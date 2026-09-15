@@ -23,7 +23,16 @@ import {
 })
 export class ViewConfigPanelComponent extends BaseConfigPanel {
     // ViewChild reference
-    @ViewChild('viewDropdown') viewDropdown!: TreeDropdownComponent;
+    @ViewChild('viewDropdown') ViewDropdown!: TreeDropdownComponent;
+
+    /** @deprecated Use {@link ViewDropdown}. */
+    get viewDropdown(): TreeDropdownComponent {
+      return this.ViewDropdown;
+    }
+    /** @deprecated Use {@link ViewDropdown}. */
+    set viewDropdown(value: TreeDropdownComponent) {
+      this.ViewDropdown = value;
+    }
 
     // Form fields
     public title = '';

@@ -186,7 +186,16 @@ export class GanttTaskViewerComponent implements OnChanges, AfterViewInit, OnDes
    */
   @Output() openEntityRecord = this.OpenEntityRecord;
 
-  @ViewChild('ganttContainer', { static: false }) ganttContainer!: ElementRef<HTMLDivElement>;
+  @ViewChild('ganttContainer', { static: false }) GanttContainer!: ElementRef<HTMLDivElement>;
+
+  /** @deprecated Use {@link GanttContainer}. */
+  get ganttContainer(): ElementRef<HTMLDivElement> {
+    return this.GanttContainer;
+  }
+  /** @deprecated Use {@link GanttContainer}. */
+  set ganttContainer(value: ElementRef<HTMLDivElement>) {
+    this.GanttContainer = value;
+  }
 
   public SelectedTask: MJTaskEntity | null = null;
 
@@ -219,7 +228,7 @@ export class GanttTaskViewerComponent implements OnChanges, AfterViewInit, OnDes
   async ngAfterViewInit() {
     console.log('🔧 ngAfterViewInit called', {
       taskCount: this.Tasks?.length || 0,
-      hasContainer: !!this.ganttContainer
+      hasContainer: !!this.GanttContainer
     });
 
     try {
@@ -227,7 +236,7 @@ export class GanttTaskViewerComponent implements OnChanges, AfterViewInit, OnDes
       this.ganttLib = module.gantt;
       this.IsGanttLoading = false;
 
-      if (this.Tasks && this.Tasks.length > 0 && this.ganttContainer) {
+      if (this.Tasks && this.Tasks.length > 0 && this.GanttContainer) {
         this.initGantt();
       }
     } catch (error) {
@@ -239,15 +248,15 @@ export class GanttTaskViewerComponent implements OnChanges, AfterViewInit, OnDes
   ngOnChanges() {
     console.log('🔄 ngOnChanges called', {
       initialized: this.ganttInitialized,
-      hasContainer: !!this.ganttContainer,
+      hasContainer: !!this.GanttContainer,
       taskCount: this.Tasks?.length || 0
     });
 
     if (!this.ganttLib) return; // Library not yet loaded
 
-    if (this.ganttInitialized && this.ganttContainer) {
+    if (this.ganttInitialized && this.GanttContainer) {
       this.updateGanttData();
-    } else if (!this.ganttInitialized && this.ganttContainer && this.Tasks && this.Tasks.length > 0) {
+    } else if (!this.ganttInitialized && this.GanttContainer && this.Tasks && this.Tasks.length > 0) {
       // Initialize if we have container and tasks but haven't initialized yet
       console.log('🎨 Late initialization - gantt not initialized but container and tasks available');
       this.initGantt();
@@ -310,7 +319,7 @@ export class GanttTaskViewerComponent implements OnChanges, AfterViewInit, OnDes
       ];
 
       // Initialize Gantt in the container
-      g.init(this.ganttContainer.nativeElement);
+      g.init(this.GanttContainer.nativeElement);
       this.ganttInitialized = true;
 
       // Attach click event

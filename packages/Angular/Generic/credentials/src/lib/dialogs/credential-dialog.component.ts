@@ -80,7 +80,16 @@ export interface CredentialDialogResult {
     changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class CredentialDialogComponent extends BaseAngularComponent implements OnInit, OnChanges {
-    @ViewChild('editPanel') editPanel!: CredentialEditPanelComponent;
+    @ViewChild('editPanel') EditPanel!: CredentialEditPanelComponent;
+
+    /** @deprecated Use {@link EditPanel}. */
+    get editPanel(): CredentialEditPanelComponent {
+      return this.EditPanel;
+    }
+    /** @deprecated Use {@link EditPanel}. */
+    set editPanel(value: CredentialEditPanelComponent) {
+      this.EditPanel = value;
+    }
 
     @Input() Visible = false;
     @Input() Credential: MJCredentialEntity | null = null;
@@ -123,8 +132,8 @@ export class CredentialDialogComponent extends BaseAngularComponent implements O
                 this.cdr.detectChanges();
                 // Use setTimeout to ensure ViewChild is resolved after render
                 setTimeout(() => {
-                    if (this.editPanel) {
-                        this.editPanel.open(this.Credential, this.PreselectedTypeId, this.PreselectedCategoryId);
+                    if (this.EditPanel) {
+                        this.EditPanel.open(this.Credential, this.PreselectedTypeId, this.PreselectedCategoryId);
                     }
                 }, 0);
             });
@@ -163,8 +172,8 @@ export class CredentialDialogComponent extends BaseAngularComponent implements O
         this.cdr.detectChanges();
 
         // Initialize the edit panel after types are loaded and template is rendered
-        if (this.editPanel) {
-            await this.editPanel.open(this.Credential, this.PreselectedTypeId, this.PreselectedCategoryId);
+        if (this.EditPanel) {
+            await this.EditPanel.open(this.Credential, this.PreselectedTypeId, this.PreselectedCategoryId);
         }
     }
 

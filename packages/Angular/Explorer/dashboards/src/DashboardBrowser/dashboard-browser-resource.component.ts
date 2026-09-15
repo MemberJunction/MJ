@@ -326,7 +326,16 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
     // load / deep link / pin navigation). Applied once loadDashboards() completes.
     private _pendingQueryParams: Record<string, string> | null = null;
 
-    @ViewChild('dashboardViewer') dashboardViewer!: DashboardViewerComponent;
+    @ViewChild('dashboardViewer') DashboardViewer!: DashboardViewerComponent;
+
+    /** @deprecated Use {@link DashboardViewer}. */
+    get dashboardViewer(): DashboardViewerComponent {
+      return this.DashboardViewer;
+    }
+    /** @deprecated Use {@link DashboardViewer}. */
+    set dashboardViewer(value: DashboardViewerComponent) {
+      this.DashboardViewer = value;
+    }
 
     // ========================================
     // Constructor
@@ -488,7 +497,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
      * @returns a descriptive panel summary list (never null)
      */
     private readOpenedDashboardPanels(): OpenedDashboardPanelSummary[] {
-        const viewer = this.dashboardViewer;
+        const viewer = this.DashboardViewer;
         if (!viewer) return [];
 
         try {
@@ -1598,8 +1607,8 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             this.SelectedDashboard.Name = this.EditingName;
             this.SelectedDashboard.Description = this.EditingDescription;
 
-            if (this.dashboardViewer) {
-                await this.dashboardViewer.save();
+            if (this.DashboardViewer) {
+                await this.DashboardViewer.save();
             }
 
             this.originalName = this.EditingName;
@@ -1789,8 +1798,8 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
      * Handle add panel dialog result
      */
     public async OnPanelAdded(result: AddPanelResult): Promise<void> {
-        if (this.dashboardViewer) {
-            await this.dashboardViewer.addPanel(
+        if (this.DashboardViewer) {
+            await this.DashboardViewer.addPanel(
                 result.PartType.ID,
                 result.Config,
                 result.Title,
@@ -1829,10 +1838,10 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
      * Open the config dialog for a panel
      */
     public OpenConfigDialog(panelId: string): void {
-        if (!this.dashboardViewer) return;
+        if (!this.DashboardViewer) return;
 
-        const panel = this.dashboardViewer.getPanel(panelId);
-        const partType = this.dashboardViewer.getPartTypeForPanel(panelId);
+        const panel = this.DashboardViewer.getPanel(panelId);
+        const partType = this.DashboardViewer.getPartTypeForPanel(panelId);
 
         if (!panel || !partType) {
             console.warn('Could not find panel or part type for config dialog');
@@ -1855,8 +1864,8 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
      * Handle config dialog save
      */
     public OnConfigDialogSaved(result: EditPartDialogResult): void {
-        if (this.dashboardViewer && this.ConfigDialogPanel) {
-            this.dashboardViewer.updatePanelConfig(
+        if (this.DashboardViewer && this.ConfigDialogPanel) {
+            this.DashboardViewer.updatePanelConfig(
                 this.ConfigDialogPanel.id,
                 result.Config,
                 result.Title,
@@ -1919,8 +1928,8 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
      * Handle remove confirmation
      */
     public OnRemoveConfirmed(): void {
-        if (this.dashboardViewer && this.ConfirmPanelId) {
-            this.dashboardViewer.confirmRemovePanel(this.ConfirmPanelId);
+        if (this.DashboardViewer && this.ConfirmPanelId) {
+            this.DashboardViewer.confirmRemovePanel(this.ConfirmPanelId);
         }
         this.closeRemoveConfirmDialog();
         // Panel set changed — refresh opened-dashboard context for the agent.

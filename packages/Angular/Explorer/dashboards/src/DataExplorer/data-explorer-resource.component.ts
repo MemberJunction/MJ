@@ -88,7 +88,16 @@ export class DataExplorerResourceComponent extends BaseResourceComponent impleme
       this.InitialQueryParams = value;
     }
 
-    @ViewChild(DataExplorerDashboardComponent) dataExplorer!: DataExplorerDashboardComponent;
+    @ViewChild(DataExplorerDashboardComponent) DataExplorer!: DataExplorerDashboardComponent;
+
+    /** @deprecated Use {@link DataExplorer}. */
+    get dataExplorer(): DataExplorerDashboardComponent {
+      return this.DataExplorer;
+    }
+    /** @deprecated Use {@link DataExplorer}. */
+    set dataExplorer(value: DataExplorerDashboardComponent) {
+      this.DataExplorer = value;
+    }
 
     private readonly _destroy$ = new Subject<void>();
     private _dataLoaded = false;
@@ -138,8 +147,8 @@ export class DataExplorerResourceComponent extends BaseResourceComponent impleme
      * needs them for deep linking (entity, viewId, filter, view mode, map mode).
      */
     protected override OnQueryParamsChanged(params: Record<string, string>, source: 'popstate' | 'deeplink'): void {
-        if (this.dataExplorer) {
-            this.dataExplorer.HandleQueryParamsChanged(params, source);
+        if (this.DataExplorer) {
+            this.DataExplorer.HandleQueryParamsChanged(params, source);
         }
     }
 
@@ -195,8 +204,8 @@ export class DataExplorerResourceComponent extends BaseResourceComponent impleme
 
         // Setup LoadCompleteEvent after view initializes
         setTimeout(() => {
-            if (this.dataExplorer) {
-                this.dataExplorer.LoadCompleteEvent = () => {
+            if (this.DataExplorer) {
+                this.DataExplorer.LoadCompleteEvent = () => {
                     this.NotifyLoadComplete();
                 };
 
@@ -205,8 +214,8 @@ export class DataExplorerResourceComponent extends BaseResourceComponent impleme
                     dashboard: null as unknown as MJDashboardEntity,
                     userState: {}
                 };
-                this.dataExplorer.Config = dashboardConfig;
-                this.dataExplorer.Refresh();
+                this.DataExplorer.Config = dashboardConfig;
+                this.DataExplorer.Refresh();
 
                 // RACE GUARD: BaseDashboard.ngOnInit() calls NotifyLoadComplete() almost immediately
                 // (after the no-op loadData), firing the inner dashboard's LoadCompleteEvent. But this
@@ -215,7 +224,7 @@ export class DataExplorerResourceComponent extends BaseResourceComponent impleme
                 // and the completion signal is lost. The shell then waits forever ("Gathering your
                 // tools…" hangs) — reproduced on direct-URL refresh. If the dashboard already completed,
                 // forward completion to the shell now.
-                if (this.dataExplorer.LoadComplete) {
+                if (this.DataExplorer.LoadComplete) {
                     this.NotifyLoadComplete();
                 }
             } else {

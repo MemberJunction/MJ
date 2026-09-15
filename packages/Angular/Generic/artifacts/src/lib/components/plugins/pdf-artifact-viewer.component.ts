@@ -114,7 +114,16 @@ import { ArtifactFileService } from '../../services/artifact-file.service';
 })
 @RegisterClass(BaseArtifactViewerPluginComponent, 'PdfArtifactViewerPlugin')
 export class PdfArtifactViewerComponent extends BaseArtifactViewerPluginComponent implements OnInit, OnDestroy {
-  @ViewChild('pdfCanvas') canvasRef?: ElementRef<HTMLCanvasElement>;
+  @ViewChild('pdfCanvas') CanvasRef?: ElementRef<HTMLCanvasElement>;
+
+  /** @deprecated Use {@link CanvasRef}. */
+  get canvasRef(): ElementRef<HTMLCanvasElement> | undefined {
+    return this.CanvasRef;
+  }
+  /** @deprecated Use {@link CanvasRef}. */
+  set canvasRef(value: ElementRef<HTMLCanvasElement> | undefined) {
+    this.CanvasRef = value;
+  }
 
   public isLoading = true;
   public IsDownloading = false;
@@ -376,13 +385,13 @@ export class PdfArtifactViewerComponent extends BaseArtifactViewerPluginComponen
    * pixel-perfectly. Subsequent +/- presses will snap to the nearest step.
    */
   private async setFitWidthZoom(): Promise<void> {
-    if (!this.pdfDoc || !this.canvasRef?.nativeElement) {
+    if (!this.pdfDoc || !this.CanvasRef?.nativeElement) {
       return;
     }
     const page = (await this.pdfDoc.getPage(1)) as PdfPageProxy;
     // naturalViewport.width is the CSS pixel width of the page at zoom = 1.0
     const naturalViewport = page.getViewport({ scale: this.BASE_SCALE });
-    const body = this.canvasRef.nativeElement.closest('.pdf-viewer__body') as HTMLElement | null;
+    const body = this.CanvasRef.nativeElement.closest('.pdf-viewer__body') as HTMLElement | null;
     const availableWidth = (body?.clientWidth ?? 0) - 32; // 16px padding each side
     if (availableWidth > 0 && naturalViewport.width > 0) {
       const fitZoom = availableWidth / naturalViewport.width;
@@ -412,14 +421,14 @@ export class PdfArtifactViewerComponent extends BaseArtifactViewerPluginComponen
   }
 
   private async renderPage(pageNum: number): Promise<void> {
-    if (!this.pdfDoc || !this.canvasRef?.nativeElement) {
+    if (!this.pdfDoc || !this.CanvasRef?.nativeElement) {
       return;
     }
 
     this.cancelCurrentRender();
 
     const page = (await this.pdfDoc.getPage(pageNum)) as PdfPageProxy;
-    const canvas = this.canvasRef.nativeElement;
+    const canvas = this.CanvasRef.nativeElement;
     const ctx = canvas.getContext('2d');
     if (!ctx) {
       return;

@@ -59,7 +59,16 @@ type MainTab = 'keys' | 'applications' | 'scopes' | 'usage';
     styleUrls: ['./api-keys-resource.component.css']
 })
 export class APIKeysResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
-    @ViewChild('keyList') keyListComponent: APIKeyListComponent | undefined;
+    @ViewChild('keyList') KeyListComponent: APIKeyListComponent | undefined;
+
+    /** @deprecated Use {@link KeyListComponent}. */
+    get keyListComponent(): APIKeyListComponent | undefined {
+      return this.KeyListComponent;
+    }
+    /** @deprecated Use {@link KeyListComponent}. */
+    set keyListComponent(value: APIKeyListComponent | undefined) {
+      this.KeyListComponent = value;
+    }
 
     protected override destroy$ = new Subject<void>();
     private md = this.ProviderToUse;
@@ -245,9 +254,9 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
         this.MainTab = 'keys';
         this.ShowListView(this.ListFilter);
         this.cdr.detectChanges();
-        if (this.keyListComponent) {
-            this.keyListComponent.SearchText = v.value;
-            this.keyListComponent.onSearch();
+        if (this.KeyListComponent) {
+            this.KeyListComponent.SearchText = v.value;
+            this.KeyListComponent.onSearch();
         }
         this.publishAgentContext();
         return { Success: true };
@@ -498,8 +507,8 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
      */
     public async Refresh(): Promise<void> {
         await this.loadData();
-        if (this.keyListComponent) {
-            await this.keyListComponent.loadKeys();
+        if (this.KeyListComponent) {
+            await this.KeyListComponent.loadKeys();
         }
     }
 

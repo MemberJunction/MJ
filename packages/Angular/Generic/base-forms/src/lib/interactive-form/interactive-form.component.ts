@@ -146,7 +146,16 @@ export class InteractiveFormComponent extends BaseFormComponent implements OnIni
      * (consistent with every other entity form in MJ) and not duplicated
      * inside the form body.
      */
-    @ViewChild('reactComponent') public reactComponent?: MJReactComponent;
+    @ViewChild('reactComponent') public ReactComponent?: MJReactComponent;
+
+    /** @deprecated Use {@link ReactComponent}. */
+    public get reactComponent(): MJReactComponent | undefined {
+        return this.ReactComponent;
+    }
+    /** @deprecated Use {@link ReactComponent}. */
+    public set reactComponent(value: MJReactComponent | undefined) {
+        this.ReactComponent = value;
+    }
 
     /**
      * Promise resolver populated when `SaveRecord` invokes `RequestSave`
@@ -350,14 +359,14 @@ export class InteractiveFormComponent extends BaseFormComponent implements OnIni
      * forms that pre-date this contract).
      */
     public override async SaveRecord(StopEditModeAfterSave: boolean): Promise<boolean> {
-        if (!this.reactComponent?.hasMethod?.(FormMethodNames.RequestSave)) {
+        if (!this.ReactComponent?.hasMethod?.(FormMethodNames.RequestSave)) {
             return super.SaveRecord(StopEditModeAfterSave);
         }
         const completion = new Promise<boolean>(resolve => {
             this.pendingSaveResolver = resolve;
         });
         try {
-            this.reactComponent.invokeMethod(FormMethodNames.RequestSave);
+            this.ReactComponent.invokeMethod(FormMethodNames.RequestSave);
         } catch (err) {
             this.pendingSaveResolver = null;
             LogError(`InteractiveFormComponent.SaveRecord: RequestSave threw: ${err instanceof Error ? err.message : String(err)}`);
@@ -380,9 +389,9 @@ export class InteractiveFormComponent extends BaseFormComponent implements OnIni
      * leaves the form in a coherent state.
      */
     public override CancelEdit(): void {
-        if (this.reactComponent?.hasMethod?.(FormMethodNames.RequestCancel)) {
+        if (this.ReactComponent?.hasMethod?.(FormMethodNames.RequestCancel)) {
             try {
-                this.reactComponent.invokeMethod(FormMethodNames.RequestCancel);
+                this.ReactComponent.invokeMethod(FormMethodNames.RequestCancel);
             } catch (err) {
                 LogError(`InteractiveFormComponent.CancelEdit: RequestCancel threw: ${err instanceof Error ? err.message : String(err)}`);
             }

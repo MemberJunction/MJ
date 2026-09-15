@@ -60,9 +60,36 @@ const DEFAULT_APP_COLOR = '#757575';
   encapsulation: ViewEncapsulation.None
 })
 export class TabContainerComponent extends BaseAngularComponent implements OnInit, OnDestroy, AfterViewInit {
-  @ViewChild('glContainer', { static: false }) glContainer!: ElementRef<HTMLDivElement>;
-  @ViewChild('directContentContainer', { static: false }) directContentContainer!: ElementRef<HTMLDivElement>;
-  @ViewChild('recordsGlContainer', { static: false }) recordsGlContainer?: ElementRef<HTMLDivElement>;
+  @ViewChild('glContainer', { static: false }) GlContainer!: ElementRef<HTMLDivElement>;
+
+  /** @deprecated Use {@link GlContainer}. */
+  get glContainer(): ElementRef<HTMLDivElement> {
+    return this.GlContainer;
+  }
+  /** @deprecated Use {@link GlContainer}. */
+  set glContainer(value: ElementRef<HTMLDivElement>) {
+    this.GlContainer = value;
+  }
+  @ViewChild('directContentContainer', { static: false }) DirectContentContainer!: ElementRef<HTMLDivElement>;
+
+  /** @deprecated Use {@link DirectContentContainer}. */
+  get directContentContainer(): ElementRef<HTMLDivElement> {
+    return this.DirectContentContainer;
+  }
+  /** @deprecated Use {@link DirectContentContainer}. */
+  set directContentContainer(value: ElementRef<HTMLDivElement>) {
+    this.DirectContentContainer = value;
+  }
+  @ViewChild('recordsGlContainer', { static: false }) RecordsGlContainer?: ElementRef<HTMLDivElement>;
+
+  /** @deprecated Use {@link RecordsGlContainer}. */
+  get recordsGlContainer(): ElementRef<HTMLDivElement> | undefined {
+    return this.RecordsGlContainer;
+  }
+  /** @deprecated Use {@link RecordsGlContainer}. */
+  set recordsGlContainer(value: ElementRef<HTMLDivElement> | undefined) {
+    this.RecordsGlContainer = value;
+  }
 
   /**
    * Emitted when the first resource component finishes loading.
@@ -553,7 +580,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     if (this.recordsLayoutInitialized) {
       return;
     }
-    const container = this.recordsGlContainer?.nativeElement;
+    const container = this.RecordsGlContainer?.nativeElement;
     if (!container) {
       return; // Template not settled yet — the next sync pass retries
     }
@@ -892,7 +919,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     if (this.UseSingleResourceMode)
       return;
 
-    if (!this.glContainer?.nativeElement) {
+    if (!this.GlContainer?.nativeElement) {
       this.layoutInitRetryCount++;
 
       if (this.layoutInitRetryCount > this.MAX_LAYOUT_INIT_RETRIES) {
@@ -936,7 +963,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     }
 
     // Initialize Golden Layout (we have config now)
-    this.layoutManager.Initialize(this.glContainer.nativeElement);
+    this.layoutManager.Initialize(this.GlContainer.nativeElement);
 
     // Mark layout as initialized
     this.layoutInitialized = true;
@@ -1288,7 +1315,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     this.currentSingleResourceSignature = newSignature;
 
     // Get the container element
-    const container = this.directContentContainer?.nativeElement;
+    const container = this.DirectContentContainer?.nativeElement;
     if (!container) {
       // Retry after view is updated
       setTimeout(() => this.loadSingleResourceContent(), 50);
@@ -1533,7 +1560,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     // Remove children from the container. This detaches the wrapper DOM element
     // without destroying the Angular component — it lives on in the cache.
     // Using removeChild (not innerHTML='') to avoid aggressive DOM cleanup.
-    const container = this.directContentContainer?.nativeElement;
+    const container = this.DirectContentContainer?.nativeElement;
     if (container) {
       while (container.firstChild) {
         container.removeChild(container.firstChild);
@@ -1689,7 +1716,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       this.singleResourceCacheIdentity = null;
       // Clear the host container's DOM so the user isn't briefly looking at the
       // destroyed component's wrapper between CloseTab and the default-tab load.
-      const directContainer = this.directContentContainer?.nativeElement;
+      const directContainer = this.DirectContentContainer?.nativeElement;
       if (directContainer) {
         while (directContainer.firstChild) directContainer.removeChild(directContainer.firstChild);
       }
@@ -2873,10 +2900,10 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       // Find the active content element — differs by mode
       let contentEl: HTMLElement | null = null;
       if (this.UseSingleResourceMode) {
-        contentEl = this.directContentContainer?.nativeElement ?? null;
+        contentEl = this.DirectContentContainer?.nativeElement ?? null;
       } else {
         // In Golden Layout mode, find the active tab's content pane
-        contentEl = this.glContainer?.nativeElement?.querySelector(
+        contentEl = this.GlContainer?.nativeElement?.querySelector(
           '.lm_item_container .lm_content'
         ) as HTMLElement | null;
       }
@@ -2903,9 +2930,9 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     try {
       let contentEl: HTMLElement | null = null;
       if (this.UseSingleResourceMode) {
-        contentEl = this.directContentContainer?.nativeElement ?? null;
+        contentEl = this.DirectContentContainer?.nativeElement ?? null;
       } else {
-        contentEl = this.glContainer?.nativeElement?.querySelector(
+        contentEl = this.GlContainer?.nativeElement?.querySelector(
           '.lm_item_container .lm_content'
         ) as HTMLElement | null;
       }

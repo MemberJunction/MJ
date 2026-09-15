@@ -139,7 +139,16 @@ import { CreateJsonSnapshot } from '../../snapshot-helpers';
 })
 @RegisterClass(BaseArtifactViewerPluginComponent, 'JsonArtifactViewerPlugin')
 export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginComponent implements OnInit, OnDestroy {
-  @ViewChild('htmlFrame') htmlFrame?: ElementRef<HTMLIFrameElement>;
+  @ViewChild('htmlFrame') HtmlFrame?: ElementRef<HTMLIFrameElement>;
+
+  /** @deprecated Use {@link HtmlFrame}. */
+  get htmlFrame(): ElementRef<HTMLIFrameElement> | undefined {
+    return this.HtmlFrame;
+  }
+  /** @deprecated Use {@link HtmlFrame}. */
+  set htmlFrame(value: ElementRef<HTMLIFrameElement> | undefined) {
+    this.HtmlFrame = value;
+  }
 
   public JsonContent = '';
 
@@ -329,7 +338,7 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
    */
   private getIframeDocument(): Document | null {
     try {
-      const iframe = this.htmlFrame?.nativeElement;
+      const iframe = this.HtmlFrame?.nativeElement;
       if (!iframe) return null;
       return iframe.contentDocument || iframe.contentWindow?.document || null;
     } catch {
@@ -339,7 +348,7 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
 
   OnIframeLoad(): void {
     // Inject base styles if HTML doesn't have them
-    if (this.htmlFrame) {
+    if (this.HtmlFrame) {
       const iframeDoc = this.getIframeDocument();
 
       if (iframeDoc) {
@@ -401,8 +410,8 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   }
 
   private resizeIframeToContent(): void {
-    if (this.htmlFrame) {
-      const iframe = this.htmlFrame.nativeElement;
+    if (this.HtmlFrame) {
+      const iframe = this.HtmlFrame.nativeElement;
       // Cross-origin (sandboxed) frames yield no document — the CSS flex sizing on
       // .html-iframe is the fallback in that case.
       const iframeDoc = this.getIframeDocument();
@@ -440,9 +449,9 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   }
 
   PrintHtml(): void {
-    if (this.htmlFrame) {
+    if (this.HtmlFrame) {
       try {
-        const iframe = this.htmlFrame.nativeElement;
+        const iframe = this.HtmlFrame.nativeElement;
         const iframeWindow = iframe.contentWindow;
         if (iframeWindow) {
           iframeWindow.focus();

@@ -16,7 +16,16 @@ import { BaseDashboard } from '@memberjunction/ng-shared';
 })
 export class SingleDashboardComponent extends BaseDashboard implements OnInit {
 
-  @ViewChild('dashboardNameInput') dashboardNameInput!: ElementRef<HTMLInputElement>
+  @ViewChild('dashboardNameInput') DashboardNameInput!: ElementRef<HTMLInputElement>
+
+  /** @deprecated Use {@link DashboardNameInput}. */
+  get dashboardNameInput(): ElementRef<HTMLInputElement> {
+    return this.DashboardNameInput;
+  }
+  /** @deprecated Use {@link DashboardNameInput}. */
+  set dashboardNameInput(value: ElementRef<HTMLInputElement>) {
+    this.DashboardNameInput = value;
+  }
 
   @Input() public ResourceData!: ResourceData;
   @Output() public DashboardSaved: EventEmitter<MJDashboardEntityExtended> = new EventEmitter<MJDashboardEntityExtended>();
@@ -427,7 +436,7 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
   public ToggleInlineNameEdit(visible: boolean): void {
     this.IsEditDashboardNameDialogOpened = visible;
     if(this.IsEditDashboardNameDialogOpened){
-      this.dashboardNameInput?.nativeElement?.focus();
+      this.DashboardNameInput?.nativeElement?.focus();
     }
   }
 
@@ -438,7 +447,7 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
 
   public SaveDashboardName(): void {
     this.ToggleInlineNameEdit(true);
-    const inputValue = this.dashboardNameInput.nativeElement.value;
+    const inputValue = this.DashboardNameInput.nativeElement.value;
     if(inputValue && inputValue.length > 3){
       this.DashboardEntity.Name = inputValue;
       this.SaveDashboard();

@@ -90,9 +90,36 @@ export class SchedulingDashboardComponent extends BaseDashboard implements After
   private lastRegisteredToolMode: SchedulingTab | null = null;
 
   /** ViewChild references to the active inner tab component — drive the toolbar UI rendered in <mj-page-header>. */
-  @ViewChild('overviewCmp') overviewCmp?: SchedulingOverviewComponent;
-  @ViewChild('jobsCmp') jobsCmp?: SchedulingJobsComponent;
-  @ViewChild('activityCmp') activityCmp?: SchedulingActivityComponent;
+  @ViewChild('overviewCmp') OverviewCmp?: SchedulingOverviewComponent;
+
+  /** @deprecated Use {@link OverviewCmp}. */
+  get overviewCmp(): SchedulingOverviewComponent | undefined {
+    return this.OverviewCmp;
+  }
+  /** @deprecated Use {@link OverviewCmp}. */
+  set overviewCmp(value: SchedulingOverviewComponent | undefined) {
+    this.OverviewCmp = value;
+  }
+  @ViewChild('jobsCmp') JobsCmp?: SchedulingJobsComponent;
+
+  /** @deprecated Use {@link JobsCmp}. */
+  get jobsCmp(): SchedulingJobsComponent | undefined {
+    return this.JobsCmp;
+  }
+  /** @deprecated Use {@link JobsCmp}. */
+  set jobsCmp(value: SchedulingJobsComponent | undefined) {
+    this.JobsCmp = value;
+  }
+  @ViewChild('activityCmp') ActivityCmp?: SchedulingActivityComponent;
+
+  /** @deprecated Use {@link ActivityCmp}. */
+  get activityCmp(): SchedulingActivityComponent | undefined {
+    return this.ActivityCmp;
+  }
+  /** @deprecated Use {@link ActivityCmp}. */
+  set activityCmp(value: SchedulingActivityComponent | undefined) {
+    this.ActivityCmp = value;
+  }
 
   private kpiSub: Subscription | undefined;
   private alertSub: Subscription | undefined;
@@ -252,18 +279,18 @@ export class SchedulingDashboardComponent extends BaseDashboard implements After
         TotalRuns: t.totalRuns,
       })),
 
-      JobsSearchTerm: this.jobsCmp?.SearchTerm ?? '',
-      StatusFilter: this.jobsCmp?.StatusFilter ?? '',
-      TypeFilter: this.jobsCmp?.TypeFilter ?? '',
-      VisibleJobs: (this.jobsCmp?.FilteredJobs ?? []).map(j => this.toJobSnapshot(j)),
-      SelectedJob: this.jobsCmp?.SelectedJob ? this.toJobSnapshot(this.jobsCmp.SelectedJob) : null,
+      JobsSearchTerm: this.JobsCmp?.SearchTerm ?? '',
+      StatusFilter: this.JobsCmp?.StatusFilter ?? '',
+      TypeFilter: this.JobsCmp?.TypeFilter ?? '',
+      VisibleJobs: (this.JobsCmp?.FilteredJobs ?? []).map(j => this.toJobSnapshot(j)),
+      SelectedJob: this.JobsCmp?.SelectedJob ? this.toJobSnapshot(this.JobsCmp.SelectedJob) : null,
 
-      ActivitySearchTerm: this.activityCmp?.SearchTerm ?? '',
-      ActivityStatusFilter: this.activityCmp?.StatusFilter ?? '',
-      ActivityJobNameFilter: this.activityCmp?.JobNameFilter ?? '',
-      ActivityTimeRange: this.activityCmp?.SelectedTimeRange ?? '7d',
-      VisibleExecutions: (this.activityCmp?.FilteredExecutions ?? []).map(e => this.toExecutionSnapshot(e)),
-      ActivityJobNames: this.activityCmp?.UniqueJobNames ?? [],
+      ActivitySearchTerm: this.ActivityCmp?.SearchTerm ?? '',
+      ActivityStatusFilter: this.ActivityCmp?.StatusFilter ?? '',
+      ActivityJobNameFilter: this.ActivityCmp?.JobNameFilter ?? '',
+      ActivityTimeRange: this.ActivityCmp?.SelectedTimeRange ?? '7d',
+      VisibleExecutions: (this.ActivityCmp?.FilteredExecutions ?? []).map(e => this.toExecutionSnapshot(e)),
+      ActivityJobNames: this.ActivityCmp?.UniqueJobNames ?? [],
     };
     this.navigationService.SetAgentContext(this, BuildSchedulingAgentContext(input));
   }
@@ -459,7 +486,7 @@ export class SchedulingDashboardComponent extends BaseDashboard implements After
     if (this.ActiveTab !== 'jobs') {
       this.OnTabChange('jobs');
     }
-    if (!this.jobsCmp) {
+    if (!this.JobsCmp) {
       return { Success: false, ErrorMessage: 'The jobs view is not ready yet. Try again after switching to the jobs tab.' };
     }
     return null;
@@ -473,7 +500,7 @@ export class SchedulingDashboardComponent extends BaseDashboard implements After
     }
     const notReady = this.ensureJobsReady();
     if (notReady) return notReady;
-    this.jobsCmp!.OnStatusFilterChange(status);
+    this.JobsCmp!.OnStatusFilterChange(status);
     this.publishAgentContext();
     return { Success: true };
   }
@@ -483,11 +510,11 @@ export class SchedulingDashboardComponent extends BaseDashboard implements After
     const type = typeof params['type'] === 'string' ? params['type'] as string : '';
     const notReady = this.ensureJobsReady();
     if (notReady) return notReady;
-    if (type && !this.jobsCmp!.TypeOptions.includes(type)) {
-      const valid = this.jobsCmp!.TypeOptions.filter(t => t);
+    if (type && !this.JobsCmp!.TypeOptions.includes(type)) {
+      const valid = this.JobsCmp!.TypeOptions.filter(t => t);
       return { Success: false, ErrorMessage: `Invalid type "${type}". Available types: ${valid.join(', ') || '(none loaded)'} (or empty to clear).` };
     }
-    this.jobsCmp!.OnTypeFilterChange(type);
+    this.JobsCmp!.OnTypeFilterChange(type);
     this.publishAgentContext();
     return { Success: true };
   }
@@ -497,7 +524,7 @@ export class SchedulingDashboardComponent extends BaseDashboard implements After
     const query = typeof params['query'] === 'string' ? params['query'] as string : '';
     const notReady = this.ensureJobsReady();
     if (notReady) return notReady;
-    this.jobsCmp!.OnSearchChange(query);
+    this.JobsCmp!.OnSearchChange(query);
     this.publishAgentContext();
     return { Success: true };
   }
@@ -518,7 +545,7 @@ export class SchedulingDashboardComponent extends BaseDashboard implements After
     }
     const notReady = this.ensureJobsReady();
     if (notReady) return notReady;
-    this.jobsCmp!.OpenEditSlideout(job);
+    this.JobsCmp!.OpenEditSlideout(job);
     this.publishAgentContext();
     return { Success: true, Data: { SelectedJobId: job.jobId, SelectedJobName: job.jobName } };
   }
@@ -539,7 +566,7 @@ export class SchedulingDashboardComponent extends BaseDashboard implements After
     }
     const notReady = this.ensureJobsReady();
     if (notReady) return notReady;
-    this.jobsCmp!.OpenEntityRecord(job);
+    this.JobsCmp!.OpenEntityRecord(job);
     return { Success: true, Data: { JobId: job.jobId, JobName: job.jobName } };
   }
 
@@ -550,7 +577,7 @@ export class SchedulingDashboardComponent extends BaseDashboard implements After
     if (this.ActiveTab !== 'activity') {
       this.OnTabChange('activity');
     }
-    if (!this.activityCmp) {
+    if (!this.ActivityCmp) {
       return { Success: false, ErrorMessage: 'The activity view is not ready yet. Try again after switching to the activity tab.' };
     }
     return null;
@@ -565,7 +592,7 @@ export class SchedulingDashboardComponent extends BaseDashboard implements After
     }
     const notReady = this.ensureActivityReady();
     if (notReady) return notReady;
-    this.activityCmp!.OnStatusFilterChange(status);
+    this.ActivityCmp!.OnStatusFilterChange(status);
     this.publishAgentContext();
     return { Success: true };
   }
@@ -575,11 +602,11 @@ export class SchedulingDashboardComponent extends BaseDashboard implements After
     const jobName = typeof params['jobName'] === 'string' ? params['jobName'] as string : '';
     const notReady = this.ensureActivityReady();
     if (notReady) return notReady;
-    if (jobName && !this.activityCmp!.UniqueJobNames.includes(jobName)) {
-      const names = this.activityCmp!.UniqueJobNames.slice(0, 25);
+    if (jobName && !this.ActivityCmp!.UniqueJobNames.includes(jobName)) {
+      const names = this.ActivityCmp!.UniqueJobNames.slice(0, 25);
       return { Success: false, ErrorMessage: `No activity for a job named "${jobName}". Available: ${names.join(', ') || '(none loaded)'} (or empty to clear).` };
     }
-    this.activityCmp!.OnJobNameFilterChange(jobName);
+    this.ActivityCmp!.OnJobNameFilterChange(jobName);
     this.publishAgentContext();
     return { Success: true };
   }
@@ -589,7 +616,7 @@ export class SchedulingDashboardComponent extends BaseDashboard implements After
     const query = typeof params['query'] === 'string' ? params['query'] as string : '';
     const notReady = this.ensureActivityReady();
     if (notReady) return notReady;
-    this.activityCmp!.OnSearchChange(query);
+    this.ActivityCmp!.OnSearchChange(query);
     this.publishAgentContext();
     return { Success: true };
   }
@@ -603,7 +630,7 @@ export class SchedulingDashboardComponent extends BaseDashboard implements After
     }
     const notReady = this.ensureActivityReady();
     if (notReady) return notReady;
-    this.activityCmp!.OnTimeRangeChange(range as '24h' | '7d' | '30d' | '90d');
+    this.ActivityCmp!.OnTimeRangeChange(range as '24h' | '7d' | '30d' | '90d');
     this.publishAgentContext();
     return { Success: true };
   }
@@ -611,11 +638,11 @@ export class SchedulingDashboardComponent extends BaseDashboard implements After
   // ───── Filter-popover plumbing for the [actions]/[toolbar] slots ─────
 
   public get JobsFilterFields(): FilterFieldConfig[] {
-    const statusOptions = (this.jobsCmp?.StatusOptions ?? ['']).map(s => ({
+    const statusOptions = (this.JobsCmp?.StatusOptions ?? ['']).map(s => ({
       text: s === '' ? 'All Statuses' : s,
       value: s
     }));
-    const typeOptions = (this.jobsCmp?.TypeOptions ?? ['']).map(t => ({
+    const typeOptions = (this.JobsCmp?.TypeOptions ?? ['']).map(t => ({
       text: t === '' ? 'All Types' : t,
       value: t
     }));
@@ -626,21 +653,21 @@ export class SchedulingDashboardComponent extends BaseDashboard implements After
   }
   public get JobsFilterValues(): Record<string, unknown> {
     return {
-      statusFilter: this.jobsCmp?.StatusFilter ?? '',
-      typeFilter: this.jobsCmp?.TypeFilter ?? ''
+      statusFilter: this.JobsCmp?.StatusFilter ?? '',
+      typeFilter: this.JobsCmp?.TypeFilter ?? ''
     };
   }
   public get JobsActiveFilterCount(): number {
     let n = 0;
-    if (this.jobsCmp?.StatusFilter) n++;
-    if (this.jobsCmp?.TypeFilter) n++;
+    if (this.JobsCmp?.StatusFilter) n++;
+    if (this.JobsCmp?.TypeFilter) n++;
     return n;
   }
   public OnJobsFilterValuesChange(v: Record<string, unknown>): void {
-    if (!this.jobsCmp) return;
+    if (!this.JobsCmp) return;
     const next = (v ?? {}) as { statusFilter?: string; typeFilter?: string };
-    if ((next.statusFilter ?? '') !== this.jobsCmp.StatusFilter) this.jobsCmp.OnStatusFilterChange(next.statusFilter ?? '');
-    if ((next.typeFilter ?? '') !== this.jobsCmp.TypeFilter) this.jobsCmp.OnTypeFilterChange(next.typeFilter ?? '');
+    if ((next.statusFilter ?? '') !== this.JobsCmp.StatusFilter) this.JobsCmp.OnStatusFilterChange(next.statusFilter ?? '');
+    if ((next.typeFilter ?? '') !== this.JobsCmp.TypeFilter) this.JobsCmp.OnTypeFilterChange(next.typeFilter ?? '');
   }
 
   /** @deprecated Use {@link OnJobsFilterValuesChange}. */
@@ -648,8 +675,8 @@ export class SchedulingDashboardComponent extends BaseDashboard implements After
     return this.OnJobsFilterValuesChange(v);
   }
   public ResetJobsFilters(): void {
-    if (this.jobsCmp?.StatusFilter) this.jobsCmp.OnStatusFilterChange('');
-    if (this.jobsCmp?.TypeFilter) this.jobsCmp.OnTypeFilterChange('');
+    if (this.JobsCmp?.StatusFilter) this.JobsCmp.OnStatusFilterChange('');
+    if (this.JobsCmp?.TypeFilter) this.JobsCmp.OnTypeFilterChange('');
   }
 
   /** @deprecated Use {@link ResetJobsFilters}. */
@@ -658,11 +685,11 @@ export class SchedulingDashboardComponent extends BaseDashboard implements After
   }
 
   public get ActivityFilterFields(): FilterFieldConfig[] {
-    const statusOptions = (this.activityCmp?.StatusOptions ?? ['']).map(s => ({
+    const statusOptions = (this.ActivityCmp?.StatusOptions ?? ['']).map(s => ({
       text: s === '' ? 'All Statuses' : s,
       value: s
     }));
-    const jobNames = this.activityCmp?.UniqueJobNames ?? [];
+    const jobNames = this.ActivityCmp?.UniqueJobNames ?? [];
     const jobOptions = [{ text: 'All Jobs', value: '' }, ...jobNames.map(n => ({ text: n, value: n }))];
     return [
       { key: 'statusFilter', type: 'dropdown', label: 'Status', icon: 'fa-solid fa-circle-info', placeholder: 'All Statuses', options: statusOptions },
@@ -671,21 +698,21 @@ export class SchedulingDashboardComponent extends BaseDashboard implements After
   }
   public get ActivityFilterValues(): Record<string, unknown> {
     return {
-      statusFilter: this.activityCmp?.StatusFilter ?? '',
-      jobNameFilter: this.activityCmp?.JobNameFilter ?? ''
+      statusFilter: this.ActivityCmp?.StatusFilter ?? '',
+      jobNameFilter: this.ActivityCmp?.JobNameFilter ?? ''
     };
   }
   public get ActivityActiveFilterCount(): number {
     let n = 0;
-    if (this.activityCmp?.StatusFilter) n++;
-    if (this.activityCmp?.JobNameFilter) n++;
+    if (this.ActivityCmp?.StatusFilter) n++;
+    if (this.ActivityCmp?.JobNameFilter) n++;
     return n;
   }
   public OnActivityFilterValuesChange(v: Record<string, unknown>): void {
-    if (!this.activityCmp) return;
+    if (!this.ActivityCmp) return;
     const next = (v ?? {}) as { statusFilter?: string; jobNameFilter?: string };
-    if ((next.statusFilter ?? '') !== this.activityCmp.StatusFilter) this.activityCmp.OnStatusFilterChange(next.statusFilter ?? '');
-    if ((next.jobNameFilter ?? '') !== this.activityCmp.JobNameFilter) this.activityCmp.OnJobNameFilterChange(next.jobNameFilter ?? '');
+    if ((next.statusFilter ?? '') !== this.ActivityCmp.StatusFilter) this.ActivityCmp.OnStatusFilterChange(next.statusFilter ?? '');
+    if ((next.jobNameFilter ?? '') !== this.ActivityCmp.JobNameFilter) this.ActivityCmp.OnJobNameFilterChange(next.jobNameFilter ?? '');
   }
 
   /** @deprecated Use {@link OnActivityFilterValuesChange}. */
@@ -693,8 +720,8 @@ export class SchedulingDashboardComponent extends BaseDashboard implements After
     return this.OnActivityFilterValuesChange(v);
   }
   public ResetActivityFilters(): void {
-    if (this.activityCmp?.StatusFilter) this.activityCmp.OnStatusFilterChange('');
-    if (this.activityCmp?.JobNameFilter) this.activityCmp.OnJobNameFilterChange('');
+    if (this.ActivityCmp?.StatusFilter) this.ActivityCmp.OnStatusFilterChange('');
+    if (this.ActivityCmp?.JobNameFilter) this.ActivityCmp.OnJobNameFilterChange('');
   }
 
   /** @deprecated Use {@link ResetActivityFilters}. */

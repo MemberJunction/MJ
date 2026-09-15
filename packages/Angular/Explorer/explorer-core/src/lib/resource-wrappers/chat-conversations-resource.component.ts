@@ -260,8 +260,26 @@ import { Subject, takeUntil } from 'rxjs';
   encapsulation: ViewEncapsulation.None
 })
 export class ChatConversationsResource extends BaseResourceComponent implements OnDestroy {
-  @ViewChild('conversationList') conversationList?: ConversationListComponent;
-  @ViewChild('chatArea') chatArea?: ConversationChatAreaComponent;
+  @ViewChild('conversationList') ConversationList?: ConversationListComponent;
+
+  /** @deprecated Use {@link ConversationList}. */
+  get conversationList(): ConversationListComponent | undefined {
+    return this.ConversationList;
+  }
+  /** @deprecated Use {@link ConversationList}. */
+  set conversationList(value: ConversationListComponent | undefined) {
+    this.ConversationList = value;
+  }
+  @ViewChild('chatArea') ChatArea?: ConversationChatAreaComponent;
+
+  /** @deprecated Use {@link ChatArea}. */
+  get chatArea(): ConversationChatAreaComponent | undefined {
+    return this.ChatArea;
+  }
+  /** @deprecated Use {@link ChatArea}. */
+  set chatArea(value: ConversationChatAreaComponent | undefined) {
+    this.ChatArea = value;
+  }
 
   public CurrentUser: any = null;
 
@@ -746,12 +764,12 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     if (!sessionId) {
       return;
     }
-    if (!this.chatArea) {
+    if (!this.ChatArea) {
       setTimeout(() => this.applyPendingRealtimeSessionReview(), 50);
       return;
     }
     this.PendingRealtimeSessionId = null;
-    void this.chatArea.OpenRealtimeSessionReview(sessionId).then((opened) => {
+    void this.ChatArea.OpenRealtimeSessionReview(sessionId).then((opened) => {
       if (!opened) {
         console.warn(`Chat: could not open realtime session review for '${sessionId}'`);
       }
@@ -915,7 +933,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    * new agent responses are visible without a full page reload.
    */
   OnRefreshRequested(): void {
-    void this.chatArea?.reloadMessages();
+    void this.ChatArea?.reloadMessages();
   }
 
   /** @deprecated Use {@link OnRefreshRequested}. */
@@ -1450,10 +1468,10 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    * the resourceId is an agent-internal ID, not a database artifact ID.
    */
   private openMostRecentArtifact(): void {
-    if (!this.chatArea) return;
+    if (!this.ChatArea) return;
 
     // Find the last artifact across all messages
-    const artifactMap = this.chatArea.artifactsByDetailId;
+    const artifactMap = this.ChatArea.artifactsByDetailId;
     let latestArtifact: { artifactId: string; versionId?: string } | null = null;
     for (const artifacts of artifactMap.values()) {
       if (artifacts.length > 0) {
@@ -1466,7 +1484,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     }
 
     if (latestArtifact) {
-      this.chatArea.onArtifactClicked(latestArtifact);
+      this.ChatArea.onArtifactClicked(latestArtifact);
     } else {
       console.warn('No artifacts found in conversation to open for Report/Dashboard command');
     }

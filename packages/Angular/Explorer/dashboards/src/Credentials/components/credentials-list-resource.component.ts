@@ -122,7 +122,16 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
 
     protected override destroy$ = new Subject<void>();
 
-    @ViewChild('editPanel') editPanel!: CredentialEditPanelComponent;
+    @ViewChild('editPanel') EditPanel!: CredentialEditPanelComponent;
+
+    /** @deprecated Use {@link EditPanel}. */
+    get editPanel(): CredentialEditPanelComponent {
+      return this.EditPanel;
+    }
+    /** @deprecated Use {@link EditPanel}. */
+    set editPanel(value: CredentialEditPanelComponent) {
+      this.EditPanel = value;
+    }
 
     public readonly ViewOptions: ViewToggleOption[] = [
         { key: 'grid', icon: 'fa-solid fa-grip', title: 'Grid view' },
@@ -343,8 +352,8 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
     // === CRUD Operations ===
 
     public CreateNewCredential(): void {
-        if (this.editPanel) {
-            this.editPanel.open(null);
+        if (this.EditPanel) {
+            this.EditPanel.open(null);
         }
     }
 
@@ -354,8 +363,8 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
     }
 
     public CreateNewCredentialWithType(typeId?: string, categoryId?: string): void {
-        if (this.editPanel) {
-            this.editPanel.open(null, typeId, categoryId);
+        if (this.EditPanel) {
+            this.EditPanel.open(null, typeId, categoryId);
         }
     }
 
@@ -368,8 +377,8 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
         if (event) {
             event.stopPropagation();
         }
-        if (this.editPanel) {
-            this.editPanel.open(credential);
+        if (this.EditPanel) {
+            this.EditPanel.open(credential);
         }
     }
 

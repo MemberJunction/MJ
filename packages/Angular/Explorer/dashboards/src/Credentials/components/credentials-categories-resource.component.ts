@@ -79,7 +79,16 @@ export class CredentialsCategoriesResourceComponent extends BaseResourceComponen
     private _metadata = this.ProviderToUse;
     private _permissionCache = new Map<string, boolean>();
 
-    @ViewChild('categoryEditPanel') categoryEditPanel!: CredentialCategoryEditPanelComponent;
+    @ViewChild('categoryEditPanel') CategoryEditPanel!: CredentialCategoryEditPanelComponent;
+
+    /** @deprecated Use {@link CategoryEditPanel}. */
+    get categoryEditPanel(): CredentialCategoryEditPanelComponent {
+      return this.CategoryEditPanel;
+    }
+    /** @deprecated Use {@link CategoryEditPanel}. */
+    set categoryEditPanel(value: CredentialCategoryEditPanelComponent) {
+      this.CategoryEditPanel = value;
+    }
 
     constructor(
         private cdr: ChangeDetectorRef,
@@ -236,8 +245,8 @@ export class CredentialsCategoriesResourceComponent extends BaseResourceComponen
     // === CRUD Operations ===
 
     public CreateNewCategory(): void {
-        if (this.categoryEditPanel) {
-            this.categoryEditPanel.open(null);
+        if (this.CategoryEditPanel) {
+            this.CategoryEditPanel.open(null);
         }
     }
 
@@ -250,8 +259,8 @@ export class CredentialsCategoriesResourceComponent extends BaseResourceComponen
         if (event) {
             event.stopPropagation();
         }
-        if (this.categoryEditPanel) {
-            this.categoryEditPanel.open(null, parentNode.category.ID);
+        if (this.CategoryEditPanel) {
+            this.CategoryEditPanel.open(null, parentNode.category.ID);
         }
     }
 
@@ -264,8 +273,8 @@ export class CredentialsCategoriesResourceComponent extends BaseResourceComponen
         if (event) {
             event.stopPropagation();
         }
-        if (this.categoryEditPanel) {
-            this.categoryEditPanel.open(node.category);
+        if (this.CategoryEditPanel) {
+            this.CategoryEditPanel.open(node.category);
         }
     }
 

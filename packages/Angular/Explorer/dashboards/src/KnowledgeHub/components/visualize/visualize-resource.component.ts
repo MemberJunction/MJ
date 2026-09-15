@@ -51,7 +51,16 @@ interface ModeOption {
     styleUrls: ['./visualize-resource.component.css'],
 })
 export class VisualizeResourceComponent extends BaseResourceComponent implements AfterViewInit, OnDestroy {
-    @ViewChild('tagCloud') tagCloud?: TagCloudComponent;
+    @ViewChild('tagCloud') TagCloud?: TagCloudComponent;
+
+    /** @deprecated Use {@link TagCloud}. */
+    get tagCloud(): TagCloudComponent | undefined {
+        return this.TagCloud;
+    }
+    /** @deprecated Use {@link TagCloud}. */
+    set tagCloud(value: TagCloudComponent | undefined) {
+        this.TagCloud = value;
+    }
 
     private cdr = inject(ChangeDetectorRef);
     protected override navigationService = inject(NavigationService);

@@ -23,7 +23,16 @@ interface Box { rect: SVGElement; node: FlowNode; }
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class FlowchartComponent implements OnDestroy {
-  @ViewChild('svg', { static: true }) svgRef!: ElementRef<SVGSVGElement>;
+  @ViewChild('svg', { static: true }) SvgRef!: ElementRef<SVGSVGElement>;
+
+  /** @deprecated Use {@link SvgRef}. */
+  get svgRef(): ElementRef<SVGSVGElement> {
+    return this.SvgRef;
+  }
+  /** @deprecated Use {@link SvgRef}. */
+  set svgRef(value: ElementRef<SVGSVGElement>) {
+    this.SvgRef = value;
+  }
   @Output() NodeSelected = new EventEmitter<FlowNode>();
 
   /**
@@ -75,7 +84,7 @@ export class FlowchartComponent implements OnDestroy {
   ngOnDestroy(): void { this.detachListeners(); }
 
   private clear(): void {
-    const svg = this.svgRef?.nativeElement;
+    const svg = this.SvgRef?.nativeElement;
     if (svg) while (svg.firstChild) svg.removeChild(svg.firstChild);
     this.boxes.clear();
   }
@@ -95,7 +104,7 @@ export class FlowchartComponent implements OnDestroy {
 
   private buildScene(fit: boolean): void {
     this.clear();
-    const svg = this.svgRef.nativeElement;
+    const svg = this.SvgRef.nativeElement;
     const ordered = this.visibleNodes();
     const rowY = (i: number) => i * (this.NODE_H + this.VGAP);
 
@@ -174,7 +183,7 @@ export class FlowchartComponent implements OnDestroy {
 
   private onWheel = (e: WheelEvent): void => {
     e.preventDefault();
-    const r = this.svgRef.nativeElement.getBoundingClientRect();
+    const r = this.SvgRef.nativeElement.getBoundingClientRect();
     this.zoomAt(e.clientX - r.left, e.clientY - r.top, e.deltaY > 0 ? 0.9 : 1.1);
   };
   private onDown = (): void => { this.panning = true; this.moved = false; this.suppressBg = false; this.start = { x: 0, y: 0, tx: this.view.tx, ty: this.view.ty }; };
@@ -192,14 +201,14 @@ export class FlowchartComponent implements OnDestroy {
   };
 
   private attachListeners(): void {
-    const svg = this.svgRef.nativeElement;
+    const svg = this.SvgRef.nativeElement;
     svg.addEventListener('wheel', this.onWheel, { passive: false });
     svg.addEventListener('mousedown', (e) => { this.onDown(); this.onDownPos(e); });
     window.addEventListener('mousemove', this.onMove);
     window.addEventListener('mouseup', this.onUp);
   }
   private detachListeners(): void {
-    const svg = this.svgRef?.nativeElement;
+    const svg = this.SvgRef?.nativeElement;
     svg?.removeEventListener('wheel', this.onWheel);
     window.removeEventListener('mousemove', this.onMove);
     window.removeEventListener('mouseup', this.onUp);
@@ -215,7 +224,7 @@ export class FlowchartComponent implements OnDestroy {
     this.view.s = ns; this.applyView();
   }
   private fitToView(): void {
-    const svg = this.svgRef.nativeElement;
+    const svg = this.SvgRef.nativeElement;
     if (!this.mainG) return;
     const bb = (this.mainG as SVGGraphicsElement).getBBox();
     const vw = svg.clientWidth || 900, vh = svg.clientHeight || 600;
@@ -224,8 +233,8 @@ export class FlowchartComponent implements OnDestroy {
     this.applyView();
   }
 
-  public zoomIn(): void { const svg = this.svgRef.nativeElement; this.zoomAt(svg.clientWidth / 2, svg.clientHeight / 2, 1.2); }
-  public zoomOut(): void { const svg = this.svgRef.nativeElement; this.zoomAt(svg.clientWidth / 2, svg.clientHeight / 2, 1 / 1.2); }
+  public zoomIn(): void { const svg = this.SvgRef.nativeElement; this.zoomAt(svg.clientWidth / 2, svg.clientHeight / 2, 1.2); }
+  public zoomOut(): void { const svg = this.SvgRef.nativeElement; this.zoomAt(svg.clientWidth / 2, svg.clientHeight / 2, 1 / 1.2); }
   public ResetView(): void { this.fitToView(); }
 
   /** @deprecated Use {@link ResetView}. */

@@ -118,7 +118,16 @@ export class CredentialsTypesResourceComponent extends BaseResourceComponent imp
     private _metadata = this.ProviderToUse;
     private _permissionCache = new Map<string, boolean>();
 
-    @ViewChild('typeEditPanel') typeEditPanel!: CredentialTypeEditPanelComponent;
+    @ViewChild('typeEditPanel') TypeEditPanel!: CredentialTypeEditPanelComponent;
+
+    /** @deprecated Use {@link TypeEditPanel}. */
+    get typeEditPanel(): CredentialTypeEditPanelComponent {
+      return this.TypeEditPanel;
+    }
+    /** @deprecated Use {@link TypeEditPanel}. */
+    set typeEditPanel(value: CredentialTypeEditPanelComponent) {
+      this.TypeEditPanel = value;
+    }
 
     public get FilterFields(): FilterFieldConfig[] {
         return [
@@ -314,8 +323,8 @@ export class CredentialsTypesResourceComponent extends BaseResourceComponent imp
     // === CRUD Operations ===
 
     public CreateNewType(): void {
-        if (this.typeEditPanel) {
-            this.typeEditPanel.open(null);
+        if (this.TypeEditPanel) {
+            this.TypeEditPanel.open(null);
         }
     }
 
@@ -328,8 +337,8 @@ export class CredentialsTypesResourceComponent extends BaseResourceComponent imp
         if (event) {
             event.stopPropagation();
         }
-        if (this.typeEditPanel) {
-            this.typeEditPanel.open(type);
+        if (this.TypeEditPanel) {
+            this.TypeEditPanel.open(type);
         }
     }
 

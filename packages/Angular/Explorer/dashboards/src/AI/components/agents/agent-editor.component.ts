@@ -63,7 +63,16 @@ export class AgentEditorComponent extends BaseAngularComponent implements OnInit
    */
   @Output() openEntityRecord = this.OpenEntityRecord;
 
-  @ViewChild('hierarchyChart', { static: false }) hierarchyChartRef!: ElementRef;
+  @ViewChild('hierarchyChart', { static: false }) HierarchyChartRef!: ElementRef;
+
+  /** @deprecated Use {@link HierarchyChartRef}. */
+  get hierarchyChartRef(): ElementRef {
+    return this.HierarchyChartRef;
+  }
+  /** @deprecated Use {@link HierarchyChartRef}. */
+  set hierarchyChartRef(value: ElementRef) {
+    this.HierarchyChartRef = value;
+  }
 
   public isLoading = false;
   public error: string | null = null;
@@ -213,7 +222,7 @@ export class AgentEditorComponent extends BaseAngularComponent implements OnInit
         
         // Initialize chart after data is loaded
         setTimeout(() => {
-          if (this.hierarchyChartRef) {
+          if (this.HierarchyChartRef) {
             this.initializeChart();
           }
         }, 100);
@@ -300,11 +309,11 @@ export class AgentEditorComponent extends BaseAngularComponent implements OnInit
   }
 
   private initializeChart(): void {
-    if (!this.hierarchyChartRef?.nativeElement) {
+    if (!this.HierarchyChartRef?.nativeElement) {
       return;
     }
 
-    const container = this.hierarchyChartRef.nativeElement;
+    const container = this.HierarchyChartRef.nativeElement;
     const width = container.clientWidth || 800;
     const height = container.clientHeight || 600;
 
@@ -354,7 +363,7 @@ export class AgentEditorComponent extends BaseAngularComponent implements OnInit
     this.g.selectAll('*').remove();
 
     // Get container dimensions
-    const container = this.hierarchyChartRef.nativeElement;
+    const container = this.HierarchyChartRef.nativeElement;
     const containerWidth = container.clientWidth || 800;
     
     // Calculate the tree bounds after layout

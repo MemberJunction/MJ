@@ -161,7 +161,16 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
    */
   private formAgentContextActive = false;
 
-  @ViewChild('fileInput', { static: false }) fileInput?: ElementRef<HTMLInputElement>;
+  @ViewChild('fileInput', { static: false }) FileInput?: ElementRef<HTMLInputElement>;
+
+  /** @deprecated Use {@link FileInput}. */
+  get fileInput(): ElementRef<HTMLInputElement> | undefined {
+    return this.FileInput;
+  }
+  /** @deprecated Use {@link FileInput}. */
+  set fileInput(value: ElementRef<HTMLInputElement> | undefined) {
+    this.FileInput = value;
+  }
 
   protected override destroy$ = new Subject<void>();
   private get metadata(): IMetadataProvider { return this.ProviderToUse; }
@@ -974,7 +983,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   }
 
   ImportFromFile(): void {
-    this.fileInput?.nativeElement.click();
+    this.FileInput?.nativeElement.click();
   }
 
   ImportFromText(): void {

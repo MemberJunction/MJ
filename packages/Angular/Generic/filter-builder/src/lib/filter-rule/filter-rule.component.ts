@@ -240,9 +240,36 @@ export class FilterRuleComponent implements OnInit, OnChanges {
   }
 
   // ViewChild references for dropdown buttons (Safari focus fix)
-  @ViewChild('fieldDropdownBtn') fieldDropdownBtn!: ElementRef<HTMLButtonElement>;
-  @ViewChild('operatorDropdownBtn') operatorDropdownBtn!: ElementRef<HTMLButtonElement>;
-  @ViewChild('valueDropdownBtn') valueDropdownBtn!: ElementRef<HTMLButtonElement>;
+  @ViewChild('fieldDropdownBtn') FieldDropdownBtn!: ElementRef<HTMLButtonElement>;
+
+  /** @deprecated Use {@link FieldDropdownBtn}. */
+  get fieldDropdownBtn(): ElementRef<HTMLButtonElement> {
+    return this.FieldDropdownBtn;
+  }
+  /** @deprecated Use {@link FieldDropdownBtn}. */
+  set fieldDropdownBtn(value: ElementRef<HTMLButtonElement>) {
+    this.FieldDropdownBtn = value;
+  }
+  @ViewChild('operatorDropdownBtn') OperatorDropdownBtn!: ElementRef<HTMLButtonElement>;
+
+  /** @deprecated Use {@link OperatorDropdownBtn}. */
+  get operatorDropdownBtn(): ElementRef<HTMLButtonElement> {
+    return this.OperatorDropdownBtn;
+  }
+  /** @deprecated Use {@link OperatorDropdownBtn}. */
+  set operatorDropdownBtn(value: ElementRef<HTMLButtonElement>) {
+    this.OperatorDropdownBtn = value;
+  }
+  @ViewChild('valueDropdownBtn') ValueDropdownBtn!: ElementRef<HTMLButtonElement>;
+
+  /** @deprecated Use {@link ValueDropdownBtn}. */
+  get valueDropdownBtn(): ElementRef<HTMLButtonElement> {
+    return this.ValueDropdownBtn;
+  }
+  /** @deprecated Use {@link ValueDropdownBtn}. */
+  set valueDropdownBtn(value: ElementRef<HTMLButtonElement>) {
+    this.ValueDropdownBtn = value;
+  }
 
   constructor(private elementRef: ElementRef) {}
 
@@ -338,8 +365,8 @@ export class FilterRuleComponent implements OnInit, OnChanges {
     this.CloseAllDropdowns();
     this.FieldDropdownOpen = !wasOpen;
     if (this.FieldDropdownOpen) {
-      this.calculateDropdownPosition(this.fieldDropdownBtn);
-      setTimeout(() => this.fieldDropdownBtn?.nativeElement?.focus(), 0);
+      this.calculateDropdownPosition(this.FieldDropdownBtn);
+      setTimeout(() => this.FieldDropdownBtn?.nativeElement?.focus(), 0);
     }
   }
 
@@ -354,8 +381,8 @@ export class FilterRuleComponent implements OnInit, OnChanges {
     this.CloseAllDropdowns();
     this.OperatorDropdownOpen = !wasOpen;
     if (this.OperatorDropdownOpen) {
-      this.calculateDropdownPosition(this.operatorDropdownBtn);
-      setTimeout(() => this.operatorDropdownBtn?.nativeElement?.focus(), 0);
+      this.calculateDropdownPosition(this.OperatorDropdownBtn);
+      setTimeout(() => this.OperatorDropdownBtn?.nativeElement?.focus(), 0);
     }
   }
 
@@ -370,8 +397,8 @@ export class FilterRuleComponent implements OnInit, OnChanges {
     this.CloseAllDropdowns();
     this.ValueDropdownOpen = !wasOpen;
     if (this.ValueDropdownOpen) {
-      this.calculateDropdownPosition(this.valueDropdownBtn);
-      setTimeout(() => this.valueDropdownBtn?.nativeElement?.focus(), 0);
+      this.calculateDropdownPosition(this.ValueDropdownBtn);
+      setTimeout(() => this.ValueDropdownBtn?.nativeElement?.focus(), 0);
     }
   }
 

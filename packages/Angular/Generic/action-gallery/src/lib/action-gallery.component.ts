@@ -92,7 +92,16 @@ export class ActionGalleryComponent extends BaseAngularComponent implements OnIn
    */
   @Output() actionTestRequested = this.ActionTestRequested;
   
-  @ViewChild('searchInput', { static: false }) searchInput: ElementRef<HTMLInputElement>;
+  @ViewChild('searchInput', { static: false }) SearchInput: ElementRef<HTMLInputElement>;
+
+  /** @deprecated Use {@link SearchInput}. */
+  get searchInput(): ElementRef<HTMLInputElement> {
+    return this.SearchInput;
+  }
+  /** @deprecated Use {@link SearchInput}. */
+  set searchInput(value: ElementRef<HTMLInputElement>) {
+    this.SearchInput = value;
+  }
   
   // State management
   private destroy$ = new Subject<void>();
@@ -597,8 +606,8 @@ export class ActionGalleryComponent extends BaseAngularComponent implements OnIn
   ClearSearch() {
     this.SearchControl.reset();
     this.SelectedCategory$.next('all');
-    if (this.searchInput) {
-      this.searchInput.nativeElement.focus();
+    if (this.SearchInput) {
+      this.SearchInput.nativeElement.focus();
     }
   }
 

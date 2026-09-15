@@ -65,7 +65,16 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
     private destroy$ = new Subject<void>();
     private searchInput$ = new Subject<string>();
 
-    @ViewChild('searchInput') searchInputRef!: ElementRef<HTMLInputElement>;
+    @ViewChild('searchInput') SearchInputRef!: ElementRef<HTMLInputElement>;
+
+    /** @deprecated Use {@link SearchInputRef}. */
+    get searchInputRef(): ElementRef<HTMLInputElement> {
+        return this.SearchInputRef;
+    }
+    /** @deprecated Use {@link SearchInputRef}. */
+    set searchInputRef(value: ElementRef<HTMLInputElement>) {
+        this.SearchInputRef = value;
+    }
 
     // --- Configuration Inputs ---
 
@@ -373,7 +382,7 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
                 // activation — preventDefault here at document level would
                 // silently swallow it, or worse, open the highlighted result.
                 const active = document.activeElement as HTMLElement | null;
-                const inCombobox = active === this.searchInputRef?.nativeElement
+                const inCombobox = active === this.SearchInputRef?.nativeElement
                     || (active?.classList.contains('result-item') ?? false);
                 if (!inCombobox) {
                     return;
@@ -467,7 +476,7 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
      */
     public OnRecentSelect(query: string): void {
         this.OnQueryInput(query);
-        this.searchInputRef?.nativeElement?.focus();
+        this.SearchInputRef?.nativeElement?.focus();
     }
 
     /** Recent-search rows are keyboard-activatable (Enter/Space = click). */
@@ -640,7 +649,7 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
         this.previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
         // Focus input after view updates
         Promise.resolve().then(() => {
-            this.searchInputRef?.nativeElement?.focus();
+            this.SearchInputRef?.nativeElement?.focus();
             this.cdr.detectChanges();
         });
     }

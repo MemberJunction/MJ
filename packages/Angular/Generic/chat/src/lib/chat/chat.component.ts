@@ -86,7 +86,16 @@ export class ChatComponent implements AfterViewInit {
   @Output() ClearChatRequested = new EventEmitter<void>();
 
   @ViewChild('messagesContainer', { static: true }) private messagesContainer!: ElementRef;
-  @ViewChild('theInput') theInput: ElementRef | undefined;
+  @ViewChild('theInput') TheInput: ElementRef | undefined;
+
+  /** @deprecated Use {@link TheInput}. */
+  get theInput(): ElementRef | undefined {
+    return this.TheInput;
+  }
+  /** @deprecated Use {@link TheInput}. */
+  set theInput(value: ElementRef | undefined) {
+    this.TheInput = value;
+  }
 
   public CurrentMessage: string = '';
 
@@ -118,7 +127,7 @@ export class ChatComponent implements AfterViewInit {
   }
 
   public HandleInputChange(event: any) {
-    const val = this.theInput?.nativeElement.value;
+    const val = this.TheInput?.nativeElement.value;
     this.InternalAllowSend = this.AllowSend && (val ? val.length > 0 : false);
     this.resizeTextInput();
   }
@@ -130,7 +139,7 @@ export class ChatComponent implements AfterViewInit {
 
   protected resizeTextInput() {
     try {
-      const textarea = this.theInput?.nativeElement;
+      const textarea = this.TheInput?.nativeElement;
       if (textarea) {
         textarea.style.height = 'auto'; // Reset height to recalculate
         textarea.style.height = `${textarea.scrollHeight}px`; // Set to scrollHeight    
@@ -168,7 +177,7 @@ export class ChatComponent implements AfterViewInit {
   }
 
   protected FocusTextArea() {
-    setTimeout(() => this.theInput?.nativeElement.focus(), 0); // use a timeout to ensure that angular has updated the DOM
+    setTimeout(() => this.TheInput?.nativeElement.focus(), 0); // use a timeout to ensure that angular has updated the DOM
   }
 
   protected async AppendMessage(message: ChatMessage, fireEvent: boolean = true) {

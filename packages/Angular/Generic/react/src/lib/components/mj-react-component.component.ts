@@ -460,7 +460,16 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
    */
   @Output() initialized = this.Initialized;
   
-  @ViewChild('container', { read: ElementRef, static: true }) container!: ElementRef<HTMLDivElement>;
+  @ViewChild('container', { read: ElementRef, static: true }) Container!: ElementRef<HTMLDivElement>;
+
+  /** @deprecated Use {@link Container}. */
+  get container(): ElementRef<HTMLDivElement> {
+    return this.Container;
+  }
+  /** @deprecated Use {@link Container}. */
+  set container(value: ElementRef<HTMLDivElement>) {
+    this.Container = value;
+  }
 
   // ─── Automatic data capture ───
   // Stores RunView/RunQuery results for components that don't implement getCurrentDataState().
@@ -688,7 +697,7 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
       }
       
       this.reactRootId = reactRootManager.createRoot(
-        this.container.nativeElement,
+        this.Container.nativeElement,
         (container: HTMLElement) => reactContext.ReactDOM.createRoot(container),
         this.componentId
       );

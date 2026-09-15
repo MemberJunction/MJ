@@ -104,7 +104,16 @@ import { QueryViewerComponent, QueryEntityLinkClickEvent } from '@memberjunction
     `]
 })
 export class QueryPartComponent extends BaseDashboardPart implements AfterViewInit, OnDestroy {
-    @ViewChild('queryViewer') queryViewer!: QueryViewerComponent;
+    @ViewChild('queryViewer') QueryViewer!: QueryViewerComponent;
+
+    /** @deprecated Use {@link QueryViewer}. */
+    get queryViewer(): QueryViewerComponent {
+      return this.QueryViewer;
+    }
+    /** @deprecated Use {@link QueryViewer}. */
+    set queryViewer(value: QueryViewerComponent) {
+      this.QueryViewer = value;
+    }
 
     public HasQuery = false;
 
@@ -236,8 +245,8 @@ export class QueryPartComponent extends BaseDashboardPart implements AfterViewIn
     }
 
     public RefreshQuery(): void {
-        if (this.queryViewer) {
-            this.queryViewer.Refresh();
+        if (this.QueryViewer) {
+            this.QueryViewer.Refresh();
         }
     }
 

@@ -316,7 +316,16 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
     /** Custom-layout Query form looks best full-width on first open. */
     public override getDefaultFormWidthMode(): 'centered' | 'full-width' { return 'full-width'; }
 
-    @ViewChild('sqlEditor') sqlEditor: CodeEditorComponent | null = null;
+    @ViewChild('sqlEditor') SqlEditor: CodeEditorComponent | null = null;
+
+    /** @deprecated Use {@link SqlEditor}. */
+    get sqlEditor(): CodeEditorComponent | null {
+      return this.SqlEditor;
+    }
+    /** @deprecated Use {@link SqlEditor}. */
+    set sqlEditor(value: CodeEditorComponent | null) {
+      this.SqlEditor = value;
+    }
     
     // SQL Filters for help display
     public SqlFilters = RUN_QUERY_SQL_FILTERS;
@@ -370,7 +379,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
     ngAfterViewInit() {
         super.ngAfterViewInit();
 
-        this.sqlEditor?.setEditable(this.EditMode);
+        this.SqlEditor?.setEditable(this.EditMode);
 
         // Set initial SQL value in the editor
         this.updateEditorValue();
@@ -378,12 +387,12 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
  
     override EndEditMode(): void {
         super.EndEditMode();
-        this.sqlEditor?.setEditable(false);
+        this.SqlEditor?.setEditable(false);
     }
 
     override StartEditMode(): void {
         super.StartEditMode();
-        this.sqlEditor?.setEditable(true);
+        this.SqlEditor?.setEditable(true);
         
         // Force change detection after a brief delay to ensure form controls are initialized
         setTimeout(() => {
@@ -394,18 +403,18 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
     override CancelEdit(): void {
         super.CancelEdit();
         this.updateEditorValue(); // Reset editor value to record SQL
-        this.sqlEditor?.setEditable(false);
+        this.SqlEditor?.setEditable(false);
         this.updateUnsavedChangesFlag(); // Reset unsaved changes flag
     }
 
     private updateEditorValue() {
-        if (!this.sqlEditor || this.isUpdatingEditorValue) {
+        if (!this.SqlEditor || this.isUpdatingEditorValue) {
             return;
         }
         
         // Use setTimeout to avoid ExpressionChangedAfterItHasBeenCheckedError
         setTimeout(() => {
-            if (!this.sqlEditor) {
+            if (!this.SqlEditor) {
                 return;
             }
             
@@ -413,7 +422,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
             const sqlValue = this.record?.SQL || '';
             
             // Use the setValue method from mj-code-editor component
-            this.sqlEditor.setValue(sqlValue);
+            this.SqlEditor.setValue(sqlValue);
             this.isUpdatingEditorValue = false;
         }, 0);
     }

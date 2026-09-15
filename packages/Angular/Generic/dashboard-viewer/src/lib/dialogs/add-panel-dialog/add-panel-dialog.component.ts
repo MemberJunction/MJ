@@ -99,7 +99,16 @@ export class AddPanelDialogComponent implements AfterViewInit, OnDestroy {
     // ========================================
 
     @ViewChild('configPanelContainer', { read: ViewContainerRef, static: false })
-    configPanelContainer!: ViewContainerRef;
+    ConfigPanelContainer!: ViewContainerRef;
+
+    /** @deprecated Use {@link ConfigPanelContainer}. */
+    get configPanelContainer(): ViewContainerRef {
+      return this.ConfigPanelContainer;
+    }
+    /** @deprecated Use {@link ConfigPanelContainer}. */
+    set configPanelContainer(value: ViewContainerRef) {
+      this.ConfigPanelContainer = value;
+    }
 
     // ========================================
     // State
@@ -359,7 +368,7 @@ export class AddPanelDialogComponent implements AfterViewInit, OnDestroy {
             return;
         }
 
-        if (!this.viewInitialized || !this.configPanelContainer) {
+        if (!this.viewInitialized || !this.ConfigPanelContainer) {
             this.loadError = 'View container not ready';
             this.cdr.detectChanges();
             return;
@@ -387,8 +396,8 @@ export class AddPanelDialogComponent implements AfterViewInit, OnDestroy {
             const componentClass = (panelInstance as object).constructor as typeof BaseConfigPanel;
 
             // Clear the container and create the component
-            this.configPanelContainer.clear();
-            this.configPanelRef = this.configPanelContainer.createComponent(componentClass as never);
+            this.ConfigPanelContainer.clear();
+            this.configPanelRef = this.ConfigPanelContainer.createComponent(componentClass as never);
 
             // Set inputs on the component
             const panel = this.configPanelRef.instance;

@@ -37,7 +37,16 @@ export class ResourceContainerComponent implements OnChanges, OnDestroy {
     return this._loadComplete;
   }
 
-  @ViewChild(Container, { static: true }) resourceContainer!: Container;
+  @ViewChild(Container, { static: true }) ResourceContainer!: Container;
+
+  /** @deprecated Use {@link ResourceContainer}. */
+  get resourceContainer(): Container {
+    return this.ResourceContainer;
+  }
+  /** @deprecated Use {@link ResourceContainer}. */
+  set resourceContainer(value: Container) {
+    this.ResourceContainer = value;
+  }
 
   private _loaded: boolean = false;
   private _componentRef: ComponentRef<any> | null = null;
@@ -82,7 +91,7 @@ export class ResourceContainerComponent implements OnChanges, OnDestroy {
         throw new Error(`Unable to find resource registration for ${this.Data.ResourceType}`);
       }
 
-      const viewContainerRef = this.resourceContainer.viewContainerRef;
+      const viewContainerRef = this.ResourceContainer.viewContainerRef;
       if (!viewContainerRef) {
         throw new Error(`Unable to find viewContainerRef`);
       }
@@ -137,8 +146,8 @@ export class ResourceContainerComponent implements OnChanges, OnDestroy {
     }
     
     // Clear the view container to ensure no lingering references
-    if (this.resourceContainer?.viewContainerRef) {
-      this.resourceContainer.viewContainerRef.clear();
+    if (this.ResourceContainer?.viewContainerRef) {
+      this.ResourceContainer.viewContainerRef.clear();
     }
     
     // Reset state

@@ -30,7 +30,16 @@ const ERD_SETTINGS_KEY = 'MJ.Admin.Entity.ERD';
 })
 @RegisterClass(BaseDashboard, 'EntityAdmin')
 export class EntityAdminDashboardComponent extends BaseDashboard implements AfterViewInit, OnDestroy {
-  @ViewChild('erdComposite', { static: false }) erdComposite!: ERDCompositeComponent;
+  @ViewChild('erdComposite', { static: false }) ErdComposite!: ERDCompositeComponent;
+
+  /** @deprecated Use {@link ErdComposite}. */
+  get erdComposite(): ERDCompositeComponent {
+    return this.ErdComposite;
+  }
+  /** @deprecated Use {@link ErdComposite}. */
+  set erdComposite(value: ERDCompositeComponent) {
+    this.ErdComposite = value;
+  }
 
   public isLoading = false;
   public IsRefreshingERD = false;
@@ -89,7 +98,7 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
 
   /** Total unfiltered entity count — feeds the chrome's X-of-Y badge. */
   public get TotalEntityCount(): number {
-    return this.erdComposite?.entities?.length ?? 0;
+    return this.ErdComposite?.entities?.length ?? 0;
   }
 
   // State management
@@ -132,8 +141,8 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
 
   public ToggleFilterPanel(): void {
     this.FilterPanelVisible = !this.FilterPanelVisible;
-    if (this.erdComposite) {
-      this.erdComposite.onToggleFilterPanel();
+    if (this.ErdComposite) {
+      this.ErdComposite.onToggleFilterPanel();
     }
   }
 
@@ -145,16 +154,16 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
   public OnStateChange(state: ERDCompositeState): void {
     // Update local state to keep header controls in sync
     this.FilterPanelVisible = state.filterPanelVisible;
-    this.FilteredEntities = this.erdComposite?.filteredEntities || [];
+    this.FilteredEntities = this.ErdComposite?.filteredEntities || [];
 
-    if (state.selectedEntityId && this.erdComposite) {
-      this.SelectedEntity = this.erdComposite.entities.find(e => UUIDsEqual(e.ID, state.selectedEntityId)) || null;
+    if (state.selectedEntityId && this.ErdComposite) {
+      this.SelectedEntity = this.ErdComposite.entities.find(e => UUIDsEqual(e.ID, state.selectedEntityId)) || null;
     } else {
       this.SelectedEntity = null;
     }
 
     // Load user state when data becomes available for the first time
-    if (this.erdComposite?.isDataLoaded && !this.hasLoadedUserState) {
+    if (this.ErdComposite?.isDataLoaded && !this.hasLoadedUserState) {
       this.hasLoadedUserState = true;
       this.loadStateFromUserSettings();
     }
@@ -234,8 +243,8 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
         this.userSettingEntity = setting;
         if (this.userSettingEntity.Value) {
           const savedState = JSON.parse(this.userSettingEntity.Value) as Partial<ERDCompositeState>;
-          if (this.erdComposite) {
-            this.erdComposite.loadUserState(savedState);
+          if (this.ErdComposite) {
+            this.ErdComposite.loadUserState(savedState);
           }
         }
       }
@@ -299,7 +308,7 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
    * Called on init (ngAfterViewInit) and on every ERD state change (onStateChange).
    */
   private publishAgentContext(): void {
-    const filters = this.erdComposite?.filters;
+    const filters = this.ErdComposite?.filters;
     const context = BuildEntityAdminAgentContext({
       TotalEntityCount: this.TotalEntityCount,
       FilteredEntityCount: this.FilteredEntities.length,
@@ -347,7 +356,7 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
 
   /** The ERD's loaded entities, narrowed to the resolver's structural shape. */
   private get entityCandidates(): EntityNameCandidate[] {
-    return this.erdComposite?.entities ?? [];
+    return this.ErdComposite?.entities ?? [];
   }
 
   /**
@@ -421,7 +430,7 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
     if (!validated.ok) {
       return validated.result;
     }
-    if (!this.erdComposite) {
+    if (!this.ErdComposite) {
       return { Success: false, ErrorMessage: 'The ERD is not ready yet.' };
     }
     const candidates = this.entityCandidates;
@@ -429,35 +438,35 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
     if (!match) {
       return { Success: false, ErrorMessage: BuildEntityNotFoundError(validated.value, candidates) };
     }
-    const entity = this.erdComposite.entities.find(e => UUIDsEqual(e.ID, match.ID));
+    const entity = this.ErdComposite.entities.find(e => UUIDsEqual(e.ID, match.ID));
     if (!entity) {
       return { Success: false, ErrorMessage: BuildEntityNotFoundError(validated.value, candidates) };
     }
-    this.erdComposite.onEntitySelected(entity);
+    this.ErdComposite.onEntitySelected(entity);
     return { Success: true, ErrorMessage: undefined };
   }
 
   /** Deselect the currently selected entity in the ERD. */
   private toolClearEntitySelection(): AgentToolResult {
-    if (!this.erdComposite) {
+    if (!this.ErdComposite) {
       return { Success: false, ErrorMessage: 'The ERD is not ready yet.' };
     }
-    this.erdComposite.onEntityDeselected();
+    this.ErdComposite.onEntityDeselected();
     return { Success: true };
   }
 
   /** Re-render the ERD diagram. */
   private toolRefreshERD(): AgentToolResult {
-    if (!this.erdComposite) {
+    if (!this.ErdComposite) {
       return { Success: false, ErrorMessage: 'The ERD is not ready yet.' };
     }
-    this.erdComposite.refreshERD();
+    this.ErdComposite.refreshERD();
     return { Success: true };
   }
 
   /** Narrow the ERD by schema and/or a name search (read-only — only changes what's shown). */
   private toolFilterEntities(params: Record<string, unknown>): AgentToolResult {
-    if (!this.erdComposite) {
+    if (!this.ErdComposite) {
       return { Success: false, ErrorMessage: 'The ERD is not ready yet.' };
     }
     const schemaRaw = params['schema'];
@@ -465,12 +474,12 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
 
     // Neither provided → reset all filters.
     if (schemaRaw === undefined && searchRaw === undefined) {
-      this.erdComposite.onResetFilters();
+      this.ErdComposite.onResetFilters();
       this.publishAgentContext();
       return { Success: true };
     }
 
-    const next = { ...this.erdComposite.filters };
+    const next = { ...this.ErdComposite.filters };
     if (schemaRaw !== undefined) {
       const validated = ValidateStringParam(schemaRaw, 'schema');
       if (!validated.ok) {
@@ -497,7 +506,7 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
       next.entityName = validated.value;
     }
 
-    this.erdComposite.onFiltersChange(next);
+    this.ErdComposite.onFiltersChange(next);
     this.publishAgentContext();
     return { Success: true };
   }

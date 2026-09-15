@@ -1570,7 +1570,16 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
     }
 
     // D3 Chart reference
-    @ViewChild('perfChart', { static: false }) perfChartRef!: ElementRef<HTMLDivElement>;
+    @ViewChild('perfChart', { static: false }) PerfChartRef!: ElementRef<HTMLDivElement>;
+
+    /** @deprecated Use {@link PerfChartRef}. */
+    get perfChartRef(): ElementRef<HTMLDivElement> {
+      return this.PerfChartRef;
+    }
+    /** @deprecated Use {@link PerfChartRef}. */
+    set perfChartRef(value: ElementRef<HTMLDivElement>) {
+      this.PerfChartRef = value;
+    }
     private chartInitialized = false;
 
     // Chart zoom and gap compression state
@@ -3279,11 +3288,11 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
      * Shows performance events over time with duration spikes
      */
     RenderPerfChart(): void {
-        if (!this.perfChartRef?.nativeElement) {
+        if (!this.PerfChartRef?.nativeElement) {
             return;
         }
 
-        const container = this.perfChartRef.nativeElement;
+        const container = this.PerfChartRef.nativeElement;
         const events = this.TelemetryEvents.filter(e => e.elapsedMs !== undefined);
 
         if (events.length === 0) {

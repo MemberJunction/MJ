@@ -75,8 +75,26 @@ export class HierarchyTreeComponent extends BaseAngularComponent implements OnIn
         super();
     }
 
-    @ViewChild('svgContainer', { static: false }) svgContainerRef!: ElementRef<HTMLDivElement>;
-    @ViewChild('svgElement', { static: false }) svgRef!: ElementRef<SVGSVGElement>;
+    @ViewChild('svgContainer', { static: false }) SvgContainerRef!: ElementRef<HTMLDivElement>;
+
+    /** @deprecated Use {@link SvgContainerRef}. */
+    get svgContainerRef(): ElementRef<HTMLDivElement> {
+        return this.SvgContainerRef;
+    }
+    /** @deprecated Use {@link SvgContainerRef}. */
+    set svgContainerRef(value: ElementRef<HTMLDivElement>) {
+        this.SvgContainerRef = value;
+    }
+    @ViewChild('svgElement', { static: false }) SvgRef!: ElementRef<SVGSVGElement>;
+
+    /** @deprecated Use {@link SvgRef}. */
+    get svgRef(): ElementRef<SVGSVGElement> {
+        return this.SvgRef;
+    }
+    /** @deprecated Use {@link SvgRef}. */
+    set svgRef(value: ElementRef<SVGSVGElement>) {
+        this.SvgRef = value;
+    }
 
     /**
      * Declarative configuration defining the target entity and visual layout properties.
@@ -212,7 +230,7 @@ export class HierarchyTreeComponent extends BaseAngularComponent implements OnIn
     }
 
     public ngAfterViewInit(): void {
-        this.log('[HierarchyTree:ngAfterViewInit] Initializing D3 Zoom & ResizeObserver. svgRef:', !!this.svgRef?.nativeElement, 'containerRect:', this.svgContainerRef?.nativeElement?.getBoundingClientRect());
+        this.log('[HierarchyTree:ngAfterViewInit] Initializing D3 Zoom & ResizeObserver. svgRef:', !!this.SvgRef?.nativeElement, 'containerRect:', this.SvgContainerRef?.nativeElement?.getBoundingClientRect());
         this.initD3Zoom();
         this.setupResizeObserver();
         if (this.AllNodes.length > 0) {
@@ -593,9 +611,9 @@ export class HierarchyTreeComponent extends BaseAngularComponent implements OnIn
     // --- D3 Layout & Visual Rendering ---
 
     private initD3Zoom(): void {
-        if (!this.svgRef?.nativeElement) return;
+        if (!this.SvgRef?.nativeElement) return;
 
-        this.svgSelection = d3.select(this.svgRef.nativeElement);
+        this.svgSelection = d3.select(this.SvgRef.nativeElement);
         this.gSelection = this.svgSelection.select<SVGGElement>('g.mj-hierarchy-canvas');
 
         this.zoomBehavior = d3.zoom<SVGSVGElement, unknown>()
@@ -615,7 +633,7 @@ export class HierarchyTreeComponent extends BaseAngularComponent implements OnIn
     }
 
     private setupResizeObserver(): void {
-        if (!this.svgContainerRef?.nativeElement) return;
+        if (!this.SvgContainerRef?.nativeElement) return;
 
         this.resizeObserver = new ResizeObserver((entries) => {
             for (const entry of entries) {
@@ -626,15 +644,15 @@ export class HierarchyTreeComponent extends BaseAngularComponent implements OnIn
                 }
             }
         });
-        this.resizeObserver.observe(this.svgContainerRef.nativeElement);
+        this.resizeObserver.observe(this.SvgContainerRef.nativeElement);
     }
 
     /**
      * Computes the D3 hierarchy tree layout and updates the SVG rendering.
      */
     public RenderTree(preserveTransform = false): void {
-        if (!this.svgRef?.nativeElement || !this.gSelection) {
-            if (this.svgRef?.nativeElement) {
+        if (!this.SvgRef?.nativeElement || !this.gSelection) {
+            if (this.SvgRef?.nativeElement) {
                 this.initD3Zoom();
             }
             if (!this.gSelection) {
@@ -957,12 +975,12 @@ export class HierarchyTreeComponent extends BaseAngularComponent implements OnIn
     }
 
     public CenterOnNode(node: HierarchyNodeData): void {
-        if (!this.svgSelection || !this.zoomBehavior || !this.svgContainerRef?.nativeElement) return;
+        if (!this.svgSelection || !this.zoomBehavior || !this.SvgContainerRef?.nativeElement) return;
         if (node.x == null || node.y == null) return;
 
-        const rect = this.svgContainerRef.nativeElement.getBoundingClientRect();
-        const width = rect.width > 50 ? rect.width : (this.svgContainerRef.nativeElement.clientWidth || 800);
-        const height = rect.height > 50 ? rect.height : (this.svgContainerRef.nativeElement.clientHeight || 500);
+        const rect = this.SvgContainerRef.nativeElement.getBoundingClientRect();
+        const width = rect.width > 50 ? rect.width : (this.SvgContainerRef.nativeElement.clientWidth || 800);
+        const height = rect.height > 50 ? rect.height : (this.SvgContainerRef.nativeElement.clientHeight || 500);
         const rightMargin = (this.ShowDetailsDrawer && this.SelectedNode) ? 340 : 0;
         const visibleWidth = Math.max(width - rightMargin, 200);
 
@@ -1089,7 +1107,7 @@ export class HierarchyTreeComponent extends BaseAngularComponent implements OnIn
 
     public SetZoomLevel(scale: number, animated = true): void {
         if (!this.svgSelection || !this.zoomBehavior || !scale) return;
-        const container = this.svgContainerRef?.nativeElement;
+        const container = this.SvgContainerRef?.nativeElement;
         const rect = container?.getBoundingClientRect();
         const width = rect?.width && rect.width > 50 ? rect.width : (container?.clientWidth || 800);
         const height = rect?.height && rect.height > 50 ? rect.height : (container?.clientHeight || 500);
@@ -1135,7 +1153,7 @@ export class HierarchyTreeComponent extends BaseAngularComponent implements OnIn
     }
 
     public FitToScreen(immediate = false, forceAutoScale = false): void {
-        if (!this.svgSelection || !this.zoomBehavior || !this.svgContainerRef?.nativeElement) return;
+        if (!this.svgSelection || !this.zoomBehavior || !this.SvgContainerRef?.nativeElement) return;
 
         const visibleNodes = this.AllNodes.filter((n) => n.x != null && n.y != null);
         if (visibleNodes.length === 0) return;
@@ -1156,9 +1174,9 @@ export class HierarchyTreeComponent extends BaseAngularComponent implements OnIn
         const treeCenterX = (minX + maxX) / 2;
         const treeCenterY = (minY + maxY) / 2;
 
-        const rect = this.svgContainerRef.nativeElement.getBoundingClientRect();
-        const width = rect.width > 50 ? rect.width : (this.svgContainerRef.nativeElement.clientWidth || 800);
-        const height = rect.height > 50 ? rect.height : (this.svgContainerRef.nativeElement.clientHeight || 500);
+        const rect = this.SvgContainerRef.nativeElement.getBoundingClientRect();
+        const width = rect.width > 50 ? rect.width : (this.SvgContainerRef.nativeElement.clientWidth || 800);
+        const height = rect.height > 50 ? rect.height : (this.SvgContainerRef.nativeElement.clientHeight || 500);
         const rightMargin = (this.ShowDetailsDrawer && this.SelectedNode) ? 340 : 0;
         const visibleWidth = Math.max(width - rightMargin, 200);
         const padding = 40;
@@ -1201,7 +1219,7 @@ export class HierarchyTreeComponent extends BaseAngularComponent implements OnIn
     }
 
     public ExportAsSVG(): string {
-        return this.svgRef?.nativeElement ? this.svgRef.nativeElement.outerHTML : '';
+        return this.SvgRef?.nativeElement ? this.SvgRef.nativeElement.outerHTML : '';
     }
 
     /** @deprecated Use {@link ExportAsSVG}. */

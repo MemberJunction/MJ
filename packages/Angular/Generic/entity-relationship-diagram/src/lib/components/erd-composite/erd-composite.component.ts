@@ -75,7 +75,16 @@ export interface ERDCompositeState {
   styleUrls: ['./erd-composite.component.css']
 })
 export class ERDCompositeComponent extends BaseAngularComponent implements OnInit, OnDestroy {
-  @ViewChild(MJEntityERDComponent) mjEntityErd!: MJEntityERDComponent;
+  @ViewChild(MJEntityERDComponent) MjEntityErd!: MJEntityERDComponent;
+
+  /** @deprecated Use {@link MjEntityErd}. */
+  get mjEntityErd(): MJEntityERDComponent {
+    return this.MjEntityErd;
+  }
+  /** @deprecated Use {@link MjEntityErd}. */
+  set mjEntityErd(value: MJEntityERDComponent) {
+    this.MjEntityErd = value;
+  }
 
   /** Whether the ERD is in a refreshing state */
   @Input() IsRefreshingERD = false;
@@ -416,8 +425,8 @@ export class ERDCompositeComponent extends BaseAngularComponent implements OnIni
     this.FilterPanelVisible = !this.FilterPanelVisible;
 
     // Trigger ERD resize when filter panel is toggled
-    if (this.mjEntityErd) {
-      this.mjEntityErd.triggerResize();
+    if (this.MjEntityErd) {
+      this.MjEntityErd.triggerResize();
     }
 
     this.emitStateChange();
@@ -449,7 +458,7 @@ export class ERDCompositeComponent extends BaseAngularComponent implements OnIni
     // microtask so the [focusEntityId] binding flushes first and the
     // inner diagram has the new focus state when we ask it to center.
     queueMicrotask(() => {
-      this.mjEntityErd?.zoomToEntity(entity.ID);
+      this.MjEntityErd?.zoomToEntity(entity.ID);
     });
 
     this.emitStateChange();
@@ -542,8 +551,8 @@ export class ERDCompositeComponent extends BaseAngularComponent implements OnIni
 
   public OnSplitterLayoutChange(_event: unknown): void {
     // Trigger ERD diagram resize when splitter layout changes
-    if (this.mjEntityErd) {
-      this.mjEntityErd.triggerResize();
+    if (this.MjEntityErd) {
+      this.MjEntityErd.triggerResize();
     }
 
     this.emitStateChange();
@@ -609,7 +618,7 @@ export class ERDCompositeComponent extends BaseAngularComponent implements OnIni
       panPosition: { x: 0, y: 0 },
       fieldsSectionExpanded: this.FieldsSectionExpanded,
       relationshipsSectionExpanded: this.RelationshipsSectionExpanded,
-      layoutAlgorithm: this.mjEntityErd?.erdDiagram?.activeLayout ?? 'schema-grid',
+      layoutAlgorithm: this.MjEntityErd?.erdDiagram?.activeLayout ?? 'schema-grid',
     };
   }
 
@@ -647,7 +656,7 @@ export class ERDCompositeComponent extends BaseAngularComponent implements OnIni
     // diagram has mounted by the time we set it.
     if (state.layoutAlgorithm) {
       const algo = state.layoutAlgorithm;
-      queueMicrotask(() => this.mjEntityErd?.erdDiagram?.setLayoutAlgorithm(algo));
+      queueMicrotask(() => this.MjEntityErd?.erdDiagram?.setLayoutAlgorithm(algo));
     }
 
     this.applyFilters();
@@ -662,8 +671,8 @@ export class ERDCompositeComponent extends BaseAngularComponent implements OnIni
    * Refresh the ERD diagram.
    */
   public RefreshERD(): void {
-    if (this.mjEntityErd) {
-      this.mjEntityErd.refresh();
+    if (this.MjEntityErd) {
+      this.MjEntityErd.refresh();
     }
   }
 

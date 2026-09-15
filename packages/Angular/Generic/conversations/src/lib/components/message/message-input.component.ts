@@ -293,7 +293,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * start of routing so the value is stable for the whole message dispatch.
    */
   private collectRequestedSkillIDs(): string[] {
-    const chipData = this.inputBox?.getMentionChipsData() || [];
+    const chipData = this.InputBox?.getMentionChipsData() || [];
     return chipData.filter(chip => chip.type === 'skill').map(chip => chip.id);
   }
 
@@ -626,7 +626,16 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    */
   @Output() uploadStateChanged = this.UploadStateChanged; // Emits when attachment upload state changes
 
-  @ViewChild('inputBox') inputBox!: AiComposerComponent;
+  @ViewChild('inputBox') InputBox!: AiComposerComponent;
+
+  /** @deprecated Use {@link InputBox}. */
+  get inputBox(): AiComposerComponent {
+    return this.InputBox;
+  }
+  /** @deprecated Use {@link InputBox}. */
+  set inputBox(value: AiComposerComponent) {
+    this.InputBox = value;
+  }
 
   private _messageText: string = '';
   /**
@@ -675,7 +684,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   set initialDraft(value: string | null) {
     if (value && value !== this.appliedInitialDraft) {
       this.appliedInitialDraft = value;
-      if (this.inputBox) {
+      if (this.InputBox) {
         this.SetDraft(value, true);
         this.InitialDraftApplied.emit();
       } else {
@@ -718,7 +727,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
   /** Current composer content in the lossless serialized form ('' when empty). */
   public GetSerializedDraft(): string {
-    const serialized = this.inputBox?.getPlainTextWithJsonMentions() ?? this.MessageText ?? '';
+    const serialized = this.InputBox?.getPlainTextWithJsonMentions() ?? this.MessageText ?? '';
     return serialized.trim().length === 0 ? '' : serialized;
   }
 
@@ -732,14 +741,14 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * @returns false while the composer view isn't mounted yet — callers may retry.
    */
   public async InsertAgentMention(agentName: string, focus: boolean = true, clearExisting: boolean = true): Promise<boolean> {
-    if (!this.inputBox) {
+    if (!this.InputBox) {
       console.log(`[Omnibar→Chat] InsertAgentMention('${agentName}'): input box not mounted yet — caller will retry`);
       return false;
     }
     if (clearExisting) {
       // Pre-addressing REPLACES any un-sent draft (tagging agent B after agent A
       // must not stack pills).
-      this.inputBox.mentionEditor?.clear();
+      this.InputBox.mentionEditor?.clear();
       this.MessageText = '';
     }
     try {
@@ -752,7 +761,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         .getSuggestions(agentName, false, '@')
         .find(s => s.type === 'agent' && s.name.trim().toLowerCase() === wanted);
       if (suggestion) {
-        const inserted = this.inputBox.InsertMention(suggestion, focus);
+        const inserted = this.InputBox.InsertMention(suggestion, focus);
         console.log(`[Omnibar→Chat] InsertAgentMention('${agentName}'): resolved to pill (id=${suggestion.id}) — insert ${inserted ? 'OK' : 'FAILED (editor view not ready)'}`);
         if (inserted) {
           if (focus) {
@@ -779,7 +788,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   private scheduleFocusReassert(context: string): void {
     for (const delay of [300, 900, 1800]) {
       setTimeout(() => {
-        const editor = this.inputBox?.mentionEditor;
+        const editor = this.InputBox?.mentionEditor;
         if (editor && !editor.HasFocus) {
           const ok = editor.FocusCaretAtEnd();
           console.log(`[Omnibar→Chat] focus re-assert (+${delay}ms) for '${context}': ${ok ? 'refocused' : 'editor gone'}`);
@@ -792,7 +801,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     this.MessageText = text;
     if (focus) {
       // The composer mounts/binds on the next tick after messageText flows down.
-      setTimeout(() => this.inputBox?.focus(), 50);
+      setTimeout(() => this.InputBox?.focus(), 50);
     }
   }
   public IsSending: boolean = false;
@@ -1034,7 +1043,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    */
   public get PickerTargetAgentId(): string | null {
     if (this.mentionedAgentId === undefined) {
-      const chips = this.inputBox?.getMentionChipsData() || [];
+      const chips = this.InputBox?.getMentionChipsData() || [];
       this.mentionedAgentId = chips.find(chip => chip.type === 'agent')?.id ?? null;
     }
     return this.mentionedAgentId ?? this.ResolveCurrentAgentId();
@@ -1394,8 +1403,8 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   private focusInput(): void {
     // Use setTimeout to ensure DOM is ready
     setTimeout(() => {
-      if (this.inputBox) {
-        this.inputBox.focus();
+      if (this.InputBox) {
+        this.InputBox.focus();
       }
     }, 100);
   }
@@ -1787,7 +1796,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         // The user-initiated send path (MessageInputBoxComponent.onSendClick)
         // calls mentionEditor.clear() — we bypass that path here, so the chips
         // would otherwise stay on screen after the message goes out.
-        this.inputBox?.mentionEditor?.clear();
+        this.InputBox?.mentionEditor?.clear();
 
         this.MessageSent.emit(detail);
 
@@ -1984,7 +1993,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     // The agentMention already has configurationId from JSON parsing
     // If it wasn't in JSON (legacy format), try to get from chip data
     if (!agentMention.configurationId) {
-      const chipData = this.inputBox?.getMentionChipsData() || [];
+      const chipData = this.InputBox?.getMentionChipsData() || [];
       const agentChip = chipData.find(chip => chip.id === agentMention.id && chip.type === 'agent');
       if (agentChip?.presetId) {
         agentMention.configurationId = agentChip.presetId;
@@ -2170,8 +2179,8 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    */
   private refocusTextarea(): void {
     setTimeout(() => {
-      if (this.inputBox) {
-        this.inputBox.focus();
+      if (this.InputBox) {
+        this.InputBox.focus();
       }
     }, 100);
   }

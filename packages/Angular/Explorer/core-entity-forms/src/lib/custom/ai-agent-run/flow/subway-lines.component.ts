@@ -23,7 +23,16 @@ interface Connector { path: SVGGraphicsElement; to: FlowNode; len: number; }
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class SubwayLinesComponent implements OnDestroy {
-  @ViewChild('svg', { static: true }) svgRef!: ElementRef<SVGSVGElement>;
+  @ViewChild('svg', { static: true }) SvgRef!: ElementRef<SVGSVGElement>;
+
+  /** @deprecated Use {@link SvgRef}. */
+  get svgRef(): ElementRef<SVGSVGElement> {
+    return this.SvgRef;
+  }
+  /** @deprecated Use {@link SvgRef}. */
+  set svgRef(value: ElementRef<SVGSVGElement>) {
+    this.SvgRef = value;
+  }
   @Output() NodeSelected = new EventEmitter<FlowNode>();
 
   /**
@@ -70,13 +79,13 @@ export class SubwayLinesComponent implements OnDestroy {
 
   private clear(): void {
     this.pz?.Detach(); this.pz = undefined;
-    const svg = this.svgRef?.nativeElement;
+    const svg = this.SvgRef?.nativeElement;
     if (svg) while (svg.firstChild) svg.removeChild(svg.firstChild);
     this.stations.clear(); this.connectors = [];
   }
 
   private build(): void {
-    const svg = this.svgRef.nativeElement;
+    const svg = this.SvgRef.nativeElement;
     const m = this._model!;
     const agents = m.nodes.filter(n => n.type === 'agent' || n.type === 'subagent');
     const lineY = new Map<number, number>();

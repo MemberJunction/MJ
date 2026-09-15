@@ -238,9 +238,36 @@ export class PerformanceHeatmapComponent implements OnInit, AfterViewInit, OnCha
   @Input() title?: string;
   @Input() config: HeatmapConfig = {};
 
-  @ViewChild('chartSvg', { static: true }) chartSvg!: ElementRef<SVGElement>;
-  @ViewChild('tooltip', { static: true }) tooltip!: ElementRef<HTMLDivElement>;
-  @ViewChild('legendGradient', { static: true }) legendGradient!: ElementRef<HTMLDivElement>;
+  @ViewChild('chartSvg', { static: true }) ChartSvg!: ElementRef<SVGElement>;
+
+  /** @deprecated Use {@link ChartSvg}. */
+  get chartSvg(): ElementRef<SVGElement> {
+    return this.ChartSvg;
+  }
+  /** @deprecated Use {@link ChartSvg}. */
+  set chartSvg(value: ElementRef<SVGElement>) {
+    this.ChartSvg = value;
+  }
+  @ViewChild('tooltip', { static: true }) Tooltip!: ElementRef<HTMLDivElement>;
+
+  /** @deprecated Use {@link Tooltip}. */
+  get tooltip(): ElementRef<HTMLDivElement> {
+    return this.Tooltip;
+  }
+  /** @deprecated Use {@link Tooltip}. */
+  set tooltip(value: ElementRef<HTMLDivElement>) {
+    this.Tooltip = value;
+  }
+  @ViewChild('legendGradient', { static: true }) LegendGradient!: ElementRef<HTMLDivElement>;
+
+  /** @deprecated Use {@link LegendGradient}. */
+  get legendGradient(): ElementRef<HTMLDivElement> {
+    return this.LegendGradient;
+  }
+  /** @deprecated Use {@link LegendGradient}. */
+  set legendGradient(value: ElementRef<HTMLDivElement>) {
+    this.LegendGradient = value;
+  }
 
   private svg!: d3.Selection<SVGElement, unknown, null, undefined>;
   private width = 0;
@@ -363,7 +390,7 @@ export class PerformanceHeatmapComponent implements OnInit, AfterViewInit, OnCha
   }
 
   private initChart() {
-    this.svg = d3.select(this.chartSvg.nativeElement);
+    this.svg = d3.select(this.ChartSvg.nativeElement);
     this.initLegend();
     
     // Set up responsive behavior
@@ -447,7 +474,7 @@ export class PerformanceHeatmapComponent implements OnInit, AfterViewInit, OnCha
   }
 
   private calculateDimensions() {
-    const container = this.chartSvg.nativeElement.parentElement!;
+    const container = this.ChartSvg.nativeElement.parentElement!;
     this.width = (this.config.width || container.clientWidth) - this.margin.left - this.margin.right;
     this.height = (this.config.height || Math.max(300, this.UniqueAgents.length * 30 + 100)) - this.margin.top - this.margin.bottom;
     
@@ -587,7 +614,7 @@ export class PerformanceHeatmapComponent implements OnInit, AfterViewInit, OnCha
   }
 
   private showTooltip(event: MouseEvent, data: HeatmapData) {
-    const tooltip = d3.select(this.tooltip.nativeElement);
+    const tooltip = d3.select(this.Tooltip.nativeElement);
     
     const content = `
       <div><strong>${data.agent} × ${data.model}</strong></div>
@@ -604,13 +631,13 @@ export class PerformanceHeatmapComponent implements OnInit, AfterViewInit, OnCha
   }
 
   private hideTooltip() {
-    d3.select(this.tooltip.nativeElement)
+    d3.select(this.Tooltip.nativeElement)
       .style('display', 'none');
   }
 
   private initLegend() {
     // Create gradient for legend
-    const gradient = d3.select(this.legendGradient.nativeElement)
+    const gradient = d3.select(this.LegendGradient.nativeElement)
       .append('svg')
       .attr('width', '100%')
       .attr('height', '100%')
@@ -628,7 +655,7 @@ export class PerformanceHeatmapComponent implements OnInit, AfterViewInit, OnCha
         .attr('stop-color', color);
     });
 
-    d3.select(this.legendGradient.nativeElement)
+    d3.select(this.LegendGradient.nativeElement)
       .select('svg')
       .append('rect')
       .attr('width', '100%')
@@ -638,7 +665,7 @@ export class PerformanceHeatmapComponent implements OnInit, AfterViewInit, OnCha
 
   private updateLegend() {
     // Update gradient colors based on current color scale
-    const gradient = d3.select(this.legendGradient.nativeElement)
+    const gradient = d3.select(this.LegendGradient.nativeElement)
       .select('linearGradient');
 
     gradient.selectAll('stop').remove();

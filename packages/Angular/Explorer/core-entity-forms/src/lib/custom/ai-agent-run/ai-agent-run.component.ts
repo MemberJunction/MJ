@@ -152,8 +152,26 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
   // Simple parsing state - true when all parsing is complete
   private _allParsingComplete = false;
   
-  @ViewChild(AIAgentRunTimelineComponent) timelineComponent?: AIAgentRunTimelineComponent;
-  @ViewChild(AIAgentRunAnalyticsComponent) analyticsComponent?: AIAgentRunAnalyticsComponent;
+  @ViewChild(AIAgentRunTimelineComponent) TimelineComponent?: AIAgentRunTimelineComponent;
+
+  /** @deprecated Use {@link TimelineComponent}. */
+  get timelineComponent(): AIAgentRunTimelineComponent | undefined {
+    return this.TimelineComponent;
+  }
+  /** @deprecated Use {@link TimelineComponent}. */
+  set timelineComponent(value: AIAgentRunTimelineComponent | undefined) {
+    this.TimelineComponent = value;
+  }
+  @ViewChild(AIAgentRunAnalyticsComponent) AnalyticsComponent?: AIAgentRunAnalyticsComponent;
+
+  /** @deprecated Use {@link AnalyticsComponent}. */
+  get analyticsComponent(): AIAgentRunAnalyticsComponent | undefined {
+    return this.AnalyticsComponent;
+  }
+  /** @deprecated Use {@link AnalyticsComponent}. */
+  set analyticsComponent(value: AIAgentRunAnalyticsComponent | undefined) {
+    this.AnalyticsComponent = value;
+  }
 
   // Field injections
   private navigationService = inject(NavigationService);
@@ -638,8 +656,8 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
         void this.loadRunTree();
         
         // Trigger analytics refresh
-        if (this.analyticsComponent) {
-          this.analyticsComponent.loadData();
+        if (this.AnalyticsComponent) {
+          this.AnalyticsComponent.loadData();
         }
       });
     }

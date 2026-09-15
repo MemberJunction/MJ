@@ -23,7 +23,16 @@ import {
 })
 export class QueryConfigPanelComponent extends BaseConfigPanel {
     // ViewChild reference
-    @ViewChild('queryDropdown') queryDropdown!: TreeDropdownComponent;
+    @ViewChild('queryDropdown') QueryDropdown!: TreeDropdownComponent;
+
+    /** @deprecated Use {@link QueryDropdown}. */
+    get queryDropdown(): TreeDropdownComponent {
+      return this.QueryDropdown;
+    }
+    /** @deprecated Use {@link QueryDropdown}. */
+    set queryDropdown(value: TreeDropdownComponent) {
+      this.QueryDropdown = value;
+    }
 
     // Form fields
     public title = '';

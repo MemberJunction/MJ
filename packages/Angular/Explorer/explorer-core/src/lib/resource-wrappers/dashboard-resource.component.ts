@@ -420,7 +420,16 @@ export class DashboardResource extends BaseResourceComponent {
         this.rehomeChildToTab(this.componentRef?.instance as BaseResourceComponent | undefined, tabId);
     }
     private dataLoaded = false;
-    @ViewChild('container', { static: true }) containerElement!: ElementRef<HTMLDivElement>;
+    @ViewChild('container', { static: true }) ContainerElement!: ElementRef<HTMLDivElement>;
+
+    /** @deprecated Use {@link ContainerElement}. */
+    get containerElement(): ElementRef<HTMLDivElement> {
+      return this.ContainerElement;
+    }
+    /** @deprecated Use {@link ContainerElement}. */
+    set containerElement(value: ElementRef<HTMLDivElement>) {
+      this.ContainerElement = value;
+    }
 
     /** Error message to display when dashboard fails to load */
     public errorMessage: string | null = null;
@@ -800,7 +809,7 @@ export class DashboardResource extends BaseResourceComponent {
         try {
             // Lazy-load the Data Explorer component to keep it out of the initial bundle
             const { DataExplorerDashboardComponent } = await import('@memberjunction/ng-dashboards/data-explorer-dashboards.module');
-            this.containerElement.nativeElement.innerHTML = '';
+            this.ContainerElement.nativeElement.innerHTML = '';
             const componentRef = this.viewContainer.createComponent(DataExplorerDashboardComponent);
             this.componentRef = componentRef;
             const instance = componentRef.instance;
@@ -830,7 +839,7 @@ export class DashboardResource extends BaseResourceComponent {
             const nativeElement = (componentRef.hostView as any).rootNodes[0];
             nativeElement.style.width = '100%';
             nativeElement.style.height = '100%';
-            this.containerElement.nativeElement.appendChild(nativeElement);
+            this.ContainerElement.nativeElement.appendChild(nativeElement);
 
             // Handle open entity record events
             instance.OpenEntityRecord.subscribe((eventData: { EntityName: string; RecordPKey: CompositeKey }) => {
@@ -893,7 +902,7 @@ export class DashboardResource extends BaseResourceComponent {
             }
 
             // Create the component instance
-            this.containerElement.nativeElement.innerHTML = '';
+            this.ContainerElement.nativeElement.innerHTML = '';
             this.componentRef = this.viewContainer.createComponent<BaseDashboard>(classReg.SubClass);
             const instance = this.componentRef.instance as BaseDashboard;
 
@@ -939,7 +948,7 @@ export class DashboardResource extends BaseResourceComponent {
             const nativeElement = (this.componentRef.hostView as any).rootNodes[0];
             nativeElement.style.width = '100%';
             nativeElement.style.height = '100%';
-            this.containerElement.nativeElement.appendChild(nativeElement);
+            this.ContainerElement.nativeElement.appendChild(nativeElement);
 
             // handle open entity record events in MJ Explorer with routing
             instance.OpenEntityRecord.subscribe((data: { EntityName: string; RecordPKey: CompositeKey }) => {
@@ -994,7 +1003,7 @@ export class DashboardResource extends BaseResourceComponent {
      */
     private async loadConfigBasedDashboard(dashboard: MJDashboardEntity): Promise<void> {
         try {
-            this.containerElement.nativeElement.innerHTML = '';
+            this.ContainerElement.nativeElement.innerHTML = '';
             const componentRef = this.viewContainer.createComponent(DashboardViewerComponent);
             this.componentRef = componentRef;
             const instance = componentRef.instance;
@@ -1014,7 +1023,7 @@ export class DashboardResource extends BaseResourceComponent {
             const nativeElement = (this.componentRef.hostView as any).rootNodes[0];
             nativeElement.style.width = '100%';
             nativeElement.style.height = '100%';
-            this.containerElement.nativeElement.appendChild(nativeElement);
+            this.ContainerElement.nativeElement.appendChild(nativeElement);
 
             // Load categories for breadcrumb navigation (if not already loaded)
             if (this.categories.length === 0) {

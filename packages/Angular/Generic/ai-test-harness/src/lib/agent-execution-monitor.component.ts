@@ -422,8 +422,26 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
      */
     @Output() viewRunClick = this.ViewRunClick;
     
-    @ViewChild('executionTreeContainer') executionTreeContainer!: ElementRef<HTMLDivElement>;
-    @ViewChild('executionNodesContainer', { read: ViewContainerRef }) executionNodesContainer!: ViewContainerRef;
+    @ViewChild('executionTreeContainer') ExecutionTreeContainer!: ElementRef<HTMLDivElement>;
+
+    /** @deprecated Use {@link ExecutionTreeContainer}. */
+    get executionTreeContainer(): ElementRef<HTMLDivElement> {
+      return this.ExecutionTreeContainer;
+    }
+    /** @deprecated Use {@link ExecutionTreeContainer}. */
+    set executionTreeContainer(value: ElementRef<HTMLDivElement>) {
+      this.ExecutionTreeContainer = value;
+    }
+    @ViewChild('executionNodesContainer', { read: ViewContainerRef }) ExecutionNodesContainer!: ViewContainerRef;
+
+    /** @deprecated Use {@link ExecutionNodesContainer}. */
+    get executionNodesContainer(): ViewContainerRef {
+      return this.ExecutionNodesContainer;
+    }
+    /** @deprecated Use {@link ExecutionNodesContainer}. */
+    set executionNodesContainer(value: ViewContainerRef) {
+      this.ExecutionNodesContainer = value;
+    }
     
     // Store the currently rendered steps for UI state management
     CurrentStep: MJAIAgentRunStepEntityExtended | null = null;
@@ -580,7 +598,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
         console.log('🎯 View initialized, checking for pending data:', {
             hasAgentRun: !!this.AgentRun,
             hasLiveSteps: this.LiveSteps?.length > 0,
-            hasContainer: !!this.executionNodesContainer
+            hasContainer: !!this.ExecutionNodesContainer
         });
         
         // Initial setup for scroll behavior
@@ -614,8 +632,8 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     private clearNodeComponents(): void {
         this.nodeComponentMap.forEach(ref => ref.destroy());
         this.nodeComponentMap.clear();
-        if (this.executionNodesContainer) {
-            this.executionNodesContainer.clear();
+        if (this.ExecutionNodesContainer) {
+            this.ExecutionNodesContainer.clear();
         }
     }
     
@@ -627,14 +645,14 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
             hasAgentRun: !!this.AgentRun,
             stepsCount: this.AgentRun?.Steps?.length || 0,
             viewInitialized: this.viewInitialized,
-            hasContainer: !!this.executionNodesContainer
+            hasContainer: !!this.ExecutionNodesContainer
         });
         
-        if (!this.AgentRun || !this.viewInitialized || !this.executionNodesContainer) {
+        if (!this.AgentRun || !this.viewInitialized || !this.ExecutionNodesContainer) {
             console.warn('⚠️ Cannot process agent run:', {
                 agentRun: !this.AgentRun ? 'missing' : 'present',
                 viewInitialized: this.viewInitialized ? 'yes' : 'no',
-                container: !this.executionNodesContainer ? 'missing' : 'present'
+                container: !this.ExecutionNodesContainer ? 'missing' : 'present'
             });
             return;
         }
@@ -646,7 +664,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
         if (this.AgentRun.Steps && this.AgentRun.Steps.length > 0) {
             console.log('🎨 Rendering', this.AgentRun.Steps.length, 'steps');
             this.renderSteps(this.AgentRun.Steps, 0, []);
-            console.log('✅ Finished rendering, container now has', this.executionNodesContainer.length, 'components');
+            console.log('✅ Finished rendering, container now has', this.ExecutionNodesContainer.length, 'components');
         } else {
             console.warn('⚠️ No steps to render');
         }
@@ -665,10 +683,10 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
         console.log('⚙️ Processing live steps:', {
             stepsCount: this.LiveSteps?.length || 0,
             viewInitialized: this.viewInitialized,
-            hasContainer: !!this.executionNodesContainer
+            hasContainer: !!this.ExecutionNodesContainer
         });
         
-        if (!this.LiveSteps || !this.viewInitialized || !this.executionNodesContainer) {
+        if (!this.LiveSteps || !this.viewInitialized || !this.ExecutionNodesContainer) {
             return;
         }
         
@@ -726,19 +744,19 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
         agentPath: string[]
     ): ComponentRef<ExecutionNodeComponent> {
         // Ensure container exists
-        if (!this.executionNodesContainer) {
+        if (!this.ExecutionNodesContainer) {
             console.error('❌ executionNodesContainer not available');
             throw new Error('executionNodesContainer ViewContainerRef not initialized');
         }
         
-        const componentRef = this.executionNodesContainer.createComponent(ExecutionNodeComponent);
+        const componentRef = this.ExecutionNodesContainer.createComponent(ExecutionNodeComponent);
         const instance = componentRef.instance;
         
         console.log('🔨 Creating component for step:', {
             stepId: step.ID,
             stepName: step.StepName,
             depth,
-            containerLength: this.executionNodesContainer.length,
+            containerLength: this.ExecutionNodesContainer.length,
             hostElement: componentRef.location.nativeElement
         });
         
@@ -1175,9 +1193,9 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
      * Check if user is at bottom (for initial setup)
      */
     private checkIfUserAtBottom(): void {
-        if (!this.executionTreeContainer) return;
+        if (!this.ExecutionTreeContainer) return;
         
-        const element = this.executionTreeContainer.nativeElement;
+        const element = this.ExecutionTreeContainer.nativeElement;
         if (this.isScrolledToBottom(element)) {
             this.userHasScrolled = false;
         }
@@ -1187,11 +1205,11 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
      * Auto-scroll to bottom if user hasn't interacted
      */
     private autoScrollToBottom(): void {
-        if (!this.executionTreeContainer || this.userHasInteracted || this.userHasScrolled) {
+        if (!this.ExecutionTreeContainer || this.userHasInteracted || this.userHasScrolled) {
             return;
         }
         
-        const element = this.executionTreeContainer.nativeElement;
+        const element = this.ExecutionTreeContainer.nativeElement;
         this.isAutoScrolling = true;
         
         // Use smooth scrolling for better UX
@@ -1321,7 +1339,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
      * Append new live steps without re-rendering entire tree
      */
     private appendNewLiveSteps(newSteps: MJAIAgentRunStepEntityExtended[]): void {
-        if (!newSteps || newSteps.length === 0 || !this.viewInitialized || !this.executionNodesContainer) {
+        if (!newSteps || newSteps.length === 0 || !this.viewInitialized || !this.ExecutionNodesContainer) {
             return;
         }
         
@@ -1464,8 +1482,8 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
      * Scroll the execution tree to the top
      */
     private scrollToTop(): void {
-        if (this.executionTreeContainer) {
-            const element = this.executionTreeContainer.nativeElement;
+        if (this.ExecutionTreeContainer) {
+            const element = this.ExecutionTreeContainer.nativeElement;
             element.scrollTo({
                 top: 0,
                 behavior: 'smooth'

@@ -230,7 +230,16 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
    */
   @Output() applyFormRequested = this.ApplyFormRequested;
 
-  @ViewChild(ArtifactTypePluginViewerComponent) pluginViewer?: ArtifactTypePluginViewerComponent;
+  @ViewChild(ArtifactTypePluginViewerComponent) PluginViewer?: ArtifactTypePluginViewerComponent;
+
+  /** @deprecated Use {@link PluginViewer}. */
+  get pluginViewer(): ArtifactTypePluginViewerComponent | undefined {
+    return this.PluginViewer;
+  }
+  /** @deprecated Use {@link PluginViewer}. */
+  set pluginViewer(value: ArtifactTypePluginViewerComponent | undefined) {
+    this.PluginViewer = value;
+  }
 
   private destroy$ = new Subject<void>();
   private artifactLoadToken = 0;
@@ -455,14 +464,14 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     }
 
     // Get plugin tabs directly from plugin instance (no caching needed - plugin always exists)
-    if (this.pluginViewer?.pluginInstance?.GetAdditionalTabs) {
-      const pluginTabs = this.pluginViewer.pluginInstance.GetAdditionalTabs();
+    if (this.PluginViewer?.pluginInstance?.GetAdditionalTabs) {
+      const pluginTabs = this.PluginViewer.pluginInstance.GetAdditionalTabs();
       const pluginTabLabels = pluginTabs.map((t: ArtifactViewerTab) => t.label);
       tabs.push(...pluginTabLabels);
     }
 
     // Get tabs to remove from plugin (case-insensitive)
-    const removals = this.pluginViewer?.pluginInstance?.GetStandardTabRemovals?.() || [];
+    const removals = this.PluginViewer?.pluginInstance?.GetStandardTabRemovals?.() || [];
     const removalsLower = removals.map(r => r.toLowerCase());
 
     // File-category artifacts (PDF, Excel, Word) have binary content — the JSON tab
@@ -497,8 +506,8 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
    */
   public GetTabDefinition(tabName: string): ArtifactViewerTab | null {
     // Check if this is a plugin-provided tab
-    if (this.pluginViewer?.pluginInstance?.GetAdditionalTabs) {
-      const pluginTabs = this.pluginViewer.pluginInstance.GetAdditionalTabs();
+    if (this.PluginViewer?.pluginInstance?.GetAdditionalTabs) {
+      const pluginTabs = this.PluginViewer.pluginInstance.GetAdditionalTabs();
       const pluginTab = pluginTabs.find((t: ArtifactViewerTab) =>
         t.label.toLowerCase() === tabName.toLowerCase()
       );
@@ -949,7 +958,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     // Note: hasDisplayContent defaults to false in base class, so plugins must
     // explicitly opt-in by overriding to return true when they have content.
     // This prevents showing Display tab before plugin loads or when plugin has no content.
-    const pluginHasContent = this.pluginViewer?.pluginInstance?.hasDisplayContent ?? false;
+    const pluginHasContent = this.PluginViewer?.pluginInstance?.hasDisplayContent ?? false;
 
     return pluginHasContent || !!this.DisplayMarkdown || !!this.DisplayHtml;
   }
@@ -1093,7 +1102,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
 
   get HasJsonTab(): boolean {
     // Query plugin directly (no cache needed - plugin always exists when it should)
-    const pluginInstance = this.pluginViewer?.pluginInstance;
+    const pluginInstance = this.PluginViewer?.pluginInstance;
     return pluginInstance?.parentShouldShowRawContent || false;
   }
 
@@ -1371,8 +1380,8 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
 
   OnPrintDisplayContent(): void {
     // Try to delegate to the plugin viewer's print method
-    if (this.pluginViewer?.pluginInstance) {
-      const plugin = this.pluginViewer.pluginInstance as any;
+    if (this.PluginViewer?.pluginInstance) {
+      const plugin = this.PluginViewer.pluginInstance as any;
       if (typeof plugin.printHtml === 'function') {
         plugin.printHtml();
         return;
@@ -1932,7 +1941,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     }
 
     // Check plugin tabs
-    const plugin = this.pluginViewer?.pluginInstance;
+    const plugin = this.PluginViewer?.pluginInstance;
     if (plugin?.GetAdditionalTabs) {
       const pluginTab = plugin.GetAdditionalTabs().find((t: ArtifactViewerTab) => t.label === tabName);
       if (pluginTab?.icon) {
@@ -2029,6 +2038,6 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
    * Returns null if no plugin is loaded or the plugin has no snapshot.
    */
   public GetCurrentStateSnapshot(): DataSnapshot | null {
-    return this.pluginViewer?.pluginInstance?.GetCurrentStateSnapshot() ?? null;
+    return this.PluginViewer?.pluginInstance?.GetCurrentStateSnapshot() ?? null;
   }
 }

@@ -26,7 +26,16 @@ import { BeforeSkillsOpenedEventArgs } from '../../events/composer-events';
   styleUrls: ['./message-input-box.component.css']
 })
 export class MessageInputBoxComponent {
-  @ViewChild('mentionEditor') mentionEditor?: MentionEditorComponent;
+  @ViewChild('mentionEditor') MentionEditor?: MentionEditorComponent;
+
+  /** @deprecated Use {@link MentionEditor}. */
+  get mentionEditor(): MentionEditorComponent | undefined {
+    return this.MentionEditor;
+  }
+  /** @deprecated Use {@link MentionEditor}. */
+  set mentionEditor(value: MentionEditorComponent | undefined) {
+    this.MentionEditor = value;
+  }
 
   @Input() Placeholder: string = 'Type your message to start a new conversation...';
   @Input() Disabled: boolean = false;
@@ -81,7 +90,7 @@ export class MessageInputBoxComponent {
    * and would leave the button permanently unpressed if nobody bound it.
    */
   get SkillsActive(): boolean {
-    return this.mentionEditor?.IsTriggerOpen('/') ?? false;
+    return this.MentionEditor?.IsTriggerOpen('/') ?? false;
   }
 
   /** Composer lost focus — hosts persist drafts on this. */
@@ -145,7 +154,7 @@ export class MessageInputBoxComponent {
     // counting opens over-counted) and re-captured the trigger's baseline at the new caret, which
     // corrupts the query offset once anything has been typed.
     if (this.SkillsActive) {
-      this.mentionEditor?.closeMentionDropdown();
+      this.MentionEditor?.closeMentionDropdown();
       return;
     }
     const args = new BeforeSkillsOpenedEventArgs();
@@ -154,7 +163,7 @@ export class MessageInputBoxComponent {
       return;
     }
     const anchor = (event?.currentTarget as HTMLElement | undefined) ?? null;
-    if (this.mentionEditor?.OpenTrigger('/', anchor)) {
+    if (this.MentionEditor?.OpenTrigger('/', anchor)) {
       this.AfterSkillsOpened.emit();
     }
   }
@@ -169,7 +178,7 @@ export class MessageInputBoxComponent {
 
   get CanSend(): boolean {
     const hasText = this.Value.trim().length > 0;
-    const hasAttachments = this.mentionEditor?.hasAttachments() || false;
+    const hasAttachments = this.MentionEditor?.hasAttachments() || false;
     return !this.Disabled && (hasText || hasAttachments);
   }
 
@@ -225,13 +234,13 @@ export class MessageInputBoxComponent {
   OnSendClick(): void {
     if (this.CanSend) {
       // Get plain text with JSON-encoded mentions (preserves configuration info)
-      const textToSend = this.mentionEditor?.getPlainTextWithJsonMentions() || this.Value.trim();
+      const textToSend = this.MentionEditor?.getPlainTextWithJsonMentions() || this.Value.trim();
       this.TextSubmitted.emit(textToSend);
       this.Value = ''; // Clear input after sending
 
       // Clear the editor content
-      if (this.mentionEditor) {
-        this.mentionEditor.clear();
+      if (this.MentionEditor) {
+        this.MentionEditor.clear();
       }
 
       this.ValueChange.emit(this.Value);
@@ -250,7 +259,7 @@ export class MessageInputBoxComponent {
       return;
     }
 
-    const editor = this.mentionEditor?.editorRef?.nativeElement;
+    const editor = this.MentionEditor?.editorRef?.nativeElement;
     if (!editor) return;
 
     // If clicking directly on the editor or its children, let the browser handle cursor placement
@@ -276,16 +285,16 @@ export class MessageInputBoxComponent {
    */
   /** Inserts a resolved mention chip + space and focuses (see MentionEditorComponent.InsertMention). */
   InsertMention(suggestion: MentionSuggestion, focus: boolean = true): boolean {
-    return this.mentionEditor?.InsertMention(suggestion, focus) ?? false;
+    return this.MentionEditor?.InsertMention(suggestion, focus) ?? false;
   }
 
   /** Focus with the caret at the end of content (see MentionEditorComponent.FocusCaretAtEnd). */
   FocusCaretAtEnd(): boolean {
-    return this.mentionEditor?.FocusCaretAtEnd() ?? false;
+    return this.MentionEditor?.FocusCaretAtEnd() ?? false;
   }
 
   Focus(): void {
-    const editor = this.mentionEditor?.editorRef?.nativeElement;
+    const editor = this.MentionEditor?.editorRef?.nativeElement;
     if (editor) {
       editor.focus();
     }
@@ -300,21 +309,21 @@ export class MessageInputBoxComponent {
    * Get mention chip data including configuration presets
    */
   GetMentionChipsData(): Array<{ id: string; type: string; name: string; presetId?: string; presetName?: string }> {
-    return this.mentionEditor?.getMentionChipsData() || [];
+    return this.MentionEditor?.getMentionChipsData() || [];
   }
 
   /**
    * Get pending attachments from the editor
    */
   GetPendingAttachments(): PendingAttachment[] {
-    return this.mentionEditor?.getPendingAttachments() || [];
+    return this.MentionEditor?.getPendingAttachments() || [];
   }
 
   /**
    * Open file picker programmatically
    */
   OpenFilePicker(): void {
-    this.mentionEditor?.openFilePicker();
+    this.MentionEditor?.openFilePicker();
   }
 
   /**
@@ -324,6 +333,6 @@ export class MessageInputBoxComponent {
     fileID: string; fileName: string; mimeType: string;
     sizeBytes: number; artifactVersionId?: string;
   }): PendingAttachment | undefined {
-    return this.mentionEditor?.AddArtifactAttachment(artifact);
+    return this.MentionEditor?.AddArtifactAttachment(artifact);
   }
 }

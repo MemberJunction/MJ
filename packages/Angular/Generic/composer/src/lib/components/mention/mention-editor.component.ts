@@ -71,7 +71,16 @@ export interface PendingAttachment {
   ]
 })
 export class MentionEditorComponent implements OnInit, AfterViewInit, ControlValueAccessor {
-  @ViewChild('editor', { static: false }) editorRef!: ElementRef<HTMLDivElement>;
+  @ViewChild('editor', { static: false }) EditorRef!: ElementRef<HTMLDivElement>;
+
+  /** @deprecated Use {@link EditorRef}. */
+  get editorRef(): ElementRef<HTMLDivElement> {
+    return this.EditorRef;
+  }
+  /** @deprecated Use {@link EditorRef}. */
+  set editorRef(value: ElementRef<HTMLDivElement>) {
+    this.EditorRef = value;
+  }
 
   @Input() Placeholder: string = 'Type @ to mention agents or users, # for entities...';
 
@@ -457,7 +466,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
     // Auto-focus the editor
     if (this.AutoFocus) {
       setTimeout(() => {
-        this.editorRef?.nativeElement?.focus();
+        this.EditorRef?.nativeElement?.focus();
       }, 100);
     }
   }
@@ -467,7 +476,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
    */
   OnContainerClick(event: MouseEvent): void {
     const target = event.target as HTMLElement;
-    const editor = this.editorRef?.nativeElement;
+    const editor = this.EditorRef?.nativeElement;
 
     // Don't handle clicks on the dropdown or its children
     if (target.closest('mj-mention-dropdown')) {
@@ -754,7 +763,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
    */
   private getTextBeforeCursor(range: Range): string {
     const tempRange = range.cloneRange();
-    tempRange.selectNodeContents(this.editorRef.nativeElement);
+    tempRange.selectNodeContents(this.EditorRef.nativeElement);
     tempRange.setEnd(range.startContainer, range.startOffset);
     return tempRange.toString();
   }
@@ -763,7 +772,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
    * Position the mention dropdown
    */
   private positionMentionDropdown(): void {
-    const editor = this.editorRef?.nativeElement;
+    const editor = this.EditorRef?.nativeElement;
     if (!editor) return;
 
     // Get the parent container (message-input-box-container) for alignment
@@ -895,7 +904,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
 
     // Refocus the editor after selection
     setTimeout(() => {
-      this.editorRef?.nativeElement?.focus();
+      this.EditorRef?.nativeElement?.focus();
     }, 50);
   }
 
@@ -919,7 +928,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
    */
   /** Focuses the editor and places the caret at the very end of its content. */
   public FocusCaretAtEnd(): boolean {
-    const editor = this.editorRef?.nativeElement;
+    const editor = this.EditorRef?.nativeElement;
     if (!editor) {
       return false;
     }
@@ -951,7 +960,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
    * @returns false when the editor is disabled, unavailable, or no active provider owns the char.
    */
   public OpenTrigger(triggerChar: string, anchorEl?: HTMLElement | null): boolean {
-    const editor = this.editorRef?.nativeElement;
+    const editor = this.EditorRef?.nativeElement;
     if (!editor || this.Disabled) {
       return false;
     }
@@ -995,12 +1004,12 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
 
   /** True when keyboard focus currently sits inside this editor. */
   public get HasFocus(): boolean {
-    const editor = this.editorRef?.nativeElement;
+    const editor = this.EditorRef?.nativeElement;
     return !!editor && (editor === document.activeElement || editor.contains(document.activeElement));
   }
 
   public InsertMention(suggestion: MentionSuggestion, focus: boolean = true): boolean {
-    const editor = this.editorRef?.nativeElement;
+    const editor = this.EditorRef?.nativeElement;
     if (!editor) {
       return false;
     }
@@ -1472,7 +1481,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
    * Convert editor HTML to plain text with @mentions
    */
   private getPlainText(): string {
-    const editor = this.editorRef?.nativeElement;
+    const editor = this.EditorRef?.nativeElement;
     if (!editor) return '';
 
     let text = '';
@@ -1547,7 +1556,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
    * strings (no tokens) take the fast path.
    */
   private setEditorContent(text: string): void {
-    const editor = this.editorRef?.nativeElement;
+    const editor = this.EditorRef?.nativeElement;
     if (!editor) return;
 
     const segments = MentionEditorComponent.ParseSerializedMentions(text);
@@ -1657,7 +1666,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
 
   // ControlValueAccessor implementation
   writeValue(value: string): void {
-    const editor = this.editorRef?.nativeElement;
+    const editor = this.EditorRef?.nativeElement;
     if (!editor) {
       // View not created yet — buffer the value; ngAfterViewInit applies it
       this.pendingWriteValue = value ?? '';
@@ -1680,8 +1689,8 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
 
   setDisabledState(isDisabled: boolean): void {
     this.Disabled = isDisabled;
-    if (this.editorRef?.nativeElement) {
-      this.editorRef.nativeElement.contentEditable = (!isDisabled).toString();
+    if (this.EditorRef?.nativeElement) {
+      this.EditorRef.nativeElement.contentEditable = (!isDisabled).toString();
     }
   }
 
@@ -1689,7 +1698,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
    * Focus the editor
    */
   public Focus(): void {
-    this.editorRef?.nativeElement?.focus();
+    this.EditorRef?.nativeElement?.focus();
   }
 
   /** @deprecated Use {@link Focus}. */
@@ -1701,8 +1710,8 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
    * Clear the editor content and pending attachments
    */
   public Clear(): void {
-    if (this.editorRef?.nativeElement) {
-      this.editorRef.nativeElement.textContent = '';
+    if (this.EditorRef?.nativeElement) {
+      this.EditorRef.nativeElement.textContent = '';
       this.OnInput();
     }
     this.ClearPendingAttachments();
@@ -1718,7 +1727,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
    * Returns array of objects containing mention info and preset configuration
    */
   public GetMentionChipsData(): Array<{ id: string; type: string; name: string; presetId?: string; presetName?: string }> {
-    const editor = this.editorRef?.nativeElement;
+    const editor = this.EditorRef?.nativeElement;
     if (!editor) return [];
 
     const chips: Array<{ id: string; type: string; name: string; presetId?: string; presetName?: string }> = [];
@@ -1755,7 +1764,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
    * Format: @{type:"agent",id:"uuid",name:"Agent Name",configId:"uuid",config:"High"}
    */
   public GetPlainTextWithJsonMentions(): string {
-    const editor = this.editorRef?.nativeElement;
+    const editor = this.EditorRef?.nativeElement;
     if (!editor) return '';
 
     let plainText = '';

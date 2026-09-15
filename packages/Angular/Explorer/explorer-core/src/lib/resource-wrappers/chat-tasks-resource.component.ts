@@ -51,7 +51,16 @@ import { Subject } from 'rxjs';
   encapsulation: ViewEncapsulation.None
 })
 export class ChatTasksResource extends BaseResourceComponent implements OnDestroy {
-  @ViewChild('tasksView') tasksView?: TasksFullViewComponent;
+  @ViewChild('tasksView') TasksView?: TasksFullViewComponent;
+
+  /** @deprecated Use {@link TasksView}. */
+  get tasksView(): TasksFullViewComponent | undefined {
+    return this.TasksView;
+  }
+  /** @deprecated Use {@link TasksView}. */
+  set tasksView(value: TasksFullViewComponent | undefined) {
+    this.TasksView = value;
+  }
 
   public CurrentUser: any = null;
 

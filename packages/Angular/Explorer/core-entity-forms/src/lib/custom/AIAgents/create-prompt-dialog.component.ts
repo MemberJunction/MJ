@@ -134,7 +134,16 @@ export class CreatePromptDialogComponent extends BaseAngularComponent implements
   }
   
   // Template editor
-  @ViewChild('templateEditor') templateEditor: any; // Template editor component reference
+  @ViewChild('templateEditor') TemplateEditor: any;
+
+  /** @deprecated Use {@link TemplateEditor}. */
+  get templateEditor(): any {
+    return this.TemplateEditor;
+  }
+  /** @deprecated Use {@link TemplateEditor}. */
+  set templateEditor(value: any) {
+    this.TemplateEditor = value;
+  } // Template editor component reference
   ShowTemplateEditor = false;
 
   /** @deprecated Use {@link ShowTemplateEditor}. */
@@ -337,10 +346,10 @@ export class CreatePromptDialogComponent extends BaseAngularComponent implements
       this.PromptEntity.OutputType = formValue.outputType;
 
       // Get template contents if template editor is active
-      if (this.templateEditor && this.ShowTemplateEditor) {
+      if (this.TemplateEditor && this.ShowTemplateEditor) {
         // Get the template contents from the editor without saving
         // The parent form will handle saving in the proper order
-        this.TemplateContents = this.templateEditor.templateContents || [];
+        this.TemplateContents = this.TemplateEditor.templateContents || [];
         
         // Ensure the template contents have the correct TemplateID
         if (this.TemplateContents && this.TemplateEntity) {

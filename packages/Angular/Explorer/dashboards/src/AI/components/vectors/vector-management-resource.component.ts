@@ -474,7 +474,16 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     public ShowEntityPicker = false;
     public SelectedEntityIndex = -1;
     /** Reference to the entity search input for programmatic focus */
-    @ViewChild('entitySearchInput') entitySearchInput?: ElementRef<HTMLInputElement>;
+    @ViewChild('entitySearchInput') EntitySearchInput?: ElementRef<HTMLInputElement>;
+
+    /** @deprecated Use {@link EntitySearchInput}. */
+    get entitySearchInput(): ElementRef<HTMLInputElement> | undefined {
+        return this.EntitySearchInput;
+    }
+    /** @deprecated Use {@link EntitySearchInput}. */
+    set entitySearchInput(value: ElementRef<HTMLInputElement> | undefined) {
+        this.EntitySearchInput = value;
+    }
 
     // --- Raw entity data (private) ---
     private entityDocuments: MJEntityDocumentEntity[] = [];
@@ -978,8 +987,8 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             this.cdr.detectChanges();
             // Focus search input after the @if block renders — deferred past the click event
             setTimeout(() => {
-                if (this.entitySearchInput?.nativeElement) {
-                    this.entitySearchInput.nativeElement.focus();
+                if (this.EntitySearchInput?.nativeElement) {
+                    this.EntitySearchInput.nativeElement.focus();
                 }
             }, 0);
         } else {

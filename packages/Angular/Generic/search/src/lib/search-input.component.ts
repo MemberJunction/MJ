@@ -32,7 +32,16 @@ export class SearchInputComponent implements OnInit, OnDestroy {
     private destroy$ = new Subject<void>();
     private queryInput$ = new Subject<string>();
 
-    @ViewChild('inputEl') inputRef!: ElementRef<HTMLInputElement>;
+    @ViewChild('inputEl') InputRef!: ElementRef<HTMLInputElement>;
+
+    /** @deprecated Use {@link InputRef}. */
+    get inputRef(): ElementRef<HTMLInputElement> {
+        return this.InputRef;
+    }
+    /** @deprecated Use {@link InputRef}. */
+    set inputRef(value: ElementRef<HTMLInputElement>) {
+        this.InputRef = value;
+    }
 
     // --- Configuration Inputs ---
 
@@ -105,7 +114,7 @@ export class SearchInputComponent implements OnInit, OnDestroy {
 
     /** Programmatically focus the input element */
     public Focus(): void {
-        this.inputRef?.nativeElement?.focus();
+        this.InputRef?.nativeElement?.focus();
     }
 
     /** Clear the query and emit InputCleared */

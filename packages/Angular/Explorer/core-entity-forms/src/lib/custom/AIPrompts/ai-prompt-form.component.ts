@@ -427,7 +427,16 @@ export class MJAIPromptFormComponentExtended extends MJAIPromptFormComponent imp
     private get _metadata() { return this.ProviderToUse; }
     private __inferenceProvider_VendorTypeDefinitionID: string = '';
 
-    @ViewChild('templateEditor') templateEditor: TemplateEditorComponent | undefined;
+    @ViewChild('templateEditor') TemplateEditor: TemplateEditorComponent | undefined;
+
+    /** @deprecated Use {@link TemplateEditor}. */
+    get templateEditor(): TemplateEditorComponent | undefined {
+      return this.TemplateEditor;
+    }
+    /** @deprecated Use {@link TemplateEditor}. */
+    set templateEditor(value: TemplateEditorComponent | undefined) {
+      this.TemplateEditor = value;
+    }
 
     async ngOnInit() {
         await super.ngOnInit();
@@ -938,9 +947,9 @@ export class MJAIPromptFormComponentExtended extends MJAIPromptFormComponent imp
         // and communicate them through the MJ event system
         
         // If the template editor has a method to get pending changes, we would call it here
-        if (this.templateEditor && typeof (this.templateEditor as any).getPendingChanges === 'function') {
+        if (this.TemplateEditor && typeof (this.TemplateEditor as any).getPendingChanges === 'function') {
             try {
-                const pendingChanges = (this.templateEditor as any).getPendingChanges();
+                const pendingChanges = (this.TemplateEditor as any).getPendingChanges();
                 if (pendingChanges && pendingChanges.length > 0) {
                     this.PendingRecords.push(...pendingChanges);
                 }
@@ -1575,9 +1584,9 @@ export class MJAIPromptFormComponentExtended extends MJAIPromptFormComponent imp
             this.loadTemplate().then(() => {
                 this.cdr.detectChanges();
             });
-        } else if (this.templateEditor) {
+        } else if (this.TemplateEditor) {
             // Even if template didn't change, refresh the template editor to discard any unsaved content changes
-            this.templateEditor.refreshAndDiscardChanges();
+            this.TemplateEditor.refreshAndDiscardChanges();
         }
         
         // Clear the stored original state

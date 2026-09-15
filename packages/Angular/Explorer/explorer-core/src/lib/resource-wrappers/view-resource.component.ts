@@ -136,8 +136,26 @@ import type { SaveViewAsListResult } from '@memberjunction/ng-list-management';
     `]
 })
 export class UserViewResource extends BaseResourceComponent {
-    @ViewChild('container', { static: true }) containerElement!: ElementRef<HTMLDivElement>;
-    @ViewChild('entityViewer') entityViewerRef?: EntityViewerComponent;
+    @ViewChild('container', { static: true }) ContainerElement!: ElementRef<HTMLDivElement>;
+
+    /** @deprecated Use {@link ContainerElement}. */
+    get containerElement(): ElementRef<HTMLDivElement> {
+      return this.ContainerElement;
+    }
+    /** @deprecated Use {@link ContainerElement}. */
+    set containerElement(value: ElementRef<HTMLDivElement>) {
+      this.ContainerElement = value;
+    }
+    @ViewChild('entityViewer') EntityViewerRef?: EntityViewerComponent;
+
+    /** @deprecated Use {@link EntityViewerRef}. */
+    get entityViewerRef(): EntityViewerComponent | undefined {
+      return this.EntityViewerRef;
+    }
+    /** @deprecated Use {@link EntityViewerRef}. */
+    set entityViewerRef(value: EntityViewerComponent | undefined) {
+      this.EntityViewerRef = value;
+    }
 
     public isLoading: boolean = false;
     public errorMessage: string | null = null;
@@ -439,7 +457,7 @@ export class UserViewResource extends BaseResourceComponent {
      * detection to avoid an ExpressionChanged error from reading child state during a CD pass.
      */
     private refreshFallbackExportVisibility(): void {
-        const next = !!this.entityViewerRef && !this.entityViewerRef.ActiveViewTypeHasOwnExport;
+        const next = !!this.EntityViewerRef && !this.EntityViewerRef.ActiveViewTypeHasOwnExport;
         if (next !== this.ShowFallbackExportButton) {
             this.ShowFallbackExportButton = next;
             this.cdr.detectChanges();
@@ -454,9 +472,9 @@ export class UserViewResource extends BaseResourceComponent {
     public async OnExport(): Promise<void> {
         // Never fail silently — a "nothing happens" click is impossible to diagnose. Surface the
         // reason both in the UI and the console.
-        if (!this.EntityInfo || !this.entityViewerRef) {
+        if (!this.EntityInfo || !this.EntityViewerRef) {
             console.error('[ViewResource] Export: viewer not ready', {
-                hasEntity: !!this.EntityInfo, hasViewer: !!this.entityViewerRef
+                hasEntity: !!this.EntityInfo, hasViewer: !!this.EntityViewerRef
             });
             this.showNotification('Export is not ready yet — try again in a moment.', 'error', 5000);
             return;
@@ -465,7 +483,7 @@ export class UserViewResource extends BaseResourceComponent {
         this.cdr.detectChanges();
         this.showNotification('Preparing your Excel export…', 'info', 2000);
         try {
-            const rows = await this.entityViewerRef.FetchAllRowsForExport();
+            const rows = await this.EntityViewerRef.FetchAllRowsForExport();
             if (!rows || rows.length === 0) {
                 this.showNotification('Nothing to export — the view returned no records.', 'warning', 5000);
                 return;
@@ -571,7 +589,7 @@ export class UserViewResource extends BaseResourceComponent {
         // Best-effort record-count hint — the entity-viewer exposes the
         // grid's row count on its gridState; we surface it so the dialog's
         // confirm button can say "Save List (476 records)".
-        this.SaveAsListRecordCount = this.entityViewerRef?.TotalRecordCount ?? null;
+        this.SaveAsListRecordCount = this.EntityViewerRef?.TotalRecordCount ?? null;
         this.SaveAsListDialogVisible = true;
         this.cdr.detectChanges();
     }

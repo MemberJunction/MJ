@@ -51,7 +51,16 @@ import { AgentRequestPanelComponent, AgentRequestPanelResult } from '../panels/a
     changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class AgentRequestDialogComponent extends BaseAngularComponent implements OnInit, OnChanges {
-    @ViewChild('requestPanel') requestPanel!: AgentRequestPanelComponent;
+    @ViewChild('requestPanel') RequestPanel!: AgentRequestPanelComponent;
+
+    /** @deprecated Use {@link RequestPanel}. */
+    get requestPanel(): AgentRequestPanelComponent {
+        return this.RequestPanel;
+    }
+    /** @deprecated Use {@link RequestPanel}. */
+    set requestPanel(value: AgentRequestPanelComponent) {
+        this.RequestPanel = value;
+    }
 
     @Input() Visible = false;
     @Input() Request: MJAIAgentRequestEntity | null = null;
@@ -84,8 +93,8 @@ export class AgentRequestDialogComponent extends BaseAngularComponent implements
             this.loadRequestTypes().then(() => {
                 this.cdr.detectChanges();
                 setTimeout(() => {
-                    if (this.requestPanel && this.Request) {
-                        this.requestPanel.Open(this.Request);
+                    if (this.RequestPanel && this.Request) {
+                        this.RequestPanel.Open(this.Request);
                     }
                 }, 0);
             });

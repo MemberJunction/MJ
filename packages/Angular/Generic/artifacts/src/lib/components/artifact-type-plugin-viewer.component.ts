@@ -179,7 +179,16 @@ export class ArtifactTypePluginViewerComponent extends BaseAngularComponent impl
   @Output() applyFormRequested = this.ApplyFormRequested;
 
   @ViewChild('viewerContainer', { read: ViewContainerRef, static: true })
-  viewerContainer!: ViewContainerRef;
+  ViewerContainer!: ViewContainerRef;
+
+  /** @deprecated Use {@link ViewerContainer}. */
+  get viewerContainer(): ViewContainerRef {
+    return this.ViewerContainer;
+  }
+  /** @deprecated Use {@link ViewerContainer}. */
+  set viewerContainer(value: ViewContainerRef) {
+    this.ViewerContainer = value;
+  }
 
   public isLoading = true;
   public error: string | null = null;
@@ -327,7 +336,7 @@ export class ArtifactTypePluginViewerComponent extends BaseAngularComponent impl
       this.destroyCurrentViewer();
 
       // Create and configure the viewer component
-      this.componentRef = this.viewerContainer.createComponent(componentType);
+      this.componentRef = this.ViewerContainer.createComponent(componentType);
 
       // Set inputs using setInput() which properly triggers ngOnChanges
       // This is critical for plugins like ComponentArtifactViewerComponent that
@@ -503,6 +512,6 @@ export class ArtifactTypePluginViewerComponent extends BaseAngularComponent impl
       this.componentRef.destroy();
       this.componentRef = null;
     }
-    this.viewerContainer.clear();
+    this.ViewerContainer.clear();
   }
 }

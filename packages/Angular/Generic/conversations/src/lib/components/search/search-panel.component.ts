@@ -76,7 +76,16 @@ export class SearchPanelComponent implements OnInit, OnDestroy {
    */
   @Output() resultSelected = this.ResultSelected;
 
-  @ViewChild('searchInput') searchInput?: ElementRef<HTMLInputElement>;
+  @ViewChild('searchInput') SearchInput?: ElementRef<HTMLInputElement>;
+
+  /** @deprecated Use {@link SearchInput}. */
+  get searchInput(): ElementRef<HTMLInputElement> | undefined {
+    return this.SearchInput;
+  }
+  /** @deprecated Use {@link SearchInput}. */
+  set searchInput(value: ElementRef<HTMLInputElement> | undefined) {
+    this.SearchInput = value;
+  }
 
   public SearchQuery: string = '';
 
@@ -324,7 +333,7 @@ export class SearchPanelComponent implements OnInit, OnDestroy {
    */
   private focusSearchInput(): void {
     setTimeout(() => {
-      this.searchInput?.nativeElement.focus();
+      this.SearchInput?.nativeElement.focus();
     }, 0);
   }
 

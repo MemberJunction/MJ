@@ -614,31 +614,103 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
   // ============================================================================
 
   /** Custom template for entire card. Context: { event, group } */
-  @ContentChild('cardTemplate') cardTemplate?: TemplateRef<{ event: MJTimelineEvent<T>; group: TimelineGroup<T> }>;
+  @ContentChild('cardTemplate') CardTemplate?: TemplateRef<{ event: MJTimelineEvent<T>; group: TimelineGroup<T> }>;
+
+  /** @deprecated Use {@link CardTemplate}. */
+  get cardTemplate(): TemplateRef<{ event: MJTimelineEvent<T>; group: TimelineGroup<T> }> | undefined {
+    return this.CardTemplate;
+  }
+  /** @deprecated Use {@link CardTemplate}. */
+  set cardTemplate(value: TemplateRef<{ event: MJTimelineEvent<T>; group: TimelineGroup<T> }> | undefined) {
+    this.CardTemplate = value;
+  }
 
   /** Custom template for card header. Context: { event } */
-  @ContentChild('headerTemplate') headerTemplate?: TemplateRef<{ event: MJTimelineEvent<T> }>;
+  @ContentChild('headerTemplate') HeaderTemplate?: TemplateRef<{ event: MJTimelineEvent<T> }>;
+
+  /** @deprecated Use {@link HeaderTemplate}. */
+  get headerTemplate(): TemplateRef<{ event: MJTimelineEvent<T> }> | undefined {
+    return this.HeaderTemplate;
+  }
+  /** @deprecated Use {@link HeaderTemplate}. */
+  set headerTemplate(value: TemplateRef<{ event: MJTimelineEvent<T> }> | undefined) {
+    this.HeaderTemplate = value;
+  }
 
   /** Custom template for card body. Context: { event } */
-  @ContentChild('bodyTemplate') bodyTemplate?: TemplateRef<{ event: MJTimelineEvent<T> }>;
+  @ContentChild('bodyTemplate') BodyTemplate?: TemplateRef<{ event: MJTimelineEvent<T> }>;
+
+  /** @deprecated Use {@link BodyTemplate}. */
+  get bodyTemplate(): TemplateRef<{ event: MJTimelineEvent<T> }> | undefined {
+    return this.BodyTemplate;
+  }
+  /** @deprecated Use {@link BodyTemplate}. */
+  set bodyTemplate(value: TemplateRef<{ event: MJTimelineEvent<T> }> | undefined) {
+    this.BodyTemplate = value;
+  }
 
   /** Custom template for card actions. Context: { event, actions } */
-  @ContentChild('actionsTemplate') actionsTemplate?: TemplateRef<{ event: MJTimelineEvent<T>; actions: TimelineAction[] }>;
+  @ContentChild('actionsTemplate') ActionsTemplate?: TemplateRef<{ event: MJTimelineEvent<T>; actions: TimelineAction[] }>;
+
+  /** @deprecated Use {@link ActionsTemplate}. */
+  get actionsTemplate(): TemplateRef<{ event: MJTimelineEvent<T>; actions: TimelineAction[] }> | undefined {
+    return this.ActionsTemplate;
+  }
+  /** @deprecated Use {@link ActionsTemplate}. */
+  set actionsTemplate(value: TemplateRef<{ event: MJTimelineEvent<T>; actions: TimelineAction[] }> | undefined) {
+    this.ActionsTemplate = value;
+  }
 
   /** Custom template for segment header. Context: { segment } */
-  @ContentChild('segmentHeaderTemplate') segmentHeaderTemplate?: TemplateRef<{ segment: TimelineSegment }>;
+  @ContentChild('segmentHeaderTemplate') SegmentHeaderTemplate?: TemplateRef<{ segment: TimelineSegment }>;
+
+  /** @deprecated Use {@link SegmentHeaderTemplate}. */
+  get segmentHeaderTemplate(): TemplateRef<{ segment: TimelineSegment }> | undefined {
+    return this.SegmentHeaderTemplate;
+  }
+  /** @deprecated Use {@link SegmentHeaderTemplate}. */
+  set segmentHeaderTemplate(value: TemplateRef<{ segment: TimelineSegment }> | undefined) {
+    this.SegmentHeaderTemplate = value;
+  }
 
   /** Custom template for empty state. */
-  @ContentChild('emptyTemplate') emptyTemplate?: TemplateRef<void>;
+  @ContentChild('emptyTemplate') EmptyTemplate?: TemplateRef<void>;
+
+  /** @deprecated Use {@link EmptyTemplate}. */
+  get emptyTemplate(): TemplateRef<void> | undefined {
+    return this.EmptyTemplate;
+  }
+  /** @deprecated Use {@link EmptyTemplate}. */
+  set emptyTemplate(value: TemplateRef<void> | undefined) {
+    this.EmptyTemplate = value;
+  }
 
   /** Custom template for loading state. */
-  @ContentChild('loadingTemplate') loadingTemplate?: TemplateRef<void>;
+  @ContentChild('loadingTemplate') LoadingTemplate?: TemplateRef<void>;
+
+  /** @deprecated Use {@link LoadingTemplate}. */
+  get loadingTemplate(): TemplateRef<void> | undefined {
+    return this.LoadingTemplate;
+  }
+  /** @deprecated Use {@link LoadingTemplate}. */
+  set loadingTemplate(value: TemplateRef<void> | undefined) {
+    this.LoadingTemplate = value;
+  }
 
   // ============================================================================
   // VIEW CHILDREN
   // ============================================================================
 
-  @ViewChild('scrollContainer') scrollContainer?: ElementRef<HTMLElement>;
+  @ViewChild('scrollContainer') ScrollContainer?: ElementRef<HTMLElement>;
+
+  /** @deprecated Use {@link ScrollContainer}. */
+  get scrollContainer(): ElementRef<HTMLElement> | undefined {
+    return this.ScrollContainer;
+  }
+  /** @deprecated Use {@link ScrollContainer}. */
+  set scrollContainer(value: ElementRef<HTMLElement> | undefined) {
+    this.ScrollContainer = value;
+  }
 
   // ============================================================================
   // PUBLIC PROPERTIES
@@ -1919,7 +1991,7 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
           }
         },
         {
-          root: this.scrollContainer?.nativeElement,
+          root: this.ScrollContainer?.nativeElement,
           threshold: 0,
           rootMargin: `${this.VirtualScroll.loadThreshold}px`
         }
@@ -1930,11 +2002,11 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
   }
 
   private onScrollCheck(): void {
-    if (!this.scrollContainer?.nativeElement || !this.VirtualScroll.enabled) {
+    if (!this.ScrollContainer?.nativeElement || !this.VirtualScroll.enabled) {
       return;
     }
 
-    const el = this.scrollContainer.nativeElement;
+    const el = this.ScrollContainer.nativeElement;
     this.ScrollState.scrollOffset = el.scrollTop;
 
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;

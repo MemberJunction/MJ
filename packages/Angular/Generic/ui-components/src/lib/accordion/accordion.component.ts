@@ -221,9 +221,36 @@ export class MJAccordionPanelComponent {
    */
   @Input() Fill = false;
   @Output() ExpandedChange = new EventEmitter<boolean>();
-  @ContentChild(MJAccordionTitleDirective) titleTemplate: MJAccordionTitleDirective | null = null;
-  @ContentChild(MJAccordionActionsDirective) actionsTemplate: MJAccordionActionsDirective | null = null;
-  @ContentChild(MJAccordionBodyDirective) bodyTemplate: MJAccordionBodyDirective | null = null;
+  @ContentChild(MJAccordionTitleDirective) TitleTemplate: MJAccordionTitleDirective | null = null;
+
+  /** @deprecated Use {@link TitleTemplate}. */
+  get titleTemplate(): MJAccordionTitleDirective | null {
+    return this.TitleTemplate;
+  }
+  /** @deprecated Use {@link TitleTemplate}. */
+  set titleTemplate(value: MJAccordionTitleDirective | null) {
+    this.TitleTemplate = value;
+  }
+  @ContentChild(MJAccordionActionsDirective) ActionsTemplate: MJAccordionActionsDirective | null = null;
+
+  /** @deprecated Use {@link ActionsTemplate}. */
+  get actionsTemplate(): MJAccordionActionsDirective | null {
+    return this.ActionsTemplate;
+  }
+  /** @deprecated Use {@link ActionsTemplate}. */
+  set actionsTemplate(value: MJAccordionActionsDirective | null) {
+    this.ActionsTemplate = value;
+  }
+  @ContentChild(MJAccordionBodyDirective) BodyTemplate: MJAccordionBodyDirective | null = null;
+
+  /** @deprecated Use {@link BodyTemplate}. */
+  get bodyTemplate(): MJAccordionBodyDirective | null {
+    return this.BodyTemplate;
+  }
+  /** @deprecated Use {@link BodyTemplate}. */
+  set bodyTemplate(value: MJAccordionBodyDirective | null) {
+    this.BodyTemplate = value;
+  }
   @HostBinding('class.mj-accordion-panel-host') readonly hostClass = true;
   /** Host claims flex:1 of its parent ONLY while a Fill panel is expanded —
    *  so a collapsed Fill panel sits at natural (header) height like any other. */

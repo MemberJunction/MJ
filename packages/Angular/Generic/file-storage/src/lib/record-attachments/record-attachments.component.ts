@@ -288,8 +288,26 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
   // Internal State
   // ────────────────────────────────────────────────────────────────────
 
-  @ViewChild('fileInputRef') fileInputRef?: ElementRef<HTMLInputElement>;
-  @ViewChild('replaceInputRef') replaceInputRef?: ElementRef<HTMLInputElement>;
+  @ViewChild('fileInputRef') FileInputRef?: ElementRef<HTMLInputElement>;
+
+  /** @deprecated Use {@link FileInputRef}. */
+  get fileInputRef(): ElementRef<HTMLInputElement> | undefined {
+    return this.FileInputRef;
+  }
+  /** @deprecated Use {@link FileInputRef}. */
+  set fileInputRef(value: ElementRef<HTMLInputElement> | undefined) {
+    this.FileInputRef = value;
+  }
+  @ViewChild('replaceInputRef') ReplaceInputRef?: ElementRef<HTMLInputElement>;
+
+  /** @deprecated Use {@link ReplaceInputRef}. */
+  get replaceInputRef(): ElementRef<HTMLInputElement> | undefined {
+    return this.ReplaceInputRef;
+  }
+  /** @deprecated Use {@link ReplaceInputRef}. */
+  set replaceInputRef(value: ElementRef<HTMLInputElement> | undefined) {
+    this.ReplaceInputRef = value;
+  }
 
   public IsLoading: boolean = false;
   public IsUploading: boolean = false;
@@ -1180,7 +1198,7 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
    */
   public RequestReplace(attachment: RecordAttachmentItem): void {
     this.pendingReplaceItem = attachment;
-    this.replaceInputRef?.nativeElement.click();
+    this.ReplaceInputRef?.nativeElement.click();
   }
 
   /**

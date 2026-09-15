@@ -353,10 +353,37 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   set selectedEntity(value: EntityInfo | null) {
     this.SelectedEntity = value;
   }
-  @ViewChild('searchInput') searchInput!: ElementRef<HTMLInputElement>;
+  @ViewChild('searchInput') SearchInput!: ElementRef<HTMLInputElement>;
+
+  /** @deprecated Use {@link SearchInput}. */
+  get searchInput(): ElementRef<HTMLInputElement> {
+    return this.SearchInput;
+  }
+  /** @deprecated Use {@link SearchInput}. */
+  set searchInput(value: ElementRef<HTMLInputElement>) {
+    this.SearchInput = value;
+  }
   /** Mobile drawer + its toggle — used to return focus to the toggle when the drawer closes. */
-  @ViewChild('mobileNavDrawer') mobileNavDrawer?: ElementRef<HTMLElement>;
-  @ViewChild('mobileNavToggle') mobileNavToggle?: ElementRef<HTMLButtonElement>;
+  @ViewChild('mobileNavDrawer') MobileNavDrawer?: ElementRef<HTMLElement>;
+
+  /** @deprecated Use {@link MobileNavDrawer}. */
+  get mobileNavDrawer(): ElementRef<HTMLElement> | undefined {
+    return this.MobileNavDrawer;
+  }
+  /** @deprecated Use {@link MobileNavDrawer}. */
+  set mobileNavDrawer(value: ElementRef<HTMLElement> | undefined) {
+    this.MobileNavDrawer = value;
+  }
+  @ViewChild('mobileNavToggle') MobileNavToggle?: ElementRef<HTMLButtonElement>;
+
+  /** @deprecated Use {@link MobileNavToggle}. */
+  get mobileNavToggle(): ElementRef<HTMLButtonElement> | undefined {
+    return this.MobileNavToggle;
+  }
+  /** @deprecated Use {@link MobileNavToggle}. */
+  set mobileNavToggle(value: ElementRef<HTMLButtonElement> | undefined) {
+    this.MobileNavToggle = value;
+  }
 
   // Legacy universal search overlay (omnibar-off MOBILE path) — opened by the
   // mobile search icon or Ctrl/Cmd+K when the inline composite isn't visible.
@@ -459,7 +486,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       // is the same guarantee read off state we already have, instead of a new
       // dirty-tracking pipeline.)
       this.workspaceManager.RecordsRegionTabFilter = this.resolvedRecordOpenStyle === 'records'
-        ? (tab) => IsRecordsRegionTab(tab.configuration) && !this.tabContainerRef?.IsRecordTabEditing(tab.id)
+        ? (tab) => IsRecordsRegionTab(tab.configuration) && !this.TabContainerRef?.IsRecordTabEditing(tab.id)
         : null;
   }
 
@@ -556,29 +583,73 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       });
   }
 
-  @ViewChild('omnibarPalette') omnibarPalette?: { Open(initialQuery?: string): void };
+  @ViewChild('omnibarPalette') OmnibarPalette?: { Open(initialQuery?: string): void };
+
+  /** @deprecated Use {@link OmnibarPalette}. */
+  get omnibarPalette(): { Open(initialQuery?: string): void } | undefined {
+    return this.OmnibarPalette;
+  }
+  /** @deprecated Use {@link OmnibarPalette}. */
+  set omnibarPalette(value: { Open(initialQuery?: string): void } | undefined) {
+    this.OmnibarPalette = value;
+  }
 
   /** Legacy inline search composite (omnibar-off desktop). Structural typing keeps
       the shell decoupled from the ng-search component class. */
-  @ViewChild('shellSearchComposite') shellSearchComposite: {
+  @ViewChild('shellSearchComposite') ShellSearchComposite: {
     Focus?(): void;
     MinRelevancePercent?: number;
     SelectedScopeIDs?: string[];
   } | undefined;
+
+  /** @deprecated Use {@link ShellSearchComposite}. */
+  get shellSearchComposite(): {
+    Focus?(): void;
+    MinRelevancePercent?: number;
+    SelectedScopeIDs?: string[];
+  } | undefined {
+    return this.ShellSearchComposite;
+  }
+  /** @deprecated Use {@link ShellSearchComposite}. */
+  set shellSearchComposite(value: {
+    Focus?(): void;
+    MinRelevancePercent?: number;
+    SelectedScopeIDs?: string[];
+  } | undefined) {
+    this.ShellSearchComposite = value;
+  }
 
   /** Header affordance click → open the palette. */
   OpenOmnibar(initialQuery = ''): void {
       if (!this.ShowSearchBar) {
           return;
       }
-      this.omnibarPalette?.Open(initialQuery);
+      this.OmnibarPalette?.Open(initialQuery);
   }
 
   // Tab container reference for thumbnail capture
-  @ViewChild(TabContainerComponent) tabContainerRef!: TabContainerComponent;
+  @ViewChild(TabContainerComponent) TabContainerRef!: TabContainerComponent;
+
+  /** @deprecated Use {@link TabContainerRef}. */
+  get tabContainerRef(): TabContainerComponent {
+    return this.TabContainerRef;
+  }
+  /** @deprecated Use {@link TabContainerRef}. */
+  set tabContainerRef(value: TabContainerComponent) {
+    this.TabContainerRef = value;
+  }
 
   // App access dialog
-  @ViewChild('appAccessDialog') appAccessDialog!: AppAccessDialogComponent;
+  @ViewChild('appAccessDialog') AppAccessDialog!: AppAccessDialogComponent;
+
+  /** @deprecated Use {@link AppAccessDialog}. */
+  get appAccessDialog(): AppAccessDialogComponent {
+    return this.AppAccessDialog;
+  }
+  /** @deprecated Use {@link AppAccessDialog}. */
+  set appAccessDialog(value: AppAccessDialogComponent) {
+    this.AppAccessDialog = value;
+  }
   private pendingAppPath: string | null = null; // Store the app path we tried to access
 
   /**
@@ -1005,9 +1076,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
             this.CurrentLoadingText = 'Switching organization...';
             this.Loading = true;
             this.cdr.detectChanges();
-          } else if (event.eventCode === 'TenantChanged' && this.tabContainerRef) {
+          } else if (event.eventCode === 'TenantChanged' && this.TabContainerRef) {
             try {
-              await this.tabContainerRef.ReloadAllTabs();
+              await this.TabContainerRef.ReloadAllTabs();
             } finally {
               this.Loading = false;
               this.cdr.detectChanges();
@@ -2364,8 +2435,8 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         this.cdr.detectChanges();
 
         // Show "Add Application?" dialog
-        if (this.appAccessDialog) {
-          this.appAccessDialog.show({
+        if (this.AppAccessDialog) {
+          this.AppAccessDialog.show({
             type: 'not_installed',
             appName: appName,
             appId: appId
@@ -2593,12 +2664,12 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    * (e.g. the drawer was closed from a keyboard shortcut while the user was in the content).
    */
   private returnFocusFromMobileNav(): void {
-    const drawer = this.mobileNavDrawer?.nativeElement;
+    const drawer = this.MobileNavDrawer?.nativeElement;
     const active = document.activeElement;
     if (!drawer || !active || !drawer.contains(active)) {
       return;
     }
-    this.mobileNavToggle?.nativeElement.focus();
+    this.MobileNavToggle?.nativeElement.focus();
   }
 
   /**
@@ -2967,8 +3038,8 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    */
   private async captureAndAttachThumbnail(tab: WorkspaceTab, resourceType: string): Promise<void> {
     try {
-      if (!this.tabContainerRef) return;
-      const thumbnail = await this.tabContainerRef.CaptureActiveThumbnail();
+      if (!this.TabContainerRef) return;
+      const thumbnail = await this.TabContainerRef.CaptureActiveThumbnail();
       if (thumbnail) {
         const pin = this.homePinService.FindPin(resourceType, tab.configuration as Record<string, unknown>);
         if (pin) {
@@ -3283,8 +3354,8 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     // Focus on search input when opened
     if (this.IsSearchOpen) {
       setTimeout(() => {
-        if (this.searchInput && this.searchInput.nativeElement) {
-          this.searchInput.nativeElement.focus();
+        if (this.SearchInput && this.SearchInput.nativeElement) {
+          this.SearchInput.nativeElement.focus();
         }
       }, 100);
     }
@@ -3311,13 +3382,13 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    * Handle search submission
    */
   OnSearch(event: Event): void {
-    if (!this.searchInput) {
+    if (!this.SearchInput) {
       return;
     }
 
-    const inputValue = this.searchInput.nativeElement.value;
+    const inputValue = this.SearchInput.nativeElement.value;
     if (inputValue && inputValue.length > 0 && inputValue.trim().length > 2) {
-      this.searchInput.nativeElement.value = ''; // Clear input
+      this.SearchInput.nativeElement.value = ''; // Clear input
       this.IsSearchOpen = false; // Close search popup
 
       // Navigate to search results
@@ -3382,10 +3453,10 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       const isMobile = window.matchMedia('(max-width: 768px)').matches;
       if (this.UseOmnibar) {
           this.OpenOmnibar();
-      } else if (!isMobile && this.shellSearchComposite?.Focus) {
+      } else if (!isMobile && this.ShellSearchComposite?.Focus) {
           // Omnibar-off desktop: the inline composite is on screen — focus it and
           // let its attached suggest dropdown do the work.
-          this.shellSearchComposite.Focus();
+          this.ShellSearchComposite.Focus();
       } else {
           // Omnibar-off mobile: no visible inline composite — open the Spotlight overlay.
           this.LegacySearchOpen = true;
@@ -3435,8 +3506,8 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       composite's relevance/scope selections. */
   OnSearchSubmitted(query: string): void {
       if (query && query.trim().length >= 2) {
-          const minRelevance = this.shellSearchComposite?.MinRelevancePercent;
-          const scopeIDs = this.shellSearchComposite?.SelectedScopeIDs;
+          const minRelevance = this.ShellSearchComposite?.MinRelevancePercent;
+          const scopeIDs = this.ShellSearchComposite?.SelectedScopeIDs;
           const opts: { minRelevance?: number; scopeIDs?: string[] } = {};
           if (minRelevance) opts.minRelevance = minRelevance;
           if (scopeIDs && scopeIDs.length > 0) opts.scopeIDs = scopeIDs;
@@ -3539,8 +3610,8 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   private async captureAndAttachFeedbackScreenshot(): Promise<void> {
     try {
       let screenshot: string | undefined;
-      if (this.tabContainerRef) {
-        screenshot = await this.tabContainerRef.CaptureActiveThumbnail();
+      if (this.TabContainerRef) {
+        screenshot = await this.TabContainerRef.CaptureActiveThumbnail();
       }
       if (!screenshot) {
         const contentEl = document.querySelector('.shell-content') as HTMLElement
@@ -3591,8 +3662,8 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     // Show the dialog on top of the loading screen
     // Use setTimeout to ensure the dialog component is ready after view init
     setTimeout(() => {
-      if (this.appAccessDialog) {
-        this.appAccessDialog.show(dialogConfig);
+      if (this.AppAccessDialog) {
+        this.AppAccessDialog.show(dialogConfig);
       } else {
         // Fallback if dialog not available - redirect to a working app
         console.warn('App access dialog not available, redirecting to fallback app');
@@ -3661,8 +3732,8 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     this.cdr.detectChanges();
 
     setTimeout(() => {
-      if (this.appAccessDialog) {
-        this.appAccessDialog.show({ type: 'no_apps' });
+      if (this.AppAccessDialog) {
+        this.AppAccessDialog.show({ type: 'no_apps' });
       }
     }, 0);
   }
@@ -3676,8 +3747,8 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     const availableApps = this.appManager.GetAllApps();
     if (availableApps.length > 0) {
       setTimeout(() => {
-        if (this.appAccessDialog) {
-          this.appAccessDialog.show({ type: 'layout_error' });
+        if (this.AppAccessDialog) {
+          this.AppAccessDialog.show({ type: 'layout_error' });
         } else {
           // Direct redirect if dialog not available
           this.redirectToFallbackApp(availableApps);
@@ -3743,12 +3814,12 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         } else {
         
           console.error('[ShellComponent] Failed to add application');
-          this.appAccessDialog?.completeProcessing();
+          this.AppAccessDialog?.completeProcessing();
           this.redirectToFallbackApp(this.appManager.GetAllApps());
       }
     } catch (error) {
       console.error('Error adding app:', error);
-      this.appAccessDialog?.completeProcessing();
+      this.AppAccessDialog?.completeProcessing();
       this.redirectToFallbackApp(this.appManager.GetAllApps());
     }
   }
@@ -3764,12 +3835,12 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         // App enabled successfully - wait for observable to sync then navigate
         await this.waitForAppAndNavigate(appId);
       } else {
-        this.appAccessDialog?.completeProcessing();
+        this.AppAccessDialog?.completeProcessing();
         this.redirectToFallbackApp(this.appManager.GetAllApps());
       }
     } catch (error) {
       console.error('Error enabling app:', error);
-      this.appAccessDialog?.completeProcessing();
+      this.AppAccessDialog?.completeProcessing();
       this.redirectToFallbackApp(this.appManager.GetAllApps());
     }
   }
@@ -3787,7 +3858,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       const app = this.appManager.GetAppById(appId);
       if (app) {
         await this.navigateToApp(app);
-        this.appAccessDialog?.completeProcessing();
+        this.AppAccessDialog?.completeProcessing();
         return;
       }
       // Wait a bit before checking again
@@ -3798,10 +3869,10 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     const systemApp = this.appManager.GetAllSystemApps().find(a => UUIDsEqual(a.ID, appId));
     if (systemApp) {
       await this.navigateToApp(systemApp);
-      this.appAccessDialog?.completeProcessing();
+      this.AppAccessDialog?.completeProcessing();
     } else {
       console.warn(`[ShellComponent] App ${appId} not found after waiting, redirecting to fallback app`);
-      this.appAccessDialog?.completeProcessing();
+      this.AppAccessDialog?.completeProcessing();
       this.redirectToFallbackApp(this.appManager.GetAllApps());
     }
   }

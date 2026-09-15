@@ -139,7 +139,16 @@ export interface AITestHarnessDialogData {
 })
 export class AITestHarnessDialogComponent extends BaseAngularComponent implements OnInit, AfterViewInit  {
     /** Reference to the embedded test harness component */
-    @ViewChild('testHarness', { static: false }) testHarness!: AITestHarnessComponent;
+    @ViewChild('testHarness', { static: false }) TestHarness!: AITestHarnessComponent;
+
+    /** @deprecated Use {@link TestHarness}. */
+    get testHarness(): AITestHarnessComponent {
+      return this.TestHarness;
+    }
+    /** @deprecated Use {@link TestHarness}. */
+    set testHarness(value: AITestHarnessComponent) {
+      this.TestHarness = value;
+    }
     
     /** The loaded AI agent entity for testing */
     Agent: MJAIAgentEntityExtended | null = null;
@@ -258,11 +267,11 @@ export class AITestHarnessDialogComponent extends BaseAngularComponent implement
      * AfterViewInit lifecycle hook to set initial data after view is initialized
      */
     async ngAfterViewInit(): Promise<void> {
-        console.log('🚀 ngAfterViewInit - testHarness available:', !!this.testHarness);
+        console.log('🚀 ngAfterViewInit - testHarness available:', !!this.TestHarness);
         console.log('📊 Dialog data:', this.Data);
         console.log('🎯 Mode:', this.Mode);
         
-        if (this.testHarness) {
+        if (this.TestHarness) {
             // Check if we need to load from a prompt run
             if (this.Data.promptRunId && this.Mode === 'prompt') {
                 console.log('🔄 Loading from prompt run in AfterViewInit:', this.Data.promptRunId);
@@ -277,7 +286,7 @@ export class AITestHarnessDialogComponent extends BaseAngularComponent implement
                             value: typeof value === 'object' ? JSON.stringify(value) : String(value),
                             type: this.detectVariableType(value)
                         }));
-                        this.testHarness.agentVariables = variables;
+                        this.TestHarness.agentVariables = variables;
                     }
                     
                     if (this.Data.initialTemplateData) {
@@ -286,7 +295,7 @@ export class AITestHarnessDialogComponent extends BaseAngularComponent implement
                             value: typeof value === 'object' ? JSON.stringify(value) : String(value),
                             type: this.detectVariableType(value)
                         }));
-                        this.testHarness.agentVariables = [...this.testHarness.agentVariables, ...templateVariables];
+                        this.TestHarness.agentVariables = [...this.TestHarness.agentVariables, ...templateVariables];
                     }
                 } else {
                     // Prompt mode: set template variables
@@ -296,18 +305,18 @@ export class AITestHarnessDialogComponent extends BaseAngularComponent implement
                             value: typeof value === 'object' ? JSON.stringify(value) : String(value),
                             type: this.detectVariableType(value)
                         }));
-                        this.testHarness.templateVariables = variables;
+                        this.TestHarness.templateVariables = variables;
                     }
                     
                     // Set selected model if provided
                     if (this.Data.selectedModelId) {
-                        this.testHarness.selectedModelId = this.Data.selectedModelId;
+                        this.TestHarness.selectedModelId = this.Data.selectedModelId;
                     }
                     if (this.Data.selectedVendorId) {
-                        this.testHarness.selectedVendorId = this.Data.selectedVendorId;
+                        this.TestHarness.selectedVendorId = this.Data.selectedVendorId;
                     }
                     if (this.Data.selectedConfigurationId) {
-                        this.testHarness.selectedConfigurationId = this.Data.selectedConfigurationId;
+                        this.TestHarness.selectedConfigurationId = this.Data.selectedConfigurationId;
                     }
                 }
             }
@@ -318,11 +327,11 @@ export class AITestHarnessDialogComponent extends BaseAngularComponent implement
             
             // Check after change detection
             setTimeout(() => {
-                console.log('⏱️ After timeout - conversationMessages:', this.testHarness?.conversationMessages);
+                console.log('⏱️ After timeout - conversationMessages:', this.TestHarness?.conversationMessages);
                 console.log('⏱️ Test harness component state:', {
-                    mode: this.testHarness?.mode,
-                    entity: this.testHarness?.entity?.Name,
-                    messagesLength: this.testHarness?.conversationMessages?.length
+                    mode: this.TestHarness?.mode,
+                    entity: this.TestHarness?.entity?.Name,
+                    messagesLength: this.TestHarness?.conversationMessages?.length
                 });
             }, 100);
         }
@@ -356,7 +365,7 @@ export class AITestHarnessDialogComponent extends BaseAngularComponent implement
             if (!this.Prompt && promptRun.PromptID) {
                 this.Prompt = await md.GetEntityObject<MJAIPromptEntityExtended>('MJ: AI Prompts');
                 await this.Prompt.Load(promptRun.PromptID);
-                this.testHarness.entity = this.Prompt;
+                this.TestHarness.entity = this.Prompt;
                 
                 // Update title to indicate we're re-running
                 this.title = `Re-Run: ${this.Prompt.Name}`;
@@ -364,13 +373,13 @@ export class AITestHarnessDialogComponent extends BaseAngularComponent implement
             
             // Set the model/vendor/configuration
             if (promptRun.ModelID) {
-                this.testHarness.selectedModelId = promptRun.ModelID;
+                this.TestHarness.selectedModelId = promptRun.ModelID;
             }
             if (promptRun.VendorID) {
-                this.testHarness.selectedVendorId = promptRun.VendorID;
+                this.TestHarness.selectedVendorId = promptRun.VendorID;
             }
             if (promptRun.ConfigurationID) {
-                this.testHarness.selectedConfigurationId = promptRun.ConfigurationID;
+                this.TestHarness.selectedConfigurationId = promptRun.ConfigurationID;
             }
             
             // Note: We do NOT extract template variables because we want to use
@@ -378,25 +387,25 @@ export class AITestHarnessDialogComponent extends BaseAngularComponent implement
             
             // Set advanced parameters
             if (promptRun.Temperature != null) {
-                this.testHarness.advancedParams.temperature = promptRun.Temperature;
+                this.TestHarness.advancedParams.temperature = promptRun.Temperature;
             }
             if (promptRun.TopP != null) {
-                this.testHarness.advancedParams.topP = promptRun.TopP;
+                this.TestHarness.advancedParams.topP = promptRun.TopP;
             }
             if (promptRun.TopK != null) {
-                this.testHarness.advancedParams.topK = promptRun.TopK;
+                this.TestHarness.advancedParams.topK = promptRun.TopK;
             }
             if (promptRun.MinP != null) {
-                this.testHarness.advancedParams.minP = promptRun.MinP;
+                this.TestHarness.advancedParams.minP = promptRun.MinP;
             }
             if (promptRun.FrequencyPenalty != null) {
-                this.testHarness.advancedParams.frequencyPenalty = promptRun.FrequencyPenalty;
+                this.TestHarness.advancedParams.frequencyPenalty = promptRun.FrequencyPenalty;
             }
             if (promptRun.PresencePenalty != null) {
-                this.testHarness.advancedParams.presencePenalty = promptRun.PresencePenalty;
+                this.TestHarness.advancedParams.presencePenalty = promptRun.PresencePenalty;
             }
             if (promptRun.Seed != null) {
-                this.testHarness.advancedParams.seed = promptRun.Seed;
+                this.TestHarness.advancedParams.seed = promptRun.Seed;
             }
             // Note: responseFormat is handled separately, not in advancedParams
             
@@ -421,25 +430,25 @@ export class AITestHarnessDialogComponent extends BaseAngularComponent implement
                 }));
                 
                 console.log('🎯 Converted messages for test harness:', convertedMessages);
-                this.testHarness.conversationMessages = convertedMessages;
-                console.log('✅ Test harness conversationMessages set:', this.testHarness.conversationMessages);
+                this.TestHarness.conversationMessages = convertedMessages;
+                console.log('✅ Test harness conversationMessages set:', this.TestHarness.conversationMessages);
             } else {
                 console.log('⚠️ No chat messages found in prompt run');
             }
             
             // Store the original prompt run ID for reference
-            this.testHarness.originalPromptRunId = promptRunId;
+            this.TestHarness.originalPromptRunId = promptRunId;
             
             // Extract and store the system prompt for re-run
             const systemPrompt = promptRun.GetSystemPrompt();
             if (systemPrompt) {
-                this.testHarness.systemPromptOverride = systemPrompt;
+                this.TestHarness.systemPromptOverride = systemPrompt;
             }
             
             // Add a note indicating this is a re-run
-            if (this.testHarness.conversationMessages.length > 0) {
+            if (this.TestHarness.conversationMessages.length > 0) {
                 // Add a system message indicating this is a re-run
-                this.testHarness.conversationMessages.unshift({
+                this.TestHarness.conversationMessages.unshift({
                     id: `system-${Date.now()}`,
                     role: 'system',
                     content: `[Re-running from Prompt Run #${promptRunId.substring(0, 8)}]`,

@@ -26,7 +26,16 @@ export class FileBrowserComponent {
   /**
    * Reference to the folder tree component for programmatic navigation
    */
-  @ViewChild(FolderTreeComponent) folderTree!: FolderTreeComponent;
+  @ViewChild(FolderTreeComponent) FolderTree!: FolderTreeComponent;
+
+  /** @deprecated Use {@link FolderTree}. */
+  get folderTree(): FolderTreeComponent {
+    return this.FolderTree;
+  }
+  /** @deprecated Use {@link FolderTree}. */
+  set folderTree(value: FolderTreeComponent) {
+    this.FolderTree = value;
+  }
 
   /**
    * Controls manual collapse of the sidebar (toggle button on mobile).
@@ -122,8 +131,8 @@ export class FileBrowserComponent {
    * @param folderPath - The full path of the folder to navigate to
    */
   public OnFolderNavigate(folderPath: string): void {
-    if (this.folderTree) {
-      this.folderTree.navigateToPath(folderPath);
+    if (this.FolderTree) {
+      this.FolderTree.navigateToPath(folderPath);
     }
   }
 
@@ -137,10 +146,10 @@ export class FileBrowserComponent {
    * Refreshes the folder tree to show the new structure.
    */
   public OnFolderStructureChanged(): void {
-    if (this.folderTree) {
+    if (this.FolderTree) {
       // Trigger a refresh of the folder tree without changing navigation
       // This will reload the folders at the current location
-      this.folderTree.refresh();
+      this.FolderTree.refresh();
     }
   }
 

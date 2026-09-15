@@ -213,8 +213,26 @@ export interface VennRegionClickEvent {
   `]
 })
 export class VennDiagramComponent implements AfterViewInit, OnChanges, OnDestroy {
-  @ViewChild('vennContainer') containerRef!: ElementRef<HTMLDivElement>;
-  @ViewChild('vennSvg') svgRef!: ElementRef<SVGSVGElement>;
+  @ViewChild('vennContainer') ContainerRef!: ElementRef<HTMLDivElement>;
+
+  /** @deprecated Use {@link ContainerRef}. */
+  get containerRef(): ElementRef<HTMLDivElement> {
+    return this.ContainerRef;
+  }
+  /** @deprecated Use {@link ContainerRef}. */
+  set containerRef(value: ElementRef<HTMLDivElement>) {
+    this.ContainerRef = value;
+  }
+  @ViewChild('vennSvg') SvgRef!: ElementRef<SVGSVGElement>;
+
+  /** @deprecated Use {@link SvgRef}. */
+  get svgRef(): ElementRef<SVGSVGElement> {
+    return this.SvgRef;
+  }
+  /** @deprecated Use {@link SvgRef}. */
+  set svgRef(value: ElementRef<SVGSVGElement>) {
+    this.SvgRef = value;
+  }
 
   @Input() Data: VennData | null = null;
 
@@ -356,27 +374,27 @@ export class VennDiagramComponent implements AfterViewInit, OnChanges, OnDestroy
   }
 
   private initializeSvg(): void {
-    if (!this.svgRef) return;
+    if (!this.SvgRef) return;
 
-    this.svg = d3.select(this.svgRef.nativeElement);
+    this.svg = d3.select(this.SvgRef.nativeElement);
     this.updateDimensions();
   }
 
   private setupResizeObserver(): void {
-    if (!this.containerRef) return;
+    if (!this.ContainerRef) return;
 
     this.resizeObserver = new ResizeObserver(() => {
       this.updateDimensions();
       this.render();
     });
 
-    this.resizeObserver.observe(this.containerRef.nativeElement);
+    this.resizeObserver.observe(this.ContainerRef.nativeElement);
   }
 
   private updateDimensions(): void {
-    if (!this.containerRef) return;
+    if (!this.ContainerRef) return;
 
-    const rect = this.containerRef.nativeElement.getBoundingClientRect();
+    const rect = this.ContainerRef.nativeElement.getBoundingClientRect();
     this.width = rect.width;
     this.height = rect.height;
   }
@@ -951,7 +969,7 @@ export class VennDiagramComponent implements AfterViewInit, OnChanges, OnDestroy
       return;
     }
 
-    const container = this.containerRef?.nativeElement;
+    const container = this.ContainerRef?.nativeElement;
     if (!container) return;
 
     const rect = container.getBoundingClientRect();
@@ -985,7 +1003,7 @@ export class VennDiagramComponent implements AfterViewInit, OnChanges, OnDestroy
    * Update tooltip position for label without triggering extra change detection
    */
   private moveLabelTooltipPosition(event: MouseEvent): void {
-    const container = this.containerRef?.nativeElement;
+    const container = this.ContainerRef?.nativeElement;
     if (!container) return;
 
     const rect = container.getBoundingClientRect();

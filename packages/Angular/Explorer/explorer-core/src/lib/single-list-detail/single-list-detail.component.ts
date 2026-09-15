@@ -51,7 +51,16 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
   }
   private bumpStatsRefresh(): void { this.StatsRefreshTrigger++; }
 
-  @ViewChild('listDetailGrid') listDetailGrid: ListDetailGridComponent | undefined;
+  @ViewChild('listDetailGrid') ListDetailGrid: ListDetailGridComponent | undefined;
+
+  /** @deprecated Use {@link ListDetailGrid}. */
+  get listDetailGrid(): ListDetailGridComponent | undefined {
+    return this.ListDetailGrid;
+  }
+  /** @deprecated Use {@link ListDetailGrid}. */
+  set listDetailGrid(value: ListDetailGridComponent | undefined) {
+    this.ListDetailGrid = value;
+  }
 
   // List record
   public ListRecord: MJListEntity | null = null;
@@ -972,8 +981,8 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
   }
 
   RefreshGrid(): void {
-    if (this.listDetailGrid) {
-      this.listDetailGrid.refresh();
+    if (this.ListDetailGrid) {
+      this.ListDetailGrid.refresh();
     }
   }
 
@@ -1666,7 +1675,7 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
       this.CloseMoveCopyDialog();
       this.MoveDelta = null;
       if (isMove) {
-        this.listDetailGrid?.clearSelection();
+        this.ListDetailGrid?.clearSelection();
         this.RefreshGrid();
         this.bumpStatsRefresh();
       }
@@ -1778,7 +1787,7 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
       // doesn't re-fetch until the user navigates away and back.
       await Promise.resolve();
       this.CloseRemoveDialog();
-      this.listDetailGrid?.clearSelection();
+      this.ListDetailGrid?.clearSelection();
       this.RefreshGrid();
       this.bumpStatsRefresh();
       this.cdr.detectChanges();

@@ -313,7 +313,16 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
   @Output() CompositionTokenClick = new EventEmitter<CompositionTokenClickEvent>();
 
   /** Reference to the editor content container */
-  @ViewChild('editorContent', { static: true }) editorContent!: ElementRef;
+  @ViewChild('editorContent', { static: true }) EditorContent!: ElementRef;
+
+  /** @deprecated Use {@link EditorContent}. */
+  get editorContent(): ElementRef {
+    return this.EditorContent;
+  }
+  /** @deprecated Use {@link EditorContent}. */
+  set editorContent(value: ElementRef) {
+    this.EditorContent = value;
+  }
 
   private _onChange: (value: string) => void = () => {};
   private _onTouched: () => void = () => {};
@@ -649,7 +658,7 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
   ngOnInit(): void {
     this.view = new EditorView({
       root: this.Root,
-      parent: this.editorContent.nativeElement, // Use ViewChild reference
+      parent: this.EditorContent.nativeElement, // Use ViewChild reference
       state: EditorState.create({ doc: this._value, extensions: this._getAllExtensions() }),
     });
 

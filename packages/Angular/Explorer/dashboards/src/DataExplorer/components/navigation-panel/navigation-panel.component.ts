@@ -278,7 +278,16 @@ export class NavigationPanelComponent extends BaseAngularComponent implements On
     this.TreeLeafConfig = value;
   }
 
-  @ViewChild('entityTree') entityTree?: TreeComponent;
+  @ViewChild('entityTree') EntityTree?: TreeComponent;
+
+  /** @deprecated Use {@link EntityTree}. */
+  get entityTree(): TreeComponent | undefined {
+    return this.EntityTree;
+  }
+  /** @deprecated Use {@link EntityTree}. */
+  set entityTree(value: TreeComponent | undefined) {
+    this.EntityTree = value;
+  }
 
   /** Selected entity ID for tree highlighting */
   public SelectedEntityIds: string[] = [];
@@ -366,8 +375,8 @@ export class NavigationPanelComponent extends BaseAngularComponent implements On
    * Filter the entity tree when search term changes
    */
   OnEntitySearchChanged(): void {
-    if (this.entityTree) {
-      this.entityTree.FilterNodes(this.EntitySearchTerm, {
+    if (this.EntityTree) {
+      this.EntityTree.FilterNodes(this.EntitySearchTerm, {
         searchBranches: true,
         searchLeaves: true,
         caseSensitive: false

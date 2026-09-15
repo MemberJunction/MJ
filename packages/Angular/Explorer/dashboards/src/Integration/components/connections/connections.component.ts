@@ -155,7 +155,16 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   IsSavingAddMap = false;
 
   // Tree dropdown config for MJ Entity picker (schema → entities)
-  @ViewChild('entityTreeDropdown') entityTreeDropdown: TreeDropdownComponent | undefined;
+  @ViewChild('entityTreeDropdown') EntityTreeDropdown: TreeDropdownComponent | undefined;
+
+  /** @deprecated Use {@link EntityTreeDropdown}. */
+  get entityTreeDropdown(): TreeDropdownComponent | undefined {
+    return this.EntityTreeDropdown;
+  }
+  /** @deprecated Use {@link EntityTreeDropdown}. */
+  set entityTreeDropdown(value: TreeDropdownComponent | undefined) {
+    this.EntityTreeDropdown = value;
+  }
 
   EntityBranchConfig: TreeBranchConfig = {
     EntityName: 'MJ: Schema Info',

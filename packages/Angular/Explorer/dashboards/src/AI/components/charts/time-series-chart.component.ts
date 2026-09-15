@@ -257,8 +257,26 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
    */
   @Output() timeRangeChange = this.TimeRangeChange;
 
-  @ViewChild('chartSvg', { static: true }) chartSvg!: ElementRef<SVGElement>;
-  @ViewChild('tooltip', { static: true }) tooltip!: ElementRef<HTMLDivElement>;
+  @ViewChild('chartSvg', { static: true }) ChartSvg!: ElementRef<SVGElement>;
+
+  /** @deprecated Use {@link ChartSvg}. */
+  get chartSvg(): ElementRef<SVGElement> {
+    return this.ChartSvg;
+  }
+  /** @deprecated Use {@link ChartSvg}. */
+  set chartSvg(value: ElementRef<SVGElement>) {
+    this.ChartSvg = value;
+  }
+  @ViewChild('tooltip', { static: true }) Tooltip!: ElementRef<HTMLDivElement>;
+
+  /** @deprecated Use {@link Tooltip}. */
+  get tooltip(): ElementRef<HTMLDivElement> {
+    return this.Tooltip;
+  }
+  /** @deprecated Use {@link Tooltip}. */
+  set tooltip(value: ElementRef<HTMLDivElement>) {
+    this.Tooltip = value;
+  }
 
   private svg!: d3.Selection<SVGElement, unknown, null, undefined>;
   private width = 0;
@@ -328,7 +346,7 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
   }
 
   private initChart() {
-    this.svg = d3.select(this.chartSvg.nativeElement);
+    this.svg = d3.select(this.ChartSvg.nativeElement);
     
     // Set up responsive behavior
     d3.select(window).on('resize.timeseries', () => this.updateChart());
@@ -346,7 +364,7 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
   }
 
   private calculateDimensions() {
-    const container = this.chartSvg.nativeElement.parentElement!;
+    const container = this.ChartSvg.nativeElement.parentElement!;
     const containerWidth = container.clientWidth;
     const containerHeight = container.clientHeight;
     
@@ -699,7 +717,7 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
   }
 
   private showTooltip(event: MouseEvent, data: TrendData) {
-    const tooltip = d3.select(this.tooltip.nativeElement);
+    const tooltip = d3.select(this.Tooltip.nativeElement);
     
     const content = `
       <div><strong>${d3.timeFormat('%H:%M')(data.timestamp)}</strong></div>
@@ -721,7 +739,7 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
   }
 
   private hideTooltip() {
-    d3.select(this.tooltip.nativeElement)
+    d3.select(this.Tooltip.nativeElement)
       .style('display', 'none');
   }
 

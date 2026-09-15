@@ -48,7 +48,16 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   private metadata = this.ProviderToUse;
   private pinService = inject(HomeAppPinService);
 
-  @ViewChild('appConfigDialog') appConfigDialog!: UserAppConfigComponent;
+  @ViewChild('appConfigDialog') AppConfigDialog!: UserAppConfigComponent;
+
+  /** @deprecated Use {@link AppConfigDialog}. */
+  get appConfigDialog(): UserAppConfigComponent {
+    return this.AppConfigDialog;
+  }
+  /** @deprecated Use {@link AppConfigDialog}. */
+  set appConfigDialog(value: UserAppConfigComponent) {
+    this.AppConfigDialog = value;
+  }
 
   // State
   public isLoading = true;
@@ -706,8 +715,8 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   OpenConfigDialog(): void {
     this.ShowConfigDialog = true;
     setTimeout(() => {
-      if (this.appConfigDialog) {
-        this.appConfigDialog.Open();
+      if (this.AppConfigDialog) {
+        this.AppConfigDialog.Open();
       }
     }, 0);
   }

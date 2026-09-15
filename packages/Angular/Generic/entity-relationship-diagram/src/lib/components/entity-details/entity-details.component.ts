@@ -25,8 +25,26 @@ export interface EntityDetailsOpenRecordEvent {
   styleUrls: ['./entity-details.component.css']
 })
 export class EntityDetailsComponent extends BaseAngularComponent implements OnChanges {
-  @ViewChild('fieldsListContainer', { static: false }) fieldsListContainer!: ElementRef;
-  @ViewChild('relationshipsListContainer', { static: false }) relationshipsListContainer!: ElementRef;
+  @ViewChild('fieldsListContainer', { static: false }) FieldsListContainer!: ElementRef;
+
+  /** @deprecated Use {@link FieldsListContainer}. */
+  get fieldsListContainer(): ElementRef {
+    return this.FieldsListContainer;
+  }
+  /** @deprecated Use {@link FieldsListContainer}. */
+  set fieldsListContainer(value: ElementRef) {
+    this.FieldsListContainer = value;
+  }
+  @ViewChild('relationshipsListContainer', { static: false }) RelationshipsListContainer!: ElementRef;
+
+  /** @deprecated Use {@link RelationshipsListContainer}. */
+  get relationshipsListContainer(): ElementRef {
+    return this.RelationshipsListContainer;
+  }
+  /** @deprecated Use {@link RelationshipsListContainer}. */
+  set relationshipsListContainer(value: ElementRef) {
+    this.RelationshipsListContainer = value;
+  }
 
   /** The currently selected entity to display details for */
   @Input() SelectedEntity: EntityInfo | null = null;
@@ -207,11 +225,11 @@ export class EntityDetailsComponent extends BaseAngularComponent implements OnCh
   private resetScrollPositions(): void {
     // Use setTimeout to ensure the DOM is updated
     setTimeout(() => {
-      if (this.fieldsListContainer?.nativeElement) {
-        this.fieldsListContainer.nativeElement.scrollTop = 0;
+      if (this.FieldsListContainer?.nativeElement) {
+        this.FieldsListContainer.nativeElement.scrollTop = 0;
       }
-      if (this.relationshipsListContainer?.nativeElement) {
-        this.relationshipsListContainer.nativeElement.scrollTop = 0;
+      if (this.RelationshipsListContainer?.nativeElement) {
+        this.RelationshipsListContainer.nativeElement.scrollTop = 0;
       }
     }, 0);
   }

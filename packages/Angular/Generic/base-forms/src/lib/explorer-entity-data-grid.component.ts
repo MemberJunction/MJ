@@ -67,7 +67,16 @@ import { RELATED_GRID_DEFAULT_MAX_PX, RelatedGridHeightPx } from './related-grid
     },
 })
 export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy {
-    @ViewChild('innerGrid') innerGrid!: EntityDataGridComponent;
+    @ViewChild('innerGrid') InnerGrid!: EntityDataGridComponent;
+
+    /** @deprecated Use {@link InnerGrid}. */
+    get innerGrid(): EntityDataGridComponent {
+      return this.InnerGrid;
+    }
+    /** @deprecated Use {@link InnerGrid}. */
+    set innerGrid(value: EntityDataGridComponent) {
+      this.InnerGrid = value;
+    }
 
     private elementRef = inject(ElementRef);
     private cdr = inject(ChangeDetectorRef);
@@ -238,7 +247,7 @@ export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy
      * button and by the parent-form refresh broadcast.
      */
     public async Refresh(): Promise<void> {
-        await this.innerGrid?.Refresh();
+        await this.InnerGrid?.Refresh();
     }
 
     private subscribeToFormRefresh(): void {
@@ -293,7 +302,7 @@ export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy
         // Emit navigation event if enabled
         if (this.NavigateOnDoubleClick && event.row) {
             // Use the inner grid's resolved EntityInfo - works for both ViewID and EntityName params
-            const entityInfo = this.innerGrid?.EntityInfo;
+            const entityInfo = this.InnerGrid?.EntityInfo;
             if (!entityInfo) return;
 
             const pkey = buildCompositeKey(event.row, entityInfo);

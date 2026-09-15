@@ -27,7 +27,16 @@ interface FlameCell {
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class FlameCascadeComponent implements OnDestroy {
-  @ViewChild('svg', { static: true }) svgRef!: ElementRef<SVGSVGElement>;
+  @ViewChild('svg', { static: true }) SvgRef!: ElementRef<SVGSVGElement>;
+
+  /** @deprecated Use {@link SvgRef}. */
+  get svgRef(): ElementRef<SVGSVGElement> {
+    return this.SvgRef;
+  }
+  /** @deprecated Use {@link SvgRef}. */
+  set svgRef(value: ElementRef<SVGSVGElement>) {
+    this.SvgRef = value;
+  }
   @Output() NodeSelected = new EventEmitter<FlowNode>();
 
   /**
@@ -74,7 +83,7 @@ export class FlameCascadeComponent implements OnDestroy {
 
   private clear(): void {
     this.pz?.Detach(); this.pz = undefined;
-    const svg = this.svgRef?.nativeElement;
+    const svg = this.SvgRef?.nativeElement;
     if (svg) while (svg.firstChild) svg.removeChild(svg.firstChild);
     this.cells.clear();
   }
@@ -84,7 +93,7 @@ export class FlameCascadeComponent implements OnDestroy {
   }
 
   private build(): void {
-    const svg = this.svgRef.nativeElement;
+    const svg = this.SvgRef.nativeElement;
     const m = this._model!;
     const VH = this.TOP + (m.maxDepth + 1) * this.ROW + 26;
     svg.setAttribute('viewBox', `0 0 ${this.VW} ${VH}`);

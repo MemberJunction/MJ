@@ -1428,7 +1428,16 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   // View Children
   // ========================================
 
-  @ViewChild('gridContainer') gridContainer!: ElementRef<HTMLDivElement>;
+  @ViewChild('gridContainer') GridContainer!: ElementRef<HTMLDivElement>;
+
+  /** @deprecated Use {@link GridContainer}. */
+  get gridContainer(): ElementRef<HTMLDivElement> {
+    return this.GridContainer;
+  }
+  /** @deprecated Use {@link GridContainer}. */
+  set gridContainer(value: ElementRef<HTMLDivElement>) {
+    this.GridContainer = value;
+  }
 
   // ========================================
   // AG Grid Properties

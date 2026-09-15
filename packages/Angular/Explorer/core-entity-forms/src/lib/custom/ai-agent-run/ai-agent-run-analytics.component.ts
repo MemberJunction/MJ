@@ -377,16 +377,106 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
   }
   
   // Chart element references
-  @ViewChild('modelDistributionChart', { static: false }) modelDistributionChart!: ElementRef;
-  @ViewChild('executionTimeChart', { static: false }) executionTimeChart!: ElementRef;
-  @ViewChild('costByVendorChart', { static: false }) costByVendorChart!: ElementRef;
-  @ViewChild('tokenUsageChart', { static: false }) tokenUsageChart!: ElementRef;
-  @ViewChild('actionSuccessRateChart', { static: false }) actionSuccessRateChart!: ElementRef;
-  @ViewChild('stepTypeChart', { static: false }) stepTypeChart!: ElementRef;
-  @ViewChild('promptTimeDistributionChart', { static: false }) promptTimeDistributionChart!: ElementRef;
-  @ViewChild('promptTokenDistributionChart', { static: false }) promptTokenDistributionChart!: ElementRef;
-  @ViewChild('promptCostDistributionChart', { static: false }) promptCostDistributionChart!: ElementRef;
-  @ViewChild('promptCountByNameChart', { static: false }) promptCountByNameChart!: ElementRef;
+  @ViewChild('modelDistributionChart', { static: false }) ModelDistributionChart!: ElementRef;
+
+  /** @deprecated Use {@link ModelDistributionChart}. */
+  get modelDistributionChart(): ElementRef {
+    return this.ModelDistributionChart;
+  }
+  /** @deprecated Use {@link ModelDistributionChart}. */
+  set modelDistributionChart(value: ElementRef) {
+    this.ModelDistributionChart = value;
+  }
+  @ViewChild('executionTimeChart', { static: false }) ExecutionTimeChart!: ElementRef;
+
+  /** @deprecated Use {@link ExecutionTimeChart}. */
+  get executionTimeChart(): ElementRef {
+    return this.ExecutionTimeChart;
+  }
+  /** @deprecated Use {@link ExecutionTimeChart}. */
+  set executionTimeChart(value: ElementRef) {
+    this.ExecutionTimeChart = value;
+  }
+  @ViewChild('costByVendorChart', { static: false }) CostByVendorChart!: ElementRef;
+
+  /** @deprecated Use {@link CostByVendorChart}. */
+  get costByVendorChart(): ElementRef {
+    return this.CostByVendorChart;
+  }
+  /** @deprecated Use {@link CostByVendorChart}. */
+  set costByVendorChart(value: ElementRef) {
+    this.CostByVendorChart = value;
+  }
+  @ViewChild('tokenUsageChart', { static: false }) TokenUsageChart!: ElementRef;
+
+  /** @deprecated Use {@link TokenUsageChart}. */
+  get tokenUsageChart(): ElementRef {
+    return this.TokenUsageChart;
+  }
+  /** @deprecated Use {@link TokenUsageChart}. */
+  set tokenUsageChart(value: ElementRef) {
+    this.TokenUsageChart = value;
+  }
+  @ViewChild('actionSuccessRateChart', { static: false }) ActionSuccessRateChart!: ElementRef;
+
+  /** @deprecated Use {@link ActionSuccessRateChart}. */
+  get actionSuccessRateChart(): ElementRef {
+    return this.ActionSuccessRateChart;
+  }
+  /** @deprecated Use {@link ActionSuccessRateChart}. */
+  set actionSuccessRateChart(value: ElementRef) {
+    this.ActionSuccessRateChart = value;
+  }
+  @ViewChild('stepTypeChart', { static: false }) StepTypeChart!: ElementRef;
+
+  /** @deprecated Use {@link StepTypeChart}. */
+  get stepTypeChart(): ElementRef {
+    return this.StepTypeChart;
+  }
+  /** @deprecated Use {@link StepTypeChart}. */
+  set stepTypeChart(value: ElementRef) {
+    this.StepTypeChart = value;
+  }
+  @ViewChild('promptTimeDistributionChart', { static: false }) PromptTimeDistributionChart!: ElementRef;
+
+  /** @deprecated Use {@link PromptTimeDistributionChart}. */
+  get promptTimeDistributionChart(): ElementRef {
+    return this.PromptTimeDistributionChart;
+  }
+  /** @deprecated Use {@link PromptTimeDistributionChart}. */
+  set promptTimeDistributionChart(value: ElementRef) {
+    this.PromptTimeDistributionChart = value;
+  }
+  @ViewChild('promptTokenDistributionChart', { static: false }) PromptTokenDistributionChart!: ElementRef;
+
+  /** @deprecated Use {@link PromptTokenDistributionChart}. */
+  get promptTokenDistributionChart(): ElementRef {
+    return this.PromptTokenDistributionChart;
+  }
+  /** @deprecated Use {@link PromptTokenDistributionChart}. */
+  set promptTokenDistributionChart(value: ElementRef) {
+    this.PromptTokenDistributionChart = value;
+  }
+  @ViewChild('promptCostDistributionChart', { static: false }) PromptCostDistributionChart!: ElementRef;
+
+  /** @deprecated Use {@link PromptCostDistributionChart}. */
+  get promptCostDistributionChart(): ElementRef {
+    return this.PromptCostDistributionChart;
+  }
+  /** @deprecated Use {@link PromptCostDistributionChart}. */
+  set promptCostDistributionChart(value: ElementRef) {
+    this.PromptCostDistributionChart = value;
+  }
+  @ViewChild('promptCountByNameChart', { static: false }) PromptCountByNameChart!: ElementRef;
+
+  /** @deprecated Use {@link PromptCountByNameChart}. */
+  get promptCountByNameChart(): ElementRef {
+    return this.PromptCountByNameChart;
+  }
+  /** @deprecated Use {@link PromptCountByNameChart}. */
+  set promptCountByNameChart(value: ElementRef) {
+    this.PromptCountByNameChart = value;
+  }
   
   constructor(
     private cdr: ChangeDetectorRef,
@@ -420,16 +510,16 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
   private cleanupAllCharts() {
     // List of all chart element refs
     const chartRefs = [
-      this.modelDistributionChart,
-      this.executionTimeChart,
-      this.costByVendorChart,
-      this.tokenUsageChart,
-      this.actionSuccessRateChart,
-      this.stepTypeChart,
-      this.promptTimeDistributionChart,
-      this.promptTokenDistributionChart,
-      this.promptCostDistributionChart,
-      this.promptCountByNameChart
+      this.ModelDistributionChart,
+      this.ExecutionTimeChart,
+      this.CostByVendorChart,
+      this.TokenUsageChart,
+      this.ActionSuccessRateChart,
+      this.StepTypeChart,
+      this.PromptTimeDistributionChart,
+      this.PromptTokenDistributionChart,
+      this.PromptCostDistributionChart,
+      this.PromptCountByNameChart
     ];
     
     // More comprehensive D3 cleanup
@@ -1040,7 +1130,7 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
   }
   
   private renderCharts() {
-    if (!this.modelDistributionChart) return; // Charts not ready yet
+    if (!this.ModelDistributionChart) return; // Charts not ready yet
     
     this.renderModelDistributionChart();
     this.renderExecutionTimeChart();
@@ -1057,7 +1147,7 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
   }
   
   private renderModelDistributionChart() {
-    const element = this.modelDistributionChart.nativeElement;
+    const element = this.ModelDistributionChart.nativeElement;
     const data = Array.from(this.PromptMetrics.byModel.entries()).map(([name, metrics]) => ({
       name,
       value: metrics.count
@@ -1120,7 +1210,7 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
   }
   
   private renderExecutionTimeChart() {
-    const element = this.executionTimeChart.nativeElement;
+    const element = this.ExecutionTimeChart.nativeElement;
     const data = Array.from(this.PromptMetrics.byVendor.entries()).map(([name, metrics]) => ({
       name,
       value: metrics.avgTime
@@ -1186,7 +1276,7 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
   }
   
   private renderCostByVendorChart() {
-    const element = this.costByVendorChart.nativeElement;
+    const element = this.CostByVendorChart.nativeElement;
     const data = Array.from(this.PromptMetrics.costBreakdown.byVendor.entries()).map(([name, cost]) => ({
       name,
       value: cost
@@ -1240,7 +1330,7 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
   }
   
   private renderTokenUsageChart() {
-    const element = this.tokenUsageChart.nativeElement;
+    const element = this.TokenUsageChart.nativeElement;
     const models = Array.from(this.PromptMetrics.tokenUsage.byModel.keys());
     const inputData = models.map(model => ({
       model,
@@ -1349,7 +1439,7 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
   }
   
   private renderActionSuccessRateChart() {
-    const element = this.actionSuccessRateChart.nativeElement;
+    const element = this.ActionSuccessRateChart.nativeElement;
     const data = Array.from(this.ActionMetrics.byAction.entries()).map(([name, metrics]) => ({
       name,
       value: metrics.successRate * 100
@@ -1414,7 +1504,7 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
   }
   
   private renderStepTypeChart() {
-    const element = this.stepTypeChart.nativeElement;
+    const element = this.StepTypeChart.nativeElement;
     const data = Array.from(this.TimelineMetrics.stepsByType.entries()).map(([name, value]) => ({
       name,
       value
@@ -1656,7 +1746,7 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
   }
   
   private renderPromptTimeDistributionChart() {
-    const element = this.promptTimeDistributionChart.nativeElement;
+    const element = this.PromptTimeDistributionChart.nativeElement;
     const data = Array.from(this.PromptMetrics.byPrompt.entries())
       .map(([name, metrics]) => ({
         name: name.length > 20 ? name.substring(0, 20) + '...' : name,
@@ -1725,7 +1815,7 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
   }
   
   private renderPromptTokenDistributionChart() {
-    const element = this.promptTokenDistributionChart.nativeElement;
+    const element = this.PromptTokenDistributionChart.nativeElement;
     
     // Aggregate token data by prompt
     const promptTokenData = new Map<string, { input: number; output: number }>();
@@ -1852,7 +1942,7 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
   }
   
   private renderPromptCostDistributionChart() {
-    const element = this.promptCostDistributionChart.nativeElement;
+    const element = this.PromptCostDistributionChart.nativeElement;
     
     // Aggregate cost data by prompt
     const promptCostData = new Map<string, number>();
@@ -1934,7 +2024,7 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
   }
   
   private renderPromptCountByNameChart() {
-    const element = this.promptCountByNameChart.nativeElement;
+    const element = this.PromptCountByNameChart.nativeElement;
     const data = Array.from(this.PromptMetrics.byPrompt.entries())
       .map(([name, metrics]) => ({
         name: name.length > 20 ? name.substring(0, 20) + '...' : name,

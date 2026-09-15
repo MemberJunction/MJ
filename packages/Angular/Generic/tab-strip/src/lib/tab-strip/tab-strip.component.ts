@@ -181,7 +181,7 @@ export class MJTabStripComponent implements AfterContentInit, AfterContentChecke
     this._viewInitialized = true;
     // Dev-mode guard: the .mj-tabs* chrome lives in a global stylesheet a standalone host must
     // import; a missing import renders bare divs with no error. Warn instead of staying silent.
-    warnIfTabChromeMissing(this.tabInnerContainer?.nativeElement?.closest('.mj-tabs') ?? undefined);
+    warnIfTabChromeMissing(this.TabInnerContainer?.nativeElement?.closest('.mj-tabs') ?? undefined);
     this.SelectedTabIndex = this.SelectedTabIndex; // force a refresh of the tab visibility
     this.syncTabIndexes();
     this.checkTabScrollButtons();
@@ -316,7 +316,16 @@ export class MJTabStripComponent implements AfterContentInit, AfterContentChecke
 
 
   /* INTERNAL IMPLEMENTATION */
-  @ViewChild('tabInnerContainer') tabInnerContainer!: ElementRef;
+  @ViewChild('tabInnerContainer') TabInnerContainer!: ElementRef;
+
+  /** @deprecated Use {@link TabInnerContainer}. */
+  get tabInnerContainer(): ElementRef {
+    return this.TabInnerContainer;
+  }
+  /** @deprecated Use {@link TabInnerContainer}. */
+  set tabInnerContainer(value: ElementRef) {
+    this.TabInnerContainer = value;
+  }
 
   ShowLeftButton: boolean = false;
 
@@ -345,11 +354,11 @@ export class MJTabStripComponent implements AfterContentInit, AfterContentChecke
   }
 
   protected checkTabScrollButtons() {
-    if (this.tabInnerContainer && this.tabInnerContainer.nativeElement) {
+    if (this.TabInnerContainer && this.TabInnerContainer.nativeElement) {
       // The list itself is the scroller now (`.mj-tabs__list` is `overflow-x: auto`), so overflow
       // and position are read off its NATIVE scroll state — the old scheme of animating a `left`
       // offset against a relatively-positioned wrapper is gone with the wrapper's CSS.
-      const container: HTMLElement = this.tabInnerContainer.nativeElement;
+      const container: HTMLElement = this.TabInnerContainer.nativeElement;
       const overflow = container.scrollWidth - container.clientWidth;
       this.ShowLeftButton = overflow > 0 && container.scrollLeft > 0;
       this.ShowRightButton = overflow > 0 && container.scrollLeft < overflow - 1;
@@ -359,7 +368,7 @@ export class MJTabStripComponent implements AfterContentInit, AfterContentChecke
   protected scrollTabHeader(scrollAmount: number) {
     // Positive amount = reveal content to the LEFT (the old `left`-offset convention, preserved so
     // ScrollAmount and the button wiring keep their meaning); native scrollLeft counts the other way.
-    const container: HTMLElement = this.tabInnerContainer.nativeElement;
+    const container: HTMLElement = this.TabInnerContainer.nativeElement;
     container.scrollBy({ left: -scrollAmount, behavior: 'smooth' });
     // Smooth scrolling settles asynchronously; re-evaluate the buttons when it has.
     setTimeout(() => this.checkTabScrollButtons(), 300);

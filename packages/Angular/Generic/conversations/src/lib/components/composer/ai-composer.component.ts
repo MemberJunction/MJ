@@ -68,7 +68,16 @@ import { SkillCommandProvider } from '../../composer-plugins/skill-command.provi
   `
 })
 export class AiComposerComponent {
-  @ViewChild('inputBox') inputBox?: MessageInputBoxComponent;
+  @ViewChild('inputBox') InputBox?: MessageInputBoxComponent;
+
+  /** @deprecated Use {@link InputBox}. */
+  get inputBox(): MessageInputBoxComponent | undefined {
+    return this.InputBox;
+  }
+  /** @deprecated Use {@link InputBox}. */
+  set inputBox(value: MessageInputBoxComponent | undefined) {
+    this.InputBox = value;
+  }
 
   // ── AI convenience flags (the wrapper's reason to exist) ─────────────────────────
   private _enableAgentMentions: boolean = true;
@@ -448,7 +457,7 @@ export class AiComposerComponent {
 
   /** The inner mention editor — kept reachable for hosts that drive it directly (e.g. clear-after-programmatic-send). */
   public get MentionEditor(): MentionEditorComponent | undefined {
-    return this.inputBox?.mentionEditor;
+    return this.InputBox?.mentionEditor;
   }
 
   /** @deprecated Use {@link MentionEditor}. */
@@ -459,16 +468,16 @@ export class AiComposerComponent {
   /** Focus the composer input. */
   /** Inserts a resolved mention chip + space (see MentionEditorComponent.InsertMention). */
   public InsertMention(suggestion: MentionSuggestion, focus: boolean = true): boolean {
-    return this.inputBox?.InsertMention(suggestion, focus) ?? false;
+    return this.InputBox?.InsertMention(suggestion, focus) ?? false;
   }
 
   /** Focus with the caret at the end of content. */
   public FocusCaretAtEnd(): boolean {
-    return this.inputBox?.FocusCaretAtEnd() ?? false;
+    return this.InputBox?.FocusCaretAtEnd() ?? false;
   }
 
   public Focus(): void {
-    this.inputBox?.focus();
+    this.InputBox?.focus();
   }
 
   /** @deprecated Use {@link Focus}. */
@@ -478,7 +487,7 @@ export class AiComposerComponent {
 
   /** Clear the editor content and pending attachments. */
   public Clear(): void {
-    this.inputBox?.mentionEditor?.clear();
+    this.InputBox?.mentionEditor?.clear();
   }
 
   /** @deprecated Use {@link Clear}. */
@@ -488,7 +497,7 @@ export class AiComposerComponent {
 
   /** Mention chip data (id/type/name + preset info) currently in the editor. */
   public GetMentionChipsData(): Array<{ id: string; type: string; name: string; presetId?: string; presetName?: string }> {
-    return this.inputBox?.GetMentionChipsData() || [];
+    return this.InputBox?.GetMentionChipsData() || [];
   }
 
   /** @deprecated Use {@link GetMentionChipsData}. */
@@ -498,7 +507,7 @@ export class AiComposerComponent {
 
   /** Plain text with mentions encoded as JSON (`@{"type":...}`) — the persistence format. */
   public GetPlainTextWithJsonMentions(): string {
-    return this.inputBox?.mentionEditor?.getPlainTextWithJsonMentions() || '';
+    return this.InputBox?.mentionEditor?.getPlainTextWithJsonMentions() || '';
   }
 
   /** @deprecated Use {@link GetPlainTextWithJsonMentions}. */
@@ -508,7 +517,7 @@ export class AiComposerComponent {
 
   /** Pending (not yet uploaded) attachments. */
   public GetPendingAttachments(): PendingAttachment[] {
-    return this.inputBox?.GetPendingAttachments() || [];
+    return this.InputBox?.GetPendingAttachments() || [];
   }
 
   /** @deprecated Use {@link GetPendingAttachments}. */
@@ -518,7 +527,7 @@ export class AiComposerComponent {
 
   /** Open the attachment file picker programmatically. */
   public OpenFilePicker(): void {
-    this.inputBox?.OpenFilePicker();
+    this.InputBox?.OpenFilePicker();
   }
 
   /** @deprecated Use {@link OpenFilePicker}. */
@@ -531,6 +540,6 @@ export class AiComposerComponent {
     fileID: string; fileName: string; mimeType: string;
     sizeBytes: number; artifactVersionId?: string;
   }): PendingAttachment | undefined {
-    return this.inputBox?.AddArtifactAttachment(artifact);
+    return this.InputBox?.AddArtifactAttachment(artifact);
   }
 }

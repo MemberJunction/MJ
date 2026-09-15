@@ -95,7 +95,16 @@ export class EditPartDialogComponent implements OnDestroy, AfterViewInit {
      * Container for dynamically loaded config panel
      */
     @ViewChild('configPanelContainer', { read: ViewContainerRef, static: false })
-    configPanelContainer!: ViewContainerRef;
+    ConfigPanelContainer!: ViewContainerRef;
+
+    /** @deprecated Use {@link ConfigPanelContainer}. */
+    get configPanelContainer(): ViewContainerRef {
+      return this.ConfigPanelContainer;
+    }
+    /** @deprecated Use {@link ConfigPanelContainer}. */
+    set configPanelContainer(value: ViewContainerRef) {
+      this.ConfigPanelContainer = value;
+    }
 
     /**
      * Reference to the dynamically created config panel component
@@ -177,7 +186,7 @@ export class EditPartDialogComponent implements OnDestroy, AfterViewInit {
             return;
         }
 
-        if (!this.configPanelContainer) {
+        if (!this.ConfigPanelContainer) {
             // Container not ready yet - will be called again from ngAfterViewInit
             console.log('[EditPartDialog] Container not ready yet');
             return;
@@ -211,8 +220,8 @@ export class EditPartDialogComponent implements OnDestroy, AfterViewInit {
             console.log('[EditPartDialog] Component class:', componentClass.name);
 
             // Clear the container and create the component
-            this.configPanelContainer.clear();
-            this.configPanelRef = this.configPanelContainer.createComponent(componentClass as never);
+            this.ConfigPanelContainer.clear();
+            this.configPanelRef = this.ConfigPanelContainer.createComponent(componentClass as never);
             console.log('[EditPartDialog] Component created successfully');
 
             // Set inputs on the component

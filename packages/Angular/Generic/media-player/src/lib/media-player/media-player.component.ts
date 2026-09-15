@@ -165,7 +165,16 @@ export class MJMediaPlayerComponent implements OnDestroy {
   // ---------------------------------------------------------------------------
 
   /** The primary media element (the single audio/video, or the first video in a grid). */
-  @ViewChild('primaryMedia') primaryMedia?: ElementRef<HTMLMediaElement>;
+  @ViewChild('primaryMedia') PrimaryMedia?: ElementRef<HTMLMediaElement>;
+
+  /** @deprecated Use {@link PrimaryMedia}. */
+  get primaryMedia(): ElementRef<HTMLMediaElement> | undefined {
+    return this.PrimaryMedia;
+  }
+  /** @deprecated Use {@link PrimaryMedia}. */
+  set primaryMedia(value: ElementRef<HTMLMediaElement> | undefined) {
+    this.PrimaryMedia = value;
+  }
 
   // ---------------------------------------------------------------------------
   // Internal state
@@ -1012,7 +1021,7 @@ export class MJMediaPlayerComponent implements OnDestroy {
     if (this._activeMediaEl) {
       return this._activeMediaEl;
     }
-    return this.primaryMedia?.nativeElement ?? null;
+    return this.PrimaryMedia?.nativeElement ?? null;
   }
 
   private initializeMediaElement(el: HTMLMediaElement): void {

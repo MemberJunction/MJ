@@ -22,7 +22,16 @@ type Placed = FlowNode & { _x?: number; _y?: number; _ang?: number };
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class ConstellationComponent {
-  @ViewChild('svg', { static: true }) svgRef!: ElementRef<SVGSVGElement>;
+  @ViewChild('svg', { static: true }) SvgRef!: ElementRef<SVGSVGElement>;
+
+  /** @deprecated Use {@link SvgRef}. */
+  get svgRef(): ElementRef<SVGSVGElement> {
+    return this.SvgRef;
+  }
+  /** @deprecated Use {@link SvgRef}. */
+  set svgRef(value: ElementRef<SVGSVGElement>) {
+    this.SvgRef = value;
+  }
   @Output() NodeSelected = new EventEmitter<FlowNode>();
 
   /**
@@ -64,13 +73,13 @@ export class ConstellationComponent {
 
   private clear(): void {
     this.pz?.Detach(); this.pz = undefined;
-    const svg = this.svgRef?.nativeElement;
+    const svg = this.SvgRef?.nativeElement;
     if (svg) while (svg.firstChild) svg.removeChild(svg.firstChild);
     this.stars.clear(); this.edges = []; this.hoveredId = -1;
   }
 
   private build(): void {
-    const svg = this.svgRef.nativeElement;
+    const svg = this.SvgRef.nativeElement;
     const m = this._model!;
     svg.setAttribute('viewBox', `0 0 ${this.VW} ${this.VH}`);
 

@@ -533,6 +533,59 @@ function rewriteInput(ctx, node, names, classNode) {
     return null;
 }
 
+/** Angular's view/content query decorators. The SELECTOR is their contract, never the property name. */
+const VIEW_QUERY_DECORATORS = new Set(['ViewChild', 'ViewChildren', 'ContentChild', 'ContentChildren']);
+
+/**
+ * `@ViewChild('ref') foo: T` → `@ViewChild('ref') Foo: T`, plus a plain accessor pair for the old name.
+ *
+ * Unlike `@Input`, the decorator does NOT move and gains no alias: what binds a view query to the
+ * template is the selector inside it (`'ref'`, or a component type), and that argument is untouched
+ * by a rename. Angular goes on assigning the same element to whichever property carries the
+ * decorator. So the old name only has to keep READING, which a delegating accessor pair does.
+ *
+ * The pair is readable AND writable because the old name was a plain property: a component's own
+ * template reads it, and tests routinely assign to it to inject a fake element.
+ */
+function rewriteViewQuery(ctx, node, names, classNode) {
+    const { text, source, buffer, unit } = ctx;
+    const decorators = decoratorNames(node);
+    // Only the query decorator may be present. Anything else stacked on the member is a contract
+    // this does not understand, and guessing is what the skip list exists to avoid.
+    if (decorators.some((n) => !VIEW_QUERY_DECORATORS.has(n))) return SKIP_REASONS.Decorated;
+    if (declaredNames(classNode).has(names.New)) return SKIP_REASONS.NameCollision;
+    if (alreadyClaimed(ctx, classNode, names.New)) return SKIP_REASONS.NameClaimedThisRun;
+    if (classNode.name && ctx.subclassIndex?.Props?.get(classNode.name.text)?.has(names.Old))
+        return SKIP_REASONS.SubclassRedeclares;
+    if (classNode.name && ctx.subclassIndex?.Members?.get(classNode.name.text)?.has(names.Old))
+        return SKIP_REASONS.Overridden;
+    if (classNode.name && ctx.subclassIndex?.Ancestors?.get(classNode.name.text)?.has(names.New))
+        return SKIP_REASONS.AncestorDeclares;
+
+    // `aliasType` already folds `?` into the annotation, and a `!` declaration deliberately asserts
+    // the property is assigned — widening that to `| undefined` here would be MORE truthful about
+    // the pre-view-init window but would break every existing `this.foo.nativeElement`. The alias
+    // exists to preserve the old contract exactly, not to improve it.
+    const type = aliasType(node, classNode, names, text);
+    if (!type) return SKIP_REASONS.GenericClass;
+    claim(ctx, classNode, names.New);
+
+    buffer.Replace(node.name.getStart(source), node.name.end, names.New);
+
+    const indent = indentOf(text, node, source);
+    const mods = accessorModifiers(node);
+    buffer.Insert(
+        node.end,
+        `\n\n${indent}${docFor(names.New)}\n` +
+            `${indent}${mods}get ${names.Old}(): ${type} {\n` +
+            `${indent}${unit}return this.${names.New};\n${indent}}\n` +
+            `${indent}${docFor(names.New)}\n` +
+            `${indent}${mods}set ${names.Old}(value: ${type}) {\n` +
+            `${indent}${unit}this.${names.New} = value;\n${indent}}`,
+    );
+    return null;
+}
+
 /**
  * `constructor(public foo: T)` → `constructor(public Foo: T)`, plus an accessor pair on the class.
  *
@@ -856,6 +909,11 @@ function rewriteFile(absPath, findings, subclassIndex) {
                     entry.Skip = rewriteOutput(ctx, member, entry.Names, classNode);
                 else if (ts.isPropertyDeclaration(member) && bindingDecorator(member, 'Input'))
                     entry.Skip = rewriteInput(ctx, member, entry.Names, classNode);
+                else if (
+                    ts.isPropertyDeclaration(member) &&
+                    decoratorNames(member).some((n) => VIEW_QUERY_DECORATORS.has(n))
+                )
+                    entry.Skip = rewriteViewQuery(ctx, member, entry.Names, classNode);
                 else if (ts.isPropertyDeclaration(member)) entry.Skip = rewriteProperty(ctx, member, entry.Names, classNode);
                 else if (ts.isGetAccessorDeclaration(member) || ts.isSetAccessorDeclaration(member))
                     entry.Skip = rewriteAccessorPair(ctx, member, entry.Names, classNode, state);

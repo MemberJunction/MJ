@@ -138,7 +138,16 @@ export interface OpenEntityRecordEvent {
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class MJEntityERDComponent extends BaseAngularComponent implements OnChanges {
-  @ViewChild(ERDDiagramComponent) erdDiagram!: ERDDiagramComponent;
+  @ViewChild(ERDDiagramComponent) ErdDiagram!: ERDDiagramComponent;
+
+  /** @deprecated Use {@link ErdDiagram}. */
+  get erdDiagram(): ERDDiagramComponent {
+    return this.ErdDiagram;
+  }
+  /** @deprecated Use {@link ErdDiagram}. */
+  set erdDiagram(value: ERDDiagramComponent) {
+    this.ErdDiagram = value;
+  }
 
   // ============================================================================
   // INPUTS - Data
@@ -613,7 +622,7 @@ export class MJEntityERDComponent extends BaseAngularComponent implements OnChan
    * Zoom in on the diagram.
    */
   public ZoomIn(): void {
-    this.erdDiagram?.zoomIn();
+    this.ErdDiagram?.zoomIn();
   }
 
   /** @deprecated Use {@link ZoomIn}. */
@@ -625,7 +634,7 @@ export class MJEntityERDComponent extends BaseAngularComponent implements OnChan
    * Zoom out on the diagram.
    */
   public ZoomOut(): void {
-    this.erdDiagram?.zoomOut();
+    this.ErdDiagram?.zoomOut();
   }
 
   /** @deprecated Use {@link ZoomOut}. */
@@ -637,7 +646,7 @@ export class MJEntityERDComponent extends BaseAngularComponent implements OnChan
    * Reset zoom to default.
    */
   public ResetZoom(): void {
-    this.erdDiagram?.resetZoom();
+    this.ErdDiagram?.resetZoom();
   }
 
   /** @deprecated Use {@link ResetZoom}. */
@@ -649,7 +658,7 @@ export class MJEntityERDComponent extends BaseAngularComponent implements OnChan
    * Fit all nodes in view.
    */
   public ZoomToFit(padding?: number): void {
-    this.erdDiagram?.zoomToFit(padding);
+    this.ErdDiagram?.zoomToFit(padding);
   }
 
   /** @deprecated Use {@link ZoomToFit}. */
@@ -661,7 +670,7 @@ export class MJEntityERDComponent extends BaseAngularComponent implements OnChan
    * Zoom to a specific entity.
    */
   public ZoomToEntity(entityId: string, scale?: number): void {
-    this.erdDiagram?.zoomToNode(entityId, scale);
+    this.ErdDiagram?.zoomToNode(entityId, scale);
   }
 
   /** @deprecated Use {@link ZoomToEntity}. */
@@ -673,7 +682,7 @@ export class MJEntityERDComponent extends BaseAngularComponent implements OnChan
    * Get current diagram state for persistence.
    */
   public GetState(): ERDState | null {
-    return this.erdDiagram?.getState() || null;
+    return this.ErdDiagram?.getState() || null;
   }
 
   /** @deprecated Use {@link GetState}. */
@@ -685,7 +694,7 @@ export class MJEntityERDComponent extends BaseAngularComponent implements OnChan
    * Restore diagram state.
    */
   public setState(state: Partial<ERDState>, restorePositions?: boolean): void {
-    this.erdDiagram?.setState(state, restorePositions);
+    this.ErdDiagram?.setState(state, restorePositions);
   }
 
   /**
@@ -693,7 +702,7 @@ export class MJEntityERDComponent extends BaseAngularComponent implements OnChan
    */
   public Refresh(): void {
     this.buildERDData();
-    this.erdDiagram?.refresh();
+    this.ErdDiagram?.refresh();
   }
 
   /** @deprecated Use {@link Refresh}. */
@@ -705,7 +714,7 @@ export class MJEntityERDComponent extends BaseAngularComponent implements OnChan
    * Export diagram as SVG.
    */
   public ExportAsSVG(): string {
-    return this.erdDiagram?.exportAsSVG() || '';
+    return this.ErdDiagram?.exportAsSVG() || '';
   }
 
   /** @deprecated Use {@link ExportAsSVG}. */
@@ -717,7 +726,7 @@ export class MJEntityERDComponent extends BaseAngularComponent implements OnChan
    * Trigger a resize recalculation. Call this when the container size changes.
    */
   public TriggerResize(): void {
-    this.erdDiagram?.triggerResize();
+    this.ErdDiagram?.triggerResize();
   }
 
   /** @deprecated Use {@link TriggerResize}. */

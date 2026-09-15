@@ -69,7 +69,16 @@ const LAST_SESSION_BASE_KEY = 'KnowledgeHub_LastClusterSession';
     styleUrls: ['./cluster-visualization-resource.component.css'],
 })
 export class ClusterVisualizationResourceComponent extends BaseResourceComponent implements AfterViewInit, OnDestroy {
-    @ViewChild('scatterPlot') scatterPlot?: ClusterScatterComponent;
+    @ViewChild('scatterPlot') ScatterPlot?: ClusterScatterComponent;
+
+    /** @deprecated Use {@link ScatterPlot}. */
+    get scatterPlot(): ClusterScatterComponent | undefined {
+        return this.ScatterPlot;
+    }
+    /** @deprecated Use {@link ScatterPlot}. */
+    set scatterPlot(value: ClusterScatterComponent | undefined) {
+        this.ScatterPlot = value;
+    }
 
     private cdr = inject(ChangeDetectorRef);
     private clusteringService = inject(ClusteringService);
@@ -402,7 +411,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
         this.RunError = null;
 
         // Auto-hide detail panel from previous visualization
-        this.scatterPlot?.CloseDetailPanel();
+        this.ScatterPlot?.CloseDetailPanel();
 
         // Update entity doc options if entity changed
         this.updateEntityDocOptions(config.EntityName);
@@ -494,7 +503,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
             Params: { ...this.ActiveConfig },
             CreatedAt: new Date().toISOString(),
             Result: this.stripVectorsFromResult(this.Result),
-            Viewport: this.scatterPlot?.GetViewportTransform(),
+            Viewport: this.ScatterPlot?.GetViewportTransform(),
             ClusterLabels: this.ClusterLabels.length > 0 ? [...this.ClusterLabels] : undefined,
         };
 
@@ -506,7 +515,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
 
     /** Select a saved visualization — restore from cache if available, otherwise re-run */
     public async OnSelectSaved(saved: SavedClusterVisualization): Promise<void> {
-        this.scatterPlot?.CloseDetailPanel();
+        this.ScatterPlot?.CloseDetailPanel();
         this.ActiveSavedId = saved.Id;
         this.VisualizationTitle = saved.Name;
 
@@ -529,7 +538,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
             // Restore viewport after a tick (scatter needs to render first)
             if (saved.Viewport) {
                 setTimeout(() => {
-                    this.scatterPlot?.SetViewportTransform(saved.Viewport!);
+                    this.ScatterPlot?.SetViewportTransform(saved.Viewport!);
                     this.cdr.detectChanges();
                 }, 50);
             }
@@ -554,7 +563,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
 
     /** Start a new analysis (clear current) */
     public OnNewAnalysis(): void {
-        this.scatterPlot?.CloseDetailPanel();
+        this.ScatterPlot?.CloseDetailPanel();
         this.ActiveSavedId = null;
         this.Result = null;
         this.ClusterLabels = [];
@@ -946,7 +955,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
                 ClusterLabels: this.ClusterLabels,
                 Config: this.ActiveConfig,
                 Title: this.VisualizationTitle,
-                Viewport: this.scatterPlot?.GetViewportTransform() ?? null,
+                Viewport: this.ScatterPlot?.GetViewportTransform() ?? null,
             };
             localStorage.setItem(buildEnvScopedKey(LAST_SESSION_BASE_KEY), JSON.stringify(session));
         } catch {
@@ -981,7 +990,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
             // Restore viewport after a tick to let the scatter component render
             if (session.Viewport) {
                 setTimeout(() => {
-                    this.scatterPlot?.SetViewportTransform(session.Viewport!);
+                    this.ScatterPlot?.SetViewportTransform(session.Viewport!);
                 }, 50);
             }
         } catch {

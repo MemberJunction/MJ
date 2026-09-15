@@ -66,10 +66,28 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   private metadata = this.ProviderToUse;
 
   /** Reference to the filter input for keyboard shortcuts */
-  @ViewChild('filterInput') filterInputRef: ElementRef<HTMLInputElement> | undefined;
+  @ViewChild('filterInput') FilterInputRef: ElementRef<HTMLInputElement> | undefined;
+
+  /** @deprecated Use {@link FilterInputRef}. */
+  get filterInputRef(): ElementRef<HTMLInputElement> | undefined {
+    return this.FilterInputRef;
+  }
+  /** @deprecated Use {@link FilterInputRef}. */
+  set filterInputRef(value: ElementRef<HTMLInputElement> | undefined) {
+    this.FilterInputRef = value;
+  }
 
   /** Reference to the view workspace (owns view CRUD + the inner data renderer) */
-  @ViewChild(ViewWorkspaceComponent) viewWorkspaceRef: ViewWorkspaceComponent | undefined;
+  @ViewChild(ViewWorkspaceComponent) ViewWorkspaceRef: ViewWorkspaceComponent | undefined;
+
+  /** @deprecated Use {@link ViewWorkspaceRef}. */
+  get viewWorkspaceRef(): ViewWorkspaceComponent | undefined {
+    return this.ViewWorkspaceRef;
+  }
+  /** @deprecated Use {@link ViewWorkspaceRef}. */
+  set viewWorkspaceRef(value: ViewWorkspaceComponent | undefined) {
+    this.ViewWorkspaceRef = value;
+  }
 
   /**
    * Optional filter to constrain which entities are shown in the explorer.
@@ -861,7 +879,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    */
   private publishAgentContext(): void {
     const accessibleViews = this.getAccessibleViewsForSelectedEntity();
-    const gridState = this.viewWorkspaceRef?.GetGridState() ?? null;
+    const gridState = this.ViewWorkspaceRef?.GetGridState() ?? null;
     const context = BuildDataExplorerAgentContext({
       SelectedEntityName: this.SelectedEntity?.Name ?? null,
       ViewMode: this.State.viewMode,
@@ -1425,7 +1443,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       displayName: recordName,
     });
     // Highlight the row in the grid (no-op when the grid view isn't mounted, e.g. cards/timeline).
-    this.viewWorkspaceRef?.SelectRecord(record);
+    this.ViewWorkspaceRef?.SelectRecord(record);
     this.cdr.detectChanges();
   }
 
@@ -1568,7 +1586,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     if (format === 'invalid') {
       return { Success: false, ErrorMessage: `Invalid format "${String(params['format'])}". Valid formats: csv, excel, json.` };
     }
-    const workspace = this.viewWorkspaceRef;
+    const workspace = this.ViewWorkspaceRef;
     if (!workspace || !workspace.ExportRecords) {
       return { Success: false, ErrorMessage: 'The record grid is not ready to export yet.' };
     }
@@ -1600,21 +1618,21 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     if (!this.SelectedEntity) {
       return { Success: false, ErrorMessage: 'No entity is selected, so there are no view properties to configure.' };
     }
-    if (!this.viewWorkspaceRef) {
+    if (!this.ViewWorkspaceRef) {
       return { Success: false, ErrorMessage: 'The view workspace is not ready yet.' };
     }
-    this.viewWorkspaceRef.onConfigureViewRequested();
+    this.ViewWorkspaceRef.onConfigureViewRequested();
     return { Success: true };
   }
 
   /** Advance the record grid to the next page. */
   private toolNextPage(): { Success: boolean; Data?: Record<string, unknown>; ErrorMessage?: string } {
-    return this.applyPageChange(() => this.viewWorkspaceRef?.NextPage() ?? null);
+    return this.applyPageChange(() => this.ViewWorkspaceRef?.NextPage() ?? null);
   }
 
   /** Move the record grid to the previous page. */
   private toolPreviousPage(): { Success: boolean; Data?: Record<string, unknown>; ErrorMessage?: string } {
-    return this.applyPageChange(() => this.viewWorkspaceRef?.PreviousPage() ?? null);
+    return this.applyPageChange(() => this.ViewWorkspaceRef?.PreviousPage() ?? null);
   }
 
   /** Jump the record grid to a specific 1-based page number. */
@@ -1626,7 +1644,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     if (validated.value < 1) {
       return { Success: false, ErrorMessage: 'page must be 1 or greater.' };
     }
-    return this.applyPageChange(() => this.viewWorkspaceRef?.GoToPage(validated.value) ?? null);
+    return this.applyPageChange(() => this.ViewWorkspaceRef?.GoToPage(validated.value) ?? null);
   }
 
   /**
@@ -1658,7 +1676,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     if (validated.value < 1) {
       return { Success: false, ErrorMessage: 'size must be 1 or greater.' };
     }
-    const applied = this.viewWorkspaceRef?.SetPageSize(validated.value) ?? null;
+    const applied = this.ViewWorkspaceRef?.SetPageSize(validated.value) ?? null;
     if (applied == null) {
       return { Success: false, ErrorMessage: 'The record grid is not ready to set a page size yet.' };
     }
@@ -1690,7 +1708,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     if (rawDir !== 'asc' && rawDir !== 'desc') {
       return { Success: false, ErrorMessage: `Invalid direction "${String(params['direction'])}". Valid directions: asc, desc.` };
     }
-    const applied = this.viewWorkspaceRef?.SetSort(field.Name, rawDir) ?? false;
+    const applied = this.ViewWorkspaceRef?.SetSort(field.Name, rawDir) ?? false;
     if (!applied) {
       return { Success: false, ErrorMessage: 'The record grid is not ready to sort yet.' };
     }
@@ -1748,28 +1766,28 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       // Ctrl+S / Cmd+S: Save current view
       if (event.key === 's' && !event.shiftKey) {
         event.preventDefault();
-        this.viewWorkspaceRef?.onQuickSaveRequested(false);
+        this.ViewWorkspaceRef?.onQuickSaveRequested(false);
         return;
       }
 
       // Ctrl+Shift+S / Cmd+Shift+S: Save as new view
       if (event.key === 'S' || (event.key === 's' && event.shiftKey)) {
         event.preventDefault();
-        this.viewWorkspaceRef?.onQuickSaveRequested(true);
+        this.ViewWorkspaceRef?.onQuickSaveRequested(true);
         return;
       }
 
       // Ctrl+, / Cmd+,: Open config panel
       if (event.key === ',') {
         event.preventDefault();
-        this.viewWorkspaceRef?.onConfigureViewRequested();
+        this.ViewWorkspaceRef?.onConfigureViewRequested();
         return;
       }
 
       // Ctrl+Z / Cmd+Z: Revert unsaved changes (only when modified)
       if (event.key === 'z' && !event.shiftKey && this.State.viewModified) {
         event.preventDefault();
-        void this.viewWorkspaceRef?.onRevertView();
+        void this.ViewWorkspaceRef?.onRevertView();
         return;
       }
     }
@@ -1779,9 +1797,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Focus the filter input
    */
   private focusFilterInput(): void {
-    if (this.filterInputRef) {
-      this.filterInputRef.nativeElement.focus();
-      this.filterInputRef.nativeElement.select();
+    if (this.FilterInputRef) {
+      this.FilterInputRef.nativeElement.focus();
+      this.FilterInputRef.nativeElement.select();
     }
   }
 

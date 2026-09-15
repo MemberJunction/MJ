@@ -133,7 +133,7 @@ export class TreeDropdownComponent extends BaseAngularComponent implements OnIni
         if (!CompositeKey.EqualsEx(val, this._value)) {
             this._value = val;
             // If tree is loaded, sync selection immediately
-            if (this.IsLoaded && this.treeComponent) {
+            if (this.IsLoaded && this.TreeComponent) {
                 this.syncValueToSelection();
             } else {
                 // Tree not loaded yet - fetch display text directly via Metadata
@@ -208,10 +208,46 @@ export class TreeDropdownComponent extends BaseAngularComponent implements OnIni
     // ViewChild References
     // ========================================
 
-    @ViewChild('triggerElement') triggerElement!: ElementRef<HTMLElement>;
-    @ViewChild('searchInput') searchInput!: ElementRef<HTMLInputElement>;
-    @ViewChild('dropdownPanel') dropdownPanel!: ElementRef<HTMLElement>;
-    @ViewChild('treeComponent') treeComponent!: TreeComponent;
+    @ViewChild('triggerElement') TriggerElement!: ElementRef<HTMLElement>;
+
+    /** @deprecated Use {@link TriggerElement}. */
+    get triggerElement(): ElementRef<HTMLElement> {
+      return this.TriggerElement;
+    }
+    /** @deprecated Use {@link TriggerElement}. */
+    set triggerElement(value: ElementRef<HTMLElement>) {
+      this.TriggerElement = value;
+    }
+    @ViewChild('searchInput') SearchInput!: ElementRef<HTMLInputElement>;
+
+    /** @deprecated Use {@link SearchInput}. */
+    get searchInput(): ElementRef<HTMLInputElement> {
+      return this.SearchInput;
+    }
+    /** @deprecated Use {@link SearchInput}. */
+    set searchInput(value: ElementRef<HTMLInputElement>) {
+      this.SearchInput = value;
+    }
+    @ViewChild('dropdownPanel') DropdownPanel!: ElementRef<HTMLElement>;
+
+    /** @deprecated Use {@link DropdownPanel}. */
+    get dropdownPanel(): ElementRef<HTMLElement> {
+      return this.DropdownPanel;
+    }
+    /** @deprecated Use {@link DropdownPanel}. */
+    set dropdownPanel(value: ElementRef<HTMLElement>) {
+      this.DropdownPanel = value;
+    }
+    @ViewChild('treeComponent') TreeComponent!: TreeComponent;
+
+    /** @deprecated Use {@link TreeComponent}. */
+    get treeComponent(): TreeComponent {
+      return this.TreeComponent;
+    }
+    /** @deprecated Use {@link TreeComponent}. */
+    set treeComponent(value: TreeComponent) {
+      this.TreeComponent = value;
+    }
 
     // ========================================
     // State
@@ -413,8 +449,8 @@ export class TreeDropdownComponent extends BaseAngularComponent implements OnIni
         this._value = null;
         this._pendingDisplayText = null;
 
-        if (this.treeComponent) {
-            this.treeComponent.ClearSelection();
+        if (this.TreeComponent) {
+            this.TreeComponent.ClearSelection();
         }
 
         this.ValueChange.emit(this._value);
@@ -426,8 +462,8 @@ export class TreeDropdownComponent extends BaseAngularComponent implements OnIni
      * Refresh tree data
      */
     public async Refresh(): Promise<void> {
-        if (this.treeComponent) {
-            await this.treeComponent.Refresh();
+        if (this.TreeComponent) {
+            await this.TreeComponent.Refresh();
         }
     }
 
@@ -547,8 +583,8 @@ export class TreeDropdownComponent extends BaseAngularComponent implements OnIni
     public OnClearSearch(): void {
         this.SearchText = '';
         this.clearSearch();
-        if (this.searchInput) {
-            this.searchInput.nativeElement.focus();
+        if (this.SearchInput) {
+            this.SearchInput.nativeElement.focus();
         }
     }
 
@@ -649,7 +685,7 @@ export class TreeDropdownComponent extends BaseAngularComponent implements OnIni
         // Sync selection after load - defer to next microtask to ensure ViewChild is resolved
         Promise.resolve().then(() => {
             
-            if (this.treeComponent) {
+            if (this.TreeComponent) {
                 
                 
             }
@@ -703,12 +739,12 @@ export class TreeDropdownComponent extends BaseAngularComponent implements OnIni
 
         const tryFocus = (retriesLeft: number): void => {
             // Try ViewChild first
-            if (this.searchInput?.nativeElement) {
-                this.searchInput.nativeElement.focus();
+            if (this.SearchInput?.nativeElement) {
+                this.SearchInput.nativeElement.focus();
                 return;
             }
             // Fallback: query DOM directly (ViewChild may not resolve for @if blocks)
-            const panel = this.dropdownPanel?.nativeElement;
+            const panel = this.DropdownPanel?.nativeElement;
             if (panel) {
                 const input = panel.querySelector('.tree-dropdown-search__input') as HTMLInputElement;
                 if (input) {
@@ -731,13 +767,13 @@ export class TreeDropdownComponent extends BaseAngularComponent implements OnIni
      * Navigate tree focus up/down/first/last while search input retains DOM focus
      */
     private navigateTree(direction: 'up' | 'down' | 'first' | 'last'): void {
-        if (!this.treeComponent?.Nodes?.length) return;
+        if (!this.TreeComponent?.Nodes?.length) return;
 
-        const visibleNodes = this.getVisibleNodesInOrder(this.treeComponent.Nodes);
+        const visibleNodes = this.getVisibleNodesInOrder(this.TreeComponent.Nodes);
         if (visibleNodes.length === 0) return;
 
-        const currentIndex = this.treeComponent.FocusedNode
-            ? visibleNodes.indexOf(this.treeComponent.FocusedNode)
+        const currentIndex = this.TreeComponent.FocusedNode
+            ? visibleNodes.indexOf(this.TreeComponent.FocusedNode)
             : -1;
 
         let targetNode: TreeNode | null = null;
@@ -766,7 +802,7 @@ export class TreeDropdownComponent extends BaseAngularComponent implements OnIni
         }
 
         if (targetNode) {
-            this.treeComponent.FocusedNode = targetNode;
+            this.TreeComponent.FocusedNode = targetNode;
             this.cdr.detectChanges();
             this.scrollFocusedNodeIntoView();
         }
@@ -776,7 +812,7 @@ export class TreeDropdownComponent extends BaseAngularComponent implements OnIni
      * Select the currently focused tree node (Enter key)
      */
     private selectFocusedNode(): void {
-        const focusedNode = this.treeComponent?.FocusedNode;
+        const focusedNode = this.TreeComponent?.FocusedNode;
         if (!focusedNode) return;
 
         // Check if the node type is selectable per config
@@ -785,7 +821,7 @@ export class TreeDropdownComponent extends BaseAngularComponent implements OnIni
             || (this.SelectableTypes === 'branch' && focusedNode.Type === 'branch');
 
         if (isSelectable) {
-            this.treeComponent.SelectNodes([focusedNode.ID], true);
+            this.TreeComponent.SelectNodes([focusedNode.ID], true);
         } else if (focusedNode.Type === 'branch') {
             // Non-selectable branch: toggle expand/collapse
             this.toggleBranchExpansion(focusedNode);
@@ -796,17 +832,17 @@ export class TreeDropdownComponent extends BaseAngularComponent implements OnIni
      * ArrowRight: expand focused branch or descend to first child
      */
     private expandOrDescendFocusedNode(): void {
-        const node = this.treeComponent?.FocusedNode;
+        const node = this.TreeComponent?.FocusedNode;
         if (!node || node.Type !== 'branch') return;
 
         if (!node.Expanded && node.Children?.length) {
-            this.treeComponent.ExpandToNode(node.Children[0].ID);
+            this.TreeComponent.ExpandToNode(node.Children[0].ID);
             this.cdr.detectChanges();
         } else if (node.Expanded && node.Children?.length) {
             // Already expanded: move focus to first visible child
             const firstVisible = node.Children.find(c => c.Visible);
             if (firstVisible) {
-                this.treeComponent.FocusedNode = firstVisible;
+                this.TreeComponent.FocusedNode = firstVisible;
                 this.cdr.detectChanges();
                 this.scrollFocusedNodeIntoView();
             }
@@ -817,7 +853,7 @@ export class TreeDropdownComponent extends BaseAngularComponent implements OnIni
      * ArrowLeft: collapse focused branch or ascend to parent
      */
     private collapseOrAscendFocusedNode(): void {
-        const node = this.treeComponent?.FocusedNode;
+        const node = this.TreeComponent?.FocusedNode;
         if (!node) return;
 
         if (node.Type === 'branch' && node.Expanded) {
@@ -825,10 +861,10 @@ export class TreeDropdownComponent extends BaseAngularComponent implements OnIni
             this.toggleBranchExpansion(node);
         } else if (node.ParentID) {
             // Move to parent
-            const allNodes = this.getVisibleNodesInOrder(this.treeComponent.Nodes);
+            const allNodes = this.getVisibleNodesInOrder(this.TreeComponent.Nodes);
             const parent = allNodes.find(n => UUIDsEqual(n.ID, node.ParentID));
             if (parent) {
-                this.treeComponent.FocusedNode = parent;
+                this.TreeComponent.FocusedNode = parent;
                 this.cdr.detectChanges();
                 this.scrollFocusedNodeIntoView();
             }
@@ -842,7 +878,7 @@ export class TreeDropdownComponent extends BaseAngularComponent implements OnIni
         if (node.Expanded) {
             node.Expanded = false;
         } else {
-            this.treeComponent.ExpandToNode(node.ID);
+            this.TreeComponent.ExpandToNode(node.ID);
         }
         this.cdr.detectChanges();
     }
@@ -852,7 +888,7 @@ export class TreeDropdownComponent extends BaseAngularComponent implements OnIni
      */
     private scrollFocusedNodeIntoView(): void {
         requestAnimationFrame(() => {
-            const panel = this.dropdownPanel?.nativeElement;
+            const panel = this.DropdownPanel?.nativeElement;
             if (!panel) return;
             const focused = panel.querySelector('.tree-node-focused, .tree-node--focused, [data-focused="true"]');
             if (focused) {
@@ -891,11 +927,11 @@ export class TreeDropdownComponent extends BaseAngularComponent implements OnIni
      * Calculate dropdown position
      */
     private calculatePosition(): void {
-        if (!this.triggerElement) {
+        if (!this.TriggerElement) {
             return;
         }
 
-        const triggerRect = this.triggerElement.nativeElement.getBoundingClientRect();
+        const triggerRect = this.TriggerElement.nativeElement.getBoundingClientRect();
         const viewportHeight = window.innerHeight;
         const viewportWidth = window.innerWidth;
 
@@ -992,9 +1028,9 @@ export class TreeDropdownComponent extends BaseAngularComponent implements OnIni
                         
                         return;
                     }
-                    const isInsideTrigger = this.triggerElement?.nativeElement?.contains(target);
+                    const isInsideTrigger = this.TriggerElement?.nativeElement?.contains(target);
                     // Check if click is inside the dropdown panel (rendered inline, not in portal)
-                    const isInsideDropdown = this.dropdownPanel?.nativeElement?.contains(target);
+                    const isInsideDropdown = this.DropdownPanel?.nativeElement?.contains(target);
                     
                     
 
@@ -1092,11 +1128,11 @@ export class TreeDropdownComponent extends BaseAngularComponent implements OnIni
         const searchText = beforeEvent.ModifiedSearchText ?? text;
 
         // Guard: tree component may not be ready or may have no nodes loaded
-        if (!this.treeComponent || !this.IsLoaded) {
+        if (!this.TreeComponent || !this.IsLoaded) {
             return;
         }
 
-        const matchedNodes = this.treeComponent.FilterNodes(
+        const matchedNodes = this.TreeComponent.FilterNodes(
             searchText,
             {
                 caseSensitive: this.SearchConfig.CaseSensitive,
@@ -1109,7 +1145,7 @@ export class TreeDropdownComponent extends BaseAngularComponent implements OnIni
         // Auto-expand to show matches — guard against empty results
         if (matchedNodes.length > 0 && this.SearchConfig.AutoExpandMatches !== false && searchText.trim()) {
             for (const node of matchedNodes) {
-                this.treeComponent.ExpandToNode(node.ID);
+                this.TreeComponent.ExpandToNode(node.ID);
             }
         }
 
@@ -1124,8 +1160,8 @@ export class TreeDropdownComponent extends BaseAngularComponent implements OnIni
      * Clear search filter
      */
     private clearSearch(): void {
-        if (this.treeComponent?.Nodes?.length) {
-            this.treeComponent.FilterNodes('', {});
+        if (this.TreeComponent?.Nodes?.length) {
+            this.TreeComponent.FilterNodes('', {});
             this.cdr.detectChanges();
         }
     }
@@ -1156,7 +1192,7 @@ export class TreeDropdownComponent extends BaseAngularComponent implements OnIni
      * Sync value to tree selection
      */
     private syncValueToSelection(): void {
-        if (!this.treeComponent || !this.IsLoaded) {
+        if (!this.TreeComponent || !this.IsLoaded) {
             return;
         }
 
@@ -1165,11 +1201,11 @@ export class TreeDropdownComponent extends BaseAngularComponent implements OnIni
 
         // Pass emitChange=false to avoid emitting SelectionChange during sync
         // This prevents unnecessary events and parent component confusion
-        this.treeComponent.SelectNodes(ids, false);
+        this.TreeComponent.SelectNodes(ids, false);
 
         // Use try-catch as defensive measure since tree component may not be fully ready
         try {
-            this.SelectedNodes = this.treeComponent.GetSelectedNodes() || [];
+            this.SelectedNodes = this.TreeComponent.GetSelectedNodes() || [];
         } catch {
             this.SelectedNodes = [];
         }

@@ -321,7 +321,16 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
     // View Children
     // ========================================
 
-    @ViewChild('layoutContainer', { static: true }) layoutContainer!: ElementRef<HTMLElement>;
+    @ViewChild('layoutContainer', { static: true }) LayoutContainer!: ElementRef<HTMLElement>;
+
+    /** @deprecated Use {@link LayoutContainer}. */
+    get layoutContainer(): ElementRef<HTMLElement> {
+      return this.LayoutContainer;
+    }
+    /** @deprecated Use {@link LayoutContainer}. */
+    set layoutContainer(value: ElementRef<HTMLElement>) {
+      this.LayoutContainer = value;
+    }
 
     // ========================================
     // State
@@ -825,11 +834,11 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
     // ========================================
 
     private async initializeLayout(generation = this._layoutInitGeneration): Promise<void> {
-        if (!this.config || !this.layoutContainer?.nativeElement) {
+        if (!this.config || !this.LayoutContainer?.nativeElement) {
             return;
         }
 
-        const el = this.layoutContainer.nativeElement;
+        const el = this.LayoutContainer.nativeElement;
         const rect = el.getBoundingClientRect();
         if (rect.width === 0 || rect.height === 0) {
             // The container has no size yet — typically because Explorer is reattaching
@@ -877,7 +886,7 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
         // Golden Layout's native ResolvedLayoutConfig is the source of truth
         // Panel data is embedded in each component's componentState
         this._glService.initialize(
-            this.layoutContainer.nativeElement,
+            this.LayoutContainer.nativeElement,
             this.config.layout,
             panelFactory,
             this.isEditing

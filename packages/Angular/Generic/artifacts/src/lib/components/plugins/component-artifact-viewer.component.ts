@@ -25,8 +25,26 @@ import { EvaluateComponentPermissions, PermissionEvaluationResult } from './comp
 })
 @RegisterClass(BaseArtifactViewerPluginComponent, 'ComponentArtifactViewerPlugin')
 export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginComponent implements OnInit, AfterViewInit, OnChanges {
-  @ViewChild('reactComponent') reactComponent?: MJReactComponent;
-  @ViewChild('interactiveForm') interactiveForm?: InteractiveFormComponent;
+  @ViewChild('reactComponent') ReactComponent?: MJReactComponent;
+
+  /** @deprecated Use {@link ReactComponent}. */
+  get reactComponent(): MJReactComponent | undefined {
+    return this.ReactComponent;
+  }
+  /** @deprecated Use {@link ReactComponent}. */
+  set reactComponent(value: MJReactComponent | undefined) {
+    this.ReactComponent = value;
+  }
+  @ViewChild('interactiveForm') InteractiveForm?: InteractiveFormComponent;
+
+  /** @deprecated Use {@link InteractiveForm}. */
+  get interactiveForm(): InteractiveFormComponent | undefined {
+    return this.InteractiveForm;
+  }
+  /** @deprecated Use {@link InteractiveForm}. */
+  set interactiveForm(value: InteractiveFormComponent | undefined) {
+    this.InteractiveForm = value;
+  }
   @Output() tabsChanged = new EventEmitter<void>();
   @Output() OpenEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
 
@@ -202,7 +220,7 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
     // Prefer the live React component's resolved spec (most up-to-date),
     // then fall back to our cached copy (survives DOM destruction),
     // then fall back to the stripped local spec as last resort.
-    return this.reactComponent?.resolvedComponentSpec || this._cachedResolvedSpec || this.Component;
+    return this.ReactComponent?.resolvedComponentSpec || this._cachedResolvedSpec || this.Component;
   }
 
   /** @deprecated Use {@link ResolvedComponentSpec}. */
@@ -453,10 +471,10 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
    * Emits tabsChanged so the parent panel re-evaluates allTabs and renders the new tab labels.
    */
   OnReactComponentInitialized(): void {
-    if (this.reactComponent?.resolvedComponentSpec &&
-        this.reactComponent.resolvedComponentSpec !== this.Component) {
+    if (this.ReactComponent?.resolvedComponentSpec &&
+        this.ReactComponent.resolvedComponentSpec !== this.Component) {
       // Cache the resolved spec so it's available even after the React component is destroyed
-      this._cachedResolvedSpec = this.reactComponent.resolvedComponentSpec;
+      this._cachedResolvedSpec = this.ReactComponent.resolvedComponentSpec;
       this.tabsChanged.emit();
 
       // Re-evaluate permissions against the resolved spec — the stripped artifact
@@ -511,7 +529,7 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
     // MJReactComponent.getCurrentDataState() already includes the fallback
     // to intercepted RunView/RunQuery results when the React component
     // doesn't register getCurrentDataState() via callbacks.RegisterMethod.
-    const dataState = this.reactComponent?.getCurrentDataState?.();
+    const dataState = this.ReactComponent?.getCurrentDataState?.();
     if (dataState && typeof dataState === 'object') {
       return dataState as DataSnapshot;
     }
@@ -774,7 +792,7 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
 
     // 2. For form artifacts, the React component lives inside <mj-interactive-form>.
     //    Reach into it to get the resolved spec from the component registry.
-    const formReactSpec = this.interactiveForm?.reactComponent?.resolvedComponentSpec;
+    const formReactSpec = this.InteractiveForm?.reactComponent?.resolvedComponentSpec;
     if (formReactSpec?.code) return formReactSpec;
 
     // 3. Re-parse the artifact version's Content directly — the agent stores the

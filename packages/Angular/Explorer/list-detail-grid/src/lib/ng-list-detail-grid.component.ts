@@ -199,7 +199,16 @@ export class ListDetailGridComponent extends BaseAngularComponent implements OnI
   }
 
   // ViewChild to access the underlying EDG component
-  @ViewChild('entityDataGrid') entityDataGrid: EntityDataGridComponent | undefined;
+  @ViewChild('entityDataGrid') EntityDataGrid: EntityDataGridComponent | undefined;
+
+  /** @deprecated Use {@link EntityDataGrid}. */
+  get entityDataGrid(): EntityDataGridComponent | undefined {
+    return this.EntityDataGrid;
+  }
+  /** @deprecated Use {@link EntityDataGrid}. */
+  set entityDataGrid(value: EntityDataGridComponent | undefined) {
+    this.EntityDataGrid = value;
+  }
 
   // Internal state
   EntityInfo: EntityInfo | null = null;
@@ -500,8 +509,8 @@ export class ListDetailGridComponent extends BaseAngularComponent implements OnI
    * Get the currently selected entity objects
    */
   GetSelectedRows(): Record<string, unknown>[] {
-    if (this.entityDataGrid) {
-      return this.entityDataGrid.GetSelectedRows();
+    if (this.EntityDataGrid) {
+      return this.EntityDataGrid.GetSelectedRows();
     }
     return [];
   }
@@ -515,8 +524,8 @@ export class ListDetailGridComponent extends BaseAngularComponent implements OnI
    * Clear all selections
    */
   ClearSelection(): void {
-    if (this.entityDataGrid) {
-      this.entityDataGrid.ClearSelection();
+    if (this.EntityDataGrid) {
+      this.EntityDataGrid.ClearSelection();
     }
     this.SelectedKeys = [];
   }
@@ -530,8 +539,8 @@ export class ListDetailGridComponent extends BaseAngularComponent implements OnI
    * Select specific rows by key
    */
   SelectRows(keys: string[], additive: boolean = false): void {
-    if (this.entityDataGrid) {
-      this.entityDataGrid.SelectRows(keys, additive);
+    if (this.EntityDataGrid) {
+      this.EntityDataGrid.SelectRows(keys, additive);
     }
   }
 
@@ -544,8 +553,8 @@ export class ListDetailGridComponent extends BaseAngularComponent implements OnI
    * Select all rows
    */
   SelectAll(): void {
-    if (this.entityDataGrid) {
-      this.entityDataGrid.SelectAll();
+    if (this.EntityDataGrid) {
+      this.EntityDataGrid.SelectAll();
     }
   }
 
@@ -582,8 +591,8 @@ export class ListDetailGridComponent extends BaseAngularComponent implements OnI
    * Trigger the export dialog
    */
   export(): void {
-    if (this.entityDataGrid) {
-      this.entityDataGrid.onExportClick();
+    if (this.EntityDataGrid) {
+      this.EntityDataGrid.onExportClick();
     }
   }
 }

@@ -234,7 +234,16 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
   }
 
   // Chart
-  @ViewChild('chartContainer') chartContainer!: ElementRef<HTMLDivElement>;
+  @ViewChild('chartContainer') ChartContainer!: ElementRef<HTMLDivElement>;
+
+  /** @deprecated Use {@link ChartContainer}. */
+  get chartContainer(): ElementRef<HTMLDivElement> {
+    return this.ChartContainer;
+  }
+  /** @deprecated Use {@link ChartContainer}. */
+  set chartContainer(value: ElementRef<HTMLDivElement>) {
+    this.ChartContainer = value;
+  }
   private chartRendered = false;
 
   // Compare data
@@ -1514,11 +1523,11 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
    * with trend lines and better visual hierarchy
    */
   private renderChart(): void {
-    if (!this.chartContainer?.nativeElement || this.MatrixData.length === 0) {
+    if (!this.ChartContainer?.nativeElement || this.MatrixData.length === 0) {
       return;
     }
 
-    const container = this.chartContainer.nativeElement;
+    const container = this.ChartContainer.nativeElement;
     const tests = this.GetUniqueTestsFromMatrix();
     const runs = this.MatrixData;
 

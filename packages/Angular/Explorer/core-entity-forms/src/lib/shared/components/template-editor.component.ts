@@ -183,7 +183,16 @@ export class TemplateEditorComponent extends BaseAngularComponent implements OnI
       this.PlaceholderCategories = value;
     }
     
-    @ViewChild('codeEditor') codeEditor: CodeEditorComponent | null = null;
+    @ViewChild('codeEditor') CodeEditor: CodeEditorComponent | null = null;
+
+    /** @deprecated Use {@link CodeEditor}. */
+    get codeEditor(): CodeEditorComponent | null {
+      return this.CodeEditor;
+    }
+    /** @deprecated Use {@link CodeEditor}. */
+    set codeEditor(value: CodeEditorComponent | null) {
+      this.CodeEditor = value;
+    }
     private isUpdatingEditorValue = false;
     private destroy$ = new Subject<void>();
     private get _metadata() { return this.ProviderToUse; }
@@ -590,7 +599,7 @@ export class TemplateEditorComponent extends BaseAngularComponent implements OnI
         Promise.resolve().then(() => {
             // Then tracked setTimeout for the next macrotask to ensure DOM is updated
             this.setTrackedTimeout(() => {
-                if (!this.codeEditor) {
+                if (!this.CodeEditor) {
                     return;
                 }
                 
@@ -598,7 +607,7 @@ export class TemplateEditorComponent extends BaseAngularComponent implements OnI
                 const newValue = this.CurrentTemplateContent?.TemplateText || '';
                 
                 // Use the setValue method from mj-code-editor component
-                this.codeEditor.setValue(newValue);  
+                this.CodeEditor.setValue(newValue);  
                 this.isUpdatingEditorValue = false;
             }, 0);
         });

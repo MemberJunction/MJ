@@ -24,7 +24,16 @@ import {
 })
 export class ArtifactConfigPanelComponent extends BaseConfigPanel implements OnInit {
     // ViewChild reference
-    @ViewChild('artifactDropdown') artifactDropdown!: TreeDropdownComponent;
+    @ViewChild('artifactDropdown') ArtifactDropdown!: TreeDropdownComponent;
+
+    /** @deprecated Use {@link ArtifactDropdown}. */
+    get artifactDropdown(): TreeDropdownComponent {
+      return this.ArtifactDropdown;
+    }
+    /** @deprecated Use {@link ArtifactDropdown}. */
+    set artifactDropdown(value: TreeDropdownComponent) {
+      this.ArtifactDropdown = value;
+    }
 
     // Form fields
     public title = '';

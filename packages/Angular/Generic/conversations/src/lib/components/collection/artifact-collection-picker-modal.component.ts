@@ -717,8 +717,26 @@ export class ArtifactCollectionPickerModalComponent extends BaseAngularComponent
   @Output() completed = new EventEmitter<{ successIds: string[]; failedIds: string[] }>();
   @Output() cancelled = new EventEmitter<void>();
 
-  @ViewChild('searchInput') searchInputRef?: ElementRef<HTMLInputElement>;
-  @ViewChild('newNameInput') newNameInputRef?: ElementRef<HTMLInputElement>;
+  @ViewChild('searchInput') SearchInputRef?: ElementRef<HTMLInputElement>;
+
+  /** @deprecated Use {@link SearchInputRef}. */
+  get searchInputRef(): ElementRef<HTMLInputElement> | undefined {
+    return this.SearchInputRef;
+  }
+  /** @deprecated Use {@link SearchInputRef}. */
+  set searchInputRef(value: ElementRef<HTMLInputElement> | undefined) {
+    this.SearchInputRef = value;
+  }
+  @ViewChild('newNameInput') NewNameInputRef?: ElementRef<HTMLInputElement>;
+
+  /** @deprecated Use {@link NewNameInputRef}. */
+  get newNameInputRef(): ElementRef<HTMLInputElement> | undefined {
+    return this.NewNameInputRef;
+  }
+  /** @deprecated Use {@link NewNameInputRef}. */
+  set newNameInputRef(value: ElementRef<HTMLInputElement> | undefined) {
+    this.NewNameInputRef = value;
+  }
 
   // Data
   private allCollections: MJCollectionEntity[] = [];
@@ -853,14 +871,14 @@ export class ArtifactCollectionPickerModalComponent extends BaseAngularComponent
         this.resetState();
         await this.loadCollections();
         // Autofocus search on next tick
-        Promise.resolve().then(() => this.searchInputRef?.nativeElement?.focus());
+        Promise.resolve().then(() => this.SearchInputRef?.nativeElement?.focus());
       }
     }
   }
 
   ngAfterViewInit(): void {
     if (this.IsOpen) {
-      this.searchInputRef?.nativeElement?.focus();
+      this.SearchInputRef?.nativeElement?.focus();
     }
   }
 
@@ -1137,7 +1155,7 @@ export class ArtifactCollectionPickerModalComponent extends BaseAngularComponent
   public ClearSearch(): void {
     this.SearchQuery = '';
     this.rebuildVisibleNodes();
-    this.searchInputRef?.nativeElement?.focus();
+    this.SearchInputRef?.nativeElement?.focus();
   }
 
   /** @deprecated Use {@link ClearSearch}. */
@@ -1166,7 +1184,7 @@ export class ArtifactCollectionPickerModalComponent extends BaseAngularComponent
     // A microtask alone isn't enough — Angular hasn't run change detection by then,
     // so the @ViewChild ref is still undefined.
     this.cdr.detectChanges();
-    this.newNameInputRef?.nativeElement?.focus();
+    this.NewNameInputRef?.nativeElement?.focus();
   }
 
   /** @deprecated Use {@link OpenCreateForm}. */

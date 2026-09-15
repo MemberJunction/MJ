@@ -228,7 +228,16 @@ import { PanelConfig } from '../models/dashboard-types';
     `]
 })
 export class WebURLPartComponent extends BaseDashboardPart implements AfterViewInit {
-    @ViewChild('iframe') iframeRef!: ElementRef<HTMLIFrameElement>;
+    @ViewChild('iframe') IframeRef!: ElementRef<HTMLIFrameElement>;
+
+    /** @deprecated Use {@link IframeRef}. */
+    get iframeRef(): ElementRef<HTMLIFrameElement> {
+      return this.IframeRef;
+    }
+    /** @deprecated Use {@link IframeRef}. */
+    set iframeRef(value: ElementRef<HTMLIFrameElement>) {
+      this.IframeRef = value;
+    }
 
     public SafeUrl: SafeResourceUrl | null = null;
     public RawUrl: string = '';

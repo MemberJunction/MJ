@@ -32,7 +32,16 @@ export interface ConnectionDialogResult {
 })
 export class MCPConnectionDialogComponent extends BaseAngularComponent implements OnInit, OnChanges {
 
-    @ViewChild('credentialDialog') credentialDialog!: CredentialDialogComponent;
+    @ViewChild('credentialDialog') CredentialDialog!: CredentialDialogComponent;
+
+    /** @deprecated Use {@link CredentialDialog}. */
+    get credentialDialog(): CredentialDialogComponent {
+      return this.CredentialDialog;
+    }
+    /** @deprecated Use {@link CredentialDialog}. */
+    set credentialDialog(value: CredentialDialogComponent) {
+      this.CredentialDialog = value;
+    }
 
     @Input() connection: MCPConnectionData | null = null;
     @Input() Servers: MCPServerData[] = [];
