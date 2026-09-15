@@ -144,6 +144,23 @@ function OctokitStatus(error: unknown): number | undefined {
 }
 
 /**
+ * Extracts a human-readable message from an Octokit error, if present. Duck-typed the same way as
+ * {@link OctokitStatus} rather than requiring `instanceof Error`: Octokit's real `RequestError` is
+ * an `Error` and would satisfy that check, but nothing here needs the whole `Error` shape — only
+ * the `message` string — so this reads it directly off any error-like value that carries one,
+ * falling back to `String(error)` only when even that is absent.
+ */
+function OctokitMessage(error: unknown): string {
+    if (error && typeof error === 'object' && 'message' in error) {
+        const message = (error as { message?: unknown }).message;
+        if (typeof message === 'string') {
+            return message;
+        }
+    }
+    return String(error);
+}
+
+/**
  * Error thrown when GitHub returns 403/429 (rate limit or access denied). A 403/429 must NOT
  * look identical to "this repo has no releases/tags", which silently resolves the wrong version
  * (or falls back to HEAD). Callers should surface this rather than treat it as empty (B36).
@@ -170,6 +187,101 @@ function ThrowIfRateLimitedOrForbidden(error: unknown, context: string): void {
             `GitHub API returned ${status} (rate limit or access denied) while ${context}. ` +
             `This is NOT the same as "no versions found" — check your GitHub token and rate limit.`,
         );
+    }
+}
+
+/**
+ * What a repository-visibility probe concluded.
+ *
+ * Three states rather than two, deliberately: a probe that itself failed has NOT established that
+ * the repository is readable, and folding that into `Readable` would reintroduce, in a narrower
+ * corner, exactly the misattribution this type exists to prevent.
+ */
+type RepoVisibility =
+    | { State: 'Readable' }
+    | { State: 'NotReadable' }
+    | { State: 'Undetermined'; Reason: string };
+
+/**
+ * Asks GitHub whether the REPOSITORY itself is readable with the caller's credential.
+ *
+ * This is the only way to disambiguate a 404 on something inside a repo. GitHub returns 404 —
+ * never 403 — for a private repository the caller cannot see, so "this ref/file is absent" and
+ * "this repository is invisible to you" are indistinguishable on the inner call. Verified against
+ * the live API (#4505): with no credential, `GET /repos/MemberJunction/bizapps-ats` 404s while the
+ * same repo's existing tag `v6.0.0` also 404s; with a credential both return 200.
+ *
+ * Uses the SAME resolved credential as the call that failed — a probe made unauthenticated would
+ * 404 on every private repo and report a missing credential to a caller who supplied one.
+ */
+async function ProbeRepoVisibility(
+    repoUrl: string,
+    parsed: { Owner: string; Repo: string },
+    options: GitHubClientOptions
+): Promise<RepoVisibility> {
+    try {
+        await CreateOctokit(repoUrl, options).repos.get({ owner: parsed.Owner, repo: parsed.Repo });
+        return { State: 'Readable' };
+    }
+    catch (error: unknown) {
+        if (OctokitStatus(error) === 404) {
+            return { State: 'NotReadable' };
+        }
+        // Anything else (403/429 rate limit, network) leaves visibility genuinely unknown. The
+        // reason travels with the state so the composed message can say what went wrong rather
+        // than quietly discarding it. Duck-typed on `message` (mirroring how OctokitStatus above
+        // duck-types `status`) rather than requiring `instanceof Error`, since an Octokit-shaped
+        // error-like value is not guaranteed to be a real Error instance.
+        return { State: 'Undetermined', Reason: OctokitMessage(error) };
+    }
+}
+
+/**
+ * The message for a repository GitHub will not show us. Names the remedy, and names the RIGHT one:
+ * telling a caller who already supplied a token to supply a token sends them to check the one thing
+ * they already did.
+ */
+function UnreadableRepoMessage(
+    parsed: { Owner: string; Repo: string },
+    repoUrl: string,
+    options: GitHubClientOptions
+): string {
+    const target = `${parsed.Owner}/${parsed.Repo}`;
+    return ResolveToken(repoUrl, options)
+        ? `Cannot read ${target}. The repository does not exist, or the GitHub credential supplied does not grant access to it — check the token is valid and carries 'repo' scope for ${target}.`
+        : `Cannot read ${target}. The repository is private or does not exist, and no GitHub credential was supplied — set GITHUB_TOKEN in the environment, or openApps.github.token in mj.config.cjs, then retry.`;
+}
+
+/**
+ * Turns a 404 on something INSIDE a repository into the message that is actually true.
+ *
+ * Every caller reading a ref, a file or a directory gets a bare 404 for two very different reasons,
+ * and guessing wrong sends the reader somewhere useless: #4505 reported `mj app install` telling a
+ * maintainer a tag was missing — and pointing at the repo's /tags page — when the tag was there and
+ * the real cause was that no credential had been supplied. Opening /tags while signed in then
+ * *confirms* the wrong conclusion. Probing the repository is what separates the two cases, so it
+ * happens here, once, instead of being re-derived at every call site.
+ *
+ * Not cached: this runs only on a path that has already failed and is about to stop, so the extra
+ * request costs nothing on any successful install.
+ *
+ * @param describeMissingTarget - the message to use when the repository IS readable, i.e. when the
+ *                                addressed thing really is absent. Lazy, so it is built only then.
+ */
+async function DescribeNotFound(
+    repoUrl: string,
+    parsed: { Owner: string; Repo: string },
+    options: GitHubClientOptions,
+    describeMissingTarget: () => string
+): Promise<string> {
+    const visibility = await ProbeRepoVisibility(repoUrl, parsed, options);
+    switch (visibility.State) {
+        case 'Readable':
+            return describeMissingTarget();
+        case 'NotReadable':
+            return UnreadableRepoMessage(parsed, repoUrl, options);
+        case 'Undetermined':
+            return `${describeMissingTarget()} (Could not confirm ${parsed.Owner}/${parsed.Repo} is readable: ${visibility.Reason}. If it is private, a GitHub credential may be required — set GITHUB_TOKEN or openApps.github.token.)`;
     }
 }
 
@@ -720,7 +832,12 @@ export async function ValidateGitHubTag(
     }
     catch (error: unknown) {
         if (OctokitStatus(error) === 404) {
-            return { Exists: false, ErrorMessage: `Tag '${tag}' not found in ${parsed.Owner}/${parsed.Repo}. Available versions can be checked at ${repoUrl}/tags` };
+            // A 404 here may be the tag OR the whole repository — DescribeNotFound tells them apart.
+            return {
+                Exists: false,
+                ErrorMessage: await DescribeNotFound(repoUrl, parsed, options, () =>
+                    `Tag '${tag}' not found in ${parsed.Owner}/${parsed.Repo}. Available versions can be checked at ${repoUrl}/tags`),
+            };
         }
         const message = error instanceof Error ? error.message : String(error);
         return { Exists: false, ErrorMessage: `Failed to validate tag '${tag}': ${message}` };

@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
     listReleases: vi.fn(),
     getRef: vi.fn(),
     getBlob: vi.fn(),
+    get: vi.fn(),
 }));
 
 /**
@@ -36,7 +37,7 @@ async function fakePaginate(endpoint: PagedEndpoint, params: Record<string, unkn
 
 vi.mock('@octokit/rest', () => ({
     Octokit: class {
-        repos = { getContent: mocks.getContent, listTags: mocks.listTags, listReleases: mocks.listReleases };
+        repos = { getContent: mocks.getContent, listTags: mocks.listTags, listReleases: mocks.listReleases, get: mocks.get };
         git = { getRef: mocks.getRef, getBlob: mocks.getBlob };
         paginate = fakePaginate;
         constructor(opts: { auth?: string; userAgent?: string }) {
@@ -61,6 +62,16 @@ import type { GitHubClientOptions } from '../github/github-client.js';
 function lastAuth(): string | undefined {
     const calls = mocks.ctor.mock.calls;
     return calls.length > 0 ? (calls[calls.length - 1][0] as { auth?: string }).auth : undefined;
+}
+
+/** The repository-visibility probe succeeds: the repo IS readable, so a 404 inside it is genuine. */
+function stubRepoReadable(): void {
+    mocks.get.mockResolvedValueOnce({ data: { private: false } });
+}
+
+/** The repository-visibility probe 404s too: GitHub will not show this repo to this caller. */
+function stubRepoUnreadable(): void {
+    mocks.get.mockRejectedValueOnce({ status: 404 });
 }
 
 /** A getContent response for a small inline file. */
@@ -129,11 +140,87 @@ describe('ValidateGitHubTag', () => {
 
     it('returns Exists: false with helpful message when tag not found', async () => {
         mocks.getRef.mockRejectedValueOnce({ status: 404 });
+        stubRepoReadable();
 
         const result = await ValidateGitHubTag('https://github.com/Acme/App', '9.9.9', {});
         expect(result.Exists).toBe(false);
         expect(result.ErrorMessage).toContain("Tag 'v9.9.9' not found");
         expect(result.ErrorMessage).toContain('Acme/App');
+    });
+
+    it('names the missing credential when a 404 is the REPOSITORY, not the tag (#4505)', async () => {
+        // GitHub returns 404 — never 403 — for a private repo the caller cannot see, so the tag
+        // lookup and the repo lookup both 404. The tag may well exist; we simply cannot see it.
+        mocks.getRef.mockRejectedValueOnce({ status: 404 });
+        stubRepoUnreadable();
+
+        const result = await ValidateGitHubTag('https://github.com/MemberJunction/bizapps-ats', '6.0.0', {});
+
+        expect(result.Exists).toBe(false);
+        expect(result.ErrorMessage).toContain('Cannot read MemberJunction/bizapps-ats');
+        expect(result.ErrorMessage).toContain('GITHUB_TOKEN');
+        expect(result.ErrorMessage).toContain('openApps.github.token');
+        // The old message blamed the tag and sent the reader to /tags, where a signed-in
+        // maintainer sees the tag and concludes the CLI is right. It must not appear.
+        expect(result.ErrorMessage).not.toContain("Tag 'v6.0.0' not found");
+        expect(result.ErrorMessage).not.toContain('/tags');
+    });
+
+    it('blames the credential, not its absence, when a token WAS supplied and the repo still 404s', async () => {
+        mocks.getRef.mockRejectedValueOnce({ status: 404 });
+        stubRepoUnreadable();
+
+        const result = await ValidateGitHubTag('https://github.com/Acme/Private', '1.0.0', { Token: 'ghp_wrong' });
+
+        expect(result.Exists).toBe(false);
+        expect(result.ErrorMessage).toContain('does not grant access');
+        // Telling someone who supplied a token to supply a token is the wrong remedy.
+        expect(result.ErrorMessage).not.toContain('no GitHub credential was supplied');
+    });
+
+    it('still blames the tag when the repository IS readable', async () => {
+        mocks.getRef.mockRejectedValueOnce({ status: 404 });
+        stubRepoReadable();
+
+        const result = await ValidateGitHubTag('https://github.com/Acme/App', '9.9.9', {});
+
+        expect(result.Exists).toBe(false);
+        expect(result.ErrorMessage).toContain("Tag 'v9.9.9' not found");
+        expect(result.ErrorMessage).not.toContain('GITHUB_TOKEN');
+    });
+
+    it('probes visibility with the SAME credential the failed call used', async () => {
+        // A probe made without the caller's token would 404 on every private repo and report
+        // "no credential supplied" to someone who supplied one.
+        mocks.getRef.mockRejectedValueOnce({ status: 404 });
+        stubRepoReadable();
+
+        await ValidateGitHubTag('https://github.com/Acme/App', '1.0.0', { Token: 'ghp_abc' });
+
+        expect(mocks.get).toHaveBeenCalledWith({ owner: 'Acme', repo: 'App' });
+        expect(lastAuth()).toBe('ghp_abc');
+    });
+
+    it('does not claim the tag is absent when the visibility probe itself failed', async () => {
+        // A probe that errored has NOT established the repo is readable. Saying "tag not found"
+        // flatly would reintroduce the same misattribution in a narrower corner.
+        mocks.getRef.mockRejectedValueOnce({ status: 404 });
+        mocks.get.mockRejectedValueOnce({ status: 429, message: 'rate limit exceeded' });
+
+        const result = await ValidateGitHubTag('https://github.com/Acme/App', '1.0.0', {});
+
+        expect(result.Exists).toBe(false);
+        expect(result.ErrorMessage).toContain('Could not confirm');
+        expect(result.ErrorMessage).toContain('rate limit exceeded');
+    });
+
+    it('does not probe at all when the tag lookup succeeded', async () => {
+        mocks.getRef.mockResolvedValueOnce({ data: {} });
+
+        const result = await ValidateGitHubTag('https://github.com/Acme/App', '1.0.0', {});
+
+        expect(result.Exists).toBe(true);
+        expect(mocks.get).not.toHaveBeenCalled();
     });
 
     it('returns error for invalid GitHub URL', async () => {
