@@ -290,6 +290,10 @@
      exist so that content a host PROJECTS into a slot lands readable without the host having to
      know which token the surface behind it was painted from. */
   --mj-login-panel-text: var(--mj-text-primary);
+  /* The picker's own lede and attribution, so a themed panel carries its whole text ramp rather
+     than just the body colour. Default to the semantics: an app that themes nothing is unchanged. */
+  --mj-login-panel-text-secondary: var(--mj-text-secondary);
+  --mj-login-panel-text-muted: var(--mj-text-muted);
   --mj-login-panel-flex: 1;
   --mj-login-picker-max-width: 400px;
   /* Width of the sign-in card in the 'centered' layout, where the panel stops being a column

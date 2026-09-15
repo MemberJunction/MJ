@@ -236,6 +236,7 @@ against the login DOM. Defaults reproduce the stock design (Login C, editorial s
 | `--mj-login-banner-logo-width` / `-height` | 297px / 45px | The image's box (`contain` fit) |
 | `--mj-login-banner-flex` / `--mj-login-panel-flex` | 1.05 / 1 | The editorial split between story panel and sign-in column |
 | `--mj-login-panel-bg` / `--mj-login-panel-text` | `--mj-bg-surface` / `--mj-text-primary` | The sign-in column's background, and the colour its content inherits |
+| `--mj-login-panel-text-secondary` / `--mj-login-panel-text-muted` | `--mj-text-secondary` / `--mj-text-muted` | The picker's lede and its attribution line. Set these with `--mj-login-panel-text` when theming a dark panel, or the heading follows and the supporting copy does not |
 | `--mj-login-picker-max-width` | 400px | Width of the sign-in stack (`<mj-login-picker>`) |
 | `--mj-login-centered-card-width` | 440px | Width of the sign-in card in the `centered` layout |
 | `--mj-login-card-bg` / `-border` / `-text` / `-text-secondary` / `-radius` | Surface-card set | Configured cards in the sign-in region |

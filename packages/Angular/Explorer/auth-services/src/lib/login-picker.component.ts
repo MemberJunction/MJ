@@ -119,14 +119,21 @@ const BRAND_ICON_CLASSES: Readonly<Record<string, string>> = {
         margin: 0;
         font-size: var(--mj-text-2xl, 1.5rem);
         font-weight: var(--mj-font-bold, 700);
-        color: var(--mj-text-primary);
+        /* LOGIN PANEL TOKEN FIRST, semantic token as the fallback — and the same pattern on the
+           lede and attribution below. The pitch of the login surface is "override tokens, never
+           write CSS against this DOM"; without this the heading kept --mj-text-primary while the
+           panel behind it took --mj-login-panel-bg, so the first thing a white-label deployment
+           does (a dark panel in light mode) left a near-black heading on it and the only way out
+           was piercing into these internals. Unset tokens fall through to the semantics, so an
+           app that themes nothing is byte-identical. */
+        color: var(--mj-login-panel-text, var(--mj-text-primary));
         text-align: left;
       }
 
       .mj-login-picker__subheading {
         margin: 0 0 var(--mj-space-5, 1.25rem);
         font-size: var(--mj-text-base, 1rem);
-        color: var(--mj-text-secondary);
+        color: var(--mj-login-panel-text-secondary, var(--mj-text-secondary));
         text-align: left;
       }
 
@@ -201,7 +208,7 @@ const BRAND_ICON_CLASSES: Readonly<Record<string, string>> = {
         align-items: center;
         flex: 0 0 auto;
         font-size: var(--mj-text-sm, 0.875rem);
-        color: var(--mj-text-muted);
+        color: var(--mj-login-panel-text-muted, var(--mj-text-muted));
         transition: color 120ms ease, transform 120ms ease;
       }
 
@@ -225,7 +232,7 @@ const BRAND_ICON_CLASSES: Readonly<Record<string, string>> = {
       .mj-login-picker__attribution {
         margin: var(--mj-space-2, 0.5rem) 0 0;
         font-size: var(--mj-text-xs, 0.75rem);
-        color: var(--mj-text-muted);
+        color: var(--mj-login-panel-text-muted, var(--mj-text-muted));
         text-align: center;
       }
     `

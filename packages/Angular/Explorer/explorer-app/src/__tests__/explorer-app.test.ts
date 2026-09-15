@@ -63,7 +63,15 @@ describe('login surface theming contract', () => {
   it('binds the banner copy and logo label to host inputs instead of hardcoding them', () => {
     expect(componentHtml).toContain('{{ LoginBannerTitle }}');
     expect(componentHtml).toContain('{{ LoginBannerSubtitle }}');
-    expect(componentHtml).toContain('[attr.aria-label]="LoginBannerLogoLabel"');
+    expect(componentHtml).toContain('[attr.aria-label]="LoginBannerLogoLabel || null"');
+  });
+
+  it('treats an empty logo label as decorative rather than an unnamed image', () => {
+    // role="img" with no accessible name is worse than no role: a screen reader announces an image
+    // and can say nothing about it. A deployment that leaves the label blank is saying the logo is
+    // decoration and the title carries the brand, so honour that instead of emitting a nameless role.
+    expect(componentHtml).toContain(`[attr.role]="LoginBannerLogoLabel ? 'img' : null"`);
+    expect(componentHtml).toContain(`[attr.aria-hidden]="LoginBannerLogoLabel ? null : 'true'"`);
     // The defaults live on the component as input initializers, not in the template.
     expect(componentHtml).not.toContain('Welcome back');
     expect(componentHtml).not.toContain('Sign in to continue');
@@ -186,6 +194,48 @@ describe('login surface overflow contract', () => {
       expect(ruleBody(child)).toContain('margin-block: auto');
     });
   }
+
+  /** The body of the first @media block whose prelude matches `query`, brace-counted so nested
+   *  rules survive. `ruleBody` above finds the FIRST match of a selector, which is the base rule —
+   *  these assertions are about what the BREAKPOINTS override, so they need the block. */
+  function mediaBody(query: string): string {
+    const at = css.indexOf(query);
+    if (at < 0) return '';
+    let depth = 0;
+    const open = css.indexOf('{', at);
+    for (let i = open; i < css.length; i++) {
+      if (css[i] === '{') depth++;
+      else if (css[i] === '}') {
+        depth--;
+        if (depth === 0) return css.slice(open + 1, i);
+      }
+    }
+    return '';
+  }
+
+  /*
+   * The regression these two exist for, because the suite above could not see it.
+   *
+   * `.main-banner` carries `flex: var(--mj-login-banner-flex, 1.05)`, and that shorthand sets
+   * flex-basis to 0% — so the banner is sized by the grow ratio and every `height` in the stacked
+   * breakpoints is dead. It stayed invisible while `.login-btn` had no overflow, because its
+   * automatic minimum size was its content height. Giving that column `overflow-y: auto` dropped
+   * the minimum to zero and handed the layout to the ratio: a landscape phone got a 183px banner
+   * on a 390px viewport with one of three sign-in rows reachable. The contract test right above
+   * asserts the overflow declaration EXISTS, which is exactly why it passed throughout.
+   */
+  it('the stacked banner is sized by its height rule, not by a grow ratio', () => {
+    const stacked = mediaBody('@media (max-width: 900px) {');
+    expect(stacked).toMatch(/\.main-banner\s*\{[^}]*flex:\s*0 0 auto/);
+    expect(stacked).toMatch(/\.main-banner\s*\{[^}]*height:\s*\d+dvh/);
+  });
+
+  it('the short-screen copy-hide is width-scoped, so a wide short window keeps its copy', () => {
+    // Unscoped, this hid the welcome copy at 1280x470 in the split layout — a 470px column with
+    // room for it. Short AND narrow is the case that needs the room; short alone is not.
+    expect(mediaBody('@media (max-height: 480px) {')).not.toContain('banner-welcome');
+    expect(mediaBody('@media (max-width: 900px) and (max-height: 480px) {')).toContain('banner-welcome');
+  });
 
   it('the centered layout scrolls at the wrapper, not in the columns it stacks', () => {
     const wrapper = ruleBody('.login-wrapper--centered {');

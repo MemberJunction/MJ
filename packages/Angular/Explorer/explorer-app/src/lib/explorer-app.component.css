@@ -165,7 +165,13 @@
   overflow-y: auto;
   background: var(--mj-login-panel-bg, var(--mj-bg-surface));
   /* The sign-in region's counterpart to the banner's inherited colour — see .main-banner. It
-     starts mattering the moment a deployment themes --mj-login-panel-bg dark. */
+     starts mattering the moment a deployment themes --mj-login-panel-bg dark.
+     REACHES PROJECTED SLOT CONTENT ONLY. The picker's own heading, lede and attribution set
+     --mj-text-primary / -secondary / -muted directly, so they do NOT follow this token: a dark
+     --mj-login-panel-bg in light mode leaves that heading near-black against it. THEMING.md
+     documents the limit correctly; this comment used to imply the colour covered the whole
+     region. Widening it means changing those three declarations, which is a deliberate change to
+     the picker rather than a token default, and is not part of this work. */
   color: var(--mj-login-panel-text, var(--mj-text-primary));
   /* dvh, not vh — see .main-banner. */
   height: 100dvh;
@@ -396,6 +402,16 @@
   }
 
   .login-wrapper .main-banner {
+    /* flex:0 0 auto so the height BELOW is the height you get. The base rule gives the banner
+       `flex: var(--mj-login-banner-flex, 1.05)`, whose shorthand sets flex-basis to 0% — so the
+       banner is sized by the grow ratio and every `height` in these breakpoints is dead. That was
+       invisible until this branch: `.login-btn` had no overflow, so its automatic minimum size was
+       its content height and it held the banner back. Giving it `overflow-y: auto` (so many
+       identity providers stay reachable) dropped that minimum to zero and handed the whole column
+       to the 1.05:1 ratio — on a landscape phone the banner took 183px of a 390px viewport and
+       one of three sign-in rows was visible. Stop it growing and the authored heights apply.
+       The centered layout already does exactly this, which is why only the stacked ones broke. */
+    flex: 0 0 auto;
     height: 35dvh;
     width: 100%;
     padding: var(--mj-space-6);
@@ -432,7 +448,13 @@
 /* Mobile: compact layout */
 @media (max-width: 480px) {
   .login-wrapper .main-banner {
-    height: 30dvh;
+    /* 50dvh, not the 30dvh this carried before, and the number is deliberate. Until the rule above
+       made heights live, this one never applied — the grow ratio decided, and on a 390x844 phone
+       that produced a 423px banner. Shipping 30dvh now would have quietly cut the first screen
+       every user meets by 170px as a side effect of a scrolling fix. 50dvh reproduces what people
+       actually see (422px), so the behaviour is unchanged and the rule is now the thing that
+       decides it. Change this number to change the banner — that is the point. */
+    height: 50dvh;
     padding: var(--mj-space-4);
   }
 
@@ -461,6 +483,16 @@
    `.login-wrapper .main-banner` (0,2,0) and `.login-wrapper .main-banner .banner-welcome`
    (0,3,0); these match that specificity and follow them, so the centered layout holds at every
    width rather than reverting to a 35dvh banner on a phone. */
+/* The toggle is `position: absolute` against `.login-wrapper` — fine while the COLUMNS scroll, as
+   they do in split. In this layout the wrapper itself is the scroller, so an absolute toggle is
+   positioned against the scrolled content and rides off the top the moment anyone scrolls: nine
+   identity providers or a few configured cards is enough, and reaching the sign-in button is
+   exactly when it disappears. Fixed against the viewport instead, so it stays where it is put.
+   (Scoped to this layout: in split the wrapper does not scroll and absolute is correct there.) */
+.login-wrapper--centered .theme-toggle {
+  position: fixed;
+}
+
 .login-wrapper--centered {
   flex-direction: column;
   justify-content: flex-start;
@@ -543,16 +575,20 @@
     height: auto;
     padding-block: var(--mj-space-4);
   }
-}
 
-@media (max-height: 480px) {
   /* The same call the stacked layout already makes when the banner is short: the logo carries
-     the brand, and the copy would cost the sign-in options their place on screen. */
+     the brand, and the copy would cost the sign-in options their place on screen.
+     WIDTH-SCOPED, and it must stay that way. Unscoped this also fired on a wide short window —
+     1280x470 in the split layout hid the welcome copy from a 470px column with room for it, a
+     visual change on a desktop that no part of this work intended. Short AND narrow is the case
+     where the copy costs the sign-in options their place; short alone is not. */
   .login-wrapper .main-banner .banner-welcome,
   .login-wrapper .main-banner .banner-sub {
     display: none;
   }
+}
 
+@media (max-height: 480px) {
   .login-wrapper--centered {
     padding-block: var(--mj-space-4);
   }

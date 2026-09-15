@@ -7,7 +7,7 @@ import { Directive, Input, TemplateRef } from '@angular/core';
  * the distinction is stated per slot below rather than left to be discovered, because it decides
  * whether a host's content lands beside the stock content or instead of it.
  *
- * @since 6.1.0
+ * @since 6.2.0
  */
 export type MJLoginSlotName =
   /**
@@ -50,7 +50,7 @@ export type MJLoginSlotName =
  * </mj-explorer-app>
  * ```
  *
- * @since 6.1.0
+ * @since 6.2.0
  */
 @Directive({
   selector: '[mjLoginSlot]',

@@ -63,7 +63,13 @@
         @if (LoginSlotTemplate('bannerContent'); as bannerContent) {
           <ng-container [ngTemplateOutlet]="bannerContent"></ng-container>
         } @else {
-          <div class="mj-logo-wordmark-login" role="img" [attr.aria-label]="LoginBannerLogoLabel"></div>
+          <!-- An EMPTY label means decorative, not unnamed: role="img" with no accessible name is a
+               worse outcome than no role at all, and "the logo is decoration, the title names the
+               brand" is a deployment's to make. Bound label -> labelled image; blank -> hidden. -->
+          <div class="mj-logo-wordmark-login"
+               [attr.role]="LoginBannerLogoLabel ? 'img' : null"
+               [attr.aria-label]="LoginBannerLogoLabel || null"
+               [attr.aria-hidden]="LoginBannerLogoLabel ? null : 'true'"></div>
           @if (LoginBannerTitle) {
             <h1 class="banner-welcome">{{ LoginBannerTitle }}</h1>
           }

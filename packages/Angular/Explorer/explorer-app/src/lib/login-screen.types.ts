@@ -8,11 +8,15 @@
  * 2. **Inputs** — copy, attribution, alignment and {@link MJLoginLayout} on
  *    `<mj-explorer-app>`, plus {@link MJLoginCard}s for extra content a deployment can
  *    express as data rather than markup.
- * 3. **Slots** — `[loginBannerContent]`, `[loginBannerFooter]`, `[loginPanelHeader]` and
- *    `[loginPanelFooter]` project arbitrary markup, following the same attribute-selector
- *    convention as MJ's page chrome (`[meta]` / `[actions]` / `[toolbar]`).
+ * 3. **Slots** — `<ng-template mjLoginSlot="bannerContent">` and its siblings
+ *    (`bannerFooter`, `panelHeader`, `panelFooter`) project arbitrary markup.
+ *    NOT attribute selectors: an earlier draft of this comment documented
+ *    `[loginBannerContent]`-style selectors in line with MJ's page chrome
+ *    (`[meta]` / `[actions]` / `[toolbar]`), but the component projects through
+ *    {@link MJLoginSlotDirective} and has no matching `ng-content`, so a host that
+ *    followed that description rendered nothing at all.
  *
- * @since 6.1.0
+ * @since 6.2.0
  */
 
 /**

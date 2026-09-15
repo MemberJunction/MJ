@@ -60,7 +60,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
    * Explorer's own login column already labels the action on the button itself, so an embedding app
    * whose single provider renders one CTA sees the word twice ("Log in" over a "Log in" button).
    * Passing `null` drops the heading. Default matches {@link MJLoginPickerComponent.Heading}.
-   * @since 6.1.0
+   * @since 6.2.0
    */
   @Input() LoginHeading: string | null = 'Log in';
 
@@ -68,7 +68,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
    * Whether the sign-in panel carries MemberJunction's "Powered by" attribution. A white-labelled
    * deployment turns it off here instead of hiding it with a CSS rule against the picker's internals.
    * Default matches {@link MJLoginPickerComponent.ShowPoweredBy}.
-   * @since 6.1.0
+   * @since 6.2.0
    */
   @Input() LoginShowPoweredBy = true;
 
@@ -77,7 +77,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
    * `'center'`. Centering is what a logo-led brand usually wants, and it is what the stacked (≤900px)
    * layout already does — this makes the same choice available on the wide layout without a host
    * reaching into `.main-banner`.
-   * @since 6.1.0
+   * @since 6.2.0
    */
   @Input() LoginBannerAlignment: 'start' | 'center' = 'start';
 
@@ -85,13 +85,13 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
    * The story panel's headline, or `null` for none. It was hardcoded ("Welcome back"), which made
    * the one prominent line of copy on the page the one thing a host could not change. `null`
    * collapses the element, so a logo-only banner is a binding, not a CSS hide.
-   * @since 6.1.0
+   * @since 6.2.0
    */
   @Input() LoginBannerTitle: string | null = 'Welcome back';
 
   /**
    * The supporting line under {@link LoginBannerTitle}, or `null` for none.
-   * @since 6.1.0
+   * @since 6.2.0
    */
   @Input() LoginBannerSubtitle: string | null = 'Sign in to continue.';
 
@@ -99,7 +99,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
    * Accessible name for the banner's brand image. The artwork itself comes from the
    * `--mj-login-banner-logo` token, which the component cannot read — so a deployment that swaps
    * the logo sets the matching name here, or a screen reader keeps announcing the default brand.
-   * @since 6.1.0
+   * @since 6.2.0
    */
   @Input() LoginBannerLogoLabel = 'MemberJunction Logo';
 
@@ -110,7 +110,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
    * single-column sign-in page, where the story content sits on a full-bleed banner background and
    * the sign-in column becomes a card on top of it. Every slot and every input still applies in
    * each layout — a layout decides where the regions go, never whether they exist.
-   * @since 6.1.0
+   * @since 6.2.0
    */
   @Input() LoginLayout: MJLoginLayout = 'split';
 
@@ -126,7 +126,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
    *
    * A host that needs richer content than a card projects a template into the region's slot
    * instead, which takes over from the cards there.
-   * @since 6.1.0
+   * @since 6.2.0
    */
   @Input() LoginCards: MJLoginCard[] = [];
 
