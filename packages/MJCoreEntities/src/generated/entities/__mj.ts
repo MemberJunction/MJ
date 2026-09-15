@@ -34558,6 +34558,102 @@ export const MJViewTypeSchema = z.object({
 export type MJViewTypeEntityType = z.infer<typeof MJViewTypeSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Web Search Providers
+ */
+export const MJWebSearchProviderSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Administrator-facing name for this provider, e.g. "Brave" or "Tavily". Unique, and usable as the Provider value when a caller pins a search to one vendor.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: What this provider searches, what it costs, and when it is the right choice.`),
+    DriverClass: z.string().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(500)
+        * * Description: ClassFactory key used with @RegisterClass(BaseWebSearchProvider, DriverClass) to instantiate the driver at runtime, e.g. "BraveWebSearchProvider". A value with no matching registration leaves the provider unavailable and is logged at engine startup.`),
+    Status: z.union([z.literal('Active'), z.literal('Pending'), z.literal('Terminated')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Pending
+    *   * Terminated
+        * * Description: Provider lifecycle status: Pending (configured but not yet in use), Active (participates in searches), Terminated (disabled). Only Active providers are loaded. Matches the vocabulary used by SearchProvider.`),
+    Priority: z.number().describe(`
+        * * Field Name: Priority
+        * * Display Name: Priority
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Failover order: LOWER values are tried FIRST. The engine serves a search from the first available provider in this order, moving on only when one fails transiently. Must be >= 0.`),
+    CredentialID: z.string().nullable().describe(`
+        * * Field Name: CredentialID
+        * * Display Name: Credential ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+        * * Description: Optional FK to the Credential record holding this provider's API key. When NULL the driver falls back to its documented environment variable, so a host that has not yet migrated its secrets into the Credential store keeps working.`),
+    ProviderConfig: z.string().nullable().describe(`
+        * * Field Name: ProviderConfig
+        * * Display Name: Provider Config
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional JSON blob of non-secret, driver-specific settings (endpoint overrides, tier flags, answer model). Schema is defined by each driver; invalid JSON is logged and ignored rather than disabling the provider.`),
+    MaxResultsOverride: z.number().nullable().describe(`
+        * * Field Name: MaxResultsOverride
+        * * Display Name: Max Results Override
+        * * SQL Data Type: int
+        * * Description: Optional per-provider cap on results per request, for pay-per-query vendors. The effective cap is the smallest of the caller's request, this value, and the vendor's own hard limit. NULL means the driver's own limit applies.`),
+    AllowResultCaching: z.boolean().describe(`
+        * * Field Name: AllowResultCaching
+        * * Display Name: Allow Result Caching
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether this vendor's terms permit storing returned results. Defaults to 0 (deny), because caching rights differ sharply between vendors and violating them is silent: some sell storage rights as a plan tier, others forbid persistent caching outright. Nothing in the engine caches today; this column exists so the first caching layer reads a per-provider gate instead of inventing one.`),
+    DisplayName: z.string().nullable().describe(`
+        * * Field Name: DisplayName
+        * * Display Name: Display Name
+        * * SQL Data Type: nvarchar(200)
+        * * Description: UI display name shown in admin surfaces and result attribution. When NULL, falls back to the Name column.`),
+    Icon: z.string().nullable().describe(`
+        * * Field Name: Icon
+        * * Display Name: Icon
+        * * SQL Data Type: nvarchar(200)
+        * * Description: CSS icon class for UI display, e.g. "fa-brands fa-brave". Supports any CSS-based icon library. When NULL a default icon is used.`),
+    Comments: z.string().nullable().describe(`
+        * * Field Name: Comments
+        * * Display Name: Comments
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Free-form administrator notes, e.g. contract terms, billing owner, or why this provider sits at its priority.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Credential: z.string().nullable().describe(`
+        * * Field Name: Credential
+        * * Display Name: Credential
+        * * SQL Data Type: nvarchar(200)`),
+});
+
+export type MJWebSearchProviderEntityType = z.infer<typeof MJWebSearchProviderSchema>;
+
+/**
  * zod schema definition for the entity MJ: Workspace Items
  */
 export const MJWorkspaceItemSchema = z.object({
@@ -128066,6 +128162,245 @@ export class MJViewTypeEntity extends BaseEntity<MJViewTypeEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Web Search Providers - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: WebSearchProvider
+ * * Base View: vwWebSearchProviders
+ * * @description Registry of external web search vendors available to @memberjunction/web-search-engine. Each row configures one driver: whether it is active, its position in the failover order, and where its credential lives. Provider capabilities (answer synthesis, domain filtering, freshness) are declared by the driver class, not stored here.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Web Search Providers')
+export class MJWebSearchProviderEntity extends BaseEntity<MJWebSearchProviderEntityType> {
+    /**
+    * Loads the MJ: Web Search Providers record from the database
+    * @param ID: string - primary key value to load the MJ: Web Search Providers record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJWebSearchProviderEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Administrator-facing name for this provider, e.g. "Brave" or "Tavily". Unique, and usable as the Provider value when a caller pins a search to one vendor.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: What this provider searches, what it costs, and when it is the right choice.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(500)
+    * * Description: ClassFactory key used with @RegisterClass(BaseWebSearchProvider, DriverClass) to instantiate the driver at runtime, e.g. "BraveWebSearchProvider". A value with no matching registration leaves the provider unavailable and is logged at engine startup.
+    */
+    get DriverClass(): string {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Pending
+    *   * Terminated
+    * * Description: Provider lifecycle status: Pending (configured but not yet in use), Active (participates in searches), Terminated (disabled). Only Active providers are loaded. Matches the vocabulary used by SearchProvider.
+    */
+    get Status(): 'Active' | 'Pending' | 'Terminated' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Pending' | 'Terminated') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: Priority
+    * * Display Name: Priority
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Failover order: LOWER values are tried FIRST. The engine serves a search from the first available provider in this order, moving on only when one fails transiently. Must be >= 0.
+    */
+    get Priority(): number {
+        return this.Get('Priority');
+    }
+    set Priority(value: number) {
+        this.Set('Priority', value);
+    }
+
+    /**
+    * * Field Name: CredentialID
+    * * Display Name: Credential ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+    * * Description: Optional FK to the Credential record holding this provider's API key. When NULL the driver falls back to its documented environment variable, so a host that has not yet migrated its secrets into the Credential store keeps working.
+    */
+    get CredentialID(): string | null {
+        return this.Get('CredentialID');
+    }
+    set CredentialID(value: string | null) {
+        this.Set('CredentialID', value);
+    }
+
+    /**
+    * * Field Name: ProviderConfig
+    * * Display Name: Provider Config
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional JSON blob of non-secret, driver-specific settings (endpoint overrides, tier flags, answer model). Schema is defined by each driver; invalid JSON is logged and ignored rather than disabling the provider.
+    */
+    get ProviderConfig(): string | null {
+        return this.Get('ProviderConfig');
+    }
+    set ProviderConfig(value: string | null) {
+        this.Set('ProviderConfig', value);
+    }
+
+    /**
+    * * Field Name: MaxResultsOverride
+    * * Display Name: Max Results Override
+    * * SQL Data Type: int
+    * * Description: Optional per-provider cap on results per request, for pay-per-query vendors. The effective cap is the smallest of the caller's request, this value, and the vendor's own hard limit. NULL means the driver's own limit applies.
+    */
+    get MaxResultsOverride(): number | null {
+        return this.Get('MaxResultsOverride');
+    }
+    set MaxResultsOverride(value: number | null) {
+        this.Set('MaxResultsOverride', value);
+    }
+
+    /**
+    * * Field Name: AllowResultCaching
+    * * Display Name: Allow Result Caching
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether this vendor's terms permit storing returned results. Defaults to 0 (deny), because caching rights differ sharply between vendors and violating them is silent: some sell storage rights as a plan tier, others forbid persistent caching outright. Nothing in the engine caches today; this column exists so the first caching layer reads a per-provider gate instead of inventing one.
+    */
+    get AllowResultCaching(): boolean {
+        return this.Get('AllowResultCaching');
+    }
+    set AllowResultCaching(value: boolean) {
+        this.Set('AllowResultCaching', value);
+    }
+
+    /**
+    * * Field Name: DisplayName
+    * * Display Name: Display Name
+    * * SQL Data Type: nvarchar(200)
+    * * Description: UI display name shown in admin surfaces and result attribution. When NULL, falls back to the Name column.
+    */
+    get DisplayName(): string | null {
+        return this.Get('DisplayName');
+    }
+    set DisplayName(value: string | null) {
+        this.Set('DisplayName', value);
+    }
+
+    /**
+    * * Field Name: Icon
+    * * Display Name: Icon
+    * * SQL Data Type: nvarchar(200)
+    * * Description: CSS icon class for UI display, e.g. "fa-brands fa-brave". Supports any CSS-based icon library. When NULL a default icon is used.
+    */
+    get Icon(): string | null {
+        return this.Get('Icon');
+    }
+    set Icon(value: string | null) {
+        this.Set('Icon', value);
+    }
+
+    /**
+    * * Field Name: Comments
+    * * Display Name: Comments
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Free-form administrator notes, e.g. contract terms, billing owner, or why this provider sits at its priority.
+    */
+    get Comments(): string | null {
+        return this.Get('Comments');
+    }
+    set Comments(value: string | null) {
+        this.Set('Comments', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Credential
+    * * Display Name: Credential
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Credential(): string | null {
+        return this.Get('Credential');
     }
 }
 

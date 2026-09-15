@@ -19,10 +19,7 @@
         "kind": "action",
         "actions": [
           {
-            "name": "Google Custom Search"
-          },
-          {
-            "name": "Perplexity Search"
+            "name": "Web Search"
           }
         ],
         "allowAdditionalActions": false
@@ -48,10 +45,7 @@
             "kind": "action",
             "actions": [
               {
-                "name": "Google Custom Search"
-              },
-              {
-                "name": "Perplexity Search"
+                "name": "Web Search"
               }
             ],
             "allowAdditionalActions": false
