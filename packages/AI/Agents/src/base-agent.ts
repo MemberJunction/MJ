@@ -109,7 +109,8 @@ import {
     ExtractPromptResultText,
     GetTaskGraphSubmitter,
     SkillAvailabilityPurpose,
-    ArtifactDirective
+    ArtifactDirective,
+    AgentRunGuardrailVerdict
 } from '@memberjunction/ai-core-plus';
 import { MJActionEntityExtended, ActionResult, ActionParam, AIDirective } from '@memberjunction/actions-base';
 import { AgentRunner } from './AgentRunner';
@@ -5114,13 +5115,7 @@ export class BaseAgent {
     protected async hasExceededAgentRunGuardrails(
         params: ExecuteAgentParams,
         agentRun: MJAIAgentRunEntityExtended
-    ): Promise<{
-        exceeded: boolean;
-        type?: 'cost' | 'tokens' | 'iterations' | 'time' | 'budget';
-        limit?: number;
-        current?: number;
-        reason?: string;
-    }> {
+    ): Promise<AgentRunGuardrailVerdict> {
         const agent = params.agent;
 
         // Refresh the run's accumulated cost/token actuals before comparing them to the agent's
@@ -5134,7 +5129,7 @@ export class BaseAgent {
         // top-up, which only fires if compaction happens to trigger.
         //
         // So mid-run both fields sat at 0, and because the checks below are guarded on
-        // `agent.MaxCostPerRun && agentRun.TotalCost`, a falsy 0 short-circuited them entirely. The
+        // `agent.MaxCostPerRun != null && agentRun.TotalCost != null`, a falsy 0 short-circuited them entirely. The
         // cost and token ceilings were evaluated only at the moment a run ENDED, which is too late
         // to stop anything: they became reporting, not guardrails. Only the iteration and time
         // limits actually interrupted a run, because TotalPromptIterations is incremented in the
@@ -5150,7 +5145,7 @@ export class BaseAgent {
         // Check absolute maximum iterations (safety net to prevent infinite loops)
         const absoluteMaxIterations = params.absoluteMaxIterations ?? BaseAgent.DEFAULT_ABSOLUTE_MAX_ITERATIONS;
 
-        if (agentRun.TotalPromptIterations && agentRun.TotalPromptIterations >= absoluteMaxIterations) {
+        if (agentRun.TotalPromptIterations != null && agentRun.TotalPromptIterations >= absoluteMaxIterations) {
             return {
                 exceeded: true,
                 type: 'iterations',
@@ -5162,10 +5157,7 @@ export class BaseAgent {
 
         // Check usage budget block enforcement (O(1) comparison against pre-evaluated LastObservedAmount — no scan).
         // Throttle is Notify plus a documented hook; not a hard execution blocker.
-        const budget = (params as { usageBudget?: MJUsageBudgetEntity; budget?: MJUsageBudgetEntity }).usageBudget ??
-            (params as { usageBudget?: MJUsageBudgetEntity; budget?: MJUsageBudgetEntity }).budget ??
-            (agent as unknown as { UsageBudget?: MJUsageBudgetEntity; Budget?: MJUsageBudgetEntity }).UsageBudget ??
-            (agent as unknown as { UsageBudget?: MJUsageBudgetEntity; Budget?: MJUsageBudgetEntity }).Budget;
+        const budget = params.usageBudget;
 
         if (budget && budget.Status === 'Active' && budget.Action === 'Block' && budget.AmountLimit != null && budget.LastObservedAmount != null) {
             if (budget.LastObservedAmount >= budget.AmountLimit) {
@@ -5180,7 +5172,7 @@ export class BaseAgent {
         }
 
         // Check cost limit
-        if (agent.MaxCostPerRun && agentRun.TotalCost) {
+        if (agent.MaxCostPerRun != null && agentRun.TotalCost != null) {
             if (agentRun.TotalCost >= agent.MaxCostPerRun) {
                 return {
                     exceeded: true,
@@ -5193,7 +5185,7 @@ export class BaseAgent {
         }
         
         // Check token limit
-        if (agent.MaxTokensPerRun && agentRun.TotalTokensUsed) {
+        if (agent.MaxTokensPerRun != null && agentRun.TotalTokensUsed != null) {
             if (agentRun.TotalTokensUsed >= agent.MaxTokensPerRun) {
                 return {
                     exceeded: true,
@@ -5206,7 +5198,7 @@ export class BaseAgent {
         }
         
         // Check iteration limit
-        if (agent.MaxIterationsPerRun && agentRun.TotalPromptIterations) {
+        if (agent.MaxIterationsPerRun != null && agentRun.TotalPromptIterations != null) {
             if (agentRun.TotalPromptIterations >= agent.MaxIterationsPerRun) {
                 return {
                     exceeded: true,
@@ -5219,7 +5211,7 @@ export class BaseAgent {
         }
         
         // Check time limit
-        if (agent.MaxTimePerRun && agentRun.StartedAt) {
+        if (agent.MaxTimePerRun != null && agentRun.StartedAt) {
             const elapsedSeconds = Math.floor((Date.now() - new Date(agentRun.StartedAt).getTime()) / 1000);
             if (elapsedSeconds >= agent.MaxTimePerRun) {
                 return {

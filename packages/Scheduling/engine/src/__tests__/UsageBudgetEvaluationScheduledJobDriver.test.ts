@@ -50,12 +50,15 @@ vi.mock('@memberjunction/scheduling-base-types', () => ({
     NotificationContent: class {},
 }));
 
-import { Metadata } from '@memberjunction/core';
 import { UsageBudgetEvaluationScheduledJobDriver } from '../drivers/UsageBudgetEvaluationScheduledJobDriver';
 
-const mockContext = () => ({
-    Schedule: { Name: 'Usage Budget Evaluation', ID: 'job-1' },
-    Run: { ID: 'run-1' },
+const mockProvider = {
+    GetEntityObject: vi.fn(),
+};
+
+const mockContext = (providerOverride?: unknown) => ({
+    Schedule: { Name: 'Usage Budget Evaluation', ID: 'job-1', ProviderToUse: providerOverride ?? mockProvider },
+    Run: { ID: 'run-1', ProviderToUse: providerOverride ?? mockProvider },
     ContextUser: { ID: 'sys-user' },
     heartbeat: vi.fn(),
 } as never);
@@ -77,12 +80,12 @@ describe('UsageBudgetEvaluationScheduledJobDriver', () => {
             expect(start.toISOString()).toBe('2026-09-15T00:00:00.000Z');
         });
 
-        it('calculates Week period start at UTC Sunday midnight', () => {
-            // 2026-09-15 is a Tuesday (day 2 of week, where Sunday is 0)
+        it('calculates Week period start at UTC Monday midnight (ISO-8601)', () => {
+            // 2026-09-15 is a Tuesday (day 2 of week, Monday is 2026-09-14)
             const now = new Date('2026-09-15T14:35:22.000Z');
             const start = UsageBudgetEvaluationScheduledJobDriver.calculatePeriodStart('Week', now);
-            expect(start.toISOString()).toBe('2026-09-13T00:00:00.000Z');
-            expect(start.getUTCDay()).toBe(0);
+            expect(start.toISOString()).toBe('2026-09-14T00:00:00.000Z');
+            expect(start.getUTCDay()).toBe(1); // Monday is day 1
         });
 
         it('calculates Month period start at 1st of month UTC midnight', () => {
@@ -174,7 +177,7 @@ describe('UsageBudgetEvaluationScheduledJobDriver', () => {
                 Results: [{ TokenCount: 850 }], // 85% >= 80%
             });
 
-            vi.mocked(Metadata.Provider.GetEntityObject).mockResolvedValue(mockCreatedEvent as never);
+            mockProvider.GetEntityObject.mockResolvedValue(mockCreatedEvent as never);
 
             const result = await driver.Execute(mockContext());
             expect(result.Success).toBe(true);
@@ -220,7 +223,7 @@ describe('UsageBudgetEvaluationScheduledJobDriver', () => {
                 Results: [{ Spend: 550 }], // 110% >= 100%
             });
 
-            vi.mocked(Metadata.Provider.GetEntityObject).mockResolvedValue(mockCreatedEvent as never);
+            mockProvider.GetEntityObject.mockResolvedValue(mockCreatedEvent as never);
 
             const result = await driver.Execute(mockContext());
             expect(result.Success).toBe(true);
@@ -257,7 +260,7 @@ describe('UsageBudgetEvaluationScheduledJobDriver', () => {
 
             const result = await driver.Execute(mockContext());
             expect(result.Success).toBe(true);
-            expect(Metadata.Provider.GetEntityObject).not.toHaveBeenCalled();
+            expect(mockProvider.GetEntityObject).not.toHaveBeenCalled();
             expect(result.Details).toMatchObject({
                 EvaluatedCount: 1,
                 BreachedCount: 0,

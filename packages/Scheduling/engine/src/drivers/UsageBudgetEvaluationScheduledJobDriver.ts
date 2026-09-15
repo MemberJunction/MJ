@@ -4,7 +4,7 @@
  */
 
 import { RegisterClass, SafeJSONParse } from '@memberjunction/global';
-import { ValidationResult, RunView, RunQuery, Metadata, IMetadataProvider } from '@memberjunction/core';
+import { ValidationResult, RunView, RunQuery, IMetadataProvider } from '@memberjunction/core';
 import { MJUsageBudgetEntity, MJUsageBudgetEventEntity } from '@memberjunction/core-entities';
 import { BaseScheduledJob, ScheduledJobExecutionContext } from '../BaseScheduledJob';
 import { ScheduledJobResult, NotificationContent } from '@memberjunction/scheduling-base-types';
@@ -33,6 +33,14 @@ export interface UsageBudgetEvaluationItemResult {
 export class UsageBudgetEvaluationScheduledJobDriver extends BaseScheduledJob {
     /**
      * Calculates the UTC start timestamp for a given budget period ('Day', 'Week', 'Month').
+     *
+     * Week boundaries adhere to the ISO-8601 standard, starting on Monday at 00:00:00.000 UTC.
+     * Day starts at 00:00:00.000 UTC on the current day.
+     * Month starts on the 1st of the current month at 00:00:00.000 UTC.
+     *
+     * @param period - The budget period cadence ('Day' | 'Week' | 'Month')
+     * @param now - The reference date
+     * @returns The UTC start Date for the current period window
      */
     public static calculatePeriodStart(period: MJUsageBudgetEntity['Period'], now: Date): Date {
         switch (period) {
@@ -40,7 +48,7 @@ export class UsageBudgetEvaluationScheduledJobDriver extends BaseScheduledJob {
                 return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0));
             case 'Week': {
                 const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0));
-                const day = start.getUTCDay(); // 0 is Sunday
+                const day = (start.getUTCDay() + 6) % 7; // ISO-8601 Monday-start: Monday is 0, Sunday is 6
                 start.setUTCDate(start.getUTCDate() - day);
                 return start;
             }
@@ -52,9 +60,16 @@ export class UsageBudgetEvaluationScheduledJobDriver extends BaseScheduledJob {
     }
 
     public async Execute(context: ScheduledJobExecutionContext): Promise<ScheduledJobResult> {
-        const provider = Metadata.Provider as IMetadataProvider;
+        const provider = context.Schedule?.ProviderToUse ?? context.Run?.ProviderToUse;
+        if (!provider) {
+            return {
+                Success: false,
+                ErrorMessage: 'No metadata provider available on scheduled job context',
+                Details: { EvaluatedCount: 0, BreachedCount: 0, FailedCount: 0, Items: [] },
+            };
+        }
 
-        const rv = new RunView();
+        const rv = new RunView(provider);
         const budgetResult = await rv.RunView<MJUsageBudgetEntity>(
             {
                 EntityName: 'MJ: Usage Budgets',
@@ -106,7 +121,7 @@ export class UsageBudgetEvaluationScheduledJobDriver extends BaseScheduledJob {
                     parameters['PeriodEnd'] = now.toISOString();
                 }
 
-                const rq = new RunQuery();
+                const rq = new RunQuery(provider);
                 const queryResult = await rq.RunQuery(
                     {
                         QueryID: budget.MeasureQueryID,
