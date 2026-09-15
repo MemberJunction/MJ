@@ -649,24 +649,41 @@ function readDeclaredEntries(member: CandidateRepo, section: 'client' | 'shared'
  * This set mirrors the HOST's rule exactly, because the host is the only thing that decides what
  * the shell imports. `GetClientPackagesFromManifest`
  * (`packages/OpenApp/Engine/src/install/config-manager.ts`) builds the client dynamic-package list
- * as `[...packages.client, ...packages.shared]` with **no role test** — its own comment: "every
- * client/shared package is emitted regardless of startupExport — client entries are side-effect
- * imports" — and `mj codegen manifest --open-app-client-bootstrap` turns every enabled entry into
- * an import in the shell's generated class-registrations manifest, with no role field even present
- * on its entry type.
+ * as `[...packages.client, ...packages.shared]` minus anything whose platform excludes the
+ * browser, and `mj codegen manifest --open-app-client-bootstrap` turns every enabled entry into an
+ * import in the shell's generated class-registrations manifest.
  *
- * So there is deliberately no `role` filter here. An earlier revision kept only `role: 'bootstrap'`
- * on the premise that other roles "are imported normally"; the host contradicts that, and `role`
- * is a required seven-value enum whose `components` / `module` members are the documented Angular
- * roles. Anything narrower leaves a schema-valid package imported by the shell and linked by
- * nobody — the exact page-load-with-a-green-build failure this module exists to prevent (#4364).
+ * There is deliberately no `role` FILTER here beyond the platform rule. An earlier revision kept
+ * only `role: 'bootstrap'` on the premise that other roles "are imported normally"; the host
+ * contradicts that, and `role` is a required seven-value enum whose `components` / `module`
+ * members are the documented Angular roles. Anything narrower leaves a schema-valid package
+ * imported by the shell and linked by nobody — the page-load-with-a-green-build failure this
+ * module exists to prevent (#4364).
+ *
+ * The platform rule itself IS a role test, but a targeted one: it drops only what cannot run in a
+ * browser at all. Before it existed, a Node-only actions package declared `shared` was imported
+ * into the Angular bundle and the host could not build (#4428).
  *
  * `packages.server[]` is NOT here, and that is not an oversight: the host routes it to
  * `dynamicPackages.server`, a Node process that resolves importer-relative rather than from the
  * vite root, so it is not part of the shell's resolution problem.
  */
 function readShellImportedEntries(member: CandidateRepo): MjAppPackageEntry[] {
-  return [...readDeclaredEntries(member, 'client'), ...readDeclaredEntries(member, 'shared')];
+  return [...readDeclaredEntries(member, 'client'), ...readDeclaredEntries(member, 'shared')].filter(runsInBrowser);
+}
+
+/**
+ * Whether a declared package may be imported by the app shell.
+ *
+ * DELIBERATE COPY of `ResolvePackagePlatform` / `PackageRunsOnTier` in
+ * `packages/OpenApp/Engine/src/manifest/package-platform.ts`, which is canonical;
+ * `packages/DynamicPackages/src/discover.ts` keeps a third copy. Importing the engine's version
+ * here would bind this command to that package's built `dist/`. Change one, change all three; the
+ * shared case table lives in the engine's `package-platform.test.ts`.
+ */
+function runsInBrowser(pkg: MjAppPackageEntry): boolean {
+  const platform = pkg.platform ?? (pkg.role === 'actions' ? 'node' : 'both');
+  return platform === 'both' || platform === 'browser';
 }
 
 export function CollectOpenAppClientPackages(
