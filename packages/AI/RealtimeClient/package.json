@@ -18,7 +18,7 @@
   "dependencies": {
     "@memberjunction/global": "6.1.1",
     "@memberjunction/ai": "6.1.1",
-    "@google/genai": "^1.40.0"
+    "@google/genai": "^2.8.0"
   },
   "devDependencies": {
     "@types/node": "24.10.11",
