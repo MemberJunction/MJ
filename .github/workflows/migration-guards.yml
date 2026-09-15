@@ -12,9 +12,15 @@ on:
       - '.github/workflows/migration-guards.yml'
   push:
     branches: [next]
+    # Deliberately identical to the pull_request list above (GitHub Actions does not expand
+    # YAML anchors in workflow files, so it has to be restated). An asymmetric list means a
+    # merge that touches only the fixtures or only this workflow never re-runs the gate on
+    # next — the checker's self-test would rot on the default branch unnoticed.
     paths:
       - 'migrations/**'
       - '.github/scripts/check-migration-guarded-creates.mjs'
+      - '.github/scripts/fixtures/guarded-creates/**'
+      - '.github/workflows/migration-guards.yml'
 
 jobs:
   guarded-creates:

@@ -460,8 +460,33 @@ jobs:
           mkdir -p /tmp/mig-partial
           cp -R migrations/. /tmp/mig-partial/
 
-          # Baselines (B*), the repeatable R__RefreshMetadata, and the non-.sql files are
-          # deliberately untouched — the partial tree must still provision a working schema.
+          # A Flyway baseline migration (B-prefix) subsumes every migration up to and
+          # including its own version. So the day a baseline is cut at or past $CUTOFF, that
+          # baseline already CONTAINS the colliding create, and the partial tree plants the
+          # row by itself: the push below then finds it present rather than colliding, the
+          # second migrate has nothing left to apply, and the job dies at the very last step
+          # with "did not converge" — which reads as "the MJ#4503 guard rewrite is broken"
+          # and sends whoever opens the log hunting a bug that is not there. Catch it here,
+          # where the actual cause is in front of them.
+          while IFS= read -r b; do
+            base="${b##*/}"
+            bver="${base#B}"
+            bver="${bver%%__*}"
+            case "$bver" in
+              '' | *[!0-9]*)
+                echo "::error::Cannot read a numeric version from baseline filename '$base', so it cannot be shown to sit before the $CUTOFF cutoff. Refusing to run a test that may be vacuous." >&2
+                exit 1
+                ;;
+            esac
+            if [ "$bver" -ge "$CUTOFF" ]; then
+              echo "::error::Baseline $base is at or past the cutoff $CUTOFF, so it already subsumes the migration whose collision this job replays. The guard rewrite is NOT implicated — this lane simply can no longer reach the collision, and would otherwise have failed downstream at the convergence assertion with a misleading 'did not converge'. Re-point COLLIDING_MIGRATION and COLLIDING_RECORD_ID at the earliest post-baseline Metadata_Sync migration that creates a fixed-GUID row which metadata/ also creates; if no such migration survives the baseline, retire this lane (migration-guards.yml still gates new migrations statically)." >&2
+              exit 1
+            fi
+          done < <(find /tmp/mig-partial -type f -name 'B*.sql')
+
+          # Baselines (B*) — version-checked just above, never removed — the repeatable
+          # R__RefreshMetadata, and the non-.sql files are deliberately untouched: the
+          # partial tree must still provision a working schema.
           REMOVED=0
           while IFS= read -r f; do
             base="${f##*/}"

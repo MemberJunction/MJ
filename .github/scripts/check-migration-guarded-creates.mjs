@@ -24,6 +24,18 @@ const EXEC_RE =
   /EXEC\s+\[?\$\{flyway:defaultSchema\}\]?\.\[?spCreate(\w+)\]?\s+([\s\S]*?);/g;
 /** `SET\n  @local = 'literal'` — the emitter splits the assignment across lines. */
 const SET_RE = /SET\s*\r?\n?\s*@(\w+)\s*=\s*N?'([0-9A-Fa-f-]{36})'/g;
+/**
+ * `DECLARE @local UNIQUEIDENTIFIER = 'literal'` — the inline-initialiser form, which a
+ * hand-written migration uses far more naturally than the emitter's DECLARE-then-SET pair
+ * (and which the comma-continued `DECLARE @a UNIQUEIDENTIFIER = '…', @b … = '…'` list also
+ * produces). Missing it was not merely a gap: the call fell through to the computed-@ID
+ * branch and was reported as "cannot collide deterministically", which is the opposite of
+ * the truth — the GUID is right there in the DECLARE and collides every time.
+ *
+ * Anchored on the UNIQUEIDENTIFIER type keyword so an NVARCHAR initialiser that happens to
+ * hold 36 GUID-shaped characters cannot be mistaken for an identity.
+ */
+const DECLARE_INIT_RE = /@(\w+)\s+UNIQUEIDENTIFIER\s*=\s*N?'([0-9A-Fa-f-]{36})'/gi;
 
 function sqlFilesUnder(dir, out = []) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
@@ -95,6 +107,84 @@ function buildProcTableMap(rootDir) {
   return map;
 }
 
+/**
+ * Every literal-GUID assignment to a local in this batch, in source order. Both emitted
+ * shapes count (`SET @x = '…'` and `DECLARE @x UNIQUEIDENTIFIER = '…'`), and order matters
+ * because a batch may assign the same local twice — the value a call sees is the LAST
+ * assignment that precedes it, which `localGuidAt` below resolves.
+ */
+function literalGuidAssignments(batch) {
+  const found = [];
+  for (const re of [SET_RE, DECLARE_INIT_RE])
+    for (const m of batch.matchAll(re)) found.push({ at: m.index, name: m[1], guid: m[2].toUpperCase() });
+  return found.sort((a, b) => a.at - b.at);
+}
+
+/** The GUID a local holds at offset `before`, or undefined if it is never literally assigned there. */
+function localGuidAt(assignments, name, before) {
+  let guid;
+  for (const a of assignments) {
+    if (a.at >= before) break;
+    if (a.name === name) guid = a.guid;
+  }
+  return guid;
+}
+
+/**
+ * Inner text of the balanced parenthesised group starting at `from` (which must index a
+ * '('), or null when the parens never balance. Single-quoted literals are skipped so a '('
+ * inside a Description cannot throw off the count; T-SQL escapes an embedded quote by
+ * doubling it, which this reads as close-then-reopen — identical for balance purposes.
+ */
+function readParenGroup(text, from) {
+  if (text[from] !== '(') return null;
+  let depth = 0;
+  let inString = false;
+  for (let i = from; i < text.length; i++) {
+    const ch = text[i];
+    if (inString) {
+      if (ch === "'") inString = false;
+      continue;
+    }
+    if (ch === "'") inString = true;
+    else if (ch === '(') depth++;
+    else if (ch === ')' && --depth === 0) return text.slice(from + 1, i);
+  }
+  return null;
+}
+
+function escapeForRegExp(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * True when `head` — the text between the previous statement and this create — contains an
+ * `IF NOT EXISTS` that tests THIS create's identity.
+ *
+ * Signal: the `@ID` reference the create itself passes, matched inside the EXISTS
+ * predicate's own parentheses (`… WHERE [ID] = @ID_x`). That is the strongest signal
+ * available, because it is the exact value the INSERT would use — a predicate testing it is
+ * by construction testing the row that would collide. Two weaker signals were rejected:
+ *   - "any IF NOT EXISTS earlier in the batch" (what this used to do) is not a signal at
+ *     all. 38 of 64 v6 migrations contain that string for unrelated reasons — a sys.columns
+ *     probe before an ALTER TABLE is the common one — so an unguarded fixed-GUID create
+ *     sitting after one passed the gate silently, not even counted as skipped.
+ *   - the table name alone still admits a guard on row A followed by a create of row B in
+ *     the same table, which is exactly the shape that collides.
+ * Fail-closed: a guard this cannot tie to the create is treated as absent. The cost of a
+ * false alarm is an author restating the guard in the canonical emitted shape; the cost of
+ * a false pass is MJ#4503 shipping again.
+ */
+function isGuardedFor(head, idRef) {
+  const ref = idRef.startsWith('@') ? `${escapeForRegExp(idRef)}\\b` : `N?${escapeForRegExp(idRef)}`;
+  const idTest = new RegExp(`\\[?ID\\]?\\s*=\\s*${ref}`, 'i');
+  for (const m of head.matchAll(/IF\s+NOT\s+EXISTS\s*(?=\()/gi)) {
+    const predicate = readParenGroup(head, m.index + m[0].length);
+    if (predicate !== null && idTest.test(predicate)) return true;
+  }
+  return false;
+}
+
 /** Rewrites one file. Returns { text, guarded, skipped } — never throws on already-guarded input. */
 function guardFile(sql, procTable, label) {
   const batches = sql.split(/^\s*GO\s*$/m);
@@ -103,7 +193,7 @@ function guardFile(sql, procTable, label) {
   let skipped = 0;
 
   const rewritten = batches.map((batch) => {
-    const locals = new Map([...batch.matchAll(SET_RE)].map((m) => [m[1], m[2].toUpperCase()]));
+    const assignments = literalGuidAssignments(batch);
     const calls = [...batch.matchAll(EXEC_RE)];
     if (calls.length === 0) return batch;
 
@@ -142,9 +232,11 @@ function guardFile(sql, procTable, label) {
         continue;
       }
       const idRef = idArg[1] ?? `'${idArg[2]}'`;
-      // idArg[1] carries the leading `@` (e.g. `@ID_8f85b67b`); SET_RE's capture group
-      // excludes it (locals keys on `ID_8f85b67b`) — strip it before the lookup.
-      const guid = idArg[1] ? locals.get(idArg[1].slice(1)) : idArg[2]?.toUpperCase();
+      // idArg[1] carries the leading `@` (e.g. `@ID_8f85b67b`); the assignment regexes'
+      // capture group excludes it (they key on `ID_8f85b67b`) — strip it before the lookup.
+      const guid = idArg[1]
+        ? localGuidAt(assignments, idArg[1].slice(1), m.index)
+        : idArg[2]?.toUpperCase();
       if (!guid || !GUID.test(guid)) {
         skipped++;
         out += batch.slice(cursor, m.index + m[0].length); // computed @ID — cannot collide deterministically
@@ -152,8 +244,8 @@ function guardFile(sql, procTable, label) {
         continue;
       }
 
-      if (/IF\s+NOT\s+EXISTS/i.test(batch.slice(cursor, m.index))) {
-        out += batch.slice(cursor, m.index + m[0].length); // already guarded
+      if (isGuardedFor(batch.slice(cursor, m.index), idRef)) {
+        out += batch.slice(cursor, m.index + m[0].length); // already guarded, and guarded on THIS id
         cursor = m.index + m[0].length;
         continue;
       }
@@ -268,7 +360,43 @@ function runSelfTest() {
     failures++;
   }
 
-  console.log(failures === 0 ? 'self-test: PASS (6 cases)' : `self-test: FAIL (${failures})`);
+  // Case 7 — the gate's worst failure mode: an IF NOT EXISTS that guards something ELSE
+  // (a sys.columns probe ahead of an ALTER TABLE) sitting in the same batch, ahead of an
+  // unguarded fixed-GUID create. This used to read as "already guarded" and the call was
+  // not even counted as skipped — MJ#4503 could ship again, silently, through any
+  // hand-written migration. The unrelated probe must survive the rewrite untouched.
+  const unrelatedInput = readFileSync(join(dir, 'unrelated-guard-input.sql'), 'utf8');
+  const unrelatedExpected = readFileSync(join(dir, 'unrelated-guard-expected.sql'), 'utf8');
+  const unrelatedGot = guardFile(unrelatedInput, procTable, 'unrelated-guard-input.sql');
+  if (unrelatedGot.text !== unrelatedExpected || unrelatedGot.guarded !== 1 || unrelatedGot.skipped !== 0) {
+    console.error('FAIL: an unrelated IF NOT EXISTS was accepted as this create\'s guard');
+    console.error('--- got ---\n' + unrelatedGot.text + '\n--- expected ---\n' + unrelatedExpected);
+    failures++;
+  }
+  // …and the real guard, once added, must still be recognised despite the unrelated probe
+  // preceding it — otherwise --fix would double-wrap on its next run.
+  const unrelatedAgain = guardFile(unrelatedExpected, procTable, 'unrelated-guard-expected.sql');
+  if (unrelatedAgain.text !== unrelatedExpected || unrelatedAgain.guarded !== 0) {
+    console.error('FAIL: the emitted guard was not recognised when an unrelated IF NOT EXISTS precedes it');
+    failures++;
+  }
+
+  // Case 8 — `DECLARE @ID_x UNIQUEIDENTIFIER = '<fixed>'`. The identity is literal, so the
+  // create collides; before the inline-initialiser form was parsed it fell through to the
+  // computed-@ID branch and was reported as "cannot collide deterministically" — false, and
+  // the gate exited 0 on it. skipped must be 0 here, not 1.
+  const inlineInput = readFileSync(join(dir, 'inline-declare-input.sql'), 'utf8');
+  const inlineExpected = readFileSync(join(dir, 'inline-declare-expected.sql'), 'utf8');
+  const inlineGot = guardFile(inlineInput, procTable, 'inline-declare-input.sql');
+  if (inlineGot.text !== inlineExpected || inlineGot.guarded !== 1 || inlineGot.skipped !== 0) {
+    console.error(
+      `FAIL: inline DECLARE initialiser not recognised as a fixed GUID (guarded=${inlineGot.guarded}, skipped=${inlineGot.skipped})`,
+    );
+    console.error('--- got ---\n' + inlineGot.text + '\n--- expected ---\n' + inlineExpected);
+    failures++;
+  }
+
+  console.log(failures === 0 ? 'self-test: PASS (8 cases)' : `self-test: FAIL (${failures})`);
   return failures === 0 ? 0 : 1;
 }
 
