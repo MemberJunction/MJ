@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   computeCoverage,
+  computeCoveragePercent,
   computeTotalCost,
   computeDailyCostBurn,
   computeCostPerToken,
@@ -184,6 +185,27 @@ describe('ai-usage-analytics.compute', () => {
       expect(cov.PricedRuns).toBe(10);
       expect(cov.UnpricedRuns).toBe(10);
       expect(cov.PricedTokenShare).toBeCloseTo(0.8);
+    });
+  });
+
+  describe('computeCoveragePercent', () => {
+    it('returns 100 for null, undefined, or empty coverage', () => {
+      expect(computeCoveragePercent(null)).toBe(100);
+      expect(computeCoveragePercent(undefined)).toBe(100);
+      expect(computeCoveragePercent({ PricedRuns: 0, UnpricedRuns: 0 })).toBe(100);
+    });
+
+    it('returns correct percentage for partial coverage', () => {
+      expect(computeCoveragePercent({ PricedRuns: 8, UnpricedRuns: 2 })).toBe(80);
+      expect(computeCoveragePercent({ PricedRuns: 1, UnpricedRuns: 3 })).toBe(25);
+    });
+
+    it('returns 0 when no runs are priced', () => {
+      expect(computeCoveragePercent({ PricedRuns: 0, UnpricedRuns: 10 })).toBe(0);
+    });
+
+    it('returns 100 when all runs are priced', () => {
+      expect(computeCoveragePercent({ PricedRuns: 10, UnpricedRuns: 0 })).toBe(100);
     });
   });
 

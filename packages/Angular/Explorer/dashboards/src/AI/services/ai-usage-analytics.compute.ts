@@ -120,6 +120,23 @@ export function computeCoverage(rows: AIUsageHourlyRow[]): AIUsageCoverage {
   };
 }
 
+/**
+ * Computes coverage percentage (0–100) from priced and unpriced run counts.
+ * `IsPriced` is binary, so total runs = `PricedRuns + UnpricedRuns`.
+ * Returns 100 when there are no runs.
+ */
+export function computeCoveragePercent(
+  coverage: { PricedRuns?: number; UnpricedRuns?: number } | null | undefined
+): number {
+  if (!coverage) {
+    return 100;
+  }
+  const priced = typeof coverage.PricedRuns === 'number' ? coverage.PricedRuns : 0;
+  const unpriced = typeof coverage.UnpricedRuns === 'number' ? coverage.UnpricedRuns : 0;
+  const total = priced + unpriced;
+  return total > 0 ? (priced / total) * 100 : 100;
+}
+
 export interface CostInputRow {
   PricedRuns?: number;
   UnpricedRuns?: number;

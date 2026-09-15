@@ -15,7 +15,7 @@ import { RunView } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UUIDsEqual } from '@memberjunction/global';
 import { GlobalFilterState } from '../../../interfaces/analytics-preferences.interface';
-import { computeTotalCost } from '../../../services/ai-usage-analytics.compute';
+import { computeTotalCost, computeCoveragePercent } from '../../../services/ai-usage-analytics.compute';
 
 // ── Interfaces ──
 
@@ -737,12 +737,15 @@ export class AnalyticsAgentRunsComponent extends BaseAngularComponent implements
         );
 
         let covPriced = 0;
+        let covUnpriced = 0;
         for (const r of runs) {
             if (r.TotalCost !== null && r.TotalCost !== undefined) {
                 covPriced++;
+            } else {
+                covUnpriced++;
             }
         }
-        const covPct = total > 0 ? (covPriced / total) * 100 : 100;
+        const covPct = computeCoveragePercent({ PricedRuns: covPriced, UnpricedRuns: covUnpriced });
         const covSubtitle = total > 0 ? `covers ${Math.round(covPct)}% of runs` : undefined;
 
         this.Stats = {

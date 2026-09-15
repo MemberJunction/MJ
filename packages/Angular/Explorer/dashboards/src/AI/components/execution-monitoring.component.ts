@@ -9,6 +9,7 @@ import {
   ChartData,
   ExecutionDetails
 } from '../services/ai-instrumentation.service';
+import { computeCoveragePercent } from '../services/ai-usage-analytics.compute';
 import { DataPointClickEvent } from './charts/time-series-chart.component';
 import { KPICardData } from './widgets/kpi-card.component';
 import { HeatmapData } from './charts/performance-heatmap.component';
@@ -1879,11 +1880,10 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
   }
 
   private createKPICards(kpis: DashboardKPIs): KPICardData[] {
-    const covTotal = kpis.Coverage ? (kpis.Coverage.PricedRuns + kpis.Coverage.UnpricedRuns + kpis.Coverage.UnmeasuredRuns) : 0;
     const covPriced = kpis.Coverage?.PricedRuns ?? 0;
-    const coveragePct = covTotal > 0
-      ? Math.round((covPriced / covTotal) * 100)
-      : 100;
+    const covUnpriced = kpis.Coverage?.UnpricedRuns ?? 0;
+    const covTotal = covPriced + covUnpriced;
+    const coveragePct = Math.round(computeCoveragePercent(kpis.Coverage));
 
     return [
       {

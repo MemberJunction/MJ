@@ -15,7 +15,7 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { GlobalFilterState } from '../../../interfaces/analytics-preferences.interface';
 import { CacheRate, CacheTokenTotals, cacheHitRate, hasCacheActivity, netCacheSavings } from '../../../services/cache-metrics';
 import { AIInstrumentationService } from '../../../services/ai-instrumentation.service';
-import { computeTotalCost } from '../../../services/ai-usage-analytics.compute';
+import { computeTotalCost, computeCoveragePercent } from '../../../services/ai-usage-analytics.compute';
 import { AIUsageDailyRow, AIUsageByModelRow } from '../../../services/ai-usage-analytics.types';
 
 // ── Interfaces ──
@@ -819,12 +819,14 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
 
         let totalRuns = 0;
         let pricedRuns = 0;
+        let unpricedRuns = 0;
         for (const r of this.dailyRows) {
             totalRuns += (r.Runs ?? 0);
             pricedRuns += (r.PricedRuns ?? 0);
+            unpricedRuns += (r.UnpricedRuns ?? 0);
         }
-        const covPct = totalRuns > 0 ? (pricedRuns / totalRuns) * 100 : 100;
-        const covSubtitle = totalRuns > 0 ? `covers ${Math.round(covPct)}% of runs` : undefined;
+        const covPct = computeCoveragePercent({ PricedRuns: pricedRuns, UnpricedRuns: unpricedRuns });
+        const covSubtitle = (totalRuns > 0 || (pricedRuns + unpricedRuns) > 0) ? `covers ${Math.round(covPct)}% of runs` : undefined;
 
         this.CostKpis = [
             {

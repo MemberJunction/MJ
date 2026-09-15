@@ -10,6 +10,7 @@ import {
   TrendData,
   ChartData
 } from '../../../services/ai-instrumentation.service';
+import { computeCoveragePercent } from '../../../services/ai-usage-analytics.compute';
 import { GlobalFilterState } from '../../../interfaces/analytics-preferences.interface';
 import { TimeSeriesConfig } from '../../charts/time-series-chart.component';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
@@ -691,16 +692,8 @@ export class AnalyticsExecutiveSummaryComponent extends BaseAngularComponent imp
       return;
     }
 
-    const covTotal = kpis.Coverage ? (kpis.Coverage.PricedRuns + kpis.Coverage.UnpricedRuns + kpis.Coverage.UnmeasuredRuns) : 0;
-    const covPriced = kpis.Coverage?.PricedRuns ?? 0;
-    const coveragePct = covTotal > 0
-      ? (covPriced / covTotal) * 100
-      : 100;
-    const prevCovTotal = this.previousKpis?.Coverage ? (this.previousKpis.Coverage.PricedRuns + this.previousKpis.Coverage.UnpricedRuns + this.previousKpis.Coverage.UnmeasuredRuns) : null;
-    const prevCovPriced = this.previousKpis?.Coverage?.PricedRuns ?? 0;
-    const prevCoveragePct = prevCovTotal !== null && prevCovTotal > 0
-      ? (prevCovPriced / prevCovTotal) * 100
-      : (prevCovTotal === 0 ? 100 : null);
+    const coveragePct = computeCoveragePercent(kpis.Coverage);
+    const prevCoveragePct = this.previousKpis?.Coverage ? computeCoveragePercent(this.previousKpis.Coverage) : null;
 
     const trends = this.TrendsData;
     this.KpiCards = [
