@@ -18,7 +18,9 @@ is an `error`. Members of an exported *data shape* are a `warn`: an interface is
 time, so there is no runtime carrier for a stub and no rename that keeps consumers compiling. Two
 kinds of data-shape member are still errors, because they do have a fix: one whose type is not
 published from its package's entry point, and one on an interface a class implements.
-`enforceTypeMembers` opts into the type-only break for the rest.
+`enforceTypeMembers` exists for repos willing to take a breaking change to their published types;
+it is off here, because renaming a published interface member breaks every consumer that names it
+and no stub can carry the old name.
 
 Anything carrying a `@deprecated` JSDoc tag is exempt, so the back-compat stub that fixes a finding
 is not itself a violation; the check reports how many findings it suppressed that way. Framework

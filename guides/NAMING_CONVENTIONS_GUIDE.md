@@ -151,10 +151,19 @@ Two kinds of data-shape member *are* errors, because they have a fix after all:
   the gate resolves each package's entry from `package.json` and follows its `export *` graph;
 - the owning interface is **implemented by a class**, which carries both names like any other class.
 
-To take the type-only break on the remaining 11,352 — renaming them outright and accepting a
-`TS2551` for external TypeScript consumers, which MJ's own
-[`PUBLISH_NO_BREAK_POLICY.md`](../packages/OpenApp/PUBLISH_NO_BREAK_POLICY.md) permits as a *minor*
-— set `enforceTypeMembers: true` in [`.mj-standards.json`](../.mj-standards.json).
+**The rest cannot be fixed at all, and that is the end of it.** Renaming a member of a published
+interface is a breaking change to the MJ repo's own API — every external consumer naming that
+property stops compiling, with no stub able to carry the old name. There is no policy under which
+that is a minor.
+
+[`PUBLISH_NO_BREAK_POLICY.md`](../packages/OpenApp/PUBLISH_NO_BREAK_POLICY.md) does **not** license
+it: that policy governs **OpenApp schemas**, not this repository's TypeScript surface. Do not read
+it as permission to break MJ's own published types.
+
+`enforceTypeMembers: true` therefore exists for a *different repository* to adopt this standard on
+its own terms — one whose types are internal, or that is pre-1.0 and willing to take the break. **It
+should stay `false` here.** Turning it on in MJ converts ~4,100 unfixable findings into build
+failures that no one may act on.
 
 ### Fixing a finding
 
@@ -288,9 +297,9 @@ export function escapeSqlString(v: string): string { return EscapeSQLString(v); 
 ```
 
 The check prints how many findings it suppressed this way. Follow MJ's existing format — name the
-replacement with `{@link}`, and give **no** removal version: the repo has never used one and
-[`PUBLISH_NO_BREAK_POLICY.md`](../packages/OpenApp/PUBLISH_NO_BREAK_POLICY.md) explicitly rejects
-"scheduled for deletion in X.Y".
+replacement with `{@link}`, and give **no** removal version. The repo has never used one, and
+promising a deletion date for a name that external consumers depend on is a breaking change with a
+countdown attached.
 
 ### Per line — the reviewed exception
 

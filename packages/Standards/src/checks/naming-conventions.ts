@@ -858,9 +858,12 @@ export const NamingConventionsCheck: StandardCheck = {
          * Promote data-shape findings from `warn` to `error`.
          *
          * Off by default because those findings have **no compatible fix** — see the severity model
-         * in `Run`. Turning it on is a decision to accept a type-only breaking change for consumers
-         * of this repo's published types, which MJ's own policy permits as a minor. It is a real
-         * choice, so it is opt-in rather than something a repo backs into.
+         * in `Run`. Turning it on accepts a **breaking change** to this repo's published types:
+         * every external consumer naming one of those properties stops compiling, and no stub can
+         * carry the old name because an interface has no runtime carrier.
+         *
+         * It exists for a repository whose types are internal, or that is pre-1.0 and willing to
+         * take the break. A repo with published consumers should leave it off.
          */
         enforceTypeMembers: false,
         /** Include `*.test.ts` / `*.spec.ts` / `__tests__`. Off: tests mimic third-party APIs on purpose. */
@@ -1039,8 +1042,8 @@ function buildNotes(
     const notes = [
         `${fileCount} file(s) in ${packageCount} package(s) scanned — ${errors.length} failing, ${warnings} reported`,
         `${warnings} are members of exported data shapes: an interface has no runtime carrier, so there is no ` +
-            'deprecated-stub form for them and no fix that keeps consumers compiling. Set "enforceTypeMembers" ' +
-            'to take the type-only break.',
+            'deprecated-stub form for them and no fix that keeps consumers compiling. Renaming them is a ' +
+            'breaking change; "enforceTypeMembers" opts into that and is off by default.',
     ];
     if (deprecatedSuppressed > 0) {
         notes.push(`${deprecatedSuppressed} finding(s) suppressed by an @deprecated tag — back-compat stubs, working as intended.`);
