@@ -460,6 +460,54 @@ SELECT * FROM ${pgDialect.QuoteSchema(schema, tableName)};`;
     }
 
     /**
+     * PostgreSQL create-or-replace for a config-declared view.
+     *
+     * `CREATE OR REPLACE VIEW` alone is not a full equivalent of SQL Server's
+     * `CREATE OR ALTER VIEW`: PG raises SQLSTATE `42P16 invalid_table_definition` when the new
+     * body renames, reorders, retypes or drops an existing column. So the statement runs inside
+     * a `DO` block that, on 42P16 only, drops the view and re-runs the create.
+     *
+     * The drop is deliberately **not** `CASCADE`. Unlike a base view, nothing CodeGen generates
+     * depends on a config-declared view, so any dependent is user-owned and CodeGen could not
+     * restore it — PG refuses the drop (`2BP01`) and the run fails loudly rather than silently
+     * destroying it. Grants on the view are lost on that path (a NOTICE names the view so an
+     * operator can re-apply them); the happy path keeps them.
+     *
+     * The body travels inside dollar quotes, which `quoteSQLForExecution` skips — it must be
+     * valid PostgreSQL as written, with mixed-case identifiers already double-quoted.
+     */
+    override generateCreateOrReplaceViewSQL(schema: string, viewName: string, selectSQL: string): string {
+        // The body sits inside BOTH dollar-quoted strings. PostgreSQL ends a dollar-quoted string at
+        // the first reoccurrence of its own tag (no nesting depth), so either tag inside the body
+        // would cut the statement short and run the rest as top-level SQL.
+        const outerTag = '$mj_create_view$';
+        const bodyTag = '$mj_view_sql$';
+        for (const tag of [outerTag, bodyTag]) {
+            if (selectSQL.includes(tag)) {
+                throw new Error(`View body for ${schema}.${viewName} contains the reserved dollar-quote tag ${tag}`);
+            }
+        }
+        const quotedView = pgDialect.QuoteSchema(schema, viewName);
+        const viewLiteral = `'${`${schema}.${viewName}`.replace(/'/g, "''")}'`;
+        const createSQL = `CREATE OR REPLACE VIEW ${quotedView}
+AS
+${this.trimStatementTerminator(selectSQL)}`;
+
+        return `DO ${outerTag}
+DECLARE
+  vsql CONSTANT TEXT := ${bodyTag}${createSQL}${bodyTag};
+BEGIN
+  EXECUTE vsql;
+EXCEPTION WHEN invalid_table_definition THEN
+  -- 42P16: the body changed the column list in a way CREATE OR REPLACE cannot apply.
+  -- No CASCADE: dependents are user-owned, so refuse rather than destroy them.
+  DROP VIEW ${quotedView};
+  EXECUTE vsql;
+  RAISE NOTICE 'MJ CodeGen: recreated view % because its column list changed; grants on it were dropped and must be re-applied', ${viewLiteral};
+END ${outerTag}`;
+    }
+
+    /**
      * PostgreSQL synthetic surrogate key: a SQL-standard auto-assigned identity column
      * (`GENERATED ALWAYS AS IDENTITY`), `bigint` for headroom on large materialized sets.
      * v1 full-rebuild only; the deterministic combined-key hashing in §5 replaces this in Phase 3.
