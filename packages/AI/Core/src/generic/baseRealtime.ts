@@ -1,5 +1,6 @@
 import { BaseModel } from "./baseModel";
 import type { RealtimeReasoningPlane } from "./modelConfiguration";
+import type { RealtimeTrackDescriptor, RealtimeTrackUsageBasis } from "./realtimeTracks";
 
 /**
  * A JSON-serializable value. Used to type open configuration bags and JSON-schema
@@ -344,9 +345,15 @@ export interface RealtimeSessionCapabilities {
     EmitsResponseComplete?: boolean;
 
     /**
-     * The units this provider uses to measure and bill usage: tokens, seconds, or both.
+     * The units this provider uses to measure and bill usage.
+     *
+     * A LIST rather than an enum because a provider can meter in more than one basis at once —
+     * GPT-Live reports voice seconds and delegated reasoning tokens from different places, so an
+     * exclusive enum would force us to drop one. Shares
+     * {@link import('./realtimeTracks').RealtimeTrackUsageBasis} with the media plane so cost has one
+     * vocabulary; `'frames'` and `'bytes'` exist for non-audio tracks.
      */
-    UsageBases?: readonly ('tokens' | 'seconds')[];
+    UsageBases?: readonly RealtimeTrackUsageBasis[];
 
     /**
      * Whether this driver provides speech-to-text transcript events for user audio input.
@@ -400,6 +407,28 @@ export interface RealtimeSessionCapabilities {
      * Maximum number of concurrent delegations supported by the provider, or undefined if unbounded.
      */
     MaxConcurrentDelegations?: number;
+
+    /**
+     * Media tracks this model can RECEIVE (user -> model).
+     *
+     * Absent or empty is read as "inbound audio only", which is every model MJ spoke to before
+     * Gemini 3.8 Live — so an existing driver that declares nothing keeps working unchanged.
+     *
+     * This is the supply side of track negotiation: the caller requests
+     * (`ModelConfiguration.Realtime.RequestedTracks`), this declares, and
+     * {@link import('./realtimeTracks').ResolveRequestedTracks} intersects them. A requested track
+     * absent here resolves to `'unsupported'` rather than being dropped, so a host can fall back
+     * deliberately instead of wondering why no samples arrive.
+     */
+    SupportedInboundTracks?: readonly RealtimeTrackDescriptor[];
+
+    /**
+     * Media tracks this model can EMIT (model -> user). Absent or empty is read as "outbound audio
+     * only". Non-audio outbound tracks (avatar video, haptics) are admitted by the contract because
+     * direction is a property of a track rather than part of its type; no provider in play emits one
+     * yet.
+     */
+    SupportedOutboundTracks?: readonly RealtimeTrackDescriptor[];
 }
 
 /** Parameters for {@link IRealtimeSession.Reconfigure} — a live turn-taking change. */

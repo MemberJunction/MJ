@@ -37,6 +37,7 @@
 import { IsPlainObject } from '@memberjunction/global';
 
 import { JSONObject, JSONValue } from './baseRealtime';
+import type { RealtimeTrackDescriptor } from './realtimeTracks';
 
 /**
  * MJ-normalized turn-detection mode vocabulary — provider-neutral by design so a shared model
@@ -147,6 +148,21 @@ export interface RealtimeConfigurationSettings {
 
     /** Tool-execution semantics this model permits. Absent = the profile's own defaults. */
     Tooling?: RealtimeToolingSettings;
+
+    /**
+     * Media tracks this session asks the model to establish, beyond audio.
+     *
+     * **The request side of negotiation, and the reason "video off by default" is structural rather
+     * than a default value someone can forget.** Absent or empty establishes audio only; a video
+     * track exists only because something asked for it. That matters concretely: Gemini 3.8 Live's
+     * own turn coverage defaults to including every video frame, billed, so a design where omission
+     * means "inherit the provider" would ship a silent cost.
+     *
+     * Requests are intersected with the model's `SupportedInboundTracks` /
+     * `SupportedOutboundTracks`; anything unsupported resolves to `'unsupported'` so the caller
+     * falls back deliberately.
+     */
+    RequestedTracks?: readonly RealtimeTrackDescriptor[];
 
     /**
      * Which server signal means "the session has gone idle and deferred work may be flushed".
