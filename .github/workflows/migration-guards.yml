@@ -1,0 +1,35 @@
+name: Migration Guards
+
+# Path-triggered rather than folded into test.yml: that workflow scopes PR runs with
+# --filter=...[origin/next] and its full-suite escape hatch only matches root-level
+# paths, so a migrations-only PR can skip every package. A path trigger cannot.
+on:
+  pull_request:
+    paths:
+      - 'migrations/**'
+      - '.github/scripts/check-migration-guarded-creates.mjs'
+      - '.github/scripts/fixtures/guarded-creates/**'
+      - '.github/workflows/migration-guards.yml'
+  push:
+    branches: [next]
+    paths:
+      - 'migrations/**'
+      - '.github/scripts/check-migration-guarded-creates.mjs'
+
+jobs:
+  guarded-creates:
+    name: Fixed-GUID creates are guarded
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      # Its own step on purpose: a self-test that only runs inside the gate never
+      # executes when the gate passes, so the fixtures would rot unnoticed.
+      - name: Self-test the checker
+        run: node .github/scripts/check-migration-guarded-creates.mjs --self-test
+
+      - name: Check migrations
+        run: node .github/scripts/check-migration-guarded-creates.mjs
