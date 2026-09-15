@@ -821,6 +821,12 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
       // Update ResultSelector JudgeScore and JudgeID from rankings if present
       const topRanking = rankings.find((r) => r.rank === 1) || rankings[0];
       if (judgeResult.promptRun) {
+        // The judge runner finalizes its prompt run through a FIRE-AND-FORGET queued UPDATE
+        // (AIPromptRunner.finalize -> _promptRunQueue.Update). BaseEntity.Save collapses into an
+        // in-flight save (baseEntity.ts, `if (this._pendingSave$) return firstValueFrom(...)`), so
+        // mutating and saving here while that UPDATE is in flight writes NOTHING — JudgeID and
+        // JudgeScore are silently lost. Drain the queue first so this Save is a real write.
+        await judgeRunner.WaitForPendingPromptRunSaves();
         judgeResult.promptRun.JudgeID = judgePrompt.ID;
         if (judgeResult.promptRun.JudgeScore == null && typeof topRanking?.score === 'number') {
           judgeResult.promptRun.JudgeScore = topRanking.score;

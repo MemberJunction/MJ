@@ -33,5 +33,9 @@ SELECT
 FROM [__mj].vwAIUsageFacts
 WHERE IsCompleted = 1
   AND IsPriced = 0
+  -- A parallel parent has no own cost BY DESIGN (the arms carry it), so it is not "unpriced".
+  -- Without this it lands in an admin-facing "needs a price tier" list and sends someone hunting
+  -- for a tier that was never missing.
+  AND IsParallelParent = 0
 ORDER BY
     RunAtUTC DESC
