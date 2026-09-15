@@ -1,5 +1,9 @@
 # @memberjunction/lists-base
 
+## 6.1.0
+
+## 6.1.0-edge.7
+
 ## 6.1.0-edge.6
 
 ## 6.1.0-edge.5

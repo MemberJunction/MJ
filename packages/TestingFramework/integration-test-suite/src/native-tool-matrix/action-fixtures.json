@@ -1,0 +1,146 @@
+[
+  {
+    "Name": "Calculate Expression",
+    "Description": "Evaluates mathematical expressions supporting basic arithmetic, parentheses, and common math functions",
+    "Params": [
+      {
+        "Name": "Expression",
+        "Description": "Mathematical expression to evaluate (e.g., '(2*3)+4/15', 'sqrt(16)+pow(2,3)')",
+        "Type": "Input     ",
+        "IsRequired": true,
+        "IsArray": false,
+        "DefaultValue": null,
+        "ValueType": "Scalar"
+      }
+    ]
+  },
+  {
+    "Name": "Run Ad-hoc Query",
+    "Description": "Executes a read-only SQL SELECT query for ad-hoc purposes with security validation. Supports {{query:\"CategoryPath/QueryName\"}} composition macros — the composition engine resolves these into CTEs before execution, enabling reuse of saved queries. Ensures SELECT-only operations, prevents dangerous SQL operations, enforces timeouts, and logs all queries for audit trail.",
+    "Params": [
+      {
+        "Name": "AnalysisRequest",
+        "Description": "Optional analysis instructions for the LLM to analyze the query results. When provided, the results will be analyzed according to these instructions. Example: 'Summarize the top 5 products by revenue' or 'Identify any anomalies in the data'.",
+        "Type": "Input     ",
+        "IsRequired": false,
+        "IsArray": false,
+        "DefaultValue": null,
+        "ValueType": "Other"
+      },
+      {
+        "Name": "ColumnMaxLength",
+        "Description": "Maximum length for column values in characters. Values longer than this will be trimmed with '...' suffix to save context. Use when querying tables with verbose text/JSON fields (e.g., PromptText, Description). Example: 50 = trim to 50 characters. Default: 50. Set to 0 if you want FULL column results. Applies to both CSV and JSON formats.",
+        "Type": "Input     ",
+        "IsRequired": false,
+        "IsArray": false,
+        "DefaultValue": "50",
+        "ValueType": "Scalar"
+      },
+      {
+        "Name": "DataFormat",
+        "Description": "Format for data output: 'csv' (comma-separated values - more token efficient) or 'json' (structured objects). Default: csv. CSV format significantly reduces token usage by avoiding field repetition in every row.",
+        "Type": "Input     ",
+        "IsRequired": false,
+        "IsArray": false,
+        "DefaultValue": "csv",
+        "ValueType": "Scalar"
+      },
+      {
+        "Name": "IncludeExecutionPlan",
+        "Description": "Whether to include query execution plan for performance analysis. Default: false.",
+        "Type": "Input     ",
+        "IsRequired": false,
+        "IsArray": false,
+        "DefaultValue": "false",
+        "ValueType": "Scalar"
+      },
+      {
+        "Name": "MaxRows",
+        "Description": "Maximum number of rows to return. Default: 1000. Helps prevent overwhelming results from large tables.",
+        "Type": "Input     ",
+        "IsRequired": false,
+        "IsArray": false,
+        "DefaultValue": "1000",
+        "ValueType": "Scalar"
+      },
+      {
+        "Name": "Query",
+        "Description": "SQL SELECT query to execute (required). Only SELECT statements are allowed. Query is validated for syntax and security before execution.",
+        "Type": "Input     ",
+        "IsRequired": true,
+        "IsArray": false,
+        "DefaultValue": null,
+        "ValueType": "Other"
+      },
+      {
+        "Name": "ResultFormat",
+        "Description": "Format for results: 'json' (structured objects), 'csv' (comma-separated values), or 'table' (formatted text table). Default: json.",
+        "Type": "Input     ",
+        "IsRequired": false,
+        "IsArray": false,
+        "DefaultValue": "json",
+        "ValueType": "Scalar"
+      },
+      {
+        "Name": "ReturnType",
+        "Description": "What to return: 'data only' (just query results), 'analysis only' (just LLM analysis), or 'data and analysis' (both). Default: 'data and analysis' if AnalysisRequest is provided, otherwise 'data only'. This parameter is ignored if AnalysisRequest is not provided.",
+        "Type": "Input     ",
+        "IsRequired": false,
+        "IsArray": false,
+        "DefaultValue": "data and analysis",
+        "ValueType": "Scalar"
+      },
+      {
+        "Name": "Timeout",
+        "Description": "Query timeout in seconds. Default: 30. Prevents long-running queries from blocking resources.",
+        "Type": "Input     ",
+        "IsRequired": false,
+        "IsArray": false,
+        "DefaultValue": "30",
+        "ValueType": "Scalar"
+      }
+    ]
+  },
+  {
+    "Name": "Get Entity Details",
+    "Description": "Returns complete field information and sample data for a specific entity. Shows field names, types, descriptions, primary keys, related entities, and a few rows of actual data (3 by default, max 10, long values truncated). Perfect for understanding entity structure before writing SQL queries.",
+    "Params": [
+      {
+        "Name": "EntityName",
+        "Description": "Exact name of the entity to get details for (required). Must match the entity's full Name exactly, including any 'MJ: ' prefix (e.g., 'MJ: AI Agents', not 'AI Agents'). If unsure, consult your entity catalog or the 'Get Entity List' action if available.",
+        "Type": "Both      ",
+        "IsRequired": true,
+        "IsArray": false,
+        "DefaultValue": null,
+        "ValueType": "Scalar"
+      },
+      {
+        "Name": "IncludeRelatedEntityInfo",
+        "Description": "Include information about entities referenced by foreign keys. Default: true.",
+        "Type": "Input     ",
+        "IsRequired": false,
+        "IsArray": false,
+        "DefaultValue": "true",
+        "ValueType": "Scalar"
+      },
+      {
+        "Name": "SampleRowCount",
+        "Description": "Number of sample rows to return. Default: 3, maximum: 10. Long field values are truncated to keep results compact. Helps understand actual data in the entity.",
+        "Type": "Both      ",
+        "IsRequired": false,
+        "IsArray": false,
+        "DefaultValue": "3",
+        "ValueType": "Scalar"
+      },
+      {
+        "Name": "UseSemanticSearch",
+        "Description": "When the entity is not found and simple name matching yields no suggestions, run a ranked semantic search over the entity catalog and suggest the top 3 conceptually related entities in the error message. Default: false.",
+        "Type": "Input     ",
+        "IsRequired": false,
+        "IsArray": false,
+        "DefaultValue": "false",
+        "ValueType": "Scalar"
+      }
+    ]
+  }
+]

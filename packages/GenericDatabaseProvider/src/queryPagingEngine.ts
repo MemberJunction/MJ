@@ -210,6 +210,25 @@ export class QueryPagingEngine {
         // Existing numeric cap — only modify when the requested cap is tighter.
         if (existing && existing.value <= cap) return { outcome: 'capped', sql };
 
+        // No cap at all, on a dialect that caps with a trailing clause — append it as TEXT.
+        //
+        // `SetOuterCap` + `ToSQL()` below re-emits the WHOLE statement from the AST, and
+        // node-sql-parser normalizes as it generates: keywords come back upper-cased and
+        // identifiers re-quoted. Appending one clause should not rewrite the caller's SQL, and
+        // on PostgreSQL that rewrite is not cosmetic — it is a correctness bug, because the
+        // provider's identifier auto-quoter runs afterwards over an upper-cased statement and
+        // quotes any keyword its allowlist is missing. A query written `ORDER BY x ASC nulls
+        // last` came back `ASC NULLS LAST`, was quoted to `ASC "NULLS" "LAST"`, and failed with
+        // `syntax error at or near ""NULLS""` — SQL the caller never wrote.
+        //
+        // The append is only taken where it is provably equivalent to the AST injection; every
+        // other shape falls through to the existing path, so this can narrow the blast radius
+        // but never change a result.
+        if (!existing) {
+            const appended = QueryPagingEngine.appendTrailingCap(sql, cap, dialect);
+            if (appended) return { outcome: 'capped', sql: appended };
+        }
+
         // No cap (or a looser one) — inject/replace.
         parsed.SetOuterCap(cap);
         try {
@@ -217,6 +236,33 @@ export class QueryPagingEngine {
         } catch {
             return { outcome: 'unparseable' };
         }
+    }
+
+    /**
+     * Clauses that must come AFTER `LIMIT` in PostgreSQL, so a bare append would be illegal.
+     *
+     * Matched loosely and deliberately: a false positive (the word inside a string literal, a
+     * column alias, or a nested subquery) costs only a fall-through to the AST path, which is
+     * the behaviour that shipped before. A false negative would emit invalid SQL, so the test
+     * errs heavily toward abstaining.
+     */
+    private static readonly CLAUSES_THAT_FOLLOW_LIMIT =
+        /\b(?:OFFSET|FETCH|FOR\s+(?:UPDATE|SHARE|NO\s+KEY\s+UPDATE|KEY\s+SHARE))\b/i;
+
+    /**
+     * Returns `sql` with the row cap appended as a trailing clause, or `null` when that is not
+     * provably safe and the caller should fall back to AST injection.
+     *
+     * Applies only to dialects whose cap is a suffix (`LIMIT N`). SQL Server caps with a `TOP N`
+     * prefix that has to go between `SELECT` and the select list — a position no append can
+     * reach — so it is left to the AST path, where the round-trip is harmless anyway because
+     * T-SQL is not case-sensitive about the identifiers involved.
+     */
+    private static appendTrailingCap(sql: string, cap: number, dialect: SQLDialect): string | null {
+        const limit = dialect.LimitClause(cap);
+        if (!limit.suffix || limit.prefix) return null;
+        if (QueryPagingEngine.CLAUSES_THAT_FOLLOW_LIMIT.test(sql)) return null;
+        return `${sql}\n${limit.suffix}`;
     }
 
     /**
