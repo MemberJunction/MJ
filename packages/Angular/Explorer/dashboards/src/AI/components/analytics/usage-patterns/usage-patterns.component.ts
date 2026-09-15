@@ -82,7 +82,7 @@ const FIELDS: string[] = [
             <div class="panel">
                 <div class="panel__header">
                     <h4 class="panel__title">Time-of-Day Heatmap</h4>
-                    <span class="panel__subtitle">Execution count by day and hour</span>
+                    <span class="panel__subtitle">Execution count by day and hour &bull; sampled from {{ TotalRuns | number }} recent runs</span>
                 </div>
                 <div class="heatmap-wrapper">
                     <div class="heatmap-grid">
@@ -603,6 +603,8 @@ export class AnalyticsUsagePatternsComponent extends BaseAngularComponent implem
             EntityName: 'MJ: AI Prompt Runs',
             ExtraFilter: `RunAt >= '${sinceStr}'`,
             Fields: FIELDS,
+            OrderBy: 'RunAt DESC',
+            MaxRows: 1000,
             ResultType: 'simple'
         });
 

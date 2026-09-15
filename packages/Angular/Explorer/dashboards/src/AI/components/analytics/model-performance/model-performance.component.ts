@@ -73,6 +73,13 @@ const FIELDS = [
         } @else {
             <!-- Leaderboard Table -->
             <div class="leaderboard-panel">
+                <div class="panel-header">
+                    <div class="panel-header__title">
+                        <i class="fa-solid fa-trophy panel-header__icon"></i>
+                        Model Performance Leaderboard
+                    </div>
+                    <span class="panel-header__subtitle">sampled from {{ allRuns.length | number }} recent runs</span>
+                </div>
                 <div class="table-wrapper">
                     <table class="leaderboard-table">
                         <thead>
@@ -149,6 +156,33 @@ const FIELDS = [
             border: 1px solid var(--mj-border-default);
             border-radius: 12px;
             overflow: hidden;
+        }
+
+        .panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 18px;
+            border-bottom: 1px solid var(--mj-border-subtle);
+        }
+
+        .panel-header__title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--mj-text-primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .panel-header__icon {
+            font-size: 13px;
+            color: var(--mj-brand-primary);
+        }
+
+        .panel-header__subtitle {
+            font-size: 12px;
+            color: var(--mj-text-muted);
         }
 
         .table-wrapper {
@@ -384,6 +418,7 @@ export class AnalyticsModelPerformanceComponent extends BaseAngularComponent imp
                 ExtraFilter: dateFilter,
                 Fields: FIELDS,
                 OrderBy: 'RunAt DESC',
+                MaxRows: 1000,
                 ResultType: 'simple'
             });
 

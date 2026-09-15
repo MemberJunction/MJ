@@ -19,6 +19,7 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 interface KpiDisplayCard {
   Label: string;
   Value: string;
+  Subtitle?: string;
   SparklineData: number[];
   DeltaPercent: number;
   DeltaDirection: 'up' | 'down' | 'stable';
@@ -58,6 +59,9 @@ interface ErrorHotspot {
         <div class="kpi-card" [style.border-left-color]="card.BorderColor">
           <div class="kpi-label">{{ card.Label }}</div>
           <div class="kpi-value">{{ card.Value }}</div>
+          @if (card.Subtitle) {
+            <div class="kpi-subtitle">{{ card.Subtitle }}</div>
+          }
           <div class="kpi-sparkline">
             @for (bar of card.SparklineData; track $index) {
               <div
@@ -686,6 +690,13 @@ export class AnalyticsExecutiveSummaryComponent extends BaseAngularComponent imp
       return;
     }
 
+    const coveragePct = kpis.Coverage && kpis.Coverage.RunsTotal > 0
+      ? (kpis.Coverage.RunsPriced / kpis.Coverage.RunsTotal) * 100
+      : (kpis.Coverage?.RunsTotal === 0 ? 100 : 0);
+    const prevCoveragePct = this.previousKpis?.Coverage && this.previousKpis.Coverage.RunsTotal > 0
+      ? (this.previousKpis.Coverage.RunsPriced / this.previousKpis.Coverage.RunsTotal) * 100
+      : (this.previousKpis?.Coverage?.RunsTotal === 0 ? 100 : null);
+
     const trends = this.TrendsData;
     this.KpiCards = [
       this.buildKpiCard(
@@ -698,7 +709,14 @@ export class AnalyticsExecutiveSummaryComponent extends BaseAngularComponent imp
         'Total Cost', kpis.totalCost !== null ? '$' + this.FormatCost(kpis.totalCost) : '\u2014',
         this.extractSparkline(trends, 'cost'),
         kpis.totalCost, this.previousKpis?.totalCost ?? null,
-        'down-is-good', 'var(--mj-status-warning)'
+        'down-is-good', 'var(--mj-status-warning)',
+        `covers ${Math.round(coveragePct)}% of runs`
+      ),
+      this.buildKpiCard(
+        'Coverage', coveragePct.toFixed(1) + '%',
+        [],
+        coveragePct, prevCoveragePct,
+        'up-is-good', 'var(--mj-status-success)'
       ),
       this.buildKpiCard(
         'Success Rate', (kpis.successRate * 100).toFixed(1) + '%',
@@ -740,7 +758,8 @@ export class AnalyticsExecutiveSummaryComponent extends BaseAngularComponent imp
     current: number | null,
     previous: number | null,
     goodDirection: 'up-is-good' | 'down-is-good' | 'up-is-neutral',
-    borderColor: string
+    borderColor: string,
+    subtitle?: string
   ): KpiDisplayCard {
     const { percent, direction } = this.computeDelta(current, previous);
     const isImprovement = this.isDirectionGood(direction, goodDirection);
@@ -748,6 +767,7 @@ export class AnalyticsExecutiveSummaryComponent extends BaseAngularComponent imp
     return {
       Label: label,
       Value: value,
+      Subtitle: subtitle,
       SparklineData: sparkline,
       DeltaPercent: percent,
       DeltaDirection: direction,

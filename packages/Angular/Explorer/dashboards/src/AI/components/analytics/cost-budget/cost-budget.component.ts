@@ -23,6 +23,7 @@ import { AIUsageDailyRow, AIUsageByModelRow } from '../../../services/ai-usage-a
 interface CostKpi {
     Label: string;
     Value: string;
+    Subtitle?: string;
     Delta: number | null;
     DeltaDirection: 'up' | 'down' | 'stable';
     Highlighted: boolean;
@@ -98,6 +99,9 @@ const TREEMAP_COLORS = [
                                     <span class="unpriced-chip">unpriced</span>
                                 }
                             </div>
+                            @if (kpi.Subtitle) {
+                                <div class="kpi-subtitle">{{ kpi.Subtitle }}</div>
+                            }
                             @if (kpi.Delta != null) {
                                 <div class="kpi-delta"
                                      [class.kpi-delta--up]="kpi.DeltaDirection === 'up'"
@@ -343,6 +347,12 @@ const TREEMAP_COLORS = [
 
         .kpi-delta--down {
             color: var(--mj-status-success);
+        }
+
+        .kpi-subtitle {
+            font-size: 11px;
+            color: var(--mj-text-muted);
+            margin-top: 2px;
         }
 
         /* ── Two-Column Layout ── */
@@ -793,10 +803,16 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
             ? ((currentTotalCost - prevTotalCost) / prevTotalCost) * 100
             : null;
 
+        const coverage = computeTotalCost(this.dailyRows);
+        const covSubtitle = coverage.PromptRunsTotal > 0
+            ? `covers ${Math.round(coverage.Percent)}% of runs`
+            : undefined;
+
         this.CostKpis = [
             {
                 Label: "Today's Spend",
                 Value: this.FormatCurrency(todaySpend),
+                Subtitle: covSubtitle,
                 Delta: null,
                 DeltaDirection: 'stable',
                 Highlighted: false,
@@ -806,6 +822,7 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
             {
                 Label: 'This Week',
                 Value: this.FormatCurrency(weekSpend),
+                Subtitle: covSubtitle,
                 Delta: null,
                 DeltaDirection: 'stable',
                 Highlighted: false,
@@ -815,6 +832,7 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
             {
                 Label: 'This Month',
                 Value: this.FormatCurrency(monthSpend),
+                Subtitle: covSubtitle,
                 Delta: delta,
                 DeltaDirection: delta != null ? (delta > 0 ? 'up' : delta < 0 ? 'down' : 'stable') : 'stable',
                 Highlighted: false,
@@ -824,6 +842,7 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
             {
                 Label: 'Projected Monthly',
                 Value: this.FormatCurrency(projectedMonthly),
+                Subtitle: covSubtitle,
                 Delta: null,
                 DeltaDirection: 'stable',
                 Highlighted: true,

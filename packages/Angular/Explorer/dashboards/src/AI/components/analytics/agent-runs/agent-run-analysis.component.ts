@@ -51,6 +51,7 @@ interface PromptRunRecord {
 interface AgentRunStats {
     TotalRuns: number;
     TotalCost: number | null;
+    CoverageSubtitle?: string;
     PromptRuns: number;
     AvgCostPerRun: number | null;
     SuccessRate: number;
@@ -120,6 +121,9 @@ const COST_COLORS = [
                 <div class="stat-card accent-brand">
                     <div class="stat-label">Total Cost</div>
                     <div class="stat-value">{{ FormatCurrency(Stats.TotalCost) }}</div>
+                    @if (Stats.CoverageSubtitle) {
+                        <div class="stat-subtitle">{{ Stats.CoverageSubtitle }}</div>
+                    }
                 </div>
                 <div class="stat-card">
                     <div class="stat-label">Prompt Runs</div>
@@ -278,6 +282,12 @@ const COST_COLORS = [
             font-weight: 700;
             color: var(--mj-text-primary);
             letter-spacing: -0.02em;
+        }
+
+        .stat-subtitle {
+            font-size: 11px;
+            color: var(--mj-text-muted);
+            margin-top: 2px;
         }
 
         /* ── Panel ── */
@@ -740,9 +750,14 @@ export class AnalyticsAgentRunsComponent extends BaseAngularComponent implements
             p => p.AgentRunID != null && this.agentRunIdSet.has(p.AgentRunID)
         );
 
+        const rowsForCoverage = agentDaily.length > 0 ? agentDaily : this.dailyRows;
+        const cov = computeTotalCost(rowsForCoverage);
+        const covSubtitle = cov.PromptRunsTotal > 0 ? `covers ${Math.round(cov.Percent)}% of runs` : undefined;
+
         this.Stats = {
             TotalRuns: total,
             TotalCost: totalCost,
+            CoverageSubtitle: covSubtitle,
             PromptRuns: linkedPromptRuns.length,
             AvgCostPerRun: total > 0 && totalCost !== null ? totalCost / total : null,
             SuccessRate: total > 0 ? (successCount / total) * 100 : 0,

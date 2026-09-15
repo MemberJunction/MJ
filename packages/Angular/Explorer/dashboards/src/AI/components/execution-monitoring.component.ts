@@ -1879,6 +1879,10 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
   }
 
   private createKPICards(kpis: DashboardKPIs): KPICardData[] {
+    const coveragePct = kpis.Coverage && kpis.Coverage.RunsTotal > 0
+      ? Math.round((kpis.Coverage.RunsPriced / kpis.Coverage.RunsTotal) * 100)
+      : (kpis.Coverage?.RunsTotal === 0 ? 100 : 0);
+
     return [
       {
         title: 'Total Executions',
@@ -1892,7 +1896,14 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
         value: kpis.totalCost !== null ? `$${kpis.totalCost.toFixed(4)}` : '\u2014',
         icon: 'fa-dollar-sign',
         color: 'warning',
-        subtitle: kpis.dailyCostBurn !== null ? `${kpis.costCurrency} • $${kpis.dailyCostBurn.toFixed(2)}/day` : kpis.costCurrency
+        subtitle: `covers ${coveragePct}% of runs`
+      },
+      {
+        title: 'Coverage',
+        value: `${coveragePct}%`,
+        icon: 'fa-shield-halved',
+        color: coveragePct >= 90 ? 'success' : coveragePct >= 70 ? 'warning' : 'danger',
+        subtitle: `${kpis.Coverage?.RunsPriced ?? 0} of ${kpis.Coverage?.RunsTotal ?? 0} runs priced`
       },
       {
         title: 'Success Rate',
@@ -2263,12 +2274,14 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
         RunView.FromMetadataProvider(this.ProviderToUse).RunView<MJAIPromptRunEntityExtended>({
           EntityName: 'MJ: AI Prompt Runs',
           ExtraFilter: `RunAt >= '${startTime.toISOString()}' AND RunAt <= '${endTime.toISOString()}'`,
-          OrderBy: 'RunAt DESC' 
+          OrderBy: 'RunAt DESC',
+          MaxRows: 500
         }),
         RunView.FromMetadataProvider(this.ProviderToUse).RunView<MJAIAgentRunEntityExtended>({
           EntityName: 'MJ: AI Agent Runs',
           ExtraFilter: `StartedAt >= '${startTime.toISOString()}' AND StartedAt <= '${endTime.toISOString()}'`,
-          OrderBy: 'StartedAt DESC' 
+          OrderBy: 'StartedAt DESC',
+          MaxRows: 500
         })
       ]);
       

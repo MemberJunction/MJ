@@ -73,7 +73,7 @@ describe('AnalyticsExecutiveSummaryComponent (DOM)', () => {
     } as DashboardKPIs);
     fixture.detectChanges(false);
     const labels = queryAll(fixture, '.kpi-card .kpi-label').map((e) => e.textContent?.trim());
-    expect(labels).toEqual(['Total Executions', 'Total Cost', 'Success Rate', 'Avg Latency', 'Token Usage', 'Errors', 'Cache Hit Rate']);
+    expect(labels).toEqual(['Total Executions', 'Total Cost', 'Coverage', 'Success Rate', 'Avg Latency', 'Token Usage', 'Errors', 'Cache Hit Rate']);
   });
 
   it('renders no KPI cards before any kpis$ emission', () => {

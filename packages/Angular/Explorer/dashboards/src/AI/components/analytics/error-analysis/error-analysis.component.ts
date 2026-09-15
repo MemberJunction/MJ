@@ -76,6 +76,7 @@ const FIELDS = [
                     <div class="summary-content">
                         <div class="summary-label">Total Errors</div>
                         <div class="summary-value">{{ Summary.TotalErrors | number }}</div>
+                        <div class="summary-subtitle">sampled from {{ totalRunCount | number }} recent runs</div>
                     </div>
                 </div>
                 <div class="summary-card">
@@ -223,6 +224,12 @@ const FIELDS = [
             font-weight: 700;
             color: var(--mj-text-primary);
             letter-spacing: -0.02em;
+        }
+
+        .summary-subtitle {
+            font-size: 11px;
+            color: var(--mj-text-muted);
+            margin-top: 2px;
         }
 
         .summary-value--text {
@@ -464,12 +471,14 @@ export class AnalyticsErrorAnalysisComponent extends BaseAngularComponent implem
                     ExtraFilter: errorFilter,
                     Fields: FIELDS,
                     OrderBy: 'RunAt DESC',
+                    MaxRows: 500,
                     ResultType: 'simple'
                 },
                 {
                     EntityName: 'MJ: AI Prompt Runs',
                     ExtraFilter: baseFilter,
                     Fields: ['ID'],
+                    MaxRows: 1000,
                     ResultType: 'simple'
                 }
             ]);

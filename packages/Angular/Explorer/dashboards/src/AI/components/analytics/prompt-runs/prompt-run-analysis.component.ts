@@ -223,7 +223,7 @@ const PAGE_SIZE = 25;
             <div class="table-panel">
                 <div class="table-header">
                     <h3 class="table-title">Run Details</h3>
-                    <span class="table-count">{{ FilteredRuns.length | number }} runs</span>
+                    <span class="table-count">showing latest {{ FilteredRuns.length | number }} of {{ allRuns.length | number }} runs</span>
                 </div>
                 <div class="table-scroll">
                     <table class="runs-table">
@@ -1001,6 +1001,7 @@ export class AnalyticsPromptRunsComponent extends BaseAngularComponent implement
                 ExtraFilter: filter,
                 OrderBy: 'RunAt DESC',
                 Fields: FIELDS,
+                MaxRows: 1000,
                 ResultType: 'simple'
             });
 
