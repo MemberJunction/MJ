@@ -195,6 +195,59 @@ separate part type, something else). The guide documents how to *enable* summari
 pages do not show a received frame. Read it off `@google/genai` v2.x types or a live session
 before writing the parser.
 
+### 5.5 Video / screen input — a new modality, NOT a new channel
+
+Gemini 3.8 Live accepts **text, images, audio AND video** as input. Per the GPT-Live plan
+(`gpt-live-1.md`), `gpt-live-1` is **Text+Audio in/out** — so live visual input is a capability
+Gemini has and GPT-Live does not. Camera *or* screen share are the same mechanism to the model:
+frames in.
+
+**MJ cannot do this today, and the gap is narrow but real.** There is no video or image input path
+anywhere in the realtime contract — no `SendVideo`, `SendImage` or `SendFrame` on
+`BaseRealtimeClient` or `IRealtimeSession`. Two things make it an addition rather than a rebuild:
+
+- **The billing side already models it.** `RealtimeUsageModalityDetail` carries an `Image` token
+  field, commented "(image-modality tokens, input only on current providers)". Usage accounting
+  anticipated image input before an input path existed.
+- **Browser capture already lives in the right layer.** `RealtimeClient` owns `micCapture.ts` /
+  `createPcmMicCapture` for audio, so frame capture (`getUserMedia` for camera,
+  `getDisplayMedia` for screen) belongs beside it, not in Core and not in a host app.
+
+**One correction to avoid building the wrong thing.** MJ's "multiple parallel channels" are
+server-side channel *sessions* (`baseRealtimeChannelServer.ts` — Media channel, whiteboard):
+separate surfaces with their own lifecycle. Video input is a **second input modality on one
+session**, a different axis entirely. Modelling frames as a channel would give each frame stream a
+session lifecycle it does not want, and would not reach the model at all.
+
+### 5.6 Per-model parameters — the control surface, and what it is missing
+
+There IS a cascade, and it is the right place for this: catalog `ModelConfiguration.Realtime`
+(lowest) → the session `Config: JSONObject` bag under `realtime.session.*` → the runtime override,
+translated per profile (`buildTurnDetection` in `openAIRealtime.ts` is the worked example). §5.1's
+`TurnCoverage` rides that cascade and **is** the video on/off control for Gemini.
+
+What is genuinely missing is a **declared** per-model parameter mechanism: today a new provider
+knob needs a new typed field in `AI/Core` plus a profile translation, so every model-specific
+parameter is a Core release. Options, to decide before step 4:
+
+1. **Typed fields only** (status quo, what §5.1 does). Safest, discoverable, compiler-checked;
+   costs a Core change per knob.
+2. **A declared passthrough** — `ModelConfiguration.Realtime.ProviderParams?: JSONObject`, merged
+   into the provider payload by the profile with an allow-list of legal keys per model. Lets a knob
+   ship as metadata; the allow-list is what keeps it from becoming an untyped bag, which is the
+   failure mode the persona plan already called out for `VendorSettings`.
+3. Both: typed for anything MJ reasons about, passthrough for genuinely provider-private knobs.
+
+Recommend **3**, with the allow-list mandatory. `TurnCoverage` is a case for typed, because MJ has
+to reason about its cost, and because the default is wrong for us.
+
+**Video must be OFF by default, and that takes an explicit act.** Gemini's own default is
+`TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO` — video **ON**, billed at $0.002/min, consuming
+context. So omitting the setting does NOT give us off; MJ has to *send*
+`audioActivityOnly`. A default that requires action to obtain is exactly the shape that ships
+silently, so: the Gemini profile sets audio-only unless the catalog or a caller opts in, and a unit
+test asserts the absent-config case resolves to audio-only rather than inheriting the provider's.
+
 ### 5.4 SDK major skew — fix it here
 
 `packages/AI/RealtimeClient` pins `@google/genai@^1.40.0`; `packages/AI/Providers/Gemini` pins
@@ -296,4 +349,10 @@ token billing for delegation. Both need both bases.
 2. How is a thought part marked on the wire? (§5.3)
 3. Does `interaction_status` appear on `gemini-3.8-live` too, or only Extended Thinking? The comparison table names it only for the latter; if it is universal, `IdleSignal` collapses to one value and the code gets simpler.
 4. Is turn coverage configurable per session, and what does MJ want as its default given the cost of always-on video?
-5. Does `RequestSpokenUpdate`'s "narration is disposable, skip when a response is in flight" collision rule still make sense when the model can speak and reason at once?
+5. Video/screen input (§5.5): does it land in this PR or the next one? It is additive and the
+   architecture has room, but it is a new modality with a capture surface, a consent/permission
+   story, and a bandwidth/cost profile of its own — a strong candidate for its own PR once the
+   audio path is proven on 3.8.
+6. Per-model parameters (§5.6): typed, declared passthrough, or both? Blocks nothing until step 4,
+   but the answer decides whether each future provider knob is a Core release.
+7. Does `RequestSpokenUpdate`'s "narration is disposable, skip when a response is in flight" collision rule still make sense when the model can speak and reason at once?
