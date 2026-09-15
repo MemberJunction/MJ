@@ -103,17 +103,21 @@ describe('EntityRecordDetailPanelComponent field values', () => {
 });
 
 describe('EntityDataGridComponent date cells', () => {
+    // The grid's formatters are private; the test reaches them through a structural handle rather
+    // than widening the class, so tsc does not collapse the type over the private members.
     type Internals = {
         formatDefaultDate(value: unknown, field: EntityFieldInfo, friendlyDates: boolean): string;
         formatValueWithCustomFormat(value: unknown, format: ColumnFormat, field: EntityFieldInfo): string;
+        getAggregateValue(agg: ViewGridAggregate): string;
         _aggregateValues: Map<string, unknown>;
         _entityInfo: EntityInfo;
     };
-    const makeGrid = (entity: EntityInfo): EntityDataGridComponent & Internals => {
+    const makeGrid = (entity: EntityInfo): Internals => {
         const grid = new EntityDataGridComponent(cdr, elementRef, {} as never, ngZone);
         grid.Provider = provider;
-        (grid as unknown as Internals)._entityInfo = entity;
-        return grid as EntityDataGridComponent & Internals;
+        const internals = grid as unknown as Internals;
+        internals._entityInfo = entity;
+        return internals;
     };
 
     it('renders a date column as its stored day in the friendly default format', () => {
@@ -167,6 +171,20 @@ describe('EntityDataGridComponent date cells', () => {
             const shown = grid.getAggregateValue(agg);
             expect(shown, `got ${shown}`).toContain('20');
             expect(shown).not.toContain('19');
+        });
+    });
+
+    it('renders an aggregate over a date column from the ISO string the wire actually carries', () => {
+        // The server JSON-stringifies aggregate values and the client parses them back, so a date
+        // aggregate reaches the browser as '2026-11-20T00:00:00.000Z', never as a Date.
+        AT('America/New_York', () => {
+            const grid = makeGrid(makeEntity());
+            grid._aggregateValues = new Map([['earliest', STORED_DAY.toISOString()]]);
+            const agg: ViewGridAggregate = { id: 'earliest', expression: 'MIN(IntakeDate)', displayType: 'card', label: 'Earliest intake' };
+            const shown = grid.getAggregateValue(agg);
+            expect(shown, `got ${shown}`).toContain('20');
+            expect(shown).not.toContain('19');
+            expect(shown).not.toContain('T00:00');
         });
     });
 

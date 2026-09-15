@@ -1225,8 +1225,14 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
         minimumFractionDigits: 0
       });
     }
+    // A date aggregate reaches the browser as an ISO string: the server JSON-stringifies the value
+    // and the client parses it back, which turns a Date into text. Resolve the column's type first
+    // so a `date` column renders as its stored day whether the value is a Date or that string.
+    if (typeof value !== 'boolean' && this.aggregateIsDateOnly(agg)) {
+      return FormatDateOnly(value);
+    }
     if (value instanceof Date) {
-      return this.aggregateIsDateOnly(agg) ? FormatDateOnly(value) : value.toLocaleDateString();
+      return value.toLocaleDateString();
     }
     return String(value);
   }
@@ -1238,10 +1244,26 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
    * be shifted into the reader's zone (MJ#4210).
    */
   private aggregateIsDateOnly(agg: ViewGridAggregate): boolean {
-    const single = /^\s*\w+\s*\(\s*\[?([A-Za-z0-9_ ]+?)\]?\s*\)\s*$/.exec(agg.expression ?? '');
-    const name = single?.[1] ?? agg.column;
+    const name = this.singleFieldOfExpression(agg.expression) ?? agg.column;
     if (!name) return false;
     return IsDateOnlySQLType(this._entityInfo?.Fields.find(f => f.Name === name)?.Type);
+  }
+
+  /**
+   * The one field an aggregate such as `MIN(IntakeDate)` or `MAX([Intake Date])` summarises, or
+   * null when the expression is anything more complex. Parsed positionally rather than with a
+   * pattern: a pattern over user-authored text is where backtracking blow-ups live.
+   */
+  private singleFieldOfExpression(expression: string | undefined): string | null {
+    const text = (expression ?? '').trim();
+    const open = text.indexOf('(');
+    if (open <= 0 || !text.endsWith(')') || text.indexOf(')') !== text.length - 1) return null;
+    const fn = text.substring(0, open).trim();
+    if (!/^\w+$/.test(fn)) return null;
+    let inner = text.substring(open + 1, text.length - 1).trim();
+    if (inner.startsWith('[') && inner.endsWith(']')) inner = inner.substring(1, inner.length - 1).trim();
+    if (inner.length === 0 || inner.includes('(') || inner.includes(',')) return null;
+    return inner;
   }
 
   // ========================================
