@@ -413,8 +413,7 @@
             "enabled": true,
             "timeoutMs": 8000,
             "actionNames": [
-              "Google Custom Search",
-              "Perplexity Search"
+              "Web Search"
             ]
           }
         }
@@ -442,7 +441,7 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:MJ: Actions.Name=Google Custom Search",
+            "ActionID": "@lookup:MJ: Actions.Name=Web Search",
             "Status": "Active"
           },
           "primaryKey": {
@@ -451,20 +450,6 @@
           "sync": {
             "lastModified": "2026-02-13T21:09:23.986Z",
             "checksum": "384775dde5eb20bf367194f82e8375db20cde188ba2878a731f5d82e0b455d73"
-          }
-        },
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "ActionID": "@lookup:MJ: Actions.Name=Perplexity Search",
-            "Status": "Active"
-          },
-          "primaryKey": {
-            "ID": "581A8F56-96E6-4FF7-8BF0-D804FE48AFF8"
-          },
-          "sync": {
-            "lastModified": "2026-08-20T22:30:09.507Z",
-            "checksum": "4d1d99626f5ea36ed6134f5c0042488057f4649d94b40e10cbb5e7503ef84b72"
           }
         },
         {

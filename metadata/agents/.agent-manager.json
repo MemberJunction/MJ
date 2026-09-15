@@ -108,7 +108,7 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:MJ: Actions.Name=Google Custom Search",
+            "ActionID": "@lookup:MJ: Actions.Name=Web Search",
             "Status": "Active"
           },
           "primaryKey": {
@@ -117,20 +117,6 @@
           "sync": {
             "lastModified": "2026-03-26T22:05:18.876Z",
             "checksum": "384775dde5eb20bf367194f82e8375db20cde188ba2878a731f5d82e0b455d73"
-          }
-        },
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "ActionID": "@lookup:MJ: Actions.Name=Perplexity Search",
-            "Status": "Active"
-          },
-          "primaryKey": {
-            "ID": "0427003E-1B67-4D6F-90BE-ADA265541B31"
-          },
-          "sync": {
-            "lastModified": "2026-08-20T22:30:08.892Z",
-            "checksum": "4d1d99626f5ea36ed6134f5c0042488057f4649d94b40e10cbb5e7503ef84b72"
           }
         },
         {
@@ -287,7 +273,7 @@
               {
                 "fields": {
                   "AgentID": "@parent:ID",
-                  "ActionID": "@lookup:MJ: Actions.Name=Google Custom Search",
+                  "ActionID": "@lookup:MJ: Actions.Name=Web Search",
                   "Status": "Active"
                 },
                 "primaryKey": {
@@ -296,20 +282,6 @@
                 "sync": {
                   "lastModified": "2026-03-26T22:05:19.084Z",
                   "checksum": "384775dde5eb20bf367194f82e8375db20cde188ba2878a731f5d82e0b455d73"
-                }
-              },
-              {
-                "fields": {
-                  "AgentID": "@parent:ID",
-                  "ActionID": "@lookup:MJ: Actions.Name=Perplexity Search",
-                  "Status": "Active"
-                },
-                "primaryKey": {
-                  "ID": "5FBCC196-BFEE-42A5-B539-9AAD4E6C819B"
-                },
-                "sync": {
-                  "lastModified": "2026-08-20T22:30:09.040Z",
-                  "checksum": "4d1d99626f5ea36ed6134f5c0042488057f4649d94b40e10cbb5e7503ef84b72"
                 }
               },
               {
@@ -452,7 +424,7 @@
               {
                 "fields": {
                   "AgentID": "@parent:ID",
-                  "ActionID": "@lookup:MJ: Actions.Name=Google Custom Search",
+                  "ActionID": "@lookup:MJ: Actions.Name=Web Search",
                   "Status": "Active"
                 },
                 "primaryKey": {
@@ -461,20 +433,6 @@
                 "sync": {
                   "lastModified": "2026-03-26T22:05:19.207Z",
                   "checksum": "384775dde5eb20bf367194f82e8375db20cde188ba2878a731f5d82e0b455d73"
-                }
-              },
-              {
-                "fields": {
-                  "AgentID": "@parent:ID",
-                  "ActionID": "@lookup:MJ: Actions.Name=Perplexity Search",
-                  "Status": "Active"
-                },
-                "primaryKey": {
-                  "ID": "7F347B61-92EC-4D63-9545-5DD23EE25E0D"
-                },
-                "sync": {
-                  "lastModified": "2026-08-20T22:30:09.058Z",
-                  "checksum": "4d1d99626f5ea36ed6134f5c0042488057f4649d94b40e10cbb5e7503ef84b72"
                 }
               },
               {
