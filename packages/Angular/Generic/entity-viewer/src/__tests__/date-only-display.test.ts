@@ -196,6 +196,24 @@ describe('EntityDataGridComponent date cells', () => {
             expect(grid.getAggregateValue(agg)).toContain('19');
         });
     });
+
+    it('renders an aggregate over a timestamp column from the ISO string the wire carries, in local time', () => {
+        AT('America/New_York', () => {
+            const grid = makeGrid(makeEntity());
+            grid._aggregateValues = new Map([['latest', INSTANT.toISOString()]]);
+            const agg: ViewGridAggregate = { id: 'latest', expression: 'MAX(LaunchAt)', displayType: 'card', label: 'Latest launch' };
+            const shown = grid.getAggregateValue(agg);
+            expect(shown, `got ${shown}`).toContain('19');
+            expect(shown).not.toContain('T02:00');
+        });
+    });
+
+    it('renders a COUNT over a date column as the count', () => {
+        const grid = makeGrid(makeEntity());
+        grid._aggregateValues = new Map([['n', 42]]);
+        const agg: ViewGridAggregate = { id: 'n', expression: 'COUNT([IntakeDate])', displayType: 'card', label: 'Intakes' };
+        expect(grid.getAggregateValue(agg)).toBe('42');
+    });
 });
 
 describe('ViewConfigPanelComponent.FormatPreviewValue', () => {

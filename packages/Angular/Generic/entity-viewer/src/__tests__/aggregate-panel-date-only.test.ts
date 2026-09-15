@@ -104,6 +104,16 @@ describe('AggregatePanelComponent.FormatValue with the entity bound', () => {
             expect(shown).not.toContain('T02:00');
         });
     });
+
+    it('renders a COUNT over a date column as the count, not as a date', () => {
+        // The setup dialog offers COUNT over any column and emits `COUNT([IntakeDate])`. The
+        // column is a date; the value is a number, and `new Date(42)` is 1970.
+        for (const expression of ['COUNT([IntakeDate])', 'COUNT(IntakeDate)']) {
+            const shown = makePanel(true, 42, expression).FormatValue(agg(expression));
+            expect(shown, `${expression} got ${shown}`).toBe('42');
+            expect(shown).not.toContain('1970');
+        }
+    });
 });
 
 describe('AggregatePanelComponent.FormatValue with no entity bound (unchanged)', () => {

@@ -15,7 +15,7 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import type { EntityActionUXContext, EntityActionUXResult } from '@memberjunction/ng-entity-action-ux';
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
-import { LogError, RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo, AggregateResult, AggregateValue, AggregateExpression, CoerceImageSrc, ParseCssHexColor, CompositeKey, IsDateOnlySQLType, FormatDateOnly } from '@memberjunction/core';
+import { LogError, RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo, AggregateResult, AggregateValue, AggregateExpression, CoerceImageSrc, ParseCssHexColor, CompositeKey, IsDateOnlySQLType, FormatDateOnly, EntityFieldTSType } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { EntityActionEngineBase } from '@memberjunction/actions-base';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
@@ -1234,6 +1234,12 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     }
     if (value instanceof Date) {
       return value.toLocaleDateString();
+    }
+    // A timestamp aggregate arrives as the same ISO string. It names an instant, so it is rendered
+    // in local time, as a Date instance would be — not printed as the wire text.
+    if (typeof value === 'string' && AggregateField(agg, this._entityInfo)?.TSType === EntityFieldTSType.Date) {
+      const date = new Date(value);
+      if (!isNaN(date.getTime())) return date.toLocaleDateString();
     }
     return String(value);
   }

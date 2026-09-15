@@ -141,8 +141,10 @@ export class AggregatePanelComponent implements OnInit {
     if (value == null) return '—';
 
     const format = agg.format || {};
+    // Only a value that is itself a date takes the date path. `COUNT(IntakeDate)` also resolves
+    // to the date column, but its value is the count — a number — and must format as one.
     const field = AggregateField(agg, this.Entity);
-    if (field?.TSType === EntityFieldTSType.Date && typeof value !== 'boolean') {
+    if (field?.TSType === EntityFieldTSType.Date && (value instanceof Date || typeof value === 'string')) {
       return this.formatDateField(value, field.Type, format);
     }
     return this.formatByType(value, format);
@@ -154,7 +156,7 @@ export class AggregatePanelComponent implements OnInit {
    * midnight and is rendered in UTC so the day does not shift west of Greenwich; a timestamp is an
    * instant and is rendered in local time.
    */
-  private formatDateField(value: number | string | Date, sqlType: string, format: AggregateValueFormat): string {
+  private formatDateField(value: string | Date, sqlType: string, format: AggregateValueFormat): string {
     const date = value instanceof Date ? value : new Date(value);
     if (isNaN(date.getTime())) return String(value);
     if (IsDateOnlySQLType(sqlType)) {
