@@ -3,7 +3,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     KeyboardAvoidingView,
-    Platform,
     Pressable,
     RefreshControl,
     ScrollView,
@@ -18,11 +17,33 @@ import { AttachmentChip } from '@/components/AttachmentChip';
 import { AttachmentPicker } from '@/components/AttachmentPicker';
 import { Icons } from '@/components/Icon';
 import { MarkdownView } from '@/components/markdown/MarkdownView';
-import { adaptConversation, adaptConversationToSummary, type AdaptedAgentRef, type AdaptedMessage } from '@/data/adapt';
-import { sendMessage, getConversationDetailStatus, type SendProgress } from '@/data/services/agents';
-import { composeMessageWithAttachment, type CapturedAttachment } from '@/data/services/attachments';
+import { AdaptConversation, AdaptConversationToSummary, type AdaptedAgentRef, type AdaptedMessage } from '@/data/adapt';
+import { SendMessage, GetConversationDetailStatus, type SendProgress } from '@/data/services/agents';
+import { AttachCapturedFile, ComposeMessageWithAttachment, type CapturedAttachment } from '@/data/services/attachments';
+import { GetDefaultAgentId } from '@/data/preferences';
+import { MentionsToPlainText } from '@/data/mention-display';
+import { MJRealtimeSessionCard } from '@/chat/realtime/RealtimeSessionCard';
+import { FindActiveTrigger, ApplyMention, MentionedAgentId, SerializeDraft, type InsertedMention } from '@/chat/mentions/trigger';
+import { MentionSuggestions } from '@/chat/mentions/MentionSuggestions';
+import { MJComposer } from '@/chat/composer/MJComposer';
+import { GlobalNav } from '@/components/GlobalNav';
 import { useConversation, useConversations } from '@/hooks/useConversations';
-import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
+import { ChatColors, Colors, Radius, Shadow, Type } from '@/theme/tokens';
+
+/**
+ * How long to keep the composer blocked on an agent run before releasing the UI.
+ *
+ * Generous on purpose: a real run that takes this long is unusual, and interrupting one early
+ * would be worse than waiting. This is a recovery path, not a timeout policy — the run itself is
+ * never cancelled.
+ */
+const AGENT_RUN_WATCHDOG_MS = 90_000;
+
+/** Resolves after `ms`. */
+function delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 
 /**
  * Chat thread (hero screen) — a single MJ conversation with its agent(s).
@@ -36,12 +57,12 @@ import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
  *     MJ `Conversations` + `Conversation Details` via RunView).
  *   - `useConversations()` -> the full list, used to build the recents strip and
  *     to refresh the list after a send.
- *   - `adaptConversation` / `adaptConversationToSummary` (`@/data/adapt`) shape
+ *   - `AdaptConversation` / `AdaptConversationToSummary` (`@/data/adapt`) shape
  *     raw entities into the view model.
- *   - `sendMessage` / `getConversationDetailStatus` (`@/data/services/agents`)
- *     post the user turn, run the agent, and poll the AI `Conversation Detail`
- *     status until it finalizes (the push WebSocket may not deliver completion
- *     on this client, so it polls up to 24× every 2.5s, refreshing as it goes).
+ *   - `SendMessage` / `GetConversationDetailStatus` (`@/data/services/agents`)
+ *     post the user turn and run the agent. `SendMessage` resolves only once the
+ *     run has completed, so the AI `Conversation Detail` status is read once
+ *     afterwards rather than polled.
  * Interactions: type + send a message (with optimistic pending bubble + live
  *   "Working…" progress), pull-to-refresh, tap a recents chip to switch threads,
  *   open the artifacts dock -> `/artifacts/[id]`, tap mic -> `/voice-mode`,
@@ -50,30 +71,84 @@ import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
  * Mockup: `plans/mobile-app-react-native/html/chat-thread.html`.
  */
 export default function ChatThreadScreen() {
-    const { id, autosend } = useLocalSearchParams<{ id: string; autosend?: string }>();
+    const { id, autosend, autosendAttachment } = useLocalSearchParams<{ id: string; autosend?: string; autosendAttachment?: string }>();
     const { data, loading, error, refresh } = useConversation(id);
     const { conversations: allConversations, refresh: refreshList } = useConversations();
 
     const [sending, setSending] = useState(false);
+    const [stalled, setStalled] = useState(false);
+    const [navOpen, setNavOpen] = useState(false);
     const [progress, setProgress] = useState<SendProgress | null>(null);
     const [pendingUserText, setPendingUserText] = useState<string | null>(null);
     const [sendError, setSendError] = useState<string | null>(null);
     const scrollRef = useRef<ScrollView>(null);
 
-    const view = useMemo(() => (data ? adaptConversation(data) : null), [data]);
+    const view = useMemo(() => (data ? AdaptConversation(data) : null), [data]);
 
-    const handleSend = useCallback(async (text: string) => {
+    const handleSend = useCallback(async (text: string, attachment: CapturedAttachment | null = null) => {
         if (!id || !text.trim()) return;
         setSending(true);
         setSendError(null);
+        setStalled(false);
         setPendingUserText(text.trim());
         setProgress({ currentStep: 'starting', message: 'Sending…' });
         try {
-            const result = await sendMessage({
+            let attachmentWarning: string | null = null;
+            const send = SendMessage({
                 conversationId: id,
                 text: text.trim(),
+                // The Profile screen's default-agent picker was write-only: it stored a choice
+                // that nothing ever read, so every message went to the runtime's own default
+                // regardless. Passing it as the explicit agent is what makes that setting mean
+                // something. Unset leaves resolution to the runtime's chain.
+                agentId: GetDefaultAgentId(),
                 onProgress: (p) => setProgress(p),
+                // Uploads the file in the window between the user's row existing and the agent
+                // reading it. It has to be this exact window: earlier and there is no row to hang
+                // the attachment off, later and the agent has already answered a message it could
+                // not see the attachment on. A failed upload degrades to a warning rather than
+                // failing the turn — the text is worth sending either way.
+                onUserMessageSaved: attachment
+                    ? async (userMessageId) => {
+                          const stored = await AttachCapturedFile(attachment, userMessageId);
+                          if (!stored.ok) {
+                              attachmentWarning = `The message sent, but the attachment did not: ${stored.message}`;
+                          }
+                      }
+                    : undefined,
             });
+
+            // `SendMessage` resolves only when the agent run finishes, which is what lets this
+            // screen show a real reply rather than a placeholder. The failure mode is the app being
+            // backgrounded, or the status socket dropping: the promise then never settles, and the
+            // composer stays disabled behind a bubble that spins for the rest of the session.
+            //
+            // The run does not need this screen — it is server-side and keeps going — so on a
+            // timeout the UI is released and told to refresh, rather than the turn being cancelled.
+            const outcome = await Promise.race([
+                send.then((r) => ({ kind: 'done' as const, r })),
+                delay(AGENT_RUN_WATCHDOG_MS).then(() => ({ kind: 'stalled' as const })),
+            ]);
+
+            if (outcome.kind === 'stalled') {
+                setStalled(true);
+                setPendingUserText(null);
+                await refresh();
+                void refreshList();
+                // Fold the eventual result back in whenever it lands, so a slow-but-successful run
+                // still updates the thread without the user doing anything.
+                void send
+                    .then(async () => {
+                        setStalled(false);
+                        await refresh();
+                        void refreshList();
+                    })
+                    .catch(() => setStalled(false));
+                return;
+            }
+
+            const result = outcome.r;
+            if (attachmentWarning) setSendError(attachmentWarning);
             // The user message + in-progress AI bubble now exist server-side; show them.
             setPendingUserText(null);
             await refresh();
@@ -82,18 +157,14 @@ export default function ChatThreadScreen() {
                 setSendError(result.errorMessage ?? 'Send failed.');
                 return;
             }
-            // The push WebSocket may not deliver completion on this client; poll the
-            // AI response detail until it finalizes, refreshing the thread as it does.
+            // `processMessage` resolves only once the run has completed — the fire-and-forget
+            // helper awaits the push-status WebSocket, which delivers reliably on this client
+            // under Expo SDK 54 (verified: "Completion event received"). The 2.5s x 24 polling
+            // loop this replaces existed because that WebSocket used to be unreliable here.
             if (result.aiMessageId) {
-                for (let i = 0; i < 24; i++) {
-                    await new Promise((r) => setTimeout(r, 2500));
-                    const status = await getConversationDetailStatus(result.aiMessageId).catch(() => null);
-                    await refresh();
-                    if (status && status !== 'In-Progress') {
-                        if (status === 'Error') setSendError('The agent could not complete this request.');
-                        break;
-                    }
-                }
+                const status = await GetConversationDetailStatus(result.aiMessageId).catch(() => null);
+                if (status === 'Error') setSendError('The agent could not complete this request.');
+                await refresh();
                 void refreshList();
             }
         } catch (e) {
@@ -112,14 +183,24 @@ export default function ChatThreadScreen() {
     useEffect(() => {
         if (autosend && !autoSentRef.current && view && !sending) {
             autoSentRef.current = true;
-            void handleSend(autosend);
+            // A first message started from the new-conversation screen may carry an attachment.
+            // Parsing is tolerant: a malformed descriptor costs the attachment, never the message.
+            let firstAttachment: CapturedAttachment | null = null;
+            if (autosendAttachment) {
+                try {
+                    firstAttachment = JSON.parse(autosendAttachment) as CapturedAttachment;
+                } catch {
+                    firstAttachment = null;
+                }
+            }
+            void handleSend(autosend, firstAttachment);
         }
-    }, [autosend, view, sending, handleSend]);
+    }, [autosend, autosendAttachment, view, sending, handleSend]);
 
     // Recents strip = top 5 most recent conversations excluding the active one
     const recentChips = useMemo(() => {
         if (!allConversations) return [];
-        const summaries = allConversations.map(adaptConversationToSummary);
+        const summaries = allConversations.map(AdaptConversationToSummary);
         return summaries
             .filter((s) => s.id !== id)
             .slice(0, 5);
@@ -151,12 +232,20 @@ export default function ChatThreadScreen() {
 
     return (
         <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+            {/*
+              * `padding` on BOTH platforms, deliberately. The usual advice is `undefined` on
+              * Android because `windowSoftInputMode="adjustResize"` resizes the window for you —
+              * but this app runs edge-to-edge (`edgeToEdgeEnabled=true`, the Expo SDK 54 default),
+              * and under edge-to-edge the window is NOT resized: the app draws behind the keyboard.
+              * With `undefined` the composer and its suggestion list sat under the keyboard,
+              * unreachable, on every Android device.
+              */}
             <KeyboardAvoidingView
                 style={{ flex: 1 }}
-                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                behavior="padding"
                 keyboardVerticalOffset={0}
             >
-                <ChatHeader title={view.title} participants={view.participants} messageCount={view.messageCount} live={view.live || sending} />
+                <ChatHeader title={view.title} participants={view.participants} messageCount={view.messageCount} live={view.live || sending} onOpenNav={() => setNavOpen(true)} />
                 {recentChips.length > 0 ? <RecentsStrip activeId={view.id} chips={recentChips} /> : null}
 
                 <ScrollView
@@ -176,14 +265,33 @@ export default function ChatThreadScreen() {
                     ) : (
                         <>
                             <Text style={styles.dayDivider}>Conversation</Text>
-                            {view.messages.map((msg) => <MessageRenderer key={msg.id} message={msg} />)}
+                            {/*
+                              * The TIMELINE, not the flat message list. Voice turns are ordinary
+                              * `MJ: Conversation Detail` rows stamped with an `AgentSessionID`, so
+                              * rendering them flat buried the typed conversation under a whole
+                              * call. `BuildThreadTimeline` collapses each session into one card at
+                              * the position of its first turn — the same grouping pass the web
+                              * message list runs.
+                              */}
+                            {view.timeline.map((item) =>
+                                item.kind === 'message' ? (
+                                    <MessageRenderer key={item.message.id} message={item.message} />
+                                ) : (
+                                    <MJRealtimeSessionCard
+                                        key={`session:${item.group.SessionID}`}
+                                        Group={item.group}
+                                        Meta={item.meta}
+                                        Turns={item.turns}
+                                    />
+                                ),
+                            )}
                         </>
                     )}
 
                     {/* Optimistic pending user message while the agent runs */}
                     {pendingUserText ? (
                         <View style={styles.userMsgWrap}>
-                            <Text style={[styles.userMsg, styles.userMsgPending]}>{pendingUserText}</Text>
+                            <Text style={[styles.userMsg, styles.userMsgPending]}>{MentionsToPlainText(pendingUserText)}</Text>
                         </View>
                     ) : null}
 
@@ -200,6 +308,15 @@ export default function ChatThreadScreen() {
                         </View>
                     ) : null}
 
+                    {stalled ? (
+                        <View style={styles.stalledBox}>
+                            <Text style={styles.stalledText}>
+                                This is taking longer than usual. The agent is still working — pull down to refresh,
+                                or leave and come back; the reply will be here.
+                            </Text>
+                        </View>
+                    ) : null}
+
                     {sendError ? (
                         <View style={styles.sendErrorBox}>
                             <Text style={styles.sendErrorText}>{sendError}</Text>
@@ -210,8 +327,9 @@ export default function ChatThreadScreen() {
                 </ScrollView>
 
                 <ArtifactDockHandle conversationId={view.id} count={view.artifacts.length} />
-                <Composer onSend={handleSend} disabled={sending} conversationId={view.id} />
+                <MJComposer OnSend={handleSend} Disabled={sending} ConversationID={view.id} />
             </KeyboardAvoidingView>
+            <GlobalNav Visible={navOpen} OnClose={() => setNavOpen(false)} />
         </SafeAreaView>
     );
 }
@@ -221,15 +339,23 @@ export default function ChatThreadScreen() {
  * avatar stack + participant/message counts + live dot, and `+`
  * (-> `/new-conversation`).
  */
-function ChatHeader({ title, participants, messageCount, live }: {
+function ChatHeader({ title, participants, messageCount, live, onOpenNav }: {
     title: string;
     participants: AdaptedAgentRef[];
     messageCount: number;
     live: boolean;
+    /** Opens the global navigation sheet — the only route to Apps, Explorer and Profile from here. */
+    onOpenNav: () => void;
 }) {
     return (
         <View style={styles.header}>
-            <Pressable hitSlop={8} style={styles.iconBtn} onPress={() => router.push('/conversations')}>
+            <Pressable
+                hitSlop={8}
+                style={styles.iconBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Navigate"
+                onPress={onOpenNav}
+            >
                 <Icons.Menu size={22} color={Colors.ink} />
             </Pressable>
             <View style={styles.headerCenter}>
@@ -254,7 +380,7 @@ function ChatHeader({ title, participants, messageCount, live }: {
 }
 
 /** A recents-strip chip = a conversation summary adapted for the horizontal rail. */
-type RecentChip = ReturnType<typeof adaptConversationToSummary>;
+type RecentChip = ReturnType<typeof AdaptConversationToSummary>;
 
 /**
  * Horizontal strip of recent-conversation chips above the thread. Tapping a
@@ -370,71 +496,6 @@ function ArtifactDockHandle({ conversationId, count }: { conversationId: string;
     );
 }
 
-/**
- * Message composer: a multiline input that owns its own draft `text` state plus
- * an optional pending {@link CapturedAttachment}. A paperclip button opens the
- * {@link AttachmentPicker}; a chosen attachment shows a removable preview chip
- * above the input. Shows a send button when there's non-empty text OR a pending
- * attachment (clears the draft and calls `onSend`), otherwise a mic button that
- * opens `/voice-mode`. `disabled` blocks input/send while an agent run is in flight.
- *
- * On send, the attachment is folded into the message via
- * {@link composeMessageWithAttachment} — the documented inline-note fallback,
- * since there is no mobile byte-upload pipeline yet (see `attachments.ts`).
- */
-function Composer({ onSend, disabled, conversationId }: { onSend: (text: string) => void; disabled: boolean; conversationId: string }) {
-    const [text, setText] = useState('');
-    const [attachment, setAttachment] = useState<CapturedAttachment | null>(null);
-    const [pickerVisible, setPickerVisible] = useState(false);
-    const canSend = (text.trim().length > 0 || attachment != null) && !disabled;
-
-    const submit = () => {
-        if (!canSend) return;
-        const body = composeMessageWithAttachment(text, attachment);
-        setText('');
-        setAttachment(null);
-        onSend(body);
-    };
-
-    return (
-        <View style={styles.composerWrap}>
-            {attachment ? (
-                <View style={styles.attachRow}>
-                    <AttachmentChip attachment={attachment} onRemove={() => setAttachment(null)} />
-                </View>
-            ) : null}
-            <View style={styles.composer}>
-                <Pressable style={styles.attachBtn} onPress={() => setPickerVisible(true)} disabled={disabled} hitSlop={6}>
-                    <Icons.Paperclip size={20} color={Colors.ink3} strokeWidth={2} />
-                </Pressable>
-                <TextInput
-                    placeholder="Reply or @mention an agent…"
-                    placeholderTextColor={Colors.ink3}
-                    style={styles.composerInput}
-                    multiline
-                    value={text}
-                    onChangeText={setText}
-                    editable={!disabled}
-                />
-                {canSend ? (
-                    <Pressable style={styles.sendBtn} onPress={submit}>
-                        <Icons.Send size={18} color={Colors.inverse} strokeWidth={2.2} />
-                    </Pressable>
-                ) : (
-                    <Pressable style={styles.micBtn} onPress={() => router.push({ pathname: '/voice-mode', params: { conversationId } })} disabled={disabled}>
-                        <Icons.Mic size={18} color={Colors.inverse} strokeWidth={2.2} />
-                    </Pressable>
-                )}
-            </View>
-            <AttachmentPicker
-                visible={pickerVisible}
-                onClose={() => setPickerVisible(false)}
-                onPicked={(a) => setAttachment(a)}
-            />
-        </View>
-    );
-}
-
 const styles = StyleSheet.create({
     safe: { flex: 1, backgroundColor: Colors.bg },
     notFound: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 12 },
@@ -442,19 +503,19 @@ const styles = StyleSheet.create({
     notFoundError: { fontSize: 13, color: Colors.danger, textAlign: 'center' },
     notFoundLink: { fontSize: 14, color: Colors.brand, fontWeight: Type.semibold },
 
-    header: { height: 60, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.line2, backgroundColor: 'rgba(250,250,247,0.92)' },
+    header: { height: 60, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.line2, backgroundColor: Colors.bg },
     iconBtn: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: Radius.md },
     headerCenter: { flex: 1, alignItems: 'center' },
     headerTitle: { fontSize: Type.body, fontWeight: Type.semibold, color: Colors.ink, letterSpacing: -0.1, maxWidth: 220 },
     headerSubrow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3 },
     headerSub: { fontSize: 11, color: Colors.ink3 },
-    liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#2ec4a3', marginLeft: 4 },
+    liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.positive, marginLeft: 4 },
 
     recents: { maxHeight: 48 },
     recentsContent: { paddingHorizontal: 14, paddingTop: 8, paddingBottom: 10, gap: 6, flexDirection: 'row', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.line2 },
     chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 11, paddingVertical: 6, backgroundColor: Colors.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: Colors.line2, borderRadius: 999, maxWidth: 180 },
     chipActive: { backgroundColor: Colors.ink, borderColor: Colors.ink },
-    chipPulse: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#2ec4a3' },
+    chipPulse: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.positive },
     chipText: { fontSize: 12.5, fontWeight: Type.medium, color: Colors.ink2 },
     chipTextActive: { color: Colors.inverse },
 
@@ -470,6 +531,9 @@ const styles = StyleSheet.create({
     userMsgPending: { opacity: 0.55 },
     mention: { fontWeight: Type.semibold, color: Colors.ink },
     progressText: { fontSize: 13, color: Colors.ink3, marginTop: 2, fontStyle: 'italic' },
+    // Informational, not an error: the run did not fail, this screen simply stopped waiting on it.
+    stalledBox: { marginHorizontal: 16, marginTop: 8, padding: 12, borderRadius: Radius.md, backgroundColor: Colors.surface2, borderWidth: StyleSheet.hairlineWidth, borderColor: Colors.line2 },
+    stalledText: { fontSize: 13, lineHeight: 19, color: Colors.ink2 },
     sendErrorBox: { backgroundColor: Colors.dangerSoft, borderRadius: Radius.lg, padding: 12, marginTop: 4, marginBottom: 8 },
     sendErrorText: { fontSize: 13, color: Colors.danger, lineHeight: 18 },
 
@@ -489,14 +553,19 @@ const styles = StyleSheet.create({
     actionChip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, backgroundColor: Colors.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: Colors.line2 },
     actionChipText: { fontSize: 12.5, fontWeight: Type.medium, color: Colors.ink },
 
-    dockHandle: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 9, backgroundColor: 'rgba(250,250,247,0.92)', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Colors.line2, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.line2 },
+    dockHandle: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 9, backgroundColor: Colors.bg, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Colors.line2, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.line2 },
     dockIcon: { width: 22, height: 22, borderRadius: 6, backgroundColor: Colors.brandSoft, alignItems: 'center', justifyContent: 'center' },
     dockText: { flex: 1, fontSize: 12.5, color: Colors.ink2, fontWeight: Type.medium },
     dockTextBold: { color: Colors.ink, fontWeight: Type.semibold },
 
+    composerActions: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 10, paddingBottom: 8, paddingTop: 2 },
+    actionBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: Radius.md },
+    sendBtnDisabled: { backgroundColor: Colors.line2 },
     composerWrap: { paddingHorizontal: 14, paddingVertical: 8, backgroundColor: Colors.bg, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Colors.line2 },
     attachRow: { paddingBottom: 8 },
-    composer: { backgroundColor: Colors.surface, borderRadius: 24, paddingLeft: 8, paddingRight: 6, flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: StyleSheet.hairlineWidth, borderColor: Colors.line2, minHeight: 48, ...Shadow.card },
+    // Explorer's composer is a plain bordered box, not a pill: `--mj-chat-composer-bg` on a 1px
+    // `--mj-chat-composer-border` hairline with `--mj-radius-lg` corners, and no shadow.
+    composer: { backgroundColor: ChatColors.composerBg, borderRadius: Radius.composer, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 4, borderWidth: 1, borderColor: ChatColors.composerBorder, minHeight: 56 },
     attachBtn: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
     composerInput: { flex: 1, fontSize: 15.5, color: Colors.ink, paddingVertical: 9, maxHeight: 120 },
     micBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: Colors.brand, alignItems: 'center', justifyContent: 'center', marginVertical: 4 },

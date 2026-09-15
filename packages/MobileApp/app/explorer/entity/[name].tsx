@@ -13,7 +13,7 @@ import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
  * Route: `/explorer/entity/:name` (Expo Router, `app/explorer/entity/[name].tsx`).
  * The `name` route param is the MJ entity name to browse.
  * Purpose: read-only, card-list view of records for a chosen entity (never a grid).
- * Data: `useEntityRecords(name)` -> explorer service `loadEntityRecords()`, which
+ * Data: `useEntityRecords(name)` -> explorer service `LoadEntityRecords()`, which
  * resolves the `EntityInfo` from `Metadata` and issues a `RunView` over that
  * entity with a narrowed field set (title/subtitle projection per row). Pull to
  * refresh re-runs the view. Client-side substring filter over title/subtitle.

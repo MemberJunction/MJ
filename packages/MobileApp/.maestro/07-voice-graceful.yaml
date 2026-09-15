@@ -1,0 +1,48 @@
+# Voice mode must reach a live call, and must degrade honestly when it cannot.
+#
+# Which of those two this deployment exercises depends on its configured realtime model, and both
+# outcomes are correct — so the flow asserts the DECISION was made and surfaced, rather than
+# hard-coding one branch:
+#
+#   • a WebRTC provider (OpenAI Realtime / GPT-Live) with a resolvable key → the call connects and
+#     the screen shows a live status pill plus the agent it is talking to;
+#   • anything else (Gemini Live, Grok Voice, ElevenLabs — websocket + PCM16) → the app mints the
+#     session, recognises it cannot carry that provider, closes it server-side, and names it.
+#
+# Asserting only the decline branch made this flow fail the moment voice started working, which is
+# exactly backwards for a regression test.
+appId: org.memberjunction.mobile
+---
+- launchApp:
+    clearState: false
+# Wait for the app to finish booting before deep-linking. A link fired at a still-starting app is
+# silently dropped on Android — which is how these flows "failed" while the screens were fine.
+- extendedWaitUntil:
+    visible: "Conversations"
+    timeout: 30000
+- openLink: "mjmobile://voice-mode"
+
+# The screen must RESOLVE, so "Connecting" does not count — that is the state it renders the
+# instant it mounts, and accepting it would let a permanently hung voice screen pass. Wait for a
+# terminal outcome instead: a live call, or the honest decline. Maestro has no "any of" assertion,
+# so the union is expressed as a regex. Generous timeout: the live branch does a real WebRTC
+# handshake against the provider.
+#
+# ENVIRONMENT NOTE — the live branch needs two things beyond a key:
+#   • a device that can capture audio (the iOS Simulator passes the host mic through; hardware
+#     works; a `-no-audio` Android emulator has no input device);
+#   • the SDP broker reachable AT THE URL THE SERVER HANDS THE CLIENT. The server builds that from
+#     `MJAPI_PUBLIC_URL` / `GRAPHQL_BASE_URL`, which locally is `http://localhost:4001`. On an
+#     Android emulator `localhost` is the EMULATOR, so `adb reverse tcp:4001 tcp:4001` is required
+#     or the handshake never completes and this assertion correctly fails. Android also negotiates
+#     noticeably slower than iOS under swiftshader, hence the generous timeout.
+#
+- extendedWaitUntil:
+    visible: "Listening|Speaking|Voice isn.t available"
+    timeout: 40000
+
+# Leave the way we came in. Without this the flow ends sitting on a live session, and the next
+# flow — which launches with clearState:false — inherits it.
+- tapOn:
+    text: "Back to chat|Back"
+    optional: true

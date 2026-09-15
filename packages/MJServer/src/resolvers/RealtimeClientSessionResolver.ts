@@ -57,7 +57,7 @@ import {
     deleteRealtimeRecordingSegments,
 } from '@memberjunction/ai-agents';
 import { AgentExecutionProgressCallback, MJAIAgentEntityExtended, AppContextSnapshot } from '@memberjunction/ai-core-plus';
-import { RealtimeToolDefinition } from '@memberjunction/ai';
+import { ChatMessage, RealtimeToolDefinition } from '@memberjunction/ai';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 import { GetReadWriteProvider } from '../util.js';
@@ -135,6 +135,11 @@ const MAX_PRIOR_TRANSCRIPT_TURNS = 30;
 const MAX_PRIOR_TRANSCRIPT_CHARS = 8_000;
 /** Maximum prior-session chain legs walked when hydrating a resumed session's transcript. */
 const MAX_PRIOR_TRANSCRIPT_LEGS = 5;
+
+/** Maximum TEXT-conversation turns hydrated into a voice session's companion prompt (newest kept). */
+const MAX_CONVERSATION_HISTORY_TURNS = 30;
+/** Maximum TEXT-conversation CHARS hydrated into a voice session's companion prompt (oldest dropped). */
+const MAX_CONVERSATION_HISTORY_CHARS = 8_000;
 
 /**
  * Authoritative shape persisted in `AIAgentSession.Config_` for a client-direct voice session.
@@ -486,10 +491,17 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         // Best-effort model-context hydration: the PRIOR session chain's transcript (ownership-
         // checked, capped) is framed into the system prompt so the model REMEMBERS the last leg.
         // Strictly tolerant — any problem yields no hydration, never a failed start.
-        const priorTranscript = await this.loadPriorTranscript(lastSessionId, contextUser, provider);
+        const prior = await this.loadPriorTranscript(lastSessionId, contextUser, provider);
+        // ...and the TEXT conversation the call is being started from, so a voice session opened
+        // mid-thread knows what was already typed. The legs above are excluded: they are already
+        // framed as the resumed transcript, and injecting the same turns twice puts two accounts of
+        // the same exchange in one prompt.
+        const conversationMessages = await this.loadConversationHistory(
+            conversationId, prior?.LegIDs ?? [], contextUser, provider,
+        );
         const result = await this.prepareClientSessionOrClose(
-            session, coAgentID, effectiveTargetId, contextUser, provider, preferredModelId, clientTools, priorTranscript,
-            configOverridesJson, maxSessionSeconds, applicationId, this.parseAppContext(appContextJson),
+            session, coAgentID, effectiveTargetId, contextUser, provider, preferredModelId, clientTools, prior?.Text,
+            configOverridesJson, maxSessionSeconds, applicationId, this.parseAppContext(appContextJson), conversationMessages,
         );
         // Best-effort restore of the PRIOR session's persisted channel states (e.g. the whiteboard
         // board). Strictly tolerant — any problem yields a null field, never a failed start.
@@ -1684,6 +1696,8 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      * @param priorTranscript Optional capped, role-tagged transcript of the PRIOR session chain
      *   (from {@link loadPriorTranscript}) — the service frames it into the system prompt so a
      *   resumed session remembers the previous leg(s).
+     * @param conversationMessages Optional capped history of the TEXT conversation this session is
+     *   starting from (from {@link loadConversationHistory}) — framed as "Conversation so far".
      */
     private async prepareClientSessionOrClose(
         session: MJAIAgentSessionEntity,
@@ -1698,6 +1712,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         maxSessionSeconds?: number,
         applicationId?: string,
         appContext?: AppContextSnapshot,
+        conversationMessages?: ChatMessage[],
     ): Promise<StartRealtimeClientSessionResult> {
         const prep = await this.clientSessionService.PrepareClientSession(
             {
@@ -1708,10 +1723,10 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 // Server-authoritative voice duration cap (widget guests) — bounds the driver session
                 // where supported; the janitor enforces the session deadline regardless.
                 MaxSessionSeconds: maxSessionSeconds,
-                // MVP: conversation history is not yet hydrated into ChatMessage[]; the co-agent
-                // companion prompt runs without prior turns. A later phase loads the session's
-                // Conversation into ChatMessage[] for richer context.
-                ConversationMessages: [],
+                // The TEXT conversation this call was started from, so the co-agent opens knowing
+                // what the user already typed rather than asking them to say it again. Hydrated by
+                // `loadConversationHistory`; empty when there is no conversation or the read failed.
+                ConversationMessages: conversationMessages ?? [],
                 UserID: contextUser.ID,
                 PreferredModelID: preferredModelId,
                 // Client-declared, CLIENT-EXECUTED UI tools (see the mutation's SECURITY NOTE) —
@@ -2005,7 +2020,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         lastSessionId: string | undefined,
         contextUser: UserInfo,
         provider: IMetadataProvider,
-    ): Promise<string | undefined> {
+    ): Promise<{ Text: string; LegIDs: string[] } | undefined> {
         if (!lastSessionId) {
             return undefined;
         }
@@ -2016,13 +2031,111 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             }
             const turns = await this.loadChainTranscriptTurns(legIDs, contextUser, provider);
             const lines = this.capTranscriptLines(turns);
-            return lines.length > 0 ? lines.join('\n') : undefined;
+            // The leg ids travel with the text because the CONVERSATION history hydrated alongside
+            // this would otherwise re-inject the same turns: a voice turn is persisted as an
+            // ordinary Conversation Detail, so these legs are part of the conversation too.
+            return lines.length > 0 ? { Text: lines.join('\n'), LegIDs: legIDs } : undefined;
         } catch (error) {
             LogError(
                 `StartRealtimeClientSession: prior-transcript hydration failed for session ${lastSessionId}: ${(error as Error).message}`,
             );
             return undefined;
         }
+    }
+
+    /**
+     * Loads the conversation this voice session is starting from, as `ChatMessage[]` for the
+     * co-agent's companion prompt.
+     *
+     * This is the half of the context flow that was missing. Voice turns have always been
+     * persisted as `MJ: Conversation Details`, so anything SAID reaches a later text turn — but
+     * nothing TYPED reached a voice session, which opened with no idea what the thread was about.
+     * The symptom is not an error; it is the agent asking the user to repeat something they just
+     * wrote, which is exactly when voice is least forgivable.
+     *
+     * Caps mirror the resume path (newest {@link MAX_CONVERSATION_HISTORY_TURNS} turns, then a
+     * {@link MAX_CONVERSATION_HISTORY_CHARS} budget with the oldest dropped first) so the freshest
+     * context always survives.
+     *
+     * Session-stamped rows are KEPT unless `coveredSessionIDs` names them: a call the user had last
+     * week is part of this conversation and the model should know it. Only the legs already framed
+     * as the resumed transcript are removed, so the prompt never carries two accounts of one
+     * exchange.
+     *
+     * Strictly tolerant — no conversation, a failed read, or any throw yields `[]`, never a failed
+     * session start. The call still works; it just starts cold.
+     *
+     * @param conversationId The conversation the session is bound to, when there is one.
+     * @param coveredSessionIDs Session ids already framed via `PriorTranscript`.
+     * @param contextUser The calling user (RunView scope — the read is row-level-secured).
+     * @param provider The request-scoped metadata provider.
+     * @returns The capped history, oldest first.
+     */
+    private async loadConversationHistory(
+        conversationId: string | undefined,
+        coveredSessionIDs: string[],
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<ChatMessage[]> {
+        if (!conversationId) {
+            return [];
+        }
+        try {
+            const rv = RunView.FromMetadataProvider(provider);
+            const result = await rv.RunView<{
+                Role: string;
+                Message: string | null;
+                HiddenToUser: boolean;
+                AgentSessionID: string | null;
+            }>(
+                {
+                    EntityName: CONVERSATION_DETAIL_ENTITY,
+                    ExtraFilter: `ConversationID='${conversationId.replace(/'/g, "''")}'`,
+                    Fields: ['ID', 'Role', 'Message', 'HiddenToUser', 'AgentSessionID', '__mj_CreatedAt'],
+                    OrderBy: '__mj_CreatedAt ASC',
+                    ResultType: 'simple',
+                },
+                contextUser,
+            );
+            if (!result.Success) {
+                LogError(`StartRealtimeClientSession: conversation-history query failed: ${result.ErrorMessage}`);
+                return [];
+            }
+            const covered = new Set(coveredSessionIDs.map((id) => id.trim().toLowerCase()));
+            const turns = (result.Results ?? []).filter(
+                (row) =>
+                    !row.HiddenToUser &&
+                    (row.Role === 'User' || row.Role === 'AI') &&
+                    typeof row.Message === 'string' &&
+                    row.Message.trim().length > 0 &&
+                    !covered.has((row.AgentSessionID ?? '').trim().toLowerCase()),
+            );
+            return this.capConversationHistory(turns);
+        } catch (error) {
+            LogError(
+                `StartRealtimeClientSession: conversation-history hydration failed for conversation ${conversationId}: ${(error as Error).message}`,
+            );
+            return [];
+        }
+    }
+
+    /**
+     * Applies the history caps and maps to `ChatMessage[]`: the newest
+     * {@link MAX_CONVERSATION_HISTORY_TURNS} turns, then a total budget of
+     * {@link MAX_CONVERSATION_HISTORY_CHARS} characters with the oldest dropped first.
+     */
+    private capConversationHistory(turns: Array<{ Role: string; Message: string | null }>): ChatMessage[] {
+        const newest = turns.slice(-MAX_CONVERSATION_HISTORY_TURNS);
+        const messages: ChatMessage[] = newest.map((t) => ({
+            role: t.Role === 'AI' ? 'assistant' : 'user',
+            content: (t.Message ?? '').trim(),
+        }));
+        let total = messages.reduce((sum, m) => sum + String(m.content).length + 1, 0);
+        while (messages.length > 0 && total > MAX_CONVERSATION_HISTORY_CHARS) {
+            const dropped = messages.shift() as ChatMessage;
+            total -= String(dropped.content).length + 1;
+        }
+        return messages;
     }
 
     /**

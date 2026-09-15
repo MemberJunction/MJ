@@ -5,9 +5,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icons } from '@/components/Icon';
 import { AgentAvatarStack } from '@/components/AgentAvatarStack';
 import { useConversationArtifacts } from '@/hooks/useConversations';
-import { adaptAgentRef } from '@/data/adapt';
+import { AdaptAgentRef } from '@/data/adapt';
 import type { ArtifactSummary, ArtifactTypeCategory } from '@/data/services/artifacts';
-import { Colors, Radius, Shadow, Type, colorForAgent } from '@/theme/tokens';
+import { Colors, Radius, Shadow, Type, ColorForAgent } from '@/theme/tokens';
 
 /**
  * Conversation artifacts dock screen — the expanded "dock" sheet listing all
@@ -18,7 +18,7 @@ import { Colors, Radius, Shadow, Type, colorForAgent } from '@/theme/tokens';
  * with `/artifact/[id]`, the single-artifact viewer this screen links into).
  * Purpose: browse every artifact in a conversation, filterable by agent or type.
  * Data: `useConversationArtifacts(id)` -> artifacts service
- * `loadConversationArtifacts()`, which `RunView`s over `MJ: Conversation
+ * `LoadConversationArtifacts()`, which `RunView`s over `MJ: Conversation
  * Artifacts` for the conversation, then joins in each artifact's latest
  * `MJ: Conversation Artifact Versions` content (category + preview) and the
  * producing agent's name/ID for attribution.
@@ -112,7 +112,7 @@ export default function ArtifactsDockScreen() {
 
 /** A single artifact row with agent avatar, category icon, title, and preview. */
 function ArtifactCard({ artifact }: { artifact: ArtifactSummary }) {
-    const agent = adaptAgentRef(artifact.agentId, artifact.agentName);
+    const agent = AdaptAgentRef(artifact.agentId, artifact.agentName);
     const accent = categoryColor(artifact.category);
     const CategoryIcon = categoryIcon(artifact.category);
     return (
@@ -165,7 +165,7 @@ function distinctAgents(artifacts: ArtifactSummary[]): AgentChip[] {
         if (existing) {
             existing.count += 1;
         } else {
-            byId.set(a.agentId, { id: a.agentId, name: a.agentName ?? 'Agent', color: colorForAgent(a.agentName), count: 1 });
+            byId.set(a.agentId, { id: a.agentId, name: a.agentName ?? 'Agent', color: ColorForAgent(a.agentName), count: 1 });
         }
     }
     return Array.from(byId.values());

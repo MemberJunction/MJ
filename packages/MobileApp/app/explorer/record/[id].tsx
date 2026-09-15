@@ -13,10 +13,10 @@ import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
  * from the query string via `useLocalSearchParams`.
  * Purpose: read-only ("view only") detail of a single record as a hero card plus
  * a FIELDS key/value list.
- * Data: `useRecordDetail(entity, id)` -> explorer service `loadRecordDetail()`,
+ * Data: `useRecordDetail(entity, id)` -> explorer service `LoadRecordDetail()`,
  * which uses `Metadata.GetEntityObject` + `Load` on the named entity to fetch the
  * single record, then projects its fields into label/value pairs.
- * Interactions: back chevron -> `router.back()`; "Ask Skip about this <entity>"
+ * Interactions: back chevron -> `router.back()`; "Ask about this <entity>"
  * bottom bar -> `/new-conversation`.
  * Mockup: `plans/mobile-app-react-native/html/record-detail.html`.
  */
@@ -77,7 +77,7 @@ export default function RecordDetailScreen() {
                 <View style={styles.askBar}>
                     <Pressable style={styles.askBtn} onPress={() => router.push('/new-conversation')}>
                         <View style={styles.askAv}><Text style={styles.askAvText}>S</Text></View>
-                        <Text style={styles.askText}>Ask Skip about this {data.entity.DisplayName?.toLowerCase() ?? 'record'}</Text>
+                        <Text style={styles.askText}>Ask about this {data.entity.DisplayName?.toLowerCase() ?? 'record'}</Text>
                     </Pressable>
                 </View>
             ) : null}

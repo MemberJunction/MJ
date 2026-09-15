@@ -1,8 +1,6 @@
 import { Observable, Subject, Subscription } from 'rxjs';
-import {
-  RealtimeCaption, RealtimeDelegationProgress, RealtimeDelegationResult, RealtimeDelegationNarration
-} from '../../services/realtime-session.service';
-import { ParsedDelegationArtifact, FormatToolName } from '../../services/delegation-result-parser';
+import { RealtimeCaption, RealtimeDelegationProgress, RealtimeDelegationResult, RealtimeDelegationNarration } from '@memberjunction/realtime-runtime';
+import { ParsedDelegationArtifact, FormatToolName } from '@memberjunction/realtime-runtime';
 
 /**
  * The four reactive session streams {@link RealtimeSessionState} merges — structurally
@@ -106,7 +104,8 @@ export interface RealtimeThreadDividerItem {
 /** One entry in the chronological thread: a caption bubble, a delegation card, or a leg divider. */
 export type RealtimeThreadItem = RealtimeThreadCaptionItem | RealtimeThreadDelegationItem | RealtimeThreadDividerItem;
 
-export { FormatToolName } from '../../services/delegation-result-parser';
+// `FormatToolName` now lives in `@memberjunction/realtime-runtime`; import it from there
+// directly rather than through this module (MJ forbids cross-package re-exports).
 
 /**
  * Maps a raw delegation step id to a human-friendly phrase. Unknown steps fall back to

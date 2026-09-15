@@ -11,7 +11,7 @@ import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
  *
  * Route: `/explorer/queries` (Expo Router, `app/explorer/queries.tsx`).
  * Purpose: searchable list of saved MJ queries; choose one to run.
- * Data: `useQueries()` -> explorer service `loadQueries()`, which reads the
+ * Data: `useQueries()` -> explorer service `LoadQueries()`, which reads the
  * in-memory MJ `Metadata.Queries` list filtered to `Status === 'Approved'` (id,
  * name, description, category) — no network call. Client-side substring filter
  * over name/description.

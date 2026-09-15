@@ -4,11 +4,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icons } from '@/components/Icon';
 import { HtmlRenderer } from '@/components/artifacts/html-renderer';
 import { Chart } from '@/components/charts/Chart';
-import { highlightCode } from '@/components/markdown/highlight';
+import { HighlightCode } from '@/components/markdown/highlight';
 import { useArtifact } from '@/hooks/useConversations';
 import type { LoadedArtifact } from '@/data/services/artifacts';
 import { DesktopFallback, InteractiveComponentRenderer } from '@/interactive/InteractiveComponentRenderer';
-import { assessSpec } from '@/interactive/mobile-safety';
+import { AssessSpec } from '@/interactive/mobile-safety';
 import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
 
 /** Horizontal padding applied by the scroll body, used to size charts. */
@@ -30,7 +30,7 @@ const BODY_PADDING = 16;
  *   text       → plain
  * Interactive components are a Phase 2 item (react-runtime) — shown as a
  * "view on desktop" notice for now (see plan §4.3).
- * Data: `useArtifact(id)` -> artifacts service `loadArtifact()`, which uses
+ * Data: `useArtifact(id)` -> artifacts service `LoadArtifact()`, which uses
  * `Metadata.GetEntityObject('MJ: Conversation Artifacts')` for the header and a
  * `RunView` over `MJ: Conversation Artifact Versions` to read the latest
  * version's `Content` (then classifies it into the `kind` above). Header shows
@@ -138,7 +138,7 @@ function ArtifactContent({ artifact }: { artifact: LoadedArtifact }) {
  * otherwise shows the "view on desktop" fallback with the specific reason.
  */
 function InteractiveArtifact({ artifact }: { artifact: LoadedArtifact }) {
-    const assessment = assessSpec(artifact.spec);
+    const assessment = AssessSpec(artifact.spec);
     if (artifact.spec && assessment.renderable) {
         return <InteractiveComponentRenderer spec={artifact.spec} />;
     }
@@ -153,7 +153,7 @@ function CodeView({ code, language }: { code: string; language?: string }) {
     return (
         <ScrollView horizontal directionalLockEnabled nestedScrollEnabled showsHorizontalScrollIndicator={false} style={styles.codeScroll}>
             <Text style={styles.code}>
-                {highlightCode(code, language).map((run, i) => (
+                {HighlightCode(code, language).map((run, i) => (
                     <Text key={i} style={{ color: run.color }}>{run.text}</Text>
                 ))}
             </Text>

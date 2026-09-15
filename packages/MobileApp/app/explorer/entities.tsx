@@ -11,7 +11,7 @@ import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
  *
  * Route: `/explorer/entities` (Expo Router, `app/explorer/entities.tsx`).
  * Purpose: searchable list of MJ entities; choose one to browse its records.
- * Data: `useEntities()` -> explorer service `loadEntities()`, which reads the
+ * Data: `useEntities()` -> explorer service `LoadEntities()`, which reads the
  * in-memory MJ `Metadata.Entities` list (name, displayName, description) — no
  * network round-trip. Client-side substring filter over displayName/name.
  * Interactions: type to filter; tap a row -> `router.push` to

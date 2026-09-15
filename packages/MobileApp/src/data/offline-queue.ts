@@ -2,7 +2,7 @@
  * Offline mutation queue (P3.2) — an MMKV-persisted, FIFO queue of record
  * mutations that could not be written to MJAPI because the device was offline.
  *
- * Each entry captures exactly what {@link ../data/offline-sync!replayQueue} needs
+ * Each entry captures exactly what {@link ../data/offline-sync!ReplayQueue} needs
  * to re-drive a `BaseEntity` save deterministically once connectivity returns:
  * the entity name, the record's primary key (or `null` for a create), the set of
  * changed scalar field values, and the operation kind. Values are constrained to
@@ -140,7 +140,7 @@ export function remove(id: string): void {
  * @param id      The mutation id to annotate.
  * @param message The error message to store on {@link OfflineMutation.lastError}.
  */
-export function recordError(id: string, message: string): void {
+export function RecordError(id: string, message: string): void {
     const entries = readQueue();
     let changed = false;
     for (const entry of entries) {

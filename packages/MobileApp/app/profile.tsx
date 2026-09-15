@@ -6,18 +6,18 @@ import { useMMKVBoolean, useMMKVString } from 'react-native-mmkv';
 import { Metadata } from '@memberjunction/core';
 import { Icons } from '@/components/Icon';
 import { useMJ } from '@/providers/mj-provider';
-import { useAgents } from '@/hooks/useAgents';
+import { AgentPicker } from '@/components/AgentPicker';
 import { Env } from '@/config/env';
 import {
-    prefsStorage,
+    PrefsStorage,
     PrefKeys,
     APPEARANCE_LABEL,
-    cycleAppearance,
-    setDefaultAgent,
+    CycleAppearance,
+    SetDefaultAgent,
     type AppearanceMode,
 } from '@/data/preferences';
-import { isBiometricAvailable } from '@/auth/biometric';
-import { registerForPushNotifications, unregisterDeviceToken } from '@/data/services/notifications';
+import { IsBiometricAvailable } from '@/auth/biometric';
+import { RegisterForPushNotifications, UnregisterDeviceToken } from '@/data/services/notifications';
 import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
 
 /**
@@ -31,9 +31,9 @@ import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
  *     email, title, initials), gated on `useMJ().status === 'ready'`;
  *     workspace host derived from `Env.graphqlUrl`.
  *   - Preferences: MMKV-backed via `react-native-mmkv` hooks
- *     (`useMMKVString`/`useMMKVBoolean` over `prefsStorage`/`PrefKeys`) —
+ *     (`useMMKVString`/`useMMKVBoolean` over `PrefsStorage`/`PrefKeys`) —
  *     appearance, default agent, voice/push/Face-ID toggles. Writes go through
- *     the `@/data/preferences` helpers (`cycleAppearance`, `setDefaultAgent`).
+ *     the `@/data/preferences` helpers (`CycleAppearance`, `SetDefaultAgent`).
  *   - `useAgents()` populates the default-agent picker.
  *   - `useMJ()` provides `signOut` and `authMethod`.
  *   Note: the Push (P2.3) and Face ID (P2.4) toggles are now wired to their
@@ -41,7 +41,7 @@ import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
  *   available, and Push requests permission + (un)registers the device token on
  *   toggle. The Voice toggle still only persists its state; full dark rendering
  *   for the Appearance choice is likewise a later task.
- * Interactions: open the default-agent picker ({@link AgentPickerModal}), cycle
+ * Interactions: open the default-agent picker ({@link AgentPicker}), cycle
  *   appearance, flip toggles, sign out (-> `/login`).
  * Mockup: `plans/mobile-app-react-native/html/profile.html`.
  */
@@ -50,11 +50,11 @@ export default function ProfileScreen() {
     const [agentPickerOpen, setAgentPickerOpen] = useState(false);
 
     // Reactive preferences — writing the same key elsewhere re-renders this screen.
-    const [appearanceRaw] = useMMKVString(PrefKeys.appearance, prefsStorage);
-    const [defaultAgentName] = useMMKVString(PrefKeys.defaultAgentName, prefsStorage);
-    const [voiceOn, setVoiceOn] = useMMKVBoolean(PrefKeys.voiceResponses, prefsStorage);
-    const [pushOn, setPushOn] = useMMKVBoolean(PrefKeys.pushNotifications, prefsStorage);
-    const [faceIdOn, setFaceIdOn] = useMMKVBoolean(PrefKeys.faceIdLock, prefsStorage);
+    const [appearanceRaw] = useMMKVString(PrefKeys.appearance, PrefsStorage);
+    const [defaultAgentName] = useMMKVString(PrefKeys.defaultAgentName, PrefsStorage);
+    const [voiceOn, setVoiceOn] = useMMKVBoolean(PrefKeys.voiceResponses, PrefsStorage);
+    const [pushOn, setPushOn] = useMMKVBoolean(PrefKeys.pushNotifications, PrefsStorage);
+    const [faceIdOn, setFaceIdOn] = useMMKVBoolean(PrefKeys.faceIdLock, PrefsStorage);
 
     const appearance = (appearanceRaw as AppearanceMode | undefined) ?? 'system';
 
@@ -63,7 +63,7 @@ export default function ProfileScreen() {
     const [biometricAvailable, setBiometricAvailable] = useState(false);
     useEffect(() => {
         let active = true;
-        void isBiometricAvailable().then((ok) => {
+        void IsBiometricAvailable().then((ok) => {
             if (active) setBiometricAvailable(ok);
         });
         return () => {
@@ -82,10 +82,10 @@ export default function ProfileScreen() {
     const handlePushToggle = async () => {
         if (pushOn) {
             setPushOn(false);
-            await unregisterDeviceToken();
+            await UnregisterDeviceToken();
             return;
         }
-        const result = await registerForPushNotifications();
+        const result = await RegisterForPushNotifications();
         setPushOn(result.granted);
     };
 
@@ -137,19 +137,19 @@ export default function ProfileScreen() {
                         icon={<Icons.Sparkle size={16} color={Colors.ink2} strokeWidth={2} />}
                         label="Default agent"
                         sub="Who answers when you don't @mention"
-                        value={defaultAgentName || 'Skip'}
+                        value={defaultAgentName || 'Sage'}
                         onPress={() => setAgentPickerOpen(true)}
                     />
                     <SettingRow
                         icon={<Icons.Sliders size={16} color={Colors.ink2} strokeWidth={2} />}
                         label="Appearance"
                         value={APPEARANCE_LABEL[appearance]}
-                        onPress={() => cycleAppearance()}
+                        onPress={() => CycleAppearance()}
                     />
                     <ToggleRow
                         icon={<Icons.Mic size={16} color={Colors.ink2} strokeWidth={2} />}
                         label="Voice responses"
-                        sub="Speak Skip's replies aloud"
+                        sub="Speak agent replies aloud"
                         value={!!voiceOn}
                         onToggle={() => setVoiceOn(!voiceOn)}
                     />
@@ -185,12 +185,14 @@ export default function ProfileScreen() {
                 </Text>
             </ScrollView>
 
-            <AgentPickerModal
-                visible={agentPickerOpen}
-                selectedName={defaultAgentName}
-                onClose={() => setAgentPickerOpen(false)}
-                onSelect={(id, name) => {
-                    setDefaultAgent(id, name);
+            <AgentPicker
+                Visible={agentPickerOpen}
+                Title="Default agent"
+                Subtitle="Answers when you don't @mention anyone."
+                SelectedName={defaultAgentName}
+                OnClose={() => setAgentPickerOpen(false)}
+                OnSelect={({ ID, Name }) => {
+                    SetDefaultAgent(ID, Name);
                     setAgentPickerOpen(false);
                 }}
             />
@@ -237,51 +239,6 @@ function ToggleRow({ icon, label, sub, value, onToggle, disabled }: { icon: Reac
     );
 }
 
-/**
- * Bottom-sheet modal for choosing the default agent. Lists `useAgents()` results,
- * marks the currently `selectedName`, and reports the pick via `onSelect(id, name)`.
- *
- * @param visible  whether the sheet is shown.
- * @param selectedName  name of the currently selected default agent (for the checkmark).
- * @param onClose  dismiss without changing the selection.
- * @param onSelect  invoked with the chosen agent's id + name.
- */
-function AgentPickerModal({ visible, selectedName, onClose, onSelect }: { visible: boolean; selectedName?: string; onClose: () => void; onSelect: (id: string, name: string) => void }) {
-    const { agents, loading } = useAgents();
-    return (
-        <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-            <Pressable style={styles.modalBackdrop} onPress={onClose}>
-                <Pressable style={styles.modalSheet} onPress={(e) => e.stopPropagation()}>
-                    <View style={styles.modalHandle} />
-                    <Text style={styles.modalTitle}>Default agent</Text>
-                    <Text style={styles.modalSub}>Answers when you don&apos;t @mention anyone.</Text>
-                    {loading || agents === null ? (
-                        <View style={styles.modalLoading}><ActivityIndicator color={Colors.brand} /></View>
-                    ) : (
-                        <ScrollView style={styles.modalList}>
-                            {agents.map((a) => {
-                                const active = a.name === selectedName;
-                                return (
-                                    <Pressable key={a.id} style={styles.agentRow} onPress={() => onSelect(a.id, a.name)}>
-                                        <View style={[styles.agentAv, { backgroundColor: a.color }]}>
-                                            <Text style={styles.agentAvText}>{a.initial}</Text>
-                                        </View>
-                                        <Text style={styles.agentName}>{a.name}</Text>
-                                        {active ? <Text style={styles.agentCheck}>✓</Text> : null}
-                                    </Pressable>
-                                );
-                            })}
-                        </ScrollView>
-                    )}
-                    <Pressable style={styles.modalClose} onPress={onClose}>
-                        <Text style={styles.modalCloseText}>Close</Text>
-                    </Pressable>
-                </Pressable>
-            </Pressable>
-        </Modal>
-    );
-}
-
 const styles = StyleSheet.create({
     safe: { flex: 1, backgroundColor: Colors.bg },
     header: { height: 56, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14 },
@@ -289,7 +246,7 @@ const styles = StyleSheet.create({
     title: { flex: 1, textAlign: 'center', fontSize: 15, fontWeight: Type.semibold, color: Colors.ink },
 
     profileBlock: { alignItems: 'center', paddingHorizontal: 24, paddingBottom: 18 },
-    avBig: { width: 78, height: 78, borderRadius: 39, backgroundColor: '#b87a1f', alignItems: 'center', justifyContent: 'center', ...Shadow.cardLarge },
+    avBig: { width: 78, height: 78, borderRadius: 39, backgroundColor: Colors.warn, alignItems: 'center', justifyContent: 'center', ...Shadow.cardLarge },
     avBigText: { color: Colors.inverse, fontSize: 30, fontWeight: '700' },
     name: { fontSize: 22, fontWeight: '700', letterSpacing: -0.4, marginTop: 14, color: Colors.ink },
     email: { fontSize: 13.5, color: Colors.ink3, marginTop: 4 },
@@ -308,8 +265,8 @@ const styles = StyleSheet.create({
     rowValue: { fontSize: 13, color: Colors.ink3 },
 
     toggle: { width: 42, height: 26, borderRadius: 13, backgroundColor: Colors.brand, padding: 2 },
-    toggleOff: { backgroundColor: 'rgba(13,13,16,0.15)' },
-    toggleKnob: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#ffffff', alignSelf: 'flex-end', ...Shadow.card },
+    toggleOff: { backgroundColor: 'rgba(7,25,39,0.15)' },
+    toggleKnob: { width: 22, height: 22, borderRadius: 11, backgroundColor: Colors.surface, alignSelf: 'flex-end', ...Shadow.card },
     toggleKnobOff: { alignSelf: 'flex-start' },
 
     signOut: { margin: 14, padding: 14, backgroundColor: Colors.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: Colors.line2, borderRadius: Radius.lg, alignItems: 'center' },
@@ -317,7 +274,7 @@ const styles = StyleSheet.create({
 
     versionFooter: { textAlign: 'center', fontSize: 11, color: Colors.ink3, marginTop: 8 },
 
-    modalBackdrop: { flex: 1, backgroundColor: 'rgba(13,13,16,0.35)', justifyContent: 'flex-end' },
+    modalBackdrop: { flex: 1, backgroundColor: 'rgba(7,25,39,0.35)', justifyContent: 'flex-end' },
     modalSheet: { backgroundColor: Colors.bg, borderTopLeftRadius: Radius.xxl, borderTopRightRadius: Radius.xxl, paddingHorizontal: 18, paddingTop: 10, paddingBottom: 28, maxHeight: '70%' },
     modalHandle: { alignSelf: 'center', width: 38, height: 4, borderRadius: 2, backgroundColor: Colors.line2, marginBottom: 12 },
     modalTitle: { fontSize: 18, fontWeight: '700', color: Colors.ink },

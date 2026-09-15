@@ -1,6 +1,6 @@
 /**
  * Unit tests for the '/' skill picker's target-agent narrowing. `IntersectAcceptedSkills` is the REAL
- * rule the service applies (mention-autocomplete.service.ts `skillsForTarget` calls it); the "no target /
+ * rule the service applies (`MentionAutocomplete.skillsForTarget` calls it); the "no target /
  * unknown agent → full runnable set" branches live in the service. The contract pinned here:
  *   1. INTERSECTION — only skills BOTH runnable by the user AND accepted by the agent; the agent's set
  *      can only remove, never add;
@@ -9,7 +9,7 @@
  *   4. UUID comparison is case-insensitive.
  */
 import { describe, it, expect } from 'vitest';
-import { IntersectAcceptedSkills } from '../lib/services/skill-picker-narrowing';
+import { IntersectAcceptedSkills } from '../mentions/SkillNarrowing';
 
 const A = { ID: 'AAAAAAAA-0000-0000-0000-000000000001', Name: 'Alpha' };
 const B = { ID: 'BBBBBBBB-0000-0000-0000-000000000002', Name: 'Beta' };

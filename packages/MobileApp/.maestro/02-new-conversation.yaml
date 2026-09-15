@@ -1,5 +1,10 @@
-# New-conversation navigation: from the Conversations home, open the composer
-# and confirm the new-conversation surface (agent rail + prompt) renders.
+# New-conversation surface: reachable from the Conversations home, and rendering the same welcome
+# and starter prompts MJ Explorer shows at its phone breakpoint.
+#
+# This screen used to have its own bespoke hero and its own plain composer — under copy telling the
+# user to "address a specific agent with @", which did nothing because the triggers lived only in
+# the chat thread's copy of the composer. Both are now the shared components, so this flow asserts
+# the SHARED content: if the two surfaces diverge again, this is what catches it.
 appId: org.memberjunction.mobile
 ---
 - launchApp
@@ -7,7 +12,36 @@ appId: org.memberjunction.mobile
     visible: "Conversations"
     timeout: 30000
 - tapOn: "New conversation"
-# The new-conversation screen shows the agent rail heading, which is unique to it.
+
+# The shared empty state — same greeting the web uses.
 - extendedWaitUntil:
-    visible: "Or talk to an agent"
+    visible: "Welcome to Conversations"
     timeout: 15000
+
+# The starter cards, which come from the same four prompts as the web.
+- assertVisible: "Search files"
+- assertVisible: "Research compiler"
+
+# The shared composer, advertising the triggers it actually has.
+- assertVisible: "Ask anything — your agent will route it…"
+
+# And the triggers work HERE, not just in the thread — the bug this screen shipped with.
+- tapOn: "Ask anything — your agent will route it…"
+- inputText: "@"
+- extendedWaitUntil:
+    visible: "Agents & people"
+    timeout: 15000
+
+# Return on a PHONE keyboard must not send.
+#
+# `SubmitOnEnter` defaults to `hardware-keyboard`: Return sends where a real keyboard is attached
+# (the desktop expectation), and stays a newline on an on-screen keyboard — which has no Shift to
+# escape to, so sending there would leave a user unable to type a second line at all. This asserts
+# the phone half, the half a well-meaning change to `always` would silently break.
+#
+# The `@` above left the picker open, and an open picker OWNS the Return key (it completes the
+# mention) — so clear the field first and assert the plain case, not an ambiguous one.
+- eraseText
+- inputText: "a second thought"
+- pressKey: Enter
+- assertVisible: "Welcome to Conversations"

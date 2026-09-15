@@ -4,7 +4,7 @@ import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, T
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AgentAvatarStack } from '@/components/AgentAvatarStack';
 import { Icons } from '@/components/Icon';
-import { groupConversations } from '@/data/adapt';
+import { GroupConversations } from '@/data/adapt';
 import type { ConversationSummary } from '@/data/types';
 import { useConversations } from '@/hooks/useConversations';
 import { useMJ } from '@/providers/mj-provider';
@@ -18,7 +18,7 @@ import { Colors, Radius, Shadow, Spacing, Type } from '@/theme/tokens';
  * Purpose: list the user's MJ conversations, grouped by recency, with entry
  *   points to start a new one and to jump into a thread.
  * Data: `useConversations()` hook (MJ `Conversations` via RunView) supplying
- *   `{ conversations, loading, error, refresh }`; `groupConversations()`
+ *   `{ conversations, loading, error, refresh }`; `GroupConversations()`
  *   (`@/data/adapt`) buckets them into pinned / today / yesterday / earlier;
  *   `useMJ()` for connection `status` (gates the pull-to-refresh spinner). Real
  *   data only — no mock fallback.
@@ -32,7 +32,7 @@ export default function ConversationsScreen() {
 
     const grouped = useMemo(() => {
         if (!conversations) return null;
-        return groupConversations(conversations);
+        return GroupConversations(conversations);
     }, [conversations]);
 
     const totalCount = conversations?.length ?? 0;
@@ -97,7 +97,7 @@ export default function ConversationsScreen() {
                         </View>
                         <Text style={styles.emptyTitle}>No conversations yet</Text>
                         <Text style={styles.emptyBody}>
-                            Tap "New conversation" to ask Skip or any other agent your first question.
+                            Tap "New conversation" to ask your first question.
                         </Text>
                     </View>
                 ) : null}
@@ -198,10 +198,20 @@ function ConversationRow({ conv }: { conv: ConversationSummary }) {
     );
 }
 
-/** Bottom-of-list navigation card: links to Data Explorer and Profile. */
+/** Bottom-of-list navigation card: links to Apps, Data Explorer and Profile. */
 function FooterNav() {
     return (
         <View style={styles.footer}>
+            <Pressable style={styles.footerRow} onPress={() => router.push('/apps')}>
+                <View style={[styles.footerIcon, { backgroundColor: Colors.positiveSoft }]}>
+                    <Icons.Sliders size={18} color={Colors.positive} />
+                </View>
+                <View style={styles.footerBody}>
+                    <Text style={styles.footerLabel}>Apps</Text>
+                    <Text style={styles.footerSub}>Applications hosted in this app</Text>
+                </View>
+                <Icons.ChevronRight size={16} color={Colors.ink3} />
+            </Pressable>
             <Pressable style={styles.footerRow} onPress={() => router.push('/explorer')}>
                 <View style={[styles.footerIcon, { backgroundColor: Colors.brandSoft }]}>
                     <Icons.Database size={18} color={Colors.brand} />
@@ -213,7 +223,7 @@ function FooterNav() {
                 <Icons.ChevronRight size={16} color={Colors.ink3} />
             </Pressable>
             <Pressable style={styles.footerRow} onPress={() => router.push('/profile')}>
-                <View style={[styles.footerIcon, { backgroundColor: '#b87a1f' }]}>
+                <View style={[styles.footerIcon, { backgroundColor: Colors.warn }]}>
                     <Text style={styles.profileInitial}>A</Text>
                 </View>
                 <View style={styles.footerBody}>
@@ -268,7 +278,7 @@ const styles = StyleSheet.create({
     rowMeta: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 },
     agentTag: { flex: 1, fontSize: 11, color: Colors.ink3, fontWeight: Type.medium },
     liveTag: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-    liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#2ec4a3' },
+    liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.positive },
     liveText: { fontSize: 11, fontWeight: Type.semibold, color: Colors.brand },
     badge: { backgroundColor: Colors.brand, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 999 },
     badgeText: { fontSize: 10.5, fontWeight: Type.bold, color: Colors.inverse },
@@ -279,5 +289,5 @@ const styles = StyleSheet.create({
     footerBody: { flex: 1 },
     footerLabel: { fontSize: 14.5, fontWeight: Type.semibold, color: Colors.ink },
     footerSub: { fontSize: 11.5, color: Colors.ink3, marginTop: 1 },
-    profileInitial: { color: '#ffffff', fontWeight: '700', fontSize: 13 },
+    profileInitial: { color: Colors.inverse, fontWeight: '700', fontSize: 13 },
 });

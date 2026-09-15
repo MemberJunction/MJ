@@ -7,7 +7,7 @@ appId: org.memberjunction.mobile
 - extendedWaitUntil:
     visible: "Conversations"
     timeout: 30000
-- openLink: "mjmobile:///markdown-preview"
+- openLink: "mjmobile://markdown-preview"
 - runFlow:
     when:
       visible: "Open"

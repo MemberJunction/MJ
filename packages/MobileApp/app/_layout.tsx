@@ -6,6 +6,12 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { MJProviderRoot } from '@/providers/mj-provider';
 import { AppLockGate } from '@/auth/AppLockGate';
 import { PushNotificationsBoot } from '@/hooks/usePushRegistration';
+import { LoadHostedMobileResources } from '@/host/registry';
+
+// Hosted application surfaces register via `@RegisterClass` module side effects, which a bundler
+// will eliminate unless something references them. This call is that reference — see
+// `src/host/registry.ts` for why a native host needs a build-time manifest at all.
+LoadHostedMobileResources();
 import { Colors } from '@/theme/tokens';
 
 /**

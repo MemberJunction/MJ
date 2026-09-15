@@ -11,7 +11,7 @@ import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
  * Route: `/explorer/dashboards` (Expo Router, `app/explorer/dashboards.tsx`).
  * Purpose: list of dashboards shared with the user, with a standing notice that
  * most dashboards are desktop-oriented and may not render optimally on mobile.
- * Data: `useDashboards()` -> explorer service `loadDashboards()`, which issues a
+ * Data: `useDashboards()` -> explorer service `LoadDashboards()`, which issues a
  * `RunView` over the `MJ: Dashboards` entity (id, name, description).
  * Interactions: tap a row -> `router.push` to `/explorer/dashboard/[id]`.
  * Mockup: `plans/mobile-app-react-native/html/dashboard-view.html` (shared).
@@ -63,8 +63,8 @@ const styles = StyleSheet.create({
     header: { height: 56, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.line2 },
     iconBtn: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: Radius.md },
     title: { flex: 1, textAlign: 'center', fontSize: Type.body, fontWeight: Type.semibold, color: Colors.ink },
-    notice: { flexDirection: 'row', gap: 10, alignItems: 'center', margin: 16, marginBottom: 4, padding: 12, backgroundColor: 'rgba(184,122,31,0.10)', borderWidth: 1, borderColor: 'rgba(184,122,31,0.25)', borderRadius: 12 },
-    noticeText: { flex: 1, fontSize: 12.5, color: '#8e5c14', lineHeight: 17 },
+    notice: { flexDirection: 'row', gap: 10, alignItems: 'center', margin: 16, marginBottom: 4, padding: 12, backgroundColor: Colors.warnSoft, borderWidth: 1, borderColor: Colors.warn, borderRadius: 12 },
+    noticeText: { flex: 1, fontSize: 12.5, color: Colors.warn, lineHeight: 17 },
     list: { paddingHorizontal: 12, paddingTop: 8, paddingBottom: 32, gap: 6 },
     loading: { textAlign: 'center', color: Colors.ink3, fontSize: 13, paddingVertical: 24 },
     row: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: Colors.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: Colors.line2, borderRadius: 12, padding: 12, marginBottom: 6, ...Shadow.card },
