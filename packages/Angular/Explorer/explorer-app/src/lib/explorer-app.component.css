@@ -166,12 +166,11 @@
   background: var(--mj-login-panel-bg, var(--mj-bg-surface));
   /* The sign-in region's counterpart to the banner's inherited colour — see .main-banner. It
      starts mattering the moment a deployment themes --mj-login-panel-bg dark.
-     REACHES PROJECTED SLOT CONTENT ONLY. The picker's own heading, lede and attribution set
-     --mj-text-primary / -secondary / -muted directly, so they do NOT follow this token: a dark
-     --mj-login-panel-bg in light mode leaves that heading near-black against it. THEMING.md
-     documents the limit correctly; this comment used to imply the colour covered the whole
-     region. Widening it means changing those three declarations, which is a deliberate change to
-     the picker rather than a token default, and is not part of this work. */
+     Reaches projected slot content AND the picker's own copy: its heading takes
+     --mj-login-panel-text, its lede --mj-login-panel-text-secondary and its attribution
+     --mj-login-panel-text-muted, each falling back to the semantic token it used to set directly.
+     So a dark panel carries its whole text ramp instead of leaving a near-black heading against
+     it, and an app that sets none of them renders byte-identically. THEMING.md lists all three. */
   color: var(--mj-login-panel-text, var(--mj-text-primary));
   /* dvh, not vh — see .main-banner. */
   height: 100dvh;
