@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { BaseEmbeddings, EmbedTextsResult, GetAIAPIKey } from '@memberjunction/ai';
 import { CredentialEngine } from '@memberjunction/credentials';
-import { BaseResponse, VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
+import { BaseResponse, IndexDescription, IndexList, VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
 import { PageRecordsParams, VectorBase } from '@memberjunction/ai-vectors';
 import { BaseEntity, CompositeKey, EntityField, EntityFieldInfo, EntityInfo, IMetadataProvider, LogError, LogStatus, LogStatusEx, Metadata, RunView, RunViewResult, UserInfo } from '@memberjunction/core';
 import { MJAIModelEntity, MJEntityDocumentEntity, MJEntityDocumentTypeEntity, MJEntityRecordDocumentEntity, MJTemplateContentEntity,
@@ -88,7 +88,11 @@ export class EntityVectorSyncer extends VectorBase {
 
     const entityDocument: MJEntityDocumentEntity = await this.GetEntityDocument(params.entityDocumentID);
     const vectorIndexEntity: MJVectorIndexEntity = this.GetVectorIndexForEntityDocument(entityDocument);
-    const obj: VectorEmeddingData = await this.GetVectorDatabaseAndEmbeddingClassByEntityDocumentID(params.entityDocumentID);
+    const obj: VectorEmeddingData = await this.GetVectorDatabaseAndEmbeddingClassByEntityDocumentID(params.entityDocumentID, false, vectorIndexEntity);
+
+    // The index decides the vector width, so the index decides the model. Refuses an index with
+    // no declared width, backfilling from the provider first where the provider can tell us.
+    const indexDimensions: number | null = await this.ResolveIndexDimensions(vectorIndexEntity, obj.vectorDB);
 
     // Parse configuration for pipeline tuning
     const docConfig = this.parseDocumentConfig(entityDocument);
@@ -127,15 +131,18 @@ export class EntityVectorSyncer extends VectorBase {
       template, templateContent, obj.embedding, obj.embeddingModelAPIName, delayTimeMS,
       params.VectorizeBatchCount || pipelineConfig?.vectorizeBatchSize,
       pipelineConfig?.maxConcurrentEmbeddings,
-      vectorIndexEntity.Dimensions ?? undefined
+      indexDimensions,
+      vectorIndexEntity.Name
     );
 
     // Parse the VectorIndex's ProviderConfig (opaque JSON blob) so Pinecone and
     // other drivers can read driver-specific settings (e.g. namespaceField).
     const vectorIndexProviderConfig = this.parseProviderConfig(vectorIndexEntity.ProviderConfig);
 
+    const providerIndexName = this.ResolveProviderIndexName(vectorIndexEntity);
+
     const vectorUpserter = this.createVectorUpserter(
-      entityDocument, templateContent, obj.vectorDB, vectorIndexEntity.Name, delayTimeMS,
+      entityDocument, templateContent, obj.vectorDB, providerIndexName, delayTimeMS,
       params.UpsertBatchCount || pipelineConfig?.upsertBatchSize,
       vectorIndexProviderConfig
     );
@@ -300,13 +307,14 @@ export class EntityVectorSyncer extends VectorBase {
     delayTimeMS: number,
     batchSize?: number,
     concurrencyLimit?: number,
-    embeddingDimensions?: number
+    indexDimensions?: number | null,
+    indexName?: string
   ): AsyncBatchTransform<Record<string, unknown>, undefined, EmbeddingData> {
     return new AsyncBatchTransform<Record<string, unknown>, undefined, EmbeddingData>({
       batchSize: batchSize || 50,
       concurrencyLimit: concurrencyLimit ?? 2,
       processBatch: (batch: Record<string, unknown>[]): Promise<EmbeddingData[]> =>
-        this.renderAndEmbedBatch(batch, template, templateContent, embedding, embeddingModelAPIName, delayTimeMS, embeddingDimensions),
+        this.renderAndEmbedBatch(batch, template, templateContent, embedding, embeddingModelAPIName, delayTimeMS, indexDimensions ?? undefined, indexName),
     });
   }
 
@@ -344,7 +352,8 @@ export class EntityVectorSyncer extends VectorBase {
     embedding: BaseEmbeddings,
     embeddingModelAPIName: string,
     delayTimeMS: number,
-    embeddingDimensions?: number
+    embeddingDimensions?: number,
+    indexName?: string
   ): Promise<EmbeddingData[]> {
     TemplateEngineServer.Instance.SetupNunjucks();
     const validEntries: { text: string; record: Record<string, unknown> }[] = [];
@@ -370,6 +379,8 @@ export class EntityVectorSyncer extends VectorBase {
     const embeddings: EmbedTextsResult = await embedding.EmbedTexts({ texts: validEntries.map(e => e.text), model: embeddingModelAPIName, dimensions: embeddingDimensions });
     await new Promise<void>((resolve) => setTimeout(resolve, delayTimeMS));
 
+    this.AssertVectorWidth(embeddings, embeddingDimensions, embeddingModelAPIName, indexName);
+
     return embeddings.vectors.map((vector: number[], index: number) => ({
       ID: index,
       Vector: vector,
@@ -381,6 +392,141 @@ export class EntityVectorSyncer extends VectorBase {
       VectorIndexID: String(validEntries[index].record.VectorIndexID ?? ''),
       TemplateContent: templateContent.TemplateText,
     }));
+  }
+
+  /**
+   * Refuse a batch whose vectors are not the width the index accepts, before a single record is
+   * upserted.
+   *
+   * The `dimensions` argument threaded into `EmbedTexts` is a **request hint, not a contract**:
+   * only some providers honour it (OpenAI's `text-embedding-3-*` family does), a local ONNX model
+   * is free to ignore it entirely, and nothing downstream ever compared what came back against
+   * what the index accepts. The consequences split by provider and both are bad:
+   *
+   *   - A provider that enforces width rejects the upsert. Pinecone's own driver already knows
+   *     this failure by name — see the comment on its `CreateRecords` catch block quoting
+   *     *"Vector dimension 1536 does not match the dimension of the index 512"* — but it only
+   *     learns it after the API round trip, per batch, for the whole run.
+   *   - A provider that does not enforce width accepts them, and the index silently ends up
+   *     holding vectors of two widths, which makes similarity search quietly meaningless.
+   *
+   * Throwing is deliberate and not per-record: every vector in the run comes from the same model,
+   * so a first-batch mismatch is a run-level misconfiguration. Continuing would spend the
+   * embedding budget on vectors that cannot be stored.
+   *
+   * Skipped when the index declares no width — see {@link ResolveIndexDimensions} for when that
+   * is legitimate.
+   */
+  protected AssertVectorWidth(
+    embeddings: EmbedTextsResult,
+    expectedDimensions: number | undefined,
+    embeddingModelAPIName: string,
+    indexName?: string
+  ): void {
+    if (!expectedDimensions || expectedDimensions <= 0) {
+      return;
+    }
+    const offending = embeddings.vectors.find(v => Array.isArray(v) && v.length !== expectedDimensions);
+    if (!offending) {
+      return;
+    }
+    const modelLabel = embeddings.model || embeddingModelAPIName || 'the configured embedding model';
+    throw new Error(
+      `Embedding width mismatch: model "${modelLabel}" returned ${offending.length}-dimension vectors, ` +
+      `but vector index "${indexName ?? 'unknown'}" accepts ${expectedDimensions} dimensions. ` +
+      `Nothing was upserted. Either point the index at a model that produces ${expectedDimensions} dimensions, ` +
+      `or create an index of ${offending.length} dimensions for this model.`
+    );
+  }
+
+  /**
+   * The width this index accepts, or `null` when the index legitimately has none.
+   *
+   * Order of preference:
+   *
+   *   1. `VectorIndex.Dimensions` when it is set. This is the operator's declaration and what
+   *      the embedding request already honours.
+   *   2. The provider's own answer, via `ListIndexes()`, written back onto the row. Existing
+   *      tenants overwhelmingly have `Dimensions` null — the Knowledge Hub create-index form
+   *      never set it, and the server-side write-back used to be fire-and-forget, so it lost the
+   *      race against any client that re-read the row (and never ran at all when the provider
+   *      call failed). Refusing those rows outright would strand them, so the provider is asked
+   *      first and the row is repaired.
+   *   3. Refuse. An index whose width nobody can state cannot have embeddings checked against
+   *      it, and that is the exact state the check exists to prevent.
+   *
+   * `null` is returned only for a driver that owns no index object
+   * ({@link VectorDBBase.ManagesIndexes} `=== false`): for `SimpleVectorServiceProvider` the
+   * "index" is a logical pairing and the vectors live in `MJ: Entity Record Documents.VectorJSON`,
+   * a JSON column with no fixed width. There is nothing to check against and nothing to refuse.
+   */
+  protected async ResolveIndexDimensions(vectorIndex: MJVectorIndexEntity, vectorDB: VectorDBBase): Promise<number | null> {
+    if (!vectorDB.ManagesIndexes) {
+      return null;
+    }
+
+    if (vectorIndex.Dimensions && vectorIndex.Dimensions > 0) {
+      return vectorIndex.Dimensions;
+    }
+
+    const described = await this.DescribeIndexInProvider(vectorIndex, vectorDB);
+    if (described) {
+      LogStatus(`Vector index "${vectorIndex.Name}" had no Dimensions recorded; the provider reports ${described.dimension}. Writing it back to the record.`);
+      vectorIndex.Dimensions = described.dimension;
+      if (!vectorIndex.Metric && described.metric) {
+        vectorIndex.Metric = described.metric;
+      }
+      if (!vectorIndex.ExternalID) {
+        vectorIndex.ExternalID = described.name;
+      }
+      const saved = await this.SaveEntity(vectorIndex);
+      if (!saved) {
+        // The width is still usable for this run even if we could not persist it; say so rather
+        // than silently re-querying the provider on every future run.
+        LogError(`Could not write the provider-reported Dimensions back to vector index "${vectorIndex.Name}": ${vectorIndex.LatestResult?.CompleteMessage ?? 'save returned false'}`);
+      }
+      return described.dimension;
+    }
+
+    throw new Error(
+      `Vector index "${vectorIndex.Name}" (ID: ${vectorIndex.ID}) has no Dimensions recorded, and the vector ` +
+      `database provider could not tell us the width of the index it holds. Without a width, the embeddings ` +
+      `this run produces cannot be checked against the index and could be silently unusable. ` +
+      `Set Dimensions on the Vector Index record to the width of its embedding model (for example 1536 for ` +
+      `text-embedding-3-small, 768 for all-mpnet-base-v2), or recreate the index so the provider reports it.`
+    );
+  }
+
+  /**
+   * Ask the provider to describe this index, matching on `ExternalID` first and then `Name`.
+   *
+   * Both are tried because `ExternalID` — the provider's own identifier, which is the sanitized
+   * form of the name — is null on every row whose write-back never completed, which is precisely
+   * the population this lookup exists to repair.
+   *
+   * A provider that reports `dimension: 0` is reporting "I do not know" (Qdrant's list endpoint
+   * does exactly this), not a zero-width index, so it is treated as no answer.
+   */
+  private async DescribeIndexInProvider(vectorIndex: MJVectorIndexEntity, vectorDB: VectorDBBase): Promise<IndexDescription | null> {
+    const wanted = [vectorIndex.ExternalID, vectorIndex.Name]
+      .filter((n): n is string => !!n && n.trim().length > 0)
+      .map(n => n.trim().toLowerCase());
+    if (wanted.length === 0) {
+      return null;
+    }
+
+    try {
+      const list: IndexList = await vectorDB.ListIndexes();
+      const match = (list.indexes ?? []).find(i => wanted.includes((i.name ?? '').trim().toLowerCase()));
+      if (!match || !(match.dimension > 0)) {
+        return null;
+      }
+      return match;
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      LogError(`Could not list indexes on the vector database provider while resolving the width of "${vectorIndex.Name}": ${msg}`);
+      return null;
+    }
   }
 
   /**
@@ -878,7 +1024,19 @@ export class EntityVectorSyncer extends VectorBase {
     }
   }
 
-  protected async GetVectorDatabaseAndEmbeddingClassByEntityDocumentID( entityDocumentID: string, createDocumentIfNotFound?: boolean ): Promise<VectorEmeddingData> {
+  /**
+   * Resolve the embedding driver and vector-DB driver for an Entity Document.
+   *
+   * @param vectorIndex When supplied, the embedding model is taken from the **index**
+   * (`VectorIndex.EmbeddingModelID`, a NOT NULL column) rather than from
+   * `EntityDocument.AIModelID`. The index's accepted width is fixed when the index is created and
+   * the width of an embedding is a property of the model, so the index is the only party whose
+   * opinion about the model can be right. `EntityDocument.AIModelID` is nullable, and when it is
+   * null this used to fall through to `GetAIModel()` with no argument — an arbitrary pick out of
+   * an unordered list, which is how an index ends up holding vectors of a width it never agreed to.
+   * A document that names a different model is reported rather than quietly honoured.
+   */
+  protected async GetVectorDatabaseAndEmbeddingClassByEntityDocumentID( entityDocumentID: string, createDocumentIfNotFound?: boolean, vectorIndex?: MJVectorIndexEntity ): Promise<VectorEmeddingData> {
     let entityDocument: MJEntityDocumentEntity | null = EntityDocumentCache.Instance.GetDocument(entityDocumentID);
     if (!entityDocument) {
       if (createDocumentIfNotFound) {
@@ -893,7 +1051,7 @@ export class EntityVectorSyncer extends VectorBase {
     }
 
     const vectorDBEntity: MJVectorDatabaseEntity = this.GetVectorDatabase(entityDocument.VectorDatabaseID);
-    const aiModelEntity: MJAIModelEntity = this.GetAIModel(entityDocument.AIModelID);
+    const aiModelEntity: MJAIModelEntity = this.ResolveEmbeddingModel(entityDocument, vectorIndex);
 
     // Resolve API keys. Empty/null is legitimate for local-only providers
     // (e.g., LocalEmbedding ONNX runtime, SimpleVectorServiceProvider in-process
@@ -941,6 +1099,49 @@ export class EntityVectorSyncer extends VectorBase {
   }
 
   /**
+   * Pick the embedding model: the index's when we have an index, the document's otherwise.
+   *
+   * When both are set and they disagree, the index wins and the disagreement is logged. The
+   * disagreement is a genuine misconfiguration — one of the two is going to produce vectors the
+   * index cannot hold — but it is the operator's to fix, and failing the run would strand every
+   * tenant whose document and index drifted apart while still embedding correctly.
+   */
+  protected ResolveEmbeddingModel(entityDocument: MJEntityDocumentEntity, vectorIndex?: MJVectorIndexEntity): MJAIModelEntity {
+    if (!vectorIndex?.EmbeddingModelID) {
+      return this.GetAIModel(entityDocument.AIModelID);
+    }
+
+    if (entityDocument.AIModelID && !UUIDsEqual(entityDocument.AIModelID, vectorIndex.EmbeddingModelID)) {
+      LogError(
+        `Entity Document "${entityDocument.Name}" names embedding model ${entityDocument.AIModelID}, but vector index ` +
+        `"${vectorIndex.Name}" was built for ${vectorIndex.EmbeddingModelID}. Using the index's model — the index's ` +
+        `vector width is fixed and the document cannot change it. Point the document at the index's model, or at a ` +
+        `different index, to clear this.`
+      );
+    }
+
+    return this.GetAIModel(vectorIndex.EmbeddingModelID);
+  }
+
+  /**
+   * The name the provider's index actually answers to.
+   *
+   * `Name` is the MJ display label and is only incidentally the provider's index name. Where the
+   * name was sanitized at creation to satisfy the provider's own naming rules, or an operator
+   * renamed the row afterwards, upserting by `Name` addresses an index that does not exist — and
+   * because a create-on-write provider will happily make one, the vectors land somewhere nothing
+   * ever searches. `ExternalID` is what the provider returned at creation, so it is the only
+   * name guaranteed to be right; `Name` remains the fallback for rows predating the write-back.
+   *
+   * This is the same correction MJ #4411 made for the Semantic search lane and the autotag
+   * vectorizer, both of which 404'd against Pinecone for exactly this reason. The vectorize
+   * path was missed.
+   */
+  protected ResolveProviderIndexName(vectorIndex: MJVectorIndexEntity): string {
+    return vectorIndex.ExternalID?.trim() || vectorIndex.Name;
+  }
+
+  /**
    * Resolves the API key for a vector database provider. Checks the Credential Engine
    * first (if VectorDatabase.CredentialID is set), then falls back to the legacy
    * environment variable AI_VENDOR_API_KEY__<ClassKey>.
@@ -976,19 +1177,16 @@ export class EntityVectorSyncer extends VectorBase {
   }
 
   public async GetEntityDocument(EntityDocumentID: string): Promise<MJEntityDocumentEntity | null> {
-    const cache = EntityDocumentCache.Instance;
-    if (!cache.IsLoaded) {
-      await cache.Refresh(false, super.CurrentUser);
-    }
-    return cache.GetDocument(EntityDocumentID);
+    // Unconditional: `Refresh` owns the decision (see EntityDocumentCache.StaleAfterMs). Gating
+    // on `IsLoaded` here is what made an out-of-band Entity Document edit invisible until the
+    // process restarted — once loaded, this branch never asked again.
+    await EntityDocumentCache.Instance.Refresh(false, super.CurrentUser);
+    return EntityDocumentCache.Instance.GetDocument(EntityDocumentID);
   }
 
   public async GetEntityDocumentByName(EntityDocumentName: string, ContextUser?: UserInfo): Promise<MJEntityDocumentEntity | null> {
-    const cache = EntityDocumentCache.Instance;
-    if (!cache.IsLoaded) {
-      await cache.Refresh(false, ContextUser);
-    }
-    return cache.GetDocumentByName(EntityDocumentName);
+    await EntityDocumentCache.Instance.Refresh(false, ContextUser);
+    return EntityDocumentCache.Instance.GetDocumentByName(EntityDocumentName);
   }
 
   /**
