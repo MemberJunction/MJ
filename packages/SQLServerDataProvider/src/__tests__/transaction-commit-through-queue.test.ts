@@ -110,6 +110,28 @@ describe('SQLServerDataProvider - commit/rollback routed through the instance SQ
     expect(mssqlState.EventKinds()).toEqual(['begin', 'begin', 'query', 'commit', 'commit']);
   });
 
+  it('rejects a query enqueued behind a FAILING commit, and rolls the doomed handle back through the queue', async () => {
+    await provider.BeginTransaction();
+    const handle = provider._transaction;
+    const tx = handle as unknown as MockTransaction;
+    let failCommit: () => void = () => undefined;
+    tx.commit = async () => {
+      await new Promise<void>(resolve => { failCommit = resolve; });
+      throw new Error('deadlock victim');
+    };
+    const commit = provider.CommitTransaction();
+    await new Promise(resolve => setImmediate(resolve)); // the commit action is running and blocked
+    const late = provider._internalExecuteSQLInstance('SELECT 9 AS late', null, { pool: provider._pool, transaction: handle });
+    failCommit();
+
+    await expect(commit).rejects.toThrow('deadlock victim');
+    // Abandon nulled the handle and queued its rollback BEHIND the failed commit but AHEAD of the
+    // late query, so the query never runs on the doomed handle and reports the real cause.
+    await expect(late).rejects.toThrow(/ambient transaction ended before this query ran/);
+    expect(mssqlState.EventKinds()).toEqual(['begin', 'rollback']);
+    expect(provider._transaction).toBeNull();
+  });
+
   it('keeps the handle for abandon when the queued commit fails', async () => {
     await provider.BeginTransaction();
     const tx = provider._transaction as unknown as MockTransaction;

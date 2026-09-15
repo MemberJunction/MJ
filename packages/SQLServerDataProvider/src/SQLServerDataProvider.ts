@@ -64,7 +64,7 @@ import { GenericDatabaseProvider, ExecuteSQLBatchOptions, SaveCoercedValue, Save
 import { MJQueryEntityExtended } from '@memberjunction/core-entities';
 
 import sql from 'mssql';
-import { BehaviorSubject, Observable, Subject, concatMap, from, tap, catchError, of } from 'rxjs';
+import { BehaviorSubject, Observable, Subject, concatMap, from, catchError, of } from 'rxjs';
 
 import { SQLServerTransactionGroup } from './SQLServerTransactionGroup';
 import {
@@ -78,7 +78,6 @@ import { DuplicateRecordDetector } from '@memberjunction/ai-vector-dupe';
 import type { IColocatedVectorHost } from '@memberjunction/ai-vectordb';
 import type { DatabasePlatform } from '@memberjunction/sql-dialect';
 
-import { v4 as uuidv4 } from 'uuid';
 import { UUIDsEqual } from '@memberjunction/global';
 import { SQLServerDialect, SQLDialect } from '@memberjunction/sql-dialect';
 
@@ -271,6 +270,31 @@ async function executeSQLCore(
  * await provider.Config();
  * ```
  */
+/**
+ * One item in the instance SQL queue: a query bound to a handle, or an action (commit, rollback,
+ * abandon) on one. Discriminated so the processor never has to guess which fields are present.
+ */
+type SQLQueueQuery = {
+  kind: 'query';
+  query: string;
+  parameters: any;
+  context: SQLExecutionContext;
+  options?: InternalSQLOptions;
+  /** Bound to the ambient handle when enqueued — see the queue's doc on SQLServerDataProvider. */
+  ambient: boolean;
+  resolve: (value: sql.IResult<any>) => void;
+  reject: (error: unknown) => void;
+};
+type SQLQueueAction = {
+  kind: 'action';
+  description: string;
+  handle: sql.Transaction;
+  run: () => Promise<void>;
+  resolve: () => void;
+  reject: (error: unknown) => void;
+};
+type SQLQueueItem = SQLQueueQuery | SQLQueueAction;
+
 interface InternalMSSQLTransaction extends sql.Transaction {
   _activeRequest?: sql.Request | null;
 }
@@ -381,17 +405,14 @@ export class SQLServerDataProvider
    * ENOTBEGUN on a finished handle. A query on an explicit handle a caller passed in — an IS-A chain
    * sharing its own transaction — is never subject to that check.
    */
-  private _sqlQueue$ = new Subject<{
-    id: string;
-    query: string;
-    parameters: any;
-    context: SQLExecutionContext;
-    options?: InternalSQLOptions;
-    ambient?: boolean;
-    action?: () => Promise<void>;
-    resolve: (value: sql.IResult<any>) => void;
-    reject: (error: any) => void;
-  }>();
+  private _sqlQueue$ = new Subject<SQLQueueItem>();
+  /**
+   * Handles whose commit or rollback has run — or whose commit FAILED, which dooms them just the same.
+   * The ambient check in runQueueItem consults this as well as `_transaction`, because a failed
+   * commit keeps `_transaction` set for AbandonPhysicalTransaction while the next queued item is
+   * already being dequeued; without the marker that item would run on the doomed handle.
+   */
+  private readonly _endedHandles = new WeakSet<sql.Transaction>();
   
   // Subscription for the queue processor
   private _queueSubscription: any;
@@ -595,11 +616,9 @@ export class SQLServerDataProvider
     // the sub, taht would cause duplicate rprocessing.
     if (!this._queueSubscription) {
       this._queueSubscription = this._sqlQueue$.pipe(
-        concatMap(item => 
+        concatMap(item =>
           from(this.runQueueItem(item)).pipe(
-            // Handle success
-            tap(result => item.resolve(result)),
-            // Handle errors
+            // runQueueItem settles the item's own promise on success; only failure is handled here
             catchError(error => {
               item.reject(error);
               return of(null); // Continue processing queue even on errors
@@ -610,26 +629,21 @@ export class SQLServerDataProvider
     }
   }
 
-  /** One queue item: a commit/rollback action on the handle, or a query (see the queue's doc). */
-  private async runQueueItem(item: {
-    query: string;
-    parameters: any;
-    context: SQLExecutionContext;
-    options?: InternalSQLOptions;
-    ambient?: boolean;
-    action?: () => Promise<void>;
-  }): Promise<sql.IResult<any>> {
-    if (item.action) {
-      await item.action();
-      return undefined as unknown as sql.IResult<any>;
+  /** Runs one queue item and settles its promise on success (see the queue's doc). */
+  private async runQueueItem(item: SQLQueueItem): Promise<void> {
+    if (item.kind === 'action') {
+      await item.run();
+      item.resolve();
+      return;
     }
-    if (item.ambient && item.context.transaction !== this._transaction) {
+    const handle = item.context.transaction;
+    if (item.ambient && handle && (this._endedHandles.has(handle) || handle !== this._transaction)) {
       throw new Error(
         'The ambient transaction ended before this query ran. A query issued on the transaction must be ' +
         'awaited before the transaction is committed or rolled back; this one was enqueued behind the commit/rollback.'
       );
     }
-    return executeSQLCore(item.query, item.parameters, item.context, item.options);
+    item.resolve(await executeSQLCore(item.query, item.parameters, item.context, item.options));
   }
 
   /**
@@ -1812,14 +1826,14 @@ export class SQLServerDataProvider
     // This prevents EREQINPROG errors when multiple queries try to use the same transaction
     return new Promise<sql.IResult<any>>((resolve, reject) => {
       this._sqlQueue$.next({
-        id: uuidv4(),
+        kind: 'query',
         query,
         parameters,
         context,
         options,
         ambient: context.transaction === this._transaction,
         resolve,
-        reject
+        reject,
       });
     });
   }
@@ -2468,31 +2482,16 @@ IF ${varName} IS NOT NULL
   }
 
   /**
-   * Runs `action` on the ambient handle from INSIDE the instance SQL queue, so it executes only after
-   * every query enqueued before it has finished, and before anything enqueued after it (#4454).
-   * Replaces the drain-then-act sequence of #4448, which left a microtask window between the drain
-   * returning and the action starting in which a newly enqueued query could still race the handle.
+   * Runs `action` on `handle` from INSIDE the instance SQL queue, so it executes only after every
+   * query enqueued before it has finished, and before anything enqueued after it (#4454). Replaces
+   * the drain-then-act sequence of #4448, which left a microtask window between the drain returning
+   * and the action starting in which a newly enqueued query could still race the handle. `handle` is
+   * passed explicitly because abandon nulls the ambient handle BEFORE enqueuing its rollback, so
+   * that queued ambient queries behind it are rejected rather than run on the doomed handle.
    */
-  private enqueueTransactionAction(description: string, action: () => Promise<void>): Promise<void> {
-    const context: SQLExecutionContext = {
-      pool: this._pool,
-      transaction: this._transaction,
-      logSqlStatement: this._logSqlStatement.bind(this),
-      clearTransaction: () => {
-        this._transaction = null;
-      },
-    };
+  private enqueueTransactionAction(description: string, handle: sql.Transaction, run: () => Promise<void>): Promise<void> {
     return new Promise<void>((resolve, reject) => {
-      this._sqlQueue$.next({
-        id: uuidv4(),
-        query: description,
-        parameters: null,
-        context,
-        ambient: true,
-        action,
-        resolve: () => resolve(),
-        reject,
-      });
+      this._sqlQueue$.next({ kind: 'action', description, handle, run, resolve, reject });
     });
   }
 
@@ -2501,9 +2500,16 @@ IF ${varName} IS NOT NULL
       throw new Error('No active transaction to commit');
     }
     const transaction = this._transaction;
-    await this.enqueueTransactionAction('commit', async () => {
+    await this.enqueueTransactionAction('commit', transaction, async () => {
       await this.waitForActiveRequest();
-      await transaction.commit();
+      try {
+        await transaction.commit();
+      } finally {
+        // Ended either way: committed, or doomed by a failed commit. Marked before the handle is
+        // nulled (success) or left for abandon (failure), so the next dequeued ambient query is
+        // rejected rather than run on it.
+        this._endedHandles.add(transaction);
+      }
       // Clear the handle only on SUCCESS, and inside the queued action: a query enqueued behind this
       // commit then finds the handle gone and is rejected with the real cause, instead of reaching
       // mssql as ENOTBEGUN. On failure the handle must survive so the base class's
@@ -2526,7 +2532,10 @@ IF ${varName} IS NOT NULL
     this._deferredTasks = [];
     if (stale) {
       try {
-        await stale.rollback();
+        // Through the queue, like commit and rollback: the handle is already nulled above, so any
+        // ambient query enqueued behind the failed commit is rejected with the real cause instead of
+        // running on the doomed handle beside this rollback (#4454).
+        await this.enqueueTransactionAction('abandon', stale, () => stale.rollback());
       } catch (e) {
         const code = e && typeof e === 'object' && 'code' in e ? String((e as { code: unknown }).code) : '';
         if (code !== 'EABORT') {
@@ -2545,9 +2554,13 @@ IF ${varName} IS NOT NULL
     }
     const transaction = this._transaction;
     try {
-      await this.enqueueTransactionAction('rollback', async () => {
+      await this.enqueueTransactionAction('rollback', transaction, async () => {
         await this.waitForActiveRequest();
-        await transaction.rollback();
+        try {
+          await transaction.rollback();
+        } finally {
+          this._endedHandles.add(transaction);
+        }
       });
     } finally {
       this._transaction = null;
