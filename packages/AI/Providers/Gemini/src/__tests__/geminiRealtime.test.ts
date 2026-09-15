@@ -239,10 +239,24 @@ describe('GeminiRealtime', () => {
             expect(config.realtimeInputConfig?.automaticActivityDetection?.disabled).toBe(true);
         });
 
-        it('1:1 call: no realtimeInputConfig when disableAutoResponse is absent (model auto-responds)', async () => {
+        /**
+         * Rewritten with the C4 turn-coverage work. This previously asserted that
+         * `realtimeInputConfig` was ABSENT, using the whole object's absence as a proxy for "automatic
+         * activity detection is not disabled, so the model auto-responds".
+         *
+         * That proxy no longer holds: MJ now always STATES turn coverage, so the object is always
+         * present. The requirement is unchanged, so the assertion now tests it directly — which is the
+         * better test either way, because it names the thing it cares about instead of an incidental
+         * shape that happened to correlate with it.
+         */
+        it('1:1 call: automatic activity detection is NOT disabled when disableAutoResponse is absent (model auto-responds)', async () => {
             await driver.StartSession(makeParams());
-            const config = driver.LastConnectArgs!.Config as { realtimeInputConfig?: unknown };
-            expect(config.realtimeInputConfig).toBeUndefined();
+            const config = driver.LastConnectArgs!.Config as {
+                realtimeInputConfig?: { automaticActivityDetection?: { disabled?: boolean }; turnCoverage?: string };
+            };
+            expect(config.realtimeInputConfig?.automaticActivityDetection).toBeUndefined();
+            // Coverage is stated on every session — that is the C4 guarantee, not a side effect.
+            expect(config.realtimeInputConfig?.turnCoverage).toBe('TURN_INCLUDES_ONLY_ACTIVITY');
         });
 
         it('capability: reports it CANNOT reconfigure turn mode mid-session (activity detection fixed at connect)', async () => {
@@ -799,5 +813,175 @@ describe('C7: agnostic voice → Gemini speechConfig (issue #3721)', () => {
         } finally {
             warn.mockRestore();
         }
+    });
+});
+
+/* ------------------------------------------------------------------ */
+/*  Per-model Live legality (plan §6 tasks C1-C4)                     */
+/*                                                                    */
+/*  Every rule here fails at SESSION MINT when broken — upstream of   */
+/*  all UI code — so each is pinned per model rather than trusted.     */
+/* ------------------------------------------------------------------ */
+describe('per-model Live legality', () => {
+    const connectConfig = (d: TestGeminiRealtime) => (d.LastConnectArgs?.Config ?? {}) as Record<string, unknown>;
+    const realtimeInput = (d: TestGeminiRealtime) =>
+        (connectConfig(d).realtimeInputConfig ?? {}) as Record<string, unknown>;
+    const thinkingOf = (d: TestGeminiRealtime) => connectConfig(d).thinkingConfig as Record<string, unknown> | undefined;
+
+    let warn: ReturnType<typeof vi.spyOn>;
+    beforeEach(() => {
+        warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    });
+
+    describe('C1 — affective dialogue is removed from the 3.8 API', () => {
+        it('drops enableAffectiveDialog for gemini-3.8-live, with a warning', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(makeParams({ Model: 'gemini-3.8-live', Config: { enableAffectiveDialog: true } }));
+            expect(connectConfig(d).enableAffectiveDialog).toBeUndefined();
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining('enableAffectiveDialog'));
+        });
+
+        it('keeps it for the 3.1 preview, where it is still valid', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(
+                makeParams({ Model: 'gemini-3.1-flash-live-preview', Config: { enableAffectiveDialog: true } })
+            );
+            expect(connectConfig(d).enableAffectiveDialog).toBe(true);
+        });
+    });
+
+    describe('C2 — proactive audio is permanently on for 3.8', () => {
+        it('drops proactivity.proactiveAudio:false rather than sending an error', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(
+                makeParams({ Model: 'gemini-3.8-live', Config: { proactivity: { proactiveAudio: false } } })
+            );
+            expect(connectConfig(d).proactivity).toBeUndefined();
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining('proactiveAudio'));
+        });
+
+        it('leaves proactiveAudio:true alone — only the illegal value is removed', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(
+                makeParams({ Model: 'gemini-3.8-live', Config: { proactivity: { proactiveAudio: true } } })
+            );
+            expect(connectConfig(d).proactivity).toEqual({ proactiveAudio: true });
+        });
+    });
+
+    describe('C3 — thinking level per model', () => {
+        it('omits thinkingConfig ENTIRELY for gemini-3.8-live, as its model page instructs', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(
+                makeParams({ Model: 'gemini-3.8-live', Config: { reasoning: { Remote: { Effort: 'high' } } } })
+            );
+            expect(thinkingOf(d)).toBeUndefined();
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining('does not accept'));
+        });
+
+        it('sends low/medium/high for Extended Thinking', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(
+                makeParams({
+                    Model: 'gemini-3.8-live-extended-thinking',
+                    Config: { reasoning: { Remote: { Effort: 'medium' } } },
+                })
+            );
+            expect(thinkingOf(d)?.thinkingLevel).toBe('MEDIUM');
+        });
+
+        it('refuses minimal on Extended Thinking without killing the session', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(
+                makeParams({
+                    Model: 'gemini-3.8-live-extended-thinking',
+                    Config: { reasoning: { Remote: { Effort: 'minimal' } } },
+                })
+            );
+            expect(thinkingOf(d)?.thinkingLevel).toBeUndefined();
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining('accepts only'));
+        });
+
+        it('accepts minimal on the 3.1 preview, which allows it', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(
+                makeParams({
+                    Model: 'gemini-3.1-flash-live-preview',
+                    Config: { reasoning: { Remote: { Effort: 'minimal' } } },
+                })
+            );
+            expect(thinkingOf(d)?.thinkingLevel).toBe('MINIMAL');
+        });
+
+        it('honours the flat legacy effortLevel bag key so existing configs keep working', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(
+                makeParams({ Model: 'gemini-3.8-live-extended-thinking', Config: { reasoningEffort: 'low' } })
+            );
+            expect(thinkingOf(d)?.thinkingLevel).toBe('LOW');
+        });
+
+        it('sets includeThoughts only when asked, and only where supported', async () => {
+            const d1 = new TestGeminiRealtime('k');
+            await d1.StartSession(
+                makeParams({
+                    Model: 'gemini-3.8-live-extended-thinking',
+                    Config: { reasoning: { IncludeThoughtSummaries: true } },
+                })
+            );
+            expect(thinkingOf(d1)?.includeThoughts).toBe(true);
+
+            const d2 = new TestGeminiRealtime('k');
+            await d2.StartSession(
+                makeParams({ Model: 'gemini-3.8-live', Config: { reasoning: { IncludeThoughtSummaries: true } } })
+            );
+            expect(thinkingOf(d2)).toBeUndefined();
+        });
+
+        it('sends no thinkingConfig when nothing asks for thinking', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(makeParams({ Model: 'gemini-3.8-live-extended-thinking' }));
+            expect(thinkingOf(d)).toBeUndefined();
+        });
+    });
+
+    describe('C4 — turn coverage is stated, never inherited', () => {
+        it('defaults to audio-only, so billed video frames are never inherited', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(makeParams({ Model: 'gemini-3.8-live' }));
+            expect(realtimeInput(d).turnCoverage).toBe('TURN_INCLUDES_ONLY_ACTIVITY');
+        });
+
+        it('includes all video only when the catalog explicitly asks', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(
+                makeParams({
+                    Model: 'gemini-3.8-live',
+                    Config: { turnDetection: { Coverage: 'audioActivityAndAllVideo' } },
+                })
+            );
+            expect(realtimeInput(d).turnCoverage).toBe('TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO');
+        });
+
+        it('states coverage even on the legacy model, so behaviour never depends on a provider default', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(makeParams({ Model: 'gemini-3.1-flash-live-preview' }));
+            expect(realtimeInput(d).turnCoverage).toBe('TURN_INCLUDES_ONLY_ACTIVITY');
+        });
+
+        it('preserves an existing automaticActivityDetection alongside coverage', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(makeParams({ Model: 'gemini-3.8-live', Config: { disableAutoResponse: true } }));
+            const ri = realtimeInput(d);
+            expect(ri.turnCoverage).toBe('TURN_INCLUDES_ONLY_ACTIVITY');
+            expect((ri.automaticActivityDetection as Record<string, unknown>)?.disabled).toBe(true);
+        });
+    });
+
+    it('an unknown Live model still mints a working session rather than failing', async () => {
+        const d = new TestGeminiRealtime('k');
+        await d.StartSession(makeParams({ Model: 'gemini-9.9-live-future' }));
+        expect(realtimeInput(d).turnCoverage).toBe('TURN_INCLUDES_ONLY_ACTIVITY');
+        expect(thinkingOf(d)).toBeUndefined();
     });
 });

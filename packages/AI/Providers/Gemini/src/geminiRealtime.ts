@@ -15,6 +15,8 @@ import {
     type Blob as GeminiBlob,
     type ActivityStart,
     type ActivityEnd,
+    TurnCoverage,
+    ThinkingLevel,
 } from '@google/genai';
 
 // MemberJunction AI core contract
@@ -35,6 +37,11 @@ import {
     type RealtimeVoiceOption,
     REALTIME_SHARED_CONFIG_KEYS,
 } from '@memberjunction/ai';
+import {
+    ResolveGeminiLiveProfile,
+    ResolveGeminiThinkingLevel,
+    type GeminiThinkingLevel,
+} from './geminiLiveProfiles';
 import { RegisterClass } from '@memberjunction/global';
 
 /**
@@ -508,7 +515,126 @@ export class GeminiRealtime extends BaseRealtimeModel {
                 };
             }
         }
+        // Applied LAST, deliberately: these are legality rules rather than preferences, so the open
+        // config bag must not be able to reintroduce a key the target model has retired. Anything the
+        // merge above put back is removed here.
+        this.applyModelLegality(config, params);
         return config;
+    }
+
+    /**
+     * Enforces what the TARGET model actually accepts, and states what MJ wants rather than
+     * inheriting a provider default.
+     *
+     * Every rule here fails at SESSION MINT if broken — upstream of all UI code, the same failure
+     * class as an illegal tool name — so none of it can be left to discover at connect time. Facts
+     * come from the resolved {@link ResolveGeminiLiveProfile} table; see
+     * `plans/realtime/gemini-3-8-live.md` §3 for their sourcing.
+     */
+    private applyModelLegality(config: LiveConnectConfig, params: RealtimeSessionParams): void {
+        const profile = ResolveGeminiLiveProfile(params.Model);
+        // The catalog's ModelConfiguration.Realtime reaches a driver folded into the session Config
+        // BAG as neutral keys (the same route `turnDetection` already travels), not as a field on
+        // RealtimeSessionParams — so read it from there.
+        const bag: Record<string, unknown> = (params.Config as Record<string, unknown> | undefined) ?? {};
+        const reasoning = GeminiRealtime.readObject(bag['reasoning']);
+        const turnDetection = GeminiRealtime.readObject(bag['turnDetection']);
+        // Structured `reasoning.Remote.Effort` first; fall back to the flat legacy bag keys so an
+        // existing co-agent config keeps working unchanged.
+        const effort =
+            GeminiRealtime.readString(GeminiRealtime.readObject(reasoning?.['Remote'])?.['Effort']) ??
+            GeminiRealtime.readString(bag['effortLevel']) ??
+            GeminiRealtime.readString(bag['reasoningEffort']);
+        const includeThoughts = reasoning?.['IncludeThoughtSummaries'] === true;
+        const coverageSetting = GeminiRealtime.readString(turnDetection?.['Coverage']);
+
+        // C1 — affective dialogue is REMOVED from the API on the 3.8 family; sending it errors. The
+        // SDK still declares `enableAffectiveDialog` (it remains valid for 3.1), so it will not stop
+        // us and the guard has to be ours.
+        if (profile.AffectiveDialogRemoved && config.enableAffectiveDialog !== undefined) {
+            delete config.enableAffectiveDialog;
+            console.warn(
+                `[GeminiRealtime] Dropped \`enableAffectiveDialog\` for ${params.Model}: affective dialogue is removed from the API on this model and sending it returns an error.`
+            );
+        }
+
+        // C2 — proactive audio is permanently ON; `proactiveAudio: false` is an error, not a default.
+        if (profile.ProactiveAudioAlwaysOn && config.proactivity?.proactiveAudio === false) {
+            delete config.proactivity;
+            console.warn(
+                `[GeminiRealtime] Dropped \`proactivity.proactiveAudio: false\` for ${params.Model}: proactive audio is permanently enabled on this model and disabling it returns an error.`
+            );
+        }
+
+        // C3 — thinking level, per model. `gemini-3.8-live` documents that thinkingConfig must be
+        // omitted ENTIRELY; Extended Thinking takes low/medium/high and rejects minimal.
+        const thinking = ResolveGeminiThinkingLevel(effort, profile);
+        if (thinking.Warning) {
+            console.warn(`[GeminiRealtime] ${thinking.Warning}`);
+        }
+        const wantSummaries = profile.SupportsThoughtSummaries && includeThoughts;
+        if (!profile.SupportsThinkingLevel && !wantSummaries) {
+            // Omit the whole block, as the model page instructs — not merely the level.
+            if (config.thinkingConfig !== undefined) {
+                delete config.thinkingConfig;
+            }
+        } else if (thinking.Level || wantSummaries) {
+            config.thinkingConfig = {
+                ...(config.thinkingConfig ?? {}),
+                ...(thinking.Level ? { thinkingLevel: GeminiRealtime.MapThinkingLevel(thinking.Level) } : {}),
+                ...(wantSummaries ? { includeThoughts: true } : {}),
+            };
+        }
+
+        // C4 — turn coverage is STATED, never inherited. The SDK's enum doc says coverage defaults to
+        // TURN_INCLUDES_ONLY_ACTIVITY while the 3.8 model page says the default includes all video;
+        // sending it explicitly makes that contradiction irrelevant. Absent config means audio-only,
+        // because video frames are billed and consume context, so the expensive option must be asked
+        // for rather than inherited.
+        const coverage = coverageSetting ?? 'audioActivityOnly';
+        config.realtimeInputConfig = {
+            ...(config.realtimeInputConfig ?? {}),
+            turnCoverage:
+                coverage === 'audioActivityAndAllVideo'
+                    ? TurnCoverage.TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO
+                    : TurnCoverage.TURN_INCLUDES_ONLY_ACTIVITY,
+        };
+    }
+
+    /**
+     * Narrows a bag value to a plain object, or `undefined`.
+     *
+     * The session Config bag is `JSONObject`, so every nested read needs narrowing. Returning
+     * `undefined` rather than throwing is deliberate: a malformed catalog value must degrade to "that
+     * setting is absent" and never cost the user their voice session.
+     */
+    private static readObject(value: unknown): Record<string, unknown> | undefined {
+        return value !== null && typeof value === 'object' && !Array.isArray(value)
+            ? (value as Record<string, unknown>)
+            : undefined;
+    }
+
+    /** Narrows a bag value to a non-blank trimmed string, or `undefined`. */
+    private static readString(value: unknown): string | undefined {
+        if (typeof value !== 'string') {
+            return undefined;
+        }
+        const trimmed = value.trim();
+        return trimmed.length > 0 ? trimmed : undefined;
+    }
+
+    /** Maps MJ's lowercase thinking level onto the SDK's uppercase {@link ThinkingLevel} enum. */
+    public static MapThinkingLevel(level: GeminiThinkingLevel): ThinkingLevel {
+        switch (level) {
+            case 'minimal':
+                return ThinkingLevel.MINIMAL;
+            case 'low':
+                return ThinkingLevel.LOW;
+            case 'medium':
+                return ThinkingLevel.MEDIUM;
+            case 'high':
+                return ThinkingLevel.HIGH;
+        }
     }
 
     /**
