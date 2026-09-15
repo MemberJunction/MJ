@@ -228,3 +228,108 @@ and still issuing tool calls. `IsBusy` must become outstanding-work-based.
 4. The release `Metadata_Sync` migration — build engineer.
 5. PostgreSQL counterparts — toolchain, at release.
 6. Retiring `gemini-3.1-flash-live-preview` — the capability matrix makes keeping it cheap.
+
+---
+
+## Appendix — implementation notes for phases C5, D, E, F
+
+Per-task file paths, the existing symbols to change, and the traps. §6 says *what*; this says
+*where*. Line numbers are as of commit `455d0606f1` and will drift — find the symbol, not the line.
+
+**The one file you will spend most of your time in:**
+`packages/AI/RealtimeClient/src/drivers/geminiRealtimeClient.ts` (the browser-side driver). Note
+that the *session config* is minted SERVER-side in
+`packages/AI/Providers/Gemini/src/geminiRealtime.ts` — config changes go there, message handling
+goes in the client. Getting this backwards costs an hour.
+
+### C5 — refuse `BLOCKING` locally for Extended Thinking
+Server side, `geminiRealtime.ts`. `MapToolsToFunctionDeclarations` is where tools become
+`FunctionDeclaration`s. `ResolveGeminiLiveProfile(model).Tooling.SupportsBlockingExecution` is
+already available and already `false` for Extended Thinking. Emit `behavior: NON_BLOCKING` and, if
+anything requests blocking on a model that forbids it, log and force non-blocking rather than
+sending a frame the server hard-errors. **Start here** — it needs no live session and validates your
+whole loop (build → test → commit → push) before you hit the parts that need a real model.
+
+### D1 — honour `IdleSignal`
+Client, `handleServerMessage` (~:482). Today it fans out on `serverContent` / `toolCall` /
+`usageMetadata`. Add `interaction_status`. **Read the wire field name off `@google/genai@2.8.0`
+types before writing the parse** — the docs write it snake_case, the SDK may camelCase it, and
+guessing here is exactly the mistake this plan's sourcing rule exists to prevent.
+Read the model's idle signal from the config bag key `idleSignal`, defaulting to `'turnComplete'`.
+
+### D2 — `IsBusy` from outstanding work
+Client, `IsBusy` (~:384), currently `return this.responseActive`. Make it the OR of: reasoning in
+progress (from `interaction_status`), tool batch non-empty (`RealtimeToolBatchBarrier.IsEmpty` is
+false), audio still playing. `openAILiveClient.ts` `IsBusy` (~:80) is the shape to copy.
+
+### D3 — drain on idle, not `turnComplete`
+Client, `flushQueuedSends` (~:687) and its call site inside the `turnComplete` path. Move the
+trigger behind the resolved idle signal. **Trap:** on `gemini-3.8-live` the signal still IS
+`turnComplete`, so this must not change that model's behaviour at all — the existing tests are your
+guard.
+
+### D4 — backstop timer
+Client. Copy `assistantSafetyBackstopTimer` (~:72 in `openAILiveClient.ts`). It is a GUARD for a
+lost `IDLE` frame, never the primary signal — if you find yourself relying on it, D1 is wrong.
+
+### D5 — async tools via the barrier
+Client, `handleToolCallFrame` (~:604) and `sendToolResponseTurn` (~:729). `RealtimeToolBatchBarrier`
+is in `AI/Core`, already provider-agnostic, already used by `openAILiveClient.ts` — see
+`toolBatchBarrier.TrackPendingCall` / `.RecordResult` / `.Clear` there. Do not write a second
+barrier. `pendingToolCallNames` (~:184) already exists because Gemini's `sendToolResponse` needs the
+function name; keep it.
+
+### D6 — scheduling gated by capability
+Server, `geminiRealtime.ts`. Gate on `profile.Tooling.SupportsScheduling` — `true` only for plain
+`gemini-3.8-live`.
+
+### E1/E2 — thinking config
+Already wired in `applyModelLegality`. E1/E2 are only about confirming the values reach the wire on
+a live session; no new code expected.
+
+### E3 — thought parts to narration
+Client, `handleServerContent` (~:513). **Gated on V2** — how a thought part is MARKED on the wire is
+unverified. Do not guess: read it from a live session or the SDK's `Part` type. A thought rendered as
+assistant speech attributes the model's scratch reasoning to it as an answer, which is worse than
+not shipping the feature.
+
+### E4/E5 — narration promotion and the card
+`Kind: 'narration'` exists in `openAILiveClient.ts`; promote it to the shared transcript type. The
+delegation card is `packages/Angular/Generic/conversations/src/lib/components/realtime/` —
+`realtime-delegation-card.component.ts/.html` already branches on `Kind: 'agent' | 'action'`; add a
+third. Cards are IMMUTABLE — every event REPLACES the object, never mutates it. Design tokens only,
+no hardcoded colours.
+
+### F1 — frame capture
+New file beside `packages/AI/RealtimeClient/src/audio/micCapture.ts` — that file is the pattern for
+browser capture in this package. `getUserMedia` for camera, `getDisplayMedia` for screen. Gate on
+`RealtimeTrackDescriptor.RequiresConsent`.
+
+### F2 — send frames
+Client. The existing `sendMicChunk` sends `{ audio: { data, mimeType } }` via
+`session.sendRealtimeInput`. Video rides the same call's `media` slot — the `FakeLiveSession` in the
+Gemini tests already captures `media`, so it is testable with no network. **Gated on V5** (encoding
+and cadence).
+
+### F3/F4/F5 — channels sourcing video
+`packages/AI/Agents/src/realtime/whiteboard-channel-server.ts` and
+`packages/AI/RemoteBrowser/Server/src/remote-browser-channel.ts`, plus their client halves. Override
+`GetSourcedTracks()` (already on the base, defaults to `[]`). **F5 is the important one:** write the
+"channel → inbound video" path ONCE and have both channels use it. Two implementations of this is
+the failure mode to avoid, and reviewers will look for it specifically.
+
+### F6 — per-track cost
+Attribute video's $0.002/min separately. `RealtimeUsageModalityDetail` already has an `Image` field;
+`UsageBases` now includes `'frames'`.
+
+### Non-negotiables for every task above
+1. No `any`, no `as any`, no `.Get()`/`.Set()` for typed fields.
+2. Build the package you changed (`cd packages/... && pnpm run build`) and run its tests before
+   committing. A pre-existing local failure: 3 Gemini socket-close tests fail on Node 22 with
+   `ReferenceError: CloseEvent is not defined` (a Node 23 global) — not yours, do not "fix" it.
+3. An unbuilt workspace dep looks exactly like a broken change. If you see
+   `Cannot find module '@memberjunction/...'` or `Failed to resolve entry for package`, build that
+   dep first (`npx turbo build --filter=<pkg>`) before believing the error.
+4. Never send a frame a model rejects when a local check could have caught it. Session-mint failures
+   are upstream of all UI and cost the whole session.
+5. Every `catch` logs with context, throws, or returns a failure result. No silent fallback.
