@@ -526,13 +526,22 @@ mj app check-updates
 
 #### Internal / dangerous flags
 
-Intentionally omitted from `--help`. Only for MJ-internal apps that own a
-reserved-looking schema (e.g. `__bcsaas`). Do not use on third-party apps.
+Intentionally omitted from `--help`. Almost never needed: MJ's own Open Apps use the
+`__mj_<AppName>` schema namespace (`__mj_BizAppsCommon`, `__mj_BizAppsForms`, …), which
+installs on the default path with no flag at all.
 
-- `--dangerously-ignore-dbl-underscore-schema-rule` — available on `mj app install`
-  and `mj app upgrade`. Bypasses the rule that blocks schema names starting with
-  `__` (reserved for MJ internals). Exact-match reserved names (`__mj`, `dbo`,
-  `sys`, `guest`, `INFORMATION_SCHEMA`) remain hard-blocked regardless.
+- `--dangerously-ignore-dbl-underscore-schema-rule` — available on `mj app install`,
+  `mj app upgrade` and `mj app remove`. Allows a `__`-prefixed schema name *outside* the
+  `__mj_` app namespace (e.g. `__bcsaas`). Reserved schemas remain hard-blocked regardless,
+  on both supported platforms: every schema the **database** owns — `dbo`, `sys`, `guest`,
+  SQL Server's nine `db_*` fixed database-role schemas, `public`, anything starting `pg_`,
+  and `information_schema` — plus every schema **MJ** owns: `__mj` and `__mj_UDT`. Each of
+  these already exists in a stock database, so naming one would not create it, it would
+  *adopt* it — and `mj app remove` would then drop it.
+
+  If an app was installed under a name *before* that name became reserved, its schema can no
+  longer be dropped. Remove it with `mj app remove <app> --keep-data`, which unregisters the
+  app and leaves the schema in place.
 
 ```bash
 mj app install https://github.com/BlueCypress/SaaS \

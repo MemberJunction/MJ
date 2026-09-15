@@ -13,15 +13,128 @@ describe('ValidateSchemaName', () => {
     });
 
     it('rejects exact-match reserved schemas', () => {
-        for (const name of ['dbo', 'sys', 'guest', 'INFORMATION_SCHEMA', '__mj']) {
+        for (const name of ['dbo', 'sys', 'guest', 'INFORMATION_SCHEMA', '__mj', '__mj_UDT']) {
             expect(ValidateSchemaName(name).Success).toBe(false);
         }
     });
 
-    it('rejects __-prefixed names by default', () => {
-        const result = ValidateSchemaName('__bcsaas');
+    it('accepts every first-party BizApp schema on the default path (#3302)', () => {
+        // These are the real names from the shipped mj-app.json of each first-party app.
+        for (const name of [
+            '__mj_BizAppsCommon',
+            '__mj_BizAppsTasks',
+            '__mj_BizAppsForms',
+            '__mj_BizAppsCaliber',
+            '__mj_BizAppsATS',
+        ]) {
+            const result = ValidateSchemaName(name);
+            expect(result.Success, `${name}: ${result.ErrorMessage}`).toBe(true);
+        }
+    });
+
+    it('rejects __-prefixed names outside the __mj_ app namespace', () => {
+        for (const name of ['__bcsaas', '__acme', '__mjx']) {
+            const result = ValidateSchemaName(name);
+            expect(result.Success, name).toBe(false);
+            expect(result.ErrorMessage).toMatch(/__/);
+        }
+    });
+
+    it('rejects a bare __mj_ prefix with no app suffix', () => {
+        expect(ValidateSchemaName('__mj_').Success).toBe(false);
+    });
+
+    it('reserves __mj_UDT — MJ core owns it (the Database Designer user-table sandbox)', () => {
+        for (const name of ['__mj_UDT', '__mj_udt', '__MJ_UDT']) {
+            const result = ValidateSchemaName(name, { allowDoubleUnderscore: true });
+            expect(result.Success, name).toBe(false);
+            expect(result.ErrorMessage).toMatch(/reserved/i);
+        }
+    });
+
+    it('reserves the PostgreSQL platform schemas, not just the SQL Server ones', () => {
+        // The reserved set is the list of names an Open App may never claim, and MJ supports both
+        // dialects. `public` is PostgreSQL's default schema — the exact analogue of `dbo` — and it
+        // exists in every PG database, so an app declaring it would be ADOPTED on the default path
+        // and `mj app remove` would then issue `DROP SCHEMA "public" CASCADE`. That takes MJ's own
+        // `SET search_path TO __mj, public` target with it, along with the extensions (pgcrypto,
+        // uuid-ossp) that install into `public` and back unqualified gen_random_uuid() calls.
+        for (const name of ['public', 'PUBLIC', 'pg_catalog', 'pg_toast']) {
+            const result = ValidateSchemaName(name, { allowDoubleUnderscore: true });
+            expect(result.Success, `${name} must be reserved`).toBe(false);
+            expect(result.ErrorMessage).toMatch(/reserved/i);
+        }
+    });
+
+    it("reserves SQL Server's fixed database-role schemas", () => {
+        // Same shape as `public`, on the other dialect. SQL Server creates these nine schemas in
+        // EVERY database (one per fixed database role). They are not MJ's and not the default
+        // schema, so nothing above catches them — but they exist, which means an app declaring
+        // one is never created, it is ADOPTED on the default path, and `mj app remove` then runs
+        // DropAllSchemaObjects + DROP SCHEMA against it. Verified droppable on SQL Server 2022.
+        // The repo already agrees they are system schemas: introspector-mssql.ts excludes this
+        // exact list from a baseline snapshot.
+        for (const name of [
+            'db_owner', 'db_accessadmin', 'db_securityadmin', 'db_ddladmin', 'db_backupoperator',
+            'db_datareader', 'db_datawriter', 'db_denydatareader', 'db_denydatawriter',
+            'DB_OWNER', 'Db_DdlAdmin',
+        ]) {
+            const result = ValidateSchemaName(name, { allowDoubleUnderscore: true });
+            expect(result.Success, `${name} must be reserved`).toBe(false);
+            expect(result.ErrorMessage).toMatch(/reserved/i);
+        }
+    });
+
+    it("reserves the whole pg_ prefix, which PostgreSQL owns", () => {
+        // PostgreSQL reserves every `pg_`-prefixed name for system use, and creates per-session
+        // `pg_temp_N` / `pg_toast_temp_N` schemas at runtime. Enumerating catalogs one at a time
+        // cannot cover names that only exist once a backend is live, so the rule is the prefix.
+        for (const name of ['pg_temp_1', 'pg_toast_temp_1', 'pg_anything', 'PG_TEMP_3']) {
+            const result = ValidateSchemaName(name, { allowDoubleUnderscore: true });
+            expect(result.Success, `${name} must be reserved`).toBe(false);
+            expect(result.ErrorMessage).toMatch(/reserved/i);
+        }
+    });
+
+    it('does not claim MemberJunction owns a platform schema it did not create', () => {
+        // `dbo`, `public` and `db_owner` belong to the database platform, not to MJ. Saying they
+        // are "reserved by MemberJunction" invites an operator to read the block as MJ policy
+        // that some flag can override, which is exactly backwards for the ones MJ cannot restore.
+        for (const name of ['dbo', 'public', 'db_owner']) {
+            const result = ValidateSchemaName(name);
+            expect(result.Success, name).toBe(false);
+            expect(result.ErrorMessage, name).not.toMatch(/reserved by MemberJunction/i);
+            expect(result.ErrorMessage, name).toMatch(/platform/i);
+        }
+        // MJ's own schemas still name MemberJunction.
+        expect(ValidateSchemaName('__mj').ErrorMessage).toMatch(/MemberJunction/i);
+    });
+
+    it('matches reserved names case-insensitively (SQL Server folds, PG lowercases)', () => {
+        for (const name of ['DBO', 'Dbo', 'SYS', 'Guest', 'information_schema', '__MJ']) {
+            const result = ValidateSchemaName(name, { allowDoubleUnderscore: true });
+            expect(result.Success, name).toBe(false);
+        }
+    });
+
+    it('rejects an empty or whitespace-only schema name', () => {
+        expect(ValidateSchemaName('').Success).toBe(false);
+        expect(ValidateSchemaName('   ').Success).toBe(false);
+    });
+
+    it('rejects a name with leading or trailing whitespace rather than silently trimming it', () => {
+        // The trimmed forms are all valid; it is the untrimmed input that must be refused, because
+        // CreateAppSchema would go on to create the schema under the untrimmed identifier.
+        for (const name of [' __mj_BizAppsForms', '__mj_BizAppsForms ', ' bcsaas ', '\tbcsaas']) {
+            const result = ValidateSchemaName(name);
+            expect(result.Success, name).toBe(false);
+        }
+    });
+
+    it('still rejects a whitespace-only name as empty, not as untrimmed', () => {
+        const result = ValidateSchemaName('   ');
         expect(result.Success).toBe(false);
-        expect(result.ErrorMessage).toMatch(/__/);
+        expect(result.ErrorMessage).toMatch(/required|empty/i);
     });
 
     it('accepts __-prefixed names when allowDoubleUnderscore is true', () => {

@@ -28,7 +28,10 @@ vi.mock('../github/github-client.js', () => ({
         return { Owner: m[1], Repo: m[2].replace(/\.git$/, ''), Subpath: sub.length ? sub : undefined };
     },
 }));
-vi.mock('../install/schema-manager.js', () => ({
+// Spread the real module so ValidateSchemaName is the genuine rule (these suites declare
+// ordinary schema names, so it always passes); only the DB-touching functions are stubbed.
+vi.mock('../install/schema-manager.js', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('../install/schema-manager.js')>()),
     CreateAppSchema: vi.fn(),
     DropAppSchema: vi.fn(),
     SchemaExists: vi.fn(),
@@ -63,6 +66,7 @@ vi.mock('../install/history-recorder.js', () => ({
     FindDependentApps: vi.fn(),
     ListInstalledApps: vi.fn(),
     UpdateAppRecord: vi.fn(),
+    CheckSchemaSharedByOtherApps: vi.fn(),
 }));
 vi.mock('@memberjunction/core', () => ({
     Metadata: class { async CreateTransactionGroup() { return { Submit: async () => true }; } },
@@ -73,6 +77,7 @@ vi.mock('@memberjunction/core', () => ({
 
 import { RemoveApp } from '../install/install-orchestrator.js';
 import type { OrchestratorContext } from '../install/install-orchestrator.js';
+import { DropAppSchema } from '../install/schema-manager.js';
 import { DownloadMigrations } from '../github/github-client.js';
 import { RunPackageInstall } from '../install/package-manager.js';
 import {
@@ -82,6 +87,7 @@ import {
     SetAppStatus,
     RecordInstallHistoryEntry,
     UpdateAppRecord,
+    CheckSchemaSharedByOtherApps,
 } from '../install/history-recorder.js';
 
 /** A full Open App manifest (schema + migrations) whose migrations declare a teardownDirectory. */
@@ -215,5 +221,69 @@ describe('RemoveApp — migrations-model teardown (HandleTeardown)', () => {
         expect(result.ErrorMessage).toMatch(/Teardown failed/i);
         // App is NOT marked Removed when teardown fails.
         expect(vi.mocked(UpdateAppRecord)).not.toHaveBeenCalledWith(expect.anything(), 'app-1', { Status: 'Removed' });
+    });
+});
+
+describe('RemoveApp — a schema that only became reserved in this version', () => {
+    /**
+     * An app installed BEFORE this change under a name that is reserved only now — `public` on
+     * PostgreSQL, or a `Dbo` / `__mj_udt` / `DB_Owner` casing — cannot be removed cleanly: its
+     * own remove calls DropAppSchema, which now refuses the name, so the app lands in status
+     * `Error` and stays installed. Refusing is right (these are schemas MJ must not drop), but
+     * the operator is then stuck unless they are told the one flag that gets them out.
+     */
+    beforeEach(() => {
+        vi.clearAllMocks();
+        vi.mocked(FindDependentApps).mockResolvedValue([]);
+        vi.mocked(ListInstalledApps).mockResolvedValue([]);
+        vi.mocked(SetAppStatus).mockResolvedValue(undefined);
+        vi.mocked(RecordInstallHistoryEntry).mockResolvedValue(undefined);
+        vi.mocked(UpdateAppRecord).mockResolvedValue(undefined);
+        vi.mocked(RunPackageInstall).mockReturnValue({ Success: true });
+        vi.mocked(CheckSchemaSharedByOtherApps).mockResolvedValue({ Shared: false, CheckFailed: false });
+        vi.mocked(FindInstalledApp).mockResolvedValue({
+            ID: 'app-legacy',
+            Name: 'legacy-app',
+            Version: '1.0.0',
+            RepositoryURL: 'https://github.com/acme/mj-apps',
+            SchemaName: 'public',
+            Status: 'Active',
+            ManifestJSON: JSON.stringify({
+                manifestVersion: 1, name: 'legacy-app', displayName: 'Legacy App',
+                description: 'Installed before the reserved set grew.', version: '1.0.0',
+                publisher: { name: 'Acme' }, repository: 'https://github.com/acme/mj-apps',
+                mjVersionRange: '>=5.0.0 <6.0.0', schema: { name: 'public' },
+            }),
+        } as unknown as Awaited<ReturnType<typeof FindInstalledApp>>);
+        // What the real DropAppSchema now returns for a newly-reserved name.
+        vi.mocked(DropAppSchema).mockResolvedValue({
+            Success: false,
+            ErrorMessage: "Schema name 'public' is reserved by the database platform and cannot be used by an Open App",
+        });
+    });
+
+    it('tells the operator about --keep-data when the drop is refused as reserved', async () => {
+        const result = await RemoveApp({ AppName: 'legacy-app' }, ctxFor('postgresql'));
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toMatch(/reserved/i);
+        expect(result.ErrorMessage, 'must name the way out').toMatch(/--keep-data/);
+    });
+
+    it('does not mention --keep-data for an ordinary drop failure', async () => {
+        vi.mocked(FindInstalledApp).mockResolvedValue({
+            ID: 'app-ok', Name: 'ok-app', Version: '1.0.0',
+            RepositoryURL: 'https://github.com/acme/mj-apps', SchemaName: 'mj_connector_acme',
+            Status: 'Active', ManifestJSON: connectorManifest(false),
+        } as unknown as Awaited<ReturnType<typeof FindInstalledApp>>);
+        vi.mocked(DropAppSchema).mockResolvedValue({
+            Success: false,
+            ErrorMessage: "Failed to drop schema 'mj_connector_acme': deadlock victim",
+        });
+
+        const result = await RemoveApp({ AppName: 'ok-app' }, ctxFor('postgresql'));
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).not.toMatch(/--keep-data/);
     });
 });
