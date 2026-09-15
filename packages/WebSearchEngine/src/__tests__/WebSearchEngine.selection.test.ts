@@ -151,7 +151,14 @@ const permanent = (msg = 'query too long') => (): WebSearchProviderResponse => (
  * Records are returned in Priority order, as the engine's own ExtraFilter/OrderBy would.
  */
 function configureProviders(
-    specs: Array<{ name: string; driver: string; priority: number; provider: FakeProvider }>,
+    specs: Array<{
+        name: string;
+        driver: string;
+        priority: number;
+        provider: FakeProvider;
+        /** Defaults to Active. The engine loads every status and filters in code. */
+        status?: string;
+    }>,
 ) {
     runViewMock.mockReset();
     runViewMock.mockResolvedValue({
@@ -162,6 +169,7 @@ function configureProviders(
                 Name: s.name,
                 DriverClass: s.driver,
                 Priority: s.priority,
+                Status: s.status ?? 'Active',
                 ProviderConfig: null,
                 CredentialID: null,
                 MaxResultsOverride: null,
@@ -335,6 +343,41 @@ describe('WebSearchEngine selection', () => {
             // are different problems with different fixes.
             expect(result.ResultCode).toBe('PROVIDER_UNAVAILABLE');
             expect(result.ErrorMessage).toContain('no credential in test');
+        });
+
+        it('reports PROVIDER_NOT_ACTIVE — not NOT_FOUND — for a provider that was parked', async () => {
+            const parked = new FakeProvider(ok());
+            configureProviders([
+                { name: 'Parked', driver: 'ParkedDriver', priority: 10, provider: parked, status: 'Pending' },
+                { name: 'Live', driver: 'LiveDriver', priority: 20, provider: new FakeProvider(ok()) },
+            ]);
+
+            const result = await (await freshEngine()).Search({ Query: 'q', Provider: 'Parked' }, USER);
+
+            // Reporting NOT_FOUND here sends an operator hunting for a record that is sitting
+            // right there — the fix is one column, not a new row.
+            expect(result.Success).toBe(false);
+            expect(result.ResultCode).toBe('PROVIDER_NOT_ACTIVE');
+            expect(result.ErrorMessage).toContain('Pending');
+            // Never instantiated: a parked provider's driver should not even be built.
+            expect(parked.callCount).toBe(0);
+        });
+
+        it('keeps a non-Active provider out of the pool for an unpinned search', async () => {
+            const parked = new FakeProvider(ok('https://parked'));
+            const live = new FakeProvider(ok('https://live'));
+            configureProviders([
+                { name: 'Parked', driver: 'ParkedDriver', priority: 10, provider: parked, status: 'Terminated' },
+                { name: 'Live', driver: 'LiveDriver', priority: 20, provider: live },
+            ]);
+
+            const result = await (await freshEngine()).Search({ Query: 'q' }, USER);
+
+            // Loading every status must not change WHICH provider serves — only the diagnosis
+            // when one is named explicitly.
+            expect(result.Success).toBe(true);
+            expect(result.ProviderUsed).toBe('Live');
+            expect(parked.callCount).toBe(0);
         });
 
         it('fails when the named provider cannot produce a requested answer', async () => {

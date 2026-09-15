@@ -354,10 +354,15 @@ export class WebSearchEngine extends BaseSingleton<WebSearchEngine> {
         // `entity_object` with the generated subclass, matching how SearchEngine types its own
         // provider records. `Fields` is deliberately absent — it is ignored for entity_object, and
         // a hand-listed projection is how a column added to the table later goes silently unread.
+        //
+        // Every status is loaded, not just Active. Filtering in SQL made a non-Active provider
+        // indistinguishable from one that was never configured: it reached neither `_entries` nor
+        // `_unavailable`, so pinning it reported PROVIDER_NOT_FOUND and sent an operator looking
+        // for a record that is sitting right there, one column away from working. The table holds
+        // a handful of rows, so reading them all and filtering here costs nothing.
         const result = await rv.RunView<MJWebSearchProviderEntity>(
             {
                 EntityName: WebSearchEngine.PROVIDER_ENTITY,
-                ExtraFilter: `Status = 'Active'`,
                 OrderBy: 'Priority ASC, Name ASC',
                 ResultType: 'entity_object',
             },
@@ -391,6 +396,20 @@ export class WebSearchEngine extends BaseSingleton<WebSearchEngine> {
         contextUser: UserInfo,
     ): Promise<void> {
         const driverClass = record.DriverClass;
+
+        // Parked deliberately — remembered with its own code, and never instantiated. Building a
+        // driver for a provider an administrator switched off would run its constructor and
+        // availability check for a row that cannot serve anything.
+        if (record.Status !== 'Active') {
+            this.recordUnavailable(record, {
+                code: 'PROVIDER_NOT_ACTIVE',
+                message:
+                    `Provider "${record.Name}" is configured but its Status is "${record.Status}", ` +
+                    'not Active. Set it to Active to bring it into the selection pool.',
+            });
+            return;
+        }
+
         try {
             const driver = MJGlobal.Instance.ClassFactory.CreateInstance<BaseWebSearchProvider>(
                 BaseWebSearchProvider,
