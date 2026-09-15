@@ -364,10 +364,18 @@ eleven was verified to appear exactly once across all of `metadata/`.
 
 This is a change from the last several weekly runs, which followed the routine prompt and omitted
 `primaryKey`; the release-time `mj sync push` then assigned IDs and wrote them back. Both approaches
-work. **A human should decide which one is intended and make the two files agree**, because the
-difference is not cosmetic: hand-assigned IDs are stable across environments and machine-assigned
-ones are not. Until then, `reports/ai-model-research/ROUTINE_PROMPT.md` and `metadata/CLAUDE.md`
-contradict each other on a rule both mark as critical.
+work, but the difference is not cosmetic: hand-assigned IDs are stable across environments and
+machine-assigned ones are not.
+
+**Resolved on review (2026-09-15).** cadam11 confirmed on PR #4474 that the metadata this run
+produced is correct and that including `primaryKey` is the right call — every one of the existing
+records in `.ai-models.json` already carries one after a push, so this is the first run whose output
+matches what the file actually looks like. Per that review, the three contradicting lines in
+`reports/ai-model-research/ROUTINE_PROMPT.md` are corrected **on this branch** to require a
+`uuidgen` `primaryKey` (or `crypto.randomUUID()` where `uuidgen` is unavailable) and to keep the
+prohibition on hand-authored `sync` blocks. The two example JSON blocks are updated to match, so the
+rule and its example no longer disagree. The copy of this prompt held by the scheduler is **not** a
+repo file and must be updated separately by its owner.
 
 ---
 
