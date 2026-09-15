@@ -1,0 +1,20 @@
+[
+  {
+    "fields": {
+      "Name": "Usage Budget Evaluation",
+      "Description": "Periodic evaluation of active usage budgets (MJ: Usage Budgets) against saved queries to track period consumption and record threshold breach events.",
+      "JobTypeID": "@lookup:MJ: Scheduled Job Types.DriverClass=UsageBudgetEvaluationScheduledJobDriver",
+      "CronExpression": "0 */15 * * * *",
+      "Timezone": "UTC",
+      "Status": "Active",
+      "ConcurrencyMode": "Skip"
+    },
+    "primaryKey": {
+      "ID": "0BECE86B-14EE-411A-B3E0-D64928F883F7"
+    },
+    "sync": {
+      "lastModified": "2026-09-15T16:06:38.349Z",
+      "checksum": "e685708f313236274937dc0fe521f73cef677218c0694364405f97ab6470010b"
+    }
+  }
+]
