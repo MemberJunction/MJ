@@ -1485,9 +1485,36 @@ WHERE ${pgDialect.QuoteIdentifier(pkName)} = '${safePKValue}';`;
      * refs to lowercase on PG ("column does not exist"). All-caps-only matching
      * recognizes the DDL keyword form (dialects always emit keywords upper-case)
      * while leaving the mixed-case column form quotable.
+     *
+     * The rest are PostgreSQL words the tokenizer used to quote as identifiers, which
+     * corrupted valid SQL: `SELECT CURRENT_DATE` became `SELECT "CURRENT_DATE"` and
+     * `ASC NULLS LAST` became `ASC "NULLS" "LAST"`. They are added to THIS tier rather
+     * than `_SQL_KEYWORDS` so only the ALL-CAPS spelling is exempt: a mixed-case column
+     * such as `Cycle` or `Current_Date` still quotes exactly as before. (Backport of
+     * #4436's keyword list; next matches every keyword case-sensitively, 5.x keeps its
+     * case-insensitive tier so Title-Case SQL keeps working.)
      */
     private static readonly _SQL_KEYWORDS_UPPERCASE_ONLY = new Set([
         'TYPE', 'DATA',
+        // Niladic datetime / identity functions, written without parentheses
+        'CURRENT_DATE', 'CURRENT_TIME', 'LOCALTIME', 'LOCALTIMESTAMP', 'CURRENT_CATALOG',
+        'CURRENT_ROLE', 'CURRENT_SCHEMA', 'CURRENT_USER', 'SESSION_USER',
+        // Ordering, ordered-set aggregates and window frames
+        'NULLS', 'FIRST', 'LAST', 'WITHIN', 'ORDINALITY', 'GROUPING', 'SETS', 'ROLLUP', 'CUBE',
+        'GROUPS', 'EXCLUDE', 'TIES',
+        // Remaining PostgreSQL reserved words
+        'LEADING', 'TRAILING', 'BOTH', 'PLACING', 'SYMMETRIC', 'ASYMMETRIC', 'NOTNULL', 'NATURAL',
+        'SIMILAR', 'VERBOSE', 'ANALYZE', 'ANALYSE', 'FREEZE', 'OVERLAPS', 'AUTHORIZATION', 'COLLATION',
+        // Type names in cast position
+        'CHARACTER', 'VARYING', 'BOOL', 'INT2', 'INT4', 'INT8', 'FLOAT4', 'FLOAT8', 'BPCHAR',
+        'TIMETZ', 'TSVECTOR', 'TSQUERY', 'SMALLSERIAL', 'VARBIT', 'JSONPATH',
+        // Utility statements and clause words
+        'REFRESH', 'TRUNCATE', 'EXPLAIN', 'VACUUM', 'REINDEX', 'UNLOGGED', 'PREPARE', 'DEALLOCATE',
+        'ESCAPE', 'UNKNOWN', 'NOWAIT', 'LOCKED', 'CASCADED', 'RESTART', 'STORED', 'OWNED',
+        'INCLUDING', 'EXCLUDING', 'INHERITS', 'INCREMENT', 'MINVALUE', 'MAXVALUE', 'CYCLE',
+        // Transactions, constraints, MERGE
+        'CONSTRAINTS', 'IMMEDIATE', 'DEFERRED', 'DEFERRABLE', 'INITIALLY', 'SAVEPOINT', 'RELEASE',
+        'MERGE', 'MATCHED', 'EXTENSION', 'VALID', 'SYSTEM',
     ]);
 
     /**

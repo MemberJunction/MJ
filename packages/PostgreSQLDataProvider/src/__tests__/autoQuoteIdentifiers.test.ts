@@ -277,4 +277,34 @@ SELECT * FROM save_result`;
                 .toBe('SELECT rc."Type" FROM __mj."vwRecordChanges" rc');
         });
     });
+
+    // Backport of #4436's keyword list into the ALL-CAPS-only tier. Each of these was
+    // quoted as an identifier, which PostgreSQL rejects.
+    describe('PostgreSQL keywords recognized in ALL-CAPS', () => {
+        it.each([
+            'SELECT CURRENT_DATE',
+            "WHERE d > CURRENT_DATE - INTERVAL '7 days'",
+            'SELECT LOCALTIMESTAMP, CURRENT_USER',
+            'ORDER BY x ASC NULLS LAST',
+            'ORDER BY x DESC NULLS FIRST',
+            'SELECT x FROM t WITHIN GROUP (ORDER BY x)',
+            'SELECT CAST(x AS CHARACTER VARYING)',
+            'SELECT x::INT8, y::FLOAT8',
+            'GROUP BY ROLLUP (a, b)',
+            'SELECT * FROM unnest(a) WITH ORDINALITY',
+            'MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN DELETE',
+        ])('leaves %s unchanged', (sql) => {
+            expect(quote(sql)).toBe(sql);
+        });
+
+        it('still quotes the mixed-case column form of a keyword', () => {
+            expect(quote('SELECT Cycle, Current_Date, t.Last FROM x t'))
+                .toBe('SELECT "Cycle", "Current_Date", t."Last" FROM x t');
+        });
+
+        it('still accepts keywords written in Title Case, as before', () => {
+            expect(quote('Select x From t Where y = 1 Order By x'))
+                .toBe('Select x From t Where y = 1 Order By x');
+        });
+    });
 });
