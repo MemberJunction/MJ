@@ -343,7 +343,12 @@ GO
 -- The retry loop below catches FK-ordering errors and retries. XACT_ABORT must be OFF for that
 -- to work: with it ON a caught error still dooms the enclosing transaction (the runner wraps
 -- each migration in one) and every later statement fails with "the current transaction cannot
--- be committed". The proc above sets it ON for its own body, which is scoped to the proc.
+-- be committed". The proc above sets it ON for its own body, which is scoped to the proc; this
+-- SET is session-scoped, not batch-scoped, so it persists past this batch's GO into every later
+-- batch/migration in the run (Skyway migrates over a single connection). Left unrestored
+-- deliberately: OFF is the T-SQL session default, so this leaves the session exactly where it
+-- started rather than drifting it into a non-default setting a later batch would have to
+-- account for.
 SET XACT_ABORT OFF;
 
 CREATE TABLE #Retired (ID uniqueidentifier PRIMARY KEY);
@@ -396,12 +401,13 @@ IF EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ResourceType]
 -- Discovered from sys.foreign_keys so the whole set is covered rather than the handful the
 -- proc knows about. Nullable FK columns are NULLED; NOT NULL columns mean the row itself has
 -- to go -- the schema's own statement about whether the child can exist without the parent.
-SELECT  sch      = SCHEMA_NAME(pt.schema_id),
-        tblName  = pt.name,
-        colName  = pc.name,
-        tbl      = QUOTENAME(SCHEMA_NAME(pt.schema_id)) + '.' + QUOTENAME(pt.name),
-        col      = QUOTENAME(pc.name),
-        nullable = pc.is_nullable
+SELECT  sch       = SCHEMA_NAME(pt.schema_id),
+        tblName   = pt.name,
+        colName   = pc.name,
+        tbl       = QUOTENAME(SCHEMA_NAME(pt.schema_id)) + '.' + QUOTENAME(pt.name),
+        col       = QUOTENAME(pc.name),
+        nullable  = pc.is_nullable,
+        lastError = CAST(NULL AS nvarchar(400))
 INTO    #Refs
 FROM sys.foreign_keys fk
 JOIN sys.tables rt ON rt.object_id = fk.referenced_object_id
@@ -409,13 +415,18 @@ JOIN sys.tables rt ON rt.object_id = fk.referenced_object_id
 JOIN sys.tables pt ON pt.object_id = fk.parent_object_id
 JOIN sys.foreign_key_columns fkc ON fkc.constraint_object_id = fk.object_id
 JOIN sys.columns pc ON pc.object_id = pt.object_id AND pc.column_id = fkc.parent_column_id
-WHERE pt.name <> 'Entity';   -- Entity.ParentID is a self-reference, handled after the children
+WHERE NOT (pt.name = 'Entity' AND SCHEMA_NAME(pt.schema_id) = '${flyway:defaultSchema}');
+    -- Entity.ParentID is a self-reference, handled after the children below. Schema-qualified
+    -- so a same-named table in a DIFFERENT schema with its own FK into Entity is swept, not
+    -- silently skipped by matching on the bare name alone.
 
 -- The proc already cascades these 21 correctly, including their own dependents
 -- (EntityFieldValue before EntityField, ListDetail before List). Sweeping them here fights
--- that ordering -- an earlier iteration of this block deadlocked exactly there -- so the sweep
--- covers only what the proc misses. Compared on bare names because the schema is a
--- placeholder; this list mirrors the proc body above and must be kept in step with it.
+-- that ordering -- an earlier iteration of this block hit repeated FK-ordering failures (error
+-- 547) retrying exactly those rows, not a deadlock (a single-connection migration can't
+-- deadlock with itself) -- so the sweep covers only what the proc misses. Compared on bare
+-- names because the schema is a placeholder; this list mirrors the proc body above and must be
+-- kept in step with it.
 --
 -- ResourceType.CategoryEntityID is deliberately NOT excluded even though the proc now nulls
 -- it: the explicit block above should already have removed every affected ResourceType row,
@@ -443,6 +454,15 @@ EXEC sp_executesql @sql;
 
 -- Pass 2 -- NOT NULL references mean the row itself must go. Bounded retry loop, because
 -- referencing tables have their own dependents and no single pass satisfies every order.
+-- @MAX_ATTEMPTS bounds how many FK-ordering levels deep the loop will unwind: each pass clears
+-- whichever rows currently have no un-cleared dependent left inside #Refs, so the deepest chain
+-- among the ~20 candidate tables here resolves well within 6 passes. A table still blocked
+-- after 6 isn't an ordering problem this loop can fix -- its blocker is a dependent OUTSIDE
+-- #Refs entirely (nothing in sys.foreign_keys ties that blocker back to Entity, e.g.
+-- EntityActionFilter blocking EntityAction), so more attempts would just spin. That is exactly
+-- the case the postcondition below exists to catch and name -- NOT to grow into a recursive
+-- cascade into dependents-of-dependents, which would delete data this migration was never
+-- designed to touch.
 DECLARE @attempt int = 0, @MAX_ATTEMPTS int = 6, @removed int = 1, @remaining int = 0;
 DECLARE @tbl nvarchar(400), @col nvarchar(200);
 WHILE @attempt < @MAX_ATTEMPTS AND @removed > 0
@@ -460,9 +480,14 @@ BEGIN
             SET @removed += @@ROWCOUNT;
         END TRY
         BEGIN CATCH
-            -- 547 is a foreign-key ordering problem: this table has dependents that another
-            -- entry in #Refs will clear on a later pass. Anything else is unexpected -- rethrow.
+            -- 547 is a foreign-key ordering problem: either another entry in #Refs clears the
+            -- blocker on a later pass, or -- if this table is still blocked when the
+            -- postcondition below runs -- the blocker is outside #Refs and unresolvable here.
+            -- Record the message either way, so the postcondition can name the actual
+            -- constraint instead of leaving the DBA to reverse-engineer it from a bare row
+            -- count. Anything other than 547 is unexpected -- rethrow immediately.
             IF ERROR_NUMBER() <> 547 THROW;
+            UPDATE #Refs SET lastError = ERROR_MESSAGE() WHERE tbl = @tbl AND col = @col;
         END CATCH
         FETCH NEXT FROM c INTO @tbl, @col;
     END
@@ -473,18 +498,48 @@ END
 -- Children of a retired entity would otherwise block its delete via Entity.ParentID.
 UPDATE [${flyway:defaultSchema}].[Entity] SET ParentID = NULL WHERE ParentID IN (SELECT ID FROM #Retired);
 
--- Postcondition -- nothing may still point at a retired entity, by any route. If the bounded
--- loop above ran out of attempts, this is what stops the migration from committing a
--- half-pruned database (the silent state #3546 describes) and names the problem instead.
-SET @sql = N'SELECT @n = ISNULL(SUM(c), 0) FROM (SELECT 0 c';
-SELECT @sql = @sql + N' UNION ALL SELECT COUNT(*) FROM ' + tbl + N' WHERE ' + col
-                   + N' IN (SELECT ID FROM #Retired)'
+-- Postcondition -- nothing THIS BLOCK is responsible for (every entry in #Refs, i.e. every
+-- inbound FK to Entity that the proc above does not already cascade) may still point at a
+-- retired entity. It does not re-check Entity.ParentID (nulled unconditionally just above) or
+-- the ResourceType/dependent tables (already asserted clean earlier in this batch). If the
+-- bounded loop above ran out of attempts, this is what stops the migration from committing a
+-- half-pruned database (the silent state #3546 describes) -- and names exactly what's still
+-- blocking it (table, column, row count, and the last FK error observed against it), so the
+-- failure is actionable instead of context-free.
+CREATE TABLE #Remaining (sch nvarchar(128), tblName nvarchar(128), colName nvarchar(128), cnt int);
+SET @sql = N'SELECT CAST(NULL AS nvarchar(128)) sch, CAST(NULL AS nvarchar(128)) tblName,'
+         + N' CAST(NULL AS nvarchar(128)) colName, 0 AS cnt WHERE 1 = 0';
+SELECT @sql = @sql + N' UNION ALL SELECT ''' + REPLACE(sch, '''', '''''') + N''', '''
+                   + REPLACE(tblName, '''', '''''') + N''', ''' + REPLACE(colName, '''', '''''')
+                   + N''', COUNT(*) FROM ' + tbl + N' WHERE ' + col + N' IN (SELECT ID FROM #Retired)'
 FROM #Refs;
-SET @sql = @sql + N') x;';
-EXEC sp_executesql @sql, N'@n int OUTPUT', @n = @remaining OUTPUT;
-IF @remaining > 0
-    THROW 50000, 'Retirement pre-clean could not clear all inbound references to the retired entities; aborting rather than half-pruning the metadata.', 1;
+SET @sql = N'INSERT INTO #Remaining (sch, tblName, colName, cnt) SELECT sch, tblName, colName, cnt FROM ('
+         + @sql + N') x WHERE cnt > 0;';
+EXEC sp_executesql @sql;
 
+SET @remaining = ISNULL((SELECT SUM(cnt) FROM #Remaining), 0);
+IF @remaining > 0
+BEGIN
+    -- Name what's still blocking, the same way the ResourceType guard earlier in this batch
+    -- does, instead of the context-free message this used to throw. Truncated to stay inside
+    -- THROW's nvarchar(2048) limit if an unusually large number of tables are ever involved.
+    DECLARE @diag nvarchar(2048) = N'';
+    SELECT @diag = @diag + CASE WHEN @diag = N'' THEN N'' ELSE N'; ' END
+                 + r.sch + N'.' + r.tblName + N'.' + r.colName + N' (' + CAST(r.cnt AS nvarchar(20))
+                 + CASE WHEN r.cnt = 1 THEN N' row)' ELSE N' rows)' END
+                 + ISNULL(N' [' + LEFT(f.lastError, 100) + N']', N'')
+    FROM #Remaining r
+    LEFT JOIN #Refs f ON f.sch = r.sch AND f.tblName = r.tblName AND f.colName = r.colName
+    ORDER BY r.sch, r.tblName, r.colName;
+    SET @diag = LEFT(@diag, 1800);
+
+    DECLARE @msg nvarchar(2048) = N'Retirement pre-clean could not clear all inbound references '
+        + N'to the retired entities; aborting rather than half-pruning the metadata. Still '
+        + N'referencing: ' + @diag + N'. Clear these rows, then re-run the migration.';
+    THROW 50000, @msg, 1;
+END
+
+DROP TABLE #Remaining;
 DROP TABLE #Refs;
 DROP TABLE #Retired;
 GO
