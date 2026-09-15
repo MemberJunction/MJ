@@ -4,9 +4,11 @@
  *
  * `shared` answers "which tiers is this package FOR", not "can this package run there". An actions
  * package is shared source — the server imports it and the app's own types reference it — but it
- * cannot be loaded in a browser: it reaches `@memberjunction/actions` -> `@memberjunction/storage`
- * -> `@google-cloud/storage` -> `fs`/`child_process`. Before this axis existed, `shared` put it in
- * the Angular bundle and the host Explorer could not build (#4428).
+ * cannot be loaded in a browser: a first-party `*-actions` package depends on
+ * `@memberjunction/aiengine`, directly or via `@memberjunction/core-entities-server`, and aiengine
+ * depends on `@memberjunction/storage` — the one package that declares `@google-cloud/storage`,
+ * which imports `fs`, `child_process`, `stream` and `node:async_hooks`. Before this axis existed,
+ * `shared` put all of that in the Angular bundle and the host Explorer could not build (#4428).
  *
  * CANONICAL. Two other sites deliberately keep their own copy of this rule rather than import it,
  * because neither may take a dependency on this package:
