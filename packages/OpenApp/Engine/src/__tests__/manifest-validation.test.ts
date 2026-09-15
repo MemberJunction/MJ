@@ -345,6 +345,68 @@ describe('Manifest Validation', () => {
     });
 });
 
+describe('packages[].platform (#4428)', () => {
+    /** A manifest whose packages section is exactly what the case needs. */
+    function withPackages(packages: unknown): Record<string, unknown> {
+        return { ...minimalManifest(), packages };
+    }
+
+    it('accepts a shared package declaring platform node', () => {
+        const r = ValidateManifestObject(withPackages({ shared: [{ name: '@acme/app-actions', role: 'library', platform: 'node' }] }));
+        expect(r.Success).toBe(true);
+    });
+
+    it('accepts every valid platform value', () => {
+        for (const platform of ['node', 'browser', 'both']) {
+            const r = ValidateManifestObject(withPackages({ shared: [{ name: '@acme/x', role: 'library', platform }] }));
+            expect(r.Success).toBe(true);
+        }
+    });
+
+    it('rejects an unknown platform value', () => {
+        const r = ValidateManifestObject(withPackages({ shared: [{ name: '@acme/x', role: 'library', platform: 'deno' }] }));
+        expect(r.Success).toBe(false);
+    });
+
+    it('still accepts an entry that omits platform entirely', () => {
+        const r = ValidateManifestObject(withPackages({ shared: [{ name: '@acme/x', role: 'library' }] }));
+        expect(r.Success).toBe(true);
+    });
+
+    it('rejects a client package declaring platform node, naming the package', () => {
+        const r = ValidateManifestObject(withPackages({ client: [{ name: '@acme/app-ng', role: 'module', platform: 'node' }] }));
+        expect(r.Success).toBe(false);
+        expect(r.Errors?.join(' ')).toContain('@acme/app-ng');
+    });
+
+    it('rejects a server package declaring platform browser, naming the package', () => {
+        const r = ValidateManifestObject(withPackages({ server: [{ name: '@acme/app-server', role: 'bootstrap', startupExport: 'Load', platform: 'browser' }] }));
+        expect(r.Success).toBe(false);
+        expect(r.Errors?.join(' ')).toContain('@acme/app-server');
+    });
+
+    it('allows platform both in either array', () => {
+        expect(ValidateManifestObject(withPackages({ client: [{ name: '@acme/a', role: 'module', platform: 'both' }] })).Success).toBe(true);
+        expect(ValidateManifestObject(withPackages({ server: [{ name: '@acme/b', role: 'library', platform: 'both' }] })).Success).toBe(true);
+    });
+
+    // The role-implied default overrides the author's explicit array placement just as surely as
+    // an explicit platform does — role:'actions' with no `platform` resolves to 'node', which is
+    // forbidden in packages.client. The validator must resolve the EFFECTIVE platform, not just
+    // read `pkg.platform`, or this contradiction passes validation and is silently dropped from
+    // the client list at install time.
+    it('rejects a client package with role actions and no explicit platform, naming the package', () => {
+        const r = ValidateManifestObject(withPackages({ client: [{ name: '@acme/x', role: 'actions' }] }));
+        expect(r.Success).toBe(false);
+        expect(r.Errors?.join(' ')).toContain('@acme/x');
+    });
+
+    it('accepts a client package with role actions when platform browser is explicit', () => {
+        const r = ValidateManifestObject(withPackages({ client: [{ name: '@acme/x', role: 'actions', platform: 'browser' }] }));
+        expect(r.Success).toBe(true);
+    });
+});
+
 /**
  * String-aware JSONC comment stripper: removes `//` line and `/* *\/` block comments
  * while preserving comment-like sequences (e.g. `https://`) inside quoted strings.

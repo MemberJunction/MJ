@@ -109,6 +109,8 @@ interface AppManifestPackage {
     name?: unknown;
     role?: unknown;
     startupExport?: unknown;
+    /** See ResolvePackagePlatform in packages/OpenApp/Engine/src/manifest/package-platform.ts. */
+    platform?: 'node' | 'browser' | 'both';
 }
 interface AppManifest {
     name?: unknown;
@@ -127,11 +129,34 @@ export interface AppManifestDiscovery {
 }
 
 /**
+ * Whether a manifest package may be loaded by a process of `tier`.
+ *
+ * DELIBERATE COPY of `ResolvePackagePlatform` / `PackageRunsOnTier` in
+ * `packages/OpenApp/Engine/src/manifest/package-platform.ts`, which is canonical. This package
+ * ships to the browser and keeps exactly one dependency by design, so it cannot import from the
+ * install engine. `packages/MJCLI/src/lib/dev-workspace/build.ts` keeps a third copy for the same
+ * reason. Change one, change all three; the shared case table lives in the engine's
+ * `package-platform.test.ts`.
+ */
+function packageRunsOnTier(pkg: AppManifestPackage, tier: DynamicPackageTier): boolean {
+    // Truthy, not `??`, to match canonical: `platform: ""` (unreachable through zod, but this
+    // package reads raw JSON directly) falls back to the role default instead of being treated as
+    // its own (invalid) platform value, which would otherwise drop the package from both tiers.
+    const platform = pkg.platform || (pkg.role === 'actions' ? 'node' : 'both');
+    if (platform === 'both') {
+        return true;
+    }
+    return tier === 'server' ? platform === 'node' : platform === 'browser';
+}
+
+/**
  * Reads `mj-app.json` from `repoDir` and returns the packages a process of `tier` should
  * load: `shared` libraries first (entities/actions register on import), then the tier's own
- * packages, with each `startupExport` carried through. Returns `null` when there is no
- * manifest, and throws only when a manifest exists but is not valid JSON — a corrupt file is
- * a problem the operator must see, an absent one is the common case.
+ * packages, with each `startupExport` carried through. Packages whose platform excludes `tier`
+ * are omitted — an actions package is Node-side and must not be handed to a browser process
+ * (#4428). Returns `null` when there is no manifest, and throws only when a manifest exists but
+ * is not valid JSON — a corrupt file is a problem the operator must see, an absent one is the
+ * common case.
  */
 export function DiscoverAppManifestPackages(repoDir: string, tier: DynamicPackageTier): AppManifestDiscovery | null {
     const manifestPath = path.join(repoDir, APP_MANIFEST_FILE_NAME);
@@ -167,10 +192,14 @@ export function DiscoverAppManifestPackages(repoDir: string, tier: DynamicPackag
         });
     };
     for (const pkg of manifest.packages?.shared ?? []) {
-        push(pkg);
+        if (packageRunsOnTier(pkg, tier)) {
+            push(pkg);
+        }
     }
     for (const pkg of manifest.packages?.[tier] ?? []) {
-        push(pkg);
+        if (packageRunsOnTier(pkg, tier)) {
+            push(pkg);
+        }
     }
     return { RepoDir: repoDir, AppName: appName, SourceDirectory: sourceDirectory, Entries: entries };
 }

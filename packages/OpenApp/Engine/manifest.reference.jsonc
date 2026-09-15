@@ -87,6 +87,14 @@
   // npm packages the app contributes. Server packages load into MJAPI at boot (firing
   // their @RegisterClass registrations); client packages load into MJExplorer. Omit
   // entirely for a metadata-only or manifest-only app.
+  //
+  // "shared" means the package belongs to BOTH tiers. It does NOT mean the package can RUN
+  // on both — declare that with "platform". A package that reaches Node built-ins (anything
+  // built on @memberjunction/actions, for example) MUST say "platform": "node", or the host
+  // Explorer's bundler fails on unresolvable "fs"/"child_process" imports.
+  //   "platform": "node" | "browser" | "both"   OPTIONAL
+  //     default: "node" for role "actions", "both" for every other role.
+  //     Declaring "node" in client[] (or "browser" in server[]) is rejected as contradictory.
   "packages": {
     "registry": "https://registry.npmjs.org",             // OPTIONAL — default public npm
     "prefix": "@acme/mj-crm-",                             // OPTIONAL — version-bump ALL workspace pkgs with this prefix
@@ -107,7 +115,9 @@
       { "name": "@acme/mj-crm-ng", "role": "module" }
     ],
     "shared": [
-      { "name": "@acme/mj-crm-types", "role": "library" }
+      { "name": "@acme/mj-crm-types", "role": "library" },
+      // Node-side, so it never reaches the browser bundle:
+      { "name": "@acme/mj-crm-shared-actions", "role": "library", "platform": "node" }
     ]
   },
 

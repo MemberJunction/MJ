@@ -624,6 +624,13 @@ export function IndexWorkspacePackages(members: readonly CandidateRepo[]): Map<s
  * contract `readJsonFile` already sets ("Unparseable JSON at <path>"). Without it a missing `name`
  * surfaced as `Cannot read properties of undefined (reading 'length')`, which names neither the
  * repo nor the file — and a developer may have a dozen of them.
+ *
+ * Also validates `platform`, when present, against the same three literals `runsInBrowser` below
+ * understands. `MjAppPackageEntry.platform` is a closed three-literal union, so the final
+ * `declared as MjAppPackageEntry[]` cast is a LIE unless this loop enforces it — an unvalidated
+ * typo like `"platform": "Node"` would satisfy the cast, fail every `=== 'node'`/`'browser'`/`'both'`
+ * comparison in `runsInBrowser`, and silently fall through its Node-only branch, dropping the
+ * package from the shell import set with no error (#4428).
  */
 function readDeclaredEntries(member: CandidateRepo, section: 'client' | 'shared'): MjAppPackageEntry[] {
   const declared: unknown = member.MjAppJson?.packages?.[section];
@@ -639,9 +646,16 @@ function readDeclaredEntries(member: CandidateRepo, section: 'client' | 'shared'
     if (typeof (entry as { name?: unknown }).name !== 'string') {
       throw new Error(`${where}[${index}] has no "name" string — a package entry must name its package`);
     }
+    const platform = (entry as { platform?: unknown }).platform;
+    if (platform !== undefined && !VALID_PLATFORMS.includes(platform as (typeof VALID_PLATFORMS)[number])) {
+      throw new Error(`${where}[${index}] has an invalid "platform" value ${JSON.stringify(platform)} — must be one of ${VALID_PLATFORMS.join(', ')}`);
+    }
   }
   return declared as MjAppPackageEntry[];
 }
+
+/** The only valid values for a manifest package entry's `platform` field — see {@link runsInBrowser}. */
+const VALID_PLATFORMS = ['node', 'browser', 'both'] as const;
 
 /**
  * Every package a member declares that an app shell will be asked to import.
@@ -649,24 +663,44 @@ function readDeclaredEntries(member: CandidateRepo, section: 'client' | 'shared'
  * This set mirrors the HOST's rule exactly, because the host is the only thing that decides what
  * the shell imports. `GetClientPackagesFromManifest`
  * (`packages/OpenApp/Engine/src/install/config-manager.ts`) builds the client dynamic-package list
- * as `[...packages.client, ...packages.shared]` with **no role test** — its own comment: "every
- * client/shared package is emitted regardless of startupExport — client entries are side-effect
- * imports" — and `mj codegen manifest --open-app-client-bootstrap` turns every enabled entry into
- * an import in the shell's generated class-registrations manifest, with no role field even present
- * on its entry type.
+ * as `[...packages.client, ...packages.shared]` minus anything whose platform excludes the
+ * browser, and `mj codegen manifest --open-app-client-bootstrap` turns every enabled entry into an
+ * import in the shell's generated class-registrations manifest.
  *
- * So there is deliberately no `role` filter here. An earlier revision kept only `role: 'bootstrap'`
- * on the premise that other roles "are imported normally"; the host contradicts that, and `role`
- * is a required seven-value enum whose `components` / `module` members are the documented Angular
- * roles. Anything narrower leaves a schema-valid package imported by the shell and linked by
- * nobody — the exact page-load-with-a-green-build failure this module exists to prevent (#4364).
+ * There is deliberately no `role` FILTER here beyond the platform rule. An earlier revision kept
+ * only `role: 'bootstrap'` on the premise that other roles "are imported normally"; the host
+ * contradicts that, and `role` is a required seven-value enum whose `components` / `module`
+ * members are the documented Angular roles. Anything narrower leaves a schema-valid package
+ * imported by the shell and linked by nobody — the page-load-with-a-green-build failure this
+ * module exists to prevent (#4364).
+ *
+ * The platform rule itself IS a role test, but a targeted one: it drops only what cannot run in a
+ * browser at all. Before it existed, a Node-only actions package declared `shared` was imported
+ * into the Angular bundle and the host could not build (#4428).
  *
  * `packages.server[]` is NOT here, and that is not an oversight: the host routes it to
  * `dynamicPackages.server`, a Node process that resolves importer-relative rather than from the
  * vite root, so it is not part of the shell's resolution problem.
  */
 function readShellImportedEntries(member: CandidateRepo): MjAppPackageEntry[] {
-  return [...readDeclaredEntries(member, 'client'), ...readDeclaredEntries(member, 'shared')];
+  return [...readDeclaredEntries(member, 'client'), ...readDeclaredEntries(member, 'shared')].filter(runsInBrowser);
+}
+
+/**
+ * Whether a declared package may be imported by the app shell.
+ *
+ * DELIBERATE COPY of `ResolvePackagePlatform` / `PackageRunsOnTier` in
+ * `packages/OpenApp/Engine/src/manifest/package-platform.ts`, which is canonical;
+ * `packages/DynamicPackages/src/discover.ts` keeps a third copy. Importing the engine's version
+ * here would bind this command to that package's built `dist/`. Change one, change all three; the
+ * shared case table lives in the engine's `package-platform.test.ts`.
+ */
+function runsInBrowser(pkg: MjAppPackageEntry): boolean {
+  // Truthy, not `??`, to match canonical: `platform: ""` (unreachable via the zod schema, but
+  // this module reads raw JSON directly) falls back to the role default instead of being treated
+  // as its own (invalid) platform value, which would otherwise drop the package from both tiers.
+  const platform = pkg.platform || (pkg.role === 'actions' ? 'node' : 'both');
+  return platform === 'both' || platform === 'browser';
 }
 
 export function CollectOpenAppClientPackages(
