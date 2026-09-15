@@ -167,7 +167,10 @@ SET
 SET
   @InheritTypeModalities_29f0bafc = 1
 SET
-  @PriorVersionID_29f0bafc = '94D5CF16-63E6-43D0-B1C0-46888A0412F9' EXEC [${flyway:defaultSchema}].spCreateAIModel @ID = @ID_29f0bafc,
+  @PriorVersionID_29f0bafc = '94D5CF16-63E6-43D0-B1C0-46888A0412F9'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModel] WHERE [ID] = @ID_29f0bafc)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModel @ID = @ID_29f0bafc,
   @Name = @Name_29f0bafc,
   @Description = @Description_29f0bafc,
   @AIModelTypeID = @AIModelTypeID_29f0bafc,
@@ -185,6 +188,29 @@ SET
   @PrefillFallbackText_Clear = 1,
   @ModelConfiguration = @ModelConfiguration_29f0bafc,
   @ModelConfiguration_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModel @ID = @ID_29f0bafc,
+  @Name = @Name_29f0bafc,
+  @Description = @Description_29f0bafc,
+  @AIModelTypeID = @AIModelTypeID_29f0bafc,
+  @PowerRank = @PowerRank_29f0bafc,
+  @IsActive = @IsActive_29f0bafc,
+  @SpeedRank = @SpeedRank_29f0bafc,
+  @CostRank = @CostRank_29f0bafc,
+  @ModelSelectionInsights = @ModelSelectionInsights_29f0bafc,
+  @ModelSelectionInsights_Clear = 1,
+  @InheritTypeModalities = @InheritTypeModalities_29f0bafc,
+  @PriorVersionID = @PriorVersionID_29f0bafc,
+  @SupportsPrefill = @SupportsPrefill_29f0bafc,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_29f0bafc,
+  @PrefillFallbackText_Clear = 1,
+  @ModelConfiguration = @ModelConfiguration_29f0bafc,
+  @ModelConfiguration_Clear = 1;
+END
+
 
 GO
 
@@ -223,7 +249,10 @@ SET
 SET
   @SupportsStreaming_54c0d730 = 0
 SET
-  @TypeID_54c0d730 = '10DB468E-F2CE-475D-9F39-2DF2DE75D257' EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_54c0d730,
+  @TypeID_54c0d730 = '10DB468E-F2CE-475D-9F39-2DF2DE75D257'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelVendor] WHERE [ID] = @ID_54c0d730)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_54c0d730,
   @ModelID = @ModelID_54c0d730,
   @VendorID = @VendorID_54c0d730,
   @Priority = @Priority_54c0d730,
@@ -248,6 +277,36 @@ SET
   @PrefillFallbackText_Clear = 1,
   @ModelConfiguration = @ModelConfiguration_54c0d730,
   @ModelConfiguration_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelVendor @ID = @ID_54c0d730,
+  @ModelID = @ModelID_54c0d730,
+  @VendorID = @VendorID_54c0d730,
+  @Priority = @Priority_54c0d730,
+  @Status = @Status_54c0d730,
+  @DriverClass = @DriverClass_54c0d730,
+  @DriverClass_Clear = 1,
+  @DriverImportPath = @DriverImportPath_54c0d730,
+  @DriverImportPath_Clear = 1,
+  @APIName = @APIName_54c0d730,
+  @APIName_Clear = 1,
+  @MaxInputTokens = @MaxInputTokens_54c0d730,
+  @MaxInputTokens_Clear = 1,
+  @MaxOutputTokens = @MaxOutputTokens_54c0d730,
+  @MaxOutputTokens_Clear = 1,
+  @SupportedResponseFormats = @SupportedResponseFormats_54c0d730,
+  @SupportsEffortLevel = @SupportsEffortLevel_54c0d730,
+  @SupportsStreaming = @SupportsStreaming_54c0d730,
+  @TypeID = @TypeID_54c0d730,
+  @SupportsPrefill = @SupportsPrefill_54c0d730,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_54c0d730,
+  @PrefillFallbackText_Clear = 1,
+  @ModelConfiguration = @ModelConfiguration_54c0d730,
+  @ModelConfiguration_Clear = 1;
+END
+
 
 GO
 
@@ -294,7 +353,10 @@ SET
 SET
   @SupportsStreaming_3b8e05bb = 1
 SET
-  @TypeID_3b8e05bb = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3' EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_3b8e05bb,
+  @TypeID_3b8e05bb = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelVendor] WHERE [ID] = @ID_3b8e05bb)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_3b8e05bb,
   @ModelID = @ModelID_3b8e05bb,
   @VendorID = @VendorID_3b8e05bb,
   @Priority = @Priority_3b8e05bb,
@@ -315,6 +377,32 @@ SET
   @PrefillFallbackText_Clear = 1,
   @ModelConfiguration = @ModelConfiguration_3b8e05bb,
   @ModelConfiguration_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelVendor @ID = @ID_3b8e05bb,
+  @ModelID = @ModelID_3b8e05bb,
+  @VendorID = @VendorID_3b8e05bb,
+  @Priority = @Priority_3b8e05bb,
+  @Status = @Status_3b8e05bb,
+  @DriverClass = @DriverClass_3b8e05bb,
+  @DriverImportPath = @DriverImportPath_3b8e05bb,
+  @DriverImportPath_Clear = 1,
+  @APIName = @APIName_3b8e05bb,
+  @MaxInputTokens = @MaxInputTokens_3b8e05bb,
+  @MaxOutputTokens = @MaxOutputTokens_3b8e05bb,
+  @SupportedResponseFormats = @SupportedResponseFormats_3b8e05bb,
+  @SupportsEffortLevel = @SupportsEffortLevel_3b8e05bb,
+  @SupportsStreaming = @SupportsStreaming_3b8e05bb,
+  @TypeID = @TypeID_3b8e05bb,
+  @SupportsPrefill = @SupportsPrefill_3b8e05bb,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_3b8e05bb,
+  @PrefillFallbackText_Clear = 1,
+  @ModelConfiguration = @ModelConfiguration_3b8e05bb,
+  @ModelConfiguration_Clear = 1;
+END
+
 
 GO
 

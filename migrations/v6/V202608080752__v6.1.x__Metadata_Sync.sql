@@ -24,7 +24,10 @@ SET
 SET
   @FieldSchema_8f85b67b = N'{"$schema":"http://json-schema.org/draft-07/schema#","type":"object","properties":{"accountName":{"type":"string","title":"Storage Account Name","description":"Azure Storage account name (the storage account itself, NOT the friendly FileStorageAccount name), e.g. mystorageacct","isSecret":false,"order":0},"accountKey":{"type":"string","title":"Account Key","description":"Azure Storage account access key (key1 or key2). Full-control secret — rotate periodically.","isSecret":true,"order":1},"defaultContainer":{"type":"string","title":"Container","description":"Blob container name to store objects in, e.g. mj-archives","isSecret":false,"order":2}},"required":["accountName","accountKey","defaultContainer"]}'
 SET
-  @IconClass_8f85b67b = N'fa-solid fa-cloud' EXEC [${flyway:defaultSchema}].spCreateCredentialType @ID = @ID_8f85b67b,
+  @IconClass_8f85b67b = N'fa-solid fa-cloud'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[CredentialType] WHERE [ID] = @ID_8f85b67b)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateCredentialType @ID = @ID_8f85b67b,
   @Name = @Name_8f85b67b,
   @Description = @Description_8f85b67b,
   @Category = @Category_8f85b67b,
@@ -32,6 +35,19 @@ SET
   @IconClass = @IconClass_8f85b67b,
   @ValidationEndpoint = @ValidationEndpoint_8f85b67b,
   @ValidationEndpoint_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateCredentialType @ID = @ID_8f85b67b,
+  @Name = @Name_8f85b67b,
+  @Description = @Description_8f85b67b,
+  @Category = @Category_8f85b67b,
+  @FieldSchema = @FieldSchema_8f85b67b,
+  @IconClass = @IconClass_8f85b67b,
+  @ValidationEndpoint = @ValidationEndpoint_8f85b67b,
+  @ValidationEndpoint_Clear = 1;
+END
+
 
 GO
 
@@ -54,7 +70,10 @@ SET
 SET
   @FieldSchema_ed8928ca = N'{"$schema":"http://json-schema.org/draft-07/schema#","type":"object","properties":{"token":{"type":"string","title":"Access Token","description":"Databricks Personal Access Token (PAT). The driver authenticates with authType ''access-token''. The warehouse hostname and HTTP path are non-secret and belong in the data source''s ConnectionConfig, not here.","isSecret":true,"order":0}},"required":["token"]}'
 SET
-  @IconClass_ed8928ca = N'fa-solid fa-key' EXEC [${flyway:defaultSchema}].spCreateCredentialType @ID = @ID_ed8928ca,
+  @IconClass_ed8928ca = N'fa-solid fa-key'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[CredentialType] WHERE [ID] = @ID_ed8928ca)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateCredentialType @ID = @ID_ed8928ca,
   @Name = @Name_ed8928ca,
   @Description = @Description_ed8928ca,
   @Category = @Category_ed8928ca,
@@ -62,6 +81,19 @@ SET
   @IconClass = @IconClass_ed8928ca,
   @ValidationEndpoint = @ValidationEndpoint_ed8928ca,
   @ValidationEndpoint_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateCredentialType @ID = @ID_ed8928ca,
+  @Name = @Name_ed8928ca,
+  @Description = @Description_ed8928ca,
+  @Category = @Category_ed8928ca,
+  @FieldSchema = @FieldSchema_ed8928ca,
+  @IconClass = @IconClass_ed8928ca,
+  @ValidationEndpoint = @ValidationEndpoint_ed8928ca,
+  @ValidationEndpoint_Clear = 1;
+END
+
 
 GO
 
@@ -148,7 +180,9 @@ SET
   @CostRank_8fbd38e1 = 7
 SET
   @InheritTypeModalities_8fbd38e1 = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModel @ID = @ID_8fbd38e1,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModel] WHERE [ID] = @ID_8fbd38e1)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModel @ID = @ID_8fbd38e1,
   @Name = @Name_8fbd38e1,
   @Description = @Description_8fbd38e1,
   @AIModelTypeID = @AIModelTypeID_8fbd38e1,
@@ -165,6 +199,28 @@ EXEC [${flyway:defaultSchema}].spCreateAIModel @ID = @ID_8fbd38e1,
   @SupportsPrefill_Clear = 1,
   @PrefillFallbackText = @PrefillFallbackText_8fbd38e1,
   @PrefillFallbackText_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModel @ID = @ID_8fbd38e1,
+  @Name = @Name_8fbd38e1,
+  @Description = @Description_8fbd38e1,
+  @AIModelTypeID = @AIModelTypeID_8fbd38e1,
+  @PowerRank = @PowerRank_8fbd38e1,
+  @IsActive = @IsActive_8fbd38e1,
+  @SpeedRank = @SpeedRank_8fbd38e1,
+  @CostRank = @CostRank_8fbd38e1,
+  @ModelSelectionInsights = @ModelSelectionInsights_8fbd38e1,
+  @ModelSelectionInsights_Clear = 1,
+  @InheritTypeModalities = @InheritTypeModalities_8fbd38e1,
+  @PriorVersionID = @PriorVersionID_8fbd38e1,
+  @PriorVersionID_Clear = 1,
+  @SupportsPrefill = @SupportsPrefill_8fbd38e1,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_8fbd38e1,
+  @PrefillFallbackText_Clear = 1;
+END
+
 
 GO
 
@@ -253,7 +309,10 @@ SET
 SET
   @SupportsStreaming_1ca722c9 = 0
 SET
-  @TypeID_1ca722c9 = '10DB468E-F2CE-475D-9F39-2DF2DE75D257' EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_1ca722c9,
+  @TypeID_1ca722c9 = '10DB468E-F2CE-475D-9F39-2DF2DE75D257'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelVendor] WHERE [ID] = @ID_1ca722c9)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_1ca722c9,
   @ModelID = @ModelID_1ca722c9,
   @VendorID = @VendorID_1ca722c9,
   @Priority = @Priority_1ca722c9,
@@ -276,6 +335,34 @@ SET
   @SupportsPrefill_Clear = 1,
   @PrefillFallbackText = @PrefillFallbackText_1ca722c9,
   @PrefillFallbackText_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelVendor @ID = @ID_1ca722c9,
+  @ModelID = @ModelID_1ca722c9,
+  @VendorID = @VendorID_1ca722c9,
+  @Priority = @Priority_1ca722c9,
+  @Status = @Status_1ca722c9,
+  @DriverClass = @DriverClass_1ca722c9,
+  @DriverClass_Clear = 1,
+  @DriverImportPath = @DriverImportPath_1ca722c9,
+  @DriverImportPath_Clear = 1,
+  @APIName = @APIName_1ca722c9,
+  @APIName_Clear = 1,
+  @MaxInputTokens = @MaxInputTokens_1ca722c9,
+  @MaxInputTokens_Clear = 1,
+  @MaxOutputTokens = @MaxOutputTokens_1ca722c9,
+  @MaxOutputTokens_Clear = 1,
+  @SupportedResponseFormats = @SupportedResponseFormats_1ca722c9,
+  @SupportsEffortLevel = @SupportsEffortLevel_1ca722c9,
+  @SupportsStreaming = @SupportsStreaming_1ca722c9,
+  @TypeID = @TypeID_1ca722c9,
+  @SupportsPrefill = @SupportsPrefill_1ca722c9,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_1ca722c9,
+  @PrefillFallbackText_Clear = 1;
+END
+
 
 GO
 
@@ -321,7 +408,10 @@ SET
 SET
   @SupportsStreaming_d7aca307 = 1
 SET
-  @TypeID_d7aca307 = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3' EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_d7aca307,
+  @TypeID_d7aca307 = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelVendor] WHERE [ID] = @ID_d7aca307)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_d7aca307,
   @ModelID = @ModelID_d7aca307,
   @VendorID = @VendorID_d7aca307,
   @Priority = @Priority_d7aca307,
@@ -340,6 +430,30 @@ SET
   @SupportsPrefill_Clear = 1,
   @PrefillFallbackText = @PrefillFallbackText_d7aca307,
   @PrefillFallbackText_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelVendor @ID = @ID_d7aca307,
+  @ModelID = @ModelID_d7aca307,
+  @VendorID = @VendorID_d7aca307,
+  @Priority = @Priority_d7aca307,
+  @Status = @Status_d7aca307,
+  @DriverClass = @DriverClass_d7aca307,
+  @DriverImportPath = @DriverImportPath_d7aca307,
+  @DriverImportPath_Clear = 1,
+  @APIName = @APIName_d7aca307,
+  @MaxInputTokens = @MaxInputTokens_d7aca307,
+  @MaxOutputTokens = @MaxOutputTokens_d7aca307,
+  @SupportedResponseFormats = @SupportedResponseFormats_d7aca307,
+  @SupportsEffortLevel = @SupportsEffortLevel_d7aca307,
+  @SupportsStreaming = @SupportsStreaming_d7aca307,
+  @TypeID = @TypeID_d7aca307,
+  @SupportsPrefill = @SupportsPrefill_d7aca307,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_d7aca307,
+  @PrefillFallbackText_Clear = 1;
+END
+
 
 GO
 
@@ -385,7 +499,10 @@ SET
 SET
   @SupportsStreaming_63b5000a = 1
 SET
-  @TypeID_63b5000a = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3' EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_63b5000a,
+  @TypeID_63b5000a = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelVendor] WHERE [ID] = @ID_63b5000a)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_63b5000a,
   @ModelID = @ModelID_63b5000a,
   @VendorID = @VendorID_63b5000a,
   @Priority = @Priority_63b5000a,
@@ -404,6 +521,30 @@ SET
   @SupportsPrefill_Clear = 1,
   @PrefillFallbackText = @PrefillFallbackText_63b5000a,
   @PrefillFallbackText_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelVendor @ID = @ID_63b5000a,
+  @ModelID = @ModelID_63b5000a,
+  @VendorID = @VendorID_63b5000a,
+  @Priority = @Priority_63b5000a,
+  @Status = @Status_63b5000a,
+  @DriverClass = @DriverClass_63b5000a,
+  @DriverImportPath = @DriverImportPath_63b5000a,
+  @DriverImportPath_Clear = 1,
+  @APIName = @APIName_63b5000a,
+  @MaxInputTokens = @MaxInputTokens_63b5000a,
+  @MaxOutputTokens = @MaxOutputTokens_63b5000a,
+  @SupportedResponseFormats = @SupportedResponseFormats_63b5000a,
+  @SupportsEffortLevel = @SupportsEffortLevel_63b5000a,
+  @SupportsStreaming = @SupportsStreaming_63b5000a,
+  @TypeID = @TypeID_63b5000a,
+  @SupportsPrefill = @SupportsPrefill_63b5000a,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_63b5000a,
+  @PrefillFallbackText_Clear = 1;
+END
+
 
 GO
 
@@ -449,7 +590,9 @@ SET
   @Comments_42c148f5 = N'Qwen 3.8 Max pricing on Alibaba Cloud Model Studio at global API general availability, 2026-08-03. $2.00/1M input, $6.00/1M output, $0.25/1M cached (implicit) input. Flat rate across the entire 1M context window — unlike other Qwen tiers there is no long-prompt price step-up. Limits: 1M context, 991.8K max input (983.6K in Thinking Mode), 131K max output. NOTE: reasoning_effort defaults to ''xhigh'' with preserve_thinking on, so thinking tokens bill at the output rate and effective cost runs above the headline $6. Sources: https://aireiter.com/blog/qwen3-8-max-api-pricing ; https://www.techrepublic.com/article/news-alibaba-qwen3-8-max-pricing-open-weights/'
 SET
   @CacheReadPricePerUnit_42c148f5 = 0.25
-EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_42c148f5,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelCost] WHERE [ID] = @ID_42c148f5)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_42c148f5,
   @ModelID = @ModelID_42c148f5,
   @VendorID = @VendorID_42c148f5,
   @StartedAt = @StartedAt_42c148f5,
@@ -466,6 +609,28 @@ EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_42c148f5,
   @CacheReadPricePerUnit = @CacheReadPricePerUnit_42c148f5,
   @CacheWritePricePerUnit = @CacheWritePricePerUnit_42c148f5,
   @CacheWritePricePerUnit_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelCost @ID = @ID_42c148f5,
+  @ModelID = @ModelID_42c148f5,
+  @VendorID = @VendorID_42c148f5,
+  @StartedAt = @StartedAt_42c148f5,
+  @EndedAt = @EndedAt_42c148f5,
+  @EndedAt_Clear = 1,
+  @Status = @Status_42c148f5,
+  @Currency = @Currency_42c148f5,
+  @PriceTypeID = @PriceTypeID_42c148f5,
+  @InputPricePerUnit = @InputPricePerUnit_42c148f5,
+  @OutputPricePerUnit = @OutputPricePerUnit_42c148f5,
+  @UnitTypeID = @UnitTypeID_42c148f5,
+  @ProcessingType = @ProcessingType_42c148f5,
+  @Comments = @Comments_42c148f5,
+  @CacheReadPricePerUnit = @CacheReadPricePerUnit_42c148f5,
+  @CacheWritePricePerUnit = @CacheWritePricePerUnit_42c148f5,
+  @CacheWritePricePerUnit_Clear = 1;
+END
+
 
 GO
 
@@ -502,7 +667,10 @@ SET
 SET
   @InheritTypeModalities_3598c955 = 1
 SET
-  @PriorVersionID_3598c955 = '19A9861F-1178-437D-941A-A4382B7D5FCA' EXEC [${flyway:defaultSchema}].spCreateAIModel @ID = @ID_3598c955,
+  @PriorVersionID_3598c955 = '19A9861F-1178-437D-941A-A4382B7D5FCA'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModel] WHERE [ID] = @ID_3598c955)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModel @ID = @ID_3598c955,
   @Name = @Name_3598c955,
   @Description = @Description_3598c955,
   @AIModelTypeID = @AIModelTypeID_3598c955,
@@ -518,6 +686,27 @@ SET
   @SupportsPrefill_Clear = 1,
   @PrefillFallbackText = @PrefillFallbackText_3598c955,
   @PrefillFallbackText_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModel @ID = @ID_3598c955,
+  @Name = @Name_3598c955,
+  @Description = @Description_3598c955,
+  @AIModelTypeID = @AIModelTypeID_3598c955,
+  @PowerRank = @PowerRank_3598c955,
+  @IsActive = @IsActive_3598c955,
+  @SpeedRank = @SpeedRank_3598c955,
+  @CostRank = @CostRank_3598c955,
+  @ModelSelectionInsights = @ModelSelectionInsights_3598c955,
+  @ModelSelectionInsights_Clear = 1,
+  @InheritTypeModalities = @InheritTypeModalities_3598c955,
+  @PriorVersionID = @PriorVersionID_3598c955,
+  @SupportsPrefill = @SupportsPrefill_3598c955,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_3598c955,
+  @PrefillFallbackText_Clear = 1;
+END
+
 
 GO
 
@@ -555,7 +744,10 @@ SET
 SET
   @SupportsStreaming_3ca5a404 = 1
 SET
-  @TypeID_3ca5a404 = '10DB468E-F2CE-475D-9F39-2DF2DE75D257' EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_3ca5a404,
+  @TypeID_3ca5a404 = '10DB468E-F2CE-475D-9F39-2DF2DE75D257'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelVendor] WHERE [ID] = @ID_3ca5a404)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_3ca5a404,
   @ModelID = @ModelID_3ca5a404,
   @VendorID = @VendorID_3ca5a404,
   @Priority = @Priority_3ca5a404,
@@ -578,6 +770,34 @@ SET
   @SupportsPrefill_Clear = 1,
   @PrefillFallbackText = @PrefillFallbackText_3ca5a404,
   @PrefillFallbackText_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelVendor @ID = @ID_3ca5a404,
+  @ModelID = @ModelID_3ca5a404,
+  @VendorID = @VendorID_3ca5a404,
+  @Priority = @Priority_3ca5a404,
+  @Status = @Status_3ca5a404,
+  @DriverClass = @DriverClass_3ca5a404,
+  @DriverClass_Clear = 1,
+  @DriverImportPath = @DriverImportPath_3ca5a404,
+  @DriverImportPath_Clear = 1,
+  @APIName = @APIName_3ca5a404,
+  @APIName_Clear = 1,
+  @MaxInputTokens = @MaxInputTokens_3ca5a404,
+  @MaxInputTokens_Clear = 1,
+  @MaxOutputTokens = @MaxOutputTokens_3ca5a404,
+  @MaxOutputTokens_Clear = 1,
+  @SupportedResponseFormats = @SupportedResponseFormats_3ca5a404,
+  @SupportsEffortLevel = @SupportsEffortLevel_3ca5a404,
+  @SupportsStreaming = @SupportsStreaming_3ca5a404,
+  @TypeID = @TypeID_3ca5a404,
+  @SupportsPrefill = @SupportsPrefill_3ca5a404,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_3ca5a404,
+  @PrefillFallbackText_Clear = 1;
+END
+
 
 GO
 
@@ -621,7 +841,10 @@ SET
 SET
   @SupportsStreaming_130002a1 = 1
 SET
-  @TypeID_130002a1 = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3' EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_130002a1,
+  @TypeID_130002a1 = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelVendor] WHERE [ID] = @ID_130002a1)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_130002a1,
   @ModelID = @ModelID_130002a1,
   @VendorID = @VendorID_130002a1,
   @Priority = @Priority_130002a1,
@@ -641,6 +864,31 @@ SET
   @SupportsPrefill_Clear = 1,
   @PrefillFallbackText = @PrefillFallbackText_130002a1,
   @PrefillFallbackText_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelVendor @ID = @ID_130002a1,
+  @ModelID = @ModelID_130002a1,
+  @VendorID = @VendorID_130002a1,
+  @Priority = @Priority_130002a1,
+  @Status = @Status_130002a1,
+  @DriverClass = @DriverClass_130002a1,
+  @DriverImportPath = @DriverImportPath_130002a1,
+  @DriverImportPath_Clear = 1,
+  @APIName = @APIName_130002a1,
+  @MaxInputTokens = @MaxInputTokens_130002a1,
+  @MaxOutputTokens = @MaxOutputTokens_130002a1,
+  @MaxOutputTokens_Clear = 1,
+  @SupportedResponseFormats = @SupportedResponseFormats_130002a1,
+  @SupportsEffortLevel = @SupportsEffortLevel_130002a1,
+  @SupportsStreaming = @SupportsStreaming_130002a1,
+  @TypeID = @TypeID_130002a1,
+  @SupportsPrefill = @SupportsPrefill_130002a1,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_130002a1,
+  @PrefillFallbackText_Clear = 1;
+END
+
 
 GO
 
@@ -683,7 +931,10 @@ SET
 SET
   @ProcessingType_364e9cf6 = N'Realtime'
 SET
-  @Comments_364e9cf6 = N'Grok Voice Think Fast 2.0 API list pricing on x.ai as of the July 29, 2026 announcement: $0.08 per minute of audio, expressed as a single blended session rate in InputPricePerUnit with OutputPricePerUnit set to 0 so per-minute consumers multiply elapsed minutes by one rate and never double-count. First cost row in the catalog on the Minutes price type / Per Minute unit. The Grok Voice Agent Builder product lists $0.05/min but is a separate SKU, not the raw realtime API. Cache pricing does not apply to per-minute audio billing (both cache columns null).' EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_364e9cf6,
+  @Comments_364e9cf6 = N'Grok Voice Think Fast 2.0 API list pricing on x.ai as of the July 29, 2026 announcement: $0.08 per minute of audio, expressed as a single blended session rate in InputPricePerUnit with OutputPricePerUnit set to 0 so per-minute consumers multiply elapsed minutes by one rate and never double-count. First cost row in the catalog on the Minutes price type / Per Minute unit. The Grok Voice Agent Builder product lists $0.05/min but is a separate SKU, not the raw realtime API. Cache pricing does not apply to per-minute audio billing (both cache columns null).'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelCost] WHERE [ID] = @ID_364e9cf6)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_364e9cf6,
   @ModelID = @ModelID_364e9cf6,
   @VendorID = @VendorID_364e9cf6,
   @StartedAt = @StartedAt_364e9cf6,
@@ -701,6 +952,29 @@ SET
   @CacheReadPricePerUnit_Clear = 1,
   @CacheWritePricePerUnit = @CacheWritePricePerUnit_364e9cf6,
   @CacheWritePricePerUnit_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelCost @ID = @ID_364e9cf6,
+  @ModelID = @ModelID_364e9cf6,
+  @VendorID = @VendorID_364e9cf6,
+  @StartedAt = @StartedAt_364e9cf6,
+  @EndedAt = @EndedAt_364e9cf6,
+  @EndedAt_Clear = 1,
+  @Status = @Status_364e9cf6,
+  @Currency = @Currency_364e9cf6,
+  @PriceTypeID = @PriceTypeID_364e9cf6,
+  @InputPricePerUnit = @InputPricePerUnit_364e9cf6,
+  @OutputPricePerUnit = @OutputPricePerUnit_364e9cf6,
+  @UnitTypeID = @UnitTypeID_364e9cf6,
+  @ProcessingType = @ProcessingType_364e9cf6,
+  @Comments = @Comments_364e9cf6,
+  @CacheReadPricePerUnit = @CacheReadPricePerUnit_364e9cf6,
+  @CacheReadPricePerUnit_Clear = 1,
+  @CacheWritePricePerUnit = @CacheWritePricePerUnit_364e9cf6,
+  @CacheWritePricePerUnit_Clear = 1;
+END
+
 
 GO
 
@@ -870,7 +1144,9 @@ SET
   @IsRequired_0a807445 = 0
 SET
   @LogValue_0a807445 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_0a807445,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_0a807445)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_0a807445,
   @ActionID = @ActionID_0a807445,
   @Name = @Name_0a807445,
   @DefaultValue = @DefaultValue_0a807445,
@@ -882,6 +1158,23 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_0a807445,
   @MediaModality = @MediaModality_0a807445,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_0a807445;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_0a807445,
+  @ActionID = @ActionID_0a807445,
+  @Name = @Name_0a807445,
+  @DefaultValue = @DefaultValue_0a807445,
+  @Type = @Type_0a807445,
+  @ValueType = @ValueType_0a807445,
+  @IsArray = @IsArray_0a807445,
+  @Description = @Description_0a807445,
+  @IsRequired = @IsRequired_0a807445,
+  @MediaModality = @MediaModality_0a807445,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_0a807445;
+END
+
 
 GO
 
@@ -915,7 +1208,9 @@ SET
   @IsRequired_877bb7b1 = 0
 SET
   @LogValue_877bb7b1 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_877bb7b1,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_877bb7b1)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_877bb7b1,
   @ActionID = @ActionID_877bb7b1,
   @Name = @Name_877bb7b1,
   @DefaultValue = @DefaultValue_877bb7b1,
@@ -928,6 +1223,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_877bb7b1,
   @MediaModality = @MediaModality_877bb7b1,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_877bb7b1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_877bb7b1,
+  @ActionID = @ActionID_877bb7b1,
+  @Name = @Name_877bb7b1,
+  @DefaultValue = @DefaultValue_877bb7b1,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_877bb7b1,
+  @ValueType = @ValueType_877bb7b1,
+  @IsArray = @IsArray_877bb7b1,
+  @Description = @Description_877bb7b1,
+  @IsRequired = @IsRequired_877bb7b1,
+  @MediaModality = @MediaModality_877bb7b1,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_877bb7b1;
+END
+
 
 GO
 
@@ -992,11 +1305,24 @@ SET
 SET
   @IsSuccess_6e48fea8 = 0
 SET
-  @Description_6e48fea8 = N'The job ran but did not complete successfully — see RunStatus and the job run record' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_6e48fea8,
+  @Description_6e48fea8 = N'The job ran but did not complete successfully — see RunStatus and the job run record'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_6e48fea8)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_6e48fea8,
   @ActionID = @ActionID_6e48fea8,
   @ResultCode = @ResultCode_6e48fea8,
   @IsSuccess = @IsSuccess_6e48fea8,
   @Description = @Description_6e48fea8;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_6e48fea8,
+  @ActionID = @ActionID_6e48fea8,
+  @ResultCode = @ResultCode_6e48fea8,
+  @IsSuccess = @IsSuccess_6e48fea8,
+  @Description = @Description_6e48fea8;
+END
+
 
 GO
 
@@ -1015,11 +1341,24 @@ SET
 SET
   @IsSuccess_e8ad5c09 = 0
 SET
-  @Description_e8ad5c09 = N'The job is already running — retry once it finishes' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_e8ad5c09,
+  @Description_e8ad5c09 = N'The job is already running — retry once it finishes'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_e8ad5c09)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_e8ad5c09,
   @ActionID = @ActionID_e8ad5c09,
   @ResultCode = @ResultCode_e8ad5c09,
   @IsSuccess = @IsSuccess_e8ad5c09,
   @Description = @Description_e8ad5c09;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_e8ad5c09,
+  @ActionID = @ActionID_e8ad5c09,
+  @ResultCode = @ResultCode_e8ad5c09,
+  @IsSuccess = @IsSuccess_e8ad5c09,
+  @Description = @Description_e8ad5c09;
+END
+
 
 GO
 
@@ -1038,11 +1377,24 @@ SET
 SET
   @IsSuccess_30e10eb3 = 1
 SET
-  @Description_30e10eb3 = N'The job was started without waiting (Wait=false) — its outcome is on the job run record' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_30e10eb3,
+  @Description_30e10eb3 = N'The job was started without waiting (Wait=false) — its outcome is on the job run record'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_30e10eb3)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_30e10eb3,
   @ActionID = @ActionID_30e10eb3,
   @ResultCode = @ResultCode_30e10eb3,
   @IsSuccess = @IsSuccess_30e10eb3,
   @Description = @Description_30e10eb3;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_30e10eb3,
+  @ActionID = @ActionID_30e10eb3,
+  @ResultCode = @ResultCode_30e10eb3,
+  @IsSuccess = @IsSuccess_30e10eb3,
+  @Description = @Description_30e10eb3;
+END
+
 
 GO
 
@@ -3493,7 +3845,9 @@ SET
   @UserID_35b7a043 = 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E'
 SET
   @IsActive_35b7a043 = 1
-EXEC [${flyway:defaultSchema}].spCreateTemplate @ID = @ID_35b7a043,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[Template] WHERE [ID] = @ID_35b7a043)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateTemplate @ID = @ID_35b7a043,
   @Name = @Name_35b7a043,
   @Description = @Description_35b7a043,
   @CategoryID = @CategoryID_35b7a043,
@@ -3505,6 +3859,23 @@ EXEC [${flyway:defaultSchema}].spCreateTemplate @ID = @ID_35b7a043,
   @DisabledAt = @DisabledAt_35b7a043,
   @DisabledAt_Clear = 1,
   @IsActive = @IsActive_35b7a043;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateTemplate @ID = @ID_35b7a043,
+  @Name = @Name_35b7a043,
+  @Description = @Description_35b7a043,
+  @CategoryID = @CategoryID_35b7a043,
+  @UserPrompt = @UserPrompt_35b7a043,
+  @UserPrompt_Clear = 1,
+  @UserID = @UserID_35b7a043,
+  @ActiveAt = @ActiveAt_35b7a043,
+  @ActiveAt_Clear = 1,
+  @DisabledAt = @DisabledAt_35b7a043,
+  @DisabledAt_Clear = 1,
+  @IsActive = @IsActive_35b7a043;
+END
+
 
 GO
 
@@ -3530,7 +3901,9 @@ SET
   @UserID_4a191bce = 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E'
 SET
   @IsActive_4a191bce = 1
-EXEC [${flyway:defaultSchema}].spCreateTemplate @ID = @ID_4a191bce,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[Template] WHERE [ID] = @ID_4a191bce)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateTemplate @ID = @ID_4a191bce,
   @Name = @Name_4a191bce,
   @Description = @Description_4a191bce,
   @CategoryID = @CategoryID_4a191bce,
@@ -3542,6 +3915,23 @@ EXEC [${flyway:defaultSchema}].spCreateTemplate @ID = @ID_4a191bce,
   @DisabledAt = @DisabledAt_4a191bce,
   @DisabledAt_Clear = 1,
   @IsActive = @IsActive_4a191bce;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateTemplate @ID = @ID_4a191bce,
+  @Name = @Name_4a191bce,
+  @Description = @Description_4a191bce,
+  @CategoryID = @CategoryID_4a191bce,
+  @UserPrompt = @UserPrompt_4a191bce,
+  @UserPrompt_Clear = 1,
+  @UserID = @UserID_4a191bce,
+  @ActiveAt = @ActiveAt_4a191bce,
+  @ActiveAt_Clear = 1,
+  @DisabledAt = @DisabledAt_4a191bce,
+  @DisabledAt_Clear = 1,
+  @IsActive = @IsActive_4a191bce;
+END
+
 
 GO
 
@@ -3953,12 +4343,25 @@ SET
   @Priority_f2bb0a43 = 1
 SET
   @IsActive_f2bb0a43 = 1
-EXEC [${flyway:defaultSchema}].spCreateTemplateContent @ID = @ID_f2bb0a43,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[TemplateContent] WHERE [ID] = @ID_f2bb0a43)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateTemplateContent @ID = @ID_f2bb0a43,
   @TemplateID = @TemplateID_f2bb0a43,
   @TypeID = @TypeID_f2bb0a43,
   @TemplateText = @TemplateText_f2bb0a43,
   @Priority = @Priority_f2bb0a43,
   @IsActive = @IsActive_f2bb0a43;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateTemplateContent @ID = @ID_f2bb0a43,
+  @TemplateID = @TemplateID_f2bb0a43,
+  @TypeID = @TypeID_f2bb0a43,
+  @TemplateText = @TemplateText_f2bb0a43,
+  @Priority = @Priority_f2bb0a43,
+  @IsActive = @IsActive_f2bb0a43;
+END
+
 
 GO
 
@@ -3991,12 +4394,25 @@ SET
   @Priority_77e49785 = 1
 SET
   @IsActive_77e49785 = 1
-EXEC [${flyway:defaultSchema}].spCreateTemplateContent @ID = @ID_77e49785,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[TemplateContent] WHERE [ID] = @ID_77e49785)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateTemplateContent @ID = @ID_77e49785,
   @TemplateID = @TemplateID_77e49785,
   @TypeID = @TypeID_77e49785,
   @TemplateText = @TemplateText_77e49785,
   @Priority = @Priority_77e49785,
   @IsActive = @IsActive_77e49785;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateTemplateContent @ID = @ID_77e49785,
+  @TemplateID = @TemplateID_77e49785,
+  @TypeID = @TypeID_77e49785,
+  @TemplateText = @TemplateText_77e49785,
+  @Priority = @Priority_77e49785,
+  @IsActive = @IsActive_77e49785;
+END
+
 
 GO
 
@@ -4313,7 +4729,9 @@ SET
   @PrefillFallbackMode_04dffc0e = N'Ignore'
 SET
   @RequireSpecificModels_04dffc0e = 0
-EXEC [${flyway:defaultSchema}].spCreateAIPrompt @ID = @ID_04dffc0e,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIPrompt] WHERE [ID] = @ID_04dffc0e)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIPrompt @ID = @ID_04dffc0e,
   @Name = @Name_04dffc0e,
   @Description = @Description_04dffc0e,
   @TemplateID = @TemplateID_04dffc0e,
@@ -4383,6 +4801,81 @@ EXEC [${flyway:defaultSchema}].spCreateAIPrompt @ID = @ID_04dffc0e,
   @AssistantPrefill_Clear = 1,
   @PrefillFallbackMode = @PrefillFallbackMode_04dffc0e,
   @RequireSpecificModels = @RequireSpecificModels_04dffc0e;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIPrompt @ID = @ID_04dffc0e,
+  @Name = @Name_04dffc0e,
+  @Description = @Description_04dffc0e,
+  @TemplateID = @TemplateID_04dffc0e,
+  @CategoryID = @CategoryID_04dffc0e,
+  @TypeID = @TypeID_04dffc0e,
+  @Status = @Status_04dffc0e,
+  @ResponseFormat = @ResponseFormat_04dffc0e,
+  @ModelSpecificResponseFormat = @ModelSpecificResponseFormat_04dffc0e,
+  @ModelSpecificResponseFormat_Clear = 1,
+  @AIModelTypeID = @AIModelTypeID_04dffc0e,
+  @AIModelTypeID_Clear = 1,
+  @MinPowerRank = @MinPowerRank_04dffc0e,
+  @SelectionStrategy = @SelectionStrategy_04dffc0e,
+  @PowerPreference = @PowerPreference_04dffc0e,
+  @ParallelizationMode = @ParallelizationMode_04dffc0e,
+  @ParallelCount = @ParallelCount_04dffc0e,
+  @ParallelCount_Clear = 1,
+  @ParallelConfigParam = @ParallelConfigParam_04dffc0e,
+  @ParallelConfigParam_Clear = 1,
+  @OutputType = @OutputType_04dffc0e,
+  @OutputExample = @OutputExample_04dffc0e,
+  @ValidationBehavior = @ValidationBehavior_04dffc0e,
+  @MaxRetries = @MaxRetries_04dffc0e,
+  @RetryDelayMS = @RetryDelayMS_04dffc0e,
+  @RetryStrategy = @RetryStrategy_04dffc0e,
+  @ResultSelectorPromptID = @ResultSelectorPromptID_04dffc0e,
+  @ResultSelectorPromptID_Clear = 1,
+  @EnableCaching = @EnableCaching_04dffc0e,
+  @CacheTTLSeconds = @CacheTTLSeconds_04dffc0e,
+  @CacheTTLSeconds_Clear = 1,
+  @CacheMatchType = @CacheMatchType_04dffc0e,
+  @CacheSimilarityThreshold = @CacheSimilarityThreshold_04dffc0e,
+  @CacheSimilarityThreshold_Clear = 1,
+  @CacheMustMatchModel = @CacheMustMatchModel_04dffc0e,
+  @CacheMustMatchVendor = @CacheMustMatchVendor_04dffc0e,
+  @CacheMustMatchAgent = @CacheMustMatchAgent_04dffc0e,
+  @CacheMustMatchConfig = @CacheMustMatchConfig_04dffc0e,
+  @PromptRole = @PromptRole_04dffc0e,
+  @PromptPosition = @PromptPosition_04dffc0e,
+  @Temperature = @Temperature_04dffc0e,
+  @Temperature_Clear = 1,
+  @TopP = @TopP_04dffc0e,
+  @TopP_Clear = 1,
+  @TopK = @TopK_04dffc0e,
+  @TopK_Clear = 1,
+  @MinP = @MinP_04dffc0e,
+  @MinP_Clear = 1,
+  @FrequencyPenalty = @FrequencyPenalty_04dffc0e,
+  @FrequencyPenalty_Clear = 1,
+  @PresencePenalty = @PresencePenalty_04dffc0e,
+  @PresencePenalty_Clear = 1,
+  @Seed = @Seed_04dffc0e,
+  @Seed_Clear = 1,
+  @StopSequences = @StopSequences_04dffc0e,
+  @StopSequences_Clear = 1,
+  @IncludeLogProbs = @IncludeLogProbs_04dffc0e,
+  @TopLogProbs = @TopLogProbs_04dffc0e,
+  @TopLogProbs_Clear = 1,
+  @FailoverStrategy = @FailoverStrategy_04dffc0e,
+  @FailoverMaxAttempts = @FailoverMaxAttempts_04dffc0e,
+  @FailoverDelaySeconds = @FailoverDelaySeconds_04dffc0e,
+  @FailoverModelStrategy = @FailoverModelStrategy_04dffc0e,
+  @FailoverErrorScope = @FailoverErrorScope_04dffc0e,
+  @EffortLevel = @EffortLevel_04dffc0e,
+  @EffortLevel_Clear = 1,
+  @AssistantPrefill = @AssistantPrefill_04dffc0e,
+  @AssistantPrefill_Clear = 1,
+  @PrefillFallbackMode = @PrefillFallbackMode_04dffc0e,
+  @RequireSpecificModels = @RequireSpecificModels_04dffc0e;
+END
+
 
 GO
 
@@ -4413,7 +4906,9 @@ SET
   @Type_a199d0fb = N'Scalar'
 SET
   @IsRequired_a199d0fb = 1
-EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_a199d0fb,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[TemplateParam] WHERE [ID] = @ID_a199d0fb)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_a199d0fb,
   @TemplateID = @TemplateID_a199d0fb,
   @Name = @Name_a199d0fb,
   @Description = @Description_a199d0fb,
@@ -4435,6 +4930,33 @@ EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_a199d0fb,
   @OrderBy_Clear = 1,
   @TemplateContentID = @TemplateContentID_a199d0fb,
   @TemplateContentID_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateTemplateParam @ID = @ID_a199d0fb,
+  @TemplateID = @TemplateID_a199d0fb,
+  @Name = @Name_a199d0fb,
+  @Description = @Description_a199d0fb,
+  @Type = @Type_a199d0fb,
+  @DefaultValue = @DefaultValue_a199d0fb,
+  @DefaultValue_Clear = 1,
+  @IsRequired = @IsRequired_a199d0fb,
+  @LinkedParameterName = @LinkedParameterName_a199d0fb,
+  @LinkedParameterName_Clear = 1,
+  @LinkedParameterField = @LinkedParameterField_a199d0fb,
+  @LinkedParameterField_Clear = 1,
+  @ExtraFilter = @ExtraFilter_a199d0fb,
+  @ExtraFilter_Clear = 1,
+  @EntityID = @EntityID_a199d0fb,
+  @EntityID_Clear = 1,
+  @RecordID = @RecordID_a199d0fb,
+  @RecordID_Clear = 1,
+  @OrderBy = @OrderBy_a199d0fb,
+  @OrderBy_Clear = 1,
+  @TemplateContentID = @TemplateContentID_a199d0fb,
+  @TemplateContentID_Clear = 1;
+END
+
 
 GO
 
@@ -4465,7 +4987,9 @@ SET
   @Type_30f93c93 = N'Scalar'
 SET
   @IsRequired_30f93c93 = 1
-EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_30f93c93,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[TemplateParam] WHERE [ID] = @ID_30f93c93)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_30f93c93,
   @TemplateID = @TemplateID_30f93c93,
   @Name = @Name_30f93c93,
   @Description = @Description_30f93c93,
@@ -4487,6 +5011,33 @@ EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_30f93c93,
   @OrderBy_Clear = 1,
   @TemplateContentID = @TemplateContentID_30f93c93,
   @TemplateContentID_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateTemplateParam @ID = @ID_30f93c93,
+  @TemplateID = @TemplateID_30f93c93,
+  @Name = @Name_30f93c93,
+  @Description = @Description_30f93c93,
+  @Type = @Type_30f93c93,
+  @DefaultValue = @DefaultValue_30f93c93,
+  @DefaultValue_Clear = 1,
+  @IsRequired = @IsRequired_30f93c93,
+  @LinkedParameterName = @LinkedParameterName_30f93c93,
+  @LinkedParameterName_Clear = 1,
+  @LinkedParameterField = @LinkedParameterField_30f93c93,
+  @LinkedParameterField_Clear = 1,
+  @ExtraFilter = @ExtraFilter_30f93c93,
+  @ExtraFilter_Clear = 1,
+  @EntityID = @EntityID_30f93c93,
+  @EntityID_Clear = 1,
+  @RecordID = @RecordID_30f93c93,
+  @RecordID_Clear = 1,
+  @OrderBy = @OrderBy_30f93c93,
+  @OrderBy_Clear = 1,
+  @TemplateContentID = @TemplateContentID_30f93c93,
+  @TemplateContentID_Clear = 1;
+END
+
 
 GO
 
@@ -4517,7 +5068,9 @@ SET
   @Type_31b6d1e5 = N'Scalar'
 SET
   @IsRequired_31b6d1e5 = 1
-EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_31b6d1e5,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[TemplateParam] WHERE [ID] = @ID_31b6d1e5)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_31b6d1e5,
   @TemplateID = @TemplateID_31b6d1e5,
   @Name = @Name_31b6d1e5,
   @Description = @Description_31b6d1e5,
@@ -4539,6 +5092,33 @@ EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_31b6d1e5,
   @OrderBy_Clear = 1,
   @TemplateContentID = @TemplateContentID_31b6d1e5,
   @TemplateContentID_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateTemplateParam @ID = @ID_31b6d1e5,
+  @TemplateID = @TemplateID_31b6d1e5,
+  @Name = @Name_31b6d1e5,
+  @Description = @Description_31b6d1e5,
+  @Type = @Type_31b6d1e5,
+  @DefaultValue = @DefaultValue_31b6d1e5,
+  @DefaultValue_Clear = 1,
+  @IsRequired = @IsRequired_31b6d1e5,
+  @LinkedParameterName = @LinkedParameterName_31b6d1e5,
+  @LinkedParameterName_Clear = 1,
+  @LinkedParameterField = @LinkedParameterField_31b6d1e5,
+  @LinkedParameterField_Clear = 1,
+  @ExtraFilter = @ExtraFilter_31b6d1e5,
+  @ExtraFilter_Clear = 1,
+  @EntityID = @EntityID_31b6d1e5,
+  @EntityID_Clear = 1,
+  @RecordID = @RecordID_31b6d1e5,
+  @RecordID_Clear = 1,
+  @OrderBy = @OrderBy_31b6d1e5,
+  @OrderBy_Clear = 1,
+  @TemplateContentID = @TemplateContentID_31b6d1e5,
+  @TemplateContentID_Clear = 1;
+END
+
 
 GO
 
@@ -4569,7 +5149,9 @@ SET
   @Type_a67fc708 = N'Scalar'
 SET
   @IsRequired_a67fc708 = 1
-EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_a67fc708,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[TemplateParam] WHERE [ID] = @ID_a67fc708)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_a67fc708,
   @TemplateID = @TemplateID_a67fc708,
   @Name = @Name_a67fc708,
   @Description = @Description_a67fc708,
@@ -4591,6 +5173,33 @@ EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_a67fc708,
   @OrderBy_Clear = 1,
   @TemplateContentID = @TemplateContentID_a67fc708,
   @TemplateContentID_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateTemplateParam @ID = @ID_a67fc708,
+  @TemplateID = @TemplateID_a67fc708,
+  @Name = @Name_a67fc708,
+  @Description = @Description_a67fc708,
+  @Type = @Type_a67fc708,
+  @DefaultValue = @DefaultValue_a67fc708,
+  @DefaultValue_Clear = 1,
+  @IsRequired = @IsRequired_a67fc708,
+  @LinkedParameterName = @LinkedParameterName_a67fc708,
+  @LinkedParameterName_Clear = 1,
+  @LinkedParameterField = @LinkedParameterField_a67fc708,
+  @LinkedParameterField_Clear = 1,
+  @ExtraFilter = @ExtraFilter_a67fc708,
+  @ExtraFilter_Clear = 1,
+  @EntityID = @EntityID_a67fc708,
+  @EntityID_Clear = 1,
+  @RecordID = @RecordID_a67fc708,
+  @RecordID_Clear = 1,
+  @OrderBy = @OrderBy_a67fc708,
+  @OrderBy_Clear = 1,
+  @TemplateContentID = @TemplateContentID_a67fc708,
+  @TemplateContentID_Clear = 1;
+END
+
 
 GO
 
@@ -4621,7 +5230,9 @@ SET
   @Type_1801f12a = N'Scalar'
 SET
   @IsRequired_1801f12a = 1
-EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_1801f12a,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[TemplateParam] WHERE [ID] = @ID_1801f12a)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_1801f12a,
   @TemplateID = @TemplateID_1801f12a,
   @Name = @Name_1801f12a,
   @Description = @Description_1801f12a,
@@ -4643,6 +5254,33 @@ EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_1801f12a,
   @OrderBy_Clear = 1,
   @TemplateContentID = @TemplateContentID_1801f12a,
   @TemplateContentID_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateTemplateParam @ID = @ID_1801f12a,
+  @TemplateID = @TemplateID_1801f12a,
+  @Name = @Name_1801f12a,
+  @Description = @Description_1801f12a,
+  @Type = @Type_1801f12a,
+  @DefaultValue = @DefaultValue_1801f12a,
+  @DefaultValue_Clear = 1,
+  @IsRequired = @IsRequired_1801f12a,
+  @LinkedParameterName = @LinkedParameterName_1801f12a,
+  @LinkedParameterName_Clear = 1,
+  @LinkedParameterField = @LinkedParameterField_1801f12a,
+  @LinkedParameterField_Clear = 1,
+  @ExtraFilter = @ExtraFilter_1801f12a,
+  @ExtraFilter_Clear = 1,
+  @EntityID = @EntityID_1801f12a,
+  @EntityID_Clear = 1,
+  @RecordID = @RecordID_1801f12a,
+  @RecordID_Clear = 1,
+  @OrderBy = @OrderBy_1801f12a,
+  @OrderBy_Clear = 1,
+  @TemplateContentID = @TemplateContentID_1801f12a,
+  @TemplateContentID_Clear = 1;
+END
+
 
 GO
 
@@ -4673,7 +5311,9 @@ SET
   @Type_a64b08ee = N'Scalar'
 SET
   @IsRequired_a64b08ee = 1
-EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_a64b08ee,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[TemplateParam] WHERE [ID] = @ID_a64b08ee)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_a64b08ee,
   @TemplateID = @TemplateID_a64b08ee,
   @Name = @Name_a64b08ee,
   @Description = @Description_a64b08ee,
@@ -4695,6 +5335,33 @@ EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_a64b08ee,
   @OrderBy_Clear = 1,
   @TemplateContentID = @TemplateContentID_a64b08ee,
   @TemplateContentID_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateTemplateParam @ID = @ID_a64b08ee,
+  @TemplateID = @TemplateID_a64b08ee,
+  @Name = @Name_a64b08ee,
+  @Description = @Description_a64b08ee,
+  @Type = @Type_a64b08ee,
+  @DefaultValue = @DefaultValue_a64b08ee,
+  @DefaultValue_Clear = 1,
+  @IsRequired = @IsRequired_a64b08ee,
+  @LinkedParameterName = @LinkedParameterName_a64b08ee,
+  @LinkedParameterName_Clear = 1,
+  @LinkedParameterField = @LinkedParameterField_a64b08ee,
+  @LinkedParameterField_Clear = 1,
+  @ExtraFilter = @ExtraFilter_a64b08ee,
+  @ExtraFilter_Clear = 1,
+  @EntityID = @EntityID_a64b08ee,
+  @EntityID_Clear = 1,
+  @RecordID = @RecordID_a64b08ee,
+  @RecordID_Clear = 1,
+  @OrderBy = @OrderBy_a64b08ee,
+  @OrderBy_Clear = 1,
+  @TemplateContentID = @TemplateContentID_a64b08ee,
+  @TemplateContentID_Clear = 1;
+END
+
 
 GO
 
@@ -4725,7 +5392,9 @@ SET
   @Type_7eeb69c8 = N'Scalar'
 SET
   @IsRequired_7eeb69c8 = 1
-EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_7eeb69c8,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[TemplateParam] WHERE [ID] = @ID_7eeb69c8)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_7eeb69c8,
   @TemplateID = @TemplateID_7eeb69c8,
   @Name = @Name_7eeb69c8,
   @Description = @Description_7eeb69c8,
@@ -4747,6 +5416,33 @@ EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_7eeb69c8,
   @OrderBy_Clear = 1,
   @TemplateContentID = @TemplateContentID_7eeb69c8,
   @TemplateContentID_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateTemplateParam @ID = @ID_7eeb69c8,
+  @TemplateID = @TemplateID_7eeb69c8,
+  @Name = @Name_7eeb69c8,
+  @Description = @Description_7eeb69c8,
+  @Type = @Type_7eeb69c8,
+  @DefaultValue = @DefaultValue_7eeb69c8,
+  @DefaultValue_Clear = 1,
+  @IsRequired = @IsRequired_7eeb69c8,
+  @LinkedParameterName = @LinkedParameterName_7eeb69c8,
+  @LinkedParameterName_Clear = 1,
+  @LinkedParameterField = @LinkedParameterField_7eeb69c8,
+  @LinkedParameterField_Clear = 1,
+  @ExtraFilter = @ExtraFilter_7eeb69c8,
+  @ExtraFilter_Clear = 1,
+  @EntityID = @EntityID_7eeb69c8,
+  @EntityID_Clear = 1,
+  @RecordID = @RecordID_7eeb69c8,
+  @RecordID_Clear = 1,
+  @OrderBy = @OrderBy_7eeb69c8,
+  @OrderBy_Clear = 1,
+  @TemplateContentID = @TemplateContentID_7eeb69c8,
+  @TemplateContentID_Clear = 1;
+END
+
 
 GO
 
@@ -4777,7 +5473,9 @@ SET
   @Type_2ca19aef = N'Scalar'
 SET
   @IsRequired_2ca19aef = 1
-EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_2ca19aef,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[TemplateParam] WHERE [ID] = @ID_2ca19aef)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_2ca19aef,
   @TemplateID = @TemplateID_2ca19aef,
   @Name = @Name_2ca19aef,
   @Description = @Description_2ca19aef,
@@ -4799,6 +5497,33 @@ EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_2ca19aef,
   @OrderBy_Clear = 1,
   @TemplateContentID = @TemplateContentID_2ca19aef,
   @TemplateContentID_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateTemplateParam @ID = @ID_2ca19aef,
+  @TemplateID = @TemplateID_2ca19aef,
+  @Name = @Name_2ca19aef,
+  @Description = @Description_2ca19aef,
+  @Type = @Type_2ca19aef,
+  @DefaultValue = @DefaultValue_2ca19aef,
+  @DefaultValue_Clear = 1,
+  @IsRequired = @IsRequired_2ca19aef,
+  @LinkedParameterName = @LinkedParameterName_2ca19aef,
+  @LinkedParameterName_Clear = 1,
+  @LinkedParameterField = @LinkedParameterField_2ca19aef,
+  @LinkedParameterField_Clear = 1,
+  @ExtraFilter = @ExtraFilter_2ca19aef,
+  @ExtraFilter_Clear = 1,
+  @EntityID = @EntityID_2ca19aef,
+  @EntityID_Clear = 1,
+  @RecordID = @RecordID_2ca19aef,
+  @RecordID_Clear = 1,
+  @OrderBy = @OrderBy_2ca19aef,
+  @OrderBy_Clear = 1,
+  @TemplateContentID = @TemplateContentID_2ca19aef,
+  @TemplateContentID_Clear = 1;
+END
+
 
 GO
 
@@ -4923,7 +5648,9 @@ SET
   @PrefillFallbackMode_0405a5ef = N'Ignore'
 SET
   @RequireSpecificModels_0405a5ef = 0
-EXEC [${flyway:defaultSchema}].spCreateAIPrompt @ID = @ID_0405a5ef,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIPrompt] WHERE [ID] = @ID_0405a5ef)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIPrompt @ID = @ID_0405a5ef,
   @Name = @Name_0405a5ef,
   @Description = @Description_0405a5ef,
   @TemplateID = @TemplateID_0405a5ef,
@@ -4993,6 +5720,81 @@ EXEC [${flyway:defaultSchema}].spCreateAIPrompt @ID = @ID_0405a5ef,
   @AssistantPrefill_Clear = 1,
   @PrefillFallbackMode = @PrefillFallbackMode_0405a5ef,
   @RequireSpecificModels = @RequireSpecificModels_0405a5ef;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIPrompt @ID = @ID_0405a5ef,
+  @Name = @Name_0405a5ef,
+  @Description = @Description_0405a5ef,
+  @TemplateID = @TemplateID_0405a5ef,
+  @CategoryID = @CategoryID_0405a5ef,
+  @TypeID = @TypeID_0405a5ef,
+  @Status = @Status_0405a5ef,
+  @ResponseFormat = @ResponseFormat_0405a5ef,
+  @ModelSpecificResponseFormat = @ModelSpecificResponseFormat_0405a5ef,
+  @ModelSpecificResponseFormat_Clear = 1,
+  @AIModelTypeID = @AIModelTypeID_0405a5ef,
+  @AIModelTypeID_Clear = 1,
+  @MinPowerRank = @MinPowerRank_0405a5ef,
+  @SelectionStrategy = @SelectionStrategy_0405a5ef,
+  @PowerPreference = @PowerPreference_0405a5ef,
+  @ParallelizationMode = @ParallelizationMode_0405a5ef,
+  @ParallelCount = @ParallelCount_0405a5ef,
+  @ParallelCount_Clear = 1,
+  @ParallelConfigParam = @ParallelConfigParam_0405a5ef,
+  @ParallelConfigParam_Clear = 1,
+  @OutputType = @OutputType_0405a5ef,
+  @OutputExample = @OutputExample_0405a5ef,
+  @ValidationBehavior = @ValidationBehavior_0405a5ef,
+  @MaxRetries = @MaxRetries_0405a5ef,
+  @RetryDelayMS = @RetryDelayMS_0405a5ef,
+  @RetryStrategy = @RetryStrategy_0405a5ef,
+  @ResultSelectorPromptID = @ResultSelectorPromptID_0405a5ef,
+  @ResultSelectorPromptID_Clear = 1,
+  @EnableCaching = @EnableCaching_0405a5ef,
+  @CacheTTLSeconds = @CacheTTLSeconds_0405a5ef,
+  @CacheTTLSeconds_Clear = 1,
+  @CacheMatchType = @CacheMatchType_0405a5ef,
+  @CacheSimilarityThreshold = @CacheSimilarityThreshold_0405a5ef,
+  @CacheSimilarityThreshold_Clear = 1,
+  @CacheMustMatchModel = @CacheMustMatchModel_0405a5ef,
+  @CacheMustMatchVendor = @CacheMustMatchVendor_0405a5ef,
+  @CacheMustMatchAgent = @CacheMustMatchAgent_0405a5ef,
+  @CacheMustMatchConfig = @CacheMustMatchConfig_0405a5ef,
+  @PromptRole = @PromptRole_0405a5ef,
+  @PromptPosition = @PromptPosition_0405a5ef,
+  @Temperature = @Temperature_0405a5ef,
+  @Temperature_Clear = 1,
+  @TopP = @TopP_0405a5ef,
+  @TopP_Clear = 1,
+  @TopK = @TopK_0405a5ef,
+  @TopK_Clear = 1,
+  @MinP = @MinP_0405a5ef,
+  @MinP_Clear = 1,
+  @FrequencyPenalty = @FrequencyPenalty_0405a5ef,
+  @FrequencyPenalty_Clear = 1,
+  @PresencePenalty = @PresencePenalty_0405a5ef,
+  @PresencePenalty_Clear = 1,
+  @Seed = @Seed_0405a5ef,
+  @Seed_Clear = 1,
+  @StopSequences = @StopSequences_0405a5ef,
+  @StopSequences_Clear = 1,
+  @IncludeLogProbs = @IncludeLogProbs_0405a5ef,
+  @TopLogProbs = @TopLogProbs_0405a5ef,
+  @TopLogProbs_Clear = 1,
+  @FailoverStrategy = @FailoverStrategy_0405a5ef,
+  @FailoverMaxAttempts = @FailoverMaxAttempts_0405a5ef,
+  @FailoverDelaySeconds = @FailoverDelaySeconds_0405a5ef,
+  @FailoverModelStrategy = @FailoverModelStrategy_0405a5ef,
+  @FailoverErrorScope = @FailoverErrorScope_0405a5ef,
+  @EffortLevel = @EffortLevel_0405a5ef,
+  @EffortLevel_Clear = 1,
+  @AssistantPrefill = @AssistantPrefill_0405a5ef,
+  @AssistantPrefill_Clear = 1,
+  @PrefillFallbackMode = @PrefillFallbackMode_0405a5ef,
+  @RequireSpecificModels = @RequireSpecificModels_0405a5ef;
+END
+
 
 GO
 
@@ -5456,7 +6258,9 @@ SET
   @AutoExpireDays_159914a7 = 14
 SET
   @Priority_159914a7 = 20
-EXEC [${flyway:defaultSchema}].spCreateUserNotificationType @ID = @ID_159914a7,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[UserNotificationType] WHERE [ID] = @ID_159914a7)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateUserNotificationType @ID = @ID_159914a7,
   @Name = @Name_159914a7,
   @Description = @Description_159914a7,
   @DefaultInApp = @DefaultInApp_159914a7,
@@ -5471,6 +6275,26 @@ EXEC [${flyway:defaultSchema}].spCreateUserNotificationType @ID = @ID_159914a7,
   @Color = @Color_159914a7,
   @AutoExpireDays = @AutoExpireDays_159914a7,
   @Priority = @Priority_159914a7;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateUserNotificationType @ID = @ID_159914a7,
+  @Name = @Name_159914a7,
+  @Description = @Description_159914a7,
+  @DefaultInApp = @DefaultInApp_159914a7,
+  @DefaultEmail = @DefaultEmail_159914a7,
+  @DefaultSMS = @DefaultSMS_159914a7,
+  @AllowUserPreference = @AllowUserPreference_159914a7,
+  @EmailTemplateID = @EmailTemplateID_159914a7,
+  @EmailTemplateID_Clear = 1,
+  @SMSTemplateID = @SMSTemplateID_159914a7,
+  @SMSTemplateID_Clear = 1,
+  @Icon = @Icon_159914a7,
+  @Color = @Color_159914a7,
+  @AutoExpireDays = @AutoExpireDays_159914a7,
+  @Priority = @Priority_159914a7;
+END
+
 
 GO
 
@@ -5510,7 +6334,9 @@ SET
   @AutoExpireDays_7542c440 = 30
 SET
   @Priority_7542c440 = 40
-EXEC [${flyway:defaultSchema}].spCreateUserNotificationType @ID = @ID_7542c440,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[UserNotificationType] WHERE [ID] = @ID_7542c440)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateUserNotificationType @ID = @ID_7542c440,
   @Name = @Name_7542c440,
   @Description = @Description_7542c440,
   @DefaultInApp = @DefaultInApp_7542c440,
@@ -5525,6 +6351,26 @@ EXEC [${flyway:defaultSchema}].spCreateUserNotificationType @ID = @ID_7542c440,
   @Color = @Color_7542c440,
   @AutoExpireDays = @AutoExpireDays_7542c440,
   @Priority = @Priority_7542c440;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateUserNotificationType @ID = @ID_7542c440,
+  @Name = @Name_7542c440,
+  @Description = @Description_7542c440,
+  @DefaultInApp = @DefaultInApp_7542c440,
+  @DefaultEmail = @DefaultEmail_7542c440,
+  @DefaultSMS = @DefaultSMS_7542c440,
+  @AllowUserPreference = @AllowUserPreference_7542c440,
+  @EmailTemplateID = @EmailTemplateID_7542c440,
+  @EmailTemplateID_Clear = 1,
+  @SMSTemplateID = @SMSTemplateID_7542c440,
+  @SMSTemplateID_Clear = 1,
+  @Icon = @Icon_7542c440,
+  @Color = @Color_7542c440,
+  @AutoExpireDays = @AutoExpireDays_7542c440,
+  @Priority = @Priority_7542c440;
+END
+
 
 GO
 
@@ -5755,7 +6601,9 @@ SET
   @CompactionTriggerPercent_fc64e69d = 75
 SET
   @CompactionTargetPercent_fc64e69d = 30
-EXEC [${flyway:defaultSchema}].spCreateAIAgentType @ID = @ID_fc64e69d,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIAgentType] WHERE [ID] = @ID_fc64e69d)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIAgentType @ID = @ID_fc64e69d,
   @Name = @Name_fc64e69d,
   @Description = @Description_fc64e69d,
   @SystemPromptID = @SystemPromptID_fc64e69d,
@@ -5789,6 +6637,45 @@ EXEC [${flyway:defaultSchema}].spCreateAIAgentType @ID = @ID_fc64e69d,
   @CompactionTargetPercent = @CompactionTargetPercent_fc64e69d,
   @ConversationSummaryPromptID = @ConversationSummaryPromptID_fc64e69d,
   @ConversationSummaryPromptID_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIAgentType @ID = @ID_fc64e69d,
+  @Name = @Name_fc64e69d,
+  @Description = @Description_fc64e69d,
+  @SystemPromptID = @SystemPromptID_fc64e69d,
+  @IsActive = @IsActive_fc64e69d,
+  @AgentPromptPlaceholder = @AgentPromptPlaceholder_fc64e69d,
+  @DriverClass = @DriverClass_fc64e69d,
+  @UIFormSectionKey = @UIFormSectionKey_fc64e69d,
+  @UIFormSectionKey_Clear = 1,
+  @UIFormKey = @UIFormKey_fc64e69d,
+  @UIFormKey_Clear = 1,
+  @UIFormSectionExpandedByDefault = @UIFormSectionExpandedByDefault_fc64e69d,
+  @PromptParamsSchema = @PromptParamsSchema_fc64e69d,
+  @PromptParamsSchema_Clear = 1,
+  @AssignmentStrategy = @AssignmentStrategy_fc64e69d,
+  @AssignmentStrategy_Clear = 1,
+  @DefaultStorageAccountID = @DefaultStorageAccountID_fc64e69d,
+  @DefaultStorageAccountID_Clear = 1,
+  @ConfigSchema = @ConfigSchema_fc64e69d,
+  @ConfigSchema_Clear = 1,
+  @DefaultConfiguration = @DefaultConfiguration_fc64e69d,
+  @DefaultConfiguration_Clear = 1,
+  @ContextCompressionMessageThreshold = @ContextCompressionMessageThreshold_fc64e69d,
+  @ContextCompressionMessageThreshold_Clear = 1,
+  @ContextCompressionPromptID = @ContextCompressionPromptID_fc64e69d,
+  @ContextCompressionPromptID_Clear = 1,
+  @ContextCompressionMessageRetentionCount = @ContextCompressionMessageRetentionCount_fc64e69d,
+  @ContextCompressionMessageRetentionCount_Clear = 1,
+  @ContextWindowMaxTokens = @ContextWindowMaxTokens_fc64e69d,
+  @ContextWindowMaxTokens_Clear = 1,
+  @CompactionTriggerPercent = @CompactionTriggerPercent_fc64e69d,
+  @CompactionTargetPercent = @CompactionTargetPercent_fc64e69d,
+  @ConversationSummaryPromptID = @ConversationSummaryPromptID_fc64e69d,
+  @ConversationSummaryPromptID_Clear = 1;
+END
+
 
 GO
 
@@ -5978,7 +6865,9 @@ SET
   @SkillActivationMode_ab87c3c0 = N'RequestedOnly'
 SET
   @RequirePlanMode_ab87c3c0 = 0
-EXEC [${flyway:defaultSchema}].spCreateAIAgent @ID = @ID_ab87c3c0,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIAgent] WHERE [ID] = @ID_ab87c3c0)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIAgent @ID = @ID_ab87c3c0,
   @Name = @Name_ab87c3c0,
   @Description = @Description_ab87c3c0,
   @LogoURL = @LogoURL_ab87c3c0,
@@ -6090,6 +6979,123 @@ EXEC [${flyway:defaultSchema}].spCreateAIAgent @ID = @ID_ab87c3c0,
   @CompactionTargetPercent_Clear = 1,
   @ConversationSummaryPromptID = @ConversationSummaryPromptID_ab87c3c0,
   @ConversationSummaryPromptID_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIAgent @ID = @ID_ab87c3c0,
+  @Name = @Name_ab87c3c0,
+  @Description = @Description_ab87c3c0,
+  @LogoURL = @LogoURL_ab87c3c0,
+  @LogoURL_Clear = 1,
+  @ParentID = @ParentID_ab87c3c0,
+  @ParentID_Clear = 1,
+  @ExposeAsAction = @ExposeAsAction_ab87c3c0,
+  @ExecutionOrder = @ExecutionOrder_ab87c3c0,
+  @ExecutionMode = @ExecutionMode_ab87c3c0,
+  @EnableContextCompression = @EnableContextCompression_ab87c3c0,
+  @ContextCompressionMessageThreshold = @ContextCompressionMessageThreshold_ab87c3c0,
+  @ContextCompressionMessageThreshold_Clear = 1,
+  @ContextCompressionPromptID = @ContextCompressionPromptID_ab87c3c0,
+  @ContextCompressionPromptID_Clear = 1,
+  @ContextCompressionMessageRetentionCount = @ContextCompressionMessageRetentionCount_ab87c3c0,
+  @ContextCompressionMessageRetentionCount_Clear = 1,
+  @TypeID = @TypeID_ab87c3c0,
+  @Status = @Status_ab87c3c0,
+  @DriverClass = @DriverClass_ab87c3c0,
+  @DriverClass_Clear = 1,
+  @IconClass = @IconClass_ab87c3c0,
+  @ModelSelectionMode = @ModelSelectionMode_ab87c3c0,
+  @PayloadDownstreamPaths = @PayloadDownstreamPaths_ab87c3c0,
+  @PayloadUpstreamPaths = @PayloadUpstreamPaths_ab87c3c0,
+  @PayloadSelfReadPaths = @PayloadSelfReadPaths_ab87c3c0,
+  @PayloadSelfReadPaths_Clear = 1,
+  @PayloadSelfWritePaths = @PayloadSelfWritePaths_ab87c3c0,
+  @PayloadSelfWritePaths_Clear = 1,
+  @PayloadScope = @PayloadScope_ab87c3c0,
+  @PayloadScope_Clear = 1,
+  @FinalPayloadValidation = @FinalPayloadValidation_ab87c3c0,
+  @FinalPayloadValidation_Clear = 1,
+  @FinalPayloadValidationMode = @FinalPayloadValidationMode_ab87c3c0,
+  @FinalPayloadValidationMaxRetries = @FinalPayloadValidationMaxRetries_ab87c3c0,
+  @MaxCostPerRun = @MaxCostPerRun_ab87c3c0,
+  @MaxTokensPerRun = @MaxTokensPerRun_ab87c3c0,
+  @MaxTokensPerRun_Clear = 1,
+  @MaxIterationsPerRun = @MaxIterationsPerRun_ab87c3c0,
+  @MaxTimePerRun = @MaxTimePerRun_ab87c3c0,
+  @MinExecutionsPerRun = @MinExecutionsPerRun_ab87c3c0,
+  @MinExecutionsPerRun_Clear = 1,
+  @MaxExecutionsPerRun = @MaxExecutionsPerRun_ab87c3c0,
+  @MaxExecutionsPerRun_Clear = 1,
+  @StartingPayloadValidation = @StartingPayloadValidation_ab87c3c0,
+  @StartingPayloadValidation_Clear = 1,
+  @StartingPayloadValidationMode = @StartingPayloadValidationMode_ab87c3c0,
+  @DefaultPromptEffortLevel = @DefaultPromptEffortLevel_ab87c3c0,
+  @DefaultPromptEffortLevel_Clear = 1,
+  @ChatHandlingOption = @ChatHandlingOption_ab87c3c0,
+  @ChatHandlingOption_Clear = 1,
+  @DefaultArtifactTypeID = @DefaultArtifactTypeID_ab87c3c0,
+  @DefaultArtifactTypeID_Clear = 1,
+  @OwnerUserID = @OwnerUserID_ab87c3c0,
+  @InvocationMode = @InvocationMode_ab87c3c0,
+  @ArtifactCreationMode = @ArtifactCreationMode_ab87c3c0,
+  @FunctionalRequirements = @FunctionalRequirements_ab87c3c0,
+  @FunctionalRequirements_Clear = 1,
+  @TechnicalDesign = @TechnicalDesign_ab87c3c0,
+  @TechnicalDesign_Clear = 1,
+  @InjectNotes = @InjectNotes_ab87c3c0,
+  @MaxNotesToInject = @MaxNotesToInject_ab87c3c0,
+  @NoteInjectionStrategy = @NoteInjectionStrategy_ab87c3c0,
+  @InjectExamples = @InjectExamples_ab87c3c0,
+  @MaxExamplesToInject = @MaxExamplesToInject_ab87c3c0,
+  @ExampleInjectionStrategy = @ExampleInjectionStrategy_ab87c3c0,
+  @IsRestricted = @IsRestricted_ab87c3c0,
+  @MessageMode = @MessageMode_ab87c3c0,
+  @MaxMessages = @MaxMessages_ab87c3c0,
+  @MaxMessages_Clear = 1,
+  @AttachmentStorageProviderID = @AttachmentStorageProviderID_ab87c3c0,
+  @AttachmentStorageProviderID_Clear = 1,
+  @AttachmentRootPath = @AttachmentRootPath_ab87c3c0,
+  @AttachmentRootPath_Clear = 1,
+  @InlineStorageThresholdBytes = @InlineStorageThresholdBytes_ab87c3c0,
+  @InlineStorageThresholdBytes_Clear = 1,
+  @AgentTypePromptParams = @AgentTypePromptParams_ab87c3c0,
+  @ScopeConfig = @ScopeConfig_ab87c3c0,
+  @ScopeConfig_Clear = 1,
+  @NoteRetentionDays = @NoteRetentionDays_ab87c3c0,
+  @ExampleRetentionDays = @ExampleRetentionDays_ab87c3c0,
+  @AutoArchiveEnabled = @AutoArchiveEnabled_ab87c3c0,
+  @RerankerConfiguration = @RerankerConfiguration_ab87c3c0,
+  @RerankerConfiguration_Clear = 1,
+  @CategoryID = @CategoryID_ab87c3c0,
+  @AllowEphemeralClientTools = @AllowEphemeralClientTools_ab87c3c0,
+  @DefaultStorageAccountID = @DefaultStorageAccountID_ab87c3c0,
+  @DefaultStorageAccountID_Clear = 1,
+  @SearchScopeAccess = @SearchScopeAccess_ab87c3c0,
+  @AcceptUnregisteredFiles = @AcceptUnregisteredFiles_ab87c3c0,
+  @DefaultCoAgentID = @DefaultCoAgentID_ab87c3c0,
+  @DefaultCoAgentID_Clear = 1,
+  @TypeConfiguration = @TypeConfiguration_ab87c3c0,
+  @AllowMemoryWrite = @AllowMemoryWrite_ab87c3c0,
+  @RecordingDefault = @RecordingDefault_ab87c3c0,
+  @RecordingDefault_Clear = 1,
+  @RecordingStorageProviderID = @RecordingStorageProviderID_ab87c3c0,
+  @RecordingStorageProviderID_Clear = 1,
+  @DefaultMediaCollectionID = @DefaultMediaCollectionID_ab87c3c0,
+  @DefaultMediaCollectionID_Clear = 1,
+  @SupportsPlanMode = @SupportsPlanMode_ab87c3c0,
+  @AcceptsSkills = @AcceptsSkills_ab87c3c0,
+  @SkillActivationMode = @SkillActivationMode_ab87c3c0,
+  @RequirePlanMode = @RequirePlanMode_ab87c3c0,
+  @ContextWindowMaxTokens = @ContextWindowMaxTokens_ab87c3c0,
+  @ContextWindowMaxTokens_Clear = 1,
+  @CompactionTriggerPercent = @CompactionTriggerPercent_ab87c3c0,
+  @CompactionTriggerPercent_Clear = 1,
+  @CompactionTargetPercent = @CompactionTargetPercent_ab87c3c0,
+  @CompactionTargetPercent_Clear = 1,
+  @ConversationSummaryPromptID = @ConversationSummaryPromptID_ab87c3c0,
+  @ConversationSummaryPromptID_Clear = 1;
+END
+
 
 GO
 
@@ -6114,7 +7120,10 @@ SET
 SET
   @Status_c773ad45 = N'Active'
 SET
-  @ContextBehavior_c773ad45 = N'Complete' EXEC [${flyway:defaultSchema}].spCreateAIAgentPrompt @ID = @ID_c773ad45,
+  @ContextBehavior_c773ad45 = N'Complete'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIAgentPrompt] WHERE [ID] = @ID_c773ad45)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIAgentPrompt @ID = @ID_c773ad45,
   @AgentID = @AgentID_c773ad45,
   @PromptID = @PromptID_c773ad45,
   @Purpose = @Purpose_c773ad45,
@@ -6126,6 +7135,23 @@ SET
   @ContextBehavior = @ContextBehavior_c773ad45,
   @ContextMessageCount = @ContextMessageCount_c773ad45,
   @ContextMessageCount_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIAgentPrompt @ID = @ID_c773ad45,
+  @AgentID = @AgentID_c773ad45,
+  @PromptID = @PromptID_c773ad45,
+  @Purpose = @Purpose_c773ad45,
+  @Purpose_Clear = 1,
+  @ExecutionOrder = @ExecutionOrder_c773ad45,
+  @ConfigurationID = @ConfigurationID_c773ad45,
+  @ConfigurationID_Clear = 1,
+  @Status = @Status_c773ad45,
+  @ContextBehavior = @ContextBehavior_c773ad45,
+  @ContextMessageCount = @ContextMessageCount_c773ad45,
+  @ContextMessageCount_Clear = 1;
+END
+
 
 GO
 
@@ -9804,7 +10830,10 @@ SET
   "ModelSelection": true
 }'
 SET
-  @Status_699d46a4 = N'Inactive' EXEC [${flyway:defaultSchema}].spCreateAIAgentHarness @ID = @ID_699d46a4,
+  @Status_699d46a4 = N'Inactive'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIAgentHarness] WHERE [ID] = @ID_699d46a4)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIAgentHarness @ID = @ID_699d46a4,
   @Name = @Name_699d46a4,
   @Description = @Description_699d46a4,
   @DriverClass = @DriverClass_699d46a4,
@@ -9815,6 +10844,22 @@ SET
   @DefaultModel = @DefaultModel_699d46a4,
   @CapabilitySettings = @CapabilitySettings_699d46a4,
   @Status = @Status_699d46a4;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIAgentHarness @ID = @ID_699d46a4,
+  @Name = @Name_699d46a4,
+  @Description = @Description_699d46a4,
+  @DriverClass = @DriverClass_699d46a4,
+  @ExecutablePath = @ExecutablePath_699d46a4,
+  @ExecutablePath_Clear = 1,
+  @AIVendorID = @AIVendorID_699d46a4,
+  @AIModelID = @AIModelID_699d46a4,
+  @DefaultModel = @DefaultModel_699d46a4,
+  @CapabilitySettings = @CapabilitySettings_699d46a4,
+  @Status = @Status_699d46a4;
+END
+
 
 GO
 
@@ -9851,7 +10896,10 @@ SET
   "ModelSelection": true
 }'
 SET
-  @Status_db5e8ab8 = N'Inactive' EXEC [${flyway:defaultSchema}].spCreateAIAgentHarness @ID = @ID_db5e8ab8,
+  @Status_db5e8ab8 = N'Inactive'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIAgentHarness] WHERE [ID] = @ID_db5e8ab8)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIAgentHarness @ID = @ID_db5e8ab8,
   @Name = @Name_db5e8ab8,
   @Description = @Description_db5e8ab8,
   @DriverClass = @DriverClass_db5e8ab8,
@@ -9864,6 +10912,24 @@ SET
   @DefaultModel_Clear = 1,
   @CapabilitySettings = @CapabilitySettings_db5e8ab8,
   @Status = @Status_db5e8ab8;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIAgentHarness @ID = @ID_db5e8ab8,
+  @Name = @Name_db5e8ab8,
+  @Description = @Description_db5e8ab8,
+  @DriverClass = @DriverClass_db5e8ab8,
+  @ExecutablePath = @ExecutablePath_db5e8ab8,
+  @ExecutablePath_Clear = 1,
+  @AIVendorID = @AIVendorID_db5e8ab8,
+  @AIModelID = @AIModelID_db5e8ab8,
+  @AIModelID_Clear = 1,
+  @DefaultModel = @DefaultModel_db5e8ab8,
+  @DefaultModel_Clear = 1,
+  @CapabilitySettings = @CapabilitySettings_db5e8ab8,
+  @Status = @Status_db5e8ab8;
+END
+
 
 GO
 
@@ -9898,7 +10964,10 @@ SET
   "ModelSelection": true
 }'
 SET
-  @Status_99d960a6 = N'Inactive' EXEC [${flyway:defaultSchema}].spCreateAIAgentHarness @ID = @ID_99d960a6,
+  @Status_99d960a6 = N'Inactive'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIAgentHarness] WHERE [ID] = @ID_99d960a6)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIAgentHarness @ID = @ID_99d960a6,
   @Name = @Name_99d960a6,
   @Description = @Description_99d960a6,
   @DriverClass = @DriverClass_99d960a6,
@@ -9912,6 +10981,25 @@ SET
   @DefaultModel_Clear = 1,
   @CapabilitySettings = @CapabilitySettings_99d960a6,
   @Status = @Status_99d960a6;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIAgentHarness @ID = @ID_99d960a6,
+  @Name = @Name_99d960a6,
+  @Description = @Description_99d960a6,
+  @DriverClass = @DriverClass_99d960a6,
+  @ExecutablePath = @ExecutablePath_99d960a6,
+  @ExecutablePath_Clear = 1,
+  @AIVendorID = @AIVendorID_99d960a6,
+  @AIVendorID_Clear = 1,
+  @AIModelID = @AIModelID_99d960a6,
+  @AIModelID_Clear = 1,
+  @DefaultModel = @DefaultModel_99d960a6,
+  @DefaultModel_Clear = 1,
+  @CapabilitySettings = @CapabilitySettings_99d960a6,
+  @Status = @Status_99d960a6;
+END
+
 
 GO
 
@@ -9948,7 +11036,10 @@ SET
   "ModelSelection": true
 }'
 SET
-  @Status_af5b37f6 = N'Inactive' EXEC [${flyway:defaultSchema}].spCreateAIAgentHarness @ID = @ID_af5b37f6,
+  @Status_af5b37f6 = N'Inactive'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIAgentHarness] WHERE [ID] = @ID_af5b37f6)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIAgentHarness @ID = @ID_af5b37f6,
   @Name = @Name_af5b37f6,
   @Description = @Description_af5b37f6,
   @DriverClass = @DriverClass_af5b37f6,
@@ -9961,6 +11052,24 @@ SET
   @DefaultModel_Clear = 1,
   @CapabilitySettings = @CapabilitySettings_af5b37f6,
   @Status = @Status_af5b37f6;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIAgentHarness @ID = @ID_af5b37f6,
+  @Name = @Name_af5b37f6,
+  @Description = @Description_af5b37f6,
+  @DriverClass = @DriverClass_af5b37f6,
+  @ExecutablePath = @ExecutablePath_af5b37f6,
+  @ExecutablePath_Clear = 1,
+  @AIVendorID = @AIVendorID_af5b37f6,
+  @AIModelID = @AIModelID_af5b37f6,
+  @AIModelID_Clear = 1,
+  @DefaultModel = @DefaultModel_af5b37f6,
+  @DefaultModel_Clear = 1,
+  @CapabilitySettings = @CapabilitySettings_af5b37f6,
+  @Status = @Status_af5b37f6;
+END
+
 
 GO
 
@@ -9996,7 +11105,10 @@ SET
   "ModelSelection": true
 }'
 SET
-  @Status_fd4274e1 = N'Inactive' EXEC [${flyway:defaultSchema}].spCreateAIAgentHarness @ID = @ID_fd4274e1,
+  @Status_fd4274e1 = N'Inactive'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIAgentHarness] WHERE [ID] = @ID_fd4274e1)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIAgentHarness @ID = @ID_fd4274e1,
   @Name = @Name_fd4274e1,
   @Description = @Description_fd4274e1,
   @DriverClass = @DriverClass_fd4274e1,
@@ -10010,6 +11122,25 @@ SET
   @DefaultModel_Clear = 1,
   @CapabilitySettings = @CapabilitySettings_fd4274e1,
   @Status = @Status_fd4274e1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIAgentHarness @ID = @ID_fd4274e1,
+  @Name = @Name_fd4274e1,
+  @Description = @Description_fd4274e1,
+  @DriverClass = @DriverClass_fd4274e1,
+  @ExecutablePath = @ExecutablePath_fd4274e1,
+  @ExecutablePath_Clear = 1,
+  @AIVendorID = @AIVendorID_fd4274e1,
+  @AIVendorID_Clear = 1,
+  @AIModelID = @AIModelID_fd4274e1,
+  @AIModelID_Clear = 1,
+  @DefaultModel = @DefaultModel_fd4274e1,
+  @DefaultModel_Clear = 1,
+  @CapabilitySettings = @CapabilitySettings_fd4274e1,
+  @Status = @Status_fd4274e1;
+END
+
 
 GO
 
@@ -10047,7 +11178,10 @@ SET
 SET
   @SupportsReadWrite_be599f9d = 0
 SET
-  @Status_be599f9d = N'Active' EXEC [${flyway:defaultSchema}].spCreateExternalDataSourceType @ID = @ID_be599f9d,
+  @Status_be599f9d = N'Active'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ExternalDataSourceType] WHERE [ID] = @ID_be599f9d)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateExternalDataSourceType @ID = @ID_be599f9d,
   @Name = @Name_be599f9d,
   @Description = @Description_be599f9d,
   @DriverClass = @DriverClass_be599f9d,
@@ -10060,6 +11194,24 @@ SET
   @SupportsNativeQueries = @SupportsNativeQueries_be599f9d,
   @SupportsReadWrite = @SupportsReadWrite_be599f9d,
   @Status = @Status_be599f9d;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateExternalDataSourceType @ID = @ID_be599f9d,
+  @Name = @Name_be599f9d,
+  @Description = @Description_be599f9d,
+  @DriverClass = @DriverClass_be599f9d,
+  @RequiredCredentialTypeID = @RequiredCredentialTypeID_be599f9d,
+  @RequiredCredentialTypeID_Clear = 1,
+  @MetadataIntrospectionStrategy = @MetadataIntrospectionStrategy_be599f9d,
+  @FilterDialect = @FilterDialect_be599f9d,
+  @PagingStrategy = @PagingStrategy_be599f9d,
+  @SupportsSchemaIntrospection = @SupportsSchemaIntrospection_be599f9d,
+  @SupportsNativeQueries = @SupportsNativeQueries_be599f9d,
+  @SupportsReadWrite = @SupportsReadWrite_be599f9d,
+  @Status = @Status_be599f9d;
+END
+
 
 GO
 
@@ -10157,7 +11309,9 @@ SET
   @Status_3f062cfe = N'Active'
 SET
   @CodeLocked_3f062cfe = 0
-EXEC [${flyway:defaultSchema}].spCreateRemoteOperation @ID = @ID_3f062cfe,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[RemoteOperation] WHERE [ID] = @ID_3f062cfe)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateRemoteOperation @ID = @ID_3f062cfe,
   @Name = @Name_3f062cfe,
   @OperationKey = @OperationKey_3f062cfe,
   @CategoryID = @CategoryID_3f062cfe,
@@ -10193,6 +11347,47 @@ EXEC [${flyway:defaultSchema}].spCreateRemoteOperation @ID = @ID_3f062cfe,
   @CodeComments_Clear = 1,
   @Libraries = @Libraries_3f062cfe,
   @Libraries_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateRemoteOperation @ID = @ID_3f062cfe,
+  @Name = @Name_3f062cfe,
+  @OperationKey = @OperationKey_3f062cfe,
+  @CategoryID = @CategoryID_3f062cfe,
+  @Description = @Description_3f062cfe,
+  @InputTypeName = @InputTypeName_3f062cfe,
+  @InputTypeDefinition = @InputTypeDefinition_3f062cfe,
+  @InputTypeIsArray = @InputTypeIsArray_3f062cfe,
+  @OutputTypeName = @OutputTypeName_3f062cfe,
+  @OutputTypeDefinition = @OutputTypeDefinition_3f062cfe,
+  @OutputTypeIsArray = @OutputTypeIsArray_3f062cfe,
+  @ExecutionMode = @ExecutionMode_3f062cfe,
+  @RequiredScope = @RequiredScope_3f062cfe,
+  @RequiresSystemUser = @RequiresSystemUser_3f062cfe,
+  @GenerationType = @GenerationType_3f062cfe,
+  @Code = @Code_3f062cfe,
+  @Code_Clear = 1,
+  @CodeApprovalStatus = @CodeApprovalStatus_3f062cfe,
+  @CodeApprovedByUserID = @CodeApprovedByUserID_3f062cfe,
+  @CodeApprovedByUserID_Clear = 1,
+  @CodeApprovedAt = @CodeApprovedAt_3f062cfe,
+  @CodeApprovedAt_Clear = 1,
+  @ContractFingerprint = @ContractFingerprint_3f062cfe,
+  @ContractFingerprint_Clear = 1,
+  @Status = @Status_3f062cfe,
+  @CacheTTLSeconds = @CacheTTLSeconds_3f062cfe,
+  @CacheTTLSeconds_Clear = 1,
+  @TimeoutMS = @TimeoutMS_3f062cfe,
+  @TimeoutMS_Clear = 1,
+  @MaxConcurrency = @MaxConcurrency_3f062cfe,
+  @MaxConcurrency_Clear = 1,
+  @CodeLocked = @CodeLocked_3f062cfe,
+  @CodeComments = @CodeComments_3f062cfe,
+  @CodeComments_Clear = 1,
+  @Libraries = @Libraries_3f062cfe,
+  @Libraries_Clear = 1;
+END
+
 
 GO
 
@@ -10270,7 +11465,9 @@ SET
   @Status_7715ab2a = N'Active'
 SET
   @CodeLocked_7715ab2a = 0
-EXEC [${flyway:defaultSchema}].spCreateRemoteOperation @ID = @ID_7715ab2a,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[RemoteOperation] WHERE [ID] = @ID_7715ab2a)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateRemoteOperation @ID = @ID_7715ab2a,
   @Name = @Name_7715ab2a,
   @OperationKey = @OperationKey_7715ab2a,
   @CategoryID = @CategoryID_7715ab2a,
@@ -10306,6 +11503,47 @@ EXEC [${flyway:defaultSchema}].spCreateRemoteOperation @ID = @ID_7715ab2a,
   @CodeComments_Clear = 1,
   @Libraries = @Libraries_7715ab2a,
   @Libraries_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateRemoteOperation @ID = @ID_7715ab2a,
+  @Name = @Name_7715ab2a,
+  @OperationKey = @OperationKey_7715ab2a,
+  @CategoryID = @CategoryID_7715ab2a,
+  @Description = @Description_7715ab2a,
+  @InputTypeName = @InputTypeName_7715ab2a,
+  @InputTypeDefinition = @InputTypeDefinition_7715ab2a,
+  @InputTypeIsArray = @InputTypeIsArray_7715ab2a,
+  @OutputTypeName = @OutputTypeName_7715ab2a,
+  @OutputTypeDefinition = @OutputTypeDefinition_7715ab2a,
+  @OutputTypeIsArray = @OutputTypeIsArray_7715ab2a,
+  @ExecutionMode = @ExecutionMode_7715ab2a,
+  @RequiredScope = @RequiredScope_7715ab2a,
+  @RequiresSystemUser = @RequiresSystemUser_7715ab2a,
+  @GenerationType = @GenerationType_7715ab2a,
+  @Code = @Code_7715ab2a,
+  @Code_Clear = 1,
+  @CodeApprovalStatus = @CodeApprovalStatus_7715ab2a,
+  @CodeApprovedByUserID = @CodeApprovedByUserID_7715ab2a,
+  @CodeApprovedByUserID_Clear = 1,
+  @CodeApprovedAt = @CodeApprovedAt_7715ab2a,
+  @CodeApprovedAt_Clear = 1,
+  @ContractFingerprint = @ContractFingerprint_7715ab2a,
+  @ContractFingerprint_Clear = 1,
+  @Status = @Status_7715ab2a,
+  @CacheTTLSeconds = @CacheTTLSeconds_7715ab2a,
+  @CacheTTLSeconds_Clear = 1,
+  @TimeoutMS = @TimeoutMS_7715ab2a,
+  @TimeoutMS_Clear = 1,
+  @MaxConcurrency = @MaxConcurrency_7715ab2a,
+  @MaxConcurrency_Clear = 1,
+  @CodeLocked = @CodeLocked_7715ab2a,
+  @CodeComments = @CodeComments_7715ab2a,
+  @CodeComments_Clear = 1,
+  @Libraries = @Libraries_7715ab2a,
+  @Libraries_Clear = 1;
+END
+
 
 GO
 
@@ -10375,7 +11613,9 @@ SET
   @Status_782ee61b = N'Active'
 SET
   @CodeLocked_782ee61b = 0
-EXEC [${flyway:defaultSchema}].spCreateRemoteOperation @ID = @ID_782ee61b,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[RemoteOperation] WHERE [ID] = @ID_782ee61b)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateRemoteOperation @ID = @ID_782ee61b,
   @Name = @Name_782ee61b,
   @OperationKey = @OperationKey_782ee61b,
   @CategoryID = @CategoryID_782ee61b,
@@ -10412,6 +11652,48 @@ EXEC [${flyway:defaultSchema}].spCreateRemoteOperation @ID = @ID_782ee61b,
   @CodeComments_Clear = 1,
   @Libraries = @Libraries_782ee61b,
   @Libraries_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateRemoteOperation @ID = @ID_782ee61b,
+  @Name = @Name_782ee61b,
+  @OperationKey = @OperationKey_782ee61b,
+  @CategoryID = @CategoryID_782ee61b,
+  @Description = @Description_782ee61b,
+  @InputTypeName = @InputTypeName_782ee61b,
+  @InputTypeDefinition = @InputTypeDefinition_782ee61b,
+  @InputTypeIsArray = @InputTypeIsArray_782ee61b,
+  @OutputTypeName = @OutputTypeName_782ee61b,
+  @OutputTypeDefinition = @OutputTypeDefinition_782ee61b,
+  @OutputTypeDefinition_Clear = 1,
+  @OutputTypeIsArray = @OutputTypeIsArray_782ee61b,
+  @ExecutionMode = @ExecutionMode_782ee61b,
+  @RequiredScope = @RequiredScope_782ee61b,
+  @RequiresSystemUser = @RequiresSystemUser_782ee61b,
+  @GenerationType = @GenerationType_782ee61b,
+  @Code = @Code_782ee61b,
+  @Code_Clear = 1,
+  @CodeApprovalStatus = @CodeApprovalStatus_782ee61b,
+  @CodeApprovedByUserID = @CodeApprovedByUserID_782ee61b,
+  @CodeApprovedByUserID_Clear = 1,
+  @CodeApprovedAt = @CodeApprovedAt_782ee61b,
+  @CodeApprovedAt_Clear = 1,
+  @ContractFingerprint = @ContractFingerprint_782ee61b,
+  @ContractFingerprint_Clear = 1,
+  @Status = @Status_782ee61b,
+  @CacheTTLSeconds = @CacheTTLSeconds_782ee61b,
+  @CacheTTLSeconds_Clear = 1,
+  @TimeoutMS = @TimeoutMS_782ee61b,
+  @TimeoutMS_Clear = 1,
+  @MaxConcurrency = @MaxConcurrency_782ee61b,
+  @MaxConcurrency_Clear = 1,
+  @CodeLocked = @CodeLocked_782ee61b,
+  @CodeComments = @CodeComments_782ee61b,
+  @CodeComments_Clear = 1,
+  @Libraries = @Libraries_782ee61b,
+  @Libraries_Clear = 1;
+END
+
 
 GO
 
@@ -10493,7 +11775,9 @@ SET
   @Status_be1a0fbe = N'Active'
 SET
   @CodeLocked_be1a0fbe = 0
-EXEC [${flyway:defaultSchema}].spCreateRemoteOperation @ID = @ID_be1a0fbe,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[RemoteOperation] WHERE [ID] = @ID_be1a0fbe)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateRemoteOperation @ID = @ID_be1a0fbe,
   @Name = @Name_be1a0fbe,
   @OperationKey = @OperationKey_be1a0fbe,
   @CategoryID = @CategoryID_be1a0fbe,
@@ -10530,6 +11814,48 @@ EXEC [${flyway:defaultSchema}].spCreateRemoteOperation @ID = @ID_be1a0fbe,
   @CodeComments_Clear = 1,
   @Libraries = @Libraries_be1a0fbe,
   @Libraries_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateRemoteOperation @ID = @ID_be1a0fbe,
+  @Name = @Name_be1a0fbe,
+  @OperationKey = @OperationKey_be1a0fbe,
+  @CategoryID = @CategoryID_be1a0fbe,
+  @Description = @Description_be1a0fbe,
+  @InputTypeName = @InputTypeName_be1a0fbe,
+  @InputTypeDefinition = @InputTypeDefinition_be1a0fbe,
+  @InputTypeDefinition_Clear = 1,
+  @InputTypeIsArray = @InputTypeIsArray_be1a0fbe,
+  @OutputTypeName = @OutputTypeName_be1a0fbe,
+  @OutputTypeDefinition = @OutputTypeDefinition_be1a0fbe,
+  @OutputTypeIsArray = @OutputTypeIsArray_be1a0fbe,
+  @ExecutionMode = @ExecutionMode_be1a0fbe,
+  @RequiredScope = @RequiredScope_be1a0fbe,
+  @RequiresSystemUser = @RequiresSystemUser_be1a0fbe,
+  @GenerationType = @GenerationType_be1a0fbe,
+  @Code = @Code_be1a0fbe,
+  @Code_Clear = 1,
+  @CodeApprovalStatus = @CodeApprovalStatus_be1a0fbe,
+  @CodeApprovedByUserID = @CodeApprovedByUserID_be1a0fbe,
+  @CodeApprovedByUserID_Clear = 1,
+  @CodeApprovedAt = @CodeApprovedAt_be1a0fbe,
+  @CodeApprovedAt_Clear = 1,
+  @ContractFingerprint = @ContractFingerprint_be1a0fbe,
+  @ContractFingerprint_Clear = 1,
+  @Status = @Status_be1a0fbe,
+  @CacheTTLSeconds = @CacheTTLSeconds_be1a0fbe,
+  @CacheTTLSeconds_Clear = 1,
+  @TimeoutMS = @TimeoutMS_be1a0fbe,
+  @TimeoutMS_Clear = 1,
+  @MaxConcurrency = @MaxConcurrency_be1a0fbe,
+  @MaxConcurrency_Clear = 1,
+  @CodeLocked = @CodeLocked_be1a0fbe,
+  @CodeComments = @CodeComments_be1a0fbe,
+  @CodeComments_Clear = 1,
+  @Libraries = @Libraries_be1a0fbe,
+  @Libraries_Clear = 1;
+END
+
 
 GO
 
@@ -10637,7 +11963,9 @@ SET
   @Status_8e718883 = N'Active'
 SET
   @CodeLocked_8e718883 = 0
-EXEC [${flyway:defaultSchema}].spCreateRemoteOperation @ID = @ID_8e718883,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[RemoteOperation] WHERE [ID] = @ID_8e718883)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateRemoteOperation @ID = @ID_8e718883,
   @Name = @Name_8e718883,
   @OperationKey = @OperationKey_8e718883,
   @CategoryID = @CategoryID_8e718883,
@@ -10673,6 +12001,47 @@ EXEC [${flyway:defaultSchema}].spCreateRemoteOperation @ID = @ID_8e718883,
   @CodeComments_Clear = 1,
   @Libraries = @Libraries_8e718883,
   @Libraries_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateRemoteOperation @ID = @ID_8e718883,
+  @Name = @Name_8e718883,
+  @OperationKey = @OperationKey_8e718883,
+  @CategoryID = @CategoryID_8e718883,
+  @Description = @Description_8e718883,
+  @InputTypeName = @InputTypeName_8e718883,
+  @InputTypeDefinition = @InputTypeDefinition_8e718883,
+  @InputTypeIsArray = @InputTypeIsArray_8e718883,
+  @OutputTypeName = @OutputTypeName_8e718883,
+  @OutputTypeDefinition = @OutputTypeDefinition_8e718883,
+  @OutputTypeIsArray = @OutputTypeIsArray_8e718883,
+  @ExecutionMode = @ExecutionMode_8e718883,
+  @RequiredScope = @RequiredScope_8e718883,
+  @RequiresSystemUser = @RequiresSystemUser_8e718883,
+  @GenerationType = @GenerationType_8e718883,
+  @Code = @Code_8e718883,
+  @Code_Clear = 1,
+  @CodeApprovalStatus = @CodeApprovalStatus_8e718883,
+  @CodeApprovedByUserID = @CodeApprovedByUserID_8e718883,
+  @CodeApprovedByUserID_Clear = 1,
+  @CodeApprovedAt = @CodeApprovedAt_8e718883,
+  @CodeApprovedAt_Clear = 1,
+  @ContractFingerprint = @ContractFingerprint_8e718883,
+  @ContractFingerprint_Clear = 1,
+  @Status = @Status_8e718883,
+  @CacheTTLSeconds = @CacheTTLSeconds_8e718883,
+  @CacheTTLSeconds_Clear = 1,
+  @TimeoutMS = @TimeoutMS_8e718883,
+  @TimeoutMS_Clear = 1,
+  @MaxConcurrency = @MaxConcurrency_8e718883,
+  @MaxConcurrency_Clear = 1,
+  @CodeLocked = @CodeLocked_8e718883,
+  @CodeComments = @CodeComments_8e718883,
+  @CodeComments_Clear = 1,
+  @Libraries = @Libraries_8e718883,
+  @Libraries_Clear = 1;
+END
+
 
 GO
 
@@ -10773,7 +12142,9 @@ SET
   @Status_473cb57b = N'Active'
 SET
   @CodeLocked_473cb57b = 0
-EXEC [${flyway:defaultSchema}].spCreateRemoteOperation @ID = @ID_473cb57b,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[RemoteOperation] WHERE [ID] = @ID_473cb57b)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateRemoteOperation @ID = @ID_473cb57b,
   @Name = @Name_473cb57b,
   @OperationKey = @OperationKey_473cb57b,
   @CategoryID = @CategoryID_473cb57b,
@@ -10809,6 +12180,47 @@ EXEC [${flyway:defaultSchema}].spCreateRemoteOperation @ID = @ID_473cb57b,
   @CodeComments_Clear = 1,
   @Libraries = @Libraries_473cb57b,
   @Libraries_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateRemoteOperation @ID = @ID_473cb57b,
+  @Name = @Name_473cb57b,
+  @OperationKey = @OperationKey_473cb57b,
+  @CategoryID = @CategoryID_473cb57b,
+  @Description = @Description_473cb57b,
+  @InputTypeName = @InputTypeName_473cb57b,
+  @InputTypeDefinition = @InputTypeDefinition_473cb57b,
+  @InputTypeIsArray = @InputTypeIsArray_473cb57b,
+  @OutputTypeName = @OutputTypeName_473cb57b,
+  @OutputTypeDefinition = @OutputTypeDefinition_473cb57b,
+  @OutputTypeIsArray = @OutputTypeIsArray_473cb57b,
+  @ExecutionMode = @ExecutionMode_473cb57b,
+  @RequiredScope = @RequiredScope_473cb57b,
+  @RequiresSystemUser = @RequiresSystemUser_473cb57b,
+  @GenerationType = @GenerationType_473cb57b,
+  @Code = @Code_473cb57b,
+  @Code_Clear = 1,
+  @CodeApprovalStatus = @CodeApprovalStatus_473cb57b,
+  @CodeApprovedByUserID = @CodeApprovedByUserID_473cb57b,
+  @CodeApprovedByUserID_Clear = 1,
+  @CodeApprovedAt = @CodeApprovedAt_473cb57b,
+  @CodeApprovedAt_Clear = 1,
+  @ContractFingerprint = @ContractFingerprint_473cb57b,
+  @ContractFingerprint_Clear = 1,
+  @Status = @Status_473cb57b,
+  @CacheTTLSeconds = @CacheTTLSeconds_473cb57b,
+  @CacheTTLSeconds_Clear = 1,
+  @TimeoutMS = @TimeoutMS_473cb57b,
+  @TimeoutMS_Clear = 1,
+  @MaxConcurrency = @MaxConcurrency_473cb57b,
+  @MaxConcurrency_Clear = 1,
+  @CodeLocked = @CodeLocked_473cb57b,
+  @CodeComments = @CodeComments_473cb57b,
+  @CodeComments_Clear = 1,
+  @Libraries = @Libraries_473cb57b,
+  @Libraries_Clear = 1;
+END
+
 
 GO
 
