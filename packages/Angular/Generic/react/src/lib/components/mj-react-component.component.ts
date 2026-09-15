@@ -1465,7 +1465,7 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
    * Builds a DataSnapshot from captured RunView/RunQuery results.
    * Returns null if no data was captured.
    */
-  private BuildCapturedDataSnapshot(): DataSnapshot | null {
+  private buildCapturedDataSnapshot(): DataSnapshot | null {
     if (this.capturedData.length === 0) return null;
 
     const tables: DataTable[] = this.capturedData.map((captured, idx) => {
@@ -1570,7 +1570,7 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
   getCurrentDataState(): DataSnapshot | undefined {
     const explicit = this.compiledComponent?.getCurrentDataState?.();
     if (explicit && typeof explicit === 'object') return explicit;
-    return this.BuildCapturedDataSnapshot() ?? undefined;
+    return this.buildCapturedDataSnapshot() ?? undefined;
   }
   
   /**

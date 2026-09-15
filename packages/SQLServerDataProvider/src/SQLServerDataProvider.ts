@@ -1566,7 +1566,7 @@ export class SQLServerDataProvider
    * @internal
    */
   protected GetDeleteSQL(entity: BaseEntity, user: UserInfo): string {
-    const result = this.GetDeleteSQLWithDetails(entity, user);
+    const result = this.getDeleteSQLWithDetails(entity, user);
     return result.fullSQL;
   }
 
@@ -1574,7 +1574,7 @@ export class SQLServerDataProvider
    * This function generates both the full SQL (with record change metadata) and the simple stored procedure call for delete
    * @returns Object with fullSQL and simpleSQL properties
    */
-  private GetDeleteSQLWithDetails(entity: BaseEntity, user: UserInfo, skipRecordChanges = false): { fullSQL: string; simpleSQL: string } {
+  private getDeleteSQLWithDetails(entity: BaseEntity, user: UserInfo, skipRecordChanges = false): { fullSQL: string; simpleSQL: string } {
     let sSQL: string = '';
     const spName: string = entity.EntityInfo.spDelete ? entity.EntityInfo.spDelete : `spDelete${entity.EntityInfo.BaseTableCodeName}`;
     const sParams = entity.PrimaryKey.KeyValuePairs.map((kv) => {
@@ -1649,7 +1649,7 @@ export class SQLServerDataProvider
   // above). See plans/sp-save-builder-generic-layer-refactor.md (rev 4).
 
   protected override GenerateDeleteSQL(entity: BaseEntity, user: UserInfo, options?: EntityDeleteOptions): DeleteSQLResult {
-    const sqlDetails = this.GetDeleteSQLWithDetails(entity, user, options?.SkipRecordChanges === true);
+    const sqlDetails = this.getDeleteSQLWithDetails(entity, user, options?.SkipRecordChanges === true);
     return {
       fullSQL: sqlDetails.fullSQL,
       simpleSQL: sqlDetails.simpleSQL,

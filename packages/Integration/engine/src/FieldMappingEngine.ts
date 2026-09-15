@@ -42,13 +42,13 @@ export class FieldMappingEngine {
     ): MappedRecord[] {
         const activeMaps = fieldMaps.filter(fm => fm.Status === 'Active');
         const excluded = excludedSourceNames ?? EMPTY_EXCLUSIONS;
-        return records.map(record => this.MapSingleRecord(record, activeMaps, entityName, excluded));
+        return records.map(record => this.mapSingleRecord(record, activeMaps, entityName, excluded));
     }
 
     /**
      * Maps a single external record through all active field mappings.
      */
-    private MapSingleRecord(
+    private mapSingleRecord(
         record: ExternalRecord,
         fieldMaps: ICompanyIntegrationFieldMap[],
         entityName: string,
@@ -80,7 +80,7 @@ export class FieldMappingEngine {
 
         for (const fieldMap of fieldMaps) {
             mappedSourceNames.add(fieldMap.SourceFieldName);
-            const value = this.ApplyFieldMapping(ext, fieldMap);
+            const value = this.applyFieldMapping(ext, fieldMap);
             if (value !== undefined) {
                 mappedFields[fieldMap.DestinationFieldName] = value;
             }
@@ -105,12 +105,12 @@ export class FieldMappingEngine {
      * Applies a single field mapping, including the full transform pipeline (delegated to the shared
      * {@link FieldTransformEngine}). Returns undefined if the field should be skipped (OnError: Skip).
      */
-    private ApplyFieldMapping(
+    private applyFieldMapping(
         record: ExternalRecord,
         fieldMap: ICompanyIntegrationFieldMap
     ): unknown {
         const value: unknown = record.Fields[fieldMap.SourceFieldName];
-        const pipeline = this.ParseTransformPipeline(fieldMap.TransformPipeline);
+        const pipeline = this.parseTransformPipeline(fieldMap.TransformPipeline);
         const result = this.transformEngine.ExecutePipeline(value, record.Fields, pipeline);
         return result.Skipped ? undefined : result.Value;
     }
@@ -118,7 +118,7 @@ export class FieldMappingEngine {
     /**
      * Parses the JSON transform pipeline string into typed TransformStep objects.
      */
-    private ParseTransformPipeline(pipelineJson: string | null): TransformStep[] {
+    private parseTransformPipeline(pipelineJson: string | null): TransformStep[] {
         if (!pipelineJson || pipelineJson.trim() === '') return [];
 
         try {

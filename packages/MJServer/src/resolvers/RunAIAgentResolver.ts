@@ -300,11 +300,11 @@ export class RunAIAgentResolver extends ResolverBase {
                 },
                 timestamp: new Date()
             };
-            this.PublishProgressUpdate(pubSub, progressMsg, userPayload);
+            this.publishProgressUpdate(pubSub, progressMsg, userPayload);
         };
     }
 
-    private PublishProgressUpdate(pubSub: PubSubEngine, data: any, userPayload: UserPayload) {
+    private publishProgressUpdate(pubSub: PubSubEngine, data: any, userPayload: UserPayload) {
         this.PublishStatusUpdate(pubSub, userPayload.sessionId, JSON.stringify({
             resolver: 'RunAIAgentResolver',
             type: 'ExecutionProgress',
@@ -314,7 +314,7 @@ export class RunAIAgentResolver extends ResolverBase {
     }
 
 
-    private PublishStreamingUpdate(pubSub: PubSubEngine, data: any, userPayload: UserPayload) {
+    private publishStreamingUpdate(pubSub: PubSubEngine, data: any, userPayload: UserPayload) {
         this.PublishStatusUpdate(pubSub, userPayload.sessionId, JSON.stringify({
             resolver: 'RunAIAgentResolver',
             type: 'StreamingContent',
@@ -350,7 +350,7 @@ export class RunAIAgentResolver extends ResolverBase {
                 },
                 timestamp: new Date()
             };
-            this.PublishStreamingUpdate(pubSub, streamMsg, userPayload);
+            this.publishStreamingUpdate(pubSub, streamMsg, userPayload);
         };
     }
 
@@ -641,7 +641,7 @@ export class RunAIAgentResolver extends ResolverBase {
                 partialResult,
                 timestamp: new Date()
             };
-            this.PublishStreamingUpdate(pubSub, partialMsg, userPayload);
+            this.publishStreamingUpdate(pubSub, partialMsg, userPayload);
         }
 
         // Publish completion with conversationDetailId for client-side routing.
@@ -656,7 +656,7 @@ export class RunAIAgentResolver extends ResolverBase {
             errorMessage: result.agentRun?.ErrorMessage || undefined,
             result: resultJson || undefined
         };
-        this.PublishStreamingUpdate(pubSub, completionData, userPayload);
+        this.publishStreamingUpdate(pubSub, completionData, userPayload);
     }
 
     /**
@@ -1371,7 +1371,7 @@ export class RunAIAgentResolver extends ResolverBase {
                 errorMessage,
                 result: JSON.stringify({ success: false, errorMessage })
             };
-            this.PublishStreamingUpdate(pubSub, errorCompletionData, userPayload);
+            this.publishStreamingUpdate(pubSub, errorCompletionData, userPayload);
         }).finally(() => pulse.stop());
     }
 

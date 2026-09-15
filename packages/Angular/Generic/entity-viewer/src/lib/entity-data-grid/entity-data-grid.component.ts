@@ -1178,7 +1178,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
    * Returns the effective aggregates config, preferring _aggregatesConfig but falling back to _gridState.aggregates.
    * This ensures aggregates work regardless of whether they came from explicit config or from view's GridState.
    */
-  private get EffectiveAggregatesConfig(): ViewGridAggregatesConfig | null | undefined {
+  private get effectiveAggregatesConfig(): ViewGridAggregatesConfig | null | undefined {
     return this._aggregatesConfig || this._gridState?.aggregates;
   }
 
@@ -1186,7 +1186,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
    * Returns enabled aggregates configured for card display.
    */
   public get CardAggregates(): ViewGridAggregate[] {
-    const config = this.EffectiveAggregatesConfig;
+    const config = this.effectiveAggregatesConfig;
     if (!config?.expressions) return [];
     return config.expressions
       .filter(a => a.enabled !== false && a.displayType === 'card')
@@ -1197,7 +1197,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
    * Returns enabled aggregates configured for column footer display.
    */
   public get ColumnAggregates(): ViewGridAggregate[] {
-    const config = this.EffectiveAggregatesConfig;
+    const config = this.effectiveAggregatesConfig;
     if (!config?.expressions) return [];
     return config.expressions
       .filter(a => a.enabled !== false && a.displayType === 'column')
@@ -2248,7 +2248,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
    * This runs a RunView with MaxRows=0 to get only aggregate results.
    */
   public async RefreshAggregates(): Promise<void> {
-    const effectiveAggConfig = this.EffectiveAggregatesConfig;
+    const effectiveAggConfig = this.effectiveAggregatesConfig;
     if (!effectiveAggConfig?.expressions?.length) {
       this._aggregateResults = [];
       this._aggregateValues.clear();
@@ -3524,7 +3524,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     try {
       // Build aggregate expressions from config if present
       // Use EffectiveAggregatesConfig to check both _aggregatesConfig and _gridState.aggregates
-      const effectiveAggConfig = this.EffectiveAggregatesConfig;
+      const effectiveAggConfig = this.effectiveAggregatesConfig;
       let aggregateExpressions: AggregateExpression[] | undefined;
       if (effectiveAggConfig?.expressions?.length) {
         aggregateExpressions = effectiveAggConfig.expressions

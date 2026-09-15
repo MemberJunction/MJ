@@ -128,7 +128,7 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
      * Returns the database platform of the connected database.
      * Uses the DB_PLATFORM env var (same source as MJServer's provider selection).
      */
-    private get CurrentPlatform(): DatabasePlatform {
+    private get currentPlatform(): DatabasePlatform {
         return resolveDbPlatformFromEnv() ?? 'sqlserver';
     }
 
@@ -144,7 +144,7 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
      * different dialect (e.g., T-SQL bracket identifiers on a PostgreSQL database).
      */
     private resolveExtractionSQL(): string {
-        const platform = this.CurrentPlatform;
+        const platform = this.currentPlatform;
 
         // 1. Check for a dialect-specific QuerySQL record
         const platformSQL = this.GetPlatformSQL(platform);
@@ -200,7 +200,7 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
             contextUser: this.ContextCurrentUser,
             metadataProvider: this.ProviderToUse as unknown as IMetadataProvider,
             runViewProvider: this.RunViewProviderToUse,
-            platform: this.CurrentPlatform,
+            platform: this.currentPlatform,
             parameterHints: this.ParameterHints,
         };
     }

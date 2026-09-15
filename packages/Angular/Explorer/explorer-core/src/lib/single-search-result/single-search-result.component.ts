@@ -76,7 +76,7 @@ export class SingleSearchResultComponent extends BaseAngularComponent implements
 
   ngOnChanges(changes: SimpleChanges): void {
     if ((changes['entity'] || changes['searchInput']) && this.entity && this.SearchInput) {
-      this.ExecuteSearch();
+      this.executeSearch();
     }
   }
 
@@ -84,7 +84,7 @@ export class SingleSearchResultComponent extends BaseAngularComponent implements
    * Runs a lightweight pre-query (MaxRows: 2, PK fields only) to determine result count,
    * then routes to the appropriate state: no-results, single-result auto-nav, or viewer.
    */
-  private async ExecuteSearch(): Promise<void> {
+  private async executeSearch(): Promise<void> {
     this.SearchState = 'loading';
     this.ResultCount = 0;
     this.LoadStarted.emit(true);

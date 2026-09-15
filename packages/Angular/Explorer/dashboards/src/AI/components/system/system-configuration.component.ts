@@ -513,8 +513,7 @@ export class SystemConfigurationComponent extends BaseResourceComponent implemen
   }
 
   public OnOpenPrompt(promptId: string): void {
-    const compositeKey = CompositeKey.FromID(promptId);
-    this.navigationService.OpenEntityRecord('MJ: AI Prompts', compositeKey);
+    this.navigationService.OpenEntityRecord('MJ: AI Prompts', CompositeKey.FromID(promptId));
   }
 
   /** @deprecated Use {@link OnOpenPrompt}. */
@@ -523,8 +522,7 @@ export class SystemConfigurationComponent extends BaseResourceComponent implemen
   }
 
   public OnOpenParam(param: MJAIConfigurationParamEntity): void {
-    const compositeKey = CompositeKey.FromID(param.ID);
-    this.navigationService.OpenEntityRecord('MJ: AI Configuration Params', compositeKey);
+    this.navigationService.OpenEntityRecord('MJ: AI Configuration Params', CompositeKey.FromID(param.ID));
   }
 
   /** @deprecated Use {@link OnOpenParam}. */

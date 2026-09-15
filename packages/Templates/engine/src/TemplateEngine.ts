@@ -69,7 +69,7 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
      * was a SECOND BaseEngine singleton that loaded a full second copy of the `Template_Metadata` dataset
      * (a silent double dataset-load — it never tripped the duplicate-RunView telemetry, but doubled memory).
      */
-    private get Base(): TemplateEngineBase {
+    private get base(): TemplateEngineBase {
         return TemplateEngineBase.Instance;
     }
 
@@ -90,7 +90,7 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
         if (contextUser) {
             this._contextUser = contextUser;
         }
-        await this.Base.Config(forceRefresh, contextUser, provider);
+        await this.base.Config(forceRefresh, contextUser, provider);
         this.ClearTemplateCache(); // base templates (re)loaded — drop any stale compiled templates
         this.ensureNunjucksInitialized(contextUser);
     }
@@ -120,17 +120,17 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
     }
 
     /** True once the underlying TemplateEngineBase cache has loaded. */
-    public get Loaded(): boolean { return this.Base.Loaded; }
-    public get ContextUser(): UserInfo { return this._contextUser ?? this.Base.ContextUser; }
+    public get Loaded(): boolean { return this.base.Loaded; }
+    public get ContextUser(): UserInfo { return this._contextUser ?? this.base.ContextUser; }
     public set ContextUser(value: UserInfo) { this._contextUser = value; }
 
     // ── Proxied cached collections + lookup (single source of truth: TemplateEngineBase.Instance) ──
-    public get Templates(): MJTemplateEntityExtended[] { return this.Base.Templates; }
-    public get TemplateContentTypes(): MJTemplateContentTypeEntity[] { return this.Base.TemplateContentTypes; }
-    public get TemplateCategories(): MJTemplateCategoryEntity[] { return this.Base.TemplateCategories; }
-    public get TemplateContents(): MJTemplateContentEntity[] { return this.Base.TemplateContents; }
-    public get TemplateParams(): MJTemplateParamEntity[] { return this.Base.TemplateParams; }
-    public FindTemplate(templateName: string): MJTemplateEntityExtended { return this.Base.FindTemplate(templateName); }
+    public get Templates(): MJTemplateEntityExtended[] { return this.base.Templates; }
+    public get TemplateContentTypes(): MJTemplateContentTypeEntity[] { return this.base.TemplateContentTypes; }
+    public get TemplateCategories(): MJTemplateCategoryEntity[] { return this.base.TemplateCategories; }
+    public get TemplateContents(): MJTemplateContentEntity[] { return this.base.TemplateContents; }
+    public get TemplateParams(): MJTemplateParamEntity[] { return this.base.TemplateParams; }
+    public FindTemplate(templateName: string): MJTemplateEntityExtended { return this.base.FindTemplate(templateName); }
 
     public SetupNunjucks(): void {
         this._templateLoader = new TemplateEntityLoader();

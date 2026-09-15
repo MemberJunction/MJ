@@ -82,12 +82,12 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
     @Input() MaxResults = 8;
 
     /** Whether the overlay is currently visible */
-    private _IsOpen = false;
+    private _isOpen = false;
 
     @Input()
     set IsOpen(value: boolean) {
-        const prev = this._IsOpen;
-        this._IsOpen = value;
+        const prev = this._isOpen;
+        this._isOpen = value;
         if (value && !prev) {
             this.onOverlayOpened();
         }
@@ -96,7 +96,7 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
         }
     }
     get IsOpen(): boolean {
-        return this._IsOpen;
+        return this._isOpen;
     }
 
     /** Debounce time in ms before search fires */
@@ -223,20 +223,20 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
             this.ToggleOverlay();
             return;
         }
-        if (this._IsOpen) {
+        if (this._isOpen) {
             this.handleOverlayKeydown(event);
         }
     }
 
     /** Toggle the overlay open/closed */
     public ToggleOverlay(): void {
-        this.IsOpen = !this._IsOpen;
-        this.IsOpenChange.emit(this._IsOpen);
+        this.IsOpen = !this._isOpen;
+        this.IsOpenChange.emit(this._isOpen);
     }
 
     /** Open the overlay */
     public Open(): void {
-        if (!this._IsOpen) {
+        if (!this._isOpen) {
             this.IsOpen = true;
             this.IsOpenChange.emit(true);
         }
@@ -244,7 +244,7 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
 
     /** Close the overlay */
     public Close(): void {
-        if (this._IsOpen) {
+        if (this._isOpen) {
             this.IsOpen = false;
             this.IsOpenChange.emit(false);
         }

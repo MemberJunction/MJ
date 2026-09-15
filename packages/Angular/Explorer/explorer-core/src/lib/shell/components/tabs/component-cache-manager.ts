@@ -230,7 +230,7 @@ export class ComponentCacheManager {
     // Clear this surface's agent client tools on detach so the previous app's tools aren't offered to
     // the AI agent on the next surface. NotifyResourceReattached replays them if the user returns.
     this.navigationService?.NotifyResourceDetached(info.componentRef.instance);
-    this.EvictIfNeeded();
+    this.evictIfNeeded();
     return info;
   }
 
@@ -320,7 +320,7 @@ export class ComponentCacheManager {
    * Evict least-recently-used detached components when over the limit.
    * Only evicts components that are not currently attached.
    */
-  private EvictIfNeeded(): void {
+  private evictIfNeeded(): void {
     if (ComponentCacheManager.MaxDetachedComponents <= 0) return;
 
     const detached = Array.from(this.cache.entries())

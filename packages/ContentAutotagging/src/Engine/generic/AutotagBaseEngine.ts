@@ -201,8 +201,8 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     private static readonly AI_PROMPT_RUN_ID_KEY = '__aiPromptRunID';
 
     // Cached metadata unique to this engine — loaded by BaseEngine.Config()
-    private _ContentTypeAttributes: MJContentTypeAttributeEntity[] = [];
-    private _ContentSourceTypeParams: MJContentSourceTypeParamEntity[] = [];
+    private _contentTypeAttributes: MJContentTypeAttributeEntity[] = [];
+    private _contentSourceTypeParams: MJContentSourceTypeParamEntity[] = [];
 
     /** Shortcut to KnowledgeHubMetadataEngine */
     private get khEngine(): KnowledgeHubMetadataEngine { return KnowledgeHubMetadataEngine.Instance; }
@@ -214,9 +214,9 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     /** All content file types — delegated to KnowledgeHubMetadataEngine */
     public get ContentFileTypes(): MJContentFileTypeEntity[] { return this.khEngine.ContentFileTypes; }
     /** All content type attributes, cached at startup */
-    public get ContentTypeAttributes(): MJContentTypeAttributeEntity[] { return this._ContentTypeAttributes; }
+    public get ContentTypeAttributes(): MJContentTypeAttributeEntity[] { return this._contentTypeAttributes; }
     /** All content source type params, cached at startup */
-    public get ContentSourceTypeParams(): MJContentSourceTypeParamEntity[] { return this._ContentSourceTypeParams; }
+    public get ContentSourceTypeParams(): MJContentSourceTypeParamEntity[] { return this._contentSourceTypeParams; }
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<unknown> {
         // Content Types, Content Source Types, and Content File Types are delegated to
@@ -227,12 +227,12 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             {
                 Type: 'entity',
                 EntityName: 'MJ: Content Type Attributes',
-                PropertyName: '_ContentTypeAttributes',
+                PropertyName: '_contentTypeAttributes',
             },
             {
                 Type: 'entity',
                 EntityName: 'MJ: Content Source Type Params',
-                PropertyName: '_ContentSourceTypeParams',
+                PropertyName: '_contentSourceTypeParams',
             },
         ];
         await this.Load(configs, provider, forceRefresh, contextUser);
@@ -608,7 +608,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
                 parentTagName: string | null,
                 ctxUser: UserInfo
             ) => {
-                await this.BridgeContentItemTagToTaxonomy(contentItemTag, parentTagName, ctxUser);
+                await this.bridgeContentItemTagToTaxonomy(contentItemTag, parentTagName, ctxUser);
             };
             LogStatus(`[TaxonomyBridge] Bridge callback installed`);
         } catch (e) {
@@ -674,7 +674,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * - For Entity sources: tags the original entity record (e.g., Products row)
      * - For non-Entity sources (RSS, Website, etc.): tags the ContentItem itself
      */
-    private async BridgeContentItemTagToTaxonomy(
+    private async bridgeContentItemTagToTaxonomy(
         contentItemTag: MJContentItemTagEntity,
         parentTagName: string | null,
         contextUser: UserInfo
@@ -1336,7 +1336,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     }
 
     public GetDefaultContentSourceTypeParams(contentSourceTypeParamID: string): ContentSourceTypeParams {
-        const result = this._ContentSourceTypeParams.find(p => UUIDsEqual(p.ID, contentSourceTypeParamID));
+        const result = this._contentSourceTypeParams.find(p => UUIDsEqual(p.ID, contentSourceTypeParamID));
         if (!result) {
             throw new Error(`Content Source Type Param with ID '${contentSourceTypeParamID}' not found in cached metadata`);
         }
@@ -1469,7 +1469,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     }
 
     public GetAdditionalContentTypePrompt(contentTypeID: string): string {
-        const attrs = this._ContentTypeAttributes.filter(a => UUIDsEqual(a.ContentTypeID, contentTypeID));
+        const attrs = this._contentTypeAttributes.filter(a => UUIDsEqual(a.ContentTypeID, contentTypeID));
         if (attrs.length === 0) return '';
 
         return attrs.map(attr =>

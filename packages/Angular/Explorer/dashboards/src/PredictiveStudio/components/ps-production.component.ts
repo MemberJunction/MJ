@@ -331,7 +331,7 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
   ngOnInit(): void {
     // Reactive: rebuild the published-model list on any MJ: ML Models change (save/delete/remote-invalidate).
     this.modelsSub = this.engine
-      .ObserveProperty<MJMLModelEntity>('_Models')
+      .ObserveProperty<MJMLModelEntity>('_models')
       .subscribe(() => {
         this.rebuildModels();
         this.cdr.detectChanges();

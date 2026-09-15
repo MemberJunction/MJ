@@ -502,7 +502,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   public ShowCaptions = false;
 
   /** UserInfoEngine key for the persisted captions (text-vs-orb) preference. */
-  private static readonly CaptionsPrefKey = 'mj.realtimeVoice.captions.v1';
+  private static readonly captionsPrefKey = 'mj.realtimeVoice.captions.v1';
 
   /**
    * Whether developer affordances (open-record links) are revealed. Per-session view
@@ -1017,7 +1017,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   /** Reads the persisted text-vs-orb preference (tolerant; default = voice-first OFF). */
   private loadCaptionsPref(): void {
     try {
-      this.ShowCaptions = UserInfoEngine.Instance.GetSetting(RealtimeSessionOverlayComponent.CaptionsPrefKey) === 'true';
+      this.ShowCaptions = UserInfoEngine.Instance.GetSetting(RealtimeSessionOverlayComponent.captionsPrefKey) === 'true';
     } catch {
       // UserInfoEngine not configured — voice-first default applies.
     }
@@ -1026,7 +1026,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   /** Persists the text-vs-orb preference (debounced, best-effort). */
   private persistCaptionsPref(): void {
     try {
-      UserInfoEngine.Instance.SetSettingDebounced(RealtimeSessionOverlayComponent.CaptionsPrefKey, String(this.ShowCaptions));
+      UserInfoEngine.Instance.SetSettingDebounced(RealtimeSessionOverlayComponent.captionsPrefKey, String(this.ShowCaptions));
     } catch {
       // engine unavailable — the preference still applies for this session
     }

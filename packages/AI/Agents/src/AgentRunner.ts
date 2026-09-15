@@ -326,7 +326,7 @@ export class AgentRunner {
 
                     if (!conversationName && options.userMessage) {
                         // Try to generate a name using the "Name Conversation" prompt (same as UI)
-                        const nameResult = await this.GenerateConversationName(options.userMessage, contextUser, md);
+                        const nameResult = await this.generateConversationName(options.userMessage, contextUser, md);
                         if (nameResult) {
                             conversationName = nameResult.name;
                             conversationDescription = nameResult.description;
@@ -707,7 +707,7 @@ export class AgentRunner {
             const rv = RunView.FromMetadataProvider(provider || this._provider);
             const result = await rv.RunView<MJArtifactVersionEntity>({
                 EntityName: 'MJ: Artifact Versions',
-                ExtraFilter: `ArtifactID='${AgentRunner.FilterId(artifactId, 'GetMaxVersionForArtifact artifactId')}'`,
+                ExtraFilter: `ArtifactID='${AgentRunner.filterId(artifactId, 'GetMaxVersionForArtifact artifactId')}'`,
                 OrderBy: 'VersionNumber DESC',
                 MaxRows: 1,
                 ResultType: 'entity_object'
@@ -757,7 +757,7 @@ export class AgentRunner {
         if (!Number.isFinite(latestVersion)) {
             LogError(
                 `CheckForDuplicateVersion: latestVersionNumber is not a finite number ` +
-                `("${AgentRunner.DescribeUntrustedValue(latestVersionNumber)}") — skipping the duplicate check`
+                `("${AgentRunner.describeUntrustedValue(latestVersionNumber)}") — skipping the duplicate check`
             );
             return null;
         }
@@ -765,7 +765,7 @@ export class AgentRunner {
         const rv = RunView.FromMetadataProvider(provider || this._provider);
         const result = await rv.RunView<{ ID: string; ContentHash: string }>({
             EntityName: 'MJ: Artifact Versions',
-            ExtraFilter: `ArtifactID='${AgentRunner.FilterId(artifactId, 'CheckForDuplicateVersion artifactId')}' AND VersionNumber=${latestVersion}`,
+            ExtraFilter: `ArtifactID='${AgentRunner.filterId(artifactId, 'CheckForDuplicateVersion artifactId')}' AND VersionNumber=${latestVersion}`,
             Fields: ['ID', 'ContentHash'],
             MaxRows: 1,
             ResultType: 'simple'
@@ -844,7 +844,7 @@ export class AgentRunner {
             const rv = RunView.FromMetadataProvider(provider || this._provider);
             const result = await rv.RunView<MJConversationDetailArtifactEntity>({
                 EntityName: 'MJ: Conversation Detail Artifacts',
-                ExtraFilter: `ConversationDetailID='${AgentRunner.FilterId(conversationDetailId, 'FindPreviousArtifactForMessage conversationDetailId')}' AND Direction='Output'`,
+                ExtraFilter: `ConversationDetailID='${AgentRunner.filterId(conversationDetailId, 'FindPreviousArtifactForMessage conversationDetailId')}' AND Direction='Output'`,
                 OrderBy: '__mj_CreatedAt DESC',
                 MaxRows: 1,
                 ResultType: 'entity_object'
@@ -964,7 +964,7 @@ export class AgentRunner {
             if (!behaviorRecognized) {
                 LogError(
                     `Ignoring artifact directive from agent "${agent?.Name}": unrecognized behavior ` +
-                    `("${AgentRunner.DescribeUntrustedValue(rawDirective!.behavior)}") — using the historical chain instead`
+                    `("${AgentRunner.describeUntrustedValue(rawDirective!.behavior)}") — using the historical chain instead`
                 );
             }
             // planArtifactTarget discards a non-string targetArtifactId silently (it is pure and
@@ -977,7 +977,7 @@ export class AgentRunner {
                 if (rawTarget !== undefined && rawTarget !== null && typeof rawTarget !== 'string') {
                     LogError(
                         `Ignoring targetArtifactId from agent "${agent?.Name}": ` +
-                        `"${AgentRunner.DescribeUntrustedValue(rawTarget)}" is not a string — ` +
+                        `"${AgentRunner.describeUntrustedValue(rawTarget)}" is not a string — ` +
                         `versioning the run's sourceArtifactId instead`
                     );
                 }
@@ -1065,7 +1065,7 @@ export class AgentRunner {
             LogStatus(`Created artifact version ${newVersionNumber} (${version.ID})`);
 
             // First version of a new artifact: adopt the extracted Name attribute unless the agent named it
-            if (isNewArtifact && newVersionNumber === 1 && !AgentRunner.SafeDirectiveText(directive?.name, AgentRunner.ARTIFACT_NAME_MAX_LENGTH)) {
+            if (isNewArtifact && newVersionNumber === 1 && !AgentRunner.safeDirectiveText(directive?.name, AgentRunner.ARTIFACT_NAME_MAX_LENGTH)) {
                 const nameAttr = (version as any).Attributes?.find((attr: any) =>
                     attr.StandardProperty === 'name' || attr.Name?.toLowerCase() === 'name'
                 );
@@ -1113,7 +1113,7 @@ export class AgentRunner {
      * @param value - Any value, however malformed.
      * @returns A short single-line description, never throwing.
      */
-    private static DescribeUntrustedValue(value: unknown): string {
+    private static describeUntrustedValue(value: unknown): string {
         let text: string;
         try {
             text = typeof value === 'string' ? value : (JSON.stringify(value) ?? Object.prototype.toString.call(value));
@@ -1139,9 +1139,9 @@ export class AgentRunner {
      * @param label - What the id is, for the warning.
      * @returns The escaped id, ready to sit inside single quotes.
      */
-    private static FilterId(id: string, label: string): string {
+    private static filterId(id: string, label: string): string {
         if (!IsValidUUID(id)) {
-            LogError(`${label} is not a UUID-shaped id ("${AgentRunner.DescribeUntrustedValue(id)}") — this query cannot match a row`);
+            LogError(`${label} is not a UUID-shaped id ("${AgentRunner.describeUntrustedValue(id)}") — this query cannot match a row`);
         }
         return EscapeSQLString(id);
     }
@@ -1159,7 +1159,7 @@ export class AgentRunner {
      * @param maxLength - Column limit to clamp to; omit for `nvarchar(MAX)` columns.
      * @returns The trimmed (and clamped) text, or `undefined` when there is nothing usable.
      */
-    private static SafeDirectiveText(value: unknown, maxLength?: number): string | undefined {
+    private static safeDirectiveText(value: unknown, maxLength?: number): string | undefined {
         if (typeof value !== 'string') {
             return undefined;
         }
@@ -1250,7 +1250,7 @@ export class AgentRunner {
         const origin = plan.source === 'directive' ? `artifact directive from agent "${agentName}"` : 'sourceArtifactId';
 
         if (typeof plan.artifactId !== 'string' || !IsValidUUID(plan.artifactId)) {
-            LogError(`Ignoring ${origin}: "${AgentRunner.DescribeUntrustedValue(plan.artifactId)}" is not a valid artifact ID`);
+            LogError(`Ignoring ${origin}: "${AgentRunner.describeUntrustedValue(plan.artifactId)}" is not a valid artifact ID`);
             return null;
         }
         const artifactId = plan.artifactId.trim();
@@ -1322,10 +1322,10 @@ export class AgentRunner {
         const agentName = agent?.Name || 'Agent';
         // Both fields are model output: coerced, trimmed, and (for Name) clamped to its column so a
         // long or non-string title cannot fail validation and take the whole artifact down with it.
-        artifact.Name = AgentRunner.SafeDirectiveText(directive?.name, AgentRunner.ARTIFACT_NAME_MAX_LENGTH)
+        artifact.Name = AgentRunner.safeDirectiveText(directive?.name, AgentRunner.ARTIFACT_NAME_MAX_LENGTH)
             || `${agentName} Payload - ${new Date().toLocaleString()}`;
         // Description is nvarchar(MAX), so there is no length to clamp to — only the type to check.
-        artifact.Description = AgentRunner.SafeDirectiveText(directive?.description)
+        artifact.Description = AgentRunner.safeDirectiveText(directive?.description)
             || `Payload returned by ${agentName}`;
 
         // Use agent's DefaultArtifactTypeID if available
@@ -1361,7 +1361,7 @@ export class AgentRunner {
      * @returns Generated conversation name and description, or null if generation failed
      * @private
      */
-    private async GenerateConversationName(
+    private async generateConversationName(
         userMessage: string,
         contextUser: UserInfo,
         provider?: IMetadataProvider

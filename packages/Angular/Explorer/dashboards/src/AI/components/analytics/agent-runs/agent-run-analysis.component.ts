@@ -541,7 +541,7 @@ export class AnalyticsAgentRunsComponent extends BaseAngularComponent implements
     set TimeRange(value: string) {
         const prev = this._timeRange;
         this._timeRange = value;
-        if (prev !== value && this.initialized) this.LoadData();
+        if (prev !== value && this.initialized) this.loadData();
     }
     get TimeRange(): string { return this._timeRange; }
 
@@ -551,7 +551,7 @@ export class AnalyticsAgentRunsComponent extends BaseAngularComponent implements
         const next = value ?? { Agents: [], Statuses: [] };
         const changed = !this.shallowFiltersEqual(this._filters, next);
         this._filters = next;
-        if (changed && this.initialized) this.LoadData();
+        if (changed && this.initialized) this.loadData();
     }
     get Filters(): AgentRunFilters { return this._filters; }
 
@@ -614,7 +614,7 @@ export class AnalyticsAgentRunsComponent extends BaseAngularComponent implements
 
     ngOnInit(): void {
         this.initialized = true;
-        this.LoadData();
+        this.loadData();
     }
 
     ngOnDestroy(): void {
@@ -627,13 +627,13 @@ export class AnalyticsAgentRunsComponent extends BaseAngularComponent implements
     public OnTimeRangeChange(range: string): void {
         this.TimeRange = range;
         this.TimeRangeChange.emit(range);
-        this.LoadData();
+        this.loadData();
     }
 
     public OnFiltersChange(filters: GlobalFilterState): void {
         this.Filters = { Agents: filters.Agents, Statuses: filters.Statuses };
         this.FiltersChange.emit(this.Filters);
-        this.LoadData();
+        this.loadData();
     }
 
     public OnSort(field: SortField): void {
@@ -655,7 +655,7 @@ export class AnalyticsAgentRunsComponent extends BaseAngularComponent implements
 
     // ── Data Loading ──
 
-    private async LoadData(): Promise<void> {
+    private async loadData(): Promise<void> {
         this.IsLoading = true;
         this.cdr.detectChanges();
 

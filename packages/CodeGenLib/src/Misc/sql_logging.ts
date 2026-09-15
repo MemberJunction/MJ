@@ -89,16 +89,16 @@ export function resolveSQLOutputFolder(args: ResolveSQLOutputFolderArgs): string
  * Utility class for logging SQL to a run file that can be fresh for each run or appended to depending on the settings in the configuration
  */
 export class SQLLogging {
-    private static _SQLLoggingFilePath: string = '';
-    private static _OmitRecurringScriptsFromLog: boolean = true;
+    private static _sQLLoggingFilePath: string = '';
+    private static _omitRecurringScriptsFromLog: boolean = true;
     /** CLI `--sql-output-dir`. Set before {@link initSQLLogging}. */
     public static sqlOutputDirFlag: string | undefined;
 
     public static get SQLLoggingFilePath(): string {
-        return SQLLogging._SQLLoggingFilePath;
+        return SQLLogging._sQLLoggingFilePath;
     }
     public static get OmitRecurringScriptsFromLog(): boolean {
-        return SQLLogging._OmitRecurringScriptsFromLog
+        return SQLLogging._omitRecurringScriptsFromLog
     }
 
     /**
@@ -159,7 +159,7 @@ export class SQLLogging {
         if (!config) {
             throw new Error("SQLOutput config is required to enable metadata logging");
         }
-        SQLLogging._OmitRecurringScriptsFromLog = config.omitRecurringScriptsFromLog;
+        SQLLogging._omitRecurringScriptsFromLog = config.omitRecurringScriptsFromLog;
         if (!SQLLogging.SQLLoggingFilePath) {
 
             if (!config.enabled)
@@ -188,7 +188,7 @@ export class SQLLogging {
             }
 
             const fileName: string = config.fileName || this.createFileName();
-            SQLLogging._SQLLoggingFilePath = path.join(folderPath, fileName);
+            SQLLogging._sQLLoggingFilePath = path.join(folderPath, fileName);
 
             if (!config.appendToFile || !fs.existsSync(SQLLogging.SQLLoggingFilePath)) {
                 fs.writeFileSync(SQLLogging.SQLLoggingFilePath, '');
@@ -219,7 +219,7 @@ export class SQLLogging {
 
     /** Test hook — SQLLogging is a process-wide singleton. */
     public static ResetForTests(): void {
-        SQLLogging._SQLLoggingFilePath = '';
+        SQLLogging._sQLLoggingFilePath = '';
         SQLLogging.sqlOutputDirFlag = undefined;
     }
 
@@ -230,7 +230,7 @@ export class SQLLogging {
 
     /** Test hook — sets the active capture file path for testing. */
     public static SetFilePathForTesting(filePath: string): void {
-        SQLLogging._SQLLoggingFilePath = filePath;
+        SQLLogging._sQLLoggingFilePath = filePath;
     }
 
     /** @deprecated Use {@link SetFilePathForTesting}. */
@@ -247,16 +247,16 @@ export class SQLLogging {
     public static SuppressOutputForTests(): () => void {
         const output = configInfo.SQLOutput;
         const previousEnabled = output?.enabled;
-        const previousPath = SQLLogging._SQLLoggingFilePath;
+        const previousPath = SQLLogging._sQLLoggingFilePath;
         if (output) {
             output.enabled = false;
         }
-        SQLLogging._SQLLoggingFilePath = '';
+        SQLLogging._sQLLoggingFilePath = '';
         return () => {
             if (output && previousEnabled !== undefined) {
                 output.enabled = previousEnabled;
             }
-            SQLLogging._SQLLoggingFilePath = previousPath;
+            SQLLogging._sQLLoggingFilePath = previousPath;
         };
     }
 

@@ -40,17 +40,17 @@ export class SearchInputComponent implements OnInit, OnDestroy {
     @Input() Placeholder = 'Search...';
 
     /** Current query value (two-way bindable via QueryChange) */
-    private _Query = '';
+    private _query = '';
 
     @Input()
     set Query(value: string) {
-        if (value !== this._Query) {
-            this._Query = value;
+        if (value !== this._query) {
+            this._query = value;
             this.cdr.detectChanges();
         }
     }
     get Query(): string {
-        return this._Query;
+        return this._query;
     }
 
     /** Whether to show the keyboard shortcut hint badge */
@@ -110,7 +110,7 @@ export class SearchInputComponent implements OnInit, OnDestroy {
 
     /** Clear the query and emit InputCleared */
     public Clear(): void {
-        this._Query = '';
+        this._query = '';
         this.queryInput$.next('');
         this.QueryChange.emit('');
         this.InputCleared.emit();
@@ -122,7 +122,7 @@ export class SearchInputComponent implements OnInit, OnDestroy {
 
     /** Handle native input event */
     public OnInput(value: string): void {
-        this._Query = value;
+        this._query = value;
         this.queryInput$.next(value);
     }
 
@@ -131,7 +131,7 @@ export class SearchInputComponent implements OnInit, OnDestroy {
         switch (event.key) {
             case 'Enter':
                 event.preventDefault();
-                this.QuerySubmit.emit(this._Query);
+                this.QuerySubmit.emit(this._query);
                 break;
             case 'Escape':
                 event.preventDefault();

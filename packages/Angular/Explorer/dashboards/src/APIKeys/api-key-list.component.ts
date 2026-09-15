@@ -66,7 +66,7 @@ export class APIKeyListComponent extends BaseAngularComponent implements OnInit,
 
     // Scope counts per key
     public KeyScopeMap = new Map<string, KeyScopeInfo>();
-    private AllScopes: MJAPIScopeEntity[] = [];
+    private allScopes: MJAPIScopeEntity[] = [];
 
     // Default UI config for categories without explicit configuration
     private readonly defaultUIConfig = {
@@ -111,11 +111,11 @@ export class APIKeyListComponent extends BaseAngularComponent implements OnInit,
 
             if (keysResult.Success) {
                 this.AllKeys = keysResult.Results as MJAPIKeyEntity[];
-                this.AllScopes = base.Scopes;
+                this.allScopes = base.Scopes;
 
                 // Build category UI config from root scopes
                 this.categoryUIConfigs.clear();
-                for (const scope of this.AllScopes) {
+                for (const scope of this.allScopes) {
                     if (!scope.ParentID) {
                         const uiConfig = parseAPIScopeUIConfig(scope);
                         this.categoryUIConfigs.set(scope.Category, {
@@ -127,7 +127,7 @@ export class APIKeyListComponent extends BaseAngularComponent implements OnInit,
 
                 // Build scope lookup map
                 const scopeMap = new Map<string, MJAPIScopeEntity>();
-                for (const scope of this.AllScopes) {
+                for (const scope of this.allScopes) {
                     scopeMap.set(scope.ID, scope);
                 }
 

@@ -89,7 +89,7 @@ class TestableCreateApp extends ManageMetadataBase {
          : `IF NOT EXISTS (\n      ${checkQuery}\n   )\n   BEGIN\n      ${insertSQL}\n   END`;
    }
 
-   protected async LogSQLAndExecute(_pool: unknown, query: string): Promise<void> {
+   protected async logSQLAndExecute(_pool: unknown, query: string): Promise<void> {
       this.captured.push(query);
    }
 

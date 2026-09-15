@@ -1136,7 +1136,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * (server-side, cross-device — never localStorage). Stored shape: `{"coAgentId":
    * string | null}` — `null` is an explicit "Auto" choice that overwrites an older pick.
    */
-  private static readonly CoAgentPrefKey = 'mj.realtimeVoice.coAgent.v1';
+  private static readonly coAgentPrefKey = 'mj.realtimeVoice.coAgent.v1';
 
   /**
    * The persisted co-agent preference, loaded just before the picker opens (and read by
@@ -1287,7 +1287,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   private async loadPersistedCoAgentId(): Promise<string | null> {
     try {
       await UserInfoEngine.Instance.Config();
-      const raw = UserInfoEngine.Instance.GetSetting(MessageInputComponent.CoAgentPrefKey);
+      const raw = UserInfoEngine.Instance.GetSetting(MessageInputComponent.coAgentPrefKey);
       if (!raw) {
         return null;
       }
@@ -1302,7 +1302,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   private persistCoAgentChoice(coAgentId: string | null): void {
     try {
       UserInfoEngine.Instance.SetSettingDebounced(
-        MessageInputComponent.CoAgentPrefKey,
+        MessageInputComponent.coAgentPrefKey,
         JSON.stringify({ coAgentId: coAgentId ?? null })
       );
     } catch (error) {

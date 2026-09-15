@@ -226,7 +226,7 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
 
       // Build enriched column configs for the first table
       if (this.ResolvedTables.length > 0) {
-        this.GridColumnConfigs = this.BuildColumnConfigsForTable(this.ResolvedTables[0]);
+        this.GridColumnConfigs = this.buildColumnConfigsForTable(this.ResolvedTables[0]);
       }
 
       // Initialize paging state for all tables
@@ -240,11 +240,11 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
       }
 
       // Load cached metadata and resolve query sync state
-      await this.InitQuerySyncState();
+      await this.initQuerySyncState();
 
       // Load data for the first (active) table
       if (this.ResolvedTables.length > 0) {
-        await this.LoadTableData(0);
+        await this.loadTableData(0);
       }
 
       // Signal parent that tabs/display content may have changed after async load
@@ -260,7 +260,7 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
    */
   public async OnRefresh(): Promise<void> {
     this.tableDataCache.delete(this.ActiveTableIndex);
-    await this.LoadTableData(this.ActiveTableIndex);
+    await this.loadTableData(this.ActiveTableIndex);
   }
 
   /**
@@ -291,7 +291,7 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
 
     // Clear cache so it reloads
     this.tableDataCache.delete(this.ActiveTableIndex);
-    await this.LoadTableData(this.ActiveTableIndex);
+    await this.loadTableData(this.ActiveTableIndex);
   }
 
   /**
@@ -307,7 +307,7 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
 
     // Use cached column configs or build new
     if (!this.tableColumnConfigsCache.has(index)) {
-      const configs = this.BuildColumnConfigsForTable(table);
+      const configs = this.buildColumnConfigsForTable(table);
       if (configs) this.tableColumnConfigsCache.set(index, configs);
     }
     this.GridColumnConfigs = this.tableColumnConfigsCache.get(index) ?? null;
@@ -320,7 +320,7 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
       this.PagerPageSize = pageState.pageSize;
       this.PagerTotalRowCount = pageState.totalRowCount;
     } else {
-      await this.LoadTableData(index);
+      await this.loadTableData(index);
     }
 
     this.cdr.detectChanges();
@@ -330,7 +330,7 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
    * Load data for a specific table.
    * Handles live SQL execution, inline rows, and caching.
    */
-  private async LoadTableData(tableIndex: number): Promise<void> {
+  private async loadTableData(tableIndex: number): Promise<void> {
     const table = this.ResolvedTables[tableIndex];
     if (!table) return;
 
@@ -363,7 +363,7 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
           this.liveRowCount = result.RowCount;
           this.liveExecutionTime = result.ExecutionTime;
         } else {
-          this.HandleTableError(tableIndex, result.ErrorMessage || 'Query failed');
+          this.handleTableError(tableIndex, result.ErrorMessage || 'Query failed');
         }
       } else if (table.rows && table.rows.length > 0) {
         // Inline data
@@ -374,7 +374,7 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
         this.GridData = [];
       }
     } catch (error) {
-      this.HandleTableError(tableIndex, error instanceof Error ? error.message : 'Load failed');
+      this.handleTableError(tableIndex, error instanceof Error ? error.message : 'Load failed');
     } finally {
       this.IsLoading = false;
       this.cdr.detectChanges();
@@ -385,7 +385,7 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
    * Build QueryGridColumnConfig[] from a DataTable's column metadata.
    * Returns null if columns have no entity metadata (grid falls back to auto-inference).
    */
-  private BuildColumnConfigsForTable(table: DataTable): QueryGridColumnConfig[] | null {
+  private buildColumnConfigsForTable(table: DataTable): QueryGridColumnConfig[] | null {
     const columns = table.columns;
     if (!columns?.length) return null;
 
@@ -437,7 +437,7 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   /**
    * Handle a table load error by setting error state and falling back to inline data
    */
-  private HandleTableError(tableIndex: number, message: string): void {
+  private handleTableError(tableIndex: number, message: string): void {
     this.HasError = true;
     this.ErrorMessage = message;
     const table = this.ResolvedTables[tableIndex];
@@ -452,7 +452,7 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
    * Initialize query sync state by loading cached metadata.
    * Resolves the latest version number and compares saved query SQL.
    */
-  private async InitQuerySyncState(): Promise<void> {
+  private async initQuerySyncState(): Promise<void> {
     // Ensure the artifact-type registry is loaded (not registered for startup).
     await ArtifactMetadataEngine.Instance.Config(false);
 
@@ -657,7 +657,7 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
       if (saved) {
         // Update spec with new version tracking
         this.spec.savedAtVersionNumber = this.CurrentVersionNumber;
-        await this.PersistArtifactContent();
+        await this.persistArtifactContent();
 
         // Refresh caches so future lookups see the updated data
         await QueryEngine.Instance.Config(true);
@@ -698,7 +698,7 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
       this.spec!.savedAtVersionNumber = this.CurrentVersionNumber;
 
       // Persist and refresh caches
-      await this.PersistArtifactContent();
+      await this.persistArtifactContent();
       await QueryEngine.Instance.Config(true);
       await ArtifactMetadataEngine.Instance.Config(true);
       await this.ProviderToUse.Refresh();
@@ -715,7 +715,7 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   }
 
   /** Persist updated spec back to the artifact version entity */
-  private async PersistArtifactContent(): Promise<void> {
+  private async persistArtifactContent(): Promise<void> {
     if (!this.artifactVersion || !this.spec) return;
     this.artifactVersion.Content = JSON.stringify(this.spec);
     await this.artifactVersion.Save();

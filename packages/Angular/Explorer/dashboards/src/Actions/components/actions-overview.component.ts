@@ -626,8 +626,7 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
   }
 
   public OpenExecution(execution: MJActionExecutionLogEntity): void {
-    const key = CompositeKey.FromID(execution.ID);
-    this.navigationService.OpenEntityRecord('MJ: Action Execution Logs', key);
+    this.navigationService.OpenEntityRecord('MJ: Action Execution Logs', CompositeKey.FromID(execution.ID));
   }
 
   /** @deprecated Use {@link OpenExecution}. */

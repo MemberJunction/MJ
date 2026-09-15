@@ -69,7 +69,7 @@ export class RuntimeUtilities {
   public BuildUtilities(debug: boolean = false, provider?: IMetadataProvider): ComponentUtilities {
     this.debug = debug;
     this.provider = provider ?? Metadata.Provider;
-    return this.SetupUtilities(this.provider);
+    return this.setupUtilities(this.provider);
   }
 
   /** @deprecated Use {@link BuildUtilities}. */
@@ -80,21 +80,21 @@ export class RuntimeUtilities {
   /**
    * Sets up the utilities object - copied from skip-chat implementation
    */
-  private SetupUtilities(md: IMetadataProvider): ComponentUtilities {
+  private setupUtilities(md: IMetadataProvider): ComponentUtilities {
     const rv = RunView.FromMetadataProvider(md);
     const rq = new RunQuery(md as unknown as IRunQueryProvider);
     const u: ComponentUtilities = {
-      md: this.CreateSimpleMetadata(md),
-      rv: this.CreateSimpleRunView(rv),
-      rq: this.CreateSimpleRunQuery(rq),
-      ai: this.CreateSimpleAITools(),
-      geoDataEngine: this.CreateSimpleGeoDataEngine(),
-      ml: this.CreateSimpleMLTools()
+      md: this.createSimpleMetadata(md),
+      rv: this.createSimpleRunView(rv),
+      rq: this.createSimpleRunQuery(rq),
+      ai: this.createSimpleAITools(),
+      geoDataEngine: this.createSimpleGeoDataEngine(),
+      ml: this.createSimpleMLTools()
     };
     return u;
   }
 
-  private CreateSimpleAITools(): SimpleAITools {
+  private createSimpleAITools(): SimpleAITools {
     // Get the GraphQL provider - it's the same as the BaseEntity provider
     const provider = BaseEntity.Provider;
     
@@ -178,7 +178,7 @@ export class RuntimeUtilities {
    * Python sidecar lives server-side and cannot run in the browser). Returns `undefined` when no
    * GraphQL provider is available, so the `ml` capability degrades cleanly.
    */
-  private CreateSimpleMLTools(): SimpleMLTools | undefined {
+  private createSimpleMLTools(): SimpleMLTools | undefined {
     const provider = BaseEntity.Provider;
     // Scoring requires a GraphQL provider to route the Remote Operation to the server engine.
     if (!(provider instanceof GraphQLDataProvider)) {
@@ -333,7 +333,7 @@ export class RuntimeUtilities {
     return value.replace(/'/g, "''");
   }
 
-  private CreateSimpleMetadata(md: IMetadataProvider): SimpleMetadata {
+  private createSimpleMetadata(md: IMetadataProvider): SimpleMetadata {
     return {
       Entities: md.Entities,
       GetEntityObject: (entityName: string) => {
@@ -342,7 +342,7 @@ export class RuntimeUtilities {
     }
   }
 
-  private CreateSimpleGeoDataEngine(): SimpleGeoDataEngine | undefined {
+  private createSimpleGeoDataEngine(): SimpleGeoDataEngine | undefined {
     try {
       const geo = GeoDataEngine.Instance;
       if (!geo) return undefined;
@@ -362,7 +362,7 @@ export class RuntimeUtilities {
     }
   }
 
-  private CreateSimpleRunQuery(rq: RunQuery): SimpleRunQuery {
+  private createSimpleRunQuery(rq: RunQuery): SimpleRunQuery {
     return {
       RunQuery: async (params: RunQueryParams) => {
         // Run a single query and return the results
@@ -387,7 +387,7 @@ export class RuntimeUtilities {
     }
   }
 
-  private CreateSimpleRunView(rv: RunView): SimpleRunView {
+  private createSimpleRunView(rv: RunView): SimpleRunView {
     return {
       RunView: async (params: RunViewParams) => {
         // Run a single view and return the results

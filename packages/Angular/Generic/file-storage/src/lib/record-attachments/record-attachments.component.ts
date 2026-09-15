@@ -338,8 +338,8 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
   // ────────────────────────────────────────────────────────────────────
 
   async ngOnInit(): Promise<void> {
-    this.RestoreUserPreferences();
-    await this.CheckStorageAndPermissions();
+    this.restoreUserPreferences();
+    await this.checkStorageAndPermissions();
     if (this.Attachments.length === 0 && (this.Record || (this.EntityID && this.RecordID))) {
       await this.Refresh();
     }
@@ -357,7 +357,7 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
   // Preferences & Permissions
   // ────────────────────────────────────────────────────────────────────
 
-  private RestoreUserPreferences(): void {
+  private restoreUserPreferences(): void {
     const savedWidth = UserInfoEngine.Instance.GetSetting(RecordAttachmentsComponent.PREF_WIDTH_KEY);
     if (savedWidth && !this.WidthPx) {
       this.WidthPx = parseInt(savedWidth, 10) || 520;
@@ -384,7 +384,7 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
     this.cdr.markForCheck();
   }
 
-  private async CheckStorageAndPermissions(): Promise<void> {
+  private async checkStorageAndPermissions(): Promise<void> {
     try {
       await FileStorageEngineBase.Instance.Config(false);
       this.ActiveProviders = FileStorageEngineBase.Instance.Providers.filter((p) => p.IsActive !== false);
@@ -525,7 +525,7 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
     this.cdr.markForCheck();
 
     try {
-      await this.CheckStorageAndPermissions();
+      await this.checkStorageAndPermissions();
 
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const linksResult = await rv.RunView<MJFileEntityRecordLinkEntity>({
@@ -687,7 +687,7 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
         // ─────────────────────────────────────────────────────────────────────
         // 1. Try Direct Binary Upload via Pre-Authenticated URL (for S3, Azure Blob, GCS)
         // ─────────────────────────────────────────────────────────────────────
-        const supportsDirectPreAuth = this.ProviderSupportsDirectUpload(targetAccount?.provider);
+        const supportsDirectPreAuth = this.providerSupportsDirectUpload(targetAccount?.provider);
         if (supportsDirectPreAuth) {
           try {
             console.log(`[RecordAttachmentsComponent] [${fileIndex}/${files.length}] Requesting pre-auth upload URL for '${file.name}' on account '${targetAccountID}'...`);
@@ -1042,7 +1042,7 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
    * Prefers the inline streaming endpoint (/media/:fileId?token=...) so the browser renders
    * the document/media natively without triggering forced attachment downloads or Save As dialogs.
    */
-  private async GetInlineFileUrl(fileId: string): Promise<string | null> {
+  private async getInlineFileUrl(fileId: string): Promise<string | null> {
     try {
       const mediaResult = await GraphQLDataProvider.ExecuteGQL(CreateMediaAccessTokenMutation, { fileId });
       const parsedMedia = CreateMediaAccessTokenMutationSchema.safeParse(mediaResult);
@@ -1075,7 +1075,7 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
     if (beforeEvent.Cancel) return false;
 
     try {
-      const url = await this.GetInlineFileUrl(attachment.FileID);
+      const url = await this.getInlineFileUrl(attachment.FileID);
       if (url) {
         // Open directly in a new tab so the browser displays the document
         window.open(url, '_blank', 'noopener,noreferrer');
@@ -1110,7 +1110,7 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
     this.cdr.markForCheck();
 
     try {
-      const url = await this.GetInlineFileUrl(attachment.FileID);
+      const url = await this.getInlineFileUrl(attachment.FileID);
       if (url) {
         this.ActivePreviewUrl = url;
         this.ActivePreviewSafeUrl = this.sanitizer.bypassSecurityTrustResourceUrl(url);
@@ -1413,7 +1413,7 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
     return 'fa-solid fa-cloud';
   }
 
-  private ProviderSupportsDirectUpload(provider?: MJFileStorageProviderEntity | null): boolean {
+  private providerSupportsDirectUpload(provider?: MJFileStorageProviderEntity | null): boolean {
     if (!provider) return false;
     const key = (provider.ServerDriverKey || '').toLowerCase();
     const name = (provider.Name || '').toLowerCase();
@@ -1428,7 +1428,7 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
     );
   }
 
-  private TriggerBrowserDownload(url: string, fileName: string): void {
+  private triggerBrowserDownload(url: string, fileName: string): void {
     const link = document.createElement('a');
     link.href = url;
     link.download = fileName;

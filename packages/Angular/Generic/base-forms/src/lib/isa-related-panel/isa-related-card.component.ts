@@ -125,7 +125,7 @@ export class MjIsaRelatedCardComponent extends BaseAngularComponent implements O
       }
 
       this.RelatedRecord = entity;
-      this.BuildFieldDisplayLists();
+      this.buildFieldDisplayLists();
     } catch {
       this.LoadError = true;
     } finally {
@@ -135,7 +135,7 @@ export class MjIsaRelatedCardComponent extends BaseAngularComponent implements O
   }
 
   /** Split fields into DefaultInView (shown by default) and extra (hidden) */
-  private BuildFieldDisplayLists(): void {
+  private buildFieldDisplayLists(): void {
     if (!this.RelatedRecord || !this.EntityInfoRef) return;
 
     const parentFieldNames = this.EntityInfoRef.ParentEntityFieldNames;
@@ -158,7 +158,7 @@ export class MjIsaRelatedCardComponent extends BaseAngularComponent implements O
     const extraFields: IsaCardFieldDisplay[] = [];
 
     for (const field of ownFields) {
-      const display = this.BuildFieldDisplay(field);
+      const display = this.buildFieldDisplay(field);
       if (field.DefaultInView) {
         defaultFields.push(display);
       } else {
@@ -171,7 +171,7 @@ export class MjIsaRelatedCardComponent extends BaseAngularComponent implements O
   }
 
   /** Create a display representation of a single field value */
-  private BuildFieldDisplay(field: EntityFieldInfo): IsaCardFieldDisplay {
+  private buildFieldDisplay(field: EntityFieldInfo): IsaCardFieldDisplay {
     const rawValue = this.RelatedRecord!.Get(field.Name);
     const label = field.DisplayNameOrName;
 
@@ -188,12 +188,12 @@ export class MjIsaRelatedCardComponent extends BaseAngularComponent implements O
     // Format the value for display
     return {
       Label: label,
-      Value: this.FormatFieldValue(rawValue, field)
+      Value: this.formatFieldValue(rawValue, field)
     };
   }
 
   /** Format a field value for compact display */
-  private FormatFieldValue(value: unknown, field: EntityFieldInfo): string {
+  private formatFieldValue(value: unknown, field: EntityFieldInfo): string {
     if (value == null) return '';
 
     // Date formatting

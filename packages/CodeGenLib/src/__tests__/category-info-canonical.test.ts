@@ -32,7 +32,7 @@ class TestableManageMetadata extends ManageMetadataBase {
         return { recordset: [] } as CodeGenQueryResult;
     }
 
-    public override async LogSQLAndExecute(_pool: CodeGenConnection, sql: string, description: string): Promise<void> {
+    public override async logSQLAndExecute(_pool: CodeGenConnection, sql: string, description: string): Promise<void> {
         this.executedSQL.push({ sql: sql.trim(), description });
     }
 

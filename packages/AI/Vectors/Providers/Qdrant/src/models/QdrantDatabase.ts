@@ -252,7 +252,7 @@ export class QdrantDatabase extends VectorDBBase {
     // signature added in @memberjunction/ai-vectordb v5.30+.
     public async QueryIndex(params: MJQueryOptions, _contextUser?: UserInfo): Promise<BaseResponse> {
         try {
-            const collectionName = this.ExtractCollectionName(params);
+            const collectionName = this.extractCollectionName(params);
             if (!collectionName) {
                 return this.wrapFailureResponse('Collection name (id) is required for QueryIndex');
             }
@@ -628,13 +628,13 @@ export class QdrantDatabase extends VectorDBBase {
         if (conditions.length === 0) {
             return undefined;
         }
-        return this.ConditionsToQdrantFilter(conditions);
+        return this.conditionsToQdrantFilter(conditions);
     }
 
     /**
      * Convert MetadataFilterConditions to Qdrant's native filter syntax.
      */
-    private ConditionsToQdrantFilter(conditions: MetadataFilterCondition[]): Record<string, unknown> {
+    private conditionsToQdrantFilter(conditions: MetadataFilterCondition[]): Record<string, unknown> {
         const must: Array<Record<string, unknown>> = [];
 
         for (const condition of conditions) {
@@ -674,7 +674,7 @@ export class QdrantDatabase extends VectorDBBase {
      * Extract collection name from query params. Checks for 'id' field first (used as collection name
      * when vector is also provided), otherwise returns undefined.
      */
-    private ExtractCollectionName(params: MJQueryOptions): string | undefined {
+    private extractCollectionName(params: MJQueryOptions): string | undefined {
         if ('id' in params && typeof params.id === 'string') {
             // When both vector and id are present, id is the collection name
             if ('vector' in params && params.vector) {

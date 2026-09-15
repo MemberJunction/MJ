@@ -1633,11 +1633,11 @@ export abstract class BaseCommunicationProvider {
 
 @RegisterClass(BaseEntity, 'MJ: Communication Providers') // sub-class to extend the properties of the base entity
 export class MJCommunicationProviderEntityExtended extends MJCommunicationProviderEntity {
-    private _ProviderMessageTypes: MJCommunicationProviderMessageTypeEntity[];
+    private _providerMessageTypes: MJCommunicationProviderMessageTypeEntity[];
     public get MessageTypes(): MJCommunicationProviderMessageTypeEntity[] {
-        return this._ProviderMessageTypes;
+        return this._providerMessageTypes;
     }
     public set MessageTypes(value: MJCommunicationProviderMessageTypeEntity[]) {
-        this._ProviderMessageTypes = value;
+        this._providerMessageTypes = value;
     }
 }

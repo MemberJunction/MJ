@@ -57,7 +57,7 @@ interface RecordChangeLookup {
  * a handful of batched queries (one per unique entity type).
  */
 export class SnapshotBuilder {
-    private Walker = new DependencyGraphWalker();
+    private walker = new DependencyGraphWalker();
 
     /** Optional provider override; falls back to Metadata.Provider when not set. */
     private _provider?: IMetadataProvider;
@@ -203,8 +203,8 @@ export class SnapshotBuilder {
             Percentage: 10,
         });
 
-        const root = await this.Walker.WalkDependents(entityName, recordKey, walkOptions, contextUser);
-        const flatNodes = this.Walker.FlattenTopological(root);
+        const root = await this.walker.WalkDependents(entityName, recordKey, walkOptions, contextUser);
+        const flatNodes = this.walker.FlattenTopological(root);
 
         // Step 2: Batch-lookup RecordChanges for all nodes
         this.emitProgress(onProgress, {

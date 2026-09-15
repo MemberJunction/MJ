@@ -542,7 +542,7 @@ export class IntegrationSchemaSync {
     // (fields need ObjectID). Within this phase, upserts are independent so we
     // batch-execute via Promise.all (concurrency cap to avoid hammering the DB).
     const objectUpserts = SourceSchema.Objects.map((srcObj) => async () => {
-      const objResult = await IntegrationSchemaSync.UpsertObject(md, IntegrationID, srcObj, existingObjects, ContextUser);
+      const objResult = await IntegrationSchemaSync.upsertObject(md, IntegrationID, srcObj, existingObjects, ContextUser);
       return { srcObj, ...objResult };
     });
     const objectResults = useBatch ? await IntegrationSchemaSync.batchExec(objectUpserts, 8) : await IntegrationSchemaSync.serialExec(objectUpserts);
@@ -587,7 +587,7 @@ export class IntegrationSchemaSync {
         const perObjectLogs: FieldMergeLog[] = [];
         const perObjectStats = { created: 0, updated: 0 };
         for (const srcField of r.srcObj.Fields) {
-          const fr = await IntegrationSchemaSync.UpsertField(md, r.ObjectID!, srcField, existingFields, ContextUser, siblingNameToID, objectHasDeclaredPK);
+          const fr = await IntegrationSchemaSync.upsertField(md, r.ObjectID!, srcField, existingFields, ContextUser, siblingNameToID, objectHasDeclaredPK);
           if (fr.Created) perObjectStats.created++;
           if (fr.Updated) perObjectStats.updated++;
           perObjectLogs.push({
@@ -729,7 +729,7 @@ export class IntegrationSchemaSync {
 
   // ── Object upsert ────────────────────────────────────────────────
 
-  private static async UpsertObject(
+  private static async upsertObject(
     md: IMetadataProvider,
     integrationID: string,
     srcObj: SourceObjectInfo,
@@ -860,7 +860,7 @@ export class IntegrationSchemaSync {
 
   // ── Field upsert ─────────────────────────────────────────────────
 
-  private static async UpsertField(
+  private static async upsertField(
     md: IMetadataProvider,
     objectID: string,
     srcField: SourceFieldInfo,
@@ -1121,7 +1121,7 @@ export class IntegrationSchemaSync {
     let created = 0;
 
     // Ensure category exists
-    const categoryID = await IntegrationSchemaSync.ResolveOrCreateCategory(md, IntegrationName, result.CategoryRecords, ContextUser);
+    const categoryID = await IntegrationSchemaSync.resolveOrCreateCategory(md, IntegrationName, result.CategoryRecords, ContextUser);
 
     for (const actionRecord of result.ActionRecords) {
       const actionName = actionRecord.fields['Name'] as string;
@@ -1141,7 +1141,7 @@ export class IntegrationSchemaSync {
       if (existing.Success && existing.Results.length > 0) continue;
 
       try {
-        const actionID = await IntegrationSchemaSync.PersistActionRecord(md, actionRecord, categoryID, ContextUser);
+        const actionID = await IntegrationSchemaSync.persistActionRecord(md, actionRecord, categoryID, ContextUser);
         if (actionID) created++;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -1155,7 +1155,7 @@ export class IntegrationSchemaSync {
     return { ActionsCreated: created };
   }
 
-  private static async PersistActionRecord(
+  private static async persistActionRecord(
     md: IMetadataProvider,
     record: { fields: Record<string, unknown>; relatedEntities: Record<string, Array<{ fields: Record<string, unknown> }>> },
     categoryID: string | null,
@@ -1207,7 +1207,7 @@ export class IntegrationSchemaSync {
     return action.ID;
   }
 
-  private static async ResolveOrCreateCategory(
+  private static async resolveOrCreateCategory(
     md: IMetadataProvider,
     integrationName: string,
     categoryRecords: Array<{ fields: Record<string, unknown> }>,

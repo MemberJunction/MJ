@@ -49,8 +49,8 @@ const PROGRESS_UPDATE_INTERVAL = 10;
  * - Supports dry-run mode for previewing changes without applying them
  */
 export class RestoreEngine {
-    private LabelMgr = new LabelManager();
-    private SnapshotBldr = new SnapshotBuilder();
+    private labelMgr = new LabelManager();
+    private snapshotBldr = new SnapshotBuilder();
 
     /** Optional provider override; falls back to Metadata.Provider when not set. */
     private _provider?: IMetadataProvider;
@@ -117,7 +117,7 @@ export class RestoreEngine {
 
         // Mark the label as restored
         if (!resolvedOptions.DryRun && finalStatus !== 'Error') {
-            await this.LabelMgr.MarkLabelRestored(labelId, contextUser);
+            await this.labelMgr.MarkLabelRestored(labelId, contextUser);
         }
 
         LogStatus(`VersionHistory: Restore complete. ${restoredCount} restored, ${failedCount} failed, ${skippedCount} skipped.`);
@@ -439,7 +439,7 @@ export class RestoreEngine {
         items: MJVersionLabelItemEntityType[],
         contextUser: UserInfo
     ): Promise<string> {
-        const label = await this.LabelMgr.CreateLabel({
+        const label = await this.labelMgr.CreateLabel({
             Name: `Pre-Restore: ${targetLabelName} (${new Date().toISOString()})`,
             Description: `Automatic safety snapshot created before restoring to label '${targetLabelName}'`,
             Scope: targetLabelScope,
@@ -458,7 +458,7 @@ export class RestoreEngine {
             // the key `ID='ID|abc'`, and a composite key can't be a single value at all.
             const key = CompositeKey.FromURLSegment(entityInfo, item.RecordID);
 
-            await this.SnapshotBldr.CaptureRecord(
+            await this.snapshotBldr.CaptureRecord(
                 preRestoreLabelId,
                 entityInfo.Name,
                 key,

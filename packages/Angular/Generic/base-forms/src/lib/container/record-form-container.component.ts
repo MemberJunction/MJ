@@ -663,11 +663,11 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     if (savedWidth) this.TagsPanelWidth = parseInt(savedWidth, 10) || 0;
 
     // Subscribe to panel Navigate events and relay them
-    this.SubscribeToPanelNavigateEvents();
+    this.subscribeToPanelNavigateEvents();
 
     // Watch for panel changes to update counts and re-subscribe
     this.Panels.changes.pipe(takeUntil(this.destroy$)).subscribe(() => {
-      this.SubscribeToPanelNavigateEvents();
+      this.subscribeToPanelNavigateEvents();
       this.scheduleChromeResolve();
       this.cdr.markForCheck();
     });
@@ -685,7 +685,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       this.cdr.markForCheck();
     });
 
-    this.RestoreChromePrefs();
+    this.restoreChromePrefs();
     this.scheduleChromeResolve();
 
     // Watch for changes to record dirty state
@@ -735,7 +735,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   public OnMoreFolderToggle(): void {
     this.chrome.ToggleMoreFolder();
-    this.PersistChromePrefs();
+    this.persistChromePrefs();
     this.cdr.detectChanges();
   }
 
@@ -834,7 +834,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     if (!this.ChromeRailPinned && previous !== groupKey) {
       this.chromeRailExpanded = false;
     }
-    this.PersistChromePrefs();
+    this.persistChromePrefs();
     this.AfterSectionActivated.emit(new AfterSectionActivatedEventArgs(groupKey));
     this.cdr.detectChanges();
   }
@@ -854,7 +854,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     if (this.ChromeRailPinned) {
       this.chromeRailExpanded = true;
     }
-    this.PersistChromePrefs();
+    this.persistChromePrefs();
     this.cdr.detectChanges();
   }
 
@@ -879,7 +879,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   public OnRailResizeEnd(): void {
     if (!this.RailResizing) return;
     this.RailResizing = false;
-    this.PersistChromePrefs();
+    this.persistChromePrefs();
     this.cdr.detectChanges();
   }
 
@@ -955,7 +955,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     if (before.Cancel) return;
     this.chrome.ToggleMore(next);
     this.applyChromeVisibility();
-    this.PersistChromePrefs();
+    this.persistChromePrefs();
     this.AfterSectionActivated.emit(new AfterSectionActivatedEventArgs(MORE_SECTION_KEY));
     this.cdr.detectChanges();
   }
@@ -966,7 +966,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     }
     this.chromeResolveTimer = setTimeout(() => {
       this.chromeResolveTimer = null;
-      this.ResolveChrome();
+      this.resolveChrome();
       this.applyChromeVisibility();
       this.cdr.markForCheck();
     }, 0);
@@ -986,7 +986,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     this.scheduleChromeResolve();
   }
 
-  private ResolveChrome(): void {
+  private resolveChrome(): void {
     const entity = this.EffectiveEntityInfo;
     if (!entity) return;
     this.loadChromeRulesIfNeeded();
@@ -1346,7 +1346,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   }
 
   /** Delegates to the pure decision in `form-chrome-rail-pref`, supplying this form's registrations. */
-  private UnsavedLeadGroupKey(): string | null {
+  private unsavedLeadGroupKey(): string | null {
     return UnsavedLeadGroupKey(
       this.EffectiveEntityInfo?.Name,
       CollectFormPanelRegistrations(),
@@ -1354,7 +1354,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     );
   }
 
-  private RestoreChromePrefs(): void {
+  private restoreChromePrefs(): void {
     if (ShouldPersistChromeActiveGroup(this.EffectiveRecord?.IsSaved)) {
       const group = UserInfoEngine.Instance.GetSetting(this.chromePrefKey('activeGroup'));
       if (group) this.chrome.ActiveGroupKey = group;
@@ -1362,7 +1362,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       // A new record has no stored position to restore, so without this it opens on the lead
       // group -- which is usually a summary, and a summary of a record with no data is a page of
       // blanks. A contribution can opt out of that by declaring `leadsWhenUnsaved`.
-      const lead = this.UnsavedLeadGroupKey();
+      const lead = this.unsavedLeadGroupKey();
       if (lead) this.chrome.ActiveGroupKey = lead;
     }
     const more = UserInfoEngine.Instance.GetSetting(this.chromePrefKey('moreExpanded'));
@@ -1377,7 +1377,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     this.chromeRailExpanded = this.ChromeRailPinned;
   }
 
-  private PersistChromePrefs(): void {
+  private persistChromePrefs(): void {
     if (ShouldPersistChromeActiveGroup(this.EffectiveRecord?.IsSaved) && this.chrome.ActiveGroupKey) {
       UserInfoEngine.Instance.SetSettingDebounced(
         this.chromePrefKey('activeGroup'),
@@ -1402,15 +1402,15 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
    * Subscribes to Navigate events from all child collapsible panels
    * and relays them through this container's Navigate output.
    */
-  private SubscribeToPanelNavigateEvents(): void {
+  private subscribeToPanelNavigateEvents(): void {
     this.panelNavReset$.next(); // tear down previous subscriptions
     // Subscribe to RecordReady on the form component — fires once after record is fully initialized
     if (this.Fc) {
       this.Fc.RecordReady.pipe(takeUntil(this.panelNavReset$)).subscribe(() => {
-        this.LoadBadgeCounts();
+        this.loadBadgeCounts();
       });
       this.Fc.RecordRefreshed.pipe(takeUntil(this.panelNavReset$)).subscribe((e) => {
-        this.OnFormRecordRefreshed(e.Record);
+        this.onFormRecordRefreshed(e.Record);
       });
     }
 
@@ -1459,7 +1459,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
    */
   private badgeCountsLoaded = false;
 
-  private LoadBadgeCounts(): void {
+  private loadBadgeCounts(): void {
     if (this.badgeCountsLoaded) return;
 
     const record = this.EffectiveRecord;
@@ -1468,16 +1468,16 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     this.badgeCountsLoaded = true;
 
     // Fire queries in parallel — no await needed, they update state async
-    this.LoadTagCount(record);
-    this.LoadVersionCount(record);
-    this.LoadAttachmentCount(record);
+    this.loadTagCount(record);
+    this.loadVersionCount(record);
+    this.loadAttachmentCount(record);
   }
 
   /**
    * Queries the count of linked attachments for the current entity + record
    * and updates the AttachmentCount badge on the toolbar.
    */
-  private async LoadAttachmentCount(record: BaseEntity): Promise<void> {
+  private async loadAttachmentCount(record: BaseEntity): Promise<void> {
     if (!this.AttachmentsAvailable) return;
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
@@ -1500,7 +1500,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
    * Queries the count of tagged items for the current entity + record
    * and updates the TagCount badge on the toolbar.
    */
-  private async LoadTagCount(record: BaseEntity): Promise<void> {
+  private async loadTagCount(record: BaseEntity): Promise<void> {
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       // Don't narrow Fields — the server caches RunView results by entity+filter (ignoring Fields),
@@ -1523,7 +1523,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
    * Queries the count of record change entries for the current entity + record
    * and updates the VersionCount badge on the toolbar.
    */
-  private async LoadVersionCount(record: BaseEntity): Promise<void> {
+  private async loadVersionCount(record: BaseEntity): Promise<void> {
     if (!record.EntityInfo.TrackRecordChanges) return;
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
@@ -1580,7 +1580,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
         await this.Fc.SaveRecord(true);
 
         // After successful save, refresh version count badge and record changes drawer
-        this.RefreshAfterSave();
+        this.refreshAfterSave();
       } finally {
         // Use microtask timing to avoid ExpressionChangedAfterItHasBeenCheckedError
         await Promise.resolve();
@@ -1599,12 +1599,12 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
    * The save operation creates a new RecordChange entry server-side, so we need
    * to update the UI to reflect the new version.
    */
-  private RefreshAfterSave(): void {
+  private refreshAfterSave(): void {
     const record = this.EffectiveRecord;
     if (!record?.EntityInfo?.TrackRecordChanges) return;
 
     // Refresh version count badge
-    this.LoadVersionCount(record);
+    this.loadVersionCount(record);
 
     // If the record changes drawer is open, refresh it too
     if (this.ShowRecordChanges && this.recordChangesDrawer) {
@@ -1653,9 +1653,9 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
    * the record itself (badges, open history drawer) and broadcast to
    * in-form listeners (related grids, IS-A panel, custom panels).
    */
-  private OnFormRecordRefreshed(record: BaseEntity): void {
+  private onFormRecordRefreshed(record: BaseEntity): void {
     this.badgeCountsLoaded = false;
-    this.LoadBadgeCounts();
+    this.loadBadgeCounts();
     if (this.ShowRecordChanges && this.recordChangesDrawer) {
       this.recordChangesDrawer.Refresh();
     }
@@ -1713,7 +1713,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     // Refresh tag count — tags may have been added/removed while panel was open
     const record = this.EffectiveRecord;
     if (record?.EntityInfo) {
-      this.LoadTagCount(record);
+      this.loadTagCount(record);
     }
   }
 
@@ -1742,7 +1742,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     // Refresh attachment count — attachments may have been added/removed while panel was open
     const record = this.EffectiveRecord;
     if (record?.EntityInfo) {
-      this.LoadAttachmentCount(record);
+      this.loadAttachmentCount(record);
     }
   }
 
@@ -1767,7 +1767,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     // Refresh version count — new changes may have occurred
     const record = this.EffectiveRecord;
     if (record?.EntityInfo) {
-      this.LoadVersionCount(record);
+      this.loadVersionCount(record);
     }
   }
 
@@ -1807,7 +1807,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
           );
 
           // Refresh version count — the save just produced a new restore-tagged change.
-          this.LoadVersionCount(record);
+          this.loadVersionCount(record);
           this.cdr.markForCheck();
         } else {
           const errMsg = record.LatestResult?.CompleteMessage ?? 'unknown error';

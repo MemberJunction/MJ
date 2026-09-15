@@ -231,7 +231,7 @@ export class TagChipsComponent extends BaseAngularComponent implements OnInit {
       return;
     }
     if (this.CanCreateNew) {
-      await this.CreateAndAddTag(term);
+      await this.createAndAddTag(term);
     }
   }
 
@@ -245,10 +245,10 @@ export class TagChipsComponent extends BaseAngularComponent implements OnInit {
   public async OnCreateNew(): Promise<void> {
     const term = this.AddInput.trim();
     if (term.length === 0) return;
-    await this.CreateAndAddTag(term);
+    await this.createAndAddTag(term);
   }
 
-  private async CreateAndAddTag(name: string): Promise<void> {
+  private async createAndAddTag(name: string): Promise<void> {
     if (!this._entityName || !this._recordId) return;
     try {
       const md = this.metadata();

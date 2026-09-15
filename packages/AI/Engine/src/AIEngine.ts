@@ -147,7 +147,7 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     private _agentBaseCatalogCache: Map<string, object> = new Map();
     private _agentCatalogListenerSetUp: boolean = false;
     /** Entities whose change must coarse-invalidate the agent base-catalog cache (lowercased). */
-    private static readonly AgentCatalogInvalidatingEntities: ReadonlySet<string> = new Set([
+    private static readonly agentCatalogInvalidatingEntities: ReadonlySet<string> = new Set([
         'ai agents',
         'mj: ai agent actions',
         'mj: ai agent relationships',
@@ -189,7 +189,7 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
                     const e = event.args as BaseEntityEvent;
                     if (e?.type === 'save' || e?.type === 'delete' || e?.type === 'remote-invalidate') {
                         const name = e.baseEntity?.EntityInfo?.Name?.toLowerCase().trim();
-                        if (name && AIEngine.AgentCatalogInvalidatingEntities.has(name)) {
+                        if (name && AIEngine.agentCatalogInvalidatingEntities.has(name)) {
                             this.ClearAgentBaseCatalogCache();
                         }
                     }

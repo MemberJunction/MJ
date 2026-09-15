@@ -1303,7 +1303,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   }
 
   /** UserInfoEngine key for persisting folder collapse state + group-by mode. */
-  private static readonly FolderPrefsKey = 'mj.conversations.folderPrefs.v1';
+  private static readonly folderPrefsKey = 'mj.conversations.folderPrefs.v1';
 
   /** How the conversation list is grouped. 'project' = folders, 'none' = flat list. */
   public GroupBy: ConversationGroupBy = 'project';
@@ -1765,7 +1765,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
 
   private loadFolderPrefs(): void {
     try {
-      const raw = UserInfoEngine.Instance.GetSetting(ConversationListComponent.FolderPrefsKey);
+      const raw = UserInfoEngine.Instance.GetSetting(ConversationListComponent.folderPrefsKey);
       if (!raw) return;
       const parsed = JSON.parse(raw) as { collapsed?: string[]; groupBy?: ConversationGroupBy };
       this.collapsedFolderIds = new Set((parsed.collapsed ?? []).map(id => NormalizeUUID(id)));
@@ -1782,7 +1782,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
       collapsed: Array.from(this.collapsedFolderIds),
       groupBy: this.GroupBy
     });
-    UserInfoEngine.Instance.SetSettingDebounced(ConversationListComponent.FolderPrefsKey, payload);
+    UserInfoEngine.Instance.SetSettingDebounced(ConversationListComponent.folderPrefsKey, payload);
   }
 
   // ========================================================================

@@ -781,8 +781,7 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
   }
 
   public OpenAction(actionId: string): void {
-    const key = CompositeKey.FromID(actionId);
-    this.navigationService.OpenEntityRecord('MJ: Actions', key);
+    this.navigationService.OpenEntityRecord('MJ: Actions', CompositeKey.FromID(actionId));
   }
 
   /** @deprecated Use {@link OpenAction}. */

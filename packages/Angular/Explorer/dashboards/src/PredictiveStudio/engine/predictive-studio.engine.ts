@@ -85,31 +85,31 @@ export class PredictiveStudioEngine extends BaseEngine<PredictiveStudioEngine> {
     return super.getInstance<PredictiveStudioEngine>();
   }
 
-  private _Algorithms: MJMLAlgorithmEntity[] = [];
-  private _UseCases: MJMLAlgorithmUseCaseEntity[] = [];
-  private _Rankings: MJMLAlgorithmUseCaseRankingEntity[] = [];
-  private _Models: MJMLModelEntity[] = [];
-  private _ScoringBindings: MJMLModelScoringBindingEntity[] = [];
-  private _RecordProcesses: MJRecordProcessEntity[] = [];
-  private _Pipelines: MJMLTrainingPipelineEntity[] = [];
-  private _TrainingRuns: MJMLTrainingRunEntity[] = [];
-  private _Experiments: MJExperimentEntity[] = [];
-  private _Sessions: MJExperimentSessionEntity[] = [];
-  private _Iterations: MJExperimentSessionIterationEntity[] = [];
+  private _algorithms: MJMLAlgorithmEntity[] = [];
+  private _useCases: MJMLAlgorithmUseCaseEntity[] = [];
+  private _rankings: MJMLAlgorithmUseCaseRankingEntity[] = [];
+  private _models: MJMLModelEntity[] = [];
+  private _scoringBindings: MJMLModelScoringBindingEntity[] = [];
+  private _recordProcesses: MJRecordProcessEntity[] = [];
+  private _pipelines: MJMLTrainingPipelineEntity[] = [];
+  private _trainingRuns: MJMLTrainingRunEntity[] = [];
+  private _experiments: MJExperimentEntity[] = [];
+  private _sessions: MJExperimentSessionEntity[] = [];
+  private _iterations: MJExperimentSessionIterationEntity[] = [];
 
   public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
     const c: Partial<BaseEnginePropertyConfig>[] = [
-      { Type: 'entity', EntityName: 'MJ: ML Algorithms', PropertyName: '_Algorithms', OrderBy: 'Name' },
-      { Type: 'entity', EntityName: 'MJ: ML Algorithm Use Cases', PropertyName: '_UseCases', OrderBy: 'DisplayOrder' },
-      { Type: 'entity', EntityName: 'MJ: ML Algorithm Use Case Rankings', PropertyName: '_Rankings' },
-      { Type: 'entity', EntityName: 'MJ: ML Models', PropertyName: '_Models', OrderBy: '__mj_UpdatedAt DESC' },
-      { Type: 'entity', EntityName: 'MJ: ML Model Scoring Bindings', PropertyName: '_ScoringBindings', OrderBy: '__mj_UpdatedAt DESC' },
-      { Type: 'entity', EntityName: 'MJ: Record Processes', PropertyName: '_RecordProcesses', OrderBy: 'Name' },
-      { Type: 'entity', EntityName: 'MJ: ML Training Pipelines', PropertyName: '_Pipelines', OrderBy: 'Name' },
-      { Type: 'entity', EntityName: 'MJ: ML Training Runs', PropertyName: '_TrainingRuns', OrderBy: '__mj_CreatedAt DESC' },
-      { Type: 'entity', EntityName: 'MJ: Experiments', PropertyName: '_Experiments', OrderBy: 'Name' },
-      { Type: 'entity', EntityName: 'MJ: Experiment Sessions', PropertyName: '_Sessions', OrderBy: '__mj_CreatedAt DESC' },
-      { Type: 'entity', EntityName: 'MJ: Experiment Session Iterations', PropertyName: '_Iterations', OrderBy: 'Sequence' },
+      { Type: 'entity', EntityName: 'MJ: ML Algorithms', PropertyName: '_algorithms', OrderBy: 'Name' },
+      { Type: 'entity', EntityName: 'MJ: ML Algorithm Use Cases', PropertyName: '_useCases', OrderBy: 'DisplayOrder' },
+      { Type: 'entity', EntityName: 'MJ: ML Algorithm Use Case Rankings', PropertyName: '_rankings' },
+      { Type: 'entity', EntityName: 'MJ: ML Models', PropertyName: '_models', OrderBy: '__mj_UpdatedAt DESC' },
+      { Type: 'entity', EntityName: 'MJ: ML Model Scoring Bindings', PropertyName: '_scoringBindings', OrderBy: '__mj_UpdatedAt DESC' },
+      { Type: 'entity', EntityName: 'MJ: Record Processes', PropertyName: '_recordProcesses', OrderBy: 'Name' },
+      { Type: 'entity', EntityName: 'MJ: ML Training Pipelines', PropertyName: '_pipelines', OrderBy: 'Name' },
+      { Type: 'entity', EntityName: 'MJ: ML Training Runs', PropertyName: '_trainingRuns', OrderBy: '__mj_CreatedAt DESC' },
+      { Type: 'entity', EntityName: 'MJ: Experiments', PropertyName: '_experiments', OrderBy: 'Name' },
+      { Type: 'entity', EntityName: 'MJ: Experiment Sessions', PropertyName: '_sessions', OrderBy: '__mj_CreatedAt DESC' },
+      { Type: 'entity', EntityName: 'MJ: Experiment Session Iterations', PropertyName: '_iterations', OrderBy: 'Sequence' },
     ];
     await super.Load(c, provider ?? Metadata.Provider, forceRefresh, contextUser);
   }
@@ -117,39 +117,39 @@ export class PredictiveStudioEngine extends BaseEngine<PredictiveStudioEngine> {
   // ---- Cached arrays (sync getters; observe via ObserveProperty for reactive UI) ----
 
   public get Algorithms(): MJMLAlgorithmEntity[] {
-    return this._Algorithms ?? [];
+    return this._algorithms ?? [];
   }
   public get UseCases(): MJMLAlgorithmUseCaseEntity[] {
-    return this._UseCases ?? [];
+    return this._useCases ?? [];
   }
   public get Rankings(): MJMLAlgorithmUseCaseRankingEntity[] {
-    return this._Rankings ?? [];
+    return this._rankings ?? [];
   }
   public get Models(): MJMLModelEntity[] {
-    return this._Models ?? [];
+    return this._models ?? [];
   }
   /** Scoring bindings — a model → (target entity + column, optional Record Process) deployment link. */
   public get ScoringBindings(): MJMLModelScoringBindingEntity[] {
-    return this._ScoringBindings ?? [];
+    return this._scoringBindings ?? [];
   }
   /** Record Processes — used to resolve the schedule (cron) + status of a binding's bound process. */
   public get RecordProcesses(): MJRecordProcessEntity[] {
-    return this._RecordProcesses ?? [];
+    return this._recordProcesses ?? [];
   }
   public get Pipelines(): MJMLTrainingPipelineEntity[] {
-    return this._Pipelines ?? [];
+    return this._pipelines ?? [];
   }
   public get TrainingRuns(): MJMLTrainingRunEntity[] {
-    return this._TrainingRuns ?? [];
+    return this._trainingRuns ?? [];
   }
   public get Experiments(): MJExperimentEntity[] {
-    return this._Experiments ?? [];
+    return this._experiments ?? [];
   }
   public get Sessions(): MJExperimentSessionEntity[] {
-    return this._Sessions ?? [];
+    return this._sessions ?? [];
   }
   public get Iterations(): MJExperimentSessionIterationEntity[] {
-    return this._Iterations ?? [];
+    return this._iterations ?? [];
   }
 
   // ---- Domain helpers ----

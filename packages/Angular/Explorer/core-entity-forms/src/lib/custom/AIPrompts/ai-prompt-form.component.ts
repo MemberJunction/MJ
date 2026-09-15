@@ -425,7 +425,7 @@ export class MJAIPromptFormComponentExtended extends MJAIPromptFormComponent imp
     }
 
     private get _metadata() { return this.ProviderToUse; }
-    private __InferenceProvider_VendorTypeDefinitionID: string = '';
+    private __inferenceProvider_VendorTypeDefinitionID: string = '';
 
     @ViewChild('templateEditor') templateEditor: TemplateEditorComponent | undefined;
 
@@ -435,8 +435,8 @@ export class MJAIPromptFormComponentExtended extends MJAIPromptFormComponent imp
         // make sure AI Engine Base is configured, this will load stuff only if not already
         // loaded in the current process space
         await AIEngineBase.Instance.Config(false, this._metadata.CurrentUser);
-        this.__InferenceProvider_VendorTypeDefinitionID = AIEngineBase.Instance.InferenceProviderTypeID || '';
-        if (!this.__InferenceProvider_VendorTypeDefinitionID) {
+        this.__inferenceProvider_VendorTypeDefinitionID = AIEngineBase.Instance.InferenceProviderTypeID || '';
+        if (!this.__inferenceProvider_VendorTypeDefinitionID) {
             console.error('Inference Provider Vendor Type Definition ID not found');
             MJNotificationService.Instance.CreateSimpleNotification(
                 'Inference Provider Vendor Type Definition not found',

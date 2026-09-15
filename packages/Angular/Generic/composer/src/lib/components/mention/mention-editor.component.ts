@@ -358,7 +358,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
    */
   private suggestionRequestSeq: number = 0;
   /** Cap on the suggestions displayed; passed to providers as `MaxResults`. */
-  private static readonly MaxSuggestions: number = 50;
+  private static readonly maxSuggestions: number = 50;
 
   /**
    * The trigger providers this editor consults: the explicit `TriggerProviders` list
@@ -717,7 +717,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
 
     const request: ComposerSuggestionRequest = {
       Query: query,
-      MaxResults: MentionEditorComponent.MaxSuggestions,
+      MaxResults: MentionEditorComponent.maxSuggestions,
       ContextUser: this.CurrentUser ?? null,
       Provider: this.Provider
     };
@@ -730,7 +730,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
       return; // superseded by a newer keystroke or an explicit close
     }
 
-    const merged = resultSets.flat().slice(0, MentionEditorComponent.MaxSuggestions);
+    const merged = resultSets.flat().slice(0, MentionEditorComponent.maxSuggestions);
     this.MentionSuggestions = merged;
 
     if (merged.length > 0) {

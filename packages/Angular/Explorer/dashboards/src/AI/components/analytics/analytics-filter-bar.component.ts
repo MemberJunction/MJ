@@ -326,7 +326,7 @@ export class AnalyticsFilterBarComponent implements OnInit {
     }
 
     ngOnInit(): void {
-        this.BuildOptions();
+        this.buildOptions();
     }
 
     public OnTimeRangeSelect(range: string): void {
@@ -363,7 +363,7 @@ export class AnalyticsFilterBarComponent implements OnInit {
         this.CompareToggled.emit(this.CompareActive);
     }
 
-    private BuildOptions(): void {
+    private buildOptions(): void {
         const engine = AIEngineBase.Instance;
 
         this.ModelOptions = engine.Models

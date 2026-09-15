@@ -421,7 +421,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
             this.Result = await this.clusteringService.RunClustering(vectors, config);
             this.activityService.Complete(activityID, 'success', `${this.Result.Points.length} points · ${this.Result.Clusters.length} clusters`);
             this.VisualizationTitle = `${config.EntityName} — ${config.Algorithm === 'kmeans' ? 'K-Means' : 'DBSCAN'}`;
-            this.FieldPriority = this.ComputeFieldPriority(config.EntityName);
+            this.FieldPriority = this.computeFieldPriority(config.EntityName);
 
             // Fire LLM cluster naming in the background (non-blocking).
             // Clusters render immediately; labels appear when LLM responds.
@@ -860,7 +860,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
      * Returns field names sorted: IsNameField first, then DefaultInView by Sequence,
      * then remaining fields by Sequence.
      */
-    private ComputeFieldPriority(entityName: string): string[] {
+    private computeFieldPriority(entityName: string): string[] {
         try {
             const md = this.ProviderToUse;
             const entityInfo = md.Entities.find(e => e.Name === entityName);
@@ -974,7 +974,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
             this.ClusterLabels = session.ClusterLabels ?? [];
             this.ActiveConfig = session.Config;
             this.VisualizationTitle = session.Title ?? 'Restored Session';
-            this.FieldPriority = this.ComputeFieldPriority(session.Config.EntityName);
+            this.FieldPriority = this.computeFieldPriority(session.Config.EntityName);
             this.applyLabelsToResult();
             this.cdr.detectChanges();
 

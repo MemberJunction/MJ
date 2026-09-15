@@ -616,7 +616,7 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
     set TimeRange(value: string) {
         const prev = this._timeRange;
         this._timeRange = value;
-        if (prev !== value && this.initialized) this.LoadData();
+        if (prev !== value && this.initialized) this.loadData();
     }
     get TimeRange(): string { return this._timeRange; }
 
@@ -626,7 +626,7 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
         const next = value ?? { Models: [], Agents: [], Prompts: [], Statuses: [] };
         const changed = !this.shallowFiltersEqual(this._filters, next);
         this._filters = next;
-        if (changed && this.initialized) this.LoadData();
+        if (changed && this.initialized) this.loadData();
     }
     get Filters(): GlobalFilterState { return this._filters; }
 
@@ -661,7 +661,7 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
 
     ngOnInit(): void {
         this.initialized = true;
-        this.LoadData();
+        this.loadData();
     }
 
     ngOnDestroy(): void {
@@ -674,13 +674,13 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
     public OnTimeRangeChange(range: string): void {
         this.TimeRange = range;
         this.TimeRangeChange.emit(range);
-        this.LoadData();
+        this.loadData();
     }
 
     public OnFiltersChange(filters: GlobalFilterState): void {
         this.Filters = filters;
         this.FiltersChange.emit(filters);
-        this.LoadData();
+        this.loadData();
     }
 
     public FormatCurrency(value: number, decimals = 2): string {
@@ -700,7 +700,7 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
 
     // ── Data Loading ──
 
-    private async LoadData(): Promise<void> {
+    private async loadData(): Promise<void> {
         this.IsLoading = true;
         this.cdr.detectChanges();
 

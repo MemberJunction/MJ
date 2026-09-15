@@ -82,8 +82,8 @@ export class APIApplicationsPanelComponent extends BaseAngularComponent implemen
     private widthSaveTimeout: ReturnType<typeof setTimeout> | null = null;
 
     // Track dirty state for unified save
-    private DetailsChanged = false;
-    private ScopesChanged = false;
+    private detailsChanged = false;
+    private scopesChanged = false;
 
     // Scope categories for display
     public ScopeCategories: ScopeCategory[] = [];
@@ -251,8 +251,8 @@ export class APIApplicationsPanelComponent extends BaseAngularComponent implemen
         this.EditDescription = '';
         this.EditIsActive = true;
         this.EditingApplication = null;
-        this.DetailsChanged = false;
-        this.ScopesChanged = false;
+        this.detailsChanged = false;
+        this.scopesChanged = false;
         this.ShowCreatePanel = true;
     }
 
@@ -311,8 +311,8 @@ export class APIApplicationsPanelComponent extends BaseAngularComponent implemen
         this.EditDescription = appItem.application.Description || '';
         this.EditIsActive = appItem.application.IsActive;
         this.EditTab = goToScopes ? 'scopes' : 'details';
-        this.DetailsChanged = false;
-        this.ScopesChanged = false;
+        this.detailsChanged = false;
+        this.scopesChanged = false;
         this.buildScopeCategories(appItem);
         this.ShowEditPanel = true;
     }
@@ -539,8 +539,8 @@ export class APIApplicationsPanelComponent extends BaseAngularComponent implemen
         this.ScopeSelections = [];
         this.ScopeCategories = [];
         this.EditTab = 'details';
-        this.DetailsChanged = false;
-        this.ScopesChanged = false;
+        this.detailsChanged = false;
+        this.scopesChanged = false;
     }
 
     /** @deprecated Use {@link ClosePanel}. */

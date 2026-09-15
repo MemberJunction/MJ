@@ -208,7 +208,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
 
     // Form Builder tab "Open in Chat" — relay to NavigationService.
     this.State.OpenInChatRequested.pipe(takeUntil(this.destroy$)).subscribe(() => {
-      this.OnOpenFormInChat();
+      this.onOpenFormInChat();
     });
 
     this.loadUserPreferences();
@@ -708,7 +708,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
    * tool so Sage can mutate the canvas live. Falls back to clipboard if the
    * navigation service isn't available (e.g. embedded host).
    */
-  private async OnOpenFormInChat(): Promise<void> {
+  private async onOpenFormInChat(): Promise<void> {
     const canvas = this.State.FormCanvas;
     if (!canvas) {
       this.notificationService.CreateSimpleNotification(

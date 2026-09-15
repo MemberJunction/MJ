@@ -60,8 +60,8 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
    * The neutral greeting shown when there is no auth status to report. Kept as a constant so
    * {@link ProviderPickerLede} can tell "nothing happened yet" apart from a real status message.
    */
-  private static readonly DefaultSubHeaderText = 'Welcome back! Please log in to your account.';
-  public SubHeaderText: string = MJExplorerAppComponent.DefaultSubHeaderText;
+  private static readonly defaultSubHeaderText = 'Welcome back! Please log in to your account.';
+  public SubHeaderText: string = MJExplorerAppComponent.defaultSubHeaderText;
 
   /** @deprecated Use {@link SubHeaderText}. */
   public get subHeaderText(): string {
@@ -251,7 +251,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
    * choice to make, so it is suppressed when there is exactly one provider and nothing to choose.
    */
   public get ProviderPickerLede(): string | null {
-    if (this.SubHeaderText !== MJExplorerAppComponent.DefaultSubHeaderText) {
+    if (this.SubHeaderText !== MJExplorerAppComponent.defaultSubHeaderText) {
       return this.SubHeaderText;
     }
     return this.ShowProviderPicker ? "Continue with one of your organization's sign-in options." : null;
@@ -445,14 +445,14 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
 
           switch (authError.type) {
             case AuthErrorType.NO_ACTIVE_SESSION:
-              this.SubHeaderText = MJExplorerAppComponent.DefaultSubHeaderText;
+              this.SubHeaderText = MJExplorerAppComponent.defaultSubHeaderText;
               break;
             case AuthErrorType.INTERACTION_REQUIRED:
             case AuthErrorType.TOKEN_EXPIRED:
               this.SubHeaderText = "Your session has expired. Please log in to your account.";
               break;
             default:
-              this.SubHeaderText = authError.userMessage || MJExplorerAppComponent.DefaultSubHeaderText;
+              this.SubHeaderText = authError.userMessage || MJExplorerAppComponent.defaultSubHeaderText;
           }
 
           // Auth state is managed by the provider itself via observables

@@ -75,7 +75,7 @@ interface TestEntityRecord {
 class TestableManageMetadataForFixpoint extends ManageMetadataBase {
    public executedSql: string[] = [];
 
-   protected override async LogSQLBatchAndExecute(
+   protected override async logSQLBatchAndExecute(
       _pool: CodeGenConnection,
       sqlBatch: string[],
       _description: string,

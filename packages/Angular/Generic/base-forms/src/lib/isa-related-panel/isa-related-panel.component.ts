@@ -81,7 +81,7 @@ export class MjIsaRelatedPanelComponent extends BaseAngularComponent implements 
 
   ngOnInit(): void {
     this.recordRefresh?.Refreshed$.pipe(takeUntil(this.destroy$)).subscribe(() => {
-      void this.DiscoverRelatedItems();
+      void this.discoverRelatedItems();
     });
   }
 
@@ -92,7 +92,7 @@ export class MjIsaRelatedPanelComponent extends BaseAngularComponent implements 
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['Record']) {
-      this.DiscoverRelatedItems();
+      this.discoverRelatedItems();
     }
   }
 
@@ -101,7 +101,7 @@ export class MjIsaRelatedPanelComponent extends BaseAngularComponent implements 
    * entity hierarchy. Finds siblings (other children of the same parent)
    * and all descendants (children, grandchildren, etc.) as a tree.
    */
-  private async DiscoverRelatedItems(): Promise<void> {
+  private async discoverRelatedItems(): Promise<void> {
     this.RelatedItems = [];
 
     if (!this.Record) return;
@@ -111,12 +111,12 @@ export class MjIsaRelatedPanelComponent extends BaseAngularComponent implements 
 
     // Case 1: Current entity is a child type — find siblings via parent
     if (entityInfo.IsChildType && entityInfo.ParentEntityInfo) {
-      this.DiscoverSiblingsFromParent(entityInfo);
+      this.discoverSiblingsFromParent(entityInfo);
     }
 
     // Case 2: Current entity is a parent type — discover all descendants as tree
     if (entityInfo.IsParentType) {
-      await this.DiscoverDescendants();
+      await this.discoverDescendants();
     }
 
     this.cdr.markForCheck();
@@ -127,7 +127,7 @@ export class MjIsaRelatedPanelComponent extends BaseAngularComponent implements 
    * (e.g., Speaker) that also have records with the same parent PK.
    * Uses the parent's ISAChildren if the parent uses overlapping subtypes.
    */
-  private DiscoverSiblingsFromParent(entityInfo: EntityInfo): void {
+  private discoverSiblingsFromParent(entityInfo: EntityInfo): void {
     const parent = this.Record?.ISAParent;
     if (!parent) return;
 
@@ -154,7 +154,7 @@ export class MjIsaRelatedPanelComponent extends BaseAngularComponent implements 
    * Recursively discover all IS-A descendants and build a tree structure.
    * Root-level children appear as top-level cards; grandchildren nest inside.
    */
-  private async DiscoverDescendants(): Promise<void> {
+  private async discoverDescendants(): Promise<void> {
     if (!this.Record) return;
 
     const descendants = await DiscoverISADescendants(this.Record, this.ProviderToUse);

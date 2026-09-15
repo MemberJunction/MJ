@@ -228,7 +228,7 @@ export abstract class TransactionGroupBase {
      * @param results The transaction results (if applicable)
      * @param error Any error that occurred (if applicable)
      */
-    private NotifyTransactionStatus(success: boolean, results?: TransactionResult[], error?: any) {
+    private notifyTransactionStatus(success: boolean, results?: TransactionResult[], error?: any) {
         this.transactionNotifier.next({ success, results, error });
     }
 
@@ -349,7 +349,7 @@ export abstract class TransactionGroupBase {
 
                 // now, see if there are any false values for results[x].Success, if so, we have to return false
                 const overallSuccess = results.every(r => r.Success);
-                this.NotifyTransactionStatus(overallSuccess, results);
+                this.notifyTransactionStatus(overallSuccess, results);
 
                 this._status = overallSuccess ? 'Complete' : 'Failed';
                 return overallSuccess;
@@ -368,7 +368,7 @@ export abstract class TransactionGroupBase {
                 await this._pendingTransactions[i].CallBack(err, false);
             }
 
-            this.NotifyTransactionStatus(false, undefined, err);
+            this.notifyTransactionStatus(false, undefined, err);
             this._status = 'Failed';
             return false;
         }

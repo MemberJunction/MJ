@@ -379,7 +379,7 @@ export class AnalyticsErrorAnalysisComponent extends BaseAngularComponent implem
     set TimeRange(value: string) {
         const prev = this._timeRange;
         this._timeRange = value;
-        if (prev !== value && this.initialized) this.LoadData();
+        if (prev !== value && this.initialized) this.loadData();
     }
     get TimeRange(): string { return this._timeRange; }
 
@@ -389,7 +389,7 @@ export class AnalyticsErrorAnalysisComponent extends BaseAngularComponent implem
         const next = value ?? { Models: [], Agents: [], Prompts: [], Statuses: [] };
         const changed = !this.shallowFiltersEqual(this._filters, next);
         this._filters = next;
-        if (changed && this.initialized) this.LoadData();
+        if (changed && this.initialized) this.loadData();
     }
     get Filters(): GlobalFilterState { return this._filters; }
 
@@ -417,7 +417,7 @@ export class AnalyticsErrorAnalysisComponent extends BaseAngularComponent implem
 
     ngOnInit(): void {
         this.initialized = true;
-        this.LoadData();
+        this.loadData();
     }
 
     ngOnDestroy(): void {
@@ -429,12 +429,12 @@ export class AnalyticsErrorAnalysisComponent extends BaseAngularComponent implem
 
     public OnTimeRangeChange(range: string): void {
         this.TimeRange = range;
-        this.LoadData();
+        this.loadData();
     }
 
     public OnFiltersChange(filters: GlobalFilterState): void {
         this.Filters = filters;
-        this.LoadData();
+        this.loadData();
     }
 
     /** Accordion-driven handler — SETS the emitted expanded value (vs. a flip),
@@ -452,7 +452,7 @@ export class AnalyticsErrorAnalysisComponent extends BaseAngularComponent implem
 
     // ── Data Loading ──
 
-    private async LoadData(): Promise<void> {
+    private async loadData(): Promise<void> {
         this.IsLoading = true;
         this.cdr.detectChanges();
 

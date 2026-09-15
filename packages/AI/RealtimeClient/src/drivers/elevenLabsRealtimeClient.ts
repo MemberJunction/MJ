@@ -724,7 +724,7 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
     }
 
     /** How long to wait for real model output after a tool result before nudging. */
-    private static readonly ToolResultNudgeMs = 1600;
+    private static readonly toolResultNudgeMs = 1600;
 
     /** Arms the absorbed-tool-result nudge (see {@link toolResultNudgeTimer}). */
     private armToolResultNudge(): void {
@@ -741,7 +741,7 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
                 'normal',
                 false
             );
-        }, ElevenLabsRealtimeClient.ToolResultNudgeMs);
+        }, ElevenLabsRealtimeClient.toolResultNudgeMs);
     }
 
     /** Cancels the nudge — real model output arrived (or the session is resetting). */

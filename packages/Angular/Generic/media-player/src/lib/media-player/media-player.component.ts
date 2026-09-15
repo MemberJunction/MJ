@@ -327,7 +327,7 @@ export class MJMediaPlayerComponent implements OnDestroy {
   }
 
   /** The active audio track that drives the waveform (the first audio track, if any). */
-  private get WaveformTrack(): MediaTrack | null {
+  private get waveformTrack(): MediaTrack | null {
     return this.IsAudioOnly ? this.AudioTracks[0] ?? null : null;
   }
 
@@ -337,7 +337,7 @@ export class MJMediaPlayerComponent implements OnDestroy {
    * (decode pending/failed, no track), the template shows a plain progress bar instead.
    */
   get ShowWaveformBars(): boolean {
-    const track = this.WaveformTrack;
+    const track = this.waveformTrack;
     if (!this.ShowWaveform || !track) {
       return false;
     }
@@ -350,7 +350,7 @@ export class MJMediaPlayerComponent implements OnDestroy {
    * client-side extraction when needed — re-renders/seeks never re-decode (cached by Id).
    */
   get WaveformPeaks(): number[] | null {
-    const track = this.WaveformTrack;
+    const track = this.waveformTrack;
     if (!this.ShowWaveform || !track) {
       return null;
     }

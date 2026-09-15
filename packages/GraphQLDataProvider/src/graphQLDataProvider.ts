@@ -364,7 +364,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * 
      * @param sessionId The session ID to store
      */
-    private async SaveStoredSessionID(sessionId: string): Promise<void> {
+    private async saveStoredSessionID(sessionId: string): Promise<void> {
         try {
             const ls = this.LocalStorageProvider;
             if (ls) {
@@ -415,7 +415,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
                 this._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, this._sessionId, configData.MJAPIKey, configData.UserAPIKey);
                 // Store the session ID for this connection
-                await this.SaveStoredSessionID(this._sessionId);
+                await this.saveStoredSessionID(this._sessionId);
             }
             else {
                 // Update the singleton instance
@@ -430,7 +430,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     GraphQLDataProvider.Instance._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, GraphQLDataProvider.Instance._sessionId, configData.MJAPIKey, configData.UserAPIKey);
 
                 // Store the session ID for the global instance
-                await GraphQLDataProvider.Instance.SaveStoredSessionID(GraphQLDataProvider.Instance._sessionId);
+                await GraphQLDataProvider.Instance.saveStoredSessionID(GraphQLDataProvider.Instance._sessionId);
 
                 // CRITICAL: Sync this instance with the singleton
                 // This ensures ExecuteGQL() can use this._client.request()
@@ -1835,7 +1835,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * metadata filtering lands (issue #3485). What makes a response correct regardless is the
      * server's own `ReadableFields___`; see {@link ApplyServerFieldAccess}.
      */
-    private GetDeniedReadFieldNamesForCurrentUser(entityInfo: EntityInfo): Set<string> {
+    private getDeniedReadFieldNamesForCurrentUser(entityInfo: EntityInfo): Set<string> {
         if (!entityInfo?.EnableFieldLevelSecurity || !this.CurrentUser) {
             return new Set<string>();
         }
@@ -1857,7 +1857,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * the two must match versions, which is the narrow and acceptable coupling: restricting a
      * non-nullable column is broken on such a server regardless.
      */
-    private FieldSecurityTransportSelection(entityInfo: EntityInfo): string {
+    private fieldSecurityTransportSelection(entityInfo: EntityInfo): string {
         return entityInfo?.EnableFieldLevelSecurity ? ReadableFieldsTransportKey : '';
     }
 
@@ -1901,7 +1901,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             return row;
         }
 
-        const denied = this.GetDeniedReadFieldNamesForCurrentUser(entityInfo);
+        const denied = this.getDeniedReadFieldNamesForCurrentUser(entityInfo);
         if (denied.size === 0) return row;
         for (const field of entityInfo.Fields) {
             if (!denied.has(field.Name.trim().toLowerCase())) continue;
@@ -1965,7 +1965,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             // value round-trips safely and a changed one is refused. Create-denied values are
             // dropped server-side (ApplyFieldLevelCreateSuppression). Filtering either verb
             // here would replace a visible refusal with a silent success.
-            const deniedReadFields = this.GetDeniedReadFieldNamesForCurrentUser(entity.EntityInfo);
+            const deniedReadFields = this.getDeniedReadFieldNamesForCurrentUser(entity.EntityInfo);
             const isDeniedRead = (fieldName: string) => deniedReadFields.has(fieldName.trim().toLowerCase());
             const filteredFields = entity.Fields.filter(f =>
                 (!f.ReadOnly || (f.IsPrimaryKey && entity.IsSaved)) &&
@@ -1973,7 +1973,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 const inner = `                ${mutationName}(input: $input) {
                 ${entity.Fields.filter(f => !isDeniedRead(f.Name))
                     .map(f => SharedFieldMapper.MapFieldName(f.CodeName)).join("\n                    ")}
-                    ${this.FieldSecurityTransportSelection(entity.EntityInfo)}
+                    ${this.fieldSecurityTransportSelection(entity.EntityInfo)}
             }`
             const outer = gql`mutation ${type}${graphQLTypeName} ($input: ${mutationName}Input!) {
                 ${inner}
@@ -2186,7 +2186,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             // optimization, NOT the correctness mechanism: it is only as good as this client's
             // metadata. `ReadableFields___` (requested just below) is what makes the result
             // correct when that metadata is stale. Empty set for unrestricted users — no change.
-            const deniedReadFields = this.GetDeniedReadFieldNamesForCurrentUser(entity.EntityInfo);
+            const deniedReadFields = this.getDeniedReadFieldNamesForCurrentUser(entity.EntityInfo);
                 const query = gql`query Single${graphQLTypeName}${rel.length > 0 ? 'Full' : ''} (${pkeyOuterParamString}) {
                 ${graphQLTypeName}(${pkeyInnerParamString}) {
                                     ${entity.Fields.filter((f) => !f.EntityFieldInfo.IsBinaryFieldType && !deniedReadFields.has(f.Name.trim().toLowerCase()))
@@ -2199,7 +2199,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                                         }
                                       })
                                       .join('\n                    ')}
-                    ${this.FieldSecurityTransportSelection(entity.EntityInfo)}
+                    ${this.fieldSecurityTransportSelection(entity.EntityInfo)}
                     ${rel}
                 }
             }

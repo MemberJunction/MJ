@@ -193,7 +193,7 @@ export class MJEntityCardComponent extends BaseAngularComponent implements OnCha
 
     /** @internal Handle card click with cancelable before/after pattern */
     public OnCardClick(): void {
-        const payload = this.BuildEventPayload();
+        const payload = this.buildEventPayload();
         const cancelable: CancelableCardEvent<CardRecordEvent> = { Data: payload, Cancel: false };
         this.BeforeCardClick.emit(cancelable);
         if (!cancelable.Cancel) {
@@ -204,7 +204,7 @@ export class MJEntityCardComponent extends BaseAngularComponent implements OnCha
     /** @internal Handle open button click with cancelable before/after pattern */
     public OnOpenClick(event: MouseEvent): void {
         event.stopPropagation();
-        const payload = this.BuildEventPayload();
+        const payload = this.buildEventPayload();
         const cancelable: CancelableCardEvent<CardRecordEvent> = { Data: payload, Cancel: false };
         this.BeforeOpen.emit(cancelable);
         if (!cancelable.Cancel) {
@@ -219,7 +219,7 @@ export class MJEntityCardComponent extends BaseAngularComponent implements OnCha
     /** Get the resolved display fields, respecting maxFields for variant */
     public get DisplayFields(): CardDisplayField[] {
         if (!this.EffectiveTemplate) return [];
-        const max = this.ResolvedMaxFields;
+        const max = this.resolvedMaxFields;
         return this.EffectiveTemplate.DisplayFields.slice(0, max);
     }
 
@@ -239,7 +239,7 @@ export class MJEntityCardComponent extends BaseAngularComponent implements OnCha
     public GetFieldValue(field: CardDisplayField): string {
         const value = this.Record[field.Name];
         if (value == null || String(value).trim() === '') return '';
-        return this.FormatValue(value, field);
+        return this.formatValue(value, field);
     }
 
     /** Get the label for a field */
@@ -320,7 +320,7 @@ export class MJEntityCardComponent extends BaseAngularComponent implements OnCha
     // Private Methods
     // ================================================================
 
-    private get ResolvedMaxFields(): number {
+    private get resolvedMaxFields(): number {
         if (this.MaxDisplayFields != null) return this.MaxDisplayFields;
         switch (this.Variant) {
             case 'compact': return 3;
@@ -356,7 +356,7 @@ export class MJEntityCardComponent extends BaseAngularComponent implements OnCha
 
         const metadataKeys = Object.keys(this.Record);
         if (this.ResolvedEntity) {
-            const full = GenerateCardTemplate(this.ResolvedEntity, this.ResolvedMaxFields);
+            const full = GenerateCardTemplate(this.ResolvedEntity, this.resolvedMaxFields);
             // Filter to fields present in the record
             const keySet = new Set(metadataKeys);
             return {
@@ -370,7 +370,7 @@ export class MJEntityCardComponent extends BaseAngularComponent implements OnCha
             };
         }
 
-        return GenerateCardTemplateFromMetadata(entityName, metadataKeys, this.ResolvedMaxFields, this.ProviderToUse);
+        return GenerateCardTemplateFromMetadata(entityName, metadataKeys, this.resolvedMaxFields, this.ProviderToUse);
     }
 
     private resolveTitle(): string {
@@ -395,7 +395,7 @@ export class MJEntityCardComponent extends BaseAngularComponent implements OnCha
         return this.ResolvedEntity?.Name ?? this.EntityName ?? '';
     }
 
-    private FormatValue(value: unknown, field: CardDisplayField): string {
+    private formatValue(value: unknown, field: CardDisplayField): string {
         switch (field.Type) {
             case 'number': {
                 const num = Number(value);
@@ -426,7 +426,7 @@ export class MJEntityCardComponent extends BaseAngularComponent implements OnCha
         }
     }
 
-    private BuildEventPayload(): CardRecordEvent {
+    private buildEventPayload(): CardRecordEvent {
         return {
             EntityName: this.EntityDisplayName,
             Record: this.Record,

@@ -66,12 +66,12 @@ export class ChatComponent implements AfterViewInit {
    */
   @Input() public Placeholder: string = 'Type a message...';
 
-  private _ShowWaitingIndicator: boolean = false;
+  private _showWaitingIndicator: boolean = false;
   @Input() public get ShowWaitingIndicator(): boolean {
-    return this._ShowWaitingIndicator;
+    return this._showWaitingIndicator;
   }
   public set ShowWaitingIndicator(value: boolean) {
-    this._ShowWaitingIndicator = value;
+    this._showWaitingIndicator = value;
     this.cd?.detectChanges(); // Manually trigger change detection
     if (!value)  {
       this.FocusTextArea();

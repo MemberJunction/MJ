@@ -647,7 +647,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
           const fullVersion = await this.loadVersionContent(targetVersion.ID);
           if (fullVersion) {
             this.artifactVersion = fullVersion;
-            this.JsonContent = this.FormatJSON(fullVersion.Content || '{}');
+            this.JsonContent = this.formatJSON(fullVersion.Content || '{}');
           }
 
           // Load attributes and collection data in parallel
@@ -785,7 +785,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
 
       if (selectedVersionEntity) {
         this.artifactVersion = selectedVersionEntity;
-        this.JsonContent = this.FormatJSON(selectedVersionEntity.Content || '{}');
+        this.JsonContent = this.formatJSON(selectedVersionEntity.Content || '{}');
       } else {
         this.error = 'Failed to load artifact version content';
         return;
@@ -1438,7 +1438,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     const fullVersion = await this.loadVersionContent(version.ID);
     if (fullVersion) {
       this.artifactVersion = fullVersion;
-      this.JsonContent = this.FormatJSON(fullVersion.Content || '{}');
+      this.JsonContent = this.formatJSON(fullVersion.Content || '{}');
     }
 
     // Load attributes and collection data in parallel
@@ -1887,7 +1887,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
   /**
    * Format JSON content using ParseJSONRecursive for deep parsing and formatting
    */
-  private FormatJSON(content: string): string {
+  private formatJSON(content: string): string {
     try {
       // First parse the JSON string to an object
       const obj = JSON.parse(content);

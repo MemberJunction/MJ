@@ -105,7 +105,7 @@ export class EntityVectorSyncer extends VectorBase {
     await TemplateEngineServer.Instance.Config(false, contextUser);
 
     const entityDocument: MJEntityDocumentEntity = await this.GetEntityDocument(params.entityDocumentID);
-    const vectorIndexEntity: MJVectorIndexEntity = this.GetVectorIndexForEntityDocument(entityDocument);
+    const vectorIndexEntity: MJVectorIndexEntity = this.getVectorIndexForEntityDocument(entityDocument);
     const obj: VectorEmeddingData = await this.GetVectorDatabaseAndEmbeddingClassByEntityDocumentID(params.entityDocumentID);
 
     // Parse configuration for pipeline tuning
@@ -1091,7 +1091,7 @@ export class EntityVectorSyncer extends VectorBase {
    * using the cached KnowledgeHubMetadataEngine. If VectorIndexID is not set on the
    * EntityDocument, throws a descriptive error instructing the user to configure it.
    */
-  private GetVectorIndexForEntityDocument(entityDocument: MJEntityDocumentEntity): MJVectorIndexEntity {
+  private getVectorIndexForEntityDocument(entityDocument: MJEntityDocumentEntity): MJVectorIndexEntity {
     if (!entityDocument.VectorIndexID) {
       throw new Error(
         `Entity Document "${entityDocument.Name}" (ID: ${entityDocument.ID}) does not have a VectorIndexID configured. ` +

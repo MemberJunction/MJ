@@ -2114,7 +2114,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
    * correct way to show it is in the zone it was written in. A `datetime`/`datetimeoffset` names
    * an instant, and the correct way to show THAT is the reader's local zone.
    */
-  private get IsDateOnlyField(): boolean {
+  private get isDateOnlyField(): boolean {
     return (this.FieldInfo?.Type ?? '').trim().toLowerCase() === 'date';
   }
 
@@ -2139,7 +2139,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
        * zone the day is computed in. A TIMESTAMP is left exactly as it was: it names an instant,
        * and local time is the right way to show one.
        */
-      if (this.IsDateOnlyField) {
+      if (this.isDateOnlyField) {
         return val.toLocaleDateString(undefined, { timeZone: 'UTC' });
       }
       return val.toLocaleString();

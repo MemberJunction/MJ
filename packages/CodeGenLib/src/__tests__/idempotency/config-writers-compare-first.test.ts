@@ -100,7 +100,7 @@ describe('T20 — Every-Run Config Writers Compare-First & Captured (C9)', () =>
          const pool = createMockConnection();
 
          // Mock config
-         vi.spyOn(ManageMetadataBase, 'getSoftPKFKConfig').mockReturnValue({
+         vi.spyOn(ManageMetadataBase, 'GetSoftPKFKConfig').mockReturnValue({
             Tables: [
                {
                   SchemaName: 'dbo',
@@ -140,7 +140,7 @@ describe('T20 — Every-Run Config Writers Compare-First & Captured (C9)', () =>
          const mm = new TestableManageMetadataForConfigWriters();
          const pool = createMockConnection();
 
-         vi.spyOn(ManageMetadataBase, 'getSoftPKFKConfig').mockReturnValue({
+         vi.spyOn(ManageMetadataBase, 'GetSoftPKFKConfig').mockReturnValue({
             Tables: [
                {
                   SchemaName: 'dbo',
@@ -183,7 +183,7 @@ describe('T20 — Every-Run Config Writers Compare-First & Captured (C9)', () =>
          const mm = new TestableManageMetadataForConfigWriters();
          const pool = createMockConnection();
 
-         vi.spyOn(ManageMetadataBase, 'getSoftPKFKConfig').mockReturnValue({
+         vi.spyOn(ManageMetadataBase, 'GetSoftPKFKConfig').mockReturnValue({
             Tables: [
                {
                   SchemaName: 'dbo',
@@ -240,7 +240,7 @@ describe('T20 — Every-Run Config Writers Compare-First & Captured (C9)', () =>
          const mm = new TestableManageMetadataForConfigWriters();
          const pool = createMockConnection();
 
-         vi.spyOn(ManageMetadataBase, 'getSoftPKFKConfig').mockReturnValue({
+         vi.spyOn(ManageMetadataBase, 'GetSoftPKFKConfig').mockReturnValue({
             Entities: [
                {
                   BaseTable: 'Organizations',
@@ -276,7 +276,7 @@ describe('T20 — Every-Run Config Writers Compare-First & Captured (C9)', () =>
          const mm = new TestableManageMetadataForConfigWriters();
          const pool = createMockConnection();
 
-         vi.spyOn(ManageMetadataBase, 'getSoftPKFKConfig').mockReturnValue({
+         vi.spyOn(ManageMetadataBase, 'GetSoftPKFKConfig').mockReturnValue({
             Entities: [
                {
                   BaseTable: 'Organizations',
