@@ -1485,9 +1485,36 @@ WHERE ${pgDialect.QuoteIdentifier(pkName)} = '${safePKValue}';`;
      * refs to lowercase on PG ("column does not exist"). All-caps-only matching
      * recognizes the DDL keyword form (dialects always emit keywords upper-case)
      * while leaving the mixed-case column form quotable.
+     *
+     * The rest are PostgreSQL words the tokenizer used to quote as identifiers, which
+     * corrupted valid SQL: `SELECT CURRENT_DATE` became `SELECT "CURRENT_DATE"` and
+     * `ASC NULLS LAST` became `ASC "NULLS" "LAST"`. They are added to THIS tier rather
+     * than `_SQL_KEYWORDS` so only the ALL-CAPS spelling is exempt: a mixed-case column
+     * such as `Cycle` or `Current_Date` still quotes exactly as before. (Backport of
+     * #4436's keyword list; next matches every keyword case-sensitively, 5.x keeps its
+     * case-insensitive tier so Title-Case SQL keeps working.)
      */
     private static readonly _SQL_KEYWORDS_UPPERCASE_ONLY = new Set([
         'TYPE', 'DATA',
+        // Niladic datetime / identity functions, written without parentheses
+        'CURRENT_DATE', 'CURRENT_TIME', 'LOCALTIME', 'LOCALTIMESTAMP', 'CURRENT_CATALOG',
+        'CURRENT_ROLE', 'CURRENT_SCHEMA', 'CURRENT_USER', 'SESSION_USER',
+        // Ordering, ordered-set aggregates and window frames
+        'NULLS', 'FIRST', 'LAST', 'WITHIN', 'ORDINALITY', 'GROUPING', 'SETS', 'ROLLUP', 'CUBE',
+        'GROUPS', 'EXCLUDE', 'TIES',
+        // Remaining PostgreSQL reserved words
+        'LEADING', 'TRAILING', 'BOTH', 'PLACING', 'SYMMETRIC', 'ASYMMETRIC', 'NOTNULL', 'NATURAL',
+        'SIMILAR', 'VERBOSE', 'ANALYZE', 'ANALYSE', 'FREEZE', 'OVERLAPS', 'AUTHORIZATION', 'COLLATION',
+        // Type names in cast position
+        'CHARACTER', 'VARYING', 'BOOL', 'INT2', 'INT4', 'INT8', 'FLOAT4', 'FLOAT8', 'BPCHAR',
+        'TIMETZ', 'TSVECTOR', 'TSQUERY', 'SMALLSERIAL', 'VARBIT', 'JSONPATH',
+        // Utility statements and clause words
+        'REFRESH', 'TRUNCATE', 'EXPLAIN', 'VACUUM', 'REINDEX', 'UNLOGGED', 'PREPARE', 'DEALLOCATE',
+        'ESCAPE', 'UNKNOWN', 'NOWAIT', 'LOCKED', 'CASCADED', 'RESTART', 'STORED', 'OWNED',
+        'INCLUDING', 'EXCLUDING', 'INHERITS', 'INCREMENT', 'MINVALUE', 'MAXVALUE', 'CYCLE',
+        // Transactions, constraints, MERGE
+        'CONSTRAINTS', 'IMMEDIATE', 'DEFERRED', 'DEFERRABLE', 'INITIALLY', 'SAVEPOINT', 'RELEASE',
+        'MERGE', 'MATCHED', 'EXTENSION', 'VALID', 'SYSTEM',
     ]);
 
     /**
@@ -1633,6 +1660,13 @@ WHERE ${pgDialect.QuoteIdentifier(pkName)} = '${safePKValue}';`;
      * camelCase tokens NOT preceded by `.` are left bare so column aliases
      * (`SELECT count(*) AS myCount`) keep their existing case-folded behavior.
      * SQL keywords and MJ-internal `__mj_*` names are also passed through.
+     *
+     * An ALL-CAPS word immediately followed by `(` and not preceded by `.` is a
+     * function call (`PERCENTILE_CONT(0.5)`, `DATE_TRUNC('day', d)`) and is left
+     * bare. Quoting it made PostgreSQL look for a function literally named in
+     * upper case, which never exists, so the rule can only fix calls that failed
+     * before. It is narrower than next's rule (any case): a mixed-case word before
+     * `(` still quotes exactly as it did on 5.x.
      */
     private processWord(sql: string, start: number, len: number, result: string[]): number {
         let j = start + 1;
@@ -1649,8 +1683,9 @@ WHERE ${pgDialect.QuoteIdentifier(pkName)} = '${safePKValue}';`;
         const isMJInternal = word.startsWith('__mj_');
         const startsUpper = /^[A-Z]/.test(word);
         const precededByDot = start > 0 && sql[start - 1] === '.';
+        const isAllCapsFunctionCall = word === word.toUpperCase() && sql[j] === '(' && !precededByDot;
 
-        const isQuotableIdentifier = !isKeyword && !isAllLower && !isMJInternal
+        const isQuotableIdentifier = !isKeyword && !isAllLower && !isMJInternal && !isAllCapsFunctionCall
             && (startsUpper || precededByDot);
 
         if (isQuotableIdentifier) {
