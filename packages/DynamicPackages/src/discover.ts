@@ -139,7 +139,10 @@ export interface AppManifestDiscovery {
  * `package-platform.test.ts`.
  */
 function packageRunsOnTier(pkg: AppManifestPackage, tier: DynamicPackageTier): boolean {
-    const platform = pkg.platform ?? (pkg.role === 'actions' ? 'node' : 'both');
+    // Truthy, not `??`, to match canonical: `platform: ""` (unreachable through zod, but this
+    // package reads raw JSON directly) falls back to the role default instead of being treated as
+    // its own (invalid) platform value, which would otherwise drop the package from both tiers.
+    const platform = pkg.platform || (pkg.role === 'actions' ? 'node' : 'both');
     if (platform === 'both') {
         return true;
     }

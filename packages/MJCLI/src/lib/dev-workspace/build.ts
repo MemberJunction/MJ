@@ -624,6 +624,13 @@ export function IndexWorkspacePackages(members: readonly CandidateRepo[]): Map<s
  * contract `readJsonFile` already sets ("Unparseable JSON at <path>"). Without it a missing `name`
  * surfaced as `Cannot read properties of undefined (reading 'length')`, which names neither the
  * repo nor the file — and a developer may have a dozen of them.
+ *
+ * Also validates `platform`, when present, against the same three literals `runsInBrowser` below
+ * understands. `MjAppPackageEntry.platform` is a closed three-literal union, so the final
+ * `declared as MjAppPackageEntry[]` cast is a LIE unless this loop enforces it — an unvalidated
+ * typo like `"platform": "Node"` would satisfy the cast, fail every `=== 'node'`/`'browser'`/`'both'`
+ * comparison in `runsInBrowser`, and silently fall through its Node-only branch, dropping the
+ * package from the shell import set with no error (#4428).
  */
 function readDeclaredEntries(member: CandidateRepo, section: 'client' | 'shared'): MjAppPackageEntry[] {
   const declared: unknown = member.MjAppJson?.packages?.[section];
@@ -639,9 +646,16 @@ function readDeclaredEntries(member: CandidateRepo, section: 'client' | 'shared'
     if (typeof (entry as { name?: unknown }).name !== 'string') {
       throw new Error(`${where}[${index}] has no "name" string — a package entry must name its package`);
     }
+    const platform = (entry as { platform?: unknown }).platform;
+    if (platform !== undefined && !VALID_PLATFORMS.includes(platform as (typeof VALID_PLATFORMS)[number])) {
+      throw new Error(`${where}[${index}] has an invalid "platform" value ${JSON.stringify(platform)} — must be one of ${VALID_PLATFORMS.join(', ')}`);
+    }
   }
   return declared as MjAppPackageEntry[];
 }
+
+/** The only valid values for a manifest package entry's `platform` field — see {@link runsInBrowser}. */
+const VALID_PLATFORMS = ['node', 'browser', 'both'] as const;
 
 /**
  * Every package a member declares that an app shell will be asked to import.
@@ -682,7 +696,10 @@ function readShellImportedEntries(member: CandidateRepo): MjAppPackageEntry[] {
  * shared case table lives in the engine's `package-platform.test.ts`.
  */
 function runsInBrowser(pkg: MjAppPackageEntry): boolean {
-  const platform = pkg.platform ?? (pkg.role === 'actions' ? 'node' : 'both');
+  // Truthy, not `??`, to match canonical: `platform: ""` (unreachable via the zod schema, but
+  // this module reads raw JSON directly) falls back to the role default instead of being treated
+  // as its own (invalid) platform value, which would otherwise drop the package from both tiers.
+  const platform = pkg.platform || (pkg.role === 'actions' ? 'node' : 'both');
   return platform === 'both' || platform === 'browser';
 }
 

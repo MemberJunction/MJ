@@ -389,6 +389,22 @@ describe('packages[].platform (#4428)', () => {
         expect(ValidateManifestObject(withPackages({ client: [{ name: '@acme/a', role: 'module', platform: 'both' }] })).Success).toBe(true);
         expect(ValidateManifestObject(withPackages({ server: [{ name: '@acme/b', role: 'library', platform: 'both' }] })).Success).toBe(true);
     });
+
+    // The role-implied default overrides the author's explicit array placement just as surely as
+    // an explicit platform does — role:'actions' with no `platform` resolves to 'node', which is
+    // forbidden in packages.client. The validator must resolve the EFFECTIVE platform, not just
+    // read `pkg.platform`, or this contradiction passes validation and is silently dropped from
+    // the client list at install time.
+    it('rejects a client package with role actions and no explicit platform, naming the package', () => {
+        const r = ValidateManifestObject(withPackages({ client: [{ name: '@acme/x', role: 'actions' }] }));
+        expect(r.Success).toBe(false);
+        expect(r.Errors?.join(' ')).toContain('@acme/x');
+    });
+
+    it('accepts a client package with role actions when platform browser is explicit', () => {
+        const r = ValidateManifestObject(withPackages({ client: [{ name: '@acme/x', role: 'actions', platform: 'browser' }] }));
+        expect(r.Success).toBe(true);
+    });
 });
 
 /**

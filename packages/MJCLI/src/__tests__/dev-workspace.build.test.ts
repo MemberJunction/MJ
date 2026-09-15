@@ -622,6 +622,20 @@ describe('CollectOpenAppClientPackages', () => {
     );
   });
 
+  // MjAppPackageEntry.platform is a closed three-literal union ('node' | 'browser' | 'both'), and
+  // readDeclaredEntries' final `declared as MjAppPackageEntry[]` cast is only true if this guard
+  // enforces it. An unvalidated typo like "Node" would satisfy the cast, then silently fail every
+  // comparison in runsInBrowser and drop the package from the shell import set with no error
+  // (#4428) — so an invalid platform must throw here, the same way an invalid/missing name does.
+  it('rejects an invalid platform value, naming the offending value', () => {
+    const broken = repo('bizapps-broken-platform', {
+      MjAppJson: JSON.parse('{"packages":{"shared":[{"name":"@acme/x","role":"library","platform":"Node"}]}}') as CandidateRepo['MjAppJson'],
+    });
+    expect(() => CollectOpenAppClientPackages([broken], IndexWorkspacePackages([broken]))).toThrow(
+      /bizapps-broken-platform[\s\S]*packages\.shared\[0\][\s\S]*"Node"/
+    );
+  });
+
   it('de-duplicates a package two members both declare, keeping the first by repo sort order', () => {
     const a = openAppMember('aaa-repo', '@mj-biz-apps/dup-ng');
     const b = openAppMember('zzz-repo', '@mj-biz-apps/dup-ng');

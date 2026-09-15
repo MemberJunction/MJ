@@ -28,9 +28,14 @@ export interface PlatformRoutable {
  * The platform a package runs on: what it declares, or the default implied by its role.
  *
  * `actions` defaults to `node` because an MJ action is Node-side by construction — it is the one
- * role in the enum that can never be browser-safe. Every other role defaults to `both`, which is
- * exactly the behaviour every manifest had before this axis existed, so no published app changes
- * meaning by upgrading.
+ * role in the manifest's `role` enum (`packageRoleSchema` in `manifest-schema.ts`) that can never
+ * be browser-safe. That is a distinct key space from `GENERATED_PACKAGE_TYPES_BY_TIER` in
+ * `@memberjunction/dynamic-packages`'s `discover.ts`, which lists `'actions'` under its CLIENT
+ * tier — that constant enumerates the HOST's own CodeGen-generated `codeGeneration.packages`
+ * types, not manifest package roles, and a host's generated actions package legitimately ships on
+ * both tiers. Same word, different axis; not a contradiction of this rule. Every other role here
+ * defaults to `both`, which is exactly the behaviour every manifest had before this axis existed,
+ * so no published app changes meaning by upgrading.
  */
 export function ResolvePackagePlatform(pkg: PlatformRoutable): PackagePlatform {
     if (pkg.platform) {
