@@ -1,0 +1,27 @@
+<div class="mj-query-pivot-container" [style.height]="Height">
+    @if (Loading && PivotedData.length === 0) {
+        <div class="mj-query-pivot-loading" role="status" aria-live="polite">
+            <div class="mj-query-pivot-spinner"></div>
+            <span class="mj-query-pivot-loading-text">Loading pivot data...</span>
+        </div>
+    }
+
+    @if (LastError) {
+        <div class="mj-query-pivot-error" role="alert">
+            <span class="mj-query-pivot-error-text">{{ LastError }}</span>
+        </div>
+    }
+
+    <div class="mj-query-pivot-grid-wrapper" [class.mj-query-pivot-dimmed]="Loading">
+        <mj-query-data-grid
+            [ColumnConfigs]="ColumnConfigs"
+            [Data]="PivotedData"
+            [SelectionMode]="SelectionMode"
+            [ShowToolbar]="ShowToolbar"
+            [VisualConfig]="VisualConfig"
+            (RowClick)="OnRowClick($event)"
+            (RowDoubleClick)="OnRowDoubleClick($event)"
+            (RefreshRequest)="OnRefreshRequest()">
+        </mj-query-data-grid>
+    </div>
+</div>
