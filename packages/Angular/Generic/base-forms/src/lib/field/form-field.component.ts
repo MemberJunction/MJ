@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy, ChangeDetectorRef, inject, OnChanges, SimpleChanges, OnDestroy, ElementRef, Renderer2 } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { BaseEntity, EntityInfo, EntityFieldInfo, EntityFieldTSType, CompositeKey, KeyValuePair, RunView, CoerceImageSrc, IsInlineImageDataUri, CoerceRawImageBase64ToDataUri, MaxStoredImageChars, MaxInlineImageBytes, FormatByteSize, ParseCssHexColor, PrettyPrintJson } from '@memberjunction/core';
+import { BaseEntity, EntityInfo, EntityFieldInfo, EntityFieldTSType, CompositeKey, KeyValuePair, RunView, CoerceImageSrc, IsInlineImageDataUri, CoerceRawImageBase64ToDataUri, MaxStoredImageChars, MaxInlineImageBytes, FormatByteSize, ParseCssHexColor, PrettyPrintJson, IsDateOnlySQLType, FormatDateOnly } from '@memberjunction/core';
 import { BaseEngineRegistry } from '@memberjunction/core';
 import { ValidationErrorInfo, HighlightSearchMatches, detectRichTextFormat, RichTextFormat, UUIDsEqual } from '@memberjunction/global';
 import { FormContext } from '../types/form-types';
@@ -1162,9 +1162,13 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     this.FKSearchFieldLabel = this.labelForRelatedField(this.FKSearchField);
   }
 
-  /** Format a raw cell value for display in the dropdown (delegates to the pure helper). */
-  private formatCell(val: unknown): string {
-    return FormatFKCell(val);
+  /**
+   * Format a raw cell value for display in the dropdown (delegates to the pure helper). The
+   * related entity's column type lets a SQL `date` render as its stored day (MJ#4210).
+   */
+  private formatCell(val: unknown, fieldName?: string): string {
+    const sqlType = fieldName ? this.getRelatedEntityInfo()?.Fields.find(f => f.Name === fieldName)?.Type : undefined;
+    return FormatFKCell(val, sqlType);
   }
 
   /**
@@ -1181,17 +1185,17 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     // Only highlight the column actually being searched, and only when enabled.
     const nameQuery = (this.FKHighlightMatches && this.isSearchingNameField(plan)) ? query : '';
     return rows.map(row => {
-      const name = this.formatCell(row.get(plan.NameFieldName));
+      const name = this.formatCell(row.get(plan.NameFieldName), plan.NameFieldName);
       // Per-row icon from the entity's ExtendedType='Icon' field; else the
       // entity-level icon; else none.
-      const rowIcon = plan.IconFieldName ? this.formatCell(row.get(plan.IconFieldName)).trim() : '';
+      const rowIcon = plan.IconFieldName ? this.formatCell(row.get(plan.IconFieldName), plan.IconFieldName).trim() : '';
       return {
         PrimaryKeyValue: row.get(plan.PkFieldName),
         DisplayName: name,
         // Empty query yields the (still HTML-escaped) plain name — no marks.
         HighlightedName: HighlightSearchMatches(name, nameQuery, 'mj-forms-search-highlight'),
         ExtraColumns: plan.ExtraFieldNames.map((fieldName, i) => {
-          const value = this.formatCell(row.get(fieldName));
+          const value = this.formatCell(row.get(fieldName), fieldName);
           const colQuery = (this.FKHighlightMatches && fieldName === searchField) ? query : '';
           return {
             FieldName: fieldName,
@@ -1742,7 +1746,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   private selectCreatedFKRecord(created: BaseEntity, plan: FKColumnPlan): void {
     const pk = created.Get(plan.PkFieldName);
     if (pk == null) return;
-    const name = this.formatCell(created.Get(plan.NameFieldName));
+    const name = this.formatCell(created.Get(plan.NameFieldName), plan.NameFieldName);
     this._fkInputText = name;
     this.Value = pk;
     this.FKIsMatched = true;
@@ -2115,7 +2119,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
    * an instant, and the correct way to show THAT is the reader's local zone.
    */
   private get IsDateOnlyField(): boolean {
-    return (this.FieldInfo?.Type ?? '').trim().toLowerCase() === 'date';
+    return IsDateOnlySQLType(this.FieldInfo?.Type);
   }
 
   FormatValue(): string {
@@ -2140,7 +2144,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
        * and local time is the right way to show one.
        */
       if (this.IsDateOnlyField) {
-        return val.toLocaleDateString(undefined, { timeZone: 'UTC' });
+        return FormatDateOnly(val);
       }
       return val.toLocaleString();
     }
