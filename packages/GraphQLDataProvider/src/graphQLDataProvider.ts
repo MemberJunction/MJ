@@ -1957,6 +1957,24 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             // fresh GUID and INSERT a second copy of the parent. The key is sent ONLY when the
             // parent is saved: a whole-chain create (new parent + new child) keeps sending no key,
             // so the server still mints the root identity and pays no parent lookup on that path.
+            //
+            // NotLoaded fields are OMITTED from the mutation input entirely (legal — the
+            // generated Update input types mark every non-PK field optional): their value is
+            // a construction artifact the user was never shown, and the NOT-NULL fabrication
+            // fallback below must never run for them. An explicitly (blind-)set field has its
+            // flag cleared and flows normally — the write-only case.
+            // Denied-READ fields are dropped from both the input and the response selection.
+            // Input: the loop below calls entity.Get(), which throws for a denied field.
+            // Response: a never-requested key comes back absent, which is what marks the field
+            // NotLoaded on the refresh, and a denied NOT-NULL column no longer breaks response
+            // serialization.
+            //
+            // Only the READ verb is filtered here. A readable-but-update-denied field must
+            // still be SENT, or the server cannot reject an attempt to change it — its check
+            // is dirty-only (BaseEntity.CheckFieldLevelUpdatePermissions), so an unchanged
+            // value round-trips safely and a changed one is refused. Create-denied values are
+            // dropped server-side (ApplyFieldLevelCreateSuppression). Filtering either verb
+            // here would replace a visible refusal with a silent success.
             const isaPromotionCreate = !entity.IsSaved && entity.EntityInfo.IsChildType && entity.ISAParent?.IsSaved === true;
             const deniedReadFields = this.GetDeniedReadFieldNamesForCurrentUser(entity.EntityInfo);
             const isDeniedRead = (fieldName: string) => deniedReadFields.has(fieldName.trim().toLowerCase());
