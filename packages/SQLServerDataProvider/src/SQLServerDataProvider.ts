@@ -1831,7 +1831,9 @@ export class SQLServerDataProvider
         parameters,
         context,
         options,
-        ambient: context.transaction === this._transaction,
+        // Ours if it is the ambient handle now, or was one that has since ended: a caller holding
+        // the old handle after its commit must be told so, not sent to mssql for ENOTBEGUN.
+        ambient: context.transaction === this._transaction || (!!context.transaction && this._endedHandles.has(context.transaction)),
         resolve,
         reject,
       });

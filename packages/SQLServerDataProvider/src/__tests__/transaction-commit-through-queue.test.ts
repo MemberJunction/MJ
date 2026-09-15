@@ -95,6 +95,17 @@ describe('SQLServerDataProvider - commit/rollback routed through the instance SQ
     expect(provider._transaction).toBeNull();
   });
 
+  it('rejects a query issued on the ambient handle AFTER its commit completed, with the real cause', async () => {
+    await provider.BeginTransaction();
+    const handle = provider._transaction;
+    await provider.CommitTransaction();
+    // The caller kept the old handle. By now _transaction is null, so a naive "is it the ambient
+    // handle" check would treat this as an explicit handle and send it to mssql for ENOTBEGUN.
+    const stale = provider._internalExecuteSQLInstance('SELECT 4 AS stale', null, { pool: provider._pool, transaction: handle });
+    await expect(stale).rejects.toThrow(/ambient transaction ended before this query ran/);
+    expect(mssqlState.EventKinds()).toEqual(['begin', 'commit']);
+  });
+
   it('leaves a query on an explicit, non-ambient handle alone', async () => {
     await provider.BeginTransaction();
     // An IS-A chain shares its OWN transaction and passes it explicitly; it is not the ambient
