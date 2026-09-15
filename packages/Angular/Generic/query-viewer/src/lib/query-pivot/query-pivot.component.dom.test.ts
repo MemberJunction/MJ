@@ -2,7 +2,14 @@ import { describe, it, expect } from 'vitest';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { By } from '@angular/platform-browser';
 import { renderComponentFixture, query, text, capture } from '@memberjunction/ng-test-utils';
-import { IRunQueryProvider, RunQueryParams, RunQueryResult } from '@memberjunction/core';
+import {
+    IRunQueryProvider,
+    ProviderConfigDataBase,
+    QueryExecutionSpec,
+    RunQueryParams,
+    RunQueryResult,
+    UserInfo
+} from '@memberjunction/core';
 import { QueryPivotComponent } from './query-pivot.component';
 import {
     QueryGridColumnConfig,
@@ -23,22 +30,36 @@ class LocalFakeRunQueryProvider implements IRunQueryProvider {
         private errorMessage: string = 'Query failed'
     ) {}
 
-    public async RunQuery(params: RunQueryParams): Promise<RunQueryResult> {
-        if (!this.shouldSucceed) {
-            return {
-                Success: false,
-                ErrorMessage: this.errorMessage,
-                Results: [],
-                RowCount: 0,
-                ExecutionTime: 0
-            };
-        }
+    /** Builds a complete RunQueryResult so the double satisfies the real contract, not a subset of it. */
+    private result(params: RunQueryParams): RunQueryResult {
+        const rows = this.shouldSucceed ? this.mockResults : [];
         return {
-            Success: true,
-            Results: this.mockResults,
-            RowCount: this.mockResults.length,
-            ExecutionTime: 15
+            QueryID: params.QueryID ?? 'test-query-id',
+            QueryName: params.QueryName ?? 'TestQuery',
+            Success: this.shouldSucceed,
+            Results: rows,
+            RowCount: rows.length,
+            TotalRowCount: rows.length,
+            ExecutionTime: this.shouldSucceed ? 15 : 0,
+            ErrorMessage: this.shouldSucceed ? '' : this.errorMessage
         };
+    }
+
+    public async Config(_configData: ProviderConfigDataBase): Promise<boolean> {
+        return true;
+    }
+
+    public async RunQuery(params: RunQueryParams, _contextUser?: UserInfo): Promise<RunQueryResult> {
+        return this.result(params);
+    }
+
+    public async RunQueries(params: RunQueryParams[], _contextUser?: UserInfo): Promise<RunQueryResult[]> {
+        return params.map((p) => this.result(p));
+    }
+
+    public async ExecuteQueryFromSpec(spec: QueryExecutionSpec, _contextUser?: UserInfo): Promise<RunQueryResult> {
+        // QueryExecutionSpec carries raw SQL, not an identity — the double reports a transient name.
+        return this.result({ QueryName: 'TransientSpec' });
     }
 }
 
@@ -216,7 +237,7 @@ describe('QueryPivotComponent (DOM)', () => {
         const clickEvent: QueryRowClickEvent = {
             rowIndex: 0,
             rowData: targetRow,
-            originalEvent: new MouseEvent('click')
+            mouseEvent: new MouseEvent('click')
         };
 
         g.RowClick.emit(clickEvent);
