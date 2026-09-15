@@ -135,16 +135,17 @@ describe('DiscoverAppManifestPackages / FindWorkspacePackageDir', () => {
 });
 
 describe('DiscoverAppManifestPackages — platform routing (#4428)', () => {
-    /**
-     * Mirrors ResolvePackagePlatform in
-     * packages/OpenApp/Engine/src/manifest/package-platform.ts — keep the two in lockstep.
-     */
+    /** Writes an mj-app.json into a fresh temp dir and returns the dir. */
     function writePlatformManifest(manifest: unknown): string {
         const dir = mkdtempSync(path.join(tmpdir(), 'dp-platform-'));
         writeFileSync(path.join(dir, 'mj-app.json'), JSON.stringify(manifest));
         return dir;
     }
 
+    /**
+     * Mirrors ResolvePackagePlatform in
+     * packages/OpenApp/Engine/src/manifest/package-platform.ts — keep the two in lockstep.
+     */
     const manifest = {
         name: 'acme',
         packages: {
