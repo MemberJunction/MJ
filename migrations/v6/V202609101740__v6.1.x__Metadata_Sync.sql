@@ -31,7 +31,10 @@ SET
   @UIConfig_5b0a5b2f9494 = N'{
   "icon": "fa-solid fa-user-shield",
   "color": "#7c5295"
-}' EXEC [${flyway:defaultSchema}].spCreateAPIScope @ID = @ID_5b0a5b2f9494,
+}'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[APIScope] WHERE [ID] = @ID_5b0a5b2f9494)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAPIScope @ID = @ID_5b0a5b2f9494,
   @Name = @Name_5b0a5b2f9494,
   @Category = @Category_5b0a5b2f9494,
   @Description = @Description_5b0a5b2f9494,
@@ -42,6 +45,22 @@ SET
   @ResourceType_Clear = 1,
   @IsActive = @IsActive_5b0a5b2f9494,
   @UIConfig = @UIConfig_5b0a5b2f9494;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAPIScope @ID = @ID_5b0a5b2f9494,
+  @Name = @Name_5b0a5b2f9494,
+  @Category = @Category_5b0a5b2f9494,
+  @Description = @Description_5b0a5b2f9494,
+  @ParentID = @ParentID_5b0a5b2f9494,
+  @ParentID_Clear = 1,
+  @FullPath = @FullPath_5b0a5b2f9494,
+  @ResourceType = @ResourceType_5b0a5b2f9494,
+  @ResourceType_Clear = 1,
+  @IsActive = @IsActive_5b0a5b2f9494,
+  @UIConfig = @UIConfig_5b0a5b2f9494;
+END
+
 
 GO
 
@@ -69,7 +88,9 @@ SET
   @FullPath_e5810af03ae5 = N'authorization:check'
 SET
   @IsActive_e5810af03ae5 = 1
-EXEC [${flyway:defaultSchema}].spCreateAPIScope @ID = @ID_e5810af03ae5,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[APIScope] WHERE [ID] = @ID_e5810af03ae5)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAPIScope @ID = @ID_e5810af03ae5,
   @Name = @Name_e5810af03ae5,
   @Category = @Category_e5810af03ae5,
   @Description = @Description_e5810af03ae5,
@@ -80,6 +101,22 @@ EXEC [${flyway:defaultSchema}].spCreateAPIScope @ID = @ID_e5810af03ae5,
   @IsActive = @IsActive_e5810af03ae5,
   @UIConfig = @UIConfig_e5810af03ae5,
   @UIConfig_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAPIScope @ID = @ID_e5810af03ae5,
+  @Name = @Name_e5810af03ae5,
+  @Category = @Category_e5810af03ae5,
+  @Description = @Description_e5810af03ae5,
+  @ParentID = @ParentID_e5810af03ae5,
+  @FullPath = @FullPath_e5810af03ae5,
+  @ResourceType = @ResourceType_e5810af03ae5,
+  @ResourceType_Clear = 1,
+  @IsActive = @IsActive_e5810af03ae5,
+  @UIConfig = @UIConfig_e5810af03ae5,
+  @UIConfig_Clear = 1;
+END
+
 
 GO
 
@@ -94,13 +131,28 @@ SET
 SET
   @Name_332df565e334 = N'Authorization Check'
 SET
-  @Description_332df565e334 = N'A named MJ: Authorizations capability was evaluated for a user (Authorization.Check Remote Operation). Emitted when the authorization row has UseAuditLog=1.' EXEC [${flyway:defaultSchema}].spCreateAuditLogType @ID = @ID_332df565e334,
+  @Description_332df565e334 = N'A named MJ: Authorizations capability was evaluated for a user (Authorization.Check Remote Operation). Emitted when the authorization row has UseAuditLog=1.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AuditLogType] WHERE [ID] = @ID_332df565e334)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAuditLogType @ID = @ID_332df565e334,
   @Name = @Name_332df565e334,
   @Description = @Description_332df565e334,
   @ParentID = @ParentID_332df565e334,
   @ParentID_Clear = 1,
   @AuthorizationID = @AuthorizationID_332df565e334,
   @AuthorizationID_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAuditLogType @ID = @ID_332df565e334,
+  @Name = @Name_332df565e334,
+  @Description = @Description_332df565e334,
+  @ParentID = @ParentID_332df565e334,
+  @ParentID_Clear = 1,
+  @AuthorizationID = @AuthorizationID_332df565e334,
+  @AuthorizationID_Clear = 1;
+END
+
 
 GO
 
@@ -116,10 +168,22 @@ SET
 SET
   @Description_8c8a02a1277e = N'Meta Platforms - developer of the open-weight Llama family and, since 2026, the proprietary Muse Spark line of multimodal agentic reasoning models. Meta''s first-party model API authenticates with an API key; MJ currently reaches Muse Spark models through OpenRouter rather than Meta direct, because no Meta driver class exists yet.'
 SET
-  @CredentialTypeID_8c8a02a1277e = '3F0C13AB-EF5F-4260-A50A-D66DDEC25270' EXEC [${flyway:defaultSchema}].spCreateAIVendor @ID = @ID_8c8a02a1277e,
+  @CredentialTypeID_8c8a02a1277e = '3F0C13AB-EF5F-4260-A50A-D66DDEC25270'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIVendor] WHERE [ID] = @ID_8c8a02a1277e)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIVendor @ID = @ID_8c8a02a1277e,
   @Name = @Name_8c8a02a1277e,
   @Description = @Description_8c8a02a1277e,
   @CredentialTypeID = @CredentialTypeID_8c8a02a1277e;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIVendor @ID = @ID_8c8a02a1277e,
+  @Name = @Name_8c8a02a1277e,
+  @Description = @Description_8c8a02a1277e,
+  @CredentialTypeID = @CredentialTypeID_8c8a02a1277e;
+END
+
 
 GO
 
@@ -156,7 +220,9 @@ SET
   @CostRank_affae1ae3363 = 4
 SET
   @InheritTypeModalities_affae1ae3363 = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModel @ID = @ID_affae1ae3363,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModel] WHERE [ID] = @ID_affae1ae3363)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModel @ID = @ID_affae1ae3363,
   @Name = @Name_affae1ae3363,
   @Description = @Description_affae1ae3363,
   @AIModelTypeID = @AIModelTypeID_affae1ae3363,
@@ -175,6 +241,30 @@ EXEC [${flyway:defaultSchema}].spCreateAIModel @ID = @ID_affae1ae3363,
   @PrefillFallbackText_Clear = 1,
   @ModelConfiguration = @ModelConfiguration_affae1ae3363,
   @ModelConfiguration_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModel @ID = @ID_affae1ae3363,
+  @Name = @Name_affae1ae3363,
+  @Description = @Description_affae1ae3363,
+  @AIModelTypeID = @AIModelTypeID_affae1ae3363,
+  @PowerRank = @PowerRank_affae1ae3363,
+  @IsActive = @IsActive_affae1ae3363,
+  @SpeedRank = @SpeedRank_affae1ae3363,
+  @CostRank = @CostRank_affae1ae3363,
+  @ModelSelectionInsights = @ModelSelectionInsights_affae1ae3363,
+  @ModelSelectionInsights_Clear = 1,
+  @InheritTypeModalities = @InheritTypeModalities_affae1ae3363,
+  @PriorVersionID = @PriorVersionID_affae1ae3363,
+  @PriorVersionID_Clear = 1,
+  @SupportsPrefill = @SupportsPrefill_affae1ae3363,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_affae1ae3363,
+  @PrefillFallbackText_Clear = 1,
+  @ModelConfiguration = @ModelConfiguration_affae1ae3363,
+  @ModelConfiguration_Clear = 1;
+END
+
 
 GO
 
@@ -403,7 +493,10 @@ SET
 SET
   @InheritTypeModalities_eeb952635c96 = 1
 SET
-  @PriorVersionID_eeb952635c96 = 'B27C205B-9B58-451C-9A82-ED86D48B56F3' EXEC [${flyway:defaultSchema}].spCreateAIModel @ID = @ID_eeb952635c96,
+  @PriorVersionID_eeb952635c96 = 'B27C205B-9B58-451C-9A82-ED86D48B56F3'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModel] WHERE [ID] = @ID_eeb952635c96)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModel @ID = @ID_eeb952635c96,
   @Name = @Name_eeb952635c96,
   @Description = @Description_eeb952635c96,
   @AIModelTypeID = @AIModelTypeID_eeb952635c96,
@@ -421,6 +514,29 @@ SET
   @PrefillFallbackText_Clear = 1,
   @ModelConfiguration = @ModelConfiguration_eeb952635c96,
   @ModelConfiguration_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModel @ID = @ID_eeb952635c96,
+  @Name = @Name_eeb952635c96,
+  @Description = @Description_eeb952635c96,
+  @AIModelTypeID = @AIModelTypeID_eeb952635c96,
+  @PowerRank = @PowerRank_eeb952635c96,
+  @IsActive = @IsActive_eeb952635c96,
+  @SpeedRank = @SpeedRank_eeb952635c96,
+  @CostRank = @CostRank_eeb952635c96,
+  @ModelSelectionInsights = @ModelSelectionInsights_eeb952635c96,
+  @ModelSelectionInsights_Clear = 1,
+  @InheritTypeModalities = @InheritTypeModalities_eeb952635c96,
+  @PriorVersionID = @PriorVersionID_eeb952635c96,
+  @SupportsPrefill = @SupportsPrefill_eeb952635c96,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_eeb952635c96,
+  @PrefillFallbackText_Clear = 1,
+  @ModelConfiguration = @ModelConfiguration_eeb952635c96,
+  @ModelConfiguration_Clear = 1;
+END
+
 
 GO
 
@@ -459,7 +575,10 @@ SET
 SET
   @SupportsStreaming_444497a043cd = 0
 SET
-  @TypeID_444497a043cd = '10DB468E-F2CE-475D-9F39-2DF2DE75D257' EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_444497a043cd,
+  @TypeID_444497a043cd = '10DB468E-F2CE-475D-9F39-2DF2DE75D257'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelVendor] WHERE [ID] = @ID_444497a043cd)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_444497a043cd,
   @ModelID = @ModelID_444497a043cd,
   @VendorID = @VendorID_444497a043cd,
   @Priority = @Priority_444497a043cd,
@@ -484,6 +603,36 @@ SET
   @PrefillFallbackText_Clear = 1,
   @ModelConfiguration = @ModelConfiguration_444497a043cd,
   @ModelConfiguration_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelVendor @ID = @ID_444497a043cd,
+  @ModelID = @ModelID_444497a043cd,
+  @VendorID = @VendorID_444497a043cd,
+  @Priority = @Priority_444497a043cd,
+  @Status = @Status_444497a043cd,
+  @DriverClass = @DriverClass_444497a043cd,
+  @DriverClass_Clear = 1,
+  @DriverImportPath = @DriverImportPath_444497a043cd,
+  @DriverImportPath_Clear = 1,
+  @APIName = @APIName_444497a043cd,
+  @APIName_Clear = 1,
+  @MaxInputTokens = @MaxInputTokens_444497a043cd,
+  @MaxInputTokens_Clear = 1,
+  @MaxOutputTokens = @MaxOutputTokens_444497a043cd,
+  @MaxOutputTokens_Clear = 1,
+  @SupportedResponseFormats = @SupportedResponseFormats_444497a043cd,
+  @SupportsEffortLevel = @SupportsEffortLevel_444497a043cd,
+  @SupportsStreaming = @SupportsStreaming_444497a043cd,
+  @TypeID = @TypeID_444497a043cd,
+  @SupportsPrefill = @SupportsPrefill_444497a043cd,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_444497a043cd,
+  @PrefillFallbackText_Clear = 1,
+  @ModelConfiguration = @ModelConfiguration_444497a043cd,
+  @ModelConfiguration_Clear = 1;
+END
+
 
 GO
 
@@ -528,7 +677,10 @@ SET
 SET
   @SupportsStreaming_758d4398bbce = 1
 SET
-  @TypeID_758d4398bbce = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3' EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_758d4398bbce,
+  @TypeID_758d4398bbce = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelVendor] WHERE [ID] = @ID_758d4398bbce)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_758d4398bbce,
   @ModelID = @ModelID_758d4398bbce,
   @VendorID = @VendorID_758d4398bbce,
   @Priority = @Priority_758d4398bbce,
@@ -550,6 +702,33 @@ SET
   @PrefillFallbackText_Clear = 1,
   @ModelConfiguration = @ModelConfiguration_758d4398bbce,
   @ModelConfiguration_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelVendor @ID = @ID_758d4398bbce,
+  @ModelID = @ModelID_758d4398bbce,
+  @VendorID = @VendorID_758d4398bbce,
+  @Priority = @Priority_758d4398bbce,
+  @Status = @Status_758d4398bbce,
+  @DriverClass = @DriverClass_758d4398bbce,
+  @DriverImportPath = @DriverImportPath_758d4398bbce,
+  @DriverImportPath_Clear = 1,
+  @APIName = @APIName_758d4398bbce,
+  @MaxInputTokens = @MaxInputTokens_758d4398bbce,
+  @MaxOutputTokens = @MaxOutputTokens_758d4398bbce,
+  @MaxOutputTokens_Clear = 1,
+  @SupportedResponseFormats = @SupportedResponseFormats_758d4398bbce,
+  @SupportsEffortLevel = @SupportsEffortLevel_758d4398bbce,
+  @SupportsStreaming = @SupportsStreaming_758d4398bbce,
+  @TypeID = @TypeID_758d4398bbce,
+  @SupportsPrefill = @SupportsPrefill_758d4398bbce,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_758d4398bbce,
+  @PrefillFallbackText_Clear = 1,
+  @ModelConfiguration = @ModelConfiguration_758d4398bbce,
+  @ModelConfiguration_Clear = 1;
+END
+
 
 GO
 
@@ -595,7 +774,9 @@ SET
   @Comments_5762c30bcf44 = N'Muse Spark 1.3 Standard-tier pricing on OpenRouter (passthrough of Meta''s own rate card) as of the September 2, 2026 launch: $1.25/1M input, $4.25/1M output, $0.15/1M cached input. The cheaper Contributor tier (meta/muse-spark-1.3-contributor, $0.10/$0.20 per 1M) is deliberately not recorded - it permits Meta to train on submitted data. Sources: https://openrouter.ai/meta/muse-spark-1.3 ; https://research.meta.ai/blog/introducing-muse-spark-1-3 ; https://www.mindstudio.ai/blog/muse-spark-1-3-pricing'
 SET
   @CacheReadPricePerUnit_5762c30bcf44 = 0.15
-EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_5762c30bcf44,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelCost] WHERE [ID] = @ID_5762c30bcf44)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_5762c30bcf44,
   @ModelID = @ModelID_5762c30bcf44,
   @VendorID = @VendorID_5762c30bcf44,
   @StartedAt = @StartedAt_5762c30bcf44,
@@ -612,6 +793,28 @@ EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_5762c30bcf44,
   @CacheReadPricePerUnit = @CacheReadPricePerUnit_5762c30bcf44,
   @CacheWritePricePerUnit = @CacheWritePricePerUnit_5762c30bcf44,
   @CacheWritePricePerUnit_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelCost @ID = @ID_5762c30bcf44,
+  @ModelID = @ModelID_5762c30bcf44,
+  @VendorID = @VendorID_5762c30bcf44,
+  @StartedAt = @StartedAt_5762c30bcf44,
+  @EndedAt = @EndedAt_5762c30bcf44,
+  @EndedAt_Clear = 1,
+  @Status = @Status_5762c30bcf44,
+  @Currency = @Currency_5762c30bcf44,
+  @PriceTypeID = @PriceTypeID_5762c30bcf44,
+  @InputPricePerUnit = @InputPricePerUnit_5762c30bcf44,
+  @OutputPricePerUnit = @OutputPricePerUnit_5762c30bcf44,
+  @UnitTypeID = @UnitTypeID_5762c30bcf44,
+  @ProcessingType = @ProcessingType_5762c30bcf44,
+  @Comments = @Comments_5762c30bcf44,
+  @CacheReadPricePerUnit = @CacheReadPricePerUnit_5762c30bcf44,
+  @CacheWritePricePerUnit = @CacheWritePricePerUnit_5762c30bcf44,
+  @CacheWritePricePerUnit_Clear = 1;
+END
+
 
 GO
 
@@ -650,7 +853,10 @@ SET
 SET
   @SupportsStreaming_43a58f40e061 = 0
 SET
-  @TypeID_43a58f40e061 = '10DB468E-F2CE-475D-9F39-2DF2DE75D257' EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_43a58f40e061,
+  @TypeID_43a58f40e061 = '10DB468E-F2CE-475D-9F39-2DF2DE75D257'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelVendor] WHERE [ID] = @ID_43a58f40e061)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_43a58f40e061,
   @ModelID = @ModelID_43a58f40e061,
   @VendorID = @VendorID_43a58f40e061,
   @Priority = @Priority_43a58f40e061,
@@ -675,6 +881,36 @@ SET
   @PrefillFallbackText_Clear = 1,
   @ModelConfiguration = @ModelConfiguration_43a58f40e061,
   @ModelConfiguration_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelVendor @ID = @ID_43a58f40e061,
+  @ModelID = @ModelID_43a58f40e061,
+  @VendorID = @VendorID_43a58f40e061,
+  @Priority = @Priority_43a58f40e061,
+  @Status = @Status_43a58f40e061,
+  @DriverClass = @DriverClass_43a58f40e061,
+  @DriverClass_Clear = 1,
+  @DriverImportPath = @DriverImportPath_43a58f40e061,
+  @DriverImportPath_Clear = 1,
+  @APIName = @APIName_43a58f40e061,
+  @APIName_Clear = 1,
+  @MaxInputTokens = @MaxInputTokens_43a58f40e061,
+  @MaxInputTokens_Clear = 1,
+  @MaxOutputTokens = @MaxOutputTokens_43a58f40e061,
+  @MaxOutputTokens_Clear = 1,
+  @SupportedResponseFormats = @SupportedResponseFormats_43a58f40e061,
+  @SupportsEffortLevel = @SupportsEffortLevel_43a58f40e061,
+  @SupportsStreaming = @SupportsStreaming_43a58f40e061,
+  @TypeID = @TypeID_43a58f40e061,
+  @SupportsPrefill = @SupportsPrefill_43a58f40e061,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_43a58f40e061,
+  @PrefillFallbackText_Clear = 1,
+  @ModelConfiguration = @ModelConfiguration_43a58f40e061,
+  @ModelConfiguration_Clear = 1;
+END
+
 
 GO
 
@@ -721,7 +957,10 @@ SET
 SET
   @SupportsStreaming_1a70f9e860b8 = 1
 SET
-  @TypeID_1a70f9e860b8 = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3' EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_1a70f9e860b8,
+  @TypeID_1a70f9e860b8 = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelVendor] WHERE [ID] = @ID_1a70f9e860b8)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_1a70f9e860b8,
   @ModelID = @ModelID_1a70f9e860b8,
   @VendorID = @VendorID_1a70f9e860b8,
   @Priority = @Priority_1a70f9e860b8,
@@ -742,6 +981,32 @@ SET
   @PrefillFallbackText_Clear = 1,
   @ModelConfiguration = @ModelConfiguration_1a70f9e860b8,
   @ModelConfiguration_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelVendor @ID = @ID_1a70f9e860b8,
+  @ModelID = @ModelID_1a70f9e860b8,
+  @VendorID = @VendorID_1a70f9e860b8,
+  @Priority = @Priority_1a70f9e860b8,
+  @Status = @Status_1a70f9e860b8,
+  @DriverClass = @DriverClass_1a70f9e860b8,
+  @DriverImportPath = @DriverImportPath_1a70f9e860b8,
+  @DriverImportPath_Clear = 1,
+  @APIName = @APIName_1a70f9e860b8,
+  @MaxInputTokens = @MaxInputTokens_1a70f9e860b8,
+  @MaxOutputTokens = @MaxOutputTokens_1a70f9e860b8,
+  @SupportedResponseFormats = @SupportedResponseFormats_1a70f9e860b8,
+  @SupportsEffortLevel = @SupportsEffortLevel_1a70f9e860b8,
+  @SupportsStreaming = @SupportsStreaming_1a70f9e860b8,
+  @TypeID = @TypeID_1a70f9e860b8,
+  @SupportsPrefill = @SupportsPrefill_1a70f9e860b8,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_1a70f9e860b8,
+  @PrefillFallbackText_Clear = 1,
+  @ModelConfiguration = @ModelConfiguration_1a70f9e860b8,
+  @ModelConfiguration_Clear = 1;
+END
+
 
 GO
 
@@ -788,7 +1053,10 @@ SET
 SET
   @SupportsStreaming_a3ff32d3e6bf = 1
 SET
-  @TypeID_a3ff32d3e6bf = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3' EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_a3ff32d3e6bf,
+  @TypeID_a3ff32d3e6bf = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelVendor] WHERE [ID] = @ID_a3ff32d3e6bf)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_a3ff32d3e6bf,
   @ModelID = @ModelID_a3ff32d3e6bf,
   @VendorID = @VendorID_a3ff32d3e6bf,
   @Priority = @Priority_a3ff32d3e6bf,
@@ -809,6 +1077,32 @@ SET
   @PrefillFallbackText_Clear = 1,
   @ModelConfiguration = @ModelConfiguration_a3ff32d3e6bf,
   @ModelConfiguration_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelVendor @ID = @ID_a3ff32d3e6bf,
+  @ModelID = @ModelID_a3ff32d3e6bf,
+  @VendorID = @VendorID_a3ff32d3e6bf,
+  @Priority = @Priority_a3ff32d3e6bf,
+  @Status = @Status_a3ff32d3e6bf,
+  @DriverClass = @DriverClass_a3ff32d3e6bf,
+  @DriverImportPath = @DriverImportPath_a3ff32d3e6bf,
+  @DriverImportPath_Clear = 1,
+  @APIName = @APIName_a3ff32d3e6bf,
+  @MaxInputTokens = @MaxInputTokens_a3ff32d3e6bf,
+  @MaxOutputTokens = @MaxOutputTokens_a3ff32d3e6bf,
+  @SupportedResponseFormats = @SupportedResponseFormats_a3ff32d3e6bf,
+  @SupportsEffortLevel = @SupportsEffortLevel_a3ff32d3e6bf,
+  @SupportsStreaming = @SupportsStreaming_a3ff32d3e6bf,
+  @TypeID = @TypeID_a3ff32d3e6bf,
+  @SupportsPrefill = @SupportsPrefill_a3ff32d3e6bf,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_a3ff32d3e6bf,
+  @PrefillFallbackText_Clear = 1,
+  @ModelConfiguration = @ModelConfiguration_a3ff32d3e6bf,
+  @ModelConfiguration_Clear = 1;
+END
+
 
 GO
 
@@ -855,7 +1149,10 @@ SET
 SET
   @SupportsStreaming_15e49540d55a = 1
 SET
-  @TypeID_15e49540d55a = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3' EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_15e49540d55a,
+  @TypeID_15e49540d55a = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelVendor] WHERE [ID] = @ID_15e49540d55a)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_15e49540d55a,
   @ModelID = @ModelID_15e49540d55a,
   @VendorID = @VendorID_15e49540d55a,
   @Priority = @Priority_15e49540d55a,
@@ -876,6 +1173,32 @@ SET
   @PrefillFallbackText_Clear = 1,
   @ModelConfiguration = @ModelConfiguration_15e49540d55a,
   @ModelConfiguration_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelVendor @ID = @ID_15e49540d55a,
+  @ModelID = @ModelID_15e49540d55a,
+  @VendorID = @VendorID_15e49540d55a,
+  @Priority = @Priority_15e49540d55a,
+  @Status = @Status_15e49540d55a,
+  @DriverClass = @DriverClass_15e49540d55a,
+  @DriverImportPath = @DriverImportPath_15e49540d55a,
+  @DriverImportPath_Clear = 1,
+  @APIName = @APIName_15e49540d55a,
+  @MaxInputTokens = @MaxInputTokens_15e49540d55a,
+  @MaxOutputTokens = @MaxOutputTokens_15e49540d55a,
+  @SupportedResponseFormats = @SupportedResponseFormats_15e49540d55a,
+  @SupportsEffortLevel = @SupportsEffortLevel_15e49540d55a,
+  @SupportsStreaming = @SupportsStreaming_15e49540d55a,
+  @TypeID = @TypeID_15e49540d55a,
+  @SupportsPrefill = @SupportsPrefill_15e49540d55a,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_15e49540d55a,
+  @PrefillFallbackText_Clear = 1,
+  @ModelConfiguration = @ModelConfiguration_15e49540d55a,
+  @ModelConfiguration_Clear = 1;
+END
+
 
 GO
 
@@ -923,7 +1246,9 @@ SET
   @CacheReadPricePerUnit_c917c361f14c = 0.25
 SET
   @CacheWritePricePerUnit_c917c361f14c = 12.5
-EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_c917c361f14c,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelCost] WHERE [ID] = @ID_c917c361f14c)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_c917c361f14c,
   @ModelID = @ModelID_c917c361f14c,
   @VendorID = @VendorID_c917c361f14c,
   @StartedAt = @StartedAt_c917c361f14c,
@@ -939,6 +1264,27 @@ EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_c917c361f14c,
   @Comments = @Comments_c917c361f14c,
   @CacheReadPricePerUnit = @CacheReadPricePerUnit_c917c361f14c,
   @CacheWritePricePerUnit = @CacheWritePricePerUnit_c917c361f14c;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelCost @ID = @ID_c917c361f14c,
+  @ModelID = @ModelID_c917c361f14c,
+  @VendorID = @VendorID_c917c361f14c,
+  @StartedAt = @StartedAt_c917c361f14c,
+  @EndedAt = @EndedAt_c917c361f14c,
+  @EndedAt_Clear = 1,
+  @Status = @Status_c917c361f14c,
+  @Currency = @Currency_c917c361f14c,
+  @PriceTypeID = @PriceTypeID_c917c361f14c,
+  @InputPricePerUnit = @InputPricePerUnit_c917c361f14c,
+  @OutputPricePerUnit = @OutputPricePerUnit_c917c361f14c,
+  @UnitTypeID = @UnitTypeID_c917c361f14c,
+  @ProcessingType = @ProcessingType_c917c361f14c,
+  @Comments = @Comments_c917c361f14c,
+  @CacheReadPricePerUnit = @CacheReadPricePerUnit_c917c361f14c,
+  @CacheWritePricePerUnit = @CacheWritePricePerUnit_c917c361f14c;
+END
+
 
 GO
 
@@ -981,7 +1327,10 @@ SET
 SET
   @ProcessingType_64aaad340c8a = N'Realtime'
 SET
-  @Comments_64aaad340c8a = N'Claude Fable 5.1 pricing on Amazon Bedrock at vendor parity with Anthropic direct ($10/$50 per 1M). Bedrock model ID anthropic.claude-fable-5-1. Regional and multi-region endpoints carry a 10% premium over global endpoints; Bedrock sets its own retirement schedule independently of the Claude API. Sources: https://platform.claude.com/docs/en/about-claude/pricing ; https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-fable-5-1.html' EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_64aaad340c8a,
+  @Comments_64aaad340c8a = N'Claude Fable 5.1 pricing on Amazon Bedrock at vendor parity with Anthropic direct ($10/$50 per 1M). Bedrock model ID anthropic.claude-fable-5-1. Regional and multi-region endpoints carry a 10% premium over global endpoints; Bedrock sets its own retirement schedule independently of the Claude API. Sources: https://platform.claude.com/docs/en/about-claude/pricing ; https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-fable-5-1.html'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelCost] WHERE [ID] = @ID_64aaad340c8a)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_64aaad340c8a,
   @ModelID = @ModelID_64aaad340c8a,
   @VendorID = @VendorID_64aaad340c8a,
   @StartedAt = @StartedAt_64aaad340c8a,
@@ -999,6 +1348,29 @@ SET
   @CacheReadPricePerUnit_Clear = 1,
   @CacheWritePricePerUnit = @CacheWritePricePerUnit_64aaad340c8a,
   @CacheWritePricePerUnit_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelCost @ID = @ID_64aaad340c8a,
+  @ModelID = @ModelID_64aaad340c8a,
+  @VendorID = @VendorID_64aaad340c8a,
+  @StartedAt = @StartedAt_64aaad340c8a,
+  @EndedAt = @EndedAt_64aaad340c8a,
+  @EndedAt_Clear = 1,
+  @Status = @Status_64aaad340c8a,
+  @Currency = @Currency_64aaad340c8a,
+  @PriceTypeID = @PriceTypeID_64aaad340c8a,
+  @InputPricePerUnit = @InputPricePerUnit_64aaad340c8a,
+  @OutputPricePerUnit = @OutputPricePerUnit_64aaad340c8a,
+  @UnitTypeID = @UnitTypeID_64aaad340c8a,
+  @ProcessingType = @ProcessingType_64aaad340c8a,
+  @Comments = @Comments_64aaad340c8a,
+  @CacheReadPricePerUnit = @CacheReadPricePerUnit_64aaad340c8a,
+  @CacheReadPricePerUnit_Clear = 1,
+  @CacheWritePricePerUnit = @CacheWritePricePerUnit_64aaad340c8a,
+  @CacheWritePricePerUnit_Clear = 1;
+END
+
 
 GO
 
@@ -1044,7 +1416,9 @@ SET
   @Comments_ff33593de014 = N'Claude Fable 5.1 on OpenRouter (passthrough pricing), live September 1, 2026. $10/$50 per 1M with $0.25/1M cache reads. A separate half-price batch route exists at anthropic/claude-fable-5.1:batch ($5/$25) and is not modelled here. Source: https://openrouter.ai/anthropic/claude-fable-5.1'
 SET
   @CacheReadPricePerUnit_ff33593de014 = 0.25
-EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_ff33593de014,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelCost] WHERE [ID] = @ID_ff33593de014)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_ff33593de014,
   @ModelID = @ModelID_ff33593de014,
   @VendorID = @VendorID_ff33593de014,
   @StartedAt = @StartedAt_ff33593de014,
@@ -1061,6 +1435,28 @@ EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_ff33593de014,
   @CacheReadPricePerUnit = @CacheReadPricePerUnit_ff33593de014,
   @CacheWritePricePerUnit = @CacheWritePricePerUnit_ff33593de014,
   @CacheWritePricePerUnit_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelCost @ID = @ID_ff33593de014,
+  @ModelID = @ModelID_ff33593de014,
+  @VendorID = @VendorID_ff33593de014,
+  @StartedAt = @StartedAt_ff33593de014,
+  @EndedAt = @EndedAt_ff33593de014,
+  @EndedAt_Clear = 1,
+  @Status = @Status_ff33593de014,
+  @Currency = @Currency_ff33593de014,
+  @PriceTypeID = @PriceTypeID_ff33593de014,
+  @InputPricePerUnit = @InputPricePerUnit_ff33593de014,
+  @OutputPricePerUnit = @OutputPricePerUnit_ff33593de014,
+  @UnitTypeID = @UnitTypeID_ff33593de014,
+  @ProcessingType = @ProcessingType_ff33593de014,
+  @Comments = @Comments_ff33593de014,
+  @CacheReadPricePerUnit = @CacheReadPricePerUnit_ff33593de014,
+  @CacheWritePricePerUnit = @CacheWritePricePerUnit_ff33593de014,
+  @CacheWritePricePerUnit_Clear = 1;
+END
+
 
 GO
 
@@ -1098,7 +1494,10 @@ SET
 SET
   @InheritTypeModalities_6bceab0f114e = 1
 SET
-  @PriorVersionID_6bceab0f114e = '63B1434F-0400-4A98-A1B9-0765BE4362F0' EXEC [${flyway:defaultSchema}].spCreateAIModel @ID = @ID_6bceab0f114e,
+  @PriorVersionID_6bceab0f114e = '63B1434F-0400-4A98-A1B9-0765BE4362F0'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModel] WHERE [ID] = @ID_6bceab0f114e)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModel @ID = @ID_6bceab0f114e,
   @Name = @Name_6bceab0f114e,
   @Description = @Description_6bceab0f114e,
   @AIModelTypeID = @AIModelTypeID_6bceab0f114e,
@@ -1116,6 +1515,29 @@ SET
   @PrefillFallbackText_Clear = 1,
   @ModelConfiguration = @ModelConfiguration_6bceab0f114e,
   @ModelConfiguration_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModel @ID = @ID_6bceab0f114e,
+  @Name = @Name_6bceab0f114e,
+  @Description = @Description_6bceab0f114e,
+  @AIModelTypeID = @AIModelTypeID_6bceab0f114e,
+  @PowerRank = @PowerRank_6bceab0f114e,
+  @IsActive = @IsActive_6bceab0f114e,
+  @SpeedRank = @SpeedRank_6bceab0f114e,
+  @CostRank = @CostRank_6bceab0f114e,
+  @ModelSelectionInsights = @ModelSelectionInsights_6bceab0f114e,
+  @ModelSelectionInsights_Clear = 1,
+  @InheritTypeModalities = @InheritTypeModalities_6bceab0f114e,
+  @PriorVersionID = @PriorVersionID_6bceab0f114e,
+  @SupportsPrefill = @SupportsPrefill_6bceab0f114e,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_6bceab0f114e,
+  @PrefillFallbackText_Clear = 1,
+  @ModelConfiguration = @ModelConfiguration_6bceab0f114e,
+  @ModelConfiguration_Clear = 1;
+END
+
 
 GO
 
@@ -1153,7 +1575,10 @@ SET
 SET
   @InheritTypeModalities_94becfd5343c = 1
 SET
-  @PriorVersionID_94becfd5343c = 'E22BB8F0-46CB-4964-AEB0-A2C74148656C' EXEC [${flyway:defaultSchema}].spCreateAIModel @ID = @ID_94becfd5343c,
+  @PriorVersionID_94becfd5343c = 'E22BB8F0-46CB-4964-AEB0-A2C74148656C'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModel] WHERE [ID] = @ID_94becfd5343c)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModel @ID = @ID_94becfd5343c,
   @Name = @Name_94becfd5343c,
   @Description = @Description_94becfd5343c,
   @AIModelTypeID = @AIModelTypeID_94becfd5343c,
@@ -1171,6 +1596,29 @@ SET
   @PrefillFallbackText_Clear = 1,
   @ModelConfiguration = @ModelConfiguration_94becfd5343c,
   @ModelConfiguration_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModel @ID = @ID_94becfd5343c,
+  @Name = @Name_94becfd5343c,
+  @Description = @Description_94becfd5343c,
+  @AIModelTypeID = @AIModelTypeID_94becfd5343c,
+  @PowerRank = @PowerRank_94becfd5343c,
+  @IsActive = @IsActive_94becfd5343c,
+  @SpeedRank = @SpeedRank_94becfd5343c,
+  @CostRank = @CostRank_94becfd5343c,
+  @ModelSelectionInsights = @ModelSelectionInsights_94becfd5343c,
+  @ModelSelectionInsights_Clear = 1,
+  @InheritTypeModalities = @InheritTypeModalities_94becfd5343c,
+  @PriorVersionID = @PriorVersionID_94becfd5343c,
+  @SupportsPrefill = @SupportsPrefill_94becfd5343c,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_94becfd5343c,
+  @PrefillFallbackText_Clear = 1,
+  @ModelConfiguration = @ModelConfiguration_94becfd5343c,
+  @ModelConfiguration_Clear = 1;
+END
+
 
 GO
 
@@ -1209,7 +1657,10 @@ SET
 SET
   @SupportsStreaming_6c3cca416b9f = 0
 SET
-  @TypeID_6c3cca416b9f = '10DB468E-F2CE-475D-9F39-2DF2DE75D257' EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_6c3cca416b9f,
+  @TypeID_6c3cca416b9f = '10DB468E-F2CE-475D-9F39-2DF2DE75D257'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelVendor] WHERE [ID] = @ID_6c3cca416b9f)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_6c3cca416b9f,
   @ModelID = @ModelID_6c3cca416b9f,
   @VendorID = @VendorID_6c3cca416b9f,
   @Priority = @Priority_6c3cca416b9f,
@@ -1234,6 +1685,36 @@ SET
   @PrefillFallbackText_Clear = 1,
   @ModelConfiguration = @ModelConfiguration_6c3cca416b9f,
   @ModelConfiguration_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelVendor @ID = @ID_6c3cca416b9f,
+  @ModelID = @ModelID_6c3cca416b9f,
+  @VendorID = @VendorID_6c3cca416b9f,
+  @Priority = @Priority_6c3cca416b9f,
+  @Status = @Status_6c3cca416b9f,
+  @DriverClass = @DriverClass_6c3cca416b9f,
+  @DriverClass_Clear = 1,
+  @DriverImportPath = @DriverImportPath_6c3cca416b9f,
+  @DriverImportPath_Clear = 1,
+  @APIName = @APIName_6c3cca416b9f,
+  @APIName_Clear = 1,
+  @MaxInputTokens = @MaxInputTokens_6c3cca416b9f,
+  @MaxInputTokens_Clear = 1,
+  @MaxOutputTokens = @MaxOutputTokens_6c3cca416b9f,
+  @MaxOutputTokens_Clear = 1,
+  @SupportedResponseFormats = @SupportedResponseFormats_6c3cca416b9f,
+  @SupportsEffortLevel = @SupportsEffortLevel_6c3cca416b9f,
+  @SupportsStreaming = @SupportsStreaming_6c3cca416b9f,
+  @TypeID = @TypeID_6c3cca416b9f,
+  @SupportsPrefill = @SupportsPrefill_6c3cca416b9f,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_6c3cca416b9f,
+  @PrefillFallbackText_Clear = 1,
+  @ModelConfiguration = @ModelConfiguration_6c3cca416b9f,
+  @ModelConfiguration_Clear = 1;
+END
+
 
 GO
 
@@ -1280,7 +1761,10 @@ SET
 SET
   @SupportsStreaming_795373bda507 = 1
 SET
-  @TypeID_795373bda507 = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3' EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_795373bda507,
+  @TypeID_795373bda507 = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelVendor] WHERE [ID] = @ID_795373bda507)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_795373bda507,
   @ModelID = @ModelID_795373bda507,
   @VendorID = @VendorID_795373bda507,
   @Priority = @Priority_795373bda507,
@@ -1301,6 +1785,32 @@ SET
   @PrefillFallbackText_Clear = 1,
   @ModelConfiguration = @ModelConfiguration_795373bda507,
   @ModelConfiguration_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelVendor @ID = @ID_795373bda507,
+  @ModelID = @ModelID_795373bda507,
+  @VendorID = @VendorID_795373bda507,
+  @Priority = @Priority_795373bda507,
+  @Status = @Status_795373bda507,
+  @DriverClass = @DriverClass_795373bda507,
+  @DriverImportPath = @DriverImportPath_795373bda507,
+  @DriverImportPath_Clear = 1,
+  @APIName = @APIName_795373bda507,
+  @MaxInputTokens = @MaxInputTokens_795373bda507,
+  @MaxOutputTokens = @MaxOutputTokens_795373bda507,
+  @SupportedResponseFormats = @SupportedResponseFormats_795373bda507,
+  @SupportsEffortLevel = @SupportsEffortLevel_795373bda507,
+  @SupportsStreaming = @SupportsStreaming_795373bda507,
+  @TypeID = @TypeID_795373bda507,
+  @SupportsPrefill = @SupportsPrefill_795373bda507,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_795373bda507,
+  @PrefillFallbackText_Clear = 1,
+  @ModelConfiguration = @ModelConfiguration_795373bda507,
+  @ModelConfiguration_Clear = 1;
+END
+
 
 GO
 
@@ -1339,7 +1849,10 @@ SET
 SET
   @SupportsStreaming_a4cb2f05f3b9 = 0
 SET
-  @TypeID_a4cb2f05f3b9 = '10DB468E-F2CE-475D-9F39-2DF2DE75D257' EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_a4cb2f05f3b9,
+  @TypeID_a4cb2f05f3b9 = '10DB468E-F2CE-475D-9F39-2DF2DE75D257'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelVendor] WHERE [ID] = @ID_a4cb2f05f3b9)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_a4cb2f05f3b9,
   @ModelID = @ModelID_a4cb2f05f3b9,
   @VendorID = @VendorID_a4cb2f05f3b9,
   @Priority = @Priority_a4cb2f05f3b9,
@@ -1364,6 +1877,36 @@ SET
   @PrefillFallbackText_Clear = 1,
   @ModelConfiguration = @ModelConfiguration_a4cb2f05f3b9,
   @ModelConfiguration_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelVendor @ID = @ID_a4cb2f05f3b9,
+  @ModelID = @ModelID_a4cb2f05f3b9,
+  @VendorID = @VendorID_a4cb2f05f3b9,
+  @Priority = @Priority_a4cb2f05f3b9,
+  @Status = @Status_a4cb2f05f3b9,
+  @DriverClass = @DriverClass_a4cb2f05f3b9,
+  @DriverClass_Clear = 1,
+  @DriverImportPath = @DriverImportPath_a4cb2f05f3b9,
+  @DriverImportPath_Clear = 1,
+  @APIName = @APIName_a4cb2f05f3b9,
+  @APIName_Clear = 1,
+  @MaxInputTokens = @MaxInputTokens_a4cb2f05f3b9,
+  @MaxInputTokens_Clear = 1,
+  @MaxOutputTokens = @MaxOutputTokens_a4cb2f05f3b9,
+  @MaxOutputTokens_Clear = 1,
+  @SupportedResponseFormats = @SupportedResponseFormats_a4cb2f05f3b9,
+  @SupportsEffortLevel = @SupportsEffortLevel_a4cb2f05f3b9,
+  @SupportsStreaming = @SupportsStreaming_a4cb2f05f3b9,
+  @TypeID = @TypeID_a4cb2f05f3b9,
+  @SupportsPrefill = @SupportsPrefill_a4cb2f05f3b9,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_a4cb2f05f3b9,
+  @PrefillFallbackText_Clear = 1,
+  @ModelConfiguration = @ModelConfiguration_a4cb2f05f3b9,
+  @ModelConfiguration_Clear = 1;
+END
+
 
 GO
 
@@ -1410,7 +1953,10 @@ SET
 SET
   @SupportsStreaming_2875816bb418 = 1
 SET
-  @TypeID_2875816bb418 = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3' EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_2875816bb418,
+  @TypeID_2875816bb418 = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelVendor] WHERE [ID] = @ID_2875816bb418)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_2875816bb418,
   @ModelID = @ModelID_2875816bb418,
   @VendorID = @VendorID_2875816bb418,
   @Priority = @Priority_2875816bb418,
@@ -1431,6 +1977,32 @@ SET
   @PrefillFallbackText_Clear = 1,
   @ModelConfiguration = @ModelConfiguration_2875816bb418,
   @ModelConfiguration_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelVendor @ID = @ID_2875816bb418,
+  @ModelID = @ModelID_2875816bb418,
+  @VendorID = @VendorID_2875816bb418,
+  @Priority = @Priority_2875816bb418,
+  @Status = @Status_2875816bb418,
+  @DriverClass = @DriverClass_2875816bb418,
+  @DriverImportPath = @DriverImportPath_2875816bb418,
+  @DriverImportPath_Clear = 1,
+  @APIName = @APIName_2875816bb418,
+  @MaxInputTokens = @MaxInputTokens_2875816bb418,
+  @MaxOutputTokens = @MaxOutputTokens_2875816bb418,
+  @SupportedResponseFormats = @SupportedResponseFormats_2875816bb418,
+  @SupportsEffortLevel = @SupportsEffortLevel_2875816bb418,
+  @SupportsStreaming = @SupportsStreaming_2875816bb418,
+  @TypeID = @TypeID_2875816bb418,
+  @SupportsPrefill = @SupportsPrefill_2875816bb418,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_2875816bb418,
+  @PrefillFallbackText_Clear = 1,
+  @ModelConfiguration = @ModelConfiguration_2875816bb418,
+  @ModelConfiguration_Clear = 1;
+END
+
 
 GO
 
@@ -1477,7 +2049,10 @@ SET
 SET
   @SupportsStreaming_0724421702ee = 1
 SET
-  @TypeID_0724421702ee = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3' EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_0724421702ee,
+  @TypeID_0724421702ee = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelVendor] WHERE [ID] = @ID_0724421702ee)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_0724421702ee,
   @ModelID = @ModelID_0724421702ee,
   @VendorID = @VendorID_0724421702ee,
   @Priority = @Priority_0724421702ee,
@@ -1498,6 +2073,32 @@ SET
   @PrefillFallbackText_Clear = 1,
   @ModelConfiguration = @ModelConfiguration_0724421702ee,
   @ModelConfiguration_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelVendor @ID = @ID_0724421702ee,
+  @ModelID = @ModelID_0724421702ee,
+  @VendorID = @VendorID_0724421702ee,
+  @Priority = @Priority_0724421702ee,
+  @Status = @Status_0724421702ee,
+  @DriverClass = @DriverClass_0724421702ee,
+  @DriverImportPath = @DriverImportPath_0724421702ee,
+  @DriverImportPath_Clear = 1,
+  @APIName = @APIName_0724421702ee,
+  @MaxInputTokens = @MaxInputTokens_0724421702ee,
+  @MaxOutputTokens = @MaxOutputTokens_0724421702ee,
+  @SupportedResponseFormats = @SupportedResponseFormats_0724421702ee,
+  @SupportsEffortLevel = @SupportsEffortLevel_0724421702ee,
+  @SupportsStreaming = @SupportsStreaming_0724421702ee,
+  @TypeID = @TypeID_0724421702ee,
+  @SupportsPrefill = @SupportsPrefill_0724421702ee,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_0724421702ee,
+  @PrefillFallbackText_Clear = 1,
+  @ModelConfiguration = @ModelConfiguration_0724421702ee,
+  @ModelConfiguration_Clear = 1;
+END
+
 
 GO
 
@@ -1543,7 +2144,9 @@ SET
   @Comments_ffe982988f08 = N'Gemini 3.8 Flash INTRODUCTORY pricing on Google direct as of the September 2, 2026 GA launch: $0.75/1M input, $3.75/1M output, $0.075/1M cached input. INTRO WINDOW: through December 31, 2026. STANDARD PRICING FROM JANUARY 1, 2027: $1.50/1M input, $7.50/1M output, with cached input doubling to $0.15/1M. A reviewer should expire this row and add a standard-rate row before the intro window closes. Google does not charge for cache writes, so CacheWritePricePerUnit is null. Sources: https://ai.google.dev/gemini-api/docs/latest-model ; https://deepmind.google/models/model-cards/gemini-3-8-flash/'
 SET
   @CacheReadPricePerUnit_ffe982988f08 = 0.075
-EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_ffe982988f08,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelCost] WHERE [ID] = @ID_ffe982988f08)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_ffe982988f08,
   @ModelID = @ModelID_ffe982988f08,
   @VendorID = @VendorID_ffe982988f08,
   @StartedAt = @StartedAt_ffe982988f08,
@@ -1560,6 +2163,28 @@ EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_ffe982988f08,
   @CacheReadPricePerUnit = @CacheReadPricePerUnit_ffe982988f08,
   @CacheWritePricePerUnit = @CacheWritePricePerUnit_ffe982988f08,
   @CacheWritePricePerUnit_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelCost @ID = @ID_ffe982988f08,
+  @ModelID = @ModelID_ffe982988f08,
+  @VendorID = @VendorID_ffe982988f08,
+  @StartedAt = @StartedAt_ffe982988f08,
+  @EndedAt = @EndedAt_ffe982988f08,
+  @EndedAt_Clear = 1,
+  @Status = @Status_ffe982988f08,
+  @Currency = @Currency_ffe982988f08,
+  @PriceTypeID = @PriceTypeID_ffe982988f08,
+  @InputPricePerUnit = @InputPricePerUnit_ffe982988f08,
+  @OutputPricePerUnit = @OutputPricePerUnit_ffe982988f08,
+  @UnitTypeID = @UnitTypeID_ffe982988f08,
+  @ProcessingType = @ProcessingType_ffe982988f08,
+  @Comments = @Comments_ffe982988f08,
+  @CacheReadPricePerUnit = @CacheReadPricePerUnit_ffe982988f08,
+  @CacheWritePricePerUnit = @CacheWritePricePerUnit_ffe982988f08,
+  @CacheWritePricePerUnit_Clear = 1;
+END
+
 
 GO
 
@@ -1605,7 +2230,9 @@ SET
   @Comments_09d13dab1ded = N'Gemini 3.8 Flash INTRODUCTORY pricing on Vertex AI (Gemini Enterprise Agent Platform) as of September 2, 2026 GA. Matches Google direct: $0.75/$3.75 per 1M with $0.075/1M cache read and no cache-write charge. Intro window runs through 2026-12-31; standard $1.50/$7.50 applies from 2027-01-01. Cross-region inference may add a Vertex-side surcharge on top of these figures. Sources: https://cloud.google.com/vertex-ai/generative-ai/pricing ; https://ai.google.dev/gemini-api/docs/latest-model'
 SET
   @CacheReadPricePerUnit_09d13dab1ded = 0.075
-EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_09d13dab1ded,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelCost] WHERE [ID] = @ID_09d13dab1ded)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_09d13dab1ded,
   @ModelID = @ModelID_09d13dab1ded,
   @VendorID = @VendorID_09d13dab1ded,
   @StartedAt = @StartedAt_09d13dab1ded,
@@ -1622,6 +2249,28 @@ EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_09d13dab1ded,
   @CacheReadPricePerUnit = @CacheReadPricePerUnit_09d13dab1ded,
   @CacheWritePricePerUnit = @CacheWritePricePerUnit_09d13dab1ded,
   @CacheWritePricePerUnit_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelCost @ID = @ID_09d13dab1ded,
+  @ModelID = @ModelID_09d13dab1ded,
+  @VendorID = @VendorID_09d13dab1ded,
+  @StartedAt = @StartedAt_09d13dab1ded,
+  @EndedAt = @EndedAt_09d13dab1ded,
+  @EndedAt_Clear = 1,
+  @Status = @Status_09d13dab1ded,
+  @Currency = @Currency_09d13dab1ded,
+  @PriceTypeID = @PriceTypeID_09d13dab1ded,
+  @InputPricePerUnit = @InputPricePerUnit_09d13dab1ded,
+  @OutputPricePerUnit = @OutputPricePerUnit_09d13dab1ded,
+  @UnitTypeID = @UnitTypeID_09d13dab1ded,
+  @ProcessingType = @ProcessingType_09d13dab1ded,
+  @Comments = @Comments_09d13dab1ded,
+  @CacheReadPricePerUnit = @CacheReadPricePerUnit_09d13dab1ded,
+  @CacheWritePricePerUnit = @CacheWritePricePerUnit_09d13dab1ded,
+  @CacheWritePricePerUnit_Clear = 1;
+END
+
 
 GO
 
@@ -1660,7 +2309,10 @@ SET
 SET
   @SupportsStreaming_eef4d5d72d69 = 0
 SET
-  @TypeID_eef4d5d72d69 = '10DB468E-F2CE-475D-9F39-2DF2DE75D257' EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_eef4d5d72d69,
+  @TypeID_eef4d5d72d69 = '10DB468E-F2CE-475D-9F39-2DF2DE75D257'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelVendor] WHERE [ID] = @ID_eef4d5d72d69)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_eef4d5d72d69,
   @ModelID = @ModelID_eef4d5d72d69,
   @VendorID = @VendorID_eef4d5d72d69,
   @Priority = @Priority_eef4d5d72d69,
@@ -1685,6 +2337,36 @@ SET
   @PrefillFallbackText_Clear = 1,
   @ModelConfiguration = @ModelConfiguration_eef4d5d72d69,
   @ModelConfiguration_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelVendor @ID = @ID_eef4d5d72d69,
+  @ModelID = @ModelID_eef4d5d72d69,
+  @VendorID = @VendorID_eef4d5d72d69,
+  @Priority = @Priority_eef4d5d72d69,
+  @Status = @Status_eef4d5d72d69,
+  @DriverClass = @DriverClass_eef4d5d72d69,
+  @DriverClass_Clear = 1,
+  @DriverImportPath = @DriverImportPath_eef4d5d72d69,
+  @DriverImportPath_Clear = 1,
+  @APIName = @APIName_eef4d5d72d69,
+  @APIName_Clear = 1,
+  @MaxInputTokens = @MaxInputTokens_eef4d5d72d69,
+  @MaxInputTokens_Clear = 1,
+  @MaxOutputTokens = @MaxOutputTokens_eef4d5d72d69,
+  @MaxOutputTokens_Clear = 1,
+  @SupportedResponseFormats = @SupportedResponseFormats_eef4d5d72d69,
+  @SupportsEffortLevel = @SupportsEffortLevel_eef4d5d72d69,
+  @SupportsStreaming = @SupportsStreaming_eef4d5d72d69,
+  @TypeID = @TypeID_eef4d5d72d69,
+  @SupportsPrefill = @SupportsPrefill_eef4d5d72d69,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_eef4d5d72d69,
+  @PrefillFallbackText_Clear = 1,
+  @ModelConfiguration = @ModelConfiguration_eef4d5d72d69,
+  @ModelConfiguration_Clear = 1;
+END
+
 
 GO
 
@@ -1731,7 +2413,10 @@ SET
 SET
   @SupportsStreaming_c8beb3f5e539 = 1
 SET
-  @TypeID_c8beb3f5e539 = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3' EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_c8beb3f5e539,
+  @TypeID_c8beb3f5e539 = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelVendor] WHERE [ID] = @ID_c8beb3f5e539)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_c8beb3f5e539,
   @ModelID = @ModelID_c8beb3f5e539,
   @VendorID = @VendorID_c8beb3f5e539,
   @Priority = @Priority_c8beb3f5e539,
@@ -1752,6 +2437,32 @@ SET
   @PrefillFallbackText_Clear = 1,
   @ModelConfiguration = @ModelConfiguration_c8beb3f5e539,
   @ModelConfiguration_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelVendor @ID = @ID_c8beb3f5e539,
+  @ModelID = @ModelID_c8beb3f5e539,
+  @VendorID = @VendorID_c8beb3f5e539,
+  @Priority = @Priority_c8beb3f5e539,
+  @Status = @Status_c8beb3f5e539,
+  @DriverClass = @DriverClass_c8beb3f5e539,
+  @DriverImportPath = @DriverImportPath_c8beb3f5e539,
+  @DriverImportPath_Clear = 1,
+  @APIName = @APIName_c8beb3f5e539,
+  @MaxInputTokens = @MaxInputTokens_c8beb3f5e539,
+  @MaxOutputTokens = @MaxOutputTokens_c8beb3f5e539,
+  @SupportedResponseFormats = @SupportedResponseFormats_c8beb3f5e539,
+  @SupportsEffortLevel = @SupportsEffortLevel_c8beb3f5e539,
+  @SupportsStreaming = @SupportsStreaming_c8beb3f5e539,
+  @TypeID = @TypeID_c8beb3f5e539,
+  @SupportsPrefill = @SupportsPrefill_c8beb3f5e539,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_c8beb3f5e539,
+  @PrefillFallbackText_Clear = 1,
+  @ModelConfiguration = @ModelConfiguration_c8beb3f5e539,
+  @ModelConfiguration_Clear = 1;
+END
+
 
 GO
 
@@ -1798,7 +2509,10 @@ SET
 SET
   @SupportsStreaming_86f50c8aca88 = 1
 SET
-  @TypeID_86f50c8aca88 = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3' EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_86f50c8aca88,
+  @TypeID_86f50c8aca88 = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelVendor] WHERE [ID] = @ID_86f50c8aca88)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_86f50c8aca88,
   @ModelID = @ModelID_86f50c8aca88,
   @VendorID = @VendorID_86f50c8aca88,
   @Priority = @Priority_86f50c8aca88,
@@ -1819,6 +2533,32 @@ SET
   @PrefillFallbackText_Clear = 1,
   @ModelConfiguration = @ModelConfiguration_86f50c8aca88,
   @ModelConfiguration_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelVendor @ID = @ID_86f50c8aca88,
+  @ModelID = @ModelID_86f50c8aca88,
+  @VendorID = @VendorID_86f50c8aca88,
+  @Priority = @Priority_86f50c8aca88,
+  @Status = @Status_86f50c8aca88,
+  @DriverClass = @DriverClass_86f50c8aca88,
+  @DriverImportPath = @DriverImportPath_86f50c8aca88,
+  @DriverImportPath_Clear = 1,
+  @APIName = @APIName_86f50c8aca88,
+  @MaxInputTokens = @MaxInputTokens_86f50c8aca88,
+  @MaxOutputTokens = @MaxOutputTokens_86f50c8aca88,
+  @SupportedResponseFormats = @SupportedResponseFormats_86f50c8aca88,
+  @SupportsEffortLevel = @SupportsEffortLevel_86f50c8aca88,
+  @SupportsStreaming = @SupportsStreaming_86f50c8aca88,
+  @TypeID = @TypeID_86f50c8aca88,
+  @SupportsPrefill = @SupportsPrefill_86f50c8aca88,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_86f50c8aca88,
+  @PrefillFallbackText_Clear = 1,
+  @ModelConfiguration = @ModelConfiguration_86f50c8aca88,
+  @ModelConfiguration_Clear = 1;
+END
+
 
 GO
 
@@ -1866,7 +2606,9 @@ SET
   @CacheReadPricePerUnit_1e0857a3e7a6 = 1
 SET
   @CacheWritePricePerUnit_1e0857a3e7a6 = 12.5
-EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_1e0857a3e7a6,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelCost] WHERE [ID] = @ID_1e0857a3e7a6)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_1e0857a3e7a6,
   @ModelID = @ModelID_1e0857a3e7a6,
   @VendorID = @VendorID_1e0857a3e7a6,
   @StartedAt = @StartedAt_1e0857a3e7a6,
@@ -1882,6 +2624,27 @@ EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_1e0857a3e7a6,
   @Comments = @Comments_1e0857a3e7a6,
   @CacheReadPricePerUnit = @CacheReadPricePerUnit_1e0857a3e7a6,
   @CacheWritePricePerUnit = @CacheWritePricePerUnit_1e0857a3e7a6;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelCost @ID = @ID_1e0857a3e7a6,
+  @ModelID = @ModelID_1e0857a3e7a6,
+  @VendorID = @VendorID_1e0857a3e7a6,
+  @StartedAt = @StartedAt_1e0857a3e7a6,
+  @EndedAt = @EndedAt_1e0857a3e7a6,
+  @EndedAt_Clear = 1,
+  @Status = @Status_1e0857a3e7a6,
+  @Currency = @Currency_1e0857a3e7a6,
+  @PriceTypeID = @PriceTypeID_1e0857a3e7a6,
+  @InputPricePerUnit = @InputPricePerUnit_1e0857a3e7a6,
+  @OutputPricePerUnit = @OutputPricePerUnit_1e0857a3e7a6,
+  @UnitTypeID = @UnitTypeID_1e0857a3e7a6,
+  @ProcessingType = @ProcessingType_1e0857a3e7a6,
+  @Comments = @Comments_1e0857a3e7a6,
+  @CacheReadPricePerUnit = @CacheReadPricePerUnit_1e0857a3e7a6,
+  @CacheWritePricePerUnit = @CacheWritePricePerUnit_1e0857a3e7a6;
+END
+
 
 GO
 
@@ -1924,7 +2687,10 @@ SET
 SET
   @ProcessingType_a22fe71a2a00 = N'Realtime'
 SET
-  @Comments_a22fe71a2a00 = N'GPT-6 Astra pricing in Microsoft Foundry / Azure OpenAI, Global Standard deployment, listed September 3, 2026 at parity with OpenAI direct ($10/$50 per 1M). ACCESS IS GATED: Foundry serves Astra through the Limited Access Program in two deployment flavours (Global and US Data Zone); there is no EU Data Zone at launch. Sources: https://www.unite.ai/microsoft-brings-openais-gpt-6-astra-to-foundry-with-limited-access/ ; https://technspire.com/en/blog/gpt-6-astra-foundry-price-gate-eu-gap' EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_a22fe71a2a00,
+  @Comments_a22fe71a2a00 = N'GPT-6 Astra pricing in Microsoft Foundry / Azure OpenAI, Global Standard deployment, listed September 3, 2026 at parity with OpenAI direct ($10/$50 per 1M). ACCESS IS GATED: Foundry serves Astra through the Limited Access Program in two deployment flavours (Global and US Data Zone); there is no EU Data Zone at launch. Sources: https://www.unite.ai/microsoft-brings-openais-gpt-6-astra-to-foundry-with-limited-access/ ; https://technspire.com/en/blog/gpt-6-astra-foundry-price-gate-eu-gap'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelCost] WHERE [ID] = @ID_a22fe71a2a00)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_a22fe71a2a00,
   @ModelID = @ModelID_a22fe71a2a00,
   @VendorID = @VendorID_a22fe71a2a00,
   @StartedAt = @StartedAt_a22fe71a2a00,
@@ -1942,6 +2708,29 @@ SET
   @CacheReadPricePerUnit_Clear = 1,
   @CacheWritePricePerUnit = @CacheWritePricePerUnit_a22fe71a2a00,
   @CacheWritePricePerUnit_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelCost @ID = @ID_a22fe71a2a00,
+  @ModelID = @ModelID_a22fe71a2a00,
+  @VendorID = @VendorID_a22fe71a2a00,
+  @StartedAt = @StartedAt_a22fe71a2a00,
+  @EndedAt = @EndedAt_a22fe71a2a00,
+  @EndedAt_Clear = 1,
+  @Status = @Status_a22fe71a2a00,
+  @Currency = @Currency_a22fe71a2a00,
+  @PriceTypeID = @PriceTypeID_a22fe71a2a00,
+  @InputPricePerUnit = @InputPricePerUnit_a22fe71a2a00,
+  @OutputPricePerUnit = @OutputPricePerUnit_a22fe71a2a00,
+  @UnitTypeID = @UnitTypeID_a22fe71a2a00,
+  @ProcessingType = @ProcessingType_a22fe71a2a00,
+  @Comments = @Comments_a22fe71a2a00,
+  @CacheReadPricePerUnit = @CacheReadPricePerUnit_a22fe71a2a00,
+  @CacheReadPricePerUnit_Clear = 1,
+  @CacheWritePricePerUnit = @CacheWritePricePerUnit_a22fe71a2a00,
+  @CacheWritePricePerUnit_Clear = 1;
+END
+
 
 GO
 
@@ -1988,7 +2777,10 @@ SET
 SET
   @SupportsStreaming_2cd873b512cd = 1
 SET
-  @TypeID_2cd873b512cd = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3' EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_2cd873b512cd,
+  @TypeID_2cd873b512cd = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelVendor] WHERE [ID] = @ID_2cd873b512cd)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_2cd873b512cd,
   @ModelID = @ModelID_2cd873b512cd,
   @VendorID = @VendorID_2cd873b512cd,
   @Priority = @Priority_2cd873b512cd,
@@ -2009,6 +2801,32 @@ SET
   @PrefillFallbackText_Clear = 1,
   @ModelConfiguration = @ModelConfiguration_2cd873b512cd,
   @ModelConfiguration_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelVendor @ID = @ID_2cd873b512cd,
+  @ModelID = @ModelID_2cd873b512cd,
+  @VendorID = @VendorID_2cd873b512cd,
+  @Priority = @Priority_2cd873b512cd,
+  @Status = @Status_2cd873b512cd,
+  @DriverClass = @DriverClass_2cd873b512cd,
+  @DriverImportPath = @DriverImportPath_2cd873b512cd,
+  @DriverImportPath_Clear = 1,
+  @APIName = @APIName_2cd873b512cd,
+  @MaxInputTokens = @MaxInputTokens_2cd873b512cd,
+  @MaxOutputTokens = @MaxOutputTokens_2cd873b512cd,
+  @SupportedResponseFormats = @SupportedResponseFormats_2cd873b512cd,
+  @SupportsEffortLevel = @SupportsEffortLevel_2cd873b512cd,
+  @SupportsStreaming = @SupportsStreaming_2cd873b512cd,
+  @TypeID = @TypeID_2cd873b512cd,
+  @SupportsPrefill = @SupportsPrefill_2cd873b512cd,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_2cd873b512cd,
+  @PrefillFallbackText_Clear = 1,
+  @ModelConfiguration = @ModelConfiguration_2cd873b512cd,
+  @ModelConfiguration_Clear = 1;
+END
+
 
 GO
 
@@ -2054,7 +2872,9 @@ SET
   @Comments_a46f6b448381 = N'GLM-5.3 rate card on Z.AI direct, effective August 19, 2026: $1.40/1M input, $4.40/1M output, $0.26/1M cached input - identical to the GLM-5.2 rate card. Cached-input storage is listed by Z.AI as free for a limited time. Resolves the ''pricing TBD'' note left when GLM-5.3 was added on 2026-08-24. Z.AI serves the model as `glm-5.3` at https://api.z.ai/api/paas/v4/chat/completions; 1M context / 128K max output. Z.AI also sells a separate GLM Coding Plan subscription that bundles GLM-5.3 - that is not a per-token rate and is not modelled. Sources: https://docs.z.ai/guides/llm/glm-5.3 ; https://www.requesty.ai/models/zai/glm-5.3 ; https://venturebeat.com/technology/glm-5-3-hits-the-api-at-1-4-4-4-per-million-tokens'
 SET
   @CacheReadPricePerUnit_a46f6b448381 = 0.26
-EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_a46f6b448381,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelCost] WHERE [ID] = @ID_a46f6b448381)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_a46f6b448381,
   @ModelID = @ModelID_a46f6b448381,
   @VendorID = @VendorID_a46f6b448381,
   @StartedAt = @StartedAt_a46f6b448381,
@@ -2071,6 +2891,28 @@ EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_a46f6b448381,
   @CacheReadPricePerUnit = @CacheReadPricePerUnit_a46f6b448381,
   @CacheWritePricePerUnit = @CacheWritePricePerUnit_a46f6b448381,
   @CacheWritePricePerUnit_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelCost @ID = @ID_a46f6b448381,
+  @ModelID = @ModelID_a46f6b448381,
+  @VendorID = @VendorID_a46f6b448381,
+  @StartedAt = @StartedAt_a46f6b448381,
+  @EndedAt = @EndedAt_a46f6b448381,
+  @EndedAt_Clear = 1,
+  @Status = @Status_a46f6b448381,
+  @Currency = @Currency_a46f6b448381,
+  @PriceTypeID = @PriceTypeID_a46f6b448381,
+  @InputPricePerUnit = @InputPricePerUnit_a46f6b448381,
+  @OutputPricePerUnit = @OutputPricePerUnit_a46f6b448381,
+  @UnitTypeID = @UnitTypeID_a46f6b448381,
+  @ProcessingType = @ProcessingType_a46f6b448381,
+  @Comments = @Comments_a46f6b448381,
+  @CacheReadPricePerUnit = @CacheReadPricePerUnit_a46f6b448381,
+  @CacheWritePricePerUnit = @CacheWritePricePerUnit_a46f6b448381,
+  @CacheWritePricePerUnit_Clear = 1;
+END
+
 
 GO
 
@@ -4828,7 +5670,10 @@ SET
 SET
   @CanDelete_e4d54d421ddc = 0
 SET
-  @Type_e4d54d421ddc = N'Allow' EXEC [${flyway:defaultSchema}].spCreateEntityPermission @ID = @ID_e4d54d421ddc,
+  @Type_e4d54d421ddc = N'Allow'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission] WHERE [ID] = @ID_e4d54d421ddc)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateEntityPermission @ID = @ID_e4d54d421ddc,
   @EntityID = @EntityID_e4d54d421ddc,
   @RoleID = @RoleID_e4d54d421ddc,
   @CanCreate = @CanCreate_e4d54d421ddc,
@@ -4844,6 +5689,27 @@ SET
   @DeleteRLSFilterID = @DeleteRLSFilterID_e4d54d421ddc,
   @DeleteRLSFilterID_Clear = 1,
   @Type = @Type_e4d54d421ddc;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateEntityPermission @ID = @ID_e4d54d421ddc,
+  @EntityID = @EntityID_e4d54d421ddc,
+  @RoleID = @RoleID_e4d54d421ddc,
+  @CanCreate = @CanCreate_e4d54d421ddc,
+  @CanRead = @CanRead_e4d54d421ddc,
+  @CanUpdate = @CanUpdate_e4d54d421ddc,
+  @CanDelete = @CanDelete_e4d54d421ddc,
+  @ReadRLSFilterID = @ReadRLSFilterID_e4d54d421ddc,
+  @ReadRLSFilterID_Clear = 1,
+  @CreateRLSFilterID = @CreateRLSFilterID_e4d54d421ddc,
+  @CreateRLSFilterID_Clear = 1,
+  @UpdateRLSFilterID = @UpdateRLSFilterID_e4d54d421ddc,
+  @UpdateRLSFilterID_Clear = 1,
+  @DeleteRLSFilterID = @DeleteRLSFilterID_e4d54d421ddc,
+  @DeleteRLSFilterID_Clear = 1,
+  @Type = @Type_e4d54d421ddc;
+END
+
 
 GO
 
@@ -4857,11 +5723,24 @@ SET
 SET
   @Name_65e2ff84a0d8 = N'Authorizations'
 SET
-  @Description_65e2ff84a0d8 = N'Named capability checks (MJ: Authorizations) — can this user execute this authorization, including ancestor grants.' EXEC [${flyway:defaultSchema}].spCreateRemoteOperationCategory @ID = @ID_65e2ff84a0d8,
+  @Description_65e2ff84a0d8 = N'Named capability checks (MJ: Authorizations) — can this user execute this authorization, including ancestor grants.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[RemoteOperationCategory] WHERE [ID] = @ID_65e2ff84a0d8)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateRemoteOperationCategory @ID = @ID_65e2ff84a0d8,
   @Name = @Name_65e2ff84a0d8,
   @Description = @Description_65e2ff84a0d8,
   @ParentID = @ParentID_65e2ff84a0d8,
   @ParentID_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateRemoteOperationCategory @ID = @ID_65e2ff84a0d8,
+  @Name = @Name_65e2ff84a0d8,
+  @Description = @Description_65e2ff84a0d8,
+  @ParentID = @ParentID_65e2ff84a0d8,
+  @ParentID_Clear = 1;
+END
+
 
 GO
 
@@ -4955,7 +5834,9 @@ SET
   @Status_c5c9502d240a = N'Active'
 SET
   @CodeLocked_c5c9502d240a = 0
-EXEC [${flyway:defaultSchema}].spCreateRemoteOperation @ID = @ID_c5c9502d240a,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[RemoteOperation] WHERE [ID] = @ID_c5c9502d240a)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateRemoteOperation @ID = @ID_c5c9502d240a,
   @Name = @Name_c5c9502d240a,
   @OperationKey = @OperationKey_c5c9502d240a,
   @CategoryID = @CategoryID_c5c9502d240a,
@@ -4991,6 +5872,47 @@ EXEC [${flyway:defaultSchema}].spCreateRemoteOperation @ID = @ID_c5c9502d240a,
   @CodeComments_Clear = 1,
   @Libraries = @Libraries_c5c9502d240a,
   @Libraries_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateRemoteOperation @ID = @ID_c5c9502d240a,
+  @Name = @Name_c5c9502d240a,
+  @OperationKey = @OperationKey_c5c9502d240a,
+  @CategoryID = @CategoryID_c5c9502d240a,
+  @Description = @Description_c5c9502d240a,
+  @InputTypeName = @InputTypeName_c5c9502d240a,
+  @InputTypeDefinition = @InputTypeDefinition_c5c9502d240a,
+  @InputTypeIsArray = @InputTypeIsArray_c5c9502d240a,
+  @OutputTypeName = @OutputTypeName_c5c9502d240a,
+  @OutputTypeDefinition = @OutputTypeDefinition_c5c9502d240a,
+  @OutputTypeIsArray = @OutputTypeIsArray_c5c9502d240a,
+  @ExecutionMode = @ExecutionMode_c5c9502d240a,
+  @RequiredScope = @RequiredScope_c5c9502d240a,
+  @RequiresSystemUser = @RequiresSystemUser_c5c9502d240a,
+  @GenerationType = @GenerationType_c5c9502d240a,
+  @Code = @Code_c5c9502d240a,
+  @Code_Clear = 1,
+  @CodeApprovalStatus = @CodeApprovalStatus_c5c9502d240a,
+  @CodeApprovedByUserID = @CodeApprovedByUserID_c5c9502d240a,
+  @CodeApprovedByUserID_Clear = 1,
+  @CodeApprovedAt = @CodeApprovedAt_c5c9502d240a,
+  @CodeApprovedAt_Clear = 1,
+  @ContractFingerprint = @ContractFingerprint_c5c9502d240a,
+  @ContractFingerprint_Clear = 1,
+  @Status = @Status_c5c9502d240a,
+  @CacheTTLSeconds = @CacheTTLSeconds_c5c9502d240a,
+  @CacheTTLSeconds_Clear = 1,
+  @TimeoutMS = @TimeoutMS_c5c9502d240a,
+  @TimeoutMS_Clear = 1,
+  @MaxConcurrency = @MaxConcurrency_c5c9502d240a,
+  @MaxConcurrency_Clear = 1,
+  @CodeLocked = @CodeLocked_c5c9502d240a,
+  @CodeComments = @CodeComments_c5c9502d240a,
+  @CodeComments_Clear = 1,
+  @Libraries = @Libraries_c5c9502d240a,
+  @Libraries_Clear = 1;
+END
+
 
 GO
 

@@ -112,6 +112,8 @@
     "check:codegen-tail:test": "vitest run --config .github/scripts/vitest.config.mts __tests__/check-codegen-tail",
     "check:browser-manifest": "node .github/scripts/check-browser-manifest-leakage.mjs",
     "check:browser-manifest:test": "vitest run --config .github/scripts/vitest.config.mts __tests__/check-browser-manifest-leakage",
+    "check:migration-guards": "node .github/scripts/check-migration-guarded-creates.mjs",
+    "check:migration-guards:test": "node .github/scripts/check-migration-guarded-creates.mjs --self-test",
     "test:scripts": "vitest run --config scripts/vitest.config.ts",
     "check:ui-layers": "node packages/MJCLI/bin/run.js standards check --check ui-layers",
     "change": "changeset",

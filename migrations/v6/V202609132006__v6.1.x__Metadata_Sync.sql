@@ -6110,7 +6110,9 @@ SET
   @CostRank_c6076efd52b2 = 5
 SET
   @InheritTypeModalities_c6076efd52b2 = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModel @ID = @ID_c6076efd52b2,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModel] WHERE [ID] = @ID_c6076efd52b2)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModel @ID = @ID_c6076efd52b2,
   @Name = @Name_c6076efd52b2,
   @Description = @Description_c6076efd52b2,
   @AIModelTypeID = @AIModelTypeID_c6076efd52b2,
@@ -6129,6 +6131,30 @@ EXEC [${flyway:defaultSchema}].spCreateAIModel @ID = @ID_c6076efd52b2,
   @PrefillFallbackText_Clear = 1,
   @ModelConfiguration = @ModelConfiguration_c6076efd52b2,
   @ModelConfiguration_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModel @ID = @ID_c6076efd52b2,
+  @Name = @Name_c6076efd52b2,
+  @Description = @Description_c6076efd52b2,
+  @AIModelTypeID = @AIModelTypeID_c6076efd52b2,
+  @PowerRank = @PowerRank_c6076efd52b2,
+  @IsActive = @IsActive_c6076efd52b2,
+  @SpeedRank = @SpeedRank_c6076efd52b2,
+  @CostRank = @CostRank_c6076efd52b2,
+  @ModelSelectionInsights = @ModelSelectionInsights_c6076efd52b2,
+  @ModelSelectionInsights_Clear = 1,
+  @InheritTypeModalities = @InheritTypeModalities_c6076efd52b2,
+  @PriorVersionID = @PriorVersionID_c6076efd52b2,
+  @PriorVersionID_Clear = 1,
+  @SupportsPrefill = @SupportsPrefill_c6076efd52b2,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_c6076efd52b2,
+  @PrefillFallbackText_Clear = 1,
+  @ModelConfiguration = @ModelConfiguration_c6076efd52b2,
+  @ModelConfiguration_Clear = 1;
+END
+
 
 GO
 
@@ -9950,7 +9976,10 @@ SET
     "NativeControlFlow": "implicit",
     "NativeToolResults": true
   }
-}' EXEC [${flyway:defaultSchema}].spCreateAIModel @ID = @ID_43d326ea8d1f,
+}'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModel] WHERE [ID] = @ID_43d326ea8d1f)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModel @ID = @ID_43d326ea8d1f,
   @Name = @Name_43d326ea8d1f,
   @Description = @Description_43d326ea8d1f,
   @AIModelTypeID = @AIModelTypeID_43d326ea8d1f,
@@ -9967,6 +9996,28 @@ SET
   @PrefillFallbackText = @PrefillFallbackText_43d326ea8d1f,
   @PrefillFallbackText_Clear = 1,
   @ModelConfiguration = @ModelConfiguration_43d326ea8d1f;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModel @ID = @ID_43d326ea8d1f,
+  @Name = @Name_43d326ea8d1f,
+  @Description = @Description_43d326ea8d1f,
+  @AIModelTypeID = @AIModelTypeID_43d326ea8d1f,
+  @PowerRank = @PowerRank_43d326ea8d1f,
+  @IsActive = @IsActive_43d326ea8d1f,
+  @SpeedRank = @SpeedRank_43d326ea8d1f,
+  @CostRank = @CostRank_43d326ea8d1f,
+  @ModelSelectionInsights = @ModelSelectionInsights_43d326ea8d1f,
+  @ModelSelectionInsights_Clear = 1,
+  @InheritTypeModalities = @InheritTypeModalities_43d326ea8d1f,
+  @PriorVersionID = @PriorVersionID_43d326ea8d1f,
+  @SupportsPrefill = @SupportsPrefill_43d326ea8d1f,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_43d326ea8d1f,
+  @PrefillFallbackText_Clear = 1,
+  @ModelConfiguration = @ModelConfiguration_43d326ea8d1f;
+END
+
 
 GO
 
@@ -11471,7 +11522,10 @@ SET
 SET
   @SupportsStreaming_984bfc9a47f3 = 1
 SET
-  @TypeID_984bfc9a47f3 = '10DB468E-F2CE-475D-9F39-2DF2DE75D257' EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_984bfc9a47f3,
+  @TypeID_984bfc9a47f3 = '10DB468E-F2CE-475D-9F39-2DF2DE75D257'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelVendor] WHERE [ID] = @ID_984bfc9a47f3)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_984bfc9a47f3,
   @ModelID = @ModelID_984bfc9a47f3,
   @VendorID = @VendorID_984bfc9a47f3,
   @Priority = @Priority_984bfc9a47f3,
@@ -11496,6 +11550,36 @@ SET
   @PrefillFallbackText_Clear = 1,
   @ModelConfiguration = @ModelConfiguration_984bfc9a47f3,
   @ModelConfiguration_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelVendor @ID = @ID_984bfc9a47f3,
+  @ModelID = @ModelID_984bfc9a47f3,
+  @VendorID = @VendorID_984bfc9a47f3,
+  @Priority = @Priority_984bfc9a47f3,
+  @Status = @Status_984bfc9a47f3,
+  @DriverClass = @DriverClass_984bfc9a47f3,
+  @DriverClass_Clear = 1,
+  @DriverImportPath = @DriverImportPath_984bfc9a47f3,
+  @DriverImportPath_Clear = 1,
+  @APIName = @APIName_984bfc9a47f3,
+  @APIName_Clear = 1,
+  @MaxInputTokens = @MaxInputTokens_984bfc9a47f3,
+  @MaxInputTokens_Clear = 1,
+  @MaxOutputTokens = @MaxOutputTokens_984bfc9a47f3,
+  @MaxOutputTokens_Clear = 1,
+  @SupportedResponseFormats = @SupportedResponseFormats_984bfc9a47f3,
+  @SupportsEffortLevel = @SupportsEffortLevel_984bfc9a47f3,
+  @SupportsStreaming = @SupportsStreaming_984bfc9a47f3,
+  @TypeID = @TypeID_984bfc9a47f3,
+  @SupportsPrefill = @SupportsPrefill_984bfc9a47f3,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_984bfc9a47f3,
+  @PrefillFallbackText_Clear = 1,
+  @ModelConfiguration = @ModelConfiguration_984bfc9a47f3,
+  @ModelConfiguration_Clear = 1;
+END
+
 
 GO
 
@@ -11538,7 +11622,10 @@ SET
 SET
   @SupportsStreaming_e4d5594eb44d = 1
 SET
-  @TypeID_e4d5594eb44d = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3' EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_e4d5594eb44d,
+  @TypeID_e4d5594eb44d = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelVendor] WHERE [ID] = @ID_e4d5594eb44d)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_e4d5594eb44d,
   @ModelID = @ModelID_e4d5594eb44d,
   @VendorID = @VendorID_e4d5594eb44d,
   @Priority = @Priority_e4d5594eb44d,
@@ -11561,6 +11648,34 @@ SET
   @PrefillFallbackText_Clear = 1,
   @ModelConfiguration = @ModelConfiguration_e4d5594eb44d,
   @ModelConfiguration_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelVendor @ID = @ID_e4d5594eb44d,
+  @ModelID = @ModelID_e4d5594eb44d,
+  @VendorID = @VendorID_e4d5594eb44d,
+  @Priority = @Priority_e4d5594eb44d,
+  @Status = @Status_e4d5594eb44d,
+  @DriverClass = @DriverClass_e4d5594eb44d,
+  @DriverImportPath = @DriverImportPath_e4d5594eb44d,
+  @DriverImportPath_Clear = 1,
+  @APIName = @APIName_e4d5594eb44d,
+  @MaxInputTokens = @MaxInputTokens_e4d5594eb44d,
+  @MaxInputTokens_Clear = 1,
+  @MaxOutputTokens = @MaxOutputTokens_e4d5594eb44d,
+  @MaxOutputTokens_Clear = 1,
+  @SupportedResponseFormats = @SupportedResponseFormats_e4d5594eb44d,
+  @SupportsEffortLevel = @SupportsEffortLevel_e4d5594eb44d,
+  @SupportsStreaming = @SupportsStreaming_e4d5594eb44d,
+  @TypeID = @TypeID_e4d5594eb44d,
+  @SupportsPrefill = @SupportsPrefill_e4d5594eb44d,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_e4d5594eb44d,
+  @PrefillFallbackText_Clear = 1,
+  @ModelConfiguration = @ModelConfiguration_e4d5594eb44d,
+  @ModelConfiguration_Clear = 1;
+END
+
 
 GO
 
@@ -11603,7 +11718,10 @@ SET
 SET
   @ProcessingType_57da10e41ae2 = N'Realtime'
 SET
-  @Comments_57da10e41ae2 = N'GPT-Live 1 per-minute audio list pricing: $0.05 per minute of audio session duration.' EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_57da10e41ae2,
+  @Comments_57da10e41ae2 = N'GPT-Live 1 per-minute audio list pricing: $0.05 per minute of audio session duration.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelCost] WHERE [ID] = @ID_57da10e41ae2)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_57da10e41ae2,
   @ModelID = @ModelID_57da10e41ae2,
   @VendorID = @VendorID_57da10e41ae2,
   @StartedAt = @StartedAt_57da10e41ae2,
@@ -11621,6 +11739,29 @@ SET
   @CacheReadPricePerUnit_Clear = 1,
   @CacheWritePricePerUnit = @CacheWritePricePerUnit_57da10e41ae2,
   @CacheWritePricePerUnit_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelCost @ID = @ID_57da10e41ae2,
+  @ModelID = @ModelID_57da10e41ae2,
+  @VendorID = @VendorID_57da10e41ae2,
+  @StartedAt = @StartedAt_57da10e41ae2,
+  @EndedAt = @EndedAt_57da10e41ae2,
+  @EndedAt_Clear = 1,
+  @Status = @Status_57da10e41ae2,
+  @Currency = @Currency_57da10e41ae2,
+  @PriceTypeID = @PriceTypeID_57da10e41ae2,
+  @InputPricePerUnit = @InputPricePerUnit_57da10e41ae2,
+  @OutputPricePerUnit = @OutputPricePerUnit_57da10e41ae2,
+  @UnitTypeID = @UnitTypeID_57da10e41ae2,
+  @ProcessingType = @ProcessingType_57da10e41ae2,
+  @Comments = @Comments_57da10e41ae2,
+  @CacheReadPricePerUnit = @CacheReadPricePerUnit_57da10e41ae2,
+  @CacheReadPricePerUnit_Clear = 1,
+  @CacheWritePricePerUnit = @CacheWritePricePerUnit_57da10e41ae2,
+  @CacheWritePricePerUnit_Clear = 1;
+END
+
 
 GO
 
@@ -11648,7 +11789,9 @@ SET
   @IsSupported_98adc2e76850 = 1
 SET
   @IsRequired_98adc2e76850 = 0
-EXEC [${flyway:defaultSchema}].spCreateAIModelModality @ID = @ID_98adc2e76850,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelModality] WHERE [ID] = @ID_98adc2e76850)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelModality @ID = @ID_98adc2e76850,
   @ModelID = @ModelID_98adc2e76850,
   @ModalityID = @ModalityID_98adc2e76850,
   @Direction = @Direction_98adc2e76850,
@@ -11664,6 +11807,27 @@ EXEC [${flyway:defaultSchema}].spCreateAIModelModality @ID = @ID_98adc2e76850,
   @MaxDimension_Clear = 1,
   @Comments = @Comments_98adc2e76850,
   @Comments_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelModality @ID = @ID_98adc2e76850,
+  @ModelID = @ModelID_98adc2e76850,
+  @ModalityID = @ModalityID_98adc2e76850,
+  @Direction = @Direction_98adc2e76850,
+  @IsSupported = @IsSupported_98adc2e76850,
+  @IsRequired = @IsRequired_98adc2e76850,
+  @SupportedFormats = @SupportedFormats_98adc2e76850,
+  @SupportedFormats_Clear = 1,
+  @MaxSizeBytes = @MaxSizeBytes_98adc2e76850,
+  @MaxSizeBytes_Clear = 1,
+  @MaxCountPerMessage = @MaxCountPerMessage_98adc2e76850,
+  @MaxCountPerMessage_Clear = 1,
+  @MaxDimension = @MaxDimension_98adc2e76850,
+  @MaxDimension_Clear = 1,
+  @Comments = @Comments_98adc2e76850,
+  @Comments_Clear = 1;
+END
+
 
 GO
 
@@ -11691,7 +11855,9 @@ SET
   @IsSupported_a0933076806a = 1
 SET
   @IsRequired_a0933076806a = 0
-EXEC [${flyway:defaultSchema}].spCreateAIModelModality @ID = @ID_a0933076806a,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelModality] WHERE [ID] = @ID_a0933076806a)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelModality @ID = @ID_a0933076806a,
   @ModelID = @ModelID_a0933076806a,
   @ModalityID = @ModalityID_a0933076806a,
   @Direction = @Direction_a0933076806a,
@@ -11707,6 +11873,27 @@ EXEC [${flyway:defaultSchema}].spCreateAIModelModality @ID = @ID_a0933076806a,
   @MaxDimension_Clear = 1,
   @Comments = @Comments_a0933076806a,
   @Comments_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelModality @ID = @ID_a0933076806a,
+  @ModelID = @ModelID_a0933076806a,
+  @ModalityID = @ModalityID_a0933076806a,
+  @Direction = @Direction_a0933076806a,
+  @IsSupported = @IsSupported_a0933076806a,
+  @IsRequired = @IsRequired_a0933076806a,
+  @SupportedFormats = @SupportedFormats_a0933076806a,
+  @SupportedFormats_Clear = 1,
+  @MaxSizeBytes = @MaxSizeBytes_a0933076806a,
+  @MaxSizeBytes_Clear = 1,
+  @MaxCountPerMessage = @MaxCountPerMessage_a0933076806a,
+  @MaxCountPerMessage_Clear = 1,
+  @MaxDimension = @MaxDimension_a0933076806a,
+  @MaxDimension_Clear = 1,
+  @Comments = @Comments_a0933076806a,
+  @Comments_Clear = 1;
+END
+
 
 GO
 
@@ -12303,7 +12490,10 @@ SET
 SET
   @SupportsStreaming_7a3d428a5086 = 0
 SET
-  @TypeID_7a3d428a5086 = '10DB468E-F2CE-475D-9F39-2DF2DE75D257' EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_7a3d428a5086,
+  @TypeID_7a3d428a5086 = '10DB468E-F2CE-475D-9F39-2DF2DE75D257'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelVendor] WHERE [ID] = @ID_7a3d428a5086)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_7a3d428a5086,
   @ModelID = @ModelID_7a3d428a5086,
   @VendorID = @VendorID_7a3d428a5086,
   @Priority = @Priority_7a3d428a5086,
@@ -12328,6 +12518,36 @@ SET
   @PrefillFallbackText_Clear = 1,
   @ModelConfiguration = @ModelConfiguration_7a3d428a5086,
   @ModelConfiguration_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelVendor @ID = @ID_7a3d428a5086,
+  @ModelID = @ModelID_7a3d428a5086,
+  @VendorID = @VendorID_7a3d428a5086,
+  @Priority = @Priority_7a3d428a5086,
+  @Status = @Status_7a3d428a5086,
+  @DriverClass = @DriverClass_7a3d428a5086,
+  @DriverClass_Clear = 1,
+  @DriverImportPath = @DriverImportPath_7a3d428a5086,
+  @DriverImportPath_Clear = 1,
+  @APIName = @APIName_7a3d428a5086,
+  @APIName_Clear = 1,
+  @MaxInputTokens = @MaxInputTokens_7a3d428a5086,
+  @MaxInputTokens_Clear = 1,
+  @MaxOutputTokens = @MaxOutputTokens_7a3d428a5086,
+  @MaxOutputTokens_Clear = 1,
+  @SupportedResponseFormats = @SupportedResponseFormats_7a3d428a5086,
+  @SupportsEffortLevel = @SupportsEffortLevel_7a3d428a5086,
+  @SupportsStreaming = @SupportsStreaming_7a3d428a5086,
+  @TypeID = @TypeID_7a3d428a5086,
+  @SupportsPrefill = @SupportsPrefill_7a3d428a5086,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_7a3d428a5086,
+  @PrefillFallbackText_Clear = 1,
+  @ModelConfiguration = @ModelConfiguration_7a3d428a5086,
+  @ModelConfiguration_Clear = 1;
+END
+
 
 GO
 
@@ -12787,7 +13007,10 @@ SET
 SET
   @SupportsStreaming_d443471c1617 = 1
 SET
-  @TypeID_d443471c1617 = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3' EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_d443471c1617,
+  @TypeID_d443471c1617 = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelVendor] WHERE [ID] = @ID_d443471c1617)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_d443471c1617,
   @ModelID = @ModelID_d443471c1617,
   @VendorID = @VendorID_d443471c1617,
   @Priority = @Priority_d443471c1617,
@@ -12808,6 +13031,32 @@ SET
   @PrefillFallbackText_Clear = 1,
   @ModelConfiguration = @ModelConfiguration_d443471c1617,
   @ModelConfiguration_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelVendor @ID = @ID_d443471c1617,
+  @ModelID = @ModelID_d443471c1617,
+  @VendorID = @VendorID_d443471c1617,
+  @Priority = @Priority_d443471c1617,
+  @Status = @Status_d443471c1617,
+  @DriverClass = @DriverClass_d443471c1617,
+  @DriverImportPath = @DriverImportPath_d443471c1617,
+  @DriverImportPath_Clear = 1,
+  @APIName = @APIName_d443471c1617,
+  @MaxInputTokens = @MaxInputTokens_d443471c1617,
+  @MaxOutputTokens = @MaxOutputTokens_d443471c1617,
+  @SupportedResponseFormats = @SupportedResponseFormats_d443471c1617,
+  @SupportsEffortLevel = @SupportsEffortLevel_d443471c1617,
+  @SupportsStreaming = @SupportsStreaming_d443471c1617,
+  @TypeID = @TypeID_d443471c1617,
+  @SupportsPrefill = @SupportsPrefill_d443471c1617,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_d443471c1617,
+  @PrefillFallbackText_Clear = 1,
+  @ModelConfiguration = @ModelConfiguration_d443471c1617,
+  @ModelConfiguration_Clear = 1;
+END
+
 
 GO
 
@@ -12854,7 +13103,10 @@ SET
 SET
   @SupportsStreaming_7c0af6ce1bbe = 1
 SET
-  @TypeID_7c0af6ce1bbe = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3' EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_7c0af6ce1bbe,
+  @TypeID_7c0af6ce1bbe = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelVendor] WHERE [ID] = @ID_7c0af6ce1bbe)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_7c0af6ce1bbe,
   @ModelID = @ModelID_7c0af6ce1bbe,
   @VendorID = @VendorID_7c0af6ce1bbe,
   @Priority = @Priority_7c0af6ce1bbe,
@@ -12875,6 +13127,32 @@ SET
   @PrefillFallbackText_Clear = 1,
   @ModelConfiguration = @ModelConfiguration_7c0af6ce1bbe,
   @ModelConfiguration_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelVendor @ID = @ID_7c0af6ce1bbe,
+  @ModelID = @ModelID_7c0af6ce1bbe,
+  @VendorID = @VendorID_7c0af6ce1bbe,
+  @Priority = @Priority_7c0af6ce1bbe,
+  @Status = @Status_7c0af6ce1bbe,
+  @DriverClass = @DriverClass_7c0af6ce1bbe,
+  @DriverImportPath = @DriverImportPath_7c0af6ce1bbe,
+  @DriverImportPath_Clear = 1,
+  @APIName = @APIName_7c0af6ce1bbe,
+  @MaxInputTokens = @MaxInputTokens_7c0af6ce1bbe,
+  @MaxOutputTokens = @MaxOutputTokens_7c0af6ce1bbe,
+  @SupportedResponseFormats = @SupportedResponseFormats_7c0af6ce1bbe,
+  @SupportsEffortLevel = @SupportsEffortLevel_7c0af6ce1bbe,
+  @SupportsStreaming = @SupportsStreaming_7c0af6ce1bbe,
+  @TypeID = @TypeID_7c0af6ce1bbe,
+  @SupportsPrefill = @SupportsPrefill_7c0af6ce1bbe,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_7c0af6ce1bbe,
+  @PrefillFallbackText_Clear = 1,
+  @ModelConfiguration = @ModelConfiguration_7c0af6ce1bbe,
+  @ModelConfiguration_Clear = 1;
+END
+
 
 GO
 
@@ -12920,7 +13198,9 @@ SET
   @Comments_29cfa8382248 = N'DeepSeek direct, OFF-PEAK tier, effective 2026-09-10. $0.15 uncached input / $0.60 output / $0.003 cached input per 1M. PEAK is exactly double ($0.30/$1.20, $0.006 cached) during Monday-Friday 01:00-04:00 and 06:00-10:00 UTC. Off-peak is recorded rather than a blend, so the figure always matches a rate DeepSeek actually charges. No OpenRouter cost row is recorded: the OpenRouter route exists (deepseek/deepseek-v4.1-flash) but its rate was not confirmed at research time, and a guessed price is worse than an absent one. Sources: https://openrouter.ai/deepseek/deepseek-v4.1-flash ; https://techbriefly.com/2026/09/11/deepseek-v4-1-flash-api-pricing/'
 SET
   @CacheReadPricePerUnit_29cfa8382248 = 0.003
-EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_29cfa8382248,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelCost] WHERE [ID] = @ID_29cfa8382248)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_29cfa8382248,
   @ModelID = @ModelID_29cfa8382248,
   @VendorID = @VendorID_29cfa8382248,
   @StartedAt = @StartedAt_29cfa8382248,
@@ -12937,6 +13217,28 @@ EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_29cfa8382248,
   @CacheReadPricePerUnit = @CacheReadPricePerUnit_29cfa8382248,
   @CacheWritePricePerUnit = @CacheWritePricePerUnit_29cfa8382248,
   @CacheWritePricePerUnit_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelCost @ID = @ID_29cfa8382248,
+  @ModelID = @ModelID_29cfa8382248,
+  @VendorID = @VendorID_29cfa8382248,
+  @StartedAt = @StartedAt_29cfa8382248,
+  @EndedAt = @EndedAt_29cfa8382248,
+  @EndedAt_Clear = 1,
+  @Status = @Status_29cfa8382248,
+  @Currency = @Currency_29cfa8382248,
+  @PriceTypeID = @PriceTypeID_29cfa8382248,
+  @InputPricePerUnit = @InputPricePerUnit_29cfa8382248,
+  @OutputPricePerUnit = @OutputPricePerUnit_29cfa8382248,
+  @UnitTypeID = @UnitTypeID_29cfa8382248,
+  @ProcessingType = @ProcessingType_29cfa8382248,
+  @Comments = @Comments_29cfa8382248,
+  @CacheReadPricePerUnit = @CacheReadPricePerUnit_29cfa8382248,
+  @CacheWritePricePerUnit = @CacheWritePricePerUnit_29cfa8382248,
+  @CacheWritePricePerUnit_Clear = 1;
+END
+
 
 GO
 
@@ -15134,7 +15436,10 @@ SET
 SET
   @SupportsStreaming_946f377839ba = 1
 SET
-  @TypeID_946f377839ba = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3' EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_946f377839ba,
+  @TypeID_946f377839ba = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelVendor] WHERE [ID] = @ID_946f377839ba)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_946f377839ba,
   @ModelID = @ModelID_946f377839ba,
   @VendorID = @VendorID_946f377839ba,
   @Priority = @Priority_946f377839ba,
@@ -15155,6 +15460,32 @@ SET
   @PrefillFallbackText_Clear = 1,
   @ModelConfiguration = @ModelConfiguration_946f377839ba,
   @ModelConfiguration_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelVendor @ID = @ID_946f377839ba,
+  @ModelID = @ModelID_946f377839ba,
+  @VendorID = @VendorID_946f377839ba,
+  @Priority = @Priority_946f377839ba,
+  @Status = @Status_946f377839ba,
+  @DriverClass = @DriverClass_946f377839ba,
+  @DriverImportPath = @DriverImportPath_946f377839ba,
+  @DriverImportPath_Clear = 1,
+  @APIName = @APIName_946f377839ba,
+  @MaxInputTokens = @MaxInputTokens_946f377839ba,
+  @MaxOutputTokens = @MaxOutputTokens_946f377839ba,
+  @SupportedResponseFormats = @SupportedResponseFormats_946f377839ba,
+  @SupportsEffortLevel = @SupportsEffortLevel_946f377839ba,
+  @SupportsStreaming = @SupportsStreaming_946f377839ba,
+  @TypeID = @TypeID_946f377839ba,
+  @SupportsPrefill = @SupportsPrefill_946f377839ba,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_946f377839ba,
+  @PrefillFallbackText_Clear = 1,
+  @ModelConfiguration = @ModelConfiguration_946f377839ba,
+  @ModelConfiguration_Clear = 1;
+END
+
 
 GO
 
@@ -15274,7 +15605,9 @@ SET
   @CacheReadPricePerUnit_34253283b65d = 1
 SET
   @CacheWritePricePerUnit_34253283b65d = 12.5
-EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_34253283b65d,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelCost] WHERE [ID] = @ID_34253283b65d)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_34253283b65d,
   @ModelID = @ModelID_34253283b65d,
   @VendorID = @VendorID_34253283b65d,
   @StartedAt = @StartedAt_34253283b65d,
@@ -15290,6 +15623,27 @@ EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_34253283b65d,
   @Comments = @Comments_34253283b65d,
   @CacheReadPricePerUnit = @CacheReadPricePerUnit_34253283b65d,
   @CacheWritePricePerUnit = @CacheWritePricePerUnit_34253283b65d;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelCost @ID = @ID_34253283b65d,
+  @ModelID = @ModelID_34253283b65d,
+  @VendorID = @VendorID_34253283b65d,
+  @StartedAt = @StartedAt_34253283b65d,
+  @EndedAt = @EndedAt_34253283b65d,
+  @EndedAt_Clear = 1,
+  @Status = @Status_34253283b65d,
+  @Currency = @Currency_34253283b65d,
+  @PriceTypeID = @PriceTypeID_34253283b65d,
+  @InputPricePerUnit = @InputPricePerUnit_34253283b65d,
+  @OutputPricePerUnit = @OutputPricePerUnit_34253283b65d,
+  @UnitTypeID = @UnitTypeID_34253283b65d,
+  @ProcessingType = @ProcessingType_34253283b65d,
+  @Comments = @Comments_34253283b65d,
+  @CacheReadPricePerUnit = @CacheReadPricePerUnit_34253283b65d,
+  @CacheWritePricePerUnit = @CacheWritePricePerUnit_34253283b65d;
+END
+
 
 GO
 
@@ -15600,7 +15954,10 @@ SET
 SET
   @ProcessingType_e480c3acea72 = N'Realtime'
 SET
-  @Comments_e480c3acea72 = N'GLM-5.3-Flash list rate on OpenRouter after the Z.AI launch promo expired 2026-09-09 16:00 UTC. Z.AI''s own OpenRouter endpoint moved to list pricing ($0.15 input / $0.50 output per 1M) on 2026-09-11, at parity with Z.AI direct. Third-party hosts on OpenRouter (DeepInfra, Relace) undercut this on their own routes; this row records the first-party Z.AI route, which is what APIName z-ai/glm-5.3-flash resolves to. Sources: https://openrouter.ai/z-ai/glm-5.3-flash ; https://cellcog.ai/blog/glm-5-3-flash/' EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_e480c3acea72,
+  @Comments_e480c3acea72 = N'GLM-5.3-Flash list rate on OpenRouter after the Z.AI launch promo expired 2026-09-09 16:00 UTC. Z.AI''s own OpenRouter endpoint moved to list pricing ($0.15 input / $0.50 output per 1M) on 2026-09-11, at parity with Z.AI direct. Third-party hosts on OpenRouter (DeepInfra, Relace) undercut this on their own routes; this row records the first-party Z.AI route, which is what APIName z-ai/glm-5.3-flash resolves to. Sources: https://openrouter.ai/z-ai/glm-5.3-flash ; https://cellcog.ai/blog/glm-5-3-flash/'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelCost] WHERE [ID] = @ID_e480c3acea72)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_e480c3acea72,
   @ModelID = @ModelID_e480c3acea72,
   @VendorID = @VendorID_e480c3acea72,
   @StartedAt = @StartedAt_e480c3acea72,
@@ -15618,6 +15975,29 @@ SET
   @CacheReadPricePerUnit_Clear = 1,
   @CacheWritePricePerUnit = @CacheWritePricePerUnit_e480c3acea72,
   @CacheWritePricePerUnit_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelCost @ID = @ID_e480c3acea72,
+  @ModelID = @ModelID_e480c3acea72,
+  @VendorID = @VendorID_e480c3acea72,
+  @StartedAt = @StartedAt_e480c3acea72,
+  @EndedAt = @EndedAt_e480c3acea72,
+  @EndedAt_Clear = 1,
+  @Status = @Status_e480c3acea72,
+  @Currency = @Currency_e480c3acea72,
+  @PriceTypeID = @PriceTypeID_e480c3acea72,
+  @InputPricePerUnit = @InputPricePerUnit_e480c3acea72,
+  @OutputPricePerUnit = @OutputPricePerUnit_e480c3acea72,
+  @UnitTypeID = @UnitTypeID_e480c3acea72,
+  @ProcessingType = @ProcessingType_e480c3acea72,
+  @Comments = @Comments_e480c3acea72,
+  @CacheReadPricePerUnit = @CacheReadPricePerUnit_e480c3acea72,
+  @CacheReadPricePerUnit_Clear = 1,
+  @CacheWritePricePerUnit = @CacheWritePricePerUnit_e480c3acea72,
+  @CacheWritePricePerUnit_Clear = 1;
+END
+
 
 GO
 
@@ -15656,7 +16036,9 @@ SET
   @Source_36a62659fce7 = N'BuiltIn'
 SET
   @IsActive_36a62659fce7 = 1
-EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_36a62659fce7,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIPersona] WHERE [ID] = @ID_36a62659fce7)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_36a62659fce7,
   @Name = @Name_36a62659fce7,
   @Description = @Description_36a62659fce7,
   @PerceivedGender = @PerceivedGender_36a62659fce7,
@@ -15678,6 +16060,33 @@ EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_36a62659fce7,
   @PreviewVideoURL_Clear = 1,
   @Source = @Source_36a62659fce7,
   @IsActive = @IsActive_36a62659fce7;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIPersona @ID = @ID_36a62659fce7,
+  @Name = @Name_36a62659fce7,
+  @Description = @Description_36a62659fce7,
+  @PerceivedGender = @PerceivedGender_36a62659fce7,
+  @PerceivedGender_Clear = 1,
+  @Locale = @Locale_36a62659fce7,
+  @Locale_Clear = 1,
+  @PerceivedAgeRangeMin = @PerceivedAgeRangeMin_36a62659fce7,
+  @PerceivedAgeRangeMin_Clear = 1,
+  @PerceivedAgeRangeMax = @PerceivedAgeRangeMax_36a62659fce7,
+  @PerceivedAgeRangeMax_Clear = 1,
+  @Tone = @Tone_36a62659fce7,
+  @SpeakingStyle = @SpeakingStyle_36a62659fce7,
+  @StyleDescriptors = @StyleDescriptors_36a62659fce7,
+  @PreviewAudioURL = @PreviewAudioURL_36a62659fce7,
+  @PreviewAudioURL_Clear = 1,
+  @PreviewImageURL = @PreviewImageURL_36a62659fce7,
+  @PreviewImageURL_Clear = 1,
+  @PreviewVideoURL = @PreviewVideoURL_36a62659fce7,
+  @PreviewVideoURL_Clear = 1,
+  @Source = @Source_36a62659fce7,
+  @IsActive = @IsActive_36a62659fce7;
+END
+
 
 GO
 
@@ -15711,7 +16120,9 @@ SET
   @Source_fc9dfb04c092 = N'BuiltIn'
 SET
   @IsActive_fc9dfb04c092 = 1
-EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_fc9dfb04c092,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIPersona] WHERE [ID] = @ID_fc9dfb04c092)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_fc9dfb04c092,
   @Name = @Name_fc9dfb04c092,
   @Description = @Description_fc9dfb04c092,
   @PerceivedGender = @PerceivedGender_fc9dfb04c092,
@@ -15734,6 +16145,34 @@ EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_fc9dfb04c092,
   @PreviewVideoURL_Clear = 1,
   @Source = @Source_fc9dfb04c092,
   @IsActive = @IsActive_fc9dfb04c092;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIPersona @ID = @ID_fc9dfb04c092,
+  @Name = @Name_fc9dfb04c092,
+  @Description = @Description_fc9dfb04c092,
+  @PerceivedGender = @PerceivedGender_fc9dfb04c092,
+  @PerceivedGender_Clear = 1,
+  @Locale = @Locale_fc9dfb04c092,
+  @Locale_Clear = 1,
+  @PerceivedAgeRangeMin = @PerceivedAgeRangeMin_fc9dfb04c092,
+  @PerceivedAgeRangeMin_Clear = 1,
+  @PerceivedAgeRangeMax = @PerceivedAgeRangeMax_fc9dfb04c092,
+  @PerceivedAgeRangeMax_Clear = 1,
+  @Tone = @Tone_fc9dfb04c092,
+  @SpeakingStyle = @SpeakingStyle_fc9dfb04c092,
+  @StyleDescriptors = @StyleDescriptors_fc9dfb04c092,
+  @StyleDescriptors_Clear = 1,
+  @PreviewAudioURL = @PreviewAudioURL_fc9dfb04c092,
+  @PreviewAudioURL_Clear = 1,
+  @PreviewImageURL = @PreviewImageURL_fc9dfb04c092,
+  @PreviewImageURL_Clear = 1,
+  @PreviewVideoURL = @PreviewVideoURL_fc9dfb04c092,
+  @PreviewVideoURL_Clear = 1,
+  @Source = @Source_fc9dfb04c092,
+  @IsActive = @IsActive_fc9dfb04c092;
+END
+
 
 GO
 
@@ -15767,7 +16206,9 @@ SET
   @Source_2fc3e047cc1c = N'BuiltIn'
 SET
   @IsActive_2fc3e047cc1c = 1
-EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_2fc3e047cc1c,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIPersona] WHERE [ID] = @ID_2fc3e047cc1c)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_2fc3e047cc1c,
   @Name = @Name_2fc3e047cc1c,
   @Description = @Description_2fc3e047cc1c,
   @PerceivedGender = @PerceivedGender_2fc3e047cc1c,
@@ -15790,6 +16231,34 @@ EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_2fc3e047cc1c,
   @PreviewVideoURL_Clear = 1,
   @Source = @Source_2fc3e047cc1c,
   @IsActive = @IsActive_2fc3e047cc1c;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIPersona @ID = @ID_2fc3e047cc1c,
+  @Name = @Name_2fc3e047cc1c,
+  @Description = @Description_2fc3e047cc1c,
+  @PerceivedGender = @PerceivedGender_2fc3e047cc1c,
+  @PerceivedGender_Clear = 1,
+  @Locale = @Locale_2fc3e047cc1c,
+  @Locale_Clear = 1,
+  @PerceivedAgeRangeMin = @PerceivedAgeRangeMin_2fc3e047cc1c,
+  @PerceivedAgeRangeMin_Clear = 1,
+  @PerceivedAgeRangeMax = @PerceivedAgeRangeMax_2fc3e047cc1c,
+  @PerceivedAgeRangeMax_Clear = 1,
+  @Tone = @Tone_2fc3e047cc1c,
+  @SpeakingStyle = @SpeakingStyle_2fc3e047cc1c,
+  @StyleDescriptors = @StyleDescriptors_2fc3e047cc1c,
+  @StyleDescriptors_Clear = 1,
+  @PreviewAudioURL = @PreviewAudioURL_2fc3e047cc1c,
+  @PreviewAudioURL_Clear = 1,
+  @PreviewImageURL = @PreviewImageURL_2fc3e047cc1c,
+  @PreviewImageURL_Clear = 1,
+  @PreviewVideoURL = @PreviewVideoURL_2fc3e047cc1c,
+  @PreviewVideoURL_Clear = 1,
+  @Source = @Source_2fc3e047cc1c,
+  @IsActive = @IsActive_2fc3e047cc1c;
+END
+
 
 GO
 
@@ -15823,7 +16292,9 @@ SET
   @Source_4d0cfe133a3b = N'BuiltIn'
 SET
   @IsActive_4d0cfe133a3b = 1
-EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_4d0cfe133a3b,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIPersona] WHERE [ID] = @ID_4d0cfe133a3b)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_4d0cfe133a3b,
   @Name = @Name_4d0cfe133a3b,
   @Description = @Description_4d0cfe133a3b,
   @PerceivedGender = @PerceivedGender_4d0cfe133a3b,
@@ -15846,6 +16317,34 @@ EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_4d0cfe133a3b,
   @PreviewVideoURL_Clear = 1,
   @Source = @Source_4d0cfe133a3b,
   @IsActive = @IsActive_4d0cfe133a3b;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIPersona @ID = @ID_4d0cfe133a3b,
+  @Name = @Name_4d0cfe133a3b,
+  @Description = @Description_4d0cfe133a3b,
+  @PerceivedGender = @PerceivedGender_4d0cfe133a3b,
+  @PerceivedGender_Clear = 1,
+  @Locale = @Locale_4d0cfe133a3b,
+  @Locale_Clear = 1,
+  @PerceivedAgeRangeMin = @PerceivedAgeRangeMin_4d0cfe133a3b,
+  @PerceivedAgeRangeMin_Clear = 1,
+  @PerceivedAgeRangeMax = @PerceivedAgeRangeMax_4d0cfe133a3b,
+  @PerceivedAgeRangeMax_Clear = 1,
+  @Tone = @Tone_4d0cfe133a3b,
+  @SpeakingStyle = @SpeakingStyle_4d0cfe133a3b,
+  @StyleDescriptors = @StyleDescriptors_4d0cfe133a3b,
+  @StyleDescriptors_Clear = 1,
+  @PreviewAudioURL = @PreviewAudioURL_4d0cfe133a3b,
+  @PreviewAudioURL_Clear = 1,
+  @PreviewImageURL = @PreviewImageURL_4d0cfe133a3b,
+  @PreviewImageURL_Clear = 1,
+  @PreviewVideoURL = @PreviewVideoURL_4d0cfe133a3b,
+  @PreviewVideoURL_Clear = 1,
+  @Source = @Source_4d0cfe133a3b,
+  @IsActive = @IsActive_4d0cfe133a3b;
+END
+
 
 GO
 
@@ -15884,7 +16383,9 @@ SET
   @Source_398337d2c88d = N'BuiltIn'
 SET
   @IsActive_398337d2c88d = 1
-EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_398337d2c88d,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIPersona] WHERE [ID] = @ID_398337d2c88d)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_398337d2c88d,
   @Name = @Name_398337d2c88d,
   @Description = @Description_398337d2c88d,
   @PerceivedGender = @PerceivedGender_398337d2c88d,
@@ -15906,6 +16407,33 @@ EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_398337d2c88d,
   @PreviewVideoURL_Clear = 1,
   @Source = @Source_398337d2c88d,
   @IsActive = @IsActive_398337d2c88d;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIPersona @ID = @ID_398337d2c88d,
+  @Name = @Name_398337d2c88d,
+  @Description = @Description_398337d2c88d,
+  @PerceivedGender = @PerceivedGender_398337d2c88d,
+  @PerceivedGender_Clear = 1,
+  @Locale = @Locale_398337d2c88d,
+  @Locale_Clear = 1,
+  @PerceivedAgeRangeMin = @PerceivedAgeRangeMin_398337d2c88d,
+  @PerceivedAgeRangeMin_Clear = 1,
+  @PerceivedAgeRangeMax = @PerceivedAgeRangeMax_398337d2c88d,
+  @PerceivedAgeRangeMax_Clear = 1,
+  @Tone = @Tone_398337d2c88d,
+  @SpeakingStyle = @SpeakingStyle_398337d2c88d,
+  @StyleDescriptors = @StyleDescriptors_398337d2c88d,
+  @PreviewAudioURL = @PreviewAudioURL_398337d2c88d,
+  @PreviewAudioURL_Clear = 1,
+  @PreviewImageURL = @PreviewImageURL_398337d2c88d,
+  @PreviewImageURL_Clear = 1,
+  @PreviewVideoURL = @PreviewVideoURL_398337d2c88d,
+  @PreviewVideoURL_Clear = 1,
+  @Source = @Source_398337d2c88d,
+  @IsActive = @IsActive_398337d2c88d;
+END
+
 
 GO
 
@@ -15939,7 +16467,9 @@ SET
   @Source_010846efafbd = N'BuiltIn'
 SET
   @IsActive_010846efafbd = 1
-EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_010846efafbd,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIPersona] WHERE [ID] = @ID_010846efafbd)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_010846efafbd,
   @Name = @Name_010846efafbd,
   @Description = @Description_010846efafbd,
   @PerceivedGender = @PerceivedGender_010846efafbd,
@@ -15962,6 +16492,34 @@ EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_010846efafbd,
   @PreviewVideoURL_Clear = 1,
   @Source = @Source_010846efafbd,
   @IsActive = @IsActive_010846efafbd;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIPersona @ID = @ID_010846efafbd,
+  @Name = @Name_010846efafbd,
+  @Description = @Description_010846efafbd,
+  @PerceivedGender = @PerceivedGender_010846efafbd,
+  @PerceivedGender_Clear = 1,
+  @Locale = @Locale_010846efafbd,
+  @Locale_Clear = 1,
+  @PerceivedAgeRangeMin = @PerceivedAgeRangeMin_010846efafbd,
+  @PerceivedAgeRangeMin_Clear = 1,
+  @PerceivedAgeRangeMax = @PerceivedAgeRangeMax_010846efafbd,
+  @PerceivedAgeRangeMax_Clear = 1,
+  @Tone = @Tone_010846efafbd,
+  @SpeakingStyle = @SpeakingStyle_010846efafbd,
+  @StyleDescriptors = @StyleDescriptors_010846efafbd,
+  @StyleDescriptors_Clear = 1,
+  @PreviewAudioURL = @PreviewAudioURL_010846efafbd,
+  @PreviewAudioURL_Clear = 1,
+  @PreviewImageURL = @PreviewImageURL_010846efafbd,
+  @PreviewImageURL_Clear = 1,
+  @PreviewVideoURL = @PreviewVideoURL_010846efafbd,
+  @PreviewVideoURL_Clear = 1,
+  @Source = @Source_010846efafbd,
+  @IsActive = @IsActive_010846efafbd;
+END
+
 
 GO
 
@@ -15995,7 +16553,9 @@ SET
   @Source_b1ce605231a0 = N'BuiltIn'
 SET
   @IsActive_b1ce605231a0 = 1
-EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_b1ce605231a0,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIPersona] WHERE [ID] = @ID_b1ce605231a0)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_b1ce605231a0,
   @Name = @Name_b1ce605231a0,
   @Description = @Description_b1ce605231a0,
   @PerceivedGender = @PerceivedGender_b1ce605231a0,
@@ -16018,6 +16578,34 @@ EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_b1ce605231a0,
   @PreviewVideoURL_Clear = 1,
   @Source = @Source_b1ce605231a0,
   @IsActive = @IsActive_b1ce605231a0;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIPersona @ID = @ID_b1ce605231a0,
+  @Name = @Name_b1ce605231a0,
+  @Description = @Description_b1ce605231a0,
+  @PerceivedGender = @PerceivedGender_b1ce605231a0,
+  @PerceivedGender_Clear = 1,
+  @Locale = @Locale_b1ce605231a0,
+  @Locale_Clear = 1,
+  @PerceivedAgeRangeMin = @PerceivedAgeRangeMin_b1ce605231a0,
+  @PerceivedAgeRangeMin_Clear = 1,
+  @PerceivedAgeRangeMax = @PerceivedAgeRangeMax_b1ce605231a0,
+  @PerceivedAgeRangeMax_Clear = 1,
+  @Tone = @Tone_b1ce605231a0,
+  @SpeakingStyle = @SpeakingStyle_b1ce605231a0,
+  @StyleDescriptors = @StyleDescriptors_b1ce605231a0,
+  @StyleDescriptors_Clear = 1,
+  @PreviewAudioURL = @PreviewAudioURL_b1ce605231a0,
+  @PreviewAudioURL_Clear = 1,
+  @PreviewImageURL = @PreviewImageURL_b1ce605231a0,
+  @PreviewImageURL_Clear = 1,
+  @PreviewVideoURL = @PreviewVideoURL_b1ce605231a0,
+  @PreviewVideoURL_Clear = 1,
+  @Source = @Source_b1ce605231a0,
+  @IsActive = @IsActive_b1ce605231a0;
+END
+
 
 GO
 
@@ -16051,7 +16639,9 @@ SET
   @Source_eb7d4a36be93 = N'BuiltIn'
 SET
   @IsActive_eb7d4a36be93 = 1
-EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_eb7d4a36be93,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIPersona] WHERE [ID] = @ID_eb7d4a36be93)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_eb7d4a36be93,
   @Name = @Name_eb7d4a36be93,
   @Description = @Description_eb7d4a36be93,
   @PerceivedGender = @PerceivedGender_eb7d4a36be93,
@@ -16074,6 +16664,34 @@ EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_eb7d4a36be93,
   @PreviewVideoURL_Clear = 1,
   @Source = @Source_eb7d4a36be93,
   @IsActive = @IsActive_eb7d4a36be93;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIPersona @ID = @ID_eb7d4a36be93,
+  @Name = @Name_eb7d4a36be93,
+  @Description = @Description_eb7d4a36be93,
+  @PerceivedGender = @PerceivedGender_eb7d4a36be93,
+  @PerceivedGender_Clear = 1,
+  @Locale = @Locale_eb7d4a36be93,
+  @Locale_Clear = 1,
+  @PerceivedAgeRangeMin = @PerceivedAgeRangeMin_eb7d4a36be93,
+  @PerceivedAgeRangeMin_Clear = 1,
+  @PerceivedAgeRangeMax = @PerceivedAgeRangeMax_eb7d4a36be93,
+  @PerceivedAgeRangeMax_Clear = 1,
+  @Tone = @Tone_eb7d4a36be93,
+  @SpeakingStyle = @SpeakingStyle_eb7d4a36be93,
+  @StyleDescriptors = @StyleDescriptors_eb7d4a36be93,
+  @StyleDescriptors_Clear = 1,
+  @PreviewAudioURL = @PreviewAudioURL_eb7d4a36be93,
+  @PreviewAudioURL_Clear = 1,
+  @PreviewImageURL = @PreviewImageURL_eb7d4a36be93,
+  @PreviewImageURL_Clear = 1,
+  @PreviewVideoURL = @PreviewVideoURL_eb7d4a36be93,
+  @PreviewVideoURL_Clear = 1,
+  @Source = @Source_eb7d4a36be93,
+  @IsActive = @IsActive_eb7d4a36be93;
+END
+
 
 GO
 
@@ -16107,7 +16725,9 @@ SET
   @Source_4fe9b8021644 = N'BuiltIn'
 SET
   @IsActive_4fe9b8021644 = 1
-EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_4fe9b8021644,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIPersona] WHERE [ID] = @ID_4fe9b8021644)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_4fe9b8021644,
   @Name = @Name_4fe9b8021644,
   @Description = @Description_4fe9b8021644,
   @PerceivedGender = @PerceivedGender_4fe9b8021644,
@@ -16130,6 +16750,34 @@ EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_4fe9b8021644,
   @PreviewVideoURL_Clear = 1,
   @Source = @Source_4fe9b8021644,
   @IsActive = @IsActive_4fe9b8021644;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIPersona @ID = @ID_4fe9b8021644,
+  @Name = @Name_4fe9b8021644,
+  @Description = @Description_4fe9b8021644,
+  @PerceivedGender = @PerceivedGender_4fe9b8021644,
+  @PerceivedGender_Clear = 1,
+  @Locale = @Locale_4fe9b8021644,
+  @Locale_Clear = 1,
+  @PerceivedAgeRangeMin = @PerceivedAgeRangeMin_4fe9b8021644,
+  @PerceivedAgeRangeMin_Clear = 1,
+  @PerceivedAgeRangeMax = @PerceivedAgeRangeMax_4fe9b8021644,
+  @PerceivedAgeRangeMax_Clear = 1,
+  @Tone = @Tone_4fe9b8021644,
+  @SpeakingStyle = @SpeakingStyle_4fe9b8021644,
+  @StyleDescriptors = @StyleDescriptors_4fe9b8021644,
+  @StyleDescriptors_Clear = 1,
+  @PreviewAudioURL = @PreviewAudioURL_4fe9b8021644,
+  @PreviewAudioURL_Clear = 1,
+  @PreviewImageURL = @PreviewImageURL_4fe9b8021644,
+  @PreviewImageURL_Clear = 1,
+  @PreviewVideoURL = @PreviewVideoURL_4fe9b8021644,
+  @PreviewVideoURL_Clear = 1,
+  @Source = @Source_4fe9b8021644,
+  @IsActive = @IsActive_4fe9b8021644;
+END
+
 
 GO
 
@@ -16163,7 +16811,9 @@ SET
   @Source_e571e322944a = N'BuiltIn'
 SET
   @IsActive_e571e322944a = 1
-EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_e571e322944a,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIPersona] WHERE [ID] = @ID_e571e322944a)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_e571e322944a,
   @Name = @Name_e571e322944a,
   @Description = @Description_e571e322944a,
   @PerceivedGender = @PerceivedGender_e571e322944a,
@@ -16186,6 +16836,34 @@ EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_e571e322944a,
   @PreviewVideoURL_Clear = 1,
   @Source = @Source_e571e322944a,
   @IsActive = @IsActive_e571e322944a;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIPersona @ID = @ID_e571e322944a,
+  @Name = @Name_e571e322944a,
+  @Description = @Description_e571e322944a,
+  @PerceivedGender = @PerceivedGender_e571e322944a,
+  @PerceivedGender_Clear = 1,
+  @Locale = @Locale_e571e322944a,
+  @Locale_Clear = 1,
+  @PerceivedAgeRangeMin = @PerceivedAgeRangeMin_e571e322944a,
+  @PerceivedAgeRangeMin_Clear = 1,
+  @PerceivedAgeRangeMax = @PerceivedAgeRangeMax_e571e322944a,
+  @PerceivedAgeRangeMax_Clear = 1,
+  @Tone = @Tone_e571e322944a,
+  @SpeakingStyle = @SpeakingStyle_e571e322944a,
+  @StyleDescriptors = @StyleDescriptors_e571e322944a,
+  @StyleDescriptors_Clear = 1,
+  @PreviewAudioURL = @PreviewAudioURL_e571e322944a,
+  @PreviewAudioURL_Clear = 1,
+  @PreviewImageURL = @PreviewImageURL_e571e322944a,
+  @PreviewImageURL_Clear = 1,
+  @PreviewVideoURL = @PreviewVideoURL_e571e322944a,
+  @PreviewVideoURL_Clear = 1,
+  @Source = @Source_e571e322944a,
+  @IsActive = @IsActive_e571e322944a;
+END
+
 
 GO
 
@@ -16219,7 +16897,9 @@ SET
   @Source_9100e8ecad97 = N'BuiltIn'
 SET
   @IsActive_9100e8ecad97 = 1
-EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_9100e8ecad97,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIPersona] WHERE [ID] = @ID_9100e8ecad97)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_9100e8ecad97,
   @Name = @Name_9100e8ecad97,
   @Description = @Description_9100e8ecad97,
   @PerceivedGender = @PerceivedGender_9100e8ecad97,
@@ -16242,6 +16922,34 @@ EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_9100e8ecad97,
   @PreviewVideoURL_Clear = 1,
   @Source = @Source_9100e8ecad97,
   @IsActive = @IsActive_9100e8ecad97;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIPersona @ID = @ID_9100e8ecad97,
+  @Name = @Name_9100e8ecad97,
+  @Description = @Description_9100e8ecad97,
+  @PerceivedGender = @PerceivedGender_9100e8ecad97,
+  @PerceivedGender_Clear = 1,
+  @Locale = @Locale_9100e8ecad97,
+  @Locale_Clear = 1,
+  @PerceivedAgeRangeMin = @PerceivedAgeRangeMin_9100e8ecad97,
+  @PerceivedAgeRangeMin_Clear = 1,
+  @PerceivedAgeRangeMax = @PerceivedAgeRangeMax_9100e8ecad97,
+  @PerceivedAgeRangeMax_Clear = 1,
+  @Tone = @Tone_9100e8ecad97,
+  @SpeakingStyle = @SpeakingStyle_9100e8ecad97,
+  @StyleDescriptors = @StyleDescriptors_9100e8ecad97,
+  @StyleDescriptors_Clear = 1,
+  @PreviewAudioURL = @PreviewAudioURL_9100e8ecad97,
+  @PreviewAudioURL_Clear = 1,
+  @PreviewImageURL = @PreviewImageURL_9100e8ecad97,
+  @PreviewImageURL_Clear = 1,
+  @PreviewVideoURL = @PreviewVideoURL_9100e8ecad97,
+  @PreviewVideoURL_Clear = 1,
+  @Source = @Source_9100e8ecad97,
+  @IsActive = @IsActive_9100e8ecad97;
+END
+
 
 GO
 
@@ -16275,7 +16983,9 @@ SET
   @Source_b1ddc5c738cd = N'BuiltIn'
 SET
   @IsActive_b1ddc5c738cd = 1
-EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_b1ddc5c738cd,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIPersona] WHERE [ID] = @ID_b1ddc5c738cd)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_b1ddc5c738cd,
   @Name = @Name_b1ddc5c738cd,
   @Description = @Description_b1ddc5c738cd,
   @PerceivedGender = @PerceivedGender_b1ddc5c738cd,
@@ -16298,6 +17008,34 @@ EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_b1ddc5c738cd,
   @PreviewVideoURL_Clear = 1,
   @Source = @Source_b1ddc5c738cd,
   @IsActive = @IsActive_b1ddc5c738cd;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIPersona @ID = @ID_b1ddc5c738cd,
+  @Name = @Name_b1ddc5c738cd,
+  @Description = @Description_b1ddc5c738cd,
+  @PerceivedGender = @PerceivedGender_b1ddc5c738cd,
+  @PerceivedGender_Clear = 1,
+  @Locale = @Locale_b1ddc5c738cd,
+  @Locale_Clear = 1,
+  @PerceivedAgeRangeMin = @PerceivedAgeRangeMin_b1ddc5c738cd,
+  @PerceivedAgeRangeMin_Clear = 1,
+  @PerceivedAgeRangeMax = @PerceivedAgeRangeMax_b1ddc5c738cd,
+  @PerceivedAgeRangeMax_Clear = 1,
+  @Tone = @Tone_b1ddc5c738cd,
+  @SpeakingStyle = @SpeakingStyle_b1ddc5c738cd,
+  @StyleDescriptors = @StyleDescriptors_b1ddc5c738cd,
+  @StyleDescriptors_Clear = 1,
+  @PreviewAudioURL = @PreviewAudioURL_b1ddc5c738cd,
+  @PreviewAudioURL_Clear = 1,
+  @PreviewImageURL = @PreviewImageURL_b1ddc5c738cd,
+  @PreviewImageURL_Clear = 1,
+  @PreviewVideoURL = @PreviewVideoURL_b1ddc5c738cd,
+  @PreviewVideoURL_Clear = 1,
+  @Source = @Source_b1ddc5c738cd,
+  @IsActive = @IsActive_b1ddc5c738cd;
+END
+
 
 GO
 
@@ -16331,7 +17069,9 @@ SET
   @Source_69f44875f7fd = N'BuiltIn'
 SET
   @IsActive_69f44875f7fd = 1
-EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_69f44875f7fd,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIPersona] WHERE [ID] = @ID_69f44875f7fd)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_69f44875f7fd,
   @Name = @Name_69f44875f7fd,
   @Description = @Description_69f44875f7fd,
   @PerceivedGender = @PerceivedGender_69f44875f7fd,
@@ -16354,6 +17094,34 @@ EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_69f44875f7fd,
   @PreviewVideoURL_Clear = 1,
   @Source = @Source_69f44875f7fd,
   @IsActive = @IsActive_69f44875f7fd;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIPersona @ID = @ID_69f44875f7fd,
+  @Name = @Name_69f44875f7fd,
+  @Description = @Description_69f44875f7fd,
+  @PerceivedGender = @PerceivedGender_69f44875f7fd,
+  @PerceivedGender_Clear = 1,
+  @Locale = @Locale_69f44875f7fd,
+  @Locale_Clear = 1,
+  @PerceivedAgeRangeMin = @PerceivedAgeRangeMin_69f44875f7fd,
+  @PerceivedAgeRangeMin_Clear = 1,
+  @PerceivedAgeRangeMax = @PerceivedAgeRangeMax_69f44875f7fd,
+  @PerceivedAgeRangeMax_Clear = 1,
+  @Tone = @Tone_69f44875f7fd,
+  @SpeakingStyle = @SpeakingStyle_69f44875f7fd,
+  @StyleDescriptors = @StyleDescriptors_69f44875f7fd,
+  @StyleDescriptors_Clear = 1,
+  @PreviewAudioURL = @PreviewAudioURL_69f44875f7fd,
+  @PreviewAudioURL_Clear = 1,
+  @PreviewImageURL = @PreviewImageURL_69f44875f7fd,
+  @PreviewImageURL_Clear = 1,
+  @PreviewVideoURL = @PreviewVideoURL_69f44875f7fd,
+  @PreviewVideoURL_Clear = 1,
+  @Source = @Source_69f44875f7fd,
+  @IsActive = @IsActive_69f44875f7fd;
+END
+
 
 GO
 
@@ -16387,7 +17155,9 @@ SET
   @Source_e0973e148458 = N'BuiltIn'
 SET
   @IsActive_e0973e148458 = 1
-EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_e0973e148458,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIPersona] WHERE [ID] = @ID_e0973e148458)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_e0973e148458,
   @Name = @Name_e0973e148458,
   @Description = @Description_e0973e148458,
   @PerceivedGender = @PerceivedGender_e0973e148458,
@@ -16410,6 +17180,34 @@ EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_e0973e148458,
   @PreviewVideoURL_Clear = 1,
   @Source = @Source_e0973e148458,
   @IsActive = @IsActive_e0973e148458;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIPersona @ID = @ID_e0973e148458,
+  @Name = @Name_e0973e148458,
+  @Description = @Description_e0973e148458,
+  @PerceivedGender = @PerceivedGender_e0973e148458,
+  @PerceivedGender_Clear = 1,
+  @Locale = @Locale_e0973e148458,
+  @Locale_Clear = 1,
+  @PerceivedAgeRangeMin = @PerceivedAgeRangeMin_e0973e148458,
+  @PerceivedAgeRangeMin_Clear = 1,
+  @PerceivedAgeRangeMax = @PerceivedAgeRangeMax_e0973e148458,
+  @PerceivedAgeRangeMax_Clear = 1,
+  @Tone = @Tone_e0973e148458,
+  @SpeakingStyle = @SpeakingStyle_e0973e148458,
+  @StyleDescriptors = @StyleDescriptors_e0973e148458,
+  @StyleDescriptors_Clear = 1,
+  @PreviewAudioURL = @PreviewAudioURL_e0973e148458,
+  @PreviewAudioURL_Clear = 1,
+  @PreviewImageURL = @PreviewImageURL_e0973e148458,
+  @PreviewImageURL_Clear = 1,
+  @PreviewVideoURL = @PreviewVideoURL_e0973e148458,
+  @PreviewVideoURL_Clear = 1,
+  @Source = @Source_e0973e148458,
+  @IsActive = @IsActive_e0973e148458;
+END
+
 
 GO
 
@@ -16443,7 +17241,9 @@ SET
   @Source_e73b9c97e4e4 = N'BuiltIn'
 SET
   @IsActive_e73b9c97e4e4 = 1
-EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_e73b9c97e4e4,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIPersona] WHERE [ID] = @ID_e73b9c97e4e4)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_e73b9c97e4e4,
   @Name = @Name_e73b9c97e4e4,
   @Description = @Description_e73b9c97e4e4,
   @PerceivedGender = @PerceivedGender_e73b9c97e4e4,
@@ -16466,6 +17266,34 @@ EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_e73b9c97e4e4,
   @PreviewVideoURL_Clear = 1,
   @Source = @Source_e73b9c97e4e4,
   @IsActive = @IsActive_e73b9c97e4e4;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIPersona @ID = @ID_e73b9c97e4e4,
+  @Name = @Name_e73b9c97e4e4,
+  @Description = @Description_e73b9c97e4e4,
+  @PerceivedGender = @PerceivedGender_e73b9c97e4e4,
+  @PerceivedGender_Clear = 1,
+  @Locale = @Locale_e73b9c97e4e4,
+  @Locale_Clear = 1,
+  @PerceivedAgeRangeMin = @PerceivedAgeRangeMin_e73b9c97e4e4,
+  @PerceivedAgeRangeMin_Clear = 1,
+  @PerceivedAgeRangeMax = @PerceivedAgeRangeMax_e73b9c97e4e4,
+  @PerceivedAgeRangeMax_Clear = 1,
+  @Tone = @Tone_e73b9c97e4e4,
+  @SpeakingStyle = @SpeakingStyle_e73b9c97e4e4,
+  @StyleDescriptors = @StyleDescriptors_e73b9c97e4e4,
+  @StyleDescriptors_Clear = 1,
+  @PreviewAudioURL = @PreviewAudioURL_e73b9c97e4e4,
+  @PreviewAudioURL_Clear = 1,
+  @PreviewImageURL = @PreviewImageURL_e73b9c97e4e4,
+  @PreviewImageURL_Clear = 1,
+  @PreviewVideoURL = @PreviewVideoURL_e73b9c97e4e4,
+  @PreviewVideoURL_Clear = 1,
+  @Source = @Source_e73b9c97e4e4,
+  @IsActive = @IsActive_e73b9c97e4e4;
+END
+
 
 GO
 
@@ -16499,7 +17327,9 @@ SET
   @Source_5f80572da02d = N'BuiltIn'
 SET
   @IsActive_5f80572da02d = 1
-EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_5f80572da02d,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIPersona] WHERE [ID] = @ID_5f80572da02d)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_5f80572da02d,
   @Name = @Name_5f80572da02d,
   @Description = @Description_5f80572da02d,
   @PerceivedGender = @PerceivedGender_5f80572da02d,
@@ -16522,6 +17352,34 @@ EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_5f80572da02d,
   @PreviewVideoURL_Clear = 1,
   @Source = @Source_5f80572da02d,
   @IsActive = @IsActive_5f80572da02d;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIPersona @ID = @ID_5f80572da02d,
+  @Name = @Name_5f80572da02d,
+  @Description = @Description_5f80572da02d,
+  @PerceivedGender = @PerceivedGender_5f80572da02d,
+  @PerceivedGender_Clear = 1,
+  @Locale = @Locale_5f80572da02d,
+  @Locale_Clear = 1,
+  @PerceivedAgeRangeMin = @PerceivedAgeRangeMin_5f80572da02d,
+  @PerceivedAgeRangeMin_Clear = 1,
+  @PerceivedAgeRangeMax = @PerceivedAgeRangeMax_5f80572da02d,
+  @PerceivedAgeRangeMax_Clear = 1,
+  @Tone = @Tone_5f80572da02d,
+  @SpeakingStyle = @SpeakingStyle_5f80572da02d,
+  @StyleDescriptors = @StyleDescriptors_5f80572da02d,
+  @StyleDescriptors_Clear = 1,
+  @PreviewAudioURL = @PreviewAudioURL_5f80572da02d,
+  @PreviewAudioURL_Clear = 1,
+  @PreviewImageURL = @PreviewImageURL_5f80572da02d,
+  @PreviewImageURL_Clear = 1,
+  @PreviewVideoURL = @PreviewVideoURL_5f80572da02d,
+  @PreviewVideoURL_Clear = 1,
+  @Source = @Source_5f80572da02d,
+  @IsActive = @IsActive_5f80572da02d;
+END
+
 
 GO
 
@@ -16555,7 +17413,9 @@ SET
   @Source_da3ace79731f = N'BuiltIn'
 SET
   @IsActive_da3ace79731f = 1
-EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_da3ace79731f,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIPersona] WHERE [ID] = @ID_da3ace79731f)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_da3ace79731f,
   @Name = @Name_da3ace79731f,
   @Description = @Description_da3ace79731f,
   @PerceivedGender = @PerceivedGender_da3ace79731f,
@@ -16578,6 +17438,34 @@ EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_da3ace79731f,
   @PreviewVideoURL_Clear = 1,
   @Source = @Source_da3ace79731f,
   @IsActive = @IsActive_da3ace79731f;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIPersona @ID = @ID_da3ace79731f,
+  @Name = @Name_da3ace79731f,
+  @Description = @Description_da3ace79731f,
+  @PerceivedGender = @PerceivedGender_da3ace79731f,
+  @PerceivedGender_Clear = 1,
+  @Locale = @Locale_da3ace79731f,
+  @Locale_Clear = 1,
+  @PerceivedAgeRangeMin = @PerceivedAgeRangeMin_da3ace79731f,
+  @PerceivedAgeRangeMin_Clear = 1,
+  @PerceivedAgeRangeMax = @PerceivedAgeRangeMax_da3ace79731f,
+  @PerceivedAgeRangeMax_Clear = 1,
+  @Tone = @Tone_da3ace79731f,
+  @SpeakingStyle = @SpeakingStyle_da3ace79731f,
+  @StyleDescriptors = @StyleDescriptors_da3ace79731f,
+  @StyleDescriptors_Clear = 1,
+  @PreviewAudioURL = @PreviewAudioURL_da3ace79731f,
+  @PreviewAudioURL_Clear = 1,
+  @PreviewImageURL = @PreviewImageURL_da3ace79731f,
+  @PreviewImageURL_Clear = 1,
+  @PreviewVideoURL = @PreviewVideoURL_da3ace79731f,
+  @PreviewVideoURL_Clear = 1,
+  @Source = @Source_da3ace79731f,
+  @IsActive = @IsActive_da3ace79731f;
+END
+
 
 GO
 
@@ -16611,7 +17499,9 @@ SET
   @Source_869932d983b2 = N'BuiltIn'
 SET
   @IsActive_869932d983b2 = 1
-EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_869932d983b2,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIPersona] WHERE [ID] = @ID_869932d983b2)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_869932d983b2,
   @Name = @Name_869932d983b2,
   @Description = @Description_869932d983b2,
   @PerceivedGender = @PerceivedGender_869932d983b2,
@@ -16634,6 +17524,34 @@ EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_869932d983b2,
   @PreviewVideoURL_Clear = 1,
   @Source = @Source_869932d983b2,
   @IsActive = @IsActive_869932d983b2;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIPersona @ID = @ID_869932d983b2,
+  @Name = @Name_869932d983b2,
+  @Description = @Description_869932d983b2,
+  @PerceivedGender = @PerceivedGender_869932d983b2,
+  @PerceivedGender_Clear = 1,
+  @Locale = @Locale_869932d983b2,
+  @Locale_Clear = 1,
+  @PerceivedAgeRangeMin = @PerceivedAgeRangeMin_869932d983b2,
+  @PerceivedAgeRangeMin_Clear = 1,
+  @PerceivedAgeRangeMax = @PerceivedAgeRangeMax_869932d983b2,
+  @PerceivedAgeRangeMax_Clear = 1,
+  @Tone = @Tone_869932d983b2,
+  @SpeakingStyle = @SpeakingStyle_869932d983b2,
+  @StyleDescriptors = @StyleDescriptors_869932d983b2,
+  @StyleDescriptors_Clear = 1,
+  @PreviewAudioURL = @PreviewAudioURL_869932d983b2,
+  @PreviewAudioURL_Clear = 1,
+  @PreviewImageURL = @PreviewImageURL_869932d983b2,
+  @PreviewImageURL_Clear = 1,
+  @PreviewVideoURL = @PreviewVideoURL_869932d983b2,
+  @PreviewVideoURL_Clear = 1,
+  @Source = @Source_869932d983b2,
+  @IsActive = @IsActive_869932d983b2;
+END
+
 
 GO
 
@@ -16667,7 +17585,9 @@ SET
   @Source_84e5ce7aa156 = N'BuiltIn'
 SET
   @IsActive_84e5ce7aa156 = 1
-EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_84e5ce7aa156,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIPersona] WHERE [ID] = @ID_84e5ce7aa156)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_84e5ce7aa156,
   @Name = @Name_84e5ce7aa156,
   @Description = @Description_84e5ce7aa156,
   @PerceivedGender = @PerceivedGender_84e5ce7aa156,
@@ -16690,6 +17610,34 @@ EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_84e5ce7aa156,
   @PreviewVideoURL_Clear = 1,
   @Source = @Source_84e5ce7aa156,
   @IsActive = @IsActive_84e5ce7aa156;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIPersona @ID = @ID_84e5ce7aa156,
+  @Name = @Name_84e5ce7aa156,
+  @Description = @Description_84e5ce7aa156,
+  @PerceivedGender = @PerceivedGender_84e5ce7aa156,
+  @PerceivedGender_Clear = 1,
+  @Locale = @Locale_84e5ce7aa156,
+  @Locale_Clear = 1,
+  @PerceivedAgeRangeMin = @PerceivedAgeRangeMin_84e5ce7aa156,
+  @PerceivedAgeRangeMin_Clear = 1,
+  @PerceivedAgeRangeMax = @PerceivedAgeRangeMax_84e5ce7aa156,
+  @PerceivedAgeRangeMax_Clear = 1,
+  @Tone = @Tone_84e5ce7aa156,
+  @SpeakingStyle = @SpeakingStyle_84e5ce7aa156,
+  @StyleDescriptors = @StyleDescriptors_84e5ce7aa156,
+  @StyleDescriptors_Clear = 1,
+  @PreviewAudioURL = @PreviewAudioURL_84e5ce7aa156,
+  @PreviewAudioURL_Clear = 1,
+  @PreviewImageURL = @PreviewImageURL_84e5ce7aa156,
+  @PreviewImageURL_Clear = 1,
+  @PreviewVideoURL = @PreviewVideoURL_84e5ce7aa156,
+  @PreviewVideoURL_Clear = 1,
+  @Source = @Source_84e5ce7aa156,
+  @IsActive = @IsActive_84e5ce7aa156;
+END
+
 
 GO
 
@@ -16723,7 +17671,9 @@ SET
   @Source_2513dbf9e171 = N'BuiltIn'
 SET
   @IsActive_2513dbf9e171 = 1
-EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_2513dbf9e171,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIPersona] WHERE [ID] = @ID_2513dbf9e171)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_2513dbf9e171,
   @Name = @Name_2513dbf9e171,
   @Description = @Description_2513dbf9e171,
   @PerceivedGender = @PerceivedGender_2513dbf9e171,
@@ -16746,6 +17696,34 @@ EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_2513dbf9e171,
   @PreviewVideoURL_Clear = 1,
   @Source = @Source_2513dbf9e171,
   @IsActive = @IsActive_2513dbf9e171;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIPersona @ID = @ID_2513dbf9e171,
+  @Name = @Name_2513dbf9e171,
+  @Description = @Description_2513dbf9e171,
+  @PerceivedGender = @PerceivedGender_2513dbf9e171,
+  @PerceivedGender_Clear = 1,
+  @Locale = @Locale_2513dbf9e171,
+  @Locale_Clear = 1,
+  @PerceivedAgeRangeMin = @PerceivedAgeRangeMin_2513dbf9e171,
+  @PerceivedAgeRangeMin_Clear = 1,
+  @PerceivedAgeRangeMax = @PerceivedAgeRangeMax_2513dbf9e171,
+  @PerceivedAgeRangeMax_Clear = 1,
+  @Tone = @Tone_2513dbf9e171,
+  @SpeakingStyle = @SpeakingStyle_2513dbf9e171,
+  @StyleDescriptors = @StyleDescriptors_2513dbf9e171,
+  @StyleDescriptors_Clear = 1,
+  @PreviewAudioURL = @PreviewAudioURL_2513dbf9e171,
+  @PreviewAudioURL_Clear = 1,
+  @PreviewImageURL = @PreviewImageURL_2513dbf9e171,
+  @PreviewImageURL_Clear = 1,
+  @PreviewVideoURL = @PreviewVideoURL_2513dbf9e171,
+  @PreviewVideoURL_Clear = 1,
+  @Source = @Source_2513dbf9e171,
+  @IsActive = @IsActive_2513dbf9e171;
+END
+
 
 GO
 
@@ -16779,7 +17757,9 @@ SET
   @Source_09ff08e48fdf = N'BuiltIn'
 SET
   @IsActive_09ff08e48fdf = 1
-EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_09ff08e48fdf,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIPersona] WHERE [ID] = @ID_09ff08e48fdf)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_09ff08e48fdf,
   @Name = @Name_09ff08e48fdf,
   @Description = @Description_09ff08e48fdf,
   @PerceivedGender = @PerceivedGender_09ff08e48fdf,
@@ -16802,6 +17782,34 @@ EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_09ff08e48fdf,
   @PreviewVideoURL_Clear = 1,
   @Source = @Source_09ff08e48fdf,
   @IsActive = @IsActive_09ff08e48fdf;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIPersona @ID = @ID_09ff08e48fdf,
+  @Name = @Name_09ff08e48fdf,
+  @Description = @Description_09ff08e48fdf,
+  @PerceivedGender = @PerceivedGender_09ff08e48fdf,
+  @PerceivedGender_Clear = 1,
+  @Locale = @Locale_09ff08e48fdf,
+  @Locale_Clear = 1,
+  @PerceivedAgeRangeMin = @PerceivedAgeRangeMin_09ff08e48fdf,
+  @PerceivedAgeRangeMin_Clear = 1,
+  @PerceivedAgeRangeMax = @PerceivedAgeRangeMax_09ff08e48fdf,
+  @PerceivedAgeRangeMax_Clear = 1,
+  @Tone = @Tone_09ff08e48fdf,
+  @SpeakingStyle = @SpeakingStyle_09ff08e48fdf,
+  @StyleDescriptors = @StyleDescriptors_09ff08e48fdf,
+  @StyleDescriptors_Clear = 1,
+  @PreviewAudioURL = @PreviewAudioURL_09ff08e48fdf,
+  @PreviewAudioURL_Clear = 1,
+  @PreviewImageURL = @PreviewImageURL_09ff08e48fdf,
+  @PreviewImageURL_Clear = 1,
+  @PreviewVideoURL = @PreviewVideoURL_09ff08e48fdf,
+  @PreviewVideoURL_Clear = 1,
+  @Source = @Source_09ff08e48fdf,
+  @IsActive = @IsActive_09ff08e48fdf;
+END
+
 
 GO
 
@@ -16835,7 +17843,9 @@ SET
   @Source_1e35d2e423a9 = N'BuiltIn'
 SET
   @IsActive_1e35d2e423a9 = 1
-EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_1e35d2e423a9,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIPersona] WHERE [ID] = @ID_1e35d2e423a9)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_1e35d2e423a9,
   @Name = @Name_1e35d2e423a9,
   @Description = @Description_1e35d2e423a9,
   @PerceivedGender = @PerceivedGender_1e35d2e423a9,
@@ -16858,6 +17868,34 @@ EXEC [${flyway:defaultSchema}].spCreateAIPersona @ID = @ID_1e35d2e423a9,
   @PreviewVideoURL_Clear = 1,
   @Source = @Source_1e35d2e423a9,
   @IsActive = @IsActive_1e35d2e423a9;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIPersona @ID = @ID_1e35d2e423a9,
+  @Name = @Name_1e35d2e423a9,
+  @Description = @Description_1e35d2e423a9,
+  @PerceivedGender = @PerceivedGender_1e35d2e423a9,
+  @PerceivedGender_Clear = 1,
+  @Locale = @Locale_1e35d2e423a9,
+  @Locale_Clear = 1,
+  @PerceivedAgeRangeMin = @PerceivedAgeRangeMin_1e35d2e423a9,
+  @PerceivedAgeRangeMin_Clear = 1,
+  @PerceivedAgeRangeMax = @PerceivedAgeRangeMax_1e35d2e423a9,
+  @PerceivedAgeRangeMax_Clear = 1,
+  @Tone = @Tone_1e35d2e423a9,
+  @SpeakingStyle = @SpeakingStyle_1e35d2e423a9,
+  @StyleDescriptors = @StyleDescriptors_1e35d2e423a9,
+  @StyleDescriptors_Clear = 1,
+  @PreviewAudioURL = @PreviewAudioURL_1e35d2e423a9,
+  @PreviewAudioURL_Clear = 1,
+  @PreviewImageURL = @PreviewImageURL_1e35d2e423a9,
+  @PreviewImageURL_Clear = 1,
+  @PreviewVideoURL = @PreviewVideoURL_1e35d2e423a9,
+  @PreviewVideoURL_Clear = 1,
+  @Source = @Source_1e35d2e423a9,
+  @IsActive = @IsActive_1e35d2e423a9;
+END
+
 
 GO
 
@@ -16884,7 +17922,9 @@ SET
   @Status_a5ad00376bdd = N'Active'
 SET
   @Priority_a5ad00376bdd = 0
-EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_a5ad00376bdd,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIPersonaVendor] WHERE [ID] = @ID_a5ad00376bdd)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_a5ad00376bdd,
   @PersonaID = @PersonaID_a5ad00376bdd,
   @VendorID = @VendorID_a5ad00376bdd,
   @ModalityID = @ModalityID_a5ad00376bdd,
@@ -16893,6 +17933,20 @@ EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_a5ad00376bdd,
   @Priority = @Priority_a5ad00376bdd,
   @VendorSettings = @VendorSettings_a5ad00376bdd,
   @VendorSettings_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIPersonaVendor @ID = @ID_a5ad00376bdd,
+  @PersonaID = @PersonaID_a5ad00376bdd,
+  @VendorID = @VendorID_a5ad00376bdd,
+  @ModalityID = @ModalityID_a5ad00376bdd,
+  @APIName = @APIName_a5ad00376bdd,
+  @Status = @Status_a5ad00376bdd,
+  @Priority = @Priority_a5ad00376bdd,
+  @VendorSettings = @VendorSettings_a5ad00376bdd,
+  @VendorSettings_Clear = 1;
+END
+
 
 GO
 
@@ -16919,7 +17973,9 @@ SET
   @Status_de2306d73eff = N'Active'
 SET
   @Priority_de2306d73eff = 0
-EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_de2306d73eff,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIPersonaVendor] WHERE [ID] = @ID_de2306d73eff)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_de2306d73eff,
   @PersonaID = @PersonaID_de2306d73eff,
   @VendorID = @VendorID_de2306d73eff,
   @ModalityID = @ModalityID_de2306d73eff,
@@ -16928,6 +17984,20 @@ EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_de2306d73eff,
   @Priority = @Priority_de2306d73eff,
   @VendorSettings = @VendorSettings_de2306d73eff,
   @VendorSettings_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIPersonaVendor @ID = @ID_de2306d73eff,
+  @PersonaID = @PersonaID_de2306d73eff,
+  @VendorID = @VendorID_de2306d73eff,
+  @ModalityID = @ModalityID_de2306d73eff,
+  @APIName = @APIName_de2306d73eff,
+  @Status = @Status_de2306d73eff,
+  @Priority = @Priority_de2306d73eff,
+  @VendorSettings = @VendorSettings_de2306d73eff,
+  @VendorSettings_Clear = 1;
+END
+
 
 GO
 
@@ -16954,7 +18024,9 @@ SET
   @Status_a2e069231c98 = N'Active'
 SET
   @Priority_a2e069231c98 = 0
-EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_a2e069231c98,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIPersonaVendor] WHERE [ID] = @ID_a2e069231c98)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_a2e069231c98,
   @PersonaID = @PersonaID_a2e069231c98,
   @VendorID = @VendorID_a2e069231c98,
   @ModalityID = @ModalityID_a2e069231c98,
@@ -16963,6 +18035,20 @@ EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_a2e069231c98,
   @Priority = @Priority_a2e069231c98,
   @VendorSettings = @VendorSettings_a2e069231c98,
   @VendorSettings_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIPersonaVendor @ID = @ID_a2e069231c98,
+  @PersonaID = @PersonaID_a2e069231c98,
+  @VendorID = @VendorID_a2e069231c98,
+  @ModalityID = @ModalityID_a2e069231c98,
+  @APIName = @APIName_a2e069231c98,
+  @Status = @Status_a2e069231c98,
+  @Priority = @Priority_a2e069231c98,
+  @VendorSettings = @VendorSettings_a2e069231c98,
+  @VendorSettings_Clear = 1;
+END
+
 
 GO
 
@@ -16989,7 +18075,9 @@ SET
   @Status_27d883f03fb5 = N'Active'
 SET
   @Priority_27d883f03fb5 = 0
-EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_27d883f03fb5,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIPersonaVendor] WHERE [ID] = @ID_27d883f03fb5)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_27d883f03fb5,
   @PersonaID = @PersonaID_27d883f03fb5,
   @VendorID = @VendorID_27d883f03fb5,
   @ModalityID = @ModalityID_27d883f03fb5,
@@ -16998,6 +18086,20 @@ EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_27d883f03fb5,
   @Priority = @Priority_27d883f03fb5,
   @VendorSettings = @VendorSettings_27d883f03fb5,
   @VendorSettings_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIPersonaVendor @ID = @ID_27d883f03fb5,
+  @PersonaID = @PersonaID_27d883f03fb5,
+  @VendorID = @VendorID_27d883f03fb5,
+  @ModalityID = @ModalityID_27d883f03fb5,
+  @APIName = @APIName_27d883f03fb5,
+  @Status = @Status_27d883f03fb5,
+  @Priority = @Priority_27d883f03fb5,
+  @VendorSettings = @VendorSettings_27d883f03fb5,
+  @VendorSettings_Clear = 1;
+END
+
 
 GO
 
@@ -17024,7 +18126,9 @@ SET
   @Status_beb0b333362e = N'Active'
 SET
   @Priority_beb0b333362e = 0
-EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_beb0b333362e,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIPersonaVendor] WHERE [ID] = @ID_beb0b333362e)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_beb0b333362e,
   @PersonaID = @PersonaID_beb0b333362e,
   @VendorID = @VendorID_beb0b333362e,
   @ModalityID = @ModalityID_beb0b333362e,
@@ -17033,6 +18137,20 @@ EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_beb0b333362e,
   @Priority = @Priority_beb0b333362e,
   @VendorSettings = @VendorSettings_beb0b333362e,
   @VendorSettings_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIPersonaVendor @ID = @ID_beb0b333362e,
+  @PersonaID = @PersonaID_beb0b333362e,
+  @VendorID = @VendorID_beb0b333362e,
+  @ModalityID = @ModalityID_beb0b333362e,
+  @APIName = @APIName_beb0b333362e,
+  @Status = @Status_beb0b333362e,
+  @Priority = @Priority_beb0b333362e,
+  @VendorSettings = @VendorSettings_beb0b333362e,
+  @VendorSettings_Clear = 1;
+END
+
 
 GO
 
@@ -17059,7 +18177,9 @@ SET
   @Status_6382d9bcabe2 = N'Inactive'
 SET
   @Priority_6382d9bcabe2 = 0
-EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_6382d9bcabe2,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIPersonaVendor] WHERE [ID] = @ID_6382d9bcabe2)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_6382d9bcabe2,
   @PersonaID = @PersonaID_6382d9bcabe2,
   @VendorID = @VendorID_6382d9bcabe2,
   @ModalityID = @ModalityID_6382d9bcabe2,
@@ -17068,6 +18188,20 @@ EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_6382d9bcabe2,
   @Priority = @Priority_6382d9bcabe2,
   @VendorSettings = @VendorSettings_6382d9bcabe2,
   @VendorSettings_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIPersonaVendor @ID = @ID_6382d9bcabe2,
+  @PersonaID = @PersonaID_6382d9bcabe2,
+  @VendorID = @VendorID_6382d9bcabe2,
+  @ModalityID = @ModalityID_6382d9bcabe2,
+  @APIName = @APIName_6382d9bcabe2,
+  @Status = @Status_6382d9bcabe2,
+  @Priority = @Priority_6382d9bcabe2,
+  @VendorSettings = @VendorSettings_6382d9bcabe2,
+  @VendorSettings_Clear = 1;
+END
+
 
 GO
 
@@ -17094,7 +18228,9 @@ SET
   @Status_0b5d517092d9 = N'Inactive'
 SET
   @Priority_0b5d517092d9 = 0
-EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_0b5d517092d9,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIPersonaVendor] WHERE [ID] = @ID_0b5d517092d9)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_0b5d517092d9,
   @PersonaID = @PersonaID_0b5d517092d9,
   @VendorID = @VendorID_0b5d517092d9,
   @ModalityID = @ModalityID_0b5d517092d9,
@@ -17103,6 +18239,20 @@ EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_0b5d517092d9,
   @Priority = @Priority_0b5d517092d9,
   @VendorSettings = @VendorSettings_0b5d517092d9,
   @VendorSettings_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIPersonaVendor @ID = @ID_0b5d517092d9,
+  @PersonaID = @PersonaID_0b5d517092d9,
+  @VendorID = @VendorID_0b5d517092d9,
+  @ModalityID = @ModalityID_0b5d517092d9,
+  @APIName = @APIName_0b5d517092d9,
+  @Status = @Status_0b5d517092d9,
+  @Priority = @Priority_0b5d517092d9,
+  @VendorSettings = @VendorSettings_0b5d517092d9,
+  @VendorSettings_Clear = 1;
+END
+
 
 GO
 
@@ -17129,7 +18279,9 @@ SET
   @Status_596b0225acf9 = N'Inactive'
 SET
   @Priority_596b0225acf9 = 0
-EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_596b0225acf9,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIPersonaVendor] WHERE [ID] = @ID_596b0225acf9)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_596b0225acf9,
   @PersonaID = @PersonaID_596b0225acf9,
   @VendorID = @VendorID_596b0225acf9,
   @ModalityID = @ModalityID_596b0225acf9,
@@ -17138,6 +18290,20 @@ EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_596b0225acf9,
   @Priority = @Priority_596b0225acf9,
   @VendorSettings = @VendorSettings_596b0225acf9,
   @VendorSettings_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIPersonaVendor @ID = @ID_596b0225acf9,
+  @PersonaID = @PersonaID_596b0225acf9,
+  @VendorID = @VendorID_596b0225acf9,
+  @ModalityID = @ModalityID_596b0225acf9,
+  @APIName = @APIName_596b0225acf9,
+  @Status = @Status_596b0225acf9,
+  @Priority = @Priority_596b0225acf9,
+  @VendorSettings = @VendorSettings_596b0225acf9,
+  @VendorSettings_Clear = 1;
+END
+
 
 GO
 
@@ -17164,7 +18330,9 @@ SET
   @Status_92e00f2d4820 = N'Active'
 SET
   @Priority_92e00f2d4820 = 0
-EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_92e00f2d4820,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIPersonaVendor] WHERE [ID] = @ID_92e00f2d4820)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_92e00f2d4820,
   @PersonaID = @PersonaID_92e00f2d4820,
   @VendorID = @VendorID_92e00f2d4820,
   @ModalityID = @ModalityID_92e00f2d4820,
@@ -17173,6 +18341,20 @@ EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_92e00f2d4820,
   @Priority = @Priority_92e00f2d4820,
   @VendorSettings = @VendorSettings_92e00f2d4820,
   @VendorSettings_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIPersonaVendor @ID = @ID_92e00f2d4820,
+  @PersonaID = @PersonaID_92e00f2d4820,
+  @VendorID = @VendorID_92e00f2d4820,
+  @ModalityID = @ModalityID_92e00f2d4820,
+  @APIName = @APIName_92e00f2d4820,
+  @Status = @Status_92e00f2d4820,
+  @Priority = @Priority_92e00f2d4820,
+  @VendorSettings = @VendorSettings_92e00f2d4820,
+  @VendorSettings_Clear = 1;
+END
+
 
 GO
 
@@ -17199,7 +18381,9 @@ SET
   @Status_1c515de781dd = N'Active'
 SET
   @Priority_1c515de781dd = 0
-EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_1c515de781dd,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIPersonaVendor] WHERE [ID] = @ID_1c515de781dd)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_1c515de781dd,
   @PersonaID = @PersonaID_1c515de781dd,
   @VendorID = @VendorID_1c515de781dd,
   @ModalityID = @ModalityID_1c515de781dd,
@@ -17208,6 +18392,20 @@ EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_1c515de781dd,
   @Priority = @Priority_1c515de781dd,
   @VendorSettings = @VendorSettings_1c515de781dd,
   @VendorSettings_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIPersonaVendor @ID = @ID_1c515de781dd,
+  @PersonaID = @PersonaID_1c515de781dd,
+  @VendorID = @VendorID_1c515de781dd,
+  @ModalityID = @ModalityID_1c515de781dd,
+  @APIName = @APIName_1c515de781dd,
+  @Status = @Status_1c515de781dd,
+  @Priority = @Priority_1c515de781dd,
+  @VendorSettings = @VendorSettings_1c515de781dd,
+  @VendorSettings_Clear = 1;
+END
+
 
 GO
 
@@ -17234,7 +18432,9 @@ SET
   @Status_708b7d884829 = N'Active'
 SET
   @Priority_708b7d884829 = 0
-EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_708b7d884829,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIPersonaVendor] WHERE [ID] = @ID_708b7d884829)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_708b7d884829,
   @PersonaID = @PersonaID_708b7d884829,
   @VendorID = @VendorID_708b7d884829,
   @ModalityID = @ModalityID_708b7d884829,
@@ -17243,6 +18443,20 @@ EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_708b7d884829,
   @Priority = @Priority_708b7d884829,
   @VendorSettings = @VendorSettings_708b7d884829,
   @VendorSettings_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIPersonaVendor @ID = @ID_708b7d884829,
+  @PersonaID = @PersonaID_708b7d884829,
+  @VendorID = @VendorID_708b7d884829,
+  @ModalityID = @ModalityID_708b7d884829,
+  @APIName = @APIName_708b7d884829,
+  @Status = @Status_708b7d884829,
+  @Priority = @Priority_708b7d884829,
+  @VendorSettings = @VendorSettings_708b7d884829,
+  @VendorSettings_Clear = 1;
+END
+
 
 GO
 
@@ -17269,7 +18483,9 @@ SET
   @Status_91ec15e61545 = N'Active'
 SET
   @Priority_91ec15e61545 = 0
-EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_91ec15e61545,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIPersonaVendor] WHERE [ID] = @ID_91ec15e61545)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_91ec15e61545,
   @PersonaID = @PersonaID_91ec15e61545,
   @VendorID = @VendorID_91ec15e61545,
   @ModalityID = @ModalityID_91ec15e61545,
@@ -17278,6 +18494,20 @@ EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_91ec15e61545,
   @Priority = @Priority_91ec15e61545,
   @VendorSettings = @VendorSettings_91ec15e61545,
   @VendorSettings_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIPersonaVendor @ID = @ID_91ec15e61545,
+  @PersonaID = @PersonaID_91ec15e61545,
+  @VendorID = @VendorID_91ec15e61545,
+  @ModalityID = @ModalityID_91ec15e61545,
+  @APIName = @APIName_91ec15e61545,
+  @Status = @Status_91ec15e61545,
+  @Priority = @Priority_91ec15e61545,
+  @VendorSettings = @VendorSettings_91ec15e61545,
+  @VendorSettings_Clear = 1;
+END
+
 
 GO
 
@@ -17304,7 +18534,9 @@ SET
   @Status_565481f9c86f = N'Active'
 SET
   @Priority_565481f9c86f = 0
-EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_565481f9c86f,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIPersonaVendor] WHERE [ID] = @ID_565481f9c86f)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_565481f9c86f,
   @PersonaID = @PersonaID_565481f9c86f,
   @VendorID = @VendorID_565481f9c86f,
   @ModalityID = @ModalityID_565481f9c86f,
@@ -17313,6 +18545,20 @@ EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_565481f9c86f,
   @Priority = @Priority_565481f9c86f,
   @VendorSettings = @VendorSettings_565481f9c86f,
   @VendorSettings_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIPersonaVendor @ID = @ID_565481f9c86f,
+  @PersonaID = @PersonaID_565481f9c86f,
+  @VendorID = @VendorID_565481f9c86f,
+  @ModalityID = @ModalityID_565481f9c86f,
+  @APIName = @APIName_565481f9c86f,
+  @Status = @Status_565481f9c86f,
+  @Priority = @Priority_565481f9c86f,
+  @VendorSettings = @VendorSettings_565481f9c86f,
+  @VendorSettings_Clear = 1;
+END
+
 
 GO
 
@@ -17339,7 +18585,9 @@ SET
   @Status_9f4f94fb7cdb = N'Active'
 SET
   @Priority_9f4f94fb7cdb = 0
-EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_9f4f94fb7cdb,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIPersonaVendor] WHERE [ID] = @ID_9f4f94fb7cdb)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_9f4f94fb7cdb,
   @PersonaID = @PersonaID_9f4f94fb7cdb,
   @VendorID = @VendorID_9f4f94fb7cdb,
   @ModalityID = @ModalityID_9f4f94fb7cdb,
@@ -17348,6 +18596,20 @@ EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_9f4f94fb7cdb,
   @Priority = @Priority_9f4f94fb7cdb,
   @VendorSettings = @VendorSettings_9f4f94fb7cdb,
   @VendorSettings_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIPersonaVendor @ID = @ID_9f4f94fb7cdb,
+  @PersonaID = @PersonaID_9f4f94fb7cdb,
+  @VendorID = @VendorID_9f4f94fb7cdb,
+  @ModalityID = @ModalityID_9f4f94fb7cdb,
+  @APIName = @APIName_9f4f94fb7cdb,
+  @Status = @Status_9f4f94fb7cdb,
+  @Priority = @Priority_9f4f94fb7cdb,
+  @VendorSettings = @VendorSettings_9f4f94fb7cdb,
+  @VendorSettings_Clear = 1;
+END
+
 
 GO
 
@@ -17374,7 +18636,9 @@ SET
   @Status_d99112d0034e = N'Active'
 SET
   @Priority_d99112d0034e = 0
-EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_d99112d0034e,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIPersonaVendor] WHERE [ID] = @ID_d99112d0034e)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_d99112d0034e,
   @PersonaID = @PersonaID_d99112d0034e,
   @VendorID = @VendorID_d99112d0034e,
   @ModalityID = @ModalityID_d99112d0034e,
@@ -17383,6 +18647,20 @@ EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_d99112d0034e,
   @Priority = @Priority_d99112d0034e,
   @VendorSettings = @VendorSettings_d99112d0034e,
   @VendorSettings_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIPersonaVendor @ID = @ID_d99112d0034e,
+  @PersonaID = @PersonaID_d99112d0034e,
+  @VendorID = @VendorID_d99112d0034e,
+  @ModalityID = @ModalityID_d99112d0034e,
+  @APIName = @APIName_d99112d0034e,
+  @Status = @Status_d99112d0034e,
+  @Priority = @Priority_d99112d0034e,
+  @VendorSettings = @VendorSettings_d99112d0034e,
+  @VendorSettings_Clear = 1;
+END
+
 
 GO
 
@@ -17409,7 +18687,9 @@ SET
   @Status_8220838ef548 = N'Active'
 SET
   @Priority_8220838ef548 = 0
-EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_8220838ef548,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIPersonaVendor] WHERE [ID] = @ID_8220838ef548)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_8220838ef548,
   @PersonaID = @PersonaID_8220838ef548,
   @VendorID = @VendorID_8220838ef548,
   @ModalityID = @ModalityID_8220838ef548,
@@ -17418,6 +18698,20 @@ EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_8220838ef548,
   @Priority = @Priority_8220838ef548,
   @VendorSettings = @VendorSettings_8220838ef548,
   @VendorSettings_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIPersonaVendor @ID = @ID_8220838ef548,
+  @PersonaID = @PersonaID_8220838ef548,
+  @VendorID = @VendorID_8220838ef548,
+  @ModalityID = @ModalityID_8220838ef548,
+  @APIName = @APIName_8220838ef548,
+  @Status = @Status_8220838ef548,
+  @Priority = @Priority_8220838ef548,
+  @VendorSettings = @VendorSettings_8220838ef548,
+  @VendorSettings_Clear = 1;
+END
+
 
 GO
 
@@ -17444,7 +18738,9 @@ SET
   @Status_102d520309c9 = N'Active'
 SET
   @Priority_102d520309c9 = 0
-EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_102d520309c9,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIPersonaVendor] WHERE [ID] = @ID_102d520309c9)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_102d520309c9,
   @PersonaID = @PersonaID_102d520309c9,
   @VendorID = @VendorID_102d520309c9,
   @ModalityID = @ModalityID_102d520309c9,
@@ -17453,6 +18749,20 @@ EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_102d520309c9,
   @Priority = @Priority_102d520309c9,
   @VendorSettings = @VendorSettings_102d520309c9,
   @VendorSettings_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIPersonaVendor @ID = @ID_102d520309c9,
+  @PersonaID = @PersonaID_102d520309c9,
+  @VendorID = @VendorID_102d520309c9,
+  @ModalityID = @ModalityID_102d520309c9,
+  @APIName = @APIName_102d520309c9,
+  @Status = @Status_102d520309c9,
+  @Priority = @Priority_102d520309c9,
+  @VendorSettings = @VendorSettings_102d520309c9,
+  @VendorSettings_Clear = 1;
+END
+
 
 GO
 
@@ -17479,7 +18789,9 @@ SET
   @Status_ad3b6fdd3763 = N'Active'
 SET
   @Priority_ad3b6fdd3763 = 0
-EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_ad3b6fdd3763,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIPersonaVendor] WHERE [ID] = @ID_ad3b6fdd3763)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_ad3b6fdd3763,
   @PersonaID = @PersonaID_ad3b6fdd3763,
   @VendorID = @VendorID_ad3b6fdd3763,
   @ModalityID = @ModalityID_ad3b6fdd3763,
@@ -17488,6 +18800,20 @@ EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_ad3b6fdd3763,
   @Priority = @Priority_ad3b6fdd3763,
   @VendorSettings = @VendorSettings_ad3b6fdd3763,
   @VendorSettings_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIPersonaVendor @ID = @ID_ad3b6fdd3763,
+  @PersonaID = @PersonaID_ad3b6fdd3763,
+  @VendorID = @VendorID_ad3b6fdd3763,
+  @ModalityID = @ModalityID_ad3b6fdd3763,
+  @APIName = @APIName_ad3b6fdd3763,
+  @Status = @Status_ad3b6fdd3763,
+  @Priority = @Priority_ad3b6fdd3763,
+  @VendorSettings = @VendorSettings_ad3b6fdd3763,
+  @VendorSettings_Clear = 1;
+END
+
 
 GO
 
@@ -17514,7 +18840,9 @@ SET
   @Status_1fd00a7b61b2 = N'Active'
 SET
   @Priority_1fd00a7b61b2 = 0
-EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_1fd00a7b61b2,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIPersonaVendor] WHERE [ID] = @ID_1fd00a7b61b2)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_1fd00a7b61b2,
   @PersonaID = @PersonaID_1fd00a7b61b2,
   @VendorID = @VendorID_1fd00a7b61b2,
   @ModalityID = @ModalityID_1fd00a7b61b2,
@@ -17523,6 +18851,20 @@ EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_1fd00a7b61b2,
   @Priority = @Priority_1fd00a7b61b2,
   @VendorSettings = @VendorSettings_1fd00a7b61b2,
   @VendorSettings_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIPersonaVendor @ID = @ID_1fd00a7b61b2,
+  @PersonaID = @PersonaID_1fd00a7b61b2,
+  @VendorID = @VendorID_1fd00a7b61b2,
+  @ModalityID = @ModalityID_1fd00a7b61b2,
+  @APIName = @APIName_1fd00a7b61b2,
+  @Status = @Status_1fd00a7b61b2,
+  @Priority = @Priority_1fd00a7b61b2,
+  @VendorSettings = @VendorSettings_1fd00a7b61b2,
+  @VendorSettings_Clear = 1;
+END
+
 
 GO
 
@@ -17549,7 +18891,9 @@ SET
   @Status_fd7f5b59700d = N'Active'
 SET
   @Priority_fd7f5b59700d = 0
-EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_fd7f5b59700d,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIPersonaVendor] WHERE [ID] = @ID_fd7f5b59700d)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_fd7f5b59700d,
   @PersonaID = @PersonaID_fd7f5b59700d,
   @VendorID = @VendorID_fd7f5b59700d,
   @ModalityID = @ModalityID_fd7f5b59700d,
@@ -17558,6 +18902,20 @@ EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_fd7f5b59700d,
   @Priority = @Priority_fd7f5b59700d,
   @VendorSettings = @VendorSettings_fd7f5b59700d,
   @VendorSettings_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIPersonaVendor @ID = @ID_fd7f5b59700d,
+  @PersonaID = @PersonaID_fd7f5b59700d,
+  @VendorID = @VendorID_fd7f5b59700d,
+  @ModalityID = @ModalityID_fd7f5b59700d,
+  @APIName = @APIName_fd7f5b59700d,
+  @Status = @Status_fd7f5b59700d,
+  @Priority = @Priority_fd7f5b59700d,
+  @VendorSettings = @VendorSettings_fd7f5b59700d,
+  @VendorSettings_Clear = 1;
+END
+
 
 GO
 
@@ -17584,7 +18942,9 @@ SET
   @Status_5dc6f651ac4a = N'Active'
 SET
   @Priority_5dc6f651ac4a = 0
-EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_5dc6f651ac4a,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIPersonaVendor] WHERE [ID] = @ID_5dc6f651ac4a)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_5dc6f651ac4a,
   @PersonaID = @PersonaID_5dc6f651ac4a,
   @VendorID = @VendorID_5dc6f651ac4a,
   @ModalityID = @ModalityID_5dc6f651ac4a,
@@ -17593,6 +18953,20 @@ EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_5dc6f651ac4a,
   @Priority = @Priority_5dc6f651ac4a,
   @VendorSettings = @VendorSettings_5dc6f651ac4a,
   @VendorSettings_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIPersonaVendor @ID = @ID_5dc6f651ac4a,
+  @PersonaID = @PersonaID_5dc6f651ac4a,
+  @VendorID = @VendorID_5dc6f651ac4a,
+  @ModalityID = @ModalityID_5dc6f651ac4a,
+  @APIName = @APIName_5dc6f651ac4a,
+  @Status = @Status_5dc6f651ac4a,
+  @Priority = @Priority_5dc6f651ac4a,
+  @VendorSettings = @VendorSettings_5dc6f651ac4a,
+  @VendorSettings_Clear = 1;
+END
+
 
 GO
 
@@ -17619,7 +18993,9 @@ SET
   @Status_83e1004fc0bc = N'Active'
 SET
   @Priority_83e1004fc0bc = 0
-EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_83e1004fc0bc,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIPersonaVendor] WHERE [ID] = @ID_83e1004fc0bc)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_83e1004fc0bc,
   @PersonaID = @PersonaID_83e1004fc0bc,
   @VendorID = @VendorID_83e1004fc0bc,
   @ModalityID = @ModalityID_83e1004fc0bc,
@@ -17628,6 +19004,20 @@ EXEC [${flyway:defaultSchema}].spCreateAIPersonaVendor @ID = @ID_83e1004fc0bc,
   @Priority = @Priority_83e1004fc0bc,
   @VendorSettings = @VendorSettings_83e1004fc0bc,
   @VendorSettings_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIPersonaVendor @ID = @ID_83e1004fc0bc,
+  @PersonaID = @PersonaID_83e1004fc0bc,
+  @VendorID = @VendorID_83e1004fc0bc,
+  @ModalityID = @ModalityID_83e1004fc0bc,
+  @APIName = @APIName_83e1004fc0bc,
+  @Status = @Status_83e1004fc0bc,
+  @Priority = @Priority_83e1004fc0bc,
+  @VendorSettings = @VendorSettings_83e1004fc0bc,
+  @VendorSettings_Clear = 1;
+END
+
 
 GO
 
@@ -17647,11 +19037,23 @@ SET
   @Sequence_858c5f0f8928 = 1
 SET
   @IsSupported_858c5f0f8928 = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_858c5f0f8928,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_858c5f0f8928)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_858c5f0f8928,
   @ModelID = @ModelID_858c5f0f8928,
   @PersonaID = @PersonaID_858c5f0f8928,
   @Sequence = @Sequence_858c5f0f8928,
   @IsSupported = @IsSupported_858c5f0f8928;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_858c5f0f8928,
+  @ModelID = @ModelID_858c5f0f8928,
+  @PersonaID = @PersonaID_858c5f0f8928,
+  @Sequence = @Sequence_858c5f0f8928,
+  @IsSupported = @IsSupported_858c5f0f8928;
+END
+
 
 GO
 
@@ -17671,11 +19073,23 @@ SET
   @Sequence_1de8df914769 = 2
 SET
   @IsSupported_1de8df914769 = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_1de8df914769,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_1de8df914769)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_1de8df914769,
   @ModelID = @ModelID_1de8df914769,
   @PersonaID = @PersonaID_1de8df914769,
   @Sequence = @Sequence_1de8df914769,
   @IsSupported = @IsSupported_1de8df914769;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_1de8df914769,
+  @ModelID = @ModelID_1de8df914769,
+  @PersonaID = @PersonaID_1de8df914769,
+  @Sequence = @Sequence_1de8df914769,
+  @IsSupported = @IsSupported_1de8df914769;
+END
+
 
 GO
 
@@ -17695,11 +19109,23 @@ SET
   @Sequence_92ccef7ed046 = 3
 SET
   @IsSupported_92ccef7ed046 = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_92ccef7ed046,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_92ccef7ed046)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_92ccef7ed046,
   @ModelID = @ModelID_92ccef7ed046,
   @PersonaID = @PersonaID_92ccef7ed046,
   @Sequence = @Sequence_92ccef7ed046,
   @IsSupported = @IsSupported_92ccef7ed046;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_92ccef7ed046,
+  @ModelID = @ModelID_92ccef7ed046,
+  @PersonaID = @PersonaID_92ccef7ed046,
+  @Sequence = @Sequence_92ccef7ed046,
+  @IsSupported = @IsSupported_92ccef7ed046;
+END
+
 
 GO
 
@@ -17719,11 +19145,23 @@ SET
   @Sequence_fe10e1cf59e8 = 4
 SET
   @IsSupported_fe10e1cf59e8 = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_fe10e1cf59e8,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_fe10e1cf59e8)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_fe10e1cf59e8,
   @ModelID = @ModelID_fe10e1cf59e8,
   @PersonaID = @PersonaID_fe10e1cf59e8,
   @Sequence = @Sequence_fe10e1cf59e8,
   @IsSupported = @IsSupported_fe10e1cf59e8;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_fe10e1cf59e8,
+  @ModelID = @ModelID_fe10e1cf59e8,
+  @PersonaID = @PersonaID_fe10e1cf59e8,
+  @Sequence = @Sequence_fe10e1cf59e8,
+  @IsSupported = @IsSupported_fe10e1cf59e8;
+END
+
 
 GO
 
@@ -17743,11 +19181,23 @@ SET
   @Sequence_9b3258f16a5c = 5
 SET
   @IsSupported_9b3258f16a5c = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_9b3258f16a5c,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_9b3258f16a5c)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_9b3258f16a5c,
   @ModelID = @ModelID_9b3258f16a5c,
   @PersonaID = @PersonaID_9b3258f16a5c,
   @Sequence = @Sequence_9b3258f16a5c,
   @IsSupported = @IsSupported_9b3258f16a5c;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_9b3258f16a5c,
+  @ModelID = @ModelID_9b3258f16a5c,
+  @PersonaID = @PersonaID_9b3258f16a5c,
+  @Sequence = @Sequence_9b3258f16a5c,
+  @IsSupported = @IsSupported_9b3258f16a5c;
+END
+
 
 GO
 
@@ -17767,11 +19217,23 @@ SET
   @Sequence_88a29036c2f9 = 6
 SET
   @IsSupported_88a29036c2f9 = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_88a29036c2f9,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_88a29036c2f9)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_88a29036c2f9,
   @ModelID = @ModelID_88a29036c2f9,
   @PersonaID = @PersonaID_88a29036c2f9,
   @Sequence = @Sequence_88a29036c2f9,
   @IsSupported = @IsSupported_88a29036c2f9;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_88a29036c2f9,
+  @ModelID = @ModelID_88a29036c2f9,
+  @PersonaID = @PersonaID_88a29036c2f9,
+  @Sequence = @Sequence_88a29036c2f9,
+  @IsSupported = @IsSupported_88a29036c2f9;
+END
+
 
 GO
 
@@ -17791,11 +19253,23 @@ SET
   @Sequence_47d75884ffba = 7
 SET
   @IsSupported_47d75884ffba = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_47d75884ffba,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_47d75884ffba)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_47d75884ffba,
   @ModelID = @ModelID_47d75884ffba,
   @PersonaID = @PersonaID_47d75884ffba,
   @Sequence = @Sequence_47d75884ffba,
   @IsSupported = @IsSupported_47d75884ffba;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_47d75884ffba,
+  @ModelID = @ModelID_47d75884ffba,
+  @PersonaID = @PersonaID_47d75884ffba,
+  @Sequence = @Sequence_47d75884ffba,
+  @IsSupported = @IsSupported_47d75884ffba;
+END
+
 
 GO
 
@@ -17815,11 +19289,23 @@ SET
   @Sequence_25d19326824c = 8
 SET
   @IsSupported_25d19326824c = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_25d19326824c,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_25d19326824c)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_25d19326824c,
   @ModelID = @ModelID_25d19326824c,
   @PersonaID = @PersonaID_25d19326824c,
   @Sequence = @Sequence_25d19326824c,
   @IsSupported = @IsSupported_25d19326824c;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_25d19326824c,
+  @ModelID = @ModelID_25d19326824c,
+  @PersonaID = @PersonaID_25d19326824c,
+  @Sequence = @Sequence_25d19326824c,
+  @IsSupported = @IsSupported_25d19326824c;
+END
+
 
 GO
 
@@ -17839,11 +19325,23 @@ SET
   @Sequence_c2a866f4c125 = 9
 SET
   @IsSupported_c2a866f4c125 = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_c2a866f4c125,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_c2a866f4c125)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_c2a866f4c125,
   @ModelID = @ModelID_c2a866f4c125,
   @PersonaID = @PersonaID_c2a866f4c125,
   @Sequence = @Sequence_c2a866f4c125,
   @IsSupported = @IsSupported_c2a866f4c125;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_c2a866f4c125,
+  @ModelID = @ModelID_c2a866f4c125,
+  @PersonaID = @PersonaID_c2a866f4c125,
+  @Sequence = @Sequence_c2a866f4c125,
+  @IsSupported = @IsSupported_c2a866f4c125;
+END
+
 
 GO
 
@@ -17863,11 +19361,23 @@ SET
   @Sequence_abecff06494d = 10
 SET
   @IsSupported_abecff06494d = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_abecff06494d,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_abecff06494d)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_abecff06494d,
   @ModelID = @ModelID_abecff06494d,
   @PersonaID = @PersonaID_abecff06494d,
   @Sequence = @Sequence_abecff06494d,
   @IsSupported = @IsSupported_abecff06494d;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_abecff06494d,
+  @ModelID = @ModelID_abecff06494d,
+  @PersonaID = @PersonaID_abecff06494d,
+  @Sequence = @Sequence_abecff06494d,
+  @IsSupported = @IsSupported_abecff06494d;
+END
+
 
 GO
 
@@ -17887,11 +19397,23 @@ SET
   @Sequence_80d394b35957 = 1
 SET
   @IsSupported_80d394b35957 = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_80d394b35957,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_80d394b35957)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_80d394b35957,
   @ModelID = @ModelID_80d394b35957,
   @PersonaID = @PersonaID_80d394b35957,
   @Sequence = @Sequence_80d394b35957,
   @IsSupported = @IsSupported_80d394b35957;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_80d394b35957,
+  @ModelID = @ModelID_80d394b35957,
+  @PersonaID = @PersonaID_80d394b35957,
+  @Sequence = @Sequence_80d394b35957,
+  @IsSupported = @IsSupported_80d394b35957;
+END
+
 
 GO
 
@@ -17911,11 +19433,23 @@ SET
   @Sequence_4efd8e8806de = 2
 SET
   @IsSupported_4efd8e8806de = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_4efd8e8806de,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_4efd8e8806de)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_4efd8e8806de,
   @ModelID = @ModelID_4efd8e8806de,
   @PersonaID = @PersonaID_4efd8e8806de,
   @Sequence = @Sequence_4efd8e8806de,
   @IsSupported = @IsSupported_4efd8e8806de;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_4efd8e8806de,
+  @ModelID = @ModelID_4efd8e8806de,
+  @PersonaID = @PersonaID_4efd8e8806de,
+  @Sequence = @Sequence_4efd8e8806de,
+  @IsSupported = @IsSupported_4efd8e8806de;
+END
+
 
 GO
 
@@ -17935,11 +19469,23 @@ SET
   @Sequence_860069b91ca3 = 3
 SET
   @IsSupported_860069b91ca3 = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_860069b91ca3,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_860069b91ca3)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_860069b91ca3,
   @ModelID = @ModelID_860069b91ca3,
   @PersonaID = @PersonaID_860069b91ca3,
   @Sequence = @Sequence_860069b91ca3,
   @IsSupported = @IsSupported_860069b91ca3;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_860069b91ca3,
+  @ModelID = @ModelID_860069b91ca3,
+  @PersonaID = @PersonaID_860069b91ca3,
+  @Sequence = @Sequence_860069b91ca3,
+  @IsSupported = @IsSupported_860069b91ca3;
+END
+
 
 GO
 
@@ -17959,11 +19505,23 @@ SET
   @Sequence_2cc981c03bd0 = 4
 SET
   @IsSupported_2cc981c03bd0 = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_2cc981c03bd0,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_2cc981c03bd0)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_2cc981c03bd0,
   @ModelID = @ModelID_2cc981c03bd0,
   @PersonaID = @PersonaID_2cc981c03bd0,
   @Sequence = @Sequence_2cc981c03bd0,
   @IsSupported = @IsSupported_2cc981c03bd0;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_2cc981c03bd0,
+  @ModelID = @ModelID_2cc981c03bd0,
+  @PersonaID = @PersonaID_2cc981c03bd0,
+  @Sequence = @Sequence_2cc981c03bd0,
+  @IsSupported = @IsSupported_2cc981c03bd0;
+END
+
 
 GO
 
@@ -17983,11 +19541,23 @@ SET
   @Sequence_28c44b1b064a = 5
 SET
   @IsSupported_28c44b1b064a = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_28c44b1b064a,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_28c44b1b064a)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_28c44b1b064a,
   @ModelID = @ModelID_28c44b1b064a,
   @PersonaID = @PersonaID_28c44b1b064a,
   @Sequence = @Sequence_28c44b1b064a,
   @IsSupported = @IsSupported_28c44b1b064a;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_28c44b1b064a,
+  @ModelID = @ModelID_28c44b1b064a,
+  @PersonaID = @PersonaID_28c44b1b064a,
+  @Sequence = @Sequence_28c44b1b064a,
+  @IsSupported = @IsSupported_28c44b1b064a;
+END
+
 
 GO
 
@@ -18007,11 +19577,23 @@ SET
   @Sequence_b77c83f3b8cb = 6
 SET
   @IsSupported_b77c83f3b8cb = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_b77c83f3b8cb,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_b77c83f3b8cb)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_b77c83f3b8cb,
   @ModelID = @ModelID_b77c83f3b8cb,
   @PersonaID = @PersonaID_b77c83f3b8cb,
   @Sequence = @Sequence_b77c83f3b8cb,
   @IsSupported = @IsSupported_b77c83f3b8cb;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_b77c83f3b8cb,
+  @ModelID = @ModelID_b77c83f3b8cb,
+  @PersonaID = @PersonaID_b77c83f3b8cb,
+  @Sequence = @Sequence_b77c83f3b8cb,
+  @IsSupported = @IsSupported_b77c83f3b8cb;
+END
+
 
 GO
 
@@ -18031,11 +19613,23 @@ SET
   @Sequence_ba281f96d9de = 7
 SET
   @IsSupported_ba281f96d9de = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_ba281f96d9de,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_ba281f96d9de)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_ba281f96d9de,
   @ModelID = @ModelID_ba281f96d9de,
   @PersonaID = @PersonaID_ba281f96d9de,
   @Sequence = @Sequence_ba281f96d9de,
   @IsSupported = @IsSupported_ba281f96d9de;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_ba281f96d9de,
+  @ModelID = @ModelID_ba281f96d9de,
+  @PersonaID = @PersonaID_ba281f96d9de,
+  @Sequence = @Sequence_ba281f96d9de,
+  @IsSupported = @IsSupported_ba281f96d9de;
+END
+
 
 GO
 
@@ -18055,11 +19649,23 @@ SET
   @Sequence_2d71c6158f0e = 11
 SET
   @IsSupported_2d71c6158f0e = 0
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_2d71c6158f0e,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_2d71c6158f0e)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_2d71c6158f0e,
   @ModelID = @ModelID_2d71c6158f0e,
   @PersonaID = @PersonaID_2d71c6158f0e,
   @Sequence = @Sequence_2d71c6158f0e,
   @IsSupported = @IsSupported_2d71c6158f0e;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_2d71c6158f0e,
+  @ModelID = @ModelID_2d71c6158f0e,
+  @PersonaID = @PersonaID_2d71c6158f0e,
+  @Sequence = @Sequence_2d71c6158f0e,
+  @IsSupported = @IsSupported_2d71c6158f0e;
+END
+
 
 GO
 
@@ -18079,11 +19685,23 @@ SET
   @Sequence_4a8e9dea5291 = 12
 SET
   @IsSupported_4a8e9dea5291 = 0
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_4a8e9dea5291,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_4a8e9dea5291)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_4a8e9dea5291,
   @ModelID = @ModelID_4a8e9dea5291,
   @PersonaID = @PersonaID_4a8e9dea5291,
   @Sequence = @Sequence_4a8e9dea5291,
   @IsSupported = @IsSupported_4a8e9dea5291;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_4a8e9dea5291,
+  @ModelID = @ModelID_4a8e9dea5291,
+  @PersonaID = @PersonaID_4a8e9dea5291,
+  @Sequence = @Sequence_4a8e9dea5291,
+  @IsSupported = @IsSupported_4a8e9dea5291;
+END
+
 
 GO
 
@@ -18103,11 +19721,23 @@ SET
   @Sequence_aaccaadbb4ad = 13
 SET
   @IsSupported_aaccaadbb4ad = 0
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_aaccaadbb4ad,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_aaccaadbb4ad)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_aaccaadbb4ad,
   @ModelID = @ModelID_aaccaadbb4ad,
   @PersonaID = @PersonaID_aaccaadbb4ad,
   @Sequence = @Sequence_aaccaadbb4ad,
   @IsSupported = @IsSupported_aaccaadbb4ad;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_aaccaadbb4ad,
+  @ModelID = @ModelID_aaccaadbb4ad,
+  @PersonaID = @PersonaID_aaccaadbb4ad,
+  @Sequence = @Sequence_aaccaadbb4ad,
+  @IsSupported = @IsSupported_aaccaadbb4ad;
+END
+
 
 GO
 
@@ -18127,11 +19757,23 @@ SET
   @Sequence_b9f05ddf2b27 = 8
 SET
   @IsSupported_b9f05ddf2b27 = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_b9f05ddf2b27,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_b9f05ddf2b27)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_b9f05ddf2b27,
   @ModelID = @ModelID_b9f05ddf2b27,
   @PersonaID = @PersonaID_b9f05ddf2b27,
   @Sequence = @Sequence_b9f05ddf2b27,
   @IsSupported = @IsSupported_b9f05ddf2b27;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_b9f05ddf2b27,
+  @ModelID = @ModelID_b9f05ddf2b27,
+  @PersonaID = @PersonaID_b9f05ddf2b27,
+  @Sequence = @Sequence_b9f05ddf2b27,
+  @IsSupported = @IsSupported_b9f05ddf2b27;
+END
+
 
 GO
 
@@ -18151,11 +19793,23 @@ SET
   @Sequence_576e177b90b0 = 9
 SET
   @IsSupported_576e177b90b0 = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_576e177b90b0,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_576e177b90b0)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_576e177b90b0,
   @ModelID = @ModelID_576e177b90b0,
   @PersonaID = @PersonaID_576e177b90b0,
   @Sequence = @Sequence_576e177b90b0,
   @IsSupported = @IsSupported_576e177b90b0;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_576e177b90b0,
+  @ModelID = @ModelID_576e177b90b0,
+  @PersonaID = @PersonaID_576e177b90b0,
+  @Sequence = @Sequence_576e177b90b0,
+  @IsSupported = @IsSupported_576e177b90b0;
+END
+
 
 GO
 
@@ -18175,11 +19829,23 @@ SET
   @Sequence_d2abee1d1086 = 10
 SET
   @IsSupported_d2abee1d1086 = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_d2abee1d1086,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_d2abee1d1086)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_d2abee1d1086,
   @ModelID = @ModelID_d2abee1d1086,
   @PersonaID = @PersonaID_d2abee1d1086,
   @Sequence = @Sequence_d2abee1d1086,
   @IsSupported = @IsSupported_d2abee1d1086;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_d2abee1d1086,
+  @ModelID = @ModelID_d2abee1d1086,
+  @PersonaID = @PersonaID_d2abee1d1086,
+  @Sequence = @Sequence_d2abee1d1086,
+  @IsSupported = @IsSupported_d2abee1d1086;
+END
+
 
 GO
 
@@ -18199,11 +19865,23 @@ SET
   @Sequence_142886510283 = 1
 SET
   @IsSupported_142886510283 = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_142886510283,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_142886510283)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_142886510283,
   @ModelID = @ModelID_142886510283,
   @PersonaID = @PersonaID_142886510283,
   @Sequence = @Sequence_142886510283,
   @IsSupported = @IsSupported_142886510283;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_142886510283,
+  @ModelID = @ModelID_142886510283,
+  @PersonaID = @PersonaID_142886510283,
+  @Sequence = @Sequence_142886510283,
+  @IsSupported = @IsSupported_142886510283;
+END
+
 
 GO
 
@@ -18223,11 +19901,23 @@ SET
   @Sequence_89e43a101f1c = 2
 SET
   @IsSupported_89e43a101f1c = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_89e43a101f1c,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_89e43a101f1c)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_89e43a101f1c,
   @ModelID = @ModelID_89e43a101f1c,
   @PersonaID = @PersonaID_89e43a101f1c,
   @Sequence = @Sequence_89e43a101f1c,
   @IsSupported = @IsSupported_89e43a101f1c;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_89e43a101f1c,
+  @ModelID = @ModelID_89e43a101f1c,
+  @PersonaID = @PersonaID_89e43a101f1c,
+  @Sequence = @Sequence_89e43a101f1c,
+  @IsSupported = @IsSupported_89e43a101f1c;
+END
+
 
 GO
 
@@ -18247,11 +19937,23 @@ SET
   @Sequence_1bf4804a4750 = 3
 SET
   @IsSupported_1bf4804a4750 = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_1bf4804a4750,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_1bf4804a4750)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_1bf4804a4750,
   @ModelID = @ModelID_1bf4804a4750,
   @PersonaID = @PersonaID_1bf4804a4750,
   @Sequence = @Sequence_1bf4804a4750,
   @IsSupported = @IsSupported_1bf4804a4750;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_1bf4804a4750,
+  @ModelID = @ModelID_1bf4804a4750,
+  @PersonaID = @PersonaID_1bf4804a4750,
+  @Sequence = @Sequence_1bf4804a4750,
+  @IsSupported = @IsSupported_1bf4804a4750;
+END
+
 
 GO
 
@@ -18271,11 +19973,23 @@ SET
   @Sequence_f85aabd2c015 = 4
 SET
   @IsSupported_f85aabd2c015 = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_f85aabd2c015,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_f85aabd2c015)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_f85aabd2c015,
   @ModelID = @ModelID_f85aabd2c015,
   @PersonaID = @PersonaID_f85aabd2c015,
   @Sequence = @Sequence_f85aabd2c015,
   @IsSupported = @IsSupported_f85aabd2c015;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_f85aabd2c015,
+  @ModelID = @ModelID_f85aabd2c015,
+  @PersonaID = @PersonaID_f85aabd2c015,
+  @Sequence = @Sequence_f85aabd2c015,
+  @IsSupported = @IsSupported_f85aabd2c015;
+END
+
 
 GO
 
@@ -18295,11 +20009,23 @@ SET
   @Sequence_3aea16fb1fe8 = 5
 SET
   @IsSupported_3aea16fb1fe8 = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_3aea16fb1fe8,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_3aea16fb1fe8)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_3aea16fb1fe8,
   @ModelID = @ModelID_3aea16fb1fe8,
   @PersonaID = @PersonaID_3aea16fb1fe8,
   @Sequence = @Sequence_3aea16fb1fe8,
   @IsSupported = @IsSupported_3aea16fb1fe8;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_3aea16fb1fe8,
+  @ModelID = @ModelID_3aea16fb1fe8,
+  @PersonaID = @PersonaID_3aea16fb1fe8,
+  @Sequence = @Sequence_3aea16fb1fe8,
+  @IsSupported = @IsSupported_3aea16fb1fe8;
+END
+
 
 GO
 
@@ -18319,11 +20045,23 @@ SET
   @Sequence_f1e53ffe34b5 = 1
 SET
   @IsSupported_f1e53ffe34b5 = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_f1e53ffe34b5,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_f1e53ffe34b5)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_f1e53ffe34b5,
   @ModelID = @ModelID_f1e53ffe34b5,
   @PersonaID = @PersonaID_f1e53ffe34b5,
   @Sequence = @Sequence_f1e53ffe34b5,
   @IsSupported = @IsSupported_f1e53ffe34b5;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_f1e53ffe34b5,
+  @ModelID = @ModelID_f1e53ffe34b5,
+  @PersonaID = @PersonaID_f1e53ffe34b5,
+  @Sequence = @Sequence_f1e53ffe34b5,
+  @IsSupported = @IsSupported_f1e53ffe34b5;
+END
+
 
 GO
 
@@ -18343,11 +20081,23 @@ SET
   @Sequence_1ab6124c3abf = 2
 SET
   @IsSupported_1ab6124c3abf = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_1ab6124c3abf,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_1ab6124c3abf)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_1ab6124c3abf,
   @ModelID = @ModelID_1ab6124c3abf,
   @PersonaID = @PersonaID_1ab6124c3abf,
   @Sequence = @Sequence_1ab6124c3abf,
   @IsSupported = @IsSupported_1ab6124c3abf;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_1ab6124c3abf,
+  @ModelID = @ModelID_1ab6124c3abf,
+  @PersonaID = @PersonaID_1ab6124c3abf,
+  @Sequence = @Sequence_1ab6124c3abf,
+  @IsSupported = @IsSupported_1ab6124c3abf;
+END
+
 
 GO
 
@@ -18367,11 +20117,23 @@ SET
   @Sequence_8539985ede0e = 1
 SET
   @IsSupported_8539985ede0e = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_8539985ede0e,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_8539985ede0e)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_8539985ede0e,
   @ModelID = @ModelID_8539985ede0e,
   @PersonaID = @PersonaID_8539985ede0e,
   @Sequence = @Sequence_8539985ede0e,
   @IsSupported = @IsSupported_8539985ede0e;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_8539985ede0e,
+  @ModelID = @ModelID_8539985ede0e,
+  @PersonaID = @PersonaID_8539985ede0e,
+  @Sequence = @Sequence_8539985ede0e,
+  @IsSupported = @IsSupported_8539985ede0e;
+END
+
 
 GO
 
@@ -18391,11 +20153,23 @@ SET
   @Sequence_20691030128e = 2
 SET
   @IsSupported_20691030128e = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_20691030128e,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_20691030128e)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_20691030128e,
   @ModelID = @ModelID_20691030128e,
   @PersonaID = @PersonaID_20691030128e,
   @Sequence = @Sequence_20691030128e,
   @IsSupported = @IsSupported_20691030128e;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_20691030128e,
+  @ModelID = @ModelID_20691030128e,
+  @PersonaID = @PersonaID_20691030128e,
+  @Sequence = @Sequence_20691030128e,
+  @IsSupported = @IsSupported_20691030128e;
+END
+
 
 GO
 
@@ -18415,11 +20189,23 @@ SET
   @Sequence_6dcb0a09b038 = 1
 SET
   @IsSupported_6dcb0a09b038 = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_6dcb0a09b038,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_6dcb0a09b038)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_6dcb0a09b038,
   @ModelID = @ModelID_6dcb0a09b038,
   @PersonaID = @PersonaID_6dcb0a09b038,
   @Sequence = @Sequence_6dcb0a09b038,
   @IsSupported = @IsSupported_6dcb0a09b038;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_6dcb0a09b038,
+  @ModelID = @ModelID_6dcb0a09b038,
+  @PersonaID = @PersonaID_6dcb0a09b038,
+  @Sequence = @Sequence_6dcb0a09b038,
+  @IsSupported = @IsSupported_6dcb0a09b038;
+END
+
 
 GO
 
@@ -18439,11 +20225,23 @@ SET
   @Sequence_fc3d4aa361d0 = 2
 SET
   @IsSupported_fc3d4aa361d0 = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_fc3d4aa361d0,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_fc3d4aa361d0)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_fc3d4aa361d0,
   @ModelID = @ModelID_fc3d4aa361d0,
   @PersonaID = @PersonaID_fc3d4aa361d0,
   @Sequence = @Sequence_fc3d4aa361d0,
   @IsSupported = @IsSupported_fc3d4aa361d0;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_fc3d4aa361d0,
+  @ModelID = @ModelID_fc3d4aa361d0,
+  @PersonaID = @PersonaID_fc3d4aa361d0,
+  @Sequence = @Sequence_fc3d4aa361d0,
+  @IsSupported = @IsSupported_fc3d4aa361d0;
+END
+
 
 GO
 
@@ -18463,11 +20261,23 @@ SET
   @Sequence_816bc22eefa4 = 3
 SET
   @IsSupported_816bc22eefa4 = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_816bc22eefa4,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_816bc22eefa4)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_816bc22eefa4,
   @ModelID = @ModelID_816bc22eefa4,
   @PersonaID = @PersonaID_816bc22eefa4,
   @Sequence = @Sequence_816bc22eefa4,
   @IsSupported = @IsSupported_816bc22eefa4;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_816bc22eefa4,
+  @ModelID = @ModelID_816bc22eefa4,
+  @PersonaID = @PersonaID_816bc22eefa4,
+  @Sequence = @Sequence_816bc22eefa4,
+  @IsSupported = @IsSupported_816bc22eefa4;
+END
+
 
 GO
 
@@ -18487,11 +20297,23 @@ SET
   @Sequence_621aca3103c8 = 4
 SET
   @IsSupported_621aca3103c8 = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_621aca3103c8,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_621aca3103c8)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_621aca3103c8,
   @ModelID = @ModelID_621aca3103c8,
   @PersonaID = @PersonaID_621aca3103c8,
   @Sequence = @Sequence_621aca3103c8,
   @IsSupported = @IsSupported_621aca3103c8;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_621aca3103c8,
+  @ModelID = @ModelID_621aca3103c8,
+  @PersonaID = @PersonaID_621aca3103c8,
+  @Sequence = @Sequence_621aca3103c8,
+  @IsSupported = @IsSupported_621aca3103c8;
+END
+
 
 GO
 
@@ -18511,11 +20333,23 @@ SET
   @Sequence_d771216916bb = 5
 SET
   @IsSupported_d771216916bb = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_d771216916bb,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_d771216916bb)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_d771216916bb,
   @ModelID = @ModelID_d771216916bb,
   @PersonaID = @PersonaID_d771216916bb,
   @Sequence = @Sequence_d771216916bb,
   @IsSupported = @IsSupported_d771216916bb;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_d771216916bb,
+  @ModelID = @ModelID_d771216916bb,
+  @PersonaID = @PersonaID_d771216916bb,
+  @Sequence = @Sequence_d771216916bb,
+  @IsSupported = @IsSupported_d771216916bb;
+END
+
 
 GO
 
@@ -18535,11 +20369,23 @@ SET
   @Sequence_b91896d81f4e = 6
 SET
   @IsSupported_b91896d81f4e = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_b91896d81f4e,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_b91896d81f4e)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_b91896d81f4e,
   @ModelID = @ModelID_b91896d81f4e,
   @PersonaID = @PersonaID_b91896d81f4e,
   @Sequence = @Sequence_b91896d81f4e,
   @IsSupported = @IsSupported_b91896d81f4e;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_b91896d81f4e,
+  @ModelID = @ModelID_b91896d81f4e,
+  @PersonaID = @PersonaID_b91896d81f4e,
+  @Sequence = @Sequence_b91896d81f4e,
+  @IsSupported = @IsSupported_b91896d81f4e;
+END
+
 
 GO
 
@@ -18559,11 +20405,23 @@ SET
   @Sequence_47e27bc2108f = 7
 SET
   @IsSupported_47e27bc2108f = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_47e27bc2108f,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_47e27bc2108f)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_47e27bc2108f,
   @ModelID = @ModelID_47e27bc2108f,
   @PersonaID = @PersonaID_47e27bc2108f,
   @Sequence = @Sequence_47e27bc2108f,
   @IsSupported = @IsSupported_47e27bc2108f;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_47e27bc2108f,
+  @ModelID = @ModelID_47e27bc2108f,
+  @PersonaID = @PersonaID_47e27bc2108f,
+  @Sequence = @Sequence_47e27bc2108f,
+  @IsSupported = @IsSupported_47e27bc2108f;
+END
+
 
 GO
 
@@ -18583,11 +20441,23 @@ SET
   @Sequence_8e8d07e843f8 = 8
 SET
   @IsSupported_8e8d07e843f8 = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_8e8d07e843f8,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_8e8d07e843f8)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_8e8d07e843f8,
   @ModelID = @ModelID_8e8d07e843f8,
   @PersonaID = @PersonaID_8e8d07e843f8,
   @Sequence = @Sequence_8e8d07e843f8,
   @IsSupported = @IsSupported_8e8d07e843f8;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_8e8d07e843f8,
+  @ModelID = @ModelID_8e8d07e843f8,
+  @PersonaID = @PersonaID_8e8d07e843f8,
+  @Sequence = @Sequence_8e8d07e843f8,
+  @IsSupported = @IsSupported_8e8d07e843f8;
+END
+
 
 GO
 
@@ -18607,11 +20477,23 @@ SET
   @Sequence_c09df0f9b2b7 = 9
 SET
   @IsSupported_c09df0f9b2b7 = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_c09df0f9b2b7,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_c09df0f9b2b7)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_c09df0f9b2b7,
   @ModelID = @ModelID_c09df0f9b2b7,
   @PersonaID = @PersonaID_c09df0f9b2b7,
   @Sequence = @Sequence_c09df0f9b2b7,
   @IsSupported = @IsSupported_c09df0f9b2b7;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_c09df0f9b2b7,
+  @ModelID = @ModelID_c09df0f9b2b7,
+  @PersonaID = @PersonaID_c09df0f9b2b7,
+  @Sequence = @Sequence_c09df0f9b2b7,
+  @IsSupported = @IsSupported_c09df0f9b2b7;
+END
+
 
 GO
 
@@ -18631,11 +20513,23 @@ SET
   @Sequence_491fda0656c3 = 10
 SET
   @IsSupported_491fda0656c3 = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_491fda0656c3,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_491fda0656c3)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_491fda0656c3,
   @ModelID = @ModelID_491fda0656c3,
   @PersonaID = @PersonaID_491fda0656c3,
   @Sequence = @Sequence_491fda0656c3,
   @IsSupported = @IsSupported_491fda0656c3;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_491fda0656c3,
+  @ModelID = @ModelID_491fda0656c3,
+  @PersonaID = @PersonaID_491fda0656c3,
+  @Sequence = @Sequence_491fda0656c3,
+  @IsSupported = @IsSupported_491fda0656c3;
+END
+
 
 GO
 
@@ -18655,11 +20549,23 @@ SET
   @Sequence_31904733bcd1 = 1
 SET
   @IsSupported_31904733bcd1 = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_31904733bcd1,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_31904733bcd1)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_31904733bcd1,
   @ModelID = @ModelID_31904733bcd1,
   @PersonaID = @PersonaID_31904733bcd1,
   @Sequence = @Sequence_31904733bcd1,
   @IsSupported = @IsSupported_31904733bcd1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_31904733bcd1,
+  @ModelID = @ModelID_31904733bcd1,
+  @PersonaID = @PersonaID_31904733bcd1,
+  @Sequence = @Sequence_31904733bcd1,
+  @IsSupported = @IsSupported_31904733bcd1;
+END
+
 
 GO
 
@@ -18679,11 +20585,23 @@ SET
   @Sequence_f1e8463079e5 = 2
 SET
   @IsSupported_f1e8463079e5 = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_f1e8463079e5,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_f1e8463079e5)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_f1e8463079e5,
   @ModelID = @ModelID_f1e8463079e5,
   @PersonaID = @PersonaID_f1e8463079e5,
   @Sequence = @Sequence_f1e8463079e5,
   @IsSupported = @IsSupported_f1e8463079e5;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_f1e8463079e5,
+  @ModelID = @ModelID_f1e8463079e5,
+  @PersonaID = @PersonaID_f1e8463079e5,
+  @Sequence = @Sequence_f1e8463079e5,
+  @IsSupported = @IsSupported_f1e8463079e5;
+END
+
 
 GO
 
@@ -18703,11 +20621,23 @@ SET
   @Sequence_997ab8fcd353 = 3
 SET
   @IsSupported_997ab8fcd353 = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_997ab8fcd353,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_997ab8fcd353)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_997ab8fcd353,
   @ModelID = @ModelID_997ab8fcd353,
   @PersonaID = @PersonaID_997ab8fcd353,
   @Sequence = @Sequence_997ab8fcd353,
   @IsSupported = @IsSupported_997ab8fcd353;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_997ab8fcd353,
+  @ModelID = @ModelID_997ab8fcd353,
+  @PersonaID = @PersonaID_997ab8fcd353,
+  @Sequence = @Sequence_997ab8fcd353,
+  @IsSupported = @IsSupported_997ab8fcd353;
+END
+
 
 GO
 
@@ -18727,11 +20657,23 @@ SET
   @Sequence_1762bbe13d8a = 4
 SET
   @IsSupported_1762bbe13d8a = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_1762bbe13d8a,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_1762bbe13d8a)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_1762bbe13d8a,
   @ModelID = @ModelID_1762bbe13d8a,
   @PersonaID = @PersonaID_1762bbe13d8a,
   @Sequence = @Sequence_1762bbe13d8a,
   @IsSupported = @IsSupported_1762bbe13d8a;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_1762bbe13d8a,
+  @ModelID = @ModelID_1762bbe13d8a,
+  @PersonaID = @PersonaID_1762bbe13d8a,
+  @Sequence = @Sequence_1762bbe13d8a,
+  @IsSupported = @IsSupported_1762bbe13d8a;
+END
+
 
 GO
 
@@ -18751,11 +20693,23 @@ SET
   @Sequence_f32103ba5f53 = 5
 SET
   @IsSupported_f32103ba5f53 = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_f32103ba5f53,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_f32103ba5f53)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_f32103ba5f53,
   @ModelID = @ModelID_f32103ba5f53,
   @PersonaID = @PersonaID_f32103ba5f53,
   @Sequence = @Sequence_f32103ba5f53,
   @IsSupported = @IsSupported_f32103ba5f53;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_f32103ba5f53,
+  @ModelID = @ModelID_f32103ba5f53,
+  @PersonaID = @PersonaID_f32103ba5f53,
+  @Sequence = @Sequence_f32103ba5f53,
+  @IsSupported = @IsSupported_f32103ba5f53;
+END
+
 
 GO
 
@@ -18775,11 +20729,23 @@ SET
   @Sequence_143d7fcc75d7 = 6
 SET
   @IsSupported_143d7fcc75d7 = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_143d7fcc75d7,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_143d7fcc75d7)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_143d7fcc75d7,
   @ModelID = @ModelID_143d7fcc75d7,
   @PersonaID = @PersonaID_143d7fcc75d7,
   @Sequence = @Sequence_143d7fcc75d7,
   @IsSupported = @IsSupported_143d7fcc75d7;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_143d7fcc75d7,
+  @ModelID = @ModelID_143d7fcc75d7,
+  @PersonaID = @PersonaID_143d7fcc75d7,
+  @Sequence = @Sequence_143d7fcc75d7,
+  @IsSupported = @IsSupported_143d7fcc75d7;
+END
+
 
 GO
 
@@ -18799,11 +20765,23 @@ SET
   @Sequence_af7093cddb3d = 7
 SET
   @IsSupported_af7093cddb3d = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_af7093cddb3d,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_af7093cddb3d)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_af7093cddb3d,
   @ModelID = @ModelID_af7093cddb3d,
   @PersonaID = @PersonaID_af7093cddb3d,
   @Sequence = @Sequence_af7093cddb3d,
   @IsSupported = @IsSupported_af7093cddb3d;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_af7093cddb3d,
+  @ModelID = @ModelID_af7093cddb3d,
+  @PersonaID = @PersonaID_af7093cddb3d,
+  @Sequence = @Sequence_af7093cddb3d,
+  @IsSupported = @IsSupported_af7093cddb3d;
+END
+
 
 GO
 
@@ -18823,11 +20801,23 @@ SET
   @Sequence_237e8868496d = 8
 SET
   @IsSupported_237e8868496d = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_237e8868496d,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_237e8868496d)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_237e8868496d,
   @ModelID = @ModelID_237e8868496d,
   @PersonaID = @PersonaID_237e8868496d,
   @Sequence = @Sequence_237e8868496d,
   @IsSupported = @IsSupported_237e8868496d;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_237e8868496d,
+  @ModelID = @ModelID_237e8868496d,
+  @PersonaID = @PersonaID_237e8868496d,
+  @Sequence = @Sequence_237e8868496d,
+  @IsSupported = @IsSupported_237e8868496d;
+END
+
 
 GO
 
@@ -18847,11 +20837,23 @@ SET
   @Sequence_3667e13bc3a8 = 9
 SET
   @IsSupported_3667e13bc3a8 = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_3667e13bc3a8,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_3667e13bc3a8)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_3667e13bc3a8,
   @ModelID = @ModelID_3667e13bc3a8,
   @PersonaID = @PersonaID_3667e13bc3a8,
   @Sequence = @Sequence_3667e13bc3a8,
   @IsSupported = @IsSupported_3667e13bc3a8;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_3667e13bc3a8,
+  @ModelID = @ModelID_3667e13bc3a8,
+  @PersonaID = @PersonaID_3667e13bc3a8,
+  @Sequence = @Sequence_3667e13bc3a8,
+  @IsSupported = @IsSupported_3667e13bc3a8;
+END
+
 
 GO
 
@@ -18871,11 +20873,23 @@ SET
   @Sequence_971578f5feb7 = 10
 SET
   @IsSupported_971578f5feb7 = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_971578f5feb7,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelPersona] WHERE [ID] = @ID_971578f5feb7)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelPersona @ID = @ID_971578f5feb7,
   @ModelID = @ModelID_971578f5feb7,
   @PersonaID = @PersonaID_971578f5feb7,
   @Sequence = @Sequence_971578f5feb7,
   @IsSupported = @IsSupported_971578f5feb7;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelPersona @ID = @ID_971578f5feb7,
+  @ModelID = @ModelID_971578f5feb7,
+  @PersonaID = @PersonaID_971578f5feb7,
+  @Sequence = @Sequence_971578f5feb7,
+  @IsSupported = @IsSupported_971578f5feb7;
+END
+
 
 GO
 
@@ -19536,7 +21550,9 @@ SET
   @Type_82ee3e3771fe = N'Scalar'
 SET
   @IsRequired_82ee3e3771fe = 0
-EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_82ee3e3771fe,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[TemplateParam] WHERE [ID] = @ID_82ee3e3771fe)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_82ee3e3771fe,
   @TemplateID = @TemplateID_82ee3e3771fe,
   @Name = @Name_82ee3e3771fe,
   @Description = @Description_82ee3e3771fe,
@@ -19558,6 +21574,33 @@ EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_82ee3e3771fe,
   @OrderBy_Clear = 1,
   @TemplateContentID = @TemplateContentID_82ee3e3771fe,
   @TemplateContentID_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateTemplateParam @ID = @ID_82ee3e3771fe,
+  @TemplateID = @TemplateID_82ee3e3771fe,
+  @Name = @Name_82ee3e3771fe,
+  @Description = @Description_82ee3e3771fe,
+  @Type = @Type_82ee3e3771fe,
+  @DefaultValue = @DefaultValue_82ee3e3771fe,
+  @DefaultValue_Clear = 1,
+  @IsRequired = @IsRequired_82ee3e3771fe,
+  @LinkedParameterName = @LinkedParameterName_82ee3e3771fe,
+  @LinkedParameterName_Clear = 1,
+  @LinkedParameterField = @LinkedParameterField_82ee3e3771fe,
+  @LinkedParameterField_Clear = 1,
+  @ExtraFilter = @ExtraFilter_82ee3e3771fe,
+  @ExtraFilter_Clear = 1,
+  @EntityID = @EntityID_82ee3e3771fe,
+  @EntityID_Clear = 1,
+  @RecordID = @RecordID_82ee3e3771fe,
+  @RecordID_Clear = 1,
+  @OrderBy = @OrderBy_82ee3e3771fe,
+  @OrderBy_Clear = 1,
+  @TemplateContentID = @TemplateContentID_82ee3e3771fe,
+  @TemplateContentID_Clear = 1;
+END
+
 
 GO
 
@@ -21689,7 +23732,9 @@ SET
   @Type_32c6e9d8d604 = N'Scalar'
 SET
   @IsRequired_32c6e9d8d604 = 0
-EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_32c6e9d8d604,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[TemplateParam] WHERE [ID] = @ID_32c6e9d8d604)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_32c6e9d8d604,
   @TemplateID = @TemplateID_32c6e9d8d604,
   @Name = @Name_32c6e9d8d604,
   @Description = @Description_32c6e9d8d604,
@@ -21711,6 +23756,33 @@ EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_32c6e9d8d604,
   @OrderBy_Clear = 1,
   @TemplateContentID = @TemplateContentID_32c6e9d8d604,
   @TemplateContentID_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateTemplateParam @ID = @ID_32c6e9d8d604,
+  @TemplateID = @TemplateID_32c6e9d8d604,
+  @Name = @Name_32c6e9d8d604,
+  @Description = @Description_32c6e9d8d604,
+  @Type = @Type_32c6e9d8d604,
+  @DefaultValue = @DefaultValue_32c6e9d8d604,
+  @DefaultValue_Clear = 1,
+  @IsRequired = @IsRequired_32c6e9d8d604,
+  @LinkedParameterName = @LinkedParameterName_32c6e9d8d604,
+  @LinkedParameterName_Clear = 1,
+  @LinkedParameterField = @LinkedParameterField_32c6e9d8d604,
+  @LinkedParameterField_Clear = 1,
+  @ExtraFilter = @ExtraFilter_32c6e9d8d604,
+  @ExtraFilter_Clear = 1,
+  @EntityID = @EntityID_32c6e9d8d604,
+  @EntityID_Clear = 1,
+  @RecordID = @RecordID_32c6e9d8d604,
+  @RecordID_Clear = 1,
+  @OrderBy = @OrderBy_32c6e9d8d604,
+  @OrderBy_Clear = 1,
+  @TemplateContentID = @TemplateContentID_32c6e9d8d604,
+  @TemplateContentID_Clear = 1;
+END
+
 
 GO
 
@@ -23341,7 +25413,9 @@ SET
   @Type_d7871f61f6fa = N'Scalar'
 SET
   @IsRequired_d7871f61f6fa = 0
-EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_d7871f61f6fa,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[TemplateParam] WHERE [ID] = @ID_d7871f61f6fa)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_d7871f61f6fa,
   @TemplateID = @TemplateID_d7871f61f6fa,
   @Name = @Name_d7871f61f6fa,
   @Description = @Description_d7871f61f6fa,
@@ -23363,6 +25437,33 @@ EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_d7871f61f6fa,
   @OrderBy_Clear = 1,
   @TemplateContentID = @TemplateContentID_d7871f61f6fa,
   @TemplateContentID_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateTemplateParam @ID = @ID_d7871f61f6fa,
+  @TemplateID = @TemplateID_d7871f61f6fa,
+  @Name = @Name_d7871f61f6fa,
+  @Description = @Description_d7871f61f6fa,
+  @Type = @Type_d7871f61f6fa,
+  @DefaultValue = @DefaultValue_d7871f61f6fa,
+  @DefaultValue_Clear = 1,
+  @IsRequired = @IsRequired_d7871f61f6fa,
+  @LinkedParameterName = @LinkedParameterName_d7871f61f6fa,
+  @LinkedParameterName_Clear = 1,
+  @LinkedParameterField = @LinkedParameterField_d7871f61f6fa,
+  @LinkedParameterField_Clear = 1,
+  @ExtraFilter = @ExtraFilter_d7871f61f6fa,
+  @ExtraFilter_Clear = 1,
+  @EntityID = @EntityID_d7871f61f6fa,
+  @EntityID_Clear = 1,
+  @RecordID = @RecordID_d7871f61f6fa,
+  @RecordID_Clear = 1,
+  @OrderBy = @OrderBy_d7871f61f6fa,
+  @OrderBy_Clear = 1,
+  @TemplateContentID = @TemplateContentID_d7871f61f6fa,
+  @TemplateContentID_Clear = 1;
+END
+
 
 GO
 
@@ -24244,7 +26345,9 @@ SET
   @Type_42d115186225 = N'Scalar'
 SET
   @IsRequired_42d115186225 = 0
-EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_42d115186225,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[TemplateParam] WHERE [ID] = @ID_42d115186225)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_42d115186225,
   @TemplateID = @TemplateID_42d115186225,
   @Name = @Name_42d115186225,
   @Description = @Description_42d115186225,
@@ -24266,6 +26369,33 @@ EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_42d115186225,
   @OrderBy_Clear = 1,
   @TemplateContentID = @TemplateContentID_42d115186225,
   @TemplateContentID_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateTemplateParam @ID = @ID_42d115186225,
+  @TemplateID = @TemplateID_42d115186225,
+  @Name = @Name_42d115186225,
+  @Description = @Description_42d115186225,
+  @Type = @Type_42d115186225,
+  @DefaultValue = @DefaultValue_42d115186225,
+  @DefaultValue_Clear = 1,
+  @IsRequired = @IsRequired_42d115186225,
+  @LinkedParameterName = @LinkedParameterName_42d115186225,
+  @LinkedParameterName_Clear = 1,
+  @LinkedParameterField = @LinkedParameterField_42d115186225,
+  @LinkedParameterField_Clear = 1,
+  @ExtraFilter = @ExtraFilter_42d115186225,
+  @ExtraFilter_Clear = 1,
+  @EntityID = @EntityID_42d115186225,
+  @EntityID_Clear = 1,
+  @RecordID = @RecordID_42d115186225,
+  @RecordID_Clear = 1,
+  @OrderBy = @OrderBy_42d115186225,
+  @OrderBy_Clear = 1,
+  @TemplateContentID = @TemplateContentID_42d115186225,
+  @TemplateContentID_Clear = 1;
+END
+
 
 GO
 
@@ -25696,7 +27826,9 @@ SET
   @Type_4fdff629b3f8 = N'Scalar'
 SET
   @IsRequired_4fdff629b3f8 = 0
-EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_4fdff629b3f8,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[TemplateParam] WHERE [ID] = @ID_4fdff629b3f8)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_4fdff629b3f8,
   @TemplateID = @TemplateID_4fdff629b3f8,
   @Name = @Name_4fdff629b3f8,
   @Description = @Description_4fdff629b3f8,
@@ -25718,6 +27850,33 @@ EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_4fdff629b3f8,
   @OrderBy_Clear = 1,
   @TemplateContentID = @TemplateContentID_4fdff629b3f8,
   @TemplateContentID_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateTemplateParam @ID = @ID_4fdff629b3f8,
+  @TemplateID = @TemplateID_4fdff629b3f8,
+  @Name = @Name_4fdff629b3f8,
+  @Description = @Description_4fdff629b3f8,
+  @Type = @Type_4fdff629b3f8,
+  @DefaultValue = @DefaultValue_4fdff629b3f8,
+  @DefaultValue_Clear = 1,
+  @IsRequired = @IsRequired_4fdff629b3f8,
+  @LinkedParameterName = @LinkedParameterName_4fdff629b3f8,
+  @LinkedParameterName_Clear = 1,
+  @LinkedParameterField = @LinkedParameterField_4fdff629b3f8,
+  @LinkedParameterField_Clear = 1,
+  @ExtraFilter = @ExtraFilter_4fdff629b3f8,
+  @ExtraFilter_Clear = 1,
+  @EntityID = @EntityID_4fdff629b3f8,
+  @EntityID_Clear = 1,
+  @RecordID = @RecordID_4fdff629b3f8,
+  @RecordID_Clear = 1,
+  @OrderBy = @OrderBy_4fdff629b3f8,
+  @OrderBy_Clear = 1,
+  @TemplateContentID = @TemplateContentID_4fdff629b3f8,
+  @TemplateContentID_Clear = 1;
+END
+
 
 GO
 
@@ -31673,7 +33832,9 @@ SET
   @Type_51ffcbeee639 = N'Scalar'
 SET
   @IsRequired_51ffcbeee639 = 0
-EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_51ffcbeee639,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[TemplateParam] WHERE [ID] = @ID_51ffcbeee639)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_51ffcbeee639,
   @TemplateID = @TemplateID_51ffcbeee639,
   @Name = @Name_51ffcbeee639,
   @Description = @Description_51ffcbeee639,
@@ -31695,6 +33856,33 @@ EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_51ffcbeee639,
   @OrderBy_Clear = 1,
   @TemplateContentID = @TemplateContentID_51ffcbeee639,
   @TemplateContentID_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateTemplateParam @ID = @ID_51ffcbeee639,
+  @TemplateID = @TemplateID_51ffcbeee639,
+  @Name = @Name_51ffcbeee639,
+  @Description = @Description_51ffcbeee639,
+  @Type = @Type_51ffcbeee639,
+  @DefaultValue = @DefaultValue_51ffcbeee639,
+  @DefaultValue_Clear = 1,
+  @IsRequired = @IsRequired_51ffcbeee639,
+  @LinkedParameterName = @LinkedParameterName_51ffcbeee639,
+  @LinkedParameterName_Clear = 1,
+  @LinkedParameterField = @LinkedParameterField_51ffcbeee639,
+  @LinkedParameterField_Clear = 1,
+  @ExtraFilter = @ExtraFilter_51ffcbeee639,
+  @ExtraFilter_Clear = 1,
+  @EntityID = @EntityID_51ffcbeee639,
+  @EntityID_Clear = 1,
+  @RecordID = @RecordID_51ffcbeee639,
+  @RecordID_Clear = 1,
+  @OrderBy = @OrderBy_51ffcbeee639,
+  @OrderBy_Clear = 1,
+  @TemplateContentID = @TemplateContentID_51ffcbeee639,
+  @TemplateContentID_Clear = 1;
+END
+
 
 GO
 
@@ -31725,7 +33913,9 @@ SET
   @Type_61414ac97d97 = N'Scalar'
 SET
   @IsRequired_61414ac97d97 = 0
-EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_61414ac97d97,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[TemplateParam] WHERE [ID] = @ID_61414ac97d97)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_61414ac97d97,
   @TemplateID = @TemplateID_61414ac97d97,
   @Name = @Name_61414ac97d97,
   @Description = @Description_61414ac97d97,
@@ -31747,6 +33937,33 @@ EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_61414ac97d97,
   @OrderBy_Clear = 1,
   @TemplateContentID = @TemplateContentID_61414ac97d97,
   @TemplateContentID_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateTemplateParam @ID = @ID_61414ac97d97,
+  @TemplateID = @TemplateID_61414ac97d97,
+  @Name = @Name_61414ac97d97,
+  @Description = @Description_61414ac97d97,
+  @Type = @Type_61414ac97d97,
+  @DefaultValue = @DefaultValue_61414ac97d97,
+  @DefaultValue_Clear = 1,
+  @IsRequired = @IsRequired_61414ac97d97,
+  @LinkedParameterName = @LinkedParameterName_61414ac97d97,
+  @LinkedParameterName_Clear = 1,
+  @LinkedParameterField = @LinkedParameterField_61414ac97d97,
+  @LinkedParameterField_Clear = 1,
+  @ExtraFilter = @ExtraFilter_61414ac97d97,
+  @ExtraFilter_Clear = 1,
+  @EntityID = @EntityID_61414ac97d97,
+  @EntityID_Clear = 1,
+  @RecordID = @RecordID_61414ac97d97,
+  @RecordID_Clear = 1,
+  @OrderBy = @OrderBy_61414ac97d97,
+  @OrderBy_Clear = 1,
+  @TemplateContentID = @TemplateContentID_61414ac97d97,
+  @TemplateContentID_Clear = 1;
+END
+
 
 GO
 
@@ -36615,7 +38832,9 @@ SET
   @Type_95c12b7fc733 = N'Scalar'
 SET
   @IsRequired_95c12b7fc733 = 0
-EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_95c12b7fc733,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[TemplateParam] WHERE [ID] = @ID_95c12b7fc733)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_95c12b7fc733,
   @TemplateID = @TemplateID_95c12b7fc733,
   @Name = @Name_95c12b7fc733,
   @Description = @Description_95c12b7fc733,
@@ -36637,6 +38856,33 @@ EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_95c12b7fc733,
   @OrderBy_Clear = 1,
   @TemplateContentID = @TemplateContentID_95c12b7fc733,
   @TemplateContentID_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateTemplateParam @ID = @ID_95c12b7fc733,
+  @TemplateID = @TemplateID_95c12b7fc733,
+  @Name = @Name_95c12b7fc733,
+  @Description = @Description_95c12b7fc733,
+  @Type = @Type_95c12b7fc733,
+  @DefaultValue = @DefaultValue_95c12b7fc733,
+  @DefaultValue_Clear = 1,
+  @IsRequired = @IsRequired_95c12b7fc733,
+  @LinkedParameterName = @LinkedParameterName_95c12b7fc733,
+  @LinkedParameterName_Clear = 1,
+  @LinkedParameterField = @LinkedParameterField_95c12b7fc733,
+  @LinkedParameterField_Clear = 1,
+  @ExtraFilter = @ExtraFilter_95c12b7fc733,
+  @ExtraFilter_Clear = 1,
+  @EntityID = @EntityID_95c12b7fc733,
+  @EntityID_Clear = 1,
+  @RecordID = @RecordID_95c12b7fc733,
+  @RecordID_Clear = 1,
+  @OrderBy = @OrderBy_95c12b7fc733,
+  @OrderBy_Clear = 1,
+  @TemplateContentID = @TemplateContentID_95c12b7fc733,
+  @TemplateContentID_Clear = 1;
+END
+
 
 GO
 
@@ -41629,12 +43875,26 @@ SET
 SET
   @Status_402b127a07f5 = N'Active'
 SET
-  @VariablesSchema_402b127a07f5 = N'{"schemaVersion":"1.0","variables":[{"name":"ToolCallingMode","displayName":"Tool Calling Mode","description":"Which encoding the cell exercises. ''envelope'' is the baseline — today''s path, no tools declared. ''native'' declares the agent''s actions as provider tools; the corpus case and its expectation are IDENTICAL either way, which is what makes the two directly comparable.","dataType":"string","valueSource":"static","possibleValues":[{"value":"envelope","label":"Envelope","description":"JSON envelope only — the baseline"},{"value":"native","label":"Native tools","description":"Actions declared as provider tools"}],"defaultValue":"envelope","required":false},{"name":"ToolChoice","displayName":"Tool Choice","description":"Forcing policy for native cells. Ignored in envelope mode. NOTE: forced choice (''required''/named) combined with JSON response format is a hard 400 on every current Gemini model.","dataType":"string","valueSource":"static","possibleValues":[{"value":"auto","label":"Auto","description":"The model decides"},{"value":"none","label":"None","description":"Tools declared but calling forbidden"},{"value":"required","label":"Required","description":"The model must call some tool"}],"defaultValue":"auto","required":false},{"name":"Model","displayName":"Model","description":"Pins the (model, vendor) pair for this cell. Every AIModelVendor pair is its own cell by design — inference-provider behavior is exactly what the vendor-level capability flags exist to capture.","dataType":"string","valueSource":"freeform","required":false},{"name":"ResponseFormat","displayName":"Response Format","description":"The prompt''s response format for this cell. Crosses with ToolCallingMode to cover the JSON-mode interaction the provider probe measured.","dataType":"string","valueSource":"static","possibleValues":[{"value":"Any","label":"Any","description":"No provider-level format constraint"},{"value":"JSON","label":"JSON","description":"Provider JSON mode"}],"required":false}]}' EXEC [${flyway:defaultSchema}].spCreateTestType @ID = @ID_402b127a07f5,
+  @VariablesSchema_402b127a07f5 = N'{"schemaVersion":"1.0","variables":[{"name":"ToolCallingMode","displayName":"Tool Calling Mode","description":"Which encoding the cell exercises. ''envelope'' is the baseline — today''s path, no tools declared. ''native'' declares the agent''s actions as provider tools; the corpus case and its expectation are IDENTICAL either way, which is what makes the two directly comparable.","dataType":"string","valueSource":"static","possibleValues":[{"value":"envelope","label":"Envelope","description":"JSON envelope only — the baseline"},{"value":"native","label":"Native tools","description":"Actions declared as provider tools"}],"defaultValue":"envelope","required":false},{"name":"ToolChoice","displayName":"Tool Choice","description":"Forcing policy for native cells. Ignored in envelope mode. NOTE: forced choice (''required''/named) combined with JSON response format is a hard 400 on every current Gemini model.","dataType":"string","valueSource":"static","possibleValues":[{"value":"auto","label":"Auto","description":"The model decides"},{"value":"none","label":"None","description":"Tools declared but calling forbidden"},{"value":"required","label":"Required","description":"The model must call some tool"}],"defaultValue":"auto","required":false},{"name":"Model","displayName":"Model","description":"Pins the (model, vendor) pair for this cell. Every AIModelVendor pair is its own cell by design — inference-provider behavior is exactly what the vendor-level capability flags exist to capture.","dataType":"string","valueSource":"freeform","required":false},{"name":"ResponseFormat","displayName":"Response Format","description":"The prompt''s response format for this cell. Crosses with ToolCallingMode to cover the JSON-mode interaction the provider probe measured.","dataType":"string","valueSource":"static","possibleValues":[{"value":"Any","label":"Any","description":"No provider-level format constraint"},{"value":"JSON","label":"JSON","description":"Provider JSON mode"}],"required":false}]}'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[TestType] WHERE [ID] = @ID_402b127a07f5)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateTestType @ID = @ID_402b127a07f5,
   @Name = @Name_402b127a07f5,
   @Description = @Description_402b127a07f5,
   @DriverClass = @DriverClass_402b127a07f5,
   @Status = @Status_402b127a07f5,
   @VariablesSchema = @VariablesSchema_402b127a07f5;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateTestType @ID = @ID_402b127a07f5,
+  @Name = @Name_402b127a07f5,
+  @Description = @Description_402b127a07f5,
+  @DriverClass = @DriverClass_402b127a07f5,
+  @Status = @Status_402b127a07f5,
+  @VariablesSchema = @VariablesSchema_402b127a07f5;
+END
+
 
 GO
 
@@ -44736,7 +46996,10 @@ SET
 SET
   @DateFieldToCheck_684b8cb2b9b3 = N'__mj_UpdatedAt'
 SET
-  @Description_684b8cb2b9b3 = N'Role-based field-level (column-level) security records, linked to their fields during metadata post-processing' EXEC [${flyway:defaultSchema}].spCreateDatasetItem @ID = @ID_684b8cb2b9b3,
+  @Description_684b8cb2b9b3 = N'Role-based field-level (column-level) security records, linked to their fields during metadata post-processing'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[DatasetItem] WHERE [ID] = @ID_684b8cb2b9b3)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateDatasetItem @ID = @ID_684b8cb2b9b3,
   @Code = @Code_684b8cb2b9b3,
   @DatasetID = @DatasetID_684b8cb2b9b3,
   @Sequence = @Sequence_684b8cb2b9b3,
@@ -44747,6 +47010,22 @@ SET
   @Description = @Description_684b8cb2b9b3,
   @Columns = @Columns_684b8cb2b9b3,
   @Columns_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateDatasetItem @ID = @ID_684b8cb2b9b3,
+  @Code = @Code_684b8cb2b9b3,
+  @DatasetID = @DatasetID_684b8cb2b9b3,
+  @Sequence = @Sequence_684b8cb2b9b3,
+  @EntityID = @EntityID_684b8cb2b9b3,
+  @WhereClause = @WhereClause_684b8cb2b9b3,
+  @WhereClause_Clear = 1,
+  @DateFieldToCheck = @DateFieldToCheck_684b8cb2b9b3,
+  @Description = @Description_684b8cb2b9b3,
+  @Columns = @Columns_684b8cb2b9b3,
+  @Columns_Clear = 1;
+END
+
 
 GO
 
@@ -44773,7 +47052,10 @@ SET
 SET
   @Status_86d26b3286a2 = N'Active'
 SET
-  @SupportedFeatures_86d26b3286a2 = N'{"InboundRouting":true,"DTMF":true,"CallTransfer":true,"DetachedMediaPlane":true}' EXEC [${flyway:defaultSchema}].spCreateAIBridgeProvider @ID = @ID_86d26b3286a2,
+  @SupportedFeatures_86d26b3286a2 = N'{"InboundRouting":true,"DTMF":true,"CallTransfer":true,"DetachedMediaPlane":true}'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIBridgeProvider] WHERE [ID] = @ID_86d26b3286a2)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIBridgeProvider @ID = @ID_86d26b3286a2,
   @Name = @Name_86d26b3286a2,
   @Description = @Description_86d26b3286a2,
   @BridgeType = @BridgeType_86d26b3286a2,
@@ -44784,6 +47066,22 @@ SET
   @ConfigSchema_Clear = 1,
   @Configuration = @Configuration_86d26b3286a2,
   @Configuration_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIBridgeProvider @ID = @ID_86d26b3286a2,
+  @Name = @Name_86d26b3286a2,
+  @Description = @Description_86d26b3286a2,
+  @BridgeType = @BridgeType_86d26b3286a2,
+  @DriverClass = @DriverClass_86d26b3286a2,
+  @Status = @Status_86d26b3286a2,
+  @SupportedFeatures = @SupportedFeatures_86d26b3286a2,
+  @ConfigSchema = @ConfigSchema_86d26b3286a2,
+  @ConfigSchema_Clear = 1,
+  @Configuration = @Configuration_86d26b3286a2,
+  @Configuration_Clear = 1;
+END
+
 
 GO
 
