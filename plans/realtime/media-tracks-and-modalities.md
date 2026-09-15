@@ -1,6 +1,7 @@
 # Realtime media tracks and an open modality vocabulary
 
-**Status:** proposal for discussion — no code
+**Status:** ACCEPTED — building in PR #4512 alongside Gemini 3.8 Live.
+**Build list:** [`gemini-3-8-live.md`](gemini-3-8-live.md) §6 phases A / B / F
 **Scope:** cross-provider realtime architecture. Prompted by Gemini 3.8 Live's video input, but
 deliberately not about Gemini.
 **Related:** [`gemini-3-8-live.md`](gemini-3-8-live.md) §5.5 / §5.6, [`gpt-live-1.md`](gpt-live-1.md)
@@ -161,6 +162,12 @@ That single seam explains every case, present and future:
 | Media display | yes, as built | none today; could sink outbound `video` |
 | Audio | no channel — the session's own plane | inbound + outbound `audio` |
 
+**This is the proof point the design is being built for.** A whiteboard that sources video means
+the agent *sees what it draws* and corrects itself mid-stroke, and *sees what the user draws*
+directly rather than through a described diff. A remote browser that sources video means the model
+watches the page while the agent acts — which is a different quality of browser control, not a
+faster version of the same one. Both are emergent from one seam rather than two features.
+
 The remote-browser row is the one that convinces me the seam is in the right place. Today the agent
 sees the browser by calling a tool that returns a screenshot — discrete, polled, latency-bound. With
 an inbound video track the *model* watches the page continuously while the agent still *acts*
@@ -189,10 +196,9 @@ knobs**, allow-listed per model, and explicitly *not* the path for anything MJ r
 consent, behaviour). The persona plan already recorded why an untyped bag relocates a vendor leak
 instead of fixing it.
 
-**Open design question worth settling before code:** with tracks, is `TurnCoverage` still its own
-setting? "Is there an inbound video track" and "are established video frames included in this turn's
+**Settled:** `TurnCoverage` stays its own setting. With tracks, is it still needed? "Is there an inbound video track" and "are established video frames included in this turn's
 context" are separable — a track can exist while a given turn ignores it — but they are close enough
-that shipping both without deciding invites two knobs that disagree. My read: keep them separate,
+that shipping both without deciding invites two knobs that disagree. Decision: keep them separate,
 because coverage is a *per-turn context* decision and the track is a *session transport* decision,
 and conflating them would mean tearing down a negotiated track to stop including frames.
 
@@ -207,6 +213,10 @@ and conflating them would mean tearing down a negotiated track to stop including
 - Not a migration. `MJ: AI Agent Channels` already has the registry shape a modality registry needs.
 
 ## 8. Sequencing
+
+**Accepted and now sequenced as phases A, B and F of [`gemini-3-8-live.md`](gemini-3-8-live.md) §6.**
+The steps below are the reasoning; that list is the checklist.
+
 
 1. This document, agreed.
 2. Track contract in `AI/Core` — types only, nobody reads them (the shape the capability contract
