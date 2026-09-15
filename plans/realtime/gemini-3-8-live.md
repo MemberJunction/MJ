@@ -108,18 +108,18 @@ and still issuing tool calls. `IsBusy` must become outstanding-work-based.
   `Reasoning.IncludeThoughtSummaries`. *(commit `35ba627ee7`)*
 - [x] **A2.** `RealtimeSessionCapabilities` gains `ProvidesThoughtSummaries`,
   `SupportsAsynchronousReasoning`. *(commit `35ba627ee7`)*
-- [ ] **A3.** Track contract in `AI/Core`: `RealtimeTrackDirection`,
+- [x] **A3.** Track contract in `AI/Core`: `RealtimeTrackDirection`,
   `RealtimeTrackDescriptor` (`Modality`, `Direction`, `Encoding`, `Rate`, `UsageBasis`,
-  `RequiresConsent`), `RealtimeTrackState`.
-- [ ] **A4.** Modality registry as a **code** registry (`BaseSingleton`) seeded with well-known
+  `RequiresConsent`), `RealtimeTrackState`, `RealtimeTrack`. *(commit pending)*
+- [x] **A4.** Modality registry as a **code** registry (`BaseSingleton`) seeded with well-known
   keys `audio`/`video`/`image`/`text`; unknown keys transportable but not reasoned about.
-- [ ] **A5.** `RealtimeSessionCapabilities` gains `SupportedInboundTracks` /
+- [x] **A5.** `RealtimeSessionCapabilities` gains `SupportedInboundTracks` /
   `SupportedOutboundTracks`.
-- [ ] **A6.** `ModelConfiguration.Realtime.RequestedTracks?: RealtimeTrackDescriptor[]` — the
+- [x] **A6.** `ModelConfiguration.Realtime.RequestedTracks?: RealtimeTrackDescriptor[]` — the
   request side of negotiation (absent ⇒ audio only).
-- [ ] **A7.** Channel contract gains optional `SourcesTracks` / `SinksTracks` on
+- [x] **A7.** Channel contract gains optional `SourcesTracks` / `SinksTracks` on
   `BaseRealtimeChannelServer` (+ client mirror).
-- [ ] **A8.** `UsageBases` / `UsageBasis` extended with `'frames' | 'bytes'`.
+- [x] **A8.** `UsageBases` / `UsageBasis` extended with `'frames' | 'bytes'`.
 
 ### Phase B — SDK and audio retrofit
 
