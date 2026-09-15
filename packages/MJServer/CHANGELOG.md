@@ -1,5 +1,103 @@
 # Change Log - @memberjunction/server
 
+## 6.1.1
+
+### Patch Changes
+
+- Updated dependencies [fec92e8]
+- Updated dependencies [f219477]
+  - @memberjunction/codegen-lib@6.1.1
+  - @memberjunction/core@6.1.1
+  - @memberjunction/ai-agent-manager-actions@6.1.1
+  - @memberjunction/ai-agent-manager@6.1.1
+  - @memberjunction/ai-agents@6.1.1
+  - @memberjunction/ai-engine-base@6.1.1
+  - @memberjunction/clustering-engine@6.1.1
+  - @memberjunction/computer-use@6.1.1
+  - @memberjunction/ai-core-plus@6.1.1
+  - @memberjunction/aiengine@6.1.1
+  - @memberjunction/tag-engine@6.1.1
+  - @memberjunction/tag-engine-base@6.1.1
+  - @memberjunction/ai-mcp-client@6.1.1
+  - @memberjunction/computer-use-engine@6.1.1
+  - @memberjunction/ai-prompts@6.1.1
+  - @memberjunction/ai-bridge-base@6.1.1
+  - @memberjunction/ai-bridge-ringcentral@6.1.1
+  - @memberjunction/ai-bridge-teams@6.1.1
+  - @memberjunction/ai-bridge-twilio@6.1.1
+  - @memberjunction/ai-bridge-vonage@6.1.1
+  - @memberjunction/ai-bridge-server@6.1.1
+  - @memberjunction/remote-browser-base@6.1.1
+  - @memberjunction/remote-browser-cdp@6.1.1
+  - @memberjunction/remote-browser-selfhost@6.1.1
+  - @memberjunction/remote-browser-server@6.1.1
+  - @memberjunction/ai-vectordb@6.1.1
+  - @memberjunction/ai-vectors-pinecone@6.1.1
+  - @memberjunction/ai-vector-sync@6.1.1
+  - @memberjunction/api-keys@6.1.1
+  - @memberjunction/actions-apollo@6.1.1
+  - @memberjunction/actions-base@6.1.1
+  - @memberjunction/actions-bizapps-accounting@6.1.1
+  - @memberjunction/actions-bizapps-crm@6.1.1
+  - @memberjunction/actions-bizapps-formbuilders@6.1.1
+  - @memberjunction/actions-bizapps-lms@6.1.1
+  - @memberjunction/actions-bizapps-social@6.1.1
+  - @memberjunction/core-actions@6.1.1
+  - @memberjunction/actions@6.1.1
+  - @memberjunction/auth-providers@6.1.1
+  - @memberjunction/communication-types@6.1.1
+  - @memberjunction/communication-engine@6.1.1
+  - @memberjunction/entity-communications-base@6.1.1
+  - @memberjunction/entity-communications-server@6.1.1
+  - @memberjunction/notifications@6.1.1
+  - @memberjunction/communication-ms-graph@6.1.1
+  - @memberjunction/communication-sendgrid@6.1.1
+  - @memberjunction/component-registry-client-sdk@6.1.1
+  - @memberjunction/credentials@6.1.1
+  - @memberjunction/doc-utils@6.1.1
+  - @memberjunction/encryption@6.1.1
+  - @memberjunction/external-change-detection@6.1.1
+  - @memberjunction/generic-database-provider@6.1.1
+  - @memberjunction/graphql-dataprovider@6.1.1
+  - @memberjunction/integration-engine@6.1.1
+  - @memberjunction/integration-engine-base@6.1.1
+  - @memberjunction/integration-schema-builder@6.1.1
+  - @memberjunction/interactive-component-types@6.1.1
+  - @memberjunction/lists@6.1.1
+  - @memberjunction/livekit-room-server@6.1.1
+  - @memberjunction/core-entities@6.1.1
+  - @memberjunction/core-entities-server@6.1.1
+  - @memberjunction/data-context@6.1.1
+  - @memberjunction/data-context-server@6.1.1
+  - @memberjunction/queue@6.1.1
+  - @memberjunction/storage@6.1.1
+  - @memberjunction/postgresql-dataprovider@6.1.1
+  - @memberjunction/record-comparison@6.1.1
+  - @memberjunction/redis-provider@6.1.1
+  - @memberjunction/sqlserver-dataprovider@6.1.1
+  - @memberjunction/scheduling-actions@6.1.1
+  - @memberjunction/scheduling-engine-base@6.1.1
+  - @memberjunction/scheduling-engine@6.1.1
+  - @memberjunction/schema-engine@6.1.1
+  - @memberjunction/search-engine@6.1.1
+  - @memberjunction/server-extensions-core@6.1.1
+  - @memberjunction/task-graph@6.1.1
+  - @memberjunction/templates@6.1.1
+  - @memberjunction/testing-engine@6.1.1
+  - @memberjunction/testing-engine-base@6.1.1
+  - @memberjunction/version-history@6.1.1
+  - @memberjunction/esignature@6.1.1
+  - @memberjunction/ai-provider-bundle@6.1.1
+  - @memberjunction/ai@6.1.1
+  - @memberjunction/config@6.1.1
+  - @memberjunction/integration-progress-artifacts@6.1.1
+  - @memberjunction/lists-base@6.1.1
+  - @memberjunction/global@6.1.1
+  - @memberjunction/network-utils@6.1.1
+  - @memberjunction/sql-dialect@6.1.1
+  - @memberjunction/sql-parser@6.1.1
+  - @memberjunction/scheduling-base-types@6.1.1
+
 ## 6.1.0
 
 ### Minor Changes

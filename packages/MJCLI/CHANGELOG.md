@@ -1,5 +1,33 @@
 # Change Log - @memberjunction/cli
 
+## 6.1.1
+
+### Patch Changes
+
+- Updated dependencies [fec92e8]
+- Updated dependencies [f219477]
+  - @memberjunction/codegen-lib@6.1.1
+  - @memberjunction/installer@6.1.1
+  - @memberjunction/core@6.1.1
+  - @memberjunction/ai-cli@6.1.1
+  - @memberjunction/aiengine@6.1.1
+  - @memberjunction/db-auto-doc@6.1.1
+  - @memberjunction/generic-database-provider@6.1.1
+  - @memberjunction/core-entities@6.1.1
+  - @memberjunction/metadata-sync@6.1.1
+  - @memberjunction/open-app-engine@6.1.1
+  - @memberjunction/query-gen@6.1.1
+  - @memberjunction/sqlserver-dataprovider@6.1.1
+  - @memberjunction/server-bootstrap-lite@6.1.1
+  - @memberjunction/testing-cli@6.1.1
+  - @memberjunction/cli-core@6.1.1
+  - @memberjunction/config@6.1.1
+  - @memberjunction/dynamic-packages@6.1.1
+  - @memberjunction/global@6.1.1
+  - @memberjunction/sql-converter@6.1.1
+  - @memberjunction/sqlglot-ts@6.1.1
+  - @memberjunction/standards@6.1.1
+
 ## 6.1.0
 
 ### Minor Changes

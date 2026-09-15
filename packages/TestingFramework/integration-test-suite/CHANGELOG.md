@@ -1,5 +1,61 @@
 # @memberjunction/integration-test-suite
 
+## 6.1.1
+
+### Patch Changes
+
+- Updated dependencies [fec92e8]
+- Updated dependencies [f219477]
+  - @memberjunction/codegen-lib@6.1.1
+  - @memberjunction/core@6.1.1
+  - @memberjunction/ai-agent-harness@6.1.1
+  - @memberjunction/ai-agents@6.1.1
+  - @memberjunction/ai-engine-base@6.1.1
+  - @memberjunction/ai-core-plus@6.1.1
+  - @memberjunction/aiengine@6.1.1
+  - @memberjunction/predictive-studio@6.1.1
+  - @memberjunction/ai-prompts@6.1.1
+  - @memberjunction/ai-bridge-base@6.1.1
+  - @memberjunction/ai-bridge-server@6.1.1
+  - @memberjunction/api-keys@6.1.1
+  - @memberjunction/actions-base@6.1.1
+  - @memberjunction/actions@6.1.1
+  - @memberjunction/auth-providers@6.1.1
+  - @memberjunction/communication-types@6.1.1
+  - @memberjunction/communication-engine@6.1.1
+  - @memberjunction/notifications@6.1.1
+  - @memberjunction/communication-ms-graph@6.1.1
+  - @memberjunction/communication-expo-push@6.1.1
+  - @memberjunction/communication-gmail@6.1.1
+  - @memberjunction/communication-sendgrid@6.1.1
+  - @memberjunction/communication-twilio@6.1.1
+  - @memberjunction/content-autotagging@6.1.1
+  - @memberjunction/conversations-runtime@6.1.1
+  - @memberjunction/generic-database-provider@6.1.1
+  - @memberjunction/graphql-dataprovider@6.1.1
+  - @memberjunction/core-entities@6.1.1
+  - @memberjunction/queue@6.1.1
+  - @memberjunction/storage@6.1.1
+  - @memberjunction/metadata-sync@6.1.1
+  - @memberjunction/open-app-engine@6.1.1
+  - @memberjunction/query-processor@6.1.1
+  - @memberjunction/record-set-processor-base@6.1.1
+  - @memberjunction/record-set-processor@6.1.1
+  - @memberjunction/redis-provider@6.1.1
+  - @memberjunction/sqlserver-dataprovider@6.1.1
+  - @memberjunction/scheduling-engine@6.1.1
+  - @memberjunction/search-engine@6.1.1
+  - @memberjunction/server-bootstrap-lite@6.1.1
+  - @memberjunction/task-graph@6.1.1
+  - @memberjunction/templates-base-types@6.1.1
+  - @memberjunction/templates@6.1.1
+  - @memberjunction/testing-engine@6.1.1
+  - @memberjunction/testing-integration@6.1.1
+  - @memberjunction/ai@6.1.1
+  - @memberjunction/predictive-studio-core@6.1.1
+  - @memberjunction/global@6.1.1
+  - @memberjunction/unit-testing@6.1.1
+
 ## 6.1.0
 
 ### Minor Changes

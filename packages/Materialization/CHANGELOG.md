@@ -1,5 +1,16 @@
 # @memberjunction/materialization
 
+## 6.1.1
+
+### Patch Changes
+
+- Updated dependencies [f219477]
+  - @memberjunction/core@6.1.1
+  - @memberjunction/core-entities@6.1.1
+  - @memberjunction/global@6.1.1
+  - @memberjunction/sql-dialect@6.1.1
+  - @memberjunction/sql-parser@6.1.1
+
 ## 6.1.0
 
 ### Minor Changes

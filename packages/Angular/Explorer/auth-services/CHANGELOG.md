@@ -1,5 +1,14 @@
 # Change Log - @memberjunction/ng-auth-services
 
+## 6.1.1
+
+### Patch Changes
+
+- Updated dependencies [f219477]
+  - @memberjunction/core@6.1.1
+  - @memberjunction/ng-ui-components@6.1.1
+  - @memberjunction/global@6.1.1
+
 ## 6.1.0
 
 ### Minor Changes

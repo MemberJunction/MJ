@@ -1,5 +1,20 @@
 # @memberjunction/ng-workspace-initializer
 
+## 6.1.1
+
+### Patch Changes
+
+- Updated dependencies [f219477]
+  - @memberjunction/core@6.1.1
+  - @memberjunction/ng-auth-services@6.1.1
+  - @memberjunction/ng-explorer-core@6.1.1
+  - @memberjunction/ng-shared@6.1.1
+  - @memberjunction/ng-shared-generic@6.1.1
+  - @memberjunction/graphql-dataprovider@6.1.1
+  - @memberjunction/core-entities@6.1.1
+  - @memberjunction/global@6.1.1
+  - @memberjunction/theme-engine@6.1.1
+
 ## 6.1.0
 
 ### Patch Changes

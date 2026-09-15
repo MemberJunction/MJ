@@ -1,5 +1,40 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 6.1.1
+
+### Patch Changes
+
+- fec92e8: Fix a fresh `mj install` that could not boot MJAPI or Explorer (MemberJunction/MJ#4477). Since the schema-scale emit change, CodeGen produced the entity-subclass, GraphQL and Angular outputs by iterating a per-directory partition of the non-core entities. On a fresh database that list is empty, the partition was empty, and the generators were never called, so `packages/GeneratedEntities/src/generated/entity_subclasses.ts` and the Angular generated-forms module were never written while CodeGen still reported "complete". `partitionEntitiesByOutputDirectory` now always includes the default directory with an empty group when one is configured, restoring the pre-change behaviour of emitting an empty barrel. The installer's post-CodeGen artifact check now treats a missing `entity_subclasses.ts` as critical and names the missing file in the failure, instead of trusting the exit code.
+- Updated dependencies [f219477]
+  - @memberjunction/core@6.1.1
+  - @memberjunction/ai-core-plus@6.1.1
+  - @memberjunction/aiengine@6.1.1
+  - @memberjunction/ai-prompts@6.1.1
+  - @memberjunction/actions-base@6.1.1
+  - @memberjunction/actions@6.1.1
+  - @memberjunction/external-data-sources@6.1.1
+  - @memberjunction/external-data-source-databricks@6.1.1
+  - @memberjunction/external-data-source-mongodb@6.1.1
+  - @memberjunction/external-data-source-mysql@6.1.1
+  - @memberjunction/external-data-source-oracle@6.1.1
+  - @memberjunction/external-data-source-postgres@6.1.1
+  - @memberjunction/external-data-source-sqlserver@6.1.1
+  - @memberjunction/external-data-source-snowflake@6.1.1
+  - @memberjunction/generic-database-provider@6.1.1
+  - @memberjunction/core-entities@6.1.1
+  - @memberjunction/core-entities-server@6.1.1
+  - @memberjunction/postgresql-dataprovider@6.1.1
+  - @memberjunction/query-processor@6.1.1
+  - @memberjunction/sqlserver-dataprovider@6.1.1
+  - @memberjunction/server-bootstrap-lite@6.1.1
+  - @memberjunction/ai-provider-bundle@6.1.1
+  - @memberjunction/ai@6.1.1
+  - @memberjunction/cli-core@6.1.1
+  - @memberjunction/config@6.1.1
+  - @memberjunction/global@6.1.1
+  - @memberjunction/sql-dialect@6.1.1
+  - @memberjunction/sql-parser@6.1.1
+
 ## 6.1.0
 
 ### Minor Changes

@@ -1,5 +1,19 @@
 # @memberjunction/realtime-widget
 
+## 6.1.1
+
+### Patch Changes
+
+- Updated dependencies [f219477]
+  - @memberjunction/core@6.1.1
+  - @memberjunction/ai-core-plus@6.1.1
+  - @memberjunction/conversations-runtime@6.1.1
+  - @memberjunction/graphql-dataprovider@6.1.1
+  - @memberjunction/core-entities@6.1.1
+  - @memberjunction/ai@6.1.1
+  - @memberjunction/ai-realtime-client@6.1.1
+  - @memberjunction/global@6.1.1
+
 ## 6.1.0
 
 ### Patch Changes

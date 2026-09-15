@@ -1,5 +1,25 @@
 # @memberjunction/ng-ai-test-harness
 
+## 6.1.1
+
+### Patch Changes
+
+- Updated dependencies [f219477]
+  - @memberjunction/core@6.1.1
+  - @memberjunction/ai-engine-base@6.1.1
+  - @memberjunction/ai-core-plus@6.1.1
+  - @memberjunction/ng-base-types@6.1.1
+  - @memberjunction/ng-code-editor@6.1.1
+  - @memberjunction/ng-container-directives@6.1.1
+  - @memberjunction/ng-notifications@6.1.1
+  - @memberjunction/ng-shared-generic@6.1.1
+  - @memberjunction/ng-task-graph-editor@6.1.1
+  - @memberjunction/graphql-dataprovider@6.1.1
+  - @memberjunction/core-entities@6.1.1
+  - @memberjunction/ng-ui-components@6.1.1
+  - @memberjunction/ai@6.1.1
+  - @memberjunction/global@6.1.1
+
 ## 6.1.0
 
 ### Patch Changes

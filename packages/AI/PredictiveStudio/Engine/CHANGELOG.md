@@ -1,5 +1,23 @@
 # @memberjunction/predictive-studio
 
+## 6.1.1
+
+### Patch Changes
+
+- Updated dependencies [f219477]
+  - @memberjunction/core@6.1.1
+  - @memberjunction/ai-agents@6.1.1
+  - @memberjunction/ai-core-plus@6.1.1
+  - @memberjunction/actions-base@6.1.1
+  - @memberjunction/actions@6.1.1
+  - @memberjunction/core-entities@6.1.1
+  - @memberjunction/record-set-processor-base@6.1.1
+  - @memberjunction/record-set-processor@6.1.1
+  - @memberjunction/ai@6.1.1
+  - @memberjunction/predictive-studio-core@6.1.1
+  - @memberjunction/predictive-studio-sidecar@6.1.1
+  - @memberjunction/global@6.1.1
+
 ## 6.1.0
 
 ### Patch Changes
