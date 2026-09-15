@@ -36,7 +36,10 @@ vi.mock('../github/github-client.js', () => ({
     ListGitHubReleases: vi.fn(),
     ListGitHubTags: vi.fn(),
 }));
-vi.mock('../install/schema-manager.js', () => ({
+// Spread the real module so ValidateSchemaName is the genuine rule (these suites declare
+// ordinary schema names, so it always passes); only the DB-touching functions are stubbed.
+vi.mock('../install/schema-manager.js', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('../install/schema-manager.js')>()),
     CreateAppSchema: vi.fn(),
     DropAppSchema: vi.fn(),
     SchemaExists: vi.fn(),
@@ -825,5 +828,92 @@ describe('UpgradeApp — config prune ordering', () => {
         expect(result.Success).toBe(false);
         expect(vi.mocked(PruneDynamicPackagesNotInManifest)).not.toHaveBeenCalled();
         expect(vi.mocked(SetAppStatus)).toHaveBeenCalledWith(expect.anything(), 'app-x-id', 'Error');
+    });
+});
+
+describe('reserved-schema guard on the adopt-an-existing-schema path', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        installSequence.length = 0;
+
+        // Default happy-path stubs — mirrors the outer describe's beforeEach so a real install
+        // would succeed if the reserved-name guard under test did not stop it first.
+        vi.mocked(CreateAppSchema).mockResolvedValue({ Success: true });
+        vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true });
+        vi.mocked(AddAppPackages).mockReturnValue({ Success: true });
+        vi.mocked(RunPackageInstall).mockReturnValue({ Success: true });
+        vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
+        vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });
+        vi.mocked(AddClientDynamicPackages).mockReturnValue({ Success: true });
+        vi.mocked(AddEntityPackageMapping).mockReturnValue({ Success: true });
+        vi.mocked(SetAppStatus).mockResolvedValue(undefined);
+        vi.mocked(RecordInstallHistoryEntry).mockResolvedValue(undefined);
+        vi.mocked(RecordAppDependencies).mockResolvedValue(undefined);
+        vi.mocked(FindInstalledApp).mockResolvedValue(undefined); // nothing installed yet
+        vi.mocked(ListInstalledApps).mockResolvedValue([]);
+        vi.mocked(RecordAppInstallation).mockImplementation(async (_user, manifest) => {
+            installSequence.push(manifest.name);
+            return `id-${manifest.name}`;
+        });
+    });
+
+    /**
+     * `HandleSchemaCreation` probes SchemaExists before it creates, and adopts the schema when
+     * it already exists. `__mj_UDT` exists in every MJ database, so without validation ahead of
+     * that probe an app could adopt MJ's user-defined-table sandbox — and `mj app remove` would
+     * then DROP it, taking every user-defined table with it.
+     */
+    it('refuses to install an app that claims a reserved schema which already exists', async () => {
+        const manifest = JSON.stringify({
+            manifestVersion: 1,
+            name: 'squatter',
+            displayName: 'squatter',
+            description: 'app claiming a reserved schema',
+            version: '1.0.0',
+            publisher: { name: 'Test' },
+            repository: 'https://github.com/test/squatter',
+            mjVersionRange: '>=5.0.0 <6.0.0',
+            schema: { name: '__mj_UDT' },
+            packages: {},
+            dependencies: {},
+        });
+        serveManifests({ 'https://github.com/test/squatter': manifest });
+        vi.mocked(SchemaExists).mockResolvedValue(true);
+
+        const result = await InstallApp({ Source: 'https://github.com/test/squatter' }, context);
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toMatch(/reserved/i);
+    });
+
+    it('still refuses when the dangerous override is on — reserved means reserved', async () => {
+        // 'dbo', not '__mj': the manifest schema's own name pattern requires 3+ chars after any
+        // leading underscores (schemaNameRegex in manifest-schema.ts), so a literal '__mj' manifest
+        // is rejected before InstallApp ever runs — it can't reach the guard under test here. 'dbo'
+        // is also an exact-match reserved name (RESERVED_SCHEMAS), so it proves the same point:
+        // the reserved check is unconditional and doesn't care about AllowDoubleUnderscoreSchema.
+        const manifest = JSON.stringify({
+            manifestVersion: 1,
+            name: 'squatter2',
+            displayName: 'squatter2',
+            description: 'app claiming a reserved schema',
+            version: '1.0.0',
+            publisher: { name: 'Test' },
+            repository: 'https://github.com/test/squatter2',
+            mjVersionRange: '>=5.0.0 <6.0.0',
+            schema: { name: 'dbo' },
+            packages: {},
+            dependencies: {},
+        });
+        serveManifests({ 'https://github.com/test/squatter2': manifest });
+        vi.mocked(SchemaExists).mockResolvedValue(true);
+
+        const result = await InstallApp(
+            { Source: 'https://github.com/test/squatter2', AllowDoubleUnderscoreSchema: true },
+            context,
+        );
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toMatch(/reserved/i);
     });
 });

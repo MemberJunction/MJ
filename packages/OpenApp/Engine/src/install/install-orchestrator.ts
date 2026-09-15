@@ -17,7 +17,7 @@ import type { ManifestFetcher, RootApp } from '../dependency/dependency-graph-bu
 import type { InstalledAppMap, DependencyValue } from '../dependency/dependency-resolver.js';
 import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ListGitHubReleases, ListGitHubTags, ValidateGitHubTag, ParseGitHubUrl, type GitHubClientOptions, type MigrationDownloadResult } from '../github/github-client.js';
 import semver from 'semver';
-import { CreateAppSchema, DropAppSchema, SchemaExists } from './schema-manager.js';
+import { CreateAppSchema, DropAppSchema, SchemaExists, ValidateSchemaName } from './schema-manager.js';
 import { RunFkGraphTeardown, buildRootDoomedPredicate } from './entity-teardown.js';
 import { extractApplicationIds } from './migration-application-ids.js';
 import { RunAppMigrations, type SkywayDatabaseConfig } from './migration-runner.js';
@@ -1592,6 +1592,17 @@ export async function ResolveDependencyVersion(
 async function HandleSchemaCreation(manifest: MJAppManifest, context: OrchestratorContext, isReinstall: boolean = false, allowDoubleUnderscore: boolean = false): Promise<InternalResult> {
   if (!manifest.schema) {
     return { Success: true };
+  }
+
+  // Validate BEFORE probing for existence. The "schema already exists → adopt it" branch below
+  // never reaches CreateAppSchema, so this is the only place the name is checked on that path —
+  // and it is the path that matters most, because the schemas worth protecting (`__mj`,
+  // `__mj_UDT`) exist in every MJ database. Adopting one would hand it to `mj app remove`,
+  // which DROPs the app's schema. CreateAppSchema validates again on the create path; that
+  // duplication is deliberate — it is an exported function and must guard its own contract.
+  const validation = ValidateSchemaName(manifest.schema.name, { allowDoubleUnderscore });
+  if (!validation.Success) {
+    return { Success: false, ErrorMessage: validation.ErrorMessage };
   }
 
   context.Callbacks?.OnProgress?.('Schema', `Checking schema '${manifest.schema.name}'...`);
