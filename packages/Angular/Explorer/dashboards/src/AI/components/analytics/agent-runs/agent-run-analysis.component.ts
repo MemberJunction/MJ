@@ -15,6 +15,9 @@ import { RunView } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UUIDsEqual } from '@memberjunction/global';
 import { GlobalFilterState } from '../../../interfaces/analytics-preferences.interface';
+import { AIInstrumentationService } from '../../../services/ai-instrumentation.service';
+import { computeTotalCost } from '../../../services/ai-usage-analytics.compute';
+import { AIUsageDailyRow } from '../../../services/ai-usage-analytics.types';
 
 // ── Interfaces ──
 
@@ -47,9 +50,9 @@ interface PromptRunRecord {
 
 interface AgentRunStats {
     TotalRuns: number;
-    TotalCost: number;
+    TotalCost: number | null;
     PromptRuns: number;
-    AvgCostPerRun: number;
+    AvgCostPerRun: number | null;
     SuccessRate: number;
     AvgDurationSeconds: number;
 }
@@ -185,7 +188,7 @@ const COST_COLORS = [
                         <i class="fa-solid fa-list panel-header__icon"></i>
                         Recent Agent Runs
                     </div>
-                    <span class="panel-header__subtitle">{{ RecentRuns.length }} runs</span>
+                    <span class="panel-header__subtitle">showing latest 100</span>
                 </div>
                 <div class="table-wrapper">
                     <table class="data-table">
@@ -642,7 +645,11 @@ export class AnalyticsAgentRunsComponent extends BaseAngularComponent implements
         this.cdr.detectChanges();
     }
 
-    public FormatCurrency(value: number, decimals = 2): string {
+    private instrumentation = inject(AIInstrumentationService);
+    private dailyRows: AIUsageDailyRow[] = [];
+
+    public FormatCurrency(value: number | null | undefined, decimals = 2): string {
+        if (value === null || value === undefined) return '—';
         if (value === 0) return '$0.00';
         if (value < 0.01 && decimals < 4) decimals = 4;
         return '$' + value.toFixed(decimals);
@@ -655,33 +662,43 @@ export class AnalyticsAgentRunsComponent extends BaseAngularComponent implements
         this.cdr.detectChanges();
 
         try {
+            this.instrumentation.Provider = this.ProviderToUse;
             const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const dateFilter = this.buildDateFilter('StartedAt');
             const agentFilter = this.buildAgentFilter();
             const statusFilter = this.buildStatusFilter();
-            const extraFilter = [dateFilter, agentFilter, statusFilter].filter(Boolean).join(' AND ');
+            const extraFilter = [dateFilter, agentFilter, statusFilter, 'ParentRunID IS NULL'].filter(Boolean).join(' AND ');
 
             const promptDateFilter = this.buildDateFilter('RunAt');
+            const now = new Date();
+            const ms = this.timeRangeToMs(this.TimeRange);
+            const currentStart = new Date(now.getTime() - ms);
 
-            const [agentResult, promptResult] = await rv.RunViews([
-                {
-                    EntityName: 'MJ: AI Agent Runs',
-                    ExtraFilter: extraFilter,
-                    Fields: AGENT_RUN_FIELDS,
-                    OrderBy: 'StartedAt DESC',
-                    ResultType: 'simple'
-                },
-                {
-                    EntityName: 'MJ: AI Prompt Runs',
-                    ExtraFilter: promptDateFilter,
-                    Fields: PROMPT_RUN_FIELDS,
-                    OrderBy: 'RunAt DESC',
-                    ResultType: 'simple'
-                }
-            ]);
+            const [agentResult, promptResult, dailyRows] = await Promise.all([
+                rv.RunViews([
+                    {
+                        EntityName: 'MJ: AI Agent Runs',
+                        ExtraFilter: extraFilter,
+                        Fields: AGENT_RUN_FIELDS,
+                        OrderBy: 'StartedAt DESC',
+                        MaxRows: 100,
+                        ResultType: 'simple'
+                    },
+                    {
+                        EntityName: 'MJ: AI Prompt Runs',
+                        ExtraFilter: promptDateFilter,
+                        Fields: PROMPT_RUN_FIELDS,
+                        OrderBy: 'RunAt DESC',
+                        MaxRows: 1000,
+                        ResultType: 'simple'
+                    }
+                ]),
+                this.instrumentation.getUsageDaily(currentStart, now).catch(() => [])
+            ]).then(([rvResults, daily]) => [rvResults[0], rvResults[1], daily] as const);
 
             this.agentRuns = (agentResult?.Results ?? []) as AgentRunRecord[];
             this.promptRuns = (promptResult?.Results ?? []) as PromptRunRecord[];
+            this.dailyRows = dailyRows;
 
             this.computeStats();
             this.computeCostAttribution();
@@ -700,7 +717,9 @@ export class AnalyticsAgentRunsComponent extends BaseAngularComponent implements
     private computeStats(): void {
         const runs = this.agentRuns;
         const total = runs.length;
-        const totalCost = runs.reduce((s, r) => s + (r.TotalCost ?? 0), 0);
+        const agentDaily = this.dailyRows.filter(r => r.AgentID != null);
+        const aggregateCost = computeTotalCost(agentDaily.length > 0 ? agentDaily : this.dailyRows);
+        const totalCost = aggregateCost ?? computeTotalCost(runs);
         const completed = runs.filter(r => r.Status === 'Completed');
         const successCount = runs.filter(r => r.Success === true).length;
 
@@ -725,7 +744,7 @@ export class AnalyticsAgentRunsComponent extends BaseAngularComponent implements
             TotalRuns: total,
             TotalCost: totalCost,
             PromptRuns: linkedPromptRuns.length,
-            AvgCostPerRun: total > 0 ? totalCost / total : 0,
+            AvgCostPerRun: total > 0 && totalCost !== null ? totalCost / total : null,
             SuccessRate: total > 0 ? (successCount / total) * 100 : 0,
             AvgDurationSeconds: avgDuration
         };
@@ -755,9 +774,11 @@ export class AnalyticsAgentRunsComponent extends BaseAngularComponent implements
 
             const entry = agentCostMap.get(agentKey)!;
             const vendor = pr.Vendor ?? 'Other';
-            const cost = pr.Cost ?? pr.TotalCost ?? 0;
-            entry.vendorCosts.set(vendor, (entry.vendorCosts.get(vendor) ?? 0) + cost);
-            entry.totalCost += cost;
+            const cost = pr.Cost ?? pr.TotalCost;
+            if (cost !== null && cost !== undefined) {
+                entry.vendorCosts.set(vendor, (entry.vendorCosts.get(vendor) ?? 0) + cost);
+                entry.totalCost += cost;
+            }
         }
 
         // Collect all vendors for consistent coloring
@@ -815,7 +836,7 @@ export class AnalyticsAgentRunsComponent extends BaseAngularComponent implements
             StatusClass: this.getStatusClass(r.Status),
             StepCount: promptCountMap.get(r.ID) ?? 0,
             Duration: this.formatDuration(r.StartedAt, r.CompletedAt),
-            Cost: this.FormatCurrency(r.TotalCost ?? 0),
+            Cost: this.FormatCurrency(r.TotalCost),
             Time: this.formatRelativeTime(r.StartedAt)
         }));
     }

@@ -10,31 +10,15 @@ import {
     OnInit, OnDestroy, ChangeDetectorRef, inject
 } from '@angular/core';
 import { Subject } from 'rxjs';
-import { RunView } from '@memberjunction/core';
 import { NormalizeUUID } from '@memberjunction/global';
-import { TOKEN_PRICE_UNIT_TYPE_DIVISORS } from '@memberjunction/ai-engine-base';
-import { CacheRate, CacheTokenTotals, cacheHitRate, hasCacheActivity, netCacheSavings } from '../../../services/cache-metrics';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { GlobalFilterState } from '../../../interfaces/analytics-preferences.interface';
+import { CacheRate, CacheTokenTotals, cacheHitRate, hasCacheActivity, netCacheSavings } from '../../../services/cache-metrics';
+import { AIInstrumentationService } from '../../../services/ai-instrumentation.service';
+import { computeTotalCost } from '../../../services/ai-usage-analytics.compute';
+import { AIUsageDailyRow, AIUsageByModelRow } from '../../../services/ai-usage-analytics.types';
 
 // ── Interfaces ──
-
-interface PromptRunRecord {
-    ID: string;
-    RunAt: string;
-    Cost: number | null;
-    TotalCost: number | null;
-    TokensPrompt: number | null;
-    TokensCompletion: number | null;
-    TokensUsed: number | null;
-    TokensCacheRead: number | null;
-    TokensCacheWrite: number | null;
-    ModelID: string | null;
-    Model: string | null;
-    VendorID: string | null;
-    Vendor: string | null;
-    Success: boolean;
-}
 
 interface CostKpi {
     Label: string;
@@ -43,6 +27,7 @@ interface CostKpi {
     DeltaDirection: 'up' | 'down' | 'stable';
     Highlighted: boolean;
     Icon: string;
+    IsUnpriced?: boolean;
 }
 
 interface DailyBar {
@@ -77,27 +62,6 @@ interface CostByModelRow {
     PercentOfTotal: number;
 }
 
-const FIELDS = [
-    'ID', 'RunAt', 'Cost', 'TotalCost', 'TokensPrompt', 'TokensCompletion',
-    'TokensUsed', 'TokensCacheRead', 'TokensCacheWrite', 'ModelID', 'Model', 'VendorID', 'Vendor', 'Success'
-];
-
-interface ModelCostRow {
-    ModelID: string | null;
-    VendorID: string | null;
-    InputPricePerUnit: number | null;
-    OutputPricePerUnit: number | null;
-    CacheReadPricePerUnit: number | null;
-    CacheWritePricePerUnit: number | null;
-    UnitTypeID: string | null;
-}
-
-/** A price unit type, reduced to what the scale lookup needs. */
-interface PriceUnitTypeRow {
-    ID: string;
-    DriverClass: string | null;
-}
-
 const TIME_RANGE_OPTIONS = ['Today', '7d', '30d', 'MTD'];
 
 const TREEMAP_COLORS = [
@@ -128,7 +92,12 @@ const TREEMAP_COLORS = [
                         </div>
                         <div class="kpi-content">
                             <div class="kpi-label">{{ kpi.Label }}</div>
-                            <div class="kpi-value">{{ kpi.Value }}</div>
+                            <div class="kpi-value-row">
+                                <div class="kpi-value">{{ kpi.Value }}</div>
+                                @if (kpi.IsUnpriced) {
+                                    <span class="unpriced-chip">unpriced</span>
+                                }
+                            </div>
                             @if (kpi.Delta != null) {
                                 <div class="kpi-delta"
                                      [class.kpi-delta--up]="kpi.DeltaDirection === 'up'"
@@ -333,12 +302,31 @@ const TREEMAP_COLORS = [
             letter-spacing: 0.5px;
         }
 
+        .kpi-value-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
         .kpi-value {
             font-size: 22px;
             font-weight: 700;
             color: var(--mj-text-primary);
             margin: 2px 0;
             letter-spacing: -0.02em;
+        }
+
+        .unpriced-chip {
+            display: inline-flex;
+            align-items: center;
+            padding: 2px 6px;
+            font-size: 10px;
+            font-weight: 500;
+            text-transform: uppercase;
+            border-radius: 4px;
+            background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+            color: var(--mj-status-warning);
+            border: 1px solid color-mix(in srgb, var(--mj-status-warning) 30%, transparent);
         }
 
         .kpi-delta {
@@ -652,8 +640,17 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
     public TreemapCells: TreemapCell[] = [];
     public CostByModelRows: CostByModelRow[] = [];
 
-    private allRuns: PromptRunRecord[] = [];
-    private previousPeriodRuns: PromptRunRecord[] = [];
+    private instrumentation = inject(AIInstrumentationService);
+
+    private dailyRows: AIUsageDailyRow[] = [];
+    private prevDailyRows: AIUsageDailyRow[] = [];
+    private modelRows: AIUsageByModelRow[] = [];
+    private lookups: {
+        models: Map<string, string>;
+        modelVendors: Map<string, string>;
+        vendors: Map<string, string>;
+        agents: Map<string, string>;
+    } = { models: new Map(), modelVendors: new Map(), vendors: new Map(), agents: new Map() };
 
     // Per model+vendor cache pricing (rates already normalized to currency-per-token). Empty until
     // AIModelCost cache rates are configured — savings then stays 0 (surfaced as "Set rates").
@@ -661,6 +658,7 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
 
     ngOnInit(): void {
         this.initialized = true;
+        this.instrumentation.Provider = this.ProviderToUse;
         this.LoadData();
     }
 
@@ -683,7 +681,8 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
         this.LoadData();
     }
 
-    public FormatCurrency(value: number, decimals = 2): string {
+    public FormatCurrency(value: number | null | undefined, decimals = 2): string {
+        if (value === null || value === undefined) return '—';
         if (value === 0) return '$0.00';
         if (value < 0.01 && decimals < 4) decimals = 4;
         return '$' + value.toFixed(decimals);
@@ -705,52 +704,23 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
         this.cdr.detectChanges();
 
         try {
-            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+            this.instrumentation.Provider = this.ProviderToUse;
             const { currentStart, previousStart } = this.getDateBounds();
             const now = new Date();
-            const modelFilter = this.buildModelFilter();
-            const currentFilter = this.combineDateAndModelFilter(currentStart, now, modelFilter);
-            const prevFilter = this.combineDateAndModelFilter(previousStart, currentStart, modelFilter);
 
-            const [currentResult, prevResult, rateResult, unitTypeResult] = await rv.RunViews([
-                {
-                    EntityName: 'MJ: AI Prompt Runs',
-                    ExtraFilter: currentFilter,
-                    Fields: FIELDS,
-                    OrderBy: 'RunAt ASC',
-                    ResultType: 'simple'
-                },
-                {
-                    EntityName: 'MJ: AI Prompt Runs',
-                    ExtraFilter: prevFilter,
-                    Fields: FIELDS,
-                    OrderBy: 'RunAt ASC',
-                    ResultType: 'simple'
-                },
-                {
-                    EntityName: 'MJ: AI Model Costs',
-                    ExtraFilter: `Status='Active' AND ProcessingType='Realtime'`,
-                    Fields: ['ModelID', 'VendorID', 'InputPricePerUnit', 'OutputPricePerUnit', 'CacheReadPricePerUnit', 'CacheWritePricePerUnit', 'UnitTypeID'],
-                    ResultType: 'simple'
-                },
-                {
-                    EntityName: 'MJ: AI Model Price Unit Types',
-                    Fields: ['ID', 'DriverClass'],
-                    ResultType: 'simple'
-                }
+            const [currentDaily, prevDaily, byModel, lookups, cacheRates] = await Promise.all([
+                this.instrumentation.getUsageDaily(currentStart, now),
+                this.instrumentation.getUsageDaily(previousStart, currentStart),
+                this.instrumentation.getUsageByModel(currentStart, now),
+                this.instrumentation.getModelAndVendorLookups(),
+                this.instrumentation.getCacheRates()
             ]);
 
-            this.allRuns = (currentResult?.Results ?? []) as PromptRunRecord[];
-            this.previousPeriodRuns = (prevResult?.Results ?? []) as PromptRunRecord[];
-            // A failed unit-type view is NOT the same as "these rows are unpriceable". Without the
-            // driver classes every rate row falls into the `continue` below, and cache savings
-            // render as a confident 0 instead of an error — the figure most likely to be believed.
-            // Say so rather than let the empty map speak for it.
-            if (unitTypeResult && !unitTypeResult.Success) {
-                console.error('Cost & Budget: price unit types failed to load; cache-savings figures will read 0. ' +
-                    unitTypeResult.ErrorMessage);
-            }
-            this.buildCacheRateMap(rateResult?.Results ?? [], unitTypeResult?.Results ?? []);
+            this.dailyRows = this.applyClientModelFilter(currentDaily);
+            this.prevDailyRows = this.applyClientModelFilter(prevDaily);
+            this.modelRows = byModel;
+            this.lookups = lookups;
+            this.cacheRates = cacheRates;
 
             this.computeKpis();
             this.computeDailyBars();
@@ -764,6 +734,14 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
         }
     }
 
+    private applyClientModelFilter(rows: AIUsageDailyRow[]): AIUsageDailyRow[] {
+        if (!this.Filters.Models || this.Filters.Models.length === 0) {
+            return rows;
+        }
+        const set = new Set(this.Filters.Models.map(m => m.toLowerCase()));
+        return rows.filter(r => r.ModelID && set.has(r.ModelID.toLowerCase()));
+    }
+
     // ── Cache pricing ──
 
     /** Stable map key for a model+vendor pair (UUIDs normalized for case-insensitive matching). */
@@ -771,49 +749,24 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
         return `${NormalizeUUID(modelID ?? '')}|${NormalizeUUID(vendorID ?? '')}`;
     }
 
-    /** The cache rate for a run's model+vendor, or undefined when no active cost row is configured. */
-    private rateFor(run: PromptRunRecord): CacheRate | undefined {
-        return this.cacheRates.get(this.rateKey(run.ModelID, run.VendorID));
-    }
-
-    /**
-     * Build the per-model+vendor rate lookup, normalizing each per-unit price to currency-per-token.
-     *
-     * The scale comes from the unit type's DriverClass, not its display name — the name is editable
-     * metadata (`Per 1M Tokens`) while the driver class is the contract the pricing drivers register
-     * under, so this cannot drift the way a hardcoded name table does.
-     */
-    private buildCacheRateMap(rows: ModelCostRow[], unitTypes: PriceUnitTypeRow[]): void {
-        this.cacheRates.clear();
-        const driverClassByUnitType = new Map<string, string>(
-            unitTypes.filter(u => u.DriverClass).map(u => [NormalizeUUID(u.ID), u.DriverClass!])
-        );
-        for (const row of rows) {
-            const driverClass = driverClassByUnitType.get(NormalizeUUID(row.UnitTypeID ?? ''));
-            const divisor = TOKEN_PRICE_UNIT_TYPE_DIVISORS[driverClass ?? ''];
-            if (divisor === undefined) {
-                // A non-token unit type (per minute/hour/image), or one this build has no driver
-                // for. Defaulting to the per-1M-token divisor would divide an hourly audio rate by
-                // a million and report a savings figure that is pure noise; no rate at all is the
-                // honest answer.
-                continue;
-            }
-            const inputRate = (row.InputPricePerUnit ?? 0) / divisor;
-            // Cache read/write fall back to the input rate when no distinct rate is recorded — exactly
-            // as the server-side cost calculator does — which makes the corresponding savings term 0.
-            const cacheReadRate = (row.CacheReadPricePerUnit ?? row.InputPricePerUnit ?? 0) / divisor;
-            const cacheWriteRate = (row.CacheWritePricePerUnit ?? row.InputPricePerUnit ?? 0) / divisor;
-            this.cacheRates.set(this.rateKey(row.ModelID, row.VendorID), { inputRate, cacheReadRate, cacheWriteRate });
+    /** Sum net cache savings across a set of rows using each row's model+vendor rate. */
+    private sumCacheSavings(rows: AIUsageDailyRow[]): number {
+        let totalSavings = 0;
+        for (const r of rows) {
+            const key = this.rateKey(r.ModelID, r.VendorID);
+            const rate = this.cacheRates.get(key);
+            if (!rate) continue;
+            const savings = netCacheSavings(
+                {
+                    uncachedInputTokens: r.TokensPrompt ?? 0,
+                    cacheReadTokens: r.TokensCacheRead ?? 0,
+                    cacheWriteTokens: r.TokensCacheWrite ?? 0
+                },
+                rate
+            );
+            if (savings > 0) totalSavings += savings;
         }
-    }
-
-    /** Sum net cache savings across a set of runs using each run's model+vendor rate. */
-    private sumCacheSavings(runs: PromptRunRecord[]): number {
-        return runs.reduce((total, run) => total + netCacheSavings({
-            uncachedInputTokens: 0,
-            cacheReadTokens: run.TokensCacheRead ?? 0,
-            cacheWriteTokens: run.TokensCacheWrite ?? 0
-        }, this.rateFor(run)), 0);
+        return totalSavings;
     }
 
     // ── Computations ──
@@ -824,18 +777,21 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
         const weekStart = new Date(todayStart.getTime() - 6 * 86400000);
         const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-        const todaySpend = this.sumCostInRange(this.allRuns, todayStart, now);
-        const weekSpend = this.sumCostInRange(this.allRuns, weekStart, now);
-        const monthSpend = this.sumCostInRange(this.allRuns, monthStart, now);
+        const todaySpend = this.sumCostInRange(this.dailyRows, todayStart, now);
+        const weekSpend = this.sumCostInRange(this.dailyRows, weekStart, now);
+        const monthSpend = this.sumCostInRange(this.dailyRows, monthStart, now);
 
-        const prevTotalCost = this.previousPeriodRuns.reduce((s, r) => s + (r.Cost ?? r.TotalCost ?? 0), 0);
-        const currentTotalCost = this.allRuns.reduce((s, r) => s + (r.Cost ?? r.TotalCost ?? 0), 0);
+        const prevTotalCost = computeTotalCost(this.prevDailyRows);
+        const currentTotalCost = computeTotalCost(this.dailyRows);
 
         // Project monthly cost based on current daily average
         const daysIntoMonth = Math.max(1, now.getDate());
-        const projectedMonthly = (monthSpend / daysIntoMonth) * new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+        const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+        const projectedMonthly = monthSpend !== null ? (monthSpend / daysIntoMonth) * daysInMonth : null;
 
-        const delta = prevTotalCost > 0 ? ((currentTotalCost - prevTotalCost) / prevTotalCost) * 100 : null;
+        const delta = prevTotalCost !== null && prevTotalCost > 0 && currentTotalCost !== null
+            ? ((currentTotalCost - prevTotalCost) / prevTotalCost) * 100
+            : null;
 
         this.CostKpis = [
             {
@@ -844,7 +800,8 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
                 Delta: null,
                 DeltaDirection: 'stable',
                 Highlighted: false,
-                Icon: 'fa-solid fa-calendar-day'
+                Icon: 'fa-solid fa-calendar-day',
+                IsUnpriced: todaySpend === null
             },
             {
                 Label: 'This Week',
@@ -852,7 +809,8 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
                 Delta: null,
                 DeltaDirection: 'stable',
                 Highlighted: false,
-                Icon: 'fa-solid fa-calendar-week'
+                Icon: 'fa-solid fa-calendar-week',
+                IsUnpriced: weekSpend === null
             },
             {
                 Label: 'This Month',
@@ -860,7 +818,8 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
                 Delta: delta,
                 DeltaDirection: delta != null ? (delta > 0 ? 'up' : delta < 0 ? 'down' : 'stable') : 'stable',
                 Highlighted: false,
-                Icon: 'fa-solid fa-calendar'
+                Icon: 'fa-solid fa-calendar',
+                IsUnpriced: monthSpend === null
             },
             {
                 Label: 'Projected Monthly',
@@ -868,22 +827,23 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
                 Delta: null,
                 DeltaDirection: 'stable',
                 Highlighted: true,
-                Icon: 'fa-solid fa-chart-line'
+                Icon: 'fa-solid fa-chart-line',
+                IsUnpriced: projectedMonthly === null
             }
         ];
 
         this.appendCacheKpis();
     }
 
-    /** Append the cache hit-rate and cache-savings KPIs (computed from the current-period runs). */
+    /** Append the cache hit-rate and cache-savings KPIs (computed from the current-period daily rows). */
     private appendCacheKpis(): void {
         const totals: CacheTokenTotals = { uncachedInputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
-        for (const r of this.allRuns) {
+        for (const r of this.dailyRows) {
             totals.uncachedInputTokens += r.TokensPrompt ?? 0;
             totals.cacheReadTokens += r.TokensCacheRead ?? 0;
             totals.cacheWriteTokens += r.TokensCacheWrite ?? 0;
         }
-        const savings = this.sumCacheSavings(this.allRuns);
+        const savings = this.sumCacheSavings(this.dailyRows);
         const activity = hasCacheActivity(totals);
 
         this.CostKpis.push({
@@ -895,8 +855,6 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
             Icon: 'fa-solid fa-bolt'
         });
 
-        // Savings requires cache rates on AIModelCost. When cache engaged but no savings computed,
-        // it means rates aren't configured yet — say so rather than implying $0 was saved.
         const savingsValue = savings > 0
             ? this.FormatCurrency(savings)
             : (activity ? 'Set rates' : '$0.00');
@@ -911,15 +869,20 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
     }
 
     private computeDailyBars(): void {
-        const buckets = new Map<string, number>();
-        for (const run of this.allRuns) {
-            const date = new Date(run.RunAt);
-            const key = date.toISOString().slice(0, 10);
-            buckets.set(key, (buckets.get(key) ?? 0) + (run.Cost ?? run.TotalCost ?? 0));
+        const buckets = new Map<string, AIUsageDailyRow[]>();
+        for (const row of this.dailyRows) {
+            const key = row.DayBucket ? row.DayBucket.slice(0, 10) : '';
+            if (!key) continue;
+            if (!buckets.has(key)) buckets.set(key, []);
+            buckets.get(key)!.push(row);
         }
 
         const sortedKeys = Array.from(buckets.keys()).sort();
-        const values = sortedKeys.map(k => buckets.get(k) ?? 0);
+        const values = sortedKeys.map(k => {
+            const dayRows = buckets.get(k)!;
+            const cost = computeTotalCost(dayRows);
+            return cost !== null ? cost : 0;
+        });
         const maxVal = Math.max(...values, 0.001);
 
         // Anomaly detection: > 2 standard deviations from mean
@@ -942,14 +905,21 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
     }
 
     private computeTreemap(): void {
-        const vendorCosts = new Map<string, number>();
-        for (const run of this.allRuns) {
-            const vendor = run.Vendor ?? 'Other';
-            vendorCosts.set(vendor, (vendorCosts.get(vendor) ?? 0) + (run.Cost ?? run.TotalCost ?? 0));
+        const vendorGroups = new Map<string, AIUsageDailyRow[]>();
+        for (const run of this.dailyRows) {
+            const vendorName = (run.VendorID ? this.lookups.vendors.get(run.VendorID.toLowerCase()) : null) ?? 'Other';
+            if (!vendorGroups.has(vendorName)) vendorGroups.set(vendorName, []);
+            vendorGroups.get(vendorName)!.push(run);
         }
 
-        const total = Array.from(vendorCosts.values()).reduce((s, v) => s + v, 0);
-        const sorted = Array.from(vendorCosts.entries()).sort((a, b) => b[1] - a[1]);
+        const vendorCosts: Array<[string, number]> = [];
+        for (const [vendor, rows] of vendorGroups.entries()) {
+            const cost = computeTotalCost(rows);
+            vendorCosts.push([vendor, cost !== null ? cost : 0]);
+        }
+
+        const total = vendorCosts.reduce((s, [, c]) => s + c, 0);
+        const sorted = vendorCosts.sort((a, b) => b[1] - a[1]);
 
         this.TreemapCells = sorted.map(([vendor, cost], i) => ({
             Label: vendor,
@@ -961,38 +931,45 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
     }
 
     private computeCostByModel(): void {
-        const groups = new Map<string, PromptRunRecord[]>();
-        for (const run of this.allRuns) {
-            const key = run.ModelID ?? 'unknown';
+        const groups = new Map<string, AIUsageDailyRow[]>();
+        for (const row of this.dailyRows) {
+            const key = row.ModelID ?? 'unknown';
             if (!groups.has(key)) groups.set(key, []);
-            groups.get(key)!.push(run);
+            groups.get(key)!.push(row);
         }
 
-        const totalCost = this.allRuns.reduce((s, r) => s + (r.Cost ?? r.TotalCost ?? 0), 0);
+        const totalCostNum = computeTotalCost(this.dailyRows);
+        const totalCost = totalCostNum !== null ? totalCostNum : 0;
 
         const rows: CostByModelRow[] = [];
-        for (const [, modelRuns] of groups) {
-            const inputTokens = modelRuns.reduce((s, r) => s + (r.TokensPrompt ?? 0), 0);
-            const outputTokens = modelRuns.reduce((s, r) => s + (r.TokensCompletion ?? 0), 0);
-            const cacheReadTokens = modelRuns.reduce((s, r) => s + (r.TokensCacheRead ?? 0), 0);
-            const cacheWriteTokens = modelRuns.reduce((s, r) => s + (r.TokensCacheWrite ?? 0), 0);
-            const cost = modelRuns.reduce((s, r) => s + (r.Cost ?? r.TotalCost ?? 0), 0);
+        for (const [modelId, modelDailyRows] of groups) {
+            const inputTokens = modelDailyRows.reduce((s, r) => s + (r.TokensPrompt ?? 0), 0);
+            const outputTokens = modelDailyRows.reduce((s, r) => s + (r.TokensCompletion ?? 0), 0);
+            const cacheReadTokens = modelDailyRows.reduce((s, r) => s + (r.TokensCacheRead ?? 0), 0);
+            const cacheWriteTokens = modelDailyRows.reduce((s, r) => s + (r.TokensCacheWrite ?? 0), 0);
+            const runsCount = modelDailyRows.reduce((s, r) => s + (r.Runs ?? 0), 0);
+            const costVal = computeTotalCost(modelDailyRows);
+            const cost = costVal !== null ? costVal : 0;
 
             // Approximate input/output cost split based on token ratio
             const totalTk = inputTokens + outputTokens;
             const inputCost = totalTk > 0 ? cost * (inputTokens / totalTk) : 0;
             const outputCost = totalTk > 0 ? cost * (outputTokens / totalTk) : 0;
 
+            const modelName = this.lookups.models.get(modelId.toLowerCase()) ?? 'Unknown';
+            const vendorId = modelDailyRows[0]?.VendorID ?? this.lookups.modelVendors.get(modelId.toLowerCase());
+            const vendorName = (vendorId ? this.lookups.vendors.get(vendorId.toLowerCase()) : null) ?? 'Unknown';
+
             rows.push({
-                Model: modelRuns[0].Model ?? 'Unknown',
-                Vendor: modelRuns[0].Vendor ?? 'Unknown',
-                Runs: modelRuns.length,
+                Model: modelName,
+                Vendor: vendorName,
+                Runs: runsCount,
                 InputTokens: inputTokens,
                 OutputTokens: outputTokens,
                 CacheReadTokens: cacheReadTokens,
                 CacheWriteTokens: cacheWriteTokens,
                 CacheHitRate: cacheHitRate({ uncachedInputTokens: inputTokens, cacheReadTokens, cacheWriteTokens }),
-                CacheSavings: this.sumCacheSavings(modelRuns),
+                CacheSavings: this.sumCacheSavings(modelDailyRows),
                 InputCost: inputCost,
                 OutputCost: outputCost,
                 TotalCost: cost,
@@ -1005,13 +982,13 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
 
     // ── Helpers ──
 
-    private sumCostInRange(runs: PromptRunRecord[], start: Date, end: Date): number {
-        return runs
-            .filter(r => {
-                const d = new Date(r.RunAt);
-                return d >= start && d <= end;
-            })
-            .reduce((s, r) => s + (r.Cost ?? r.TotalCost ?? 0), 0);
+    private sumCostInRange(rows: AIUsageDailyRow[], start: Date, end: Date): number | null {
+        const inRange = rows.filter(r => {
+            if (!r.DayBucket) return false;
+            const d = new Date(r.DayBucket.slice(0, 10) + 'T00:00:00Z');
+            return d >= start && d <= end;
+        });
+        return computeTotalCost(inRange);
     }
 
     private getDateBounds(): { currentStart: Date; previousStart: Date } {
@@ -1028,23 +1005,8 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
         return { currentStart, previousStart };
     }
 
-    private buildModelFilter(): string {
-        if (this.Filters.Models.length === 0) return '';
-        const ids = this.Filters.Models.map(id => `'${id}'`).join(',');
-        return `ModelID IN (${ids})`;
-    }
-
-    private combineDateAndModelFilter(start: Date, end: Date, modelFilter: string): string {
-        const parts = [
-            `RunAt >= '${start.toISOString()}'`,
-            `RunAt <= '${end.toISOString()}'`
-        ];
-        if (modelFilter) parts.push(modelFilter);
-        return parts.join(' AND ');
-    }
-
     private formatBarLabel(dateStr: string): string {
-        const d = new Date(dateStr + 'T00:00:00');
+        const d = new Date(dateStr.slice(0, 10) + 'T00:00:00');
         const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
         return months[d.getMonth()] + ' ' + d.getDate();
     }
