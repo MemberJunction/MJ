@@ -71,7 +71,13 @@ function createHarness(): Harness {
   open['windowStore'] = windowStore;
   open['currentUser'] = { ID: 'USER-1' };
   open['cdr'] = { detectChanges: vi.fn() };
-  open['realtimeConversationReady'] = { emit: realtimeConversationReadyEmit };
+  // One stub under both names, matching the component's own shape: the deprecated
+  // `realtimeConversationReady` @Output is the SAME EventEmitter as the canonical
+  // `RealtimeConversationReady`, and only the canonical one is ever emitted on. Object.create
+  // skips the field initialisers, so the alias has to be wired here rather than inherited.
+  const readyEmitter = { emit: realtimeConversationReadyEmit };
+  open['RealtimeConversationReady'] = readyEmitter;
+  open['realtimeConversationReady'] = readyEmitter;
   // Stub the private peripheral-data reload so the timeline-refresh test stays focused.
   open['loadPeripheralData'] = loadPeripheralData;
   open['lastLoadedConversationId'] = 'STALE';
