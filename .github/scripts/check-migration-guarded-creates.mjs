@@ -11,7 +11,7 @@
  *
  * Modes: (default) check, --fix rewrite in place, --self-test run fixtures.
  */
-import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { readdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -35,32 +35,47 @@ function sqlFilesUnder(dir, out = []) {
 }
 
 /**
- * The current (non-frozen) era folder — `migrations/v<highest N>` — which is where new
- * migrations land (migrations/CLAUDE.md). Only this era's fixed-GUID creates are offenders:
- * every earlier era is already applied to every existing database, so retrofitting a guard
- * there rewrites a shipped migration's bytes for zero benefit and changes its Flyway checksum
- * on every install (migrations/CLAUDE.md: "rewriting them would change Flyway checksums on
- * every existing database for no benefit"). Resolved by folder number rather than hardcoded
- * so this keeps gating the right migrations once a v7 era opens and v6 goes frozen.
+ * The oldest era this MJ#4503 gate covers. Earlier eras (v2–v5) are already applied to every
+ * existing database, so retrofitting a guard there rewrites a shipped migration's bytes for
+ * zero benefit and changes its Flyway checksum on every install (migrations/CLAUDE.md:
+ * "rewriting them would change Flyway checksums on every existing database for no benefit").
+ * It is also the era the gate's own ground truth was measured against: exactly 567 fixed-GUID
+ * creates, all in migrations/v6.
  */
-function currentEraDir(migrationsRoot) {
+const OLDEST_GUARDED_ERA = 6;
+
+/**
+ * Every era folder from OLDEST_GUARDED_ERA through the newest one that exists, oldest first —
+ * not just the newest. Scanning only the newest would drop the era below it out of the gate the
+ * moment a new one opens (once v7 exists, a fixed-GUID create backported into a v6 file would
+ * pass silently), and the newest era needs covering from the day it opens, even before it holds
+ * a single migration of its own. Resolved by folder number rather than hardcoded past
+ * OLDEST_GUARDED_ERA so this keeps gating the right migrations once v7 opens and v6 freezes.
+ */
+function guardedEraDirs(migrationsRoot) {
   const eras = readdirSync(migrationsRoot, { withFileTypes: true })
     .filter((e) => e.isDirectory() && /^v\d+$/.test(e.name))
-    .map((e) => e.name)
-    .sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)));
-  if (eras.length === 0) throw new Error(`no migrations/vN era folder found under ${migrationsRoot}`);
-  return join(migrationsRoot, eras[eras.length - 1]);
+    .map((e) => Number(e.name.slice(1)))
+    .filter((n) => n >= OLDEST_GUARDED_ERA)
+    .sort((a, b) => a - b);
+  if (eras.length === 0)
+    throw new Error(`no migrations/vN era folder >= v${OLDEST_GUARDED_ERA} found under ${migrationsRoot}`);
+  return eras.map((n) => join(migrationsRoot, `v${n}`));
 }
 
 /**
  * Maps `spCreate<X>` to the table it inserts into, read off the generated proc
  * bodies in migration history.
  *
- * Deliberately NOT derived from the SP-name suffix: CodeGen builds the name as
- * `spCreate${entity.BaseTableCodeName}` and honours a per-entity `spCreate`
- * override, so the suffix is a coincidence that holds today and could stop holding.
- * A guard naming a table that does not exist would break the migration for
- * everyone, which is strictly worse than the bug being fixed.
+ * Fail-closed by construction, not name-suffix derivation: the `m[4] === m[2]` check below
+ * only accepts a proc body whose INSERT target matches the proc's own name suffix exactly, so
+ * a proc's real table can never differ from what's stored here — but the reverse also holds,
+ * and matters: a proc whose real table is genuinely NOT its suffix (or whose body this regex
+ * mismatched, e.g. a hand-written proc with a differently-shaped body) gets no entry at all,
+ * not a wrong one. guardFile's lookup then finds nothing and throws "cannot resolve a table"
+ * rather than guessing. That is the intended tradeoff: a guard naming a table that does not
+ * exist would break the migration for everyone, which is strictly worse than a call the tool
+ * refuses to guard until someone adds it by hand.
  */
 function buildProcTableMap(rootDir) {
   const PROC_RE =
@@ -101,6 +116,23 @@ function guardFile(sql, procTable, label) {
     for (const m of calls) {
       const entity = m[1];
       const args = m[2];
+
+      // Postcondition on the capture itself: EXEC_RE's non-greedy match stops at the FIRST
+      // ';', which is the wrong boundary if that ';' sits inside a string literal (a
+      // Description, prompt template or JSON value) rather than terminating the statement.
+      // Detect it by requiring unescaped single quotes to balance — T-SQL escapes a literal
+      // quote as '' , so those pairs are stripped before counting — and refuse to guess a
+      // repaired boundary; a truncated capture re-emitted into the guard would produce an
+      // unterminated string inside BOTH BEGIN blocks plus dangling text after END.
+      const unescaped = args.replace(/''/g, '');
+      if ((unescaped.match(/'/g) ?? []).length % 2 !== 0) {
+        const fragment = args.length > 160 ? `${args.slice(0, 160)}…` : args;
+        throw new Error(
+          `${label}: EXEC capture for spCreate${entity} has an unbalanced quote — the capture ` +
+            `likely ended at a ';' inside a string literal instead of the statement's real ` +
+            `terminator. Fragment: ${fragment}`,
+        );
+      }
 
       const idArg = /@ID\s*=\s*(?:(@\w+)|N?'([0-9A-Fa-f-]{36})')/.exec(args);
       if (!idArg) {
@@ -161,7 +193,12 @@ function guardFile(sql, procTable, label) {
 
 function runSelfTest() {
   const dir = join(HERE, 'fixtures', 'guarded-creates');
-  const procTable = new Map([['spCreateCredentialType', 'CredentialType']]);
+  // spCreateFooBar -> Foo is a deliberate suffix mismatch (case 5): proves guardFile emits
+  // whatever table the map says, not a name derived from the SP suffix.
+  const procTable = new Map([
+    ['spCreateCredentialType', 'CredentialType'],
+    ['spCreateFooBar', 'Foo'],
+  ]);
   let failures = 0;
 
   const input = readFileSync(join(dir, 'unguarded-input.sql'), 'utf8');
@@ -195,41 +232,92 @@ function runSelfTest() {
     }
   }
 
-  console.log(failures === 0 ? 'self-test: PASS (3 cases)' : `self-test: FAIL (${failures})`);
+  // Case 4 — C1: a ';' inside a string literal (e.g. a Description) must not silently
+  // truncate the capture; the unbalanced-quote postcondition has to catch it and throw.
+  const unbalanced = readFileSync(join(dir, 'unbalanced-quote.sql'), 'utf8');
+  try {
+    guardFile(unbalanced, procTable, 'unbalanced-quote.sql');
+    console.error('FAIL: a ";" inside a string literal should throw on an unbalanced quote');
+    failures++;
+  } catch (err) {
+    if (!/unbalanced quote/i.test(err.message)) {
+      console.error(`FAIL: wrong error for unbalanced-quote input: ${err.message}`);
+      failures++;
+    }
+  }
+
+  // Case 5 — M2: the guard must name the table the procTable map says, not one derived from
+  // the SP name's suffix (spCreateFooBar here resolves to [Foo], not [FooBar]).
+  const suffixInput = readFileSync(join(dir, 'suffix-mismatch-input.sql'), 'utf8');
+  const suffixExpected = readFileSync(join(dir, 'suffix-mismatch-expected.sql'), 'utf8');
+  const suffixGot = guardFile(suffixInput, procTable, 'suffix-mismatch-input.sql');
+  if (suffixGot.text !== suffixExpected || suffixGot.guarded !== 1) {
+    console.error('FAIL: suffix-mismatch input did not resolve to the mapped (non-suffix) table');
+    console.error('--- got ---\n' + suffixGot.text + '\n--- expected ---\n' + suffixExpected);
+    failures++;
+  }
+
+  // Case 6 — M3: a GO batch with more than one create call (the pre-emitter "MANUAL PATCH"
+  // shape) must guard each call independently rather than crash or guard only the first.
+  const multiInput = readFileSync(join(dir, 'multi-call-batch-input.sql'), 'utf8');
+  const multiExpected = readFileSync(join(dir, 'multi-call-batch-expected.sql'), 'utf8');
+  const multiGot = guardFile(multiInput, procTable, 'multi-call-batch-input.sql');
+  if (multiGot.text !== multiExpected || multiGot.guarded !== 2) {
+    console.error('FAIL: multi-call batch did not guard both calls independently');
+    console.error('--- got ---\n' + multiGot.text + '\n--- expected ---\n' + multiExpected);
+    failures++;
+  }
+
+  console.log(failures === 0 ? 'self-test: PASS (6 cases)' : `self-test: FAIL (${failures})`);
   return failures === 0 ? 0 : 1;
 }
 
 function run(fix) {
   const migRoot = join(REPO, 'migrations');
+  if (!existsSync(migRoot)) throw new Error(`MJ#4503 gate: no migrations/ directory found at ${migRoot}`);
   // The table map draws on CREATE PROCEDURE bodies from all of migration history — a proc
   // can have been defined in an earlier era and never touched since — but the offender scan
-  // below is scoped to the current era only (see currentEraDir).
+  // below is scoped to the guarded eras only (see guardedEraDirs).
   const procTable = buildProcTableMap(migRoot);
-  const scanRoot = currentEraDir(migRoot);
+  const scanRoots = guardedEraDirs(migRoot);
   let totalGuarded = 0;
+  let totalSkipped = 0;
   const offenders = [];
+  // Every file's result is computed — and every throw (an unresolvable SP, an unbalanced
+  // quote) raised — before any write below, so a failure partway through leaves every file on
+  // disk untouched instead of a half-rewritten tree with no record of what changed.
+  const pending = [];
 
-  for (const f of sqlFilesUnder(scanRoot)) {
-    const sql = readFileSync(f, 'utf8');
-    if (!/EXEC\s+\[?\$\{flyway:defaultSchema\}\]?\.\[?spCreate/.test(sql)) continue;
-    const rel = relative(REPO, f);
-    const res = guardFile(sql, procTable, rel);
-    if (res.guarded === 0) continue;
-    if (fix) {
-      writeFileSync(f, res.text, 'utf8');
-      console.log(`guarded ${String(res.guarded).padStart(4)} create(s) in ${rel}`);
-      totalGuarded += res.guarded;
-    } else {
-      offenders.push({ rel, n: res.guarded });
+  for (const scanRoot of scanRoots) {
+    for (const f of sqlFilesUnder(scanRoot)) {
+      const sql = readFileSync(f, 'utf8');
+      if (!/EXEC\s+\[?\$\{flyway:defaultSchema\}\]?\.\[?spCreate/.test(sql)) continue;
+      const rel = relative(REPO, f);
+      const res = guardFile(sql, procTable, rel);
+      totalSkipped += res.skipped;
+      if (res.guarded === 0) continue;
+      if (fix) pending.push({ f, rel, res });
+      else offenders.push({ rel, n: res.guarded });
     }
   }
 
+  const eraLabel = scanRoots.map((r) => relative(REPO, r)).join(', ');
+  const skippedNote =
+    totalSkipped > 0
+      ? ` (${totalSkipped} computed-@ID create(s) skipped — cannot collide deterministically)`
+      : '';
+
   if (fix) {
-    console.log(`\nguarded ${totalGuarded} create call(s)`);
+    for (const { f, rel, res } of pending) {
+      writeFileSync(f, res.text, 'utf8');
+      console.log(`guarded ${String(res.guarded).padStart(4)} create(s) in ${rel}`);
+      totalGuarded += res.guarded;
+    }
+    console.log(`\nguarded ${totalGuarded} create call(s)${skippedNote}`);
     return 0;
   }
   if (offenders.length === 0) {
-    console.log('all fixed-GUID creates in migrations/ are guarded');
+    console.log(`all fixed-GUID creates in ${eraLabel} are guarded${skippedNote}`);
     return 0;
   }
   console.error('Unguarded fixed-GUID spCreate calls found (MJ#4503).\n');
@@ -237,6 +325,8 @@ function run(fix) {
   console.error('there. On any database where `mj sync push` ran before migrating, the');
   console.error('migration dies on a primary-key violation and the upgrade stops.\n');
   for (const o of offenders) console.error(`  ${String(o.n).padStart(4)}  ${o.rel}`);
+  if (totalSkipped > 0)
+    console.error(`\n${totalSkipped} computed-@ID create(s) also seen — skipped, cannot collide deterministically.`);
   console.error('\nFix: node .github/scripts/check-migration-guarded-creates.mjs --fix');
   return 1;
 }
