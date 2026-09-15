@@ -64,10 +64,17 @@ const packageRoleSchema = z.enum([
     'bootstrap', 'actions', 'engine', 'provider', 'module', 'components', 'library'
 ]);
 
+/**
+ * Where the package may RUN. Absent, it is derived from `role` — see
+ * {@link ResolvePackagePlatform} in ./package-platform.ts, which is the canonical rule.
+ */
+const packagePlatformSchema = z.enum(['node', 'browser', 'both']);
+
 const packageEntrySchema = z.object({
     name: z.string().max(214).regex(npmPackageNameRegex, 'Package name must be a valid npm package name (lowercase, URL-safe characters, optional @scope/)'),
     role: packageRoleSchema,
     startupExport: z.string().regex(jsIdentifierRegex, 'startupExport must be a single JavaScript identifier').optional(),
+    platform: packagePlatformSchema.optional(),
 }).refine(
     (pkg) => pkg.role !== 'bootstrap' || (pkg.startupExport != null && pkg.startupExport.length > 0),
     { message: 'startupExport is required for packages with the "bootstrap" role', path: ['startupExport'] }
@@ -85,7 +92,23 @@ const packagesSchema = z.object({
     server: z.array(packageEntrySchema).optional(),
     client: z.array(packageEntrySchema).optional(),
     shared: z.array(packageEntrySchema).optional(),
-});
+})
+    // An explicit `platform` that contradicts the array the entry sits in is a self-contradictory
+    // manifest. Routing would silently drop the package from the only tier that asked for it —
+    // the class of silent-wrong-config failure that produces a green install and a broken host.
+    .superRefine((packages, ctx) => {
+        for (const [array, forbidden] of [['client', 'node'], ['server', 'browser']] as const) {
+            for (const [index, pkg] of (packages[array] ?? []).entries()) {
+                if (pkg.platform === forbidden) {
+                    ctx.addIssue({
+                        code: z.ZodIssueCode.custom,
+                        path: [array, index, 'platform'],
+                        message: `"${pkg.name}" is declared in packages.${array} but sets platform "${forbidden}". Move it to packages.${forbidden === 'node' ? 'server' : 'client'}, or declare platform "both".`,
+                    });
+                }
+            }
+        }
+    });
 
 // ── Database Schema ───────────────────────────────────────
 

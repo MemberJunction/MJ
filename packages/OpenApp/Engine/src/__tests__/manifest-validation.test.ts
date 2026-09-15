@@ -345,6 +345,52 @@ describe('Manifest Validation', () => {
     });
 });
 
+describe('packages[].platform (#4428)', () => {
+    /** A manifest whose packages section is exactly what the case needs. */
+    function withPackages(packages: unknown): Record<string, unknown> {
+        return { ...minimalManifest(), packages };
+    }
+
+    it('accepts a shared package declaring platform node', () => {
+        const r = ValidateManifestObject(withPackages({ shared: [{ name: '@acme/app-actions', role: 'library', platform: 'node' }] }));
+        expect(r.Success).toBe(true);
+    });
+
+    it('accepts every valid platform value', () => {
+        for (const platform of ['node', 'browser', 'both']) {
+            const r = ValidateManifestObject(withPackages({ shared: [{ name: '@acme/x', role: 'library', platform }] }));
+            expect(r.Success).toBe(true);
+        }
+    });
+
+    it('rejects an unknown platform value', () => {
+        const r = ValidateManifestObject(withPackages({ shared: [{ name: '@acme/x', role: 'library', platform: 'deno' }] }));
+        expect(r.Success).toBe(false);
+    });
+
+    it('still accepts an entry that omits platform entirely', () => {
+        const r = ValidateManifestObject(withPackages({ shared: [{ name: '@acme/x', role: 'library' }] }));
+        expect(r.Success).toBe(true);
+    });
+
+    it('rejects a client package declaring platform node, naming the package', () => {
+        const r = ValidateManifestObject(withPackages({ client: [{ name: '@acme/app-ng', role: 'module', platform: 'node' }] }));
+        expect(r.Success).toBe(false);
+        expect(r.Errors?.join(' ')).toContain('@acme/app-ng');
+    });
+
+    it('rejects a server package declaring platform browser, naming the package', () => {
+        const r = ValidateManifestObject(withPackages({ server: [{ name: '@acme/app-server', role: 'bootstrap', startupExport: 'Load', platform: 'browser' }] }));
+        expect(r.Success).toBe(false);
+        expect(r.Errors?.join(' ')).toContain('@acme/app-server');
+    });
+
+    it('allows platform both in either array', () => {
+        expect(ValidateManifestObject(withPackages({ client: [{ name: '@acme/a', role: 'module', platform: 'both' }] })).Success).toBe(true);
+        expect(ValidateManifestObject(withPackages({ server: [{ name: '@acme/b', role: 'library', platform: 'both' }] })).Success).toBe(true);
+    });
+});
+
 /**
  * String-aware JSONC comment stripper: removes `//` line and `/* *\/` block comments
  * while preserving comment-like sequences (e.g. `https://`) inside quoted strings.
