@@ -663,8 +663,15 @@ async function CompensateSchemaOnFailure(
   // 3. The app's own schema (and with it, its migration history table).
   try {
     callbacks?.OnProgress?.('Rollback', `Dropping schema '${schemaName}'...`);
-    await DropAppSchema(schemaName, context.DatabaseProvider, { allowDoubleUnderscore });
-    callbacks?.OnProgress?.('Rollback', `Schema '${schemaName}' dropped successfully`);
+    // DropAppSchema reports failure by RETURNING { Success: false, ErrorMessage } — it does not
+    // throw (see the catch at the end of DropAppSchema in schema-manager.ts) — so the catch below
+    // alone would never see a failed drop. The result must be inspected explicitly.
+    const dropResult = await DropAppSchema(schemaName, context.DatabaseProvider, { allowDoubleUnderscore });
+    if (!dropResult.Success) {
+      callbacks?.OnError?.('Rollback', `Failed to drop schema '${schemaName}' during rollback: ${dropResult.ErrorMessage ?? 'unknown error'}`);
+    } else {
+      callbacks?.OnProgress?.('Rollback', `Schema '${schemaName}' dropped successfully`);
+    }
   } catch (rollbackError: unknown) {
     const msg = rollbackError instanceof Error ? rollbackError.message : String(rollbackError);
     callbacks?.OnError?.('Rollback', `Failed to drop schema '${schemaName}' during rollback: ${msg}`);

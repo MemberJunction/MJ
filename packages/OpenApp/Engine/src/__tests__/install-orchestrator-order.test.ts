@@ -375,16 +375,24 @@ describe('InstallApp — compensation when migrations fail', () => {
     });
     const source = 'https://github.com/MemberJunction/Integrations/CRM/HubSpot';
     const warnings: string[] = [];
+    const errors: { Phase: string; Message: string }[] = [];
+    const progressMessages: string[] = [];
     const ctx = () => ({
         ...context,
         DatabaseProvider: { Dialect: { PlatformKey: 'sqlserver', CanonicalSchemaName: (s: string) => s } },
         DatabaseConfig: {},
-        Callbacks: { OnWarn: (_phase: string, message: string) => { warnings.push(message); } },
+        Callbacks: {
+            OnWarn: (_phase: string, message: string) => { warnings.push(message); },
+            OnError: (phase: string, message: string) => { errors.push({ Phase: phase, Message: message }); },
+            OnProgress: (_phase: string, message: string) => { progressMessages.push(message); },
+        },
     } as unknown as OrchestratorContext);
 
     beforeEach(() => {
         vi.clearAllMocks();
         warnings.length = 0;
+        errors.length = 0;
+        progressMessages.length = 0;
         vi.mocked(SchemaExists).mockResolvedValue(false);
         // The schema is created THIS run, which is what licenses tearing it down again.
         vi.mocked(CreateAppSchema).mockResolvedValue({ Success: true, Created: true });
@@ -464,6 +472,23 @@ describe('InstallApp — compensation when migrations fail', () => {
         expect(vi.mocked(CreateAppSchema)).not.toHaveBeenCalled();
         expect(vi.mocked(DropAppSchema)).not.toHaveBeenCalled();
         expect(teardownAttempted()).toBe(false);
+    });
+
+    // DropAppSchema reports a failed DROP by RESOLVING to { Success: false }, never by throwing,
+    // so the rollback's try/catch alone cannot see it. Without checking the result the operator is
+    // told the schema was dropped while it is still sitting in the database.
+    it('reports a failed schema drop during rollback instead of announcing success', async () => {
+        vi.mocked(FetchManifestFromGitHub).mockResolvedValue({ Success: true, ManifestJSON: withTeardown });
+        vi.mocked(DropAppSchema).mockResolvedValue({ Success: false, ErrorMessage: 'schema is not empty' });
+
+        const r = await InstallApp({ Source: source }, ctx());
+
+        expect(r.Success).toBe(false);
+        expect(vi.mocked(DropAppSchema)).toHaveBeenCalled();
+        expect(
+            errors.some((e) => e.Phase === 'Rollback' && e.Message.includes('mj_connector_hubspot') && e.Message.includes('schema is not empty')),
+        ).toBe(true);
+        expect(progressMessages.some((m) => m.includes('dropped successfully'))).toBe(false);
     });
 });
 
