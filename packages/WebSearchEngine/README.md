@@ -85,9 +85,15 @@ All three land in the same engine and obey the same provider configuration.
 
 ## Who uses this
 
-All core AI agents (`Agent Manager`, `Demo Loop Agent`, `Demo Multi-Step Agent`, `Research Agent`, `Sage`) and the `Web Research` skill route their web lookups through the provider-neutral `Web Search` Action.
+**No agent or skill binds a search vendor directly.** Every agent and skill that does web lookups — including the `Web Research` skill — binds the provider-neutral `Web Search` Action, and leaves `Provider` unset so the engine can fail over.
 
-The legacy vendor actions (`Google Custom Search` and `Perplexity Search`) remain registered for direct or manual execution, but **carry no agent or skill bindings**. Any new agent, skill, or workflow step must bind `Web Search` instead of a specific vendor.
+`Google Custom Search` and `Perplexity Search` remain registered for direct or manual execution, but carry **no agent or skill bindings**. Anything new binds `Web Search`, never a vendor.
+
+Verify at any time:
+```bash
+grep -rn "Google Custom Search\|Perplexity Search" metadata/agents/ metadata/ai-skills/
+# no output = no vendor bindings remain
+```
 
 ---
 
