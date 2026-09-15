@@ -37,6 +37,7 @@ vi.mock('@memberjunction/config', () => ({
 }));
 
 import { parseBooleanEnv } from '@memberjunction/config';
+import { DEFAULT_CODEGEN_CONFIG } from '../Config/config';
 
 describe('Config Types', () => {
     describe('parseBooleanEnv (utility function)', () => {
@@ -52,6 +53,28 @@ describe('Config Types', () => {
         it('should parse "false" string', () => {
             expect(parseBooleanEnv('false', true)).toBe(false);
         });
+    });
+});
+
+describe('integrityChecks defaults', () => {
+    // The checks run by default. This is the half that makes the reporting in `runCodeGen` reach
+    // anybody: a repo that ships with `enabled: false` gets the 'none-ran' warning rather than a
+    // pass, but it also gets no verification, so the default has to be on.
+    it('runs the integrity checks by default', () => {
+        expect(DEFAULT_CODEGEN_CONFIG.integrityChecks?.enabled).toBe(true);
+        expect(DEFAULT_CODEGEN_CONFIG.integrityChecks?.entityFieldsSequenceCheck).toBe(true);
+    });
+
+    // There is deliberately no `failOnError`-style opt-out. A failing integrity check always fails
+    // the run. Pinning the ABSENCE here is the point: the knob is an easy thing to add in good
+    // faith ("let people keep building while they fix the drift"), and its default would decide
+    // whether every existing repo silently stops failing. If a future change wants one, it has to
+    // delete this test and argue with the reason, which is what a fixture is for.
+    it('exposes no way to turn a failing check into a passing run', () => {
+        expect(Object.keys(DEFAULT_CODEGEN_CONFIG.integrityChecks ?? {}).sort()).toEqual([
+            'enabled',
+            'entityFieldsSequenceCheck',
+        ]);
     });
 });
 
