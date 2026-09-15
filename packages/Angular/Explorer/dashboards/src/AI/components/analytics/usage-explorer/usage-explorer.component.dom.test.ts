@@ -200,6 +200,12 @@ describe('UsageExplorerComponent (DOM)', () => {
             { key: 'TokensCompletion', label: 'Completion Tokens', format: 'number', aggregation: 'sum' }
         ]);
 
+        component.OnMeasureChange('p95_latency');
+        expect(component.MeasureColumns).toEqual([
+            { key: 'LatencyP95', label: 'Avg P95 Latency', format: 'duration', aggregation: 'avg' },
+            { key: 'LatencyP50', label: 'Avg P50 Latency', format: 'duration', aggregation: 'avg' }
+        ]);
+
         component.OnGroupByChange('ModelID');
         expect(component.DimensionColumns).toEqual(['ModelID']);
 

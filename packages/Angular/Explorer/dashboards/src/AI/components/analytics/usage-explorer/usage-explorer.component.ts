@@ -50,7 +50,7 @@ export class UsageExplorerComponent extends BaseResourceComponent implements OnI
         { text: 'Cost ($)', value: 'cost' },
         { text: 'Tokens', value: 'tokens' },
         { text: 'Runs', value: 'runs' },
-        { text: 'P95 Latency', value: 'p95_latency' },
+        { text: 'Avg Latency (P95/P50)', value: 'p95_latency' },
         { text: 'Cache-Read Share', value: 'cache_read' },
         { text: 'Unpriced %', value: 'unpriced_pct' }
     ];
@@ -142,8 +142,8 @@ export class UsageExplorerComponent extends BaseResourceComponent implements OnI
             case 'p95_latency':
             case 'p95 latency':
                 return [
-                    { key: 'LatencyP95', label: 'P95 Latency', format: 'duration', aggregation: 'avg' },
-                    { key: 'LatencyP50', label: 'P50 Latency', format: 'duration', aggregation: 'avg' }
+                    { key: 'LatencyP95', label: 'Avg P95 Latency', format: 'duration', aggregation: 'avg' },
+                    { key: 'LatencyP50', label: 'Avg P50 Latency', format: 'duration', aggregation: 'avg' }
                 ];
             case 'cache_read':
             case 'cache-read share':
