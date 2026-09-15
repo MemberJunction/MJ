@@ -10,13 +10,11 @@
  * @since 2.50.0
  */
 
-import { MJAIAgentTypeEntity,  } from '@memberjunction/core-entities';
-import { ChatMessage, ChatToolCall } from '@memberjunction/ai';
-import {  } from '@memberjunction/core-entities';
+import { MJAIAgentTypeEntity, MJUsageBudgetEntity } from '@memberjunction/core-entities';
+import { ChatMessage, ChatToolCall, AIAPIKey } from '@memberjunction/ai';
 import { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { AgentPayloadChangeRequest } from './agent-payload-change-request';
 import { AgentScratchpad } from './agent-scratchpad';
-import { AIAPIKey } from '@memberjunction/ai';
 import { AgentResponseForm } from './response-forms';
 import { ActionParam } from '@memberjunction/actions-base';
 import { ActionableCommand, AutomaticCommand } from './ui-commands';
@@ -1717,6 +1715,23 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      */
     maxExecutionTimeMs?: number;
 
+    /**
+     * Optional usage budget to enforce for this agent run.
+     * When provided and configured with Action: 'Block', the agent execution guardrail
+     * will block the run before it starts if LastObservedAmount >= AmountLimit.
+     */
+    usageBudget?: MJUsageBudgetEntity;
+}
+
+/**
+ * Result of evaluating agent run guardrails.
+ */
+export interface AgentRunGuardrailVerdict {
+    exceeded: boolean;
+    type?: 'cost' | 'tokens' | 'iterations' | 'time' | 'budget';
+    limit?: number;
+    current?: number;
+    reason?: string;
 }
 
 /**

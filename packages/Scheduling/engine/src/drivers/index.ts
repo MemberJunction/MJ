@@ -12,3 +12,4 @@ export * from './AgentRunSweepScheduledJobDriver';
 export * from './RecordProcessScheduledJobDriver';
 export * from './MaterializationRefreshScheduledJobDriver';
 export * from './UserRoutineDispatcherDriver';
+export * from './UsageBudgetEvaluationScheduledJobDriver';

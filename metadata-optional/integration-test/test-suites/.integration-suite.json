@@ -1176,6 +1176,21 @@
             "lastModified": "2026-09-13T20:08:49.403Z",
             "checksum": "8b999ce08a53bcd562be1dc253cdabc1967b15bf2b3824564676be246e4dacbd"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT94 - Usage Budgets Evaluation Pipeline",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "E365E242-29A1-4286-9AC0-C76F89BC971E"
+          },
+          "sync": {
+            "lastModified": "2026-09-15T16:15:00.000Z",
+            "checksum": "e365e24229a142869ac0c76f89bc971e00000000000000000000000000000000"
+          }
         }
       ]
     },
