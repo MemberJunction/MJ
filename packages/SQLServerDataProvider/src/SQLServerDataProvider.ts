@@ -1258,7 +1258,47 @@ export class SQLServerDataProvider
       setSQL: setStatements.join('\n'),
       callArgsSQL: execParams.join(',\n                '),
       simpleParamsSQL: simpleParams,
+      suffix: uniqueSuffix,
     };
+  }
+
+  /**
+   * Replay form of a CREATE for the SQL log (never executed): the same DECLARE/SET
+   * block, then `IF NOT EXISTS (row with this PK) EXEC spCreate ELSE EXEC spUpdate`.
+   *
+   * The consolidated Metadata_Sync migrations are recordings of `mj sync push`, and a
+   * push creates rows with fixed primary keys from `metadata/**`. Replaying an
+   * unguarded create on a database where a push already created the row fails on the
+   * primary key (MemberJunction/MJ#4503). Create and update procs take the same
+   * parameter list, so the update branch reuses the create's arguments and converges
+   * the row to the recorded content instead of skipping it.
+   *
+   * Returns undefined when any primary key value is not part of the call (the DB
+   * default would generate it, so there is nothing to look up).
+   */
+  protected override RenderReplaySaveSQL(
+    binding: SaveCallBinding,
+    entity: BaseEntity,
+    createSpName: string,
+    fieldValues: Map<EntityFieldInfo, unknown>,
+  ): string | undefined {
+    if (binding.kind !== 'mssql-declare-exec') {
+      throw new Error(`SQLServerDataProvider.RenderReplaySaveSQL: unexpected binding kind '${binding.kind}'`);
+    }
+    const pks = entity.EntityInfo.PrimaryKeys;
+    if (pks.length === 0 || !pks.every((pk) => fieldValues.has(pk))) {
+      return undefined;
+    }
+    const schema = entity.EntityInfo.SchemaName;
+    const where = pks.map((pk) => `[${pk.Name}] = @${pk.CodeName}${binding.suffix}`).join(' AND ');
+    const updateSpName = this.GetCreateUpdateSPName(entity, false);
+    const head = binding.preambleSQL ? `${binding.preambleSQL}\n\n${binding.setSQL}\n\n` : '';
+    return (
+      `${head}IF NOT EXISTS (SELECT 1 FROM [${schema}].[${entity.EntityInfo.BaseTable}] WHERE ${where})\n` +
+      `BEGIN\n    EXEC [${schema}].${createSpName} ${binding.callArgsSQL}\nEND\n` +
+      `ELSE\n` +
+      `BEGIN\n    EXEC [${schema}].${updateSpName} ${binding.callArgsSQL}\nEND`
+    );
   }
 
   /**

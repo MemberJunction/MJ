@@ -1106,7 +1106,10 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             isMutation: true,
             description: `Save ${entity.EntityInfo.Name}`,
         };
-        if (entity.EntityInfo.TrackRecordChanges && sqlDetails.simpleSQL) {
+        // Always offer the record-change-free form to the SQL logger, not only when the
+        // entity tracks record changes: it is also the replay-safe form of a create for
+        // migration recordings (MemberJunction/MJ#4503). Execution still uses fullSQL.
+        if (sqlDetails.simpleSQL) {
             opts.simpleSQLFallback = sqlDetails.simpleSQL;
         }
         return opts;
@@ -1579,7 +1582,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     this.OnSuspendRefresh();
 
                     const extraData = this.GetTransactionExtraData(entity);
-                    if (entity.EntityInfo.TrackRecordChanges && sqlDetails.simpleSQL) {
+                    if (sqlDetails.simpleSQL) {
                         extraData.simpleSQLFallback = sqlDetails.simpleSQL;
                     }
                     extraData.entityName = entity.EntityInfo.Name;
@@ -1721,7 +1724,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 entity.RaiseReadyForTransaction();
 
                 const extraData = this.GetTransactionExtraData(entity);
-                if (entity.EntityInfo.TrackRecordChanges && sqlDetails.simpleSQL) {
+                if (sqlDetails.simpleSQL) {
                     extraData.simpleSQLFallback = sqlDetails.simpleSQL;
                 }
                 extraData.entityName = entity.EntityInfo.Name;
