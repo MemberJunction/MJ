@@ -526,13 +526,14 @@ mj app check-updates
 
 #### Internal / dangerous flags
 
-Intentionally omitted from `--help`. Only for MJ-internal apps that own a
-reserved-looking schema (e.g. `__bcsaas`). Do not use on third-party apps.
+Intentionally omitted from `--help`. Almost never needed: MJ's own Open Apps use the
+`__mj_<AppName>` schema namespace (`__mj_BizAppsCommon`, `__mj_BizAppsForms`, …), which
+installs on the default path with no flag at all.
 
-- `--dangerously-ignore-dbl-underscore-schema-rule` — available on `mj app install`
-  and `mj app upgrade`. Bypasses the rule that blocks schema names starting with
-  `__` (reserved for MJ internals). Exact-match reserved names (`__mj`, `dbo`,
-  `sys`, `guest`, `INFORMATION_SCHEMA`) remain hard-blocked regardless.
+- `--dangerously-ignore-dbl-underscore-schema-rule` — available on `mj app install`,
+  `mj app upgrade` and `mj app remove`. Allows a `__`-prefixed schema name *outside* the
+  `__mj_` app namespace (e.g. `__bcsaas`). Exact-match reserved names — `__mj`, `__mj_UDT`,
+  `dbo`, `sys`, `guest`, `information_schema` — remain hard-blocked regardless.
 
 ```bash
 mj app install https://github.com/BlueCypress/SaaS \

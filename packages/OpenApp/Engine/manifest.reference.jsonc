@@ -51,6 +51,11 @@
   // ── Schema (OPTIONAL — the SCHEMA-BACKED form) ──────────────────────────────
   // Present only when the app ships its own database objects. The engine creates this
   // schema at install and drops it at remove. Omit entirely for metadata-/code-only apps.
+  //
+  // Naming: MemberJunction reserves the `__` prefix. MJ's own Open Apps use
+  // `__mj_<AppName>` (e.g. `__mj_BizAppsForms`); third-party apps pick a name that does not
+  // start with `__`. `dbo`, `sys`, `guest`, `information_schema`, `__mj` and `__mj_UDT` are
+  // reserved outright and can never be claimed.
   "schema": {
     "name": "acme_crm",                                    // REQUIRED within schema — SQL schema name
     "createIfNotExists": true,                             // OPTIONAL — default true

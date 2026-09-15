@@ -179,7 +179,11 @@ export interface InstallOptions {
     Subpath?: string;
     /** Enable verbose output */
     Verbose?: boolean;
-    /** Allow schema names starting with '__'. Dangerous; MJ-internal apps only. */
+    /**
+     * Allow a `__`-prefixed schema name outside the `__mj_<AppName>` app namespace, which
+     * needs no override. Exact-match reserved names (`__mj`, `__mj_UDT`, `dbo`, `sys`,
+     * `guest`, `information_schema`) stay blocked regardless. Dangerous; MJ-internal apps only.
+     */
     AllowDoubleUnderscoreSchema?: boolean;
     /**
      * @internal Set by the orchestrator when installing the pre-resolved members
@@ -219,7 +223,11 @@ export interface UpgradeOptions {
     Version?: string;
     /** Enable verbose output */
     Verbose?: boolean;
-    /** Allow schema names starting with '__'. Dangerous; MJ-internal apps only. */
+    /**
+     * Allow a `__`-prefixed schema name outside the `__mj_<AppName>` app namespace, which
+     * needs no override. Exact-match reserved names (`__mj`, `__mj_UDT`, `dbo`, `sys`,
+     * `guest`, `information_schema`) stay blocked regardless. Dangerous; MJ-internal apps only.
+     */
     AllowDoubleUnderscoreSchema?: boolean;
 }
 
@@ -236,9 +244,9 @@ export interface RemoveOptions {
     /** Enable verbose output */
     Verbose?: boolean;
     /**
-     * Allow dropping schemas whose name starts with '__' (normally reserved for MJ internals).
-     * The exact-match reserved list (dbo/sys/guest/INFORMATION_SCHEMA/__mj) remains blocked.
-     * Dangerous; intended for MJ-internal apps only.
+     * Allow dropping a `__`-prefixed schema outside the `__mj_<AppName>` app namespace, which
+     * needs no override. The exact-match reserved list (`dbo`, `sys`, `guest`,
+     * `information_schema`, `__mj`, `__mj_UDT`) remains blocked. Dangerous; MJ-internal apps only.
      */
     AllowDoubleUnderscoreSchema?: boolean;
 }
