@@ -524,6 +524,25 @@ mj app remove <name> --keep-data
 mj app check-updates
 ```
 
+#### Private repositories
+
+Every first-party BizApp repository is private. GitHub answers **404, not 403**, for a repository
+it will not show you, so an install without a credential fails as though the app or the version
+did not exist. Supply a token one of three ways:
+
+```bash
+# 1. Environment variable
+GITHUB_TOKEN=$(gh auth token) mj app install https://github.com/MemberJunction/bizapps-ats
+
+# 2. mj.config.cjs — per-repository tokens, keyed by repo URL
+#    openApps: { github: { tokens: { 'https://github.com/MemberJunction/bizapps-ats': process.env.ATS_TOKEN } } }
+
+# 3. mj.config.cjs — one token for every Open App repo
+#    openApps: { github: { token: process.env.GITHUB_TOKEN } }
+```
+
+The token needs `repo` scope for the repositories you install from.
+
 #### Internal / dangerous flags
 
 Intentionally omitted from `--help`. Only for MJ-internal apps that own a
