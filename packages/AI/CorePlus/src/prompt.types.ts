@@ -842,9 +842,50 @@ export class AIPromptParams {
   nativeFileInputs?: NativeFileInput[];
 }
 
+/**
+ * Input parameters for resolving AgentRunID and UserID attribution for prompt runs.
+ */
+export interface ResolvePromptRunAttributionInput {
+  /** Explicit agent run ID override, if provided. */
+  agentRunId?: string | null;
+  /** Enclosing agent run or object with ID and/or UserID, if available. */
+  agentRun?: { ID?: string | null; UserID?: string | null } | null;
+  /** Explicit user ID override, if provided. */
+  userId?: string | null;
+  /** Context user on whose behalf the operation is running. */
+  contextUser?: { ID?: string | null } | null;
+}
 
+/**
+ * Resolved attribution identifiers for an AI prompt run record.
+ */
+export interface ResolvedPromptRunAttribution {
+  /** The resolved agent run ID, or null if direct/unaffiliated. */
+  agentRunId: string | null;
+  /** The resolved user ID, or null if anonymous/unspecified. */
+  userId: string | null;
+}
 
+/**
+ * Pure function to resolve AgentRunID and UserID attribution across the AI stack.
+ *
+ * Attribution precedence:
+ * - `agentRunId`: explicit `agentRunId` > `agentRun.ID` > null
+ * - `userId`: explicit `userId` > `agentRun.UserID` > `contextUser.ID` > null
+ */
+export function ResolvePromptRunAttribution(input?: ResolvePromptRunAttributionInput | null): ResolvedPromptRunAttribution {
+  const agentRunId = (input?.agentRunId !== undefined && input?.agentRunId !== null && input?.agentRunId !== '')
+    ? input.agentRunId
+    : (input?.agentRun?.ID || null);
 
+  const userId = (input?.userId !== undefined && input?.userId !== null && input?.userId !== '')
+    ? input.userId
+    : (input?.agentRun?.UserID || input?.contextUser?.ID || null);
+
+  return { agentRunId, userId };
+}
+
+export const resolvePromptRunAttribution = ResolvePromptRunAttribution;
 
 /**
  * Callback function type for execution progress updates

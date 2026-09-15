@@ -46,7 +46,7 @@ import {
     RealtimeToolCall,
     RealtimeToolDefinition
 } from '@memberjunction/ai';
-import { MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIAgentRunEntityExtended, MJAIPromptRunEntityExtended, AgentExecutionProgressCallback, ExecuteAgentResult, AppContextSnapshot, FormatAppContextNote } from '@memberjunction/ai-core-plus';
+import { MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIAgentRunEntityExtended, MJAIPromptRunEntityExtended, AgentExecutionProgressCallback, ExecuteAgentResult, AppContextSnapshot, FormatAppContextNote, ResolvePromptRunAttribution } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 
 import { AgentMemoryContextBuilder } from '../agent-memory-context-builder';
@@ -1030,8 +1030,12 @@ export class RealtimeClientSessionService {
             promptRun.VendorID = vendorID;
         }
         promptRun.AgentID = coAgent.ID;
-        promptRun.AgentRunID = coAgentRunID;
-        promptRun.UserID = contextUser?.ID ?? null;
+        const attribution = ResolvePromptRunAttribution({
+            agentRunId: coAgentRunID,
+            contextUser,
+        });
+        promptRun.AgentRunID = attribution.agentRunId;
+        promptRun.UserID = attribution.userId;
         promptRun.RunAt = new Date();
         promptRun.RunType = 'Single';
         promptRun.Status = 'Running';

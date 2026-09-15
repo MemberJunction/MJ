@@ -16,7 +16,7 @@ import {
   JudgeRanking,
 } from './ParallelExecution';
 import { AIEngine } from '@memberjunction/aiengine';
-import { AIPromptParams } from '@memberjunction/ai-core-plus';
+import { AIPromptParams, ResolvePromptRunAttribution } from '@memberjunction/ai-core-plus';
 import { AIPromptRunner } from './AIPromptRunner';
 
 /**
@@ -770,8 +770,11 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
       ];
 
       const agentId = results[0]?.task?.agentId;
-      const agentRunId = results[0]?.task?.agentRunId;
-      const userId = results[0]?.task?.userId ?? user?.ID;
+      const judgeAttribution = ResolvePromptRunAttribution({
+        agentRunId: results[0]?.task?.agentRunId,
+        userId: results[0]?.task?.userId,
+        contextUser: user,
+      });
 
       // Execute the judge prompt
       const judgeRunner = new AIPromptRunner();
@@ -787,8 +790,8 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
         runType: 'ResultSelector',
         executionOrder: results.length,
         agentId,
-        agentRunId,
-        userId,
+        agentRunId: judgeAttribution.agentRunId ?? undefined,
+        userId: judgeAttribution.userId ?? undefined,
       });
 
       const judgeEndTime = Date.now();
@@ -1002,8 +1005,13 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
       if (task.agentId) {
         promptRun.AgentID = task.agentId;
       }
-      promptRun.AgentRunID = task.agentRunId ?? null;
-      promptRun.UserID = task.userId ?? task.contextUser?.ID ?? null;
+      const attribution = ResolvePromptRunAttribution({
+        agentRunId: task.agentRunId,
+        userId: task.userId,
+        contextUser: task.contextUser,
+      });
+      promptRun.AgentRunID = attribution.agentRunId;
+      promptRun.UserID = attribution.userId;
       promptRun.RunAt = startTime;
       promptRun.RunType = 'ParallelChild';
       promptRun.ParentID = parentPromptRunId;

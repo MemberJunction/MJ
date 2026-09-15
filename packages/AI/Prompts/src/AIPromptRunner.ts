@@ -18,7 +18,8 @@ import { SystemPlaceholderManager } from '@memberjunction/ai-core-plus';
 import {
     TemplateMessageRole,
     ChildPromptParam,
-    AIPromptParams
+    AIPromptParams,
+    ResolvePromptRunAttribution
 } from '@memberjunction/ai-core-plus';
 // json5 is a CJS module: under this package's ESM output its import namespace has no
 // `parse` — only the default export does. `import * as JSON5` made JSON5.parse
@@ -1186,10 +1187,15 @@ export class AIPromptRunner {
       throw new Error(`No execution tasks created for parallel execution of prompt ${prompt.Name}`);
     }
 
+    const parallelAttribution = ResolvePromptRunAttribution({
+      agentRunId: params.agentRunId,
+      userId: params.userId,
+      contextUser: params.contextUser,
+    });
     for (const task of executionTasks) {
       task.agentId = params.agentId;
-      task.agentRunId = params.agentRunId;
-      task.userId = params.userId ?? params.contextUser?.ID;
+      task.agentRunId = parallelAttribution.agentRunId ?? undefined;
+      task.userId = parallelAttribution.userId ?? undefined;
     }
 
     // Check for cancellation before executing tasks
@@ -2917,8 +2923,13 @@ export class AIPromptRunner {
       if (params.agentId) {
         promptRun.AgentID = params.agentId;
       }
-      promptRun.AgentRunID = params.agentRunId ?? null;
-      promptRun.UserID = params.userId ?? params.contextUser?.ID ?? null;
+      const attribution = ResolvePromptRunAttribution({
+        agentRunId: params.agentRunId,
+        userId: params.userId,
+        contextUser: params.contextUser,
+      });
+      promptRun.AgentRunID = attribution.agentRunId;
+      promptRun.UserID = attribution.userId;
 
       // Set ChildPromptID if this is a hierarchical execution with child prompts
       if (params.childPrompts && params.childPrompts.length > 0) {
@@ -5654,6 +5665,12 @@ export class AIPromptRunner {
           throw new Error('Repair JSON prompt not found in MJ: System category');
         }
         
+        const repairAttribution = ResolvePromptRunAttribution({
+          agentRunId: params.agentRunId,
+          userId: params.userId,
+          contextUser: params.contextUser,
+        });
+
         // Run the repair prompt
         const repairResult = await this.ExecutePrompt({
           parentPromptRunId: currentPromptRun.ID,
@@ -5665,8 +5682,8 @@ export class AIPromptRunner {
           },
           skipValidation: true, // don't want to validate as this would cause recursive infinity scenario if the JSON is invalid. Just one shot, fix or no fix
           agentId: params.agentId,
-          agentRunId: params.agentRunId,
-          userId: params.userId ?? params.contextUser?.ID,
+          agentRunId: repairAttribution.agentRunId ?? undefined,
+          userId: repairAttribution.userId ?? undefined,
         });
         
         if (!repairResult.success || !repairResult.result) {
