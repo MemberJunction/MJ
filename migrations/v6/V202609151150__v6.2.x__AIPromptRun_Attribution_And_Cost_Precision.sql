@@ -71,9 +71,26 @@ ALTER TABLE [${flyway:defaultSchema}].[AIAgentRun] ADD CONSTRAINT [DF_AIAgentRun
 GO
 
 -- 3. Backfill (set-based, idempotent). Required to make the new columns meaningful; the only data statement in this file.
+-- Deliberately NOT filtered by StepType. TargetLogID is polymorphic — it holds an AIPromptRun ID
+-- for 'Prompt' and 'Compaction' steps AND for 'Tool' steps (base-agent.ts,
+-- `toolStep.TargetLogID = executed.promptRunId`), an AIAgentRun ID for 'Sub-Agent' steps, and an
+-- ActionExecutionLog ID for 'Actions'. The join to AIPromptRun.ID is what establishes that this
+-- particular target IS a prompt run, so the step type adds nothing and an enumerated list silently
+-- drifts every time a new step type starts logging a prompt run. An earlier revision listed only
+-- ('Prompt','Compaction'), which left every tool-call prompt run with a NULL AgentRunID: the fact
+-- view then classified them SourceKind='Direct' while runs after this migration are attributed
+-- inline, producing a step change in every trend chart that spans the migration date — an artifact
+-- of the backfill, not of the workload.
+-- CROSS APPLY TOP 1 rather than a plain JOIN so a prompt run referenced by two steps resolves
+-- deterministically instead of picking one arbitrarily.
 UPDATE p SET p.AgentRunID = s.AgentRunID
 FROM [${flyway:defaultSchema}].[AIPromptRun] p
-JOIN [${flyway:defaultSchema}].[AIAgentRunStep] s ON s.TargetLogID = p.ID AND s.StepType IN ('Prompt','Compaction')
+CROSS APPLY (
+    SELECT TOP 1 st.AgentRunID
+    FROM [${flyway:defaultSchema}].[AIAgentRunStep] st
+    WHERE st.TargetLogID = p.ID AND st.AgentRunID IS NOT NULL
+    ORDER BY st.StartedAt, st.ID
+) s
 WHERE p.AgentRunID IS NULL;
 
 UPDATE p SET p.UserID = r.UserID
@@ -81,11 +98,21 @@ FROM [${flyway:defaultSchema}].[AIPromptRun] p
 JOIN [${flyway:defaultSchema}].[AIAgentRun] r ON r.ID = p.AgentRunID
 WHERE p.UserID IS NULL AND r.UserID IS NOT NULL;
 
--- children of a parallel parent inherit
-UPDATE c SET c.AgentRunID = p.AgentRunID, c.UserID = p.UserID
-FROM [${flyway:defaultSchema}].[AIPromptRun] c
-JOIN [${flyway:defaultSchema}].[AIPromptRun] p ON p.ID = c.ParentID
-WHERE c.AgentRunID IS NULL AND p.AgentRunID IS NOT NULL;
+
+-- Children inherit from the parent. Repeated until no rows move, because ParentID nests more than
+-- one level deep: AIPromptRunner's JSON-repair path hangs a child off a parallel ARM, which is
+-- itself a child of the parallel parent, so a single pass reaches children but never grandchildren.
+-- COALESCE on UserID keeps this idempotent — a re-run must not overwrite a child's correct UserID
+-- with a parent's NULL one.
+DECLARE @rows int = 1;
+WHILE @rows > 0
+BEGIN
+    UPDATE c SET c.AgentRunID = p.AgentRunID, c.UserID = COALESCE(c.UserID, p.UserID)
+    FROM [${flyway:defaultSchema}].[AIPromptRun] c
+    JOIN [${flyway:defaultSchema}].[AIPromptRun] p ON p.ID = c.ParentID
+    WHERE c.AgentRunID IS NULL AND p.AgentRunID IS NOT NULL;
+    SET @rows = @@ROWCOUNT;
+END;
 GO
 
 -- 4. Analytics indexes (explicitly required by MJ#4396 Part 4; these are NOT FK indexes — CodeGen makes those)
