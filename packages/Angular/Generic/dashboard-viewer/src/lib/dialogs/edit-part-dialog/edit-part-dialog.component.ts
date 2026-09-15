@@ -223,7 +223,7 @@ export class EditPartDialogComponent implements OnDestroy, AfterViewInit {
 
             // Subscribe to config changes
             panel.configChanged.subscribe((result: ConfigPanelResult) => {
-                this.onConfigChanged(result);
+                this.OnConfigChanged(result);
             });
 
             this.IsLoading = false;
@@ -252,18 +252,28 @@ export class EditPartDialogComponent implements OnDestroy, AfterViewInit {
     /**
      * Handle configuration changes from the embedded panel
      */
-    public onConfigChanged(result: ConfigPanelResult): void {
+    public OnConfigChanged(result: ConfigPanelResult): void {
         this.latestResult = result;
         this.IsValid = result.isValid;
         this.cdr.detectChanges();
     }
 
+    /** @deprecated Use {@link OnConfigChanged}. */
+    public onConfigChanged(result: ConfigPanelResult): void {
+      return this.OnConfigChanged(result);
+    }
+
     /**
      * Get the dialog title based on part type
      */
-    public getDialogTitle(): string {
+    public GetDialogTitle(): string {
         const partName = this.PartType?.Name || 'Part';
         return this.Panel ? `Configure ${partName}` : `Add ${partName}`;
+    }
+
+    /** @deprecated Use {@link GetDialogTitle}. */
+    public getDialogTitle(): string {
+      return this.GetDialogTitle();
     }
 
     /**
@@ -298,7 +308,12 @@ export class EditPartDialogComponent implements OnDestroy, AfterViewInit {
     /**
      * Get save button text
      */
-    public getSaveButtonText(): string {
+    public GetSaveButtonText(): string {
         return this.Panel ? 'Save Changes' : 'Add Part';
+    }
+
+    /** @deprecated Use {@link GetSaveButtonText}. */
+    public getSaveButtonText(): string {
+      return this.GetSaveButtonText();
     }
 }

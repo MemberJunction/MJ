@@ -119,7 +119,7 @@ export class ActionExplorerStateService implements OnDestroy {
   /**
    * Load saved state from UserInfoEngine
    */
-  public async loadSavedState(): Promise<void> {
+  public async LoadSavedState(): Promise<void> {
     try {
       const savedState = UserInfoEngine.Instance.GetSetting(`${SETTING_PREFIX}action-explorer/state`);
       if (savedState) {
@@ -146,6 +146,11 @@ export class ActionExplorerStateService implements OnDestroy {
     } catch (error) {
       console.warn('[ActionExplorerState] Failed to load saved state:', error);
     }
+  }
+
+  /** @deprecated Use {@link LoadSavedState}. */
+  public async loadSavedState(): Promise<void> {
+    return this.LoadSavedState();
   }
 
   /**
@@ -176,7 +181,7 @@ export class ActionExplorerStateService implements OnDestroy {
   }
 
   // Tree panel methods
-  public setTreeWidth(width: number): void {
+  public SetTreeWidth(width: number): void {
     const clampedWidth = Math.min(Math.max(width, TREE_WIDTH_MIN), TREE_WIDTH_MAX);
     if (clampedWidth !== this._treeWidth$.value) {
       this._treeWidth$.next(clampedWidth);
@@ -184,27 +189,47 @@ export class ActionExplorerStateService implements OnDestroy {
     }
   }
 
-  public setTreeCollapsed(collapsed: boolean): void {
+  /** @deprecated Use {@link SetTreeWidth}. */
+  public setTreeWidth(width: number): void {
+    return this.SetTreeWidth(width);
+  }
+
+  public SetTreeCollapsed(collapsed: boolean): void {
     if (collapsed !== this._treeCollapsed$.value) {
       this._treeCollapsed$.next(collapsed);
       this.queuePersist();
     }
   }
 
+  /** @deprecated Use {@link SetTreeCollapsed}. */
+  public setTreeCollapsed(collapsed: boolean): void {
+    return this.SetTreeCollapsed(collapsed);
+  }
+
+  public ToggleTreeCollapsed(): void {
+    this.SetTreeCollapsed(!this._treeCollapsed$.value);
+  }
+
+  /** @deprecated Use {@link ToggleTreeCollapsed}. */
   public toggleTreeCollapsed(): void {
-    this.setTreeCollapsed(!this._treeCollapsed$.value);
+    return this.ToggleTreeCollapsed();
   }
 
   // View mode methods
-  public setViewMode(mode: ActionViewMode): void {
+  public SetViewMode(mode: ActionViewMode): void {
     if (mode !== this._viewMode$.value) {
       this._viewMode$.next(mode);
       this.queuePersist();
     }
   }
 
+  /** @deprecated Use {@link SetViewMode}. */
+  public setViewMode(mode: ActionViewMode): void {
+    return this.SetViewMode(mode);
+  }
+
   // Sort methods
-  public setSortConfig(config: SortConfig): void {
+  public SetSortConfig(config: SortConfig): void {
     if (config.field !== this._sortConfig$.value.field ||
         config.direction !== this._sortConfig$.value.direction) {
       this._sortConfig$.next(config);
@@ -212,25 +237,40 @@ export class ActionExplorerStateService implements OnDestroy {
     }
   }
 
-  public toggleSortDirection(): void {
+  /** @deprecated Use {@link SetSortConfig}. */
+  public setSortConfig(config: SortConfig): void {
+    return this.SetSortConfig(config);
+  }
+
+  public ToggleSortDirection(): void {
     const current = this._sortConfig$.value;
-    this.setSortConfig({
+    this.SetSortConfig({
       field: current.field,
       direction: current.direction === 'asc' ? 'desc' : 'asc'
     });
   }
 
-  public setSortField(field: SortField): void {
+  /** @deprecated Use {@link ToggleSortDirection}. */
+  public toggleSortDirection(): void {
+    return this.ToggleSortDirection();
+  }
+
+  public SetSortField(field: SortField): void {
     const current = this._sortConfig$.value;
     if (field === current.field) {
-      this.toggleSortDirection();
+      this.ToggleSortDirection();
     } else {
-      this.setSortConfig({ field, direction: 'asc' });
+      this.SetSortConfig({ field, direction: 'asc' });
     }
   }
 
+  /** @deprecated Use {@link SetSortField}. */
+  public setSortField(field: SortField): void {
+    return this.SetSortField(field);
+  }
+
   // Category expansion methods
-  public toggleCategoryExpanded(categoryId: string): void {
+  public ToggleCategoryExpanded(categoryId: string): void {
     const expanded = new Set(this._expandedCategories$.value);
     if (expanded.has(categoryId)) {
       expanded.delete(categoryId);
@@ -241,7 +281,12 @@ export class ActionExplorerStateService implements OnDestroy {
     this.queuePersist();
   }
 
-  public setCategoryExpanded(categoryId: string, isExpanded: boolean): void {
+  /** @deprecated Use {@link ToggleCategoryExpanded}. */
+  public toggleCategoryExpanded(categoryId: string): void {
+    return this.ToggleCategoryExpanded(categoryId);
+  }
+
+  public SetCategoryExpanded(categoryId: string, isExpanded: boolean): void {
     const expanded = new Set(this._expandedCategories$.value);
     if (isExpanded) {
       expanded.add(categoryId);
@@ -252,7 +297,12 @@ export class ActionExplorerStateService implements OnDestroy {
     this.queuePersist();
   }
 
-  public expandPathToCategory(categoryId: string, categoryParentMap: Map<string, string | null>): void {
+  /** @deprecated Use {@link SetCategoryExpanded}. */
+  public setCategoryExpanded(categoryId: string, isExpanded: boolean): void {
+    return this.SetCategoryExpanded(categoryId, isExpanded);
+  }
+
+  public ExpandPathToCategory(categoryId: string, categoryParentMap: Map<string, string | null>): void {
     const expanded = new Set(this._expandedCategories$.value);
     let currentId: string | null = categoryParentMap.get(categoryId) || null;
 
@@ -265,45 +315,85 @@ export class ActionExplorerStateService implements OnDestroy {
     this.queuePersist();
   }
 
-  public collapseAllCategories(): void {
+  /** @deprecated Use {@link ExpandPathToCategory}. */
+  public expandPathToCategory(categoryId: string, categoryParentMap: Map<string, string | null>): void {
+    return this.ExpandPathToCategory(categoryId, categoryParentMap);
+  }
+
+  public CollapseAllCategories(): void {
     this._expandedCategories$.next(new Set());
     this.queuePersist();
   }
 
-  public expandAllCategories(categoryIds: string[]): void {
+  /** @deprecated Use {@link CollapseAllCategories}. */
+  public collapseAllCategories(): void {
+    return this.CollapseAllCategories();
+  }
+
+  public ExpandAllCategories(categoryIds: string[]): void {
     this._expandedCategories$.next(new Set(categoryIds));
     this.queuePersist();
   }
 
+  /** @deprecated Use {@link ExpandAllCategories}. */
+  public expandAllCategories(categoryIds: string[]): void {
+    return this.ExpandAllCategories(categoryIds);
+  }
+
   // Selected category methods
-  public setSelectedCategoryId(categoryId: string): void {
+  public SetSelectedCategoryId(categoryId: string): void {
     if (categoryId !== this._selectedCategoryId$.value) {
       this._selectedCategoryId$.next(categoryId);
       // Don't persist - this comes from URL
     }
   }
 
+  /** @deprecated Use {@link SetSelectedCategoryId}. */
+  public setSelectedCategoryId(categoryId: string): void {
+    return this.SetSelectedCategoryId(categoryId);
+  }
+
   // Filter methods
-  public setFilters(filters: Partial<ActionFilters>): void {
+  public SetFilters(filters: Partial<ActionFilters>): void {
     this._filters$.next({ ...this._filters$.value, ...filters });
     // Don't persist filters - they come from URL
   }
 
-  public setSearchTerm(searchTerm: string): void {
+  /** @deprecated Use {@link SetFilters}. */
+  public setFilters(filters: Partial<ActionFilters>): void {
+    return this.SetFilters(filters);
+  }
+
+  public SetSearchTerm(searchTerm: string): void {
     if (searchTerm !== this._filters$.value.searchTerm) {
       this._filters$.next({ ...this._filters$.value, searchTerm });
     }
   }
 
-  public setStatusFilter(statuses: string[]): void {
+  /** @deprecated Use {@link SetSearchTerm}. */
+  public setSearchTerm(searchTerm: string): void {
+    return this.SetSearchTerm(searchTerm);
+  }
+
+  public SetStatusFilter(statuses: string[]): void {
     this._filters$.next({ ...this._filters$.value, statuses });
   }
 
-  public setTypeFilter(types: string[]): void {
+  /** @deprecated Use {@link SetStatusFilter}. */
+  public setStatusFilter(statuses: string[]): void {
+    return this.SetStatusFilter(statuses);
+  }
+
+  public SetTypeFilter(types: string[]): void {
     this._filters$.next({ ...this._filters$.value, types });
   }
 
-  public clearFilters(): void {
+  /** @deprecated Use {@link SetTypeFilter}. */
+  public setTypeFilter(types: string[]): void {
+    return this.SetTypeFilter(types);
+  }
+
+  public ClearFilters(): void {
     this._filters$.next({
       searchTerm: '',
       statuses: [],
@@ -313,7 +403,12 @@ export class ActionExplorerStateService implements OnDestroy {
     });
   }
 
-  public hasActiveFilters(): boolean {
+  /** @deprecated Use {@link ClearFilters}. */
+  public clearFilters(): void {
+    return this.ClearFilters();
+  }
+
+  public HasActiveFilters(): boolean {
     const f = this._filters$.value;
     return f.searchTerm.length > 0 ||
            f.statuses.length > 0 ||
@@ -322,27 +417,52 @@ export class ActionExplorerStateService implements OnDestroy {
            f.hasExecutions != null;
   }
 
+  /** @deprecated Use {@link HasActiveFilters}. */
+  public hasActiveFilters(): boolean {
+    return this.HasActiveFilters();
+  }
+
   // Panel methods
-  public openNewCategoryPanel(): void {
+  public OpenNewCategoryPanel(): void {
     this._newCategoryPanelOpen$.next(true);
   }
 
-  public closeNewCategoryPanel(): void {
+  /** @deprecated Use {@link OpenNewCategoryPanel}. */
+  public openNewCategoryPanel(): void {
+    return this.OpenNewCategoryPanel();
+  }
+
+  public CloseNewCategoryPanel(): void {
     this._newCategoryPanelOpen$.next(false);
   }
 
-  public openNewActionPanel(): void {
+  /** @deprecated Use {@link CloseNewCategoryPanel}. */
+  public closeNewCategoryPanel(): void {
+    return this.CloseNewCategoryPanel();
+  }
+
+  public OpenNewActionPanel(): void {
     this._newActionPanelOpen$.next(true);
   }
 
-  public closeNewActionPanel(): void {
+  /** @deprecated Use {@link OpenNewActionPanel}. */
+  public openNewActionPanel(): void {
+    return this.OpenNewActionPanel();
+  }
+
+  public CloseNewActionPanel(): void {
     this._newActionPanelOpen$.next(false);
+  }
+
+  /** @deprecated Use {@link CloseNewActionPanel}. */
+  public closeNewActionPanel(): void {
+    return this.CloseNewActionPanel();
   }
 
   /**
    * Build URL query params from current state for deep linking
    */
-  public buildQueryParams(): Record<string, string | null> {
+  public BuildQueryParams(): Record<string, string | null> {
     const params: Record<string, string | null> = {};
 
     if (this._selectedCategoryId$.value !== 'all') {
@@ -386,10 +506,15 @@ export class ActionExplorerStateService implements OnDestroy {
     return params;
   }
 
+  /** @deprecated Use {@link BuildQueryParams}. */
+  public buildQueryParams(): Record<string, string | null> {
+    return this.BuildQueryParams();
+  }
+
   /**
    * Parse URL query params and update state
    */
-  public parseQueryParams(params: URLSearchParams): void {
+  public ParseQueryParams(params: URLSearchParams): void {
     const category = params.get('category');
     if (category) {
       this._selectedCategoryId$.next(category);
@@ -418,5 +543,10 @@ export class ActionExplorerStateService implements OnDestroy {
       statuses,
       types
     });
+  }
+
+  /** @deprecated Use {@link ParseQueryParams}. */
+  public parseQueryParams(params: URLSearchParams): void {
+    return this.ParseQueryParams(params);
   }
 }

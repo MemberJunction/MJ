@@ -4,10 +4,10 @@ import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { Metadata, EntityInfo } from '@memberjunction/core';
 import { ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
-import { AgentToolResult, validateStringParam } from '../../shared/agent-tool-validation';
+import { AgentToolResult, ValidateStringParam } from '../../shared/agent-tool-validation';
 import {
-    buildVersionHistoryGraphAgentContext,
-    resolveGraphEntity,
+    BuildVersionHistoryGraphAgentContext,
+    ResolveGraphEntity,
     VersionHistoryGraphSelectedEntitySummary,
 } from '../version-history-graph-agent-context';
 
@@ -107,7 +107,7 @@ export class VersionHistoryGraphResourceComponent extends BaseResourceComponent 
      * unit-testable. Called on load, on filter changes, and on entity selection.
      */
     private publishAgentContext(): void {
-        const context = buildVersionHistoryGraphAgentContext({
+        const context = BuildVersionHistoryGraphAgentContext({
             SelectedEntityName: this.SelectedEntity?.Name ?? null,
             SelectedEntityId: this.SelectedEntity?.ID ?? null,
             SelectedEntitySummary: this.buildSelectedEntitySummary(),
@@ -185,11 +185,11 @@ export class VersionHistoryGraphResourceComponent extends BaseResourceComponent 
      * select it for the dependency view. View-only.
      */
     private toolSelectEntity(params: Record<string, unknown>): AgentToolResult & { Data?: Record<string, unknown> } {
-        const parsed = validateStringParam(params['entityName'], 'entityName');
+        const parsed = ValidateStringParam(params['entityName'], 'entityName');
         if (!parsed.ok) {
             return parsed.result;
         }
-        const resolution = resolveGraphEntity(parsed.value, this.AllEntities);
+        const resolution = ResolveGraphEntity(parsed.value, this.AllEntities);
         if (!resolution.ok) {
             return { Success: false, ErrorMessage: resolution.error };
         }
@@ -199,7 +199,7 @@ export class VersionHistoryGraphResourceComponent extends BaseResourceComponent 
 
     /** Apply a schema filter deterministically (no toggle), validating it exists. */
     private toolFilterBySchema(params: Record<string, unknown>): AgentToolResult & { Data?: Record<string, unknown> } {
-        const parsed = validateStringParam(params['schema'], 'schema');
+        const parsed = ValidateStringParam(params['schema'], 'schema');
         if (!parsed.ok) {
             return parsed.result;
         }
@@ -217,7 +217,7 @@ export class VersionHistoryGraphResourceComponent extends BaseResourceComponent 
 
     /** Apply an entity-name search filter. */
     private toolSearchEntities(params: Record<string, unknown>): AgentToolResult & { Data?: Record<string, unknown> } {
-        const parsed = validateStringParam(params['text'], 'text');
+        const parsed = ValidateStringParam(params['text'], 'text');
         if (!parsed.ok) {
             return parsed.result;
         }

@@ -7,7 +7,7 @@ import { QueryGridColumnConfig, QueryEntityLinkClickEvent, resolveTargetEntity }
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
 import { BaseArtifactViewerPluginComponent, ArtifactViewerTab, NavigationRequest } from '../base-artifact-viewer.component';
 import { SaveQueryResult } from './save-query-dialog.component';
-import { createDataSnapshot, buildMultiTableSql } from '../../snapshot-helpers';
+import { CreateDataSnapshot, BuildMultiTableSql } from '../../snapshot-helpers';
 
 /**
  * Data artifact content shape as parsed from JSON.
@@ -68,7 +68,16 @@ type QuerySyncState =
 })
 @RegisterClass(BaseArtifactViewerPluginComponent, 'DataArtifactViewerPlugin')
 export class DataArtifactViewerComponent extends BaseArtifactViewerPluginComponent implements OnInit {
-  @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
+  @Output() OpenEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
+
+  /**
+   * @deprecated Use {@link OpenEntityRecord}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (openEntityRecord) keeps working. Must stay AFTER OpenEntityRecord: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() openEntityRecord = this.OpenEntityRecord;
   @Output() override navigationRequest = new EventEmitter<NavigationRequest>();
   public override tabsChanged = new EventEmitter<void>();
 
@@ -263,7 +272,7 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     // recordId may be a bare value or a "F1|v1||F2|v2" segment; FromURLSegment reads both against
     // the entity's real primary key(s) instead of assuming a single column.
     const compositeKey = CompositeKey.FromURLSegment(md.EntityByName(event.entityName), event.recordId);
-    this.openEntityRecord.emit({
+    this.OpenEntityRecord.emit({
       entityName: event.entityName,
       compositeKey
     });
@@ -762,7 +771,7 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
 
     // SQL tab — multi-table shows all queries with headers
     if (this.IsMultiTable) {
-      const multiSql = buildMultiTableSql(this.ResolvedTables);
+      const multiSql = BuildMultiTableSql(this.ResolvedTables);
       if (multiSql) {
         tabs.push({
           label: 'SQL',

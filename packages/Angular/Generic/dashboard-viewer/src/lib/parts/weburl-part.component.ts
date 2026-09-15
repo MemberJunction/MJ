@@ -231,10 +231,46 @@ export class WebURLPartComponent extends BaseDashboardPart implements AfterViewI
     @ViewChild('iframe') iframeRef!: ElementRef<HTMLIFrameElement>;
 
     public SafeUrl: SafeResourceUrl | null = null;
-    public rawUrl: string = '';
-    public sandboxMode: 'standard' | 'strict' | 'permissive' = 'standard';
-    public allowFullscreen: boolean = true;
-    public showFallbackLink: boolean = false; // Hidden by default, shown if content might be blocked
+    public RawUrl: string = '';
+
+    /** @deprecated Use {@link RawUrl}. */
+    public get rawUrl(): string {
+      return this.RawUrl;
+    }
+    /** @deprecated Use {@link RawUrl}. */
+    public set rawUrl(value: string) {
+      this.RawUrl = value;
+    }
+    public SandboxMode: 'standard' | 'strict' | 'permissive' = 'standard';
+
+    /** @deprecated Use {@link SandboxMode}. */
+    public get sandboxMode(): 'standard' | 'strict' | 'permissive' {
+      return this.SandboxMode;
+    }
+    /** @deprecated Use {@link SandboxMode}. */
+    public set sandboxMode(value: 'standard' | 'strict' | 'permissive') {
+      this.SandboxMode = value;
+    }
+    public AllowFullscreen: boolean = true;
+
+    /** @deprecated Use {@link AllowFullscreen}. */
+    public get allowFullscreen(): boolean {
+      return this.AllowFullscreen;
+    }
+    /** @deprecated Use {@link AllowFullscreen}. */
+    public set allowFullscreen(value: boolean) {
+      this.AllowFullscreen = value;
+    }
+    public ShowFallbackLink: boolean = false;
+
+    /** @deprecated Use {@link ShowFallbackLink}. */
+    public get showFallbackLink(): boolean {
+      return this.ShowFallbackLink;
+    }
+    /** @deprecated Use {@link ShowFallbackLink}. */
+    public set showFallbackLink(value: boolean) {
+      this.ShowFallbackLink = value;
+    } // Hidden by default, shown if content might be blocked
 
     private sanitizer: DomSanitizer;
     private loadCheckTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -264,11 +300,11 @@ export class WebURLPartComponent extends BaseDashboardPart implements AfterViewI
 
         // Reset state
         this.iframeLoaded = false;
-        this.showFallbackLink = false;
+        this.ShowFallbackLink = false;
 
         if (!url) {
             this.SafeUrl = null;
-            this.rawUrl = '';
+            this.RawUrl = '';
             this.cdr.detectChanges();
             return;
         }
@@ -277,16 +313,16 @@ export class WebURLPartComponent extends BaseDashboardPart implements AfterViewI
 
         try {
             // Store raw URL for fallback link
-            this.rawUrl = url;
+            this.RawUrl = url;
 
             // Sanitize and set URL for iframe src binding
             this.SafeUrl = this.sanitizer.bypassSecurityTrustResourceUrl(url);
 
             // Set sandbox mode (used by template to select correct iframe)
-            this.sandboxMode = (config?.['sandboxMode'] as 'standard' | 'strict' | 'permissive') || 'standard';
+            this.SandboxMode = (config?.['sandboxMode'] as 'standard' | 'strict' | 'permissive') || 'standard';
 
             // Set fullscreen permission
-            this.allowFullscreen = (config?.['allowFullscreen'] as boolean) ?? true;
+            this.AllowFullscreen = (config?.['allowFullscreen'] as boolean) ?? true;
 
             this.setLoading(false);
 
@@ -309,7 +345,7 @@ export class WebURLPartComponent extends BaseDashboardPart implements AfterViewI
     private checkIfBlocked(): void {
         // If the load event hasn't fired after the timeout, content might be blocked
         if (!this.iframeLoaded) {
-            this.showFallbackLink = true;
+            this.ShowFallbackLink = true;
             this.cdr.detectChanges();
         }
         // If iframeLoaded is true, content loaded successfully - keep fallback hidden
@@ -318,7 +354,7 @@ export class WebURLPartComponent extends BaseDashboardPart implements AfterViewI
     /**
      * Handle iframe load event
      */
-    public onIframeLoad(): void {
+    public OnIframeLoad(): void {
         // Mark that the load event fired
         this.iframeLoaded = true;
 
@@ -334,11 +370,21 @@ export class WebURLPartComponent extends BaseDashboardPart implements AfterViewI
         this.cdr.detectChanges();
     }
 
+    /** @deprecated Use {@link OnIframeLoad}. */
+    public onIframeLoad(): void {
+      return this.OnIframeLoad();
+    }
+
     /**
      * Handle iframe error event
      */
-    public onIframeError(_event: Event): void {
+    public OnIframeError(_event: Event): void {
         // This may fire for some load failures, but not for X-Frame-Options
         this.setError('This site cannot be embedded. It may block iframe embedding for security reasons.');
+    }
+
+    /** @deprecated Use {@link OnIframeError}. */
+    public onIframeError(_event: Event): void {
+      return this.OnIframeError(_event);
     }
 }

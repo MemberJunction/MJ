@@ -11,8 +11,8 @@ import { UserAppConfigComponent } from '@memberjunction/ng-explorer-settings';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ActionPinConfigResult } from './action-pin-config-dialog.component';
 import { ActionPinRunResult } from './action-pin-runner-dialog.component';
-import { buildHomeAgentContext, buildHomeNotFoundError, resolveNamedRecord, NamedRecord, RecentItemSummary } from './home-agent-context';
-import { AgentToolResult, validateStringParam } from '../shared/agent-tool-validation';
+import { BuildHomeAgentContext, BuildHomeNotFoundError, ResolveNamedRecord, NamedRecord, RecentItemSummary } from './home-agent-context';
+import { AgentToolResult, ValidateStringParam } from '../shared/agent-tool-validation';
 
 /**
  * Cached app data with pre-computed values for optimal rendering performance
@@ -52,25 +52,124 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
 
   // State
   public isLoading = true;
-  public apps: BaseApplication[] = [];
-  public appsDisplayData: AppDisplayData[] = []; // Pre-computed display data
-  public currentUser: { Name: string; Email: string } | null = null;
-  public showConfigDialog = false;
+  public Apps: BaseApplication[] = [];
+
+  /** @deprecated Use {@link Apps}. */
+  public get apps(): BaseApplication[] {
+    return this.Apps;
+  }
+  /** @deprecated Use {@link Apps}. */
+  public set apps(value: BaseApplication[]) {
+    this.Apps = value;
+  }
+  public AppsDisplayData: AppDisplayData[] = [];
+
+  /** @deprecated Use {@link AppsDisplayData}. */
+  public get appsDisplayData(): AppDisplayData[] {
+    return this.AppsDisplayData;
+  }
+  /** @deprecated Use {@link AppsDisplayData}. */
+  public set appsDisplayData(value: AppDisplayData[]) {
+    this.AppsDisplayData = value;
+  } // Pre-computed display data
+  public CurrentUser: { Name: string; Email: string } | null = null;
+
+  /** @deprecated Use {@link CurrentUser}. */
+  public get currentUser(): { Name: string; Email: string } | null {
+    return this.CurrentUser;
+  }
+  /** @deprecated Use {@link CurrentUser}. */
+  public set currentUser(value: { Name: string; Email: string } | null) {
+    this.CurrentUser = value;
+  }
+  public ShowConfigDialog = false;
+
+  /** @deprecated Use {@link ShowConfigDialog}. */
+  public get showConfigDialog() {
+    return this.ShowConfigDialog;
+  }
+  /** @deprecated Use {@link ShowConfigDialog}. */
+  public set showConfigDialog(value) {
+    this.ShowConfigDialog = value;
+  }
 
   // Favorites
-  public favorites: MJUserFavoriteEntity[] = [];
-  public favoritesLoading = true;
+  public Favorites: MJUserFavoriteEntity[] = [];
+
+  /** @deprecated Use {@link Favorites}. */
+  public get favorites(): MJUserFavoriteEntity[] {
+    return this.Favorites;
+  }
+  /** @deprecated Use {@link Favorites}. */
+  public set favorites(value: MJUserFavoriteEntity[]) {
+    this.Favorites = value;
+  }
+  public FavoritesLoading = true;
+
+  /** @deprecated Use {@link FavoritesLoading}. */
+  public get favoritesLoading() {
+    return this.FavoritesLoading;
+  }
+  /** @deprecated Use {@link FavoritesLoading}. */
+  public set favoritesLoading(value) {
+    this.FavoritesLoading = value;
+  }
 
   // Recents
-  public recentItems: RecentAccessItem[] = [];
-  public recentsLoading = true;
+  public RecentItems: RecentAccessItem[] = [];
+
+  /** @deprecated Use {@link RecentItems}. */
+  public get recentItems(): RecentAccessItem[] {
+    return this.RecentItems;
+  }
+  /** @deprecated Use {@link RecentItems}. */
+  public set recentItems(value: RecentAccessItem[]) {
+    this.RecentItems = value;
+  }
+  public RecentsLoading = true;
+
+  /** @deprecated Use {@link RecentsLoading}. */
+  public get recentsLoading() {
+    return this.RecentsLoading;
+  }
+  /** @deprecated Use {@link RecentsLoading}. */
+  public set recentsLoading(value) {
+    this.RecentsLoading = value;
+  }
 
   // Notifications
-  public unreadNotifications: MJUserNotificationEntity[] = [];
-  public notificationsLoading = true;
+  public UnreadNotifications: MJUserNotificationEntity[] = [];
+
+  /** @deprecated Use {@link UnreadNotifications}. */
+  public get unreadNotifications(): MJUserNotificationEntity[] {
+    return this.UnreadNotifications;
+  }
+  /** @deprecated Use {@link UnreadNotifications}. */
+  public set unreadNotifications(value: MJUserNotificationEntity[]) {
+    this.UnreadNotifications = value;
+  }
+  public NotificationsLoading = true;
+
+  /** @deprecated Use {@link NotificationsLoading}. */
+  public get notificationsLoading() {
+    return this.NotificationsLoading;
+  }
+  /** @deprecated Use {@link NotificationsLoading}. */
+  public set notificationsLoading(value) {
+    this.NotificationsLoading = value;
+  }
 
   // Sidebar state - default closed on all screen sizes
-  public sidebarOpen = false;
+  public SidebarOpen = false;
+
+  /** @deprecated Use {@link SidebarOpen}. */
+  public get sidebarOpen() {
+    return this.SidebarOpen;
+  }
+  /** @deprecated Use {@link SidebarOpen}. */
+  public set sidebarOpen(value) {
+    this.SidebarOpen = value;
+  }
 
   // Pin empty-state dismissal preference (persisted in UserSettings via UserInfoEngine)
   public HidePinEmptyState = false;
@@ -125,24 +224,43 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   private resourceIconCache = new Map<string, string>();
 
   // Resolved display names for favorites (keyed by favorite ID)
-  public favoriteDisplayNames = new Map<string, string>();
+  public FavoriteDisplayNames = new Map<string, string>();
+
+  /** @deprecated Use {@link FavoriteDisplayNames}. */
+  public get favoriteDisplayNames() {
+    return this.FavoriteDisplayNames;
+  }
+  /** @deprecated Use {@link FavoriteDisplayNames}. */
+  public set favoriteDisplayNames(value) {
+    this.FavoriteDisplayNames = value;
+  }
 
   /**
    * Check if sidebar has any content to show
    */
+  get HasSidebarContent(): boolean {
+    return this.UnreadNotifications.length > 0 ||
+           this.Favorites.length > 0 ||
+           this.RecentItems.length > 0 ||
+           this.FavoritesLoading ||
+           this.RecentsLoading;
+  }
+
+  /** @deprecated Use {@link HasSidebarContent}. */
   get hasSidebarContent(): boolean {
-    return this.unreadNotifications.length > 0 ||
-           this.favorites.length > 0 ||
-           this.recentItems.length > 0 ||
-           this.favoritesLoading ||
-           this.recentsLoading;
+    return this.HasSidebarContent;
   }
 
   /**
    * Toggle sidebar visibility
    */
+  ToggleSidebar(): void {
+    this.SidebarOpen = !this.SidebarOpen;
+  }
+
+  /** @deprecated Use {@link ToggleSidebar}. */
   toggleSidebar(): void {
-    this.sidebarOpen = !this.sidebarOpen;
+    return this.ToggleSidebar();
   }
 
   /**
@@ -170,7 +288,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
 
   async ngAfterViewInit(): Promise<void> {
     // Get current user info
-    this.currentUser = {
+    this.CurrentUser = {
       Name: this.metadata.CurrentUser?.Name || 'User',
       Email: this.metadata.CurrentUser?.Email || ''
     };
@@ -192,7 +310,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
       .pipe(takeUntil(this.destroy$))
       .subscribe(async apps => {
         // Exclude the Home app from the list (users are already on Home)
-        this.apps = apps.filter(app => app.Name !== 'Home');
+        this.Apps = apps.filter(app => app.Name !== 'Home');
 
         // Pre-compute display data for all apps
         await this.computeAppsDisplayData();
@@ -210,8 +328,8 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     MJNotificationService.Notifications$
       .pipe(takeUntil(this.destroy$))
       .subscribe(notifications => {
-        this.unreadNotifications = notifications.filter(n => n.Unread).slice(0, 5);
-        this.notificationsLoading = false;
+        this.UnreadNotifications = notifications.filter(n => n.Unread).slice(0, 5);
+        this.NotificationsLoading = false;
         this.publishAgentContext();
         this.cdr.markForCheck();
       });
@@ -220,8 +338,8 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     this.recentAccessService.RecentItems
       .pipe(takeUntil(this.destroy$))
       .subscribe(items => {
-        this.recentItems = this.deduplicateRecents(items).slice(0, 5);
-        this.recentsLoading = false;
+        this.RecentItems = this.deduplicateRecents(items).slice(0, 5);
+        this.RecentsLoading = false;
         this.publishAgentContext();
         this.cdr.markForCheck();
       });
@@ -289,21 +407,21 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
    * unit-testable. Called on init and on every meaningful state change.
    */
   private publishAgentContext(): void {
-    const context = buildHomeAgentContext({
-      AppCount: this.apps.length,
-      VisibleAppCount: this.appsDisplayData.length,
-      AppNames: this.apps.map(a => a.Name),
+    const context = BuildHomeAgentContext({
+      AppCount: this.Apps.length,
+      VisibleAppCount: this.AppsDisplayData.length,
+      AppNames: this.Apps.map(a => a.Name),
       PinnedItemCount: this.PinnedItems.length,
       PinGroupCount: this.PinGroups.length,
       PinGroupNames: this.PinGroups,
       PinNames: this.PinnedItems.map(p => p.DisplayName),
-      UnreadNotifications: this.unreadNotifications.length,
-      NotificationTitles: this.unreadNotifications.map(n => n.Title ?? '(untitled)'),
-      RecentItemsCount: this.recentItems.length,
+      UnreadNotifications: this.UnreadNotifications.length,
+      NotificationTitles: this.UnreadNotifications.map(n => n.Title ?? '(untitled)'),
+      RecentItemsCount: this.RecentItems.length,
       RecentItems: this.buildRecentItemSummaries(),
       EditMode: this.EditMode,
       AddPanelOpen: this.AddPanelOpen,
-      SidebarOpen: this.sidebarOpen,
+      SidebarOpen: this.SidebarOpen,
       AddPanelSearchQuery: this.AddPanelSearchQuery,
     });
     this.navigationService.SetAgentContext(this, context);
@@ -311,7 +429,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
 
   /** Structured recent-item summaries (display name + resource type) for the agent context. */
   private buildRecentItemSummaries(): RecentItemSummary[] {
-    return this.recentItems.map(item => ({
+    return this.RecentItems.map(item => ({
       Name: item.recordName || item.entityName || item.recordId,
       ResourceType: item.resourceType,
     }));
@@ -397,9 +515,9 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
         Description: 'Toggle the Home sidebar (unread notifications, favorites, and recent items).',
         ParameterSchema: { type: 'object', properties: {} },
         Handler: async () => {
-          this.toggleSidebar();
+          this.ToggleSidebar();
           this.publishAgentContext();
-          return { Success: true, Data: { SidebarOpen: this.sidebarOpen } };
+          return { Success: true, Data: { SidebarOpen: this.SidebarOpen } };
         },
       },
       {
@@ -417,7 +535,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
 
   /** Resolve an app by name (exact then partial, case-insensitive) and switch to it. */
   private async toolOpenApp(params: Record<string, unknown>): Promise<AgentToolResult & { Data?: Record<string, unknown> }> {
-    const parsed = validateStringParam(params['appName'], 'appName');
+    const parsed = ValidateStringParam(params['appName'], 'appName');
     if (!parsed.ok) {
       return parsed.result;
     }
@@ -425,16 +543,16 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     if (!appName) {
       return { Success: false, ErrorMessage: 'appName is required.' };
     }
-    const candidates: NamedRecord[] = this.apps.map(a => ({ Name: a.Name }));
-    const match = resolveNamedRecord(appName, candidates);
+    const candidates: NamedRecord[] = this.Apps.map(a => ({ Name: a.Name }));
+    const match = ResolveNamedRecord(appName, candidates);
     if (!match) {
-      return { Success: false, ErrorMessage: buildHomeNotFoundError(appName, 'app', candidates) };
+      return { Success: false, ErrorMessage: BuildHomeNotFoundError(appName, 'app', candidates) };
     }
-    const app = this.apps.find(a => a.Name === match.Name);
+    const app = this.Apps.find(a => a.Name === match.Name);
     if (!app) {
-      return { Success: false, ErrorMessage: buildHomeNotFoundError(appName, 'app', candidates) };
+      return { Success: false, ErrorMessage: BuildHomeNotFoundError(appName, 'app', candidates) };
     }
-    await this.onAppClick(app);
+    await this.OnAppClick(app);
     return { Success: true, Data: { AppName: app.Name } };
   }
 
@@ -445,7 +563,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
 
   /** Resolve a pinned item by display name (exact then partial, case-insensitive) and open it. */
   private toolOpenPin(params: Record<string, unknown>): AgentToolResult & { Data?: Record<string, unknown> } {
-    const parsed = validateStringParam(params['pinName'], 'pinName');
+    const parsed = ValidateStringParam(params['pinName'], 'pinName');
     if (!parsed.ok) {
       return parsed.result;
     }
@@ -453,13 +571,13 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     if (!pinName) {
       return { Success: false, ErrorMessage: 'pinName is required.' };
     }
-    const match = resolveNamedRecord(pinName, this.pinNamedRecords);
+    const match = ResolveNamedRecord(pinName, this.pinNamedRecords);
     if (!match) {
-      return { Success: false, ErrorMessage: buildHomeNotFoundError(pinName, 'pinned item', this.pinNamedRecords) };
+      return { Success: false, ErrorMessage: BuildHomeNotFoundError(pinName, 'pinned item', this.pinNamedRecords) };
     }
     const pin = this.PinnedItems.find(p => p.DisplayName === match.Name);
     if (!pin) {
-      return { Success: false, ErrorMessage: buildHomeNotFoundError(pinName, 'pinned item', this.pinNamedRecords) };
+      return { Success: false, ErrorMessage: BuildHomeNotFoundError(pinName, 'pinned item', this.pinNamedRecords) };
     }
     // OnPinClick is a no-op while in edit mode; clear edit mode so the open succeeds.
     if (this.EditMode) {
@@ -471,7 +589,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
 
   /** Find pinned items whose display name matches a query (read-only — returns matches). */
   private toolSearchPins(params: Record<string, unknown>): AgentToolResult & { Data?: Record<string, unknown> } {
-    const parsed = validateStringParam(params['query'], 'query');
+    const parsed = ValidateStringParam(params['query'], 'query');
     if (!parsed.ok) {
       return parsed.result;
     }
@@ -484,7 +602,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
 
   /** Resolve a recent item by display name (exact then partial) and navigate to it. */
   private toolOpenRecent(params: Record<string, unknown>): AgentToolResult & { Data?: Record<string, unknown> } {
-    const parsed = validateStringParam(params['name'], 'name');
+    const parsed = ValidateStringParam(params['name'], 'name');
     if (!parsed.ok) {
       return parsed.result;
     }
@@ -493,25 +611,25 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
       return { Success: false, ErrorMessage: 'name is required.' };
     }
     // Build the same display name the context publishes, then resolve against it.
-    const named: NamedRecord[] = this.recentItems.map(item => ({
+    const named: NamedRecord[] = this.RecentItems.map(item => ({
       Name: item.recordName || item.entityName || item.recordId,
     }));
-    const match = resolveNamedRecord(name, named);
+    const match = ResolveNamedRecord(name, named);
     if (!match) {
-      return { Success: false, ErrorMessage: buildHomeNotFoundError(name, 'recent item', named) };
+      return { Success: false, ErrorMessage: BuildHomeNotFoundError(name, 'recent item', named) };
     }
     const idx = named.findIndex(n => n.Name === match.Name);
-    const item = this.recentItems[idx];
+    const item = this.RecentItems[idx];
     if (!item) {
-      return { Success: false, ErrorMessage: buildHomeNotFoundError(name, 'recent item', named) };
+      return { Success: false, ErrorMessage: BuildHomeNotFoundError(name, 'recent item', named) };
     }
-    this.onRecentClick(item);
+    this.OnRecentClick(item);
     return { Success: true, Data: { Name: match.Name, ResourceType: item.resourceType } };
   }
 
   /** Open the Add Pin panel (if needed) and apply a search query. */
   private async toolSearchAddPinPanel(params: Record<string, unknown>): Promise<AgentToolResult & { Data?: Record<string, unknown> }> {
-    const parsed = validateStringParam(params['query'], 'query');
+    const parsed = ValidateStringParam(params['query'], 'query');
     if (!parsed.ok) {
       return parsed.result;
     }
@@ -541,17 +659,22 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   /**
    * Get a greeting based on time of day
    */
-  get greeting(): string {
+  get Greeting(): string {
     const hour = new Date().getHours();
     if (hour < 12) return 'Good morning';
     if (hour < 17) return 'Good afternoon';
     return 'Good evening';
   }
 
+  /** @deprecated Use {@link Greeting}. */
+  get greeting(): string {
+    return this.Greeting;
+  }
+
   /**
    * Get formatted date string
    */
-  get formattedDate(): string {
+  get FormattedDate(): string {
     return new Date().toLocaleDateString('en-US', {
       weekday: 'long',
       month: 'long',
@@ -559,19 +682,29 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     });
   }
 
+  /** @deprecated Use {@link FormattedDate}. */
+  get formattedDate(): string {
+    return this.FormattedDate;
+  }
+
   /**
    * Navigate to an application
    */
-  async onAppClick(app: BaseApplication): Promise<void> {
+  async OnAppClick(app: BaseApplication): Promise<void> {
     // Use NavigationService to switch to the app (handles tab creation if needed)
     await this.navigationService.SwitchToApp(app.ID);
+  }
+
+  /** @deprecated Use {@link OnAppClick}. */
+  async onAppClick(app: BaseApplication): Promise<void> {
+    return this.OnAppClick(app);
   }
 
   /**
    * Open app configuration dialog
    */
-  openConfigDialog(): void {
-    this.showConfigDialog = true;
+  OpenConfigDialog(): void {
+    this.ShowConfigDialog = true;
     setTimeout(() => {
       if (this.appConfigDialog) {
         this.appConfigDialog.Open();
@@ -579,18 +712,28 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     }, 0);
   }
 
+  /** @deprecated Use {@link OpenConfigDialog}. */
+  openConfigDialog(): void {
+    return this.OpenConfigDialog();
+  }
+
   /**
    * Handle when config is saved
    */
+  OnConfigSaved(): void {
+    this.ShowConfigDialog = false;
+  }
+
+  /** @deprecated Use {@link OnConfigSaved}. */
   onConfigSaved(): void {
-    this.showConfigDialog = false;
+    return this.OnConfigSaved();
   }
 
   /**
    * Pre-compute display data for all apps to avoid repeated calculations during change detection
    */
   private async computeAppsDisplayData(): Promise<void> {
-    this.appsDisplayData = await Promise.all(this.apps.map(async app => {
+    this.AppsDisplayData = await Promise.all(this.Apps.map(async app => {
       const navItems = await app.GetNavItems();
       const navItemsCount = navItems.length;
       const navItemsPreview = navItems.slice(0, 3).map(item => ({
@@ -613,15 +756,25 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   /**
    * Track function for apps loop
    */
-  trackByApp(_index: number, item: AppDisplayData): string {
+  TrackByApp(_index: number, item: AppDisplayData): string {
     return item.app.ID;
+  }
+
+  /** @deprecated Use {@link TrackByApp}. */
+  trackByApp(_index: number, item: AppDisplayData): string {
+    return this.TrackByApp(_index, item);
   }
 
   /**
    * Track function for nav items preview
    */
-  trackByNavItem(_index: number, item: { Label: string; Icon: string }): string {
+  TrackByNavItem(_index: number, item: { Label: string; Icon: string }): string {
     return item.Label;
+  }
+
+  /** @deprecated Use {@link TrackByNavItem}. */
+  trackByNavItem(_index: number, item: { Label: string; Icon: string }): string {
+    return this.TrackByNavItem(_index, item);
   }
 
   /**
@@ -629,17 +782,17 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
    */
   private async loadFavorites(): Promise<void> {
     try {
-      this.favoritesLoading = true;
+      this.FavoritesLoading = true;
 
       // Get first 10 favorites (already ordered by __mj_CreatedAt DESC in engine)
-      this.favorites = UserInfoEngine.Instance.UserFavorites.slice(0, 10);
+      this.Favorites = UserInfoEngine.Instance.UserFavorites.slice(0, 10);
 
       // Batch-resolve record names for all favorites
       await this.resolveFavoriteNames();
     } catch (error) {
       console.error('Error loading favorites:', error);
     } finally {
-      this.favoritesLoading = false;
+      this.FavoritesLoading = false;
       this.cdr.markForCheck();
     }
   }
@@ -651,7 +804,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     const nameInputs: EntityRecordNameInput[] = [];
     const favoriteIdByKey = new Map<string, string>(); // map key -> favorite ID
 
-    for (const fav of this.favorites) {
+    for (const fav of this.Favorites) {
       if (!fav.Entity || !fav.RecordID) continue;
       const compositeKey = this.buildCompositeKeyForRecord(fav.Entity, fav.RecordID);
       if (!compositeKey) continue;
@@ -669,7 +822,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
           const key = `${result.EntityName}||${result.CompositeKey.ToConcatenatedString()}`;
           const favId = favoriteIdByKey.get(key);
           if (favId) {
-            this.favoriteDisplayNames.set(favId, result.RecordName);
+            this.FavoriteDisplayNames.set(favId, result.RecordName);
           }
         }
       }
@@ -695,8 +848,13 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   /**
    * Get the display name for a favorite (resolved name or entity name fallback)
    */
+  GetFavoriteDisplayName(favorite: MJUserFavoriteEntity): string {
+    return this.FavoriteDisplayNames.get(favorite.ID) || favorite.Entity || favorite.RecordID;
+  }
+
+  /** @deprecated Use {@link GetFavoriteDisplayName}. */
   getFavoriteDisplayName(favorite: MJUserFavoriteEntity): string {
-    return this.favoriteDisplayNames.get(favorite.ID) || favorite.Entity || favorite.RecordID;
+    return this.GetFavoriteDisplayName(favorite);
   }
 
   /**
@@ -704,13 +862,13 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
    */
   private async loadRecents(): Promise<void> {
     try {
-      this.recentsLoading = true;
+      this.RecentsLoading = true;
       this.cdr.markForCheck();
       await this.recentAccessService.loadRecentItems(10);
     } catch (error) {
       console.error('Error loading recents:', error);
     } finally {
-      this.recentsLoading = false;
+      this.RecentsLoading = false;
       this.cdr.markForCheck();
     }
   }
@@ -718,7 +876,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   /**
    * Navigate to a favorite item using NavigationService
    */
-  onFavoriteClick(favorite: MJUserFavoriteEntity): void {
+  OnFavoriteClick(favorite: MJUserFavoriteEntity): void {
     // Navigate based on entity type using NavigationService
     const entityName = favorite.Entity?.toLowerCase();
     const recordId = favorite.RecordID;
@@ -738,10 +896,15 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     }
   }
 
+  /** @deprecated Use {@link OnFavoriteClick}. */
+  onFavoriteClick(favorite: MJUserFavoriteEntity): void {
+    return this.OnFavoriteClick(favorite);
+  }
+
   /**
    * Navigate to a recent item using NavigationService
    */
-  onRecentClick(item: RecentAccessItem): void {
+  OnRecentClick(item: RecentAccessItem): void {
     // Use recordName if available, otherwise fall back to generic titles
     const name = item.recordName;
 
@@ -765,18 +928,28 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     }
   }
 
+  /** @deprecated Use {@link OnRecentClick}. */
+  onRecentClick(item: RecentAccessItem): void {
+    return this.OnRecentClick(item);
+  }
+
   /**
    * Navigate to a notification using NavigationService
    */
-  onNotificationClick(notification: MJUserNotificationEntity): void {
+  OnNotificationClick(notification: MJUserNotificationEntity): void {
     // Navigate to the notifications view using NavigationService
     this.navigationService.OpenDynamicView('MJ: User Notifications');
+  }
+
+  /** @deprecated Use {@link OnNotificationClick}. */
+  onNotificationClick(notification: MJUserNotificationEntity): void {
+    return this.OnNotificationClick(notification);
   }
 
   /**
    * Get icon for an entity by name, using entity metadata Icon field (cached)
    */
-  getEntityIconByName(entityName: string): string {
+  GetEntityIconByName(entityName: string): string {
     if (!entityName) return 'fa-solid fa-file';
 
     const cached = this.resourceIconCache.get(entityName);
@@ -787,6 +960,11 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
 
     this.resourceIconCache.set(entityName, icon);
     return icon;
+  }
+
+  /** @deprecated Use {@link GetEntityIconByName}. */
+  getEntityIconByName(entityName: string): string {
+    return this.GetEntityIconByName(entityName);
   }
 
   /**
@@ -827,8 +1005,13 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   /**
    * Track function for favorites
    */
-  trackByFavorite(_index: number, item: MJUserFavoriteEntity): string {
+  TrackByFavorite(_index: number, item: MJUserFavoriteEntity): string {
     return item.ID;
+  }
+
+  /** @deprecated Use {@link TrackByFavorite}. */
+  trackByFavorite(_index: number, item: MJUserFavoriteEntity): string {
+    return this.TrackByFavorite(_index, item);
   }
 
   /**
@@ -849,15 +1032,25 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   /**
    * Track function for recent items
    */
-  trackByRecent(_index: number, item: RecentAccessItem): string {
+  TrackByRecent(_index: number, item: RecentAccessItem): string {
     return `${item.entityName}-${item.recordId}`;
+  }
+
+  /** @deprecated Use {@link TrackByRecent}. */
+  trackByRecent(_index: number, item: RecentAccessItem): string {
+    return this.TrackByRecent(_index, item);
   }
 
   /**
    * Track function for notifications
    */
-  trackByNotification(_index: number, item: MJUserNotificationEntity): string {
+  TrackByNotification(_index: number, item: MJUserNotificationEntity): string {
     return item.ID;
+  }
+
+  /** @deprecated Use {@link TrackByNotification}. */
+  trackByNotification(_index: number, item: MJUserNotificationEntity): string {
+    return this.TrackByNotification(_index, item);
   }
 
   // =============================================
@@ -1173,10 +1366,10 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     const entity = (pin.Configuration['Entity'] || pin.Configuration['entity'] || '') as string;
     switch (pin.ResourceType) {
       case 'Dashboards': return 'fa-solid fa-gauge-high';
-      case 'User Views': return entity ? this.getEntityIconByName(entity) : 'fa-solid fa-table-list';
+      case 'User Views': return entity ? this.GetEntityIconByName(entity) : 'fa-solid fa-table-list';
       case 'Queries': return 'fa-solid fa-database';
       case 'Reports': return 'fa-solid fa-chart-bar';
-      case 'Records': return entity ? this.getEntityIconByName(entity) : 'fa-solid fa-file';
+      case 'Records': return entity ? this.GetEntityIconByName(entity) : 'fa-solid fa-file';
       case 'Custom': return this.getNavItemIcon(pin) || this.getAppIcon(pin) || 'fa-solid fa-cube';
       case 'Actions': return 'fa-solid fa-bolt';
       default: return 'fa-solid fa-thumbtack';
@@ -1225,7 +1418,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     if (!appName || !navItemName) return undefined;
 
     // Check the pre-computed display data first (fast)
-    const appData = this.appsDisplayData.find(d => d.app.Name === appName);
+    const appData = this.AppsDisplayData.find(d => d.app.Name === appName);
     if (appData) {
       const navItem = appData.navItemsPreview.find(ni => ni.Label === navItemName);
       if (navItem) return navItem.Icon;
@@ -1373,12 +1566,22 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     this.DragOverPinId = null;
   }
 
-  trackByPin(_index: number, pin: HomeAppPinnedItem): string {
+  TrackByPin(_index: number, pin: HomeAppPinnedItem): string {
     return pin.Id;
   }
 
-  trackByGroup(_index: number, group: string): string {
+  /** @deprecated Use {@link TrackByPin}. */
+  trackByPin(_index: number, pin: HomeAppPinnedItem): string {
+    return this.TrackByPin(_index, pin);
+  }
+
+  TrackByGroup(_index: number, group: string): string {
     return group;
+  }
+
+  /** @deprecated Use {@link TrackByGroup}. */
+  trackByGroup(_index: number, group: string): string {
+    return this.TrackByGroup(_index, group);
   }
 
   // =============================================

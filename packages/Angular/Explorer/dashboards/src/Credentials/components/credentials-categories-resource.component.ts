@@ -24,11 +24,56 @@ interface CategoryNode {
 })
 export class CredentialsCategoriesResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
     public isLoading = true;
-    public categories: MJCredentialCategoryEntity[] = [];
-    public categoryTree: CategoryNode[] = [];
-    public types: MJCredentialTypeEntity[] = [];
-    public selectedNode: CategoryNode | null = null;
-    public searchText = '';
+    public Categories: MJCredentialCategoryEntity[] = [];
+
+    /** @deprecated Use {@link Categories}. */
+    public get categories(): MJCredentialCategoryEntity[] {
+      return this.Categories;
+    }
+    /** @deprecated Use {@link Categories}. */
+    public set categories(value: MJCredentialCategoryEntity[]) {
+      this.Categories = value;
+    }
+    public CategoryTree: CategoryNode[] = [];
+
+    /** @deprecated Use {@link CategoryTree}. */
+    public get categoryTree(): CategoryNode[] {
+      return this.CategoryTree;
+    }
+    /** @deprecated Use {@link CategoryTree}. */
+    public set categoryTree(value: CategoryNode[]) {
+      this.CategoryTree = value;
+    }
+    public Types: MJCredentialTypeEntity[] = [];
+
+    /** @deprecated Use {@link Types}. */
+    public get types(): MJCredentialTypeEntity[] {
+      return this.Types;
+    }
+    /** @deprecated Use {@link Types}. */
+    public set types(value: MJCredentialTypeEntity[]) {
+      this.Types = value;
+    }
+    public SelectedNode: CategoryNode | null = null;
+
+    /** @deprecated Use {@link SelectedNode}. */
+    public get selectedNode(): CategoryNode | null {
+      return this.SelectedNode;
+    }
+    /** @deprecated Use {@link SelectedNode}. */
+    public set selectedNode(value: CategoryNode | null) {
+      this.SelectedNode = value;
+    }
+    public SearchText = '';
+
+    /** @deprecated Use {@link SearchText}. */
+    public get searchText() {
+      return this.SearchText;
+    }
+    /** @deprecated Use {@link SearchText}. */
+    public set searchText(value) {
+      this.SearchText = value;
+    }
 
     // Permissions
     private _metadata = this.ProviderToUse;
@@ -125,11 +170,11 @@ export class CredentialsCategoriesResourceComponent extends BaseResourceComponen
             ]);
 
             if (catResult.Success) {
-                this.categories = catResult.Results as MJCredentialCategoryEntity[];
+                this.Categories = catResult.Results as MJCredentialCategoryEntity[];
             }
 
             if (typeResult.Success) {
-                this.types = typeResult.Results as MJCredentialTypeEntity[];
+                this.Types = typeResult.Results as MJCredentialTypeEntity[];
             }
 
             this.buildTree();
@@ -148,8 +193,8 @@ export class CredentialsCategoriesResourceComponent extends BaseResourceComponen
         const categoryMap = new Map<string, CategoryNode>();
 
         // Create nodes for all categories with stats
-        for (const category of this.categories) {
-            const typesInCategory = this.types.filter(t => t.Category === category.Name);
+        for (const category of this.Categories) {
+            const typesInCategory = this.Types.filter(t => t.Category === category.Name);
             categoryMap.set(category.ID, {
                 category,
                 children: [],
@@ -161,7 +206,7 @@ export class CredentialsCategoriesResourceComponent extends BaseResourceComponen
 
         // Build tree structure
         const roots: CategoryNode[] = [];
-        for (const category of this.categories) {
+        for (const category of this.Categories) {
             const node = categoryMap.get(category.ID)!;
             if (category.ParentID) {
                 const parent = categoryMap.get(category.ParentID);
@@ -185,18 +230,23 @@ export class CredentialsCategoriesResourceComponent extends BaseResourceComponen
         };
         sortNodes(roots);
 
-        this.categoryTree = roots;
+        this.CategoryTree = roots;
     }
 
     // === CRUD Operations ===
 
-    public createNewCategory(): void {
+    public CreateNewCategory(): void {
         if (this.categoryEditPanel) {
             this.categoryEditPanel.open(null);
         }
     }
 
-    public createChildCategory(parentNode: CategoryNode, event?: Event): void {
+    /** @deprecated Use {@link CreateNewCategory}. */
+    public createNewCategory(): void {
+      return this.CreateNewCategory();
+    }
+
+    public CreateChildCategory(parentNode: CategoryNode, event?: Event): void {
         if (event) {
             event.stopPropagation();
         }
@@ -205,7 +255,12 @@ export class CredentialsCategoriesResourceComponent extends BaseResourceComponen
         }
     }
 
-    public editCategory(node: CategoryNode, event?: Event): void {
+    /** @deprecated Use {@link CreateChildCategory}. */
+    public createChildCategory(parentNode: CategoryNode, event?: Event): void {
+      return this.CreateChildCategory(parentNode, event);
+    }
+
+    public EditCategory(node: CategoryNode, event?: Event): void {
         if (event) {
             event.stopPropagation();
         }
@@ -214,7 +269,12 @@ export class CredentialsCategoriesResourceComponent extends BaseResourceComponen
         }
     }
 
-    public async deleteCategory(node: CategoryNode, event?: Event): Promise<void> {
+    /** @deprecated Use {@link EditCategory}. */
+    public editCategory(node: CategoryNode, event?: Event): void {
+      return this.EditCategory(node, event);
+    }
+
+    public async DeleteCategory(node: CategoryNode, event?: Event): Promise<void> {
         if (event) {
             event.stopPropagation();
         }
@@ -253,9 +313,9 @@ export class CredentialsCategoriesResourceComponent extends BaseResourceComponen
             const success = await node.category.Delete();
             if (success) {
                 MJNotificationService.Instance.CreateSimpleNotification(`Category "${node.category.Name}" deleted successfully`, 'success', 3000);
-                this.categories = this.categories.filter(c => !UUIDsEqual(c.ID, node.category.ID));
-                if (UUIDsEqual(this.selectedNode?.category.ID, node.category.ID)) {
-                    this.selectedNode = null;
+                this.Categories = this.Categories.filter(c => !UUIDsEqual(c.ID, node.category.ID));
+                if (UUIDsEqual(this.SelectedNode?.category.ID, node.category.ID)) {
+                    this.SelectedNode = null;
                 }
                 this.buildTree();
                 this.cdr.markForCheck();
@@ -268,38 +328,58 @@ export class CredentialsCategoriesResourceComponent extends BaseResourceComponen
         }
     }
 
+    /** @deprecated Use {@link DeleteCategory}. */
+    public async deleteCategory(node: CategoryNode, event?: Event): Promise<void> {
+      return this.DeleteCategory(node, event);
+    }
+
     // === Panel Event Handlers ===
 
-    public onCategorySaved(category: MJCredentialCategoryEntity): void {
-        const existingIndex = this.categories.findIndex(c => UUIDsEqual(c.ID, category.ID));
+    public OnCategorySaved(category: MJCredentialCategoryEntity): void {
+        const existingIndex = this.Categories.findIndex(c => UUIDsEqual(c.ID, category.ID));
 
         if (existingIndex >= 0) {
-            this.categories[existingIndex] = category;
+            this.Categories[existingIndex] = category;
         } else {
-            this.categories.push(category);
+            this.Categories.push(category);
         }
 
         this.buildTree();
         this.cdr.markForCheck();
     }
 
-    public onCategoryDeleted(categoryId: string): void {
-        this.categories = this.categories.filter(c => !UUIDsEqual(c.ID, categoryId));
-        if (UUIDsEqual(this.selectedNode?.category.ID, categoryId)) {
-            this.selectedNode = null;
+    /** @deprecated Use {@link OnCategorySaved}. */
+    public onCategorySaved(category: MJCredentialCategoryEntity): void {
+      return this.OnCategorySaved(category);
+    }
+
+    public OnCategoryDeleted(categoryId: string): void {
+        this.Categories = this.Categories.filter(c => !UUIDsEqual(c.ID, categoryId));
+        if (UUIDsEqual(this.SelectedNode?.category.ID, categoryId)) {
+            this.SelectedNode = null;
         }
         this.buildTree();
         this.cdr.markForCheck();
+    }
+
+    /** @deprecated Use {@link OnCategoryDeleted}. */
+    public onCategoryDeleted(categoryId: string): void {
+      return this.OnCategoryDeleted(categoryId);
     }
 
     // === Selection ===
 
-    public selectNode(node: CategoryNode): void {
-        this.selectedNode = UUIDsEqual(this.selectedNode?.category.ID, node.category.ID) ? null : node;
+    public SelectNode(node: CategoryNode): void {
+        this.SelectedNode = UUIDsEqual(this.SelectedNode?.category.ID, node.category.ID) ? null : node;
         this.cdr.markForCheck();
     }
 
-    public toggleExpand(node: CategoryNode, event?: Event): void {
+    /** @deprecated Use {@link SelectNode}. */
+    public selectNode(node: CategoryNode): void {
+      return this.SelectNode(node);
+    }
+
+    public ToggleExpand(node: CategoryNode, event?: Event): void {
         if (event) {
             event.stopPropagation();
         }
@@ -307,55 +387,85 @@ export class CredentialsCategoriesResourceComponent extends BaseResourceComponen
         this.cdr.markForCheck();
     }
 
+    /** @deprecated Use {@link ToggleExpand}. */
+    public toggleExpand(node: CategoryNode, event?: Event): void {
+      return this.ToggleExpand(node, event);
+    }
+
     // === Search ===
 
-    public onSearchChange(value: string): void {
-        this.searchText = value;
+    public OnSearchChange(value: string): void {
+        this.SearchText = value;
         if (value) {
-            this.expandAll();
+            this.ExpandAll();
         }
         this.cdr.markForCheck();
     }
 
-    public clearSearch(): void {
-        this.searchText = '';
+    /** @deprecated Use {@link OnSearchChange}. */
+    public onSearchChange(value: string): void {
+      return this.OnSearchChange(value);
+    }
+
+    public ClearSearch(): void {
+        this.SearchText = '';
         this.cdr.markForCheck();
+    }
+
+    /** @deprecated Use {@link ClearSearch}. */
+    public clearSearch(): void {
+      return this.ClearSearch();
     }
 
     /** Empty-state CTA: clear search when narrowing, otherwise create. */
-    public onEmptyStateAction(): void {
-        if (this.searchText) {
-            this.clearSearch();
+    public OnEmptyStateAction(): void {
+        if (this.SearchText) {
+            this.ClearSearch();
         } else {
-            this.createNewCategory();
+            this.CreateNewCategory();
         }
     }
 
-    public expandAll(): void {
+    /** @deprecated Use {@link OnEmptyStateAction}. */
+    public onEmptyStateAction(): void {
+      return this.OnEmptyStateAction();
+    }
+
+    public ExpandAll(): void {
         const expand = (nodes: CategoryNode[]): void => {
             for (const node of nodes) {
                 node.expanded = true;
                 expand(node.children);
             }
         };
-        expand(this.categoryTree);
+        expand(this.CategoryTree);
         this.cdr.markForCheck();
     }
 
-    public collapseAll(): void {
+    /** @deprecated Use {@link ExpandAll}. */
+    public expandAll(): void {
+      return this.ExpandAll();
+    }
+
+    public CollapseAll(): void {
         const collapse = (nodes: CategoryNode[]): void => {
             for (const node of nodes) {
                 node.expanded = false;
                 collapse(node.children);
             }
         };
-        collapse(this.categoryTree);
+        collapse(this.CategoryTree);
         this.cdr.markForCheck();
     }
 
-    public getFlattenedNodes(): CategoryNode[] {
+    /** @deprecated Use {@link CollapseAll}. */
+    public collapseAll(): void {
+      return this.CollapseAll();
+    }
+
+    public GetFlattenedNodes(): CategoryNode[] {
         const result: CategoryNode[] = [];
-        const searchLower = this.searchText.toLowerCase().trim();
+        const searchLower = this.SearchText.toLowerCase().trim();
 
         const flatten = (nodes: CategoryNode[]): void => {
             for (const node of nodes) {
@@ -374,8 +484,13 @@ export class CredentialsCategoriesResourceComponent extends BaseResourceComponen
             }
         };
 
-        flatten(this.categoryTree);
+        flatten(this.CategoryTree);
         return result;
+    }
+
+    /** @deprecated Use {@link GetFlattenedNodes}. */
+    public getFlattenedNodes(): CategoryNode[] {
+      return this.GetFlattenedNodes();
     }
 
     private nodeMatchesSearch(node: CategoryNode, searchLower: string): boolean {
@@ -384,15 +499,25 @@ export class CredentialsCategoriesResourceComponent extends BaseResourceComponen
         return nameMatch || descMatch || false;
     }
 
+    public GetTotalTypeCount(): number {
+        return this.Types.length;
+    }
+
+    /** @deprecated Use {@link GetTotalTypeCount}. */
     public getTotalTypeCount(): number {
-        return this.types.length;
+      return this.GetTotalTypeCount();
     }
 
+    public GetTypesForCategory(categoryName: string): MJCredentialTypeEntity[] {
+        return this.Types.filter(t => t.Category === categoryName);
+    }
+
+    /** @deprecated Use {@link GetTypesForCategory}. */
     public getTypesForCategory(categoryName: string): MJCredentialTypeEntity[] {
-        return this.types.filter(t => t.Category === categoryName);
+      return this.GetTypesForCategory(categoryName);
     }
 
-    public createCredentialWithCategory(categoryId: string, event?: Event): void {
+    public CreateCredentialWithCategory(categoryId: string, event?: Event): void {
         if (event) {
             event.stopPropagation();
         }
@@ -403,7 +528,12 @@ export class CredentialsCategoriesResourceComponent extends BaseResourceComponen
         });
     }
 
-    public viewTypesForCategory(categoryName: string, event?: Event): void {
+    /** @deprecated Use {@link CreateCredentialWithCategory}. */
+    public createCredentialWithCategory(categoryId: string, event?: Event): void {
+      return this.CreateCredentialWithCategory(categoryId, event);
+    }
+
+    public ViewTypesForCategory(categoryName: string, event?: Event): void {
         if (event) {
             event.stopPropagation();
         }
@@ -413,12 +543,17 @@ export class CredentialsCategoriesResourceComponent extends BaseResourceComponen
         });
     }
 
-    /** Case-insensitive UUID check whether a tree node is the currently selected node. */
-    public IsNodeSelected(node: CategoryNode): boolean {
-        return UUIDsEqual(this.selectedNode?.category?.ID, node.category.ID);
+    /** @deprecated Use {@link ViewTypesForCategory}. */
+    public viewTypesForCategory(categoryName: string, event?: Event): void {
+      return this.ViewTypesForCategory(categoryName, event);
     }
 
-    public getCategoryColor(index: number): string {
+    /** Case-insensitive UUID check whether a tree node is the currently selected node. */
+    public IsNodeSelected(node: CategoryNode): boolean {
+        return UUIDsEqual(this.SelectedNode?.category?.ID, node.category.ID);
+    }
+
+    public GetCategoryColor(index: number): string {
         const colors = [
             'var(--mj-brand-primary)',
             'var(--mj-brand-primary)',
@@ -431,8 +566,18 @@ export class CredentialsCategoriesResourceComponent extends BaseResourceComponen
         return colors[index % colors.length];
     }
 
-    public refresh(): void {
-        this.selectedNode = null;
+    /** @deprecated Use {@link GetCategoryColor}. */
+    public getCategoryColor(index: number): string {
+      return this.GetCategoryColor(index);
+    }
+
+    public Refresh(): void {
+        this.SelectedNode = null;
         this.loadData();
+    }
+
+    /** @deprecated Use {@link Refresh}. */
+    public refresh(): void {
+      return this.Refresh();
     }
 }

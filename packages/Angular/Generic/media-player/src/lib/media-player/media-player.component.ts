@@ -21,14 +21,14 @@ import {
   MediaTrack,
   MediaTranscriptCue,
 } from '../media-player.types';
-import { computeActiveCueIndex } from './cue-utils';
-import { MediaStateContext, MediaStateEvent, nextPlaybackState } from './playback-state';
+import { ComputeActiveCueIndex } from './cue-utils';
+import { MediaStateContext, MediaStateEvent, NextPlaybackState } from './playback-state';
 import {
   TranscriptPosition,
-  resolveTranscriptToggleVisible,
-  resolveTranscriptVisible,
+  ResolveTranscriptToggleVisible,
+  ResolveTranscriptVisible,
 } from './transcript-layout';
-import { DEFAULT_WAVEFORM_BARS, downsamplePeaks } from './waveform-utils';
+import { DEFAULT_WAVEFORM_BARS, DownsamplePeaks } from './waveform-utils';
 
 /**
  * Delay (ms) before the *buffering* spinner is shown, to avoid flicker on instant seeks
@@ -306,7 +306,7 @@ export class MJMediaPlayerComponent implements OnDestroy {
    * the `ShowTranscript` master switch, AND the runtime toggle to be visible.
    */
   get ShowTranscriptPanel(): boolean {
-    return resolveTranscriptVisible(this.HasTranscript, this.ShowTranscript, this._transcriptUserVisible);
+    return ResolveTranscriptVisible(this.HasTranscript, this.ShowTranscript, this._transcriptUserVisible);
   }
   /** The current runtime visibility of the transcript (toggle-driven). */
   get TranscriptVisible(): boolean {
@@ -314,7 +314,7 @@ export class MJMediaPlayerComponent implements OnDestroy {
   }
   /** Whether the transcript show/hide toggle button should render in the transport. */
   get ShowTranscriptToggleButton(): boolean {
-    return resolveTranscriptToggleVisible(this.HasTranscript, this.ShowTranscript, this.ShowTranscriptToggle);
+    return ResolveTranscriptToggleVisible(this.HasTranscript, this.ShowTranscript, this.ShowTranscriptToggle);
   }
   get ScrubFraction(): number {
     return this._durationMs > 0 ? this._currentTimeMs / this._durationMs : 0;
@@ -749,7 +749,7 @@ export class MJMediaPlayerComponent implements OnDestroy {
       ReadyState: el?.readyState ?? 0,
       Ended: el?.ended ?? false,
     };
-    const next = nextPlaybackState(event, this._mediaState, ctx);
+    const next = NextPlaybackState(event, this._mediaState, ctx);
     this.setMediaState(next);
   }
 
@@ -1041,7 +1041,7 @@ export class MJMediaPlayerComponent implements OnDestroy {
   }
 
   private refreshActiveCue(): void {
-    const newIndex = computeActiveCueIndex(this._currentTimeMs, this._transcript);
+    const newIndex = ComputeActiveCueIndex(this._currentTimeMs, this._transcript);
     if (newIndex !== this._activeCueIndex) {
       this._activeCueIndex = newIndex;
       if (newIndex >= 0 && this._transcript) {
@@ -1132,7 +1132,7 @@ export class MJMediaPlayerComponent implements OnDestroy {
       const arrayBuffer = await response.arrayBuffer();
       const audioBuffer = await ctx.decodeAudioData(arrayBuffer.slice(0));
       const channel = audioBuffer.getChannelData(0);
-      const peaks = downsamplePeaks(channel, this.WaveformBarCount, 'max-abs');
+      const peaks = DownsamplePeaks(channel, this.WaveformBarCount, 'max-abs');
       this._peaksByTrackId.set(track.Id, peaks);
       this.cdr.markForCheck();
     } catch {

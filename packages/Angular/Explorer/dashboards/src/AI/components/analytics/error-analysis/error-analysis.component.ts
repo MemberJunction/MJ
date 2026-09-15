@@ -440,9 +440,14 @@ export class AnalyticsErrorAnalysisComponent extends BaseAngularComponent implem
     /** Accordion-driven handler — SETS the emitted expanded value (vs. a flip),
      *  preserving the detectChanges() side-effect and keeping IsExpanded in sync
      *  so the collapsed-only "last error" preview shows/hides correctly. */
-    public onGroupExpandedChange(group: ErrorGroup, expanded: boolean): void {
+    public OnGroupExpandedChange(group: ErrorGroup, expanded: boolean): void {
         group.IsExpanded = expanded;
         this.cdr.detectChanges();
+    }
+
+    /** @deprecated Use {@link OnGroupExpandedChange}. */
+    public onGroupExpandedChange(group: ErrorGroup, expanded: boolean): void {
+        return this.OnGroupExpandedChange(group, expanded);
     }
 
     // ── Data Loading ──

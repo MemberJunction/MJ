@@ -94,10 +94,28 @@ export class InteractiveFormComponent extends BaseFormComponent implements OnIni
      * NewRecord). Keeping just the form body produces a clean "this is
      * what the form looks like" view.
      */
-    @Input() public previewMode = false;
+    @Input() public PreviewMode = false;
+
+    /** @deprecated Use {@link PreviewMode}. */
+    @Input() public set previewMode(value: InteractiveFormComponent['PreviewMode']) {
+        this.PreviewMode = value;
+    }
+    /** @deprecated Use {@link PreviewMode}. */
+    public get previewMode(): InteractiveFormComponent['PreviewMode'] {
+        return this.PreviewMode;
+    }
 
     /** FormHostProps passed to the React component. Recomputed when record or mode changes. */
-    public formHostProps: FormHostProps | null = null;
+    public FormHostProps: FormHostProps | null = null;
+
+    /** @deprecated Use {@link FormHostProps}. */
+    public get formHostProps(): FormHostProps | null {
+        return this.FormHostProps;
+    }
+    /** @deprecated Use {@link FormHostProps}. */
+    public set formHostProps(value: FormHostProps | null) {
+        this.FormHostProps = value;
+    }
 
     /** Loaded-spec error (component row missing, JSON parse failure, etc.). */
     private _loadError: string | null = null;
@@ -464,7 +482,7 @@ export class InteractiveFormComponent extends BaseFormComponent implements OnIni
      */
     private rebuildFormHostProps(): void {
         if (!this.record) {
-            this.formHostProps = null;
+            this.FormHostProps = null;
             return;
         }
         const fields: SimpleEntityFieldInfo[] = this.record.Fields.map(f =>
@@ -475,7 +493,7 @@ export class InteractiveFormComponent extends BaseFormComponent implements OnIni
             ? this.primaryKeyToPlain(pk)
             : null;
 
-        this.formHostProps = {
+        this.FormHostProps = {
             entityName: this.record.EntityInfo.Name,
             primaryKey,
             record: this.record.GetAll(),

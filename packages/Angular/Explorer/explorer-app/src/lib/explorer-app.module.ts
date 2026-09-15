@@ -65,7 +65,7 @@ export class MJExplorerAppModule {
    * Configure the Explorer App module with environment settings.
    * Should be called once in the root application module.
    */
-  static forRoot(environment: MJEnvironmentConfig): ModuleWithProviders<MJExplorerAppModule> {
+  static ForRoot(environment: MJEnvironmentConfig): ModuleWithProviders<MJExplorerAppModule> {
     // Enable Angular's production mode before bootstrap completes. This
     // disables development-only assertions (extra change-detection passes,
     // assert-equality checks) and shaves real time off every digest cycle.
@@ -101,5 +101,10 @@ export class MJExplorerAppModule {
         ...(swModule.providers ?? [])
       ]
     };
+  }
+
+  /** @deprecated Use {@link ForRoot}. */
+  static forRoot(environment: MJEnvironmentConfig): ModuleWithProviders<MJExplorerAppModule> {
+    return this.ForRoot(environment);
   }
 }

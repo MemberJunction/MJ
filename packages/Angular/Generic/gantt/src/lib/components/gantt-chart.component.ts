@@ -266,7 +266,16 @@ export class MjGanttChartComponent implements AfterViewInit, OnChanges, OnDestro
     @ViewChild('ganttContainer', { static: false }) ganttContainer!: ElementRef<HTMLDivElement>;
 
     /** @internal */
-    loading = true;
+    Loading = true;
+
+    /** @deprecated Use {@link Loading}. */
+    get loading() {
+        return this.Loading;
+    }
+    /** @deprecated Use {@link Loading}. */
+    set loading(value) {
+        this.Loading = value;
+    }
     private gantt: GanttStatic | null = null;
     private initialized = false;
     private _zoomLevel: GanttZoomLevelName = 'week';
@@ -321,7 +330,7 @@ export class MjGanttChartComponent implements AfterViewInit, OnChanges, OnDestro
         try {
             const module = await import('dhtmlx-gantt');
             this.gantt = module.gantt;
-            this.loading = false;
+            this.Loading = false;
             this.cdr.detectChanges();
 
             if (this.Items.length > 0 && this.ganttContainer) {
@@ -330,7 +339,7 @@ export class MjGanttChartComponent implements AfterViewInit, OnChanges, OnDestro
             }
         } catch (error) {
             console.error('@memberjunction/ng-gantt: Failed to load dhtmlx-gantt:', error);
-            this.loading = false;
+            this.Loading = false;
             this.cdr.markForCheck();
         }
     }

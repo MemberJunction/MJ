@@ -184,18 +184,36 @@ import { CommonModule } from '@angular/common';
   `]
 })
 export class SystemValidationBannerComponent implements OnInit, OnDestroy {
-  issues: SystemValidationIssue[] = [];
-  hasErrors = false;
+  Issues: SystemValidationIssue[] = [];
+
+  /** @deprecated Use {@link Issues}. */
+  get issues(): SystemValidationIssue[] {
+    return this.Issues;
+  }
+  /** @deprecated Use {@link Issues}. */
+  set issues(value: SystemValidationIssue[]) {
+    this.Issues = value;
+  }
+  HasErrors = false;
+
+  /** @deprecated Use {@link HasErrors}. */
+  get hasErrors() {
+    return this.HasErrors;
+  }
+  /** @deprecated Use {@link HasErrors}. */
+  set hasErrors(value) {
+    this.HasErrors = value;
+  }
   private subscription: Subscription | undefined;
 
   constructor(private validationService: SystemValidationService) { }
 
   ngOnInit() {
     this.subscription = this.validationService.validationIssues$.subscribe(issues => {
-      this.issues = issues;
+      this.Issues = issues;
       
       // Check if there are any error-level issues
-      this.hasErrors = issues.some(issue => issue.severity === 'error');
+      this.HasErrors = issues.some(issue => issue.severity === 'error');
     });
   }
 
@@ -205,7 +223,12 @@ export class SystemValidationBannerComponent implements OnInit, OnDestroy {
     }
   }
 
-  dismissIssue(id: string) {
+  DismissIssue(id: string) {
     this.validationService.removeIssue(id);
+  }
+
+  /** @deprecated Use {@link DismissIssue}. */
+  dismissIssue(id: string) {
+    return this.DismissIssue(id);
   }
 }

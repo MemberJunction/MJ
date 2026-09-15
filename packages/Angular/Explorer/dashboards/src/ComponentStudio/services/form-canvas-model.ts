@@ -52,15 +52,20 @@ export interface FormCanvasModel {
 }
 
 /** Generate a short stable id for canvas elements. Not cryptographic. */
-export function generateCanvasId(prefix: string): string {
+export function GenerateCanvasId(prefix: string): string {
     const slug = Math.random().toString(36).slice(2, 10);
     return `${prefix}-${slug}`;
 }
 
+/** @deprecated Use {@link GenerateCanvasId}. */
+export function generateCanvasId(prefix: string): string {
+    return GenerateCanvasId(prefix);
+}
+
 /** Build a default, empty section. */
-export function buildEmptySection(title = 'Untitled Section'): FormCanvasSection {
+export function BuildEmptySection(title = 'Untitled Section'): FormCanvasSection {
     return {
-        id: generateCanvasId('section'),
+        id: GenerateCanvasId('section'),
         title,
         collapsible: false,
         columns: 2,
@@ -68,11 +73,21 @@ export function buildEmptySection(title = 'Untitled Section'): FormCanvasSection
     };
 }
 
+/** @deprecated Use {@link BuildEmptySection}. */
+export function buildEmptySection(title = 'Untitled Section'): FormCanvasSection {
+    return BuildEmptySection(title);
+}
+
 /** Build a default empty canvas for an entity. */
-export function buildEmptyCanvas(entityName: string, title?: string): FormCanvasModel {
+export function BuildEmptyCanvas(entityName: string, title?: string): FormCanvasModel {
     return {
         entityName,
         title: title ?? '',
-        sections: [buildEmptySection('Details')],
+        sections: [BuildEmptySection('Details')],
     };
+}
+
+/** @deprecated Use {@link BuildEmptyCanvas}. */
+export function buildEmptyCanvas(entityName: string, title?: string): FormCanvasModel {
+    return BuildEmptyCanvas(entityName, title);
 }

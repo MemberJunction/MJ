@@ -52,6 +52,8 @@ const SKIP_REASONS = {
     StructuralClass: 'class is a declared data shape (@ObjectType/@InputType et al), so object literals are assigned to it and an accessor stub changes what they must supply',
     SubclassRedeclares: 'a subclass redeclares this member as a plain property, and TypeScript forbids a property overriding an accessor (TS2610)',
     Overridden: 'a subclass overrides this member, and a @deprecated stub preserves CALLING the old name but not OVERRIDING it — the override would be silently bypassed',
+    AncestorDeclares: 'an ancestor class already declares the PascalCase name, so the rename would collide with an inherited member',
+    NameClaimedThisRun: 'another member in this class already takes that PascalCase name in this run — `artifact` and `_artifact` both pascalize to `Artifact`',
     NameCollision: 'the PascalCase name is already declared in this scope',
     Declared: '`declare` member — no runtime carrier',
     ConstructorBodyRef: 'parameter property is referenced by bare name inside the constructor',
@@ -207,6 +209,19 @@ function accessorModifiers(node) {
 
 const docFor = (newName) => `/** @deprecated Use {@link ${newName}}. */`;
 
+/** Has this run already given some other member of this class the new name? */
+function alreadyClaimed(ctx, classNode, newName) {
+    const set = ctx.claimed?.get(classNode);
+    return !!set && set.has(newName);
+}
+
+/** Record that the new name is now taken in this class, for the rest of this run. */
+function claim(ctx, classNode, newName) {
+    if (!ctx.claimed) return;
+    if (!ctx.claimed.has(classNode)) ctx.claimed.set(classNode, new Set());
+    ctx.claimed.get(classNode).add(newName);
+}
+
 /** Names already declared in a class body or at module scope, to catch a stub colliding. */
 function declaredNames(container) {
     const names = new Set();
@@ -295,12 +310,16 @@ function rewriteMethod(ctx, node, names, classNode) {
     if (node.parameters.some((p) => !ts.isIdentifier(p.name))) return SKIP_REASONS.BindingPattern;
     if (node.parameters.some((p) => ts.isIdentifier(p.name) && p.name.text === 'this')) return SKIP_REASONS.ThisParameter;
     if (declaredNames(classNode).has(names.New)) return SKIP_REASONS.NameCollision;
+    if (alreadyClaimed(ctx, classNode, names.New)) return SKIP_REASONS.NameClaimedThisRun;
+    claim(ctx, classNode, names.New);
     // The silent one. A stub lets a caller keep using the old name, but a SUBCLASS that overrides
     // the old name now overrides the stub, while everything internal calls the new name — so the
     // override is simply never reached. `BaseProvider.getSupportedOperations` is overridden by every
     // provider; renaming it made all of them dead code that still compiled.
     if (classNode.name && ctx.subclassIndex?.Members?.get(classNode.name.text)?.has(names.Old))
         return SKIP_REASONS.Overridden;
+    if (classNode.name && ctx.subclassIndex?.Ancestors?.get(classNode.name.text)?.has(names.New))
+        return SKIP_REASONS.AncestorDeclares;
 
     const sameName = classNode.members.filter((m) => m.name && ts.isIdentifier(m.name) && m.name.text === names.Old);
     if (sameName.length > 1) return SKIP_REASONS.Overloaded;
@@ -337,9 +356,13 @@ function rewriteProperty(ctx, node, names, classNode) {
         return SKIP_REASONS.SubclassRedeclares;
     if (classNode.name && ctx.subclassIndex?.Members?.get(classNode.name.text)?.has(names.Old))
         return SKIP_REASONS.Overridden;
+    if (classNode.name && ctx.subclassIndex?.Ancestors?.get(classNode.name.text)?.has(names.New))
+        return SKIP_REASONS.AncestorDeclares;
     if ((node.modifiers ?? []).some((m) => m.kind === ts.SyntaxKind.DeclareKeyword)) return SKIP_REASONS.Declared;
     if ((node.modifiers ?? []).some((m) => m.kind === ts.SyntaxKind.AbstractKeyword)) return SKIP_REASONS.Abstract;
     if (declaredNames(classNode).has(names.New)) return SKIP_REASONS.NameCollision;
+    if (alreadyClaimed(ctx, classNode, names.New)) return SKIP_REASONS.NameClaimedThisRun;
+    claim(ctx, classNode, names.New);
 
     buffer.Replace(node.name.getStart(source), node.name.end, names.New);
 
@@ -418,7 +441,12 @@ const decoratorNames = (node) =>
  * but it cannot name a generic class without its arguments, so those are handed back.
  */
 function aliasType(node, classNode, names, text) {
-    if (node.type) return text.slice(node.type.pos, node.type.end).trim();
+    // `@Input() TestId?: string` declares `string | undefined`, but the `?` is a separate token from
+    // the type annotation — reading only the annotation gives `string`, and the getter then fails to
+    // compile because it returns the real, wider type. An accessor cannot itself be optional, so the
+    // optionality has to travel in the type.
+    const optional = node.questionToken ? ' | undefined' : '';
+    if (node.type) return `${text.slice(node.type.pos, node.type.end).trim()}${optional}`;
     if (!classNode.name || classNode.typeParameters?.length) return null;
     return `${classNode.name.text}['${names.New}']`;
 }
@@ -440,6 +468,10 @@ function rewriteOutput(ctx, node, names, classNode) {
     // is unchanged by a rename and no second output is needed — or wanted.
     if (ts.isCallExpression(decorator) && decorator.arguments.length > 0) return SKIP_REASONS.AliasedBinding;
     if (declaredNames(classNode).has(names.New)) return SKIP_REASONS.NameCollision;
+    if (alreadyClaimed(ctx, classNode, names.New)) return SKIP_REASONS.NameClaimedThisRun;
+    claim(ctx, classNode, names.New);
+    if (classNode.name && ctx.subclassIndex?.Ancestors?.get(classNode.name.text)?.has(names.New))
+        return SKIP_REASONS.AncestorDeclares;
 
     buffer.Replace(node.name.getStart(source), node.name.end, names.New);
 
@@ -473,6 +505,10 @@ function rewriteInput(ctx, node, names, classNode) {
     if (decoratorNames(node).some((n) => n !== 'Input')) return SKIP_REASONS.Decorated;
     if (ts.isCallExpression(decorator) && decorator.arguments.length > 0) return SKIP_REASONS.AliasedBinding;
     if (declaredNames(classNode).has(names.New)) return SKIP_REASONS.NameCollision;
+    if (alreadyClaimed(ctx, classNode, names.New)) return SKIP_REASONS.NameClaimedThisRun;
+    claim(ctx, classNode, names.New);
+    if (classNode.name && ctx.subclassIndex?.Ancestors?.get(classNode.name.text)?.has(names.New))
+        return SKIP_REASONS.AncestorDeclares;
 
     const type = aliasType(node, classNode, names, text);
     if (!type) return SKIP_REASONS.GenericClass;
@@ -514,7 +550,11 @@ function rewriteParameterProperty(ctx, node, names, classNode, ctor) {
         return SKIP_REASONS.SubclassRedeclares;
     if (classNode.name && ctx.subclassIndex?.Members?.get(classNode.name.text)?.has(names.Old))
         return SKIP_REASONS.Overridden;
+    if (classNode.name && ctx.subclassIndex?.Ancestors?.get(classNode.name.text)?.has(names.New))
+        return SKIP_REASONS.AncestorDeclares;
     if (declaredNames(classNode).has(names.New)) return SKIP_REASONS.NameCollision;
+    if (alreadyClaimed(ctx, classNode, names.New)) return SKIP_REASONS.NameClaimedThisRun;
+    claim(ctx, classNode, names.New);
 
     // Inside the constructor the parameter is also a plain local. Renaming it there is a separate,
     // scope-sensitive edit, so a body that uses the bare name is handed back to a human.
@@ -579,7 +619,11 @@ function rewriteAccessorPair(ctx, node, names, classNode, state) {
         return SKIP_REASONS.SubclassRedeclares;
     if (classNode.name && ctx.subclassIndex?.Members?.get(classNode.name.text)?.has(names.Old))
         return SKIP_REASONS.Overridden;
+    if (classNode.name && ctx.subclassIndex?.Ancestors?.get(classNode.name.text)?.has(names.New))
+        return SKIP_REASONS.AncestorDeclares;
     if (declaredNames(classNode).has(names.New)) return SKIP_REASONS.NameCollision;
+    if (alreadyClaimed(ctx, classNode, names.New)) return SKIP_REASONS.NameClaimedThisRun;
+    claim(ctx, classNode, names.New);
 
     const pair = classNode.members.filter(
         (m) =>
@@ -718,7 +762,11 @@ function rewriteFile(absPath, findings, subclassIndex) {
     const text = readFileSync(absPath, 'utf8');
     const source = ts.createSourceFile(absPath, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
     const buffer = new EditBuffer(text);
-    const ctx = { text, source, buffer, unit: indentUnit(text), subclassIndex };
+    // Names this run has already introduced, per class. `declaredNames` only sees the ORIGINAL
+    // members, so two findings that pascalize to the same thing — `artifact` and `_artifact` both
+    // become `Artifact` — each pass the collision check and produce a duplicate identifier.
+    const claimed = new Map();
+    const ctx = { text, source, buffer, unit: indentUnit(text), subclassIndex, claimed };
     /** Declaration-name identifiers already rewritten; a reference pass must not touch them again. */
     const declarationNames = new Set();
     /** Renamed module-scope functions, and renamed members grouped by their owning class. */
@@ -867,7 +915,10 @@ function buildSubclassIndex(packageDir) {
     /** class name → every member name it declares, of any kind */
     const members = new Map();
 
-    for (const abs of collectSourceFiles(packageDir)) {
+    // GENERATED code is included here even though the codemod never rewrites it. A generated form
+    // component is a real ancestor — `MJListFormComponentExtended extends MJListFormComponent` — and
+    // an index that cannot see it reports no ancestor at all, which is worse than not checking.
+    for (const abs of collectSourceFiles(packageDir, [], { includeGenerated: true })) {
         let source;
         try {
             source = ts.createSourceFile(abs, readFileSync(abs, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
@@ -910,6 +961,26 @@ function buildSubclassIndex(packageDir) {
     // Invert: for each class, what everything below it declares. Two views, because they guard
     // different failures — `Props` is the TS2610 compile error, `Members` is the silent one where an
     // override stops being reached at all.
+    // Ancestors, the mirror image. Renaming `loadComplete` to `LoadComplete` on a component whose
+    // GRANDPARENT in another package already declares a `LoadComplete` accessor produces a member
+    // that collides with an inherited one — TS2610/TS2416/TS2687 — and the same-class collision
+    // check cannot see it, because the clashing declaration is not in this class or this file.
+    const ancestorMembers = new Map();
+    for (const [child] of parents) {
+        const acc = new Set();
+        const seen = new Set();
+        const up = (names) => {
+            for (const base of names) {
+                if (seen.has(base)) continue;
+                seen.add(base);
+                for (const n of members.get(base) ?? []) acc.add(n);
+                up(parents.get(base) ?? []);
+            }
+        };
+        up(parents.get(child) ?? []);
+        ancestorMembers.set(child, acc);
+    }
+
     const descendantProps = new Map();
     const descendantMembers = new Map();
     for (const [child, bases] of parents) {
@@ -931,7 +1002,7 @@ function buildSubclassIndex(packageDir) {
         };
         walkUp(bases);
     }
-    return { Props: descendantProps, Members: descendantMembers };
+    return { Props: descendantProps, Members: descendantMembers, Ancestors: ancestorMembers };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1001,7 +1072,10 @@ function resolveSpecifier(fromFile, specifier) {
 
 const SKIP_DIRS = new Set(['node_modules', 'dist', 'build', '.git', '.angular', 'coverage', 'generated', '.turbo']);
 
-function collectSourceFiles(dir, out = []) {
+/** Is this a test file? Used to scope the riskier, name-only rewrites to code that is not shipped. */
+const isTestFile = (abs) => /(?:\.test\.ts|\.spec\.ts)$/.test(abs) || abs.includes('__tests__');
+
+function collectSourceFiles(dir, out = [], { includeGenerated = false } = {}) {
     let entries;
     try {
         entries = readdirSync(dir, { withFileTypes: true });
@@ -1010,7 +1084,8 @@ function collectSourceFiles(dir, out = []) {
     }
     for (const entry of entries) {
         if (entry.isDirectory()) {
-            if (!SKIP_DIRS.has(entry.name)) collectSourceFiles(join(dir, entry.name), out);
+            const skip = SKIP_DIRS.has(entry.name) && !(includeGenerated && entry.name === 'generated');
+            if (!skip) collectSourceFiles(join(dir, entry.name), out, { includeGenerated });
         } else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.d.ts')) {
             out.push(join(dir, entry.name));
         }
@@ -1041,6 +1116,9 @@ function updateMockFactories(packageDir, renamesByFile) {
         if (!/\b(?:vi|jest|vitest)\s*\.\s*(?:mock|spyOn)\s*\(/.test(text)) continue;
         const source = ts.createSourceFile(abs, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
         const buffer = new EditBuffer(text);
+
+        /** Every rename this run made anywhere in the package, for instance-target spies. */
+        const packageRenames = [...renamesByFile.values()].flat();
 
         /** local namespace binding → the renames of the module it points at */
         const namespaceRenames = new Map();
@@ -1079,12 +1157,21 @@ function updateMockFactories(packageDir, renamesByFile) {
                 ts.isIdentifier(node.arguments[0]) &&
                 ts.isStringLiteral(node.arguments[1])
             ) {
-                const renames = namespaceRenames.get(node.arguments[0].text);
-                const pair = renames?.find((r) => r.Old === node.arguments[1].text);
-                if (pair) {
-                    const lit = node.arguments[1];
-                    buffer.Replace(lit.getStart(source) + 1, lit.end - 1, pair.New);
+                const lit = node.arguments[1];
+                // Case 1: the target is a namespace import, so the module — and therefore the
+                // rename — can be resolved exactly.
+                const nsRenames = namespaceRenames.get(node.arguments[0].text);
+                let pair = nsRenames?.find((r) => r.Old === lit.text);
+
+                // Case 2: the target is an instance (`vi.spyOn(component, 'highlightMatch')`), which
+                // cannot be resolved to a class without a type checker. Restricted to TEST files and
+                // to names this run actually renamed somewhere in the package. Worth doing because
+                // the failure is silent: the @deprecated stub still exists, so the spy ATTACHES and
+                // then never fires, because the code under test calls the new name.
+                if (!pair && isTestFile(abs)) {
+                    pair = packageRenames.find((r) => r.Old === lit.text);
                 }
+                if (pair) buffer.Replace(lit.getStart(source) + 1, lit.end - 1, pair.New);
             }
             ts.forEachChild(node, visit);
         };

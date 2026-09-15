@@ -38,25 +38,129 @@ interface TimelineGroup {
 })
 export class CredentialsAuditResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
     public isLoading = true;
-    public auditLogs: AuditLogWithDetails[] = [];
-    public filteredLogs: AuditLogWithDetails[] = [];
-    public timelineGroups: TimelineGroup[] = [];
+    public AuditLogs: AuditLogWithDetails[] = [];
 
-    public selectedStatus = '';
-    public selectedOperation = '';
-    public dateRange = '7'; // days
-    public searchText = '';
-    public viewMode: 'table' | 'timeline' = 'timeline';
-    public expandedLogId: string | null = null;
+    /** @deprecated Use {@link AuditLogs}. */
+    public get auditLogs(): AuditLogWithDetails[] {
+      return this.AuditLogs;
+    }
+    /** @deprecated Use {@link AuditLogs}. */
+    public set auditLogs(value: AuditLogWithDetails[]) {
+      this.AuditLogs = value;
+    }
+    public FilteredLogs: AuditLogWithDetails[] = [];
+
+    /** @deprecated Use {@link FilteredLogs}. */
+    public get filteredLogs(): AuditLogWithDetails[] {
+      return this.FilteredLogs;
+    }
+    /** @deprecated Use {@link FilteredLogs}. */
+    public set filteredLogs(value: AuditLogWithDetails[]) {
+      this.FilteredLogs = value;
+    }
+    public TimelineGroups: TimelineGroup[] = [];
+
+    /** @deprecated Use {@link TimelineGroups}. */
+    public get timelineGroups(): TimelineGroup[] {
+      return this.TimelineGroups;
+    }
+    /** @deprecated Use {@link TimelineGroups}. */
+    public set timelineGroups(value: TimelineGroup[]) {
+      this.TimelineGroups = value;
+    }
+
+    public SelectedStatus = '';
+
+    /** @deprecated Use {@link SelectedStatus}. */
+    public get selectedStatus() {
+      return this.SelectedStatus;
+    }
+    /** @deprecated Use {@link SelectedStatus}. */
+    public set selectedStatus(value) {
+      this.SelectedStatus = value;
+    }
+    public SelectedOperation = '';
+
+    /** @deprecated Use {@link SelectedOperation}. */
+    public get selectedOperation() {
+      return this.SelectedOperation;
+    }
+    /** @deprecated Use {@link SelectedOperation}. */
+    public set selectedOperation(value) {
+      this.SelectedOperation = value;
+    }
+    public DateRange = '7';
+
+    /** @deprecated Use {@link DateRange}. */
+    public get dateRange() {
+      return this.DateRange;
+    }
+    /** @deprecated Use {@link DateRange}. */
+    public set dateRange(value) {
+      this.DateRange = value;
+    } // days
+    public SearchText = '';
+
+    /** @deprecated Use {@link SearchText}. */
+    public get searchText() {
+      return this.SearchText;
+    }
+    /** @deprecated Use {@link SearchText}. */
+    public set searchText(value) {
+      this.SearchText = value;
+    }
+    public ViewMode: 'table' | 'timeline' = 'timeline';
+
+    /** @deprecated Use {@link ViewMode}. */
+    public get viewMode(): 'table' | 'timeline' {
+      return this.ViewMode;
+    }
+    /** @deprecated Use {@link ViewMode}. */
+    public set viewMode(value: 'table' | 'timeline') {
+      this.ViewMode = value;
+    }
+    public ExpandedLogId: string | null = null;
+
+    /** @deprecated Use {@link ExpandedLogId}. */
+    public get expandedLogId(): string | null {
+      return this.ExpandedLogId;
+    }
+    /** @deprecated Use {@link ExpandedLogId}. */
+    public set expandedLogId(value: string | null) {
+      this.ExpandedLogId = value;
+    }
 
     // Chart data
-    public hourlyData: { hour: string; success: number; failed: number }[] = [];
-    public operationCounts: Map<string, number> = new Map();
+    public HourlyData: { hour: string; success: number; failed: number }[] = [];
 
-    public readonly viewOptions: ViewToggleOption[] = [
+    /** @deprecated Use {@link HourlyData}. */
+    public get hourlyData(): { hour: string; success: number; failed: number }[] {
+      return this.HourlyData;
+    }
+    /** @deprecated Use {@link HourlyData}. */
+    public set hourlyData(value: { hour: string; success: number; failed: number }[]) {
+      this.HourlyData = value;
+    }
+    public OperationCounts: Map<string, number> = new Map();
+
+    /** @deprecated Use {@link OperationCounts}. */
+    public get operationCounts(): Map<string, number> {
+      return this.OperationCounts;
+    }
+    /** @deprecated Use {@link OperationCounts}. */
+    public set operationCounts(value: Map<string, number>) {
+      this.OperationCounts = value;
+    }
+
+    public readonly ViewOptions: ViewToggleOption[] = [
         { key: 'timeline', icon: 'fa-solid fa-timeline', title: 'Timeline view' },
         { key: 'table', icon: 'fa-solid fa-table', title: 'Table view' }
     ];
+
+    /** @deprecated Use {@link ViewOptions}. */
+    public get viewOptions(): ViewToggleOption[] {
+      return this.ViewOptions;
+    }
 
     public get FilterFields(): FilterFieldConfig[] {
         return [
@@ -81,7 +185,7 @@ export class CredentialsAuditResourceComponent extends BaseResourceComponent imp
                 filterable: true,
                 options: [
                     { text: 'All Operations', value: '' },
-                    ...this.getOperationList().map(op => ({ text: op, value: op }))
+                    ...this.GetOperationList().map(op => ({ text: op, value: op }))
                 ]
             },
             {
@@ -100,34 +204,44 @@ export class CredentialsAuditResourceComponent extends BaseResourceComponent imp
     }
     public get FilterValues(): Record<string, unknown> {
         return {
-            status: this.selectedStatus,
-            operation: this.selectedOperation,
-            dateRange: this.dateRange
+            status: this.SelectedStatus,
+            operation: this.SelectedOperation,
+            dateRange: this.DateRange
         };
     }
     public get ActiveFilterCount(): number {
         let n = 0;
-        if (this.selectedStatus) n++;
-        if (this.selectedOperation) n++;
-        if (this.dateRange && this.dateRange !== '7') n++;  // 7-day is the default; don't count it
+        if (this.SelectedStatus) n++;
+        if (this.SelectedOperation) n++;
+        if (this.DateRange && this.DateRange !== '7') n++;  // 7-day is the default; don't count it
         return n;
     }
-    public onFilterValuesChange(v: Record<string, unknown>): void {
+    public OnFilterValuesChange(v: Record<string, unknown>): void {
         const next = (v ?? {}) as { status?: string; operation?: string; dateRange?: string };
-        if ((next.status ?? '') !== this.selectedStatus) {
-            this.onStatusFilterChange(next.status ?? '');
+        if ((next.status ?? '') !== this.SelectedStatus) {
+            this.OnStatusFilterChange(next.status ?? '');
         }
-        if ((next.operation ?? '') !== this.selectedOperation) {
-            this.onOperationFilterChange(next.operation ?? '');
+        if ((next.operation ?? '') !== this.SelectedOperation) {
+            this.OnOperationFilterChange(next.operation ?? '');
         }
-        if ((next.dateRange ?? '7') !== this.dateRange) {
-            this.onDateRangeChange(next.dateRange ?? '7');
+        if ((next.dateRange ?? '7') !== this.DateRange) {
+            this.OnDateRangeChange(next.dateRange ?? '7');
         }
     }
+
+    /** @deprecated Use {@link OnFilterValuesChange}. */
+    public onFilterValuesChange(v: Record<string, unknown>): void {
+      return this.OnFilterValuesChange(v);
+    }
+    public ResetFilters(): void {
+        if (this.SelectedStatus) this.OnStatusFilterChange('');
+        if (this.SelectedOperation) this.OnOperationFilterChange('');
+        if (this.DateRange !== '7') this.OnDateRangeChange('7');
+    }
+
+    /** @deprecated Use {@link ResetFilters}. */
     public resetFilters(): void {
-        if (this.selectedStatus) this.onStatusFilterChange('');
-        if (this.selectedOperation) this.onOperationFilterChange('');
-        if (this.dateRange !== '7') this.onDateRangeChange('7');
+      return this.ResetFilters();
     }
 
     constructor(private cdr: ChangeDetectorRef) {
@@ -161,7 +275,7 @@ export class CredentialsAuditResourceComponent extends BaseResourceComponent imp
 
             // Calculate date filter
             const startDate = new Date();
-            startDate.setDate(startDate.getDate() - parseInt(this.dateRange, 10));
+            startDate.setDate(startDate.getDate() - parseInt(this.DateRange, 10));
             const dateFilter = `AuditLogTypeID = '${CREDENTIAL_ACCESS_AUDIT_LOG_TYPE_ID}' AND __mj_CreatedAt >= '${startDate.toISOString()}'`;
 
             const result = await rv.RunView<AuditLogWithDetails>({
@@ -173,9 +287,9 @@ export class CredentialsAuditResourceComponent extends BaseResourceComponent imp
             });
 
             if (result.Success) {
-                this.auditLogs = result.Results;
+                this.AuditLogs = result.Results;
                 this.parseAllDetails();
-                this.applyFilters();
+                this.ApplyFilters();
                 this.buildChartData();
             }
 
@@ -189,7 +303,7 @@ export class CredentialsAuditResourceComponent extends BaseResourceComponent imp
     }
 
     private parseAllDetails(): void {
-        for (const log of this.auditLogs) {
+        for (const log of this.AuditLogs) {
             log.parsedDetails = this.parseDetails(log);
         }
     }
@@ -205,47 +319,82 @@ export class CredentialsAuditResourceComponent extends BaseResourceComponent imp
         return {};
     }
 
+    public OnStatusFilterChange(status: string): void {
+        this.SelectedStatus = status;
+        this.ApplyFilters();
+    }
+
+    /** @deprecated Use {@link OnStatusFilterChange}. */
     public onStatusFilterChange(status: string): void {
-        this.selectedStatus = status;
-        this.applyFilters();
+      return this.OnStatusFilterChange(status);
     }
 
+    public OnOperationFilterChange(operation: string): void {
+        this.SelectedOperation = operation;
+        this.ApplyFilters();
+    }
+
+    /** @deprecated Use {@link OnOperationFilterChange}. */
     public onOperationFilterChange(operation: string): void {
-        this.selectedOperation = operation;
-        this.applyFilters();
+      return this.OnOperationFilterChange(operation);
     }
 
-    public onDateRangeChange(days: string): void {
-        this.dateRange = days;
+    public OnDateRangeChange(days: string): void {
+        this.DateRange = days;
         this.loadData();
     }
 
-    public onSearchChange(value: string): void {
-        this.searchText = value;
-        this.applyFilters();
+    /** @deprecated Use {@link OnDateRangeChange}. */
+    public onDateRangeChange(days: string): void {
+      return this.OnDateRangeChange(days);
     }
 
+    public OnSearchChange(value: string): void {
+        this.SearchText = value;
+        this.ApplyFilters();
+    }
+
+    /** @deprecated Use {@link OnSearchChange}. */
+    public onSearchChange(value: string): void {
+      return this.OnSearchChange(value);
+    }
+
+    public ClearSearch(): void {
+        this.SearchText = '';
+        this.ApplyFilters();
+    }
+
+    /** @deprecated Use {@link ClearSearch}. */
     public clearSearch(): void {
-        this.searchText = '';
-        this.applyFilters();
+      return this.ClearSearch();
     }
 
     /** True when search and/or any filter narrow the log list. */
     public get IsListNarrowed(): boolean {
-        return !!(this.searchText || this.selectedStatus || this.selectedOperation);
+        return !!(this.SearchText || this.SelectedStatus || this.SelectedOperation);
     }
 
     /** Empty-state CTA: reset search + status + operation filters. */
-    public resetAuditFilters(): void {
-        this.searchText = '';
-        this.selectedStatus = '';
-        this.selectedOperation = '';
-        this.applyFilters();
+    public ResetAuditFilters(): void {
+        this.SearchText = '';
+        this.SelectedStatus = '';
+        this.SelectedOperation = '';
+        this.ApplyFilters();
     }
 
-    public setViewMode(mode: 'table' | 'timeline'): void {
-        this.viewMode = mode;
+    /** @deprecated Use {@link ResetAuditFilters}. */
+    public resetAuditFilters(): void {
+      return this.ResetAuditFilters();
+    }
+
+    public SetViewMode(mode: 'table' | 'timeline'): void {
+        this.ViewMode = mode;
         this.cdr.markForCheck();
+    }
+
+    /** @deprecated Use {@link SetViewMode}. */
+    public setViewMode(mode: 'table' | 'timeline'): void {
+      return this.SetViewMode(mode);
     }
 
     /**
@@ -254,27 +403,32 @@ export class CredentialsAuditResourceComponent extends BaseResourceComponent imp
      * template's `expandedLogId === log.ID` binding collapses the prior one);
      * collapsing the open row clears it. OnPush — drives change detection.
      */
-    public onLogExpandedChange(logId: string, expanded: boolean): void {
-        this.expandedLogId = expanded ? logId : null;
+    public OnLogExpandedChange(logId: string, expanded: boolean): void {
+        this.ExpandedLogId = expanded ? logId : null;
         this.cdr.markForCheck();
     }
 
-    public applyFilters(): void {
-        let filtered = [...this.auditLogs];
+    /** @deprecated Use {@link OnLogExpandedChange}. */
+    public onLogExpandedChange(logId: string, expanded: boolean): void {
+      return this.OnLogExpandedChange(logId, expanded);
+    }
 
-        if (this.selectedStatus) {
-            filtered = filtered.filter(log => log.Status === this.selectedStatus);
+    public ApplyFilters(): void {
+        let filtered = [...this.AuditLogs];
+
+        if (this.SelectedStatus) {
+            filtered = filtered.filter(log => log.Status === this.SelectedStatus);
         }
 
-        if (this.selectedOperation) {
+        if (this.SelectedOperation) {
             filtered = filtered.filter(log => {
                 const op = log.parsedDetails?.operation || 'Access';
-                return op === this.selectedOperation;
+                return op === this.SelectedOperation;
             });
         }
 
-        if (this.searchText) {
-            const searchLower = this.searchText.toLowerCase();
+        if (this.SearchText) {
+            const searchLower = this.SearchText.toLowerCase();
             filtered = filtered.filter(log => {
                 const user = (log.User || '').toLowerCase();
                 const desc = (log.Description || '').toLowerCase();
@@ -287,15 +441,20 @@ export class CredentialsAuditResourceComponent extends BaseResourceComponent imp
             });
         }
 
-        this.filteredLogs = filtered;
+        this.FilteredLogs = filtered;
         this.buildTimelineGroups();
         this.cdr.markForCheck();
+    }
+
+    /** @deprecated Use {@link ApplyFilters}. */
+    public applyFilters(): void {
+      return this.ApplyFilters();
     }
 
     private buildTimelineGroups(): void {
         const groups = new Map<string, AuditLogWithDetails[]>();
 
-        for (const log of this.filteredLogs) {
+        for (const log of this.FilteredLogs) {
             const date = new Date(log.__mj_CreatedAt);
             const dateKey = date.toISOString().split('T')[0];
 
@@ -305,7 +464,7 @@ export class CredentialsAuditResourceComponent extends BaseResourceComponent imp
             groups.get(dateKey)!.push(log);
         }
 
-        this.timelineGroups = Array.from(groups.entries())
+        this.TimelineGroups = Array.from(groups.entries())
             .sort((a, b) => b[0].localeCompare(a[0]))
             .map(([date, logs]) => ({
                 date,
@@ -344,7 +503,7 @@ export class CredentialsAuditResourceComponent extends BaseResourceComponent imp
             hourCounts[hour] = { success: 0, failed: 0 };
         }
 
-        for (const log of this.auditLogs) {
+        for (const log of this.AuditLogs) {
             const date = new Date(log.__mj_CreatedAt);
             if (date.toDateString() === today) {
                 const hour = date.getHours().toString().padStart(2, '0') + ':00';
@@ -356,28 +515,38 @@ export class CredentialsAuditResourceComponent extends BaseResourceComponent imp
             }
         }
 
-        this.hourlyData = Object.entries(hourCounts).map(([hour, counts]) => ({
+        this.HourlyData = Object.entries(hourCounts).map(([hour, counts]) => ({
             hour,
             ...counts
         }));
 
         // Build operation counts
-        this.operationCounts.clear();
-        for (const log of this.auditLogs) {
+        this.OperationCounts.clear();
+        for (const log of this.AuditLogs) {
             const op = log.parsedDetails?.operation || 'Access';
-            this.operationCounts.set(op, (this.operationCounts.get(op) || 0) + 1);
+            this.OperationCounts.set(op, (this.OperationCounts.get(op) || 0) + 1);
         }
     }
 
+    public GetMaxHourlyCount(): number {
+        return Math.max(...this.HourlyData.map(d => d.success + d.failed), 1);
+    }
+
+    /** @deprecated Use {@link GetMaxHourlyCount}. */
     public getMaxHourlyCount(): number {
-        return Math.max(...this.hourlyData.map(d => d.success + d.failed), 1);
+      return this.GetMaxHourlyCount();
     }
 
+    public GetOperationList(): string[] {
+        return Array.from(this.OperationCounts.keys());
+    }
+
+    /** @deprecated Use {@link GetOperationList}. */
     public getOperationList(): string[] {
-        return Array.from(this.operationCounts.keys());
+      return this.GetOperationList();
     }
 
-    public getStatusClass(status: string): string {
+    public GetStatusClass(status: string): string {
         switch (status) {
             case 'Success': return 'success';
             case 'Failed': return 'failed';
@@ -385,15 +554,30 @@ export class CredentialsAuditResourceComponent extends BaseResourceComponent imp
         }
     }
 
-    public getOperationType(log: AuditLogWithDetails): string {
+    /** @deprecated Use {@link GetStatusClass}. */
+    public getStatusClass(status: string): string {
+      return this.GetStatusClass(status);
+    }
+
+    public GetOperationType(log: AuditLogWithDetails): string {
         return log.parsedDetails?.operation || 'Access';
     }
 
-    public getSubsystem(log: AuditLogWithDetails): string {
+    /** @deprecated Use {@link GetOperationType}. */
+    public getOperationType(log: AuditLogWithDetails): string {
+      return this.GetOperationType(log);
+    }
+
+    public GetSubsystem(log: AuditLogWithDetails): string {
         return log.parsedDetails?.subsystem || '';
     }
 
-    public getOperationIcon(operation: string): string {
+    /** @deprecated Use {@link GetSubsystem}. */
+    public getSubsystem(log: AuditLogWithDetails): string {
+      return this.GetSubsystem(log);
+    }
+
+    public GetOperationIcon(operation: string): string {
         switch (operation.toLowerCase()) {
             case 'access': return 'fa-solid fa-eye';
             case 'create': return 'fa-solid fa-plus';
@@ -405,7 +589,12 @@ export class CredentialsAuditResourceComponent extends BaseResourceComponent imp
         }
     }
 
-    public getOperationColor(operation: string): string {
+    /** @deprecated Use {@link GetOperationIcon}. */
+    public getOperationIcon(operation: string): string {
+      return this.GetOperationIcon(operation);
+    }
+
+    public GetOperationColor(operation: string): string {
         switch (operation.toLowerCase()) {
             case 'access': return 'var(--mj-brand-primary)';
             case 'create': return 'var(--mj-status-success)';
@@ -415,6 +604,11 @@ export class CredentialsAuditResourceComponent extends BaseResourceComponent imp
             case 'validate': return 'var(--mj-brand-primary)';
             default: return 'var(--mj-text-secondary)';
         }
+    }
+
+    /** @deprecated Use {@link GetOperationColor}. */
+    public getOperationColor(operation: string): string {
+      return this.GetOperationColor(operation);
     }
 
     public formatDate(date: Date | string | null): string {
@@ -430,7 +624,7 @@ export class CredentialsAuditResourceComponent extends BaseResourceComponent imp
         });
     }
 
-    public formatTime(date: Date | string | null): string {
+    public FormatTime(date: Date | string | null): string {
         if (!date) return '';
         const d = new Date(date);
         return d.toLocaleTimeString('en-US', {
@@ -440,43 +634,73 @@ export class CredentialsAuditResourceComponent extends BaseResourceComponent imp
         });
     }
 
+    /** @deprecated Use {@link FormatTime}. */
+    public formatTime(date: Date | string | null): string {
+      return this.FormatTime(date);
+    }
+
     public formatDuration(ms: number | undefined): string {
         if (!ms) return '-';
         if (ms < 1000) return `${ms}ms`;
         return `${(ms / 1000).toFixed(2)}s`;
     }
 
-    public refresh(): void {
+    public Refresh(): void {
         this.loadData();
     }
 
+    /** @deprecated Use {@link Refresh}. */
+    public refresh(): void {
+      return this.Refresh();
+    }
+
+    public GetSuccessCount(): number {
+        return this.AuditLogs.filter(log => log.Status === 'Success').length;
+    }
+
+    /** @deprecated Use {@link GetSuccessCount}. */
     public getSuccessCount(): number {
-        return this.auditLogs.filter(log => log.Status === 'Success').length;
+      return this.GetSuccessCount();
     }
 
+    public GetFailedCount(): number {
+        return this.AuditLogs.filter(log => log.Status === 'Failed').length;
+    }
+
+    /** @deprecated Use {@link GetFailedCount}. */
     public getFailedCount(): number {
-        return this.auditLogs.filter(log => log.Status === 'Failed').length;
+      return this.GetFailedCount();
     }
 
+    public GetSuccessRate(): number {
+        if (this.AuditLogs.length === 0) return 0;
+        return Math.round((this.GetSuccessCount() / this.AuditLogs.length) * 100);
+    }
+
+    /** @deprecated Use {@link GetSuccessRate}. */
     public getSuccessRate(): number {
-        if (this.auditLogs.length === 0) return 0;
-        return Math.round((this.getSuccessCount() / this.auditLogs.length) * 100);
+      return this.GetSuccessRate();
     }
 
-    public getUniqueUserCount(): number {
-        const users = new Set(this.auditLogs.map(log => log.User).filter(Boolean));
+    public GetUniqueUserCount(): number {
+        const users = new Set(this.AuditLogs.map(log => log.User).filter(Boolean));
         return users.size;
     }
 
-    public exportToCSV(): void {
+    /** @deprecated Use {@link GetUniqueUserCount}. */
+    public getUniqueUserCount(): number {
+      return this.GetUniqueUserCount();
+    }
+
+    public ExportToCSV(): void {
         const headers = ['Timestamp', 'User', 'Operation', 'Status', 'Description', 'Subsystem', 'Credential Type'];
-        const rows = this.filteredLogs.map(log => [
+        const rows = this.FilteredLogs.map(log => [
             this.formatDate(log.__mj_CreatedAt),
             log.User || '',
-            this.getOperationType(log),
+            this.GetOperationType(log),
             log.Status || '',
             log.Description || '',
-            this.getSubsystem(log),
+            this.GetSubsystem(log),
             log.parsedDetails?.credentialType || ''
         ]);
 
@@ -490,5 +714,10 @@ export class CredentialsAuditResourceComponent extends BaseResourceComponent imp
         link.href = URL.createObjectURL(blob);
         link.download = `credential-audit-log-${new Date().toISOString().split('T')[0]}.csv`;
         link.click();
+    }
+
+    /** @deprecated Use {@link ExportToCSV}. */
+    public exportToCSV(): void {
+      return this.ExportToCSV();
     }
 }

@@ -2,8 +2,8 @@ import {
   Component, ElementRef, Input, Output, EventEmitter, ViewChild,
   ChangeDetectionStrategy, ViewEncapsulation, OnDestroy
 } from '@angular/core';
-import { FlowModel, FlowNode, FLOW_COLORS, FLOW_LABEL, shortLabel, formatDuration } from './agent-run-flow.model';
-import { svgEl, clip, appendIcon, appendTitle } from './flow-svg.util';
+import { FlowModel, FlowNode, FLOW_COLORS, FLOW_LABEL, ShortLabel, FormatDuration } from './agent-run-flow.model';
+import { SvgEl, Clip, AppendIcon, AppendTitle } from './flow-svg.util';
 
 interface Box { rect: SVGElement; node: FlowNode; }
 
@@ -24,8 +24,26 @@ interface Box { rect: SVGElement; node: FlowNode; }
 })
 export class FlowchartComponent implements OnDestroy {
   @ViewChild('svg', { static: true }) svgRef!: ElementRef<SVGSVGElement>;
-  @Output() nodeSelected = new EventEmitter<FlowNode>();
-  @Output() selectionCleared = new EventEmitter<void>();
+  @Output() NodeSelected = new EventEmitter<FlowNode>();
+
+  /**
+   * @deprecated Use {@link NodeSelected}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (nodeSelected) keeps working. Must stay AFTER NodeSelected: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() nodeSelected = this.NodeSelected;
+  @Output() SelectionCleared = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link SelectionCleared}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (selectionCleared) keeps working. Must stay AFTER SelectionCleared: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() selectionCleared = this.SelectionCleared;
 
   private _model: FlowModel | null = null;
   private built = false;
@@ -81,10 +99,10 @@ export class FlowchartComponent implements OnDestroy {
     const ordered = this.visibleNodes();
     const rowY = (i: number) => i * (this.NODE_H + this.VGAP);
 
-    this.mainG = svgEl('g', {}, svg);
+    this.mainG = SvgEl('g', {}, svg);
     const main = this.mainG;
-    const edges = svgEl('g', {}, main);
-    const nodesG = svgEl('g', {}, main);
+    const edges = SvgEl('g', {}, main);
+    const nodesG = SvgEl('g', {}, main);
 
     const pos = new Map<number, { x: number; y: number }>();
     ordered.forEach((n, i) => pos.set(n.id, { x: this.PADX + n.depth * this.INDENT, y: rowY(i) }));
@@ -94,7 +112,7 @@ export class FlowchartComponent implements OnDestroy {
       if (!n.parent || !pos.has(n.parent.id)) continue;
       const c = pos.get(n.id)!, p = pos.get(n.parent.id)!;
       const spineX = p.x + 16, midY = c.y + this.NODE_H / 2;
-      svgEl('path', { d: `M${spineX},${p.y + this.NODE_H} L${spineX},${midY} L${c.x},${midY}`, fill: 'none', stroke: 'var(--mj-border-strong)', 'stroke-width': 1.5 }, edges);
+      SvgEl('path', { d: `M${spineX},${p.y + this.NODE_H} L${spineX},${midY} L${c.x},${midY}`, fill: 'none', stroke: 'var(--mj-border-strong)', 'stroke-width': 1.5 }, edges);
     }
 
     for (const n of ordered) {
@@ -102,40 +120,40 @@ export class FlowchartComponent implements OnDestroy {
       const col = FLOW_COLORS[n.type];
       const isContainer = n.children.length > 0;
       const isCollapsed = this.collapsed.has(n.id);
-      const grp = svgEl('g', {}, nodesG);
+      const grp = SvgEl('g', {}, nodesG);
       (grp as SVGElement & { style: CSSStyleDeclaration }).style.color = col;
 
-      const body = svgEl('g', {}, grp);
+      const body = SvgEl('g', {}, grp);
       (body as SVGElement & { style: CSSStyleDeclaration }).style.cursor = 'pointer';
       const sel = n.id === this.selectedId;
-      const rect = svgEl('rect', {
+      const rect = SvgEl('rect', {
         x, y, width: this.NODE_W, height: this.NODE_H, rx: 12,
         fill: sel ? 'var(--mj-bg-surface-hover)' : 'var(--mj-bg-surface-card)',
         stroke: col, 'stroke-width': sel ? 3 : isContainer ? 2 : 1.4, opacity: 0.98
       }, body);
       if (n.heat >= 2) rect.setAttribute('class', 'glow' + n.heat);
-      svgEl('rect', { x, y, width: 5, height: this.NODE_H, rx: 2.5, fill: col }, body);
-      appendTitle(body, `${n.name} · ${formatDuration(n.realDur)}`);
-      appendIcon(body, x + 14, y + this.NODE_H / 2 - 11, 22, n.iconClass, n.logoUrl, col);
-      svgEl('text', { x: x + 46, y: y + 22, 'font-size': 13, 'font-weight': 600, 'dominant-baseline': 'middle', text: clip(shortLabel(n), 26) }, body);
+      SvgEl('rect', { x, y, width: 5, height: this.NODE_H, rx: 2.5, fill: col }, body);
+      AppendTitle(body, `${n.name} · ${FormatDuration(n.realDur)}`);
+      AppendIcon(body, x + 14, y + this.NODE_H / 2 - 11, 22, n.iconClass, n.logoUrl, col);
+      SvgEl('text', { x: x + 46, y: y + 22, 'font-size': 13, 'font-weight': 600, 'dominant-baseline': 'middle', text: Clip(ShortLabel(n), 26) }, body);
       const baseSub = n.model ? `${FLOW_LABEL[n.type]} · ${n.model}` : FLOW_LABEL[n.type];
       const sub = isContainer && isCollapsed ? `${FLOW_LABEL[n.type]} · ${this.descendantCount(n)} hidden` : baseSub;
-      svgEl('text', { x: x + 46, y: y + 41, 'font-size': 10.5, class: 'ftxt-muted', text: clip(sub, 32) }, body);
+      SvgEl('text', { x: x + 46, y: y + 41, 'font-size': 10.5, class: 'ftxt-muted', text: Clip(sub, 32) }, body);
       if (n.realDur) {
-        svgEl('text', { x: x + this.NODE_W - 14, y: y + this.NODE_H / 2, 'font-size': 11, 'font-weight': 600, 'text-anchor': 'end', 'dominant-baseline': 'middle', class: 'ftxt-secondary', text: formatDuration(n.realDur) }, body);
+        SvgEl('text', { x: x + this.NODE_W - 14, y: y + this.NODE_H / 2, 'font-size': 11, 'font-weight': 600, 'text-anchor': 'end', 'dominant-baseline': 'middle', class: 'ftxt-secondary', text: FormatDuration(n.realDur) }, body);
       }
       body.addEventListener('mouseup', () => { if (!this.moved) { this.suppressBg = true; this.onNodeClick(n); } });
 
       // collapse / expand disclosure — in the LEFT gutter, tree convention
       if (isContainer) {
         const gx = x - 15, gy = y + this.NODE_H / 2;
-        const tg = svgEl('g', {}, grp);
+        const tg = SvgEl('g', {}, grp);
         (tg as SVGElement & { style: CSSStyleDeclaration }).style.cursor = 'pointer';
-        svgEl('circle', { cx: gx, cy: gy, r: 9, fill: 'transparent' }, tg); // hit target
+        SvgEl('circle', { cx: gx, cy: gy, r: 9, fill: 'transparent' }, tg); // hit target
         const tri = isCollapsed
           ? `M${gx - 3},${gy - 5} L${gx + 4},${gy} L${gx - 3},${gy + 5} Z`
           : `M${gx - 5},${gy - 3} L${gx + 5},${gy - 3} L${gx},${gy + 4} Z`;
-        svgEl('path', { d: tri, fill: col }, tg);
+        SvgEl('path', { d: tri, fill: col }, tg);
         tg.addEventListener('mouseup', () => { if (!this.moved) { this.suppressBg = true; this.toggleCollapse(n); } });
       }
 
@@ -208,7 +226,12 @@ export class FlowchartComponent implements OnDestroy {
 
   public zoomIn(): void { const svg = this.svgRef.nativeElement; this.zoomAt(svg.clientWidth / 2, svg.clientHeight / 2, 1.2); }
   public zoomOut(): void { const svg = this.svgRef.nativeElement; this.zoomAt(svg.clientWidth / 2, svg.clientHeight / 2, 1 / 1.2); }
-  public resetView(): void { this.fitToView(); }
+  public ResetView(): void { this.fitToView(); }
+
+  /** @deprecated Use {@link ResetView}. */
+  public resetView(): void {
+    return this.ResetView();
+  }
 
   // unified interface used by the container's shared zoom toolbar
   public ZoomIn(): void { this.zoomIn(); }
@@ -221,13 +244,13 @@ export class FlowchartComponent implements OnDestroy {
     if (this.selectedId === n.id) { this.deselect(); return; }
     this.selectedId = n.id;
     this.paintSelection();
-    this.nodeSelected.emit(n);
+    this.NodeSelected.emit(n);
   }
   private deselect(): void {
     if (this.selectedId === -1) return;
     this.selectedId = -1;
     this.paintSelection();
-    this.selectionCleared.emit();
+    this.SelectionCleared.emit();
   }
 
   /** External deselect (e.g. detail panel closed) — clears highlight without re-emitting. */

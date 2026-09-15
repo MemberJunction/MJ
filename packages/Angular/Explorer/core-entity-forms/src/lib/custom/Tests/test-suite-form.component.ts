@@ -36,89 +36,499 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
   private destroy$ = new Subject<void>();
 
   // UI state
-  activeTab = 'overview';
-  loading = false;
-  loadingTests = false;
-  loadingRuns = false;
-  loadingAnalytics = false;
-  loadingCompare = false;
-  testsLoaded = false;
-  runsLoaded = false;
-  analyticsLoaded = false;
+  ActiveTab = 'overview';
+
+  /** @deprecated Use {@link ActiveTab}. */
+  get activeTab() {
+    return this.ActiveTab;
+  }
+  /** @deprecated Use {@link ActiveTab}. */
+  set activeTab(value) {
+    this.ActiveTab = value;
+  }
+  Loading = false;
+
+  /** @deprecated Use {@link Loading}. */
+  get loading() {
+    return this.Loading;
+  }
+  /** @deprecated Use {@link Loading}. */
+  set loading(value) {
+    this.Loading = value;
+  }
+  LoadingTests = false;
+
+  /** @deprecated Use {@link LoadingTests}. */
+  get loadingTests() {
+    return this.LoadingTests;
+  }
+  /** @deprecated Use {@link LoadingTests}. */
+  set loadingTests(value) {
+    this.LoadingTests = value;
+  }
+  LoadingRuns = false;
+
+  /** @deprecated Use {@link LoadingRuns}. */
+  get loadingRuns() {
+    return this.LoadingRuns;
+  }
+  /** @deprecated Use {@link LoadingRuns}. */
+  set loadingRuns(value) {
+    this.LoadingRuns = value;
+  }
+  LoadingAnalytics = false;
+
+  /** @deprecated Use {@link LoadingAnalytics}. */
+  get loadingAnalytics() {
+    return this.LoadingAnalytics;
+  }
+  /** @deprecated Use {@link LoadingAnalytics}. */
+  set loadingAnalytics(value) {
+    this.LoadingAnalytics = value;
+  }
+  LoadingCompare = false;
+
+  /** @deprecated Use {@link LoadingCompare}. */
+  get loadingCompare() {
+    return this.LoadingCompare;
+  }
+  /** @deprecated Use {@link LoadingCompare}. */
+  set loadingCompare(value) {
+    this.LoadingCompare = value;
+  }
+  TestsLoaded = false;
+
+  /** @deprecated Use {@link TestsLoaded}. */
+  get testsLoaded() {
+    return this.TestsLoaded;
+  }
+  /** @deprecated Use {@link TestsLoaded}. */
+  set testsLoaded(value) {
+    this.TestsLoaded = value;
+  }
+  RunsLoaded = false;
+
+  /** @deprecated Use {@link RunsLoaded}. */
+  get runsLoaded() {
+    return this.RunsLoaded;
+  }
+  /** @deprecated Use {@link RunsLoaded}. */
+  set runsLoaded(value) {
+    this.RunsLoaded = value;
+  }
+  AnalyticsLoaded = false;
+
+  /** @deprecated Use {@link AnalyticsLoaded}. */
+  get analyticsLoaded() {
+    return this.AnalyticsLoaded;
+  }
+  /** @deprecated Use {@link AnalyticsLoaded}. */
+  set analyticsLoaded(value) {
+    this.AnalyticsLoaded = value;
+  }
   isRefreshing = false;
   error: string | null = null;
 
   // Related data
-  suiteTests: MJTestSuiteTestEntity[] = [];
-  suiteRuns: MJTestSuiteRunEntity[] = [];
+  SuiteTests: MJTestSuiteTestEntity[] = [];
+
+  /** @deprecated Use {@link SuiteTests}. */
+  get suiteTests(): MJTestSuiteTestEntity[] {
+    return this.SuiteTests;
+  }
+  /** @deprecated Use {@link SuiteTests}. */
+  set suiteTests(value: MJTestSuiteTestEntity[]) {
+    this.SuiteTests = value;
+  }
+  SuiteRuns: MJTestSuiteRunEntity[] = [];
+
+  /** @deprecated Use {@link SuiteRuns}. */
+  get suiteRuns(): MJTestSuiteRunEntity[] {
+    return this.SuiteRuns;
+  }
+  /** @deprecated Use {@link SuiteRuns}. */
+  set suiteRuns(value: MJTestSuiteRunEntity[]) {
+    this.SuiteRuns = value;
+  }
 
   // Analytics data
-  analyticsData: AnalyticsDataPoint[] = [];
-  uniqueTags: string[] = [];
-  selectedTags: string[] = [];  // Multi-select: empty array means "All Tags"
-  analyticsTimeRange: '7d' | '30d' | '90d' | 'all' = '30d';
-  analyticsView: 'summary' | 'matrix' | 'chart' = 'summary';
-  matrixData: MatrixDataPoint[] = [];
-  loadingMatrix = false;
-  matrixLoaded = false;
+  AnalyticsData: AnalyticsDataPoint[] = [];
+
+  /** @deprecated Use {@link AnalyticsData}. */
+  get analyticsData(): AnalyticsDataPoint[] {
+    return this.AnalyticsData;
+  }
+  /** @deprecated Use {@link AnalyticsData}. */
+  set analyticsData(value: AnalyticsDataPoint[]) {
+    this.AnalyticsData = value;
+  }
+  UniqueTags: string[] = [];
+
+  /** @deprecated Use {@link UniqueTags}. */
+  get uniqueTags(): string[] {
+    return this.UniqueTags;
+  }
+  /** @deprecated Use {@link UniqueTags}. */
+  set uniqueTags(value: string[]) {
+    this.UniqueTags = value;
+  }
+  SelectedTags: string[] = [];
+
+  /** @deprecated Use {@link SelectedTags}. */
+  get selectedTags(): string[] {
+    return this.SelectedTags;
+  }
+  /** @deprecated Use {@link SelectedTags}. */
+  set selectedTags(value: string[]) {
+    this.SelectedTags = value;
+  }  // Multi-select: empty array means "All Tags"
+  AnalyticsTimeRange: '7d' | '30d' | '90d' | 'all' = '30d';
+
+  /** @deprecated Use {@link AnalyticsTimeRange}. */
+  get analyticsTimeRange(): '7d' | '30d' | '90d' | 'all' {
+    return this.AnalyticsTimeRange;
+  }
+  /** @deprecated Use {@link AnalyticsTimeRange}. */
+  set analyticsTimeRange(value: '7d' | '30d' | '90d' | 'all') {
+    this.AnalyticsTimeRange = value;
+  }
+  AnalyticsView: 'summary' | 'matrix' | 'chart' = 'summary';
+
+  /** @deprecated Use {@link AnalyticsView}. */
+  get analyticsView(): 'summary' | 'matrix' | 'chart' {
+    return this.AnalyticsView;
+  }
+  /** @deprecated Use {@link AnalyticsView}. */
+  set analyticsView(value: 'summary' | 'matrix' | 'chart') {
+    this.AnalyticsView = value;
+  }
+  MatrixData: MatrixDataPoint[] = [];
+
+  /** @deprecated Use {@link MatrixData}. */
+  get matrixData(): MatrixDataPoint[] {
+    return this.MatrixData;
+  }
+  /** @deprecated Use {@link MatrixData}. */
+  set matrixData(value: MatrixDataPoint[]) {
+    this.MatrixData = value;
+  }
+  LoadingMatrix = false;
+
+  /** @deprecated Use {@link LoadingMatrix}. */
+  get loadingMatrix() {
+    return this.LoadingMatrix;
+  }
+  /** @deprecated Use {@link LoadingMatrix}. */
+  set loadingMatrix(value) {
+    this.LoadingMatrix = value;
+  }
+  MatrixLoaded = false;
+
+  /** @deprecated Use {@link MatrixLoaded}. */
+  get matrixLoaded() {
+    return this.MatrixLoaded;
+  }
+  /** @deprecated Use {@link MatrixLoaded}. */
+  set matrixLoaded(value) {
+    this.MatrixLoaded = value;
+  }
 
   // Chart
   @ViewChild('chartContainer') chartContainer!: ElementRef<HTMLDivElement>;
   private chartRendered = false;
 
   // Compare data
-  compareRunA: MJTestSuiteRunEntity | null = null;
-  compareRunB: MJTestSuiteRunEntity | null = null;
-  compareResults: TestRunComparison[] = [];
-  compareRunATests: MJTestRunEntity[] = [];
-  compareRunBTests: MJTestRunEntity[] = [];
+  CompareRunA: MJTestSuiteRunEntity | null = null;
+
+  /** @deprecated Use {@link CompareRunA}. */
+  get compareRunA(): MJTestSuiteRunEntity | null {
+    return this.CompareRunA;
+  }
+  /** @deprecated Use {@link CompareRunA}. */
+  set compareRunA(value: MJTestSuiteRunEntity | null) {
+    this.CompareRunA = value;
+  }
+  CompareRunB: MJTestSuiteRunEntity | null = null;
+
+  /** @deprecated Use {@link CompareRunB}. */
+  get compareRunB(): MJTestSuiteRunEntity | null {
+    return this.CompareRunB;
+  }
+  /** @deprecated Use {@link CompareRunB}. */
+  set compareRunB(value: MJTestSuiteRunEntity | null) {
+    this.CompareRunB = value;
+  }
+  CompareResults: TestRunComparison[] = [];
+
+  /** @deprecated Use {@link CompareResults}. */
+  get compareResults(): TestRunComparison[] {
+    return this.CompareResults;
+  }
+  /** @deprecated Use {@link CompareResults}. */
+  set compareResults(value: TestRunComparison[]) {
+    this.CompareResults = value;
+  }
+  CompareRunATests: MJTestRunEntity[] = [];
+
+  /** @deprecated Use {@link CompareRunATests}. */
+  get compareRunATests(): MJTestRunEntity[] {
+    return this.CompareRunATests;
+  }
+  /** @deprecated Use {@link CompareRunATests}. */
+  set compareRunATests(value: MJTestRunEntity[]) {
+    this.CompareRunATests = value;
+  }
+  CompareRunBTests: MJTestRunEntity[] = [];
+
+  /** @deprecated Use {@link CompareRunBTests}. */
+  get compareRunBTests(): MJTestRunEntity[] {
+    return this.CompareRunBTests;
+  }
+  /** @deprecated Use {@link CompareRunBTests}. */
+  set compareRunBTests(value: MJTestRunEntity[]) {
+    this.CompareRunBTests = value;
+  }
 
   // Keyboard shortcuts
-  keyboardShortcutsEnabled = true;
-  showShortcuts = false; // Hidden by default
+  KeyboardShortcutsEnabled = true;
+
+  /** @deprecated Use {@link KeyboardShortcutsEnabled}. */
+  get keyboardShortcutsEnabled() {
+    return this.KeyboardShortcutsEnabled;
+  }
+  /** @deprecated Use {@link KeyboardShortcutsEnabled}. */
+  set keyboardShortcutsEnabled(value) {
+    this.KeyboardShortcutsEnabled = value;
+  }
+  ShowShortcuts = false;
+
+  /** @deprecated Use {@link ShowShortcuts}. */
+  get showShortcuts() {
+    return this.ShowShortcuts;
+  }
+  /** @deprecated Use {@link ShowShortcuts}. */
+  set showShortcuts(value) {
+    this.ShowShortcuts = value;
+  } // Hidden by default
   private shortcutsSettingEntity: MJUserSettingEntity | null = null;
   private get metadata() { return this.ProviderToUse; }
   // Evaluation preferences
-  evalPreferences: EvaluationPreferences = { showExecution: true, showHuman: true, showAuto: false };
+  EvalPreferences: EvaluationPreferences = { showExecution: true, showHuman: true, showAuto: false };
+
+  /** @deprecated Use {@link EvalPreferences}. */
+  get evalPreferences(): EvaluationPreferences {
+    return this.EvalPreferences;
+  }
+  /** @deprecated Use {@link EvalPreferences}. */
+  set evalPreferences(value: EvaluationPreferences) {
+    this.EvalPreferences = value;
+  }
 
   // Filter collapse state
-  filtersCollapsed = false;
+  FiltersCollapsed = false;
+
+  /** @deprecated Use {@link FiltersCollapsed}. */
+  get filtersCollapsed() {
+    return this.FiltersCollapsed;
+  }
+  /** @deprecated Use {@link FiltersCollapsed}. */
+  set filtersCollapsed(value) {
+    this.FiltersCollapsed = value;
+  }
 
   // Matrix sorting
-  matrixSortBy: 'sequence' | 'name' = 'sequence';
-  matrixSortAsc = true;
+  MatrixSortBy: 'sequence' | 'name' = 'sequence';
+
+  /** @deprecated Use {@link MatrixSortBy}. */
+  get matrixSortBy(): 'sequence' | 'name' {
+    return this.MatrixSortBy;
+  }
+  /** @deprecated Use {@link MatrixSortBy}. */
+  set matrixSortBy(value: 'sequence' | 'name') {
+    this.MatrixSortBy = value;
+  }
+  MatrixSortAsc = true;
+
+  /** @deprecated Use {@link MatrixSortAsc}. */
+  get matrixSortAsc() {
+    return this.MatrixSortAsc;
+  }
+  /** @deprecated Use {@link MatrixSortAsc}. */
+  set matrixSortAsc(value) {
+    this.MatrixSortAsc = value;
+  }
 
   // Matrix row selection
-  selectedMatrixTestId: string | null = null;
+  SelectedMatrixTestId: string | null = null;
+
+  /** @deprecated Use {@link SelectedMatrixTestId}. */
+  get selectedMatrixTestId(): string | null {
+    return this.SelectedMatrixTestId;
+  }
+  /** @deprecated Use {@link SelectedMatrixTestId}. */
+  set selectedMatrixTestId(value: string | null) {
+    this.SelectedMatrixTestId = value;
+  }
 
   // Matrix test name filter
-  matrixTestFilter = '';
+  MatrixTestFilter = '';
+
+  /** @deprecated Use {@link MatrixTestFilter}. */
+  get matrixTestFilter() {
+    return this.MatrixTestFilter;
+  }
+  /** @deprecated Use {@link MatrixTestFilter}. */
+  set matrixTestFilter(value) {
+    this.MatrixTestFilter = value;
+  }
   private matrixFilterSubject$ = new Subject<string>();
 
   // Edit state
-  isSaving = false;
-  parentSuiteOptions: MJTestSuiteEntity[] = [];
-  tagDraft = '';
-  readonly statusOptions: readonly string[] = ['Active', 'Pending', 'Disabled'];
+  IsSaving = false;
+
+  /** @deprecated Use {@link IsSaving}. */
+  get isSaving() {
+    return this.IsSaving;
+  }
+  /** @deprecated Use {@link IsSaving}. */
+  set isSaving(value) {
+    this.IsSaving = value;
+  }
+  ParentSuiteOptions: MJTestSuiteEntity[] = [];
+
+  /** @deprecated Use {@link ParentSuiteOptions}. */
+  get parentSuiteOptions(): MJTestSuiteEntity[] {
+    return this.ParentSuiteOptions;
+  }
+  /** @deprecated Use {@link ParentSuiteOptions}. */
+  set parentSuiteOptions(value: MJTestSuiteEntity[]) {
+    this.ParentSuiteOptions = value;
+  }
+  TagDraft = '';
+
+  /** @deprecated Use {@link TagDraft}. */
+  get tagDraft() {
+    return this.TagDraft;
+  }
+  /** @deprecated Use {@link TagDraft}. */
+  set tagDraft(value) {
+    this.TagDraft = value;
+  }
+  readonly StatusOptions: readonly string[] = ['Active', 'Pending', 'Disabled'];
+
+  /** @deprecated Use {@link StatusOptions}. */
+  get statusOptions(): readonly string[] {
+    return this.StatusOptions;
+  }
 
   // Add Tests picker state
-  showAddTestsDialog = false;
-  availableTests: MJTestEntity[] = [];
-  loadingAvailableTests = false;
-  selectedTestIdsToAdd = new Set<string>();
-  addTestsSearch = '';
-  isAddingTests = false;
+  ShowAddTestsDialog = false;
+
+  /** @deprecated Use {@link ShowAddTestsDialog}. */
+  get showAddTestsDialog() {
+    return this.ShowAddTestsDialog;
+  }
+  /** @deprecated Use {@link ShowAddTestsDialog}. */
+  set showAddTestsDialog(value) {
+    this.ShowAddTestsDialog = value;
+  }
+  AvailableTests: MJTestEntity[] = [];
+
+  /** @deprecated Use {@link AvailableTests}. */
+  get availableTests(): MJTestEntity[] {
+    return this.AvailableTests;
+  }
+  /** @deprecated Use {@link AvailableTests}. */
+  set availableTests(value: MJTestEntity[]) {
+    this.AvailableTests = value;
+  }
+  LoadingAvailableTests = false;
+
+  /** @deprecated Use {@link LoadingAvailableTests}. */
+  get loadingAvailableTests() {
+    return this.LoadingAvailableTests;
+  }
+  /** @deprecated Use {@link LoadingAvailableTests}. */
+  set loadingAvailableTests(value) {
+    this.LoadingAvailableTests = value;
+  }
+  SelectedTestIdsToAdd = new Set<string>();
+
+  /** @deprecated Use {@link SelectedTestIdsToAdd}. */
+  get selectedTestIdsToAdd() {
+    return this.SelectedTestIdsToAdd;
+  }
+  /** @deprecated Use {@link SelectedTestIdsToAdd}. */
+  set selectedTestIdsToAdd(value) {
+    this.SelectedTestIdsToAdd = value;
+  }
+  AddTestsSearch = '';
+
+  /** @deprecated Use {@link AddTestsSearch}. */
+  get addTestsSearch() {
+    return this.AddTestsSearch;
+  }
+  /** @deprecated Use {@link AddTestsSearch}. */
+  set addTestsSearch(value) {
+    this.AddTestsSearch = value;
+  }
+  IsAddingTests = false;
+
+  /** @deprecated Use {@link IsAddingTests}. */
+  get isAddingTests() {
+    return this.IsAddingTests;
+  }
+  /** @deprecated Use {@link IsAddingTests}. */
+  set isAddingTests(value) {
+    this.IsAddingTests = value;
+  }
 
   // Remove-confirm state (per-row inline confirm)
-  confirmingRemoveSuiteTestId: string | null = null;
-  isRemovingTest = false;
+  ConfirmingRemoveSuiteTestId: string | null = null;
+
+  /** @deprecated Use {@link ConfirmingRemoveSuiteTestId}. */
+  get confirmingRemoveSuiteTestId(): string | null {
+    return this.ConfirmingRemoveSuiteTestId;
+  }
+  /** @deprecated Use {@link ConfirmingRemoveSuiteTestId}. */
+  set confirmingRemoveSuiteTestId(value: string | null) {
+    this.ConfirmingRemoveSuiteTestId = value;
+  }
+  IsRemovingTest = false;
+
+  /** @deprecated Use {@link IsRemovingTest}. */
+  get isRemovingTest() {
+    return this.IsRemovingTest;
+  }
+  /** @deprecated Use {@link IsRemovingTest}. */
+  set isRemovingTest(value) {
+    this.IsRemovingTest = value;
+  }
 
   // Reorder state
-  isReorderingTests = false;
+  IsReorderingTests = false;
+
+  /** @deprecated Use {@link IsReorderingTests}. */
+  get isReorderingTests() {
+    return this.IsReorderingTests;
+  }
+  /** @deprecated Use {@link IsReorderingTests}. */
+  set isReorderingTests(value) {
+    this.IsReorderingTests = value;
+  }
 
   // Service injections
   private navigationService = inject(NavigationService);
-  public testingDialogService = inject(TestingDialogService);
+  public TestingDialogService = inject(TestingDialogService);
+
+  /** @deprecated Use {@link TestingDialogService}. */
+  public get testingDialogService() {
+    return this.TestingDialogService;
+  }
+  /** @deprecated Use {@link TestingDialogService}. */
+  public set testingDialogService(value) {
+    this.TestingDialogService = value;
+  }
   private evalPrefsService = inject(EvaluationPreferencesService);
   private viewContainerRef = inject(ViewContainerRef);
   private appManager = inject(ApplicationManager);
@@ -134,10 +544,10 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
     this.evalPrefsService.preferences$
       .pipe(takeUntil(this.destroy$))
       .subscribe(prefs => {
-        this.evalPreferences = prefs;
+        this.EvalPreferences = prefs;
         this.cdr.markForCheck();
         // Re-render chart when preferences change (D3 chart needs manual update)
-        if (this.chartRendered && this.analyticsView === 'chart') {
+        if (this.chartRendered && this.AnalyticsView === 'chart') {
           this.renderChart();
         }
       });
@@ -150,12 +560,12 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
         takeUntil(this.destroy$)
       )
       .subscribe(value => {
-        this.matrixTestFilter = value;
+        this.MatrixTestFilter = value;
         this.cdr.markForCheck();
       });
 
     // Subscribe to panel state changes so the slide panel renders in this form
-    this.testingDialogService.PanelStateChanged$
+    this.TestingDialogService.PanelStateChanged$
       .pipe(takeUntil(this.destroy$))
       .subscribe(() => {
         this.cdr.detectChanges();
@@ -174,13 +584,13 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
   // Keyboard shortcuts
   @HostListener('document:keydown', ['$event'])
   handleKeyboardShortcut(event: KeyboardEvent) {
-    if (!this.keyboardShortcutsEnabled) return;
+    if (!this.KeyboardShortcutsEnabled) return;
 
     // Cmd/Ctrl + S: Save (if dirty)
     if ((event.metaKey || event.ctrlKey) && event.key === 's' && !event.shiftKey) {
-      if (this.isDirty) {
+      if (this.IsDirty) {
         event.preventDefault();
-        this.saveChanges();
+        this.SaveChanges();
       }
       return;
     }
@@ -188,25 +598,25 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
     // Cmd/Ctrl + R: Refresh
     if ((event.metaKey || event.ctrlKey) && event.key === 'r' && !event.shiftKey) {
       event.preventDefault();
-      this.refresh();
+      this.Refresh();
       return;
     }
 
     // Cmd/Ctrl + Enter: Run suite
     if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
       event.preventDefault();
-      this.runSuite();
+      this.RunSuite();
       return;
     }
 
     // Number keys for tabs (1-5) — skip when typing into form inputs
     if (!event.metaKey && !event.ctrlKey && !event.altKey && !this.isTextInputFocused()) {
       switch (event.key) {
-        case '1': this.changeTab('overview'); break;
-        case '2': this.changeTab('tests'); break;
-        case '3': this.changeTab('runs'); break;
-        case '4': this.changeTab('analytics'); break;
-        case '5': this.changeTab('compare'); break;
+        case '1': this.ChangeTab('overview'); break;
+        case '2': this.ChangeTab('tests'); break;
+        case '3': this.ChangeTab('runs'); break;
+        case '4': this.ChangeTab('analytics'); break;
+        case '5': this.ChangeTab('compare'); break;
       }
     }
   }
@@ -214,7 +624,7 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
   // Warn before tab close / hard navigation when there are unsaved changes
   @HostListener('window:beforeunload', ['$event'])
   handleBeforeUnload(event: BeforeUnloadEvent) {
-    if (this.isDirty) {
+    if (this.IsDirty) {
       event.preventDefault();
       event.returnValue = '';
     }
@@ -227,18 +637,23 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
     return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (el as HTMLElement).isContentEditable;
   }
 
-  changeTab(tab: string) {
-    this.activeTab = tab;
-    if (tab === 'tests' && !this.testsLoaded) this.loadTests();
-    if (tab === 'runs' && !this.runsLoaded) this.loadRuns();
-    if (tab === 'analytics' && !this.analyticsLoaded) this.loadAnalytics();
+  ChangeTab(tab: string) {
+    this.ActiveTab = tab;
+    if (tab === 'tests' && !this.TestsLoaded) this.loadTests();
+    if (tab === 'runs' && !this.RunsLoaded) this.loadRuns();
+    if (tab === 'analytics' && !this.AnalyticsLoaded) this.loadAnalytics();
     this.cdr.markForCheck();
   }
 
-  private async loadTests() {
-    if (this.testsLoaded) return;
+  /** @deprecated Use {@link ChangeTab}. */
+  changeTab(tab: string) {
+    return this.ChangeTab(tab);
+  }
 
-    this.loadingTests = true;
+  private async loadTests() {
+    if (this.TestsLoaded) return;
+
+    this.LoadingTests = true;
     this.cdr.markForCheck();
 
     try {
@@ -249,21 +664,21 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
         OrderBy: 'Sequence',
         ResultType: 'entity_object'
       });
-      if (result.Success) this.suiteTests = result.Results || [];
-      this.testsLoaded = true;
+      if (result.Success) this.SuiteTests = result.Results || [];
+      this.TestsLoaded = true;
     } catch (error) {
       console.error('Error loading tests:', error);
       SharedService.Instance.CreateSimpleNotification('Failed to load tests', 'error', 3000);
     } finally {
-      this.loadingTests = false;
+      this.LoadingTests = false;
       this.cdr.markForCheck();
     }
   }
 
   private async loadRuns() {
-    if (this.runsLoaded) return;
+    if (this.RunsLoaded) return;
 
-    this.loadingRuns = true;
+    this.LoadingRuns = true;
     this.cdr.markForCheck();
 
     try {
@@ -275,18 +690,18 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
         MaxRows: 50,
         ResultType: 'entity_object'
       });
-      if (result.Success) this.suiteRuns = result.Results || [];
-      this.runsLoaded = true;
+      if (result.Success) this.SuiteRuns = result.Results || [];
+      this.RunsLoaded = true;
     } catch (error) {
       console.error('Error loading runs:', error);
       SharedService.Instance.CreateSimpleNotification('Failed to load runs', 'error', 3000);
     } finally {
-      this.loadingRuns = false;
+      this.LoadingRuns = false;
       this.cdr.markForCheck();
     }
   }
 
-  getStatusColor(): string {
+  GetStatusColor(): string {
     switch (this.record.Status) {
       case 'Active': return '#10b981';
       case 'Disabled': return '#6b7280';
@@ -295,11 +710,21 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
     }
   }
 
-  getStatusClass(): string {
+  /** @deprecated Use {@link GetStatusColor}. */
+  getStatusColor(): string {
+    return this.GetStatusColor();
+  }
+
+  GetStatusClass(): string {
     return `status-${this.record.Status?.toLowerCase() || 'unknown'}`;
   }
 
-  getRunStatusColor(status: string): string {
+  /** @deprecated Use {@link GetStatusClass}. */
+  getStatusClass(): string {
+    return this.GetStatusClass();
+  }
+
+  GetRunStatusColor(status: string): string {
     switch (status) {
       case 'Completed': return '#10b981';
       case 'Failed': return '#ef4444';
@@ -310,7 +735,12 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
     }
   }
 
-  formatTimeout(ms: number | null): string {
+  /** @deprecated Use {@link GetRunStatusColor}. */
+  getRunStatusColor(status: string): string {
+    return this.GetRunStatusColor(status);
+  }
+
+  FormatTimeout(ms: number | null): string {
     if (ms === null || ms === undefined) return 'Default (5 min)';
     if (ms < 1000) return `${ms}ms`;
     if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
@@ -324,7 +754,12 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
     return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
   }
 
-  getRelativeTime(date: Date | string | null): string {
+  /** @deprecated Use {@link FormatTimeout}. */
+  formatTimeout(ms: number | null): string {
+    return this.FormatTimeout(ms);
+  }
+
+  GetRelativeTime(date: Date | string | null): string {
     if (!date) return 'N/A';
     const d = new Date(date);
     const now = new Date();
@@ -340,40 +775,70 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
     return d.toLocaleDateString();
   }
 
-  getPassRate(run: MJTestSuiteRunEntity): number {
+  /** @deprecated Use {@link GetRelativeTime}. */
+  getRelativeTime(date: Date | string | null): string {
+    return this.GetRelativeTime(date);
+  }
+
+  GetPassRate(run: MJTestSuiteRunEntity): number {
     const total = run.TotalTests || 0;
     const passed = run.PassedTests || 0;
     if (total === 0) return 0;
     return (passed / total) * 100;
   }
 
-  openTest(testId: string) {
+  /** @deprecated Use {@link GetPassRate}. */
+  getPassRate(run: MJTestSuiteRunEntity): number {
+    return this.GetPassRate(run);
+  }
+
+  OpenTest(testId: string) {
     SharedService.Instance.OpenEntityRecord('MJ: Tests', CompositeKey.FromID(testId));
   }
 
-  openSuiteRun(runId: string) {
+  /** @deprecated Use {@link OpenTest}. */
+  openTest(testId: string) {
+    return this.OpenTest(testId);
+  }
+
+  OpenSuiteRun(runId: string) {
     SharedService.Instance.OpenEntityRecord('MJ: Test Suite Runs', CompositeKey.FromID(runId));
   }
 
-  navigateToTestingDashboard(): void {
+  /** @deprecated Use {@link OpenSuiteRun}. */
+  openSuiteRun(runId: string) {
+    return this.OpenSuiteRun(runId);
+  }
+
+  NavigateToTestingDashboard(): void {
     const testingApp = this.appManager.GetAppByName('Testing');
     if (testingApp) {
       this.navigationService.SwitchToApp(testingApp.ID);
     }
   }
 
-  async runSuite() {
+  /** @deprecated Use {@link NavigateToTestingDashboard}. */
+  navigateToTestingDashboard(): void {
+    return this.NavigateToTestingDashboard();
+  }
+
+  async RunSuite() {
     if (this.record?.ID) {
-      this.testingDialogService.OpenSuitePanel(this.record.ID);
+      this.TestingDialogService.OpenSuitePanel(this.record.ID);
     }
   }
 
+  /** @deprecated Use {@link RunSuite}. */
+  async runSuite() {
+    return this.RunSuite();
+  }
+
   OnPanelClosed(): void {
-    this.testingDialogService.ClosePanel();
+    this.TestingDialogService.ClosePanel();
     this.cdr.markForCheck();
   }
 
-  async refresh() {
+  async Refresh() {
     this.isRefreshing = true;
     this.cdr.markForCheck();
 
@@ -381,25 +846,25 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
       await this.record.Load(this.record.ID);
 
       // Reset lazy-loaded data
-      if (this.testsLoaded) {
-        this.testsLoaded = false;
-        this.suiteTests = [];
+      if (this.TestsLoaded) {
+        this.TestsLoaded = false;
+        this.SuiteTests = [];
         await this.loadTests();
       }
-      if (this.runsLoaded) {
-        this.runsLoaded = false;
-        this.suiteRuns = [];
+      if (this.RunsLoaded) {
+        this.RunsLoaded = false;
+        this.SuiteRuns = [];
         await this.loadRuns();
       }
-      if (this.analyticsLoaded) {
-        this.analyticsLoaded = false;
-        this.analyticsData = [];
+      if (this.AnalyticsLoaded) {
+        this.AnalyticsLoaded = false;
+        this.AnalyticsData = [];
         // Also reset matrix data so it reloads with fresh data
-        this.matrixLoaded = false;
-        this.matrixData = [];
+        this.MatrixLoaded = false;
+        this.MatrixData = [];
         await this.loadAnalytics();
         // Reload matrix if currently viewing matrix or chart view
-        if (this.analyticsView === 'matrix' || this.analyticsView === 'chart') {
+        if (this.AnalyticsView === 'matrix' || this.AnalyticsView === 'chart') {
           await this.loadMatrixData();
         }
       }
@@ -413,14 +878,19 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
     }
   }
 
+  /** @deprecated Use {@link Refresh}. */
+  async refresh() {
+    return this.Refresh();
+  }
+
   // ==========================================
   // Analytics Tab Methods
   // ==========================================
 
   private async loadAnalytics() {
-    if (this.analyticsLoaded) return;
+    if (this.AnalyticsLoaded) return;
 
-    this.loadingAnalytics = true;
+    this.LoadingAnalytics = true;
     this.cdr.markForCheck();
 
     try {
@@ -436,24 +906,24 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
 
       if (result.Success && result.Results) {
         // Process runs into analytics data points
-        this.analyticsData = result.Results.map(run => this.runToDataPoint(run));
+        this.AnalyticsData = result.Results.map(run => this.runToDataPoint(run));
 
         // Extract unique tags
-        this.uniqueTags = TagsHelper.getUniqueTags(result.Results.map(r => r.Tags));
+        this.UniqueTags = TagsHelper.getUniqueTags(result.Results.map(r => r.Tags));
 
         // Also populate suiteRuns if not already loaded
-        if (!this.runsLoaded) {
-          this.suiteRuns = result.Results.slice(0, 50);
-          this.runsLoaded = true;
+        if (!this.RunsLoaded) {
+          this.SuiteRuns = result.Results.slice(0, 50);
+          this.RunsLoaded = true;
         }
       }
 
-      this.analyticsLoaded = true;
+      this.AnalyticsLoaded = true;
     } catch (error) {
       console.error('Error loading analytics:', error);
       SharedService.Instance.CreateSimpleNotification('Failed to load analytics data', 'error', 3000);
     } finally {
-      this.loadingAnalytics = false;
+      this.LoadingAnalytics = false;
       this.cdr.markForCheck();
     }
   }
@@ -477,14 +947,14 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
     };
   }
 
-  getFilteredAnalyticsData(): AnalyticsDataPoint[] {
-    let data = this.analyticsData;
+  GetFilteredAnalyticsData(): AnalyticsDataPoint[] {
+    let data = this.AnalyticsData;
 
     // Apply time range filter
     const now = new Date();
     let cutoffDate: Date | null = null;
 
-    switch (this.analyticsTimeRange) {
+    switch (this.AnalyticsTimeRange) {
       case '7d':
         cutoffDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
         break;
@@ -501,81 +971,106 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
     }
 
     // Apply tag filter (multi-select: empty array means all tags)
-    if (this.selectedTags.length > 0) {
-      data = data.filter(d => this.selectedTags.some(tag => d.tags.includes(tag)));
+    if (this.SelectedTags.length > 0) {
+      data = data.filter(d => this.SelectedTags.some(tag => d.tags.includes(tag)));
     }
 
     return data;
   }
 
-  setTimeRange(range: '7d' | '30d' | '90d' | 'all') {
-    this.analyticsTimeRange = range;
+  /** @deprecated Use {@link GetFilteredAnalyticsData}. */
+  getFilteredAnalyticsData(): AnalyticsDataPoint[] {
+    return this.GetFilteredAnalyticsData();
+  }
+
+  SetTimeRange(range: '7d' | '30d' | '90d' | 'all') {
+    this.AnalyticsTimeRange = range;
     // Reload matrix data when time range changes (if currently viewing matrix or chart)
-    if (this.analyticsView === 'matrix' || this.analyticsView === 'chart') {
+    if (this.AnalyticsView === 'matrix' || this.AnalyticsView === 'chart') {
       this.reloadMatrixData();
     }
     this.cdr.markForCheck();
+  }
+
+  /** @deprecated Use {@link SetTimeRange}. */
+  setTimeRange(range: '7d' | '30d' | '90d' | 'all') {
+    return this.SetTimeRange(range);
   }
 
   /**
    * Toggle a tag in the multi-select filter.
    * If tag is null, clear all selections (show all tags).
    */
-  toggleTagFilter(tag: string | null) {
+  ToggleTagFilter(tag: string | null) {
     if (tag === null) {
       // Clear all - show all tags
-      this.selectedTags = [];
+      this.SelectedTags = [];
     } else {
       // Toggle the tag
-      const index = this.selectedTags.indexOf(tag);
+      const index = this.SelectedTags.indexOf(tag);
       if (index >= 0) {
-        this.selectedTags = this.selectedTags.filter(t => t !== tag);
+        this.SelectedTags = this.SelectedTags.filter(t => t !== tag);
       } else {
-        this.selectedTags = [...this.selectedTags, tag];
+        this.SelectedTags = [...this.SelectedTags, tag];
       }
     }
     // Reload matrix data when tag filter changes (if currently viewing matrix or chart)
-    if (this.analyticsView === 'matrix' || this.analyticsView === 'chart') {
+    if (this.AnalyticsView === 'matrix' || this.AnalyticsView === 'chart') {
       this.reloadMatrixData();
     }
     this.cdr.markForCheck();
   }
 
+  /** @deprecated Use {@link ToggleTagFilter}. */
+  toggleTagFilter(tag: string | null) {
+    return this.ToggleTagFilter(tag);
+  }
+
   /**
    * Check if a tag is currently selected in the filter
    */
-  isTagSelected(tag: string): boolean {
-    return this.selectedTags.includes(tag);
+  IsTagSelected(tag: string): boolean {
+    return this.SelectedTags.includes(tag);
   }
 
-  setAnalyticsView(view: 'summary' | 'matrix' | 'chart') {
-    this.analyticsView = view;
-    if ((view === 'matrix' || view === 'chart') && !this.matrixLoaded) {
+  /** @deprecated Use {@link IsTagSelected}. */
+  isTagSelected(tag: string): boolean {
+    return this.IsTagSelected(tag);
+  }
+
+  SetAnalyticsView(view: 'summary' | 'matrix' | 'chart') {
+    this.AnalyticsView = view;
+    if ((view === 'matrix' || view === 'chart') && !this.MatrixLoaded) {
       this.loadMatrixData();
     }
     // Render chart when switching to chart view
-    if (view === 'chart' && this.matrixLoaded) {
+    if (view === 'chart' && this.MatrixLoaded) {
       setTimeout(() => this.renderChart(), 100);
     }
     this.cdr.markForCheck();
+  }
+
+  /** @deprecated Use {@link SetAnalyticsView}. */
+  setAnalyticsView(view: 'summary' | 'matrix' | 'chart') {
+    return this.SetAnalyticsView(view);
   }
 
   /**
    * Force reload of matrix data (used when filters change)
    */
   private reloadMatrixData() {
-    this.matrixLoaded = false;
+    this.MatrixLoaded = false;
     this.loadMatrixData();
   }
 
   private async loadMatrixData() {
-    if (this.loadingMatrix) return;
-    this.loadingMatrix = true;
+    if (this.LoadingMatrix) return;
+    this.LoadingMatrix = true;
     this.cdr.markForCheck();
 
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-      const filteredRuns = this.getFilteredAnalyticsData();
+      const filteredRuns = this.GetFilteredAnalyticsData();
 
       // Load test runs for each suite run (limit to most recent 10 for performance)
       const runsToLoad = filteredRuns.slice(0, 10);
@@ -644,18 +1139,18 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
         }
       }
 
-      this.matrixData = matrixData;
-      this.matrixLoaded = true;
+      this.MatrixData = matrixData;
+      this.MatrixLoaded = true;
 
       // Render chart if currently on chart view
-      if (this.analyticsView === 'chart') {
+      if (this.AnalyticsView === 'chart') {
         setTimeout(() => this.renderChart(), 100);
       }
     } catch (error) {
       console.error('Error loading matrix data:', error);
       SharedService.Instance.CreateSimpleNotification('Failed to load matrix data', 'error', 3000);
     } finally {
-      this.loadingMatrix = false;
+      this.LoadingMatrix = false;
       this.cdr.markForCheck();
     }
   }
@@ -697,10 +1192,10 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
     return feedbackMap;
   }
 
-  getUniqueTestsFromMatrix(): { testId: string; testName: string; sequence: number }[] {
+  GetUniqueTestsFromMatrix(): { testId: string; testName: string; sequence: number }[] {
     const testsMap = new Map<string, { testName: string; sequence: number }>();
 
-    for (const runData of this.matrixData) {
+    for (const runData of this.MatrixData) {
       for (const [testId, testResult] of runData.testResults) {
         if (!testsMap.has(testId)) {
           testsMap.set(testId, { testName: testResult.testName, sequence: testResult.sequence });
@@ -715,69 +1210,99 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
     }));
 
     // Apply test name filter if set
-    if (this.matrixTestFilter.trim()) {
-      const filterLower = this.matrixTestFilter.toLowerCase().trim();
+    if (this.MatrixTestFilter.trim()) {
+      const filterLower = this.MatrixTestFilter.toLowerCase().trim();
       tests = tests.filter(t => t.testName.toLowerCase().includes(filterLower));
     }
 
     // Apply sorting
-    if (this.matrixSortBy === 'sequence') {
-      tests = tests.sort((a, b) => this.matrixSortAsc ? a.sequence - b.sequence : b.sequence - a.sequence);
+    if (this.MatrixSortBy === 'sequence') {
+      tests = tests.sort((a, b) => this.MatrixSortAsc ? a.sequence - b.sequence : b.sequence - a.sequence);
     } else {
       tests = tests.sort((a, b) => {
         const cmp = a.testName.localeCompare(b.testName);
-        return this.matrixSortAsc ? cmp : -cmp;
+        return this.MatrixSortAsc ? cmp : -cmp;
       });
     }
 
     return tests;
   }
 
+  /** @deprecated Use {@link GetUniqueTestsFromMatrix}. */
+  getUniqueTestsFromMatrix(): { testId: string; testName: string; sequence: number }[] {
+    return this.GetUniqueTestsFromMatrix();
+  }
+
   /**
    * Toggle matrix sort column
    */
-  toggleMatrixSort(column: 'sequence' | 'name') {
-    if (this.matrixSortBy === column) {
-      this.matrixSortAsc = !this.matrixSortAsc;
+  ToggleMatrixSort(column: 'sequence' | 'name') {
+    if (this.MatrixSortBy === column) {
+      this.MatrixSortAsc = !this.MatrixSortAsc;
     } else {
-      this.matrixSortBy = column;
-      this.matrixSortAsc = true;
+      this.MatrixSortBy = column;
+      this.MatrixSortAsc = true;
     }
     this.cdr.markForCheck();
+  }
+
+  /** @deprecated Use {@link ToggleMatrixSort}. */
+  toggleMatrixSort(column: 'sequence' | 'name') {
+    return this.ToggleMatrixSort(column);
   }
 
   /**
    * Select/deselect a matrix row for highlighting
    */
-  selectMatrixRow(testId: string): void {
-    this.selectedMatrixTestId = this.selectedMatrixTestId === testId ? null : testId;
+  SelectMatrixRow(testId: string): void {
+    this.SelectedMatrixTestId = this.SelectedMatrixTestId === testId ? null : testId;
     this.cdr.markForCheck();
+  }
+
+  /** @deprecated Use {@link SelectMatrixRow}. */
+  selectMatrixRow(testId: string): void {
+    return this.SelectMatrixRow(testId);
   }
 
   /**
    * Handle test name filter input - uses Subject for debounce
    */
-  onMatrixFilterInput(event: Event): void {
+  OnMatrixFilterInput(event: Event): void {
     const value = (event.target as HTMLInputElement).value;
     this.matrixFilterSubject$.next(value);
+  }
+
+  /** @deprecated Use {@link OnMatrixFilterInput}. */
+  onMatrixFilterInput(event: Event): void {
+    return this.OnMatrixFilterInput(event);
   }
 
   /**
    * Clear the matrix test name filter
    */
-  clearMatrixFilter(): void {
-    this.matrixTestFilter = '';
+  ClearMatrixFilter(): void {
+    this.MatrixTestFilter = '';
     this.matrixFilterSubject$.next('');
     this.cdr.markForCheck();
   }
 
-  getTestResultForRun(runId: string, testId: string): TestResultCell | null {
-    const runData = this.matrixData.find(r => r.runId === runId);
+  /** @deprecated Use {@link ClearMatrixFilter}. */
+  clearMatrixFilter(): void {
+    return this.ClearMatrixFilter();
+  }
+
+  GetTestResultForRun(runId: string, testId: string): TestResultCell | null {
+    const runData = this.MatrixData.find(r => r.runId === runId);
     if (!runData) return null;
     return runData.testResults.get(testId) || null;
   }
 
-  getMatrixCellClass(result: TestResultCell | null): string {
+  /** @deprecated Use {@link GetTestResultForRun}. */
+  getTestResultForRun(runId: string, testId: string): TestResultCell | null {
+    return this.GetTestResultForRun(runId, testId);
+  }
+
+  GetMatrixCellClass(result: TestResultCell | null): string {
     if (!result) return 'cell-none cell-not-run';
     switch (result.status) {
       case 'Passed': return 'cell-passed';
@@ -790,10 +1315,15 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
     }
   }
 
+  /** @deprecated Use {@link GetMatrixCellClass}. */
+  getMatrixCellClass(result: TestResultCell | null): string {
+    return this.GetMatrixCellClass(result);
+  }
+
   /**
    * Get descriptive tooltip for execution status
    */
-  getStatusTooltip(status: string): string {
+  GetStatusTooltip(status: string): string {
     switch (status) {
       case 'Passed': return 'Status: Passed - Test completed without error';
       case 'Failed': return 'Status: Failed - Test assertions did not pass';
@@ -806,10 +1336,15 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
     }
   }
 
+  /** @deprecated Use {@link GetStatusTooltip}. */
+  getStatusTooltip(status: string): string {
+    return this.GetStatusTooltip(status);
+  }
+
   /**
    * Get tooltip for human review with rating and optional comments
    */
-  getHumanTooltip(rating: number, comments: string | null): string {
+  GetHumanTooltip(rating: number, comments: string | null): string {
     let tooltip = `Human Review: ${rating}/10 rating`;
     if (comments) {
       const truncated = comments.length > 200 ? comments.substring(0, 200) + '...' : comments;
@@ -818,15 +1353,25 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
     return tooltip;
   }
 
+  /** @deprecated Use {@link GetHumanTooltip}. */
+  getHumanTooltip(rating: number, comments: string | null): string {
+    return this.GetHumanTooltip(rating, comments);
+  }
+
   /**
    * Get the count of enabled evaluation types for matrix cell layout
    */
-  getEvalCount(): number {
+  GetEvalCount(): number {
     let count = 0;
-    if (this.evalPreferences.showExecution) count++;
-    if (this.evalPreferences.showHuman) count++;
-    if (this.evalPreferences.showAuto) count++;
+    if (this.EvalPreferences.showExecution) count++;
+    if (this.EvalPreferences.showHuman) count++;
+    if (this.EvalPreferences.showAuto) count++;
     return count;
+  }
+
+  /** @deprecated Use {@link GetEvalCount}. */
+  getEvalCount(): number {
+    return this.GetEvalCount();
   }
 
   // ===========================
@@ -836,7 +1381,7 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
   /**
    * Get count of passed tests for a run
    */
-  getRunPassedCount(run: MatrixDataPoint): number {
+  GetRunPassedCount(run: MatrixDataPoint): number {
     let count = 0;
     run.testResults.forEach(result => {
       if (result.status === 'Passed') count++;
@@ -844,17 +1389,27 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
     return count;
   }
 
+  /** @deprecated Use {@link GetRunPassedCount}. */
+  getRunPassedCount(run: MatrixDataPoint): number {
+    return this.GetRunPassedCount(run);
+  }
+
   /**
    * Get total count of tests for a run
    */
-  getRunTotalCount(run: MatrixDataPoint): number {
+  GetRunTotalCount(run: MatrixDataPoint): number {
     return run.testResults.size;
+  }
+
+  /** @deprecated Use {@link GetRunTotalCount}. */
+  getRunTotalCount(run: MatrixDataPoint): number {
+    return this.GetRunTotalCount(run);
   }
 
   /**
    * Get average human rating for a run (only from tests that have ratings)
    */
-  getRunHumanAvg(run: MatrixDataPoint): number | null {
+  GetRunHumanAvg(run: MatrixDataPoint): number | null {
     let sum = 0;
     let count = 0;
     run.testResults.forEach(result => {
@@ -866,10 +1421,15 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
     return count > 0 ? sum / count : null;
   }
 
+  /** @deprecated Use {@link GetRunHumanAvg}. */
+  getRunHumanAvg(run: MatrixDataPoint): number | null {
+    return this.GetRunHumanAvg(run);
+  }
+
   /**
    * Get count of tests with human ratings for a run
    */
-  getRunHumanCount(run: MatrixDataPoint): number {
+  GetRunHumanCount(run: MatrixDataPoint): number {
     let count = 0;
     run.testResults.forEach(result => {
       if (result.humanRating != null) count++;
@@ -877,10 +1437,15 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
     return count;
   }
 
+  /** @deprecated Use {@link GetRunHumanCount}. */
+  getRunHumanCount(run: MatrixDataPoint): number {
+    return this.GetRunHumanCount(run);
+  }
+
   /**
    * Get average auto score for a run (only from tests that have scores)
    */
-  getRunAutoAvg(run: MatrixDataPoint): number | null {
+  GetRunAutoAvg(run: MatrixDataPoint): number | null {
     let sum = 0;
     let count = 0;
     run.testResults.forEach(result => {
@@ -892,10 +1457,15 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
     return count > 0 ? sum / count : null;
   }
 
+  /** @deprecated Use {@link GetRunAutoAvg}. */
+  getRunAutoAvg(run: MatrixDataPoint): number | null {
+    return this.GetRunAutoAvg(run);
+  }
+
   /**
    * Get count of tests with auto scores for a run
    */
-  getRunAutoCount(run: MatrixDataPoint): number {
+  GetRunAutoCount(run: MatrixDataPoint): number {
     let count = 0;
     run.testResults.forEach(result => {
       if (result.score != null) count++;
@@ -903,21 +1473,36 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
     return count;
   }
 
+  /** @deprecated Use {@link GetRunAutoCount}. */
+  getRunAutoCount(run: MatrixDataPoint): number {
+    return this.GetRunAutoCount(run);
+  }
+
   /**
    * Navigate to a test run when clicking a matrix cell
    */
-  openTestRun(testRunId: string) {
+  OpenTestRun(testRunId: string) {
     SharedService.Instance.OpenEntityRecord('MJ: Test Runs', CompositeKey.FromID(testRunId));
+  }
+
+  /** @deprecated Use {@link OpenTestRun}. */
+  openTestRun(testRunId: string) {
+    return this.OpenTestRun(testRunId);
   }
 
   /**
    * Handle matrix cell click - navigate to the test run
    */
-  onMatrixCellClick(result: TestResultCell | null, event: Event): void {
+  OnMatrixCellClick(result: TestResultCell | null, event: Event): void {
     event.stopPropagation(); // Prevent row click from also firing
     if (result?.testRunId) {
-      this.openTestRun(result.testRunId);
+      this.OpenTestRun(result.testRunId);
     }
+  }
+
+  /** @deprecated Use {@link OnMatrixCellClick}. */
+  onMatrixCellClick(result: TestResultCell | null, event: Event): void {
+    return this.OnMatrixCellClick(result, event);
   }
 
   // ===========================
@@ -929,17 +1514,17 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
    * with trend lines and better visual hierarchy
    */
   private renderChart(): void {
-    if (!this.chartContainer?.nativeElement || this.matrixData.length === 0) {
+    if (!this.chartContainer?.nativeElement || this.MatrixData.length === 0) {
       return;
     }
 
     const container = this.chartContainer.nativeElement;
-    const tests = this.getUniqueTestsFromMatrix();
-    const runs = this.matrixData;
+    const tests = this.GetUniqueTestsFromMatrix();
+    const runs = this.MatrixData;
 
     // Dynamic sizing based on content and evaluation preferences
     const width = container.clientWidth || 900;
-    const evalCount = this.getEvalCount();
+    const evalCount = this.GetEvalCount();
     // Adjust row height and column width based on how many eval types are shown
     const rowHeight = evalCount >= 3 ? 34 : evalCount === 2 ? 30 : 28;
     const minColWidth = evalCount >= 3 ? 65 : evalCount === 2 ? 55 : 50;
@@ -1029,9 +1614,9 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
         .attr('fill', '#475569')
         .attr('font-size', '10px')
         .attr('font-weight', '500')
-        .text(this.getRelativeTime(run.date))
+        .text(this.GetRelativeTime(run.date))
         .style('cursor', 'pointer')
-        .on('click', () => this.openSuiteRun(run.runId));
+        .on('click', () => this.OpenSuiteRun(run.runId));
 
       // Pass rate badge
       const passRateColor = run.passRate >= 80 ? '#22c55e' : run.passRate >= 50 ? '#f97316' : '#ef4444';
@@ -1080,7 +1665,7 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
             .attr('stroke', '#93c5fd')
             .attr('stroke-width', 1)
             .style('cursor', 'pointer')
-            .on('click', () => this.openSuiteRun(run.runId));
+            .on('click', () => this.OpenSuiteRun(run.runId));
 
           // Tag text
           chart.append('text')
@@ -1092,7 +1677,7 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
             .attr('font-weight', '600')
             .text(tag.length > 8 ? tag.substring(0, 7) + '…' : tag)
             .style('cursor', 'pointer')
-            .on('click', () => this.openSuiteRun(run.runId));
+            .on('click', () => this.OpenSuiteRun(run.runId));
         });
 
         // Show +N indicator if more tags
@@ -1189,13 +1774,13 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
 
         // Build tooltip content based on evaluation preferences
         const tooltipParts: string[] = [];
-        if (this.evalPreferences.showExecution) {
+        if (this.EvalPreferences.showExecution) {
           tooltipParts.push(`<div style="display:inline-block; padding:2px 8px; border-radius:4px; background:${statusColors[result.status]}; color:white; font-size:11px; font-weight:600">${result.status}</div>`);
         }
-        if (this.evalPreferences.showHuman) {
+        if (this.EvalPreferences.showHuman) {
           tooltipParts.push(`<div style="margin-top:4px"><span style="color:var(--mj-status-warning)">👤</span> <strong>Human:</strong> <span style="color:var(--mj-text-disabled)">Needs review</span></div>`);
         }
-        if (this.evalPreferences.showAuto && result.score != null) {
+        if (this.EvalPreferences.showAuto && result.score != null) {
           tooltipParts.push(`<div style="margin-top:4px"><span style="color:var(--mj-status-info)">🤖</span> <strong>Auto:</strong> ${(result.score * 100).toFixed(1)}%</div>`);
         }
         const durationText = result.duration != null ? `<div><strong>Duration:</strong> ${result.duration.toFixed(2)}s</div>` : '';
@@ -1203,7 +1788,7 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
         const cellGroup = chart.append('g')
           .attr('class', 'result-cell')
           .style('cursor', 'pointer')
-          .on('click', () => this.openTestRun(result.testRunId))
+          .on('click', () => this.OpenTestRun(result.testRunId))
           .on('mouseover', (event: MouseEvent) => {
             d3.select(event.currentTarget as Element).select('rect.cell-bg')
               .attr('stroke', '#1e40af')
@@ -1215,7 +1800,7 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
                 <div style="font-weight:600; margin-bottom:6px; color:#f1f5f9">${result.testName}</div>
                 ${tooltipParts.join('')}
                 ${durationText}
-                <div style="margin-top:6px; color:#94a3b8; font-size:10px">${this.getRelativeTime(run.date)} • Click to view</div>
+                <div style="margin-top:6px; color:#94a3b8; font-size:10px">${this.GetRelativeTime(run.date)} • Click to view</div>
               `)
               .style('left', `${event.offsetX + 15}px`)
               .style('top', `${event.offsetY - 10}px`);
@@ -1231,10 +1816,10 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
         let cellBgColor = '#f1f5f9';
         let cellBgGradient = '';
 
-        if (this.evalPreferences.showExecution) {
+        if (this.EvalPreferences.showExecution) {
           // Use status-based gradient
           cellBgGradient = `url(#gradient-${result.status.toLowerCase()})`;
-        } else if (this.evalPreferences.showAuto && result.score != null) {
+        } else if (this.EvalPreferences.showAuto && result.score != null) {
           // Use score-based color
           const scoreColor = result.score >= 0.8 ? '#22c55e' : result.score >= 0.5 ? '#f97316' : '#ef4444';
           cellBgColor = scoreColor;
@@ -1265,7 +1850,7 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
         let iconIndex = 0;
 
         // Status icon (execution)
-        if (this.evalPreferences.showExecution) {
+        if (this.EvalPreferences.showExecution) {
           const iconText: Record<string, string> = {
             'Passed': '✓',
             'Failed': '✕',
@@ -1301,7 +1886,7 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
         }
 
         // Human icon
-        if (this.evalPreferences.showHuman) {
+        if (this.EvalPreferences.showHuman) {
           const iconX = startX + iconIndex * iconSpacing;
 
           // Human evaluation indicator (clock icon for pending)
@@ -1326,7 +1911,7 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
         }
 
         // Auto score icon/indicator
-        if (this.evalPreferences.showAuto) {
+        if (this.EvalPreferences.showAuto) {
           const iconX = startX + iconIndex * iconSpacing;
 
           if (result.score != null) {
@@ -1478,7 +2063,7 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
     let xOffset = 55;
 
     // Status indicator
-    if (this.evalPreferences.showExecution) {
+    if (this.EvalPreferences.showExecution) {
       const statusGroup = legendGroup.append('g')
         .attr('transform', `translate(${xOffset}, -4)`);
 
@@ -1509,7 +2094,7 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
     }
 
     // Human indicator
-    if (this.evalPreferences.showHuman) {
+    if (this.EvalPreferences.showHuman) {
       const humanGroup = legendGroup.append('g')
         .attr('transform', `translate(${xOffset}, -4)`);
 
@@ -1541,7 +2126,7 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
     }
 
     // Auto indicator
-    if (this.evalPreferences.showAuto) {
+    if (this.EvalPreferences.showAuto) {
       const autoGroup = legendGroup.append('g')
         .attr('transform', `translate(${xOffset}, -4)`);
 
@@ -1572,28 +2157,48 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
     }
   }
 
-  getAveragePassRate(): number {
-    const data = this.getFilteredAnalyticsData();
+  GetAveragePassRate(): number {
+    const data = this.GetFilteredAnalyticsData();
     if (data.length === 0) return 0;
     return data.reduce((sum, d) => sum + d.passRate, 0) / data.length;
   }
 
-  getTotalRuns(): number {
-    return this.getFilteredAnalyticsData().length;
+  /** @deprecated Use {@link GetAveragePassRate}. */
+  getAveragePassRate(): number {
+    return this.GetAveragePassRate();
   }
 
-  getAverageDuration(): number {
-    const data = this.getFilteredAnalyticsData();
+  GetTotalRuns(): number {
+    return this.GetFilteredAnalyticsData().length;
+  }
+
+  /** @deprecated Use {@link GetTotalRuns}. */
+  getTotalRuns(): number {
+    return this.GetTotalRuns();
+  }
+
+  GetAverageDuration(): number {
+    const data = this.GetFilteredAnalyticsData();
     if (data.length === 0) return 0;
     return data.reduce((sum, d) => sum + d.duration, 0) / data.length;
   }
 
-  getTotalCost(): number {
-    return this.getFilteredAnalyticsData().reduce((sum, d) => sum + d.cost, 0);
+  /** @deprecated Use {@link GetAverageDuration}. */
+  getAverageDuration(): number {
+    return this.GetAverageDuration();
   }
 
-  getPassRateTrend(): { direction: 'up' | 'down' | 'stable'; value: number } {
-    const data = this.getFilteredAnalyticsData();
+  GetTotalCost(): number {
+    return this.GetFilteredAnalyticsData().reduce((sum, d) => sum + d.cost, 0);
+  }
+
+  /** @deprecated Use {@link GetTotalCost}. */
+  getTotalCost(): number {
+    return this.GetTotalCost();
+  }
+
+  GetPassRateTrend(): { direction: 'up' | 'down' | 'stable'; value: number } {
+    const data = this.GetFilteredAnalyticsData();
     if (data.length < 2) return { direction: 'stable', value: 0 };
 
     // Compare recent half to older half
@@ -1609,6 +2214,11 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
     return { direction: diff > 0 ? 'up' : 'down', value: Math.abs(diff) };
   }
 
+  /** @deprecated Use {@link GetPassRateTrend}. */
+  getPassRateTrend(): { direction: 'up' | 'down' | 'stable'; value: number } {
+    return this.GetPassRateTrend();
+  }
+
   formatDuration(seconds: number): string {
     if (seconds < 60) return `${seconds.toFixed(1)}s`;
     if (seconds < 3600) {
@@ -1621,43 +2231,63 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
     return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
   }
 
-  formatCost(cost: number): string {
+  FormatCost(cost: number): string {
     if (cost < 0.01) return `$${cost.toFixed(6)}`;
     if (cost < 1) return `$${cost.toFixed(4)}`;
     return `$${cost.toFixed(2)}`;
+  }
+
+  /** @deprecated Use {@link FormatCost}. */
+  formatCost(cost: number): string {
+    return this.FormatCost(cost);
   }
 
   // ==========================================
   // Compare Tab Methods
   // ==========================================
 
+  async SelectCompareRunA(run: MJTestSuiteRunEntity) {
+    this.CompareRunA = run;
+    await this.loadCompareData();
+  }
+
+  /** @deprecated Use {@link SelectCompareRunA}. */
   async selectCompareRunA(run: MJTestSuiteRunEntity) {
-    this.compareRunA = run;
+    return this.SelectCompareRunA(run);
+  }
+
+  async SelectCompareRunB(run: MJTestSuiteRunEntity) {
+    this.CompareRunB = run;
     await this.loadCompareData();
   }
 
+  /** @deprecated Use {@link SelectCompareRunB}. */
   async selectCompareRunB(run: MJTestSuiteRunEntity) {
-    this.compareRunB = run;
-    await this.loadCompareData();
+    return this.SelectCompareRunB(run);
   }
 
-  clearCompareSelection() {
-    this.compareRunA = null;
-    this.compareRunB = null;
-    this.compareResults = [];
-    this.compareRunATests = [];
-    this.compareRunBTests = [];
+  ClearCompareSelection() {
+    this.CompareRunA = null;
+    this.CompareRunB = null;
+    this.CompareResults = [];
+    this.CompareRunATests = [];
+    this.CompareRunBTests = [];
     this.cdr.markForCheck();
   }
 
+  /** @deprecated Use {@link ClearCompareSelection}. */
+  clearCompareSelection() {
+    return this.ClearCompareSelection();
+  }
+
   private async loadCompareData() {
-    if (!this.compareRunA || !this.compareRunB) {
-      this.compareResults = [];
+    if (!this.CompareRunA || !this.CompareRunB) {
+      this.CompareResults = [];
       this.cdr.markForCheck();
       return;
     }
 
-    this.loadingCompare = true;
+    this.LoadingCompare = true;
     this.cdr.markForCheck();
 
     try {
@@ -1667,28 +2297,28 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
       const [resultA, resultB] = await Promise.all([
         rv.RunView<MJTestRunEntity>({
           EntityName: 'MJ: Test Runs',
-          ExtraFilter: `TestSuiteRunID='${this.compareRunA.ID}'`,
+          ExtraFilter: `TestSuiteRunID='${this.CompareRunA.ID}'`,
           OrderBy: 'Sequence ASC',
           ResultType: 'entity_object'
         }),
         rv.RunView<MJTestRunEntity>({
           EntityName: 'MJ: Test Runs',
-          ExtraFilter: `TestSuiteRunID='${this.compareRunB.ID}'`,
+          ExtraFilter: `TestSuiteRunID='${this.CompareRunB.ID}'`,
           OrderBy: 'Sequence ASC',
           ResultType: 'entity_object'
         })
       ]);
 
-      this.compareRunATests = resultA.Success ? resultA.Results || [] : [];
-      this.compareRunBTests = resultB.Success ? resultB.Results || [] : [];
+      this.CompareRunATests = resultA.Success ? resultA.Results || [] : [];
+      this.CompareRunBTests = resultB.Success ? resultB.Results || [] : [];
 
       // Build comparison results
-      this.compareResults = this.buildComparisonResults(this.compareRunATests, this.compareRunBTests);
+      this.CompareResults = this.buildComparisonResults(this.CompareRunATests, this.CompareRunBTests);
     } catch (error) {
       console.error('Error loading comparison data:', error);
       SharedService.Instance.CreateSimpleNotification('Failed to load comparison data', 'error', 3000);
     } finally {
-      this.loadingCompare = false;
+      this.LoadingCompare = false;
       this.cdr.markForCheck();
     }
   }
@@ -1739,56 +2369,86 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
     return results;
   }
 
-  getComparePassRateDiff(): number | null {
-    if (!this.compareRunA || !this.compareRunB) return null;
-    const rateA = this.getPassRate(this.compareRunA);
-    const rateB = this.getPassRate(this.compareRunB);
+  GetComparePassRateDiff(): number | null {
+    if (!this.CompareRunA || !this.CompareRunB) return null;
+    const rateA = this.GetPassRate(this.CompareRunA);
+    const rateB = this.GetPassRate(this.CompareRunB);
     return rateB - rateA;
   }
 
-  getCompareDurationDiff(): number | null {
-    if (!this.compareRunA || !this.compareRunB) return null;
-    const durA = this.compareRunA.TotalDurationSeconds || 0;
-    const durB = this.compareRunB.TotalDurationSeconds || 0;
+  /** @deprecated Use {@link GetComparePassRateDiff}. */
+  getComparePassRateDiff(): number | null {
+    return this.GetComparePassRateDiff();
+  }
+
+  GetCompareDurationDiff(): number | null {
+    if (!this.CompareRunA || !this.CompareRunB) return null;
+    const durA = this.CompareRunA.TotalDurationSeconds || 0;
+    const durB = this.CompareRunB.TotalDurationSeconds || 0;
     return durB - durA;
   }
 
-  getAbsCompareDurationDiff(): number {
-    const diff = this.getCompareDurationDiff();
+  /** @deprecated Use {@link GetCompareDurationDiff}. */
+  getCompareDurationDiff(): number | null {
+    return this.GetCompareDurationDiff();
+  }
+
+  GetAbsCompareDurationDiff(): number {
+    const diff = this.GetCompareDurationDiff();
     return diff != null ? Math.abs(diff) : 0;
   }
 
-  getCompareCostDiff(): number | null {
-    if (!this.compareRunA || !this.compareRunB) return null;
-    const costA = this.compareRunA.TotalCostUSD || 0;
-    const costB = this.compareRunB.TotalCostUSD || 0;
+  /** @deprecated Use {@link GetAbsCompareDurationDiff}. */
+  getAbsCompareDurationDiff(): number {
+    return this.GetAbsCompareDurationDiff();
+  }
+
+  GetCompareCostDiff(): number | null {
+    if (!this.CompareRunA || !this.CompareRunB) return null;
+    const costA = this.CompareRunA.TotalCostUSD || 0;
+    const costB = this.CompareRunB.TotalCostUSD || 0;
     return costB - costA;
   }
 
-  getCompareImprovedCount(): number {
-    return this.compareResults.filter(r =>
+  /** @deprecated Use {@link GetCompareCostDiff}. */
+  getCompareCostDiff(): number | null {
+    return this.GetCompareCostDiff();
+  }
+
+  GetCompareImprovedCount(): number {
+    return this.CompareResults.filter(r =>
       r.runA && r.runB &&
       r.runA.status !== 'Passed' && r.runB.status === 'Passed'
     ).length;
   }
 
-  getCompareRegressedCount(): number {
-    return this.compareResults.filter(r =>
+  /** @deprecated Use {@link GetCompareImprovedCount}. */
+  getCompareImprovedCount(): number {
+    return this.GetCompareImprovedCount();
+  }
+
+  GetCompareRegressedCount(): number {
+    return this.CompareResults.filter(r =>
       r.runA && r.runB &&
       r.runA.status === 'Passed' && r.runB.status !== 'Passed'
     ).length;
+  }
+
+  /** @deprecated Use {@link GetCompareRegressedCount}. */
+  getCompareRegressedCount(): number {
+    return this.GetCompareRegressedCount();
   }
 
   // ==========================================
   // Excel Export Methods
   // ==========================================
 
-  async exportToExcel() {
+  async ExportToExcel() {
     try {
       // Ensure runs are loaded
-      if (!this.runsLoaded) await this.loadRuns();
+      if (!this.RunsLoaded) await this.loadRuns();
 
-      const data = this.suiteRuns.map(run => ({
+      const data = this.SuiteRuns.map(run => ({
         'Run ID': run.ID,
         'Status': run.Status,
         'Started At': run.StartedAt ? new Date(run.StartedAt).toLocaleString() : 'N/A',
@@ -1813,6 +2473,11 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
       console.error('Export failed:', error);
       SharedService.Instance.CreateSimpleNotification('Export failed', 'error', 3000);
     }
+  }
+
+  /** @deprecated Use {@link ExportToExcel}. */
+  async exportToExcel() {
+    return this.ExportToExcel();
   }
 
   private downloadAsCSV(data: Record<string, string | number>[], filename: string) {
@@ -1842,22 +2507,27 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
     URL.revokeObjectURL(link.href);
   }
 
-  getRunTags(run: MJTestSuiteRunEntity): string[] {
+  GetRunTags(run: MJTestSuiteRunEntity): string[] {
     return TagsHelper.parseTags(run.Tags);
+  }
+
+  /** @deprecated Use {@link GetRunTags}. */
+  getRunTags(run: MJTestSuiteRunEntity): string[] {
+    return this.GetRunTags(run);
   }
 
   /**
    * Export matrix view data to CSV
    */
-  exportMatrixToCSV() {
-    if (this.matrixData.length === 0) {
+  ExportMatrixToCSV() {
+    if (this.MatrixData.length === 0) {
       SharedService.Instance.CreateSimpleNotification('No data to export', 'warning', 2000);
       return;
     }
 
     try {
-      const tests = this.getUniqueTestsFromMatrix();
-      const runs = this.matrixData;
+      const tests = this.GetUniqueTestsFromMatrix();
+      const runs = this.MatrixData;
 
       // Build CSV rows
       const rows: Record<string, string | number>[] = [];
@@ -1872,15 +2542,15 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
         for (const run of runs) {
           const result = run.testResults.get(test.testId);
           const runLabel = run.tags.length > 0
-            ? `${run.tags.slice(0, 2).join('/')} (${this.getRelativeTime(run.date)})`
-            : this.getRelativeTime(run.date);
+            ? `${run.tags.slice(0, 2).join('/')} (${this.GetRelativeTime(run.date)})`
+            : this.GetRelativeTime(run.date);
 
           if (result) {
             // Build cell value based on what's shown
             const parts: string[] = [];
-            if (this.evalPreferences.showExecution) parts.push(result.status);
-            if (this.evalPreferences.showHuman) parts.push(result.humanRating != null ? `H:${result.humanRating}` : 'H:-');
-            if (this.evalPreferences.showAuto) parts.push(result.score != null ? `A:${Math.round(result.score * 100)}%` : 'A:-');
+            if (this.EvalPreferences.showExecution) parts.push(result.status);
+            if (this.EvalPreferences.showHuman) parts.push(result.humanRating != null ? `H:${result.humanRating}` : 'H:-');
+            if (this.EvalPreferences.showAuto) parts.push(result.score != null ? `A:${Math.round(result.score * 100)}%` : 'A:-');
             row[runLabel] = parts.join(' | ');
           } else {
             row[runLabel] = 'Not Run';
@@ -1898,6 +2568,11 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
     }
   }
 
+  /** @deprecated Use {@link ExportMatrixToCSV}. */
+  exportMatrixToCSV() {
+    return this.ExportMatrixToCSV();
+  }
+
   // ==========================================
   // Keyboard Shortcuts Settings
   // ==========================================
@@ -1912,10 +2587,10 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
 
       if (setting) {
         this.shortcutsSettingEntity = setting;
-        this.showShortcuts = setting.Value === 'true';
+        this.ShowShortcuts = setting.Value === 'true';
       } else {
         // Default to hidden
-        this.showShortcuts = false;
+        this.ShowShortcuts = false;
       }
       this.cdr.markForCheck();
     } catch (error) {
@@ -1926,9 +2601,14 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
   /**
    * Toggle analytics filters visibility
    */
-  toggleFilters(): void {
-    this.filtersCollapsed = !this.filtersCollapsed;
+  ToggleFilters(): void {
+    this.FiltersCollapsed = !this.FiltersCollapsed;
     this.cdr.markForCheck();
+  }
+
+  /** @deprecated Use {@link ToggleFilters}. */
+  toggleFilters(): void {
+    return this.ToggleFilters();
   }
 
   /**
@@ -1936,16 +2616,21 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
    * The panel's Expanded is the inverse of filtersCollapsed; set (not flip) so it
    * stays in sync, and mark for check (OnPush change detection).
    */
-  onFiltersExpandedChange(expanded: boolean): void {
-    this.filtersCollapsed = !expanded;
+  OnFiltersExpandedChange(expanded: boolean): void {
+    this.FiltersCollapsed = !expanded;
     this.cdr.markForCheck();
+  }
+
+  /** @deprecated Use {@link OnFiltersExpandedChange}. */
+  onFiltersExpandedChange(expanded: boolean): void {
+    return this.OnFiltersExpandedChange(expanded);
   }
 
   /**
    * Toggle keyboard shortcuts visibility and save preference
    */
-  async toggleShortcuts(): Promise<void> {
-    this.showShortcuts = !this.showShortcuts;
+  async ToggleShortcuts(): Promise<void> {
+    this.ShowShortcuts = !this.ShowShortcuts;
     this.cdr.markForCheck();
 
     try {
@@ -1965,21 +2650,26 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
         }
       }
 
-      this.shortcutsSettingEntity.Value = this.showShortcuts ? 'true' : 'false';
+      this.shortcutsSettingEntity.Value = this.ShowShortcuts ? 'true' : 'false';
       await this.shortcutsSettingEntity.Save();
     } catch (error) {
       console.warn('Failed to save shortcuts setting:', error);
     }
   }
 
+  /** @deprecated Use {@link ToggleShortcuts}. */
+  async toggleShortcuts(): Promise<void> {
+    return this.ToggleShortcuts();
+  }
+
   /** Case-insensitive UUID check whether a run is the currently selected Run A (baseline). */
   public IsCompareRunA(run: MJTestSuiteRunEntity): boolean {
-    return UUIDsEqual(this.compareRunA?.ID, run.ID);
+    return UUIDsEqual(this.CompareRunA?.ID, run.ID);
   }
 
   /** Case-insensitive UUID check whether a run is the currently selected Run B (compare). */
   public IsCompareRunB(run: MJTestSuiteRunEntity): boolean {
-    return UUIDsEqual(this.compareRunB?.ID, run.ID);
+    return UUIDsEqual(this.CompareRunB?.ID, run.ID);
   }
 
   // ==========================================
@@ -1987,14 +2677,24 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
   // ==========================================
 
   /** True if the suite record has any unsaved field changes. */
-  get isDirty(): boolean {
+  get IsDirty(): boolean {
     return this.record?.Dirty === true;
   }
 
+  /** @deprecated Use {@link IsDirty}. */
+  get isDirty(): boolean {
+    return this.IsDirty;
+  }
+
   /** Names of fields with pending edits, used by the save bar. */
-  get dirtyFieldNames(): string[] {
+  get DirtyFieldNames(): string[] {
     if (!this.record?.Fields) return [];
     return this.record.Fields.filter(f => f.Dirty).map(f => f.Name);
+  }
+
+  /** @deprecated Use {@link DirtyFieldNames}. */
+  get dirtyFieldNames(): string[] {
+    return this.DirtyFieldNames;
   }
 
   /** Parsed tags as a plain array — derived from record.Tags JSON. */
@@ -2016,7 +2716,7 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
         ResultType: 'entity_object'
       });
       if (result.Success) {
-        this.parentSuiteOptions = result.Results || [];
+        this.ParentSuiteOptions = result.Results || [];
         this.cdr.markForCheck();
       }
     } catch (error) {
@@ -2025,10 +2725,10 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
   }
 
   /** Save all pending changes on the suite record. */
-  async saveChanges(): Promise<void> {
-    if (!this.isDirty || this.isSaving) return;
+  async SaveChanges(): Promise<void> {
+    if (!this.IsDirty || this.IsSaving) return;
 
-    this.isSaving = true;
+    this.IsSaving = true;
     this.cdr.markForCheck();
     try {
       const ok = await this.SaveRecord(false);
@@ -2042,23 +2742,33 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
       const msg = err instanceof Error ? err.message : 'Save failed';
       SharedService.Instance.CreateSimpleNotification(msg, 'error', 4000);
     } finally {
-      this.isSaving = false;
+      this.IsSaving = false;
       this.cdr.markForCheck();
     }
   }
 
+  /** @deprecated Use {@link SaveChanges}. */
+  async saveChanges(): Promise<void> {
+    return this.SaveChanges();
+  }
+
   /** Discard all pending field changes on the suite. */
-  async discardChanges(): Promise<void> {
-    if (!this.isDirty) return;
+  async DiscardChanges(): Promise<void> {
+    if (!this.IsDirty) return;
     if (!(await this.confirmService.Confirm('Discard your unsaved changes?'))) return;
     this.record.Revert();
-    this.tagDraft = '';
+    this.TagDraft = '';
     this.cdr.markForCheck();
   }
 
+  /** @deprecated Use {@link DiscardChanges}. */
+  async discardChanges(): Promise<void> {
+    return this.DiscardChanges();
+  }
+
   /** Add a tag from tagDraft (called on Enter / comma / blur). */
-  addTagFromDraft(): void {
-    const raw = this.tagDraft.trim();
+  AddTagFromDraft(): void {
+    const raw = this.TagDraft.trim();
     if (!raw) return;
     // Allow comma-separated entry: "alpha, beta" → two tags
     const incoming = raw.split(',').map(t => t.trim()).filter(t => t.length > 0);
@@ -2068,31 +2778,46 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
       if (!merged.includes(t)) merged.push(t);
     }
     this.record.Tags = TagsHelper.toJson(merged);
-    this.tagDraft = '';
+    this.TagDraft = '';
     this.cdr.markForCheck();
   }
 
+  /** @deprecated Use {@link AddTagFromDraft}. */
+  addTagFromDraft(): void {
+    return this.AddTagFromDraft();
+  }
+
   /** Remove a single tag. */
-  removeTag(tag: string): void {
+  RemoveTag(tag: string): void {
     this.record.Tags = TagsHelper.removeTag(this.record.Tags, tag);
     this.cdr.markForCheck();
   }
 
+  /** @deprecated Use {@link RemoveTag}. */
+  removeTag(tag: string): void {
+    return this.RemoveTag(tag);
+  }
+
   /** Handle Enter / comma in the tag input to commit the draft tag. */
-  onTagInputKeydown(event: KeyboardEvent): void {
+  OnTagInputKeydown(event: KeyboardEvent): void {
     if (event.key === 'Enter' || event.key === ',') {
       event.preventDefault();
-      this.addTagFromDraft();
+      this.AddTagFromDraft();
       return;
     }
     // Backspace on an empty draft pops the last chip
-    if (event.key === 'Backspace' && !this.tagDraft) {
+    if (event.key === 'Backspace' && !this.TagDraft) {
       const all = this.tags;
       if (all.length > 0) {
         event.preventDefault();
-        this.removeTag(all[all.length - 1]);
+        this.RemoveTag(all[all.length - 1]);
       }
     }
+  }
+
+  /** @deprecated Use {@link OnTagInputKeydown}. */
+  onTagInputKeydown(event: KeyboardEvent): void {
+    return this.OnTagInputKeydown(event);
   }
 
   // ==========================================
@@ -2101,23 +2826,23 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
 
   /** Empty-state message shown when the add-tests search matches nothing. */
   public get AddTestsNoMatchMessage(): string {
-    return `No tests match "${this.addTestsSearch}".`;
+    return `No tests match "${this.AddTestsSearch}".`;
   }
 
   /** Open the picker dialog and load tests not yet in this suite. */
-  async openAddTestsDialog(): Promise<void> {
-    this.showAddTestsDialog = true;
-    this.selectedTestIdsToAdd = new Set<string>();
-    this.addTestsSearch = '';
-    this.loadingAvailableTests = true;
+  async OpenAddTestsDialog(): Promise<void> {
+    this.ShowAddTestsDialog = true;
+    this.SelectedTestIdsToAdd = new Set<string>();
+    this.AddTestsSearch = '';
+    this.LoadingAvailableTests = true;
     this.cdr.markForCheck();
 
     try {
-      if (!this.testsLoaded) {
+      if (!this.TestsLoaded) {
         await this.loadTests();
       }
 
-      const existingTestIds = new Set(this.suiteTests.map(st => st.TestID));
+      const existingTestIds = new Set(this.SuiteTests.map(st => st.TestID));
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJTestEntity>({
         EntityName: 'MJ: Tests',
@@ -2126,7 +2851,7 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
       });
 
       if (result.Success) {
-        this.availableTests = (result.Results || []).filter(t => !existingTestIds.has(t.ID));
+        this.AvailableTests = (result.Results || []).filter(t => !existingTestIds.has(t.ID));
       } else {
         SharedService.Instance.CreateSimpleNotification('Failed to load tests', 'error', 3000);
       }
@@ -2134,73 +2859,108 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
       console.error('Error loading available tests:', err);
       SharedService.Instance.CreateSimpleNotification('Failed to load tests', 'error', 3000);
     } finally {
-      this.loadingAvailableTests = false;
+      this.LoadingAvailableTests = false;
       this.cdr.markForCheck();
     }
   }
 
-  closeAddTestsDialog(): void {
-    if (this.isAddingTests) return;
-    this.showAddTestsDialog = false;
-    this.selectedTestIdsToAdd = new Set<string>();
-    this.addTestsSearch = '';
+  /** @deprecated Use {@link OpenAddTestsDialog}. */
+  async openAddTestsDialog(): Promise<void> {
+    return this.OpenAddTestsDialog();
+  }
+
+  CloseAddTestsDialog(): void {
+    if (this.IsAddingTests) return;
+    this.ShowAddTestsDialog = false;
+    this.SelectedTestIdsToAdd = new Set<string>();
+    this.AddTestsSearch = '';
     this.cdr.markForCheck();
   }
 
-  toggleAddSelection(testId: string): void {
-    if (this.selectedTestIdsToAdd.has(testId)) {
-      this.selectedTestIdsToAdd.delete(testId);
+  /** @deprecated Use {@link CloseAddTestsDialog}. */
+  closeAddTestsDialog(): void {
+    return this.CloseAddTestsDialog();
+  }
+
+  ToggleAddSelection(testId: string): void {
+    if (this.SelectedTestIdsToAdd.has(testId)) {
+      this.SelectedTestIdsToAdd.delete(testId);
     } else {
-      this.selectedTestIdsToAdd.add(testId);
+      this.SelectedTestIdsToAdd.add(testId);
     }
     // Set mutation alone doesn't trigger OnPush — assign a new reference
-    this.selectedTestIdsToAdd = new Set(this.selectedTestIdsToAdd);
+    this.SelectedTestIdsToAdd = new Set(this.SelectedTestIdsToAdd);
     this.cdr.markForCheck();
   }
 
+  /** @deprecated Use {@link ToggleAddSelection}. */
+  toggleAddSelection(testId: string): void {
+    return this.ToggleAddSelection(testId);
+  }
+
+  IsAddSelected(testId: string): boolean {
+    return this.SelectedTestIdsToAdd.has(testId);
+  }
+
+  /** @deprecated Use {@link IsAddSelected}. */
   isAddSelected(testId: string): boolean {
-    return this.selectedTestIdsToAdd.has(testId);
+    return this.IsAddSelected(testId);
   }
 
   /** Tests that match the picker search filter. */
-  get filteredAvailableTests(): MJTestEntity[] {
-    const q = this.addTestsSearch.trim().toLowerCase();
-    if (!q) return this.availableTests;
-    return this.availableTests.filter(t =>
+  get FilteredAvailableTests(): MJTestEntity[] {
+    const q = this.AddTestsSearch.trim().toLowerCase();
+    if (!q) return this.AvailableTests;
+    return this.AvailableTests.filter(t =>
       (t.Name || '').toLowerCase().includes(q) ||
       (t.Description || '').toLowerCase().includes(q) ||
       (t.Type || '').toLowerCase().includes(q)
     );
   }
 
-  selectAllFiltered(): void {
-    for (const t of this.filteredAvailableTests) {
-      this.selectedTestIdsToAdd.add(t.ID);
+  /** @deprecated Use {@link FilteredAvailableTests}. */
+  get filteredAvailableTests(): MJTestEntity[] {
+    return this.FilteredAvailableTests;
+  }
+
+  SelectAllFiltered(): void {
+    for (const t of this.FilteredAvailableTests) {
+      this.SelectedTestIdsToAdd.add(t.ID);
     }
-    this.selectedTestIdsToAdd = new Set(this.selectedTestIdsToAdd);
+    this.SelectedTestIdsToAdd = new Set(this.SelectedTestIdsToAdd);
     this.cdr.markForCheck();
   }
 
-  clearAddSelection(): void {
-    this.selectedTestIdsToAdd = new Set<string>();
+  /** @deprecated Use {@link SelectAllFiltered}. */
+  selectAllFiltered(): void {
+    return this.SelectAllFiltered();
+  }
+
+  ClearAddSelection(): void {
+    this.SelectedTestIdsToAdd = new Set<string>();
     this.cdr.markForCheck();
+  }
+
+  /** @deprecated Use {@link ClearAddSelection}. */
+  clearAddSelection(): void {
+    return this.ClearAddSelection();
   }
 
   /** Create suite-test rows for every selected test, appended after existing ones. */
-  async confirmAddTests(): Promise<void> {
-    if (this.selectedTestIdsToAdd.size === 0 || this.isAddingTests) return;
+  async ConfirmAddTests(): Promise<void> {
+    if (this.SelectedTestIdsToAdd.size === 0 || this.IsAddingTests) return;
 
-    this.isAddingTests = true;
+    this.IsAddingTests = true;
     this.cdr.markForCheck();
 
     const provider = this.ProviderToUse;
-    const startSequence = this.suiteTests.reduce((max, st) => Math.max(max, st.Sequence ?? 0), 0);
-    const idsToAdd = Array.from(this.selectedTestIdsToAdd);
+    const startSequence = this.SuiteTests.reduce((max, st) => Math.max(max, st.Sequence ?? 0), 0);
+    const idsToAdd = Array.from(this.SelectedTestIdsToAdd);
     // Snapshot test names from the picker so we can hydrate the joined "Test"
     // column on the optimistic rows (BaseEntity's joined view fields aren't
     // always populated through a TransactionGroup save).
     const testNameById = new Map<string, string>(
-      this.availableTests.map(t => [t.ID, t.Name])
+      this.AvailableTests.map(t => [t.ID, t.Name])
     );
 
     try {
@@ -2233,7 +2993,7 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
             }
           }
         }
-        this.suiteTests = [...this.suiteTests, ...newRows];
+        this.SuiteTests = [...this.SuiteTests, ...newRows];
         this.cdr.markForCheck();
 
         SharedService.Instance.CreateSimpleNotification(
@@ -2241,9 +3001,9 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
           'success',
           2000
         );
-        this.showAddTestsDialog = false;
-        this.selectedTestIdsToAdd = new Set<string>();
-        this.addTestsSearch = '';
+        this.ShowAddTestsDialog = false;
+        this.SelectedTestIdsToAdd = new Set<string>();
+        this.AddTestsSearch = '';
       } else {
         const failed = newRows.find(r => r.LatestResult && !r.LatestResult.Success);
         const detail = failed?.LatestResult?.CompleteMessage || 'Failed to add tests';
@@ -2253,35 +3013,50 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
       const msg = err instanceof Error ? err.message : 'Failed to add tests';
       SharedService.Instance.CreateSimpleNotification(msg, 'error', 4000);
     } finally {
-      this.isAddingTests = false;
+      this.IsAddingTests = false;
       this.cdr.markForCheck();
     }
   }
 
+  /** @deprecated Use {@link ConfirmAddTests}. */
+  async confirmAddTests(): Promise<void> {
+    return this.ConfirmAddTests();
+  }
+
   /** Show the inline remove-confirm for one suite-test row. */
-  requestRemoveTest(suiteTest: MJTestSuiteTestEntity, event?: Event): void {
+  RequestRemoveTest(suiteTest: MJTestSuiteTestEntity, event?: Event): void {
     if (event) event.stopPropagation();
-    this.confirmingRemoveSuiteTestId = suiteTest.ID;
+    this.ConfirmingRemoveSuiteTestId = suiteTest.ID;
     this.cdr.markForCheck();
   }
 
-  cancelRemoveTest(event?: Event): void {
+  /** @deprecated Use {@link RequestRemoveTest}. */
+  requestRemoveTest(suiteTest: MJTestSuiteTestEntity, event?: Event): void {
+    return this.RequestRemoveTest(suiteTest, event);
+  }
+
+  CancelRemoveTest(event?: Event): void {
     if (event) event.stopPropagation();
-    this.confirmingRemoveSuiteTestId = null;
+    this.ConfirmingRemoveSuiteTestId = null;
     this.cdr.markForCheck();
+  }
+
+  /** @deprecated Use {@link CancelRemoveTest}. */
+  cancelRemoveTest(event?: Event): void {
+    return this.CancelRemoveTest(event);
   }
 
   /** Delete the suite-test join row and refresh the list. */
-  async confirmRemoveTest(suiteTest: MJTestSuiteTestEntity, event?: Event): Promise<void> {
+  async ConfirmRemoveTest(suiteTest: MJTestSuiteTestEntity, event?: Event): Promise<void> {
     if (event) event.stopPropagation();
-    if (this.isRemovingTest) return;
-    this.isRemovingTest = true;
+    if (this.IsRemovingTest) return;
+    this.IsRemovingTest = true;
     this.cdr.markForCheck();
 
     try {
       const ok = await suiteTest.Delete();
       if (ok) {
-        this.suiteTests = this.suiteTests.filter(t => !UUIDsEqual(t.ID, suiteTest.ID));
+        this.SuiteTests = this.SuiteTests.filter(t => !UUIDsEqual(t.ID, suiteTest.ID));
         SharedService.Instance.CreateSimpleNotification('Test removed from suite', 'success', 2000);
       } else {
         const detail = suiteTest.LatestResult?.CompleteMessage || 'Failed to remove test';
@@ -2291,20 +3066,25 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
       const msg = err instanceof Error ? err.message : 'Failed to remove test';
       SharedService.Instance.CreateSimpleNotification(msg, 'error', 4000);
     } finally {
-      this.isRemovingTest = false;
-      this.confirmingRemoveSuiteTestId = null;
+      this.IsRemovingTest = false;
+      this.ConfirmingRemoveSuiteTestId = null;
       this.cdr.markForCheck();
     }
   }
 
+  /** @deprecated Use {@link ConfirmRemoveTest}. */
+  async confirmRemoveTest(suiteTest: MJTestSuiteTestEntity, event?: Event): Promise<void> {
+    return this.ConfirmRemoveTest(suiteTest, event);
+  }
+
   /** Handle CDK drag-drop reordering — persists new Sequence values. */
-  async onTestDrop(event: CdkDragDrop<MJTestSuiteTestEntity[]>): Promise<void> {
+  async OnTestDrop(event: CdkDragDrop<MJTestSuiteTestEntity[]>): Promise<void> {
     if (event.previousIndex === event.currentIndex) return;
 
     // Optimistic reorder
-    const reordered = [...this.suiteTests];
+    const reordered = [...this.SuiteTests];
     moveItemInArray(reordered, event.previousIndex, event.currentIndex);
-    this.suiteTests = reordered;
+    this.SuiteTests = reordered;
     this.cdr.markForCheck();
 
     // Compute which rows actually changed sequence (1-based contiguous numbering)
@@ -2319,7 +3099,7 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
 
     if (dirty.length === 0) return;
 
-    this.isReorderingTests = true;
+    this.IsReorderingTests = true;
     this.cdr.markForCheck();
 
     const provider = this.ProviderToUse;
@@ -2334,18 +3114,23 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
         const failed = dirty.find(r => r.LatestResult && !r.LatestResult.Success);
         const detail = failed?.LatestResult?.CompleteMessage || 'Failed to save new order';
         SharedService.Instance.CreateSimpleNotification(detail, 'error', 4000);
-        this.testsLoaded = false;
+        this.TestsLoaded = false;
         await this.loadTests();
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to save new order';
       SharedService.Instance.CreateSimpleNotification(msg, 'error', 4000);
-      this.testsLoaded = false;
+      this.TestsLoaded = false;
       await this.loadTests();
     } finally {
-      this.isReorderingTests = false;
+      this.IsReorderingTests = false;
       this.cdr.markForCheck();
     }
+  }
+
+  /** @deprecated Use {@link OnTestDrop}. */
+  async onTestDrop(event: CdkDragDrop<MJTestSuiteTestEntity[]>): Promise<void> {
+    return this.OnTestDrop(event);
   }
 }
 

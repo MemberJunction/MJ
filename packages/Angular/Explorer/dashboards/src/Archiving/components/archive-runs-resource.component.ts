@@ -27,11 +27,11 @@ import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ArchiveRunViewerComponent } from '@memberjunction/ng-archive-manager';
 import { AgentToolResult } from '../../shared/agent-tool-validation';
 import {
-    buildArchiveRunsAgentContext,
-    computeArchiveRunStatusCounts,
-    filterArchiveRunsByStatus,
-    isValidArchiveRunStatusFilter,
-    resolveArchiveRun,
+    BuildArchiveRunsAgentContext,
+    ComputeArchiveRunStatusCounts,
+    FilterArchiveRunsByStatus,
+    IsValidArchiveRunStatusFilter,
+    ResolveArchiveRun,
     ARCHIVE_RUN_STATUS_FILTERS,
     ARCHIVE_NAME_LIST_CAP,
     ArchiveRunStatusFilter,
@@ -93,8 +93,8 @@ export class ArchiveRunsResourceComponent extends BaseResourceComponent implemen
      */
     private publishAgentContext(): void {
         const runs = this.loadedRuns();
-        const counts = computeArchiveRunStatusCounts(runs);
-        const filtered = filterArchiveRunsByStatus(runs, this.statusFilter);
+        const counts = ComputeArchiveRunStatusCounts(runs);
+        const filtered = FilterArchiveRunsByStatus(runs, this.statusFilter);
         const selected = this.runViewer?.SelectedRun ?? null;
         const recentRuns: ArchiveRunSummaryItem[] = filtered
             .slice(0, ARCHIVE_NAME_LIST_CAP)
@@ -109,7 +109,7 @@ export class ArchiveRunsResourceComponent extends BaseResourceComponent implemen
             RecentRuns: recentRuns,
             IsLoading: this.runViewer?.IsLoading ?? false,
         };
-        this.navigationService.SetAgentContext(this, buildArchiveRunsAgentContext(input));
+        this.navigationService.SetAgentContext(this, BuildArchiveRunsAgentContext(input));
     }
 
     /**
@@ -172,14 +172,14 @@ export class ArchiveRunsResourceComponent extends BaseResourceComponent implemen
     /** Apply a status filter (wrapper-owned) and re-publish context. Never throws. */
     private toolFilterByStatus(params: Record<string, unknown>): AgentToolResult & { Data?: Record<string, unknown> } {
         const raw = params['status'];
-        if (!isValidArchiveRunStatusFilter(raw)) {
+        if (!IsValidArchiveRunStatusFilter(raw)) {
             return {
                 Success: false,
                 ErrorMessage: `Invalid status "${String(raw)}". Expected one of: ${ARCHIVE_RUN_STATUS_FILTERS.join(', ')}.`,
             };
         }
         this.statusFilter = raw;
-        const filteredCount = filterArchiveRunsByStatus(this.loadedRuns(), this.statusFilter).length;
+        const filteredCount = FilterArchiveRunsByStatus(this.loadedRuns(), this.statusFilter).length;
         this.publishAgentContext();
         return { Success: true, Data: { StatusFilter: this.statusFilter, FilteredRunCount: filteredCount } };
     }
@@ -211,7 +211,7 @@ export class ArchiveRunsResourceComponent extends BaseResourceComponent implemen
         if (!this.runViewer) {
             return { Success: false, ErrorMessage: 'The run history view is not ready yet.' };
         }
-        const resolution = resolveArchiveRun(reference, this.loadedRuns());
+        const resolution = ResolveArchiveRun(reference, this.loadedRuns());
         if (!resolution.ok) {
             return { Success: false, ErrorMessage: resolution.error };
         }

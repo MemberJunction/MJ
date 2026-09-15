@@ -55,7 +55,7 @@ export class ArtifactPermissionService {
     /**
      * Load all explicit permissions for an artifact
      */
-    async loadPermissions(artifactId: string, currentUser: UserInfo): Promise<ArtifactPermission[]> {
+    async LoadPermissions(artifactId: string, currentUser: UserInfo): Promise<ArtifactPermission[]> {
         const rv = RunView.FromMetadataProvider(this.Provider);
         const result = await rv.RunView<MJArtifactPermissionEntity>({
             EntityName: 'MJ: Artifact Permissions',
@@ -70,11 +70,16 @@ export class ArtifactPermissionService {
         return [];
     }
 
+    /** @deprecated Use {@link LoadPermissions}. */
+    async loadPermissions(artifactId: string, currentUser: UserInfo): Promise<ArtifactPermission[]> {
+        return this.LoadPermissions(artifactId, currentUser);
+    }
+
     /**
      * Check if user has specific permission for an artifact (HYBRID CHECK)
      * Checks in order: Owner > Explicit Permission > Collection Inheritance
      */
-    async checkPermission(
+    async CheckPermission(
         artifactId: string,
         userId: string,
         permission: 'read' | 'edit' | 'share',
@@ -87,7 +92,7 @@ export class ArtifactPermissionService {
         }
 
         // 2. Check explicit artifact permission
-        const explicit = await this.getExplicitPermission(artifactId, userId, currentUser);
+        const explicit = await this.GetExplicitPermission(artifactId, userId, currentUser);
         if (explicit) {
             return this.hasPermission(explicit, permission);
         }
@@ -110,10 +115,20 @@ export class ArtifactPermissionService {
         return false;
     }
 
+    /** @deprecated Use {@link CheckPermission}. */
+    async checkPermission(
+        artifactId: string,
+        userId: string,
+        permission: 'read' | 'edit' | 'share',
+        currentUser: UserInfo
+    ): Promise<boolean> {
+        return this.CheckPermission(artifactId, userId, permission, currentUser);
+    }
+
     /**
      * Get explicit permission record for a user on an artifact
      */
-    async getExplicitPermission(
+    async GetExplicitPermission(
         artifactId: string,
         userId: string,
         currentUser: UserInfo
@@ -132,10 +147,19 @@ export class ArtifactPermissionService {
         return null;
     }
 
+    /** @deprecated Use {@link GetExplicitPermission}. */
+    async getExplicitPermission(
+        artifactId: string,
+        userId: string,
+        currentUser: UserInfo
+    ): Promise<ArtifactPermission | null> {
+        return this.GetExplicitPermission(artifactId, userId, currentUser);
+    }
+
     /**
      * Get all effective permissions for an artifact (owner + explicit + inherited)
      */
-    async getEffectiveUsers(artifactId: string, currentUser: UserInfo): Promise<EffectivePermission[]> {
+    async GetEffectiveUsers(artifactId: string, currentUser: UserInfo): Promise<EffectivePermission[]> {
         const effectivePermissions: EffectivePermission[] = [];
         const seenUsers = new Set<string>();
 
@@ -159,7 +183,7 @@ export class ArtifactPermissionService {
         }
 
         // 2. Add explicit permissions
-        const explicitPerms = await this.loadPermissions(artifactId, currentUser);
+        const explicitPerms = await this.LoadPermissions(artifactId, currentUser);
         for (const perm of explicitPerms) {
             if (!seenUsers.has(perm.userId)) {
                 effectivePermissions.push({
@@ -202,10 +226,15 @@ export class ArtifactPermissionService {
         return effectivePermissions;
     }
 
+    /** @deprecated Use {@link GetEffectiveUsers}. */
+    async getEffectiveUsers(artifactId: string, currentUser: UserInfo): Promise<EffectivePermission[]> {
+        return this.GetEffectiveUsers(artifactId, currentUser);
+    }
+
     /**
      * Grant explicit permission to a user
      */
-    async grantPermission(
+    async GrantPermission(
         artifactId: string,
         userId: string,
         permissions: ArtifactPermissionSet,
@@ -233,10 +262,21 @@ export class ArtifactPermissionService {
         return permission;
     }
 
+    /** @deprecated Use {@link GrantPermission}. */
+    async grantPermission(
+        artifactId: string,
+        userId: string,
+        permissions: ArtifactPermissionSet,
+        sharedByUserId: string,
+        currentUser: UserInfo
+    ): Promise<MJArtifactPermissionEntity> {
+        return this.GrantPermission(artifactId, userId, permissions, sharedByUserId, currentUser);
+    }
+
     /**
      * Update existing permission
      */
-    async updatePermission(
+    async UpdatePermission(
         permissionId: string,
         permissions: ArtifactPermissionSet,
         currentUser: UserInfo
@@ -255,10 +295,19 @@ export class ArtifactPermissionService {
         return await permission.Save();
     }
 
+    /** @deprecated Use {@link UpdatePermission}. */
+    async updatePermission(
+        permissionId: string,
+        permissions: ArtifactPermissionSet,
+        currentUser: UserInfo
+    ): Promise<boolean> {
+        return this.UpdatePermission(permissionId, permissions, currentUser);
+    }
+
     /**
      * Revoke explicit permission
      */
-    async revokePermission(permissionId: string, currentUser: UserInfo): Promise<boolean> {
+    async RevokePermission(permissionId: string, currentUser: UserInfo): Promise<boolean> {
         const md = this.Provider;
         const permission = await md.GetEntityObject<MJArtifactPermissionEntity>(
             'MJ: Artifact Permissions',
@@ -269,10 +318,15 @@ export class ArtifactPermissionService {
         return await permission.Delete();
     }
 
+    /** @deprecated Use {@link RevokePermission}. */
+    async revokePermission(permissionId: string, currentUser: UserInfo): Promise<boolean> {
+        return this.RevokePermission(permissionId, currentUser);
+    }
+
     /**
      * Validate that requested permissions don't exceed granter's permissions
      */
-    validatePermissions(
+    ValidatePermissions(
         requested: ArtifactPermissionSet,
         granter: ArtifactPermissionSet,
         isOwner: boolean
@@ -286,10 +340,19 @@ export class ArtifactPermissionService {
         return true;
     }
 
+    /** @deprecated Use {@link ValidatePermissions}. */
+    validatePermissions(
+        requested: ArtifactPermissionSet,
+        granter: ArtifactPermissionSet,
+        isOwner: boolean
+    ): boolean {
+        return this.ValidatePermissions(requested, granter, isOwner);
+    }
+
     /**
      * Get available permissions for a user to grant based on their own permissions
      */
-    getAvailablePermissions(userPermissions: ArtifactPermissionSet, isOwner: boolean): string[] {
+    GetAvailablePermissions(userPermissions: ArtifactPermissionSet, isOwner: boolean): string[] {
         if (isOwner) {
             return ['Read', 'Edit', 'Share'];
         }
@@ -301,25 +364,40 @@ export class ArtifactPermissionService {
         return available;
     }
 
+    /** @deprecated Use {@link GetAvailablePermissions}. */
+    getAvailablePermissions(userPermissions: ArtifactPermissionSet, isOwner: boolean): string[] {
+        return this.GetAvailablePermissions(userPermissions, isOwner);
+    }
+
     /**
      * Check if user is owner of artifact
      */
-    async isOwner(artifactId: string, userId: string, currentUser: UserInfo): Promise<boolean> {
+    async IsOwner(artifactId: string, userId: string, currentUser: UserInfo): Promise<boolean> {
         const artifact = await this.getArtifact(artifactId, currentUser);
         return artifact ? UUIDsEqual(artifact.UserID, userId) : false;
+    }
+
+    /** @deprecated Use {@link IsOwner}. */
+    async isOwner(artifactId: string, userId: string, currentUser: UserInfo): Promise<boolean> {
+        return this.IsOwner(artifactId, userId, currentUser);
     }
 
     /**
      * Get all permissions for current user on an artifact (convenience method for UI)
      */
-    async getUserPermissions(artifactId: string, currentUser: UserInfo): Promise<ArtifactPermissionSet> {
+    async GetUserPermissions(artifactId: string, currentUser: UserInfo): Promise<ArtifactPermissionSet> {
         const [canRead, canEdit, canShare] = await Promise.all([
-            this.checkPermission(artifactId, currentUser.ID, 'read', currentUser),
-            this.checkPermission(artifactId, currentUser.ID, 'edit', currentUser),
-            this.checkPermission(artifactId, currentUser.ID, 'share', currentUser)
+            this.CheckPermission(artifactId, currentUser.ID, 'read', currentUser),
+            this.CheckPermission(artifactId, currentUser.ID, 'edit', currentUser),
+            this.CheckPermission(artifactId, currentUser.ID, 'share', currentUser)
         ]);
 
         return { canRead, canEdit, canShare };
+    }
+
+    /** @deprecated Use {@link GetUserPermissions}. */
+    async getUserPermissions(artifactId: string, currentUser: UserInfo): Promise<ArtifactPermissionSet> {
+        return this.GetUserPermissions(artifactId, currentUser);
     }
 
     /**

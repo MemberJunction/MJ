@@ -88,21 +88,44 @@ export class ChatComponent implements AfterViewInit {
   @ViewChild('messagesContainer', { static: true }) private messagesContainer!: ElementRef;
   @ViewChild('theInput') theInput: ElementRef | undefined;
 
-  public currentMessage: string = '';
-  public showingClearAllDialog: boolean = false;
+  public CurrentMessage: string = '';
+
+  /** @deprecated Use {@link CurrentMessage}. */
+  public get currentMessage(): string {
+    return this.CurrentMessage;
+  }
+  /** @deprecated Use {@link CurrentMessage}. */
+  public set currentMessage(value: string) {
+    this.CurrentMessage = value;
+  }
+  public ShowingClearAllDialog: boolean = false;
+
+  /** @deprecated Use {@link ShowingClearAllDialog}. */
+  public get showingClearAllDialog(): boolean {
+    return this.ShowingClearAllDialog;
+  }
+  /** @deprecated Use {@link ShowingClearAllDialog}. */
+  public set showingClearAllDialog(value: boolean) {
+    this.ShowingClearAllDialog = value;
+  }
   constructor(private markdownService: MarkdownService, private cd: ChangeDetectorRef) {}
 
   public SendCurrentMessage(): void {
-    if (this.currentMessage.trim() !== '') {
-      this.SendMessage(this.currentMessage, 'User', 'user', null);
-      this.currentMessage = ''; // Clear the input field
+    if (this.CurrentMessage.trim() !== '') {
+      this.SendMessage(this.CurrentMessage, 'User', 'user', null);
+      this.CurrentMessage = ''; // Clear the input field
     }
   }
 
-  public handleInputChange(event: any) {
+  public HandleInputChange(event: any) {
     const val = this.theInput?.nativeElement.value;
     this.InternalAllowSend = this.AllowSend && (val ? val.length > 0 : false);
     this.resizeTextInput();
+  }
+
+  /** @deprecated Use {@link HandleInputChange}. */
+  public handleInputChange(event: any) {
+    return this.HandleInputChange(event);
   }
 
   protected resizeTextInput() {
@@ -141,7 +164,7 @@ export class ChatComponent implements AfterViewInit {
     this.cd.detectChanges(); // Manually trigger change detection
 
     this.FocusTextArea();
-    this.showingClearAllDialog = false;
+    this.ShowingClearAllDialog = false;
   }
 
   protected FocusTextArea() {
@@ -208,12 +231,17 @@ export class ChatComponent implements AfterViewInit {
 
   public ShowScrollToBottomButton: boolean = false;
 
-  handleCheckScroll(): void {
+  HandleCheckScroll(): void {
     const element = this.messagesContainer.nativeElement;
     if (element.scrollHeight - element.scrollTop > element.clientHeight) {
       this.ShowScrollToBottomButton = true;
     } else {
       this.ShowScrollToBottomButton = false;
     }
+  }
+
+  /** @deprecated Use {@link HandleCheckScroll}. */
+  handleCheckScroll(): void {
+    return this.HandleCheckScroll();
   }
 }

@@ -50,7 +50,16 @@ export class StepBasicsComponent implements OnInit {
     public Description = '';
 
     /** When true, TableName auto-tracks EntityName changes. */
-    public tableNameIsAuto = true;
+    public TableNameIsAuto = true;
+
+    /** @deprecated Use {@link TableNameIsAuto}. */
+    public get tableNameIsAuto() {
+        return this.TableNameIsAuto;
+    }
+    /** @deprecated Use {@link TableNameIsAuto}. */
+    public set tableNameIsAuto(value) {
+        this.TableNameIsAuto = value;
+    }
 
     // ─── Custom schema input ───────────────────────────────────────────────
 
@@ -64,7 +73,7 @@ export class StepBasicsComponent implements OnInit {
         this.TableName   = this.InitialValue.tableName   ?? '';
         this.SchemaName  = this.InitialValue.schemaName  ?? this.defaultSchema();
         this.Description = this.InitialValue.description ?? '';
-        this.tableNameIsAuto = this.InitialValue.tableNameIsAuto ?? true;
+        this.TableNameIsAuto = this.InitialValue.tableNameIsAuto ?? true;
         // If SchemaName was a previously typed value (no matching dropdown option),
         // restore it to CustomSchemaName so the text field is pre-populated on back-nav.
         const knownOpt = this.AvailableSchemas.find(s => s.value === this.SchemaName);
@@ -78,8 +87,8 @@ export class StepBasicsComponent implements OnInit {
 
     public OnEntityNameChange(value: string): void {
         this.EntityName = value;
-        if (this.tableNameIsAuto) {
-            this.TableName = this.deriveTableName(value);
+        if (this.TableNameIsAuto) {
+            this.TableName = this.DeriveTableName(value);
         }
         this.emit();
     }
@@ -87,7 +96,7 @@ export class StepBasicsComponent implements OnInit {
     public OnTableNameChange(value: string): void {
         this.TableName = value;
         // User has taken manual control
-        this.tableNameIsAuto = value === this.deriveTableName(this.EntityName);
+        this.TableNameIsAuto = value === this.DeriveTableName(this.EntityName);
         this.emit();
     }
 
@@ -127,7 +136,7 @@ export class StepBasicsComponent implements OnInit {
     }
 
     /** Convert "Support Tickets" → "SupportTickets". */
-    public deriveTableName(entityName: string): string {
+    public DeriveTableName(entityName: string): string {
         return entityName
             .replace(/[^a-zA-Z0-9 ]/g, '')
             .split(' ')
@@ -136,13 +145,18 @@ export class StepBasicsComponent implements OnInit {
             .join('');
     }
 
+    /** @deprecated Use {@link DeriveTableName}. */
+    public deriveTableName(entityName: string): string {
+        return this.DeriveTableName(entityName);
+    }
+
     private emit(): void {
         this.ValueChanged.emit({
             entityName: this.EntityName,
             tableName:  this.TableName,
             schemaName: this.SchemaName,
             description: this.Description,
-            tableNameIsAuto: this.tableNameIsAuto,
+            tableNameIsAuto: this.TableNameIsAuto,
         });
         this.cdr.markForCheck();
     }

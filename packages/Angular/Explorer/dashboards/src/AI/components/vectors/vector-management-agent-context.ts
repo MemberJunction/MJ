@@ -22,8 +22,13 @@ export type VectorSyncStatus = 'Synced' | 'Syncing' | 'Error' | 'Pending';
  * Cap an array of names to {@link VECTOR_AGENT_CONTEXT_NAME_LIST_CAP} entries.
  * Pure + deterministic; never mutates the input.
  */
-export function capVectorNames(names: readonly string[]): string[] {
+export function CapVectorNames(names: readonly string[]): string[] {
     return names.slice(0, VECTOR_AGENT_CONTEXT_NAME_LIST_CAP);
+}
+
+/** @deprecated Use {@link CapVectorNames}. */
+export function capVectorNames(names: readonly string[]): string[] {
+    return CapVectorNames(names);
 }
 
 /**
@@ -55,7 +60,7 @@ export type VectorResolveResult<T> =
  * Pure + deterministic over the supplied row list. Returns a tolerant "available entities"
  * error on a miss (never throws).
  */
-export function resolveSyncRow<T extends VectorSyncRowCandidate>(
+export function ResolveSyncRow<T extends VectorSyncRowCandidate>(
     input: string,
     rows: readonly T[],
 ): VectorResolveResult<T> {
@@ -78,22 +83,35 @@ export function resolveSyncRow<T extends VectorSyncRowCandidate>(
     );
     if (byPartial) return { ok: true, value: byPartial };
 
-    return { ok: false, error: buildVectorNotFoundError(input, rows.map(r => r.EntityName)) };
+    return { ok: false, error: BuildVectorNotFoundError(input, rows.map(r => r.EntityName)) };
+}
+
+/** @deprecated Use {@link ResolveSyncRow}. */
+export function resolveSyncRow<T extends VectorSyncRowCandidate>(
+    input: string,
+    rows: readonly T[],
+): VectorResolveResult<T> {
+    return ResolveSyncRow(input, rows);
 }
 
 /**
  * Build a tolerant "not found" error listing a bounded sample of available entity names.
  * Pure + deterministic.
  */
-export function buildVectorNotFoundError(input: string, availableNames: readonly string[]): string {
+export function BuildVectorNotFoundError(input: string, availableNames: readonly string[]): string {
     if (availableNames.length === 0) {
         return `No match for "${input}". No vector entity documents are configured.`;
     }
-    const sample = capVectorNames(availableNames).join(', ');
+    const sample = CapVectorNames(availableNames).join(', ');
     const more = availableNames.length > VECTOR_AGENT_CONTEXT_NAME_LIST_CAP
         ? ` (+${availableNames.length - VECTOR_AGENT_CONTEXT_NAME_LIST_CAP} more)`
         : '';
     return `No vector entity document matches "${input}". Available: ${sample}${more}.`;
+}
+
+/** @deprecated Use {@link BuildVectorNotFoundError}. */
+export function buildVectorNotFoundError(input: string, availableNames: readonly string[]): string {
+    return BuildVectorNotFoundError(input, availableNames);
 }
 
 /**
@@ -141,7 +159,7 @@ export interface VectorAgentContextInput {
  * status), and the list of entity names the SyncVectorsForEntity / SelectVectorEntity tools
  * can target. Pure function (no `this`) for unit-testability.
  */
-export function buildVectorAgentContext(input: VectorAgentContextInput): Record<string, unknown> {
+export function BuildVectorAgentContext(input: VectorAgentContextInput): Record<string, unknown> {
     const context: Record<string, unknown> = {
         TotalVectors: input.TotalVectors,
         EntityDocumentCount: input.EntityDocumentCount,
@@ -163,11 +181,16 @@ export function buildVectorAgentContext(input: VectorAgentContextInput): Record<
             VectorCount: e.VectorCount,
             Status: e.Status,
         }));
-        context['AvailableEntityNames'] = capVectorNames(input.Entities.map(e => e.EntityName));
+        context['AvailableEntityNames'] = CapVectorNames(input.Entities.map(e => e.EntityName));
         if (input.Entities.length > VECTOR_AGENT_CONTEXT_NAME_LIST_CAP) {
             context['EntityBreakdownCount'] = input.Entities.length;
         }
     }
 
     return context;
+}
+
+/** @deprecated Use {@link BuildVectorAgentContext}. */
+export function buildVectorAgentContext(input: VectorAgentContextInput): Record<string, unknown> {
+    return BuildVectorAgentContext(input);
 }

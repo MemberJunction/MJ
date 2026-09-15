@@ -15,7 +15,7 @@
  * here is how the two sources would drift into looking like different products.
  */
 import type { AgentRunTreeNode, AgentRunTreeNodeType } from '@memberjunction/ai-core-plus';
-import { FlowNode, FlowModel, RootIcon, finalizeFlowModel } from './agent-run-flow.model';
+import { FlowNode, FlowModel, RootIcon, FinalizeFlowModel } from './agent-run-flow.model';
 
 /**
  * How a tree node's kind maps to the visual vocabulary.
@@ -81,7 +81,7 @@ const ICON_BY_TYPE: Record<FlowNode['type'], string> = {
  * @param rootStatus the run's status
  * @param rootIcon the agent's icon/logo, which only the form knows
  */
-export function buildFlowModelFromTree(
+export function BuildFlowModelFromTree(
     root: AgentRunTreeNode | null,
     rootName: string,
     rootStatus: string,
@@ -107,7 +107,17 @@ export function buildFlowModelFromTree(
 
     for (const child of root.Children) attach(rootNode, child);
 
-    return finalizeFlowModel(rootNode);
+    return FinalizeFlowModel(rootNode);
+}
+
+/** @deprecated Use {@link BuildFlowModelFromTree}. */
+export function buildFlowModelFromTree(
+    root: AgentRunTreeNode | null,
+    rootName: string,
+    rootStatus: string,
+    rootIcon: RootIcon,
+): FlowModel | null {
+    return BuildFlowModelFromTree(root, rootName, rootStatus, rootIcon);
 }
 
 /** Adds one tree node (and its descendants) under a flow node. */

@@ -78,7 +78,16 @@ export class MJNotificationService {
 
   private static isLoading$ = new BehaviorSubject<boolean>(false);
   private tabChange = new Subject();
-  tabChange$ = this.tabChange.asObservable();
+  TabChange$ = this.tabChange.asObservable();
+
+  /** @deprecated Use {@link TabChange$}. */
+  get tabChange$() {
+    return this.TabChange$;
+  }
+  /** @deprecated Use {@link TabChange$}. */
+  set tabChange$(value) {
+    this.TabChange$ = value;
+  }
 
   /**
    * Observable stream of the current user's notifications, derived from

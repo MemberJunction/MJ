@@ -225,7 +225,16 @@ export interface HeatmapConfig {
   `]
 })
 export class PerformanceHeatmapComponent implements OnInit, AfterViewInit, OnChanges, OnDestroy {
-  @Input() data: HeatmapData[] = [];
+  @Input() Data: HeatmapData[] = [];
+
+  /** @deprecated Use {@link Data}. */
+  @Input() set data(value: HeatmapData[]) {
+    this.Data = value;
+  }
+  /** @deprecated Use {@link Data}. */
+  get data(): HeatmapData[] {
+    return this.Data;
+  }
   @Input() title?: string;
   @Input() config: HeatmapConfig = {};
 
@@ -262,12 +271,66 @@ export class PerformanceHeatmapComponent implements OnInit, AfterViewInit, OnCha
   }
   
   // Data processing
-  selectedMetric = 'performance';
-  processedData: HeatmapData[] = [];
-  uniqueAgents: string[] = [];
-  uniqueModels: string[] = [];
-  minValue = 0;
-  maxValue = 1;
+  SelectedMetric = 'performance';
+
+  /** @deprecated Use {@link SelectedMetric}. */
+  get selectedMetric() {
+    return this.SelectedMetric;
+  }
+  /** @deprecated Use {@link SelectedMetric}. */
+  set selectedMetric(value) {
+    this.SelectedMetric = value;
+  }
+  ProcessedData: HeatmapData[] = [];
+
+  /** @deprecated Use {@link ProcessedData}. */
+  get processedData(): HeatmapData[] {
+    return this.ProcessedData;
+  }
+  /** @deprecated Use {@link ProcessedData}. */
+  set processedData(value: HeatmapData[]) {
+    this.ProcessedData = value;
+  }
+  UniqueAgents: string[] = [];
+
+  /** @deprecated Use {@link UniqueAgents}. */
+  get uniqueAgents(): string[] {
+    return this.UniqueAgents;
+  }
+  /** @deprecated Use {@link UniqueAgents}. */
+  set uniqueAgents(value: string[]) {
+    this.UniqueAgents = value;
+  }
+  UniqueModels: string[] = [];
+
+  /** @deprecated Use {@link UniqueModels}. */
+  get uniqueModels(): string[] {
+    return this.UniqueModels;
+  }
+  /** @deprecated Use {@link UniqueModels}. */
+  set uniqueModels(value: string[]) {
+    this.UniqueModels = value;
+  }
+  MinValue = 0;
+
+  /** @deprecated Use {@link MinValue}. */
+  get minValue() {
+    return this.MinValue;
+  }
+  /** @deprecated Use {@link MinValue}. */
+  set minValue(value) {
+    this.MinValue = value;
+  }
+  MaxValue = 1;
+
+  /** @deprecated Use {@link MaxValue}. */
+  get maxValue() {
+    return this.MaxValue;
+  }
+  /** @deprecated Use {@link MaxValue}. */
+  set maxValue(value) {
+    this.MaxValue = value;
+  }
 
   ngOnInit() {
     this.applyConfig();
@@ -276,17 +339,17 @@ export class PerformanceHeatmapComponent implements OnInit, AfterViewInit, OnCha
   ngAfterViewInit() {
     this.initChart();
     this.processData();
-    this.updateChart();
+    this.UpdateChart();
   }
 
   ngOnChanges(changes: SimpleChanges) {
     if (changes['data'] && !changes['data'].firstChange) {
       this.processData();
-      this.updateChart();
+      this.UpdateChart();
     }
     if (changes['config'] && !changes['config'].firstChange) {
       this.applyConfig();
-      this.updateChart();
+      this.UpdateChart();
     }
   }
 
@@ -304,26 +367,26 @@ export class PerformanceHeatmapComponent implements OnInit, AfterViewInit, OnCha
     this.initLegend();
     
     // Set up responsive behavior
-    d3.select(window).on('resize.heatmap', () => this.updateChart());
+    d3.select(window).on('resize.heatmap', () => this.UpdateChart());
   }
 
   private processData() {
-    if (!this.data || this.data.length === 0) {
-      this.processedData = [];
-      this.uniqueAgents = [];
-      this.uniqueModels = [];
+    if (!this.Data || this.Data.length === 0) {
+      this.ProcessedData = [];
+      this.UniqueAgents = [];
+      this.UniqueModels = [];
       return;
     }
 
     // Calculate performance scores and process data
-    this.processedData = this.data.map(d => ({
+    this.ProcessedData = this.Data.map(d => ({
       ...d,
       value: this.calculatePerformanceScore(d)
     }));
 
     // Get unique agents and models
-    this.uniqueAgents = Array.from(new Set(this.processedData.map(d => d.agent))).sort();
-    this.uniqueModels = Array.from(new Set(this.processedData.map(d => d.model))).sort();
+    this.UniqueAgents = Array.from(new Set(this.ProcessedData.map(d => d.agent))).sort();
+    this.UniqueModels = Array.from(new Set(this.ProcessedData.map(d => d.model))).sort();
 
     // Update value range based on selected metric
     this.updateValueRange();
@@ -331,7 +394,7 @@ export class PerformanceHeatmapComponent implements OnInit, AfterViewInit, OnCha
 
   private calculatePerformanceScore(data: HeatmapData): number {
     // Normalize avgTime (lower is better, scale 0-1)
-    const maxTime = Math.max(...this.data.map(d => d.avgTime));
+    const maxTime = Math.max(...this.Data.map(d => d.avgTime));
     const normalizedTime = maxTime > 0 ? 1 - (data.avgTime / maxTime) : 1;
     
     // Success rate is already 0-1
@@ -344,30 +407,30 @@ export class PerformanceHeatmapComponent implements OnInit, AfterViewInit, OnCha
   private updateValueRange() {
     let values: number[];
     
-    switch (this.selectedMetric) {
+    switch (this.SelectedMetric) {
       case 'avgTime':
-        values = this.processedData.map(d => d.avgTime);
+        values = this.ProcessedData.map(d => d.avgTime);
         break;
       case 'successRate':
-        values = this.processedData.map(d => d.successRate);
+        values = this.ProcessedData.map(d => d.successRate);
         break;
       case 'performance':
       default:
-        values = this.processedData.map(d => d.value || 0);
+        values = this.ProcessedData.map(d => d.value || 0);
         break;
     }
 
-    this.minValue = Math.min(...values);
-    this.maxValue = Math.max(...values);
+    this.MinValue = Math.min(...values);
+    this.MaxValue = Math.max(...values);
 
     // Ensure reasonable range
-    if (this.minValue === this.maxValue) {
-      this.maxValue = this.minValue + 1;
+    if (this.MinValue === this.MaxValue) {
+      this.MaxValue = this.MinValue + 1;
     }
   }
 
-  updateChart() {
-    if (!this.processedData || this.processedData.length === 0) {
+  UpdateChart() {
+    if (!this.ProcessedData || this.ProcessedData.length === 0) {
       this.svg.selectAll('*').remove();
       return;
     }
@@ -378,10 +441,15 @@ export class PerformanceHeatmapComponent implements OnInit, AfterViewInit, OnCha
     this.updateLegend();
   }
 
+  /** @deprecated Use {@link UpdateChart}. */
+  updateChart() {
+    return this.UpdateChart();
+  }
+
   private calculateDimensions() {
     const container = this.chartSvg.nativeElement.parentElement!;
     this.width = (this.config.width || container.clientWidth) - this.margin.left - this.margin.right;
-    this.height = (this.config.height || Math.max(300, this.uniqueAgents.length * 30 + 100)) - this.margin.top - this.margin.bottom;
+    this.height = (this.config.height || Math.max(300, this.UniqueAgents.length * 30 + 100)) - this.margin.top - this.margin.bottom;
     
     this.svg
       .attr('width', this.width + this.margin.left + this.margin.right)
@@ -394,22 +462,22 @@ export class PerformanceHeatmapComponent implements OnInit, AfterViewInit, OnCha
 
     // Create scales
     const xScale = d3.scaleBand()
-      .domain(this.uniqueModels)
+      .domain(this.UniqueModels)
       .range([0, this.width])
       .padding(0.05);
 
     const yScale = d3.scaleBand()
-      .domain(this.uniqueAgents)
+      .domain(this.UniqueAgents)
       .range([0, this.height])
       .padding(0.05);
 
     const colorScale = d3.scaleSequential()
-      .domain([this.minValue, this.maxValue])
+      .domain([this.MinValue, this.MaxValue])
       .interpolator(d3.interpolateBlues);
 
     // Draw cells
     const cells = g.selectAll('.heatmap-cell')
-      .data(this.processedData)
+      .data(this.ProcessedData)
       .enter().append('rect')
       .attr('class', 'heatmap-cell')
       .attr('x', d => xScale(d.model) || 0)
@@ -434,9 +502,9 @@ export class PerformanceHeatmapComponent implements OnInit, AfterViewInit, OnCha
     this.drawAxes(g, xScale, yScale);
 
     // Add value labels on cells (for smaller datasets)
-    if (this.processedData.length <= 50) {
+    if (this.ProcessedData.length <= 50) {
       g.selectAll('.cell-label')
-        .data(this.processedData)
+        .data(this.ProcessedData)
         .enter().append('text')
         .attr('class', 'cell-label')
         .attr('x', d => (xScale(d.model) || 0) + xScale.bandwidth() / 2)
@@ -485,7 +553,7 @@ export class PerformanceHeatmapComponent implements OnInit, AfterViewInit, OnCha
   }
 
   private getMetricValue(data: HeatmapData): number {
-    switch (this.selectedMetric) {
+    switch (this.SelectedMetric) {
       case 'avgTime':
         return data.avgTime;
       case 'successRate':
@@ -507,7 +575,7 @@ export class PerformanceHeatmapComponent implements OnInit, AfterViewInit, OnCha
   }
 
   private formatCellValue(value: number): string {
-    switch (this.selectedMetric) {
+    switch (this.SelectedMetric) {
       case 'avgTime':
         return `${(value / 1000).toFixed(1)}s`;
       case 'successRate':
@@ -576,21 +644,21 @@ export class PerformanceHeatmapComponent implements OnInit, AfterViewInit, OnCha
     gradient.selectAll('stop').remove();
 
     const colorScale = d3.scaleSequential()
-      .domain([this.minValue, this.maxValue])
+      .domain([this.MinValue, this.MaxValue])
       .interpolator(d3.interpolateBlues);
 
     // Create 10 color stops
     for (let i = 0; i <= 10; i++) {
       const t = i / 10;
-      const value = this.minValue + t * (this.maxValue - this.minValue);
+      const value = this.MinValue + t * (this.MaxValue - this.MinValue);
       gradient.append('stop')
         .attr('offset', `${t * 100}%`)
         .attr('stop-color', colorScale(value));
     }
   }
 
-  getLegendTitle(): string {
-    switch (this.selectedMetric) {
+  GetLegendTitle(): string {
+    switch (this.SelectedMetric) {
       case 'avgTime':
         return 'Execution Time';
       case 'successRate':
@@ -601,8 +669,13 @@ export class PerformanceHeatmapComponent implements OnInit, AfterViewInit, OnCha
     }
   }
 
-  formatLegendValue(value: number): string {
-    switch (this.selectedMetric) {
+  /** @deprecated Use {@link GetLegendTitle}. */
+  getLegendTitle(): string {
+    return this.GetLegendTitle();
+  }
+
+  FormatLegendValue(value: number): string {
+    switch (this.SelectedMetric) {
       case 'avgTime':
         return `${(value / 1000).toFixed(1)}s`;
       case 'successRate':
@@ -611,5 +684,10 @@ export class PerformanceHeatmapComponent implements OnInit, AfterViewInit, OnCha
       default:
         return value.toFixed(2);
     }
+  }
+
+  /** @deprecated Use {@link FormatLegendValue}. */
+  formatLegendValue(value: number): string {
+    return this.FormatLegendValue(value);
   }
 }

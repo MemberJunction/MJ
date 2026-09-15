@@ -150,37 +150,262 @@ export class AiComposerComponent {
   }
 
   // ── Proxied inputs (identical names/defaults to MessageInputBoxComponent) ────────
-  @Input() placeholder: string = 'Type your message to start a new conversation...';
-  @Input() disabled: boolean = false;
-  @Input() value: string = '';
-  @Input() showCharacterCount: boolean = false;
+  @Input() Placeholder: string = 'Type your message to start a new conversation...';
+
+  /** @deprecated Use {@link Placeholder}. */
+  @Input() set placeholder(value: string) {
+    this.Placeholder = value;
+  }
+  /** @deprecated Use {@link Placeholder}. */
+  get placeholder(): string {
+    return this.Placeholder;
+  }
+  @Input() Disabled: boolean = false;
+
+  /** @deprecated Use {@link Disabled}. */
+  @Input() set disabled(value: boolean) {
+    this.Disabled = value;
+  }
+  /** @deprecated Use {@link Disabled}. */
+  get disabled(): boolean {
+    return this.Disabled;
+  }
+  @Input() Value: string = '';
+
+  /** @deprecated Use {@link Value}. */
+  @Input() set value(value: string) {
+    this.Value = value;
+  }
+  /** @deprecated Use {@link Value}. */
+  get value(): string {
+    return this.Value;
+  }
+  @Input() ShowCharacterCount: boolean = false;
+
+  /** @deprecated Use {@link ShowCharacterCount}. */
+  @Input() set showCharacterCount(value: boolean) {
+    this.ShowCharacterCount = value;
+  }
+  /** @deprecated Use {@link ShowCharacterCount}. */
+  get showCharacterCount(): boolean {
+    return this.ShowCharacterCount;
+  }
   /** Master switch for all mention/command triggers (pass-through). */
-  @Input() enableMentions: boolean = true;
+  @Input() EnableMentions: boolean = true;
+
+  /** @deprecated Use {@link EnableMentions}. */
+  @Input() set enableMentions(value: boolean) {
+    this.EnableMentions = value;
+  }
+  /** @deprecated Use {@link EnableMentions}. */
+  get enableMentions(): boolean {
+    return this.EnableMentions;
+  }
   /** Optional metadata provider scoping this composer (pass-through to the trigger plugins). */
   @Input() Provider: IMetadataProvider | null = null;
-  @Input() currentUser?: UserInfo;
-  @Input() rows: number = 3;
-  @Input() enableAttachments: boolean = true;
-  @Input() maxAttachments: number = 10;
-  @Input() maxAttachmentSizeBytes: number = 20 * 1024 * 1024; // 20MB
-  @Input() acceptedFileTypes: string = 'image/*';
-  @Input() enableRealtime: boolean = false;
-  @Input() voiceActive: boolean = false;
-  @Input() canStartRealtime: boolean = true;
-  @Input() enablePlanMode: boolean = false;
-  @Input() planModeActive: boolean = false;
+  @Input() CurrentUser?: UserInfo;
+
+  /** @deprecated Use {@link CurrentUser}. */
+  @Input() set currentUser(value: UserInfo | undefined) {
+    this.CurrentUser = value;
+  }
+  /** @deprecated Use {@link CurrentUser}. */
+  get currentUser(): UserInfo | undefined {
+    return this.CurrentUser;
+  }
+  @Input() Rows: number = 3;
+
+  /** @deprecated Use {@link Rows}. */
+  @Input() set rows(value: number) {
+    this.Rows = value;
+  }
+  /** @deprecated Use {@link Rows}. */
+  get rows(): number {
+    return this.Rows;
+  }
+  @Input() EnableAttachments: boolean = true;
+
+  /** @deprecated Use {@link EnableAttachments}. */
+  @Input() set enableAttachments(value: boolean) {
+    this.EnableAttachments = value;
+  }
+  /** @deprecated Use {@link EnableAttachments}. */
+  get enableAttachments(): boolean {
+    return this.EnableAttachments;
+  }
+  @Input() MaxAttachments: number = 10;
+
+  /** @deprecated Use {@link MaxAttachments}. */
+  @Input() set maxAttachments(value: number) {
+    this.MaxAttachments = value;
+  }
+  /** @deprecated Use {@link MaxAttachments}. */
+  get maxAttachments(): number {
+    return this.MaxAttachments;
+  }
+  @Input() MaxAttachmentSizeBytes: number = 20 * 1024 * 1024;
+
+  /** @deprecated Use {@link MaxAttachmentSizeBytes}. */
+  @Input() set maxAttachmentSizeBytes(value: number) {
+    this.MaxAttachmentSizeBytes = value;
+  }
+  /** @deprecated Use {@link MaxAttachmentSizeBytes}. */
+  get maxAttachmentSizeBytes(): number {
+    return this.MaxAttachmentSizeBytes;
+  } // 20MB
+  @Input() AcceptedFileTypes: string = 'image/*';
+
+  /** @deprecated Use {@link AcceptedFileTypes}. */
+  @Input() set acceptedFileTypes(value: string) {
+    this.AcceptedFileTypes = value;
+  }
+  /** @deprecated Use {@link AcceptedFileTypes}. */
+  get acceptedFileTypes(): string {
+    return this.AcceptedFileTypes;
+  }
+  @Input() EnableRealtime: boolean = false;
+
+  /** @deprecated Use {@link EnableRealtime}. */
+  @Input() set enableRealtime(value: boolean) {
+    this.EnableRealtime = value;
+  }
+  /** @deprecated Use {@link EnableRealtime}. */
+  get enableRealtime(): boolean {
+    return this.EnableRealtime;
+  }
+  @Input() VoiceActive: boolean = false;
+
+  /** @deprecated Use {@link VoiceActive}. */
+  @Input() set voiceActive(value: boolean) {
+    this.VoiceActive = value;
+  }
+  /** @deprecated Use {@link VoiceActive}. */
+  get voiceActive(): boolean {
+    return this.VoiceActive;
+  }
+  @Input() CanStartRealtime: boolean = true;
+
+  /** @deprecated Use {@link CanStartRealtime}. */
+  @Input() set canStartRealtime(value: boolean) {
+    this.CanStartRealtime = value;
+  }
+  /** @deprecated Use {@link CanStartRealtime}. */
+  get canStartRealtime(): boolean {
+    return this.CanStartRealtime;
+  }
+  @Input() EnablePlanMode: boolean = false;
+
+  /** @deprecated Use {@link EnablePlanMode}. */
+  @Input() set enablePlanMode(value: boolean) {
+    this.EnablePlanMode = value;
+  }
+  /** @deprecated Use {@link EnablePlanMode}. */
+  get enablePlanMode(): boolean {
+    return this.EnablePlanMode;
+  }
+  @Input() PlanModeActive: boolean = false;
+
+  /** @deprecated Use {@link PlanModeActive}. */
+  @Input() set planModeActive(value: boolean) {
+    this.PlanModeActive = value;
+  }
+  /** @deprecated Use {@link PlanModeActive}. */
+  get planModeActive(): boolean {
+    return this.PlanModeActive;
+  }
 
   // ── Proxied outputs ───────────────────────────────────────────────────────────────
-  @Output() textSubmitted = new EventEmitter<string>();
+  @Output() TextSubmitted = new EventEmitter<string>();
+
+  /**
+   * @deprecated Use {@link TextSubmitted}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (textSubmitted) keeps working. Must stay AFTER TextSubmitted: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() textSubmitted = this.TextSubmitted;
   /** Composer lost focus — hosts persist drafts on this. */
-  @Output() blurred = new EventEmitter<void>();
-  @Output() valueChange = new EventEmitter<string>();
-  @Output() attachmentsChanged = new EventEmitter<PendingAttachment[]>();
-  @Output() attachmentError = new EventEmitter<string>();
-  @Output() attachmentClicked = new EventEmitter<PendingAttachment>();
-  @Output() voiceRequested = new EventEmitter<void>();
-  @Output() voiceOptionsRequested = new EventEmitter<void>();
-  @Output() planModeToggle = new EventEmitter<void>();
+  @Output() Blurred = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link Blurred}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (blurred) keeps working. Must stay AFTER Blurred: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() blurred = this.Blurred;
+  @Output() ValueChange = new EventEmitter<string>();
+
+  /**
+   * @deprecated Use {@link ValueChange}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (valueChange) keeps working. Must stay AFTER ValueChange: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() valueChange = this.ValueChange;
+  @Output() AttachmentsChanged = new EventEmitter<PendingAttachment[]>();
+
+  /**
+   * @deprecated Use {@link AttachmentsChanged}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (attachmentsChanged) keeps working. Must stay AFTER AttachmentsChanged: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() attachmentsChanged = this.AttachmentsChanged;
+  @Output() AttachmentError = new EventEmitter<string>();
+
+  /**
+   * @deprecated Use {@link AttachmentError}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (attachmentError) keeps working. Must stay AFTER AttachmentError: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() attachmentError = this.AttachmentError;
+  @Output() AttachmentClicked = new EventEmitter<PendingAttachment>();
+
+  /**
+   * @deprecated Use {@link AttachmentClicked}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (attachmentClicked) keeps working. Must stay AFTER AttachmentClicked: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() attachmentClicked = this.AttachmentClicked;
+  @Output() VoiceRequested = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link VoiceRequested}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (voiceRequested) keeps working. Must stay AFTER VoiceRequested: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() voiceRequested = this.VoiceRequested;
+  @Output() VoiceOptionsRequested = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link VoiceOptionsRequested}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (voiceOptionsRequested) keeps working. Must stay AFTER VoiceOptionsRequested: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() voiceOptionsRequested = this.VoiceOptionsRequested;
+  @Output() PlanModeToggle = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link PlanModeToggle}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (planModeToggle) keeps working. Must stay AFTER PlanModeToggle: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() planModeToggle = this.PlanModeToggle;
   /**
    * Before/After pair for the Skills button, proxied straight through from the input box. Gated on
    * `EnableSkillCommands` — the button and the keystroke are two doors to the same feature, so one
@@ -188,19 +413,47 @@ export class AiComposerComponent {
    *
    * Cancel on `beforeSkillsOpened` vetoes the dropdown; `afterSkillsOpened` then does not fire.
    */
-  @Output() beforeSkillsOpened = new EventEmitter<BeforeSkillsOpenedEventArgs>();
-  @Output() afterSkillsOpened = new EventEmitter<void>();
+  @Output() BeforeSkillsOpened = new EventEmitter<BeforeSkillsOpenedEventArgs>();
 
+  /**
+   * @deprecated Use {@link BeforeSkillsOpened}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (beforeSkillsOpened) keeps working. Must stay AFTER BeforeSkillsOpened: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() beforeSkillsOpened = this.BeforeSkillsOpened;
+  @Output() AfterSkillsOpened = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link AfterSkillsOpened}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (afterSkillsOpened) keeps working. Must stay AFTER AfterSkillsOpened: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() afterSkillsOpened = this.AfterSkillsOpened;
+
+  OnInnerValueChange(newValue: string): void {
+    this.Value = newValue;
+    this.ValueChange.emit(newValue);
+  }
+
+  /** @deprecated Use {@link OnInnerValueChange}. */
   onInnerValueChange(newValue: string): void {
-    this.value = newValue;
-    this.valueChange.emit(newValue);
+    return this.OnInnerValueChange(newValue);
   }
 
   // ── Proxied public methods (ViewChild delegation) ─────────────────────────────────
 
   /** The inner mention editor — kept reachable for hosts that drive it directly (e.g. clear-after-programmatic-send). */
-  public get mentionEditor(): MentionEditorComponent | undefined {
+  public get MentionEditor(): MentionEditorComponent | undefined {
     return this.inputBox?.mentionEditor;
+  }
+
+  /** @deprecated Use {@link MentionEditor}. */
+  public get mentionEditor(): MentionEditorComponent | undefined {
+    return this.MentionEditor;
   }
 
   /** Focus the composer input. */
@@ -214,33 +467,63 @@ export class AiComposerComponent {
     return this.inputBox?.FocusCaretAtEnd() ?? false;
   }
 
-  public focus(): void {
+  public Focus(): void {
     this.inputBox?.focus();
   }
 
+  /** @deprecated Use {@link Focus}. */
+  public focus(): void {
+    return this.Focus();
+  }
+
   /** Clear the editor content and pending attachments. */
-  public clear(): void {
+  public Clear(): void {
     this.inputBox?.mentionEditor?.clear();
   }
 
+  /** @deprecated Use {@link Clear}. */
+  public clear(): void {
+    return this.Clear();
+  }
+
   /** Mention chip data (id/type/name + preset info) currently in the editor. */
-  public getMentionChipsData(): Array<{ id: string; type: string; name: string; presetId?: string; presetName?: string }> {
+  public GetMentionChipsData(): Array<{ id: string; type: string; name: string; presetId?: string; presetName?: string }> {
     return this.inputBox?.GetMentionChipsData() || [];
   }
 
+  /** @deprecated Use {@link GetMentionChipsData}. */
+  public getMentionChipsData(): Array<{ id: string; type: string; name: string; presetId?: string; presetName?: string }> {
+    return this.GetMentionChipsData();
+  }
+
   /** Plain text with mentions encoded as JSON (`@{"type":...}`) — the persistence format. */
-  public getPlainTextWithJsonMentions(): string {
+  public GetPlainTextWithJsonMentions(): string {
     return this.inputBox?.mentionEditor?.getPlainTextWithJsonMentions() || '';
   }
 
+  /** @deprecated Use {@link GetPlainTextWithJsonMentions}. */
+  public getPlainTextWithJsonMentions(): string {
+    return this.GetPlainTextWithJsonMentions();
+  }
+
   /** Pending (not yet uploaded) attachments. */
-  public getPendingAttachments(): PendingAttachment[] {
+  public GetPendingAttachments(): PendingAttachment[] {
     return this.inputBox?.GetPendingAttachments() || [];
   }
 
+  /** @deprecated Use {@link GetPendingAttachments}. */
+  public getPendingAttachments(): PendingAttachment[] {
+    return this.GetPendingAttachments();
+  }
+
   /** Open the attachment file picker programmatically. */
-  public openFilePicker(): void {
+  public OpenFilePicker(): void {
     this.inputBox?.OpenFilePicker();
+  }
+
+  /** @deprecated Use {@link OpenFilePicker}. */
+  public openFilePicker(): void {
+    return this.OpenFilePicker();
   }
 
   /** Attach an artifact as a pending attachment (artifact picker flow). */

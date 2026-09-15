@@ -54,7 +54,7 @@ function parseRowDrivers(raw: unknown): RowDriver[] | null {
     // Keep the one-hot category: for a per-record "why", the category IS the story — "Membership Type =
     // Student lowers risk" is actionable where a collapsed "Membership Type" is close to meaningless.
     // (Collapsing across categories is only right for GLOBAL importance — see topGlobalDrivers.)
-    out.push({ label: humanizeFeatureName(feature), value, up: value > 0 });
+    out.push({ label: HumanizeFeatureName(feature), value, up: value > 0 });
   }
   return out.length > 0 ? out : null;
 }
@@ -64,7 +64,7 @@ function parseRowDrivers(raw: unknown): RowDriver[] | null {
  * single `Name`, else `FirstName`+`LastName`, else `Email`, else any first non-empty string field.
  * Returns null when nothing usable is found (caller falls back to the record id).
  */
-export function labelFromRecord(row: Record<string, unknown> | undefined | null): string | null {
+export function LabelFromRecord(row: Record<string, unknown> | undefined | null): string | null {
   if (!row) return null;
   const str = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
   const name = str(row['Name']);
@@ -81,6 +81,11 @@ export function labelFromRecord(row: Record<string, unknown> | undefined | null)
   return null;
 }
 
+/** @deprecated Use {@link LabelFromRecord}. */
+export function labelFromRecord(row: Record<string, unknown> | undefined | null): string | null {
+  return LabelFromRecord(row);
+}
+
 /** The raw per-record detail the list is built from (a slice of `MJ: Process Run Details`). */
 export interface RunDetailLike {
   recordId: string;
@@ -92,7 +97,7 @@ function bandFor(score: number): AtRiskRow['band'] {
 }
 
 /** Parse + rank the per-record predictions into the at-risk list (highest risk first). */
-export function parseAtRiskRows(details: RunDetailLike[]): AtRiskRow[] {
+export function ParseAtRiskRows(details: RunDetailLike[]): AtRiskRow[] {
   const rows: AtRiskRow[] = [];
   for (const d of details) {
     if (!d.ResultPayload) continue;
@@ -124,13 +129,18 @@ export function parseAtRiskRows(details: RunDetailLike[]): AtRiskRow[] {
   return rows.sort((a, b) => b.score - a.score);
 }
 
+/** @deprecated Use {@link ParseAtRiskRows}. */
+export function parseAtRiskRows(details: RunDetailLike[]): AtRiskRow[] {
+  return ParseAtRiskRows(details);
+}
+
 /**
  * The top plain-language drivers for the whole prediction, from the model's global feature importance.
  * Accepts the object form (`{"MembershipType=Student": 0.9, ...}`) or the array form
  * (`[{feature, importance}]`), strips one-hot `=value` suffixes, de-duplicates, and returns the
  * highest-importance feature names — so a business user sees "what's driving this", not raw weights.
  */
-export function topGlobalDrivers(featureImportanceJson: string | null | undefined, n = 3): string[] {
+export function TopGlobalDrivers(featureImportanceJson: string | null | undefined, n = 3): string[] {
   if (!featureImportanceJson) return [];
   let parsed: unknown;
   try {
@@ -157,7 +167,12 @@ export function topGlobalDrivers(featureImportanceJson: string | null | undefine
     if (!base) continue;
     byFeature.set(base, Math.max(byFeature.get(base) ?? 0, weight));
   }
-  return [...byFeature.entries()].sort((a, b) => b[1] - a[1]).slice(0, n).map(([name]) => humanizeFeatureName(name));
+  return [...byFeature.entries()].sort((a, b) => b[1] - a[1]).slice(0, n).map(([name]) => HumanizeFeatureName(name));
+}
+
+/** @deprecated Use {@link TopGlobalDrivers}. */
+export function topGlobalDrivers(featureImportanceJson: string | null | undefined, n = 3): string[] {
+  return TopGlobalDrivers(featureImportanceJson, n);
 }
 
 /**
@@ -166,7 +181,7 @@ export function topGlobalDrivers(featureImportanceJson: string | null | undefine
  * `Membership Type = Student`. Splits camelCase + snake/kebab, spaces one-hot `=`, collapses whitespace,
  * and capitalizes the first letter. Already-spaced labels pass through unchanged.
  */
-export function humanizeFeatureName(name: string): string {
+export function HumanizeFeatureName(name: string): string {
   return name
     .replace(/[_-]+/g, ' ')
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
@@ -174,4 +189,9 @@ export function humanizeFeatureName(name: string): string {
     .replace(/\s+/g, ' ')
     .trim()
     .replace(/^\w/, (c) => c.toUpperCase());
+}
+
+/** @deprecated Use {@link HumanizeFeatureName}. */
+export function humanizeFeatureName(name: string): string {
+  return HumanizeFeatureName(name);
 }

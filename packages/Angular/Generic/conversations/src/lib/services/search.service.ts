@@ -97,11 +97,36 @@ export class SearchService {
   private readonly MAX_RECENT_SEARCHES = 10;
 
   // Public observables
-  public readonly searchQuery$ = this._searchQuery$.asObservable();
-  public readonly searchFilter$ = this._searchFilter$.asObservable();
-  public readonly dateRange$ = this._dateRange$.asObservable();
-  public readonly isSearching$ = this._isSearching$.asObservable();
-  public readonly searchResults$ = this._searchResults$.asObservable();
+  public readonly SearchQuery$ = this._searchQuery$.asObservable();
+
+  /** @deprecated Use {@link SearchQuery$}. */
+  public get searchQuery$() {
+    return this.SearchQuery$;
+  }
+  public readonly SearchFilter$ = this._searchFilter$.asObservable();
+
+  /** @deprecated Use {@link SearchFilter$}. */
+  public get searchFilter$() {
+    return this.SearchFilter$;
+  }
+  public readonly DateRange$ = this._dateRange$.asObservable();
+
+  /** @deprecated Use {@link DateRange$}. */
+  public get dateRange$() {
+    return this.DateRange$;
+  }
+  public readonly IsSearching$ = this._isSearching$.asObservable();
+
+  /** @deprecated Use {@link IsSearching$}. */
+  public get isSearching$() {
+    return this.IsSearching$;
+  }
+  public readonly SearchResults$ = this._searchResults$.asObservable();
+
+  /** @deprecated Use {@link SearchResults$}. */
+  public get searchResults$() {
+    return this.SearchResults$;
+  }
 
   private _provider: IMetadataProvider | null = null;
 
@@ -138,7 +163,7 @@ export class SearchService {
   /**
    * Search across all content types
    */
-  public async search(
+  public async Search(
     query: string,
     environmentId: string,
     currentUser: UserInfo
@@ -196,6 +221,15 @@ export class SearchService {
     } finally {
       this._isSearching$.next(false);
     }
+  }
+
+  /** @deprecated Use {@link Search}. */
+  public async search(
+    query: string,
+    environmentId: string,
+    currentUser: UserInfo
+  ): Promise<GroupedSearchResults> {
+    return this.Search(query, environmentId, currentUser);
   }
 
   /**
@@ -645,29 +679,44 @@ export class SearchService {
   /**
    * Set search filter
    */
-  public setSearchFilter(filter: SearchFilter): void {
+  public SetSearchFilter(filter: SearchFilter): void {
     this._searchFilter$.next(filter);
+  }
+
+  /** @deprecated Use {@link SetSearchFilter}. */
+  public setSearchFilter(filter: SearchFilter): void {
+    return this.SetSearchFilter(filter);
   }
 
   /**
    * Set date range filter
    */
-  public setDateRange(range: DateRange): void {
+  public SetDateRange(range: DateRange): void {
     this._dateRange$.next(range);
+  }
+
+  /** @deprecated Use {@link SetDateRange}. */
+  public setDateRange(range: DateRange): void {
+    return this.SetDateRange(range);
   }
 
   /**
    * Clear all filters
    */
-  public clearFilters(): void {
+  public ClearFilters(): void {
     this._searchFilter$.next('all');
     this._dateRange$.next({ start: null, end: null });
+  }
+
+  /** @deprecated Use {@link ClearFilters}. */
+  public clearFilters(): void {
+    return this.ClearFilters();
   }
 
   /**
    * Clear search results
    */
-  public clearResults(): void {
+  public ClearResults(): void {
     this._searchResults$.next({
       conversations: [],
       messages: [],
@@ -678,11 +727,21 @@ export class SearchService {
     });
   }
 
+  /** @deprecated Use {@link ClearResults}. */
+  public clearResults(): void {
+    return this.ClearResults();
+  }
+
   /**
    * Get recent searches
    */
-  public getRecentSearches(): string[] {
+  public GetRecentSearches(): string[] {
     return [...this.recentSearches];
+  }
+
+  /** @deprecated Use {@link GetRecentSearches}. */
+  public getRecentSearches(): string[] {
+    return this.GetRecentSearches();
   }
 
   /**
@@ -709,9 +768,14 @@ export class SearchService {
   /**
    * Clear recent searches
    */
-  public clearRecentSearches(): void {
+  public ClearRecentSearches(): void {
     this.recentSearches = [];
     this.saveRecentSearches();
+  }
+
+  /** @deprecated Use {@link ClearRecentSearches}. */
+  public clearRecentSearches(): void {
+    return this.ClearRecentSearches();
   }
 
   /**

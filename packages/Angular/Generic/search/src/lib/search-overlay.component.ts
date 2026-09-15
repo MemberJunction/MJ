@@ -654,18 +654,33 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
     }
 
     /** Check if any filters are active (used by template) */
-    public hasActiveFilters(): boolean {
+    public HasActiveFilters(): boolean {
         return Object.values(this.ActiveFilters).some(v => v.length > 0);
     }
 
+    /** @deprecated Use {@link HasActiveFilters}. */
+    public hasActiveFilters(): boolean {
+        return this.HasActiveFilters();
+    }
+
     /** Check if a result is currently keyboard-highlighted */
-    public isResultHighlighted(result: SearchResultItem): boolean {
-        const flatIndex = this.getFlatIndex(result);
+    public IsResultHighlighted(result: SearchResultItem): boolean {
+        const flatIndex = this.GetFlatIndex(result);
         return flatIndex === this.HighlightedIndex;
     }
 
+    /** @deprecated Use {@link IsResultHighlighted}. */
+    public isResultHighlighted(result: SearchResultItem): boolean {
+        return this.IsResultHighlighted(result);
+    }
+
     /** Get the flat index of a result for keyboard navigation */
-    public getFlatIndex(result: SearchResultItem): number {
+    public GetFlatIndex(result: SearchResultItem): number {
         return this.FlatResults.indexOf(result);
+    }
+
+    /** @deprecated Use {@link GetFlatIndex}. */
+    public getFlatIndex(result: SearchResultItem): number {
+        return this.GetFlatIndex(result);
     }
 }

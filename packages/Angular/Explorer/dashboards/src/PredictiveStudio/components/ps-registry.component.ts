@@ -14,15 +14,15 @@ import { PSFeatureBar, PS_LIFECYCLE_STEPS, PSLifecycleStep } from '../predictive
 import {
   PS_FEATURE_DOMINANCE_THRESHOLD,
   PSMetricDisplay,
-  maxFeatureImportance,
-  metricsToDisplay,
-  overfitGap,
-  parseFeatureImportance,
-  parseMetrics,
-  primaryAuc,
+  MaxFeatureImportance,
+  MetricsToDisplay,
+  OverfitGap,
+  ParseFeatureImportance,
+  ParseMetrics,
+  PrimaryAuc,
 } from '../predictive-studio.view-models';
 import { PSConfirmModalComponent } from './ps-confirm-modal.component';
-import { humanizeFeatureName } from '../at-risk.view-models';
+import { HumanizeFeatureName } from '../at-risk.view-models';
 
 interface ModelRowVM {
   id: string;
@@ -232,103 +232,222 @@ export class PSRegistryComponent implements OnInit {
   /** Provider to route the promote Remote Op + engine refresh through (multi-provider correctness). */
   @Input() provider: IMetadataProvider | null = null;
   /** Acting user for the engine refresh after a mutation. */
-  @Input() currentUser: UserInfo | null = null;
+  @Input() CurrentUser: UserInfo | null = null;
+
+  /** @deprecated Use {@link CurrentUser}. */
+  @Input() set currentUser(value: UserInfo | null) {
+    this.CurrentUser = value;
+  }
+  /** @deprecated Use {@link CurrentUser}. */
+  get currentUser(): UserInfo | null {
+    return this.CurrentUser;
+  }
 
   private cdr = inject(ChangeDetectorRef);
   private notifications = inject(MJNotificationService);
 
-  public models: ModelRowVM[] = [];
-  public selectedId = '';
-  public lifecycleSteps = PS_LIFECYCLE_STEPS;
-  public readonly dominanceThreshold = PS_FEATURE_DOMINANCE_THRESHOLD.toFixed(2);
+  public Models: ModelRowVM[] = [];
+
+  /** @deprecated Use {@link Models}. */
+  public get models(): ModelRowVM[] {
+    return this.Models;
+  }
+  /** @deprecated Use {@link Models}. */
+  public set models(value: ModelRowVM[]) {
+    this.Models = value;
+  }
+  public SelectedId = '';
+
+  /** @deprecated Use {@link SelectedId}. */
+  public get selectedId() {
+    return this.SelectedId;
+  }
+  /** @deprecated Use {@link SelectedId}. */
+  public set selectedId(value) {
+    this.SelectedId = value;
+  }
+  public LifecycleSteps = PS_LIFECYCLE_STEPS;
+
+  /** @deprecated Use {@link LifecycleSteps}. */
+  public get lifecycleSteps() {
+    return this.LifecycleSteps;
+  }
+  /** @deprecated Use {@link LifecycleSteps}. */
+  public set lifecycleSteps(value) {
+    this.LifecycleSteps = value;
+  }
+  public readonly DominanceThreshold = PS_FEATURE_DOMINANCE_THRESHOLD.toFixed(2);
+
+  /** @deprecated Use {@link DominanceThreshold}. */
+  public get dominanceThreshold() {
+    return this.DominanceThreshold;
+  }
 
   /** Pending confirmation (null when no modal is open). */
-  public pending: PendingPromotion | null = null;
+  public Pending: PendingPromotion | null = null;
+
+  /** @deprecated Use {@link Pending}. */
+  public get pending(): PendingPromotion | null {
+    return this.Pending;
+  }
+  /** @deprecated Use {@link Pending}. */
+  public set pending(value: PendingPromotion | null) {
+    this.Pending = value;
+  }
   /** Remote Op in flight — drives the modal spinner + disables the buttons. */
-  public busy = false;
+  public Busy = false;
+
+  /** @deprecated Use {@link Busy}. */
+  public get busy() {
+    return this.Busy;
+  }
+  /** @deprecated Use {@link Busy}. */
+  public set busy(value) {
+    this.Busy = value;
+  }
 
   ngOnInit(): void {
     this.buildModels();
-    this.selectedId = this.models[0]?.id ?? '';
+    this.SelectedId = this.Models[0]?.id ?? '';
   }
 
   // ---- selection + master list ----
 
-  public select(id: string): void {
-    this.selectedId = id;
+  public Select(id: string): void {
+    this.SelectedId = id;
   }
 
+  /** @deprecated Use {@link Select}. */
+  public select(id: string): void {
+    return this.Select(id);
+  }
+
+  public get Selected(): ModelRowVM {
+    return this.Models.find((m) => m.id === this.SelectedId) ?? this.Models[0] ?? this.placeholder();
+  }
+
+  /** @deprecated Use {@link Selected}. */
   public get selected(): ModelRowVM {
-    return this.models.find((m) => m.id === this.selectedId) ?? this.models[0] ?? this.placeholder();
+    return this.Selected;
   }
 
   private get selectedEntity(): MJMLModelEntity | undefined {
-    return this.engine?.Models.find((m) => UUIDsEqual(m.ID, this.selectedId));
+    return this.engine?.Models.find((m) => UUIDsEqual(m.ID, this.SelectedId));
   }
 
   // ---- live detail: feature importance + metrics ----
 
   /** Top-6 feature importance bars parsed live from the selected model's `FeatureImportance` JSON, with humanized display names. */
-  public get importance(): PSFeatureBar[] {
-    return parseFeatureImportance(this.selectedEntity?.FeatureImportance, 6).map((b) => ({
+  public get Importance(): PSFeatureBar[] {
+    return ParseFeatureImportance(this.selectedEntity?.FeatureImportance, 6).map((b) => ({
       ...b,
-      name: humanizeFeatureName(b.name),
+      name: HumanizeFeatureName(b.name),
     }));
   }
 
-  public get importanceCaption(): string {
-    const n = this.importance.length;
+  /** @deprecated Use {@link Importance}. */
+  public get importance(): PSFeatureBar[] {
+    return this.Importance;
+  }
+
+  public get ImportanceCaption(): string {
+    const n = this.Importance.length;
     return n === 0 ? 'no data' : `normalized · top ${n}`;
   }
 
-  public get topFeatureName(): string {
-    return this.importance[0]?.name ?? '—';
+  /** @deprecated Use {@link ImportanceCaption}. */
+  public get importanceCaption(): string {
+    return this.ImportanceCaption;
   }
+
+  public get TopFeatureName(): string {
+    return this.Importance[0]?.name ?? '—';
+  }
+
+  /** @deprecated Use {@link TopFeatureName}. */
+  public get topFeatureName(): string {
+    return this.TopFeatureName;
+  }
+  public get TopFeatureValue(): string {
+    return this.Importance[0]?.value ?? '—';
+  }
+
+  /** @deprecated Use {@link TopFeatureValue}. */
   public get topFeatureValue(): string {
-    return this.importance[0]?.value ?? '—';
+    return this.TopFeatureValue;
   }
 
   /** True when a single feature's |importance| meets/exceeds the dominance threshold. */
-  public get leakageFlagged(): boolean {
-    const max = maxFeatureImportance(this.selectedEntity?.FeatureImportance);
+  public get LeakageFlagged(): boolean {
+    const max = MaxFeatureImportance(this.selectedEntity?.FeatureImportance);
     return max != null && max >= PS_FEATURE_DOMINANCE_THRESHOLD;
   }
 
+  /** @deprecated Use {@link LeakageFlagged}. */
+  public get leakageFlagged(): boolean {
+    return this.LeakageFlagged;
+  }
+
   /** Holdout AUC hero number, formatted, or '—'. */
-  public get trainAuc(): string {
-    const train = parseMetrics(this.selectedEntity?.Metrics).AUC;
+  public get TrainAuc(): string {
+    const train = ParseMetrics(this.selectedEntity?.Metrics).AUC;
     return train != null ? train.toFixed(3) : '—';
   }
 
+  /** @deprecated Use {@link TrainAuc}. */
+  public get trainAuc(): string {
+    return this.TrainAuc;
+  }
+
   /** Secondary metric tiles (precision/recall/F1/log-loss/…) — only those actually recorded. */
-  public get secondaryMetrics(): PSMetricDisplay[] {
+  public get SecondaryMetrics(): PSMetricDisplay[] {
     const e = this.selectedEntity;
     if (!e) return [];
     // Prefer holdout metrics for the honest secondary numbers; fall back to training metrics.
-    const holdout = metricsToDisplay(parseMetrics(e.HoldoutMetrics));
-    return holdout.length > 0 ? holdout : metricsToDisplay(parseMetrics(e.Metrics));
+    const holdout = MetricsToDisplay(ParseMetrics(e.HoldoutMetrics));
+    return holdout.length > 0 ? holdout : MetricsToDisplay(ParseMetrics(e.Metrics));
+  }
+
+  /** @deprecated Use {@link SecondaryMetrics}. */
+  public get secondaryMetrics(): PSMetricDisplay[] {
+    return this.SecondaryMetrics;
   }
 
   /** The formatted train–holdout overfit gap, or '' when not computable. */
-  public get gapText(): string {
-    const gap = overfitGap(this.selectedEntity ?? { Metrics: null, HoldoutMetrics: null });
+  public get GapText(): string {
+    const gap = OverfitGap(this.selectedEntity ?? { Metrics: null, HoldoutMetrics: null });
     return gap == null ? '' : Math.abs(gap).toFixed(3);
   }
 
-  public get gapVerdict(): string {
-    const gap = overfitGap(this.selectedEntity ?? { Metrics: null, HoldoutMetrics: null });
+  /** @deprecated Use {@link GapText}. */
+  public get gapText(): string {
+    return this.GapText;
+  }
+
+  public get GapVerdict(): string {
+    const gap = OverfitGap(this.selectedEntity ?? { Metrics: null, HoldoutMetrics: null });
     if (gap == null) return '';
     return gap > 0.1 ? 'is wide — watch for overfitting' : 'is within tolerance — no overfitting flag';
   }
 
-  public get targetSuffix(): string {
+  /** @deprecated Use {@link GapVerdict}. */
+  public get gapVerdict(): string {
+    return this.GapVerdict;
+  }
+
+  public get TargetSuffix(): string {
     const target = this.selectedEntity?.TargetVariable;
     return target ? ` · predicts ${target}` : '';
   }
 
+  /** @deprecated Use {@link TargetSuffix}. */
+  public get targetSuffix(): string {
+    return this.TargetSuffix;
+  }
+
   // ---- lifecycle stepper ----
 
-  public statusClass(status: string): string {
+  public StatusClass(status: string): string {
     switch (status) {
       case 'Published': return 'pub';
       case 'Validated': return 'val';
@@ -338,7 +457,12 @@ export class PSRegistryComponent implements OnInit {
     }
   }
 
-  public statusBadgeClass(status: string): string {
+  /** @deprecated Use {@link StatusClass}. */
+  public statusClass(status: string): string {
+    return this.StatusClass(status);
+  }
+
+  public StatusBadgeClass(status: string): string {
     switch (status) {
       case 'Published': return 'green';
       case 'Validated': return 'blue';
@@ -347,9 +471,14 @@ export class PSRegistryComponent implements OnInit {
     }
   }
 
+  /** @deprecated Use {@link StatusBadgeClass}. */
+  public statusBadgeClass(status: string): string {
+    return this.StatusBadgeClass(status);
+  }
+
   /** Stepper state for a lifecycle step relative to the selected model's status. */
-  public stepState(step: PSLifecycleStep): 'done' | 'curr' | 'todo' {
-    const order = PS_LIFECYCLE_STEPS.indexOf(this.selected.status as PSLifecycleStep);
+  public StepState(step: PSLifecycleStep): 'done' | 'curr' | 'todo' {
+    const order = PS_LIFECYCLE_STEPS.indexOf(this.Selected.status as PSLifecycleStep);
     const idx = PS_LIFECYCLE_STEPS.indexOf(step);
     if (order < 0) return 'todo';
     if (idx < order) return 'done';
@@ -357,20 +486,40 @@ export class PSRegistryComponent implements OnInit {
     return 'todo';
   }
 
+  /** @deprecated Use {@link StepState}. */
+  public stepState(step: PSLifecycleStep): 'done' | 'curr' | 'todo' {
+    return this.StepState(step);
+  }
+
   // ---- promote/archive availability ----
 
-  public get canValidate(): boolean {
-    return this.selected.status === 'Draft';
-  }
-  public get canPublish(): boolean {
-    return this.selected.status === 'Validated' || this.selected.status === 'Draft';
-  }
-  public get canArchive(): boolean {
-    return this.selected.status === 'Published' || this.selected.status === 'Validated';
+  public get CanValidate(): boolean {
+    return this.Selected.status === 'Draft';
   }
 
-  public get actionHint(): string {
-    switch (this.selected.status) {
+  /** @deprecated Use {@link CanValidate}. */
+  public get canValidate(): boolean {
+    return this.CanValidate;
+  }
+  public get CanPublish(): boolean {
+    return this.Selected.status === 'Validated' || this.Selected.status === 'Draft';
+  }
+
+  /** @deprecated Use {@link CanPublish}. */
+  public get canPublish(): boolean {
+    return this.CanPublish;
+  }
+  public get CanArchive(): boolean {
+    return this.Selected.status === 'Published' || this.Selected.status === 'Validated';
+  }
+
+  /** @deprecated Use {@link CanArchive}. */
+  public get canArchive(): boolean {
+    return this.CanArchive;
+  }
+
+  public get ActionHint(): string {
+    switch (this.Selected.status) {
       case 'Published': return 'This model is live. Archiving detaches its scoring bindings.';
       case 'Validated': return 'Validated and ready to publish — publishing makes it available for scoring.';
       case 'Draft': return 'Newly registered. Validate it before publishing to production.';
@@ -379,64 +528,104 @@ export class PSRegistryComponent implements OnInit {
     }
   }
 
+  /** @deprecated Use {@link ActionHint}. */
+  public get actionHint(): string {
+    return this.ActionHint;
+  }
+
   // ---- promote/archive flow (Remote Op) ----
 
   /** Open the confirmation modal for a lifecycle transition. */
-  public requestPromote(targetStatus: PredictiveStudioModelTargetStatus): void {
+  public RequestPromote(targetStatus: PredictiveStudioModelTargetStatus): void {
     const entity = this.selectedEntity;
     if (!entity) return;
-    this.pending = {
+    this.Pending = {
       modelId: entity.ID,
-      modelName: this.selected.name,
+      modelName: this.Selected.name,
       targetStatus,
-      leakageFlagged: targetStatus === 'Published' && this.leakageFlagged,
+      leakageFlagged: targetStatus === 'Published' && this.LeakageFlagged,
     };
   }
 
-  public cancelPromote(): void {
-    if (this.busy) return;
-    this.pending = null;
+  /** @deprecated Use {@link RequestPromote}. */
+  public requestPromote(targetStatus: PredictiveStudioModelTargetStatus): void {
+    return this.RequestPromote(targetStatus);
   }
 
+  public CancelPromote(): void {
+    if (this.Busy) return;
+    this.Pending = null;
+  }
+
+  /** @deprecated Use {@link CancelPromote}. */
+  public cancelPromote(): void {
+    return this.CancelPromote();
+  }
+
+  public get PendingTitle(): string {
+    if (!this.Pending) return '';
+    return this.Pending.targetStatus === 'Archived' ? 'Archive model' : `Promote to ${this.Pending.targetStatus}`;
+  }
+
+  /** @deprecated Use {@link PendingTitle}. */
   public get pendingTitle(): string {
-    if (!this.pending) return '';
-    return this.pending.targetStatus === 'Archived' ? 'Archive model' : `Promote to ${this.pending.targetStatus}`;
+    return this.PendingTitle;
   }
+  public get PendingIcon(): string {
+    if (!this.Pending) return 'fa-solid fa-check';
+    return this.Pending.targetStatus === 'Archived' ? 'fa-solid fa-box-archive' : 'fa-solid fa-arrow-up';
+  }
+
+  /** @deprecated Use {@link PendingIcon}. */
   public get pendingIcon(): string {
-    if (!this.pending) return 'fa-solid fa-check';
-    return this.pending.targetStatus === 'Archived' ? 'fa-solid fa-box-archive' : 'fa-solid fa-arrow-up';
+    return this.PendingIcon;
   }
+  public get PendingConfirmLabel(): string {
+    if (!this.Pending) return 'Confirm';
+    return this.Pending.targetStatus === 'Archived' ? 'Archive' : `Promote to ${this.Pending.targetStatus}`;
+  }
+
+  /** @deprecated Use {@link PendingConfirmLabel}. */
   public get pendingConfirmLabel(): string {
-    if (!this.pending) return 'Confirm';
-    return this.pending.targetStatus === 'Archived' ? 'Archive' : `Promote to ${this.pending.targetStatus}`;
+    return this.PendingConfirmLabel;
   }
+  public get PendingVariant(): 'info' | 'warn' | 'danger' {
+    if (!this.Pending) return 'info';
+    if (this.Pending.targetStatus === 'Archived') return 'warn';
+    return this.Pending.leakageFlagged ? 'warn' : 'info';
+  }
+
+  /** @deprecated Use {@link PendingVariant}. */
   public get pendingVariant(): 'info' | 'warn' | 'danger' {
-    if (!this.pending) return 'info';
-    if (this.pending.targetStatus === 'Archived') return 'warn';
-    return this.pending.leakageFlagged ? 'warn' : 'info';
+    return this.PendingVariant;
   }
-  public get pendingMessage(): string {
-    if (!this.pending) return '';
-    const name = escapeHtml(this.pending.modelName);
-    if (this.pending.targetStatus === 'Archived') {
+  public get PendingMessage(): string {
+    if (!this.Pending) return '';
+    const name = escapeHtml(this.Pending.modelName);
+    if (this.Pending.targetStatus === 'Archived') {
       return `Archive <strong>${name}</strong>? This detaches any active scoring bindings and removes it from production scoring. The model artifact remains immutable and recoverable.`;
     }
-    if (this.pending.leakageFlagged) {
+    if (this.Pending.leakageFlagged) {
       return `<strong>${name}</strong> is flagged for possible target leakage. Publishing requires an explicit sign-off — confirm you understand the risk and provide a reason below.`;
     }
-    return `Promote <strong>${name}</strong> to <strong>${this.pending.targetStatus}</strong>? This changes only the lifecycle state — the trained weights never change.`;
+    return `Promote <strong>${name}</strong> to <strong>${this.Pending.targetStatus}</strong>? This changes only the lifecycle state — the trained weights never change.`;
+  }
+
+  /** @deprecated Use {@link PendingMessage}. */
+  public get pendingMessage(): string {
+    return this.PendingMessage;
   }
 
   /** Run the promote Remote Op, then refresh the engine + close on success. */
-  public async confirmPromote(reason: string): Promise<void> {
-    if (!this.pending || this.busy) return;
-    this.busy = true;
-    const { modelId, modelName, targetStatus, leakageFlagged } = this.pending;
+  public async ConfirmPromote(reason: string): Promise<void> {
+    if (!this.Pending || this.Busy) return;
+    this.Busy = true;
+    const { modelId, modelName, targetStatus, leakageFlagged } = this.Pending;
     try {
       const op = new PredictiveStudioPromoteModelOperation();
       const result = await op.Execute(
         { modelId, targetStatus, signOff: leakageFlagged ? true : undefined, reason: reason || undefined },
-        { provider: this.provider ?? undefined, user: this.currentUser ?? undefined },
+        { provider: this.provider ?? undefined, user: this.CurrentUser ?? undefined },
       );
       if (result.Success && result.Output?.promoted) {
         this.notifications.CreateSimpleNotification(
@@ -445,7 +634,7 @@ export class PSRegistryComponent implements OnInit {
           3500,
         );
         await this.refreshAfterMutation();
-        this.pending = null;
+        this.Pending = null;
       } else {
         this.notifications.CreateSimpleNotification(
           result.ErrorMessage || `Could not promote ${modelName} (status: ${result.Output?.status ?? 'unchanged'}).`,
@@ -460,18 +649,23 @@ export class PSRegistryComponent implements OnInit {
         5000,
       );
     } finally {
-      this.busy = false;
+      this.Busy = false;
       this.cdr.detectChanges();
     }
+  }
+
+  /** @deprecated Use {@link ConfirmPromote}. */
+  public async confirmPromote(reason: string): Promise<void> {
+    return this.ConfirmPromote(reason);
   }
 
   /** Force-refresh the engine's cached models, then rebuild the master list. */
   private async refreshAfterMutation(): Promise<void> {
     const provider = this.provider ?? undefined;
-    await this.engine.Config(true, this.currentUser ?? undefined, provider);
+    await this.engine.Config(true, this.CurrentUser ?? undefined, provider);
     this.buildModels();
-    if (!this.models.some((m) => m.id === this.selectedId)) {
-      this.selectedId = this.models[0]?.id ?? '';
+    if (!this.Models.some((m) => m.id === this.SelectedId)) {
+      this.SelectedId = this.Models[0]?.id ?? '';
     }
     this.cdr.detectChanges();
   }
@@ -479,11 +673,11 @@ export class PSRegistryComponent implements OnInit {
   // ---- master-list view-models ----
 
   private buildModels(): void {
-    this.models = (this.engine?.Models ?? []).map((m) => this.toVM(m));
+    this.Models = (this.engine?.Models ?? []).map((m) => this.toVM(m));
   }
 
   private toVM(m: MJMLModelEntity): ModelRowVM {
-    const holdout = primaryAuc(m);
+    const holdout = PrimaryAuc(m);
     return {
       id: m.ID,
       name: this.engine.ModelDisplayName(m),

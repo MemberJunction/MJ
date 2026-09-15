@@ -98,23 +98,122 @@ const NO_PENDING_ARTIFACTS: readonly MessagePendingArtifactRef[] = Object.freeze
 })
 export class MessageItemComponent extends BaseAngularComponent implements OnInit, AfterViewInit, OnDestroy, OnChanges, DoCheck {
   @Input() public message!: MJConversationDetailEntity;
-  @Input() public conversation!: MJConversationEntity | null;
-  @Input() public currentUser!: UserInfo;
-  @Input() public allMessages!: MJConversationDetailEntity[];
-  @Input() public isProcessing: boolean = false;
-  @Input() public artifact?: MJArtifactEntity;
+  @Input() public Conversation!: MJConversationEntity | null;
+
+  /** @deprecated Use {@link Conversation}. */
+  @Input() public set conversation(value: MJConversationEntity | null) {
+    this.Conversation = value;
+  }
+  /** @deprecated Use {@link Conversation}. */
+  public get conversation(): MJConversationEntity | null {
+    return this.Conversation;
+  }
+  @Input() public CurrentUser!: UserInfo;
+
+  /** @deprecated Use {@link CurrentUser}. */
+  @Input() public set currentUser(value: UserInfo) {
+    this.CurrentUser = value;
+  }
+  /** @deprecated Use {@link CurrentUser}. */
+  public get currentUser(): UserInfo {
+    return this.CurrentUser;
+  }
+  @Input() public AllMessages!: MJConversationDetailEntity[];
+
+  /** @deprecated Use {@link AllMessages}. */
+  @Input() public set allMessages(value: MJConversationDetailEntity[]) {
+    this.AllMessages = value;
+  }
+  /** @deprecated Use {@link AllMessages}. */
+  public get allMessages(): MJConversationDetailEntity[] {
+    return this.AllMessages;
+  }
+  @Input() public IsProcessing: boolean = false;
+
+  /** @deprecated Use {@link IsProcessing}. */
+  @Input() public set isProcessing(value: boolean) {
+    this.IsProcessing = value;
+  }
+  /** @deprecated Use {@link IsProcessing}. */
+  public get isProcessing(): boolean {
+    return this.IsProcessing;
+  }
+  @Input() public Artifact?: MJArtifactEntity;
+
+  /** @deprecated Use {@link Artifact}. */
+  @Input() public set artifact(value: MJArtifactEntity | undefined) {
+    this.Artifact = value;
+  }
+  /** @deprecated Use {@link Artifact}. */
+  public get artifact(): MJArtifactEntity | undefined {
+    return this.Artifact;
+  }
   @Input() public artifactVersion?: MJArtifactVersionEntity;
   /**
    * All distinct artifacts attached to this message, each at its latest version.
    * Preferred over the single `artifact`/`artifactVersion` inputs above (which are
    * retained for backward compatibility and kept pointed at the first entry).
    */
-  @Input() public artifacts: MessageArtifactRef[] = [];
-  @Input() public agentRun: MJAIAgentRunEntityExtended | null = null; // Passed from parent, loaded once per conversation
-  @Input() public userAvatarMap: Map<string, {imageUrl: string | null; iconClass: string | null}> = new Map();
-  @Input() public ratings?: RatingJSON[]; // Pre-loaded ratings from parent (RatingsJSON from query)
-  @Input() public isLastMessage: boolean = false; // Whether this is the last message in the conversation
-  @Input() public attachments: MessageAttachment[] = []; // Attachments for this message
+  @Input() public Artifacts: MessageArtifactRef[] = [];
+
+  /** @deprecated Use {@link Artifacts}. */
+  @Input() public set artifacts(value: MessageArtifactRef[]) {
+    this.Artifacts = value;
+  }
+  /** @deprecated Use {@link Artifacts}. */
+  public get artifacts(): MessageArtifactRef[] {
+    return this.Artifacts;
+  }
+  @Input() public AgentRun: MJAIAgentRunEntityExtended | null = null;
+
+  /** @deprecated Use {@link AgentRun}. */
+  @Input() public set agentRun(value: MJAIAgentRunEntityExtended | null) {
+    this.AgentRun = value;
+  }
+  /** @deprecated Use {@link AgentRun}. */
+  public get agentRun(): MJAIAgentRunEntityExtended | null {
+    return this.AgentRun;
+  } // Passed from parent, loaded once per conversation
+  @Input() public UserAvatarMap: Map<string, {imageUrl: string | null; iconClass: string | null}> = new Map();
+
+  /** @deprecated Use {@link UserAvatarMap}. */
+  @Input() public set userAvatarMap(value: Map<string, {imageUrl: string | null; iconClass: string | null}>) {
+    this.UserAvatarMap = value;
+  }
+  /** @deprecated Use {@link UserAvatarMap}. */
+  public get userAvatarMap(): Map<string, {imageUrl: string | null; iconClass: string | null}> {
+    return this.UserAvatarMap;
+  }
+  @Input() public Ratings?: RatingJSON[];
+
+  /** @deprecated Use {@link Ratings}. */
+  @Input() public set ratings(value: RatingJSON[] | undefined) {
+    this.Ratings = value;
+  }
+  /** @deprecated Use {@link Ratings}. */
+  public get ratings(): RatingJSON[] | undefined {
+    return this.Ratings;
+  } // Pre-loaded ratings from parent (RatingsJSON from query)
+  @Input() public IsLastMessage: boolean = false;
+
+  /** @deprecated Use {@link IsLastMessage}. */
+  @Input() public set isLastMessage(value: boolean) {
+    this.IsLastMessage = value;
+  }
+  /** @deprecated Use {@link IsLastMessage}. */
+  public get isLastMessage(): boolean {
+    return this.IsLastMessage;
+  } // Whether this is the last message in the conversation
+  @Input() public Attachments: MessageAttachment[] = [];
+
+  /** @deprecated Use {@link Attachments}. */
+  @Input() public set attachments(value: MessageAttachment[]) {
+    this.Attachments = value;
+  }
+  /** @deprecated Use {@link Attachments}. */
+  public get attachments(): MessageAttachment[] {
+    return this.Attachments;
+  } // Attachments for this message
 
   /**
    * Artifacts attached to this message whose entity rows have not arrived yet.
@@ -128,7 +227,16 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * is still loading an image, both render at once. Entries whose artifact has since loaded are
    * filtered out by {@link pendingArtifactPlaceholders}.
    */
-  @Input() public pendingArtifacts: readonly MessagePendingArtifactRef[] = [];
+  @Input() public PendingArtifacts: readonly MessagePendingArtifactRef[] = [];
+
+  /** @deprecated Use {@link PendingArtifacts}. */
+  @Input() public set pendingArtifacts(value: readonly MessagePendingArtifactRef[]) {
+    this.PendingArtifacts = value;
+  }
+  /** @deprecated Use {@link PendingArtifacts}. */
+  public get pendingArtifacts(): readonly MessagePendingArtifactRef[] {
+    return this.PendingArtifacts;
+  }
 
   /**
    * Optional additive per-message slot template (forwarded from chat-area's
@@ -136,32 +244,104 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * content, before attachments. Receives the message as `$implicit` + a named
    * `message` context binding. Null when no consumer template is projected.
    */
-  @Input() public messageExtraTemplate: TemplateRef<unknown> | null = null;
+  @Input() public MessageExtraTemplate: TemplateRef<unknown> | null = null;
+
+  /** @deprecated Use {@link MessageExtraTemplate}. */
+  @Input() public set messageExtraTemplate(value: TemplateRef<unknown> | null) {
+    this.MessageExtraTemplate = value;
+  }
+  /** @deprecated Use {@link MessageExtraTemplate}. */
+  public get messageExtraTemplate(): TemplateRef<unknown> | null {
+    return this.MessageExtraTemplate;
+  }
 
   // --- Host-level feature gates (forwarded from mj-conversation-chat-area) ---
   // All default true so existing consumers are unaffected; set false to remove
   // the affordance entirely (the control is not rendered, not merely disabled).
   /** Show the per-message agent run-detail grid (run ID, step/token counts, $ cost). */
-  @Input() public showAgentRunDetails: boolean = true;
+  @Input() public ShowAgentRunDetails: boolean = true;
+
+  /** @deprecated Use {@link ShowAgentRunDetails}. */
+  @Input() public set showAgentRunDetails(value: boolean) {
+    this.ShowAgentRunDetails = value;
+  }
+  /** @deprecated Use {@link ShowAgentRunDetails}. */
+  public get showAgentRunDetails(): boolean {
+    return this.ShowAgentRunDetails;
+  }
   /** Show the per-message reaction buttons (like / comment). */
-  @Input() public showReactions: boolean = true;
+  @Input() public ShowReactions: boolean = true;
+
+  /** @deprecated Use {@link ShowReactions}. */
+  @Input() public set showReactions(value: boolean) {
+    this.ShowReactions = value;
+  }
+  /** @deprecated Use {@link ShowReactions}. */
+  public get showReactions(): boolean {
+    return this.ShowReactions;
+  }
   /** Show the per-message thumbs rating control on completed AI messages. */
-  @Input() public showMessageRating: boolean = true;
+  @Input() public ShowMessageRating: boolean = true;
+
+  /** @deprecated Use {@link ShowMessageRating}. */
+  @Input() public set showMessageRating(value: boolean) {
+    this.ShowMessageRating = value;
+  }
+  /** @deprecated Use {@link ShowMessageRating}. */
+  public get showMessageRating(): boolean {
+    return this.ShowMessageRating;
+  }
   /** Allow pinning messages (the per-message pin button). */
-  @Input() public allowPinning: boolean = true;
+  @Input() public AllowPinning: boolean = true;
+
+  /** @deprecated Use {@link AllowPinning}. */
+  @Input() public set allowPinning(value: boolean) {
+    this.AllowPinning = value;
+  }
+  /** @deprecated Use {@link AllowPinning}. */
+  public get allowPinning(): boolean {
+    return this.AllowPinning;
+  }
   /** Allow editing the user's own messages (the per-message edit button). */
-  @Input() public allowMessageEdit: boolean = true;
+  @Input() public AllowMessageEdit: boolean = true;
+
+  /** @deprecated Use {@link AllowMessageEdit}. */
+  @Input() public set allowMessageEdit(value: boolean) {
+    this.AllowMessageEdit = value;
+  }
+  /** @deprecated Use {@link AllowMessageEdit}. */
+  public get allowMessageEdit(): boolean {
+    return this.AllowMessageEdit;
+  }
   /** Allow deleting the user's own messages (the per-message delete button). */
-  @Input() public allowMessageDelete: boolean = true;
+  @Input() public AllowMessageDelete: boolean = true;
+
+  /** @deprecated Use {@link AllowMessageDelete}. */
+  @Input() public set allowMessageDelete(value: boolean) {
+    this.AllowMessageDelete = value;
+  }
+  /** @deprecated Use {@link AllowMessageDelete}. */
+  public get allowMessageDelete(): boolean {
+    return this.AllowMessageDelete;
+  }
   /** Host override for the AI message display name (white-label persona). Null = the agent record's name. */
-  @Input() public assistantDisplayName: string | null = null;
+  @Input() public AssistantDisplayName: string | null = null;
+
+  /** @deprecated Use {@link AssistantDisplayName}. */
+  @Input() public set assistantDisplayName(value: string | null) {
+    this.AssistantDisplayName = value;
+  }
+  /** @deprecated Use {@link AssistantDisplayName}. */
+  public get assistantDisplayName(): string | null {
+    return this.AssistantDisplayName;
+  }
   /** Host image URL for the AI message avatar. Null = the agent's Font Awesome icon. */
   @Input()
   public set assistantAvatarUrl(value: string | null) {
     if (value !== this._assistantAvatarUrl) {
       this._assistantAvatarUrl = value;
       // A new URL gets a fresh chance even if the previous one 404'd.
-      this.assistantAvatarFailed = false;
+      this.AssistantAvatarFailed = false;
     }
   }
   public get assistantAvatarUrl(): string | null {
@@ -170,28 +350,150 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   private _assistantAvatarUrl: string | null = null;
 
   /** The last assistantAvatarUrl failed to load — fall back to the icon branch. */
-  public assistantAvatarFailed = false;
+  public AssistantAvatarFailed = false;
+
+  /** @deprecated Use {@link AssistantAvatarFailed}. */
+  public get assistantAvatarFailed() {
+    return this.AssistantAvatarFailed;
+  }
+  /** @deprecated Use {@link AssistantAvatarFailed}. */
+  public set assistantAvatarFailed(value) {
+    this.AssistantAvatarFailed = value;
+  }
 
   /** The avatar image URL actually rendered: trimmed, and null after a load error
    *  so a broken/whitespace URL degrades to the agent icon instead of a broken-image glyph. */
-  public get effectiveAssistantAvatarUrl(): string | null {
-    if (this.assistantAvatarFailed) return null;
+  public get EffectiveAssistantAvatarUrl(): string | null {
+    if (this.AssistantAvatarFailed) return null;
     const url = this._assistantAvatarUrl?.trim();
     return url ? url : null;
   }
 
-  @Output() public editClicked = new EventEmitter<MJConversationDetailEntity>();
-  @Output() public deleteClicked = new EventEmitter<MJConversationDetailEntity>();
-  @Output() public retryClicked = new EventEmitter<MJConversationDetailEntity>();
-  @Output() public testFeedbackClicked = new EventEmitter<MJConversationDetailEntity>();
-  @Output() public artifactClicked = new EventEmitter<{artifactId: string; versionId?: string}>();
-  @Output() public artifactActionPerformed = new EventEmitter<{action: string; artifactId: string}>();
-  @Output() public messageEdited = new EventEmitter<MJConversationDetailEntity>();
-  @Output() public openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
-  @Output() public suggestedResponseSelected = new EventEmitter<{text: string; customInput?: string}>();
-  @Output() public attachmentClicked = new EventEmitter<MessageAttachment>();
-  @Output() public diagnosticRequested = new EventEmitter<string>(); // emits messageId on Shift+Click
-  @Output() public messagePinToggled = new EventEmitter<MJConversationDetailEntity>();
+  /** @deprecated Use {@link EffectiveAssistantAvatarUrl}. */
+  public get effectiveAssistantAvatarUrl(): string | null {
+    return this.EffectiveAssistantAvatarUrl;
+  }
+
+  @Output() public EditClicked = new EventEmitter<MJConversationDetailEntity>();
+
+  /**
+   * @deprecated Use {@link EditClicked}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (editClicked) keeps working. Must stay AFTER EditClicked: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public editClicked = this.EditClicked;
+  @Output() public DeleteClicked = new EventEmitter<MJConversationDetailEntity>();
+
+  /**
+   * @deprecated Use {@link DeleteClicked}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (deleteClicked) keeps working. Must stay AFTER DeleteClicked: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public deleteClicked = this.DeleteClicked;
+  @Output() public RetryClicked = new EventEmitter<MJConversationDetailEntity>();
+
+  /**
+   * @deprecated Use {@link RetryClicked}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (retryClicked) keeps working. Must stay AFTER RetryClicked: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public retryClicked = this.RetryClicked;
+  @Output() public TestFeedbackClicked = new EventEmitter<MJConversationDetailEntity>();
+
+  /**
+   * @deprecated Use {@link TestFeedbackClicked}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (testFeedbackClicked) keeps working. Must stay AFTER TestFeedbackClicked: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public testFeedbackClicked = this.TestFeedbackClicked;
+  @Output() public ArtifactClicked = new EventEmitter<{artifactId: string; versionId?: string}>();
+
+  /**
+   * @deprecated Use {@link ArtifactClicked}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (artifactClicked) keeps working. Must stay AFTER ArtifactClicked: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public artifactClicked = this.ArtifactClicked;
+  @Output() public ArtifactActionPerformed = new EventEmitter<{action: string; artifactId: string}>();
+
+  /**
+   * @deprecated Use {@link ArtifactActionPerformed}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (artifactActionPerformed) keeps working. Must stay AFTER ArtifactActionPerformed: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public artifactActionPerformed = this.ArtifactActionPerformed;
+  @Output() public MessageEdited = new EventEmitter<MJConversationDetailEntity>();
+
+  /**
+   * @deprecated Use {@link MessageEdited}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (messageEdited) keeps working. Must stay AFTER MessageEdited: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public messageEdited = this.MessageEdited;
+  @Output() public OpenEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
+
+  /**
+   * @deprecated Use {@link OpenEntityRecord}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (openEntityRecord) keeps working. Must stay AFTER OpenEntityRecord: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public openEntityRecord = this.OpenEntityRecord;
+  @Output() public SuggestedResponseSelected = new EventEmitter<{text: string; customInput?: string}>();
+
+  /**
+   * @deprecated Use {@link SuggestedResponseSelected}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (suggestedResponseSelected) keeps working. Must stay AFTER SuggestedResponseSelected: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public suggestedResponseSelected = this.SuggestedResponseSelected;
+  @Output() public AttachmentClicked = new EventEmitter<MessageAttachment>();
+
+  /**
+   * @deprecated Use {@link AttachmentClicked}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (attachmentClicked) keeps working. Must stay AFTER AttachmentClicked: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public attachmentClicked = this.AttachmentClicked;
+  @Output() public DiagnosticRequested = new EventEmitter<string>();
+
+  /**
+   * @deprecated Use {@link DiagnosticRequested}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (diagnosticRequested) keeps working. Must stay AFTER DiagnosticRequested: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public diagnosticRequested = this.DiagnosticRequested; // emits messageId on Shift+Click
+  @Output() public MessagePinToggled = new EventEmitter<MJConversationDetailEntity>();
+
+  /**
+   * @deprecated Use {@link MessagePinToggled}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (messagePinToggled) keeps working. Must stay AFTER MessagePinToggled: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public messagePinToggled = this.MessagePinToggled;
 
   /**
    * Cancelable — fired BEFORE the response form's values are sent back as a new
@@ -201,21 +503,75 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * NOT fired and `suggestedResponseSelected` is NOT emitted.
    * Follows MJ's established Before/After cancelable event pattern.
    */
-  @Output() public beforeResponseFormSubmitted = new EventEmitter<BeforeResponseFormSubmittedEventArgs>();
+  @Output() public BeforeResponseFormSubmitted = new EventEmitter<BeforeResponseFormSubmittedEventArgs>();
+
+  /**
+   * @deprecated Use {@link BeforeResponseFormSubmitted}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (beforeResponseFormSubmitted) keeps working. Must stay AFTER BeforeResponseFormSubmitted: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public beforeResponseFormSubmitted = this.BeforeResponseFormSubmitted;
 
   /**
    * Fired AFTER the response form's values have been submitted. Carries the form id
    * (using the message ID as a stable per-message identifier) and the submitted
    * values map. Not fired when {@link beforeResponseFormSubmitted} was canceled.
    */
-  @Output() public afterResponseFormSubmitted = new EventEmitter<AfterResponseFormSubmittedEventArgs>();
+  @Output() public AfterResponseFormSubmitted = new EventEmitter<AfterResponseFormSubmittedEventArgs>();
+
+  /**
+   * @deprecated Use {@link AfterResponseFormSubmitted}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (afterResponseFormSubmitted) keeps working. Must stay AFTER AfterResponseFormSubmitted: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public afterResponseFormSubmitted = this.AfterResponseFormSubmitted;
 
   private _loadTime: number = Date.now();
   private _elapsedTimeInterval: any = null;
-  public _elapsedTimeFormatted: string = '0:00';
-  public _agentRunDurationFormatted: string = '0:00';
-  public isEditing: boolean = false;
-  public editedText: string = '';
+  public ElapsedTimeFormatted: string = '0:00';
+
+  /** @deprecated Use {@link ElapsedTimeFormatted}. */
+  public get _elapsedTimeFormatted(): string {
+    return this.ElapsedTimeFormatted;
+  }
+  /** @deprecated Use {@link ElapsedTimeFormatted}. */
+  public set _elapsedTimeFormatted(value: string) {
+    this.ElapsedTimeFormatted = value;
+  }
+  public AgentRunDurationFormatted: string = '0:00';
+
+  /** @deprecated Use {@link AgentRunDurationFormatted}. */
+  public get _agentRunDurationFormatted(): string {
+    return this.AgentRunDurationFormatted;
+  }
+  /** @deprecated Use {@link AgentRunDurationFormatted}. */
+  public set _agentRunDurationFormatted(value: string) {
+    this.AgentRunDurationFormatted = value;
+  }
+  public IsEditing: boolean = false;
+
+  /** @deprecated Use {@link IsEditing}. */
+  public get isEditing(): boolean {
+    return this.IsEditing;
+  }
+  /** @deprecated Use {@link IsEditing}. */
+  public set isEditing(value: boolean) {
+    this.IsEditing = value;
+  }
+  public EditedText: string = '';
+
+  /** @deprecated Use {@link EditedText}. */
+  public get editedText(): string {
+    return this.EditedText;
+  }
+  /** @deprecated Use {@link EditedText}. */
+  public set editedText(value: string) {
+    this.EditedText = value;
+  }
   private originalText: string = '';
 
   // Track previous status for DoCheck comparison
@@ -233,8 +589,26 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   private _stableIsInProgressAIMessage: boolean = false;
 
   // Agent run details
-  public isAgentDetailsExpanded: boolean = false;
-  public detailTasks: MJTaskEntity[] = [];
+  public IsAgentDetailsExpanded: boolean = false;
+
+  /** @deprecated Use {@link IsAgentDetailsExpanded}. */
+  public get isAgentDetailsExpanded(): boolean {
+    return this.IsAgentDetailsExpanded;
+  }
+  /** @deprecated Use {@link IsAgentDetailsExpanded}. */
+  public set isAgentDetailsExpanded(value: boolean) {
+    this.IsAgentDetailsExpanded = value;
+  }
+  public DetailTasks: MJTaskEntity[] = [];
+
+  /** @deprecated Use {@link DetailTasks}. */
+  public get detailTasks(): MJTaskEntity[] {
+    return this.DetailTasks;
+  }
+  /** @deprecated Use {@link DetailTasks}. */
+  public set detailTasks(value: MJTaskEntity[]) {
+    this.DetailTasks = value;
+  }
   private tasksLoaded: boolean = false;
 
   // Memoization for mention parsing to prevent repeated parsing on change detection
@@ -310,7 +684,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     // ngDoCheck runs once per CD pass but NOT during the dev-mode verify pass, so
     // snapshotting here produces values that don't change between the two reads.
     this._messageClasses = this.buildMessageClasses();
-    this._stableIsInProgressAIMessage = this.isAIMessage && currentStatus === 'In-Progress';
+    this._stableIsInProgressAIMessage = this.IsAIMessage && currentStatus === 'In-Progress';
     this._stableDisplayMessage = this.computeDisplayMessage();
   }
 
@@ -339,7 +713,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * can dump live streaming state to the browser console — useful for debugging
    * stuck or forever-spinning conversations without any code changes.
    */
-  public onMessageBubbleClick(event: MouseEvent): void {
+  public OnMessageBubbleClick(event: MouseEvent): void {
     const recordBadge = (event.target as HTMLElement | null)?.closest?.('.mention-badge.record') as HTMLElement | null;
     if (recordBadge) {
       event.preventDefault();
@@ -347,10 +721,15 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       this.openRecordLinkBadge(recordBadge);
       return;
     }
-    if (!event.shiftKey || !this.isAIMessage) return;
+    if (!event.shiftKey || !this.IsAIMessage) return;
     event.preventDefault();
     event.stopPropagation();
-    this.diagnosticRequested.emit(this.message.ID);
+    this.DiagnosticRequested.emit(this.message.ID);
+  }
+
+  /** @deprecated Use {@link OnMessageBubbleClick}. */
+  public onMessageBubbleClick(event: MouseEvent): void {
+    return this.OnMessageBubbleClick(event);
   }
 
   private openRecordLinkBadge(el: HTMLElement): void {
@@ -377,7 +756,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       console.warn('Record link: incomplete primary key', entityName, keysJson);
       return;
     }
-    this.openEntityRecord.emit({ entityName, compositeKey });
+    this.OpenEntityRecord.emit({ entityName, compositeKey });
   }
 
   /**
@@ -388,7 +767,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   private startElapsedTimeUpdater(): void {
     // Start timer for temporary messages (in-progress, no ID) OR active agent runs
     // Both need periodic updates to _elapsedTimeFormatted / _agentRunDurationFormatted
-    if (this.isInProgressAIMessage || this.isAgentRunActive) {
+    if (this.IsInProgressAIMessage || this.IsAgentRunActive) {
       // Initial update
       this.updateTimers();
       this.cdRef.markForCheck();
@@ -411,16 +790,16 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    */
   private updateTimers(): void {
     // Update temporary message elapsed time
-    if (this.isInProgressAIMessage) {
-      this._elapsedTimeFormatted = this.formatElapsedTime(this.elapsedTimeSinceLoad);
+    if (this.IsInProgressAIMessage) {
+      this.ElapsedTimeFormatted = this.formatElapsedTime(this.ElapsedTimeSinceLoad);
     }
 
     // Update agent run duration for active runs
-    if (this.isAgentRunActive && this.agentRun?.__mj_CreatedAt) {
-      const createdAt = new Date(this.agentRun.__mj_CreatedAt);
+    if (this.IsAgentRunActive && this.AgentRun?.__mj_CreatedAt) {
+      const createdAt = new Date(this.AgentRun.__mj_CreatedAt);
       const now = new Date();
       const diffMs = now.getTime() - createdAt.getTime();
-      this._agentRunDurationFormatted = this.formatDurationFromMs(diffMs);
+      this.AgentRunDurationFormatted = this.formatDurationFromMs(diffMs);
     }
   }
 
@@ -452,12 +831,22 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     return formattedTime;
   }
 
-  public get elapsedTimeSinceLoad(): number {
+  public get ElapsedTimeSinceLoad(): number {
     return Date.now() - this._loadTime;
   }
 
-  public get isAIMessage(): boolean {
+  /** @deprecated Use {@link ElapsedTimeSinceLoad}. */
+  public get elapsedTimeSinceLoad(): number {
+    return this.ElapsedTimeSinceLoad;
+  }
+
+  public get IsAIMessage(): boolean {
     return this.message.Role?.trim().toLowerCase() === 'ai';
+  }
+
+  /** @deprecated Use {@link IsAIMessage}. */
+  public get isAIMessage(): boolean {
+    return this.IsAIMessage;
   }
 
   /**
@@ -467,18 +856,23 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * real agent name (e.g. {@link isConversationManager}) uses `engineAgentInfo`
    * directly, so a display override can never change routing/behavior decisions.
    */
-  public get aiAgentInfo(): { name: string; iconClass: string; role: string } | null {
+  public get AiAgentInfo(): { name: string; iconClass: string; role: string } | null {
     const info = this.engineAgentInfo;
     if (!info) return null;
-    const override = this.assistantDisplayName?.trim();
+    const override = this.AssistantDisplayName?.trim();
     return override ? { ...info, name: override } : info;
+  }
+
+  /** @deprecated Use {@link AiAgentInfo}. */
+  public get aiAgentInfo(): { name: string; iconClass: string; role: string } | null {
+    return this.AiAgentInfo;
   }
 
   /** The engine-resolved agent identity — no host display overrides applied.
    *  Protected (not private) so the template's run-details header — which labels
    *  the REAL agent's diagnostics and record link — can read it directly. */
   protected get engineAgentInfo(): { name: string; iconClass: string; role: string } | null {
-    if (!this.isAIMessage) return null;
+    if (!this.IsAIMessage) return null;
 
     // Get agent ID from denormalized field (populated when message is created)
     const agentID = this.message.AgentID;
@@ -509,8 +903,13 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     };
   }
 
-  public get isUserMessage(): boolean {
+  public get IsUserMessage(): boolean {
     return this.message.Role?.trim().toLowerCase() === 'user';
+  }
+
+  /** @deprecated Use {@link IsUserMessage}. */
+  public get isUserMessage(): boolean {
+    return this.IsUserMessage;
   }
 
   /**
@@ -518,7 +917,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * Uses the denormalized User field from the view if available,
    * otherwise falls back to current user name
    */
-  public get messageSenderName(): string {
+  public get MessageSenderName(): string {
     // Use the denormalized User field from the ConversationDetail view
     // This is populated from the UserID (if present) or falls back to Conversation.UserID
     if (this.message.User) {
@@ -526,34 +925,49 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     }
 
     // Fallback to current user name (for backwards compatibility)
-    return this.currentUser.Name;
+    return this.CurrentUser.Name;
+  }
+
+  /** @deprecated Use {@link MessageSenderName}. */
+  public get messageSenderName(): string {
+    return this.MessageSenderName;
   }
 
   /**
    * Get the user's avatar image URL from the userAvatarMap
    * Uses fast O(1) lookup by UserID
    */
-  public get userAvatarUrl(): string | null {
-    if (!this.isUserMessage || !this.message.UserID) {
+  public get UserAvatarUrl(): string | null {
+    if (!this.IsUserMessage || !this.message.UserID) {
       return null;
     }
-    const avatarData = this.userAvatarMap.get(this.message.UserID);
+    const avatarData = this.UserAvatarMap.get(this.message.UserID);
     return avatarData?.imageUrl || null;
+  }
+
+  /** @deprecated Use {@link UserAvatarUrl}. */
+  public get userAvatarUrl(): string | null {
+    return this.UserAvatarUrl;
   }
 
   /**
    * Get the user's avatar icon class from the userAvatarMap
    * Uses fast O(1) lookup by UserID
    */
-  public get userAvatarIconClass(): string | null {
-    if (!this.isUserMessage || !this.message.UserID) {
+  public get UserAvatarIconClass(): string | null {
+    if (!this.IsUserMessage || !this.message.UserID) {
       return null;
     }
-    const avatarData = this.userAvatarMap.get(this.message.UserID);
+    const avatarData = this.UserAvatarMap.get(this.message.UserID);
     return avatarData?.iconClass || null;
   }
 
-  public get isConversationManager(): boolean {
+  /** @deprecated Use {@link UserAvatarIconClass}. */
+  public get userAvatarIconClass(): string | null {
+    return this.UserAvatarIconClass;
+  }
+
+  public get IsConversationManager(): boolean {
     // Resolved at runtime via the conversation manager agent registered through
     // ConversationsRuntime's DefaultAgentResolver chain — explicit input wins,
     // then app-scoped Application Setting, then global Application Setting, then
@@ -567,8 +981,18 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     return this.engineAgentInfo?.name === cmName;
   }
 
-  public get displayMessage(): string {
+  /** @deprecated Use {@link IsConversationManager}. */
+  public get isConversationManager(): boolean {
+    return this.IsConversationManager;
+  }
+
+  public get DisplayMessage(): string {
     return this._stableDisplayMessage;
+  }
+
+  /** @deprecated Use {@link DisplayMessage}. */
+  public get displayMessage(): string {
+    return this.DisplayMessage;
   }
 
   /**
@@ -579,7 +1003,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     let text = this.message.Message || '';
 
     // For Sage, only show the delegation line (starts with emoji)
-    if (this.isConversationManager && text) {
+    if (this.IsConversationManager && text) {
       const delegationMatch = text.match(/🤖.*Delegating to.*Agent.*/);
       if (delegationMatch) {
         text = delegationMatch[0];
@@ -811,24 +1235,39 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     return FormResponseUtils.EscapeHtml(text);
   }
 
-  public get isInProgressAIMessage(): boolean {
+  public get IsInProgressAIMessage(): boolean {
     return this._stableIsInProgressAIMessage;
   }
 
-  public get isAgentRunActive(): boolean {
-    if (!this.agentRun) {
+  /** @deprecated Use {@link IsInProgressAIMessage}. */
+  public get isInProgressAIMessage(): boolean {
+    return this.IsInProgressAIMessage;
+  }
+
+  public get IsAgentRunActive(): boolean {
+    if (!this.AgentRun) {
       return false;
     }
-    const status = this.agentRun.Status?.toLowerCase();
+    const status = this.AgentRun.Status?.toLowerCase();
     return status === 'in-progress' || status === 'running';
   }
 
-  public get messageStatus(): 'Complete' | 'In-Progress' | 'Error' {
+  /** @deprecated Use {@link IsAgentRunActive}. */
+  public get isAgentRunActive(): boolean {
+    return this.IsAgentRunActive;
+  }
+
+  public get MessageStatus(): 'Complete' | 'In-Progress' | 'Error' {
     return this.message.Status || 'Complete';
   }
 
-  public getStatusText(): string {
-    switch (this.messageStatus) {
+  /** @deprecated Use {@link MessageStatus}. */
+  public get messageStatus(): 'Complete' | 'In-Progress' | 'Error' {
+    return this.MessageStatus;
+  }
+
+  public GetStatusText(): string {
+    switch (this.MessageStatus) {
       case 'In-Progress':
         return 'Processing...';
       case 'Error':
@@ -838,12 +1277,27 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     }
   }
 
-  public get isFirstMessageInConversation(): boolean {
-    return this.allMessages.indexOf(this.message) === 0;
+  /** @deprecated Use {@link GetStatusText}. */
+  public getStatusText(): string {
+    return this.GetStatusText();
   }
 
+  public get IsFirstMessageInConversation(): boolean {
+    return this.AllMessages.indexOf(this.message) === 0;
+  }
+
+  /** @deprecated Use {@link IsFirstMessageInConversation}. */
+  public get isFirstMessageInConversation(): boolean {
+    return this.IsFirstMessageInConversation;
+  }
+
+  public get IsLastMessageInConversation(): boolean {
+    return this.AllMessages.indexOf(this.message) === this.AllMessages.length - 1;
+  }
+
+  /** @deprecated Use {@link IsLastMessageInConversation}. */
   public get isLastMessageInConversation(): boolean {
-    return this.allMessages.indexOf(this.message) === this.allMessages.length - 1;
+    return this.IsLastMessageInConversation;
   }
 
   /**
@@ -851,23 +1305,23 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * Show for latest completed AI message that user hasn't rated yet.
    * For older/already-rated messages, ratings accessible via gear menu.
    */
-  public shouldShowRating(): boolean {
+  public ShouldShowRating(): boolean {
     // Must be an AI message
-    if (!this.isAIMessage) return false;
+    if (!this.IsAIMessage) return false;
 
     // Must be completed (not in progress or failed)
-    if (this.messageStatus !== 'Complete') return false;
+    if (this.MessageStatus !== 'Complete') return false;
 
     // Must not be editing
-    if (this.isEditing) return false;
+    if (this.IsEditing) return false;
 
     // Must be the last message in conversation
-    if (!this.isLastMessageInConversation) return false;
+    if (!this.IsLastMessageInConversation) return false;
 
     // Check if current user has already rated this message
-    if (this.ratings && this.ratings.length > 0) {
-      const currentUserId = this.currentUser?.ID;
-      const userHasRated = this.ratings.some(r => UUIDsEqual(r.UserID, currentUserId));
+    if (this.Ratings && this.Ratings.length > 0) {
+      const currentUserId = this.CurrentUser?.ID;
+      const userHasRated = this.Ratings.some(r => UUIDsEqual(r.UserID, currentUserId));
 
       // If user already rated, don't show inline (accessible via gear menu)
       if (userHasRated) return false;
@@ -877,41 +1331,71 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     return true;
   }
 
+  /** @deprecated Use {@link ShouldShowRating}. */
+  public shouldShowRating(): boolean {
+    return this.ShouldShowRating();
+  }
+
   /**
    * Check if message has any ratings (for gear icon badge)
    */
+  public HasRatings(): boolean {
+    return !!(this.Ratings && this.Ratings.length > 0);
+  }
+
+  /** @deprecated Use {@link HasRatings}. */
   public hasRatings(): boolean {
-    return !!(this.ratings && this.ratings.length > 0);
+    return this.HasRatings();
   }
 
   /**
    * Get rating count for badge display on gear icon
    */
+  public GetRatingCount(): number {
+    return this.Ratings?.length || 0;
+  }
+
+  /** @deprecated Use {@link GetRatingCount}. */
   public getRatingCount(): number {
-    return this.ratings?.length || 0;
+    return this.GetRatingCount();
   }
 
   /**
    * Get thumbs up count (ratings >= 8)
    */
+  public GetThumbsUpCount(): number {
+    return this.Ratings?.filter(r => r.Rating ? r.Rating >= 8 : false).length || 0;
+  }
+
+  /** @deprecated Use {@link GetThumbsUpCount}. */
   public getThumbsUpCount(): number {
-    return this.ratings?.filter(r => r.Rating ? r.Rating >= 8 : false).length || 0;
+    return this.GetThumbsUpCount();
   }
 
   /**
    * Get thumbs down count (ratings <= 3)
    */
+  public GetThumbsDownCount(): number {
+    return this.Ratings?.filter(r => r.Rating ? r.Rating <= 3 : false).length || 0;
+  }
+
+  /** @deprecated Use {@link GetThumbsDownCount}. */
   public getThumbsDownCount(): number {
-    return this.ratings?.filter(r => r.Rating ? r.Rating <= 3 : false).length || 0;
+    return this.GetThumbsDownCount();
   }
 
   /**
    * Determine if pin/delete actions should show inline (with rating buttons).
    * Show for latest completed AI message that user hasn't rated yet.
    */
-  public shouldShowInlineActions(): boolean {
+  public ShouldShowInlineActions(): boolean {
     // Same logic as shouldShowRating - latest unrated message
-    return this.shouldShowRating();
+    return this.ShouldShowRating();
+  }
+
+  /** @deprecated Use {@link ShouldShowInlineActions}. */
+  public shouldShowInlineActions(): boolean {
+    return this.ShouldShowInlineActions();
   }
 
   /**
@@ -919,18 +1403,28 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * `artifacts` array; falls back to the legacy single `artifact`/`artifactVersion`
    * inputs so older callers that set only those keep working.
    */
-  public get displayArtifacts(): MessageArtifactRef[] {
-    if (this.artifacts && this.artifacts.length > 0) {
-      return this.artifacts;
+  public get DisplayArtifacts(): MessageArtifactRef[] {
+    if (this.Artifacts && this.Artifacts.length > 0) {
+      return this.Artifacts;
     }
-    if (this.artifact && this.artifactVersion) {
-      return [{ artifact: this.artifact, version: this.artifactVersion }];
+    if (this.Artifact && this.artifactVersion) {
+      return [{ artifact: this.Artifact, version: this.artifactVersion }];
     }
     return [];
   }
 
+  /** @deprecated Use {@link DisplayArtifacts}. */
+  public get displayArtifacts(): MessageArtifactRef[] {
+    return this.DisplayArtifacts;
+  }
+
+  public get HasArtifact(): boolean {
+    return this.DisplayArtifacts.length > 0;
+  }
+
+  /** @deprecated Use {@link HasArtifact}. */
   public get hasArtifact(): boolean {
-    return this.displayArtifacts.length > 0;
+    return this.HasArtifact;
   }
 
   /**
@@ -938,8 +1432,13 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * beside a spinner reads as a title, not as progress, which is the confusion this whole change
    * exists to remove. Matches the media previews' "Loading image..." phrasing.
    */
-  public pendingLabel(pending: MessagePendingArtifactRef): string {
+  public PendingLabel(pending: MessagePendingArtifactRef): string {
     return pending.artifactName ? `Loading ${pending.artifactName}...` : 'Loading attachment...';
+  }
+
+  /** @deprecated Use {@link PendingLabel}. */
+  public pendingLabel(pending: MessagePendingArtifactRef): string {
+    return this.PendingLabel(pending);
   }
 
   /**
@@ -947,27 +1446,37 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * suppressed wholesale: a message can hold a loaded report and an in-flight image at once, and
    * gating on `displayArtifacts.length` would leave that image's window silent.
    */
-  public get pendingArtifactPlaceholders(): readonly MessagePendingArtifactRef[] {
+  public get PendingArtifactPlaceholders(): readonly MessagePendingArtifactRef[] {
     // Shared constant in the steady state, which the parent now keeps us in most of the time by
     // only publishing artifacts that are genuinely still loading. The component is CheckAlways and
     // runs a per-second refresh while an agent run is active, so allocating here would cost for
     // the life of every message.
-    if (this.pendingArtifacts.length === 0) {
+    if (this.PendingArtifacts.length === 0) {
       return NO_PENDING_ARTIFACTS;
     }
     // UUIDsEqual, not string equality: these two IDs come from different sources — one from the
     // conversation query, one off a loaded entity — and SQL Server returns upper-case UUIDs where
     // PostgreSQL returns lower-case. A case-sensitive match left a placeholder sitting above the
     // very card it was waiting for. See guides/UUID_COMPARISON_GUIDE.md.
-    const loaded = this.displayArtifacts;
-    return this.pendingArtifacts.filter(p => !loaded.some(a => UUIDsEqual(a.artifact.ID, p.artifactId)));
+    const loaded = this.DisplayArtifacts;
+    return this.PendingArtifacts.filter(p => !loaded.some(a => UUIDsEqual(a.artifact.ID, p.artifactId)));
+  }
+
+  /** @deprecated Use {@link PendingArtifactPlaceholders}. */
+  public get pendingArtifactPlaceholders(): readonly MessagePendingArtifactRef[] {
+    return this.PendingArtifactPlaceholders;
   }
 
   /**
    * Check if the artifact is a system-only artifact
    */
+  public get IsSystemArtifact(): boolean {
+    return this.Artifact?.Visibility === 'System Only';
+  }
+
+  /** @deprecated Use {@link IsSystemArtifact}. */
   public get isSystemArtifact(): boolean {
-    return this.artifact?.Visibility === 'System Only';
+    return this.IsSystemArtifact;
   }
 
   /**
@@ -978,35 +1487,40 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * - Completed messages: Final generation time
    * - Failed messages: Time before failure
    */
-  public get timePillText(): string | null {
+  public get TimePillText(): string | null {
     return this.calculateTimePillText();
   }
 
+  /** @deprecated Use {@link TimePillText}. */
+  public get timePillText(): string | null {
+    return this.TimePillText;
+  }
+
   private calculateTimePillText(): string | null {
-    if (this.isUserMessage) {
+    if (this.IsUserMessage) {
       return null;
     }
 
     // For temporary messages (in-progress), show live elapsed time
-    if (this.isInProgressAIMessage) {
-      return this._elapsedTimeFormatted;
+    if (this.IsInProgressAIMessage) {
+      return this.ElapsedTimeFormatted;
     }
 
     // For active agent runs, calculate live duration from agentRun timestamps
     // This getter recalculates every time using new Date(), so it updates smoothly
-    if (this.isAgentRunActive && this.agentRun?.__mj_CreatedAt) {
-      return this.agentRunDuration;
+    if (this.IsAgentRunActive && this.AgentRun?.__mj_CreatedAt) {
+      return this.AgentRunDuration;
     }
 
     // For completed/failed messages with an agent run, use agentRun timestamps.
     // These are set when the run finishes and never change, so pin/edit saves on the
     // message entity cannot corrupt the displayed duration.
-    if (this.agentRun?.__mj_CreatedAt && this.agentRun?.__mj_UpdatedAt) {
-      return this.agentRunDuration;
+    if (this.AgentRun?.__mj_CreatedAt && this.AgentRun?.__mj_UpdatedAt) {
+      return this.AgentRunDuration;
     }
 
     // No agent run — fall back to message entity timestamps.
-    const fromMessage = this.formattedGenerationTime;
+    const fromMessage = this.FormattedGenerationTime;
     if (fromMessage) {
       return fromMessage;
     }
@@ -1018,12 +1532,12 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     // complete (no in-progress phase observed), `_elapsedTimeFormatted` is still
     // its initial '0:00' — return null in that case so the time pill doesn't render
     // a misleading zero.
-    return this._elapsedTimeFormatted !== '0:00' ? this._elapsedTimeFormatted : null;
+    return this.ElapsedTimeFormatted !== '0:00' ? this.ElapsedTimeFormatted : null;
   }
 
-  public get formattedGenerationTime(): string | null {
+  public get FormattedGenerationTime(): string | null {
     // Only show generation time for AI messages
-    if (this.isUserMessage || !this.message.__mj_CreatedAt || !this.message.__mj_UpdatedAt) {
+    if (this.IsUserMessage || !this.message.__mj_CreatedAt || !this.message.__mj_UpdatedAt) {
       return null;
     }
 
@@ -1050,53 +1564,73 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     }
   }
 
+  /** @deprecated Use {@link FormattedGenerationTime}. */
+  public get formattedGenerationTime(): string | null {
+    return this.FormattedGenerationTime;
+  }
+
   /**
    * Returns the cached CSS class string. Updated in ngDoCheck so the value
    * is stable within a single change detection cycle, preventing
    * ExpressionChangedAfterItHasBeenCheckedError.
    */
-  public get messageClasses(): string {
+  public get MessageClasses(): string {
     return this._messageClasses;
+  }
+
+  /** @deprecated Use {@link MessageClasses}. */
+  public get messageClasses(): string {
+    return this.MessageClasses;
   }
 
   private buildMessageClasses(): string {
     const classes: string[] = ['message-item'];
-    if (this.isAIMessage) {
+    if (this.IsAIMessage) {
       classes.push('ai-message');
-      if (this.isInProgressAIMessage) {
+      if (this.IsInProgressAIMessage) {
         classes.push('in-progress');
       }
-    } else if (this.isUserMessage) {
+    } else if (this.IsUserMessage) {
       classes.push('user-message');
     }
     if (this.message?.IsPinned) {
       classes.push('pinned');
     }
-    if (this.isEditing) {
+    if (this.IsEditing) {
       classes.push('editing');
     }
     return classes.join(' ');
   }
 
-  public get isMessageEdited(): boolean {
+  public get IsMessageEdited(): boolean {
     // Only show edited badge if user actually edited the message content
     // The OriginalMessageChanged flag is set server-side when the Message field changes on update
-    if (!this.isUserMessage) {
+    if (!this.IsUserMessage) {
       return false;
     }
     return this.message.OriginalMessageChanged === true;
   }
 
-  public onEditClick(): void {
-    if (!this.isProcessing && !this.isEditing) {
-      this.startEditing();
+  /** @deprecated Use {@link IsMessageEdited}. */
+  public get isMessageEdited(): boolean {
+    return this.IsMessageEdited;
+  }
+
+  public OnEditClick(): void {
+    if (!this.IsProcessing && !this.IsEditing) {
+      this.StartEditing();
     }
   }
 
-  public startEditing(): void {
+  /** @deprecated Use {@link OnEditClick}. */
+  public onEditClick(): void {
+    return this.OnEditClick();
+  }
+
+  public StartEditing(): void {
     this.originalText = this.message.Message || '';
-    this.editedText = this.originalText;
-    this.isEditing = true;
+    this.EditedText = this.originalText;
+    this.IsEditing = true;
 
     // Focus textarea after Angular renders it
     Promise.resolve().then(() => {
@@ -1109,32 +1643,42 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     });
   }
 
-  public cancelEditing(): void {
-    this.isEditing = false;
-    this.editedText = '';
+  /** @deprecated Use {@link StartEditing}. */
+  public startEditing(): void {
+    return this.StartEditing();
+  }
+
+  public CancelEditing(): void {
+    this.IsEditing = false;
+    this.EditedText = '';
     this.originalText = '';
     this.cdRef.detectChanges();
   }
 
-  public async saveEdit(): Promise<void> {
-    if (!this.editedText.trim() || this.editedText === this.originalText) {
-      this.cancelEditing();
+  /** @deprecated Use {@link CancelEditing}. */
+  public cancelEditing(): void {
+    return this.CancelEditing();
+  }
+
+  public async SaveEdit(): Promise<void> {
+    if (!this.EditedText.trim() || this.EditedText === this.originalText) {
+      this.CancelEditing();
       return;
     }
 
     try {
       // Update the message entity
-      this.message.Message = this.editedText;
+      this.message.Message = this.EditedText;
       const saveResult = await this.message.Save();
 
       if (saveResult) {
-        this.isEditing = false;
-        this.editedText = '';
+        this.IsEditing = false;
+        this.EditedText = '';
         this.originalText = '';
         // Invalidate display message cache since message changed
         this._cachedMessageText = '';
         this._cachedDisplayMessage = '';
-        this.messageEdited.emit(this.message);
+        this.MessageEdited.emit(this.message);
         this.cdRef.detectChanges();
       } else {
         console.error('Failed to save message edit');
@@ -1146,20 +1690,35 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     }
   }
 
-  public onEditKeydown(event: KeyboardEvent): void {
+  /** @deprecated Use {@link SaveEdit}. */
+  public async saveEdit(): Promise<void> {
+    return this.SaveEdit();
+  }
+
+  public OnEditKeydown(event: KeyboardEvent): void {
     if (event.key === 'Escape') {
       event.preventDefault();
-      this.cancelEditing();
+      this.CancelEditing();
     } else if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
-      this.saveEdit();
+      this.SaveEdit();
     }
   }
 
-  public onDeleteClick(): void {
-    if (!this.isProcessing) {
-      this.deleteClicked.emit(this.message);
+  /** @deprecated Use {@link OnEditKeydown}. */
+  public onEditKeydown(event: KeyboardEvent): void {
+    return this.OnEditKeydown(event);
+  }
+
+  public OnDeleteClick(): void {
+    if (!this.IsProcessing) {
+      this.DeleteClicked.emit(this.message);
     }
+  }
+
+  /** @deprecated Use {@link OnDeleteClick}. */
+  public onDeleteClick(): void {
+    return this.OnDeleteClick();
   }
 
   public async PinMessage(): Promise<void> {
@@ -1178,109 +1737,179 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       // Notify parent so it can patch the conversation cache in-place.
       // Without this, navigating away and back rebuilds entities from stale cache data,
       // causing the pin state to appear lost until the next full page reload.
-      this.messagePinToggled.emit(this.message);
+      this.MessagePinToggled.emit(this.message);
     }
   }
 
+  public OnTestFeedbackClick(): void {
+    if (!this.IsProcessing) {
+      this.TestFeedbackClicked.emit(this.message);
+    }
+  }
+
+  /** @deprecated Use {@link OnTestFeedbackClick}. */
   public onTestFeedbackClick(): void {
-    if (!this.isProcessing) {
-      this.testFeedbackClicked.emit(this.message);
+    return this.OnTestFeedbackClick();
+  }
+
+  public OnRetryClick(): void {
+    if (!this.IsProcessing && this.MessageStatus === 'Error') {
+      this.RetryClicked.emit(this.message);
     }
   }
 
+  /** @deprecated Use {@link OnRetryClick}. */
   public onRetryClick(): void {
-    if (!this.isProcessing && this.messageStatus === 'Error') {
-      this.retryClicked.emit(this.message);
-    }
+    return this.OnRetryClick();
   }
 
-  public onArtifactClick(): void {
-    if (this.hasArtifact && this.artifact) {
-      this.artifactClicked.emit({
-        artifactId: this.artifact.ID,
+  public OnArtifactClick(): void {
+    if (this.HasArtifact && this.Artifact) {
+      this.ArtifactClicked.emit({
+        artifactId: this.Artifact.ID,
         versionId: this.artifactVersion?.ID
       });
     }
   }
 
-  public onArtifactActionPerformed(event: {action: string; artifact: MJArtifactEntity; version?: MJArtifactVersionEntity}): void {
+  /** @deprecated Use {@link OnArtifactClick}. */
+  public onArtifactClick(): void {
+    return this.OnArtifactClick();
+  }
+
+  public OnArtifactActionPerformed(event: {action: string; artifact: MJArtifactEntity; version?: MJArtifactVersionEntity}): void {
     // Handle artifact actions from inline-artifact component
     if (event.action === 'open') {
-      this.artifactClicked.emit({
+      this.ArtifactClicked.emit({
         artifactId: event.artifact.ID,
         versionId: event.version?.ID
       });
     } else {
       // Emit other actions to parent
-      this.artifactActionPerformed.emit({ action: event.action, artifactId: event.artifact.ID });
+      this.ArtifactActionPerformed.emit({ action: event.action, artifactId: event.artifact.ID });
     }
   }
 
-  public toggleReaction(type: 'like' | 'comment'): void {
+  /** @deprecated Use {@link OnArtifactActionPerformed}. */
+  public onArtifactActionPerformed(event: {action: string; artifact: MJArtifactEntity; version?: MJArtifactVersionEntity}): void {
+    return this.OnArtifactActionPerformed(event);
+  }
+
+  public ToggleReaction(type: 'like' | 'comment'): void {
     // TODO: Implement reaction toggling
     console.log('Toggle reaction:', type, 'for message:', this.message.ID);
   }
 
-  public onSaveArtifact(event: Event): void {
+  /** @deprecated Use {@link ToggleReaction}. */
+  public toggleReaction(type: 'like' | 'comment'): void {
+    return this.ToggleReaction(type);
+  }
+
+  public OnSaveArtifact(event: Event): void {
     event.stopPropagation();
     // TODO: Implement artifact save
     console.log('Save artifact for message:', this.message.ID);
   }
 
-  public onShareArtifact(event: Event): void {
+  /** @deprecated Use {@link OnSaveArtifact}. */
+  public onSaveArtifact(event: Event): void {
+    return this.OnSaveArtifact(event);
+  }
+
+  public OnShareArtifact(event: Event): void {
     event.stopPropagation();
     // TODO: Implement artifact share
     console.log('Share artifact for message:', this.message.ID);
   }
 
-  public onExportArtifact(event: Event): void {
+  /** @deprecated Use {@link OnShareArtifact}. */
+  public onShareArtifact(event: Event): void {
+    return this.OnShareArtifact(event);
+  }
+
+  public OnExportArtifact(event: Event): void {
     event.stopPropagation();
     // TODO: Implement artifact export
     console.log('Export artifact for message:', this.message.ID);
+  }
+
+  /** @deprecated Use {@link OnExportArtifact}. */
+  public onExportArtifact(event: Event): void {
+    return this.OnExportArtifact(event);
   }
 
   /**
    * Handle attachment thumbnail click
    * Emits the attachment for the parent to display in the image viewer
    */
+  public OnAttachmentClick(attachment: MessageAttachment): void {
+    this.AttachmentClicked.emit(attachment);
+  }
+
+  /** @deprecated Use {@link OnAttachmentClick}. */
   public onAttachmentClick(attachment: MessageAttachment): void {
-    this.attachmentClicked.emit(attachment);
+    return this.OnAttachmentClick(attachment);
   }
 
   /**
    * Check if message has any attachments
    */
+  public get HasAttachments(): boolean {
+    return this.Attachments && this.Attachments.length > 0;
+  }
+
+  /** @deprecated Use {@link HasAttachments}. */
   public get hasAttachments(): boolean {
-    return this.attachments && this.attachments.length > 0;
+    return this.HasAttachments;
   }
 
   /**
    * Get only image attachments
    */
+  public get ImageAttachments(): MessageAttachment[] {
+    return this.Attachments?.filter(a => a.type === 'Image') || [];
+  }
+
+  /** @deprecated Use {@link ImageAttachments}. */
   public get imageAttachments(): MessageAttachment[] {
-    return this.attachments?.filter(a => a.type === 'Image') || [];
+    return this.ImageAttachments;
   }
 
   /**
    * Format file size for display
    */
-  public formatFileSize(bytes: number): string {
+  public FormatFileSize(bytes: number): string {
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   }
 
+  /** @deprecated Use {@link FormatFileSize}. */
+  public formatFileSize(bytes: number): string {
+    return this.FormatFileSize(bytes);
+  }
+
   /** Compact UPPERCASE badge label (artifact-type name wins over file extension). */
-  public badgeTextFor(attachment: MessageAttachment): string {
+  public BadgeTextFor(attachment: MessageAttachment): string {
     return BadgeTextForAttachment(attachment);
+  }
+
+  /** @deprecated Use {@link BadgeTextFor}. */
+  public badgeTextFor(attachment: MessageAttachment): string {
+    return this.BadgeTextFor(attachment);
   }
 
   /**
    * Whether this message has an associated agent run
    * Based on whether the message has an AgentID (not whether agentRun object is loaded)
    */
-  public get hasAgentRun(): boolean {
+  public get HasAgentRun(): boolean {
     return !!this.message?.AgentID;
+  }
+
+  /** @deprecated Use {@link HasAgentRun}. */
+  public get hasAgentRun(): boolean {
+    return this.HasAgentRun;
   }
 
   /**
@@ -1301,37 +1930,47 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * empty. That window is deliberately preserved (byte-identical defaults) rather
    * than fixed here.
    */
-  public get hasAgentDetailsPanelContent(): boolean {
+  public get HasAgentDetailsPanelContent(): boolean {
     // Run-details enabled → gear shows for any agent-run message (the button
     // already AND-gates hasAgentRun), exactly as before the gate existed — even
     // before the agentRun object finishes loading. This keeps the default
     // (showAgentRunDetails=true) byte-identical.
-    if (this.showAgentRunDetails) return true;
-    if (this.detailTasks.length > 0) return true;
-    if (!this.isLastMessage) {
-      if (this.allowMessageDelete && this.isConversationOwner) return true;
-      if (this.allowPinning) return true;
+    if (this.ShowAgentRunDetails) return true;
+    if (this.DetailTasks.length > 0) return true;
+    if (!this.IsLastMessage) {
+      if (this.AllowMessageDelete && this.IsConversationOwner) return true;
+      if (this.AllowPinning) return true;
       // The rating only renders inside the template's `messageStatus === 'Complete'`
       // branch, so an incomplete/errored message must NOT count it as content —
       // otherwise the gear reappears over an empty panel, which is the whole bug
       // this getter exists to prevent.
-      if (this.showMessageRating && this.messageStatus === 'Complete') return true;
+      if (this.ShowMessageRating && this.MessageStatus === 'Complete') return true;
     }
     return false;
+  }
+
+  /** @deprecated Use {@link HasAgentDetailsPanelContent}. */
+  public get hasAgentDetailsPanelContent(): boolean {
+    return this.HasAgentDetailsPanelContent;
   }
 
   /**
    * Toggle the agent details panel expansion
    */
-  public async toggleAgentDetails(): Promise<void> {
-    this.isAgentDetailsExpanded = !this.isAgentDetailsExpanded;
+  public async ToggleAgentDetails(): Promise<void> {
+    this.IsAgentDetailsExpanded = !this.IsAgentDetailsExpanded;
 
     // Load tasks when expanding if not already loaded
-    if (this.isAgentDetailsExpanded && !this.tasksLoaded) {
+    if (this.IsAgentDetailsExpanded && !this.tasksLoaded) {
       await this.loadTasks();
     }
 
     this.cdRef.detectChanges();
+  }
+
+  /** @deprecated Use {@link ToggleAgentDetails}. */
+  public async toggleAgentDetails(): Promise<void> {
+    return this.ToggleAgentDetails();
   }
 
   /**
@@ -1351,11 +1990,11 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
           OrderBy: '__mj_CreatedAt DESC',
           ResultType: 'entity_object'
         },
-        this.currentUser
+        this.CurrentUser
       );
 
       if (result.Success) {
-        this.detailTasks = result.Results || [];
+        this.DetailTasks = result.Results || [];
         this.tasksLoaded = true;
       }
     } catch (error) {
@@ -1368,23 +2007,23 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * For active runs: Calculate from created to NOW (live updates)
    * For completed runs: Calculate from created to updated timestamp (static)
    */
-  public get agentRunDuration(): string | null {
-    if (!this.agentRun || !this.agentRun.__mj_CreatedAt) {
+  public get AgentRunDuration(): string | null {
+    if (!this.AgentRun || !this.AgentRun.__mj_CreatedAt) {
       return null;
     }
 
     // For active runs, return the interval-updated field to avoid
     // ExpressionChangedAfterItHasBeenCheckedError (new Date() changes between CD cycles)
-    if (this.isAgentRunActive) {
-      return this._agentRunDurationFormatted;
+    if (this.IsAgentRunActive) {
+      return this.AgentRunDurationFormatted;
     }
 
     // For completed runs, calculate static duration from timestamps
-    if (!this.agentRun.__mj_UpdatedAt) {
+    if (!this.AgentRun.__mj_UpdatedAt) {
       return null;
     }
-    const createdAt = new Date(this.agentRun.__mj_CreatedAt);
-    const endTime = new Date(this.agentRun.__mj_UpdatedAt);
+    const createdAt = new Date(this.AgentRun.__mj_CreatedAt);
+    const endTime = new Date(this.AgentRun.__mj_UpdatedAt);
     const diffMs = endTime.getTime() - createdAt.getTime();
 
     if (diffMs <= 0) {
@@ -1394,78 +2033,118 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     return this.formatDurationFromMs(diffMs);
   }
 
+  /** @deprecated Use {@link AgentRunDuration}. */
+  public get agentRunDuration(): string | null {
+    return this.AgentRunDuration;
+  }
+
   /**
    * Get total tokens used in the agent run
    */
-  public get agentRunTotalTokens(): number {
-    if (!this.agentRun) {
+  public get AgentRunTotalTokens(): number {
+    if (!this.AgentRun) {
       return 0;
     }
-    return (this.agentRun.TotalPromptTokensUsed || 0) + (this.agentRun.TotalCompletionTokensUsed || 0);
+    return (this.AgentRun.TotalPromptTokensUsed || 0) + (this.AgentRun.TotalCompletionTokensUsed || 0);
+  }
+
+  /** @deprecated Use {@link AgentRunTotalTokens}. */
+  public get agentRunTotalTokens(): number {
+    return this.AgentRunTotalTokens;
   }
 
   /**
    * Get total cost of the agent run
    */
+  public get AgentRunTotalCost(): number {
+    return this.AgentRun?.TotalCost || 0;
+  }
+
+  /** @deprecated Use {@link AgentRunTotalCost}. */
   public get agentRunTotalCost(): number {
-    return this.agentRun?.TotalCost || 0;
+    return this.AgentRunTotalCost;
   }
 
   /**
    * Get number of steps in the agent run
    */
-  public get agentRunStepCount(): number {
+  public get AgentRunStepCount(): number {
     // Count from the Steps array if available
-    if (this.agentRun && (this.agentRun as any).Steps) {
-      return (this.agentRun as any).Steps.length;
+    if (this.AgentRun && (this.AgentRun as any).Steps) {
+      return (this.AgentRun as any).Steps.length;
     }
     return 0;
+  }
+
+  /** @deprecated Use {@link AgentRunStepCount}. */
+  public get agentRunStepCount(): number {
+    return this.AgentRunStepCount;
   }
 
   /**
    * Format number with commas
    */
-  public formatNumber(num: number): string {
+  public FormatNumber(num: number): string {
     return num.toLocaleString();
+  }
+
+  /** @deprecated Use {@link FormatNumber}. */
+  public formatNumber(num: number): string {
+    return this.FormatNumber(num);
   }
 
   /**
    * Open the agent run entity record in a new tab
    */
-  public openAgentRunRecord(): void {
-    if (!this.agentRun?.ID) return;
+  public OpenAgentRunRecord(): void {
+    if (!this.AgentRun?.ID) return;
 
     const compositeKey = new CompositeKey([
-      new KeyValuePair('ID', this.agentRun.ID)
+      new KeyValuePair('ID', this.AgentRun.ID)
     ]);
 
-    this.openEntityRecord.emit({
+    this.OpenEntityRecord.emit({
       entityName: 'MJ: AI Agent Runs',
       compositeKey
     });
   }
 
+  /** @deprecated Use {@link OpenAgentRunRecord}. */
+  public openAgentRunRecord(): void {
+    return this.OpenAgentRunRecord();
+  }
+
   /**
    * Open the agent entity record in a new tab
    */
-  public openAgentRecord(): void {
-    if (!this.agentRun?.AgentID) return;
+  public OpenAgentRecord(): void {
+    if (!this.AgentRun?.AgentID) return;
 
     const compositeKey = new CompositeKey([
-      new KeyValuePair('ID', this.agentRun.AgentID)
+      new KeyValuePair('ID', this.AgentRun.AgentID)
     ]);
 
-    this.openEntityRecord.emit({
+    this.OpenEntityRecord.emit({
       entityName: 'MJ: AI Agents',
       compositeKey
     });
   }
 
+  /** @deprecated Use {@link OpenAgentRecord}. */
+  public openAgentRecord(): void {
+    return this.OpenAgentRecord();
+  }
+
   /**
    * Check if current user is the conversation owner
    */
+  public get IsConversationOwner(): boolean {
+    return UUIDsEqual(this.Conversation?.UserID, this.CurrentUser.ID);
+  }
+
+  /** @deprecated Use {@link IsConversationOwner}. */
   public get isConversationOwner(): boolean {
-    return UUIDsEqual(this.conversation?.UserID, this.currentUser.ID);
+    return this.IsConversationOwner;
   }
 
   /**
@@ -1479,7 +2158,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    */
   private _responseFormRaw: string | null | undefined = undefined;
   private _responseFormCache: AgentResponseForm | null = null;
-  public get responseForm(): AgentResponseForm | null {
+  public get ResponseForm(): AgentResponseForm | null {
     const rawData = this.message.ResponseForm ?? null;
     if (rawData === this._responseFormRaw) return this._responseFormCache;
     this._responseFormRaw = rawData;
@@ -1496,6 +2175,11 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     return this._responseFormCache;
   }
 
+  /** @deprecated Use {@link ResponseForm}. */
+  public get responseForm(): AgentResponseForm | null {
+    return this.ResponseForm;
+  }
+
   /**
    * Get actionable commands from message
    * Uses ActionableCommands property from MJConversationDetailEntity
@@ -1504,7 +2188,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    */
   private _actionableCommandsRaw: string | null | undefined = undefined;
   private _actionableCommandsCache: ActionableCommand[] = [];
-  public get actionableCommands(): ActionableCommand[] {
+  public get ActionableCommands(): ActionableCommand[] {
     const rawData = this.message.ActionableCommands ?? null;
     if (rawData === this._actionableCommandsRaw) return this._actionableCommandsCache;
     this._actionableCommandsRaw = rawData;
@@ -1522,12 +2206,17 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     return this._actionableCommandsCache;
   }
 
+  /** @deprecated Use {@link ActionableCommands}. */
+  public get actionableCommands(): ActionableCommand[] {
+    return this.ActionableCommands;
+  }
+
   /**
    * Handle agent response form submission
    * Converts form data to the new @{_mode:"form",...} format
    */
-  public onFormSubmitted(formData: Record<string, any>): void {
-    const form = this.responseForm;
+  public OnFormSubmitted(formData: Record<string, any>): void {
+    const form = this.ResponseForm;
     if (!form) {
       console.error('No response form available for submission');
       return;
@@ -1558,7 +2247,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     // message ID as the form id — each AgentResponseForm is attached to exactly
     // one message, giving a stable per-message identifier.
     const beforeEvent = new BeforeResponseFormSubmittedEventArgs(this.message.ID, formData);
-    this.beforeResponseFormSubmitted.emit(beforeEvent);
+    this.BeforeResponseFormSubmitted.emit(beforeEvent);
     if (beforeEvent.Cancel) {
       return;
     }
@@ -1577,14 +2266,19 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     );
 
     // Emit the formatted message
-    this.suggestedResponseSelected.emit({
+    this.SuggestedResponseSelected.emit({
       text: formMessage,
       customInput: undefined // No longer needed with new format
     });
 
-    this.afterResponseFormSubmitted.emit(
+    this.AfterResponseFormSubmitted.emit(
       new AfterResponseFormSubmittedEventArgs(this.message.ID, formData)
     );
+  }
+
+  /** @deprecated Use {@link OnFormSubmitted}. */
+  public onFormSubmitted(formData: Record<string, any>): void {
+    return this.OnFormSubmitted(formData);
   }
 
   /**
@@ -1594,7 +2288,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * Mode (plan phase complete — execute); REJECT intentionally leaves it on (re-plan).
    */
   private applyPlanDecision(formData: Record<string, unknown>): void {
-    const form = this.responseForm;
+    const form = this.ResponseForm;
     const isPlanForm =
       !!form?.questions.some(q => q.id === 'plan') &&
       !!form?.questions.some(q => q.id === 'decision');
@@ -1609,7 +2303,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   /**
    * Handle actionable command execution
    */
-  public async onCommandExecuted(command: ActionableCommand): Promise<void> {
+  public async OnCommandExecuted(command: ActionableCommand): Promise<void> {
     try {
       await this.uiCommandHandler.executeActionableCommand(command, {
         conversationId: this.message.ConversationID,
@@ -1620,13 +2314,18 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     }
   }
 
+  /** @deprecated Use {@link OnCommandExecuted}. */
+  public async onCommandExecuted(command: ActionableCommand): Promise<void> {
+    return this.OnCommandExecuted(command);
+  }
+
   /**
    * Execute automatic commands when message loads
    * This is called after a message with automatic commands is received
    */
   private async executeAutomaticCommands(): Promise<void> {
     try {
-      if (!this.isLastMessage)
+      if (!this.IsLastMessage)
         return; // we only do this when the message is the last one in the conversation
 
       // TODO - IMPORTANT

@@ -45,7 +45,7 @@ export class ConversationAttachmentService {
    * Load all attachments for a list of conversation detail IDs.
    * Returns a map of ConversationDetailID -> MessageAttachment[]
    */
-  async loadAttachmentsForMessages(
+  async LoadAttachmentsForMessages(
     conversationDetailIds: string[],
     contextUser?: UserInfo
   ): Promise<Map<string, MessageAttachment[]>> {
@@ -138,15 +138,31 @@ export class ConversationAttachmentService {
     return result;
   }
 
+  /** @deprecated Use {@link LoadAttachmentsForMessages}. */
+  async loadAttachmentsForMessages(
+    conversationDetailIds: string[],
+    contextUser?: UserInfo
+  ): Promise<Map<string, MessageAttachment[]>> {
+    return this.LoadAttachmentsForMessages(conversationDetailIds, contextUser);
+  }
+
   /**
    * Load attachments for a single message
    */
+  async LoadAttachmentsForMessage(
+    conversationDetailId: string,
+    contextUser?: UserInfo
+  ): Promise<MessageAttachment[]> {
+    const map = await this.LoadAttachmentsForMessages([conversationDetailId], contextUser);
+    return map.get(conversationDetailId) || [];
+  }
+
+  /** @deprecated Use {@link LoadAttachmentsForMessage}. */
   async loadAttachmentsForMessage(
     conversationDetailId: string,
     contextUser?: UserInfo
   ): Promise<MessageAttachment[]> {
-    const map = await this.loadAttachmentsForMessages([conversationDetailId], contextUser);
-    return map.get(conversationDetailId) || [];
+    return this.LoadAttachmentsForMessage(conversationDetailId, contextUser);
   }
 
   /**
@@ -157,7 +173,7 @@ export class ConversationAttachmentService {
    * @param pendingAttachments - Array of pending attachments from the mention editor
    * @param contextUser - User context for the operation
    */
-  async saveAttachments(
+  async SaveAttachments(
     conversationDetailId: string,
     pendingAttachments: PendingAttachment[],
     contextUser?: UserInfo
@@ -239,11 +255,20 @@ export class ConversationAttachmentService {
     return savedAttachments;
   }
 
+  /** @deprecated Use {@link SaveAttachments}. */
+  async saveAttachments(
+    conversationDetailId: string,
+    pendingAttachments: PendingAttachment[],
+    contextUser?: UserInfo
+  ): Promise<MJConversationDetailAttachmentEntity[]> {
+    return this.SaveAttachments(conversationDetailId, pendingAttachments, contextUser);
+  }
+
   /**
    * Create attachment reference tokens for message text.
    * These tokens are stored in the Message field to reference attachments.
    */
-  createAttachmentReferences(attachments: MJConversationDetailAttachmentEntity[]): string {
+  CreateAttachmentReferences(attachments: MJConversationDetailAttachmentEntity[]): string {
     return attachments
       .map(att => {
         const content: AttachmentContent = {
@@ -261,6 +286,11 @@ export class ConversationAttachmentService {
         return ConversationUtility.CreateAttachmentReference(content);
       })
       .join(' ');
+  }
+
+  /** @deprecated Use {@link CreateAttachmentReferences}. */
+  createAttachmentReferences(attachments: MJConversationDetailAttachmentEntity[]): string {
+    return this.CreateAttachmentReferences(attachments);
   }
 
   /**
@@ -364,7 +394,7 @@ export class ConversationAttachmentService {
    * Create a thumbnail from an image file.
    * Returns a base64 data URL of the thumbnail.
    */
-  async createThumbnail(
+  async CreateThumbnail(
     file: File,
     maxSize: number = 200
   ): Promise<string | null> {
@@ -414,10 +444,18 @@ export class ConversationAttachmentService {
     });
   }
 
+  /** @deprecated Use {@link CreateThumbnail}. */
+  async createThumbnail(
+    file: File,
+    maxSize: number = 200
+  ): Promise<string | null> {
+    return this.CreateThumbnail(file, maxSize);
+  }
+
   /**
    * Get image dimensions from a file
    */
-  async getImageDimensions(file: File): Promise<{ width: number; height: number } | null> {
+  async GetImageDimensions(file: File): Promise<{ width: number; height: number } | null> {
     return new Promise((resolve) => {
       if (!file.type.startsWith('image/')) {
         resolve(null);
@@ -438,11 +476,16 @@ export class ConversationAttachmentService {
     });
   }
 
+  /** @deprecated Use {@link GetImageDimensions}. */
+  async getImageDimensions(file: File): Promise<{ width: number; height: number } | null> {
+    return this.GetImageDimensions(file);
+  }
+
   /**
    * Process a file and create a PendingAttachment.
    * This creates the data structure needed for the mention editor component.
    */
-  async processFile(file: File): Promise<PendingAttachment> {
+  async ProcessFile(file: File): Promise<PendingAttachment> {
     // Read file data URL
     const dataUrl = await this.fileToDataUrl(file);
 
@@ -458,19 +501,24 @@ export class ConversationAttachmentService {
     // Get image dimensions and create thumbnail
     const type = ConversationUtility.GetAttachmentTypeFromMime(file.type);
     if (type === 'Image') {
-      const dimensions = await this.getImageDimensions(file);
+      const dimensions = await this.GetImageDimensions(file);
       if (dimensions) {
         pending.width = dimensions.width;
         pending.height = dimensions.height;
       }
 
-      const thumbnail = await this.createThumbnail(file);
+      const thumbnail = await this.CreateThumbnail(file);
       if (thumbnail) {
         pending.thumbnailUrl = thumbnail;
       }
     }
 
     return pending;
+  }
+
+  /** @deprecated Use {@link ProcessFile}. */
+  async processFile(file: File): Promise<PendingAttachment> {
+    return this.ProcessFile(file);
   }
 
   /**

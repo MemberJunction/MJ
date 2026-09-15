@@ -10,23 +10,140 @@ import { MessageInputComponent } from '../message/message-input.component';
   styleUrls: ['./conversation-empty-state.component.css']
 })
 export class ConversationEmptyStateComponent {
-  @Input() currentUser!: UserInfo;
-  @Input() disabled: boolean = false;
-  @Input() showSidebarToggle: boolean = false;
-  @Input() enableAttachments: boolean = false;
-  @Input() enableMentions: boolean = true;
+  @Input() CurrentUser!: UserInfo;
+
+  /** @deprecated Use {@link CurrentUser}. */
+  @Input() set currentUser(value: UserInfo) {
+    this.CurrentUser = value;
+  }
+  /** @deprecated Use {@link CurrentUser}. */
+  get currentUser(): UserInfo {
+    return this.CurrentUser;
+  }
+  @Input() Disabled: boolean = false;
+
+  /** @deprecated Use {@link Disabled}. */
+  @Input() set disabled(value: boolean) {
+    this.Disabled = value;
+  }
+  /** @deprecated Use {@link Disabled}. */
+  get disabled(): boolean {
+    return this.Disabled;
+  }
+  @Input() ShowSidebarToggle: boolean = false;
+
+  /** @deprecated Use {@link ShowSidebarToggle}. */
+  @Input() set showSidebarToggle(value: boolean) {
+    this.ShowSidebarToggle = value;
+  }
+  /** @deprecated Use {@link ShowSidebarToggle}. */
+  get showSidebarToggle(): boolean {
+    return this.ShowSidebarToggle;
+  }
+  @Input() EnableAttachments: boolean = false;
+
+  /** @deprecated Use {@link EnableAttachments}. */
+  @Input() set enableAttachments(value: boolean) {
+    this.EnableAttachments = value;
+  }
+  /** @deprecated Use {@link EnableAttachments}. */
+  get enableAttachments(): boolean {
+    return this.EnableAttachments;
+  }
+  @Input() EnableMentions: boolean = true;
+
+  /** @deprecated Use {@link EnableMentions}. */
+  @Input() set enableMentions(value: boolean) {
+    this.EnableMentions = value;
+  }
+  /** @deprecated Use {@link EnableMentions}. */
+  get enableMentions(): boolean {
+    return this.EnableMentions;
+  }
   /** Per-type mention caps under enableMentions (all default true) — forwarded to the composer. */
-  @Input() enableAgentMentions: boolean = true;
-  @Input() enableEntityMentions: boolean = true;
-  @Input() enableSkillCommands: boolean = true;
+  @Input() EnableAgentMentions: boolean = true;
+
+  /** @deprecated Use {@link EnableAgentMentions}. */
+  @Input() set enableAgentMentions(value: boolean) {
+    this.EnableAgentMentions = value;
+  }
+  /** @deprecated Use {@link EnableAgentMentions}. */
+  get enableAgentMentions(): boolean {
+    return this.EnableAgentMentions;
+  }
+  @Input() EnableEntityMentions: boolean = true;
+
+  /** @deprecated Use {@link EnableEntityMentions}. */
+  @Input() set enableEntityMentions(value: boolean) {
+    this.EnableEntityMentions = value;
+  }
+  /** @deprecated Use {@link EnableEntityMentions}. */
+  get enableEntityMentions(): boolean {
+    return this.EnableEntityMentions;
+  }
+  @Input() EnableSkillCommands: boolean = true;
+
+  /** @deprecated Use {@link EnableSkillCommands}. */
+  @Input() set enableSkillCommands(value: boolean) {
+    this.EnableSkillCommands = value;
+  }
+  /** @deprecated Use {@link EnableSkillCommands}. */
+  get enableSkillCommands(): boolean {
+    return this.EnableSkillCommands;
+  }
   /** Show the built-in suggested-prompt chips. Hosts that don't want the default prompt vocabulary set false. */
-  @Input() showSuggestedPrompts: boolean = true;
-  @Input() maxAttachments: number = 10;
-  @Input() maxAttachmentSizeBytes: number = 20 * 1024 * 1024;
-  @Input() acceptedFileTypes: string = 'image/*';
+  @Input() ShowSuggestedPrompts: boolean = true;
+
+  /** @deprecated Use {@link ShowSuggestedPrompts}. */
+  @Input() set showSuggestedPrompts(value: boolean) {
+    this.ShowSuggestedPrompts = value;
+  }
+  /** @deprecated Use {@link ShowSuggestedPrompts}. */
+  get showSuggestedPrompts(): boolean {
+    return this.ShowSuggestedPrompts;
+  }
+  @Input() MaxAttachments: number = 10;
+
+  /** @deprecated Use {@link MaxAttachments}. */
+  @Input() set maxAttachments(value: number) {
+    this.MaxAttachments = value;
+  }
+  /** @deprecated Use {@link MaxAttachments}. */
+  get maxAttachments(): number {
+    return this.MaxAttachments;
+  }
+  @Input() MaxAttachmentSizeBytes: number = 20 * 1024 * 1024;
+
+  /** @deprecated Use {@link MaxAttachmentSizeBytes}. */
+  @Input() set maxAttachmentSizeBytes(value: number) {
+    this.MaxAttachmentSizeBytes = value;
+  }
+  /** @deprecated Use {@link MaxAttachmentSizeBytes}. */
+  get maxAttachmentSizeBytes(): number {
+    return this.MaxAttachmentSizeBytes;
+  }
+  @Input() AcceptedFileTypes: string = 'image/*';
+
+  /** @deprecated Use {@link AcceptedFileTypes}. */
+  @Input() set acceptedFileTypes(value: string) {
+    this.AcceptedFileTypes = value;
+  }
+  /** @deprecated Use {@link AcceptedFileTypes}. */
+  get acceptedFileTypes(): string {
+    return this.AcceptedFileTypes;
+  }
 
   /** Greeting text shown in the empty state. Set by host app via overlay/chat-area chain. */
-  @Input() greeting: string = 'How can I help you?';
+  @Input() Greeting: string = 'How can I help you?';
+
+  /** @deprecated Use {@link Greeting}. */
+  @Input() set greeting(value: string) {
+    this.Greeting = value;
+  }
+  /** @deprecated Use {@link Greeting}. */
+  get greeting(): string {
+    return this.Greeting;
+  }
 
   /** When true (overlay context), suggested prompts are hidden to save space */
   private _overlayMode = false;
@@ -34,7 +151,7 @@ export class ConversationEmptyStateComponent {
   set overlayMode(value: boolean) {
       this._overlayMode = value;
       if (value) {
-          this.suggestedPrompts = [];
+          this.SuggestedPrompts = [];
       }
   }
   get overlayMode(): boolean {
@@ -44,17 +161,62 @@ export class ConversationEmptyStateComponent {
   @ViewChild(MessageInputComponent) private messageInput?: MessageInputComponent;
 
   /** Draft staged into the composer on mount (see MessageInputComponent.initialDraft). */
-  @Input() initialDraft: string | null = null;
-  @Output() initialDraftApplied = new EventEmitter<void>();
+  @Input() InitialDraft: string | null = null;
+
+  /** @deprecated Use {@link InitialDraft}. */
+  @Input() set initialDraft(value: string | null) {
+    this.InitialDraft = value;
+  }
+  /** @deprecated Use {@link InitialDraft}. */
+  get initialDraft(): string | null {
+    return this.InitialDraft;
+  }
+  @Output() InitialDraftApplied = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link InitialDraftApplied}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (initialDraftApplied) keeps working. Must stay AFTER InitialDraftApplied: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() initialDraftApplied = this.InitialDraftApplied;
   /** Forwarded from the inner composer — serialized draft on every value change. */
   @Output() DraftStateChanged = new EventEmitter<string>();
   /** Forwarded from the inner composer — persist-drafts save point. */
   @Output() ComposerBlurred = new EventEmitter<void>();
 
-  @Output() messageSent = new EventEmitter<{text: string; attachments: PendingAttachment[]}>();
-  @Output() sidebarToggleClicked = new EventEmitter<void>();
+  @Output() MessageSent = new EventEmitter<{text: string; attachments: PendingAttachment[]}>();
 
-  public messageText: string = '';
+  /**
+   * @deprecated Use {@link MessageSent}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (messageSent) keeps working. Must stay AFTER MessageSent: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() messageSent = this.MessageSent;
+  @Output() SidebarToggleClicked = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link SidebarToggleClicked}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (sidebarToggleClicked) keeps working. Must stay AFTER SidebarToggleClicked: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() sidebarToggleClicked = this.SidebarToggleClicked;
+
+  public MessageText: string = '';
+
+  /** @deprecated Use {@link MessageText}. */
+  public get messageText(): string {
+    return this.MessageText;
+  }
+  /** @deprecated Use {@link MessageText}. */
+  public set messageText(value: string) {
+    this.MessageText = value;
+  }
 
   // All available suggested prompts (business user focused)
   private allSuggestedPrompts: Array<{icon: string; title: string; prompt: string}> = [
@@ -166,11 +328,20 @@ export class ConversationEmptyStateComponent {
   ];
 
   // Randomly selected prompts to display (refreshed on each load)
-  public suggestedPrompts: Array<{icon: string; title: string; prompt: string}> = [];
+  public SuggestedPrompts: Array<{icon: string; title: string; prompt: string}> = [];
+
+  /** @deprecated Use {@link SuggestedPrompts}. */
+  public get suggestedPrompts(): Array<{icon: string; title: string; prompt: string}> {
+    return this.SuggestedPrompts;
+  }
+  /** @deprecated Use {@link SuggestedPrompts}. */
+  public set suggestedPrompts(value: Array<{icon: string; title: string; prompt: string}>) {
+    this.SuggestedPrompts = value;
+  }
 
   constructor() {
     // Select 4 random prompts on initialization
-    this.suggestedPrompts = this.selectRandomPrompts(4);
+    this.SuggestedPrompts = this.selectRandomPrompts(4);
   }
 
   /**
@@ -205,13 +376,23 @@ export class ConversationEmptyStateComponent {
     }, 100);
   }
 
-  onEmptyStateSubmit(event: {text: string; attachments: PendingAttachment[]}): void {
-    this.messageSent.emit(event);
+  OnEmptyStateSubmit(event: {text: string; attachments: PendingAttachment[]}): void {
+    this.MessageSent.emit(event);
   }
 
-  onSuggestedPromptClicked(prompt: string): void {
-    if (!this.disabled) {
-      this.messageSent.emit({ text: prompt, attachments: [] });
+  /** @deprecated Use {@link OnEmptyStateSubmit}. */
+  onEmptyStateSubmit(event: {text: string; attachments: PendingAttachment[]}): void {
+    return this.OnEmptyStateSubmit(event);
+  }
+
+  OnSuggestedPromptClicked(prompt: string): void {
+    if (!this.Disabled) {
+      this.MessageSent.emit({ text: prompt, attachments: [] });
     }
+  }
+
+  /** @deprecated Use {@link OnSuggestedPromptClicked}. */
+  onSuggestedPromptClicked(prompt: string): void {
+    return this.OnSuggestedPromptClicked(prompt);
   }
 }

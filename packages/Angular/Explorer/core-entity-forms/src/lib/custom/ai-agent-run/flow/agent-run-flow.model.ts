@@ -227,7 +227,7 @@ function heatTier(d: number, maxLeaf: number): 0 | 1 | 2 | 3 {
  * sub-agent tree (via the helper's cached `loadSubAgentData`) so the zoomed-out
  * view shows the entire run at once.
  */
-export async function buildFlowModel(
+export async function BuildFlowModel(
   rootName: string,
   rootStatus: string,
   rootIcon: RootIcon,
@@ -246,7 +246,17 @@ export async function buildFlowModel(
     await attachStepTree(root, steps, promptRuns, helper);
   }
 
-  return finalizeFlowModel(root);
+  return FinalizeFlowModel(root);
+}
+
+/** @deprecated Use {@link BuildFlowModel}. */
+export async function buildFlowModel(
+  rootName: string,
+  rootStatus: string,
+  rootIcon: RootIcon,
+  helper: AIAgentRunDataHelper
+): Promise<FlowModel> {
+  return BuildFlowModel(rootName, rootStatus, rootIcon, helper);
 }
 
 /**
@@ -257,7 +267,7 @@ export async function buildFlowModel(
  * into looking like different products — different bar widths, different heat thresholds — for the
  * same run.
  */
-export function finalizeFlowModel(root: FlowNode): FlowModel {
+export function FinalizeFlowModel(root: FlowNode): FlowModel {
   calcDur(root);
   assignT(root, 0, 1);
   assignReal(root, 0);
@@ -276,9 +286,14 @@ export function finalizeFlowModel(root: FlowNode): FlowModel {
   };
 }
 
+/** @deprecated Use {@link FinalizeFlowModel}. */
+export function finalizeFlowModel(root: FlowNode): FlowModel {
+  return FinalizeFlowModel(root);
+}
+
 /* ----------------------------- shared lookups ----------------------------- */
 
-export function activeLeaf(model: FlowModel, p: number): FlowNode {
+export function ActiveLeaf(model: FlowModel, p: number): FlowNode {
   const L = model.leaves;
   if (!L.length) return model.root;
   if (p <= 0) return L[0];
@@ -286,22 +301,42 @@ export function activeLeaf(model: FlowModel, p: number): FlowNode {
   return L.find(l => p >= l.t0 && p < l.t1) ?? L[L.length - 1];
 }
 
-export function ancestors(n: FlowNode): FlowNode[] {
+/** @deprecated Use {@link ActiveLeaf}. */
+export function activeLeaf(model: FlowModel, p: number): FlowNode {
+  return ActiveLeaf(model, p);
+}
+
+export function Ancestors(n: FlowNode): FlowNode[] {
   const out: FlowNode[] = []; let c: FlowNode | null = n;
   while (c) { out.unshift(c); c = c.parent; }
   return out;
 }
 
-export function agentOf(n: FlowNode): FlowNode {
+/** @deprecated Use {@link Ancestors}. */
+export function ancestors(n: FlowNode): FlowNode[] {
+  return Ancestors(n);
+}
+
+export function AgentOf(n: FlowNode): FlowNode {
   let c = n.parent;
   while (c) { if (c.type === 'agent' || c.type === 'subagent') return c; c = c.parent; }
   return n;
 }
 
+/** @deprecated Use {@link AgentOf}. */
+export function agentOf(n: FlowNode): FlowNode {
+  return AgentOf(n);
+}
+
 /** "Execute Sub-Agent: Query Strategist" → "Query Strategist". */
-export function agentShortName(a: FlowNode): string {
+export function AgentShortName(a: FlowNode): string {
   const i = a.name.indexOf(': ');
   return i >= 0 ? a.name.slice(i + 2) : a.name;
+}
+
+/** @deprecated Use {@link AgentShortName}. */
+export function agentShortName(a: FlowNode): string {
+  return AgentShortName(a);
 }
 
 /**
@@ -309,13 +344,18 @@ export function agentShortName(a: FlowNode): string {
  * "Query Strategist: Execute Agent Prompt"; on a view that already shows which
  * agent/line a node belongs to, the prefix is pure noise that causes overlap.
  */
-export function displayName(n: FlowNode): string {
-  const a = agentOf(n);
+export function DisplayName(n: FlowNode): string {
+  const a = AgentOf(n);
   if (a && a !== n) {
-    const short = agentShortName(a);
+    const short = AgentShortName(a);
     if (short && n.name.startsWith(short + ':')) return n.name.slice(short.length + 1).trim();
   }
   return n.name;
+}
+
+/** @deprecated Use {@link DisplayName}. */
+export function displayName(n: FlowNode): string {
+  return DisplayName(n);
 }
 
 /**
@@ -326,9 +366,9 @@ export function displayName(n: FlowNode): string {
  *   "Execute Action: Search Query Catalog"→ "Search Query Catalog"
  *   "Agent Validation"                    → "Validation"
  */
-export function shortLabel(n: FlowNode): string {
-  if (n.type === 'subagent') return `${agentShortName(n)} Sub-Agent`;
-  let s = displayName(n);
+export function ShortLabel(n: FlowNode): string {
+  if (n.type === 'subagent') return `${AgentShortName(n)} Sub-Agent`;
+  let s = DisplayName(n);
   s = s.replace(/^Execute Action:\s*/i, '').replace(/^Execute Sub-Agent:\s*/i, '');
   if (/^Execute Agent Prompt$/i.test(s)) s = 'Prompt';
   else if (/^Agent Validation$/i.test(s)) s = 'Validation';
@@ -336,9 +376,19 @@ export function shortLabel(n: FlowNode): string {
   return s;
 }
 
-export function formatDuration(seconds: number): string {
+/** @deprecated Use {@link ShortLabel}. */
+export function shortLabel(n: FlowNode): string {
+  return ShortLabel(n);
+}
+
+export function FormatDuration(seconds: number): string {
   if (seconds < 1) return `${Math.round(seconds * 1000)}ms`;
   if (seconds < 60) return `${seconds < 10 ? seconds.toFixed(1) : Math.round(seconds)}s`;
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
   return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
+}
+
+/** @deprecated Use {@link FormatDuration}. */
+export function formatDuration(seconds: number): string {
+  return FormatDuration(seconds);
 }

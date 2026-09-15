@@ -1,6 +1,6 @@
 import { Component, ElementRef, Input, Output, EventEmitter, ViewChild, OnDestroy, ChangeDetectionStrategy, ViewEncapsulation } from '@angular/core';
-import { FlowModel, FlowNode, FLOW_COLORS, shortLabel } from './agent-run-flow.model';
-import { svgEl, clip, appendIcon, appendTitle } from './flow-svg.util';
+import { FlowModel, FlowNode, FLOW_COLORS, ShortLabel } from './agent-run-flow.model';
+import { SvgEl, Clip, AppendIcon, AppendTitle } from './flow-svg.util';
 import { PanZoomController } from './pan-zoom';
 
 interface Star { halo: SVGElement; ring: SVGElement; icon: SVGElement; lab: SVGElement; node: FlowNode; rad: number; }
@@ -23,7 +23,16 @@ type Placed = FlowNode & { _x?: number; _y?: number; _ang?: number };
 })
 export class ConstellationComponent {
   @ViewChild('svg', { static: true }) svgRef!: ElementRef<SVGSVGElement>;
-  @Output() nodeSelected = new EventEmitter<FlowNode>();
+  @Output() NodeSelected = new EventEmitter<FlowNode>();
+
+  /**
+   * @deprecated Use {@link NodeSelected}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (nodeSelected) keeps working. Must stay AFTER NodeSelected: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() nodeSelected = this.NodeSelected;
 
   private _model: FlowModel | null = null;
   private built = false;
@@ -65,14 +74,14 @@ export class ConstellationComponent {
     const m = this._model!;
     svg.setAttribute('viewBox', `0 0 ${this.VW} ${this.VH}`);
 
-    const bg = svgEl('g', {}, svg);
+    const bg = SvgEl('g', {}, svg);
     let seed = 7; const rnd = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
     for (let i = 0; i < 150; i++) {
-      svgEl('circle', { cx: rnd() * this.VW, cy: rnd() * this.VH, r: rnd() * 1.3 + 0.3, class: 'fstar-bg', opacity: rnd() * 0.3 + 0.04 }, bg);
+      SvgEl('circle', { cx: rnd() * this.VW, cy: rnd() * this.VH, r: rnd() * 1.3 + 0.3, class: 'fstar-bg', opacity: rnd() * 0.3 + 0.04 }, bg);
     }
-    const main = svgEl('g', {}, svg);
-    const edgeG = svgEl('g', {}, main);
-    const nodeG = svgEl('g', {}, main);
+    const main = SvgEl('g', {}, svg);
+    const edgeG = SvgEl('g', {}, main);
+    const nodeG = SvgEl('g', {}, main);
 
     const step = Math.min(150, 300 / Math.max(1, m.maxDepth));
     const leafCount = Math.max(1, m.leaves.length);
@@ -95,8 +104,8 @@ export class ConstellationComponent {
       const mx = (pn._x! + cn._x!) / 2, my = (pn._y! + cn._y!) / 2;
       const ctrlX = mx + (this.CX - mx) * 0.16, ctrlY = my + (this.CY - my) * 0.16;
       const col = FLOW_COLORS[n.type];
-      const path = svgEl('path', { d: `M${pn._x},${pn._y} Q${ctrlX},${ctrlY} ${cn._x},${cn._y}`, fill: 'none', stroke: col, 'stroke-width': 1.4, opacity: 0.12 }, edgeG) as SVGGraphicsElement;
-      const part = svgEl('circle', { r: 3.2, class: 'fhand-dot', opacity: 0 }, edgeG);
+      const path = SvgEl('path', { d: `M${pn._x},${pn._y} Q${ctrlX},${ctrlY} ${cn._x},${cn._y}`, fill: 'none', stroke: col, 'stroke-width': 1.4, opacity: 0.12 }, edgeG) as SVGGraphicsElement;
+      const part = SvgEl('circle', { r: 3.2, class: 'fhand-dot', opacity: 0 }, edgeG);
       this.edges.push({ path, part, node: n, len: (path as unknown as SVGPathElement).getTotalLength() });
     }
 
@@ -104,13 +113,13 @@ export class ConstellationComponent {
       const cn = n as Placed;
       const rad = n.depth === 0 ? 22 : Math.min(24, 9 + Math.pow(n.realDur, 0.55) * 2.6);
       const col = FLOW_COLORS[n.type];
-      const grp = svgEl('g', {}, nodeG);
+      const grp = SvgEl('g', {}, nodeG);
       (grp as SVGElement & { style: CSSStyleDeclaration }).style.color = col;
       (grp as SVGElement & { style: CSSStyleDeclaration }).style.cursor = 'pointer';
-      appendTitle(grp, `${n.name}`);
-      const halo = svgEl('circle', { cx: cn._x!, cy: cn._y!, r: rad + 7, fill: col, opacity: 0 }, grp);
-      const ring = svgEl('circle', { cx: cn._x!, cy: cn._y!, r: rad, fill: col, 'fill-opacity': 0.16, stroke: col, 'stroke-width': 1.6 }, grp);
-      const icon = appendIcon(grp, cn._x! - rad * 0.6, cn._y! - rad * 0.6, rad * 1.2, n.iconClass, n.logoUrl, col);
+      AppendTitle(grp, `${n.name}`);
+      const halo = SvgEl('circle', { cx: cn._x!, cy: cn._y!, r: rad + 7, fill: col, opacity: 0 }, grp);
+      const ring = SvgEl('circle', { cx: cn._x!, cy: cn._y!, r: rad, fill: col, 'fill-opacity': 0.16, stroke: col, 'stroke-width': 1.6 }, grp);
+      const icon = AppendIcon(grp, cn._x! - rad * 0.6, cn._y! - rad * 0.6, rad * 1.2, n.iconClass, n.logoUrl, col);
       icon.setAttribute('opacity', '0');
       // angle each label along its radial spoke (flip on the left half so it stays upright)
       const dir = cn._ang! - Math.PI / 2;
@@ -118,15 +127,15 @@ export class ConstellationComponent {
       const flip = Math.cos(dir) < 0;
       const deg = dir * 180 / Math.PI + (flip ? 180 : 0);
       const lab = n.depth === 0
-        ? svgEl('text', { x: cn._x!, y: cn._y! + rad + 18, 'font-size': 13, 'font-weight': 700, 'text-anchor': 'middle', class: 'fhalo', opacity: 0, text: clip(shortLabel(n), 22) }, grp)
-        : svgEl('text', {
+        ? SvgEl('text', { x: cn._x!, y: cn._y! + rad + 18, 'font-size': 13, 'font-weight': 700, 'text-anchor': 'middle', class: 'fhalo', opacity: 0, text: Clip(ShortLabel(n), 22) }, grp)
+        : SvgEl('text', {
             x: lx, y: ly, 'font-size': 10.5, 'font-weight': 600, 'dominant-baseline': 'middle',
             'text-anchor': flip ? 'end' : 'start', transform: `rotate(${deg} ${lx} ${ly})`,
-            class: 'fhalo', opacity: 0, text: clip(shortLabel(n), 22)
+            class: 'fhalo', opacity: 0, text: Clip(ShortLabel(n), 22)
           }, grp);
       grp.addEventListener('mouseenter', () => { this.hoveredId = n.id; });
       grp.addEventListener('mouseleave', () => { if (this.hoveredId === n.id) this.hoveredId = -1; });
-      grp.addEventListener('click', () => { if (!this.pz?.moved) this.nodeSelected.emit(n); });
+      grp.addEventListener('click', () => { if (!this.pz?.moved) this.NodeSelected.emit(n); });
       this.stars.set(n.id, { halo, ring, icon, lab, node: n, rad });
     }
 

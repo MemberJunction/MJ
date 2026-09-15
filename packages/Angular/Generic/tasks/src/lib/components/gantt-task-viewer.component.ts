@@ -135,16 +135,79 @@ import { UUIDsEqual } from '@memberjunction/global';
   `]
 })
 export class GanttTaskViewerComponent implements OnChanges, AfterViewInit, OnDestroy {
-  @Input() tasks: MJTaskEntity[] = [];
-  @Input() taskDependencies: MJTaskDependencyEntity[] = [];
-  @Input() agentRunMap?: Map<string, string>; // Maps TaskID -> AgentRunID
-  @Output() taskClicked = new EventEmitter<MJTaskEntity>();
-  @Output() openEntityRecord = new EventEmitter<{ entityName: string; recordId: string }>();
+  @Input() Tasks: MJTaskEntity[] = [];
+
+  /** @deprecated Use {@link Tasks}. */
+  @Input() set tasks(value: MJTaskEntity[]) {
+    this.Tasks = value;
+  }
+  /** @deprecated Use {@link Tasks}. */
+  get tasks(): MJTaskEntity[] {
+    return this.Tasks;
+  }
+  @Input() TaskDependencies: MJTaskDependencyEntity[] = [];
+
+  /** @deprecated Use {@link TaskDependencies}. */
+  @Input() set taskDependencies(value: MJTaskDependencyEntity[]) {
+    this.TaskDependencies = value;
+  }
+  /** @deprecated Use {@link TaskDependencies}. */
+  get taskDependencies(): MJTaskDependencyEntity[] {
+    return this.TaskDependencies;
+  }
+  @Input() AgentRunMap?: Map<string, string>;
+
+  /** @deprecated Use {@link AgentRunMap}. */
+  @Input() set agentRunMap(value: Map<string, string> | undefined) {
+    this.AgentRunMap = value;
+  }
+  /** @deprecated Use {@link AgentRunMap}. */
+  get agentRunMap(): Map<string, string> | undefined {
+    return this.AgentRunMap;
+  } // Maps TaskID -> AgentRunID
+  @Output() TaskClicked = new EventEmitter<MJTaskEntity>();
+
+  /**
+   * @deprecated Use {@link TaskClicked}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (taskClicked) keeps working. Must stay AFTER TaskClicked: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() taskClicked = this.TaskClicked;
+  @Output() OpenEntityRecord = new EventEmitter<{ entityName: string; recordId: string }>();
+
+  /**
+   * @deprecated Use {@link OpenEntityRecord}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (openEntityRecord) keeps working. Must stay AFTER OpenEntityRecord: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() openEntityRecord = this.OpenEntityRecord;
 
   @ViewChild('ganttContainer', { static: false }) ganttContainer!: ElementRef<HTMLDivElement>;
 
-  public selectedTask: MJTaskEntity | null = null;
-  public detailPanelWidth: number = 400;
+  public SelectedTask: MJTaskEntity | null = null;
+
+  /** @deprecated Use {@link SelectedTask}. */
+  public get selectedTask(): MJTaskEntity | null {
+    return this.SelectedTask;
+  }
+  /** @deprecated Use {@link SelectedTask}. */
+  public set selectedTask(value: MJTaskEntity | null) {
+    this.SelectedTask = value;
+  }
+  public DetailPanelWidth: number = 400;
+
+  /** @deprecated Use {@link DetailPanelWidth}. */
+  public get detailPanelWidth(): number {
+    return this.DetailPanelWidth;
+  }
+  /** @deprecated Use {@link DetailPanelWidth}. */
+  public set detailPanelWidth(value: number) {
+    this.DetailPanelWidth = value;
+  }
   public IsGanttLoading = true;
 
   private ganttLib: GanttStatic | null = null;
@@ -155,7 +218,7 @@ export class GanttTaskViewerComponent implements OnChanges, AfterViewInit, OnDes
 
   async ngAfterViewInit() {
     console.log('🔧 ngAfterViewInit called', {
-      taskCount: this.tasks?.length || 0,
+      taskCount: this.Tasks?.length || 0,
       hasContainer: !!this.ganttContainer
     });
 
@@ -164,7 +227,7 @@ export class GanttTaskViewerComponent implements OnChanges, AfterViewInit, OnDes
       this.ganttLib = module.gantt;
       this.IsGanttLoading = false;
 
-      if (this.tasks && this.tasks.length > 0 && this.ganttContainer) {
+      if (this.Tasks && this.Tasks.length > 0 && this.ganttContainer) {
         this.initGantt();
       }
     } catch (error) {
@@ -177,14 +240,14 @@ export class GanttTaskViewerComponent implements OnChanges, AfterViewInit, OnDes
     console.log('🔄 ngOnChanges called', {
       initialized: this.ganttInitialized,
       hasContainer: !!this.ganttContainer,
-      taskCount: this.tasks?.length || 0
+      taskCount: this.Tasks?.length || 0
     });
 
     if (!this.ganttLib) return; // Library not yet loaded
 
     if (this.ganttInitialized && this.ganttContainer) {
       this.updateGanttData();
-    } else if (!this.ganttInitialized && this.ganttContainer && this.tasks && this.tasks.length > 0) {
+    } else if (!this.ganttInitialized && this.ganttContainer && this.Tasks && this.Tasks.length > 0) {
       // Initialize if we have container and tasks but haven't initialized yet
       console.log('🎨 Late initialization - gantt not initialized but container and tasks available');
       this.initGantt();
@@ -252,10 +315,10 @@ export class GanttTaskViewerComponent implements OnChanges, AfterViewInit, OnDes
 
       // Attach click event
       g.attachEvent('onTaskClick', (id: string) => {
-        const originalTask = this.tasks.find(t => UUIDsEqual(t.ID, id));
+        const originalTask = this.Tasks.find(t => UUIDsEqual(t.ID, id));
         if (originalTask) {
-          this.selectedTask = originalTask;
-          this.taskClicked.emit(originalTask);
+          this.SelectedTask = originalTask;
+          this.TaskClicked.emit(originalTask);
         }
         return true;
       });
@@ -283,10 +346,10 @@ export class GanttTaskViewerComponent implements OnChanges, AfterViewInit, OnDes
     if (!this.ganttInitialized) return;
 
     try {
-      console.log('📊 Updating Gantt data with', this.tasks.length, 'tasks');
+      console.log('📊 Updating Gantt data with', this.Tasks.length, 'tasks');
       const g = this.ganttLib!;
 
-      const ganttData = this.convertToGanttFormat(this.tasks);
+      const ganttData = this.convertToGanttFormat(this.Tasks);
       g.clearAll();
       g.parse(ganttData);
 
@@ -317,7 +380,7 @@ export class GanttTaskViewerComponent implements OnChanges, AfterViewInit, OnDes
     const links: GanttLink[] = [];
 
     console.log('🔍 Converting tasks:', tasks);
-    console.log('🔗 Task dependencies:', this.taskDependencies);
+    console.log('🔗 Task dependencies:', this.TaskDependencies);
 
     // Build a map of task ID to task for quick lookup
     const taskMap = new Map<string, MJTaskEntity>();
@@ -325,7 +388,7 @@ export class GanttTaskViewerComponent implements OnChanges, AfterViewInit, OnDes
 
     // Build dependency map: taskId -> array of tasks it depends on
     const dependencyMap = new Map<string, string[]>();
-    this.taskDependencies.forEach(dep => {
+    this.TaskDependencies.forEach(dep => {
       if (!dependencyMap.has(dep.TaskID)) {
         dependencyMap.set(dep.TaskID, []);
       }
@@ -456,7 +519,7 @@ export class GanttTaskViewerComponent implements OnChanges, AfterViewInit, OnDes
     });
 
     // Create links from MJTaskDependencyEntity records
-    this.taskDependencies.forEach((dep, index) => {
+    this.TaskDependencies.forEach((dep, index) => {
       links.push({
         id: dep.ID || `link_${index}`,
         source: dep.DependsOnTaskID, // The task being depended on
@@ -486,23 +549,43 @@ export class GanttTaskViewerComponent implements OnChanges, AfterViewInit, OnDes
     return `${year}-${month}-${day} 00:00`;
   }
 
+  public GetAgentRunId(task: MJTaskEntity): string | null {
+    return this.AgentRunMap?.get(task.ID) || null;
+  }
+
+  /** @deprecated Use {@link GetAgentRunId}. */
   public getAgentRunId(task: MJTaskEntity): string | null {
-    return this.agentRunMap?.get(task.ID) || null;
+    return this.GetAgentRunId(task);
   }
 
+  public CloseDetailPanel(): void {
+    this.SelectedTask = null;
+  }
+
+  /** @deprecated Use {@link CloseDetailPanel}. */
   public closeDetailPanel(): void {
-    this.selectedTask = null;
+    return this.CloseDetailPanel();
   }
 
+  public OnOpenEntityRecord(event: { entityName: string; recordId: string }): void {
+    this.OpenEntityRecord.emit(event);
+  }
+
+  /** @deprecated Use {@link OnOpenEntityRecord}. */
   public onOpenEntityRecord(event: { entityName: string; recordId: string }): void {
-    this.openEntityRecord.emit(event);
+    return this.OnOpenEntityRecord(event);
   }
 
-  public startResize(event: MouseEvent): void {
+  public StartResize(event: MouseEvent): void {
     this.isResizing = true;
     this.resizeStartX = event.clientX;
-    this.resizeStartWidth = this.detailPanelWidth;
+    this.resizeStartWidth = this.DetailPanelWidth;
     event.preventDefault();
+  }
+
+  /** @deprecated Use {@link StartResize}. */
+  public startResize(event: MouseEvent): void {
+    return this.StartResize(event);
   }
 
   @HostListener('document:mousemove', ['$event'])
@@ -513,7 +596,7 @@ export class GanttTaskViewerComponent implements OnChanges, AfterViewInit, OnDes
     const newWidth = this.resizeStartWidth + delta;
 
     // Constrain width between min and max
-    this.detailPanelWidth = Math.max(300, Math.min(600, newWidth));
+    this.DetailPanelWidth = Math.max(300, Math.min(600, newWidth));
   }
 
   @HostListener('document:mouseup')
@@ -550,10 +633,10 @@ export class GanttTaskViewerComponent implements OnChanges, AfterViewInit, OnDes
       if (rootTaskId != null) {
         g.selectTask(rootTaskId);
         // Trigger task click event to open detail panel
-        const originalTask = this.tasks.find(t => UUIDsEqual(t.ID, String(rootTaskId)));
+        const originalTask = this.Tasks.find(t => UUIDsEqual(t.ID, String(rootTaskId)));
         if (originalTask) {
-          this.selectedTask = originalTask;
-          this.taskClicked.emit(originalTask);
+          this.SelectedTask = originalTask;
+          this.TaskClicked.emit(originalTask);
         }
       }
 

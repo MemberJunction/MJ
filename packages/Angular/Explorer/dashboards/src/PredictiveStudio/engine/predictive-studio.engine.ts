@@ -50,7 +50,7 @@ export interface RankingRow {
  * algorithm's BEST recommendation level (max by rank) across those scenarios. Extracted from the
  * engine so it is unit-testable without a metadata provider / DB.
  */
-export function computeBestLevels(rankings: RankingRow[], useCaseIds: string[]): Map<string, RecommendationLevel> {
+export function ComputeBestLevels(rankings: RankingRow[], useCaseIds: string[]): Map<string, RecommendationLevel> {
   const out = new Map<string, RecommendationLevel>();
   if (useCaseIds.length === 0) return out;
   for (const ranking of rankings) {
@@ -61,6 +61,11 @@ export function computeBestLevels(rankings: RankingRow[], useCaseIds: string[]):
     }
   }
   return out;
+}
+
+/** @deprecated Use {@link ComputeBestLevels}. */
+export function computeBestLevels(rankings: RankingRow[], useCaseIds: string[]): Map<string, RecommendationLevel> {
+  return ComputeBestLevels(rankings, useCaseIds);
 }
 
 /**
@@ -180,7 +185,7 @@ export class PredictiveStudioEngine extends BaseEngine<PredictiveStudioEngine> {
    * Returns a map of algorithmId → best level, omitting algorithms with no ranking row.
    */
   public BestLevelsForScenarios(useCaseIds: string[]): Map<string, RecommendationLevel> {
-    return computeBestLevels(this.Rankings, useCaseIds);
+    return ComputeBestLevels(this.Rankings, useCaseIds);
   }
 
   /** Iterations belonging to a session, in sequence order. */

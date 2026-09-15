@@ -69,13 +69,31 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
    * This allows the shell to keep showing its loading indicator until the first
    * resource is ready, eliminating the visual gap between shell loading and resource loading.
    */
-  @Output() firstResourceLoadComplete = new EventEmitter<void>();
+  @Output() FirstResourceLoadComplete = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link FirstResourceLoadComplete}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (firstResourceLoadComplete) keeps working. Must stay AFTER FirstResourceLoadComplete: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() firstResourceLoadComplete = this.FirstResourceLoadComplete;
 
   /**
    * Emitted when Golden Layout fails to initialize after multiple retries.
    * The shell can use this to show an error dialog and redirect.
    */
-  @Output() layoutInitError = new EventEmitter<void>();
+  @Output() LayoutInitError = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link LayoutInitError}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (layoutInitError) keeps working. Must stay AFTER LayoutInitError: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() layoutInitError = this.LayoutInitError;
 
   private pinService = inject(HomeAppPinService);
   private navigationService = inject(NavigationService);
@@ -101,7 +119,16 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
 
   // Single-resource mode: render component directly without Golden Layout
   // This avoids the 20px height issue when GL header is hidden
-  useSingleResourceMode = false;
+  UseSingleResourceMode = false;
+
+  /** @deprecated Use {@link UseSingleResourceMode}. */
+  get useSingleResourceMode() {
+    return this.UseSingleResourceMode;
+  }
+  /** @deprecated Use {@link UseSingleResourceMode}. */
+  set useSingleResourceMode(value) {
+    this.UseSingleResourceMode = value;
+  }
   private singleResourceComponentRef: ComponentRef<BaseResourceComponent> | null = null;
   /** Cache identity of the current single-resource component for detachment */
   private singleResourceCacheIdentity: { driverClass: string; recordId: string; appId: string; tabId: string; discriminator?: string } | null = null;
@@ -110,10 +137,46 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
   private isCreatingInitialTabs = false; // Flag to prevent syncTabsWithConfiguration during initial tab creation
 
   // Context menu state
-  contextMenuVisible = false;
-  contextMenuX = 0;
-  contextMenuY = 0;
-  contextMenuTabId: string | null = null;
+  ContextMenuVisible = false;
+
+  /** @deprecated Use {@link ContextMenuVisible}. */
+  get contextMenuVisible() {
+    return this.ContextMenuVisible;
+  }
+  /** @deprecated Use {@link ContextMenuVisible}. */
+  set contextMenuVisible(value) {
+    this.ContextMenuVisible = value;
+  }
+  ContextMenuX = 0;
+
+  /** @deprecated Use {@link ContextMenuX}. */
+  get contextMenuX() {
+    return this.ContextMenuX;
+  }
+  /** @deprecated Use {@link ContextMenuX}. */
+  set contextMenuX(value) {
+    this.ContextMenuX = value;
+  }
+  ContextMenuY = 0;
+
+  /** @deprecated Use {@link ContextMenuY}. */
+  get contextMenuY() {
+    return this.ContextMenuY;
+  }
+  /** @deprecated Use {@link ContextMenuY}. */
+  set contextMenuY(value) {
+    this.ContextMenuY = value;
+  }
+  ContextMenuTabId: string | null = null;
+
+  /** @deprecated Use {@link ContextMenuTabId}. */
+  get contextMenuTabId(): string | null {
+    return this.ContextMenuTabId;
+  }
+  /** @deprecated Use {@link ContextMenuTabId}. */
+  set contextMenuTabId(value: string | null) {
+    this.ContextMenuTabId = value;
+  }
   /** The control that opened the context menu — focus returns here on close */
   private contextMenuAnchor: HTMLElement | null = null;
 
@@ -637,7 +700,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
         this.workspaceManager.TogglePin(tabId);
       }),
       this.layoutManager.TabRightClicked.subscribe(event => {
-        this.showContextMenu(event.x, event.y, event.tabId, event.anchorEl);
+        this.ShowContextMenu(event.x, event.y, event.tabId, event.anchorEl);
       })
     );
 
@@ -682,7 +745,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
           this.syncRecordsRegion(config);
           this.updateRecordSurfaceState(config);
 
-          if (this.useSingleResourceMode) {
+          if (this.UseSingleResourceMode) {
             // In single-resource mode, reload content if the tab content changed
             // The same tab ID can have different content (tab gets reused)
             const activeTab = config.tabs.find(t => t.id === config.activeTabId) || config.tabs[0];
@@ -805,14 +868,14 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
         this.workspaceManager.TogglePin(tabId);
       }),
       this.recordsLayoutManager.TabRightClicked.subscribe(event => {
-        this.showContextMenu(event.x, event.y, event.tabId, event.anchorEl);
+        this.ShowContextMenu(event.x, event.y, event.tabId, event.anchorEl);
       })
     );
   }
 
   ngAfterViewInit(): void {
     // Initialize Golden Layout only if we're not in single-resource mode
-    if (!this.useSingleResourceMode) {
+    if (!this.UseSingleResourceMode) {
       this.initializeGoldenLayout();
     } else {
       // In single-resource mode, load content directly
@@ -826,7 +889,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
    */
   private initializeGoldenLayout(forceCreateTabs = false): void {
     // If we are in single resource mode we do NOT need to do this work as golden layout should not exist in that state
-    if (this.useSingleResourceMode)
+    if (this.UseSingleResourceMode)
       return;
 
     if (!this.glContainer?.nativeElement) {
@@ -834,7 +897,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
 
       if (this.layoutInitRetryCount > this.MAX_LAYOUT_INIT_RETRIES) {
         console.error(`Golden Layout container not available after ${this.MAX_LAYOUT_INIT_RETRIES} retries, emitting error`);
-        this.layoutInitError.emit();
+        this.LayoutInitError.emit();
         return;
       }
 
@@ -986,7 +1049,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     // Destroy all cached component instances
     this.cacheManager.clearCache();
 
-    if (this.useSingleResourceMode) {
+    if (this.UseSingleResourceMode) {
       // Force reload by clearing the signature check
       this.currentSingleResourceSignature = null;
       this.singleResourceComponentRef = null;
@@ -1089,7 +1152,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
    */
   @HostListener('window:resize')
   onWindowResize(): void {
-    if (this.layoutInitialized && !this.useSingleResourceMode) {
+    if (this.layoutInitialized && !this.UseSingleResourceMode) {
       this.layoutManager.updateSize();
     }
   }
@@ -1107,13 +1170,13 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     // Determine if we should use single-resource mode
     const shouldUseSingleResourceMode = !tabBarVisible;
 
-    if (shouldUseSingleResourceMode !== this.useSingleResourceMode) {
-      this.useSingleResourceMode = shouldUseSingleResourceMode;
+    if (shouldUseSingleResourceMode !== this.UseSingleResourceMode) {
+      this.UseSingleResourceMode = shouldUseSingleResourceMode;
       // Defer detectChanges to next microtask to avoid ExpressionChangedAfterItHasBeenCheckedError
       // when this handler fires during an already-running change detection cycle.
       Promise.resolve().then(() => this.cdr.detectChanges());
 
-      if (this.useSingleResourceMode) {
+      if (this.UseSingleResourceMode) {
         // Transitioning to single-resource mode
         // **CRITICAL FIX**: Wait for the template to render directContentContainer
         // before trying to load content. detectChanges() only marks dirty, doesn't render immediately.
@@ -1535,7 +1598,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       // Pre-compute and stamp the new signature so the configuration-subscription path
       // in single-resource mode doesn't see a "content changed" delta and trigger a
       // needless reload cycle (which would destroy the currently attached component).
-      if (this.useSingleResourceMode && this.currentSingleResourceSignature !== null) {
+      if (this.UseSingleResourceMode && this.currentSingleResourceSignature !== null) {
         const updatedTab: WorkspaceTab = {
           ...tab,
           resourceRecordId: newRecordId,
@@ -2420,11 +2483,11 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
   /**
    * Show context menu
    */
-  showContextMenu(x: number, y: number, tabId: string, anchorEl?: HTMLElement): void {
-    this.contextMenuX = x;
-    this.contextMenuY = y;
-    this.contextMenuTabId = tabId;
-    this.contextMenuVisible = true;
+  ShowContextMenu(x: number, y: number, tabId: string, anchorEl?: HTMLElement): void {
+    this.ContextMenuX = x;
+    this.ContextMenuY = y;
+    this.ContextMenuTabId = tabId;
+    this.ContextMenuVisible = true;
     // Remember the invoking control so closing can hand focus back (the
     // slot button passes itself; right-click falls back to whatever was
     // focused). aria-expanded reflects the open menu on the anchor.
@@ -2452,7 +2515,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       const clickHandler = (event: MouseEvent) => {
         const target = event.target as HTMLElement;
         if (!target.closest('.context-menu')) {
-          this.hideContextMenu();
+          this.HideContextMenu();
           document.removeEventListener('click', clickHandler, true);
           document.removeEventListener('keydown', keyHandler, true);
         }
@@ -2460,7 +2523,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
 
       const keyHandler = (event: KeyboardEvent) => {
         if (event.key === 'Escape') {
-          this.hideContextMenu();
+          this.HideContextMenu();
           document.removeEventListener('click', clickHandler, true);
           document.removeEventListener('keydown', keyHandler, true);
         }
@@ -2471,12 +2534,17 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     }, 0);
   }
 
+  /** @deprecated Use {@link ShowContextMenu}. */
+  showContextMenu(x: number, y: number, tabId: string, anchorEl?: HTMLElement): void {
+    return this.ShowContextMenu(x, y, tabId, anchorEl);
+  }
+
   /**
    * Hide context menu
    */
-  hideContextMenu(restoreFocus = true): void {
-    this.contextMenuVisible = false;
-    this.contextMenuTabId = null;
+  HideContextMenu(restoreFocus = true): void {
+    this.ContextMenuVisible = false;
+    this.ContextMenuTabId = null;
     const anchor = this.contextMenuAnchor;
     this.contextMenuAnchor = null;
     if (anchor?.classList.contains('mj-tab-type-slot')) {
@@ -2493,12 +2561,17 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     }
   }
 
+  /** @deprecated Use {@link HideContextMenu}. */
+  hideContextMenu(restoreFocus = true): void {
+    return this.HideContextMenu(restoreFocus);
+  }
+
   /**
    * role="menu" keyboard model: ArrowUp/Down rove (wrapping) over enabled
    * items, Home/End jump, Escape closes with focus return, Tab dismisses
    * (native menus don't trap Tab).
    */
-  onMenuKeydown(event: KeyboardEvent): void {
+  OnMenuKeydown(event: KeyboardEvent): void {
     const items = Array.from(document.querySelectorAll<HTMLButtonElement>('.context-menu [role="menuitem"]:not([disabled])'));
     if (items.length === 0) {
       return;
@@ -2526,36 +2599,56 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
         // deferred document-level teardown listener attaches.
         event.preventDefault();
         event.stopPropagation();
-        this.hideContextMenu();
+        this.HideContextMenu();
         break;
       case 'Tab':
-        this.hideContextMenu(false);
+        this.HideContextMenu(false);
         break;
     }
+  }
+
+  /** @deprecated Use {@link OnMenuKeydown}. */
+  onMenuKeydown(event: KeyboardEvent): void {
+    return this.OnMenuKeydown(event);
   }
 
   /**
    * Check if context menu tab is pinned
    */
-  get isContextTabPinned(): boolean {
-    if (!this.contextMenuTabId) return false;
-    const tab = this.workspaceManager.GetTab(this.contextMenuTabId);
+  get IsContextTabPinned(): boolean {
+    if (!this.ContextMenuTabId) return false;
+    const tab = this.workspaceManager.GetTab(this.ContextMenuTabId);
     return tab?.isPinned || false;
   }
 
+  /** @deprecated Use {@link IsContextTabPinned}. */
+  get isContextTabPinned(): boolean {
+    return this.IsContextTabPinned;
+  }
+
   /** Context tab is a records-REGION record — eligible for "Move to Workspace" */
-  get canContextMoveToWorkspace(): boolean {
+  get CanContextMoveToWorkspace(): boolean {
     // Docked/region composition is a DESKTOP concept — no move actions on mobile
-    if (!this.contextMenuTabId || !this.RecordsStyleActive || this.mobileRecordsActive) return false;
-    const tab = this.workspaceManager.GetTab(this.contextMenuTabId);
+    if (!this.ContextMenuTabId || !this.RecordsStyleActive || this.mobileRecordsActive) return false;
+    const tab = this.workspaceManager.GetTab(this.ContextMenuTabId);
     return !!tab && IsRecordsRegionTab(tab.configuration);
   }
 
+  /** @deprecated Use {@link CanContextMoveToWorkspace}. */
+  get canContextMoveToWorkspace(): boolean {
+    return this.CanContextMoveToWorkspace;
+  }
+
   /** Context tab is a DOCKED record — eligible for "Move to Records" */
-  get canContextMoveToRecords(): boolean {
-    if (!this.contextMenuTabId || !this.RecordsStyleActive || this.mobileRecordsActive) return false;
-    const tab = this.workspaceManager.GetTab(this.contextMenuTabId);
+  get CanContextMoveToRecords(): boolean {
+    if (!this.ContextMenuTabId || !this.RecordsStyleActive || this.mobileRecordsActive) return false;
+    const tab = this.workspaceManager.GetTab(this.ContextMenuTabId);
     return !!tab && IsRecordsTabConfiguration(tab.configuration) && IsRecordDockedToWorkspace(tab.configuration);
+  }
+
+  /** @deprecated Use {@link CanContextMoveToRecords}. */
+  get canContextMoveToRecords(): boolean {
+    return this.CanContextMoveToRecords;
   }
 
   /**
@@ -2566,13 +2659,18 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
    * (b) a single-resource→multi-tab transition triggered by the flip exempts
    * it from the force-pin sweep (it IS the activeTabId).
    */
-  onContextMoveToWorkspace(): void {
-    const tabId = this.contextMenuTabId;
-    this.hideContextMenu(false);
+  OnContextMoveToWorkspace(): void {
+    const tabId = this.ContextMenuTabId;
+    this.HideContextMenu(false);
     if (!tabId) return;
     this.workspaceManager.SetActiveTab(tabId);
     this.workspaceManager.UpdateTabConfiguration(tabId, { [RECORD_DOCKED_TO_WORKSPACE_KEY]: true });
     this.assertMovedTabActivation(tabId);
+  }
+
+  /** @deprecated Use {@link OnContextMoveToWorkspace}. */
+  onContextMoveToWorkspace(): void {
+    return this.OnContextMoveToWorkspace();
   }
 
   /**
@@ -2582,13 +2680,18 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
    * the returned tab. `false` (not undefined) so the choice is explicit in
    * the persisted configuration.
    */
-  onContextMoveToRecords(): void {
-    const tabId = this.contextMenuTabId;
-    this.hideContextMenu(false);
+  OnContextMoveToRecords(): void {
+    const tabId = this.ContextMenuTabId;
+    this.HideContextMenu(false);
     if (!tabId) return;
     this.workspaceManager.SetActiveTab(tabId);
     this.workspaceManager.UpdateTabConfiguration(tabId, { [RECORD_DOCKED_TO_WORKSPACE_KEY]: false });
     this.assertMovedTabActivation(tabId);
+  }
+
+  /** @deprecated Use {@link OnContextMoveToRecords}. */
+  onContextMoveToRecords(): void {
+    return this.OnContextMoveToRecords();
   }
 
   /**
@@ -2610,73 +2713,98 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
   /**
    * Toggle pin from context menu
    */
-  onContextPin(): void {
-    if (this.contextMenuTabId) {
-      this.workspaceManager.TogglePin(this.contextMenuTabId);
+  OnContextPin(): void {
+    if (this.ContextMenuTabId) {
+      this.workspaceManager.TogglePin(this.ContextMenuTabId);
     }
-    this.hideContextMenu();
+    this.HideContextMenu();
+  }
+
+  /** @deprecated Use {@link OnContextPin}. */
+  onContextPin(): void {
+    return this.OnContextPin();
   }
 
   /**
    * Close tab from context menu
    */
-  onContextClose(): void {
-    if (this.contextMenuTabId) {
-      const tab = this.workspaceManager.GetTab(this.contextMenuTabId);
+  OnContextClose(): void {
+    if (this.ContextMenuTabId) {
+      const tab = this.workspaceManager.GetTab(this.ContextMenuTabId);
       const manager = tab && this.isRecordTab(tab) ? this.recordsLayoutManager : this.layoutManager;
-      manager.RemoveTab(this.contextMenuTabId);
+      manager.RemoveTab(this.ContextMenuTabId);
     }
     // The anchor lives on the closed tab — nothing to return focus to.
-    this.hideContextMenu(false);
+    this.HideContextMenu(false);
+  }
+
+  /** @deprecated Use {@link OnContextClose}. */
+  onContextClose(): void {
+    return this.OnContextClose();
   }
 
   /**
    * Close all other tabs from context menu
    */
-  onContextCloseOthers(): void {
-    if (this.contextMenuTabId) {
-      this.workspaceManager.CloseOtherTabs(this.contextMenuTabId);
+  OnContextCloseOthers(): void {
+    if (this.ContextMenuTabId) {
+      this.workspaceManager.CloseOtherTabs(this.ContextMenuTabId);
     }
-    this.hideContextMenu();
+    this.HideContextMenu();
+  }
+
+  /** @deprecated Use {@link OnContextCloseOthers}. */
+  onContextCloseOthers(): void {
+    return this.OnContextCloseOthers();
   }
 
   /**
    * Close tabs to the right from context menu
    */
-  onContextCloseToRight(): void {
-    if (this.contextMenuTabId) {
-      this.workspaceManager.CloseTabsToRight(this.contextMenuTabId);
+  OnContextCloseToRight(): void {
+    if (this.ContextMenuTabId) {
+      this.workspaceManager.CloseTabsToRight(this.ContextMenuTabId);
     }
-    this.hideContextMenu();
+    this.HideContextMenu();
+  }
+
+  /** @deprecated Use {@link OnContextCloseToRight}. */
+  onContextCloseToRight(): void {
+    return this.OnContextCloseToRight();
   }
 
   /**
    * Check if context menu tab is pinned to Home dashboard
    */
-  get isContextTabPinnedToHome(): boolean {
-    if (!this.contextMenuTabId) return false;
-    const tab = this.workspaceManager.GetTab(this.contextMenuTabId);
+  get IsContextTabPinnedToHome(): boolean {
+    if (!this.ContextMenuTabId) return false;
+    const tab = this.workspaceManager.GetTab(this.ContextMenuTabId);
     if (!tab) return false;
     const resourceType = this.resolveResourceType(tab);
     return this.pinService.IsPinned(resourceType, tab.configuration as Record<string, unknown>);
   }
 
+  /** @deprecated Use {@link IsContextTabPinnedToHome}. */
+  get isContextTabPinnedToHome(): boolean {
+    return this.IsContextTabPinnedToHome;
+  }
+
   /**
    * Pin current context menu tab to Home dashboard
    */
-  async onContextPinToHome(): Promise<void> {
-    if (this.isContextTabPinnedToHome) {
-      this.hideContextMenu();
+  async OnContextPinToHome(): Promise<void> {
+    if (this.IsContextTabPinnedToHome) {
+      this.HideContextMenu();
       return;
     }
-    if (!this.contextMenuTabId) {
-      this.hideContextMenu();
+    if (!this.ContextMenuTabId) {
+      this.HideContextMenu();
       return;
     }
 
-    const tab = this.workspaceManager.GetTab(this.contextMenuTabId);
+    const tab = this.workspaceManager.GetTab(this.ContextMenuTabId);
     if (!tab) {
-      this.hideContextMenu();
+      this.HideContextMenu();
       return;
     }
 
@@ -2715,7 +2843,12 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       );
     }
 
-    this.hideContextMenu();
+    this.HideContextMenu();
+  }
+
+  /** @deprecated Use {@link OnContextPinToHome}. */
+  async onContextPinToHome(): Promise<void> {
+    return this.OnContextPinToHome();
   }
 
   /**
@@ -2739,7 +2872,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     try {
       // Find the active content element — differs by mode
       let contentEl: HTMLElement | null = null;
-      if (this.useSingleResourceMode) {
+      if (this.UseSingleResourceMode) {
         contentEl = this.directContentContainer?.nativeElement ?? null;
       } else {
         // In Golden Layout mode, find the active tab's content pane
@@ -2769,7 +2902,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
   public async CaptureActiveThumbnail(): Promise<string | undefined> {
     try {
       let contentEl: HTMLElement | null = null;
-      if (this.useSingleResourceMode) {
+      if (this.UseSingleResourceMode) {
         contentEl = this.directContentContainer?.nativeElement ?? null;
       } else {
         contentEl = this.glContainer?.nativeElement?.querySelector(
@@ -2789,7 +2922,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
    * forever we emit all events upstream
    */
   private emitFirstLoadCompleteOnce(): void {
-    this.firstResourceLoadComplete.emit(); // do this each time to be sure we don't suppress messages
+    this.FirstResourceLoadComplete.emit(); // do this each time to be sure we don't suppress messages
   }
 
   /**

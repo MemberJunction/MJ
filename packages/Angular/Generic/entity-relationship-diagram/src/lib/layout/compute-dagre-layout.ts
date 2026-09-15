@@ -52,7 +52,7 @@ export interface DagreLayoutOptions extends ErdLayoutOptions {
     rankSep?: number;
 }
 
-export function computeDagreLayout(nodes: ERDNode[], options: DagreLayoutOptions = {}): ErdLayout {
+export function ComputeDagreLayout(nodes: ERDNode[], options: DagreLayoutOptions = {}): ErdLayout {
     if (nodes.length === 0) {
         return { nodes: [], edges: [], bands: [], totalWidth: 0, totalHeight: 0 };
     }
@@ -125,6 +125,11 @@ export function computeDagreLayout(nodes: ERDNode[], options: DagreLayoutOptions
         totalWidth: totalWidth || 0,
         totalHeight: totalHeight || 0,
     };
+}
+
+/** @deprecated Use {@link ComputeDagreLayout}. */
+export function computeDagreLayout(nodes: ERDNode[], options: DagreLayoutOptions = {}): ErdLayout {
+    return ComputeDagreLayout(nodes, options);
 }
 
 // ──────────────────────────────────────────────────────────────────────────

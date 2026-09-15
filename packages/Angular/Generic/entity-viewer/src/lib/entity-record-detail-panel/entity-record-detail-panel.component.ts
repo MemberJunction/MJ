@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ChangeDetectorRef, NgZone } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { EntityInfo, EntityRelationshipInfo, EntityOrganicKeyInfo, EntityOrganicKeyRelatedEntityInfo, RunView, Metadata, RunViewParams, EntityFieldValueListType, EntityFieldInfo, CompositeKey } from '@memberjunction/core';
-import { buildCompositeKey, buildPkString } from '../utils/record.util';
+import { BuildCompositeKey, BuildPkString } from '../utils/record.util';
 
 interface RelatedEntityData {
   relationship: EntityRelationshipInfo;
@@ -98,25 +98,124 @@ export class EntityRecordDetailPanelComponent extends BaseAngularComponent imple
   @Input() record: Record<string, unknown> | null = null;
 
   @Output() close = new EventEmitter<void>();
-  @Output() openRecord = new EventEmitter<Record<string, unknown>>();
-  @Output() navigateToRelated = new EventEmitter<NavigateToRelatedEvent>();
-  @Output() openRelatedRecord = new EventEmitter<OpenRelatedRecordEvent>();
-  @Output() openForeignKeyRecord = new EventEmitter<OpenForeignKeyRecordEvent>();
+  @Output() OpenRecord = new EventEmitter<Record<string, unknown>>();
+
+  /**
+   * @deprecated Use {@link OpenRecord}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (openRecord) keeps working. Must stay AFTER OpenRecord: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() openRecord = this.OpenRecord;
+  @Output() NavigateToRelated = new EventEmitter<NavigateToRelatedEvent>();
+
+  /**
+   * @deprecated Use {@link NavigateToRelated}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (navigateToRelated) keeps working. Must stay AFTER NavigateToRelated: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() navigateToRelated = this.NavigateToRelated;
+  @Output() OpenRelatedRecord = new EventEmitter<OpenRelatedRecordEvent>();
+
+  /**
+   * @deprecated Use {@link OpenRelatedRecord}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (openRelatedRecord) keeps working. Must stay AFTER OpenRelatedRecord: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() openRelatedRecord = this.OpenRelatedRecord;
+  @Output() OpenForeignKeyRecord = new EventEmitter<OpenForeignKeyRecordEvent>();
+
+  /**
+   * @deprecated Use {@link OpenForeignKeyRecord}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (openForeignKeyRecord) keeps working. Must stay AFTER OpenForeignKeyRecord: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() openForeignKeyRecord = this.OpenForeignKeyRecord;
 
   // Related entity counts
-  public relatedEntities: RelatedEntityData[] = [];
-  public isLoadingRelationships = false;
+  public RelatedEntities: RelatedEntityData[] = [];
+
+  /** @deprecated Use {@link RelatedEntities}. */
+  public get relatedEntities(): RelatedEntityData[] {
+    return this.RelatedEntities;
+  }
+  /** @deprecated Use {@link RelatedEntities}. */
+  public set relatedEntities(value: RelatedEntityData[]) {
+    this.RelatedEntities = value;
+  }
+  public IsLoadingRelationships = false;
+
+  /** @deprecated Use {@link IsLoadingRelationships}. */
+  public get isLoadingRelationships() {
+    return this.IsLoadingRelationships;
+  }
+  /** @deprecated Use {@link IsLoadingRelationships}. */
+  public set isLoadingRelationships(value) {
+    this.IsLoadingRelationships = value;
+  }
 
   // Organic key match counts
-  public organicKeyMatches: OrganicKeyMatchData[] = [];
-  public isLoadingOrganicKeys = false;
+  public OrganicKeyMatches: OrganicKeyMatchData[] = [];
+
+  /** @deprecated Use {@link OrganicKeyMatches}. */
+  public get organicKeyMatches(): OrganicKeyMatchData[] {
+    return this.OrganicKeyMatches;
+  }
+  /** @deprecated Use {@link OrganicKeyMatches}. */
+  public set organicKeyMatches(value: OrganicKeyMatchData[]) {
+    this.OrganicKeyMatches = value;
+  }
+  public IsLoadingOrganicKeys = false;
+
+  /** @deprecated Use {@link IsLoadingOrganicKeys}. */
+  public get isLoadingOrganicKeys() {
+    return this.IsLoadingOrganicKeys;
+  }
+  /** @deprecated Use {@link IsLoadingOrganicKeys}. */
+  public set isLoadingOrganicKeys(value) {
+    this.IsLoadingOrganicKeys = value;
+  }
 
   private metadata = this.ProviderToUse;
 
   // Sections expanded state
-  public detailsSectionExpanded = true;
-  public relationshipsSectionExpanded = true;
-  public organicKeysSectionExpanded = true;
+  public DetailsSectionExpanded = true;
+
+  /** @deprecated Use {@link DetailsSectionExpanded}. */
+  public get detailsSectionExpanded() {
+    return this.DetailsSectionExpanded;
+  }
+  /** @deprecated Use {@link DetailsSectionExpanded}. */
+  public set detailsSectionExpanded(value) {
+    this.DetailsSectionExpanded = value;
+  }
+  public RelationshipsSectionExpanded = true;
+
+  /** @deprecated Use {@link RelationshipsSectionExpanded}. */
+  public get relationshipsSectionExpanded() {
+    return this.RelationshipsSectionExpanded;
+  }
+  /** @deprecated Use {@link RelationshipsSectionExpanded}. */
+  public set relationshipsSectionExpanded(value) {
+    this.RelationshipsSectionExpanded = value;
+  }
+  public OrganicKeysSectionExpanded = true;
+
+  /** @deprecated Use {@link OrganicKeysSectionExpanded}. */
+  public get organicKeysSectionExpanded() {
+    return this.OrganicKeysSectionExpanded;
+  }
+  /** @deprecated Use {@link OrganicKeysSectionExpanded}. */
+  public set organicKeysSectionExpanded(value) {
+    this.OrganicKeysSectionExpanded = value;
+  }
 
   constructor(private cdr: ChangeDetectorRef, private ngZone: NgZone) {
   super();}
@@ -134,24 +233,24 @@ export class EntityRecordDetailPanelComponent extends BaseAngularComponent imple
   private async loadRelationshipCounts(): Promise<void> {
     if (!this.entity || !this.record) return;
 
-    this.isLoadingRelationships = true;
-    this.relatedEntities = [];
+    this.IsLoadingRelationships = true;
+    this.RelatedEntities = [];
 
     // Get relationships where this entity is the related entity (foreign keys pointing TO this record)
     const relationships = this.entity.RelatedEntities;
 
     if (relationships.length === 0) {
-      this.isLoadingRelationships = false;
+      this.IsLoadingRelationships = false;
       return;
     }
 
     // Build a CompositeKey for the current record
-    const compositeKey = buildCompositeKey(this.record, this.entity);
+    const compositeKey = BuildCompositeKey(this.record, this.entity);
 
     // Get the first PK value for the join field filter
     const pkValue = compositeKey.KeyValuePairs[0]?.Value;
     if (!pkValue) {
-      this.isLoadingRelationships = false;
+      this.IsLoadingRelationships = false;
       return;
     }
 
@@ -167,7 +266,7 @@ export class EntityRecordDetailPanelComponent extends BaseAngularComponent imple
       const results = await rv.RunViews(viewParams);
 
       // Map results back to relationship data
-      this.relatedEntities = relationships.map((rel, index) => {
+      this.RelatedEntities = relationships.map((rel, index) => {
         const result = results[index];
         return {
           relationship: rel,
@@ -181,7 +280,7 @@ export class EntityRecordDetailPanelComponent extends BaseAngularComponent imple
     } catch (error) {
       console.warn('Failed to load relationship counts:', error);
       // Initialize with zero counts on error
-      this.relatedEntities = relationships.map(rel => ({
+      this.RelatedEntities = relationships.map(rel => ({
         relationship: rel,
         relatedEntityName: rel.RelatedEntity,
         count: 0,
@@ -191,7 +290,7 @@ export class EntityRecordDetailPanelComponent extends BaseAngularComponent imple
       }));
     } finally {
       this.ngZone.run(() => {
-        this.isLoadingRelationships = false;
+        this.IsLoadingRelationships = false;
         this.cdr.detectChanges();
       });
     }
@@ -206,7 +305,7 @@ export class EntityRecordDetailPanelComponent extends BaseAngularComponent imple
 
     const organicKeys = this.entity.OrganicKeys;
     if (!organicKeys || organicKeys.length === 0) {
-      this.organicKeyMatches = [];
+      this.OrganicKeyMatches = [];
       return;
     }
 
@@ -219,12 +318,12 @@ export class EntityRecordDetailPanelComponent extends BaseAngularComponent imple
     }
 
     if (allPairs.length === 0) {
-      this.organicKeyMatches = [];
+      this.OrganicKeyMatches = [];
       return;
     }
 
-    this.isLoadingOrganicKeys = true;
-    this.organicKeyMatches = [];
+    this.IsLoadingOrganicKeys = true;
+    this.OrganicKeyMatches = [];
 
     // Build a mock BaseEntity-like object for BuildOrganicKeyViewParams
     // The static method only calls record.Get(fieldName), so we can duck-type it
@@ -248,7 +347,7 @@ export class EntityRecordDetailPanelComponent extends BaseAngularComponent imple
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const results = await rv.RunViews(viewParams);
 
-      this.organicKeyMatches = allPairs.map((pair, index) => {
+      this.OrganicKeyMatches = allPairs.map((pair, index) => {
         const result = results[index];
         return {
           organicKey: pair.organicKey,
@@ -262,7 +361,7 @@ export class EntityRecordDetailPanelComponent extends BaseAngularComponent imple
       });
     } catch (error) {
       console.warn('Failed to load organic key counts:', error);
-      this.organicKeyMatches = allPairs.map(pair => ({
+      this.OrganicKeyMatches = allPairs.map(pair => ({
         organicKey: pair.organicKey,
         relatedEntity: pair.relatedEntity,
         relatedEntityName: pair.relatedEntity.DisplayName || pair.relatedEntity.RelatedEntity,
@@ -273,7 +372,7 @@ export class EntityRecordDetailPanelComponent extends BaseAngularComponent imple
       }));
     } finally {
       this.ngZone.run(() => {
-        this.isLoadingOrganicKeys = false;
+        this.IsLoadingOrganicKeys = false;
         this.cdr.detectChanges();
       });
     }
@@ -282,14 +381,19 @@ export class EntityRecordDetailPanelComponent extends BaseAngularComponent imple
   /**
    * Get only organic key matches that have records (count > 0)
    */
+  get OrganicKeyMatchesWithRecords(): OrganicKeyMatchData[] {
+    return this.OrganicKeyMatches.filter(m => m.count > 0);
+  }
+
+  /** @deprecated Use {@link OrganicKeyMatchesWithRecords}. */
   get organicKeyMatchesWithRecords(): OrganicKeyMatchData[] {
-    return this.organicKeyMatches.filter(m => m.count > 0);
+    return this.OrganicKeyMatchesWithRecords;
   }
 
   /**
    * Toggle expansion of an organic key match section and load records if needed
    */
-  async toggleOrganicKeyExpansion(match: OrganicKeyMatchData, event: Event): Promise<void> {
+  async ToggleOrganicKeyExpansion(match: OrganicKeyMatchData, event: Event): Promise<void> {
     event.stopPropagation();
     if (match.count === 0) return;
 
@@ -298,6 +402,11 @@ export class EntityRecordDetailPanelComponent extends BaseAngularComponent imple
     if (match.isExpanded && match.records.length === 0 && !match.isLoadingRecords) {
       await this.loadOrganicKeyRecords(match);
     }
+  }
+
+  /** @deprecated Use {@link ToggleOrganicKeyExpansion}. */
+  async toggleOrganicKeyExpansion(match: OrganicKeyMatchData, event: Event): Promise<void> {
+    return this.ToggleOrganicKeyExpansion(match, event);
   }
 
   /**
@@ -352,18 +461,23 @@ export class EntityRecordDetailPanelComponent extends BaseAngularComponent imple
   /**
    * Handle click on an organic key record
    */
-  onOrganicKeyRecordClick(match: OrganicKeyMatchData, record: Record<string, unknown>, event: Event): void {
+  OnOrganicKeyRecordClick(match: OrganicKeyMatchData, record: Record<string, unknown>, event: Event): void {
     event.stopPropagation();
-    this.openRelatedRecord.emit({
+    this.OpenRelatedRecord.emit({
       entityName: match.relatedEntity.RelatedEntity,
       record,
     });
   }
 
+  /** @deprecated Use {@link OnOrganicKeyRecordClick}. */
+  onOrganicKeyRecordClick(match: OrganicKeyMatchData, record: Record<string, unknown>, event: Event): void {
+    return this.OnOrganicKeyRecordClick(match, record, event);
+  }
+
   /**
    * Navigate to view all organic key matched records
    */
-  onViewAllOrganicKey(match: OrganicKeyMatchData, event: Event): void {
+  OnViewAllOrganicKey(match: OrganicKeyMatchData, event: Event): void {
     event.stopPropagation();
     if (!this.record || !this.entity) return;
 
@@ -377,31 +491,41 @@ export class EntityRecordDetailPanelComponent extends BaseAngularComponent imple
       match.organicKey,
     );
 
-    this.navigateToRelated.emit({
+    this.NavigateToRelated.emit({
       entityName: match.relatedEntity.RelatedEntity,
       filter: String(params.ExtraFilter || ''),
     });
   }
 
+  /** @deprecated Use {@link OnViewAllOrganicKey}. */
+  onViewAllOrganicKey(match: OrganicKeyMatchData, event: Event): void {
+    return this.OnViewAllOrganicKey(match, event);
+  }
+
   /**
    * Get display name for an organic key record
    */
-  getOrganicKeyRecordDisplayName(match: OrganicKeyMatchData, record: Record<string, unknown>): string {
+  GetOrganicKeyRecordDisplayName(match: OrganicKeyMatchData, record: Record<string, unknown>): string {
     const entityInfo = this.metadata.Entities.find(e => e.Name === match.relatedEntity.RelatedEntity);
     if (entityInfo?.NameField) {
       const name = record[entityInfo.NameField.Name];
       if (name) return String(name);
     }
     if (entityInfo) {
-      return buildPkString(record, entityInfo);
+      return BuildPkString(record, entityInfo);
     }
     return 'Record';
+  }
+
+  /** @deprecated Use {@link GetOrganicKeyRecordDisplayName}. */
+  getOrganicKeyRecordDisplayName(match: OrganicKeyMatchData, record: Record<string, unknown>): string {
+    return this.GetOrganicKeyRecordDisplayName(match, record);
   }
 
   /**
    * Get subtitle for an organic key record
    */
-  getOrganicKeyRecordSubtitle(match: OrganicKeyMatchData, record: Record<string, unknown>): string {
+  GetOrganicKeyRecordSubtitle(match: OrganicKeyMatchData, record: Record<string, unknown>): string {
     const entityInfo = this.metadata.Entities.find(e => e.Name === match.relatedEntity.RelatedEntity);
     if (!entityInfo) return '';
 
@@ -420,10 +544,15 @@ export class EntityRecordDetailPanelComponent extends BaseAngularComponent imple
     return '';
   }
 
+  /** @deprecated Use {@link GetOrganicKeyRecordSubtitle}. */
+  getOrganicKeyRecordSubtitle(match: OrganicKeyMatchData, record: Record<string, unknown>): string {
+    return this.GetOrganicKeyRecordSubtitle(match, record);
+  }
+
   /**
    * Get icon for an organic key matched entity
    */
-  getOrganicKeyEntityIcon(match: OrganicKeyMatchData): string {
+  GetOrganicKeyEntityIcon(match: OrganicKeyMatchData): string {
     const entityInfo = this.metadata.Entities.find(e => e.Name === match.relatedEntity.RelatedEntity);
     if (entityInfo?.Icon) {
       return this.formatEntityIcon(entityInfo.Icon);
@@ -431,10 +560,15 @@ export class EntityRecordDetailPanelComponent extends BaseAngularComponent imple
     return 'fa-solid fa-link';
   }
 
+  /** @deprecated Use {@link GetOrganicKeyEntityIcon}. */
+  getOrganicKeyEntityIcon(match: OrganicKeyMatchData): string {
+    return this.GetOrganicKeyEntityIcon(match);
+  }
+
   /**
    * Get key fields to display in details section, categorized by type
    */
-  get displayFields(): FieldDisplay[] {
+  get DisplayFields(): FieldDisplay[] {
     if (!this.entity || !this.record) return [];
 
     const fields: FieldDisplay[] = [];
@@ -487,6 +621,11 @@ export class EntityRecordDetailPanelComponent extends BaseAngularComponent imple
     }
 
     return fields;
+  }
+
+  /** @deprecated Use {@link DisplayFields}. */
+  get displayFields(): FieldDisplay[] {
+    return this.DisplayFields;
   }
 
   /**
@@ -594,7 +733,7 @@ export class EntityRecordDetailPanelComponent extends BaseAngularComponent imple
   /**
    * Get record title
    */
-  get recordTitle(): string {
+  get RecordTitle(): string {
     if (!this.entity || !this.record) return 'Record';
 
     if (this.entity.NameField) {
@@ -602,29 +741,44 @@ export class EntityRecordDetailPanelComponent extends BaseAngularComponent imple
       if (name) return String(name);
     }
 
-    return buildPkString(this.record, this.entity);
+    return BuildPkString(this.record, this.entity);
+  }
+
+  /** @deprecated Use {@link RecordTitle}. */
+  get recordTitle(): string {
+    return this.RecordTitle;
   }
 
   /**
    * Handle close button click
    */
-  onClose(): void {
+  OnClose(): void {
     this.close.emit();
+  }
+
+  /** @deprecated Use {@link OnClose}. */
+  onClose(): void {
+    return this.OnClose();
   }
 
   /**
    * Handle open record button click
    */
-  onOpenRecord(): void {
+  OnOpenRecord(): void {
     if (this.record) {
-      this.openRecord.emit(this.record);
+      this.OpenRecord.emit(this.record);
     }
+  }
+
+  /** @deprecated Use {@link OnOpenRecord}. */
+  onOpenRecord(): void {
+    return this.OnOpenRecord();
   }
 
   /**
    * Copy primary key value to clipboard
    */
-  copyToClipboard(value: string, event: Event): void {
+  CopyToClipboard(value: string, event: Event): void {
     event.stopPropagation();
     navigator.clipboard.writeText(value).then(() => {
       // Could add a toast notification here
@@ -634,33 +788,48 @@ export class EntityRecordDetailPanelComponent extends BaseAngularComponent imple
     });
   }
 
+  /** @deprecated Use {@link CopyToClipboard}. */
+  copyToClipboard(value: string, event: Event): void {
+    return this.CopyToClipboard(value, event);
+  }
+
   /**
    * Open a foreign key record (FK link click)
    * Emits openForeignKeyRecord event for parent to handle opening the record
    */
-  onForeignKeyClick(field: FieldDisplay, event: Event): void {
+  OnForeignKeyClick(field: FieldDisplay, event: Event): void {
     event.stopPropagation();
     if (field.relatedEntityName && field.relatedRecordId) {
-      this.openForeignKeyRecord.emit({
+      this.OpenForeignKeyRecord.emit({
         entityName: field.relatedEntityName,
         recordId: field.relatedRecordId
       });
     }
   }
 
+  /** @deprecated Use {@link OnForeignKeyClick}. */
+  onForeignKeyClick(field: FieldDisplay, event: Event): void {
+    return this.OnForeignKeyClick(field, event);
+  }
+
   /**
    * Check if a FK display value is different from the raw ID (i.e., we have a name to show)
    */
-  hasFriendlyName(field: FieldDisplay): boolean {
+  HasFriendlyName(field: FieldDisplay): boolean {
     return field.type === 'foreign-key' &&
            field.displayValue !== undefined &&
            field.displayValue !== field.value;
   }
 
+  /** @deprecated Use {@link HasFriendlyName}. */
+  hasFriendlyName(field: FieldDisplay): boolean {
+    return this.HasFriendlyName(field);
+  }
+
   /**
    * Toggle expansion of related entity section and load records if needed
    */
-  async toggleRelatedEntityExpansion(relEntity: RelatedEntityData, event: Event): Promise<void> {
+  async ToggleRelatedEntityExpansion(relEntity: RelatedEntityData, event: Event): Promise<void> {
     event.stopPropagation();
 
     if (relEntity.count === 0) return;
@@ -673,13 +842,18 @@ export class EntityRecordDetailPanelComponent extends BaseAngularComponent imple
     }
   }
 
+  /** @deprecated Use {@link ToggleRelatedEntityExpansion}. */
+  async toggleRelatedEntityExpansion(relEntity: RelatedEntityData, event: Event): Promise<void> {
+    return this.ToggleRelatedEntityExpansion(relEntity, event);
+  }
+
   /**
    * Load actual records for a related entity
    */
   private async loadRelatedRecords(relEntity: RelatedEntityData): Promise<void> {
     if (!this.record || !this.entity) return;
 
-    const compositeKey = buildCompositeKey(this.record, this.entity);
+    const compositeKey = BuildCompositeKey(this.record, this.entity);
     const pkValue = compositeKey.KeyValuePairs[0]?.Value;
     if (!pkValue) return;
 
@@ -719,51 +893,66 @@ export class EntityRecordDetailPanelComponent extends BaseAngularComponent imple
   /**
    * Handle click on individual related record - opens in new tab
    */
-  onRelatedRecordClick(relEntity: RelatedEntityData, record: Record<string, unknown>, event: Event): void {
+  OnRelatedRecordClick(relEntity: RelatedEntityData, record: Record<string, unknown>, event: Event): void {
     event.stopPropagation();
-    this.openRelatedRecord.emit({
+    this.OpenRelatedRecord.emit({
       entityName: relEntity.relatedEntityName,
       record
     });
   }
 
+  /** @deprecated Use {@link OnRelatedRecordClick}. */
+  onRelatedRecordClick(relEntity: RelatedEntityData, record: Record<string, unknown>, event: Event): void {
+    return this.OnRelatedRecordClick(relEntity, record, event);
+  }
+
   /**
    * Navigate to view all related records (when count > 10)
    */
-  onViewAllRelated(relEntity: RelatedEntityData, event: Event): void {
+  OnViewAllRelated(relEntity: RelatedEntityData, event: Event): void {
     event.stopPropagation();
 
     if (!this.record || !this.entity) return;
 
-    const compositeKey = buildCompositeKey(this.record, this.entity);
+    const compositeKey = BuildCompositeKey(this.record, this.entity);
     const pkValue = compositeKey.KeyValuePairs[0]?.Value;
     if (!pkValue) return;
 
-    this.navigateToRelated.emit({
+    this.NavigateToRelated.emit({
       entityName: relEntity.relatedEntityName,
       filter: `${relEntity.relationship.RelatedEntityJoinField}='${pkValue}'`
     });
   }
 
+  /** @deprecated Use {@link OnViewAllRelated}. */
+  onViewAllRelated(relEntity: RelatedEntityData, event: Event): void {
+    return this.OnViewAllRelated(relEntity, event);
+  }
+
   /**
    * Get display name for a related record
    */
-  getRelatedRecordDisplayName(relEntity: RelatedEntityData, record: Record<string, unknown>): string {
+  GetRelatedRecordDisplayName(relEntity: RelatedEntityData, record: Record<string, unknown>): string {
     const entityInfo = this.metadata.Entities.find(e => e.Name === relEntity.relatedEntityName);
     if (entityInfo?.NameField) {
       const name = record[entityInfo.NameField.Name];
       if (name) return String(name);
     }
     if (entityInfo) {
-      return buildPkString(record, entityInfo);
+      return BuildPkString(record, entityInfo);
     }
     return 'Record';
+  }
+
+  /** @deprecated Use {@link GetRelatedRecordDisplayName}. */
+  getRelatedRecordDisplayName(relEntity: RelatedEntityData, record: Record<string, unknown>): string {
+    return this.GetRelatedRecordDisplayName(relEntity, record);
   }
 
   /**
    * Get subtitle/secondary info for a related record
    */
-  getRelatedRecordSubtitle(relEntity: RelatedEntityData, record: Record<string, unknown>): string {
+  GetRelatedRecordSubtitle(relEntity: RelatedEntityData, record: Record<string, unknown>): string {
     const entityInfo = this.metadata.Entities.find(e => e.Name === relEntity.relatedEntityName);
     if (!entityInfo) return '';
 
@@ -783,17 +972,27 @@ export class EntityRecordDetailPanelComponent extends BaseAngularComponent imple
     return '';
   }
 
+  /** @deprecated Use {@link GetRelatedRecordSubtitle}. */
+  getRelatedRecordSubtitle(relEntity: RelatedEntityData, record: Record<string, unknown>): string {
+    return this.GetRelatedRecordSubtitle(relEntity, record);
+  }
+
   /**
    * Get only related entities that have records (count > 0)
    */
+  get RelatedEntitiesWithRecords(): RelatedEntityData[] {
+    return this.RelatedEntities.filter(r => r.count > 0);
+  }
+
+  /** @deprecated Use {@link RelatedEntitiesWithRecords}. */
   get relatedEntitiesWithRecords(): RelatedEntityData[] {
-    return this.relatedEntities.filter(r => r.count > 0);
+    return this.RelatedEntitiesWithRecords;
   }
 
   /**
    * Get icon for related entity by looking up EntityInfo from Metadata
    */
-  getRelatedEntityIcon(relEntity: RelatedEntityData): string {
+  GetRelatedEntityIcon(relEntity: RelatedEntityData): string {
     const entityInfo = this.metadata.Entities.find(e => e.Name === relEntity.relatedEntityName);
     if (entityInfo?.Icon) {
       return this.formatEntityIcon(entityInfo.Icon);
@@ -801,14 +1000,24 @@ export class EntityRecordDetailPanelComponent extends BaseAngularComponent imple
     return 'fa-solid fa-table';
   }
 
+  /** @deprecated Use {@link GetRelatedEntityIcon}. */
+  getRelatedEntityIcon(relEntity: RelatedEntityData): string {
+    return this.GetRelatedEntityIcon(relEntity);
+  }
+
   /**
    * Get the icon class for the current entity
    */
-  getEntityIconClass(): string {
+  GetEntityIconClass(): string {
     if (!this.entity?.Icon) {
       return 'fa-solid fa-table';
     }
     return this.formatEntityIcon(this.entity.Icon);
+  }
+
+  /** @deprecated Use {@link GetEntityIconClass}. */
+  getEntityIconClass(): string {
+    return this.GetEntityIconClass();
   }
 
   /**

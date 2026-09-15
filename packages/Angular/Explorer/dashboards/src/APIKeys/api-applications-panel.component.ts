@@ -143,11 +143,16 @@ export class APIApplicationsPanelComponent extends BaseAngularComponent implemen
     /**
      * Start resizing the panel
      */
-    public startResize(event: MouseEvent): void {
+    public StartResize(event: MouseEvent): void {
         event.preventDefault();
         this.IsResizing = true;
         this.resizeStartX = event.clientX;
         this.resizeStartWidth = this.PanelWidth;
+    }
+
+    /** @deprecated Use {@link StartResize}. */
+    public startResize(event: MouseEvent): void {
+      return this.StartResize(event);
     }
 
     /**
@@ -241,7 +246,7 @@ export class APIApplicationsPanelComponent extends BaseAngularComponent implemen
     /**
      * Open create panel (slide-out)
      */
-    public openCreatePanel(): void {
+    public OpenCreatePanel(): void {
         this.EditName = '';
         this.EditDescription = '';
         this.EditIsActive = true;
@@ -251,10 +256,15 @@ export class APIApplicationsPanelComponent extends BaseAngularComponent implemen
         this.ShowCreatePanel = true;
     }
 
+    /** @deprecated Use {@link OpenCreatePanel}. */
+    public openCreatePanel(): void {
+      return this.OpenCreatePanel();
+    }
+
     /**
      * Save application (create only - for create panel)
      */
-    public async saveApplication(): Promise<void> {
+    public async SaveApplication(): Promise<void> {
         this.IsSaving = true;
         this.ErrorMessage = '';
 
@@ -269,7 +279,7 @@ export class APIApplicationsPanelComponent extends BaseAngularComponent implemen
             const result = await app.Save();
             if (result) {
                 this.SuccessMessage = 'Application created successfully';
-                this.closePanel();
+                this.ClosePanel();
                 // Refresh the cache before reloading display
                 await APIKeysEngineBase.Instance.Config(true);
                 this.loadData();
@@ -286,10 +296,15 @@ export class APIApplicationsPanelComponent extends BaseAngularComponent implemen
         }
     }
 
+    /** @deprecated Use {@link SaveApplication}. */
+    public async saveApplication(): Promise<void> {
+      return this.SaveApplication();
+    }
+
     /**
      * Open edit panel (slide-out) with optional direct-to-scopes tab
      */
-    public openEditPanel(appItem: ApplicationWithScopes, goToScopes = false): void {
+    public OpenEditPanel(appItem: ApplicationWithScopes, goToScopes = false): void {
         this.EditingApplication = appItem.application;
         this.SelectedApplication = appItem;
         this.EditName = appItem.application.Name;
@@ -300,6 +315,11 @@ export class APIApplicationsPanelComponent extends BaseAngularComponent implemen
         this.ScopesChanged = false;
         this.buildScopeCategories(appItem);
         this.ShowEditPanel = true;
+    }
+
+    /** @deprecated Use {@link OpenEditPanel}. */
+    public openEditPanel(appItem: ApplicationWithScopes, goToScopes = false): void {
+      return this.OpenEditPanel(appItem, goToScopes);
     }
 
     /**
@@ -402,14 +422,19 @@ export class APIApplicationsPanelComponent extends BaseAngularComponent implemen
     /**
      * Toggle category expansion
      */
-    public toggleScopeCategory(category: ScopeCategory): void {
+    public ToggleScopeCategory(category: ScopeCategory): void {
         category.expanded = !category.expanded;
+    }
+
+    /** @deprecated Use {@link ToggleScopeCategory}. */
+    public toggleScopeCategory(category: ScopeCategory): void {
+      return this.ToggleScopeCategory(category);
     }
 
     /**
      * Toggle all scopes in a category
      */
-    public toggleCategoryAll(category: ScopeCategory): void {
+    public ToggleCategoryAll(category: ScopeCategory): void {
         const newState = !category.allSelected;
         for (const scope of category.scopes) {
             scope.selected = newState;
@@ -417,32 +442,52 @@ export class APIApplicationsPanelComponent extends BaseAngularComponent implemen
         category.allSelected = newState;
     }
 
+    /** @deprecated Use {@link ToggleCategoryAll}. */
+    public toggleCategoryAll(category: ScopeCategory): void {
+      return this.ToggleCategoryAll(category);
+    }
+
     /**
      * Update category state when individual scope changes
      */
-    public updateCategoryState(category: ScopeCategory): void {
+    public UpdateCategoryState(category: ScopeCategory): void {
         const selectedCount = category.scopes.filter(s => s.selected).length;
         category.allSelected = selectedCount === category.scopes.length && category.scopes.length > 0;
+    }
+
+    /** @deprecated Use {@link UpdateCategoryState}. */
+    public updateCategoryState(category: ScopeCategory): void {
+      return this.UpdateCategoryState(category);
     }
 
     /**
      * Get total selected scope count
      */
-    public getSelectedScopeCount(): number {
+    public GetSelectedScopeCount(): number {
         return this.ScopeSelections.filter(s => s.selected).length;
+    }
+
+    /** @deprecated Use {@link GetSelectedScopeCount}. */
+    public getSelectedScopeCount(): number {
+      return this.GetSelectedScopeCount();
     }
 
     /**
      * Get selected scope count for a category
      */
-    public getCategorySelectedCount(category: ScopeCategory): number {
+    public GetCategorySelectedCount(category: ScopeCategory): number {
         return category.scopes.filter(s => s.selected).length;
+    }
+
+    /** @deprecated Use {@link GetCategorySelectedCount}. */
+    public getCategorySelectedCount(category: ScopeCategory): number {
+      return this.GetCategorySelectedCount(category);
     }
 
     /**
      * Save scope assignments (legacy - now handled by saveAll)
      */
-    public async saveScopeAssignments(): Promise<void> {
+    public async SaveScopeAssignments(): Promise<void> {
         if (!this.SelectedApplication) return;
 
         this.IsSaving = true;
@@ -452,7 +497,7 @@ export class APIApplicationsPanelComponent extends BaseAngularComponent implemen
             await this.saveScopeAssignmentsInternal();
 
             this.SuccessMessage = 'Scope assignments saved successfully';
-            this.closePanel();
+            this.ClosePanel();
             // Refresh the cache before reloading display
             await APIKeysEngineBase.Instance.Config(true);
             this.loadData();
@@ -466,17 +511,27 @@ export class APIApplicationsPanelComponent extends BaseAngularComponent implemen
         }
     }
 
+    /** @deprecated Use {@link SaveScopeAssignments}. */
+    public async saveScopeAssignments(): Promise<void> {
+      return this.SaveScopeAssignments();
+    }
+
     /**
      * Toggle application expansion
      */
-    public toggleExpanded(appItem: ApplicationWithScopes): void {
+    public ToggleExpanded(appItem: ApplicationWithScopes): void {
         appItem.expanded = !appItem.expanded;
+    }
+
+    /** @deprecated Use {@link ToggleExpanded}. */
+    public toggleExpanded(appItem: ApplicationWithScopes): void {
+      return this.ToggleExpanded(appItem);
     }
 
     /**
      * Close all panels
      */
-    public closePanel(): void {
+    public ClosePanel(): void {
         this.ShowCreatePanel = false;
         this.ShowEditPanel = false;
         this.EditingApplication = null;
@@ -488,10 +543,15 @@ export class APIApplicationsPanelComponent extends BaseAngularComponent implemen
         this.ScopesChanged = false;
     }
 
+    /** @deprecated Use {@link ClosePanel}. */
+    public closePanel(): void {
+      return this.ClosePanel();
+    }
+
     /**
      * Save all changes (both details and scopes)
      */
-    public async saveAll(): Promise<void> {
+    public async SaveAll(): Promise<void> {
         this.IsSaving = true;
         this.ErrorMessage = '';
 
@@ -515,7 +575,7 @@ export class APIApplicationsPanelComponent extends BaseAngularComponent implemen
             }
 
             this.SuccessMessage = 'Application saved successfully';
-            this.closePanel();
+            this.ClosePanel();
             // Refresh the cache before reloading display
             await APIKeysEngineBase.Instance.Config(true);
             this.loadData();
@@ -527,6 +587,11 @@ export class APIApplicationsPanelComponent extends BaseAngularComponent implemen
         } finally {
             this.IsSaving = false;
         }
+    }
+
+    /** @deprecated Use {@link SaveAll}. */
+    public async saveAll(): Promise<void> {
+      return this.SaveAll();
     }
 
     /**
@@ -591,24 +656,39 @@ export class APIApplicationsPanelComponent extends BaseAngularComponent implemen
     /**
      * Get icon for pattern type
      */
-    public getPatternIcon(patternType: string, isDeny: boolean): string {
+    public GetPatternIcon(patternType: string, isDeny: boolean): string {
         if (isDeny) return 'fa-solid fa-ban';
         return patternType === 'Include' ? 'fa-solid fa-check' : 'fa-solid fa-minus';
+    }
+
+    /** @deprecated Use {@link GetPatternIcon}. */
+    public getPatternIcon(patternType: string, isDeny: boolean): string {
+      return this.GetPatternIcon(patternType, isDeny);
     }
 
     /**
      * Get class for pattern type
      */
-    public getPatternClass(patternType: string, isDeny: boolean): string {
+    public GetPatternClass(patternType: string, isDeny: boolean): string {
         if (isDeny) return 'pattern-deny';
         return patternType === 'Include' ? 'pattern-include' : 'pattern-exclude';
+    }
+
+    /** @deprecated Use {@link GetPatternClass}. */
+    public getPatternClass(patternType: string, isDeny: boolean): string {
+      return this.GetPatternClass(patternType, isDeny);
     }
 
     /**
      * Get scope name by ID
      */
-    public getScopeName(scopeId: string): string {
+    public GetScopeName(scopeId: string): string {
         const scope = this.AllScopes.find(s => UUIDsEqual(s.ID, scopeId));
         return scope?.FullPath || scope?.Name || 'Unknown';
+    }
+
+    /** @deprecated Use {@link GetScopeName}. */
+    public getScopeName(scopeId: string): string {
+      return this.GetScopeName(scopeId);
     }
 }

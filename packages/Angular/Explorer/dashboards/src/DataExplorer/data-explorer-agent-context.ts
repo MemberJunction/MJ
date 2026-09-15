@@ -39,8 +39,13 @@ export const AGENT_CONTEXT_RECORD_LIST_CAP = 25;
  * @param name - a (possibly prefixed) entity Name, e.g. "MJ: ML Models"
  * @returns the name without the "MJ: " prefix, e.g. "ML Models"
  */
-export function stripMJPrefix(name: string): string {
+export function StripMJPrefix(name: string): string {
     return name.startsWith(MJ_ENTITY_NAME_PREFIX) ? name.slice(MJ_ENTITY_NAME_PREFIX.length) : name;
+}
+
+/** @deprecated Use {@link StripMJPrefix}. */
+export function stripMJPrefix(name: string): string {
+    return StripMJPrefix(name);
 }
 
 /**
@@ -53,11 +58,16 @@ export function stripMJPrefix(name: string): string {
  * @param displayName - the entity's DisplayName, if any (takes precedence, used verbatim)
  * @returns the user-facing display label
  */
-export function entityDisplayName(name: string, displayName?: string | null): string {
+export function EntityDisplayName(name: string, displayName?: string | null): string {
     if (displayName) {
         return displayName;
     }
-    return stripMJPrefix(name);
+    return StripMJPrefix(name);
+}
+
+/** @deprecated Use {@link EntityDisplayName}. */
+export function entityDisplayName(name: string, displayName?: string | null): string {
+    return EntityDisplayName(name, displayName);
 }
 
 /**
@@ -85,7 +95,7 @@ export interface EntityNameCandidate {
  * @param candidates - the entities available in this explorer
  * @returns the matched candidate, or null on a miss
  */
-export function resolveEntityByName<T extends EntityNameCandidate>(input: string, candidates: readonly T[]): T | null {
+export function ResolveEntityByName<T extends EntityNameCandidate>(input: string, candidates: readonly T[]): T | null {
     const needle = input.trim().toLowerCase();
     if (!needle) {
         return null;
@@ -96,19 +106,24 @@ export function resolveEntityByName<T extends EntityNameCandidate>(input: string
         return byName;
     }
     // 2. display name (DisplayName, else prefix-stripped Name)
-    const byDisplay = candidates.find(c => entityDisplayName(c.Name, c.DisplayName).toLowerCase() === needle);
+    const byDisplay = candidates.find(c => EntityDisplayName(c.Name, c.DisplayName).toLowerCase() === needle);
     if (byDisplay) {
         return byDisplay;
     }
     // 3. display name ignoring the "MJ: " prefix (covers an input that itself carries the prefix)
-    const strippedNeedle = stripMJPrefix(input.trim()).toLowerCase();
+    const strippedNeedle = StripMJPrefix(input.trim()).toLowerCase();
     if (strippedNeedle !== needle) {
-        const byStripped = candidates.find(c => entityDisplayName(c.Name, c.DisplayName).toLowerCase() === strippedNeedle);
+        const byStripped = candidates.find(c => EntityDisplayName(c.Name, c.DisplayName).toLowerCase() === strippedNeedle);
         if (byStripped) {
             return byStripped;
         }
     }
     return null;
+}
+
+/** @deprecated Use {@link ResolveEntityByName}. */
+export function resolveEntityByName<T extends EntityNameCandidate>(input: string, candidates: readonly T[]): T | null {
+    return ResolveEntityByName(input, candidates);
 }
 
 /**
@@ -158,7 +173,7 @@ export type RecordSelectionResult =
  * @param request - the agent's selection request
  * @returns the resolved 0-based index, or a clear error message
  */
-export function resolveRecordSelection(recordNames: readonly string[], request: RecordSelectionRequest): RecordSelectionResult {
+export function ResolveRecordSelection(recordNames: readonly string[], request: RecordSelectionRequest): RecordSelectionResult {
     if (recordNames.length === 0) {
         return { ok: false, error: 'No records are currently loaded in the view to select from.' };
     }
@@ -173,6 +188,11 @@ export function resolveRecordSelection(recordNames: readonly string[], request: 
     }
 
     return { ok: false, error: 'Provide either a position ("first", "last", or a 1-based index) or a record name to select.' };
+}
+
+/** @deprecated Use {@link ResolveRecordSelection}. */
+export function resolveRecordSelection(recordNames: readonly string[], request: RecordSelectionRequest): RecordSelectionResult {
+    return ResolveRecordSelection(recordNames, request);
 }
 
 /** Resolve a 'first' | 'last' | 1-based-index position to a 0-based index. */
@@ -232,8 +252,13 @@ function capNames(names: readonly string[]): string[] {
  * @param mode - candidate mode string (may be anything the agent passes)
  * @returns true when `mode` is one of grid | cards | timeline | map
  */
-export function isValidViewMode(mode: unknown): mode is DataExplorerViewMode {
+export function IsValidViewMode(mode: unknown): mode is DataExplorerViewMode {
     return typeof mode === 'string' && (VALID_VIEW_MODES as readonly string[]).includes(mode);
+}
+
+/** @deprecated Use {@link IsValidViewMode}. */
+export function isValidViewMode(mode: unknown): mode is DataExplorerViewMode {
+    return IsValidViewMode(mode);
 }
 
 /**
@@ -243,8 +268,13 @@ export function isValidViewMode(mode: unknown): mode is DataExplorerViewMode {
  * @param mode - candidate mode string (may be anything the agent passes)
  * @returns true when `mode` is one of 'all' | 'favorites'
  */
-export function isValidEntityBrowserMode(mode: unknown): mode is 'all' | 'favorites' {
+export function IsValidEntityBrowserMode(mode: unknown): mode is 'all' | 'favorites' {
     return typeof mode === 'string' && (VALID_ENTITY_BROWSER_MODES as readonly string[]).includes(mode);
+}
+
+/** @deprecated Use {@link IsValidEntityBrowserMode}. */
+export function isValidEntityBrowserMode(mode: unknown): mode is 'all' | 'favorites' {
+    return IsValidEntityBrowserMode(mode);
 }
 
 /**
@@ -397,7 +427,7 @@ function buildRecordBrowsingContext(input: DataExplorerAgentContextInput): Recor
     // non-positive count yields 1 page.
     context['PageSize'] = input.PageSize;
     context['CurrentPage'] = input.CurrentPage ?? 1;
-    context['TotalPages'] = input.TotalPages ?? computeTotalPages(input.FilteredRecordCount, input.PageSize);
+    context['TotalPages'] = input.TotalPages ?? ComputeTotalPages(input.FilteredRecordCount, input.PageSize);
 
     // Sort — only surfaced when the grid is actually sorted by a column.
     if (input.SortColumn) {
@@ -470,11 +500,16 @@ function buildEntityBrowsingContext(input: DataExplorerAgentContextInput): Recor
  * Derive the total page count from a record count and page size.
  * Guards against a non-positive page size (returns 1 page) and rounds up.
  */
-export function computeTotalPages(recordCount: number, pageSize: number): number {
+export function ComputeTotalPages(recordCount: number, pageSize: number): number {
     if (!Number.isFinite(pageSize) || pageSize <= 0 || recordCount <= 0) {
         return 1;
     }
     return Math.ceil(recordCount / pageSize);
+}
+
+/** @deprecated Use {@link ComputeTotalPages}. */
+export function computeTotalPages(recordCount: number, pageSize: number): number {
+    return ComputeTotalPages(recordCount, pageSize);
 }
 
 /**
@@ -494,9 +529,14 @@ export function computeTotalPages(recordCount: number, pageSize: number): number
  * @param input - the component's current state snapshot
  * @returns a flat key-value object suitable for `SetAgentContext`
  */
-export function buildDataExplorerAgentContext(input: DataExplorerAgentContextInput): Record<string, unknown> {
+export function BuildDataExplorerAgentContext(input: DataExplorerAgentContextInput): Record<string, unknown> {
     if (input.SelectedEntityName) {
         return buildRecordBrowsingContext(input);
     }
     return buildEntityBrowsingContext(input);
+}
+
+/** @deprecated Use {@link BuildDataExplorerAgentContext}. */
+export function buildDataExplorerAgentContext(input: DataExplorerAgentContextInput): Record<string, unknown> {
+    return BuildDataExplorerAgentContext(input);
 }

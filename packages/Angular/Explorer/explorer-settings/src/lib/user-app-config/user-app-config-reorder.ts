@@ -21,7 +21,7 @@ export interface ReorderableAppItem {
  * 0..n-1 in the new display order. Out-of-range indexes return the input array
  * unchanged (and un-renumbered) so callers can bind arrow buttons without guards.
  */
-export function moveAndResequence<T extends ReorderableAppItem>(items: T[], fromIndex: number, toIndex: number): T[] {
+export function MoveAndResequence<T extends ReorderableAppItem>(items: T[], fromIndex: number, toIndex: number): T[] {
   if (
     fromIndex < 0 || fromIndex >= items.length ||
     toIndex < 0 || toIndex >= items.length ||
@@ -32,8 +32,13 @@ export function moveAndResequence<T extends ReorderableAppItem>(items: T[], from
   const reordered = [...items];
   const [moved] = reordered.splice(fromIndex, 1);
   reordered.splice(toIndex, 0, moved);
-  resequenceItems(reordered);
+  ResequenceItems(reordered);
   return reordered;
+}
+
+/** @deprecated Use {@link MoveAndResequence}. */
+export function moveAndResequence<T extends ReorderableAppItem>(items: T[], fromIndex: number, toIndex: number): T[] {
+  return MoveAndResequence(items, fromIndex, toIndex);
 }
 
 /**
@@ -41,11 +46,16 @@ export function moveAndResequence<T extends ReorderableAppItem>(items: T[], from
  * dirty so the next save persists the fix — this is what self-heals duplicate
  * Sequence values already in the database.
  */
-export function resequenceItems<T extends ReorderableAppItem>(items: T[]): void {
+export function ResequenceItems<T extends ReorderableAppItem>(items: T[]): void {
   items.forEach((item, index) => {
     if (item.sequence !== index) {
       item.sequence = index;
       item.isDirty = true;
     }
   });
+}
+
+/** @deprecated Use {@link ResequenceItems}. */
+export function resequenceItems<T extends ReorderableAppItem>(items: T[]): void {
+  return ResequenceItems(items);
 }

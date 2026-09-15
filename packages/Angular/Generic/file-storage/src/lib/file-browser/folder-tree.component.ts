@@ -62,131 +62,233 @@ export class FolderTreeComponent {
   /**
    * Emits when a folder is selected in the tree
    */
-  @Output() folderSelected = new EventEmitter<string>();
+  @Output() FolderSelected = new EventEmitter<string>();
+
+  /**
+   * @deprecated Use {@link FolderSelected}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (folderSelected) keeps working. Must stay AFTER FolderSelected: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() folderSelected = this.FolderSelected;
 
   /**
    * Current folder path
    */
-  public currentPath: string = '/';
+  public CurrentPath: string = '/';
+
+  /** @deprecated Use {@link CurrentPath}. */
+  public get currentPath(): string {
+    return this.CurrentPath;
+  }
+  /** @deprecated Use {@link CurrentPath}. */
+  public set currentPath(value: string) {
+    this.CurrentPath = value;
+  }
 
   /**
    * Navigation history (for back button)
    */
-  public history: string[] = [];
+  public History: string[] = [];
+
+  /** @deprecated Use {@link History}. */
+  public get history(): string[] {
+    return this.History;
+  }
+  /** @deprecated Use {@link History}. */
+  public set history(value: string[]) {
+    this.History = value;
+  }
 
   /**
    * Current position in history
    */
-  public historyIndex: number = -1;
+  public HistoryIndex: number = -1;
+
+  /** @deprecated Use {@link HistoryIndex}. */
+  public get historyIndex(): number {
+    return this.HistoryIndex;
+  }
+  /** @deprecated Use {@link HistoryIndex}. */
+  public set historyIndex(value: number) {
+    this.HistoryIndex = value;
+  }
 
   /**
    * Breadcrumb items for current path
    */
-  public breadcrumbs: BreadcrumbItem[] = [];
+  public Breadcrumbs: BreadcrumbItem[] = [];
+
+  /** @deprecated Use {@link Breadcrumbs}. */
+  public get breadcrumbs(): BreadcrumbItem[] {
+    return this.Breadcrumbs;
+  }
+  /** @deprecated Use {@link Breadcrumbs}. */
+  public set breadcrumbs(value: BreadcrumbItem[]) {
+    this.Breadcrumbs = value;
+  }
 
   /**
    * Folders in current path
    */
-  public folders: FolderItem[] = [];
+  public Folders: FolderItem[] = [];
+
+  /** @deprecated Use {@link Folders}. */
+  public get folders(): FolderItem[] {
+    return this.Folders;
+  }
+  /** @deprecated Use {@link Folders}. */
+  public set folders(value: FolderItem[]) {
+    this.Folders = value;
+  }
 
   private cdr = inject(ChangeDetectorRef);
 
   /**
    * Loading state
    */
-  public isLoading: boolean = false;
+  public IsLoading: boolean = false;
+
+  /** @deprecated Use {@link IsLoading}. */
+  public get isLoading(): boolean {
+    return this.IsLoading;
+  }
+  /** @deprecated Use {@link IsLoading}. */
+  public set isLoading(value: boolean) {
+    this.IsLoading = value;
+  }
 
   /**
    * Error message
    */
-  public errorMessage: string | null = null;
+  public ErrorMessage: string | null = null;
+
+  /** @deprecated Use {@link ErrorMessage}. */
+  public get errorMessage(): string | null {
+    return this.ErrorMessage;
+  }
+  /** @deprecated Use {@link ErrorMessage}. */
+  public set errorMessage(value: string | null) {
+    this.ErrorMessage = value;
+  }
 
   /**
    * Resets navigation when provider changes
    */
   private resetNavigation(): void {
-    this.currentPath = '/';
-    this.history = ['/'];
-    this.historyIndex = 0;
+    this.CurrentPath = '/';
+    this.History = ['/'];
+    this.HistoryIndex = 0;
     this.updateBreadcrumbs();
   }
 
   /**
    * Navigates to a specific folder path
    */
-  public navigateToPath(path: string): void {
+  public NavigateToPath(path: string): void {
     // Don't navigate if already at this path
-    if (path === this.currentPath) {
+    if (path === this.CurrentPath) {
       return;
     }
 
     // Add to history if navigating from user action (not back/forward)
-    if (this.historyIndex === this.history.length - 1) {
-      this.history.push(path);
-      this.historyIndex = this.history.length - 1;
+    if (this.HistoryIndex === this.History.length - 1) {
+      this.History.push(path);
+      this.HistoryIndex = this.History.length - 1;
     } else {
       // Navigating from middle of history - truncate forward history
-      this.history = this.history.slice(0, this.historyIndex + 1);
-      this.history.push(path);
-      this.historyIndex = this.history.length - 1;
+      this.History = this.History.slice(0, this.HistoryIndex + 1);
+      this.History.push(path);
+      this.HistoryIndex = this.History.length - 1;
     }
 
-    this.currentPath = path;
+    this.CurrentPath = path;
     this.updateBreadcrumbs();
     this.loadFolders();
-    this.folderSelected.emit(path);
+    this.FolderSelected.emit(path);
+  }
+
+  /** @deprecated Use {@link NavigateToPath}. */
+  public navigateToPath(path: string): void {
+    return this.NavigateToPath(path);
   }
 
   /**
    * Refreshes the current folder view without changing navigation
    * Used when folder structure changes (e.g., folder deleted) but we're staying in the same location
    */
-  public refresh(): void {
+  public Refresh(): void {
     this.loadFolders();
+  }
+
+  /** @deprecated Use {@link Refresh}. */
+  public refresh(): void {
+    return this.Refresh();
   }
 
   /**
    * Navigates back in history
    */
-  public navigateBack(): void {
-    if (!this.canGoBack()) {
+  public NavigateBack(): void {
+    if (!this.CanGoBack()) {
       return;
     }
 
-    this.historyIndex--;
-    this.currentPath = this.history[this.historyIndex];
+    this.HistoryIndex--;
+    this.CurrentPath = this.History[this.HistoryIndex];
     this.updateBreadcrumbs();
-    this.folderSelected.emit(this.currentPath);
+    this.FolderSelected.emit(this.CurrentPath);
     this.loadFolders();
+  }
+
+  /** @deprecated Use {@link NavigateBack}. */
+  public navigateBack(): void {
+    return this.NavigateBack();
   }
 
   /**
    * Navigates forward in history
    */
-  public navigateForward(): void {
-    if (!this.canGoForward()) {
+  public NavigateForward(): void {
+    if (!this.CanGoForward()) {
       return;
     }
 
-    this.historyIndex++;
-    this.currentPath = this.history[this.historyIndex];
+    this.HistoryIndex++;
+    this.CurrentPath = this.History[this.HistoryIndex];
     this.updateBreadcrumbs();
-    this.folderSelected.emit(this.currentPath);
+    this.FolderSelected.emit(this.CurrentPath);
     this.loadFolders();
+  }
+
+  /** @deprecated Use {@link NavigateForward}. */
+  public navigateForward(): void {
+    return this.NavigateForward();
   }
 
   /**
    * Checks if can navigate back
    */
+  public CanGoBack(): boolean {
+    return this.HistoryIndex > 0;
+  }
+
+  /** @deprecated Use {@link CanGoBack}. */
   public canGoBack(): boolean {
-    return this.historyIndex > 0;
+    return this.CanGoBack();
   }
 
   /**
    * Checks if can navigate forward
    */
+  public CanGoForward(): boolean {
+    return this.HistoryIndex < this.History.length - 1;
+  }
+
+  /** @deprecated Use {@link CanGoForward}. */
   public canGoForward(): boolean {
-    return this.historyIndex < this.history.length - 1;
+    return this.CanGoForward();
   }
 
   /**
@@ -194,7 +296,7 @@ export class FolderTreeComponent {
    */
   private updateBreadcrumbs(): void {
     if (!this.account) {
-      this.breadcrumbs = [];
+      this.Breadcrumbs = [];
       return;
     }
 
@@ -207,8 +309,8 @@ export class FolderTreeComponent {
     ];
 
     // Add path segments if not at root
-    if (this.currentPath !== '/') {
-      const segments = this.currentPath.split('/').filter(s => s.length > 0);
+    if (this.CurrentPath !== '/') {
+      const segments = this.CurrentPath.split('/').filter(s => s.length > 0);
       let builtPath = '';
 
       for (const segment of segments) {
@@ -220,15 +322,20 @@ export class FolderTreeComponent {
       }
     }
 
-    this.breadcrumbs = items;
+    this.Breadcrumbs = items;
   }
 
   /**
    * Handles breadcrumb click
    */
-  public onBreadcrumbClick(item: BreadcrumbItem): void {
-    this.navigateToPath(item.path);
+  public OnBreadcrumbClick(item: BreadcrumbItem): void {
+    this.NavigateToPath(item.path);
     this.loadFolders();
+  }
+
+  /** @deprecated Use {@link OnBreadcrumbClick}. */
+  public onBreadcrumbClick(item: BreadcrumbItem): void {
+    return this.OnBreadcrumbClick(item);
   }
 
   /**
@@ -236,12 +343,12 @@ export class FolderTreeComponent {
    */
   private async loadFolders(): Promise<void> {
     if (!this.account) {
-      this.folders = [];
+      this.Folders = [];
       return;
     }
 
-    this.isLoading = true;
-    this.errorMessage = null;
+    this.IsLoading = true;
+    this.ErrorMessage = null;
     this.cdr.detectChanges();
 
     try {
@@ -249,7 +356,7 @@ export class FolderTreeComponent {
       // directory prefix. currentPath is stored with a leading slash (e.g. "/test"), which
       // never matches real keys — so nested-folder listings came back empty (empty folder
       // names). Normalize to a slash-free, trailing-slash prefix before listing.
-      const rawPath = this.currentPath && this.currentPath !== '/' ? this.currentPath : '';
+      const rawPath = this.CurrentPath && this.CurrentPath !== '/' ? this.CurrentPath : '';
       const listPrefix = rawPath ? rawPath.replace(/^\/+/, '').replace(/\/+$/, '') + '/' : '';
       const listResult = await this.storageClient.ListObjects(
         this.account.account.ID,
@@ -259,7 +366,7 @@ export class FolderTreeComponent {
 
       // Convert prefixes to FolderItems
       const prefixes = listResult.prefixes || [];
-      this.folders = prefixes.map((prefix: string) => {
+      this.Folders = prefixes.map((prefix: string) => {
         // Remove trailing slash and get just the folder name
         const cleanPath = prefix.endsWith('/') ? prefix.slice(0, -1) : prefix;
         const name = cleanPath.split('/').pop() || cleanPath;
@@ -271,10 +378,10 @@ export class FolderTreeComponent {
       });
     } catch (error) {
       console.error('Error loading folders:', error);
-      this.errorMessage = error instanceof Error ? error.message : 'Failed to load folders';
-      this.folders = [];
+      this.ErrorMessage = error instanceof Error ? error.message : 'Failed to load folders';
+      this.Folders = [];
     } finally {
-      this.isLoading = false;
+      this.IsLoading = false;
       this.cdr.detectChanges();
     }
   }
@@ -282,8 +389,13 @@ export class FolderTreeComponent {
   /**
    * Handles folder click for navigation
    */
-  public onFolderClick(folder: FolderItem): void {
-    this.navigateToPath(folder.fullPath);
+  public OnFolderClick(folder: FolderItem): void {
+    this.NavigateToPath(folder.fullPath);
     this.loadFolders();
+  }
+
+  /** @deprecated Use {@link OnFolderClick}. */
+  public onFolderClick(folder: FolderItem): void {
+    return this.OnFolderClick(folder);
   }
 }

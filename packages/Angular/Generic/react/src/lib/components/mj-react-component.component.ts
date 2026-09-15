@@ -38,7 +38,7 @@ import {
   mergeUserSettings,
   applyUserSettingsUpdate
 } from '@memberjunction/react-runtime';
-import { createRuntimeUtilities } from '../utilities/runtime-utilities';
+import { CreateRuntimeUtilities } from '../utilities/runtime-utilities';
 import { LogError, CompositeKey, KeyValuePair, Metadata, RunView, RunViewParams, RunViewResult, RunQueryParams, RunQueryResult, DataSnapshot, DataTable, MJColumnDescriptor } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ComponentMetadataEngine, UserInfoEngine } from '@memberjunction/core-entities';
@@ -170,7 +170,7 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
     this._component = value;
 
     // If already initialized and component spec changed, reinitialize
-    if (this.isInitialized && value && previousComponent !== value) {
+    if (this.IsInitialized && value && previousComponent !== value) {
       // Check if it's actually a different component (not just same reference)
       const isDifferent = !previousComponent ||
         previousComponent.name !== value.name ||
@@ -183,8 +183,8 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
         // Same code, new styleOverrides (a regenerated spec whose only change is the
         // requested styling): re-render in place — no teardown needed. The resolved
         // spec must be kept in step because the styleOverrides getter prefers it.
-        if (this.resolvedComponentSpec) {
-          this.resolvedComponentSpec.styleOverrides = value.styleOverrides;
+        if (this.ResolvedComponentSpec) {
+          this.ResolvedComponentSpec.styleOverrides = value.styleOverrides;
         }
         this.renderComponent();
       }
@@ -199,8 +199,26 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
    * Note: This does NOT control which React build (dev/prod) is loaded.
    * To control React builds, use ReactDebugConfig.setDebugMode() at app startup.
    */
-  @Input() enableLogging: boolean = false;
-  @Input() useComponentManager: boolean = true; // NEW: Use unified ComponentManager by default
+  @Input() EnableLogging: boolean = false;
+
+  /** @deprecated Use {@link EnableLogging}. */
+  @Input() set enableLogging(value: boolean) {
+    this.EnableLogging = value;
+  }
+  /** @deprecated Use {@link EnableLogging}. */
+  get enableLogging(): boolean {
+    return this.EnableLogging;
+  }
+  @Input() UseComponentManager: boolean = true;
+
+  /** @deprecated Use {@link UseComponentManager}. */
+  @Input() set useComponentManager(value: boolean) {
+    this.UseComponentManager = value;
+  }
+  /** @deprecated Use {@link UseComponentManager}. */
+  get useComponentManager(): boolean {
+    return this.UseComponentManager;
+  } // NEW: Use unified ComponentManager by default
   
   // Auto-initialize utilities if not provided
   private _utilities: any;
@@ -211,9 +229,9 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
   get utilities(): any {
     // Lazy initialization - only create default utilities when needed
     if (!this._utilities) {
-      const runtimeUtils = createRuntimeUtilities();
-      this._utilities = runtimeUtils.buildUtilities(this.enableLogging, this.ProviderToUse);
-      if (this.enableLogging) {
+      const runtimeUtils = CreateRuntimeUtilities();
+      this._utilities = runtimeUtils.buildUtilities(this.EnableLogging, this.ProviderToUse);
+      if (this.EnableLogging) {
         console.log('MJReactComponent: Auto-initialized utilities using createRuntimeUtilities()');
       }
     }
@@ -245,7 +263,7 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
     if (!this._themeStyles || this._themeStylesKey !== key) {
       this._themeStyles = BuildStylesFromTheme();
       this._themeStylesKey = key;
-      if (this.enableLogging) {
+      if (this.EnableLogging) {
         console.log(`MJReactComponent: Bridged styles from live theme (key="${key}")`);
       }
     }
@@ -260,7 +278,7 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
    * asynchronously) and falls back to the spec passed in.
    */
   private get styleOverrides(): StyleOverrides | undefined {
-    return this.resolvedComponentSpec?.styleOverrides ?? this._component?.styleOverrides;
+    return this.ResolvedComponentSpec?.styleOverrides ?? this._component?.styleOverrides;
   }
 
   // Memo for the override merge. ApplyStyleOverrides allocates a new object whenever
@@ -314,7 +332,7 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
       if (key !== this._themeStylesKey) {
         this._themeStyles = undefined;
         this._themeStylesKey = undefined;
-        if (this.isInitialized) {
+        if (this.IsInitialized) {
           this.renderComponent();
         }
       }
@@ -330,7 +348,7 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
   set savedUserSettings(value: any) {
     this._savedUserSettings = value || {};
     // Re-render if component is initialized
-    if (this.isInitialized) {
+    if (this.IsInitialized) {
       this.renderComponent();
     }
   }
@@ -372,7 +390,7 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
   @Input()
   set componentProps(value: object | undefined) {
     this._componentProps = value ?? {};
-    if (this.isInitialized) {
+    if (this.IsInitialized) {
       this.renderComponent();
     }
   }
@@ -380,13 +398,67 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
     return this._componentProps;
   }
 
-  @Output() stateChange = new EventEmitter<StateChangeEvent>();
-  @Output() componentEvent = new EventEmitter<ReactComponentEvent>();
-  @Output() refreshData = new EventEmitter<void>();
-  @Output() openEntityRecord = new EventEmitter<{ entityName: string; key: CompositeKey }>();
-  @Output() userSettingsChanged = new EventEmitter<UserSettingsChangedEvent>();
+  @Output() StateChange = new EventEmitter<StateChangeEvent>();
+
+  /**
+   * @deprecated Use {@link StateChange}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (stateChange) keeps working. Must stay AFTER StateChange: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() stateChange = this.StateChange;
+  @Output() ComponentEvent = new EventEmitter<ReactComponentEvent>();
+
+  /**
+   * @deprecated Use {@link ComponentEvent}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (componentEvent) keeps working. Must stay AFTER ComponentEvent: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() componentEvent = this.ComponentEvent;
+  @Output() RefreshData = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link RefreshData}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (refreshData) keeps working. Must stay AFTER RefreshData: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() refreshData = this.RefreshData;
+  @Output() OpenEntityRecord = new EventEmitter<{ entityName: string; key: CompositeKey }>();
+
+  /**
+   * @deprecated Use {@link OpenEntityRecord}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (openEntityRecord) keeps working. Must stay AFTER OpenEntityRecord: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() openEntityRecord = this.OpenEntityRecord;
+  @Output() UserSettingsChanged = new EventEmitter<UserSettingsChangedEvent>();
+
+  /**
+   * @deprecated Use {@link UserSettingsChanged}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (userSettingsChanged) keeps working. Must stay AFTER UserSettingsChanged: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() userSettingsChanged = this.UserSettingsChanged;
   /** Emitted once after the component successfully loads and resolvedComponentSpec is populated. */
-  @Output() initialized = new EventEmitter<void>();
+  @Output() Initialized = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link Initialized}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (initialized) keeps working. Must stay AFTER Initialized: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() initialized = this.Initialized;
   
   @ViewChild('container', { read: ElementRef, static: true }) container!: ElementRef<HTMLDivElement>;
 
@@ -400,13 +472,31 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
   private loadedDependencies: Record<string, ComponentObject> = {};
   private destroyed$ = new Subject<void>();
   private currentCallbacks: ComponentCallbacks | null = null;
-  isInitialized = false;
+  IsInitialized = false;
+
+  /** @deprecated Use {@link IsInitialized}. */
+  get isInitialized() {
+    return this.IsInitialized;
+  }
+  /** @deprecated Use {@link IsInitialized}. */
+  set isInitialized(value) {
+    this.IsInitialized = value;
+  }
   private isRendering = false;
   private pendingRender = false;
   private isDestroying = false;
   private componentId: string;
   private componentVersion: string = '';  // Store the version for resolver
-  hasError = false;
+  HasError = false;
+
+  /** @deprecated Use {@link HasError}. */
+  get hasError() {
+    return this.HasError;
+  }
+  /** @deprecated Use {@link HasError}. */
+  set hasError(value) {
+    this.HasError = value;
+  }
   
   /**
    * Public property containing the fully resolved component specification.
@@ -414,7 +504,16 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
    * to inspect the complete resolved specification including dependencies.
    * Only populated after successful component initialization.
    */
-  public resolvedComponentSpec: ComponentSpec | null = null;
+  public ResolvedComponentSpec: ComponentSpec | null = null;
+
+  /** @deprecated Use {@link ResolvedComponentSpec}. */
+  public get resolvedComponentSpec(): ComponentSpec | null {
+    return this.ResolvedComponentSpec;
+  }
+  /** @deprecated Use {@link ResolvedComponentSpec}. */
+  public set resolvedComponentSpec(value: ComponentSpec | null) {
+    this.ResolvedComponentSpec = value;
+  }
 
   constructor(
     private reactBridge: ReactBridgeService,
@@ -481,11 +580,11 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
 
     // Clear cached state from previous component
     this.compiledComponent = null;
-    this.resolvedComponentSpec = null;
+    this.ResolvedComponentSpec = null;
     this.loadedDependencies = {};
     this.componentVersion = '';
-    this.hasError = false;
-    this.isInitialized = false;
+    this.HasError = false;
+    this.IsInitialized = false;
     this.capturedData = [];
 
     // Unmount existing React root if present
@@ -515,7 +614,7 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
       await this.reactBridge.waitForReactReady();
 
       // NEW: Use ComponentManager if enabled (default: true)
-      if (this.useComponentManager) {
+      if (this.UseComponentManager) {
         console.log(`🎯 [initializeComponent] Using NEW ComponentManager approach`);
         await this.loadComponentWithManager();
         
@@ -600,19 +699,19 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
 
       // Initial render
       this.renderComponent();
-      this.isInitialized = true;
+      this.IsInitialized = true;
 
       // Trigger change detection since we're using OnPush
       this.cdr.detectChanges();
 
       // Notify parent that the component has successfully initialized and
       // resolvedComponentSpec is now populated with the full spec from the registry
-      this.initialized.emit();
+      this.Initialized.emit();
 
     } catch (error) {
-      this.hasError = true;
+      this.HasError = true;
       LogError(`Failed to initialize React component: ${error}`);
-      this.componentEvent.emit({
+      this.ComponentEvent.emit({
         type: 'error',
         payload: {
           error: error instanceof Error ? error.message : String(error),
@@ -667,7 +766,7 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
     const resolver = this.adapter.getResolver();
     
     // Debug: Log what dependencies we're trying to resolve
-    if (this.enableLogging) {
+    if (this.EnableLogging) {
       console.log(`Resolving components for ${spec.name}. Dependencies:`, spec.dependencies);
     }
     
@@ -678,7 +777,7 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
       this.ProviderToUse.CurrentUser // Pass current user context for database operations
     );
     
-    if (this.enableLogging) {
+    if (this.EnableLogging) {
       console.log(`Resolved ${Object.keys(resolved).length} components for version ${version}:`, Object.keys(resolved));
     }
     return resolved;
@@ -709,7 +808,7 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
       }
       
       // Store the results (handle undefined values)
-      this.resolvedComponentSpec = this.enrichSpecWithRegistryInfo(result.resolvedSpec || null);
+      this.ResolvedComponentSpec = this.enrichSpecWithRegistryInfo(result.resolvedSpec || null);
       this.compiledComponent = result.rootComponent || null;
       this.componentVersion = result.resolvedSpec?.version || this.component.version || 'latest';
       
@@ -846,7 +945,7 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
     
     // Store the resolved spec from the registration result
     if (result.resolvedSpec) {
-      this.resolvedComponentSpec = this.enrichSpecWithRegistryInfo(result.resolvedSpec || null);
+      this.ResolvedComponentSpec = this.enrichSpecWithRegistryInfo(result.resolvedSpec || null);
       console.log(`📋 [registerComponentHierarchy] Received resolved spec from runtime:`, {
         name: result.resolvedSpec.name,
         hasCode: !!result.resolvedSpec.code,
@@ -964,7 +1063,7 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
     // Resolve components with the correct version using runtime's resolver
     // SKIP this if using ComponentManager - components are already loaded!
     let components = {};
-    if (!this.useComponentManager) {
+    if (!this.UseComponentManager) {
       components = await this.resolveComponentsWithVersion(this.component, this.componentVersion);
     } else {
       // Use the dependencies that were already loaded and unwrapped by ComponentManager
@@ -1040,7 +1139,7 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
       () => {
         // Check if still rendering and not destroyed
         if (this.isRendering && !this.isDestroying) {
-          this.componentEvent.emit({
+          this.ComponentEvent.emit({
             type: 'error',
             payload: {
               error: 'Component render timeout - possible infinite loop detected',
@@ -1164,11 +1263,11 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
             }
           }
 
-          this.openEntityRecord.emit({ entityName, key: keyToUse });
+          this.OpenEntityRecord.emit({ entityName, key: keyToUse });
         }
       },
       NotifyEvent: async (eventName: string, args: BaseEventArgs) => {
-        this.componentEvent.emit({ type: eventName, payload: args });
+        this.ComponentEvent.emit({ type: eventName, payload: args });
       }
     };
   }
@@ -1178,7 +1277,7 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
    */
   private handleReactError(error: any, errorInfo?: any) {
     LogError(`React component error: ${error?.toString() || 'Unknown error'}`, errorInfo);
-    this.componentEvent.emit({
+    this.ComponentEvent.emit({
       type: 'error',
       payload: {
         error: error?.toString() || 'Unknown error',
@@ -1215,7 +1314,7 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
     this.persistUserSettings(this._savedUserSettings);
 
     // Bubble the event up to parent containers (back-compat; no consumer required).
-    this.userSettingsChanged.emit({
+    this.UserSettingsChanged.emit({
       settings: this._savedUserSettings,
       componentName: this.component?.name,
       timestamp: new Date()
@@ -1259,7 +1358,7 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
       const stored = parseStoredUserSettings(UserInfoEngine.Instance.GetSetting(key));
       this._savedUserSettings = mergeUserSettings(this._savedUserSettings, stored);
     } catch (error) {
-      if (this.enableLogging) {
+      if (this.EnableLogging) {
         console.warn('MJReactComponent: failed to seed user settings from store', error);
       }
     }
@@ -1287,7 +1386,7 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
       const serialized = typeof settings === 'string' ? settings : JSON.stringify(settings);
       UserInfoEngine.Instance.SetSettingDebounced(key, serialized, user);
     } catch (error) {
-      if (this.enableLogging) {
+      if (this.EnableLogging) {
         console.warn('MJReactComponent: failed to persist user settings', error);
       }
     }
@@ -1424,7 +1523,7 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
 
     // Clear references
     this.compiledComponent = null;
-    this.isInitialized = false;
+    this.IsInitialized = false;
     this.capturedData = [];
 
     // Trigger registry cleanup (guard: adapter may not be initialized if
@@ -1456,7 +1555,7 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
    */
   updateState(path: string, value: any) {
     // Just emit the event, don't manage state here
-    this.stateChange.emit({ path, value });
+    this.StateChange.emit({ path, value });
   }
 
   // =================================================================
@@ -1486,31 +1585,51 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
    * Checks if the component has unsaved changes
    * @returns true if dirty, false otherwise
    */
-  isDirty(): boolean {
+  IsDirty(): boolean {
     return this.compiledComponent?.isDirty?.() || false;
+  }
+
+  /** @deprecated Use {@link IsDirty}. */
+  isDirty(): boolean {
+    return this.IsDirty();
   }
   
   /**
    * Resets the component to its initial state
    */
-  reset(): void {
+  Reset(): void {
     this.compiledComponent?.reset?.();
+  }
+
+  /** @deprecated Use {@link Reset}. */
+  reset(): void {
+    return this.Reset();
   }
   
   /**
    * Scrolls to a specific element or position within the component
    * @param target - Element selector, element reference, or scroll options
    */
-  scrollTo(target: string | HTMLElement | { top?: number; left?: number }): void {
+  ScrollTo(target: string | HTMLElement | { top?: number; left?: number }): void {
     this.compiledComponent?.scrollTo?.(target);
+  }
+
+  /** @deprecated Use {@link ScrollTo}. */
+  scrollTo(target: string | HTMLElement | { top?: number; left?: number }): void {
+    return this.ScrollTo(target);
   }
   
   /**
    * Sets focus to a specific element within the component
    * @param target - Element selector or element reference
    */
-  focus(target?: string | HTMLElement): void {
+  Focus(target?: string | HTMLElement): void {
     this.compiledComponent?.focus?.(target);
+  }
+
+  /** @deprecated Use {@link Focus}. */
+  focus(target?: string | HTMLElement): void {
+    return this.Focus(target);
   }
   
   /**
@@ -1519,8 +1638,13 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
    * @param args - Arguments to pass to the method
    * @returns The result of the method call, or undefined if method doesn't exist
    */
-  invokeMethod(methodName: string, ...args: any[]): any {
+  InvokeMethod(methodName: string, ...args: any[]): any {
     return this.compiledComponent?.invokeMethod?.(methodName, ...args);
+  }
+
+  /** @deprecated Use {@link InvokeMethod}. */
+  invokeMethod(methodName: string, ...args: any[]): any {
+    return this.InvokeMethod(methodName, ...args);
   }
   
   /**
@@ -1528,15 +1652,20 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
    * @param methodName - Name of the method to check
    * @returns true if the method exists
    */
-  hasMethod(methodName: string): boolean {
+  HasMethod(methodName: string): boolean {
     return this.compiledComponent?.hasMethod?.(methodName) || false;
+  }
+
+  /** @deprecated Use {@link HasMethod}. */
+  hasMethod(methodName: string): boolean {
+    return this.HasMethod(methodName);
   }
   
   /**
    * Print the component content
    * Uses component's print method if available, otherwise uses window.print()
    */
-  print(): void {
+  Print(): void {
     if (this.compiledComponent?.print) {
       this.compiledComponent.print();
     } else if (typeof window !== 'undefined' && window.print) {
@@ -1544,12 +1673,17 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
     }
   }
 
+  /** @deprecated Use {@link Print}. */
+  print(): void {
+    return this.Print();
+  }
+
   /**
    * Force clear component registries
    * Used by Component Studio for fresh loads
    * This is a static method that can be called without a component instance
    */
-  public static forceClearRegistries(): void {
+  public static ForceClearRegistries(): void {
     // Clear React runtime's component registry service
     ComponentRegistryService.reset();
 
@@ -1559,6 +1693,11 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
     }
 
     console.log('🧹 All component registries cleared for fresh load');
+  }
+
+  /** @deprecated Use {@link ForceClearRegistries}. */
+  public static forceClearRegistries(): void {
+    return this.ForceClearRegistries();
   }
 
   /**

@@ -59,7 +59,16 @@ export class AgentRequestDialogComponent extends BaseAngularComponent implements
     @Output() Close = new EventEmitter<AgentRequestPanelResult>();
 
     public IsLoading = false;
-    public requestTypes: MJAIAgentRequestTypeEntity[] = [];
+    public RequestTypes: MJAIAgentRequestTypeEntity[] = [];
+
+    /** @deprecated Use {@link RequestTypes}. */
+    public get requestTypes(): MJAIAgentRequestTypeEntity[] {
+        return this.RequestTypes;
+    }
+    /** @deprecated Use {@link RequestTypes}. */
+    public set requestTypes(value: MJAIAgentRequestTypeEntity[]) {
+        this.RequestTypes = value;
+    }
 
     constructor(private cdr: ChangeDetectorRef) {
         super();}
@@ -84,7 +93,7 @@ export class AgentRequestDialogComponent extends BaseAngularComponent implements
     }
 
     private async loadRequestTypes(): Promise<void> {
-        if (this.requestTypes.length > 0) return;
+        if (this.RequestTypes.length > 0) return;
 
         this.IsLoading = true;
         this.cdr.markForCheck();
@@ -98,7 +107,7 @@ export class AgentRequestDialogComponent extends BaseAngularComponent implements
             });
 
             if (result.Success) {
-                this.requestTypes = result.Results;
+                this.RequestTypes = result.Results;
             }
         } catch (error) {
             console.error('Error loading request types:', error);

@@ -33,11 +33,11 @@ import { MJScheduledJobEntity } from '@memberjunction/core-entities';
 import { BuildSingleStaticParamConfiguration, ResolveActionJobTypeID } from '../../../shared/action-scheduled-job';
 import { CronToHumanReadable } from '../autotagging/shared/classify.format';
 import {
-    buildVectorAgentContext,
-    resolveSyncRow,
+    BuildVectorAgentContext,
+    ResolveSyncRow,
     VectorSyncRowCandidate,
 } from './vector-management-agent-context';
-import { validateStringParam } from '../../../shared/agent-tool-validation';
+import { ValidateStringParam } from '../../../shared/agent-tool-validation';
 
 /** Flattened row for the entity sync table */
 interface EntitySyncRow {
@@ -513,7 +513,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         if (this.HideToolbar) {
             return;
         }
-        this.navigationService.SetAgentContext(this, buildVectorAgentContext({
+        this.navigationService.SetAgentContext(this, BuildVectorAgentContext({
             TotalVectors: this.TotalVectors,
             EntityDocumentCount: this.SyncRows.length,
             SyncingCount: this.SyncingIds.size,
@@ -581,9 +581,9 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
                     required: ['entityName'],
                 },
                 Handler: async (params: Record<string, unknown>) => {
-                    const v = validateStringParam(params['entityName'], 'entityName');
+                    const v = ValidateStringParam(params['entityName'], 'entityName');
                     if (!v.ok) return v.result;
-                    const resolved = resolveSyncRow(v.value, this.getSyncRowCandidates());
+                    const resolved = ResolveSyncRow(v.value, this.getSyncRowCandidates());
                     if (!resolved.ok) return { Success: false, ErrorMessage: resolved.error };
                     if (this.SyncingIds.has(resolved.value.EntityDocumentID)) {
                         return { Success: false, ErrorMessage: `"${resolved.value.EntityName}" is already syncing` };
@@ -621,9 +621,9 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
                     required: ['document'],
                 },
                 Handler: async (params: Record<string, unknown>) => {
-                    const v = validateStringParam(params['document'], 'document');
+                    const v = ValidateStringParam(params['document'], 'document');
                     if (!v.ok) return v.result;
-                    const resolved = resolveSyncRow(v.value, this.getSyncRowCandidates());
+                    const resolved = ResolveSyncRow(v.value, this.getSyncRowCandidates());
                     if (!resolved.ok) return { Success: false, ErrorMessage: resolved.error };
                     await this.OpenEditPanel(resolved.value.EntityDocumentID);
                     return { Success: true, Data: { EntityName: resolved.value.EntityName, DocumentName: resolved.value.DocumentName } };

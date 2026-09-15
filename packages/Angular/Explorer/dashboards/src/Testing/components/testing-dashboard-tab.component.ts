@@ -587,10 +587,28 @@ interface TestAlert {
 })
 export class TestingDashboardTabComponent implements OnInit, OnDestroy {
 
-  @Input() initialState: Record<string, unknown> | null = null;
+  @Input() InitialState: Record<string, unknown> | null = null;
+
+  /** @deprecated Use {@link InitialState}. */
+  @Input() set initialState(value: Record<string, unknown> | null) {
+    this.InitialState = value;
+  }
+  /** @deprecated Use {@link InitialState}. */
+  get initialState(): Record<string, unknown> | null {
+    return this.InitialState;
+  }
   /** When true, the inner bespoke .page-header is hidden — the parent shell owns the chrome. */
   @Input() HideToolbar = false;
-  @Output() stateChange = new EventEmitter<Record<string, unknown>>();
+  @Output() StateChange = new EventEmitter<Record<string, unknown>>();
+
+  /**
+   * @deprecated Use {@link StateChange}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (stateChange) keeps working. Must stay AFTER StateChange: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() stateChange = this.StateChange;
 
   private destroy$ = new Subject<void>();
 

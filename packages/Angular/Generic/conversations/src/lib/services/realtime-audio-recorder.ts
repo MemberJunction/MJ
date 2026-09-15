@@ -1,4 +1,4 @@
-import { encodePcm16Wav, PeakAccumulator } from './realtime-pcm-wav';
+import { EncodePcm16Wav, PeakAccumulator } from './realtime-pcm-wav';
 
 /**
  * Browser-side audio recorder for a CLIENT-DIRECT realtime voice session.
@@ -367,7 +367,7 @@ export class RealtimeAudioRecorder {
             return null;
         }
         const all = this.collectSamples(0, this.totalSamples);
-        const wav = encodePcm16Wav(all, this.sampleRate);
+        const wav = EncodePcm16Wav(all, this.sampleRate);
         return new Blob([wav], { type: RealtimeAudioRecorder.WavMimeType });
     }
 

@@ -14,14 +14,14 @@ import {
   EntityMapRow
 } from '../../services/integration-data.service';
 import {
-  buildConnectionsAgentContext,
-  resolveIntegrationSurface,
-  navLabelForSurface,
-  resolveIntegrationRecord,
-  buildIntegrationNotFoundError,
+  BuildConnectionsAgentContext,
+  ResolveIntegrationSurface,
+  NavLabelForSurface,
+  ResolveIntegrationRecord,
+  BuildIntegrationNotFoundError,
   NamedIntegrationRecord,
 } from '../../integration-agent-context';
-import { AgentToolResult, validateStringParam } from '../../../shared/agent-tool-validation';
+import { AgentToolResult, ValidateStringParam } from '../../../shared/agent-tool-validation';
 
 /** Brand color mapping for known integration names */
 const BRAND_COLOR_MAP: Array<{ Pattern: RegExp; Color: string }> = [
@@ -298,7 +298,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
     for (const value of this.EntityMapCounts.values()) {
       pipelineCount += value;
     }
-    const context = buildConnectionsAgentContext({
+    const context = BuildConnectionsAgentContext({
       KPIs: {
         TotalIntegrations: kpis.TotalIntegrations,
         ActiveSyncs: kpis.ActiveSyncs,
@@ -368,11 +368,11 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   }
 
   private async toolSwitchSurface(params: Record<string, unknown>): Promise<AgentToolResult> {
-    const surface = resolveIntegrationSurface(params['surface']);
+    const surface = ResolveIntegrationSurface(params['surface']);
     if (!surface) {
       return { Success: false, ErrorMessage: 'Invalid surface. Expected one of: Overview, Connections, Activity, Schedules.' };
     }
-    const tabId = await this.navigationService.OpenNavItemByName(navLabelForSurface(surface));
+    const tabId = await this.navigationService.OpenNavItemByName(NavLabelForSurface(surface));
     if (!tabId) {
       return { Success: false, ErrorMessage: `Could not open the "${surface}" surface.` };
     }
@@ -384,18 +384,18 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   }
 
   private async toolSelectConnection(params: Record<string, unknown>): Promise<AgentToolResult> {
-    const check = validateStringParam(params['connection'], 'connection');
+    const check = ValidateStringParam(params['connection'], 'connection');
     if (!check.ok) {
       return check.result;
     }
     const candidates = this.connectionCandidates();
-    const match = resolveIntegrationRecord(check.value, candidates);
+    const match = ResolveIntegrationRecord(check.value, candidates);
     if (!match) {
-      return { Success: false, ErrorMessage: buildIntegrationNotFoundError(check.value, candidates, 'connection') };
+      return { Success: false, ErrorMessage: BuildIntegrationNotFoundError(check.value, candidates, 'connection') };
     }
     const summary = this.Connections.find(c => UUIDsEqual(c.Integration.ID, match.ID));
     if (!summary) {
-      return { Success: false, ErrorMessage: buildIntegrationNotFoundError(check.value, candidates, 'connection') };
+      return { Success: false, ErrorMessage: BuildIntegrationNotFoundError(check.value, candidates, 'connection') };
     }
     await this.SelectIntegrationCard(summary);
     this.emitAgentContext();
@@ -403,7 +403,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   }
 
   private toolSearchEntityMaps(params: Record<string, unknown>): AgentToolResult {
-    const check = validateStringParam(params['query'], 'query');
+    const check = ValidateStringParam(params['query'], 'query');
     if (!check.ok) {
       return check.result;
     }
@@ -418,14 +418,14 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   }
 
   private toolOpenConnectionRecord(params: Record<string, unknown>): AgentToolResult {
-    const check = validateStringParam(params['connection'], 'connection');
+    const check = ValidateStringParam(params['connection'], 'connection');
     if (!check.ok) {
       return check.result;
     }
     const candidates = this.connectionCandidates();
-    const match = resolveIntegrationRecord(check.value, candidates);
+    const match = ResolveIntegrationRecord(check.value, candidates);
     if (!match) {
-      return { Success: false, ErrorMessage: buildIntegrationNotFoundError(check.value, candidates, 'connection') };
+      return { Success: false, ErrorMessage: BuildIntegrationNotFoundError(check.value, candidates, 'connection') };
     }
     this.navigationService.OpenEntityRecord('MJ: Company Integrations', CompositeKey.FromID(match.ID));
     return { Success: true };

@@ -304,9 +304,18 @@ export interface OracleResult {
   `]
 })
 export class OracleBreakdownTableComponent {
-  @Input() results: OracleResult[] = [];
+  @Input() Results: OracleResult[] = [];
 
-  formatDuration(milliseconds: number): string {
+  /** @deprecated Use {@link Results}. */
+  @Input() set results(value: OracleResult[]) {
+    this.Results = value;
+  }
+  /** @deprecated Use {@link Results}. */
+  get results(): OracleResult[] {
+    return this.Results;
+  }
+
+  FormatDuration(milliseconds: number): string {
     if (milliseconds < 1000) {
       return `${milliseconds}ms`;
     }
@@ -324,19 +333,39 @@ export class OracleBreakdownTableComponent {
     }
   }
 
+  /** @deprecated Use {@link FormatDuration}. */
+  formatDuration(milliseconds: number): string {
+    return this.FormatDuration(milliseconds);
+  }
+
+  GetAggregateScore(): number {
+    if (!this.Results || this.Results.length === 0) return 0;
+    const total = this.Results.reduce((sum, r) => sum + r.score, 0);
+    return total / this.Results.length;
+  }
+
+  /** @deprecated Use {@link GetAggregateScore}. */
   getAggregateScore(): number {
-    if (!this.results || this.results.length === 0) return 0;
-    const total = this.results.reduce((sum, r) => sum + r.score, 0);
-    return total / this.results.length;
+    return this.GetAggregateScore();
   }
 
+  GetTotalCost(): number {
+    if (!this.Results || this.Results.length === 0) return 0;
+    return this.Results.reduce((sum, r) => sum + r.cost, 0);
+  }
+
+  /** @deprecated Use {@link GetTotalCost}. */
   getTotalCost(): number {
-    if (!this.results || this.results.length === 0) return 0;
-    return this.results.reduce((sum, r) => sum + r.cost, 0);
+    return this.GetTotalCost();
   }
 
+  GetTotalDuration(): number {
+    if (!this.Results || this.Results.length === 0) return 0;
+    return this.Results.reduce((sum, r) => sum + r.duration, 0);
+  }
+
+  /** @deprecated Use {@link GetTotalDuration}. */
   getTotalDuration(): number {
-    if (!this.results || this.results.length === 0) return 0;
-    return this.results.reduce((sum, r) => sum + r.duration, 0);
+    return this.GetTotalDuration();
   }
 }

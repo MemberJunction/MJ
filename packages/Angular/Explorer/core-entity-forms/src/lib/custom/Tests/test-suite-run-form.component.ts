@@ -38,52 +38,286 @@ export class MJTestSuiteRunFormComponentExtended extends MJTestSuiteRunFormCompo
   private destroy$ = new Subject<void>();
 
   // UI state
-  activeTab = 'overview';
-  loading = false;
-  loadingTestRuns = false;
-  loadingFeedbacks = false;
+  ActiveTab = 'overview';
+
+  /** @deprecated Use {@link ActiveTab}. */
+  get activeTab() {
+    return this.ActiveTab;
+  }
+  /** @deprecated Use {@link ActiveTab}. */
+  set activeTab(value) {
+    this.ActiveTab = value;
+  }
+  Loading = false;
+
+  /** @deprecated Use {@link Loading}. */
+  get loading() {
+    return this.Loading;
+  }
+  /** @deprecated Use {@link Loading}. */
+  set loading(value) {
+    this.Loading = value;
+  }
+  LoadingTestRuns = false;
+
+  /** @deprecated Use {@link LoadingTestRuns}. */
+  get loadingTestRuns() {
+    return this.LoadingTestRuns;
+  }
+  /** @deprecated Use {@link LoadingTestRuns}. */
+  set loadingTestRuns(value) {
+    this.LoadingTestRuns = value;
+  }
+  LoadingFeedbacks = false;
+
+  /** @deprecated Use {@link LoadingFeedbacks}. */
+  get loadingFeedbacks() {
+    return this.LoadingFeedbacks;
+  }
+  /** @deprecated Use {@link LoadingFeedbacks}. */
+  set loadingFeedbacks(value) {
+    this.LoadingFeedbacks = value;
+  }
   error: string | null = null;
-  testRunsLoaded = false;
-  feedbacksLoaded = false;
+  TestRunsLoaded = false;
+
+  /** @deprecated Use {@link TestRunsLoaded}. */
+  get testRunsLoaded() {
+    return this.TestRunsLoaded;
+  }
+  /** @deprecated Use {@link TestRunsLoaded}. */
+  set testRunsLoaded(value) {
+    this.TestRunsLoaded = value;
+  }
+  FeedbacksLoaded = false;
+
+  /** @deprecated Use {@link FeedbacksLoaded}. */
+  get feedbacksLoaded() {
+    return this.FeedbacksLoaded;
+  }
+  /** @deprecated Use {@link FeedbacksLoaded}. */
+  set feedbacksLoaded(value) {
+    this.FeedbacksLoaded = value;
+  }
   isRefreshing = false;
-  autoRefreshEnabled = false;
+  AutoRefreshEnabled = false;
+
+  /** @deprecated Use {@link AutoRefreshEnabled}. */
+  get autoRefreshEnabled() {
+    return this.AutoRefreshEnabled;
+  }
+  /** @deprecated Use {@link AutoRefreshEnabled}. */
+  set autoRefreshEnabled(value) {
+    this.AutoRefreshEnabled = value;
+  }
 
   // Related entities
-  testSuite: MJTestSuiteEntity | null = null;
-  testRuns: MJTestRunEntity[] = [];
-  feedbacks: Map<string, MJTestRunFeedbackEntity> = new Map();
+  TestSuite: MJTestSuiteEntity | null = null;
+
+  /** @deprecated Use {@link TestSuite}. */
+  get testSuite(): MJTestSuiteEntity | null {
+    return this.TestSuite;
+  }
+  /** @deprecated Use {@link TestSuite}. */
+  set testSuite(value: MJTestSuiteEntity | null) {
+    this.TestSuite = value;
+  }
+  TestRuns: MJTestRunEntity[] = [];
+
+  /** @deprecated Use {@link TestRuns}. */
+  get testRuns(): MJTestRunEntity[] {
+    return this.TestRuns;
+  }
+  /** @deprecated Use {@link TestRuns}. */
+  set testRuns(value: MJTestRunEntity[]) {
+    this.TestRuns = value;
+  }
+  Feedbacks: Map<string, MJTestRunFeedbackEntity> = new Map();
+
+  /** @deprecated Use {@link Feedbacks}. */
+  get feedbacks(): Map<string, MJTestRunFeedbackEntity> {
+    return this.Feedbacks;
+  }
+  /** @deprecated Use {@link Feedbacks}. */
+  set feedbacks(value: Map<string, MJTestRunFeedbackEntity>) {
+    this.Feedbacks = value;
+  }
 
   // Tags
   tags: string[] = [];
-  newTag = '';
-  editingTags = false;
-  savingTags = false;
+  NewTag = '';
+
+  /** @deprecated Use {@link NewTag}. */
+  get newTag() {
+    return this.NewTag;
+  }
+  /** @deprecated Use {@link NewTag}. */
+  set newTag(value) {
+    this.NewTag = value;
+  }
+  EditingTags = false;
+
+  /** @deprecated Use {@link EditingTags}. */
+  get editingTags() {
+    return this.EditingTags;
+  }
+  /** @deprecated Use {@link EditingTags}. */
+  set editingTags(value) {
+    this.EditingTags = value;
+  }
+  SavingTags = false;
+
+  /** @deprecated Use {@link SavingTags}. */
+  get savingTags() {
+    return this.SavingTags;
+  }
+  /** @deprecated Use {@link SavingTags}. */
+  set savingTags(value) {
+    this.SavingTags = value;
+  }
 
   // Inline feedback
-  expandedRunId: string | null = null;
-  inlineRating: number = 0;
-  inlineHoverRating: number = 0;
-  inlineIsCorrect: boolean | null = null;
-  inlineComments: string = '';
-  savingInlineFeedback = false;
+  ExpandedRunId: string | null = null;
+
+  /** @deprecated Use {@link ExpandedRunId}. */
+  get expandedRunId(): string | null {
+    return this.ExpandedRunId;
+  }
+  /** @deprecated Use {@link ExpandedRunId}. */
+  set expandedRunId(value: string | null) {
+    this.ExpandedRunId = value;
+  }
+  InlineRating: number = 0;
+
+  /** @deprecated Use {@link InlineRating}. */
+  get inlineRating(): number {
+    return this.InlineRating;
+  }
+  /** @deprecated Use {@link InlineRating}. */
+  set inlineRating(value: number) {
+    this.InlineRating = value;
+  }
+  InlineHoverRating: number = 0;
+
+  /** @deprecated Use {@link InlineHoverRating}. */
+  get inlineHoverRating(): number {
+    return this.InlineHoverRating;
+  }
+  /** @deprecated Use {@link InlineHoverRating}. */
+  set inlineHoverRating(value: number) {
+    this.InlineHoverRating = value;
+  }
+  InlineIsCorrect: boolean | null = null;
+
+  /** @deprecated Use {@link InlineIsCorrect}. */
+  get inlineIsCorrect(): boolean | null {
+    return this.InlineIsCorrect;
+  }
+  /** @deprecated Use {@link InlineIsCorrect}. */
+  set inlineIsCorrect(value: boolean | null) {
+    this.InlineIsCorrect = value;
+  }
+  InlineComments: string = '';
+
+  /** @deprecated Use {@link InlineComments}. */
+  get inlineComments(): string {
+    return this.InlineComments;
+  }
+  /** @deprecated Use {@link InlineComments}. */
+  set inlineComments(value: string) {
+    this.InlineComments = value;
+  }
+  SavingInlineFeedback = false;
+
+  /** @deprecated Use {@link SavingInlineFeedback}. */
+  get savingInlineFeedback() {
+    return this.SavingInlineFeedback;
+  }
+  /** @deprecated Use {@link SavingInlineFeedback}. */
+  set savingInlineFeedback(value) {
+    this.SavingInlineFeedback = value;
+  }
 
   // Filter for test runs
-  runStatusFilter: string | null = null;
+  RunStatusFilter: string | null = null;
+
+  /** @deprecated Use {@link RunStatusFilter}. */
+  get runStatusFilter(): string | null {
+    return this.RunStatusFilter;
+  }
+  /** @deprecated Use {@link RunStatusFilter}. */
+  set runStatusFilter(value: string | null) {
+    this.RunStatusFilter = value;
+  }
 
   // Keyboard shortcuts
-  keyboardShortcutsEnabled = true;
-  showShortcuts = false; // Hidden by default
+  KeyboardShortcutsEnabled = true;
+
+  /** @deprecated Use {@link KeyboardShortcutsEnabled}. */
+  get keyboardShortcutsEnabled() {
+    return this.KeyboardShortcutsEnabled;
+  }
+  /** @deprecated Use {@link KeyboardShortcutsEnabled}. */
+  set keyboardShortcutsEnabled(value) {
+    this.KeyboardShortcutsEnabled = value;
+  }
+  ShowShortcuts = false;
+
+  /** @deprecated Use {@link ShowShortcuts}. */
+  get showShortcuts() {
+    return this.ShowShortcuts;
+  }
+  /** @deprecated Use {@link ShowShortcuts}. */
+  set showShortcuts(value) {
+    this.ShowShortcuts = value;
+  } // Hidden by default
   private shortcutsSettingEntity: MJUserSettingEntity | null = null;
   private get metadata() { return this.ProviderToUse; }
   // Evaluation system
-  evalPreferences: EvaluationPreferences = {
+  EvalPreferences: EvaluationPreferences = {
     showExecution: true,
     showHuman: true,
     showAuto: false
   };
-  testRunsWithFeedback: TestRunWithFeedback[] = [];
-  evaluationMetrics: EvaluationMetrics | null = null;
-  needsReviewItems: NeedsReviewItem[] = [];
+
+  /** @deprecated Use {@link EvalPreferences}. */
+  get evalPreferences(): EvaluationPreferences {
+    return this.EvalPreferences;
+  }
+  /** @deprecated Use {@link EvalPreferences}. */
+  set evalPreferences(value: EvaluationPreferences) {
+    this.EvalPreferences = value;
+  }
+  TestRunsWithFeedback: TestRunWithFeedback[] = [];
+
+  /** @deprecated Use {@link TestRunsWithFeedback}. */
+  get testRunsWithFeedback(): TestRunWithFeedback[] {
+    return this.TestRunsWithFeedback;
+  }
+  /** @deprecated Use {@link TestRunsWithFeedback}. */
+  set testRunsWithFeedback(value: TestRunWithFeedback[]) {
+    this.TestRunsWithFeedback = value;
+  }
+  EvaluationMetrics: EvaluationMetrics | null = null;
+
+  /** @deprecated Use {@link EvaluationMetrics}. */
+  get evaluationMetrics(): EvaluationMetrics | null {
+    return this.EvaluationMetrics;
+  }
+  /** @deprecated Use {@link EvaluationMetrics}. */
+  set evaluationMetrics(value: EvaluationMetrics | null) {
+    this.EvaluationMetrics = value;
+  }
+  NeedsReviewItems: NeedsReviewItem[] = [];
+
+  /** @deprecated Use {@link NeedsReviewItems}. */
+  get needsReviewItems(): NeedsReviewItem[] {
+    return this.NeedsReviewItems;
+  }
+  /** @deprecated Use {@link NeedsReviewItems}. */
+  set needsReviewItems(value: NeedsReviewItem[]) {
+    this.NeedsReviewItems = value;
+  }
 
   // Service injections
   private navigationService = inject(NavigationService);
@@ -100,7 +334,7 @@ export class MJTestSuiteRunFormComponentExtended extends MJTestSuiteRunFormCompo
     this.evalPrefsService.preferences$
       .pipe(takeUntil(this.destroy$))
       .subscribe(prefs => {
-        this.evalPreferences = prefs;
+        this.EvalPreferences = prefs;
         this.cdr.markForCheck();
       });
 
@@ -127,42 +361,42 @@ export class MJTestSuiteRunFormComponentExtended extends MJTestSuiteRunFormCompo
   // Keyboard shortcuts
   @HostListener('document:keydown', ['$event'])
   handleKeyboardShortcut(event: KeyboardEvent) {
-    if (!this.keyboardShortcutsEnabled) return;
+    if (!this.KeyboardShortcutsEnabled) return;
 
     // Cmd/Ctrl + R: Refresh
     if ((event.metaKey || event.ctrlKey) && event.key === 'r' && !event.shiftKey) {
       event.preventDefault();
-      this.refresh();
+      this.Refresh();
       return;
     }
 
     // Cmd/Ctrl + Shift + R: Re-run suite
     if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key === 'r') {
       event.preventDefault();
-      this.reRunSuite();
+      this.ReRunSuite();
       return;
     }
 
     // Number keys for tabs (1-4)
     if (!event.metaKey && !event.ctrlKey && !event.altKey) {
       switch (event.key) {
-        case '1': this.changeTab('overview'); break;
-        case '2': this.changeTab('runs'); break;
-        case '3': this.changeTab('details'); break;
-        case '4': this.changeTab('analytics'); break;
+        case '1': this.ChangeTab('overview'); break;
+        case '2': this.ChangeTab('runs'); break;
+        case '3': this.ChangeTab('details'); break;
+        case '4': this.ChangeTab('analytics'); break;
       }
     }
   }
 
   private startAutoRefresh() {
-    this.autoRefreshEnabled = true;
+    this.AutoRefreshEnabled = true;
     interval(5000)
       .pipe(takeUntil(this.destroy$))
       .subscribe(() => {
-        if (this.autoRefreshEnabled && (this.record.Status === 'Running' || this.record.Status === 'Pending')) {
+        if (this.AutoRefreshEnabled && (this.record.Status === 'Running' || this.record.Status === 'Pending')) {
           this.silentRefresh();
         } else {
-          this.autoRefreshEnabled = false;
+          this.AutoRefreshEnabled = false;
         }
       });
   }
@@ -177,7 +411,7 @@ export class MJTestSuiteRunFormComponentExtended extends MJTestSuiteRunFormCompo
   }
 
   private async loadRelatedData() {
-    this.loading = true;
+    this.Loading = true;
     this.error = null;
 
     try {
@@ -186,7 +420,7 @@ export class MJTestSuiteRunFormComponentExtended extends MJTestSuiteRunFormCompo
         const md = this.ProviderToUse;
         const suite = await md.GetEntityObject<MJTestSuiteEntity>('MJ: Test Suites');
         if (suite && await suite.Load(this.record.SuiteID)) {
-          this.testSuite = suite;
+          this.TestSuite = suite;
         }
       }
 
@@ -195,7 +429,7 @@ export class MJTestSuiteRunFormComponentExtended extends MJTestSuiteRunFormCompo
       console.error('Error loading related data:', error);
       this.error = 'Failed to load related data. Click to retry.';
     } finally {
-      this.loading = false;
+      this.Loading = false;
       this.cdr.markForCheck();
     }
   }
@@ -206,9 +440,9 @@ export class MJTestSuiteRunFormComponentExtended extends MJTestSuiteRunFormCompo
   }
 
   private async loadTestRuns() {
-    if (this.testRunsLoaded) return;
+    if (this.TestRunsLoaded) return;
 
-    this.loadingTestRuns = true;
+    this.LoadingTestRuns = true;
     this.cdr.markForCheck();
 
     try {
@@ -221,36 +455,41 @@ export class MJTestSuiteRunFormComponentExtended extends MJTestSuiteRunFormCompo
       });
 
       if (result.Success) {
-        this.testRuns = result.Results || [];
+        this.TestRuns = result.Results || [];
       }
 
-      this.testRunsLoaded = true;
+      this.TestRunsLoaded = true;
 
       // Also load feedbacks for these runs
-      if (this.testRuns.length > 0) {
+      if (this.TestRuns.length > 0) {
         await this.loadFeedbacks();
       }
     } catch (error) {
       console.error('Error loading test runs:', error);
       SharedService.Instance.CreateSimpleNotification('Failed to load test runs', 'error', 3000);
     } finally {
-      this.loadingTestRuns = false;
+      this.LoadingTestRuns = false;
       this.cdr.markForCheck();
     }
   }
 
-  changeTab(tab: string) {
-    this.activeTab = tab;
+  ChangeTab(tab: string) {
+    this.ActiveTab = tab;
 
     // Lazy load tabs
-    if ((tab === 'runs' || tab === 'analytics') && !this.testRunsLoaded) {
+    if ((tab === 'runs' || tab === 'analytics') && !this.TestRunsLoaded) {
       this.loadTestRuns();
     }
 
     this.cdr.markForCheck();
   }
 
-  getStatusColor(): string {
+  /** @deprecated Use {@link ChangeTab}. */
+  changeTab(tab: string) {
+    return this.ChangeTab(tab);
+  }
+
+  GetStatusColor(): string {
     switch (this.record.Status) {
       case 'Completed': return '#10b981';
       case 'Failed': return '#ef4444';
@@ -261,7 +500,12 @@ export class MJTestSuiteRunFormComponentExtended extends MJTestSuiteRunFormCompo
     }
   }
 
-  getStatusIcon(): string {
+  /** @deprecated Use {@link GetStatusColor}. */
+  getStatusColor(): string {
+    return this.GetStatusColor();
+  }
+
+  GetStatusIcon(): string {
     switch (this.record.Status) {
       case 'Completed': return 'fa-check-circle';
       case 'Failed': return 'fa-times-circle';
@@ -272,11 +516,21 @@ export class MJTestSuiteRunFormComponentExtended extends MJTestSuiteRunFormCompo
     }
   }
 
-  getStatusClass(): string {
+  /** @deprecated Use {@link GetStatusIcon}. */
+  getStatusIcon(): string {
+    return this.GetStatusIcon();
+  }
+
+  GetStatusClass(): string {
     return `status-${this.record.Status?.toLowerCase() || 'unknown'}`;
   }
 
-  calculateDuration(): string {
+  /** @deprecated Use {@link GetStatusClass}. */
+  getStatusClass(): string {
+    return this.GetStatusClass();
+  }
+
+  CalculateDuration(): string {
     if (!this.record.TotalDurationSeconds) return 'N/A';
 
     const seconds = this.record.TotalDurationSeconds;
@@ -292,19 +546,34 @@ export class MJTestSuiteRunFormComponentExtended extends MJTestSuiteRunFormCompo
     return `${hours}h ${mins}m`;
   }
 
-  formatCost(cost: number | null): string {
+  /** @deprecated Use {@link CalculateDuration}. */
+  calculateDuration(): string {
+    return this.CalculateDuration();
+  }
+
+  FormatCost(cost: number | null): string {
     if (cost === null || cost === undefined) return 'N/A';
     return `$${cost.toFixed(6)}`;
   }
 
-  getPassRate(): number {
+  /** @deprecated Use {@link FormatCost}. */
+  formatCost(cost: number | null): string {
+    return this.FormatCost(cost);
+  }
+
+  GetPassRate(): number {
     const total = this.record.TotalTests || 0;
     const passed = this.record.PassedTests || 0;
     if (total === 0) return 0;
     return (passed / total) * 100;
   }
 
-  getRelativeTime(date: Date | string | null): string {
+  /** @deprecated Use {@link GetPassRate}. */
+  getPassRate(): number {
+    return this.GetPassRate();
+  }
+
+  GetRelativeTime(date: Date | string | null): string {
     if (!date) return 'N/A';
     const d = new Date(date);
     const now = new Date();
@@ -320,24 +589,44 @@ export class MJTestSuiteRunFormComponentExtended extends MJTestSuiteRunFormCompo
     return d.toLocaleDateString();
   }
 
-  navigateToTestingDashboard(): void {
+  /** @deprecated Use {@link GetRelativeTime}. */
+  getRelativeTime(date: Date | string | null): string {
+    return this.GetRelativeTime(date);
+  }
+
+  NavigateToTestingDashboard(): void {
     const testingApp = this.appManager.GetAppByName('Testing');
     if (testingApp) {
       this.navigationService.SwitchToApp(testingApp.ID);
     }
   }
 
-  openTestSuite() {
-    if (this.testSuite) {
-      SharedService.Instance.OpenEntityRecord('MJ: Test Suites', CompositeKey.FromID(this.testSuite.ID));
+  /** @deprecated Use {@link NavigateToTestingDashboard}. */
+  navigateToTestingDashboard(): void {
+    return this.NavigateToTestingDashboard();
+  }
+
+  OpenTestSuite() {
+    if (this.TestSuite) {
+      SharedService.Instance.OpenEntityRecord('MJ: Test Suites', CompositeKey.FromID(this.TestSuite.ID));
     }
   }
 
-  openTestRun(runId: string) {
+  /** @deprecated Use {@link OpenTestSuite}. */
+  openTestSuite() {
+    return this.OpenTestSuite();
+  }
+
+  OpenTestRun(runId: string) {
     SharedService.Instance.OpenEntityRecord('MJ: Test Runs', CompositeKey.FromID(runId));
   }
 
-  async reRunSuite() {
+  /** @deprecated Use {@link OpenTestRun}. */
+  openTestRun(runId: string) {
+    return this.OpenTestRun(runId);
+  }
+
+  async ReRunSuite() {
     if (!this.record.SuiteID) {
       SharedService.Instance.CreateSimpleNotification('Cannot re-run: Suite ID not available', 'error', 3000);
       return;
@@ -346,7 +635,12 @@ export class MJTestSuiteRunFormComponentExtended extends MJTestSuiteRunFormCompo
     this.testingDialogService.OpenSuitePanel(this.record.SuiteID);
   }
 
-  async refresh() {
+  /** @deprecated Use {@link ReRunSuite}. */
+  async reRunSuite() {
+    return this.ReRunSuite();
+  }
+
+  async Refresh() {
     this.isRefreshing = true;
     this.cdr.markForCheck();
 
@@ -355,9 +649,9 @@ export class MJTestSuiteRunFormComponentExtended extends MJTestSuiteRunFormCompo
       await this.loadRelatedData();
 
       // Reset lazy-loaded data
-      if (this.testRunsLoaded) {
-        this.testRunsLoaded = false;
-        this.testRuns = [];
+      if (this.TestRunsLoaded) {
+        this.TestRunsLoaded = false;
+        this.TestRuns = [];
         await this.loadTestRuns();
       }
 
@@ -370,7 +664,12 @@ export class MJTestSuiteRunFormComponentExtended extends MJTestSuiteRunFormCompo
     }
   }
 
-  getRunStatusColor(status: string): string {
+  /** @deprecated Use {@link Refresh}. */
+  async refresh() {
+    return this.Refresh();
+  }
+
+  GetRunStatusColor(status: string): string {
     switch (status) {
       case 'Passed': return '#10b981';
       case 'Failed': return '#ef4444';
@@ -383,7 +682,12 @@ export class MJTestSuiteRunFormComponentExtended extends MJTestSuiteRunFormCompo
     }
   }
 
-  getRunStatusIcon(status: string): string {
+  /** @deprecated Use {@link GetRunStatusColor}. */
+  getRunStatusColor(status: string): string {
+    return this.GetRunStatusColor(status);
+  }
+
+  GetRunStatusIcon(status: string): string {
     switch (status) {
       case 'Passed': return 'fa-check';
       case 'Failed': return 'fa-times';
@@ -396,45 +700,70 @@ export class MJTestSuiteRunFormComponentExtended extends MJTestSuiteRunFormCompo
     }
   }
 
+  /** @deprecated Use {@link GetRunStatusIcon}. */
+  getRunStatusIcon(status: string): string {
+    return this.GetRunStatusIcon(status);
+  }
+
   // ===========================
   // Tag Management
   // ===========================
 
-  startEditingTags(): void {
-    this.editingTags = true;
+  StartEditingTags(): void {
+    this.EditingTags = true;
     this.cdr.markForCheck();
   }
 
-  cancelEditingTags(): void {
-    this.editingTags = false;
-    this.newTag = '';
+  /** @deprecated Use {@link StartEditingTags}. */
+  startEditingTags(): void {
+    return this.StartEditingTags();
+  }
+
+  CancelEditingTags(): void {
+    this.EditingTags = false;
+    this.NewTag = '';
     this.parseTags(); // Reset to original
     this.cdr.markForCheck();
   }
 
-  addTag(): void {
-    const tag = this.newTag.trim();
+  /** @deprecated Use {@link CancelEditingTags}. */
+  cancelEditingTags(): void {
+    return this.CancelEditingTags();
+  }
+
+  AddTag(): void {
+    const tag = this.NewTag.trim();
     if (tag && !this.tags.includes(tag)) {
       this.tags = [...this.tags, tag];
-      this.newTag = '';
+      this.NewTag = '';
       this.cdr.markForCheck();
     }
   }
 
-  removeTag(tag: string): void {
+  /** @deprecated Use {@link AddTag}. */
+  addTag(): void {
+    return this.AddTag();
+  }
+
+  RemoveTag(tag: string): void {
     this.tags = this.tags.filter(t => t !== tag);
     this.cdr.markForCheck();
   }
 
-  async saveTags(): Promise<void> {
+  /** @deprecated Use {@link RemoveTag}. */
+  removeTag(tag: string): void {
+    return this.RemoveTag(tag);
+  }
+
+  async SaveTags(): Promise<void> {
     // Auto-add any pending tag in the input before saving
-    const pendingTag = this.newTag.trim();
+    const pendingTag = this.NewTag.trim();
     if (pendingTag && !this.tags.includes(pendingTag)) {
       this.tags = [...this.tags, pendingTag];
-      this.newTag = '';
+      this.NewTag = '';
     }
 
-    this.savingTags = true;
+    this.SavingTags = true;
     this.cdr.markForCheck();
 
     try {
@@ -442,7 +771,7 @@ export class MJTestSuiteRunFormComponentExtended extends MJTestSuiteRunFormCompo
       const result = await this.record.Save();
 
       if (result) {
-        this.editingTags = false;
+        this.EditingTags = false;
         SharedService.Instance.CreateSimpleNotification('Tags saved successfully', 'success', 2000);
       } else {
         SharedService.Instance.CreateSimpleNotification(
@@ -454,27 +783,47 @@ export class MJTestSuiteRunFormComponentExtended extends MJTestSuiteRunFormCompo
     } catch (error) {
       SharedService.Instance.CreateSimpleNotification('Failed to save tags', 'error', 3000);
     } finally {
-      this.savingTags = false;
+      this.SavingTags = false;
       this.cdr.markForCheck();
     }
+  }
+
+  /** @deprecated Use {@link SaveTags}. */
+  async saveTags(): Promise<void> {
+    return this.SaveTags();
   }
 
   // ===========================
   // Test Run Filtering
   // ===========================
 
-  setRunStatusFilter(status: string | null): void {
-    this.runStatusFilter = status;
+  SetRunStatusFilter(status: string | null): void {
+    this.RunStatusFilter = status;
     this.cdr.markForCheck();
   }
 
-  getFilteredTestRuns(): MJTestRunEntity[] {
-    if (!this.runStatusFilter) return this.testRuns;
-    return this.testRuns.filter(run => run.Status === this.runStatusFilter);
+  /** @deprecated Use {@link SetRunStatusFilter}. */
+  setRunStatusFilter(status: string | null): void {
+    return this.SetRunStatusFilter(status);
   }
 
+  GetFilteredTestRuns(): MJTestRunEntity[] {
+    if (!this.RunStatusFilter) return this.TestRuns;
+    return this.TestRuns.filter(run => run.Status === this.RunStatusFilter);
+  }
+
+  /** @deprecated Use {@link GetFilteredTestRuns}. */
+  getFilteredTestRuns(): MJTestRunEntity[] {
+    return this.GetFilteredTestRuns();
+  }
+
+  GetRunCountByStatus(status: string): number {
+    return this.TestRuns.filter(run => run.Status === status).length;
+  }
+
+  /** @deprecated Use {@link GetRunCountByStatus}. */
   getRunCountByStatus(status: string): number {
-    return this.testRuns.filter(run => run.Status === status).length;
+    return this.GetRunCountByStatus(status);
   }
 
   // ===========================
@@ -482,13 +831,13 @@ export class MJTestSuiteRunFormComponentExtended extends MJTestSuiteRunFormCompo
   // ===========================
 
   private async loadFeedbacks(): Promise<void> {
-    if (this.feedbacksLoaded) return;
+    if (this.FeedbacksLoaded) return;
 
-    this.loadingFeedbacks = true;
+    this.LoadingFeedbacks = true;
     this.cdr.markForCheck();
 
     try {
-      const testRunIds = this.testRuns.map(r => `'${r.ID}'`).join(',');
+      const testRunIds = this.TestRuns.map(r => `'${r.ID}'`).join(',');
       if (!testRunIds) return;
 
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
@@ -499,20 +848,20 @@ export class MJTestSuiteRunFormComponentExtended extends MJTestSuiteRunFormCompo
       });
 
       if (result.Success && result.Results) {
-        this.feedbacks.clear();
+        this.Feedbacks.clear();
         for (const feedback of result.Results) {
-          this.feedbacks.set(feedback.TestRunID, feedback);
+          this.Feedbacks.set(feedback.TestRunID, feedback);
         }
       }
 
       // Build TestRunWithFeedback array and calculate metrics
       this.buildTestRunsWithFeedback();
 
-      this.feedbacksLoaded = true;
+      this.FeedbacksLoaded = true;
     } catch (error) {
       console.error('Error loading feedbacks:', error);
     } finally {
-      this.loadingFeedbacks = false;
+      this.LoadingFeedbacks = false;
       this.cdr.markForCheck();
     }
   }
@@ -521,8 +870,8 @@ export class MJTestSuiteRunFormComponentExtended extends MJTestSuiteRunFormCompo
    * Build TestRunWithFeedback array from testRuns and feedbacks
    */
   private buildTestRunsWithFeedback(): void {
-    this.testRunsWithFeedback = this.testRuns.map(run => {
-      const feedback = this.feedbacks.get(run.ID);
+    this.TestRunsWithFeedback = this.TestRuns.map(run => {
+      const feedback = this.Feedbacks.get(run.ID);
       return {
         id: run.ID,
         testId: run.TestID,
@@ -548,85 +897,105 @@ export class MJTestSuiteRunFormComponentExtended extends MJTestSuiteRunFormCompo
     });
 
     // Calculate metrics
-    this.evaluationMetrics = calculateEvaluationMetrics(this.testRunsWithFeedback);
+    this.EvaluationMetrics = calculateEvaluationMetrics(this.TestRunsWithFeedback);
 
     // Get items needing review
-    this.needsReviewItems = getNeedsReviewItems(this.testRunsWithFeedback);
+    this.NeedsReviewItems = getNeedsReviewItems(this.TestRunsWithFeedback);
   }
 
-  toggleRunExpanded(runId: string): void {
-    if (this.expandedRunId === runId) {
-      this.expandedRunId = null;
+  ToggleRunExpanded(runId: string): void {
+    if (this.ExpandedRunId === runId) {
+      this.ExpandedRunId = null;
     } else {
-      this.expandedRunId = runId;
+      this.ExpandedRunId = runId;
       this.initializeInlineFeedback(runId);
     }
     this.cdr.markForCheck();
   }
 
-  private initializeInlineFeedback(runId: string): void {
-    const existingFeedback = this.feedbacks.get(runId);
-    if (existingFeedback) {
-      this.inlineRating = existingFeedback.Rating || 0;
-      this.inlineIsCorrect = existingFeedback.IsCorrect;
-      this.inlineComments = existingFeedback.CorrectionSummary || '';
-    } else {
-      this.inlineRating = 0;
-      this.inlineIsCorrect = null;
-      this.inlineComments = '';
-    }
-    this.inlineHoverRating = 0;
+  /** @deprecated Use {@link ToggleRunExpanded}. */
+  toggleRunExpanded(runId: string): void {
+    return this.ToggleRunExpanded(runId);
   }
 
-  setInlineRating(value: number): void {
-    this.inlineRating = value;
+  private initializeInlineFeedback(runId: string): void {
+    const existingFeedback = this.Feedbacks.get(runId);
+    if (existingFeedback) {
+      this.InlineRating = existingFeedback.Rating || 0;
+      this.InlineIsCorrect = existingFeedback.IsCorrect;
+      this.InlineComments = existingFeedback.CorrectionSummary || '';
+    } else {
+      this.InlineRating = 0;
+      this.InlineIsCorrect = null;
+      this.InlineComments = '';
+    }
+    this.InlineHoverRating = 0;
+  }
+
+  SetInlineRating(value: number): void {
+    this.InlineRating = value;
     this.cdr.markForCheck();
   }
 
-  getInlineRatingLabel(): string {
-    if (this.inlineRating <= 3) return 'Poor';
-    if (this.inlineRating <= 5) return 'Below Average';
-    if (this.inlineRating <= 6) return 'Average';
-    if (this.inlineRating <= 7) return 'Good';
-    if (this.inlineRating <= 8) return 'Very Good';
-    if (this.inlineRating <= 9) return 'Excellent';
+  /** @deprecated Use {@link SetInlineRating}. */
+  setInlineRating(value: number): void {
+    return this.SetInlineRating(value);
+  }
+
+  GetInlineRatingLabel(): string {
+    if (this.InlineRating <= 3) return 'Poor';
+    if (this.InlineRating <= 5) return 'Below Average';
+    if (this.InlineRating <= 6) return 'Average';
+    if (this.InlineRating <= 7) return 'Good';
+    if (this.InlineRating <= 8) return 'Very Good';
+    if (this.InlineRating <= 9) return 'Excellent';
     return 'Outstanding';
   }
 
-  canSubmitInlineFeedback(): boolean {
-    return this.inlineRating > 0 && this.inlineComments.trim().length > 0;
+  /** @deprecated Use {@link GetInlineRatingLabel}. */
+  getInlineRatingLabel(): string {
+    return this.GetInlineRatingLabel();
   }
 
-  async saveInlineFeedback(): Promise<void> {
-    if (!this.expandedRunId || !this.canSubmitInlineFeedback()) return;
+  CanSubmitInlineFeedback(): boolean {
+    return this.InlineRating > 0 && this.InlineComments.trim().length > 0;
+  }
 
-    this.savingInlineFeedback = true;
+  /** @deprecated Use {@link CanSubmitInlineFeedback}. */
+  canSubmitInlineFeedback(): boolean {
+    return this.CanSubmitInlineFeedback();
+  }
+
+  async SaveInlineFeedback(): Promise<void> {
+    if (!this.ExpandedRunId || !this.CanSubmitInlineFeedback()) return;
+
+    this.SavingInlineFeedback = true;
     this.cdr.markForCheck();
 
     try {
       const md = this.ProviderToUse;
       const currentUser = md.CurrentUser;
 
-      let feedback = this.feedbacks.get(this.expandedRunId);
+      let feedback = this.Feedbacks.get(this.ExpandedRunId);
 
       if (!feedback) {
         feedback = await md.GetEntityObject<MJTestRunFeedbackEntity>('MJ: Test Run Feedbacks', currentUser);
-        feedback.TestRunID = this.expandedRunId;
+        feedback.TestRunID = this.ExpandedRunId;
         feedback.ReviewerUserID = currentUser.ID;
       }
 
-      feedback.Rating = this.inlineRating;
-      feedback.IsCorrect = this.inlineIsCorrect;
-      feedback.CorrectionSummary = this.inlineComments.trim() || null;
+      feedback.Rating = this.InlineRating;
+      feedback.IsCorrect = this.InlineIsCorrect;
+      feedback.CorrectionSummary = this.InlineComments.trim() || null;
 
       const result = await feedback.Save();
 
       if (result) {
-        this.feedbacks.set(this.expandedRunId, feedback);
+        this.Feedbacks.set(this.ExpandedRunId, feedback);
         // Rebuild the metrics after feedback update
         this.buildTestRunsWithFeedback();
         SharedService.Instance.CreateSimpleNotification('Feedback saved', 'success', 2000);
-        this.expandedRunId = null;
+        this.ExpandedRunId = null;
       } else {
         SharedService.Instance.CreateSimpleNotification(
           feedback.LatestResult?.Message || 'Failed to save feedback',
@@ -637,39 +1006,69 @@ export class MJTestSuiteRunFormComponentExtended extends MJTestSuiteRunFormCompo
     } catch (error) {
       SharedService.Instance.CreateSimpleNotification('Failed to save feedback', 'error', 3000);
     } finally {
-      this.savingInlineFeedback = false;
+      this.SavingInlineFeedback = false;
       this.cdr.markForCheck();
     }
   }
 
-  hasFeedback(runId: string): boolean {
-    return this.feedbacks.has(runId);
+  /** @deprecated Use {@link SaveInlineFeedback}. */
+  async saveInlineFeedback(): Promise<void> {
+    return this.SaveInlineFeedback();
   }
 
+  HasFeedback(runId: string): boolean {
+    return this.Feedbacks.has(runId);
+  }
+
+  /** @deprecated Use {@link HasFeedback}. */
+  hasFeedback(runId: string): boolean {
+    return this.HasFeedback(runId);
+  }
+
+  GetFeedbackRating(runId: string): number {
+    return this.Feedbacks.get(runId)?.Rating || 0;
+  }
+
+  /** @deprecated Use {@link GetFeedbackRating}. */
   getFeedbackRating(runId: string): number {
-    return this.feedbacks.get(runId)?.Rating || 0;
+    return this.GetFeedbackRating(runId);
   }
 
   /**
    * Get TestRunWithFeedback by run ID for template binding
    */
+  GetRunWithFeedback(runId: string): TestRunWithFeedback | undefined {
+    return this.TestRunsWithFeedback.find(r => r.id === runId);
+  }
+
+  /** @deprecated Use {@link GetRunWithFeedback}. */
   getRunWithFeedback(runId: string): TestRunWithFeedback | undefined {
-    return this.testRunsWithFeedback.find(r => r.id === runId);
+    return this.GetRunWithFeedback(runId);
   }
 
   /**
    * Get the human correctness status for a run
    */
+  GetHumanIsCorrect(runId: string): boolean | null {
+    return this.Feedbacks.get(runId)?.IsCorrect ?? null;
+  }
+
+  /** @deprecated Use {@link GetHumanIsCorrect}. */
   getHumanIsCorrect(runId: string): boolean | null {
-    return this.feedbacks.get(runId)?.IsCorrect ?? null;
+    return this.GetHumanIsCorrect(runId);
   }
 
   // ===========================
   // Run Tags
   // ===========================
 
-  getRunTags(run: MJTestRunEntity): string[] {
+  GetRunTags(run: MJTestRunEntity): string[] {
     return TagsHelper.parseTags(run.Tags);
+  }
+
+  /** @deprecated Use {@link GetRunTags}. */
+  getRunTags(run: MJTestRunEntity): string[] {
+    return this.GetRunTags(run);
   }
 
   // ===========================
@@ -686,10 +1085,10 @@ export class MJTestSuiteRunFormComponentExtended extends MJTestSuiteRunFormCompo
 
       if (setting) {
         this.shortcutsSettingEntity = setting;
-        this.showShortcuts = setting.Value === 'true';
+        this.ShowShortcuts = setting.Value === 'true';
       } else {
         // Default to hidden
-        this.showShortcuts = false;
+        this.ShowShortcuts = false;
       }
       this.cdr.markForCheck();
     } catch (error) {
@@ -700,8 +1099,8 @@ export class MJTestSuiteRunFormComponentExtended extends MJTestSuiteRunFormCompo
   /**
    * Toggle keyboard shortcuts visibility and save preference
    */
-  async toggleShortcuts(): Promise<void> {
-    this.showShortcuts = !this.showShortcuts;
+  async ToggleShortcuts(): Promise<void> {
+    this.ShowShortcuts = !this.ShowShortcuts;
     this.cdr.markForCheck();
 
     try {
@@ -721,67 +1120,107 @@ export class MJTestSuiteRunFormComponentExtended extends MJTestSuiteRunFormCompo
         }
       }
 
-      this.shortcutsSettingEntity.Value = this.showShortcuts ? 'true' : 'false';
+      this.shortcutsSettingEntity.Value = this.ShowShortcuts ? 'true' : 'false';
       await this.shortcutsSettingEntity.Save();
     } catch (error) {
       console.warn('Failed to save shortcuts setting:', error);
     }
   }
 
+  /** @deprecated Use {@link ToggleShortcuts}. */
+  async toggleShortcuts(): Promise<void> {
+    return this.ToggleShortcuts();
+  }
+
   // ===========================
   // Analytics Calculations
   // ===========================
 
+  GetPassedCount(): number {
+    return this.TestRuns.filter(r => r.Status === 'Passed').length;
+  }
+
+  /** @deprecated Use {@link GetPassedCount}. */
   getPassedCount(): number {
-    return this.testRuns.filter(r => r.Status === 'Passed').length;
+    return this.GetPassedCount();
   }
 
+  GetFailedCount(): number {
+    return this.TestRuns.filter(r => r.Status === 'Failed' || r.Status === 'Error').length;
+  }
+
+  /** @deprecated Use {@link GetFailedCount}. */
   getFailedCount(): number {
-    return this.testRuns.filter(r => r.Status === 'Failed' || r.Status === 'Error').length;
+    return this.GetFailedCount();
   }
 
+  GetPassedPercent(): number {
+    if (this.TestRuns.length === 0) return 0;
+    return (this.GetPassedCount() / this.TestRuns.length) * 100;
+  }
+
+  /** @deprecated Use {@link GetPassedPercent}. */
   getPassedPercent(): number {
-    if (this.testRuns.length === 0) return 0;
-    return (this.getPassedCount() / this.testRuns.length) * 100;
+    return this.GetPassedPercent();
   }
 
+  GetFailedPercent(): number {
+    if (this.TestRuns.length === 0) return 0;
+    return (this.GetFailedCount() / this.TestRuns.length) * 100;
+  }
+
+  /** @deprecated Use {@link GetFailedPercent}. */
   getFailedPercent(): number {
-    if (this.testRuns.length === 0) return 0;
-    return (this.getFailedCount() / this.testRuns.length) * 100;
+    return this.GetFailedPercent();
   }
 
-  getAverageScore(): number {
-    const runsWithScore = this.testRuns.filter(r => r.Score != null);
+  GetAverageScore(): number {
+    const runsWithScore = this.TestRuns.filter(r => r.Score != null);
     if (runsWithScore.length === 0) return 0;
     const sum = runsWithScore.reduce((acc, r) => acc + (r.Score || 0), 0);
     return sum / runsWithScore.length;
   }
 
-  getAverageDuration(): number {
-    const runsWithDuration = this.testRuns.filter(r => r.DurationSeconds != null);
+  /** @deprecated Use {@link GetAverageScore}. */
+  getAverageScore(): number {
+    return this.GetAverageScore();
+  }
+
+  GetAverageDuration(): number {
+    const runsWithDuration = this.TestRuns.filter(r => r.DurationSeconds != null);
     if (runsWithDuration.length === 0) return 0;
     const sum = runsWithDuration.reduce((acc, r) => acc + (r.DurationSeconds || 0), 0);
     return sum / runsWithDuration.length;
   }
 
+  /** @deprecated Use {@link GetAverageDuration}. */
+  getAverageDuration(): number {
+    return this.GetAverageDuration();
+  }
+
+  GetTotalCost(): number {
+    return this.TestRuns.reduce((acc, r) => acc + (r.CostUSD || 0), 0);
+  }
+
+  /** @deprecated Use {@link GetTotalCost}. */
   getTotalCost(): number {
-    return this.testRuns.reduce((acc, r) => acc + (r.CostUSD || 0), 0);
+    return this.GetTotalCost();
   }
 
   // ===========================
   // Export
   // ===========================
 
-  exportToCSV(): void {
+  ExportToCSV(): void {
     const headers = ['Test Name', 'Status', 'Score', 'Duration (s)', 'Cost (USD)', 'Started At', 'Tags'];
-    const rows = this.testRuns.map(run => [
+    const rows = this.TestRuns.map(run => [
       run.Test || '',
       run.Status || '',
       run.Score?.toFixed(4) || '',
       run.DurationSeconds?.toFixed(2) || '',
       run.CostUSD?.toFixed(6) || '',
       run.StartedAt ? new Date(run.StartedAt).toISOString() : '',
-      this.getRunTags(run).join('; ')
+      this.GetRunTags(run).join('; ')
     ]);
 
     const csvContent = [headers, ...rows]
@@ -796,5 +1235,10 @@ export class MJTestSuiteRunFormComponentExtended extends MJTestSuiteRunFormCompo
     URL.revokeObjectURL(link.href);
 
     SharedService.Instance.CreateSimpleNotification('Export complete', 'success', 2000);
+  }
+
+  /** @deprecated Use {@link ExportToCSV}. */
+  exportToCSV(): void {
+    return this.ExportToCSV();
   }
 }

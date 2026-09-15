@@ -74,13 +74,58 @@ export class TagChipsComponent extends BaseAngularComponent implements OnInit {
   @Output() TagsChanged = new EventEmitter<void>();
 
   public tags: DisplayTag[] = [];
-  public loading = false;
-  public addInput = '';
-  public suggestions: MJTagEntity[] = [];
-  public showSuggestions = false;
+  public Loading = false;
+
+  /** @deprecated Use {@link Loading}. */
+  public get loading() {
+    return this.Loading;
+  }
+  /** @deprecated Use {@link Loading}. */
+  public set loading(value) {
+    this.Loading = value;
+  }
+  public AddInput = '';
+
+  /** @deprecated Use {@link AddInput}. */
+  public get addInput() {
+    return this.AddInput;
+  }
+  /** @deprecated Use {@link AddInput}. */
+  public set addInput(value) {
+    this.AddInput = value;
+  }
+  public Suggestions: MJTagEntity[] = [];
+
+  /** @deprecated Use {@link Suggestions}. */
+  public get suggestions(): MJTagEntity[] {
+    return this.Suggestions;
+  }
+  /** @deprecated Use {@link Suggestions}. */
+  public set suggestions(value: MJTagEntity[]) {
+    this.Suggestions = value;
+  }
+  public ShowSuggestions = false;
+
+  /** @deprecated Use {@link ShowSuggestions}. */
+  public get showSuggestions() {
+    return this.ShowSuggestions;
+  }
+  /** @deprecated Use {@link ShowSuggestions}. */
+  public set showSuggestions(value) {
+    this.ShowSuggestions = value;
+  }
   /** True when the trimmed input doesn't exactly match any existing tag —
    *  drives the "Create '<term>'" affordance at the top of the dropdown. */
-  public canCreateNew = false;
+  public CanCreateNew = false;
+
+  /** @deprecated Use {@link CanCreateNew}. */
+  public get canCreateNew() {
+    return this.CanCreateNew;
+  }
+  /** @deprecated Use {@link CanCreateNew}. */
+  public set canCreateNew(value) {
+    this.CanCreateNew = value;
+  }
 
   private initialized = false;
   private entityID: string | null = null;
@@ -90,12 +135,22 @@ export class TagChipsComponent extends BaseAngularComponent implements OnInit {
     if (this._entityName && this._recordId) await this.loadTags();
   }
 
-  public get displayedTags(): DisplayTag[] {
+  public get DisplayedTags(): DisplayTag[] {
     return this.tags.slice(0, this.MaxDisplay);
   }
 
-  public get extraTagCount(): number {
+  /** @deprecated Use {@link DisplayedTags}. */
+  public get displayedTags(): DisplayTag[] {
+    return this.DisplayedTags;
+  }
+
+  public get ExtraTagCount(): number {
     return Math.max(0, this.tags.length - this.MaxDisplay);
+  }
+
+  /** @deprecated Use {@link ExtraTagCount}. */
+  public get extraTagCount(): number {
+    return this.ExtraTagCount;
   }
 
   public OnTagClick(tag: DisplayTag): void {
@@ -122,12 +177,12 @@ export class TagChipsComponent extends BaseAngularComponent implements OnInit {
   }
 
   public async OnAddInputChange(value: string): Promise<void> {
-    this.addInput = value;
+    this.AddInput = value;
     const term = value.trim();
     if (term.length < 1) {
-      this.suggestions = [];
-      this.canCreateNew = false;
-      this.showSuggestions = false;
+      this.Suggestions = [];
+      this.CanCreateNew = false;
+      this.ShowSuggestions = false;
       this.cdr.markForCheck();
       return;
     }
@@ -142,16 +197,16 @@ export class TagChipsComponent extends BaseAngularComponent implements OnInit {
         ResultType: 'entity_object',
       });
       const alreadyApplied = new Set(this.tags.map((t) => t.TagID));
-      this.suggestions = (result.Results ?? []).filter((t) => !alreadyApplied.has(t.ID));
+      this.Suggestions = (result.Results ?? []).filter((t) => !alreadyApplied.has(t.ID));
       // Offer "Create '<term>'" when the typed text doesn't exactly
       // match any existing tag (case-insensitive). Without this, typing
       // a brand-new tag name and hitting Enter does nothing — there's
       // no suggestion to click.
       const lowerTerm = term.toLowerCase();
-      this.canCreateNew = !this.suggestions.some(
+      this.CanCreateNew = !this.Suggestions.some(
         (s) => s.Name.toLowerCase() === lowerTerm,
       );
-      this.showSuggestions = true;
+      this.ShowSuggestions = true;
     } catch (e) {
       LogError(`tag-chips: suggestion lookup failed: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
@@ -167,15 +222,15 @@ export class TagChipsComponent extends BaseAngularComponent implements OnInit {
    */
   public async OnAddInputSubmit(event?: Event): Promise<void> {
     event?.preventDefault();
-    const term = this.addInput.trim();
+    const term = this.AddInput.trim();
     if (term.length === 0) return;
     // Existing tag in suggestions takes priority — Enter selects the
     // first match (matching most autocomplete UIs).
-    if (this.suggestions.length > 0) {
-      await this.OnAddTag(this.suggestions[0]);
+    if (this.Suggestions.length > 0) {
+      await this.OnAddTag(this.Suggestions[0]);
       return;
     }
-    if (this.canCreateNew) {
+    if (this.CanCreateNew) {
       await this.CreateAndAddTag(term);
     }
   }
@@ -188,7 +243,7 @@ export class TagChipsComponent extends BaseAngularComponent implements OnInit {
   /** Click handler for the "Create '<term>'" affordance. Creates the
    *  `MJ: Tags` row then attaches it via the standard apply path. */
   public async OnCreateNew(): Promise<void> {
-    const term = this.addInput.trim();
+    const term = this.AddInput.trim();
     if (term.length === 0) return;
     await this.CreateAndAddTag(term);
   }
@@ -232,10 +287,10 @@ export class TagChipsComponent extends BaseAngularComponent implements OnInit {
         return;
       }
       this.tags = [...this.tags, { TaggedItemID: entity.ID, TagID: tagId, Name: tagName }];
-      this.addInput = '';
-      this.suggestions = [];
-      this.canCreateNew = false;
-      this.showSuggestions = false;
+      this.AddInput = '';
+      this.Suggestions = [];
+      this.CanCreateNew = false;
+      this.ShowSuggestions = false;
       this.TagsChanged.emit();
       this.cdr.markForCheck();
     } catch (e) {
@@ -253,7 +308,7 @@ export class TagChipsComponent extends BaseAngularComponent implements OnInit {
       this.tags = [];
       return;
     }
-    this.loading = true;
+    this.Loading = true;
     this.cdr.markForCheck();
     try {
       const md = this.metadata();
@@ -298,7 +353,7 @@ export class TagChipsComponent extends BaseAngularComponent implements OnInit {
         }))
         .sort((a, b) => a.Name.localeCompare(b.Name));
     } finally {
-      this.loading = false;
+      this.Loading = false;
       this.cdr.markForCheck();
     }
   }

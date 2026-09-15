@@ -225,11 +225,21 @@ export class TestingInstrumentationService {
   private readonly _runsFilterIntent$ = new BehaviorSubject<RunsFilterIntent | null>(null);
 
   /** Observable of agent-driven Runs filter intents. */
-  readonly runsFilterIntent$ = this._runsFilterIntent$.asObservable();
+  readonly RunsFilterIntent$ = this._runsFilterIntent$.asObservable();
+
+  /** @deprecated Use {@link RunsFilterIntent$}. */
+  get runsFilterIntent$() {
+    return this.RunsFilterIntent$;
+  }
 
   /** Publish an agent-driven filter intent for the Runs surface to apply. */
-  setRunsFilterIntent(intent: RunsFilterIntent): void {
+  SetRunsFilterIntent(intent: RunsFilterIntent): void {
     this._runsFilterIntent$.next(intent);
+  }
+
+  /** @deprecated Use {@link SetRunsFilterIntent}. */
+  setRunsFilterIntent(intent: RunsFilterIntent): void {
+    return this.SetRunsFilterIntent(intent);
   }
 
   /**
@@ -244,7 +254,12 @@ export class TestingInstrumentationService {
   private readonly _runSelectionIntent$ = new BehaviorSubject<RunSelectionIntent | null>(null);
 
   /** Observable of agent-driven run-selection intents. */
-  readonly runSelectionIntent$ = this._runSelectionIntent$.asObservable();
+  readonly RunSelectionIntent$ = this._runSelectionIntent$.asObservable();
+
+  /** @deprecated Use {@link RunSelectionIntent$}. */
+  get runSelectionIntent$() {
+    return this.RunSelectionIntent$;
+  }
 
   /** Monotonic source for {@link RunSelectionIntent.nonce}. */
   private _runSelectionNonce = 0;
@@ -254,10 +269,15 @@ export class TestingInstrumentationService {
    * Assigns the next monotonic nonce so re-selecting the same run id still
    * replays. Returns the published intent (with its assigned nonce).
    */
-  setRunSelectionIntent(runId: string, open: boolean = false): RunSelectionIntent {
+  SetRunSelectionIntent(runId: string, open: boolean = false): RunSelectionIntent {
     const intent: RunSelectionIntent = { runId, open, nonce: ++this._runSelectionNonce };
     this._runSelectionIntent$.next(intent);
     return intent;
+  }
+
+  /** @deprecated Use {@link SetRunSelectionIntent}. */
+  setRunSelectionIntent(runId: string, open: boolean = false): RunSelectionIntent {
+    return this.SetRunSelectionIntent(runId, open);
   }
 
   private readonly _suiteFilter$ = new BehaviorSubject<string | null>(null);
@@ -280,20 +300,35 @@ export class TestingInstrumentationService {
   }
 
   // Expose observables
-  readonly isLoading$ = this._isLoading$.asObservable();
-  readonly dateRange$ = this._dateRange$.asObservable();
+  readonly IsLoading$ = this._isLoading$.asObservable();
+
+  /** @deprecated Use {@link IsLoading$}. */
+  get isLoading$() {
+    return this.IsLoading$;
+  }
+  readonly DateRange$ = this._dateRange$.asObservable();
+
+  /** @deprecated Use {@link DateRange$}. */
+  get dateRange$() {
+    return this.DateRange$;
+  }
 
   constructor() {}
 
   // Main data streams
-  readonly kpis$ = combineLatest([this._refreshTrigger$, this._dateRange$]).pipe(
+  readonly Kpis$ = combineLatest([this._refreshTrigger$, this._dateRange$]).pipe(
     tap(() => this._isLoading$.next(true)),
     switchMap(() => from(this.loadKPIs())),
     tap(() => this.checkLoadingComplete()),
     shareReplay(1)
   );
 
-  readonly testRuns$ = combineLatest([
+  /** @deprecated Use {@link Kpis$}. */
+  get kpis$() {
+    return this.Kpis$;
+  }
+
+  readonly TestRuns$ = combineLatest([
     this._refreshTrigger$,
     this._dateRange$,
     this._suiteFilter$,
@@ -305,45 +340,75 @@ export class TestingInstrumentationService {
     shareReplay(1)
   );
 
-  readonly suiteHierarchy$ = combineLatest([this._refreshTrigger$, this._dateRange$]).pipe(
+  /** @deprecated Use {@link TestRuns$}. */
+  get testRuns$() {
+    return this.TestRuns$;
+  }
+
+  readonly SuiteHierarchy$ = combineLatest([this._refreshTrigger$, this._dateRange$]).pipe(
     tap(() => this._isLoading$.next(true)),
     switchMap(() => from(this.loadSuiteHierarchy())),
     tap(() => this.checkLoadingComplete()),
     shareReplay(1)
   );
 
-  readonly trends$ = combineLatest([this._refreshTrigger$, this._dateRange$]).pipe(
+  /** @deprecated Use {@link SuiteHierarchy$}. */
+  get suiteHierarchy$() {
+    return this.SuiteHierarchy$;
+  }
+
+  readonly Trends$ = combineLatest([this._refreshTrigger$, this._dateRange$]).pipe(
     tap(() => this._isLoading$.next(true)),
     switchMap(() => from(this.loadTrends())),
     tap(() => this.checkLoadingComplete()),
     shareReplay(1)
   );
 
-  readonly analytics$ = combineLatest([this._refreshTrigger$, this._dateRange$]).pipe(
+  /** @deprecated Use {@link Trends$}. */
+  get trends$() {
+    return this.Trends$;
+  }
+
+  readonly Analytics$ = combineLatest([this._refreshTrigger$, this._dateRange$]).pipe(
     tap(() => this._isLoading$.next(true)),
     switchMap(() => from(this.loadAnalytics())),
     tap(() => this.checkLoadingComplete()),
     shareReplay(1)
   );
 
-  readonly pendingFeedback$ = combineLatest([this._refreshTrigger$, this._dateRange$]).pipe(
+  /** @deprecated Use {@link Analytics$}. */
+  get analytics$() {
+    return this.Analytics$;
+  }
+
+  readonly PendingFeedback$ = combineLatest([this._refreshTrigger$, this._dateRange$]).pipe(
     tap(() => this._isLoading$.next(true)),
     switchMap(() => from(this.loadPendingFeedback())),
     tap(() => this.checkLoadingComplete()),
     shareReplay(1)
   );
 
-  readonly feedbackStats$ = combineLatest([this._refreshTrigger$, this._dateRange$]).pipe(
+  /** @deprecated Use {@link PendingFeedback$}. */
+  get pendingFeedback$() {
+    return this.PendingFeedback$;
+  }
+
+  readonly FeedbackStats$ = combineLatest([this._refreshTrigger$, this._dateRange$]).pipe(
     tap(() => this._isLoading$.next(true)),
     switchMap(() => from(this.loadFeedbackStats())),
     tap(() => this.checkLoadingComplete()),
     shareReplay(1)
   );
 
+  /** @deprecated Use {@link FeedbackStats$}. */
+  get feedbackStats$() {
+    return this.FeedbackStats$;
+  }
+
   /**
    * Test runs with feedback data joined - for evaluation display
    */
-  readonly testRunsWithFeedback$ = combineLatest([
+  readonly TestRunsWithFeedback$ = combineLatest([
     this._refreshTrigger$,
     this._dateRange$,
     this._suiteFilter$,
@@ -355,13 +420,23 @@ export class TestingInstrumentationService {
     shareReplay(1)
   );
 
+  /** @deprecated Use {@link TestRunsWithFeedback$}. */
+  get testRunsWithFeedback$() {
+    return this.TestRunsWithFeedback$;
+  }
+
   /**
    * Aggregated evaluation metrics from test runs with feedback
    */
-  readonly evaluationMetrics$ = this.testRunsWithFeedback$.pipe(
+  readonly EvaluationMetrics$ = this.TestRunsWithFeedback$.pipe(
     map(runs => this.calculateEvaluationMetrics(runs)),
     shareReplay(1)
   );
+
+  /** @deprecated Use {@link EvaluationMetrics$}. */
+  get evaluationMetrics$() {
+    return this.EvaluationMetrics$;
+  }
 
   private checkLoadingComplete(): void {
     setTimeout(() => {
@@ -369,8 +444,13 @@ export class TestingInstrumentationService {
     }, 100);
   }
 
-  setDateRange(start: Date, end: Date): void {
+  SetDateRange(start: Date, end: Date): void {
     this._dateRange$.next({ start, end });
+  }
+
+  /** @deprecated Use {@link SetDateRange}. */
+  setDateRange(start: Date, end: Date): void {
+    return this.SetDateRange(start, end);
   }
 
   /**
@@ -378,7 +458,7 @@ export class TestingInstrumentationService {
    * range-to-dates computation so both the Runs surface UI and the agent's
    * `FilterTestsByTimeRange` tool resolve identical windows.
    */
-  setDateRangeByName(range: 'today' | 'week' | 'month' | '90days'): void {
+  SetDateRangeByName(range: 'today' | 'week' | 'month' | '90days'): void {
     const now = new Date();
     let start: Date;
     switch (range) {
@@ -397,19 +477,39 @@ export class TestingInstrumentationService {
         start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
         break;
     }
-    this.setDateRange(start, now);
+    this.SetDateRange(start, now);
   }
 
-  setSuiteFilter(suiteId: string | null): void {
+  /** @deprecated Use {@link SetDateRangeByName}. */
+  setDateRangeByName(range: 'today' | 'week' | 'month' | '90days'): void {
+    return this.SetDateRangeByName(range);
+  }
+
+  SetSuiteFilter(suiteId: string | null): void {
     this._suiteFilter$.next(suiteId);
   }
 
-  setTestTypeFilter(typeId: string | null): void {
+  /** @deprecated Use {@link SetSuiteFilter}. */
+  setSuiteFilter(suiteId: string | null): void {
+    return this.SetSuiteFilter(suiteId);
+  }
+
+  SetTestTypeFilter(typeId: string | null): void {
     this._testTypeFilter$.next(typeId);
   }
 
-  refresh(): void {
+  /** @deprecated Use {@link SetTestTypeFilter}. */
+  setTestTypeFilter(typeId: string | null): void {
+    return this.SetTestTypeFilter(typeId);
+  }
+
+  Refresh(): void {
     this._refreshTrigger$.next(this._refreshTrigger$.value + 1);
+  }
+
+  /** @deprecated Use {@link Refresh}. */
+  refresh(): void {
+    return this.Refresh();
   }
 
   private async loadKPIs(): Promise<TestingDashboardKPIs> {
@@ -958,7 +1058,7 @@ export class TestingInstrumentationService {
     };
   }
 
-  async submitFeedback(testRunID: string, rating: number, isCorrect: boolean, comments: string): Promise<boolean> {
+  async SubmitFeedback(testRunID: string, rating: number, isCorrect: boolean, comments: string): Promise<boolean> {
     try {
       const feedback = await this.metadata.GetEntityObject<MJTestRunFeedbackEntity>('MJ: Test Run Feedbacks');
       feedback.TestRunID = testRunID;
@@ -968,7 +1068,7 @@ export class TestingInstrumentationService {
 
       const result = await feedback.Save();
       if (result) {
-        this.refresh(); // Refresh data after submission
+        this.Refresh(); // Refresh data after submission
         return true;
       }
       return false;
@@ -978,7 +1078,12 @@ export class TestingInstrumentationService {
     }
   }
 
-  async getVersionMetrics(): Promise<VersionMetrics[]> {
+  /** @deprecated Use {@link SubmitFeedback}. */
+  async submitFeedback(testRunID: string, rating: number, isCorrect: boolean, comments: string): Promise<boolean> {
+    return this.SubmitFeedback(testRunID, rating, isCorrect, comments);
+  }
+
+  async GetVersionMetrics(): Promise<VersionMetrics[]> {
     const rv = RunView.FromMetadataProvider(this.Provider);
 
     // Use simple result type with only needed fields
@@ -1032,6 +1137,11 @@ export class TestingInstrumentationService {
     });
 
     return metrics.sort((a, b) => b.runDate.getTime() - a.runDate.getTime());
+  }
+
+  /** @deprecated Use {@link GetVersionMetrics}. */
+  async getVersionMetrics(): Promise<VersionMetrics[]> {
+    return this.GetVersionMetrics();
   }
 
   private createTimeBuckets(start: Date, end: Date): Date[] {

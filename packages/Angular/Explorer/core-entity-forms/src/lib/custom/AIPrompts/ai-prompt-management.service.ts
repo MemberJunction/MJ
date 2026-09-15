@@ -18,7 +18,7 @@ export class AIPromptManagementService {
   /**
    * Opens the template selector dialog for linking existing templates to AI prompts
    */
-  openTemplateSelectorDialog(config: TemplateSelectorConfig & { viewContainerRef?: ViewContainerRef }): Observable<TemplateSelectorResult | null> {
+  OpenTemplateSelectorDialog(config: TemplateSelectorConfig & { viewContainerRef?: ViewContainerRef }): Observable<TemplateSelectorResult | null> {
     const dialogRef: MJDialogRef = this.dialogService.open({
       title: config.title,
       content: TemplateSelectorDialogComponent,
@@ -71,10 +71,15 @@ export class AIPromptManagementService {
     return resultSubject.asObservable();
   }
 
+  /** @deprecated Use {@link OpenTemplateSelectorDialog}. */
+  openTemplateSelectorDialog(config: TemplateSelectorConfig & { viewContainerRef?: ViewContainerRef }): Observable<TemplateSelectorResult | null> {
+    return this.OpenTemplateSelectorDialog(config);
+  }
+
   /**
    * Opens a template creation dialog and returns the created template
    */
-  openCreateTemplateDialog(config: {
+  OpenCreateTemplateDialog(config: {
     promptId?: string;
     promptName?: string;
     viewContainerRef?: ViewContainerRef;
@@ -90,5 +95,14 @@ export class AIPromptManagementService {
     }, 100);
 
     return resultSubject.asObservable();
+  }
+
+  /** @deprecated Use {@link OpenCreateTemplateDialog}. */
+  openCreateTemplateDialog(config: {
+    promptId?: string;
+    promptName?: string;
+    viewContainerRef?: ViewContainerRef;
+  }): Observable<MJTemplateEntity | null> {
+    return this.OpenCreateTemplateDialog(config);
   }
 }

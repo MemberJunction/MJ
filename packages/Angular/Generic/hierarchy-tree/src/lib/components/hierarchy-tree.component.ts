@@ -217,7 +217,7 @@ export class HierarchyTreeComponent extends BaseAngularComponent implements OnIn
         this.setupResizeObserver();
         if (this.AllNodes.length > 0) {
             this.log('[HierarchyTree:ngAfterViewInit] AllNodes already loaded (' + this.AllNodes.length + '), triggering renderTree');
-            this.renderTree();
+            this.RenderTree();
         }
     }
 
@@ -236,11 +236,11 @@ export class HierarchyTreeComponent extends BaseAngularComponent implements OnIn
         } else if (changes['ActiveRecordID'] && !changes['ActiveRecordID'].isFirstChange()) {
             this.updateActiveNodeSelection(this.ActiveRecordID);
         } else if (changes['Data'] && !changes['Data'].isFirstChange()) {
-            this.buildTreeFromData(this.Data || []);
+            this.BuildTreeFromData(this.Data || []);
         } else if (changes['FocusRecordID'] && !changes['FocusRecordID'].isFirstChange()) {
-            this.setFocusRoot(this.FocusRecordID);
+            this.SetFocusRoot(this.FocusRecordID);
         } else if (changes['ZoomLevel'] && !changes['ZoomLevel'].isFirstChange() && this.ZoomLevel !== undefined) {
-            this.setZoomLevel(this.ZoomLevel, true);
+            this.SetZoomLevel(this.ZoomLevel, true);
         }
     }
 
@@ -275,7 +275,7 @@ export class HierarchyTreeComponent extends BaseAngularComponent implements OnIn
             }
             this.SelectedNode = activeNode;
             this.expandAncestors(activeNode);
-            this.renderTree();
+            this.RenderTree();
         }
     }
 
@@ -355,7 +355,7 @@ export class HierarchyTreeComponent extends BaseAngularComponent implements OnIn
 
             if (this.Data) {
                 this.log('[HierarchyTree:loadData] Using provided Data prop:', this.Data.length, 'items');
-                this.buildTreeFromData(this.Data);
+                this.BuildTreeFromData(this.Data);
                 return;
             }
 
@@ -385,7 +385,7 @@ export class HierarchyTreeComponent extends BaseAngularComponent implements OnIn
             }
 
             const rawItems = (result.Results as Record<string, unknown>[]) || [];
-            this.buildTreeFromData(rawItems);
+            this.BuildTreeFromData(rawItems);
         } catch (err) {
             this.ErrorMessage = err instanceof Error ? err.message : 'Error loading hierarchy tree.';
             console.error('[HierarchyTree:loadData] Error:', err);
@@ -393,8 +393,8 @@ export class HierarchyTreeComponent extends BaseAngularComponent implements OnIn
             this.Loading = false;
             this.cdr?.detectChanges();
             setTimeout(() => {
-                this.renderTree();
-                this.fitToScreen(false);
+                this.RenderTree();
+                this.FitToScreen(false);
             }, 80);
         }
     }
@@ -415,7 +415,7 @@ export class HierarchyTreeComponent extends BaseAngularComponent implements OnIn
     /**
      * Constructs the in-memory tree nodes, computes composite keys, descendant counts, and depths.
      */
-    public buildTreeFromData(items: Record<string, unknown>[]): void {
+    public BuildTreeFromData(items: Record<string, unknown>[]): void {
         this.nodeMap.clear();
         this.AllNodes = [];
 
@@ -533,8 +533,13 @@ export class HierarchyTreeComponent extends BaseAngularComponent implements OnIn
         }
 
         if (this.FocusRecordID || this.Config?.FocusRecordID) {
-            this.setFocusRoot(this.FocusRecordID || this.Config?.FocusRecordID);
+            this.SetFocusRoot(this.FocusRecordID || this.Config?.FocusRecordID);
         }
+    }
+
+    /** @deprecated Use {@link BuildTreeFromData}. */
+    public buildTreeFromData(items: Record<string, unknown>[]): void {
+        return this.BuildTreeFromData(items);
     }
 
     private resolveParentFieldName(): string {
@@ -616,7 +621,7 @@ export class HierarchyTreeComponent extends BaseAngularComponent implements OnIn
             for (const entry of entries) {
                 if (entry.contentRect.width > 50 && entry.contentRect.height > 50) {
                     if (this.AllNodes.length > 0) {
-                        this.renderTree();
+                        this.RenderTree();
                     }
                 }
             }
@@ -627,13 +632,13 @@ export class HierarchyTreeComponent extends BaseAngularComponent implements OnIn
     /**
      * Computes the D3 hierarchy tree layout and updates the SVG rendering.
      */
-    public renderTree(preserveTransform = false): void {
+    public RenderTree(preserveTransform = false): void {
         if (!this.svgRef?.nativeElement || !this.gSelection) {
             if (this.svgRef?.nativeElement) {
                 this.initD3Zoom();
             }
             if (!this.gSelection) {
-                setTimeout(() => this.renderTree(preserveTransform), 30);
+                setTimeout(() => this.RenderTree(preserveTransform), 30);
                 return;
             }
         }
@@ -734,8 +739,13 @@ export class HierarchyTreeComponent extends BaseAngularComponent implements OnIn
         this.cdr?.markForCheck();
         this.cdr?.detectChanges();
         if (!preserveTransform) {
-            this.fitToScreen(true);
+            this.FitToScreen(true);
         }
+    }
+
+    /** @deprecated Use {@link RenderTree}. */
+    public renderTree(preserveTransform = false): void {
+        return this.RenderTree(preserveTransform);
     }
 
     // --- Interactive Actions ---
@@ -743,7 +753,7 @@ export class HierarchyTreeComponent extends BaseAngularComponent implements OnIn
     /**
      * Toggles the expand/collapse state of a node, firing cancelable Before and After events.
      */
-    public toggleNodeExpansion(node: HierarchyNodeData, event?: MouseEvent): void {
+    public ToggleNodeExpansion(node: HierarchyNodeData, event?: MouseEvent): void {
         if (event) event.stopPropagation();
 
         if (node.IsExpanded) {
@@ -764,27 +774,47 @@ export class HierarchyTreeComponent extends BaseAngularComponent implements OnIn
             this.AfterNodeExpand.emit({ Node: node, OriginalEvent: event });
         }
 
-        this.renderTree(true);
+        this.RenderTree(true);
     }
 
-    public closeDetailsDrawer(): void {
+    /** @deprecated Use {@link ToggleNodeExpansion}. */
+    public toggleNodeExpansion(node: HierarchyNodeData, event?: MouseEvent): void {
+        return this.ToggleNodeExpansion(node, event);
+    }
+
+    public CloseDetailsDrawer(): void {
         this.ShowDetailsDrawer = false;
         this.cdr?.markForCheck();
     }
 
-    public openDetailsDrawer(): void {
+    /** @deprecated Use {@link CloseDetailsDrawer}. */
+    public closeDetailsDrawer(): void {
+        return this.CloseDetailsDrawer();
+    }
+
+    public OpenDetailsDrawer(): void {
         this.ShowDetailsDrawer = true;
         this.cdr?.markForCheck();
     }
 
-    public onCanvasBackgroundClick(event: MouseEvent): void {
+    /** @deprecated Use {@link OpenDetailsDrawer}. */
+    public openDetailsDrawer(): void {
+        return this.OpenDetailsDrawer();
+    }
+
+    public OnCanvasBackgroundClick(event: MouseEvent): void {
         const target = event.target as HTMLElement;
         if (target?.closest('.mj-details-drawer') || target?.closest('.mj-node-card') || target?.closest('.mj-tool-btn')) {
             return;
         }
     }
 
-    public onNodeClick(node: HierarchyNodeData, event: MouseEvent): void {
+    /** @deprecated Use {@link OnCanvasBackgroundClick}. */
+    public onCanvasBackgroundClick(event: MouseEvent): void {
+        return this.OnCanvasBackgroundClick(event);
+    }
+
+    public OnNodeClick(node: HierarchyNodeData, event: MouseEvent): void {
         event.stopPropagation();
         this.SelectedNode = node;
         this.ShowDetailsDrawer = true;
@@ -796,25 +826,35 @@ export class HierarchyTreeComponent extends BaseAngularComponent implements OnIn
         this.cdr?.markForCheck();
     }
 
-    public onNodeDoubleClick(node: HierarchyNodeData, event: MouseEvent): void {
-        event.stopPropagation();
-        this.NodeDoubleClick.emit({ Node: node, OriginalEvent: event });
-        this.navigateToRecord(node, event);
+    /** @deprecated Use {@link OnNodeClick}. */
+    public onNodeClick(node: HierarchyNodeData, event: MouseEvent): void {
+        return this.OnNodeClick(node, event);
     }
 
-    public onNodeAction(node: HierarchyNodeData, action: string, event: MouseEvent): void {
+    public OnNodeDoubleClick(node: HierarchyNodeData, event: MouseEvent): void {
+        event.stopPropagation();
+        this.NodeDoubleClick.emit({ Node: node, OriginalEvent: event });
+        this.NavigateToRecord(node, event);
+    }
+
+    /** @deprecated Use {@link OnNodeDoubleClick}. */
+    public onNodeDoubleClick(node: HierarchyNodeData, event: MouseEvent): void {
+        return this.OnNodeDoubleClick(node, event);
+    }
+
+    public OnNodeAction(node: HierarchyNodeData, action: string, event: MouseEvent): void {
         event.stopPropagation();
         this.NodeAction.emit({ Node: node, Action: action });
 
         switch (action) {
             case 'open':
-                this.navigateToRecord(node, event);
+                this.NavigateToRecord(node, event);
                 break;
             case 'focus':
-                this.setFocusRoot(node.ID);
+                this.SetFocusRoot(node.ID);
                 break;
             case 'reset-focus':
-                this.resetFocus();
+                this.ResetFocus();
                 break;
             case 'add-child':
                 // Handled via custom subscriber or event
@@ -822,7 +862,12 @@ export class HierarchyTreeComponent extends BaseAngularComponent implements OnIn
         }
     }
 
-    public navigateToRecord(node: HierarchyNodeData, event?: MouseEvent): void {
+    /** @deprecated Use {@link OnNodeAction}. */
+    public onNodeAction(node: HierarchyNodeData, action: string, event: MouseEvent): void {
+        return this.OnNodeAction(node, action, event);
+    }
+
+    public NavigateToRecord(node: HierarchyNodeData, event?: MouseEvent): void {
         const entityName = this.entityInfo ? this.entityInfo.Name : this.Config.EntityName;
         const navEvent: RecordNavigationEvent = {
             Kind: 'record',
@@ -833,7 +878,12 @@ export class HierarchyTreeComponent extends BaseAngularComponent implements OnIn
         this.Navigate.emit(navEvent);
     }
 
-    public getRecordAttributeEntries(record: Record<string, unknown>): { key: string; label: string; value: string }[] {
+    /** @deprecated Use {@link NavigateToRecord}. */
+    public navigateToRecord(node: HierarchyNodeData, event?: MouseEvent): void {
+        return this.NavigateToRecord(node, event);
+    }
+
+    public GetRecordAttributeEntries(record: Record<string, unknown>): { key: string; label: string; value: string }[] {
         const entries: { key: string; label: string; value: string }[] = [];
         const skipFields = new Set([
             'id', 'parentid', 'parentproductcategoryid', 'parentcategoryid',
@@ -853,16 +903,21 @@ export class HierarchyTreeComponent extends BaseAngularComponent implements OnIn
         return entries.slice(0, 8);
     }
 
+    /** @deprecated Use {@link GetRecordAttributeEntries}. */
+    public getRecordAttributeEntries(record: Record<string, unknown>): { key: string; label: string; value: string }[] {
+        return this.GetRecordAttributeEntries(record);
+    }
+
     // --- Search & Highlight ---
 
-    public onSearchInput(): void {
+    public OnSearchInput(): void {
         const q = this.SearchQuery.trim().toLowerCase();
         if (!q) {
             for (const n of this.AllNodes) {
                 n.IsHighlighted = false;
             }
             this.MatchingNodeCount = 0;
-            this.renderTree(true);
+            this.RenderTree(true);
             return;
         }
 
@@ -879,19 +934,29 @@ export class HierarchyTreeComponent extends BaseAngularComponent implements OnIn
         }
 
         this.MatchingNodeCount = count;
-        this.renderTree(true);
+        this.RenderTree(true);
 
         if (firstMatch && firstMatch.x != null && firstMatch.y != null) {
-            this.centerOnNode(firstMatch);
+            this.CenterOnNode(firstMatch);
         }
     }
 
-    public clearSearch(): void {
-        this.SearchQuery = '';
-        this.onSearchInput();
+    /** @deprecated Use {@link OnSearchInput}. */
+    public onSearchInput(): void {
+        return this.OnSearchInput();
     }
 
-    public centerOnNode(node: HierarchyNodeData): void {
+    public ClearSearch(): void {
+        this.SearchQuery = '';
+        this.OnSearchInput();
+    }
+
+    /** @deprecated Use {@link ClearSearch}. */
+    public clearSearch(): void {
+        return this.ClearSearch();
+    }
+
+    public CenterOnNode(node: HierarchyNodeData): void {
         if (!this.svgSelection || !this.zoomBehavior || !this.svgContainerRef?.nativeElement) return;
         if (node.x == null || node.y == null) return;
 
@@ -915,6 +980,11 @@ export class HierarchyTreeComponent extends BaseAngularComponent implements OnIn
         this.svgSelection.interrupt().transition().duration(400).ease(d3.easeCubicOut).call(this.zoomBehavior.transform, target);
     }
 
+    /** @deprecated Use {@link CenterOnNode}. */
+    public centerOnNode(node: HierarchyNodeData): void {
+        return this.CenterOnNode(node);
+    }
+
     private expandAncestors(node: HierarchyNodeData): void {
         let curr = node.ParentID ? this.nodeMap.get(NormalizeUUID(node.ParentID)) : undefined;
         while (curr) {
@@ -926,9 +996,9 @@ export class HierarchyTreeComponent extends BaseAngularComponent implements OnIn
 
     // --- Subtree Focus ---
 
-    public setFocusRoot(recordId?: string): void {
+    public SetFocusRoot(recordId?: string): void {
         if (!recordId) {
-            this.resetFocus();
+            this.ResetFocus();
             return;
         }
 
@@ -938,56 +1008,86 @@ export class HierarchyTreeComponent extends BaseAngularComponent implements OnIn
         for (const n of this.AllNodes) n.IsFocusRoot = false;
         target.IsFocusRoot = true;
         this.FocusedNode = target;
-        this.renderTree();
-        this.onFitToViewClick();
+        this.RenderTree();
+        this.OnFitToViewClick();
     }
 
-    public resetFocus(): void {
+    /** @deprecated Use {@link SetFocusRoot}. */
+    public setFocusRoot(recordId?: string): void {
+        return this.SetFocusRoot(recordId);
+    }
+
+    public ResetFocus(): void {
         for (const n of this.AllNodes) n.IsFocusRoot = false;
         this.FocusedNode = null;
-        this.renderTree();
-        this.onFitToViewClick();
+        this.RenderTree();
+        this.OnFitToViewClick();
+    }
+
+    /** @deprecated Use {@link ResetFocus}. */
+    public resetFocus(): void {
+        return this.ResetFocus();
     }
 
     // --- Toolbar Actions / Verbs ---
 
-    public expandAll(): void {
+    public ExpandAll(): void {
         for (const n of this.AllNodes) {
             n.IsExpanded = true;
             n.Children = [...(n._allChildren || [])];
         }
-        this.renderTree(true);
+        this.RenderTree(true);
     }
 
-    public collapseAll(): void {
+    /** @deprecated Use {@link ExpandAll}. */
+    public expandAll(): void {
+        return this.ExpandAll();
+    }
+
+    public CollapseAll(): void {
         for (const n of this.AllNodes) {
             if (n.Depth > 0) {
                 n.IsExpanded = false;
                 n.Children = [];
             }
         }
-        this.renderTree(true);
+        this.RenderTree(true);
     }
 
-    public zoomIn(): void {
+    /** @deprecated Use {@link CollapseAll}. */
+    public collapseAll(): void {
+        return this.CollapseAll();
+    }
+
+    public ZoomIn(): void {
         if (!this.svgSelection || !this.zoomBehavior) return;
         const currentScale = this.currentZoomTransform?.k || 1;
         const targetScale = Math.min(currentScale * 1.25, 4.0);
-        this.setZoomLevel(targetScale, true);
+        this.SetZoomLevel(targetScale, true);
         this.ZoomLevel = targetScale;
         this.ZoomChange.emit(targetScale);
     }
 
-    public zoomOut(): void {
+    /** @deprecated Use {@link ZoomIn}. */
+    public zoomIn(): void {
+        return this.ZoomIn();
+    }
+
+    public ZoomOut(): void {
         if (!this.svgSelection || !this.zoomBehavior) return;
         const currentScale = this.currentZoomTransform?.k || 1;
         const targetScale = Math.max(currentScale * 0.8, 0.1);
-        this.setZoomLevel(targetScale, true);
+        this.SetZoomLevel(targetScale, true);
         this.ZoomLevel = targetScale;
         this.ZoomChange.emit(targetScale);
     }
 
-    public setZoomLevel(scale: number, animated = true): void {
+    /** @deprecated Use {@link ZoomOut}. */
+    public zoomOut(): void {
+        return this.ZoomOut();
+    }
+
+    public SetZoomLevel(scale: number, animated = true): void {
         if (!this.svgSelection || !this.zoomBehavior || !scale) return;
         const container = this.svgContainerRef?.nativeElement;
         const rect = container?.getBoundingClientRect();
@@ -1007,19 +1107,34 @@ export class HierarchyTreeComponent extends BaseAngularComponent implements OnIn
         }
     }
 
-    public resetZoom(): void {
-        if (!this.svgSelection || !this.zoomBehavior) return;
-        this.onFitToViewClick();
+    /** @deprecated Use {@link SetZoomLevel}. */
+    public setZoomLevel(scale: number, animated = true): void {
+        return this.SetZoomLevel(scale, animated);
     }
 
-    public onFitToViewClick(): void {
-        this.fitToScreen(false, true);
+    public ResetZoom(): void {
+        if (!this.svgSelection || !this.zoomBehavior) return;
+        this.OnFitToViewClick();
+    }
+
+    /** @deprecated Use {@link ResetZoom}. */
+    public resetZoom(): void {
+        return this.ResetZoom();
+    }
+
+    public OnFitToViewClick(): void {
+        this.FitToScreen(false, true);
         setTimeout(() => {
-            this.fitToScreen(false, true);
+            this.FitToScreen(false, true);
         }, 320);
     }
 
-    public fitToScreen(immediate = false, forceAutoScale = false): void {
+    /** @deprecated Use {@link OnFitToViewClick}. */
+    public onFitToViewClick(): void {
+        return this.OnFitToViewClick();
+    }
+
+    public FitToScreen(immediate = false, forceAutoScale = false): void {
         if (!this.svgSelection || !this.zoomBehavior || !this.svgContainerRef?.nativeElement) return;
 
         const visibleNodes = this.AllNodes.filter((n) => n.x != null && n.y != null);
@@ -1080,11 +1195,26 @@ export class HierarchyTreeComponent extends BaseAngularComponent implements OnIn
         }
     }
 
-    public exportAsSVG(): string {
+    /** @deprecated Use {@link FitToScreen}. */
+    public fitToScreen(immediate = false, forceAutoScale = false): void {
+        return this.FitToScreen(immediate, forceAutoScale);
+    }
+
+    public ExportAsSVG(): string {
         return this.svgRef?.nativeElement ? this.svgRef.nativeElement.outerHTML : '';
     }
 
-    public async refresh(): Promise<void> {
+    /** @deprecated Use {@link ExportAsSVG}. */
+    public exportAsSVG(): string {
+        return this.ExportAsSVG();
+    }
+
+    public async Refresh(): Promise<void> {
         await this.loadData();
+    }
+
+    /** @deprecated Use {@link Refresh}. */
+    public async refresh(): Promise<void> {
+        return this.Refresh();
     }
 }

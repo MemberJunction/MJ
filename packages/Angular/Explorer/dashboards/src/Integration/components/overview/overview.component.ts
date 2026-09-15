@@ -14,15 +14,15 @@ import {
   EntityMapRow
 } from '../../services/integration-data.service';
 import {
-  buildOverviewAgentContext,
-  resolveIntegrationSurface,
-  navLabelForSurface,
-  resolveIntegrationRecord,
-  buildIntegrationNotFoundError,
+  BuildOverviewAgentContext,
+  ResolveIntegrationSurface,
+  NavLabelForSurface,
+  ResolveIntegrationRecord,
+  BuildIntegrationNotFoundError,
   NamedIntegrationRecord,
 } from '../../integration-agent-context';
 import { CompositeKey } from '@memberjunction/core';
-import { AgentToolResult, validateStringParam } from '../../../shared/agent-tool-validation';
+import { AgentToolResult, ValidateStringParam } from '../../../shared/agent-tool-validation';
 
 type StatusColorType = 'green' | 'amber' | 'red' | 'gray';
 
@@ -121,7 +121,7 @@ export class OverviewComponent extends BaseResourceComponent implements OnInit, 
   }
 
   private emitAgentContext(): void {
-    const context = buildOverviewAgentContext({
+    const context = BuildOverviewAgentContext({
       KPIs: {
         TotalIntegrations: this.KPIs.TotalIntegrations,
         ActiveSyncs: this.KPIs.ActiveSyncs,
@@ -176,11 +176,11 @@ export class OverviewComponent extends BaseResourceComponent implements OnInit, 
 
   /** Resolve a requested surface and route to it via NavigationService. */
   private async toolSwitchSurface(params: Record<string, unknown>): Promise<AgentToolResult> {
-    const surface = resolveIntegrationSurface(params['surface']);
+    const surface = ResolveIntegrationSurface(params['surface']);
     if (!surface) {
       return { Success: false, ErrorMessage: 'Invalid surface. Expected one of: Overview, Connections, Activity, Schedules.' };
     }
-    const tabId = await this.navigationService.OpenNavItemByName(navLabelForSurface(surface));
+    const tabId = await this.navigationService.OpenNavItemByName(NavLabelForSurface(surface));
     if (!tabId) {
       return { Success: false, ErrorMessage: `Could not open the "${surface}" surface.` };
     }
@@ -189,7 +189,7 @@ export class OverviewComponent extends BaseResourceComponent implements OnInit, 
 
   /** Open a company-integration record (read-only nav) by id or name. */
   private toolOpenIntegrationRecord(params: Record<string, unknown>): AgentToolResult {
-    const check = validateStringParam(params['integration'], 'integration');
+    const check = ValidateStringParam(params['integration'], 'integration');
     if (!check.ok) {
       return check.result;
     }
@@ -197,9 +197,9 @@ export class OverviewComponent extends BaseResourceComponent implements OnInit, 
       ID: s.Integration.ID,
       Name: s.Integration.Name,
     }));
-    const match = resolveIntegrationRecord(check.value, candidates);
+    const match = ResolveIntegrationRecord(check.value, candidates);
     if (!match) {
-      return { Success: false, ErrorMessage: buildIntegrationNotFoundError(check.value, candidates, 'integration') };
+      return { Success: false, ErrorMessage: BuildIntegrationNotFoundError(check.value, candidates, 'integration') };
     }
     this.navigationService.OpenEntityRecord('MJ: Company Integrations', CompositeKey.FromID(match.ID));
     return { Success: true };

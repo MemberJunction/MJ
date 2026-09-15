@@ -6,14 +6,14 @@ import { MJMLModelEntity, MJMLModelScoringBindingEntity } from '@memberjunction/
 import {
     PredictionBand,
     PredictionDriver,
-    bandFor,
-    formatLastScored,
-    formatValue,
-    gaugePct,
-    parseDrivers,
-    resolveLabel,
-    toNumber,
-    valueKind,
+    BandFor,
+    FormatLastScored,
+    FormatValue,
+    GaugePct,
+    ParseDrivers,
+    ResolveLabel,
+    ToNumber,
+    ValueKind,
 } from './model-prediction.logic';
 
 /**
@@ -196,21 +196,21 @@ export class ModelPredictionPanel extends BaseFormPanel implements OnInit {
         // The column name is data-driven (from the binding), so reading it
         // dynamically via Get() is the legitimate use of the dynamic accessor.
         const rawValue = binding.TargetColumn ? this.Record.Get(binding.TargetColumn) : null;
-        const numeric = toNumber(rawValue);
-        const kind = valueKind(model.ProblemType, numeric);
+        const numeric = ToNumber(rawValue);
+        const kind = ValueKind(model.ProblemType, numeric);
 
         return {
             bindingId: binding.ID,
-            label: resolveLabel(model.TargetVariable, binding.TargetColumn),
+            label: ResolveLabel(model.TargetVariable, binding.TargetColumn),
             isProbability: kind === 'probability',
             isNumeric: kind === 'numeric',
             isClass: kind === 'class',
-            displayValue: formatValue(rawValue, numeric, kind),
-            gaugePct: kind === 'probability' && numeric != null ? gaugePct(numeric) : 0,
-            band: kind === 'probability' && numeric != null ? bandFor(numeric) : null,
-            drivers: parseDrivers(model.FeatureImportance),
+            displayValue: FormatValue(rawValue, numeric, kind),
+            gaugePct: kind === 'probability' && numeric != null ? GaugePct(numeric) : 0,
+            band: kind === 'probability' && numeric != null ? BandFor(numeric) : null,
+            drivers: ParseDrivers(model.FeatureImportance),
             provenance: `${model.Pipeline} v${model.Version}`,
-            lastScored: formatLastScored(binding.LastScoredAt),
+            lastScored: FormatLastScored(binding.LastScoredAt),
         };
     }
 

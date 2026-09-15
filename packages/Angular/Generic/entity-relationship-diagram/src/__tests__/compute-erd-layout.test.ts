@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeErdLayout, pointsToPath, getNeighbors } from '../lib/layout/compute-erd-layout';
+import { ComputeErdLayout, PointsToPath, GetNeighbors } from '../lib/layout/compute-erd-layout';
 import type { ERDNode } from '../lib/interfaces/erd-types';
 
 const pk = (id: string, name = 'ID') => ({ id, name, type: 'uniqueidentifier', isPrimaryKey: true });
@@ -16,7 +16,7 @@ describe('computeErdLayout', () => {
 
     describe('empty input', () => {
         it('returns empty layout for no nodes', () => {
-            const layout = computeErdLayout([]);
+            const layout = ComputeErdLayout([]);
             expect(layout.nodes).toEqual([]);
             expect(layout.edges).toEqual([]);
             expect(layout.bands).toEqual([]);
@@ -26,7 +26,7 @@ describe('computeErdLayout', () => {
     describe('single node', () => {
         it('creates one node in one band', () => {
             const n = node('u', 'core', 'Users', [pk('u:id')]);
-            const layout = computeErdLayout([n]);
+            const layout = ComputeErdLayout([n]);
             expect(layout.nodes).toHaveLength(1);
             expect(layout.bands).toHaveLength(1);
             expect(layout.bands[0].schemaName).toBe('core');
@@ -37,7 +37,7 @@ describe('computeErdLayout', () => {
 
         it('uses the synthetic default schema when schemaName is missing', () => {
             const n = node('u', undefined, 'Users', [pk('u:id')]);
-            const layout = computeErdLayout([n]);
+            const layout = ComputeErdLayout([n]);
             expect(layout.bands).toHaveLength(1);
             expect(layout.bands[0].schemaName).toBe('_');
         });
@@ -48,19 +48,19 @@ describe('computeErdLayout', () => {
             Array.from({ length: count }, (_, i) => node(`${schema}-${i}`, schema, `Entity${i}`, [pk(`${i}:id`)]));
 
         it('uses 1 column when count <= 3', () => {
-            const layout = computeErdLayout(make(3));
+            const layout = ComputeErdLayout(make(3));
             const xs = new Set(layout.nodes.map(n => n.x));
             expect(xs.size).toBe(1);
         });
 
         it('uses 2 columns when count is between 4 and 8', () => {
-            const layout = computeErdLayout(make(6));
+            const layout = ComputeErdLayout(make(6));
             const xs = new Set(layout.nodes.map(n => n.x));
             expect(xs.size).toBe(2);
         });
 
         it('uses 3 columns when count > 8', () => {
-            const layout = computeErdLayout(make(12));
+            const layout = ComputeErdLayout(make(12));
             const xs = new Set(layout.nodes.map(n => n.x));
             expect(xs.size).toBe(3);
         });
@@ -73,7 +73,7 @@ describe('computeErdLayout', () => {
                 node('b', 'ai',   'B', [pk('b:id')]),
                 node('c', 'core', 'C', [pk('c:id')]),
             ];
-            const layout = computeErdLayout(nodes, { schemaOrder: ['core', 'ai'] });
+            const layout = ComputeErdLayout(nodes, { schemaOrder: ['core', 'ai'] });
             expect(layout.bands.map(b => b.schemaName)).toEqual(['core', 'ai']);
         });
 
@@ -85,7 +85,7 @@ describe('computeErdLayout', () => {
                 node('d', 'core', 'D', [pk('d:id')]),
                 node('e', 'ai',   'E', [pk('e:id')]),
             ];
-            const layout = computeErdLayout(nodes);
+            const layout = ComputeErdLayout(nodes);
             const heights = new Set(layout.bands.map(b => b.height));
             expect(heights.size).toBe(1);
         });
@@ -96,7 +96,7 @@ describe('computeErdLayout', () => {
                 node('b', 'core', 'Alpha', [pk('a:id')]),
                 node('c', 'core', 'Bravo', [pk('b:id')]),
             ];
-            const layout = computeErdLayout(nodes);
+            const layout = ComputeErdLayout(nodes);
             expect(layout.nodes.map(n => n.name)).toEqual(['Alpha', 'Bravo', 'Charlie']);
         });
     });
@@ -109,7 +109,7 @@ describe('computeErdLayout', () => {
                 col('u:email', 'Email'),
                 fk('u:role', 'RoleID', 'r'),
             ]);
-            const layout = computeErdLayout([n]);
+            const layout = ComputeErdLayout([n]);
             const visible = layout.nodes[0].visibleFields.map(f => f.name);
             expect(visible).toEqual(['ID', 'RoleID']);
             expect(layout.nodes[0].hasMore).toBe(true);
@@ -121,7 +121,7 @@ describe('computeErdLayout', () => {
                 col('u:name', 'Name'),
                 col('u:email', 'Email'),
             ]);
-            const layout = computeErdLayout([n], { showAllFields: true });
+            const layout = ComputeErdLayout([n], { showAllFields: true });
             expect(layout.nodes[0].visibleFields.map(f => f.name)).toEqual(['ID', 'Name', 'Email']);
             expect(layout.nodes[0].hasMore).toBe(false);
         });
@@ -131,7 +131,7 @@ describe('computeErdLayout', () => {
                 pk('u:id'),
                 col('u:name', 'Name'),
             ]);
-            const layout = computeErdLayout([n], { expandedNodeIds: new Set(['u']) });
+            const layout = ComputeErdLayout([n], { expandedNodeIds: new Set(['u']) });
             expect(layout.nodes[0].visibleFields.map(f => f.name)).toEqual(['ID', 'Name']);
             expect(layout.nodes[0].hasMore).toBe(false);
         });
@@ -143,7 +143,7 @@ describe('computeErdLayout', () => {
                 node('u', 'core', 'Users', [pk('u:id'), fk('u:r', 'RoleID', 'r')]),
                 node('r', 'core', 'Roles', [pk('r:id')]),
             ];
-            const layout = computeErdLayout(nodes);
+            const layout = ComputeErdLayout(nodes);
             expect(layout.edges).toHaveLength(1);
             expect(layout.edges[0].sourceId).toBe('u');
             expect(layout.edges[0].targetId).toBe('r');
@@ -151,7 +151,7 @@ describe('computeErdLayout', () => {
 
         it('skips FKs whose target isn\'t in the node list', () => {
             const nodes = [node('u', 'core', 'Users', [pk('u:id'), fk('u:x', 'GhostID', 'ghost')])];
-            const layout = computeErdLayout(nodes);
+            const layout = ComputeErdLayout(nodes);
             expect(layout.edges).toEqual([]);
         });
 
@@ -160,7 +160,7 @@ describe('computeErdLayout', () => {
                 node('u', 'core', 'Users', [pk('u:id'), fk('u:r', 'RoleID', 'r')]),
                 node('r', 'ai',   'Roles', [pk('r:id')]),
             ];
-            const layout = computeErdLayout(nodes, { schemaOrder: ['core', 'ai'] });
+            const layout = ComputeErdLayout(nodes, { schemaOrder: ['core', 'ai'] });
             expect(layout.edges[0].points).toHaveLength(4);
             expect(layout.edges[0].selfReference).toBe(false);
             expect(layout.edges[0].goingRight).toBe(true);
@@ -170,7 +170,7 @@ describe('computeErdLayout', () => {
             const nodes = [
                 node('e', 'core', 'Employees', [pk('e:id'), fk('e:sup', 'SupervisorID', 'e')]),
             ];
-            const layout = computeErdLayout(nodes);
+            const layout = ComputeErdLayout(nodes);
             expect(layout.edges).toHaveLength(1);
             expect(layout.edges[0].selfReference).toBe(true);
             expect(layout.edges[0].points).toHaveLength(5);
@@ -183,7 +183,7 @@ describe('computeErdLayout', () => {
                 node('z', 'zzz', 'Z', [pk('z:id')]),
                 node('a', 'aaa', 'A', [pk('a:id')]),
             ];
-            const layout = computeErdLayout(nodes, { schemaOrder: ['zzz', 'aaa'] });
+            const layout = ComputeErdLayout(nodes, { schemaOrder: ['zzz', 'aaa'] });
             expect(layout.bands.map(b => b.schemaName)).toEqual(['zzz', 'aaa']);
         });
 
@@ -192,7 +192,7 @@ describe('computeErdLayout', () => {
                 node('x', 'x', 'X', [pk('x:id')]),
                 node('y', 'y', 'Y', [pk('y:id')]),
             ];
-            const layout = computeErdLayout(nodes, { schemaOrder: ['y'] });
+            const layout = ComputeErdLayout(nodes, { schemaOrder: ['y'] });
             expect(layout.bands.map(b => b.schemaName)).toEqual(['y', 'x']);
         });
     });
@@ -200,19 +200,19 @@ describe('computeErdLayout', () => {
 
 describe('pointsToPath', () => {
     it('builds an SVG M/L path string', () => {
-        const d = pointsToPath([[0, 0], [10, 0], [10, 10]]);
+        const d = PointsToPath([[0, 0], [10, 0], [10, 10]]);
         expect(d).toBe('M0 0 L10 0 L10 10');
     });
 
     it('returns empty string for empty points', () => {
-        expect(pointsToPath([])).toBe('');
+        expect(PointsToPath([])).toBe('');
     });
 });
 
 describe('getNeighbors', () => {
     it('returns just the node id when no relationships exist', () => {
         const nodes = [node('a', 'x', 'A', [pk('a:id')])];
-        expect([...getNeighbors(nodes, 'a')]).toEqual(['a']);
+        expect([...GetNeighbors(nodes, 'a')]).toEqual(['a']);
     });
 
     it('includes nodes referenced via outgoing FK', () => {
@@ -220,7 +220,7 @@ describe('getNeighbors', () => {
             node('u', 'core', 'Users', [pk('u:id'), fk('u:r', 'RoleID', 'r')]),
             node('r', 'core', 'Roles', [pk('r:id')]),
         ];
-        const set = getNeighbors(nodes, 'u');
+        const set = GetNeighbors(nodes, 'u');
         expect(set.has('r')).toBe(true);
     });
 
@@ -229,7 +229,7 @@ describe('getNeighbors', () => {
             node('u', 'core', 'Users', [pk('u:id'), fk('u:r', 'RoleID', 'r')]),
             node('r', 'core', 'Roles', [pk('r:id')]),
         ];
-        const set = getNeighbors(nodes, 'r');
+        const set = GetNeighbors(nodes, 'r');
         expect(set.has('u')).toBe(true);
     });
 });

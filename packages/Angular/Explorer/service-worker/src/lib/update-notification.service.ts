@@ -99,7 +99,7 @@ export class UpdateNotificationService implements OnDestroy {
      * (with an immediate check) when the tab becomes visible again.
      */
     public startAutoCheck(intervalMs: number): void {
-        this.stopAutoCheck();
+        this.StopAutoCheck();
         this._pollIntervalMs = intervalMs;
         if (!this._swUpdate.isEnabled || intervalMs <= 0) return;
 
@@ -107,20 +107,20 @@ export class UpdateNotificationService implements OnDestroy {
             // Only fire when visible. Hidden tabs catch up via the
             // visibilitychange handler.
             if (typeof document === 'undefined' || !document.hidden) {
-                void this.checkForUpdate();
+                void this.CheckForUpdate();
             }
         }, intervalMs);
 
         if (typeof document !== 'undefined') {
             this._visibilityListener = () => {
-                if (!document.hidden) void this.checkForUpdate();
+                if (!document.hidden) void this.CheckForUpdate();
             };
             document.addEventListener('visibilitychange', this._visibilityListener);
         }
     }
 
     /** Stop the periodic poll started by `startAutoCheck()`. */
-    public stopAutoCheck(): void {
+    public StopAutoCheck(): void {
         if (this._pollHandle !== null) {
             clearInterval(this._pollHandle);
             this._pollHandle = null;
@@ -129,6 +129,11 @@ export class UpdateNotificationService implements OnDestroy {
             document.removeEventListener('visibilitychange', this._visibilityListener);
             this._visibilityListener = null;
         }
+    }
+
+    /** @deprecated Use {@link StopAutoCheck}. */
+    public stopAutoCheck(): void {
+        return this.StopAutoCheck();
     }
 
     /**
@@ -149,23 +154,43 @@ export class UpdateNotificationService implements OnDestroy {
      * Stays `true` until either `applyUpdate()` (which reloads the page) or
      * `dismissForSession()` (which resets the flag without reloading).
      */
-    public get updateAvailable$(): Observable<boolean> {
+    public get UpdateAvailable$(): Observable<boolean> {
         return this._updateAvailable$.asObservable();
     }
 
+    /** @deprecated Use {@link UpdateAvailable$}. */
+    public get updateAvailable$(): Observable<boolean> {
+        return this.UpdateAvailable$;
+    }
+
     /** Synchronous accessor for current update-available state. */
-    public get isUpdateAvailable(): boolean {
+    public get IsUpdateAvailable(): boolean {
         return this._updateAvailable$.value;
     }
 
+    /** @deprecated Use {@link IsUpdateAvailable}. */
+    public get isUpdateAvailable(): boolean {
+        return this.IsUpdateAvailable;
+    }
+
     /** True if the underlying SwUpdate API is active (SW registered + supported). */
-    public get isServiceWorkerEnabled(): boolean {
+    public get IsServiceWorkerEnabled(): boolean {
         return this._swUpdate.isEnabled;
     }
 
+    /** @deprecated Use {@link IsServiceWorkerEnabled}. */
+    public get isServiceWorkerEnabled(): boolean {
+        return this.IsServiceWorkerEnabled;
+    }
+
     /** The most recent `VERSION_READY` event, if any. Useful for diagnostics. */
-    public get lastVersionEvent(): VersionReadyEvent | null {
+    public get LastVersionEvent(): VersionReadyEvent | null {
         return this._lastVersionEvent;
+    }
+
+    /** @deprecated Use {@link LastVersionEvent}. */
+    public get lastVersionEvent(): VersionReadyEvent | null {
+        return this.LastVersionEvent;
     }
 
     /**
@@ -179,12 +204,17 @@ export class UpdateNotificationService implements OnDestroy {
      * This method is split out (vs. inlining `location.reload()`) so consumers
      * can be tested without actually reloading the page.
      */
-    public applyUpdate(): void {
+    public ApplyUpdate(): void {
         // Hide the prompt before reloading so it doesn't briefly flash again
         // on the new page if anything in the shell renders before the SW
         // activates.
         this._updateAvailable$.next(false);
         this.performReload();
+    }
+
+    /** @deprecated Use {@link ApplyUpdate}. */
+    public applyUpdate(): void {
+        return this.ApplyUpdate();
     }
 
     /**
@@ -195,8 +225,13 @@ export class UpdateNotificationService implements OnDestroy {
      * Use case: a power user is in the middle of editing something and doesn't
      * want to interrupt; they'll get prompted again on their next reload.
      */
-    public dismissForSession(): void {
+    public DismissForSession(): void {
         this._updateAvailable$.next(false);
+    }
+
+    /** @deprecated Use {@link DismissForSession}. */
+    public dismissForSession(): void {
+        return this.DismissForSession();
     }
 
     /**
@@ -207,7 +242,7 @@ export class UpdateNotificationService implements OnDestroy {
      * Returns `true` if a new version was found and downloaded; `false` if
      * we're already on the latest. Resolves to `false` if the SW is disabled.
      */
-    public async checkForUpdate(): Promise<boolean> {
+    public async CheckForUpdate(): Promise<boolean> {
         if (!this._swUpdate.isEnabled) return false;
         try {
             return await this._swUpdate.checkForUpdate();
@@ -216,6 +251,11 @@ export class UpdateNotificationService implements OnDestroy {
             console.warn('[UpdateNotificationService] checkForUpdate failed:', err);
             return false;
         }
+    }
+
+    /** @deprecated Use {@link CheckForUpdate}. */
+    public async checkForUpdate(): Promise<boolean> {
+        return this.CheckForUpdate();
     }
 
     /**
@@ -233,7 +273,7 @@ export class UpdateNotificationService implements OnDestroy {
     }
 
     ngOnDestroy(): void {
-        this.stopAutoCheck();
+        this.StopAutoCheck();
         this._destroy$.next();
         this._destroy$.complete();
         this._updateAvailable$.complete();

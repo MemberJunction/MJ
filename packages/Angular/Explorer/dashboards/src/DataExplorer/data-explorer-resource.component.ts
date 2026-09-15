@@ -46,11 +46,47 @@ export class DataExplorerResourceComponent extends BaseResourceComponent impleme
     // State
     // ========================================
 
-    public entityFilter: DataExplorerFilter | null = null;
-    public contextName: string | null = null;
-    public contextIcon: string | null = null;
+    public EntityFilter: DataExplorerFilter | null = null;
+
+    /** @deprecated Use {@link EntityFilter}. */
+    public get entityFilter(): DataExplorerFilter | null {
+      return this.EntityFilter;
+    }
+    /** @deprecated Use {@link EntityFilter}. */
+    public set entityFilter(value: DataExplorerFilter | null) {
+      this.EntityFilter = value;
+    }
+    public ContextName: string | null = null;
+
+    /** @deprecated Use {@link ContextName}. */
+    public get contextName(): string | null {
+      return this.ContextName;
+    }
+    /** @deprecated Use {@link ContextName}. */
+    public set contextName(value: string | null) {
+      this.ContextName = value;
+    }
+    public ContextIcon: string | null = null;
+
+    /** @deprecated Use {@link ContextIcon}. */
+    public get contextIcon(): string | null {
+      return this.ContextIcon;
+    }
+    /** @deprecated Use {@link ContextIcon}. */
+    public set contextIcon(value: string | null) {
+      this.ContextIcon = value;
+    }
     /** Initial query params from the URL, forwarded to the dashboard */
-    public initialQueryParams: Record<string, string> = {};
+    public InitialQueryParams: Record<string, string> = {};
+
+    /** @deprecated Use {@link InitialQueryParams}. */
+    public get initialQueryParams(): Record<string, string> {
+      return this.InitialQueryParams;
+    }
+    /** @deprecated Use {@link InitialQueryParams}. */
+    public set initialQueryParams(value: Record<string, string>) {
+      this.InitialQueryParams = value;
+    }
 
     @ViewChild(DataExplorerDashboardComponent) dataExplorer!: DataExplorerDashboardComponent;
 
@@ -139,9 +175,9 @@ export class DataExplorerResourceComponent extends BaseResourceComponent impleme
         const config = data.Configuration || {};
 
         // Extract configuration options
-        this.entityFilter = config['entityFilter'] as DataExplorerFilter || null;
-        this.contextName = config['appName'] as string || null;
-        this.contextIcon = config['appIcon'] as string || null;
+        this.EntityFilter = config['entityFilter'] as DataExplorerFilter || null;
+        this.ContextName = config['appName'] as string || null;
+        this.ContextIcon = config['appIcon'] as string || null;
 
         // Build initial query params: start with workspace-saved params, then let
         // browser URL params override. The URL is the source of truth for user intent —
@@ -153,7 +189,7 @@ export class DataExplorerResourceComponent extends BaseResourceComponent impleme
         browserParams.forEach((value, key) => {
             merged[key] = value;
         });
-        this.initialQueryParams = merged;
+        this.InitialQueryParams = merged;
 
         this.cdr.detectChanges();
 
@@ -192,13 +228,23 @@ export class DataExplorerResourceComponent extends BaseResourceComponent impleme
     // Event Handlers
     // ========================================
 
-    public onOpenEntityRecord(event: { EntityName: string; RecordPKey: CompositeKey }): void {
+    public OnOpenEntityRecord(event: { EntityName: string; RecordPKey: CompositeKey }): void {
         if (event && event.EntityName && event.RecordPKey) {
             this.navigationService.OpenEntityRecord(event.EntityName, event.RecordPKey);
         }
     }
 
-    public onDisplayNameChanged(name: string): void {
+    /** @deprecated Use {@link OnOpenEntityRecord}. */
+    public onOpenEntityRecord(event: { EntityName: string; RecordPKey: CompositeKey }): void {
+      return this.OnOpenEntityRecord(event);
+    }
+
+    public OnDisplayNameChanged(name: string): void {
         this.NotifyDisplayNameChanged(name);
+    }
+
+    /** @deprecated Use {@link OnDisplayNameChanged}. */
+    public onDisplayNameChanged(name: string): void {
+      return this.OnDisplayNameChanged(name);
     }
 }

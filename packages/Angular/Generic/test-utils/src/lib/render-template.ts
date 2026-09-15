@@ -35,7 +35,7 @@ export interface RenderTemplateOptions {
  * const tabs = fixture.nativeElement.querySelectorAll('.single-tab');
  * ```
  */
-export async function renderTemplate(
+export async function RenderTemplate(
   template: string,
   options: RenderTemplateOptions = {},
 ): Promise<ComponentFixture<unknown>> {
@@ -54,4 +54,12 @@ export async function renderTemplate(
   fixture.autoDetectChanges();
   await fixture.whenStable();
   return fixture;
+}
+
+/** @deprecated Use {@link RenderTemplate}. */
+export async function renderTemplate(
+  template: string,
+  options: RenderTemplateOptions = {},
+): Promise<ComponentFixture<unknown>> {
+  return RenderTemplate(template, options);
 }

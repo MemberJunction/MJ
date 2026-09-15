@@ -109,7 +109,7 @@ const DEFAULT_SCHEMA = '_';
 /**
  * Compute a schema-grouped grid layout for the given nodes.  Pure function.
  */
-export function computeErdLayout(nodes: ERDNode[], options: ErdLayoutOptions = {}): ErdLayout {
+export function ComputeErdLayout(nodes: ERDNode[], options: ErdLayoutOptions = {}): ErdLayout {
     const nodeW = options.nodeWidth ?? 220;
     const headerH = options.headerHeight ?? 36;
     const fieldH = options.fieldHeight ?? 22;
@@ -201,6 +201,11 @@ export function computeErdLayout(nodes: ERDNode[], options: ErdLayoutOptions = {
     const edges = buildEdges(laidOutNodes, headerH, fieldH);
 
     return { nodes: laidOutNodes, edges, bands, totalWidth, totalHeight };
+}
+
+/** @deprecated Use {@link ComputeErdLayout}. */
+export function computeErdLayout(nodes: ERDNode[], options: ErdLayoutOptions = {}): ErdLayout {
+    return ComputeErdLayout(nodes, options);
 }
 
 /**
@@ -343,18 +348,23 @@ function routeEdge(r: RouteInput): LaidOutEdge {
 }
 
 /** Convert a polyline to an SVG path string. */
-export function pointsToPath(points: ReadonlyArray<readonly [number, number]>): string {
+export function PointsToPath(points: ReadonlyArray<readonly [number, number]>): string {
     if (!points || points.length === 0) return '';
     let d = `M${points[0][0]} ${points[0][1]}`;
     for (let i = 1; i < points.length; i++) d += ` L${points[i][0]} ${points[i][1]}`;
     return d;
 }
 
+/** @deprecated Use {@link PointsToPath}. */
+export function pointsToPath(points: ReadonlyArray<readonly [number, number]>): string {
+    return PointsToPath(points);
+}
+
 /**
  * Return the set of node IDs one hop from the given node (inclusive).
  * Used for focus and hover highlight modes.
  */
-export function getNeighbors(nodes: ReadonlyArray<ERDNode>, id: string): Set<string> {
+export function GetNeighbors(nodes: ReadonlyArray<ERDNode>, id: string): Set<string> {
     const result = new Set<string>([id]);
     for (const n of nodes) {
         for (const f of n.fields) {
@@ -366,4 +376,9 @@ export function getNeighbors(nodes: ReadonlyArray<ERDNode>, id: string): Set<str
         }
     }
     return result;
+}
+
+/** @deprecated Use {@link GetNeighbors}. */
+export function getNeighbors(nodes: ReadonlyArray<ERDNode>, id: string): Set<string> {
+    return GetNeighbors(nodes, id);
 }

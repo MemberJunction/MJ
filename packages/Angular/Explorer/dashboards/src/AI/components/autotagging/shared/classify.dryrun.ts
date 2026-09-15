@@ -120,10 +120,19 @@ function disposeRow(input: DryRunInput, cfg: DryRunConfig, r: ResolveResult): Dr
  * Pure and deterministic — given the same inputs + resolve function it always
  * returns the same rows in the same order.
  */
-export function previewDispositions(
+export function PreviewDispositions(
     input: DryRunInput[],
     cfg: DryRunConfig,
     resolve: (tag: string) => ResolveResult,
 ): DryRunRow[] {
     return input.map(row => disposeRow(row, cfg, resolve(row.tag)));
+}
+
+/** @deprecated Use {@link PreviewDispositions}. */
+export function previewDispositions(
+    input: DryRunInput[],
+    cfg: DryRunConfig,
+    resolve: (tag: string) => ResolveResult,
+): DryRunRow[] {
+    return PreviewDispositions(input, cfg, resolve);
 }

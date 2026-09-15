@@ -22,7 +22,7 @@ import {
 } from './realtime-surface-panel-prefs';
 import { RealtimeDisclosureModel, RealtimeUxDensity, SerializeUxMilestones, REALTIME_UX_PREF_KEY } from './realtime-disclosure';
 import {
-  resolveRealtimeUi, DEFAULT_REALTIME_UI_INPUTS, DEFAULT_REALTIME_UI_SIGNALS,
+  ResolveRealtimeUi, DEFAULT_REALTIME_UI_INPUTS, DEFAULT_REALTIME_UI_SIGNALS,
   RealtimeUiInputs, RealtimeUiSignals, ResolvedRealtimeUi,
   RealtimeChromeMode, RealtimeControlId, RealtimeUiConnectionState
 } from './realtime-ui-config';
@@ -385,7 +385,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   // Seed from a dependency-free baseline — this runs as a field initializer, BEFORE the
   // disclosure model / session state / ResizeObserver exist. recomputeUi() produces the real
   // value once dependencies are ready (post-init + on every wired change source).
-  private _ui: ResolvedRealtimeUi = resolveRealtimeUi(DEFAULT_REALTIME_UI_INPUTS, DEFAULT_REALTIME_UI_SIGNALS);
+  private _ui: ResolvedRealtimeUi = ResolveRealtimeUi(DEFAULT_REALTIME_UI_INPUTS, DEFAULT_REALTIME_UI_SIGNALS);
 
   /**
    * The current resolved UI view-model. Every visibility/affordance decision the template
@@ -707,7 +707,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    * the resolver is pure so redundant calls are cheap. Always marks for check.
    */
   private recomputeUi(): void {
-    const next = resolveRealtimeUi(this.mergedUiInputs, this.buildSignals());
+    const next = ResolveRealtimeUi(this.mergedUiInputs, this.buildSignals());
     const prevChrome = this._ui.chrome;
     this._ui = next;
     if (next.chrome !== prevChrome) {

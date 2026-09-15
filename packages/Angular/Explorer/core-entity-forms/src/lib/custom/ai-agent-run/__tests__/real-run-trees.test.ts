@@ -23,7 +23,7 @@ import type { TimelineItem } from '../ai-agent-run-timeline.component';
 function flatten(items: TimelineItem[]): TimelineItem[] {
     return items.flatMap((item) => [item, ...flatten(item.children ?? [])]);
 }
-import { buildFlowModelFromTree } from '../flow/run-tree-flow-projection';
+import { BuildFlowModelFromTree } from '../flow/run-tree-flow-projection';
 import fixture from './real-run-trees.fixture.json';
 
 type Fixture = Record<string, { runID: string; rows: AgentRunTreeRow[] }>;
@@ -100,7 +100,7 @@ describe('real Content Pipeline run', () => {
     });
 
     it('gives the visualizations a typed node for every step', () => {
-        const model = buildFlowModelFromTree(
+        const model = BuildFlowModelFromTree(
             treeFor('Content Pipeline'), 'Content Pipeline', 'Completed',
             { iconClass: 'fa-robot', logoUrl: null },
         )!;
@@ -124,7 +124,7 @@ describe('real Schema Documentation Sweep run', () => {
     });
 
     it('types the loop as a loop so it renders distinctly', () => {
-        const model = buildFlowModelFromTree(
+        const model = BuildFlowModelFromTree(
             treeFor('Schema Documentation Sweep'), 'Schema Documentation Sweep', 'Completed',
             { iconClass: 'fa-robot', logoUrl: null },
         )!;

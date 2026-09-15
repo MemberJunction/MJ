@@ -16,10 +16,10 @@ import { SchedulingOverviewComponent } from './components/scheduling-overview.co
 import { SchedulingJobsComponent } from './components/scheduling-jobs.component';
 import { SchedulingActivityComponent } from './components/scheduling-activity.component';
 import {
-  buildSchedulingAgentContext,
-  buildSchedulingNotFoundError,
-  isValidSchedulingTab,
-  resolveSchedulingItem,
+  BuildSchedulingAgentContext,
+  BuildSchedulingNotFoundError,
+  IsValidSchedulingTab,
+  ResolveSchedulingItem,
   SchedulingAgentContextInput,
   SchedulingExecutionSnapshot,
   SchedulingItemCandidate,
@@ -265,7 +265,7 @@ export class SchedulingDashboardComponent extends BaseDashboard implements After
       VisibleExecutions: (this.activityCmp?.FilteredExecutions ?? []).map(e => this.toExecutionSnapshot(e)),
       ActivityJobNames: this.activityCmp?.UniqueJobNames ?? [],
     };
-    this.navigationService.SetAgentContext(this, buildSchedulingAgentContext(input));
+    this.navigationService.SetAgentContext(this, BuildSchedulingAgentContext(input));
   }
 
   /** Project a full job statistics row into the read-only snapshot shape. */
@@ -304,7 +304,7 @@ export class SchedulingDashboardComponent extends BaseDashboard implements After
    * {@link lastRegisteredToolMode}). See the SAFETY BOUNDARY comment above.
    */
   private syncAgentToolsForMode(): void {
-    const tab: SchedulingTab = isValidSchedulingTab(this.ActiveTab) ? this.ActiveTab : 'dashboard';
+    const tab: SchedulingTab = IsValidSchedulingTab(this.ActiveTab) ? this.ActiveTab : 'dashboard';
     if (this.lastRegisteredToolMode === tab) {
       return;
     }
@@ -428,7 +428,7 @@ export class SchedulingDashboardComponent extends BaseDashboard implements After
   /** Switch the active tab after validating the requested tab id. */
   private toolSwitchTab(params: Record<string, unknown>): AgentToolResult & { Data?: Record<string, unknown> } {
     const tab = params['tab'];
-    if (!isValidSchedulingTab(tab)) {
+    if (!IsValidSchedulingTab(tab)) {
       return { Success: false, ErrorMessage: `Invalid tab "${String(tab)}". Valid tabs: ${SCHEDULING_TABS.join(', ')}.` };
     }
     this.OnTabChange(tab);
@@ -441,13 +441,13 @@ export class SchedulingDashboardComponent extends BaseDashboard implements After
     if (!ref) {
       return { Success: false, ErrorMessage: 'A job id or name is required.' };
     }
-    const match = resolveSchedulingItem(ref, this.jobCandidates);
+    const match = ResolveSchedulingItem(ref, this.jobCandidates);
     if (!match) {
-      return { Success: false, ErrorMessage: buildSchedulingNotFoundError(ref, this.jobCandidates) };
+      return { Success: false, ErrorMessage: BuildSchedulingNotFoundError(ref, this.jobCandidates) };
     }
     const job = this.currentJobs.find(j => UUIDsEqual(j.jobId, match.ID));
     if (!job) {
-      return { Success: false, ErrorMessage: buildSchedulingNotFoundError(ref, this.jobCandidates) };
+      return { Success: false, ErrorMessage: BuildSchedulingNotFoundError(ref, this.jobCandidates) };
     }
     return { Success: true, Data: this.toJobSnapshot(job) as unknown as Record<string, unknown> };
   }
@@ -508,13 +508,13 @@ export class SchedulingDashboardComponent extends BaseDashboard implements After
     if (!ref) {
       return { Success: false, ErrorMessage: 'A job id or name is required.' };
     }
-    const match = resolveSchedulingItem(ref, this.jobCandidates);
+    const match = ResolveSchedulingItem(ref, this.jobCandidates);
     if (!match) {
-      return { Success: false, ErrorMessage: buildSchedulingNotFoundError(ref, this.jobCandidates) };
+      return { Success: false, ErrorMessage: BuildSchedulingNotFoundError(ref, this.jobCandidates) };
     }
     const job = this.currentJobs.find(j => UUIDsEqual(j.jobId, match.ID));
     if (!job) {
-      return { Success: false, ErrorMessage: buildSchedulingNotFoundError(ref, this.jobCandidates) };
+      return { Success: false, ErrorMessage: BuildSchedulingNotFoundError(ref, this.jobCandidates) };
     }
     const notReady = this.ensureJobsReady();
     if (notReady) return notReady;
@@ -529,13 +529,13 @@ export class SchedulingDashboardComponent extends BaseDashboard implements After
     if (!ref) {
       return { Success: false, ErrorMessage: 'A job id or name is required.' };
     }
-    const match = resolveSchedulingItem(ref, this.jobCandidates);
+    const match = ResolveSchedulingItem(ref, this.jobCandidates);
     if (!match) {
-      return { Success: false, ErrorMessage: buildSchedulingNotFoundError(ref, this.jobCandidates) };
+      return { Success: false, ErrorMessage: BuildSchedulingNotFoundError(ref, this.jobCandidates) };
     }
     const job = this.currentJobs.find(j => UUIDsEqual(j.jobId, match.ID));
     if (!job) {
-      return { Success: false, ErrorMessage: buildSchedulingNotFoundError(ref, this.jobCandidates) };
+      return { Success: false, ErrorMessage: BuildSchedulingNotFoundError(ref, this.jobCandidates) };
     }
     const notReady = this.ensureJobsReady();
     if (notReady) return notReady;
@@ -636,15 +636,25 @@ export class SchedulingDashboardComponent extends BaseDashboard implements After
     if (this.jobsCmp?.TypeFilter) n++;
     return n;
   }
-  public onJobsFilterValuesChange(v: Record<string, unknown>): void {
+  public OnJobsFilterValuesChange(v: Record<string, unknown>): void {
     if (!this.jobsCmp) return;
     const next = (v ?? {}) as { statusFilter?: string; typeFilter?: string };
     if ((next.statusFilter ?? '') !== this.jobsCmp.StatusFilter) this.jobsCmp.OnStatusFilterChange(next.statusFilter ?? '');
     if ((next.typeFilter ?? '') !== this.jobsCmp.TypeFilter) this.jobsCmp.OnTypeFilterChange(next.typeFilter ?? '');
   }
-  public resetJobsFilters(): void {
+
+  /** @deprecated Use {@link OnJobsFilterValuesChange}. */
+  public onJobsFilterValuesChange(v: Record<string, unknown>): void {
+    return this.OnJobsFilterValuesChange(v);
+  }
+  public ResetJobsFilters(): void {
     if (this.jobsCmp?.StatusFilter) this.jobsCmp.OnStatusFilterChange('');
     if (this.jobsCmp?.TypeFilter) this.jobsCmp.OnTypeFilterChange('');
+  }
+
+  /** @deprecated Use {@link ResetJobsFilters}. */
+  public resetJobsFilters(): void {
+    return this.ResetJobsFilters();
   }
 
   public get ActivityFilterFields(): FilterFieldConfig[] {
@@ -671,15 +681,25 @@ export class SchedulingDashboardComponent extends BaseDashboard implements After
     if (this.activityCmp?.JobNameFilter) n++;
     return n;
   }
-  public onActivityFilterValuesChange(v: Record<string, unknown>): void {
+  public OnActivityFilterValuesChange(v: Record<string, unknown>): void {
     if (!this.activityCmp) return;
     const next = (v ?? {}) as { statusFilter?: string; jobNameFilter?: string };
     if ((next.statusFilter ?? '') !== this.activityCmp.StatusFilter) this.activityCmp.OnStatusFilterChange(next.statusFilter ?? '');
     if ((next.jobNameFilter ?? '') !== this.activityCmp.JobNameFilter) this.activityCmp.OnJobNameFilterChange(next.jobNameFilter ?? '');
   }
-  public resetActivityFilters(): void {
+
+  /** @deprecated Use {@link OnActivityFilterValuesChange}. */
+  public onActivityFilterValuesChange(v: Record<string, unknown>): void {
+    return this.OnActivityFilterValuesChange(v);
+  }
+  public ResetActivityFilters(): void {
     if (this.activityCmp?.StatusFilter) this.activityCmp.OnStatusFilterChange('');
     if (this.activityCmp?.JobNameFilter) this.activityCmp.OnJobNameFilterChange('');
+  }
+
+  /** @deprecated Use {@link ResetActivityFilters}. */
+  public resetActivityFilters(): void {
+    return this.ResetActivityFilters();
   }
 
   private setupStateManagement(): void {

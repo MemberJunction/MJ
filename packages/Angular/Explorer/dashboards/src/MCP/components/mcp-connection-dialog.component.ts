@@ -35,14 +35,68 @@ export class MCPConnectionDialogComponent extends BaseAngularComponent implement
     @ViewChild('credentialDialog') credentialDialog!: CredentialDialogComponent;
 
     @Input() connection: MCPConnectionData | null = null;
-    @Input() servers: MCPServerData[] = [];
-    @Input() visible = false;
+    @Input() Servers: MCPServerData[] = [];
+
+    /** @deprecated Use {@link Servers}. */
+    @Input() set servers(value: MCPServerData[]) {
+      this.Servers = value;
+    }
+    /** @deprecated Use {@link Servers}. */
+    get servers(): MCPServerData[] {
+      return this.Servers;
+    }
+    @Input() Visible = false;
+
+    /** @deprecated Use {@link Visible}. */
+    @Input() set visible(value: MCPConnectionDialogComponent['Visible']) {
+      this.Visible = value;
+    }
+    /** @deprecated Use {@link Visible}. */
+    get visible(): MCPConnectionDialogComponent['Visible'] {
+      return this.Visible;
+    }
     @Output() close = new EventEmitter<ConnectionDialogResult>();
 
-    public connectionForm: FormGroup;
-    public credentials: Array<{ ID: string; Name: string }> = [];
-    public companies: Array<{ ID: string; Name: string }> = [];
-    public credentialTypes: MJCredentialTypeEntity[] = [];
+    public ConnectionForm: FormGroup;
+
+    /** @deprecated Use {@link ConnectionForm}. */
+    public get connectionForm(): FormGroup {
+      return this.ConnectionForm;
+    }
+    /** @deprecated Use {@link ConnectionForm}. */
+    public set connectionForm(value: FormGroup) {
+      this.ConnectionForm = value;
+    }
+    public Credentials: Array<{ ID: string; Name: string }> = [];
+
+    /** @deprecated Use {@link Credentials}. */
+    public get credentials(): Array<{ ID: string; Name: string }> {
+      return this.Credentials;
+    }
+    /** @deprecated Use {@link Credentials}. */
+    public set credentials(value: Array<{ ID: string; Name: string }>) {
+      this.Credentials = value;
+    }
+    public Companies: Array<{ ID: string; Name: string }> = [];
+
+    /** @deprecated Use {@link Companies}. */
+    public get companies(): Array<{ ID: string; Name: string }> {
+      return this.Companies;
+    }
+    /** @deprecated Use {@link Companies}. */
+    public set companies(value: Array<{ ID: string; Name: string }>) {
+      this.Companies = value;
+    }
+    public CredentialTypes: MJCredentialTypeEntity[] = [];
+
+    /** @deprecated Use {@link CredentialTypes}. */
+    public get credentialTypes(): MJCredentialTypeEntity[] {
+      return this.CredentialTypes;
+    }
+    /** @deprecated Use {@link CredentialTypes}. */
+    public set credentialTypes(value: MJCredentialTypeEntity[]) {
+      this.CredentialTypes = value;
+    }
     public IsSaving = false;
     public IsLoadingDropdowns = false;
     public ErrorMessage: string | null = null;
@@ -57,7 +111,7 @@ export class MCPConnectionDialogComponent extends BaseAngularComponent implement
     }
 
     public get ActiveServers(): MCPServerData[] {
-        return this.servers.filter(s => s.Status === 'Active');
+        return this.Servers.filter(s => s.Status === 'Active');
     }
 
     constructor(
@@ -65,7 +119,7 @@ export class MCPConnectionDialogComponent extends BaseAngularComponent implement
         private cdr: ChangeDetectorRef
     ) {
         super();
-        this.connectionForm = this.createForm();
+        this.ConnectionForm = this.createForm();
     }
 
     ngOnInit(): void {
@@ -74,7 +128,7 @@ export class MCPConnectionDialogComponent extends BaseAngularComponent implement
 
     ngOnChanges(changes: SimpleChanges): void {
         if (changes['connection'] || changes['visible']) {
-            if (this.visible) {
+            if (this.Visible) {
                 this.initializeForm();
             }
         }
@@ -100,7 +154,7 @@ export class MCPConnectionDialogComponent extends BaseAngularComponent implement
 
     private initializeForm(): void {
         if (this.connection) {
-            this.connectionForm.patchValue({
+            this.ConnectionForm.patchValue({
                 MCPServerID: this.connection.MCPServerID,
                 Name: this.connection.Name,
                 Description: this.connection.Description ?? '',
@@ -116,7 +170,7 @@ export class MCPConnectionDialogComponent extends BaseAngularComponent implement
                 Status: this.connection.Status
             });
         } else {
-            this.connectionForm.reset({
+            this.ConnectionForm.reset({
                 MCPServerID: '',
                 Name: '',
                 Description: '',
@@ -162,13 +216,13 @@ export class MCPConnectionDialogComponent extends BaseAngularComponent implement
             ]);
 
             if (credResult.Success) {
-                this.credentials = credResult.Results as Array<{ ID: string; Name: string }> || [];
+                this.Credentials = credResult.Results as Array<{ ID: string; Name: string }> || [];
             }
             if (typeResult.Success) {
-                this.credentialTypes = typeResult.Results as MJCredentialTypeEntity[] || [];
+                this.CredentialTypes = typeResult.Results as MJCredentialTypeEntity[] || [];
             }
             if (companyResult.Success) {
-                this.companies = companyResult.Results as Array<{ ID: string; Name: string }> || [];
+                this.Companies = companyResult.Results as Array<{ ID: string; Name: string }> || [];
             }
         } catch (error) {
             console.error('Failed to load dropdown data:', error);
@@ -181,27 +235,32 @@ export class MCPConnectionDialogComponent extends BaseAngularComponent implement
     /**
      * Opens the credential creation dialog
      */
-    public openCredentialDialog(): void {
+    public OpenCredentialDialog(): void {
         this.ShowCredentialDialog = true;
         this.cdr.detectChanges();
+    }
+
+    /** @deprecated Use {@link OpenCredentialDialog}. */
+    public openCredentialDialog(): void {
+      return this.OpenCredentialDialog();
     }
 
     /**
      * Handles the credential dialog close event
      */
-    public onCredentialDialogClose(result: CredentialDialogResult): void {
+    public OnCredentialDialogClose(result: CredentialDialogResult): void {
         this.ShowCredentialDialog = false;
 
         if (result.success && result.credential) {
             // Add the new credential to the list and select it
-            this.credentials.push({
+            this.Credentials.push({
                 ID: result.credential.ID,
                 Name: result.credential.Name
             });
             // Sort credentials by name
-            this.credentials.sort((a, b) => a.Name.localeCompare(b.Name));
+            this.Credentials.sort((a, b) => a.Name.localeCompare(b.Name));
             // Select the new credential
-            this.connectionForm.patchValue({
+            this.ConnectionForm.patchValue({
                 CredentialID: result.credential.ID
             });
         }
@@ -209,20 +268,30 @@ export class MCPConnectionDialogComponent extends BaseAngularComponent implement
         this.cdr.detectChanges();
     }
 
-    public onServerChange(): void {
-        const serverId = this.connectionForm.get('MCPServerID')?.value;
-        const server = this.servers.find(s => UUIDsEqual(s.ID, serverId));
-        if (server && !this.connectionForm.get('Name')?.value) {
+    /** @deprecated Use {@link OnCredentialDialogClose}. */
+    public onCredentialDialogClose(result: CredentialDialogResult): void {
+      return this.OnCredentialDialogClose(result);
+    }
+
+    public OnServerChange(): void {
+        const serverId = this.ConnectionForm.get('MCPServerID')?.value;
+        const server = this.Servers.find(s => UUIDsEqual(s.ID, serverId));
+        if (server && !this.ConnectionForm.get('Name')?.value) {
             // Auto-fill name based on server
-            this.connectionForm.patchValue({
+            this.ConnectionForm.patchValue({
                 Name: `${server.Name} Connection`
             });
         }
     }
 
+    /** @deprecated Use {@link OnServerChange}. */
+    public onServerChange(): void {
+      return this.OnServerChange();
+    }
+
     public async save(): Promise<void> {
-        if (this.connectionForm.invalid) {
-            this.connectionForm.markAllAsTouched();
+        if (this.ConnectionForm.invalid) {
+            this.ConnectionForm.markAllAsTouched();
             return;
         }
 
@@ -241,7 +310,7 @@ export class MCPConnectionDialogComponent extends BaseAngularComponent implement
             }
 
             // Apply form values
-            const formValue = this.connectionForm.value;
+            const formValue = this.ConnectionForm.value;
             entity.MCPServerID = formValue.MCPServerID;
             entity.Name = formValue.Name;
             entity.Description = formValue.Description || null;
@@ -281,8 +350,13 @@ export class MCPConnectionDialogComponent extends BaseAngularComponent implement
         this.close.emit({ saved: false });
     }
 
-    public hasError(controlName: string, errorType: string): boolean {
-        const control = this.connectionForm.get(controlName);
+    public HasError(controlName: string, errorType: string): boolean {
+        const control = this.ConnectionForm.get(controlName);
         return control?.hasError(errorType) && control?.touched || false;
+    }
+
+    /** @deprecated Use {@link HasError}. */
+    public hasError(controlName: string, errorType: string): boolean {
+      return this.HasError(controlName, errorType);
     }
 }

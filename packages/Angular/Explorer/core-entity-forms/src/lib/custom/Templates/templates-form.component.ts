@@ -23,37 +23,177 @@ import { TemplateEditorConfig } from '../../shared/components/template-editor.co
 })
 export class MJTemplateFormComponentExtended extends MJTemplateFormComponent implements OnInit, OnDestroy, AfterViewInit {
     public record!: MJTemplateEntity;
-    public readonly toolbarConfig = CUSTOM_LAYOUT_TOOLBAR_CONFIG;
+    public readonly ToolbarConfig = CUSTOM_LAYOUT_TOOLBAR_CONFIG;
+
+    /** @deprecated Use {@link ToolbarConfig}. */
+    public get toolbarConfig() {
+      return this.ToolbarConfig;
+    }
 
     /** Custom-layout Template form looks best full-width on first open. */
     public override getDefaultFormWidthMode(): 'centered' | 'full-width' { return 'full-width'; }
-    public templateContents: MJTemplateContentEntity[] = [];
-    public selectedContentIndex: number = 0;
-    public isAddingNewContent: boolean = false;
-    public newTemplateContent: MJTemplateContentEntity | null = null;
-    public hasUnsavedChanges: boolean = false;
-    public templateInfoExpanded: boolean = true;
-    public templateContentsExpanded: boolean = true;
-    public categoryOptions: Array<{text: string, value: string}> = [
+    public TemplateContents: MJTemplateContentEntity[] = [];
+
+    /** @deprecated Use {@link TemplateContents}. */
+    public get templateContents(): MJTemplateContentEntity[] {
+      return this.TemplateContents;
+    }
+    /** @deprecated Use {@link TemplateContents}. */
+    public set templateContents(value: MJTemplateContentEntity[]) {
+      this.TemplateContents = value;
+    }
+    public SelectedContentIndex: number = 0;
+
+    /** @deprecated Use {@link SelectedContentIndex}. */
+    public get selectedContentIndex(): number {
+      return this.SelectedContentIndex;
+    }
+    /** @deprecated Use {@link SelectedContentIndex}. */
+    public set selectedContentIndex(value: number) {
+      this.SelectedContentIndex = value;
+    }
+    public IsAddingNewContent: boolean = false;
+
+    /** @deprecated Use {@link IsAddingNewContent}. */
+    public get isAddingNewContent(): boolean {
+      return this.IsAddingNewContent;
+    }
+    /** @deprecated Use {@link IsAddingNewContent}. */
+    public set isAddingNewContent(value: boolean) {
+      this.IsAddingNewContent = value;
+    }
+    public NewTemplateContent: MJTemplateContentEntity | null = null;
+
+    /** @deprecated Use {@link NewTemplateContent}. */
+    public get newTemplateContent(): MJTemplateContentEntity | null {
+      return this.NewTemplateContent;
+    }
+    /** @deprecated Use {@link NewTemplateContent}. */
+    public set newTemplateContent(value: MJTemplateContentEntity | null) {
+      this.NewTemplateContent = value;
+    }
+    public HasUnsavedChanges: boolean = false;
+
+    /** @deprecated Use {@link HasUnsavedChanges}. */
+    public get hasUnsavedChanges(): boolean {
+      return this.HasUnsavedChanges;
+    }
+    /** @deprecated Use {@link HasUnsavedChanges}. */
+    public set hasUnsavedChanges(value: boolean) {
+      this.HasUnsavedChanges = value;
+    }
+    public TemplateInfoExpanded: boolean = true;
+
+    /** @deprecated Use {@link TemplateInfoExpanded}. */
+    public get templateInfoExpanded(): boolean {
+      return this.TemplateInfoExpanded;
+    }
+    /** @deprecated Use {@link TemplateInfoExpanded}. */
+    public set templateInfoExpanded(value: boolean) {
+      this.TemplateInfoExpanded = value;
+    }
+    public TemplateContentsExpanded: boolean = true;
+
+    /** @deprecated Use {@link TemplateContentsExpanded}. */
+    public get templateContentsExpanded(): boolean {
+      return this.TemplateContentsExpanded;
+    }
+    /** @deprecated Use {@link TemplateContentsExpanded}. */
+    public set templateContentsExpanded(value: boolean) {
+      this.TemplateContentsExpanded = value;
+    }
+    public CategoryOptions: Array<{text: string, value: string}> = [
         { text: 'Select Category...', value: '' },
         // TODO: Load from database
     ];
-    public contentTypeOptions: Array<{text: string, value: string}> = [];
-    public supportedLanguages: LanguageDescription[] = languages;
+
+    /** @deprecated Use {@link CategoryOptions}. */
+    public get categoryOptions(): Array<{text: string, value: string}> {
+      return this.CategoryOptions;
+    }
+    /** @deprecated Use {@link CategoryOptions}. */
+    public set categoryOptions(value: Array<{text: string, value: string}>) {
+      this.CategoryOptions = value;
+    }
+    public ContentTypeOptions: Array<{text: string, value: string}> = [];
+
+    /** @deprecated Use {@link ContentTypeOptions}. */
+    public get contentTypeOptions(): Array<{text: string, value: string}> {
+      return this.ContentTypeOptions;
+    }
+    /** @deprecated Use {@link ContentTypeOptions}. */
+    public set contentTypeOptions(value: Array<{text: string, value: string}>) {
+      this.ContentTypeOptions = value;
+    }
+    public SupportedLanguages: LanguageDescription[] = languages;
+
+    /** @deprecated Use {@link SupportedLanguages}. */
+    public get supportedLanguages(): LanguageDescription[] {
+      return this.SupportedLanguages;
+    }
+    /** @deprecated Use {@link SupportedLanguages}. */
+    public set supportedLanguages(value: LanguageDescription[]) {
+      this.SupportedLanguages = value;
+    }
     
     @ViewChild('codeEditor') codeEditor: CodeEditorComponent | null = null;
     private isUpdatingEditorValue = false;
-    public isRunningTemplate = false;
-    public templateTestResult: string | null = null;
-    public templateTestError: string | null = null;
-    public showParamDialog = false;
+    public IsRunningTemplate = false;
+
+    /** @deprecated Use {@link IsRunningTemplate}. */
+    public get isRunningTemplate() {
+      return this.IsRunningTemplate;
+    }
+    /** @deprecated Use {@link IsRunningTemplate}. */
+    public set isRunningTemplate(value) {
+      this.IsRunningTemplate = value;
+    }
+    public TemplateTestResult: string | null = null;
+
+    /** @deprecated Use {@link TemplateTestResult}. */
+    public get templateTestResult(): string | null {
+      return this.TemplateTestResult;
+    }
+    /** @deprecated Use {@link TemplateTestResult}. */
+    public set templateTestResult(value: string | null) {
+      this.TemplateTestResult = value;
+    }
+    public TemplateTestError: string | null = null;
+
+    /** @deprecated Use {@link TemplateTestError}. */
+    public get templateTestError(): string | null {
+      return this.TemplateTestError;
+    }
+    /** @deprecated Use {@link TemplateTestError}. */
+    public set templateTestError(value: string | null) {
+      this.TemplateTestError = value;
+    }
+    public ShowParamDialog = false;
+
+    /** @deprecated Use {@link ShowParamDialog}. */
+    public get showParamDialog() {
+      return this.ShowParamDialog;
+    }
+    /** @deprecated Use {@link ShowParamDialog}. */
+    public set showParamDialog(value) {
+      this.ShowParamDialog = value;
+    }
     
     // Template editor configuration for shared component
-    public templateEditorConfig: TemplateEditorConfig = {
+    public TemplateEditorConfig: TemplateEditorConfig = {
         allowEdit: true,
         showRunButton: true,
         compactMode: false
     };
+
+    /** @deprecated Use {@link TemplateEditorConfig}. */
+    public get templateEditorConfig(): TemplateEditorConfig {
+      return this.TemplateEditorConfig;
+    }
+    /** @deprecated Use {@link TemplateEditorConfig}. */
+    public set templateEditorConfig(value: TemplateEditorConfig) {
+      this.TemplateEditorConfig = value;
+    }
     
     private destroy$ = new Subject<void>();
     private activeTimeouts: number[] = [];
@@ -61,9 +201,9 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
 
     async ngOnInit() {
         await super.ngOnInit();
-        await this.loadTemplateContents();
-        await this.loadCategories();
-        this.loadContentTypes();
+        await this.LoadTemplateContents();
+        await this.LoadCategories();
+        this.LoadContentTypes();
     }
 
     ngOnDestroy() {
@@ -80,7 +220,7 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
         this.syncEditorValue();
     }
 
-    async loadTemplateContents() {
+    async LoadTemplateContents() {
         if (this.record && this.record.ID) {
             try {
                 const rv = RunView.FromMetadataProvider(this.ProviderToUse);
@@ -91,16 +231,16 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
                     ResultType: 'entity_object'
                 });
                 
-                this.templateContents = results.Results;
+                this.TemplateContents = results.Results;
                 
                 // If we have contents but no selection, select the first one
-                if (this.templateContents.length > 0 && this.selectedContentIndex === 0) {
-                    this.selectedContentIndex = 0;
+                if (this.TemplateContents.length > 0 && this.SelectedContentIndex === 0) {
+                    this.SelectedContentIndex = 0;
                 }
                 
                 // If no template contents exist, create a default one for single-content optimization
-                if (this.templateContents.length === 0) {
-                    await this.createDefaultTemplateContent();
+                if (this.TemplateContents.length === 0) {
+                    await this.CreateDefaultTemplateContent();
                 }
 
                 // Entity change tracking is handled automatically by BaseEntity
@@ -113,7 +253,12 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
         }
     }
 
-    async createDefaultTemplateContent() {
+    /** @deprecated Use {@link LoadTemplateContents}. */
+    async loadTemplateContents() {
+      return this.LoadTemplateContents();
+    }
+
+    async CreateDefaultTemplateContent() {
         const md = this.ProviderToUse;
         const defaultContent = await md.GetEntityObject<MJTemplateContentEntity>('MJ: Template Contents');
         defaultContent.TemplateID = this.record.ID;
@@ -121,21 +266,26 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
         defaultContent.IsActive = true;
         
         // Set default to first real content type (skip "Select Type..." if it exists)
-        const validContentTypes = this.contentTypeOptions.filter(option => option.value !== '');
+        const validContentTypes = this.ContentTypeOptions.filter(option => option.value !== '');
         if (validContentTypes.length > 0) {
             defaultContent.TypeID = validContentTypes[0].value;
         }
         
-        this.templateContents = [defaultContent];
-        this.selectedContentIndex = 0;
+        this.TemplateContents = [defaultContent];
+        this.SelectedContentIndex = 0;
         
         // Sync editor value after creating default content
         this.syncEditorValue();
     }
 
-    async selectTemplateContent(index: number, confirmSwitch: boolean = true): Promise<void> {
+    /** @deprecated Use {@link CreateDefaultTemplateContent}. */
+    async createDefaultTemplateContent() {
+      return this.CreateDefaultTemplateContent();
+    }
+
+    async SelectTemplateContent(index: number, confirmSwitch: boolean = true): Promise<void> {
         // If we're adding new content and user clicks on existing content, ask for confirmation
-        if (this.isAddingNewContent && confirmSwitch) {
+        if (this.IsAddingNewContent && confirmSwitch) {
             if (!(await this.confirmService.Confirm({
                 title: 'Discard changes?',
                 message: 'Switch content version and lose your unsaved changes?',
@@ -145,9 +295,9 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
             }
         }
         
-        if (index >= 0 && index < this.templateContents.length) {
-            this.selectedContentIndex = index;
-            this.isAddingNewContent = false;
+        if (index >= 0 && index < this.TemplateContents.length) {
+            this.SelectedContentIndex = index;
+            this.IsAddingNewContent = false;
             // Don't clear newTemplateContent to preserve the work in progress
             
             // Sync editor value when switching content
@@ -155,14 +305,19 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
         }
     }
 
-    async loadCategories() {
+    /** @deprecated Use {@link SelectTemplateContent}. */
+    async selectTemplateContent(index: number, confirmSwitch: boolean = true): Promise<void> {
+      return this.SelectTemplateContent(index, confirmSwitch);
+    }
+
+    async LoadCategories() {
         try {
             const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const results = await rv.RunView({
                 EntityName: 'MJ: Template Categories' 
             });
             
-            this.categoryOptions = [
+            this.CategoryOptions = [
                 { text: 'Select Category...', value: '' },
                 ...results.Results.map((cat: any) => ({
                     text: cat.Name,
@@ -171,15 +326,20 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
             ];
         } catch (error) {
             console.error('Error loading categories:', error);
-            this.categoryOptions = [{ text: 'Select Category...', value: '' }];
+            this.CategoryOptions = [{ text: 'Select Category...', value: '' }];
         }
     }
 
-    loadContentTypes() {
+    /** @deprecated Use {@link LoadCategories}. */
+    async loadCategories() {
+      return this.LoadCategories();
+    }
+
+    LoadContentTypes() {
         try {
             // Get content types from TemplateEngine cache
             const contentTypes = TemplateEngineBase.Instance.TemplateContentTypes;
-            this.contentTypeOptions = [
+            this.ContentTypeOptions = [
                 { text: 'Select Type...', value: '' },
                 ...contentTypes.map(ct => ({
                     text: ct.Name,
@@ -189,7 +349,7 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
         } catch (error) {
             console.error('Error loading content types:', error);
             // Fallback to basic types
-            this.contentTypeOptions = [
+            this.ContentTypeOptions = [
                 { text: 'Select Type...', value: '' },
                 { text: 'HTML', value: 'HTML' },
                 { text: 'Plain Text', value: 'Text' },
@@ -198,12 +358,17 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
         }
     }
 
-    async onCategoryChange(value: string) {
+    /** @deprecated Use {@link LoadContentTypes}. */
+    loadContentTypes() {
+      return this.LoadContentTypes();
+    }
+
+    async OnCategoryChange(value: string) {
         // If it's a new category (string but not in existing options)
-        if (value && !this.categoryOptions.find(opt => opt.value === value)) {
+        if (value && !this.CategoryOptions.find(opt => opt.value === value)) {
             // Check for duplicate category names (case-insensitive, trimmed)
             if (this.isDuplicateCategory(value)) {
-                const existingCategory = this.categoryOptions.find(option => 
+                const existingCategory = this.CategoryOptions.find(option => 
                     option.text && option.text.trim().toLowerCase() === value.trim().toLowerCase()
                 );
                 if (existingCategory) {
@@ -227,7 +392,7 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
                 
                 if (saved) {
                     // Add to options and set the ID
-                    this.categoryOptions.push({
+                    this.CategoryOptions.push({
                         text: newCategory.Name,
                         value: newCategory.ID
                     });
@@ -252,52 +417,67 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
         }
     }
 
-    async addNewTemplateContent() {
+    /** @deprecated Use {@link OnCategoryChange}. */
+    async onCategoryChange(value: string) {
+      return this.OnCategoryChange(value);
+    }
+
+    async AddNewTemplateContent() {
         const md = this.ProviderToUse;
-        this.newTemplateContent = await md.GetEntityObject<MJTemplateContentEntity>('MJ: Template Contents');
-        this.newTemplateContent.TemplateID = this.record.ID;
-        this.newTemplateContent.Priority = this.templateContents.length + 1;
-        this.newTemplateContent.IsActive = true;
+        this.NewTemplateContent = await md.GetEntityObject<MJTemplateContentEntity>('MJ: Template Contents');
+        this.NewTemplateContent.TemplateID = this.record.ID;
+        this.NewTemplateContent.Priority = this.TemplateContents.length + 1;
+        this.NewTemplateContent.IsActive = true;
         
         // Set default to first real content type (skip "Select Type..." if it exists)
-        const validContentTypes = this.contentTypeOptions.filter(option => option.value !== '');
+        const validContentTypes = this.ContentTypeOptions.filter(option => option.value !== '');
         if (validContentTypes.length > 0) {
-            this.newTemplateContent.TypeID = validContentTypes[0].value;
+            this.NewTemplateContent.TypeID = validContentTypes[0].value;
         }
-        this.newTemplateContent.TemplateText = '';
+        this.NewTemplateContent.TemplateText = '';
         
         // Add immediately to the array
-        this.templateContents.push(this.newTemplateContent);
-        this.selectedContentIndex = this.templateContents.length - 1;
-        this.isAddingNewContent = true;
+        this.TemplateContents.push(this.NewTemplateContent);
+        this.SelectedContentIndex = this.TemplateContents.length - 1;
+        this.IsAddingNewContent = true;
         
         // Sync editor value when adding new content
         this.syncEditorValue();
     }
 
-    cancelNewTemplateContent() {
-        this.isAddingNewContent = false;
-        this.newTemplateContent = null;
+    /** @deprecated Use {@link AddNewTemplateContent}. */
+    async addNewTemplateContent() {
+      return this.AddNewTemplateContent();
     }
 
-    async deleteTemplateContent(index: number) {
-        if (index >= 0 && index < this.templateContents.length) {
-            const contentToDelete = this.templateContents[index];
+    CancelNewTemplateContent() {
+        this.IsAddingNewContent = false;
+        this.NewTemplateContent = null;
+    }
+
+    /** @deprecated Use {@link CancelNewTemplateContent}. */
+    cancelNewTemplateContent() {
+      return this.CancelNewTemplateContent();
+    }
+
+    async DeleteTemplateContent(index: number) {
+        if (index >= 0 && index < this.TemplateContents.length) {
+            const contentToDelete = this.TemplateContents[index];
 
             if (contentToDelete.ID) {
                 try {
                     const result = await contentToDelete.Delete();
                     if (result) {
-                        this.templateContents.splice(index, 1);
+                        this.TemplateContents.splice(index, 1);
                         
                         // Adjust selected index if necessary
-                        if (this.selectedContentIndex >= this.templateContents.length) {
-                            this.selectedContentIndex = Math.max(0, this.templateContents.length - 1);
+                        if (this.SelectedContentIndex >= this.TemplateContents.length) {
+                            this.SelectedContentIndex = Math.max(0, this.TemplateContents.length - 1);
                         }
                         
                         // If no contents remain, create a default one
-                        if (this.templateContents.length === 0) {
-                            await this.createDefaultTemplateContent();
+                        if (this.TemplateContents.length === 0) {
+                            await this.CreateDefaultTemplateContent();
                         }
                     } else {
                         console.error('Delete returned false');
@@ -308,15 +488,15 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
                 }
             } else {
                 // Not saved yet, just remove from array
-                this.templateContents.splice(index, 1);
-                if (this.selectedContentIndex >= this.templateContents.length) {
-                    this.selectedContentIndex = Math.max(0, this.templateContents.length - 1);
+                this.TemplateContents.splice(index, 1);
+                if (this.SelectedContentIndex >= this.TemplateContents.length) {
+                    this.SelectedContentIndex = Math.max(0, this.TemplateContents.length - 1);
                 }
                 
                 // Reset adding new content state if we're deleting the new content
-                if (this.isAddingNewContent && index === this.templateContents.length) {
-                    this.isAddingNewContent = false;
-                    this.newTemplateContent = null;
+                if (this.IsAddingNewContent && index === this.TemplateContents.length) {
+                    this.IsAddingNewContent = false;
+                    this.NewTemplateContent = null;
                 }
             }
         } else {
@@ -324,48 +504,78 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
         }
     }
 
-    get currentTemplateContent(): MJTemplateContentEntity | null {
-        if (this.isAddingNewContent) {
-            return this.newTemplateContent;
+    /** @deprecated Use {@link DeleteTemplateContent}. */
+    async deleteTemplateContent(index: number) {
+      return this.DeleteTemplateContent(index);
+    }
+
+    get CurrentTemplateContent(): MJTemplateContentEntity | null {
+        if (this.IsAddingNewContent) {
+            return this.NewTemplateContent;
         }
-        return this.templateContents[this.selectedContentIndex] || null;
+        return this.TemplateContents[this.SelectedContentIndex] || null;
     }
 
+    /** @deprecated Use {@link CurrentTemplateContent}. */
+    get currentTemplateContent(): MJTemplateContentEntity | null {
+      return this.CurrentTemplateContent;
+    }
+
+    get HasMultipleContents(): boolean {
+        return this.TemplateContents.length > 1 || this.IsAddingNewContent;
+    }
+
+    /** @deprecated Use {@link HasMultipleContents}. */
     get hasMultipleContents(): boolean {
-        return this.templateContents.length > 1 || this.isAddingNewContent;
+      return this.HasMultipleContents;
     }
 
-    onContentTypeChange() {
+    OnContentTypeChange() {
         // Content type changes just modify the current content, no new record creation
         this.updateUnsavedChangesFlag();
     }
 
-    onContentChange() {
+    /** @deprecated Use {@link OnContentTypeChange}. */
+    onContentTypeChange() {
+      return this.OnContentTypeChange();
+    }
+
+    OnContentChange() {
         this.updateUnsavedChangesFlag();
+    }
+
+    /** @deprecated Use {@link OnContentChange}. */
+    onContentChange() {
+      return this.OnContentChange();
     }
 
     /**
      * Updates the hasUnsavedChanges flag based on entity dirty states
      */
     private updateUnsavedChangesFlag() {
-        this.hasUnsavedChanges = this.templateContents.some(content => content.Dirty) || 
-                                this.isAddingNewContent ||
+        this.HasUnsavedChanges = this.TemplateContents.some(content => content.Dirty) || 
+                                this.IsAddingNewContent ||
                                 this.record?.Dirty || false;
     }
 
-    onTemplateTextChange(event: any) {
+    OnTemplateTextChange(event: any) {
         if (this.isUpdatingEditorValue) {
             // Ignore change events when we're programmatically updating the editor
             return;
         }
         
-        if (this.currentTemplateContent) {
+        if (this.CurrentTemplateContent) {
             // Extract value from event - might be event.target.value or just event depending on component
             const value = typeof event === 'string' ? event : (event.target?.value || event);
-            this.currentTemplateContent.TemplateText = value;
+            this.CurrentTemplateContent.TemplateText = value;
             // hasUnsavedChanges is automatically handled by entity's IsDirty flag
             this.updateUnsavedChangesFlag();
         }
+    }
+
+    /** @deprecated Use {@link OnTemplateTextChange}. */
+    onTemplateTextChange(event: any) {
+      return this.OnTemplateTextChange(event);
     }
 
     /**
@@ -397,7 +607,7 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
                 }
                 
                 this.isUpdatingEditorValue = true;
-                const newValue = this.currentTemplateContent?.TemplateText || '';
+                const newValue = this.CurrentTemplateContent?.TemplateText || '';
                 
                 // Use the setValue method from mj-code-editor component
                 this.codeEditor.setValue(newValue);  
@@ -406,10 +616,10 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
         });
     }
 
-    async saveTemplateContents(): Promise<boolean> {
+    async SaveTemplateContents(): Promise<boolean> {
         try {
             // Save all template contents that have changes
-            for (const content of this.templateContents) {
+            for (const content of this.TemplateContents) {
                 content.TemplateID = this.record.ID; // Ensure FK is set
                 if (content.Dirty || !content.ID) {
                     const contentResult = await content.Save();
@@ -420,8 +630,8 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
                 }
             }
 
-            this.isAddingNewContent = false;
-            this.newTemplateContent = null;
+            this.IsAddingNewContent = false;
+            this.NewTemplateContent = null;
             this.updateUnsavedChangesFlag(); // Update based on current entity states
             return true;
         } catch (error) {
@@ -430,12 +640,17 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
         }
     }
 
+    /** @deprecated Use {@link SaveTemplateContents}. */
+    async saveTemplateContents(): Promise<boolean> {
+      return this.SaveTemplateContents();
+    }
+
     async SaveRecord(StopEditModeAfterSave: boolean = true): Promise<boolean> {
         // Check if we need to create a new category first
-        if (this.record.CategoryID && !this.categoryOptions.find(opt => opt.value === this.record.CategoryID)) {
+        if (this.record.CategoryID && !this.CategoryOptions.find(opt => opt.value === this.record.CategoryID)) {
             // Check for duplicate category names (case-insensitive, trimmed)
             if (this.isDuplicateCategory(this.record.CategoryID)) {
-                const existingCategory = this.categoryOptions.find(option => 
+                const existingCategory = this.CategoryOptions.find(option => 
                     option.text && option.text.trim().toLowerCase() === this.record.CategoryID?.trim().toLowerCase()
                 );
                 if (existingCategory) {
@@ -457,7 +672,7 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
                     
                     if (saved) {
                         // Add to options and set the ID
-                        this.categoryOptions.push({
+                        this.CategoryOptions.push({
                             text: newCategory.Name,
                             value: newCategory.ID
                         });
@@ -491,24 +706,29 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
         
         if (templateSaved) {
             // Then save all template contents
-            return await this.saveTemplateContents();
+            return await this.SaveTemplateContents();
         }
         
         return false;
     }
 
-    getContentTypeDisplayText(typeId: string): string {
+    GetContentTypeDisplayText(typeId: string): string {
         if (!typeId) return '-';
-        const option = this.contentTypeOptions.find(opt => opt.value === typeId);
+        const option = this.ContentTypeOptions.find(opt => opt.value === typeId);
         return option ? option.text : typeId;
     }
 
-    getEditorLanguage(): string {
-        if (!this.currentTemplateContent?.TypeID) {
+    /** @deprecated Use {@link GetContentTypeDisplayText}. */
+    getContentTypeDisplayText(typeId: string): string {
+      return this.GetContentTypeDisplayText(typeId);
+    }
+
+    GetEditorLanguage(): string {
+        if (!this.CurrentTemplateContent?.TypeID) {
             return 'jinja2'; // default to jinja2 for template syntax (compatible with Nunjucks)
         }
 
-        const contentType = this.currentTemplateContent.TypeID.toLowerCase();
+        const contentType = this.CurrentTemplateContent.TypeID.toLowerCase();
         
         // Map content types to CodeMirror language modes
         switch (contentType) {
@@ -535,9 +755,14 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
         }
     }
 
+    /** @deprecated Use {@link GetEditorLanguage}. */
+    getEditorLanguage(): string {
+      return this.GetEditorLanguage();
+    }
+
     private isDuplicateCategory(categoryName: string): boolean {
         const normalizedName = categoryName.trim().toLowerCase();
-        return this.categoryOptions.some(option => 
+        return this.CategoryOptions.some(option => 
             option.text && option.text.trim().toLowerCase() === normalizedName
         );
     }
@@ -545,8 +770,8 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
     /**
      * Test run the current template using the parameter dialog
      */
-    async runTemplate() {
-        if (!this.record?.IsSaved || !this.currentTemplateContent) {
+    async RunTemplate() {
+        if (!this.record?.IsSaved || !this.CurrentTemplateContent) {
             MJNotificationService.Instance.CreateSimpleNotification(
                 'Please save the template before running it.', 
                 'warning'
@@ -555,7 +780,7 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
         }
 
         // Save any unsaved changes first
-        if (this.hasUnsavedChanges) {
+        if (this.HasUnsavedChanges) {
             const saveResult = await this.SaveRecord(false); // Don't exit edit mode
             if (!saveResult) {
                 MJNotificationService.Instance.CreateSimpleNotification(
@@ -567,34 +792,59 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
         }
 
         // Show the parameter dialog
-        this.showParamDialog = true;
+        this.ShowParamDialog = true;
+    }
+
+    /** @deprecated Use {@link RunTemplate}. */
+    async runTemplate() {
+      return this.RunTemplate();
     }
 
     /**
      * Handle parameter dialog close
      */
-    onParamDialogClose() {
-        this.showParamDialog = false;
+    OnParamDialogClose() {
+        this.ShowParamDialog = false;
     }
 
-    getContentTypeOptionsForContent(): Array<{text: string, value: string}> {
+    /** @deprecated Use {@link OnParamDialogClose}. */
+    onParamDialogClose() {
+      return this.OnParamDialogClose();
+    }
+
+    GetContentTypeOptionsForContent(): Array<{text: string, value: string}> {
         // Always exclude "Select Type..." option for all content
-        return this.contentTypeOptions.filter(option => option.value !== '');
+        return this.ContentTypeOptions.filter(option => option.value !== '');
+    }
+
+    /** @deprecated Use {@link GetContentTypeOptionsForContent}. */
+    getContentTypeOptionsForContent(): Array<{text: string, value: string}> {
+      return this.GetContentTypeOptionsForContent();
     }
 
     /**
      * Handles template content changes from the shared editor
      */
-    public onSharedTemplateContentChange(content: MJTemplateContentEntity[]) {
-        this.templateContents = content;
+    public OnSharedTemplateContentChange(content: MJTemplateContentEntity[]) {
+        this.TemplateContents = content;
         this.updateUnsavedChangesFlag();
+    }
+
+    /** @deprecated Use {@link OnSharedTemplateContentChange}. */
+    public onSharedTemplateContentChange(content: MJTemplateContentEntity[]) {
+      return this.OnSharedTemplateContentChange(content);
     }
 
     /**
      * Handles template run requests from the shared editor
      */
+    public OnSharedTemplateRun(template: MJTemplateEntity) {
+        this.RunTemplate();
+    }
+
+    /** @deprecated Use {@link OnSharedTemplateRun}. */
     public onSharedTemplateRun(template: MJTemplateEntity) {
-        this.runTemplate();
+      return this.OnSharedTemplateRun(template);
     }
 
 } 

@@ -26,13 +26,23 @@ export type AutotagTab = (typeof AUTOTAG_TABS)[number];
  * Cap an array of names to {@link AUTOTAG_AGENT_CONTEXT_NAME_LIST_CAP} entries.
  * Pure + deterministic; never mutates the input.
  */
-export function capAutotagNames(names: readonly string[]): string[] {
+export function CapAutotagNames(names: readonly string[]): string[] {
     return names.slice(0, AUTOTAG_AGENT_CONTEXT_NAME_LIST_CAP);
 }
 
+/** @deprecated Use {@link CapAutotagNames}. */
+export function capAutotagNames(names: readonly string[]): string[] {
+    return CapAutotagNames(names);
+}
+
 /** Type-guard for a Classify tab string — keeps SwitchClassifyTab tolerant of arbitrary input. */
-export function isValidAutotagTab(tab: unknown): tab is AutotagTab {
+export function IsValidAutotagTab(tab: unknown): tab is AutotagTab {
     return typeof tab === 'string' && (AUTOTAG_TABS as readonly string[]).includes(tab);
+}
+
+/** @deprecated Use {@link IsValidAutotagTab}. */
+export function isValidAutotagTab(tab: unknown): tab is AutotagTab {
+    return IsValidAutotagTab(tab);
 }
 
 /**
@@ -58,7 +68,7 @@ export type AutotagResolveResult<T> =
  *
  * Pure + deterministic. Returns a tolerant "available names" error on a miss (never throws).
  */
-export function resolveAutotagRecord<T extends AutotagRecordCandidate>(
+export function ResolveAutotagRecord<T extends AutotagRecordCandidate>(
     input: string,
     candidates: readonly T[],
 ): AutotagResolveResult<T> {
@@ -72,19 +82,32 @@ export function resolveAutotagRecord<T extends AutotagRecordCandidate>(
     if (byName) return { ok: true, value: byName };
     const byPartial = candidates.find(c => c.Name.toLowerCase().includes(needle));
     if (byPartial) return { ok: true, value: byPartial };
-    return { ok: false, error: buildAutotagNotFoundError(input, candidates.map(c => c.Name)) };
+    return { ok: false, error: BuildAutotagNotFoundError(input, candidates.map(c => c.Name)) };
+}
+
+/** @deprecated Use {@link ResolveAutotagRecord}. */
+export function resolveAutotagRecord<T extends AutotagRecordCandidate>(
+    input: string,
+    candidates: readonly T[],
+): AutotagResolveResult<T> {
+    return ResolveAutotagRecord(input, candidates);
 }
 
 /** Build a tolerant "not found" error listing a bounded sample of available names. */
-export function buildAutotagNotFoundError(input: string, availableNames: readonly string[]): string {
+export function BuildAutotagNotFoundError(input: string, availableNames: readonly string[]): string {
     if (availableNames.length === 0) {
         return `No match for "${input}". No records are loaded.`;
     }
-    const sample = capAutotagNames(availableNames).join(', ');
+    const sample = CapAutotagNames(availableNames).join(', ');
     const more = availableNames.length > AUTOTAG_AGENT_CONTEXT_NAME_LIST_CAP
         ? ` (+${availableNames.length - AUTOTAG_AGENT_CONTEXT_NAME_LIST_CAP} more)`
         : '';
     return `No record matches "${input}". Available: ${sample}${more}.`;
+}
+
+/** @deprecated Use {@link BuildAutotagNotFoundError}. */
+export function buildAutotagNotFoundError(input: string, availableNames: readonly string[]): string {
+    return BuildAutotagNotFoundError(input, availableNames);
 }
 
 /**
@@ -134,7 +157,7 @@ export interface AutotagAgentContextInput {
  * pipeline status + progress + stage, the inbox/health pending badges, and bounded lists of
  * source + content-type names the safe filter/select/open tools can target. Pure function.
  */
-export function buildAutotagAgentContext(input: AutotagAgentContextInput): Record<string, unknown> {
+export function BuildAutotagAgentContext(input: AutotagAgentContextInput): Record<string, unknown> {
     const context: Record<string, unknown> = {
         ActiveTab: input.ActiveTab,
         SourceCount: input.SourceCount,
@@ -156,18 +179,23 @@ export function buildAutotagAgentContext(input: AutotagAgentContextInput): Recor
     }
 
     if (input.SourceNames.length > 0) {
-        context['AvailableSourceNames'] = capAutotagNames(input.SourceNames);
+        context['AvailableSourceNames'] = CapAutotagNames(input.SourceNames);
         if (input.SourceNames.length > AUTOTAG_AGENT_CONTEXT_NAME_LIST_CAP) {
             context['SourceNameCount'] = input.SourceNames.length;
         }
     }
 
     if (input.ContentTypeNames.length > 0) {
-        context['AvailableContentTypeNames'] = capAutotagNames(input.ContentTypeNames);
+        context['AvailableContentTypeNames'] = CapAutotagNames(input.ContentTypeNames);
         if (input.ContentTypeNames.length > AUTOTAG_AGENT_CONTEXT_NAME_LIST_CAP) {
             context['ContentTypeNameCount'] = input.ContentTypeNames.length;
         }
     }
 
     return context;
+}
+
+/** @deprecated Use {@link BuildAutotagAgentContext}. */
+export function buildAutotagAgentContext(input: AutotagAgentContextInput): Record<string, unknown> {
+    return BuildAutotagAgentContext(input);
 }

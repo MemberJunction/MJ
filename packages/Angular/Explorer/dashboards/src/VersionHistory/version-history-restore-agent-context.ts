@@ -41,8 +41,13 @@ export type RestoreStatusFilter = (typeof RESTORE_STATUS_FILTERS)[number];
  * @param status - candidate status string (may be anything the agent passes)
  * @returns true when `status` is a known restore status or the empty string
  */
-export function isValidRestoreStatusFilter(status: unknown): status is RestoreStatusFilter {
+export function IsValidRestoreStatusFilter(status: unknown): status is RestoreStatusFilter {
     return typeof status === 'string' && (RESTORE_STATUS_FILTERS as readonly string[]).includes(status);
+}
+
+/** @deprecated Use {@link IsValidRestoreStatusFilter}. */
+export function isValidRestoreStatusFilter(status: unknown): status is RestoreStatusFilter {
+    return IsValidRestoreStatusFilter(status);
 }
 
 /** A bounded, agent-visible summary of one recent restore. */
@@ -78,7 +83,7 @@ export type RestoreResolution =
  * @param restores - the restores currently loaded
  * @returns the matched restore, or a clear error message
  */
-export function resolveRestore(
+export function ResolveRestore(
     reference: string,
     restores: readonly RestoreSnapshot[],
 ): RestoreResolution {
@@ -107,6 +112,14 @@ export function resolveRestore(
         .slice(0, RESTORE_LIST_CAP)
         .join(', ');
     return { ok: false, error: `No restore matches "${reference}". Available restores include: ${sample}.` };
+}
+
+/** @deprecated Use {@link ResolveRestore}. */
+export function resolveRestore(
+    reference: string,
+    restores: readonly RestoreSnapshot[],
+): RestoreResolution {
+    return ResolveRestore(reference, restores);
 }
 
 /**
@@ -152,7 +165,7 @@ export interface VersionHistoryRestoreAgentContextInput {
  * @param input - the component's current state snapshot
  * @returns a flat key-value object suitable for `SetAgentContext`
  */
-export function buildVersionHistoryRestoreAgentContext(
+export function BuildVersionHistoryRestoreAgentContext(
     input: VersionHistoryRestoreAgentContextInput,
 ): Record<string, unknown> {
     const context: Record<string, unknown> = {
@@ -172,4 +185,11 @@ export function buildVersionHistoryRestoreAgentContext(
         }
     }
     return context;
+}
+
+/** @deprecated Use {@link BuildVersionHistoryRestoreAgentContext}. */
+export function buildVersionHistoryRestoreAgentContext(
+    input: VersionHistoryRestoreAgentContextInput,
+): Record<string, unknown> {
+    return BuildVersionHistoryRestoreAgentContext(input);
 }

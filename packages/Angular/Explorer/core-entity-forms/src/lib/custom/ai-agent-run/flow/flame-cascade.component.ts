@@ -1,6 +1,6 @@
 import { Component, ElementRef, Input, Output, EventEmitter, ViewChild, OnDestroy, ChangeDetectionStrategy, ViewEncapsulation } from '@angular/core';
-import { FlowModel, FlowNode, FLOW_COLORS, shortLabel, formatDuration } from './agent-run-flow.model';
-import { svgEl, clip, appendIcon, appendTitle } from './flow-svg.util';
+import { FlowModel, FlowNode, FLOW_COLORS, ShortLabel, FormatDuration } from './agent-run-flow.model';
+import { SvgEl, Clip, AppendIcon, AppendTitle } from './flow-svg.util';
 import { PanZoomController } from './pan-zoom';
 
 interface FlameCell {
@@ -28,7 +28,16 @@ interface FlameCell {
 })
 export class FlameCascadeComponent implements OnDestroy {
   @ViewChild('svg', { static: true }) svgRef!: ElementRef<SVGSVGElement>;
-  @Output() nodeSelected = new EventEmitter<FlowNode>();
+  @Output() NodeSelected = new EventEmitter<FlowNode>();
+
+  /**
+   * @deprecated Use {@link NodeSelected}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (nodeSelected) keeps working. Must stay AFTER NodeSelected: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() nodeSelected = this.NodeSelected;
 
   private static seq = 0;
   private uid = 'flame' + (FlameCascadeComponent.seq++);
@@ -79,17 +88,17 @@ export class FlameCascadeComponent implements OnDestroy {
     const m = this._model!;
     const VH = this.TOP + (m.maxDepth + 1) * this.ROW + 26;
     svg.setAttribute('viewBox', `0 0 ${this.VW} ${VH}`);
-    const defs = svgEl('defs', {}, svg);
-    const main = svgEl('g', {}, svg);
-    const bands = svgEl('g', {}, main);
-    const grid = svgEl('g', {}, main);
-    const g = svgEl('g', {}, main);
+    const defs = SvgEl('defs', {}, svg);
+    const main = SvgEl('g', {}, svg);
+    const bands = SvgEl('g', {}, main);
+    const grid = SvgEl('g', {}, main);
+    const g = SvgEl('g', {}, main);
 
     // time axis
     for (let i = 0; i <= 10; i++) {
       const x = this.PAD + this.IW * i / 10;
-      svgEl('line', { x1: x, y1: this.TOP - 8, x2: x, y2: VH - 18, 'stroke-width': 1, class: 'fgrid' }, grid);
-      if (i % 2 === 0) svgEl('text', { x, y: this.TOP - 16, 'font-size': 9.5, 'text-anchor': 'middle', class: 'ftxt-muted', text: i * 10 + '%' }, grid);
+      SvgEl('line', { x1: x, y1: this.TOP - 8, x2: x, y2: VH - 18, 'stroke-width': 1, class: 'fgrid' }, grid);
+      if (i % 2 === 0) SvgEl('text', { x, y: this.TOP - 16, 'font-size': 9.5, 'text-anchor': 'middle', class: 'ftxt-muted', text: i * 10 + '%' }, grid);
     }
 
     // swimlane bands behind sub-agent / loop containers (nested grouping)
@@ -99,7 +108,7 @@ export class FlameCascadeComponent implements OnDestroy {
       const w = Math.max(2, (n.t1 - n.t0) * this.IW);
       const y = this.TOP + n.depth * this.ROW - 3;
       const h = (this.subtreeMaxDepth(n) - n.depth + 1) * this.ROW - this.GAP + 6;
-      const band = svgEl('rect', { x: x - 3, y, width: w + 6, height: h, rx: 12, fill: FLOW_COLORS[n.type], opacity: 0.07 }, bands);
+      const band = SvgEl('rect', { x: x - 3, y, width: w + 6, height: h, rx: 12, fill: FLOW_COLORS[n.type], opacity: 0.07 }, bands);
       band.setAttribute('stroke', FLOW_COLORS[n.type]);
       band.setAttribute('stroke-width', '1');
       band.setAttribute('stroke-opacity', '0.18');
@@ -111,42 +120,42 @@ export class FlameCascadeComponent implements OnDestroy {
       const y = this.TOP + n.depth * this.ROW;
       const h = this.ROW - this.GAP;
       const col = FLOW_COLORS[n.type];
-      const grp = svgEl('g', {}, g);
+      const grp = SvgEl('g', {}, g);
       (grp as SVGElement & { style: CSSStyleDeclaration }).style.color = col;
       (grp as SVGElement & { style: CSSStyleDeclaration }).style.cursor = 'pointer';
-      appendTitle(grp, `${n.name} · ${formatDuration(n.realDur)}`);
+      AppendTitle(grp, `${n.name} · ${FormatDuration(n.realDur)}`);
 
       // outline = always-visible structure; fill = animated progress overlay
-      const outline = svgEl('rect', { x, y, width: fw, height: h, rx: 8, fill: col, 'fill-opacity': 0.14, stroke: col, 'stroke-width': 1.4, 'stroke-opacity': 0.7 }, grp);
-      const fill = svgEl('rect', { x, y, width: 0, height: h, rx: 8, fill: col, opacity: 0 }, grp);
+      const outline = SvgEl('rect', { x, y, width: fw, height: h, rx: 8, fill: col, 'fill-opacity': 0.14, stroke: col, 'stroke-width': 1.4, 'stroke-opacity': 0.7 }, grp);
+      const fill = SvgEl('rect', { x, y, width: 0, height: h, rx: 8, fill: col, opacity: 0 }, grp);
 
       // label group, clipped to the bar so it never bleeds into neighbours
       const clipId = `${this.uid}-${n.id}`;
-      const cp = svgEl('clipPath', { id: clipId }, defs);
-      svgEl('rect', { x, y, width: fw, height: h, rx: 8 }, cp);
-      const content = svgEl('g', { 'clip-path': `url(#${clipId})` }, grp);
+      const cp = SvgEl('clipPath', { id: clipId }, defs);
+      SvgEl('rect', { x, y, width: fw, height: h, rx: 8 }, cp);
+      const content = SvgEl('g', { 'clip-path': `url(#${clipId})` }, grp);
       const cy = y + h / 2;
-      const name = shortLabel(n);
+      const name = ShortLabel(n);
       const showIcon = fw > 22;
       const iconRight = showIcon ? 30 : 9;
-      if (showIcon) appendIcon(content, x + 7, cy - 9, 18, n.iconClass, n.logoUrl, col);
+      if (showIcon) AppendIcon(content, x + 7, cy - 9, 18, n.iconClass, n.logoUrl, col);
       // shrink the font until the (already abbreviated) label fits, before giving up
       let fontSize = 0;
       for (const fs of [12.5, 11.5, 10.5, 9.5, 8.5]) {
         if (iconRight + name.length * fs * 0.56 + 8 <= fw) { fontSize = fs; break; }
       }
       if (fontSize > 0) {
-        svgEl('text', { x: x + iconRight, y: cy + 1, 'font-size': fontSize, 'font-weight': 600, 'dominant-baseline': 'middle', class: 'ftxt-on', text: name }, content);
+        SvgEl('text', { x: x + iconRight, y: cy + 1, 'font-size': fontSize, 'font-weight': 600, 'dominant-baseline': 'middle', class: 'ftxt-on', text: name }, content);
         if (n.realDur && iconRight + name.length * fontSize * 0.56 + 52 <= fw) {
-          svgEl('text', { x: x + fw - 12, y: cy + 1, 'font-size': 10.5, 'text-anchor': 'end', 'dominant-baseline': 'middle', class: 'ftxt-on', opacity: 0.72, text: formatDuration(n.realDur) }, content);
+          SvgEl('text', { x: x + fw - 12, y: cy + 1, 'font-size': 10.5, 'text-anchor': 'end', 'dominant-baseline': 'middle', class: 'ftxt-on', opacity: 0.72, text: FormatDuration(n.realDur) }, content);
         }
       }
-      grp.addEventListener('click', () => { if (!this.pz?.moved) this.nodeSelected.emit(n); });
+      grp.addEventListener('click', () => { if (!this.pz?.moved) this.NodeSelected.emit(n); });
       this.cells.set(n.id, { outline, fill, x, fw, node: n });
     }
 
-    this.playhead = svgEl('line', { x1: this.PAD, y1: this.TOP - 8, x2: this.PAD, y2: VH - 16, 'stroke-width': 1.5, opacity: 0, class: 'fhand' }, g);
-    this.playMark = svgEl('path', { d: `M${this.PAD - 5},${this.TOP - 14} L${this.PAD + 5},${this.TOP - 14} L${this.PAD},${this.TOP - 6} Z`, opacity: 0, class: 'fhand-dot' }, g);
+    this.playhead = SvgEl('line', { x1: this.PAD, y1: this.TOP - 8, x2: this.PAD, y2: VH - 16, 'stroke-width': 1.5, opacity: 0, class: 'fhand' }, g);
+    this.playMark = SvgEl('path', { d: `M${this.PAD - 5},${this.TOP - 14} L${this.PAD + 5},${this.TOP - 14} L${this.PAD},${this.TOP - 6} Z`, opacity: 0, class: 'fhand-dot' }, g);
 
     this.pz = new PanZoomController(svg, main, 'mj.agentRunFlow.view.flame.v1');
     this.pz.Load(); this.pz.Attach();

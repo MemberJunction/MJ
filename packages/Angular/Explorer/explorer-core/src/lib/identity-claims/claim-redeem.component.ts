@@ -209,17 +209,27 @@ export class ClaimRedeemComponent extends BaseAngularComponent implements OnInit
     }
 
     /** Navigates into the app shell (which handles sign-in when needed) */
-    public onGoToApp(): void {
+    public OnGoToApp(): void {
         this.router.navigateByUrl('/');
     }
 
+    /** @deprecated Use {@link OnGoToApp}. */
+    public onGoToApp(): void {
+        return this.OnGoToApp();
+    }
+
     /** Retries redemption from scratch (fresh component state) */
-    public onRetry(): void {
+    public OnRetry(): void {
         this.IsLoading = true;
         this.HasError = false;
         this.NeedsSignIn = false;
         this.ErrorMessage = '';
         this.isProcessing = false;
         void this.waitForProviderAndRedeem();
+    }
+
+    /** @deprecated Use {@link OnRetry}. */
+    public onRetry(): void {
+        return this.OnRetry();
     }
 }

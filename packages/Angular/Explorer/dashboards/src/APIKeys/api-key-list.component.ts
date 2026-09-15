@@ -78,19 +78,19 @@ export class APIKeyListComponent extends BaseAngularComponent implements OnInit,
     private categoryUIConfigs = new Map<string, { icon: string; color: string }>();
 
     async ngOnInit(): Promise<void> {
-        await this.loadKeys();
+        await this.LoadKeys();
     }
 
     async ngOnChanges(changes: SimpleChanges): Promise<void> {
         if (changes['Filter'] && !changes['Filter'].firstChange) {
-            this.applyFilters();
+            this.ApplyFilters();
         }
     }
 
     /**
      * Load all API keys
      */
-    public async loadKeys(): Promise<void> {
+    public async LoadKeys(): Promise<void> {
         this.IsLoading = true;
         try {
             const rv = RunView.FromMetadataProvider(this.ProviderToUse);
@@ -172,7 +172,7 @@ export class APIKeyListComponent extends BaseAngularComponent implements OnInit,
                 }
 
                 this.calculateStats();
-                this.applyFilters();
+                this.ApplyFilters();
             }
         } catch (error) {
             console.error('Error loading API keys:', error);
@@ -181,11 +181,21 @@ export class APIKeyListComponent extends BaseAngularComponent implements OnInit,
         }
     }
 
+    /** @deprecated Use {@link LoadKeys}. */
+    public async loadKeys(): Promise<void> {
+      return this.LoadKeys();
+    }
+
     /**
      * Get scope info for a key
      */
-    public getScopeInfo(key: MJAPIKeyEntity): KeyScopeInfo {
+    public GetScopeInfo(key: MJAPIKeyEntity): KeyScopeInfo {
         return this.KeyScopeMap.get(key.ID) || { count: 0, preview: [], categories: [] };
+    }
+
+    /** @deprecated Use {@link GetScopeInfo}. */
+    public getScopeInfo(key: MJAPIKeyEntity): KeyScopeInfo {
+      return this.GetScopeInfo(key);
     }
 
     /**
@@ -217,7 +227,7 @@ export class APIKeyListComponent extends BaseAngularComponent implements OnInit,
     /**
      * Apply filters and sorting
      */
-    public applyFilters(): void {
+    public ApplyFilters(): void {
         const now = new Date();
         const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
@@ -303,19 +313,34 @@ export class APIKeyListComponent extends BaseAngularComponent implements OnInit,
         this.CurrentPage = 1;
     }
 
+    /** @deprecated Use {@link ApplyFilters}. */
+    public applyFilters(): void {
+      return this.ApplyFilters();
+    }
+
     /**
      * Handle search input
      */
+    public OnSearch(): void {
+        this.ApplyFilters();
+    }
+
+    /** @deprecated Use {@link OnSearch}. */
     public onSearch(): void {
-        this.applyFilters();
+      return this.OnSearch();
     }
 
     /**
      * Clear search
      */
-    public clearSearch(): void {
+    public ClearSearch(): void {
         this.SearchText = '';
-        this.applyFilters();
+        this.ApplyFilters();
+    }
+
+    /** @deprecated Use {@link ClearSearch}. */
+    public clearSearch(): void {
+      return this.ClearSearch();
     }
 
     /** Dynamic title for the empty state — reflects search vs filter vs truly-empty. */
@@ -332,61 +357,91 @@ export class APIKeyListComponent extends BaseAngularComponent implements OnInit,
     /**
      * Set filter
      */
-    public setFilter(filter: APIKeyFilter): void {
+    public SetFilter(filter: APIKeyFilter): void {
         this.Filter = filter;
-        this.applyFilters();
+        this.ApplyFilters();
+    }
+
+    /** @deprecated Use {@link SetFilter}. */
+    public setFilter(filter: APIKeyFilter): void {
+      return this.SetFilter(filter);
     }
 
     /**
      * Toggle sort
      */
-    public toggleSort(field: typeof this.SortField): void {
+    public ToggleSort(field: typeof this.SortField): void {
         if (this.SortField === field) {
             this.SortDirection = this.SortDirection === 'asc' ? 'desc' : 'asc';
         } else {
             this.SortField = field;
             this.SortDirection = field === 'Label' ? 'asc' : 'desc';
         }
-        this.applyFilters();
+        this.ApplyFilters();
+    }
+
+    /** @deprecated Use {@link ToggleSort}. */
+    public toggleSort(field: typeof this.SortField): void {
+      return this.ToggleSort(field);
     }
 
     /**
      * Get sort icon class
      */
-    public getSortIcon(field: typeof this.SortField): string {
+    public GetSortIcon(field: typeof this.SortField): string {
         if (this.SortField !== field) return 'fa-solid fa-sort';
         return this.SortDirection === 'asc' ? 'fa-solid fa-sort-up' : 'fa-solid fa-sort-down';
+    }
+
+    /** @deprecated Use {@link GetSortIcon}. */
+    public getSortIcon(field: typeof this.SortField): string {
+      return this.GetSortIcon(field);
     }
 
     /**
      * Get paginated keys
      */
-    public getPaginatedKeys(): MJAPIKeyEntity[] {
+    public GetPaginatedKeys(): MJAPIKeyEntity[] {
         const start = (this.CurrentPage - 1) * this.PageSize;
         return this.FilteredKeys.slice(start, start + this.PageSize);
+    }
+
+    /** @deprecated Use {@link GetPaginatedKeys}. */
+    public getPaginatedKeys(): MJAPIKeyEntity[] {
+      return this.GetPaginatedKeys();
     }
 
     /**
      * Get total pages
      */
-    public getTotalPages(): number {
+    public GetTotalPages(): number {
         return Math.ceil(this.FilteredKeys.length / this.PageSize);
+    }
+
+    /** @deprecated Use {@link GetTotalPages}. */
+    public getTotalPages(): number {
+      return this.GetTotalPages();
     }
 
     /**
      * Go to page
      */
-    public goToPage(page: number): void {
-        if (page >= 1 && page <= this.getTotalPages()) {
+    public GoToPage(page: number): void {
+        if (page >= 1 && page <= this.GetTotalPages()) {
             this.CurrentPage = page;
         }
+    }
+
+    /** @deprecated Use {@link GoToPage}. */
+    public goToPage(page: number): void {
+      return this.GoToPage(page);
     }
 
     /**
      * Get page numbers to display
      */
-    public getPageNumbers(): number[] {
-        const total = this.getTotalPages();
+    public GetPageNumbers(): number[] {
+        const total = this.GetTotalPages();
         const current = this.CurrentPage;
         const pages: number[] = [];
 
@@ -408,18 +463,33 @@ export class APIKeyListComponent extends BaseAngularComponent implements OnInit,
         return pages;
     }
 
+    /** @deprecated Use {@link GetPageNumbers}. */
+    public getPageNumbers(): number[] {
+      return this.GetPageNumbers();
+    }
+
     /**
      * Select a key
      */
-    public selectKey(key: MJAPIKeyEntity): void {
+    public SelectKey(key: MJAPIKeyEntity): void {
         this.KeySelected.emit(key);
+    }
+
+    /** @deprecated Use {@link SelectKey}. */
+    public selectKey(key: MJAPIKeyEntity): void {
+      return this.SelectKey(key);
     }
 
     /**
      * Request key creation
      */
-    public requestCreate(): void {
+    public RequestCreate(): void {
         this.CreateRequested.emit();
+    }
+
+    /** @deprecated Use {@link RequestCreate}. */
+    public requestCreate(): void {
+      return this.RequestCreate();
     }
 
     /**
@@ -450,7 +520,7 @@ export class APIKeyListComponent extends BaseAngularComponent implements OnInit,
     /**
      * Format expiration for display
      */
-    public formatExpiration(date: Date | null): string {
+    public FormatExpiration(date: Date | null): string {
         if (!date) return 'Never';
 
         const now = new Date();
@@ -467,10 +537,15 @@ export class APIKeyListComponent extends BaseAngularComponent implements OnInit,
         return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     }
 
+    /** @deprecated Use {@link FormatExpiration}. */
+    public formatExpiration(date: Date | null): string {
+      return this.FormatExpiration(date);
+    }
+
     /**
      * Get expiration status class
      */
-    public getExpirationClass(key: MJAPIKeyEntity): string {
+    public GetExpirationClass(key: MJAPIKeyEntity): string {
         if (!key.ExpiresAt) return 'never';
 
         const now = new Date();
@@ -484,10 +559,15 @@ export class APIKeyListComponent extends BaseAngularComponent implements OnInit,
         return 'ok';
     }
 
+    /** @deprecated Use {@link GetExpirationClass}. */
+    public getExpirationClass(key: MJAPIKeyEntity): string {
+      return this.GetExpirationClass(key);
+    }
+
     /**
      * Get filter count
      */
-    public getFilterCount(filter: APIKeyFilter): number {
+    public GetFilterCount(filter: APIKeyFilter): number {
         switch (filter) {
             case 'all': return this.Stats.total;
             case 'active': return this.Stats.active;
@@ -496,5 +576,10 @@ export class APIKeyListComponent extends BaseAngularComponent implements OnInit,
             case 'expired': return this.Stats.expired;
             case 'never-used': return this.Stats.neverUsed;
         }
+    }
+
+    /** @deprecated Use {@link GetFilterCount}. */
+    public getFilterCount(filter: APIKeyFilter): number {
+      return this.GetFilterCount(filter);
     }
 }

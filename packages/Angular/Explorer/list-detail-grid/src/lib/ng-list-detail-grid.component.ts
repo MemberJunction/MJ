@@ -60,19 +60,46 @@ export class ListDetailGridComponent extends BaseAngularComponent implements OnI
    * When set, the component loads the list entity and builds a filter
    * to show only records that are in this list.
    */
-  @Input() listId: string | null = null;
+  @Input() ListId: string | null = null;
+
+  /** @deprecated Use {@link ListId}. */
+  @Input() set listId(value: string | null) {
+    this.ListId = value;
+  }
+  /** @deprecated Use {@link ListId}. */
+  get listId(): string | null {
+    return this.ListId;
+  }
 
   /**
    * Optional: The List entity object if already loaded.
    * If provided, avoids an extra database call to load the list.
    */
-  @Input() listEntity: MJListEntity | null = null;
+  @Input() ListEntity: MJListEntity | null = null;
+
+  /** @deprecated Use {@link ListEntity}. */
+  @Input() set listEntity(value: MJListEntity | null) {
+    this.ListEntity = value;
+  }
+  /** @deprecated Use {@link ListEntity}. */
+  get listEntity(): MJListEntity | null {
+    return this.ListEntity;
+  }
 
   /**
    * Whether to auto-navigate to the record when double-clicked.
    * Defaults to true.
    */
-  @Input() autoNavigate: boolean = true;
+  @Input() AutoNavigate: boolean = true;
+
+  /** @deprecated Use {@link AutoNavigate}. */
+  @Input() set autoNavigate(value: boolean) {
+    this.AutoNavigate = value;
+  }
+  /** @deprecated Use {@link AutoNavigate}. */
+  get autoNavigate(): boolean {
+    return this.AutoNavigate;
+  }
 
   /**
    * Height of the grid. Can be a number (pixels), 'auto', or 'fit-content'.
@@ -84,7 +111,16 @@ export class ListDetailGridComponent extends BaseAngularComponent implements OnI
    * Show the grid toolbar.
    * Defaults to true.
    */
-  @Input() showToolbar: boolean = true;
+  @Input() ShowToolbar: boolean = true;
+
+  /** @deprecated Use {@link ShowToolbar}. */
+  @Input() set showToolbar(value: boolean) {
+    this.ShowToolbar = value;
+  }
+  /** @deprecated Use {@link ShowToolbar}. */
+  get showToolbar(): boolean {
+    return this.ShowToolbar;
+  }
 
   /**
    * Selection mode for the grid.
@@ -95,38 +131,128 @@ export class ListDetailGridComponent extends BaseAngularComponent implements OnI
   /**
    * Emitted when a row is clicked (single click).
    */
-  @Output() rowClicked = new EventEmitter<ListGridRowClickedEvent>();
+  @Output() RowClicked = new EventEmitter<ListGridRowClickedEvent>();
+
+  /**
+   * @deprecated Use {@link RowClicked}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (rowClicked) keeps working. Must stay AFTER RowClicked: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() rowClicked = this.RowClicked;
 
   /**
    * Emitted when a row is double-clicked.
    */
-  @Output() rowDoubleClicked = new EventEmitter<ListGridRowClickedEvent>();
+  @Output() RowDoubleClicked = new EventEmitter<ListGridRowClickedEvent>();
+
+  /**
+   * @deprecated Use {@link RowDoubleClicked}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (rowDoubleClicked) keeps working. Must stay AFTER RowDoubleClicked: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() rowDoubleClicked = this.RowDoubleClicked;
 
   /**
    * Emitted when the grid data is loaded.
    */
-  @Output() dataLoaded = new EventEmitter<{ totalCount: number }>();
+  @Output() DataLoaded = new EventEmitter<{ totalCount: number }>();
+
+  /**
+   * @deprecated Use {@link DataLoaded}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (dataLoaded) keeps working. Must stay AFTER DataLoaded: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() dataLoaded = this.DataLoaded;
 
   /**
    * Emitted when row selection changes (for checkbox mode).
    */
-  @Output() selectionChange = new EventEmitter<string[]>();
+  @Output() SelectionChange = new EventEmitter<string[]>();
+
+  /**
+   * @deprecated Use {@link SelectionChange}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (selectionChange) keeps working. Must stay AFTER SelectionChange: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() selectionChange = this.SelectionChange;
 
   /**
    * Custom toolbar configuration. If not provided, uses default.
    */
-  @Input() toolbarConfig: GridToolbarConfig | null = null;
+  @Input() ToolbarConfig: GridToolbarConfig | null = null;
+
+  /** @deprecated Use {@link ToolbarConfig}. */
+  @Input() set toolbarConfig(value: GridToolbarConfig | null) {
+    this.ToolbarConfig = value;
+  }
+  /** @deprecated Use {@link ToolbarConfig}. */
+  get toolbarConfig(): GridToolbarConfig | null {
+    return this.ToolbarConfig;
+  }
 
   // ViewChild to access the underlying EDG component
   @ViewChild('entityDataGrid') entityDataGrid: EntityDataGridComponent | undefined;
 
   // Internal state
-  entityInfo: EntityInfo | null = null;
-  gridParams: RunViewParams | null = null;
+  EntityInfo: EntityInfo | null = null;
+
+  /** @deprecated Use {@link EntityInfo}. */
+  get entityInfo(): EntityInfo | null {
+    return this.EntityInfo;
+  }
+  /** @deprecated Use {@link EntityInfo}. */
+  set entityInfo(value: EntityInfo | null) {
+    this.EntityInfo = value;
+  }
+  GridParams: RunViewParams | null = null;
+
+  /** @deprecated Use {@link GridParams}. */
+  get gridParams(): RunViewParams | null {
+    return this.GridParams;
+  }
+  /** @deprecated Use {@link GridParams}. */
+  set gridParams(value: RunViewParams | null) {
+    this.GridParams = value;
+  }
   isLoading: boolean = false;
-  listLoaded: boolean = false;
-  selectedKeys: string[] = [];
-  totalRowCount: number = 0;
+  ListLoaded: boolean = false;
+
+  /** @deprecated Use {@link ListLoaded}. */
+  get listLoaded(): boolean {
+    return this.ListLoaded;
+  }
+  /** @deprecated Use {@link ListLoaded}. */
+  set listLoaded(value: boolean) {
+    this.ListLoaded = value;
+  }
+  SelectedKeys: string[] = [];
+
+  /** @deprecated Use {@link SelectedKeys}. */
+  get selectedKeys(): string[] {
+    return this.SelectedKeys;
+  }
+  /** @deprecated Use {@link SelectedKeys}. */
+  set selectedKeys(value: string[]) {
+    this.SelectedKeys = value;
+  }
+  TotalRowCount: number = 0;
+
+  /** @deprecated Use {@link TotalRowCount}. */
+  get totalRowCount(): number {
+    return this.TotalRowCount;
+  }
+  /** @deprecated Use {@link TotalRowCount}. */
+  set totalRowCount(value: number) {
+    this.TotalRowCount = value;
+  }
 
   // Default toolbar configuration - minimal for list display
   private defaultToolbarConfig: GridToolbarConfig = {
@@ -142,8 +268,13 @@ export class ListDetailGridComponent extends BaseAngularComponent implements OnI
   /**
    * Get the effective toolbar config (custom or default)
    */
+  get EffectiveToolbarConfig(): GridToolbarConfig {
+    return this.ToolbarConfig || this.defaultToolbarConfig;
+  }
+
+  /** @deprecated Use {@link EffectiveToolbarConfig}. */
   get effectiveToolbarConfig(): GridToolbarConfig {
-    return this.toolbarConfig || this.defaultToolbarConfig;
+    return this.EffectiveToolbarConfig;
   }
 
   constructor(
@@ -153,7 +284,7 @@ export class ListDetailGridComponent extends BaseAngularComponent implements OnI
     super();}
 
   ngOnInit(): void {
-    if (this.listId || this.listEntity) {
+    if (this.ListId || this.ListEntity) {
       this.loadList();
     }
   }
@@ -208,10 +339,10 @@ export class ListDetailGridComponent extends BaseAngularComponent implements OnI
    */
   private async loadList(): Promise<void> {
     // Reset state
-    this.listLoaded = false;
-    this.gridParams = null;
+    this.ListLoaded = false;
+    this.GridParams = null;
 
-    if (!this.listId && !this.listEntity) {
+    if (!this.ListId && !this.ListEntity) {
       return;
     }
 
@@ -220,12 +351,12 @@ export class ListDetailGridComponent extends BaseAngularComponent implements OnI
 
     try {
       const md = this.ProviderToUse;
-      let list: MJListEntity | null = this.listEntity;
+      let list: MJListEntity | null = this.ListEntity;
 
       // Load the list entity if not provided
-      if (!list && this.listId) {
+      if (!list && this.ListId) {
         list = await md.GetEntityObject<MJListEntity>('MJ: Lists');
-        await list.Load(this.listId);
+        await list.Load(this.ListId);
       }
 
       if (!list) {
@@ -240,7 +371,7 @@ export class ListDetailGridComponent extends BaseAngularComponent implements OnI
         return;
       }
 
-      this.entityInfo = entityInfo;
+      this.EntityInfo = entityInfo;
 
       // Get the List Details entity info to get the correct schema name
       const listDetailsEntityInfo = md.EntityByName('MJ: List Details');
@@ -261,14 +392,14 @@ export class ListDetailGridComponent extends BaseAngularComponent implements OnI
       // cached result — the grid would otherwise serve stale rows until a
       // server restart. `BypassCache: true` makes the server skip both
       // the cache lookup and the write for this query.
-      this.gridParams = {
+      this.GridParams = {
         EntityName: entityInfo.Name,
         ExtraFilter: extraFilter,
         ResultType: 'entity_object',
         BypassCache: true
       };
 
-      this.listLoaded = true;
+      this.ListLoaded = true;
     } catch (error) {
       console.error('Error loading list:', error);
     } finally {
@@ -280,116 +411,171 @@ export class ListDetailGridComponent extends BaseAngularComponent implements OnI
   /**
    * Handle row click event from the grid
    */
-  onRowClick(event: AfterRowClickEventArgs): void {
-    if (!this.entityInfo || !event.row) return;
+  OnRowClick(event: AfterRowClickEventArgs): void {
+    if (!this.EntityInfo || !event.row) return;
 
     const compositeKey = new CompositeKey();
-    compositeKey.LoadFromEntityInfoAndRecord(this.entityInfo, event.row);
+    compositeKey.LoadFromEntityInfoAndRecord(this.EntityInfo, event.row);
 
-    this.rowClicked.emit({
-      entityId: this.entityInfo.ID,
-      entityName: this.entityInfo.Name,
+    this.RowClicked.emit({
+      entityId: this.EntityInfo.ID,
+      entityName: this.EntityInfo.Name,
       compositeKey,
       record: event.row
     });
+  }
+
+  /** @deprecated Use {@link OnRowClick}. */
+  onRowClick(event: AfterRowClickEventArgs): void {
+    return this.OnRowClick(event);
   }
 
   /**
    * Handle row double-click event from the grid
    */
-  onRowDoubleClick(event: AfterRowDoubleClickEventArgs): void {
-    if (!this.entityInfo || !event.row) return;
+  OnRowDoubleClick(event: AfterRowDoubleClickEventArgs): void {
+    if (!this.EntityInfo || !event.row) return;
 
     const compositeKey = new CompositeKey();
-    compositeKey.LoadFromEntityInfoAndRecord(this.entityInfo, event.row);
+    compositeKey.LoadFromEntityInfoAndRecord(this.EntityInfo, event.row);
 
-    this.rowDoubleClicked.emit({
-      entityId: this.entityInfo.ID,
-      entityName: this.entityInfo.Name,
+    this.RowDoubleClicked.emit({
+      entityId: this.EntityInfo.ID,
+      entityName: this.EntityInfo.Name,
       compositeKey,
       record: event.row
     });
 
     // Auto-navigate if enabled - use SharedService for proper tab-based navigation
-    if (this.autoNavigate) {
-      this.sharedService.OpenEntityRecord(this.entityInfo.Name, compositeKey);
+    if (this.AutoNavigate) {
+      this.sharedService.OpenEntityRecord(this.EntityInfo.Name, compositeKey);
     }
+  }
+
+  /** @deprecated Use {@link OnRowDoubleClick}. */
+  onRowDoubleClick(event: AfterRowDoubleClickEventArgs): void {
+    return this.OnRowDoubleClick(event);
   }
 
   /**
    * Handle data loaded event from the grid
    */
+  OnDataLoaded(event: AfterDataLoadEventArgs): void {
+    this.TotalRowCount = event.totalRowCount;
+    this.DataLoaded.emit({ totalCount: event.totalRowCount });
+  }
+
+  /** @deprecated Use {@link OnDataLoaded}. */
   onDataLoaded(event: AfterDataLoadEventArgs): void {
-    this.totalRowCount = event.totalRowCount;
-    this.dataLoaded.emit({ totalCount: event.totalRowCount });
+    return this.OnDataLoaded(event);
   }
 
   /**
    * Handle selection change from the grid
    */
+  OnSelectionChange(keys: string[]): void {
+    this.SelectedKeys = keys;
+    this.SelectionChange.emit(keys);
+  }
+
+  /** @deprecated Use {@link OnSelectionChange}. */
   onSelectionChange(keys: string[]): void {
-    this.selectedKeys = keys;
-    this.selectionChange.emit(keys);
+    return this.OnSelectionChange(keys);
   }
 
   /**
    * Refresh the grid data
    */
-  refresh(): void {
+  Refresh(): void {
     // Re-trigger load to refresh data
     this.loadList();
+  }
+
+  /** @deprecated Use {@link Refresh}. */
+  refresh(): void {
+    return this.Refresh();
   }
 
   /**
    * Get the currently selected entity objects
    */
-  getSelectedRows(): Record<string, unknown>[] {
+  GetSelectedRows(): Record<string, unknown>[] {
     if (this.entityDataGrid) {
       return this.entityDataGrid.GetSelectedRows();
     }
     return [];
   }
 
+  /** @deprecated Use {@link GetSelectedRows}. */
+  getSelectedRows(): Record<string, unknown>[] {
+    return this.GetSelectedRows();
+  }
+
   /**
    * Clear all selections
    */
-  clearSelection(): void {
+  ClearSelection(): void {
     if (this.entityDataGrid) {
       this.entityDataGrid.ClearSelection();
     }
-    this.selectedKeys = [];
+    this.SelectedKeys = [];
+  }
+
+  /** @deprecated Use {@link ClearSelection}. */
+  clearSelection(): void {
+    return this.ClearSelection();
   }
 
   /**
    * Select specific rows by key
    */
-  selectRows(keys: string[], additive: boolean = false): void {
+  SelectRows(keys: string[], additive: boolean = false): void {
     if (this.entityDataGrid) {
       this.entityDataGrid.SelectRows(keys, additive);
     }
   }
 
+  /** @deprecated Use {@link SelectRows}. */
+  selectRows(keys: string[], additive: boolean = false): void {
+    return this.SelectRows(keys, additive);
+  }
+
   /**
    * Select all rows
    */
-  selectAll(): void {
+  SelectAll(): void {
     if (this.entityDataGrid) {
       this.entityDataGrid.SelectAll();
     }
   }
 
+  /** @deprecated Use {@link SelectAll}. */
+  selectAll(): void {
+    return this.SelectAll();
+  }
+
   /**
    * Get the total row count
    */
+  get RowCount(): number {
+    return this.TotalRowCount;
+  }
+
+  /** @deprecated Use {@link RowCount}. */
   get rowCount(): number {
-    return this.totalRowCount;
+    return this.RowCount;
   }
 
   /**
    * Get the selected row count
    */
+  get SelectedCount(): number {
+    return this.SelectedKeys.length;
+  }
+
+  /** @deprecated Use {@link SelectedCount}. */
   get selectedCount(): number {
-    return this.selectedKeys.length;
+    return this.SelectedCount;
   }
 
   /**

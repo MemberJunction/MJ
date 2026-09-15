@@ -27,7 +27,7 @@ import {
     TreeSelectableTypes,
     TreeStyleConfig,
     TreeKeyboardConfig,
-    createDefaultTreeNode
+    CreateDefaultTreeNode
 } from '../models/tree-types';
 import {
     BeforeNodeSelectEventArgs,
@@ -567,7 +567,7 @@ export class TreeComponent extends BaseAngularComponent implements OnInit, OnDes
     /**
      * Handle node click
      */
-    public onNodeClick(node: TreeNode, event: MouseEvent): void {
+    public OnNodeClick(node: TreeNode, event: MouseEvent): void {
         // Fire before click event
         const beforeClickEvent = new BeforeNodeClickEventArgs(this, node, event);
         this.BeforeNodeClick.emit(beforeClickEvent);
@@ -599,10 +599,15 @@ export class TreeComponent extends BaseAngularComponent implements OnInit, OnDes
         this.AfterNodeClick.emit(afterClickEvent);
     }
 
+    /** @deprecated Use {@link OnNodeClick}. */
+    public onNodeClick(node: TreeNode, event: MouseEvent): void {
+      return this.OnNodeClick(node, event);
+    }
+
     /**
      * Handle node double-click
      */
-    public onNodeDoubleClick(node: TreeNode, event: MouseEvent): void {
+    public OnNodeDoubleClick(node: TreeNode, event: MouseEvent): void {
         // Fire before event
         const beforeEvent = new BeforeNodeDoubleClickEventArgs(this, node, event);
         this.BeforeNodeDoubleClick.emit(beforeEvent);
@@ -621,12 +626,22 @@ export class TreeComponent extends BaseAngularComponent implements OnInit, OnDes
         this.AfterNodeDoubleClick.emit(afterEvent);
     }
 
+    /** @deprecated Use {@link OnNodeDoubleClick}. */
+    public onNodeDoubleClick(node: TreeNode, event: MouseEvent): void {
+      return this.OnNodeDoubleClick(node, event);
+    }
+
     /**
      * Handle toggle click
      */
-    public onToggleClick(node: TreeNode, event: MouseEvent): void {
+    public OnToggleClick(node: TreeNode, event: MouseEvent): void {
         event.stopPropagation();
         this.toggleNodeExpansion(node);
+    }
+
+    /** @deprecated Use {@link OnToggleClick}. */
+    public onToggleClick(node: TreeNode, event: MouseEvent): void {
+      return this.OnToggleClick(node, event);
     }
 
     // ========================================
@@ -1074,7 +1089,7 @@ export class TreeComponent extends BaseAngularComponent implements OnInit, OnDes
             const id = String(data[idField] || '');
             const parentId = data[parentIdField] ? String(data[parentIdField]) : null;
 
-            const node = createDefaultTreeNode({
+            const node = CreateDefaultTreeNode({
                 ID: id,
                 Label: String(data[displayField] || ''),
                 Type: 'branch',
@@ -1169,7 +1184,7 @@ export class TreeComponent extends BaseAngularComponent implements OnInit, OnDes
                 continue; // Skip leaves not in any branch via junction
             }
 
-            const leaf = createDefaultTreeNode({
+            const leaf = CreateDefaultTreeNode({
                 ID: id,
                 Label: String(data[displayField] || ''),
                 Type: 'leaf',
@@ -1205,7 +1220,7 @@ export class TreeComponent extends BaseAngularComponent implements OnInit, OnDes
                         } else {
                             // Additional attachments: create a clone of the leaf
                             // This allows the same artifact to appear under multiple collections
-                            const leafClone = createDefaultTreeNode({
+                            const leafClone = CreateDefaultTreeNode({
                                 ...leaf,
                                 ParentID: branchId,
                                 Level: parent.Level + 1,
@@ -1747,7 +1762,7 @@ export class TreeComponent extends BaseAngularComponent implements OnInit, OnDes
     /**
      * Get the padding for a node based on its level
      */
-    public getNodePadding(node: TreeNode): string {
+    public GetNodePadding(node: TreeNode): string {
         const basePadding = node.Level * this._indentSize;
         // Root-level leaves need a small indent since they have no toggle button
         // to align them with nested items
@@ -1757,10 +1772,15 @@ export class TreeComponent extends BaseAngularComponent implements OnInit, OnDes
         return `${basePadding}px`;
     }
 
+    /** @deprecated Use {@link GetNodePadding}. */
+    public getNodePadding(node: TreeNode): string {
+      return this.GetNodePadding(node);
+    }
+
     /**
      * Get CSS classes for a node
      */
-    public getNodeClasses(node: TreeNode): Record<string, boolean> {
+    public GetNodeClasses(node: TreeNode): Record<string, boolean> {
         return {
             'tree-node': true,
             'tree-node--branch': node.Type === 'branch',
@@ -1779,10 +1799,15 @@ export class TreeComponent extends BaseAngularComponent implements OnInit, OnDes
         };
     }
 
+    /** @deprecated Use {@link GetNodeClasses}. */
+    public getNodeClasses(node: TreeNode): Record<string, boolean> {
+      return this.GetNodeClasses(node);
+    }
+
     /**
      * Get container classes
      */
-    public getContainerClasses(): Record<string, boolean> {
+    public GetContainerClasses(): Record<string, boolean> {
         return {
             'tree-container': true,
             'tree-container--loading': this.IsLoading,
@@ -1791,17 +1816,27 @@ export class TreeComponent extends BaseAngularComponent implements OnInit, OnDes
         };
     }
 
+    /** @deprecated Use {@link GetContainerClasses}. */
+    public getContainerClasses(): Record<string, boolean> {
+      return this.GetContainerClasses();
+    }
+
     /**
      * Track nodes for ngFor
      */
-    public trackNode(index: number, node: TreeNode): string {
+    public TrackNode(index: number, node: TreeNode): string {
         return node.ID;
+    }
+
+    /** @deprecated Use {@link TrackNode}. */
+    public trackNode(index: number, node: TreeNode): string {
+      return this.TrackNode(index, node);
     }
 
     /**
      * Get label HTML with search text highlighted
      */
-    public getHighlightedLabel(node: TreeNode): string {
+    public GetHighlightedLabel(node: TreeNode): string {
         const label = node.Label;
 
         // No search text or node doesn't match - return plain label (escaped)
@@ -1824,6 +1859,11 @@ export class TreeComponent extends BaseAngularComponent implements OnInit, OnDes
         const after = label.substring(matchIndex + this.CurrentSearchText.length);
 
         return `${this.escapeHtml(before)}<mark class="tree-search-highlight">${this.escapeHtml(match)}</mark>${this.escapeHtml(after)}`;
+    }
+
+    /** @deprecated Use {@link GetHighlightedLabel}. */
+    public getHighlightedLabel(node: TreeNode): string {
+      return this.GetHighlightedLabel(node);
     }
 
     /**

@@ -27,24 +27,24 @@ import {
     buildDefaultFormScaffold,
     type CuratedFormSchema,
 } from '@memberjunction/interactive-component-types/forms';
-import { generateCodeFromCanvas, toComponentIdentifier } from '../ComponentStudio/services/canvas-to-code';
-import { parseCanvasFromCode } from '../ComponentStudio/services/code-to-canvas';
+import { GenerateCodeFromCanvas, ToComponentIdentifier } from '../ComponentStudio/services/canvas-to-code';
+import { ParseCanvasFromCode } from '../ComponentStudio/services/code-to-canvas';
 import {
-    buildEmptyCanvas,
-    generateCanvasId,
+    BuildEmptyCanvas,
+    GenerateCanvasId,
     type FormCanvasElement,
     type FormCanvasModel,
     type FormCanvasSection,
 } from '../ComponentStudio/services/form-canvas-model';
 import {
-    buildCanvasEditClientTools,
-    buildCanvasStateSummary,
-    collectFieldNames,
+    BuildCanvasEditClientTools,
+    BuildCanvasStateSummary,
+    CollectFieldNames,
     type CanvasEditHost,
 } from '../ComponentStudio/services/canvas-edit-transforms';
 import { EntityFormOverrideService } from '../ComponentStudio/services/entity-form-override.service';
 import { ConversationBridgeService } from '@memberjunction/ng-conversations';
-import { joinVersionsWithOverrides, pickActiveVersionID } from './form-builder-version-rail.helpers';
+import { JoinVersionsWithOverrides, PickActiveVersionID } from './form-builder-version-rail.helpers';
 import type { FormOverrideDialogResult } from '../ComponentStudio/components/form-override-dialog.component';
 
 /**
@@ -507,8 +507,13 @@ export class FormBuilderResourceComponent
     // Public so the template can bind it to <mj-conversation-chat-area>'s
     // [currentUser] input. The chat-area requires a UserInfo at mount time;
     // we gate it with @if(currentUser) in the template to avoid a null bind.
-    public get currentUser(): UserInfo | null {
+    public get CurrentUser(): UserInfo | null {
         return this.provider?.CurrentUser ?? null;
+    }
+
+    /** @deprecated Use {@link CurrentUser}. */
+    public get currentUser(): UserInfo | null {
+        return this.CurrentUser;
     }
 
     public async ngAfterViewInit(): Promise<void> {
@@ -541,7 +546,7 @@ export class FormBuilderResourceComponent
             // Fire-and-forget: if it hasn't loaded by first publish, the
             // libraries list will just be empty for that turn — degrades
             // gracefully.
-            void ComponentMetadataEngine.Instance.Config(false, this.currentUser ?? undefined, this.provider);
+            void ComponentMetadataEngine.Instance.Config(false, this.CurrentUser ?? undefined, this.provider);
             // Restore cockpit UI prefs (pane sizes, collapse, last tab)
             // from UserInfoEngine. Single JSON blob under FORM_BUILDER_PREFS_KEY.
             this.loadPrefs();
@@ -552,7 +557,7 @@ export class FormBuilderResourceComponent
             try {
                 await InteractiveFormsEngine.Instance.Config(
                     false,
-                    this.currentUser ?? undefined,
+                    this.CurrentUser ?? undefined,
                     this.provider,
                 );
             } catch (err) {
@@ -570,7 +575,7 @@ export class FormBuilderResourceComponent
                 InteractiveFormsEngine.Instance.Overrides$,
             ]).pipe(skip(1)).subscribe(() => {
                 void this.loadExistingForms();
-                if (this.SelectedFormName) void this.loadVersionsForActiveForm();
+                if (this.SelectedFormName) void this.LoadVersionsForActiveForm();
             });
             // Resolve the Form Builder agent ID once. Fire-and-forget — if it
             // doesn't resolve before the user opens chat, [defaultAgentId]
@@ -671,7 +676,7 @@ export class FormBuilderResourceComponent
                 } else {
                     // Lineage match isn't free to compute here, but
                     // refreshing the version rail is cheap and covers it.
-                    void this.loadVersionsForActiveForm();
+                    void this.LoadVersionsForActiveForm();
                 }
             }
         } catch (err) {
@@ -761,7 +766,7 @@ export class FormBuilderResourceComponent
         } else {
             // Couldn't locate the row (deleted? out-of-scope?) — just
             // refresh the version rail so the UI isn't stale.
-            await this.loadVersionsForActiveForm();
+            await this.LoadVersionsForActiveForm();
         }
     }
 
@@ -813,7 +818,7 @@ export class FormBuilderResourceComponent
             this.cdr.markForCheck();
             return;
         }
-        const user = this.currentUser;
+        const user = this.CurrentUser;
 
         // Build lookup ComponentID → override Status + EntityID from the
         // engine's cached overrides. Scoped to the current user's User-scope
@@ -910,7 +915,7 @@ export class FormBuilderResourceComponent
      * pinned-first. The result drives both the flat-list view and is
      * grouped by schema/entity for the tree view.
      */
-    public get filteredForms(): ReadonlyArray<FormComponentSummary> {
+    public get FilteredForms(): ReadonlyArray<FormComponentSummary> {
         const q = this.LeftRailFilter.trim().toLowerCase();
         const entityFilter = this.FormsEntityFilter.trim();
         const statusSet = this.FormsStatusFilter;
@@ -957,17 +962,22 @@ export class FormBuilderResourceComponent
         return [...pinned, ...unpinned];
     }
 
+    /** @deprecated Use {@link FilteredForms}. */
+    public get filteredForms(): ReadonlyArray<FormComponentSummary> {
+        return this.FilteredForms;
+    }
+
     /**
      * Tree-view groups: forms grouped by SchemaName → EntityName. Falls
      * back to a synthetic "(no entity)" group for forms without a
      * user-scope override bound to an entity.
      */
-    public get treeGroups(): ReadonlyArray<{
+    public get TreeGroups(): ReadonlyArray<{
         schema: string;
         entities: ReadonlyArray<{ entity: string; entityDisplay: string; icon: string | null; forms: ReadonlyArray<FormComponentSummary> }>;
     }> {
         const bySchema = new Map<string, Map<string, FormComponentSummary[]>>();
-        for (const f of this.filteredForms) {
+        for (const f of this.FilteredForms) {
             const schema = f.TargetEntitySchemaName ?? '(no schema)';
             const entity = f.TargetEntityName ?? '(no entity)';
             let byEntity = bySchema.get(schema);
@@ -996,13 +1006,21 @@ export class FormBuilderResourceComponent
         return out;
     }
 
+    /** @deprecated Use {@link TreeGroups}. */
+    public get treeGroups(): ReadonlyArray<{
+        schema: string;
+        entities: ReadonlyArray<{ entity: string; entityDisplay: string; icon: string | null; forms: ReadonlyArray<FormComponentSummary> }>;
+    }> {
+        return this.TreeGroups;
+    }
+
     /**
      * Distinct entity names that appear in the current forms list — used
      * to populate the entity-filter dropdown. Empty string ("") = "All
      * entities", added at the top. Search-text-filtered when the user
      * is typing into the dropdown's own search box.
      */
-    public get entityFilterOptions(): ReadonlyArray<{ name: string; display: string; icon: string | null; count: number }> {
+    public get EntityFilterOptions(): ReadonlyArray<{ name: string; display: string; icon: string | null; count: number }> {
         const counts = new Map<string, { name: string; display: string; icon: string | null; count: number }>();
         for (const f of this.ExistingForms) {
             if (!f.TargetEntityName) continue;
@@ -1019,6 +1037,11 @@ export class FormBuilderResourceComponent
         const q = this.EntityFilterSearch.trim().toLowerCase();
         if (!q) return list;
         return list.filter(o => o.display.toLowerCase().includes(q) || o.name.toLowerCase().includes(q));
+    }
+
+    /** @deprecated Use {@link EntityFilterOptions}. */
+    public get entityFilterOptions(): ReadonlyArray<{ name: string; display: string; icon: string | null; count: number }> {
+        return this.EntityFilterOptions;
     }
 
     public OnLeftRailFilterChange(event: Event): void {
@@ -1209,7 +1232,7 @@ export class FormBuilderResourceComponent
         if (mode === 'preview' && this.TargetEntityName && !this.PreviewRecord) {
             // Lazy-load on first switch — avoids the RunView on every form
             // pick when the user prefers Code or Layout.
-            void this.loadPreviewRecord();
+            void this.LoadPreviewRecord();
         }
     }
 
@@ -1232,7 +1255,7 @@ export class FormBuilderResourceComponent
         const base: Record<string, unknown> = this.SavedSpec
             ? { ...(this.SavedSpec as unknown as Record<string, unknown>) }
             : {};
-        base.name = toComponentIdentifier(this.SelectedFormName);
+        base.name = ToComponentIdentifier(this.SelectedFormName);
         base.componentRole = 'form';
         base.location = 'embedded';
         base.code = this.EditableCode;
@@ -1245,9 +1268,9 @@ export class FormBuilderResourceComponent
      * If the entity has no rows, we still mount the form against a synthetic
      * NewRecord() so the layout / styling / event handlers can be evaluated.
      */
-    public async loadPreviewRecord(): Promise<void> {
+    public async LoadPreviewRecord(): Promise<void> {
         const provider = this.provider;
-        const user = this.currentUser;
+        const user = this.CurrentUser;
         if (!provider || !user || !this.TargetEntityName) return;
         this.PreviewLoading = true;
         this.PreviewError = null;
@@ -1291,6 +1314,11 @@ export class FormBuilderResourceComponent
             this.PreviewLoading = false;
             this.cdr.markForCheck();
         }
+    }
+
+    /** @deprecated Use {@link LoadPreviewRecord}. */
+    public async loadPreviewRecord(): Promise<void> {
+        return this.LoadPreviewRecord();
     }
 
     /** Pull a human label from the record's NameField or primary key. */
@@ -1364,7 +1392,7 @@ export class FormBuilderResourceComponent
             return;
         }
         const provider = this.provider;
-        const user = this.currentUser;
+        const user = this.CurrentUser;
         if (!provider || !user) return;
         const entity = provider.EntityByName(this.TargetEntityName);
         const nameField = entity?.NameField?.Name;
@@ -1398,7 +1426,7 @@ export class FormBuilderResourceComponent
     /** User picked a different record from the search results — re-bind preview. */
     public async OnPreviewRecordPicked(item: { ID: string; Label: string }): Promise<void> {
         const provider = this.provider;
-        const user = this.currentUser;
+        const user = this.CurrentUser;
         if (!provider || !user || !this.TargetEntityName) return;
         const entityInfo = provider.EntityByName(this.TargetEntityName);
         if (!entityInfo) return;
@@ -1427,7 +1455,7 @@ export class FormBuilderResourceComponent
      * `SetCenterPaneMode('preview')` + record-load lifecycle. When no record
      * id is given, the standard Top-1 lazy load in `SetCenterPaneMode` runs.
      */
-    public previewForm(recordId?: string): void {
+    public PreviewForm(recordId?: string): void {
         this.SetCenterPaneMode('preview');
         const id = recordId?.trim();
         if (id) {
@@ -1435,6 +1463,11 @@ export class FormBuilderResourceComponent
             // from the loaded record's NameField, so we pass the raw id.
             void this.OnPreviewRecordPicked({ ID: id, Label: id });
         }
+    }
+
+    /** @deprecated Use {@link PreviewForm}. */
+    public previewForm(recordId?: string): void {
+        return this.PreviewForm(recordId);
     }
 
     /**
@@ -1711,7 +1744,7 @@ export class FormBuilderResourceComponent
      */
     private async loadLinkedConversationForActiveForm(): Promise<void> {
         const provider = this.provider;
-        const user = this.currentUser;
+        const user = this.CurrentUser;
         // Always blank the chat first so the chat-area sees a clear
         // input transition (B.ID -> null -> A.ID) when switching between
         // forms.
@@ -1768,7 +1801,7 @@ export class FormBuilderResourceComponent
             return;
         }
         const provider = this.provider;
-        const user = this.currentUser;
+        const user = this.CurrentUser;
         if (!provider || !user) return;
         try {
             const entity = await provider.GetEntityObject<MJConversationEntity>(
@@ -1879,7 +1912,7 @@ export class FormBuilderResourceComponent
      *
      * Kept `async` for callers that already `await` it; the body is sync.
      */
-    public async loadVersionsForActiveForm(): Promise<void> {
+    public async LoadVersionsForActiveForm(): Promise<void> {
         if (!this.SelectedFormName) {
             this.Versions = [];
             this.ActiveVersionID = null;
@@ -1887,7 +1920,7 @@ export class FormBuilderResourceComponent
             return;
         }
         const engine = InteractiveFormsEngine.Instance;
-        const user = this.currentUser;
+        const user = this.CurrentUser;
         if (!engine.Loaded || !user) {
             this.Versions = [];
             this.cdr.markForCheck();
@@ -1915,12 +1948,17 @@ export class FormBuilderResourceComponent
             const overrides = engine.GetUserOverrides(user.ID)
                 .filter(o => o.ComponentID && lineageIDs.has(NormalizeUUID(o.ComponentID)))
                 .map(o => ({ ComponentID: o.ComponentID, Status: o.Status }));
-            this.Versions = joinVersionsWithOverrides(lineage, overrides);
-            this.ActiveVersionID = pickActiveVersionID(this.Versions) ?? this.SelectedFormID;
+            this.Versions = JoinVersionsWithOverrides(lineage, overrides);
+            this.ActiveVersionID = PickActiveVersionID(this.Versions) ?? this.SelectedFormID;
         } finally {
             this.VersionsLoading = false;
             this.cdr.markForCheck();
         }
+    }
+
+    /** @deprecated Use {@link LoadVersionsForActiveForm}. */
+    public async loadVersionsForActiveForm(): Promise<void> {
+        return this.LoadVersionsForActiveForm();
     }
 
     /**
@@ -1958,7 +1996,7 @@ export class FormBuilderResourceComponent
         // reload. We intentionally don't try to mimic the action's logic on
         // the client — keeps the lifecycle in one place.
         const provider = this.provider;
-        if (!provider || !this.currentUser) return;
+        if (!provider || !this.CurrentUser) return;
         if (version.IsActive) return;   // already active, no-op
 
         // We don't have a direct action-invoke utility in the resource
@@ -1971,36 +2009,36 @@ export class FormBuilderResourceComponent
                 // Activate path: find the Pending override pointing at this version.
                 const pending = await rv.RunView<{ ID: string }>({
                     EntityName: 'MJ: Entity Form Overrides',
-                    ExtraFilter: `UserID='${this.currentUser.ID}' AND ComponentID='${version.ID}' AND Status='Pending'`,
+                    ExtraFilter: `UserID='${this.CurrentUser.ID}' AND ComponentID='${version.ID}' AND Status='Pending'`,
                     Fields: ['ID'],
                     MaxRows: 1,
                     ResultType: 'simple',
-                }, this.currentUser);
+                }, this.CurrentUser);
                 const overrideID = pending.Results?.[0]?.ID;
                 if (!overrideID) {
                     this.notifications.CreateSimpleNotification(
                         `Could not find a Pending override for ${version.Version}.`, 'warning', 3500);
                     return;
                 }
-                await this.overrideService.activateVersion(overrideID, this.currentUser ?? undefined, provider);
+                await this.overrideService.activateVersion(overrideID, this.CurrentUser ?? undefined, provider);
             } else {
                 // Revert path: find the user's Active override for the same lineage.
                 const active = await rv.RunView<{ ID: string }>({
                     EntityName: 'MJ: Entity Form Overrides',
-                    ExtraFilter: `UserID='${this.currentUser.ID}' AND ComponentID IN (${this.Versions.map(v => `'${v.ID}'`).join(',')}) AND Status='Active'`,
+                    ExtraFilter: `UserID='${this.CurrentUser.ID}' AND ComponentID IN (${this.Versions.map(v => `'${v.ID}'`).join(',')}) AND Status='Active'`,
                     Fields: ['ID'],
                     MaxRows: 1,
                     ResultType: 'simple',
-                }, this.currentUser);
+                }, this.CurrentUser);
                 const overrideID = active.Results?.[0]?.ID;
                 if (!overrideID) {
                     this.notifications.CreateSimpleNotification(
                         `Could not find an Active override to revert.`, 'warning', 3500);
                     return;
                 }
-                await this.overrideService.revertToComponent(overrideID, version.ID, this.currentUser ?? undefined, provider);
+                await this.overrideService.revertToComponent(overrideID, version.ID, this.CurrentUser ?? undefined, provider);
             }
-            await this.loadVersionsForActiveForm();
+            await this.LoadVersionsForActiveForm();
             this.notifications.CreateSimpleNotification(
                 `Version ${version.Version} is now Active.`, 'info', 3000);
         } catch (err) {
@@ -2065,7 +2103,7 @@ export class FormBuilderResourceComponent
         const sourceID = this.DiffSourceVersionID;
         try {
             const provider = this.provider;
-            const user = this.currentUser;
+            const user = this.CurrentUser;
             if (!provider || !user) return;
             const [src, tgt] = await Promise.all([
                 provider.GetEntityObject<MJComponentEntity>('MJ: Components', user).then(async e => { await e.Load(sourceID); return e; }),
@@ -2095,9 +2133,14 @@ export class FormBuilderResourceComponent
     }
 
     /** Helper: lookup the version row for a given ID, used in the diff title. */
-    public versionByID(id: string | null): ComponentVersionRow | null {
+    public VersionByID(id: string | null): ComponentVersionRow | null {
         if (!id) return null;
         return this.Versions.find(v => UUIDsEqual(v.ID, id)) ?? null;
+    }
+
+    /** @deprecated Use {@link VersionByID}. */
+    public versionByID(id: string | null): ComponentVersionRow | null {
+        return this.VersionByID(id);
     }
 
     public async OnFormPicked(form: FormComponentSummary): Promise<void> {
@@ -2107,7 +2150,7 @@ export class FormBuilderResourceComponent
             if (!provider) return;
             const componentEntity = await provider.GetEntityObject<MJComponentEntity>(
                 'MJ: Components',
-                this.currentUser ?? undefined,
+                this.CurrentUser ?? undefined,
             );
             const loaded = await componentEntity.Load(form.ID);
             if (!loaded) {
@@ -2147,7 +2190,7 @@ export class FormBuilderResourceComponent
             await this.loadLinkedConversationForActiveForm();
             // Populate the version rail (fire-and-forget — the rail shows
             // a loading spinner until this resolves).
-            this.loadVersionsForActiveForm();
+            this.LoadVersionsForActiveForm();
             // Reset preview state — record will lazy-load on next switch
             // to the Preview tab against the (new) target entity.
             this.PreviewRecord = null;
@@ -2156,7 +2199,7 @@ export class FormBuilderResourceComponent
             this.PreviewError = null;
             // If the user is already on the Preview tab, kick off loading now.
             if (this.CenterPaneMode === 'preview' && this.TargetEntityName) {
-                void this.loadPreviewRecord();
+                void this.LoadPreviewRecord();
             }
         } catch (err) {
             LogError(`FormBuilderResource.OnFormPicked: ${err instanceof Error ? err.message : String(err)}`);
@@ -2225,7 +2268,7 @@ export class FormBuilderResourceComponent
             return;
         }
         const provider = this.provider;
-        const user = this.currentUser;
+        const user = this.CurrentUser;
         if (!provider || !user) {
             this.notifications.CreateSimpleNotification(
                 'No provider or user — cannot update status.', 'error', 4000);
@@ -2282,7 +2325,7 @@ export class FormBuilderResourceComponent
             MaxRows: 1,
             ResultType: 'simple',
             BypassCache: true,
-        }, this.currentUser ?? undefined);
+        }, this.CurrentUser ?? undefined);
         const row = result.Success ? result.Results?.[0] : null;
         if (!row) {
             this.ActiveOverrideID = null;
@@ -2383,12 +2426,17 @@ export class FormBuilderResourceComponent
         this.cdr.markForCheck();
     }
 
-    public get filteredEntityChoices(): ReadonlyArray<{ Name: string; DisplayName: string }> {
+    public get FilteredEntityChoices(): ReadonlyArray<{ Name: string; DisplayName: string }> {
         const q = this.EntityPickerSearch.trim().toLowerCase();
         if (!q) return this.EntityChoices;
         return this.EntityChoices.filter(e =>
             e.Name.toLowerCase().includes(q) ||
             e.DisplayName.toLowerCase().includes(q));
+    }
+
+    /** @deprecated Use {@link FilteredEntityChoices}. */
+    public get filteredEntityChoices(): ReadonlyArray<{ Name: string; DisplayName: string }> {
+        return this.FilteredEntityChoices;
     }
 
     public OnEntityPicked(entityName: string): void {
@@ -2407,12 +2455,12 @@ export class FormBuilderResourceComponent
         // compiler requires the function name in the emitted code to match
         // `spec.name` exactly, so we drive both from the same source.
         if (this.IsNewForm && !this.SelectedFormName?.trim()) {
-            this.SelectedFormName = toComponentIdentifier(schema.displayName);
+            this.SelectedFormName = ToComponentIdentifier(schema.displayName);
         }
         const existing = this.EditableCode ?? '';
         if (existing.length > 0) {
-            const result = parseCanvasFromCode(existing, schema);
-            this.Canvas = result.canvas ?? buildEmptyCanvas(entityName, schema.displayName);
+            const result = ParseCanvasFromCode(existing, schema);
+            this.Canvas = result.canvas ?? BuildEmptyCanvas(entityName, schema.displayName);
         } else if (this.IsNewForm) {
             // Retrospective fix #4: new-form flow seeds the canvas + code
             // from the CodeGen-equivalent scaffold. Previously the user got
@@ -2421,13 +2469,13 @@ export class FormBuilderResourceComponent
             const scaffold = buildDefaultFormScaffold(entityName, provider);
             if (scaffold?.code) {
                 this.EditableCode = scaffold.code;
-                const result = parseCanvasFromCode(scaffold.code, schema);
-                this.Canvas = result.canvas ?? buildEmptyCanvas(entityName, schema.displayName);
+                const result = ParseCanvasFromCode(scaffold.code, schema);
+                this.Canvas = result.canvas ?? BuildEmptyCanvas(entityName, schema.displayName);
             } else {
-                this.Canvas = buildEmptyCanvas(entityName, schema.displayName);
+                this.Canvas = BuildEmptyCanvas(entityName, schema.displayName);
             }
         } else {
-            this.Canvas = buildEmptyCanvas(entityName, schema.displayName);
+            this.Canvas = BuildEmptyCanvas(entityName, schema.displayName);
         }
         this.SelectedElementId = null;
         this.SelectedSectionId = this.Canvas?.sections[0]?.id ?? null;
@@ -2540,7 +2588,7 @@ export class FormBuilderResourceComponent
                 ? {
                     ...s,
                     elements: [...s.elements, {
-                        id: generateCanvasId('field'),
+                        id: GenerateCanvasId('field'),
                         type: 'field',
                         fieldName: payload.fieldName,
                         span: 1,
@@ -2572,7 +2620,7 @@ export class FormBuilderResourceComponent
             // `function <Name>(...)` matches `spec.name` at save time. Falls
             // back to the entity displayName for safety.
             const name = this.SelectedFormName?.trim() || this.Schema.displayName;
-            const code = generateCodeFromCanvas(this.Canvas, this.Schema, name);
+            const code = GenerateCodeFromCanvas(this.Canvas, this.Schema, name);
             this.EditableCode = code;
         } catch (err) {
             LogError(`FormBuilderResource.regenerateCode: ${err instanceof Error ? err.message : String(err)}`);
@@ -2585,9 +2633,9 @@ export class FormBuilderResourceComponent
             this.CanvasDiverged = false;
             return;
         }
-        const result = parseCanvasFromCode(this.EditableCode, this.Schema);
+        const result = ParseCanvasFromCode(this.EditableCode, this.Schema);
         this.Canvas = result.canvas
-            ?? buildEmptyCanvas(this.TargetEntityName, this.Schema.displayName);
+            ?? BuildEmptyCanvas(this.TargetEntityName, this.Schema.displayName);
         // Retrospective fix #6: parseCanvasFromCode signals "code has stuff
         // the canvas can't represent" via `hasUnknownConstructs` (true when
         // the parser found JSX it couldn't round-trip) and `canvas: null`
@@ -2612,7 +2660,7 @@ export class FormBuilderResourceComponent
         this.regenerateCode();
 
         const provider = this.provider;
-        const user = this.currentUser;
+        const user = this.CurrentUser;
         if (!provider || !user) {
             this.notifications.CreateSimpleNotification(
                 'No metadata provider or current user — cannot save.', 'error', 4000);
@@ -2637,7 +2685,7 @@ export class FormBuilderResourceComponent
                 // runtime compiler requires `spec.name` to match the emitted
                 // `function <Name>(...)`. Free-form names with spaces or
                 // punctuation would mismatch and fail compilation.
-                const safeName = toComponentIdentifier(
+                const safeName = ToComponentIdentifier(
                     this.SelectedFormName?.trim() || `Form for ${this.TargetEntityName}`);
                 componentEntity.Name = safeName;
                 this.SelectedFormName = safeName;
@@ -2741,7 +2789,7 @@ export class FormBuilderResourceComponent
             return;
         }
         const provider = this.provider;
-        const user = this.currentUser;
+        const user = this.CurrentUser;
         if (!provider || !user) {
             this.notifications.CreateSimpleNotification(
                 'No metadata provider or current user — cannot delete.', 'error', 4000);
@@ -2813,7 +2861,7 @@ export class FormBuilderResourceComponent
 
     public async OnFormOverrideDialogConfirm(result: FormOverrideDialogResult): Promise<void> {
         this.ShowFormOverrideDialog = false;
-        const user = this.currentUser;
+        const user = this.CurrentUser;
         if (!user) {
             this.notifications.CreateSimpleNotification(
                 'No current user — cannot save.', 'error', 4000);
@@ -2829,7 +2877,7 @@ export class FormBuilderResourceComponent
                 // chrome (status pill, etc.) reflects the new values.
                 await this.loadExistingForms();
                 if (this.SelectedFormID) {
-                    void this.loadVersionsForActiveForm();
+                    void this.LoadVersionsForActiveForm();
                     void this.refreshActiveOverrideMetadata(this.SelectedFormID);
                 }
             } else {
@@ -2890,7 +2938,7 @@ export class FormBuilderResourceComponent
      */
     public async OpenEditFormDetailsDialog(): Promise<void> {
         const provider = this.provider;
-        const user = this.currentUser;
+        const user = this.CurrentUser;
         if (!provider || !user || !this.ActiveOverrideID) {
             this.notifications.CreateSimpleNotification(
                 'No active override to edit. Save the form first.', 'info', 4000);
@@ -2967,7 +3015,7 @@ export class FormBuilderResourceComponent
      */
     private async refreshActiveOverrideMetadata(componentID: string): Promise<void> {
         const provider = this.provider;
-        const user = this.currentUser;
+        const user = this.CurrentUser;
         if (!provider || !user) return;
         try {
             const rv = RunView.FromMetadataProvider(provider);
@@ -3130,9 +3178,9 @@ export class FormBuilderResourceComponent
         return {
             GetCanvas: () => this.Canvas,
             ApplyCanvas: (next: FormCanvasModel) => this.OnCanvasChanged(next),
-            NewElementId: () => generateCanvasId('field'),
-            NewSectionId: () => generateCanvasId('section'),
-            PreviewForm: (recordId?: string) => this.previewForm(recordId),
+            NewElementId: () => GenerateCanvasId('field'),
+            NewSectionId: () => GenerateCanvasId('section'),
+            PreviewForm: (recordId?: string) => this.PreviewForm(recordId),
             ViewFormCode: () => this.SetCenterPaneMode('code'),
             ViewFormLayout: () => this.SetCenterPaneMode('layout'),
         };
@@ -3165,7 +3213,7 @@ export class FormBuilderResourceComponent
         const canvas = this.Canvas;
         if (!canvas) return [];
         const issues: string[] = [];
-        const totalFields = collectFieldNames(canvas).length;
+        const totalFields = CollectFieldNames(canvas).length;
         if (totalFields === 0) {
             issues.push('The form has no fields placed yet.');
         }
@@ -3214,7 +3262,7 @@ export class FormBuilderResourceComponent
                         SelectedElementId: this.SelectedElementId,
                         SelectedSectionId: this.SelectedSectionId,
                         CenterPaneMode: this.CenterPaneMode,
-                        AllFieldNames: this.Canvas ? collectFieldNames(this.Canvas) : [],
+                        AllFieldNames: this.Canvas ? CollectFieldNames(this.Canvas) : [],
                         // Deep, bounded canvas-state summary: section list with
                         // per-section field counts, every placed element
                         // addressable by id AND label, the curated entity
@@ -3224,7 +3272,7 @@ export class FormBuilderResourceComponent
                         // email field required" or "add the Phone field" with
                         // no tool round-trip to discover what's there. All
                         // lists are capped (with *Truncated / *Count companions).
-                        CanvasSummary: buildCanvasStateSummary(
+                        CanvasSummary: BuildCanvasStateSummary(
                             this.Canvas,
                             this.Schema?.fields.map(f => f.name) ?? [],
                             this.SelectedElementId,
@@ -3331,7 +3379,7 @@ export class FormBuilderResourceComponent
                         return { Success: true };
                     },
                 },
-                ...buildCanvasEditClientTools(this.buildCanvasEditHost()),
+                ...BuildCanvasEditClientTools(this.buildCanvasEditHost()),
             ]);
         } catch (err) {
             LogError(`FormBuilderResource.registerAgentContext: ${err instanceof Error ? err.message : String(err)}`);

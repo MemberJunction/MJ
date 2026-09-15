@@ -34,7 +34,7 @@ export interface ResolvableVennRegion {
  * @param regions - The currently-available intersections.
  * @param query - The agent-supplied region identifier (label or set-label list).
  */
-export function resolveVennRegion<T extends ResolvableVennRegion>(
+export function ResolveVennRegion<T extends ResolvableVennRegion>(
     regions: readonly T[],
     query: string,
 ): T | null {
@@ -71,4 +71,12 @@ export function resolveVennRegion<T extends ResolvableVennRegion>(
     }
 
     return null;
+}
+
+/** @deprecated Use {@link ResolveVennRegion}. */
+export function resolveVennRegion<T extends ResolvableVennRegion>(
+    regions: readonly T[],
+    query: string,
+): T | null {
+    return ResolveVennRegion(regions, query);
 }

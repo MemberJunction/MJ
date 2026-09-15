@@ -5,15 +5,15 @@ import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData, MJCompanyIntegrationEntity, MJScheduledJobEntity } from '@memberjunction/core-entities';
 import { IntegrationDataService, ResolveIntegrationIcon } from '../../services/integration-data.service';
 import {
-  buildSchedulesAgentContext,
-  resolveIntegrationSurface,
-  navLabelForSurface,
-  resolveIntegrationRecord,
-  buildIntegrationNotFoundError,
+  BuildSchedulesAgentContext,
+  ResolveIntegrationSurface,
+  NavLabelForSurface,
+  ResolveIntegrationRecord,
+  BuildIntegrationNotFoundError,
   ScheduleSummary,
   NamedIntegrationRecord,
 } from '../../integration-agent-context';
-import { AgentToolResult, validateStringParam } from '../../../shared/agent-tool-validation';
+import { AgentToolResult, ValidateStringParam } from '../../../shared/agent-tool-validation';
 
 // ---------------------------------------------------------------------------
 // Data interfaces
@@ -160,7 +160,7 @@ export class SchedulesComponent extends BaseResourceComponent implements OnInit,
   }
 
   private emitAgentContext(): void {
-    const context = buildSchedulesAgentContext({
+    const context = BuildSchedulesAgentContext({
       KPIs: {
         TotalIntegrations: this.Schedules.length,
         ActiveSyncs: 0,
@@ -208,11 +208,11 @@ export class SchedulesComponent extends BaseResourceComponent implements OnInit,
   }
 
   private async toolSwitchSurface(params: Record<string, unknown>): Promise<AgentToolResult> {
-    const surface = resolveIntegrationSurface(params['surface']);
+    const surface = ResolveIntegrationSurface(params['surface']);
     if (!surface) {
       return { Success: false, ErrorMessage: 'Invalid surface. Expected one of: Overview, Connections, Activity, Schedules.' };
     }
-    const tabId = await this.navigationService.OpenNavItemByName(navLabelForSurface(surface));
+    const tabId = await this.navigationService.OpenNavItemByName(NavLabelForSurface(surface));
     if (!tabId) {
       return { Success: false, ErrorMessage: `Could not open the "${surface}" surface.` };
     }
@@ -220,7 +220,7 @@ export class SchedulesComponent extends BaseResourceComponent implements OnInit,
   }
 
   private toolOpenScheduleRecord(params: Record<string, unknown>): AgentToolResult {
-    const check = validateStringParam(params['integration'], 'integration');
+    const check = ValidateStringParam(params['integration'], 'integration');
     if (!check.ok) {
       return check.result;
     }
@@ -228,9 +228,9 @@ export class SchedulesComponent extends BaseResourceComponent implements OnInit,
       ID: s.ID,
       Name: s.Integration ?? s.Name,
     }));
-    const match = resolveIntegrationRecord(check.value, candidates);
+    const match = ResolveIntegrationRecord(check.value, candidates);
     if (!match) {
-      return { Success: false, ErrorMessage: buildIntegrationNotFoundError(check.value, candidates, 'integration') };
+      return { Success: false, ErrorMessage: BuildIntegrationNotFoundError(check.value, candidates, 'integration') };
     }
     this.navigationService.OpenEntityRecord('MJ: Company Integrations', CompositeKey.FromID(match.ID));
     return { Success: true };

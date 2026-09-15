@@ -13,7 +13,16 @@ import { ResourceData } from '@memberjunction/core-entities';
 })
 export class ResourceContainerComponent implements OnChanges, OnDestroy {
   @Input() public Data!: ResourceData;
-  @Input() public isVisible: boolean = false;
+  @Input() public IsVisible: boolean = false;
+
+  /** @deprecated Use {@link IsVisible}. */
+  @Input() public set isVisible(value: boolean) {
+    this.IsVisible = value;
+  }
+  /** @deprecated Use {@link IsVisible}. */
+  public get isVisible(): boolean {
+    return this.IsVisible;
+  }
   @Output() public ResourceRecordSaved: EventEmitter<BaseEntity> = new EventEmitter<BaseEntity>();
   @Output() public ContentLoadingStarted: EventEmitter<ResourceContainerComponent> = new EventEmitter<ResourceContainerComponent>();
   @Output() public ContentLoadingComplete: EventEmitter<ResourceContainerComponent> = new EventEmitter<ResourceContainerComponent>();
@@ -38,7 +47,16 @@ export class ResourceContainerComponent implements OnChanges, OnDestroy {
    *  cdkVirtualFor) resolve correctly. */
   private readonly envInjector = inject(EnvironmentInjector);
 
-  constructor(public sharedService: SharedService) { }
+  constructor(public SharedService: SharedService) { }
+
+  /** @deprecated Use {@link SharedService}. */
+  public get sharedService(): SharedService {
+    return this.SharedService;
+  }
+  /** @deprecated Use {@link SharedService}. */
+  public set sharedService(value: SharedService) {
+    this.SharedService = value;
+  }
 
    ngOnChanges(changes: SimpleChanges): void {
     if (changes['isVisible']) {
@@ -49,13 +67,13 @@ export class ResourceContainerComponent implements OnChanges, OnDestroy {
         // visible state has changed
         if (!this._loaded && currentValue) {
           // first time we are loading this resource, so go ahead and load whatever our component type is
-          this.loadComponent();
+          this.LoadComponent();
         }
       }
     }
   }
 
-  async loadComponent() {
+  async LoadComponent() {
     try {
       this._loaded = true;
       const resourceReg = await MJGlobal.Instance.ClassFactory.GetRegistrationAsync(BaseResourceComponent, this.Data.ResourceType);
@@ -104,6 +122,11 @@ export class ResourceContainerComponent implements OnChanges, OnDestroy {
     catch (e) {
       LogError(e);
     }
+  }
+
+  /** @deprecated Use {@link LoadComponent}. */
+  async loadComponent() {
+    return this.LoadComponent();
   }
 
   ngOnDestroy(): void {

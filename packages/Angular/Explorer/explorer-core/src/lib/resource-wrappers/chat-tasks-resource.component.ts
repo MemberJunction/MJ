@@ -53,13 +53,22 @@ import { Subject } from 'rxjs';
 export class ChatTasksResource extends BaseResourceComponent implements OnDestroy {
   @ViewChild('tasksView') tasksView?: TasksFullViewComponent;
 
-  public currentUser: any = null;
+  public CurrentUser: any = null;
+
+  /** @deprecated Use {@link CurrentUser}. */
+  public get currentUser(): any {
+    return this.CurrentUser;
+  }
+  /** @deprecated Use {@link CurrentUser}. */
+  public set currentUser(value: any) {
+    this.CurrentUser = value;
+  }
   public activeTaskId?: string;
 
   ngOnInit() {
     super.ngOnInit();
     const md = this.ProviderToUse;
-    this.currentUser = md.CurrentUser;
+    this.CurrentUser = md.CurrentUser;
 
     // Apply initial state from query params or tab config
     const params = this.GetQueryParams();
@@ -89,17 +98,27 @@ export class ChatTasksResource extends BaseResourceComponent implements OnDestro
   /**
    * Handle task selection from the tasks view.
    */
-  onTaskSelected(taskId: string | null): void {
+  OnTaskSelected(taskId: string | null): void {
     this.activeTaskId = taskId || undefined;
     this.UpdateQueryParams({ taskId: this.activeTaskId ?? null });
+  }
+
+  /** @deprecated Use {@link OnTaskSelected}. */
+  onTaskSelected(taskId: string | null): void {
+    return this.OnTaskSelected(taskId);
   }
 
 
   /**
    * Get the environment ID from configuration or use default
    */
-  get environmentId(): string {
+  get EnvironmentId(): string {
     return this.Data?.Configuration?.environmentId || MJEnvironmentEntityExtended.DefaultEnvironmentID;
+  }
+
+  /** @deprecated Use {@link EnvironmentId}. */
+  get environmentId(): string {
+    return this.EnvironmentId;
   }
 
   /**

@@ -172,22 +172,63 @@ export class PSCatalogComponent implements OnInit {
   @Input() engine!: PredictiveStudioEngine;
 
   /** Emitted with a starter prompt to open + seed the Model Development Agent chat. */
-  @Output() askAgent = new EventEmitter<string>();
+  @Output() AskAgent = new EventEmitter<string>();
 
-  public selectedUseCaseIds: string[] = [];
-  public cards: AlgoCardVM[] = [];
+  /**
+   * @deprecated Use {@link AskAgent}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (askAgent) keeps working. Must stay AFTER AskAgent: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() askAgent = this.AskAgent;
+
+  public SelectedUseCaseIds: string[] = [];
+
+  /** @deprecated Use {@link SelectedUseCaseIds}. */
+  public get selectedUseCaseIds(): string[] {
+    return this.SelectedUseCaseIds;
+  }
+  /** @deprecated Use {@link SelectedUseCaseIds}. */
+  public set selectedUseCaseIds(value: string[]) {
+    this.SelectedUseCaseIds = value;
+  }
+  public Cards: AlgoCardVM[] = [];
+
+  /** @deprecated Use {@link Cards}. */
+  public get cards(): AlgoCardVM[] {
+    return this.Cards;
+  }
+  /** @deprecated Use {@link Cards}. */
+  public set cards(value: AlgoCardVM[]) {
+    this.Cards = value;
+  }
   /** The algorithm whose inline detail panel is expanded (null = none). */
-  public detailId: string | null = null;
+  public DetailId: string | null = null;
+
+  /** @deprecated Use {@link DetailId}. */
+  public get detailId(): string | null {
+    return this.DetailId;
+  }
+  /** @deprecated Use {@link DetailId}. */
+  public set detailId(value: string | null) {
+    this.DetailId = value;
+  }
 
   ngOnInit(): void {
     this.rebuildCards();
   }
 
-  public get useCases(): MJMLAlgorithmUseCaseEntity[] {
+  public get UseCases(): MJMLAlgorithmUseCaseEntity[] {
     return this.engine?.UseCases ?? [];
   }
 
-  public useCaseIcon(uc: MJMLAlgorithmUseCaseEntity): string {
+  /** @deprecated Use {@link UseCases}. */
+  public get useCases(): MJMLAlgorithmUseCaseEntity[] {
+    return this.UseCases;
+  }
+
+  public UseCaseIcon(uc: MJMLAlgorithmUseCaseEntity): string {
     const name = (uc.Name || '').toLowerCase();
     if (name.includes('binary')) return USE_CASE_ICONS['binary'];
     if (name.includes('regression')) return USE_CASE_ICONS['regression'];
@@ -199,41 +240,71 @@ export class PSCatalogComponent implements OnInit {
     return 'fa-solid fa-circle-dot';
   }
 
-  public isSelected(id: string): boolean {
-    return this.selectedUseCaseIds.some((s) => UUIDsEqual(s, id));
+  /** @deprecated Use {@link UseCaseIcon}. */
+  public useCaseIcon(uc: MJMLAlgorithmUseCaseEntity): string {
+    return this.UseCaseIcon(uc);
   }
 
-  public toggleUseCase(id: string): void {
-    if (this.isSelected(id)) {
-      this.selectedUseCaseIds = this.selectedUseCaseIds.filter((s) => !UUIDsEqual(s, id));
+  public IsSelected(id: string): boolean {
+    return this.SelectedUseCaseIds.some((s) => UUIDsEqual(s, id));
+  }
+
+  /** @deprecated Use {@link IsSelected}. */
+  public isSelected(id: string): boolean {
+    return this.IsSelected(id);
+  }
+
+  public ToggleUseCase(id: string): void {
+    if (this.IsSelected(id)) {
+      this.SelectedUseCaseIds = this.SelectedUseCaseIds.filter((s) => !UUIDsEqual(s, id));
     } else {
-      this.selectedUseCaseIds = [...this.selectedUseCaseIds, id];
+      this.SelectedUseCaseIds = [...this.SelectedUseCaseIds, id];
     }
     this.rebuildCards();
   }
 
-  public clearScenarios(): void {
-    this.selectedUseCaseIds = [];
+  /** @deprecated Use {@link ToggleUseCase}. */
+  public toggleUseCase(id: string): void {
+    return this.ToggleUseCase(id);
+  }
+
+  public ClearScenarios(): void {
+    this.SelectedUseCaseIds = [];
     this.rebuildCards();
+  }
+
+  /** @deprecated Use {@link ClearScenarios}. */
+  public clearScenarios(): void {
+    return this.ClearScenarios();
   }
 
   // ---- algorithm card actions ----
 
   /** Toggle the inline detail panel for an algorithm card. */
+  public ToggleDetail(id: string): void {
+    this.DetailId = this.DetailId === id ? null : id;
+  }
+
+  /** @deprecated Use {@link ToggleDetail}. */
   public toggleDetail(id: string): void {
-    this.detailId = this.detailId === id ? null : id;
+    return this.ToggleDetail(id);
   }
 
   /** Seed the Model Development Agent to build a model with the chosen algorithm. */
-  public useAlgorithm(algo: MJMLAlgorithmEntity): void {
-    this.askAgent.emit(
+  public UseAlgorithm(algo: MJMLAlgorithmEntity): void {
+    this.AskAgent.emit(
       `Help me build a predictive model using the ${algo.Name} algorithm. ` +
         `Walk me through choosing the entity, the outcome to predict, and the features to assemble.`,
     );
   }
 
+  /** @deprecated Use {@link UseAlgorithm}. */
+  public useAlgorithm(algo: MJMLAlgorithmEntity): void {
+    return this.UseAlgorithm(algo);
+  }
+
   /** Parse an algorithm's `DefaultHyperparameters` JSON into a small key/value list (≤8 rows). */
-  public hyperparams(algo: MJMLAlgorithmEntity): { k: string; v: string }[] {
+  public Hyperparams(algo: MJMLAlgorithmEntity): { k: string; v: string }[] {
     const raw = algo.DefaultHyperparameters;
     if (!raw) {
       return [];
@@ -251,11 +322,21 @@ export class PSCatalogComponent implements OnInit {
     }
   }
 
-  public rank(level: RecommendationLevel): number {
+  /** @deprecated Use {@link Hyperparams}. */
+  public hyperparams(algo: MJMLAlgorithmEntity): { k: string; v: string }[] {
+    return this.Hyperparams(algo);
+  }
+
+  public Rank(level: RecommendationLevel): number {
     return RECOMMENDATION_RANK[level];
   }
 
-  public levelLabel(level: RecommendationLevel): string {
+  /** @deprecated Use {@link Rank}. */
+  public rank(level: RecommendationLevel): number {
+    return this.Rank(level);
+  }
+
+  public LevelLabel(level: RecommendationLevel): string {
     switch (level) {
       case 'Primary': return 'Primary fit';
       case 'Strong': return 'Strong fit';
@@ -265,36 +346,46 @@ export class PSCatalogComponent implements OnInit {
     }
   }
 
+  /** @deprecated Use {@link LevelLabel}. */
+  public levelLabel(level: RecommendationLevel): string {
+    return this.LevelLabel(level);
+  }
+
   /**
    * Structured recommendation data for the "Guide me" banner — rendered with plain template
    * interpolation + `<strong>` markup (no `[innerHTML]`). `scenarioLabel` is the human-readable
    * scenario name(s); `primaries` is the list of Primary-fit algorithm names.
    */
-  public get recommendation(): { scenarioLabel: string; primaries: string[] } {
-    const levels = this.engine.BestLevelsForScenarios(this.selectedUseCaseIds);
+  public get Recommendation(): { scenarioLabel: string; primaries: string[] } {
+    const levels = this.engine.BestLevelsForScenarios(this.SelectedUseCaseIds);
     const primaries = this.engine.Algorithms.filter((a) => levels.get(a.ID) === 'Primary').map((a) => a.Name);
     const scenarioLabel =
-      this.selectedUseCaseIds.length === 1
-        ? this.useCases.find((u) => UUIDsEqual(u.ID, this.selectedUseCaseIds[0]))?.Name ?? 'your scenario'
-        : `${this.selectedUseCaseIds.length} scenarios`;
+      this.SelectedUseCaseIds.length === 1
+        ? this.UseCases.find((u) => UUIDsEqual(u.ID, this.SelectedUseCaseIds[0]))?.Name ?? 'your scenario'
+        : `${this.SelectedUseCaseIds.length} scenarios`;
     return { scenarioLabel, primaries };
   }
 
+  /** @deprecated Use {@link Recommendation}. */
+  public get recommendation(): { scenarioLabel: string; primaries: string[] } {
+    return this.Recommendation;
+  }
+
   private rebuildCards(): void {
-    const levels = this.engine.BestLevelsForScenarios(this.selectedUseCaseIds);
+    const levels = this.engine.BestLevelsForScenarios(this.SelectedUseCaseIds);
     const cards: AlgoCardVM[] = this.engine.Algorithms.map((algo) => ({
       algo,
       icon: ALGO_ICONS[algo.DriverClass] ?? 'fa-solid fa-shapes',
       problemTypes: (algo.ProblemTypes || '').split(',').map((p) => p.trim()).filter((p) => p.length > 0),
       bestLevel: levels.get(algo.ID) ?? null,
     }));
-    if (this.selectedUseCaseIds.length > 0) {
+    if (this.SelectedUseCaseIds.length > 0) {
       cards.sort((a, b) => {
         const ra = a.bestLevel ? RECOMMENDATION_RANK[a.bestLevel] : -1;
         const rb = b.bestLevel ? RECOMMENDATION_RANK[b.bestLevel] : -1;
         return rb - ra;
       });
     }
-    this.cards = cards;
+    this.Cards = cards;
   }
 }

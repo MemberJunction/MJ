@@ -124,65 +124,125 @@ export class SchedulingInstrumentationService {
   private readonly _refreshTrigger$ = new BehaviorSubject<number>(0);
   private readonly _isLoading$ = new BehaviorSubject<boolean>(false);
 
-  readonly isLoading$ = this._isLoading$.asObservable();
+  readonly IsLoading$ = this._isLoading$.asObservable();
 
-  readonly kpis$ = combineLatest([this._refreshTrigger$, this._dateRange$]).pipe(
+  /** @deprecated Use {@link IsLoading$}. */
+  get isLoading$() {
+    return this.IsLoading$;
+  }
+
+  readonly Kpis$ = combineLatest([this._refreshTrigger$, this._dateRange$]).pipe(
     tap(() => this._isLoading$.next(true)),
     switchMap(() => from(this.loadKPIs())),
     tap(() => this._isLoading$.next(false)),
     shareReplay(1)
   );
 
-  readonly liveExecutions$ = this._refreshTrigger$.pipe(
+  /** @deprecated Use {@link Kpis$}. */
+  get kpis$() {
+    return this.Kpis$;
+  }
+
+  readonly LiveExecutions$ = this._refreshTrigger$.pipe(
     switchMap(() => from(this.loadLiveExecutions())),
     shareReplay(1)
   );
 
-  readonly upcomingExecutions$ = this._refreshTrigger$.pipe(
+  /** @deprecated Use {@link LiveExecutions$}. */
+  get liveExecutions$() {
+    return this.LiveExecutions$;
+  }
+
+  readonly UpcomingExecutions$ = this._refreshTrigger$.pipe(
     switchMap(() => from(this.loadUpcomingExecutions())),
     shareReplay(1)
   );
 
-  readonly executionHistory$ = combineLatest([this._refreshTrigger$, this._dateRange$]).pipe(
+  /** @deprecated Use {@link UpcomingExecutions$}. */
+  get upcomingExecutions$() {
+    return this.UpcomingExecutions$;
+  }
+
+  readonly ExecutionHistory$ = combineLatest([this._refreshTrigger$, this._dateRange$]).pipe(
     switchMap(() => from(this.loadExecutionHistory())),
     shareReplay(1)
   );
 
-  readonly executionTrends$ = combineLatest([this._refreshTrigger$, this._dateRange$]).pipe(
+  /** @deprecated Use {@link ExecutionHistory$}. */
+  get executionHistory$() {
+    return this.ExecutionHistory$;
+  }
+
+  readonly ExecutionTrends$ = combineLatest([this._refreshTrigger$, this._dateRange$]).pipe(
     switchMap(() => from(this.loadExecutionTrends())),
     shareReplay(1)
   );
 
-  readonly jobStatistics$ = this._refreshTrigger$.pipe(
+  /** @deprecated Use {@link ExecutionTrends$}. */
+  get executionTrends$() {
+    return this.ExecutionTrends$;
+  }
+
+  readonly JobStatistics$ = this._refreshTrigger$.pipe(
     switchMap(() => from(this.loadJobStatistics())),
     shareReplay(1)
   );
 
-  readonly jobTypes$ = this._refreshTrigger$.pipe(
+  /** @deprecated Use {@link JobStatistics$}. */
+  get jobStatistics$() {
+    return this.JobStatistics$;
+  }
+
+  readonly JobTypes$ = this._refreshTrigger$.pipe(
     switchMap(() => from(this.loadJobTypes())),
     shareReplay(1)
   );
 
-  readonly lockInfo$ = this._refreshTrigger$.pipe(
+  /** @deprecated Use {@link JobTypes$}. */
+  get jobTypes$() {
+    return this.JobTypes$;
+  }
+
+  readonly LockInfo$ = this._refreshTrigger$.pipe(
     switchMap(() => from(this.loadLockInfo())),
     shareReplay(1)
   );
 
-  readonly alerts$ = combineLatest([this.lockInfo$, this.kpis$, this.jobStatistics$]).pipe(
+  /** @deprecated Use {@link LockInfo$}. */
+  get lockInfo$() {
+    return this.LockInfo$;
+  }
+
+  readonly Alerts$ = combineLatest([this.LockInfo$, this.Kpis$, this.JobStatistics$]).pipe(
     switchMap(([locks, kpis, jobs]) => from(this.buildAlerts(locks, kpis, jobs))),
     shareReplay(1)
   );
 
-  setDateRange(start: Date, end: Date): void {
+  /** @deprecated Use {@link Alerts$}. */
+  get alerts$() {
+    return this.Alerts$;
+  }
+
+  SetDateRange(start: Date, end: Date): void {
     this._dateRange$.next({ start, end });
+  }
+
+  /** @deprecated Use {@link SetDateRange}. */
+  setDateRange(start: Date, end: Date): void {
+    return this.SetDateRange(start, end);
   }
 
   get CurrentDateRange(): { start: Date; end: Date } {
     return this._dateRange$.value;
   }
 
-  refresh(): void {
+  Refresh(): void {
     this._refreshTrigger$.next(this._refreshTrigger$.value + 1);
+  }
+
+  /** @deprecated Use {@link Refresh}. */
+  refresh(): void {
+    return this.Refresh();
   }
 
   // ── KPIs ──────────────────────────────────────────────────
@@ -549,14 +609,14 @@ export class SchedulingInstrumentationService {
   }
 
   // ── CRUD Operations ───────────────────────────────────────
-  async updateJobStatus(jobId: string, status: 'Pending' | 'Active' | 'Paused' | 'Disabled' | 'Expired'): Promise<boolean> {
+  async UpdateJobStatus(jobId: string, status: 'Pending' | 'Active' | 'Paused' | 'Disabled' | 'Expired'): Promise<boolean> {
     try {
       const md = this.Provider;
       const job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs');
       await job.Load(jobId);
       job.Status = status;
       const result = await job.Save();
-      if (result) this.refresh();
+      if (result) this.Refresh();
       return result;
     } catch (error) {
       console.error('Failed to update job status:', error);
@@ -564,7 +624,12 @@ export class SchedulingInstrumentationService {
     }
   }
 
-  async saveJob(jobId: string | null, data: Partial<{
+  /** @deprecated Use {@link UpdateJobStatus}. */
+  async updateJobStatus(jobId: string, status: 'Pending' | 'Active' | 'Paused' | 'Disabled' | 'Expired'): Promise<boolean> {
+    return this.UpdateJobStatus(jobId, status);
+  }
+
+  async SaveJob(jobId: string | null, data: Partial<{
     Name: string;
     Description: string | null;
     JobTypeID: string;
@@ -602,7 +667,7 @@ export class SchedulingInstrumentationService {
       if (data.NotifyOnFailure !== undefined) job.NotifyOnFailure = data.NotifyOnFailure;
 
       const result = await job.Save();
-      if (result) this.refresh();
+      if (result) this.Refresh();
       return result;
     } catch (error) {
       console.error('Failed to save job:', error);
@@ -610,13 +675,31 @@ export class SchedulingInstrumentationService {
     }
   }
 
-  async deleteJob(jobId: string): Promise<boolean> {
+  /** @deprecated Use {@link SaveJob}. */
+  async saveJob(jobId: string | null, data: Partial<{
+    Name: string;
+    Description: string | null;
+    JobTypeID: string;
+    CronExpression: string;
+    Timezone: string;
+    Status: 'Pending' | 'Active' | 'Paused' | 'Disabled' | 'Expired';
+    Configuration: string | null;
+    ConcurrencyMode: 'Concurrent' | 'Queue' | 'Skip';
+    StartAt: Date | null;
+    EndAt: Date | null;
+    NotifyOnSuccess: boolean;
+    NotifyOnFailure: boolean;
+  }>): Promise<boolean> {
+    return this.SaveJob(jobId, data);
+  }
+
+  async DeleteJob(jobId: string): Promise<boolean> {
     try {
       const md = this.Provider;
       const job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs');
       await job.Load(jobId);
       const result = await job.Delete();
-      if (result) this.refresh();
+      if (result) this.Refresh();
       return result;
     } catch (error) {
       console.error('Failed to delete job:', error);
@@ -624,7 +707,12 @@ export class SchedulingInstrumentationService {
     }
   }
 
-  async releaseLock(jobId: string): Promise<boolean> {
+  /** @deprecated Use {@link DeleteJob}. */
+  async deleteJob(jobId: string): Promise<boolean> {
+    return this.DeleteJob(jobId);
+  }
+
+  async ReleaseLock(jobId: string): Promise<boolean> {
     try {
       const md = this.Provider;
       const job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs');
@@ -634,7 +722,7 @@ export class SchedulingInstrumentationService {
       job.LockedByInstance = null;
       job.ExpectedCompletionAt = null;
       const result = await job.Save();
-      if (result) this.refresh();
+      if (result) this.Refresh();
       return result;
     } catch (error) {
       console.error('Failed to release lock:', error);
@@ -642,7 +730,12 @@ export class SchedulingInstrumentationService {
     }
   }
 
-  async loadJobTypesForDropdown(): Promise<{ id: string; name: string }[]> {
+  /** @deprecated Use {@link ReleaseLock}. */
+  async releaseLock(jobId: string): Promise<boolean> {
+    return this.ReleaseLock(jobId);
+  }
+
+  async LoadJobTypesForDropdown(): Promise<{ id: string; name: string }[]> {
     const rv = RunView.FromMetadataProvider(this.Provider);
     const result = await rv.RunView<MJScheduledJobTypeEntity>({
       EntityName: 'MJ: Scheduled Job Types',
@@ -653,5 +746,10 @@ export class SchedulingInstrumentationService {
 
     if (!result.Success) return [];
     return (result.Results || []).map(t => ({ id: t.ID, name: t.Name }));
+  }
+
+  /** @deprecated Use {@link LoadJobTypesForDropdown}. */
+  async loadJobTypesForDropdown(): Promise<{ id: string; name: string }[]> {
+    return this.LoadJobTypesForDropdown();
   }
 }

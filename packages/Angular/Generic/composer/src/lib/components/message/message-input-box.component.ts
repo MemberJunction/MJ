@@ -284,11 +284,16 @@ export class MessageInputBoxComponent {
     return this.mentionEditor?.FocusCaretAtEnd() ?? false;
   }
 
-  focus(): void {
+  Focus(): void {
     const editor = this.mentionEditor?.editorRef?.nativeElement;
     if (editor) {
       editor.focus();
     }
+  }
+
+  /** @deprecated Use {@link Focus}. */
+  focus(): void {
+    return this.Focus();
   }
 
   /**

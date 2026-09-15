@@ -203,14 +203,59 @@ export interface DataPointClickEvent {
   `]
 })
 export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewInit, OnChanges {
-  @Input() data: TrendData[] = [];
+  @Input() Data: TrendData[] = [];
+
+  /** @deprecated Use {@link Data}. */
+  @Input() set data(value: TrendData[]) {
+    this.Data = value;
+  }
+  /** @deprecated Use {@link Data}. */
+  get data(): TrendData[] {
+    return this.Data;
+  }
   @Input() title?: string;
   @Input() config: TimeSeriesConfig = {};
-  @Input() showLegend = true;
-  @Input() showControls = true;
+  @Input() ShowLegend = true;
+
+  /** @deprecated Use {@link ShowLegend}. */
+  @Input() set showLegend(value: TimeSeriesChartComponent['ShowLegend']) {
+    this.ShowLegend = value;
+  }
+  /** @deprecated Use {@link ShowLegend}. */
+  get showLegend(): TimeSeriesChartComponent['ShowLegend'] {
+    return this.ShowLegend;
+  }
+  @Input() ShowControls = true;
+
+  /** @deprecated Use {@link ShowControls}. */
+  @Input() set showControls(value: TimeSeriesChartComponent['ShowControls']) {
+    this.ShowControls = value;
+  }
+  /** @deprecated Use {@link ShowControls}. */
+  get showControls(): TimeSeriesChartComponent['ShowControls'] {
+    return this.ShowControls;
+  }
   
-  @Output() dataPointClick: EventEmitter<DataPointClickEvent> = new EventEmitter<DataPointClickEvent>();
-  @Output() timeRangeChange = new EventEmitter<string>();
+  @Output() DataPointClick: EventEmitter<DataPointClickEvent> = new EventEmitter<DataPointClickEvent>();
+
+  /**
+   * @deprecated Use {@link DataPointClick}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (dataPointClick) keeps working. Must stay AFTER DataPointClick: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() dataPointClick = this.DataPointClick;
+  @Output() TimeRangeChange = new EventEmitter<string>();
+
+  /**
+   * @deprecated Use {@link TimeRangeChange}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (timeRangeChange) keeps working. Must stay AFTER TimeRangeChange: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() timeRangeChange = this.TimeRangeChange;
 
   @ViewChild('chartSvg', { static: true }) chartSvg!: ElementRef<SVGElement>;
   @ViewChild('tooltip', { static: true }) tooltip!: ElementRef<HTMLDivElement>;
@@ -224,7 +269,16 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
   private defaultColors: string[] = [];
   
   // Metrics configuration
-  visibleMetrics = ['executions', 'cost', 'tokens', 'avgTime', 'errors'];
+  VisibleMetrics = ['executions', 'cost', 'tokens', 'avgTime', 'errors'];
+
+  /** @deprecated Use {@link VisibleMetrics}. */
+  get visibleMetrics() {
+    return this.VisibleMetrics;
+  }
+  /** @deprecated Use {@link VisibleMetrics}. */
+  set visibleMetrics(value) {
+    this.VisibleMetrics = value;
+  }
   private hiddenMetrics = new Set<string>();
 
 
@@ -281,7 +335,7 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
   }
 
   private updateChart() {
-    if (!this.data || this.data.length === 0) {
+    if (!this.Data || this.Data.length === 0) {
       this.svg.selectAll('*').remove();
       return;
     }
@@ -315,7 +369,7 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
 
     // Create scales
     const xScale = d3.scaleTime()
-      .domain(d3.extent(this.data, d => d.timestamp) as [Date, Date])
+      .domain(d3.extent(this.Data, d => d.timestamp) as [Date, Date])
       .range([0, this.width]);
 
     // Create separate scales for different metrics
@@ -346,7 +400,7 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
 
       // Create left axis scale (cost and time)
       const leftValues = leftAxisMetrics.flatMap(metric =>
-        this.data.map(d => {
+        this.Data.map(d => {
           const value = this.getMetricValue(d, metric);
           // Normalize avgTime to seconds for better scale comparison with cost
           return metric === 'avgTime' ? (value || 0) / 1000 : (value || 0);
@@ -365,7 +419,7 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
 
       // Create right axis scale (count-based metrics)
       const rightValues = rightAxisMetrics.flatMap(metric =>
-        this.data.map(d => this.getMetricValue(d, metric)).filter((v): v is number => v != null)
+        this.Data.map(d => this.getMetricValue(d, metric)).filter((v): v is number => v != null)
       );
 
       if (rightValues.length > 0) {
@@ -388,7 +442,7 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
 
       Object.entries(metricGroups).forEach(([groupName, metrics]) => {
         const allValues = metrics.flatMap(metric =>
-          this.data.map(d => this.getMetricValue(d, metric)).filter((v): v is number => v != null)
+          this.Data.map(d => this.getMetricValue(d, metric)).filter((v): v is number => v != null)
         );
 
         if (allValues.length > 0) {
@@ -513,10 +567,10 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
     const linesGroup = g.append('g').attr('class', 'lines-group');
     
     // First draw all lines and areas
-    this.visibleMetrics.forEach((metric) => {
+    this.VisibleMetrics.forEach((metric) => {
       if (this.hiddenMetrics.has(metric) || !scales[metric]) return;
 
-      const color = this.getMetricColor(metric);
+      const color = this.GetMetricColor(metric);
       const scale = scales[metric];
 
       // Create line generator with proper value transformation
@@ -547,7 +601,7 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
       // Draw area (optional)
       if (metric === 'executions' || metric === 'cost') {
         linesGroup.append('path')
-          .datum(this.data)
+          .datum(this.Data)
           .attr('class', `chart-area chart-area--${metric}`)
           .attr('d', area)
           .attr('fill', color);
@@ -555,7 +609,7 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
 
       // Draw line
       linesGroup.append('path')
-        .datum(this.data)
+        .datum(this.Data)
         .attr('class', `chart-line chart-line--${metric}`)
         .attr('d', line)
         .attr('stroke', color);
@@ -565,14 +619,14 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
     const dotsGroup = g.append('g').attr('class', 'dots-group').style('pointer-events', 'all');
     
     // Draw all dots in a separate pass so they're all on top
-    this.visibleMetrics.forEach((metric) => {
+    this.VisibleMetrics.forEach((metric) => {
       if (this.hiddenMetrics.has(metric) || !scales[metric]) return;
       
-      const color = this.getMetricColor(metric);
+      const color = this.GetMetricColor(metric);
       const scale = scales[metric];
       
       // Draw dots with click events - only for non-zero values
-      const dotsData = this.data.filter(d => {
+      const dotsData = this.Data.filter(d => {
         const value = this.getMetricValue(d, metric);
         return value != null && value > 0;
       });
@@ -621,7 +675,7 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
           // Only emit if there's actual data
           const value = this.getMetricValue(d, metric);
           if (value != null && value > 0) {
-            this.dataPointClick.emit({ data: d, metric, event });
+            this.DataPointClick.emit({ data: d, metric, event });
           }
         });
     });
@@ -635,9 +689,9 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
   }
 
   private findClosestDataPoint(targetDate: Date): TrendData | null {
-    if (!this.data.length) return null;
+    if (!this.Data.length) return null;
 
-    return this.data.reduce((closest, current) => {
+    return this.Data.reduce((closest, current) => {
       const currentDiff = Math.abs(current.timestamp.getTime() - targetDate.getTime());
       const closestDiff = Math.abs(closest.timestamp.getTime() - targetDate.getTime());
       return currentDiff < closestDiff ? current : closest;
@@ -682,13 +736,18 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
     }
   }
 
-  getMetricColor(metric: string): string {
+  GetMetricColor(metric: string): string {
     const colors = this.config.colors || this.defaultColors;
-    const index = this.visibleMetrics.indexOf(metric);
+    const index = this.VisibleMetrics.indexOf(metric);
     return colors[index % colors.length];
   }
 
-  getMetricLabel(metric: string): string {
+  /** @deprecated Use {@link GetMetricColor}. */
+  getMetricColor(metric: string): string {
+    return this.GetMetricColor(metric);
+  }
+
+  GetMetricLabel(metric: string): string {
     const labels: { [key: string]: string } = {
       executions: 'Executions',
       cost: 'Cost ($)',
@@ -699,11 +758,21 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
     return labels[metric] || metric;
   }
 
-  isMetricVisible(metric: string): boolean {
+  /** @deprecated Use {@link GetMetricLabel}. */
+  getMetricLabel(metric: string): string {
+    return this.GetMetricLabel(metric);
+  }
+
+  IsMetricVisible(metric: string): boolean {
     return !this.hiddenMetrics.has(metric);
   }
 
-  toggleMetric(metric: string): void {
+  /** @deprecated Use {@link IsMetricVisible}. */
+  isMetricVisible(metric: string): boolean {
+    return this.IsMetricVisible(metric);
+  }
+
+  ToggleMetric(metric: string): void {
     if (this.hiddenMetrics.has(metric)) {
       this.hiddenMetrics.delete(metric);
     } else {
@@ -711,15 +780,20 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
     }
     this.updateChart();
   }
+
+  /** @deprecated Use {@link ToggleMetric}. */
+  toggleMetric(metric: string): void {
+    return this.ToggleMetric(metric);
+  }
   
   private getTimeFormat(): (date: Date) => string {
-    if (this.data.length < 2) {
+    if (this.Data.length < 2) {
       return d3.timeFormat('%H:%M');
     }
     
     // Calculate the time span of the data
-    const firstDate = this.data[0].timestamp;
-    const lastDate = this.data[this.data.length - 1].timestamp;
+    const firstDate = this.Data[0].timestamp;
+    const lastDate = this.Data[this.Data.length - 1].timestamp;
     const timeDiff = lastDate.getTime() - firstDate.getTime();
     const hours = timeDiff / (1000 * 60 * 60);
     const days = hours / 24;
@@ -741,13 +815,13 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
   }
   
   private getOptimalTickCount(): number {
-    if (this.data.length < 2) {
+    if (this.Data.length < 2) {
       return 6;
     }
     
     // Calculate the time span of the data
-    const firstDate = this.data[0].timestamp;
-    const lastDate = this.data[this.data.length - 1].timestamp;
+    const firstDate = this.Data[0].timestamp;
+    const lastDate = this.Data[this.Data.length - 1].timestamp;
     const timeDiff = lastDate.getTime() - firstDate.getTime();
     const hours = timeDiff / (1000 * 60 * 60);
     const days = hours / 24;

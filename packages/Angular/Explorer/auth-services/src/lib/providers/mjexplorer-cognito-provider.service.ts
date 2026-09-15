@@ -66,7 +66,7 @@ export class MJCognitoProvider extends MJAuthBase {
    * Factory function to provide Angular dependencies required by the Cognito provider.
    * Returns a config injection token following the Okta provider pattern.
    */
-  static angularProviderFactory = (environment: Record<string, unknown>) => {
+  static AngularProviderFactory = (environment: Record<string, unknown>) => {
     const isMCPOAuthCallback = window.location.pathname.startsWith('/oauth/callback');
 
     return [
@@ -87,6 +87,15 @@ export class MJCognitoProvider extends MJAuthBase {
       }
     ];
   };
+
+  /** @deprecated Use {@link AngularProviderFactory}. */
+  static get angularProviderFactory() {
+    return this.AngularProviderFactory;
+  }
+  /** @deprecated Use {@link AngularProviderFactory}. */
+  static set angularProviderFactory(value) {
+    this.AngularProviderFactory = value;
+  }
 
   constructor(@Inject('cognitoConfig') private cognitoConfig: CognitoConfig) {
     const config: AngularAuthProviderConfig = {

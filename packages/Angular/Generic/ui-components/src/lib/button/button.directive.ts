@@ -51,11 +51,56 @@ export type MjButtonSize = 'sm' | 'md' | 'lg';
   standalone: true
 })
 export class MJButtonDirective implements AfterContentInit {
-  @Input() variant: MjButtonVariant = 'secondary';
-  @Input() size: MjButtonSize = 'md';
-  @Input() toggleable = false;
-  @Input() selected = false;
-  @Output() selectedChange = new EventEmitter<boolean>();
+  @Input() Variant: MjButtonVariant = 'secondary';
+
+  /** @deprecated Use {@link Variant}. */
+  @Input() set variant(value: MjButtonVariant) {
+    this.Variant = value;
+  }
+  /** @deprecated Use {@link Variant}. */
+  get variant(): MjButtonVariant {
+    return this.Variant;
+  }
+  @Input() Size: MjButtonSize = 'md';
+
+  /** @deprecated Use {@link Size}. */
+  @Input() set size(value: MjButtonSize) {
+    this.Size = value;
+  }
+  /** @deprecated Use {@link Size}. */
+  get size(): MjButtonSize {
+    return this.Size;
+  }
+  @Input() Toggleable = false;
+
+  /** @deprecated Use {@link Toggleable}. */
+  @Input() set toggleable(value: MJButtonDirective['Toggleable']) {
+    this.Toggleable = value;
+  }
+  /** @deprecated Use {@link Toggleable}. */
+  get toggleable(): MJButtonDirective['Toggleable'] {
+    return this.Toggleable;
+  }
+  @Input() Selected = false;
+
+  /** @deprecated Use {@link Selected}. */
+  @Input() set selected(value: MJButtonDirective['Selected']) {
+    this.Selected = value;
+  }
+  /** @deprecated Use {@link Selected}. */
+  get selected(): MJButtonDirective['Selected'] {
+    return this.Selected;
+  }
+  @Output() SelectedChange = new EventEmitter<boolean>();
+
+  /**
+   * @deprecated Use {@link SelectedChange}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (selectedChange) keeps working. Must stay AFTER SelectedChange: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() selectedChange = this.SelectedChange;
 
   // Constructor injection (not inject()) so the directive can be unit-tested via direct
   // instantiation with a stub ElementRef — the established pattern in this package's specs.
@@ -80,28 +125,28 @@ export class MJButtonDirective implements AfterContentInit {
 
   @HostBinding('class.mj-btn') readonly baseClass = true;
 
-  @HostBinding('class.mj-btn--primary') get isPrimary() { return this.variant === 'primary'; }
-  @HostBinding('class.mj-btn--secondary') get isSecondary() { return this.variant === 'secondary'; }
-  @HostBinding('class.mj-btn--outline') get isOutline() { return this.variant === 'outline'; }
-  @HostBinding('class.mj-btn--flat') get isFlat() { return this.variant === 'flat'; }
-  @HostBinding('class.mj-btn--danger') get isDanger() { return this.variant === 'danger'; }
-  @HostBinding('class.mj-btn--icon') get isIcon() { return this.variant === 'icon'; }
-  @HostBinding('class.mj-btn--success') get isSuccess() { return this.variant === 'success'; }
-  @HostBinding('class.mj-btn--warning') get isWarning() { return this.variant === 'warning'; }
+  @HostBinding('class.mj-btn--primary') get isPrimary() { return this.Variant === 'primary'; }
+  @HostBinding('class.mj-btn--secondary') get isSecondary() { return this.Variant === 'secondary'; }
+  @HostBinding('class.mj-btn--outline') get isOutline() { return this.Variant === 'outline'; }
+  @HostBinding('class.mj-btn--flat') get isFlat() { return this.Variant === 'flat'; }
+  @HostBinding('class.mj-btn--danger') get isDanger() { return this.Variant === 'danger'; }
+  @HostBinding('class.mj-btn--icon') get isIcon() { return this.Variant === 'icon'; }
+  @HostBinding('class.mj-btn--success') get isSuccess() { return this.Variant === 'success'; }
+  @HostBinding('class.mj-btn--warning') get isWarning() { return this.Variant === 'warning'; }
 
-  @HostBinding('class.mj-btn--sm') get isSm() { return this.size === 'sm'; }
-  @HostBinding('class.mj-btn--lg') get isLg() { return this.size === 'lg'; }
+  @HostBinding('class.mj-btn--sm') get isSm() { return this.Size === 'sm'; }
+  @HostBinding('class.mj-btn--lg') get isLg() { return this.Size === 'lg'; }
 
-  @HostBinding('class.mj-btn--selected') get isSelected() { return this.toggleable && this.selected; }
+  @HostBinding('class.mj-btn--selected') get isSelected() { return this.Toggleable && this.Selected; }
   @HostBinding('attr.aria-pressed') get ariaPressed(): string | null {
-    return this.toggleable ? String(this.selected) : null;
+    return this.Toggleable ? String(this.Selected) : null;
   }
 
   @HostListener('click')
   OnClick(): void {
-    if (this.toggleable) {
-      this.selected = !this.selected;
-      this.selectedChange.emit(this.selected);
+    if (this.Toggleable) {
+      this.Selected = !this.Selected;
+      this.SelectedChange.emit(this.Selected);
     }
   }
 
@@ -111,7 +156,7 @@ export class MJButtonDirective implements AfterContentInit {
    * agents. Warn so it gets a name. No-op in production builds.
    */
   ngAfterContentInit(): void {
-    if (!isDevMode() || this.variant !== 'icon') {
+    if (!isDevMode() || this.Variant !== 'icon') {
       return;
     }
     const el = this.host.nativeElement;

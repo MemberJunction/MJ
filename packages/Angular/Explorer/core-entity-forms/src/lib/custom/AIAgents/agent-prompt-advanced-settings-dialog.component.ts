@@ -29,23 +29,86 @@ export interface AgentPromptAdvancedSettingsFormData {
 export class AgentPromptAdvancedSettingsDialogComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   
   // Input properties set by service
-  agentPrompt!: MJAIAgentPromptEntity;
-  allAgentPrompts: MJAIAgentPromptEntity[] = []; // For execution order validation
+  AgentPrompt!: MJAIAgentPromptEntity;
+
+  /** @deprecated Use {@link AgentPrompt}. */
+  get agentPrompt(): MJAIAgentPromptEntity {
+    return this.AgentPrompt;
+  }
+  /** @deprecated Use {@link AgentPrompt}. */
+  set agentPrompt(value: MJAIAgentPromptEntity) {
+    this.AgentPrompt = value;
+  }
+  AllAgentPrompts: MJAIAgentPromptEntity[] = [];
+
+  /** @deprecated Use {@link AllAgentPrompts}. */
+  get allAgentPrompts(): MJAIAgentPromptEntity[] {
+    return this.AllAgentPrompts;
+  }
+  /** @deprecated Use {@link AllAgentPrompts}. */
+  set allAgentPrompts(value: MJAIAgentPromptEntity[]) {
+    this.AllAgentPrompts = value;
+  } // For execution order validation
   
   // Reactive state management
   private destroy$ = new Subject<void>();
-  public result = new Subject<AgentPromptAdvancedSettingsFormData | null>();
+  public Result = new Subject<AgentPromptAdvancedSettingsFormData | null>();
+
+  /** @deprecated Use {@link Result}. */
+  public get result() {
+    return this.Result;
+  }
+  /** @deprecated Use {@link Result}. */
+  public set result(value) {
+    this.Result = value;
+  }
   
   // Form and data
-  advancedForm!: FormGroup;
-  isLoading$ = new BehaviorSubject<boolean>(false);
-  isSaving$ = new BehaviorSubject<boolean>(false);
+  AdvancedForm!: FormGroup;
+
+  /** @deprecated Use {@link AdvancedForm}. */
+  get advancedForm(): FormGroup {
+    return this.AdvancedForm;
+  }
+  /** @deprecated Use {@link AdvancedForm}. */
+  set advancedForm(value: FormGroup) {
+    this.AdvancedForm = value;
+  }
+  IsLoading$ = new BehaviorSubject<boolean>(false);
+
+  /** @deprecated Use {@link IsLoading$}. */
+  get isLoading$() {
+    return this.IsLoading$;
+  }
+  /** @deprecated Use {@link IsLoading$}. */
+  set isLoading$(value) {
+    this.IsLoading$ = value;
+  }
+  IsSaving$ = new BehaviorSubject<boolean>(false);
+
+  /** @deprecated Use {@link IsSaving$}. */
+  get isSaving$() {
+    return this.IsSaving$;
+  }
+  /** @deprecated Use {@link IsSaving$}. */
+  set isSaving$(value) {
+    this.IsSaving$ = value;
+  }
   
   // Dropdown data
-  configurations$ = new BehaviorSubject<MJAIConfigurationEntity[]>([]);
+  Configurations$ = new BehaviorSubject<MJAIConfigurationEntity[]>([]);
+
+  /** @deprecated Use {@link Configurations$}. */
+  get configurations$() {
+    return this.Configurations$;
+  }
+  /** @deprecated Use {@link Configurations$}. */
+  set configurations$(value) {
+    this.Configurations$ = value;
+  }
   
   // Available options
-  contextBehaviorOptions = [
+  ContextBehaviorOptions = [
     { text: 'Complete Context', value: 'Complete', description: 'Include entire conversation context' },
     { text: 'Smart Context', value: 'Smart', description: 'AI determines relevant context automatically' },
     { text: 'No Context', value: 'None', description: 'No conversation context included' },
@@ -54,15 +117,42 @@ export class AgentPromptAdvancedSettingsDialogComponent extends BaseAngularCompo
     { text: 'Custom Context', value: 'Custom', description: 'Custom context filtering logic' }
   ];
 
-  statusOptions = [
+  /** @deprecated Use {@link ContextBehaviorOptions}. */
+  get contextBehaviorOptions() {
+    return this.ContextBehaviorOptions;
+  }
+  /** @deprecated Use {@link ContextBehaviorOptions}. */
+  set contextBehaviorOptions(value) {
+    this.ContextBehaviorOptions = value;
+  }
+
+  StatusOptions = [
     { text: 'Active', value: 'Active' },
     { text: 'Inactive', value: 'Inactive' },
     { text: 'Deprecated', value: 'Deprecated' },
     { text: 'Preview', value: 'Preview' }
   ];
 
+  /** @deprecated Use {@link StatusOptions}. */
+  get statusOptions() {
+    return this.StatusOptions;
+  }
+  /** @deprecated Use {@link StatusOptions}. */
+  set statusOptions(value) {
+    this.StatusOptions = value;
+  }
+
   // Execution order validation
-  executionOrderError: string | null = null;
+  ExecutionOrderError: string | null = null;
+
+  /** @deprecated Use {@link ExecutionOrderError}. */
+  get executionOrderError(): string | null {
+    return this.ExecutionOrderError;
+  }
+  /** @deprecated Use {@link ExecutionOrderError}. */
+  set executionOrderError(value: string | null) {
+    this.ExecutionOrderError = value;
+  }
 
   @Output() DialogClose = new EventEmitter<void>();
 
@@ -83,13 +173,13 @@ export class AgentPromptAdvancedSettingsDialogComponent extends BaseAngularCompo
   }
 
   private initializeForm() {
-    this.advancedForm = this.fb.group({
-      executionOrder: [this.agentPrompt.ExecutionOrder || 0, [Validators.required, Validators.min(0)]],
-      purpose: [this.agentPrompt.Purpose],
-      configurationID: [this.agentPrompt.ConfigurationID],
-      contextBehavior: [this.agentPrompt.ContextBehavior || 'Complete', [Validators.required]],
-      contextMessageCount: [this.agentPrompt.ContextMessageCount],
-      status: [this.agentPrompt.Status || 'Active', [Validators.required]]
+    this.AdvancedForm = this.fb.group({
+      executionOrder: [this.AgentPrompt.ExecutionOrder || 0, [Validators.required, Validators.min(0)]],
+      purpose: [this.AgentPrompt.Purpose],
+      configurationID: [this.AgentPrompt.ConfigurationID],
+      contextBehavior: [this.AgentPrompt.ContextBehavior || 'Complete', [Validators.required]],
+      contextMessageCount: [this.AgentPrompt.ContextMessageCount],
+      status: [this.AgentPrompt.Status || 'Active', [Validators.required]]
     });
 
     this.setupValidationLogic();
@@ -97,8 +187,8 @@ export class AgentPromptAdvancedSettingsDialogComponent extends BaseAngularCompo
 
   private setupValidationLogic() {
     // Context behavior validation
-    const contextBehaviorControl = this.advancedForm.get('contextBehavior');
-    const contextMessageCountControl = this.advancedForm.get('contextMessageCount');
+    const contextBehaviorControl = this.AdvancedForm.get('contextBehavior');
+    const contextMessageCountControl = this.AdvancedForm.get('contextMessageCount');
 
     contextBehaviorControl?.valueChanges.pipe(
       takeUntil(this.destroy$)
@@ -115,7 +205,7 @@ export class AgentPromptAdvancedSettingsDialogComponent extends BaseAngularCompo
     });
 
     // Execution order validation
-    const executionOrderControl = this.advancedForm.get('executionOrder');
+    const executionOrderControl = this.AdvancedForm.get('executionOrder');
     executionOrderControl?.valueChanges.pipe(
       takeUntil(this.destroy$)
     ).subscribe(order => {
@@ -125,27 +215,27 @@ export class AgentPromptAdvancedSettingsDialogComponent extends BaseAngularCompo
 
   private validateExecutionOrder(order: number) {
     if (order == null) {
-      this.executionOrderError = null;
+      this.ExecutionOrderError = null;
       return;
     }
 
     // Check for conflicts with other prompts (excluding current one)
-    const conflictingPrompt = this.allAgentPrompts.find(p => 
-      !UUIDsEqual(p.ID, this.agentPrompt.ID) && 
+    const conflictingPrompt = this.AllAgentPrompts.find(p => 
+      !UUIDsEqual(p.ID, this.AgentPrompt.ID) && 
       p.ExecutionOrder === order
     );
 
     if (conflictingPrompt) {
-      this.executionOrderError = `Execution order ${order} is already used by another prompt. Please choose a different order.`;
+      this.ExecutionOrderError = `Execution order ${order} is already used by another prompt. Please choose a different order.`;
     } else {
-      this.executionOrderError = null;
+      this.ExecutionOrderError = null;
     }
 
     this.cdr.detectChanges();
   }
 
   private async loadDropdownData() {
-    this.isLoading$.next(true);
+    this.IsLoading$.next(true);
     
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
@@ -160,7 +250,7 @@ export class AgentPromptAdvancedSettingsDialogComponent extends BaseAngularCompo
       });
 
       if (configurationsResult.Success) {
-        this.configurations$.next(configurationsResult.Results || []);
+        this.Configurations$.next(configurationsResult.Results || []);
       }
 
     } catch (error) {
@@ -171,19 +261,24 @@ export class AgentPromptAdvancedSettingsDialogComponent extends BaseAngularCompo
         3000
       );
     } finally {
-      this.isLoading$.next(false);
+      this.IsLoading$.next(false);
     }
   }
 
   // === Validation Helpers ===
 
-  isFieldInvalid(fieldName: string): boolean {
-    const field = this.advancedForm.get(fieldName);
+  IsFieldInvalid(fieldName: string): boolean {
+    const field = this.AdvancedForm.get(fieldName);
     return !!(field && field.invalid && (field.dirty || field.touched));
   }
 
-  getFieldError(fieldName: string): string {
-    const field = this.advancedForm.get(fieldName);
+  /** @deprecated Use {@link IsFieldInvalid}. */
+  isFieldInvalid(fieldName: string): boolean {
+    return this.IsFieldInvalid(fieldName);
+  }
+
+  GetFieldError(fieldName: string): string {
+    const field = this.AdvancedForm.get(fieldName);
     if (field?.errors) {
       if (field.errors['required']) return `${fieldName} is required`;
       if (field.errors['min']) return `${fieldName} must be greater than or equal to ${field.errors['min'].min}`;
@@ -191,32 +286,52 @@ export class AgentPromptAdvancedSettingsDialogComponent extends BaseAngularCompo
     return '';
   }
 
+  /** @deprecated Use {@link GetFieldError}. */
+  getFieldError(fieldName: string): string {
+    return this.GetFieldError(fieldName);
+  }
+
+  HasExecutionOrderError(): boolean {
+    return !!this.ExecutionOrderError;
+  }
+
+  /** @deprecated Use {@link HasExecutionOrderError}. */
   hasExecutionOrderError(): boolean {
-    return !!this.executionOrderError;
+    return this.HasExecutionOrderError();
   }
 
   // === Context Behavior Helpers ===
 
-  requiresMessageCount(): boolean {
-    const behavior = this.advancedForm.get('contextBehavior')?.value;
+  RequiresMessageCount(): boolean {
+    const behavior = this.AdvancedForm.get('contextBehavior')?.value;
     return behavior === 'RecentMessages' || behavior === 'InitialMessages';
   }
 
-  getContextBehaviorDescription(value: string): string {
-    const option = this.contextBehaviorOptions.find(opt => opt.value === value);
+  /** @deprecated Use {@link RequiresMessageCount}. */
+  requiresMessageCount(): boolean {
+    return this.RequiresMessageCount();
+  }
+
+  GetContextBehaviorDescription(value: string): string {
+    const option = this.ContextBehaviorOptions.find(opt => opt.value === value);
     return option?.description || '';
+  }
+
+  /** @deprecated Use {@link GetContextBehaviorDescription}. */
+  getContextBehaviorDescription(value: string): string {
+    return this.GetContextBehaviorDescription(value);
   }
 
   // === Dialog Actions ===
 
   cancel() {
-    this.result.next(null);
+    this.Result.next(null);
     this.DialogClose.emit();
   }
 
   async save() {
-    if (this.advancedForm.invalid || this.hasExecutionOrderError()) {
-      this.advancedForm.markAllAsTouched();
+    if (this.AdvancedForm.invalid || this.HasExecutionOrderError()) {
+      this.AdvancedForm.markAllAsTouched();
       MJNotificationService.Instance.CreateSimpleNotification(
         'Please fix validation errors before saving',
         'error',
@@ -225,19 +340,19 @@ export class AgentPromptAdvancedSettingsDialogComponent extends BaseAngularCompo
       return;
     }
 
-    this.isSaving$.next(true);
+    this.IsSaving$.next(true);
     
     try {
       const formData: AgentPromptAdvancedSettingsFormData = {
-        executionOrder: this.advancedForm.get('executionOrder')?.value,
-        purpose: this.advancedForm.get('purpose')?.value || null,
-        configurationID: this.advancedForm.get('configurationID')?.value || null,
-        contextBehavior: this.advancedForm.get('contextBehavior')?.value,
-        contextMessageCount: this.advancedForm.get('contextMessageCount')?.value || null,
-        status: this.advancedForm.get('status')?.value
+        executionOrder: this.AdvancedForm.get('executionOrder')?.value,
+        purpose: this.AdvancedForm.get('purpose')?.value || null,
+        configurationID: this.AdvancedForm.get('configurationID')?.value || null,
+        contextBehavior: this.AdvancedForm.get('contextBehavior')?.value,
+        contextMessageCount: this.AdvancedForm.get('contextMessageCount')?.value || null,
+        status: this.AdvancedForm.get('status')?.value
       };
 
-      this.result.next(formData);
+      this.Result.next(formData);
       this.DialogClose.emit();
       
     } catch (error) {
@@ -248,7 +363,7 @@ export class AgentPromptAdvancedSettingsDialogComponent extends BaseAngularCompo
         3000
       );
     } finally {
-      this.isSaving$.next(false);
+      this.IsSaving$.next(false);
     }
   }
 }

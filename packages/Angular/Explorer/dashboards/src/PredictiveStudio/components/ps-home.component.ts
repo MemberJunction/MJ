@@ -12,9 +12,9 @@ import {
   PSHomeKpis,
   PSModelEventSource,
   PSProcessRunRow,
-  buildActivityFeed,
-  computeHomeKpis,
-  deriveModelEvents,
+  BuildActivityFeed,
+  ComputeHomeKpis,
+  DeriveModelEvents,
 } from '../predictive-studio.view-models';
 
 /**
@@ -142,25 +142,75 @@ export class PSHomeComponent implements OnInit {
   /** Provider to load recent scoring runs through (multi-provider correctness). */
   @Input() provider: IMetadataProvider | null = null;
   /** Acting user for the on-demand scoring-runs load. */
-  @Input() currentUser: UserInfo | null = null;
-  @Output() navigate = new EventEmitter<PSPanelKey>();
+  @Input() CurrentUser: UserInfo | null = null;
+
+  /** @deprecated Use {@link CurrentUser}. */
+  @Input() set currentUser(value: UserInfo | null) {
+    this.CurrentUser = value;
+  }
+  /** @deprecated Use {@link CurrentUser}. */
+  get currentUser(): UserInfo | null {
+    return this.CurrentUser;
+  }
+  @Output() Navigate = new EventEmitter<PSPanelKey>();
+
+  /**
+   * @deprecated Use {@link Navigate}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (navigate) keeps working. Must stay AFTER Navigate: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() navigate = this.Navigate;
   /**
    * Emitted when the user clicks an "Ask the agent" entry path. The payload is the starter prompt to seed
    * the Model Development Agent chat with — the entity-agnostic {@link PS_AGENT_STARTER_PROMPT} by default.
    */
-  @Output() askAgent = new EventEmitter<string>();
+  @Output() AskAgent = new EventEmitter<string>();
+
+  /**
+   * @deprecated Use {@link AskAgent}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (askAgent) keeps working. Must stay AFTER AskAgent: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() askAgent = this.AskAgent;
 
   private cdr = inject(ChangeDetectorRef);
 
   /** Entry-path handler — emits {@link askAgent} with the default entity-agnostic starter prompt. */
+  public OnAskAgent(): void {
+    this.AskAgent.emit(PS_AGENT_STARTER_PROMPT);
+  }
+
+  /** @deprecated Use {@link OnAskAgent}. */
   public onAskAgent(): void {
-    this.askAgent.emit(PS_AGENT_STARTER_PROMPT);
+    return this.OnAskAgent();
   }
 
   /** Derived KPI strip. Starts from the synchronously-available counts, refined once runs load. */
-  public kpis: PSHomeKpis = { publishedCount: 0, activeExperiments: 0, bestHoldout: '—', scoredThisWeek: '0', experimentRuns: 0 };
+  public Kpis: PSHomeKpis = { publishedCount: 0, activeExperiments: 0, bestHoldout: '—', scoredThisWeek: '0', experimentRuns: 0 };
+
+  /** @deprecated Use {@link Kpis}. */
+  public get kpis(): PSHomeKpis {
+    return this.Kpis;
+  }
+  /** @deprecated Use {@link Kpis}. */
+  public set kpis(value: PSHomeKpis) {
+    this.Kpis = value;
+  }
   /** Recent-activity timeline. */
-  public activity: PSActivityFeedItem[] = [];
+  public Activity: PSActivityFeedItem[] = [];
+
+  /** @deprecated Use {@link Activity}. */
+  public get activity(): PSActivityFeedItem[] {
+    return this.Activity;
+  }
+  /** @deprecated Use {@link Activity}. */
+  public set activity(value: PSActivityFeedItem[]) {
+    this.Activity = value;
+  }
 
   /** Cached recent scoring runs (loaded on demand). */
   private scoringRuns: PSProcessRunRow[] = [];
@@ -177,7 +227,7 @@ export class PSHomeComponent implements OnInit {
   private async loadScoringRuns(): Promise<void> {
     if (!this.provider) return;
     try {
-      this.scoringRuns = await this.engine.LoadRecentScoringRuns(this.provider, this.currentUser ?? undefined, {
+      this.scoringRuns = await this.engine.LoadRecentScoringRuns(this.provider, this.CurrentUser ?? undefined, {
         sinceDays: 7,
         maxRows: 50,
       });
@@ -192,7 +242,7 @@ export class PSHomeComponent implements OnInit {
     const runningSessions = this.engine?.RunningSessions.length ?? 0;
     const experimentRuns = this.engine?.Iterations.length ?? 0;
 
-    this.kpis = computeHomeKpis(models, runningSessions, this.scoringRuns, experimentRuns);
+    this.Kpis = ComputeHomeKpis(models, runningSessions, this.scoringRuns, experimentRuns);
 
     const eventSources: PSModelEventSource[] = models.map((m) => ({
       Name: this.engine.ModelDisplayName(m),
@@ -202,6 +252,6 @@ export class PSHomeComponent implements OnInit {
       HoldoutMetrics: m.HoldoutMetrics,
       UpdatedAt: m.__mj_UpdatedAt,
     }));
-    this.activity = buildActivityFeed(this.scoringRuns, deriveModelEvents(eventSources), new Date(), 6);
+    this.Activity = BuildActivityFeed(this.scoringRuns, DeriveModelEvents(eventSources), new Date(), 6);
   }
 }

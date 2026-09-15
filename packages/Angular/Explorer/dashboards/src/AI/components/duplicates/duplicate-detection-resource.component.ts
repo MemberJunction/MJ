@@ -24,12 +24,12 @@ import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService, ActivityService } from '@memberjunction/ng-shared';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import {
-    buildDuplicateAgentContext,
-    resolveEntityDoc,
-    resolveEntityFilter,
+    BuildDuplicateAgentContext,
+    ResolveEntityDoc,
+    ResolveEntityFilter,
     DupeEntityDocCandidate,
 } from './duplicate-detection-agent-context';
-import { validateStringParam } from '../../../shared/agent-tool-validation';
+import { ValidateStringParam } from '../../../shared/agent-tool-validation';
 
 /**
  * Represents a group of duplicate matches for a single source record,
@@ -395,7 +395,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             return;
         }
         const selectedDoc = this.SelectedDocumentThresholds;
-        this.navigationService.SetAgentContext(this, buildDuplicateAgentContext({
+        this.navigationService.SetAgentContext(this, BuildDuplicateAgentContext({
             IsDetecting: this.IsDetecting,
             DetectionProgress: this.DetectionProgress,
             DetectionStage: this.DetectionStage,
@@ -449,9 +449,9 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
                     required: ['document'],
                 },
                 Handler: async (params: Record<string, unknown>) => {
-                    const v = validateStringParam(params['document'], 'document');
+                    const v = ValidateStringParam(params['document'], 'document');
                     if (!v.ok) return v.result;
-                    const resolved = resolveEntityDoc(v.value, this.getEntityDocCandidates());
+                    const resolved = ResolveEntityDoc(v.value, this.getEntityDocCandidates());
                     if (!resolved.ok) return { Success: false, ErrorMessage: resolved.error };
                     this.SelectedEntityDocumentID = resolved.value.ID;
                     this.emitAgentContext();
@@ -483,9 +483,9 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
                     required: ['entityName'],
                 },
                 Handler: async (params: Record<string, unknown>) => {
-                    const v = validateStringParam(params['entityName'], 'entityName');
+                    const v = ValidateStringParam(params['entityName'], 'entityName');
                     if (!v.ok) return v.result;
-                    const resolved = resolveEntityFilter(v.value, this.EntityNames);
+                    const resolved = ResolveEntityFilter(v.value, this.EntityNames);
                     if (!resolved.ok) return { Success: false, ErrorMessage: resolved.error };
                     this.FilterByEntity(resolved.value);
                     return { Success: true, Data: { EntityFilter: resolved.value || 'All', PendingCount: this.PendingGroups.length } };

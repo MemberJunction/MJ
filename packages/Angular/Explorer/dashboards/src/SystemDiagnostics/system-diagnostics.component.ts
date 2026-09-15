@@ -8,9 +8,9 @@ import { ResourceData, MJUserSettingEntity, UserInfoEngine } from '@memberjuncti
 import { BaseEngineRegistry, EngineMemoryStats, LocalCacheManager, CacheEntryInfo, CacheStats, CacheEntryType, Metadata } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { TabConfig } from '@memberjunction/ng-ui-components';
-import { validateEnumParam, validateNonNegativeNumberParam } from '../shared/agent-tool-validation';
+import { ValidateEnumParam, ValidateNonNegativeNumberParam } from '../shared/agent-tool-validation';
 import {
-    buildSystemDiagnosticsAgentContext,
+    BuildSystemDiagnosticsAgentContext,
     VALID_DIAGNOSTICS_SECTIONS,
     VALID_PERF_TABS,
     VALID_TELEMETRY_CATEGORIES,
@@ -1368,43 +1368,232 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
 
     // State
     isLoading = false;
-    autoRefresh = false;
-    activeSection: 'engines' | 'redundant' | 'performance' | 'cache' = 'engines';
-    lastUpdated = new Date();
-    isRefreshingEngines = false;
+    AutoRefresh = false;
+
+    /** @deprecated Use {@link AutoRefresh}. */
+    get autoRefresh() {
+      return this.AutoRefresh;
+    }
+    /** @deprecated Use {@link AutoRefresh}. */
+    set autoRefresh(value) {
+      this.AutoRefresh = value;
+    }
+    ActiveSection: 'engines' | 'redundant' | 'performance' | 'cache' = 'engines';
+
+    /** @deprecated Use {@link ActiveSection}. */
+    get activeSection(): 'engines' | 'redundant' | 'performance' | 'cache' {
+      return this.ActiveSection;
+    }
+    /** @deprecated Use {@link ActiveSection}. */
+    set activeSection(value: 'engines' | 'redundant' | 'performance' | 'cache') {
+      this.ActiveSection = value;
+    }
+    LastUpdated = new Date();
+
+    /** @deprecated Use {@link LastUpdated}. */
+    get lastUpdated() {
+      return this.LastUpdated;
+    }
+    /** @deprecated Use {@link LastUpdated}. */
+    set lastUpdated(value) {
+      this.LastUpdated = value;
+    }
+    IsRefreshingEngines = false;
+
+    /** @deprecated Use {@link IsRefreshingEngines}. */
+    get isRefreshingEngines() {
+      return this.IsRefreshingEngines;
+    }
+    /** @deprecated Use {@link IsRefreshingEngines}. */
+    set isRefreshingEngines(value) {
+      this.IsRefreshingEngines = value;
+    }
 
     // Data
-    engineStats: EngineMemoryStats | null = null;
-    engines: EngineDiagnosticInfo[] = [];
-    redundantLoads: RedundantLoadInfo[] = [];
+    EngineStats: EngineMemoryStats | null = null;
+
+    /** @deprecated Use {@link EngineStats}. */
+    get engineStats(): EngineMemoryStats | null {
+      return this.EngineStats;
+    }
+    /** @deprecated Use {@link EngineStats}. */
+    set engineStats(value: EngineMemoryStats | null) {
+      this.EngineStats = value;
+    }
+    Engines: EngineDiagnosticInfo[] = [];
+
+    /** @deprecated Use {@link Engines}. */
+    get engines(): EngineDiagnosticInfo[] {
+      return this.Engines;
+    }
+    /** @deprecated Use {@link Engines}. */
+    set engines(value: EngineDiagnosticInfo[]) {
+      this.Engines = value;
+    }
+    RedundantLoads: RedundantLoadInfo[] = [];
+
+    /** @deprecated Use {@link RedundantLoads}. */
+    get redundantLoads(): RedundantLoadInfo[] {
+      return this.RedundantLoads;
+    }
+    /** @deprecated Use {@link RedundantLoads}. */
+    set redundantLoads(value: RedundantLoadInfo[]) {
+      this.RedundantLoads = value;
+    }
 
     // Telemetry data
-    telemetrySummary: TelemetrySummary | null = null;
-    telemetryPatterns: TelemetryPatternDisplay[] = [];
-    telemetryInsights: TelemetryInsightDisplay[] = [];
-    telemetryEnabled = false;
-    categoriesWithData: { name: string; events: number; avgMs: number }[] = [];
+    TelemetrySummary: TelemetrySummary | null = null;
+
+    /** @deprecated Use {@link TelemetrySummary}. */
+    get telemetrySummary(): TelemetrySummary | null {
+      return this.TelemetrySummary;
+    }
+    /** @deprecated Use {@link TelemetrySummary}. */
+    set telemetrySummary(value: TelemetrySummary | null) {
+      this.TelemetrySummary = value;
+    }
+    TelemetryPatterns: TelemetryPatternDisplay[] = [];
+
+    /** @deprecated Use {@link TelemetryPatterns}. */
+    get telemetryPatterns(): TelemetryPatternDisplay[] {
+      return this.TelemetryPatterns;
+    }
+    /** @deprecated Use {@link TelemetryPatterns}. */
+    set telemetryPatterns(value: TelemetryPatternDisplay[]) {
+      this.TelemetryPatterns = value;
+    }
+    TelemetryInsights: TelemetryInsightDisplay[] = [];
+
+    /** @deprecated Use {@link TelemetryInsights}. */
+    get telemetryInsights(): TelemetryInsightDisplay[] {
+      return this.TelemetryInsights;
+    }
+    /** @deprecated Use {@link TelemetryInsights}. */
+    set telemetryInsights(value: TelemetryInsightDisplay[]) {
+      this.TelemetryInsights = value;
+    }
+    TelemetryEnabled = false;
+
+    /** @deprecated Use {@link TelemetryEnabled}. */
+    get telemetryEnabled() {
+      return this.TelemetryEnabled;
+    }
+    /** @deprecated Use {@link TelemetryEnabled}. */
+    set telemetryEnabled(value) {
+      this.TelemetryEnabled = value;
+    }
+    CategoriesWithData: { name: string; events: number; avgMs: number }[] = [];
+
+    /** @deprecated Use {@link CategoriesWithData}. */
+    get categoriesWithData(): { name: string; events: number; avgMs: number }[] {
+      return this.CategoriesWithData;
+    }
+    /** @deprecated Use {@link CategoriesWithData}. */
+    set categoriesWithData(value: { name: string; events: number; avgMs: number }[]) {
+      this.CategoriesWithData = value;
+    }
 
     // Telemetry source toggle (client vs server)
-    telemetrySource: 'client' | 'server' = 'client';
-    serverTelemetryLoading = false;
-    serverTelemetryError: string | null = null;
-    serverTelemetryEnabled = false; // Read from server config, not changeable at runtime
+    TelemetrySource: 'client' | 'server' = 'client';
+
+    /** @deprecated Use {@link TelemetrySource}. */
+    get telemetrySource(): 'client' | 'server' {
+      return this.TelemetrySource;
+    }
+    /** @deprecated Use {@link TelemetrySource}. */
+    set telemetrySource(value: 'client' | 'server') {
+      this.TelemetrySource = value;
+    }
+    ServerTelemetryLoading = false;
+
+    /** @deprecated Use {@link ServerTelemetryLoading}. */
+    get serverTelemetryLoading() {
+      return this.ServerTelemetryLoading;
+    }
+    /** @deprecated Use {@link ServerTelemetryLoading}. */
+    set serverTelemetryLoading(value) {
+      this.ServerTelemetryLoading = value;
+    }
+    ServerTelemetryError: string | null = null;
+
+    /** @deprecated Use {@link ServerTelemetryError}. */
+    get serverTelemetryError(): string | null {
+      return this.ServerTelemetryError;
+    }
+    /** @deprecated Use {@link ServerTelemetryError}. */
+    set serverTelemetryError(value: string | null) {
+      this.ServerTelemetryError = value;
+    }
+    ServerTelemetryEnabled = false;
+
+    /** @deprecated Use {@link ServerTelemetryEnabled}. */
+    get serverTelemetryEnabled() {
+      return this.ServerTelemetryEnabled;
+    }
+    /** @deprecated Use {@link ServerTelemetryEnabled}. */
+    set serverTelemetryEnabled(value) {
+      this.ServerTelemetryEnabled = value;
+    } // Read from server config, not changeable at runtime
 
     // Timeline data
-    telemetryEvents: TelemetryEventDisplay[] = [];
-    timelineView: 'insights' | 'timeline' | 'chart' = 'insights';
+    TelemetryEvents: TelemetryEventDisplay[] = [];
+
+    /** @deprecated Use {@link TelemetryEvents}. */
+    get telemetryEvents(): TelemetryEventDisplay[] {
+      return this.TelemetryEvents;
+    }
+    /** @deprecated Use {@link TelemetryEvents}. */
+    set telemetryEvents(value: TelemetryEventDisplay[]) {
+      this.TelemetryEvents = value;
+    }
+    TimelineView: 'insights' | 'timeline' | 'chart' = 'insights';
+
+    /** @deprecated Use {@link TimelineView}. */
+    get timelineView(): 'insights' | 'timeline' | 'chart' {
+      return this.TimelineView;
+    }
+    /** @deprecated Use {@link TimelineView}. */
+    set timelineView(value: 'insights' | 'timeline' | 'chart') {
+      this.TimelineView = value;
+    }
 
     // Performance sub-tabs
-    perfTab: 'monitor' | 'overview' | 'events' | 'patterns' | 'insights' = 'monitor';
+    PerfTab: 'monitor' | 'overview' | 'events' | 'patterns' | 'insights' = 'monitor';
+
+    /** @deprecated Use {@link PerfTab}. */
+    get perfTab(): 'monitor' | 'overview' | 'events' | 'patterns' | 'insights' {
+      return this.PerfTab;
+    }
+    /** @deprecated Use {@link PerfTab}. */
+    set perfTab(value: 'monitor' | 'overview' | 'events' | 'patterns' | 'insights') {
+      this.PerfTab = value;
+    }
 
     // D3 Chart reference
     @ViewChild('perfChart', { static: false }) perfChartRef!: ElementRef<HTMLDivElement>;
     private chartInitialized = false;
 
     // Chart zoom and gap compression state
-    chartZoomLevel = 1;
-    chartGapCompression = true;
+    ChartZoomLevel = 1;
+
+    /** @deprecated Use {@link ChartZoomLevel}. */
+    get chartZoomLevel() {
+      return this.ChartZoomLevel;
+    }
+    /** @deprecated Use {@link ChartZoomLevel}. */
+    set chartZoomLevel(value) {
+      this.ChartZoomLevel = value;
+    }
+    ChartGapCompression = true;
+
+    /** @deprecated Use {@link ChartGapCompression}. */
+    get chartGapCompression() {
+      return this.ChartGapCompression;
+    }
+    /** @deprecated Use {@link ChartGapCompression}. */
+    set chartGapCompression(value) {
+      this.ChartGapCompression = value;
+    }
     private chartViewportStart = 0;
     private chartViewportEnd = 0;
     private expandedGaps = new Set<number>(); // Track which gaps are expanded
@@ -1415,51 +1604,204 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
     private selectionRect: d3.Selection<SVGRectElement, unknown, null, undefined> | null = null;
     private chartXScale: d3.ScaleLinear<number, number> | null = null;
     private chartMarginLeft = 50;
-    chartTimeRangeStart: number | null = null;  // Currently visible time range start
+    ChartTimeRangeStart: number | null = null;
+
+    /** @deprecated Use {@link ChartTimeRangeStart}. */
+    get chartTimeRangeStart(): number | null {
+      return this.ChartTimeRangeStart;
+    }
+    /** @deprecated Use {@link ChartTimeRangeStart}. */
+    set chartTimeRangeStart(value: number | null) {
+      this.ChartTimeRangeStart = value;
+    }  // Currently visible time range start
 
     // Chart interaction mode: 'pointer' to click events, 'select' for drag-to-zoom, 'pan' for panning
-    chartInteractionMode: 'pointer' | 'select' | 'pan' = 'pointer';
+    ChartInteractionMode: 'pointer' | 'select' | 'pan' = 'pointer';
+
+    /** @deprecated Use {@link ChartInteractionMode}. */
+    get chartInteractionMode(): 'pointer' | 'select' | 'pan' {
+      return this.ChartInteractionMode;
+    }
+    /** @deprecated Use {@link ChartInteractionMode}. */
+    set chartInteractionMode(value: 'pointer' | 'select' | 'pan') {
+      this.ChartInteractionMode = value;
+    }
 
     // Store gap segments for inverse mapping (x -> time)
     private chartGapSegments: Array<{ type: 'events' | 'gap'; startTime: number; endTime: number; gapIndex?: number; displayStart: number; displayEnd: number }> = [];
-    chartTimeRangeEnd: number | null = null;    // Currently visible time range end
+    ChartTimeRangeEnd: number | null = null;
+
+    /** @deprecated Use {@link ChartTimeRangeEnd}. */
+    get chartTimeRangeEnd(): number | null {
+      return this.ChartTimeRangeEnd;
+    }
+    /** @deprecated Use {@link ChartTimeRangeEnd}. */
+    set chartTimeRangeEnd(value: number | null) {
+      this.ChartTimeRangeEnd = value;
+    }    // Currently visible time range end
 
     // Slow queries
-    slowQueries: TelemetryEventDisplay[] = [];
-    slowQueryThresholdMs = 500;
+    SlowQueries: TelemetryEventDisplay[] = [];
+
+    /** @deprecated Use {@link SlowQueries}. */
+    get slowQueries(): TelemetryEventDisplay[] {
+      return this.SlowQueries;
+    }
+    /** @deprecated Use {@link SlowQueries}. */
+    set slowQueries(value: TelemetryEventDisplay[]) {
+      this.SlowQueries = value;
+    }
+    SlowQueryThresholdMs = 500;
+
+    /** @deprecated Use {@link SlowQueryThresholdMs}. */
+    get slowQueryThresholdMs() {
+      return this.SlowQueryThresholdMs;
+    }
+    /** @deprecated Use {@link SlowQueryThresholdMs}. */
+    set slowQueryThresholdMs(value) {
+      this.SlowQueryThresholdMs = value;
+    }
 
     // Patterns sorting
-    patternSort: PatternSortConfig = { column: 'count', direction: 'desc' };
+    PatternSort: PatternSortConfig = { column: 'count', direction: 'desc' };
+
+    /** @deprecated Use {@link PatternSort}. */
+    get patternSort(): PatternSortConfig {
+      return this.PatternSort;
+    }
+    /** @deprecated Use {@link PatternSort}. */
+    set patternSort(value: PatternSortConfig) {
+      this.PatternSort = value;
+    }
 
     // Search/Filter
-    searchQuery = '';
-    categoryFilter: TelemetryCategory | 'all' = 'all';
+    SearchQuery = '';
+
+    /** @deprecated Use {@link SearchQuery}. */
+    get searchQuery() {
+      return this.SearchQuery;
+    }
+    /** @deprecated Use {@link SearchQuery}. */
+    set searchQuery(value) {
+      this.SearchQuery = value;
+    }
+    CategoryFilter: TelemetryCategory | 'all' = 'all';
+
+    /** @deprecated Use {@link CategoryFilter}. */
+    get categoryFilter(): TelemetryCategory | 'all' {
+      return this.CategoryFilter;
+    }
+    /** @deprecated Use {@link CategoryFilter}. */
+    set categoryFilter(value: TelemetryCategory | 'all') {
+      this.CategoryFilter = value;
+    }
 
     // Store telemetry boot time for relative time calculations (public for template access)
-    telemetryBootTime: number = 0;
+    TelemetryBootTime: number = 0;
+
+    /** @deprecated Use {@link TelemetryBootTime}. */
+    get telemetryBootTime(): number {
+      return this.TelemetryBootTime;
+    }
+    /** @deprecated Use {@link TelemetryBootTime}. */
+    set telemetryBootTime(value: number) {
+      this.TelemetryBootTime = value;
+    }
 
     // Event detail panel state
-    eventDetailPanel: EventDetailPanelState = {
+    EventDetailPanel: EventDetailPanelState = {
         isOpen: false,
         event: null,
         relatedPattern: null
     };
 
+    /** @deprecated Use {@link EventDetailPanel}. */
+    get eventDetailPanel(): EventDetailPanelState {
+      return this.EventDetailPanel;
+    }
+    /** @deprecated Use {@link EventDetailPanel}. */
+    set eventDetailPanel(value: EventDetailPanelState) {
+      this.EventDetailPanel = value;
+    }
+
     // Local Cache data
-    cacheStats: CacheStats | null = null;
-    cacheEntries: CacheEntryInfo[] = [];
-    cacheTypeFilter: CacheEntryType | 'all' = 'all';
-    cacheInitialized = false;
-    cacheHitRate = 0;
+    CacheStats: CacheStats | null = null;
+
+    /** @deprecated Use {@link CacheStats}. */
+    get cacheStats(): CacheStats | null {
+      return this.CacheStats;
+    }
+    /** @deprecated Use {@link CacheStats}. */
+    set cacheStats(value: CacheStats | null) {
+      this.CacheStats = value;
+    }
+    CacheEntries: CacheEntryInfo[] = [];
+
+    /** @deprecated Use {@link CacheEntries}. */
+    get cacheEntries(): CacheEntryInfo[] {
+      return this.CacheEntries;
+    }
+    /** @deprecated Use {@link CacheEntries}. */
+    set cacheEntries(value: CacheEntryInfo[]) {
+      this.CacheEntries = value;
+    }
+    CacheTypeFilter: CacheEntryType | 'all' = 'all';
+
+    /** @deprecated Use {@link CacheTypeFilter}. */
+    get cacheTypeFilter(): CacheEntryType | 'all' {
+      return this.CacheTypeFilter;
+    }
+    /** @deprecated Use {@link CacheTypeFilter}. */
+    set cacheTypeFilter(value: CacheEntryType | 'all') {
+      this.CacheTypeFilter = value;
+    }
+    CacheInitialized = false;
+
+    /** @deprecated Use {@link CacheInitialized}. */
+    get cacheInitialized() {
+      return this.CacheInitialized;
+    }
+    /** @deprecated Use {@link CacheInitialized}. */
+    set cacheInitialized(value) {
+      this.CacheInitialized = value;
+    }
+    CacheHitRate = 0;
+
+    /** @deprecated Use {@link CacheHitRate}. */
+    get cacheHitRate() {
+      return this.CacheHitRate;
+    }
+    /** @deprecated Use {@link CacheHitRate}. */
+    set cacheHitRate(value) {
+      this.CacheHitRate = value;
+    }
 
     // Engine detail panel state
-    engineDetailPanel: EngineDetailPanelState = {
+    EngineDetailPanel: EngineDetailPanelState = {
         isOpen: false,
         engine: null,
         configItems: [],
         isRefreshing: false
     };
-    isRefreshingSingleEngine: string | null = null;
+
+    /** @deprecated Use {@link EngineDetailPanel}. */
+    get engineDetailPanel(): EngineDetailPanelState {
+      return this.EngineDetailPanel;
+    }
+    /** @deprecated Use {@link EngineDetailPanel}. */
+    set engineDetailPanel(value: EngineDetailPanelState) {
+      this.EngineDetailPanel = value;
+    }
+    IsRefreshingSingleEngine: string | null = null;
+
+    /** @deprecated Use {@link IsRefreshingSingleEngine}. */
+    get isRefreshingSingleEngine(): string | null {
+      return this.IsRefreshingSingleEngine;
+    }
+    /** @deprecated Use {@link IsRefreshingSingleEngine}. */
+    set isRefreshingSingleEngine(value: string | null) {
+      this.IsRefreshingSingleEngine = value;
+    }
 
     constructor(
         private cdr: ChangeDetectorRef,
@@ -1481,7 +1823,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         // (Explorer CACHES and reuses resource components, so a one-shot read in ngOnInit is not
         // enough either: a re-focused tab never re-runs it.)
 
-        this.refreshData();
+        this.RefreshData();
         this.NotifyLoadComplete();
     }
 
@@ -1498,8 +1840,8 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
     ngAfterViewInit() {
         // Render the PerfMon chart if we're on the monitor tab
         // Need a small delay to ensure the DOM is fully ready
-        if (this.activeSection === 'performance' && this.perfTab === 'monitor') {
-            setTimeout(() => this.renderPerfChart(), 100);
+        if (this.ActiveSection === 'performance' && this.PerfTab === 'monitor') {
+            setTimeout(() => this.RenderPerfChart(), 100);
         }
 
         // Wire the agent context + read-only client tools (see SAFETY BOUNDARY below).
@@ -1535,52 +1877,52 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
      * so the agent always sees a fresh, read-only snapshot of the dashboard.
      */
     private publishAgentContext(): void {
-        const byType = this.cacheStats?.byType;
-        this.navigationService.SetAgentContext(this, buildSystemDiagnosticsAgentContext({
+        const byType = this.CacheStats?.byType;
+        this.navigationService.SetAgentContext(this, BuildSystemDiagnosticsAgentContext({
             // Navigation
-            ActiveSection: this.activeSection,
-            PerfTab: this.perfTab,
-            TelemetrySource: this.telemetrySource,
-            TelemetryEnabled: this.telemetryEnabled,
-            ServerTelemetryEnabled: this.serverTelemetryEnabled,
-            CategoryFilter: this.categoryFilter,
-            SlowQueryThresholdMs: this.slowQueryThresholdMs,
+            ActiveSection: this.ActiveSection,
+            PerfTab: this.PerfTab,
+            TelemetrySource: this.TelemetrySource,
+            TelemetryEnabled: this.TelemetryEnabled,
+            ServerTelemetryEnabled: this.ServerTelemetryEnabled,
+            CategoryFilter: this.CategoryFilter,
+            SlowQueryThresholdMs: this.SlowQueryThresholdMs,
 
             // Engines
-            EngineCount: this.engineStats?.totalEngines ?? this.engines.length,
-            LoadedEngineCount: this.engines.filter(e => e.isLoaded).length,
-            TotalMemoryBytes: this.engineStats?.totalEstimatedMemoryBytes ?? 0,
-            TotalMemoryDisplay: this.formatBytes(this.engineStats?.totalEstimatedMemoryBytes ?? 0),
-            EngineNames: this.engines.map(e => e.className),
+            EngineCount: this.EngineStats?.totalEngines ?? this.Engines.length,
+            LoadedEngineCount: this.Engines.filter(e => e.isLoaded).length,
+            TotalMemoryBytes: this.EngineStats?.totalEstimatedMemoryBytes ?? 0,
+            TotalMemoryDisplay: this.formatBytes(this.EngineStats?.totalEstimatedMemoryBytes ?? 0),
+            EngineNames: this.Engines.map(e => e.className),
 
             // Redundant loading
-            RedundantLoadCount: this.redundantLoads.length,
-            RedundantEntityNames: this.redundantLoads.map(r => r.entityName),
+            RedundantLoadCount: this.RedundantLoads.length,
+            RedundantEntityNames: this.RedundantLoads.map(r => r.entityName),
 
             // Telemetry aggregates
-            TotalEvents: this.telemetrySummary?.totalEvents ?? 0,
-            TotalPatterns: this.telemetrySummary?.totalPatterns ?? 0,
-            TotalInsights: this.telemetrySummary?.totalInsights ?? 0,
-            ActiveEvents: this.telemetrySummary?.activeEvents ?? 0,
-            SlowQueryCount: this.slowQueries.length,
-            SlowOperations: this.slowQueries.map(q => ({
+            TotalEvents: this.TelemetrySummary?.totalEvents ?? 0,
+            TotalPatterns: this.TelemetrySummary?.totalPatterns ?? 0,
+            TotalInsights: this.TelemetrySummary?.totalInsights ?? 0,
+            ActiveEvents: this.TelemetrySummary?.activeEvents ?? 0,
+            SlowQueryCount: this.SlowQueries.length,
+            SlowOperations: this.SlowQueries.map(q => ({
                 Label: q.entityName || q.operation,
                 Category: q.category,
                 ElapsedMs: Math.round(q.elapsedMs ?? 0),
             })),
-            CategoryBreakdown: this.categoriesWithData.map(c => ({
+            CategoryBreakdown: this.CategoriesWithData.map(c => ({
                 Name: c.name,
                 Events: c.events,
                 AvgMs: Math.round(c.avgMs),
             })),
 
             // Cache (counts + sizes only — never entry values)
-            CacheInitialized: this.cacheInitialized,
-            CacheTotalEntries: this.cacheStats?.totalEntries ?? 0,
-            CacheTotalSizeBytes: this.cacheStats?.totalSizeBytes ?? 0,
-            CacheHits: this.cacheStats?.hits ?? 0,
-            CacheMisses: this.cacheStats?.misses ?? 0,
-            CacheHitRate: this.cacheHitRate,
+            CacheInitialized: this.CacheInitialized,
+            CacheTotalEntries: this.CacheStats?.totalEntries ?? 0,
+            CacheTotalSizeBytes: this.CacheStats?.totalSizeBytes ?? 0,
+            CacheHits: this.CacheStats?.hits ?? 0,
+            CacheMisses: this.CacheStats?.misses ?? 0,
+            CacheHitRate: this.CacheHitRate,
             CacheDatasetCount: byType?.dataset?.count ?? 0,
             CacheRunViewCount: byType?.runview?.count ?? 0,
             CacheRunQueryCount: byType?.runquery?.count ?? 0,
@@ -1632,24 +1974,24 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
     private static readonly TELEMETRY_CATEGORIES = VALID_TELEMETRY_CATEGORIES;
 
     private handleSwitchSectionTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
-        const v = validateEnumParam(params?.['section'], SystemDiagnosticsComponent.DIAGNOSTICS_SECTIONS, 'section');
+        const v = ValidateEnumParam(params?.['section'], SystemDiagnosticsComponent.DIAGNOSTICS_SECTIONS, 'section');
         if (!v.ok) return v.result;
-        this.setActiveSection(v.value);
+        this.SetActiveSection(v.value);
         this.publishAgentContext();
         return { Success: true };
     }
 
     private handleSwitchPerfTabTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
-        const v = validateEnumParam(params?.['tab'], SystemDiagnosticsComponent.PERF_TABS, 'tab');
+        const v = ValidateEnumParam(params?.['tab'], SystemDiagnosticsComponent.PERF_TABS, 'tab');
         if (!v.ok) return v.result;
-        this.setPerfTab(v.value);
+        this.SetPerfTab(v.value);
         this.publishAgentContext();
         return { Success: true };
     }
 
     private async handleRefreshTool(): Promise<{ Success: boolean; ErrorMessage?: string }> {
         try {
-            await this.refreshData();
+            await this.RefreshData();
             this.publishAgentContext();
             return { Success: true };
         } catch (e) {
@@ -1658,14 +2000,14 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
     }
 
     private handleFilterTelemetryTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
-        const v = validateEnumParam(params?.['category'], SystemDiagnosticsComponent.TELEMETRY_CATEGORIES, 'category');
+        const v = ValidateEnumParam(params?.['category'], SystemDiagnosticsComponent.TELEMETRY_CATEGORIES, 'category');
         if (!v.ok) return v.result;
-        this.setCategoryFilter(v.value as TelemetryCategory | 'all');
+        this.SetCategoryFilter(v.value as TelemetryCategory | 'all');
         return { Success: true };
     }
 
     private handleSetSlowQueryThresholdTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
-        const v = validateNonNegativeNumberParam(params?.['thresholdMs'], 'thresholdMs');
+        const v = ValidateNonNegativeNumberParam(params?.['thresholdMs'], 'thresholdMs');
         if (!v.ok) return v.result;
         this.SetSlowQueryThreshold(v.value);
         return { Success: true };
@@ -1677,27 +2019,32 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
      * not refetch or mutate any telemetry data.
      */
     public SetSlowQueryThreshold(thresholdMs: number): void {
-        this.slowQueryThresholdMs = thresholdMs;
-        this.slowQueries = this.telemetryEvents
-            .filter(e => e.elapsedMs !== undefined && e.elapsedMs >= this.slowQueryThresholdMs)
+        this.SlowQueryThresholdMs = thresholdMs;
+        this.SlowQueries = this.TelemetryEvents
+            .filter(e => e.elapsedMs !== undefined && e.elapsedMs >= this.SlowQueryThresholdMs)
             .sort((a, b) => (b.elapsedMs || 0) - (a.elapsedMs || 0))
             .slice(0, 20);
         this.cdr.markForCheck();
         this.publishAgentContext();
     }
 
-    setActiveSection(section: 'engines' | 'redundant' | 'performance' | 'cache'): void {
-        this.activeSection = section;
+    SetActiveSection(section: 'engines' | 'redundant' | 'performance' | 'cache'): void {
+        this.ActiveSection = section;
         if (section === 'cache') {
-            this.refreshCacheData();
+            this.RefreshCacheData();
         }
-        if (section === 'performance' && this.perfTab === 'monitor') {
+        if (section === 'performance' && this.PerfTab === 'monitor') {
             // Need to wait for DOM to render before chart can be drawn
-            setTimeout(() => this.renderPerfChart(), 50);
+            setTimeout(() => this.RenderPerfChart(), 50);
         }
         this.cdr.markForCheck();
         this.saveUserPreferencesDebounced();
         this.publishAgentContext();
+    }
+
+    /** @deprecated Use {@link SetActiveSection}. */
+    setActiveSection(section: 'engines' | 'redundant' | 'performance' | 'cache'): void {
+      return this.SetActiveSection(section);
     }
 
     /**
@@ -1705,10 +2052,15 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
      * Narrows the emitted key to the typed `activeSection` union before
      * delegating to `setActiveSection`.
      */
-    onSectionTabChange(key: string): void {
+    OnSectionTabChange(key: string): void {
         if (key === 'engines' || key === 'redundant' || key === 'performance' || key === 'cache') {
-            this.setActiveSection(key);
+            this.SetActiveSection(key);
         }
+    }
+
+    /** @deprecated Use {@link OnSectionTabChange}. */
+    onSectionTabChange(key: string): void {
+      return this.OnSectionTabChange(key);
     }
 
     /**
@@ -1716,61 +2068,71 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
      * Badges are dynamic (engine count, redundant-load count w/ warning variant,
      * telemetry event count, cache entry count).
      */
-    get diagnosticsTabs(): TabConfig[] {
+    get DiagnosticsTabs(): TabConfig[] {
         return [
             {
                 key: 'engines',
                 icon: 'fa-solid fa-cogs',
                 label: 'Engine Registry',
-                badge: this.engineStats?.totalEngines ?? 0
+                badge: this.EngineStats?.totalEngines ?? 0
             },
             {
                 key: 'redundant',
                 icon: 'fa-solid fa-copy',
                 label: 'Redundant Loading',
-                badge: this.redundantLoads.length,
-                badgeVariant: this.redundantLoads.length > 0 ? 'warning' : 'success'
+                badge: this.RedundantLoads.length,
+                badgeVariant: this.RedundantLoads.length > 0 ? 'warning' : 'success'
             },
             {
                 key: 'performance',
                 icon: 'fa-solid fa-chart-line',
                 label: 'Performance',
-                badge: this.telemetrySummary?.totalEvents ?? 0
+                badge: this.TelemetrySummary?.totalEvents ?? 0
             },
             {
                 key: 'cache',
                 icon: 'fa-solid fa-database',
                 label: 'Local Cache',
-                badge: this.cacheStats?.totalEntries ?? 0
+                badge: this.CacheStats?.totalEntries ?? 0
             }
         ];
     }
 
-    toggleAutoRefresh(): void {
-        if (this.autoRefresh) {
+    /** @deprecated Use {@link DiagnosticsTabs}. */
+    get diagnosticsTabs(): TabConfig[] {
+      return this.DiagnosticsTabs;
+    }
+
+    ToggleAutoRefresh(): void {
+        if (this.AutoRefresh) {
             // Start auto-refresh interval
             interval(5000)
                 .pipe(takeUntil(this.destroy$))
                 .subscribe(() => {
-                    if (this.autoRefresh) {
-                        this.refreshData();
+                    if (this.AutoRefresh) {
+                        this.RefreshData();
                     }
                 });
         }
         this.saveUserPreferencesDebounced();
     }
 
+    /** @deprecated Use {@link ToggleAutoRefresh}. */
+    toggleAutoRefresh(): void {
+      return this.ToggleAutoRefresh();
+    }
 
-    async refreshData(): Promise<void> {
+
+    async RefreshData(): Promise<void> {
         this.isLoading = true;
         this.cdr.markForCheck();
 
         try {
             // Get engine registry stats
-            this.engineStats = BaseEngineRegistry.Instance.GetMemoryStats();
+            this.EngineStats = BaseEngineRegistry.Instance.GetMemoryStats();
 
             // Transform to display format
-            this.engines = this.engineStats.engineStats.map(engine => ({
+            this.Engines = this.EngineStats.engineStats.map(engine => ({
                 className: engine.className,
                 isLoaded: engine.isLoaded,
                 registeredAt: engine.registeredAt,
@@ -1782,7 +2144,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
 
             // Get redundantly loaded entities
             const redundantMap = BaseEngineRegistry.Instance.GetRedundantlyLoadedEntities();
-            this.redundantLoads = Array.from(redundantMap.entries())
+            this.RedundantLoads = Array.from(redundantMap.entries())
                 .map(([entityName, engines]) => ({
                     entityName,
                     engines
@@ -1792,7 +2154,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
             // Get telemetry data
             this.refreshTelemetryData();
 
-            this.lastUpdated = new Date();
+            this.LastUpdated = new Date();
         } catch (error) {
             console.error('Error refreshing diagnostics data:', error);
         } finally {
@@ -1802,13 +2164,18 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         }
     }
 
+    /** @deprecated Use {@link RefreshData}. */
+    async refreshData(): Promise<void> {
+      return this.RefreshData();
+    }
+
     private refreshTelemetryData(): void {
         const tm = TelemetryManager.Instance;
-        this.telemetryEnabled = tm.IsEnabled;
+        this.TelemetryEnabled = tm.IsEnabled;
 
         // Get summary stats
         const stats = tm.GetStats();
-        this.telemetrySummary = {
+        this.TelemetrySummary = {
             totalEvents: stats.totalEvents,
             totalPatterns: stats.totalPatterns,
             totalInsights: stats.totalInsights,
@@ -1818,7 +2185,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
 
         // Build categories with data for display
         const categoryNames: TelemetryCategory[] = ['RunView', 'RunQuery', 'Engine', 'AI', 'Cache'];
-        this.categoriesWithData = categoryNames
+        this.CategoriesWithData = categoryNames
             .filter(cat => stats.byCategory[cat]?.events > 0)
             .map(cat => ({
                 name: cat,
@@ -1828,13 +2195,13 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
 
         // Get patterns and apply sorting
         const patterns = tm.GetPatterns({ minCount: 1, sortBy: 'count' });
-        this.telemetryPatterns = this.sortPatterns(patterns.slice(0, 100).map(p => ({
+        this.TelemetryPatterns = this.sortPatterns(patterns.slice(0, 100).map(p => ({
             fingerprint: p.fingerprint,
             category: p.category,
             operation: p.operation,
             entityName: this.getEntityName(p.sampleParams),
-            filter: this.getFilter(p.sampleParams),
-            orderBy: this.getOrderBy(p.sampleParams),
+            filter: this.GetFilter(p.sampleParams),
+            orderBy: this.GetOrderBy(p.sampleParams),
             count: p.count,
             avgElapsedMs: Math.round(p.avgElapsedMs * 100) / 100,
             totalElapsedMs: Math.round(p.totalElapsedMs),
@@ -1846,17 +2213,17 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
 
         // Get all events for timeline
         const events = tm.GetEvents({ limit: 200 });
-        this.telemetryEvents = events.map(e => this.eventToDisplay(e));
+        this.TelemetryEvents = events.map(e => this.eventToDisplay(e));
 
         // Get slow queries (operations above threshold)
-        this.slowQueries = this.telemetryEvents
-            .filter(e => e.elapsedMs !== undefined && e.elapsedMs >= this.slowQueryThresholdMs)
+        this.SlowQueries = this.TelemetryEvents
+            .filter(e => e.elapsedMs !== undefined && e.elapsedMs >= this.SlowQueryThresholdMs)
             .sort((a, b) => (b.elapsedMs || 0) - (a.elapsedMs || 0))
             .slice(0, 20);
 
         // Get insights and convert to display format with expansion support
         const insights = tm.GetInsights({ limit: 20 });
-        this.telemetryInsights = insights.map(insight => ({
+        this.TelemetryInsights = insights.map(insight => ({
             ...insight,
             expanded: false,
             relatedEvents: this.getRelatedEventsForInsight(insight)
@@ -1869,7 +2236,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
             category: e.category,
             operation: e.operation,
             entityName: this.getEntityName(e.params),
-            filter: this.getFilter(e.params),
+            filter: this.GetFilter(e.params),
             startTime: e.startTime,
             endTime: e.endTime,
             elapsedMs: e.elapsedMs,
@@ -1889,7 +2256,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
     private sortPatterns(patterns: TelemetryPatternDisplay[]): TelemetryPatternDisplay[] {
         return [...patterns].sort((a, b) => {
             let comparison = 0;
-            switch (this.patternSort.column) {
+            switch (this.PatternSort.column) {
                 case 'category':
                     comparison = a.category.localeCompare(b.category);
                     break;
@@ -1909,61 +2276,91 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
                     comparison = a.totalElapsedMs - b.totalElapsedMs;
                     break;
             }
-            return this.patternSort.direction === 'asc' ? comparison : -comparison;
+            return this.PatternSort.direction === 'asc' ? comparison : -comparison;
         });
     }
 
-    sortPatternsBy(column: PatternSortConfig['column']): void {
-        if (this.patternSort.column === column) {
+    SortPatternsBy(column: PatternSortConfig['column']): void {
+        if (this.PatternSort.column === column) {
             // Toggle direction
-            this.patternSort.direction = this.patternSort.direction === 'asc' ? 'desc' : 'asc';
+            this.PatternSort.direction = this.PatternSort.direction === 'asc' ? 'desc' : 'asc';
         } else {
-            this.patternSort.column = column;
-            this.patternSort.direction = 'desc';
+            this.PatternSort.column = column;
+            this.PatternSort.direction = 'desc';
         }
-        this.telemetryPatterns = this.sortPatterns(this.telemetryPatterns);
+        this.TelemetryPatterns = this.sortPatterns(this.TelemetryPatterns);
         this.cdr.markForCheck();
     }
 
-    getSortIcon(column: PatternSortConfig['column']): string {
-        if (this.patternSort.column !== column) {
-            return 'fa-sort';
-        }
-        return this.patternSort.direction === 'asc' ? 'fa-sort-up' : 'fa-sort-down';
+    /** @deprecated Use {@link SortPatternsBy}. */
+    sortPatternsBy(column: PatternSortConfig['column']): void {
+      return this.SortPatternsBy(column);
     }
 
-    onInsightExpandedChange(insight: TelemetryInsightDisplay, expanded: boolean): void {
+    GetSortIcon(column: PatternSortConfig['column']): string {
+        if (this.PatternSort.column !== column) {
+            return 'fa-sort';
+        }
+        return this.PatternSort.direction === 'asc' ? 'fa-sort-up' : 'fa-sort-down';
+    }
+
+    /** @deprecated Use {@link GetSortIcon}. */
+    getSortIcon(column: PatternSortConfig['column']): string {
+      return this.GetSortIcon(column);
+    }
+
+    OnInsightExpandedChange(insight: TelemetryInsightDisplay, expanded: boolean): void {
         insight.expanded = expanded;
         this.cdr.markForCheck();
     }
 
-    setTimelineView(view: 'insights' | 'timeline' | 'chart'): void {
-        this.timelineView = view;
+    /** @deprecated Use {@link OnInsightExpandedChange}. */
+    onInsightExpandedChange(insight: TelemetryInsightDisplay, expanded: boolean): void {
+      return this.OnInsightExpandedChange(insight, expanded);
+    }
+
+    SetTimelineView(view: 'insights' | 'timeline' | 'chart'): void {
+        this.TimelineView = view;
         if (view === 'chart') {
             // Render chart after view updates
-            setTimeout(() => this.renderPerfChart(), 0);
+            setTimeout(() => this.RenderPerfChart(), 0);
         }
         this.cdr.markForCheck();
     }
 
-    setPerfTab(tab: 'monitor' | 'overview' | 'events' | 'patterns' | 'insights'): void {
-        this.perfTab = tab;
+    /** @deprecated Use {@link SetTimelineView}. */
+    setTimelineView(view: 'insights' | 'timeline' | 'chart'): void {
+      return this.SetTimelineView(view);
+    }
+
+    SetPerfTab(tab: 'monitor' | 'overview' | 'events' | 'patterns' | 'insights'): void {
+        this.PerfTab = tab;
         if (tab === 'monitor') {
             // Render chart after view updates
-            setTimeout(() => this.renderPerfChart(), 0);
+            setTimeout(() => this.RenderPerfChart(), 0);
         }
         this.cdr.markForCheck();
         this.saveUserPreferencesDebounced();
         this.publishAgentContext();
     }
 
-    jumpToPatternsByCategory(categoryName: string): void {
-        this.perfTab = 'patterns';
-        this.categoryFilter = categoryName as TelemetryCategory;
+    /** @deprecated Use {@link SetPerfTab}. */
+    setPerfTab(tab: 'monitor' | 'overview' | 'events' | 'patterns' | 'insights'): void {
+      return this.SetPerfTab(tab);
+    }
+
+    JumpToPatternsByCategory(categoryName: string): void {
+        this.PerfTab = 'patterns';
+        this.CategoryFilter = categoryName as TelemetryCategory;
         this.cdr.markForCheck();
     }
 
-    getInsightFilter(insight: TelemetryInsightDisplay): string | null {
+    /** @deprecated Use {@link JumpToPatternsByCategory}. */
+    jumpToPatternsByCategory(categoryName: string): void {
+      return this.JumpToPatternsByCategory(categoryName);
+    }
+
+    GetInsightFilter(insight: TelemetryInsightDisplay): string | null {
         // Get filter from first related event
         if (insight.relatedEvents.length > 0) {
             return insight.relatedEvents[0].filter;
@@ -1971,7 +2368,12 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         return null;
     }
 
-    getEventParams(event: TelemetryEventDisplay): Array<{ key: string; value: string }> {
+    /** @deprecated Use {@link GetInsightFilter}. */
+    getInsightFilter(insight: TelemetryInsightDisplay): string | null {
+      return this.GetInsightFilter(insight);
+    }
+
+    GetEventParams(event: TelemetryEventDisplay): Array<{ key: string; value: string }> {
         const params: Array<{ key: string; value: string }> = [];
         if (!event.params) return params;
 
@@ -2006,6 +2408,11 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         return params;
     }
 
+    /** @deprecated Use {@link GetEventParams}. */
+    getEventParams(event: TelemetryEventDisplay): Array<{ key: string; value: string }> {
+      return this.GetEventParams(event);
+    }
+
     private formatParamValue(val: unknown): string {
         if (val === null || val === undefined) return '';
         if (typeof val === 'string') return val || '(empty)';
@@ -2019,46 +2426,71 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
     /**
      * Check if this is a RunView/RunViews operation
      */
-    isRunViewOperation(event: TelemetryEventDisplay): boolean {
+    IsRunViewOperation(event: TelemetryEventDisplay): boolean {
         return event.operation === 'ProviderBase.RunView' || event.operation === 'ProviderBase.RunViews';
+    }
+
+    /** @deprecated Use {@link IsRunViewOperation}. */
+    isRunViewOperation(event: TelemetryEventDisplay): boolean {
+      return this.IsRunViewOperation(event);
     }
 
     /**
      * Check if this is a batch RunViews operation
      */
-    isRunViewsOperation(event: TelemetryEventDisplay): boolean {
+    IsRunViewsOperation(event: TelemetryEventDisplay): boolean {
         return event.operation === 'ProviderBase.RunViews';
+    }
+
+    /** @deprecated Use {@link IsRunViewsOperation}. */
+    isRunViewsOperation(event: TelemetryEventDisplay): boolean {
+      return this.IsRunViewsOperation(event);
     }
 
     /**
      * Get entity names for RunViews batch operation (first few for display)
      */
-    getRunViewsEntities(event: TelemetryEventDisplay, maxDisplay: number = 3): string[] {
+    GetRunViewsEntities(event: TelemetryEventDisplay, maxDisplay: number = 3): string[] {
         if (!event.params || !isBatchRunViewParams(event.params)) return [];
         const entities = event.params.Entities;
         if (!entities || !Array.isArray(entities)) return [];
         return entities.slice(0, maxDisplay);
     }
 
+    /** @deprecated Use {@link GetRunViewsEntities}. */
+    getRunViewsEntities(event: TelemetryEventDisplay, maxDisplay: number = 3): string[] {
+      return this.GetRunViewsEntities(event, maxDisplay);
+    }
+
     /**
      * Get total entity count for RunViews batch operation
      */
-    getRunViewsEntityCount(event: TelemetryEventDisplay): number {
+    GetRunViewsEntityCount(event: TelemetryEventDisplay): number {
         if (!event.params || !isBatchRunViewParams(event.params)) return 0;
         return event.params.Entities?.length || 0;
+    }
+
+    /** @deprecated Use {@link GetRunViewsEntityCount}. */
+    getRunViewsEntityCount(event: TelemetryEventDisplay): number {
+      return this.GetRunViewsEntityCount(event);
     }
 
     /**
      * Check if there are more entities than displayed
      */
+    HasMoreEntities(event: TelemetryEventDisplay, maxDisplay: number = 3): boolean {
+        return this.GetRunViewsEntityCount(event) > maxDisplay;
+    }
+
+    /** @deprecated Use {@link HasMoreEntities}. */
     hasMoreEntities(event: TelemetryEventDisplay, maxDisplay: number = 3): boolean {
-        return this.getRunViewsEntityCount(event) > maxDisplay;
+      return this.HasMoreEntities(event, maxDisplay);
     }
 
     /**
      * Check if the event was a cache hit (safe accessor for union type params)
      */
-    isCacheHit(event: TelemetryEventDisplay | { params: TelemetryParamsUnion }): boolean {
+    IsCacheHit(event: TelemetryEventDisplay | { params: TelemetryParamsUnion }): boolean {
         if (!event?.params) return false;
         // Use isSingleRunViewParams or isSingleRunQueryParams to safely access cacheHit
         if (isSingleRunViewParams(event.params)) {
@@ -2074,6 +2506,11 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
             return (p.cacheHits ?? 0) > 0 && (p.cacheMisses ?? 0) === 0;
         }
         return false;
+    }
+
+    /** @deprecated Use {@link IsCacheHit}. */
+    isCacheHit(event: TelemetryEventDisplay | { params: TelemetryParamsUnion }): boolean {
+      return this.IsCacheHit(event);
     }
 
     /**
@@ -2093,7 +2530,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
     /**
      * Get filter from telemetry params (safe accessor for union type)
      */
-    getFilter(params: TelemetryParamsUnion | undefined): string | null {
+    GetFilter(params: TelemetryParamsUnion | undefined): string | null {
         if (!params) return null;
         if (isSingleRunViewParams(params)) {
             return params.ExtraFilter || null;
@@ -2101,10 +2538,15 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         return null;
     }
 
+    /** @deprecated Use {@link GetFilter}. */
+    getFilter(params: TelemetryParamsUnion | undefined): string | null {
+      return this.GetFilter(params);
+    }
+
     /**
      * Get order by from telemetry params (safe accessor for union type)
      */
-    getOrderBy(params: TelemetryParamsUnion | undefined): string | null {
+    GetOrderBy(params: TelemetryParamsUnion | undefined): string | null {
         if (!params) return null;
         if (isSingleRunViewParams(params)) {
             return params.OrderBy || null;
@@ -2112,14 +2554,19 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         return null;
     }
 
+    /** @deprecated Use {@link GetOrderBy}. */
+    getOrderBy(params: TelemetryParamsUnion | undefined): string | null {
+      return this.GetOrderBy(params);
+    }
+
     /**
      * Get RunView parameter pills for display
      */
-    getRunViewPills(event: TelemetryEventDisplay): Array<{ label: string; value: string; type: 'filter' | 'order' | 'result' | 'limit' | 'batch' | 'info' }> {
+    GetRunViewPills(event: TelemetryEventDisplay): Array<{ label: string; value: string; type: 'filter' | 'order' | 'result' | 'limit' | 'batch' | 'info' }> {
         const pills: Array<{ label: string; value: string; type: 'filter' | 'order' | 'result' | 'limit' | 'batch' | 'info' }> = [];
 
         // For batch operations, show batch size
-        if (this.isRunViewsOperation(event) && event.params && isBatchRunViewParams(event.params)) {
+        if (this.IsRunViewsOperation(event) && event.params && isBatchRunViewParams(event.params)) {
             const batchSize = event.params.BatchSize;
             if (batchSize) {
                 pills.push({ label: 'Batch', value: String(batchSize), type: 'batch' });
@@ -2127,15 +2574,15 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         }
 
         // For single RunView, show params
-        if (!this.isRunViewsOperation(event) && event.params && isSingleRunViewParams(event.params)) {
+        if (!this.IsRunViewsOperation(event) && event.params && isSingleRunViewParams(event.params)) {
             const extraFilter = event.params.ExtraFilter;
             if (extraFilter) {
-                pills.push({ label: 'Filter', value: this.truncateString(extraFilter, 25), type: 'filter' });
+                pills.push({ label: 'Filter', value: this.TruncateString(extraFilter, 25), type: 'filter' });
             }
 
             const orderBy = event.params.OrderBy;
             if (orderBy) {
-                pills.push({ label: 'Order', value: this.truncateString(orderBy, 20), type: 'order' });
+                pills.push({ label: 'Order', value: this.TruncateString(orderBy, 20), type: 'order' });
             }
 
             const resultType = event.params.ResultType;
@@ -2152,17 +2599,22 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         return pills;
     }
 
+    /** @deprecated Use {@link GetRunViewPills}. */
+    getRunViewPills(event: TelemetryEventDisplay): Array<{ label: string; value: string; type: 'filter' | 'order' | 'result' | 'limit' | 'batch' | 'info' }> {
+      return this.GetRunViewPills(event);
+    }
+
     // === Event Detail Panel Methods ===
 
-    openEventDetailPanel(event: TelemetryEventDisplay): void {
+    OpenEventDetailPanel(event: TelemetryEventDisplay): void {
         // Find related pattern
-        const relatedPattern = this.telemetryPatterns.find(p =>
+        const relatedPattern = this.TelemetryPatterns.find(p =>
             p.category === event.category &&
             p.operation === event.operation &&
             p.entityName === event.entityName
         ) || null;
 
-        this.eventDetailPanel = {
+        this.EventDetailPanel = {
             isOpen: true,
             event,
             relatedPattern
@@ -2170,8 +2622,13 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         this.cdr.markForCheck();
     }
 
-    closeEventDetailPanel(): void {
-        this.eventDetailPanel = {
+    /** @deprecated Use {@link OpenEventDetailPanel}. */
+    openEventDetailPanel(event: TelemetryEventDisplay): void {
+      return this.OpenEventDetailPanel(event);
+    }
+
+    CloseEventDetailPanel(): void {
+        this.EventDetailPanel = {
             isOpen: false,
             event: null,
             relatedPattern: null
@@ -2179,7 +2636,12 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         this.cdr.markForCheck();
     }
 
-    copyEventToClipboard(event: TelemetryEventDisplay): void {
+    /** @deprecated Use {@link CloseEventDetailPanel}. */
+    closeEventDetailPanel(): void {
+      return this.CloseEventDetailPanel();
+    }
+
+    CopyEventToClipboard(event: TelemetryEventDisplay): void {
         const eventData = {
             id: event.id,
             category: event.category,
@@ -2203,21 +2665,31 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
             });
     }
 
-    filterByEntity(entityName: string | null): void {
+    /** @deprecated Use {@link CopyEventToClipboard}. */
+    copyEventToClipboard(event: TelemetryEventDisplay): void {
+      return this.CopyEventToClipboard(event);
+    }
+
+    FilterByEntity(entityName: string | null): void {
         if (!entityName) return;
 
-        this.closeEventDetailPanel();
-        this.searchQuery = entityName;
-        this.perfTab = 'patterns';
+        this.CloseEventDetailPanel();
+        this.SearchQuery = entityName;
+        this.PerfTab = 'patterns';
         this.cdr.markForCheck();
     }
 
-    exportTelemetryData(): void {
+    /** @deprecated Use {@link FilterByEntity}. */
+    filterByEntity(entityName: string | null): void {
+      return this.FilterByEntity(entityName);
+    }
+
+    ExportTelemetryData(): void {
         const exportData = {
             exportedAt: new Date().toISOString(),
-            bootTime: this.telemetryBootTime,
-            summary: this.telemetrySummary,
-            events: this.telemetryEvents.map(e => ({
+            bootTime: this.TelemetryBootTime,
+            summary: this.TelemetrySummary,
+            events: this.TelemetryEvents.map(e => ({
                 id: e.id,
                 category: e.category,
                 operation: e.operation,
@@ -2229,7 +2701,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
                 timestamp: e.timestamp.toISOString(),
                 params: e.params
             })),
-            patterns: this.telemetryPatterns.map(p => ({
+            patterns: this.TelemetryPatterns.map(p => ({
                 fingerprint: p.fingerprint,
                 category: p.category,
                 operation: p.operation,
@@ -2242,7 +2714,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
                 maxElapsedMs: p.maxElapsedMs,
                 lastSeen: p.lastSeen.toISOString()
             })),
-            insights: this.telemetryInsights.map(i => ({
+            insights: this.TelemetryInsights.map(i => ({
                 id: i.id,
                 category: i.category,
                 severity: i.severity,
@@ -2265,29 +2737,54 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         URL.revokeObjectURL(url);
     }
 
+    /** @deprecated Use {@link ExportTelemetryData}. */
+    exportTelemetryData(): void {
+      return this.ExportTelemetryData();
+    }
+
+    SetCategoryFilter(category: TelemetryCategory | 'all'): void {
+        this.CategoryFilter = category;
+        this.cdr.markForCheck();
+        this.saveUserPreferencesDebounced();
+    }
+
+    /** @deprecated Use {@link SetCategoryFilter}. */
     setCategoryFilter(category: TelemetryCategory | 'all'): void {
-        this.categoryFilter = category;
-        this.cdr.markForCheck();
-        this.saveUserPreferencesDebounced();
+      return this.SetCategoryFilter(category);
     }
 
-    setCategoryFilterByName(name: string): void {
+    SetCategoryFilterByName(name: string): void {
         // Cast string to TelemetryCategory since we know it comes from categoriesWithData
-        this.categoryFilter = name as TelemetryCategory;
+        this.CategoryFilter = name as TelemetryCategory;
         this.cdr.markForCheck();
         this.saveUserPreferencesDebounced();
     }
 
-    onSearchChange(): void {
+    /** @deprecated Use {@link SetCategoryFilterByName}. */
+    setCategoryFilterByName(name: string): void {
+      return this.SetCategoryFilterByName(name);
+    }
+
+    OnSearchChange(): void {
         this.cdr.markForCheck();
         // Debounce URL update for search to avoid too many history changes
         this.updateQueryParamsDebounced();
     }
 
-    clearSearch(): void {
-        this.searchQuery = '';
+    /** @deprecated Use {@link OnSearchChange}. */
+    onSearchChange(): void {
+      return this.OnSearchChange();
+    }
+
+    ClearSearch(): void {
+        this.SearchQuery = '';
         this.cdr.markForCheck();
         this.updateQueryParams();
+    }
+
+    /** @deprecated Use {@link ClearSearch}. */
+    clearSearch(): void {
+      return this.ClearSearch();
     }
 
     private searchParamsTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -2301,17 +2798,17 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         }, 300);
     }
 
-    get filteredPatterns(): TelemetryPatternDisplay[] {
-        let patterns = this.telemetryPatterns;
+    get FilteredPatterns(): TelemetryPatternDisplay[] {
+        let patterns = this.TelemetryPatterns;
 
         // Apply category filter
-        if (this.categoryFilter !== 'all') {
-            patterns = patterns.filter(p => p.category === this.categoryFilter);
+        if (this.CategoryFilter !== 'all') {
+            patterns = patterns.filter(p => p.category === this.CategoryFilter);
         }
 
         // Apply search filter
-        if (this.searchQuery.trim()) {
-            const query = this.searchQuery.toLowerCase();
+        if (this.SearchQuery.trim()) {
+            const query = this.SearchQuery.toLowerCase();
             patterns = patterns.filter(p =>
                 p.entityName?.toLowerCase().includes(query) ||
                 p.operation.toLowerCase().includes(query) ||
@@ -2323,17 +2820,22 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         return patterns;
     }
 
-    get filteredEvents(): TelemetryEventDisplay[] {
-        let events = this.telemetryEvents;
+    /** @deprecated Use {@link FilteredPatterns}. */
+    get filteredPatterns(): TelemetryPatternDisplay[] {
+      return this.FilteredPatterns;
+    }
+
+    get FilteredEvents(): TelemetryEventDisplay[] {
+        let events = this.TelemetryEvents;
 
         // Apply category filter
-        if (this.categoryFilter !== 'all') {
-            events = events.filter(e => e.category === this.categoryFilter);
+        if (this.CategoryFilter !== 'all') {
+            events = events.filter(e => e.category === this.CategoryFilter);
         }
 
         // Apply search filter
-        if (this.searchQuery.trim()) {
-            const query = this.searchQuery.toLowerCase();
+        if (this.SearchQuery.trim()) {
+            const query = this.SearchQuery.toLowerCase();
             events = events.filter(e =>
                 e.entityName?.toLowerCase().includes(query) ||
                 e.operation.toLowerCase().includes(query) ||
@@ -2345,7 +2847,12 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         return events;
     }
 
-    formatTimestamp(date: Date): string {
+    /** @deprecated Use {@link FilteredEvents}. */
+    get filteredEvents(): TelemetryEventDisplay[] {
+      return this.FilteredEvents;
+    }
+
+    FormatTimestamp(date: Date): string {
         return date.toLocaleTimeString('en-US', {
             hour: '2-digit',
             minute: '2-digit',
@@ -2354,20 +2861,35 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         });
     }
 
-    truncateString(str: string | null, maxLength: number): string {
+    /** @deprecated Use {@link FormatTimestamp}. */
+    formatTimestamp(date: Date): string {
+      return this.FormatTimestamp(date);
+    }
+
+    TruncateString(str: string | null, maxLength: number): string {
         if (!str) return '-';
         if (str.length <= maxLength) return str;
         return str.substring(0, maxLength) + '...';
     }
 
-    toggleTelemetry(): void {
+    /** @deprecated Use {@link TruncateString}. */
+    truncateString(str: string | null, maxLength: number): string {
+      return this.TruncateString(str, maxLength);
+    }
+
+    ToggleTelemetry(): void {
         const tm = TelemetryManager.Instance;
         tm.SetEnabled(!tm.IsEnabled);
-        this.telemetryEnabled = tm.IsEnabled;
+        this.TelemetryEnabled = tm.IsEnabled;
         this.cdr.markForCheck();
     }
 
-    clearTelemetry(): void {
+    /** @deprecated Use {@link ToggleTelemetry}. */
+    toggleTelemetry(): void {
+      return this.ToggleTelemetry();
+    }
+
+    ClearTelemetry(): void {
         // Only client telemetry can be cleared (server telemetry is read-only)
         TelemetryManager.Instance.Clear();
         TelemetryManager.Instance.ClearInsights();
@@ -2375,14 +2897,19 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         this.cdr.markForCheck();
     }
 
+    /** @deprecated Use {@link ClearTelemetry}. */
+    clearTelemetry(): void {
+      return this.ClearTelemetry();
+    }
+
     /**
      * Switch between client and server telemetry sources
      */
-    setTelemetrySource(source: 'client' | 'server'): void {
-        if (this.telemetrySource === source) return;
+    SetTelemetrySource(source: 'client' | 'server'): void {
+        if (this.TelemetrySource === source) return;
 
-        this.telemetrySource = source;
-        this.serverTelemetryError = null;
+        this.TelemetrySource = source;
+        this.ServerTelemetryError = null;
 
         if (source === 'server') {
             this.loadServerTelemetry();
@@ -2393,12 +2920,17 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         this.saveUserPreferencesDebounced();
     }
 
+    /** @deprecated Use {@link SetTelemetrySource}. */
+    setTelemetrySource(source: 'client' | 'server'): void {
+      return this.SetTelemetrySource(source);
+    }
+
     /**
      * Load telemetry data from the server via GraphQL
      */
     private async loadServerTelemetry(): Promise<void> {
-        this.serverTelemetryLoading = true;
-        this.serverTelemetryError = null;
+        this.ServerTelemetryLoading = true;
+        this.ServerTelemetryError = null;
         this.cdr.markForCheck();
 
         try {
@@ -2499,7 +3031,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
 
             // Process settings (read-only status from server config)
             if (settingsResult?.GetServerTelemetrySettings) {
-                this.serverTelemetryEnabled = settingsResult.GetServerTelemetrySettings.enabled;
+                this.ServerTelemetryEnabled = settingsResult.GetServerTelemetrySettings.enabled;
             }
 
             // Process stats
@@ -2525,7 +3057,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
                     }
                 }
 
-                this.telemetrySummary = {
+                this.TelemetrySummary = {
                     totalEvents: stats.totalEvents,
                     totalPatterns: stats.totalPatterns,
                     totalInsights: stats.totalInsights,
@@ -2535,7 +3067,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
 
                 // Build categories with data
                 const categoryNames: TelemetryCategory[] = ['RunView', 'RunQuery', 'Engine', 'AI', 'Cache'];
-                this.categoriesWithData = categoryNames
+                this.CategoriesWithData = categoryNames
                     .filter(cat => byCategory[cat]?.events > 0)
                     .map(cat => ({
                         name: cat,
@@ -2546,7 +3078,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
 
             // Process events
             if (eventsResult?.GetServerTelemetryEvents) {
-                this.telemetryEvents = eventsResult.GetServerTelemetryEvents.map((e: {
+                this.TelemetryEvents = eventsResult.GetServerTelemetryEvents.map((e: {
                     id: string;
                     category: string;
                     operation: string;
@@ -2571,15 +3103,15 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
                 });
 
                 // Update slow queries
-                this.slowQueries = this.telemetryEvents
-                    .filter(e => e.elapsedMs !== undefined && e.elapsedMs >= this.slowQueryThresholdMs)
+                this.SlowQueries = this.TelemetryEvents
+                    .filter(e => e.elapsedMs !== undefined && e.elapsedMs >= this.SlowQueryThresholdMs)
                     .sort((a, b) => (b.elapsedMs || 0) - (a.elapsedMs || 0))
                     .slice(0, 20);
             }
 
             // Process patterns
             if (patternsResult?.GetServerTelemetryPatterns) {
-                this.telemetryPatterns = patternsResult.GetServerTelemetryPatterns.slice(0, 100).map((p: {
+                this.TelemetryPatterns = patternsResult.GetServerTelemetryPatterns.slice(0, 100).map((p: {
                     fingerprint: string;
                     category: string;
                     operation: string;
@@ -2612,7 +3144,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
 
             // Process insights
             if (insightsResult?.GetServerTelemetryInsights) {
-                this.telemetryInsights = insightsResult.GetServerTelemetryInsights.map((i: {
+                this.TelemetryInsights = insightsResult.GetServerTelemetryInsights.map((i: {
                     id: string;
                     severity: string;
                     analyzerName: string;
@@ -2641,23 +3173,23 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
                 }));
             }
 
-            this.telemetryEnabled = true; // Server telemetry is available
+            this.TelemetryEnabled = true; // Server telemetry is available
         } catch (error) {
             console.error('Failed to load server telemetry:', error);
-            this.serverTelemetryError = `Failed to load server telemetry: ${error instanceof Error ? error.message : String(error)}`;
+            this.ServerTelemetryError = `Failed to load server telemetry: ${error instanceof Error ? error.message : String(error)}`;
             // Clear data on error
-            this.telemetrySummary = null;
-            this.telemetryEvents = [];
-            this.telemetryPatterns = [];
-            this.telemetryInsights = [];
-            this.slowQueries = [];
+            this.TelemetrySummary = null;
+            this.TelemetryEvents = [];
+            this.TelemetryPatterns = [];
+            this.TelemetryInsights = [];
+            this.SlowQueries = [];
         } finally {
-            this.serverTelemetryLoading = false;
+            this.ServerTelemetryLoading = false;
             this.cdr.markForCheck();
         }
     }
 
-    getSeverityClass(severity: string): string {
+    GetSeverityClass(severity: string): string {
         switch (severity) {
             case 'info': return 'severity-info';
             case 'warning': return 'severity-warning';
@@ -2666,7 +3198,12 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         }
     }
 
-    getSeverityIcon(severity: string): string {
+    /** @deprecated Use {@link GetSeverityClass}. */
+    getSeverityClass(severity: string): string {
+      return this.GetSeverityClass(severity);
+    }
+
+    GetSeverityIcon(severity: string): string {
         switch (severity) {
             case 'info': return 'fa-info-circle';
             case 'warning': return 'fa-exclamation-triangle';
@@ -2675,20 +3212,30 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         }
     }
 
-    async refreshAllEngines(): Promise<void> {
-        this.isRefreshingEngines = true;
+    /** @deprecated Use {@link GetSeverityIcon}. */
+    getSeverityIcon(severity: string): string {
+      return this.GetSeverityIcon(severity);
+    }
+
+    async RefreshAllEngines(): Promise<void> {
+        this.IsRefreshingEngines = true;
         this.cdr.markForCheck();
 
         try {
             const count = await BaseEngineRegistry.Instance.RefreshAllEngines();
             console.log(`Refreshed ${count} engines`);
-            this.refreshData();
+            this.RefreshData();
         } catch (error) {
             console.error('Error refreshing engines:', error);
         } finally {
-            this.isRefreshingEngines = false;
+            this.IsRefreshingEngines = false;
             this.cdr.markForCheck();
         }
+    }
+
+    /** @deprecated Use {@link RefreshAllEngines}. */
+    async refreshAllEngines(): Promise<void> {
+      return this.RefreshAllEngines();
     }
 
     formatBytes(bytes: number): string {
@@ -2701,11 +3248,16 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
 
-    formatTime(date: Date): string {
+    FormatTime(date: Date): string {
         return date.toLocaleTimeString();
     }
 
-    formatRelativeTime(ms: number): string {
+    /** @deprecated Use {@link FormatTime}. */
+    formatTime(date: Date): string {
+      return this.FormatTime(date);
+    }
+
+    FormatRelativeTime(ms: number): string {
         if (ms < 1000) {
             return `${ms.toFixed(0)}ms`;
         } else if (ms < 60000) {
@@ -2717,17 +3269,22 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         }
     }
 
+    /** @deprecated Use {@link FormatRelativeTime}. */
+    formatRelativeTime(ms: number): string {
+      return this.FormatRelativeTime(ms);
+    }
+
     /**
      * Renders a Windows PerfMon-style D3 time series chart
      * Shows performance events over time with duration spikes
      */
-    renderPerfChart(): void {
+    RenderPerfChart(): void {
         if (!this.perfChartRef?.nativeElement) {
             return;
         }
 
         const container = this.perfChartRef.nativeElement;
-        const events = this.telemetryEvents.filter(e => e.elapsedMs !== undefined);
+        const events = this.TelemetryEvents.filter(e => e.elapsedMs !== undefined);
 
         if (events.length === 0) {
             container.innerHTML = '<div style="color: var(--mj-text-secondary); text-align: center; padding: 100px 20px;">No telemetry events with timing data yet.<br>Navigate around the app to generate performance data.</div>';
@@ -2746,12 +3303,12 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         const innerHeight = height - margin.top - margin.bottom;
 
         // Calculate boot time (earliest event)
-        this.telemetryBootTime = Math.min(...events.map(e => e.startTime));
+        this.TelemetryBootTime = Math.min(...events.map(e => e.startTime));
 
         // Prepare data with relative time
         const allChartData = events.map(e => ({
             ...e,
-            relativeTime: e.startTime - this.telemetryBootTime,
+            relativeTime: e.startTime - this.TelemetryBootTime,
             duration: e.elapsedMs || 0
         })).sort((a, b) => a.relativeTime - b.relativeTime);
 
@@ -2763,7 +3320,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         let viewportEnd = this.chartViewportEnd;
 
         // If no viewport set or zoom level is 1, show everything
-        if (this.chartZoomLevel <= 1 || (viewportStart === 0 && viewportEnd === 0)) {
+        if (this.ChartZoomLevel <= 1 || (viewportStart === 0 && viewportEnd === 0)) {
             viewportStart = 0;
             viewportEnd = fullTimeRange;
         }
@@ -2782,7 +3339,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         }
 
         // Calculate effective width with zoom
-        const effectiveWidth = innerWidth * this.chartZoomLevel;
+        const effectiveWidth = innerWidth * this.ChartZoomLevel;
 
         // Create SVG with potential scroll for zoomed view
         const svg = d3.select(container)
@@ -2797,7 +3354,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         let xScale: d3.ScaleLinear<number, number>;
         let gapSegments: Array<{ type: 'events' | 'gap'; startTime: number; endTime: number; gapIndex?: number; displayStart: number; displayEnd: number }> = [];
 
-        if (this.chartGapCompression && chartData.length > 1) {
+        if (this.ChartGapCompression && chartData.length > 1) {
             // Identify gaps and create compressed scale
             const segments = this.identifyGaps(chartData, 5000); // 5 second threshold
             const compressedGapWidth = 30; // Fixed width for compressed gaps
@@ -2972,7 +3529,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         this.drawEventPoints(g, chartData, xScale, yScale, categoryColors, container);
 
         // Draw threshold line for slow queries
-        this.drawThresholdLine(g, yScale, effectiveWidth, this.slowQueryThresholdMs);
+        this.drawThresholdLine(g, yScale, effectiveWidth, this.SlowQueryThresholdMs);
 
         // Add selection brush for drag-to-zoom and pan
         this.addSelectionBrush(svg, g, xScale, innerHeight, margin, allChartData, fullTimeRange);
@@ -2982,6 +3539,11 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         this.chartMarginLeft = margin.left;
 
         this.chartInitialized = true;
+    }
+
+    /** @deprecated Use {@link RenderPerfChart}. */
+    renderPerfChart(): void {
+      return this.RenderPerfChart();
     }
 
     private drawGridLines(
@@ -3177,19 +3739,19 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
             .attr('font-family', 'monospace');
 
         // Split data into cached and non-cached events
-        const nonCachedData = data.filter(d => !this.isCacheHit(d));
-        const cachedData = data.filter(d => this.isCacheHit(d));
+        const nonCachedData = data.filter(d => !this.IsCacheHit(d));
+        const cachedData = data.filter(d => this.IsCacheHit(d));
 
         // Helper to show tooltip
         const showTooltip = (event: MouseEvent, d: TelemetryEventDisplay & { relativeTime: number; duration: number }) => {
             // Update tooltip content
-            const isCached = this.isCacheHit(d);
+            const isCached = this.IsCacheHit(d);
             const lines = [
                 `${d.category}: ${d.operation}`,
                 d.entityName ? `Entity: ${d.entityName}` : null,
                 `Duration: ${d.duration.toFixed(0)}ms`,
                 isCached ? '⚡ CACHED' : null,
-                `Time: +${this.formatRelativeTime(d.relativeTime)}`
+                `Time: +${this.FormatRelativeTime(d.relativeTime)}`
             ].filter(Boolean);
 
             tooltipText.selectAll('tspan').remove();
@@ -3230,9 +3792,9 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
             .attr('class', 'event-point event-point-circle')
             .attr('cx', d => xScale(d.relativeTime))
             .attr('cy', d => yScale(d.duration))
-            .attr('r', d => d.duration >= this.slowQueryThresholdMs ? 5 : 3)
+            .attr('r', d => d.duration >= this.SlowQueryThresholdMs ? 5 : 3)
             .attr('fill', d => categoryColors[d.category] || '#78909c')
-            .attr('stroke', d => d.duration >= this.slowQueryThresholdMs ? '#ff5252' : 'none')
+            .attr('stroke', d => d.duration >= this.SlowQueryThresholdMs ? '#ff5252' : 'none')
             .attr('stroke-width', 2)
             .style('cursor', 'pointer')
             .on('mouseenter', (event: MouseEvent, d) => {
@@ -3242,13 +3804,13 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
             })
             .on('mouseleave', (event: MouseEvent, d) => {
                 const target = event.target as SVGCircleElement;
-                d3.select(target).attr('r', d.duration >= this.slowQueryThresholdMs ? 5 : 3);
+                d3.select(target).attr('r', d.duration >= this.SlowQueryThresholdMs ? 5 : 3);
                 hideTooltip();
             })
             .on('click', (_event: MouseEvent, d) => {
                 // Open detail panel for this event
                 this.ngZone.run(() => {
-                    this.openEventDetailPanel(d);
+                    this.OpenEventDetailPanel(d);
                 });
             });
 
@@ -3262,9 +3824,9 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
             .append('path')
             .attr('class', 'event-point event-point-bolt')
             .attr('d', boltPath)
-            .attr('transform', d => `translate(${xScale(d.relativeTime)},${yScale(d.duration)}) scale(${d.duration >= this.slowQueryThresholdMs ? 1.3 : 1})`)
+            .attr('transform', d => `translate(${xScale(d.relativeTime)},${yScale(d.duration)}) scale(${d.duration >= this.SlowQueryThresholdMs ? 1.3 : 1})`)
             .attr('fill', '#f59e0b')
-            .attr('stroke', d => d.duration >= this.slowQueryThresholdMs ? '#ff5252' : categoryColors[d.category] || '#78909c')
+            .attr('stroke', d => d.duration >= this.SlowQueryThresholdMs ? '#ff5252' : categoryColors[d.category] || '#78909c')
             .attr('stroke-width', 1.5)
             .style('cursor', 'pointer')
             .style('filter', 'drop-shadow(0 0 2px rgba(245, 158, 11, 0.5))')
@@ -3278,14 +3840,14 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
             .on('mouseleave', (event: MouseEvent, d) => {
                 const target = event.target as SVGPathElement;
                 d3.select(target)
-                    .attr('transform', `translate(${xScale(d.relativeTime)},${yScale(d.duration)}) scale(${d.duration >= this.slowQueryThresholdMs ? 1.3 : 1})`)
+                    .attr('transform', `translate(${xScale(d.relativeTime)},${yScale(d.duration)}) scale(${d.duration >= this.SlowQueryThresholdMs ? 1.3 : 1})`)
                     .style('filter', 'drop-shadow(0 0 2px rgba(245, 158, 11, 0.5))');
                 hideTooltip();
             })
             .on('click', (_event: MouseEvent, d) => {
                 // Open detail panel for this event
                 this.ngZone.run(() => {
-                    this.openEventDetailPanel(d);
+                    this.OpenEventDetailPanel(d);
                 });
             });
     }
@@ -3325,57 +3887,77 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
     /**
      * Zoom the chart in or out
      */
-    zoomPerfChart(direction: 'in' | 'out'): void {
+    ZoomPerfChart(direction: 'in' | 'out'): void {
         const zoomFactor = 1.5;
         if (direction === 'in') {
-            this.chartZoomLevel = Math.min(this.chartZoomLevel * zoomFactor, 100); // Allow up to 100x zoom
+            this.ChartZoomLevel = Math.min(this.ChartZoomLevel * zoomFactor, 100); // Allow up to 100x zoom
         } else {
-            this.chartZoomLevel = Math.max(this.chartZoomLevel / zoomFactor, 0.25); // Allow zoom out to 25%
+            this.ChartZoomLevel = Math.max(this.ChartZoomLevel / zoomFactor, 0.25); // Allow zoom out to 25%
         }
-        this.renderPerfChart();
+        this.RenderPerfChart();
         this.cdr.markForCheck();
         this.saveUserPreferencesDebounced();
+    }
+
+    /** @deprecated Use {@link ZoomPerfChart}. */
+    zoomPerfChart(direction: 'in' | 'out'): void {
+      return this.ZoomPerfChart(direction);
     }
 
     /**
      * Reset chart zoom to default
      */
-    resetPerfChartZoom(): void {
-        this.chartZoomLevel = 1;
+    ResetPerfChartZoom(): void {
+        this.ChartZoomLevel = 1;
         this.chartViewportStart = 0;
         this.chartViewportEnd = 0;
-        this.chartTimeRangeStart = null;
-        this.chartTimeRangeEnd = null;
+        this.ChartTimeRangeStart = null;
+        this.ChartTimeRangeEnd = null;
         this.expandedGaps.clear();
-        this.renderPerfChart();
+        this.RenderPerfChart();
         this.cdr.markForCheck();
         this.saveUserPreferencesDebounced();
+    }
+
+    /** @deprecated Use {@link ResetPerfChartZoom}. */
+    resetPerfChartZoom(): void {
+      return this.ResetPerfChartZoom();
     }
 
     /**
      * Handle gap compression toggle
      */
-    onGapCompressionChange(): void {
+    OnGapCompressionChange(): void {
         this.expandedGaps.clear();
-        this.renderPerfChart();
+        this.RenderPerfChart();
         this.cdr.markForCheck();
         this.saveUserPreferencesDebounced();
+    }
+
+    /** @deprecated Use {@link OnGapCompressionChange}. */
+    onGapCompressionChange(): void {
+      return this.OnGapCompressionChange();
     }
 
     /**
      * Set chart interaction mode (select for drag-to-zoom, pan for click-to-view)
      */
-    setChartInteractionMode(mode: 'pointer' | 'select' | 'pan'): void {
-        this.chartInteractionMode = mode;
-        this.renderPerfChart(); // Re-render to update cursor and behavior
+    SetChartInteractionMode(mode: 'pointer' | 'select' | 'pan'): void {
+        this.ChartInteractionMode = mode;
+        this.RenderPerfChart(); // Re-render to update cursor and behavior
         this.cdr.markForCheck();
+    }
+
+    /** @deprecated Use {@link SetChartInteractionMode}. */
+    setChartInteractionMode(mode: 'pointer' | 'select' | 'pan'): void {
+      return this.SetChartInteractionMode(mode);
     }
 
     /**
      * Returns the appropriate cursor style based on the current chart interaction mode
      */
     private getChartCursor(): string {
-        switch (this.chartInteractionMode) {
+        switch (this.ChartInteractionMode) {
             case 'pointer':
                 return 'default';
             case 'select':
@@ -3393,7 +3975,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
     private getOverlayPointerEvents(): string {
         // In pointer mode, let events pass through to the data points
         // In select/pan mode, the overlay needs to capture events
-        return this.chartInteractionMode === 'pointer' ? 'none' : 'all';
+        return this.ChartInteractionMode === 'pointer' ? 'none' : 'all';
     }
 
     /**
@@ -3508,7 +4090,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
             .style('cursor', 'pointer');
 
         // Vertical text showing gap duration
-        const gapText = this.formatRelativeTime(gapDurationMs);
+        const gapText = this.FormatRelativeTime(gapDurationMs);
         const textG = g.append('g')
             .attr('transform', `translate(${x + width / 2}, ${height / 2})`)
             .style('pointer-events', 'none');
@@ -3529,7 +4111,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
                 } else {
                     this.expandedGaps.add(gapIndex);
                 }
-                this.renderPerfChart();
+                this.RenderPerfChart();
             });
         });
     }
@@ -3586,7 +4168,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         };
 
         overlay.on('mousedown', (event: MouseEvent) => {
-            if (this.chartInteractionMode === 'select') {
+            if (this.ChartInteractionMode === 'select') {
                 // Selection mode - drag to zoom
                 isDragging = true;
                 this.isSelecting = true;
@@ -3600,7 +4182,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
                     .attr('width', 0)
                     .attr('height', innerHeight)
                     .style('display', 'block');
-            } else if (this.chartInteractionMode === 'pan') {
+            } else if (this.ChartInteractionMode === 'pan') {
                 // Pan mode - drag to pan
                 isPanning = true;
                 const [x] = d3.pointer(event, overlay.node());
@@ -3611,7 +4193,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         });
 
         svg.on('mousemove', (event: MouseEvent) => {
-            if (isDragging && this.chartInteractionMode === 'select') {
+            if (isDragging && this.ChartInteractionMode === 'select') {
                 const [x] = d3.pointer(event, g.node());
                 const currentX = Math.max(0, Math.min(x, xScale.range()[1]));
 
@@ -3621,7 +4203,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
                 selectionRect
                     .attr('x', rectX)
                     .attr('width', rectWidth);
-            } else if (isPanning && this.chartInteractionMode === 'pan') {
+            } else if (isPanning && this.ChartInteractionMode === 'pan') {
                 const [x] = d3.pointer(event, g.node());
                 const deltaX = x - panStartX;
 
@@ -3630,7 +4212,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
                 const timeDelta = -deltaX / pixelsPerMs; // Negative because dragging right should move viewport left
 
                 // Calculate new viewport position using the full time range
-                const viewportSize = (this.chartViewportEnd - this.chartViewportStart) || fullTimeRange / this.chartZoomLevel;
+                const viewportSize = (this.chartViewportEnd - this.chartViewportStart) || fullTimeRange / this.ChartZoomLevel;
 
                 let newStart = panStartViewportStart + timeDelta;
                 // Clamp to valid range
@@ -3641,13 +4223,13 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
 
                 // Re-render chart with new viewport
                 this.ngZone.run(() => {
-                    this.renderPerfChart();
+                    this.RenderPerfChart();
                 });
             }
         });
 
         svg.on('mouseup', (event: MouseEvent) => {
-            if (isDragging && this.chartInteractionMode === 'select') {
+            if (isDragging && this.ChartInteractionMode === 'select') {
                 isDragging = false;
                 this.isSelecting = false;
 
@@ -3695,19 +4277,19 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         allData: Array<{ relativeTime: number; duration: number }>
     ): void {
         // Store the time range for filtering
-        this.chartTimeRangeStart = startTime;
-        this.chartTimeRangeEnd = endTime;
+        this.ChartTimeRangeStart = startTime;
+        this.ChartTimeRangeEnd = endTime;
 
         // Calculate zoom level based on selection
         const fullRange = (d3.max(allData, d => d.relativeTime) || 1000) - (d3.min(allData, d => d.relativeTime) || 0);
         const selectedRange = endTime - startTime;
         const newZoomLevel = fullRange / Math.max(selectedRange, 10); // Allow very fine selections (down to 10ms)
 
-        this.chartZoomLevel = Math.min(Math.max(newZoomLevel, 1), 100); // Allow up to 100x zoom
+        this.ChartZoomLevel = Math.min(Math.max(newZoomLevel, 1), 100); // Allow up to 100x zoom
         this.chartViewportStart = startTime;
         this.chartViewportEnd = endTime;
 
-        this.renderPerfChart();
+        this.RenderPerfChart();
         this.cdr.markForCheck();
     }
 
@@ -3716,56 +4298,76 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
     /**
      * Refreshes cache data from LocalCacheManager
      */
-    refreshCacheData(): void {
+    RefreshCacheData(): void {
         const lcm = LocalCacheManager.Instance;
-        this.cacheInitialized = lcm.IsInitialized;
+        this.CacheInitialized = lcm.IsInitialized;
 
-        if (this.cacheInitialized) {
-            this.cacheStats = lcm.GetStats();
-            this.cacheEntries = lcm.GetAllEntries();
-            this.cacheHitRate = lcm.GetHitRate();
+        if (this.CacheInitialized) {
+            this.CacheStats = lcm.GetStats();
+            this.CacheEntries = lcm.GetAllEntries();
+            this.CacheHitRate = lcm.GetHitRate();
         } else {
-            this.cacheStats = null;
-            this.cacheEntries = [];
-            this.cacheHitRate = 0;
+            this.CacheStats = null;
+            this.CacheEntries = [];
+            this.CacheHitRate = 0;
         }
 
         this.cdr.markForCheck();
+    }
+
+    /** @deprecated Use {@link RefreshCacheData}. */
+    refreshCacheData(): void {
+      return this.RefreshCacheData();
     }
 
     /**
      * Getter for filtered cache entries based on type filter
      */
-    get filteredCacheEntries(): CacheEntryInfo[] {
-        if (this.cacheTypeFilter === 'all') {
-            return this.cacheEntries;
+    get FilteredCacheEntries(): CacheEntryInfo[] {
+        if (this.CacheTypeFilter === 'all') {
+            return this.CacheEntries;
         }
-        return this.cacheEntries.filter(e => e.type === this.cacheTypeFilter);
+        return this.CacheEntries.filter(e => e.type === this.CacheTypeFilter);
+    }
+
+    /** @deprecated Use {@link FilteredCacheEntries}. */
+    get filteredCacheEntries(): CacheEntryInfo[] {
+      return this.FilteredCacheEntries;
     }
 
     /**
      * Sets the cache type filter
      */
-    setCacheTypeFilter(type: CacheEntryType | 'all'): void {
-        this.cacheTypeFilter = type;
+    SetCacheTypeFilter(type: CacheEntryType | 'all'): void {
+        this.CacheTypeFilter = type;
         this.cdr.markForCheck();
+    }
+
+    /** @deprecated Use {@link SetCacheTypeFilter}. */
+    setCacheTypeFilter(type: CacheEntryType | 'all'): void {
+      return this.SetCacheTypeFilter(type);
     }
 
     /**
      * Clears all cache entries
      */
-    async clearAllCache(): Promise<void> {
+    async ClearAllCache(): Promise<void> {
         const lcm = LocalCacheManager.Instance;
         if (lcm.IsInitialized) {
             await lcm.ClearAll();
-            this.refreshCacheData();
+            this.RefreshCacheData();
         }
+    }
+
+    /** @deprecated Use {@link ClearAllCache}. */
+    async clearAllCache(): Promise<void> {
+      return this.ClearAllCache();
     }
 
     /**
      * Invalidates a single cache entry
      */
-    async invalidateCacheEntry(entry: CacheEntryInfo): Promise<void> {
+    async InvalidateCacheEntry(entry: CacheEntryInfo): Promise<void> {
         const lcm = LocalCacheManager.Instance;
         if (!lcm.IsInitialized) return;
 
@@ -3781,13 +4383,18 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
             await lcm.InvalidateRunViewResult(entry.fingerprint);
         }
 
-        this.refreshCacheData();
+        this.RefreshCacheData();
+    }
+
+    /** @deprecated Use {@link InvalidateCacheEntry}. */
+    async invalidateCacheEntry(entry: CacheEntryInfo): Promise<void> {
+      return this.InvalidateCacheEntry(entry);
     }
 
     /**
      * Formats a cache timestamp (unix ms) to display string
      */
-    formatCacheTimestamp(timestamp: number): string {
+    FormatCacheTimestamp(timestamp: number): string {
         const date = new Date(timestamp);
         return date.toLocaleTimeString('en-US', {
             hour: '2-digit',
@@ -3796,14 +4403,19 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         });
     }
 
+    /** @deprecated Use {@link FormatCacheTimestamp}. */
+    formatCacheTimestamp(timestamp: number): string {
+      return this.FormatCacheTimestamp(timestamp);
+    }
+
     // === Engine Detail Panel Methods ===
 
     /**
      * Refresh a single engine
      */
-    async refreshSingleEngine(engine: EngineDiagnosticInfo, event: Event): Promise<void> {
+    async RefreshSingleEngine(engine: EngineDiagnosticInfo, event: Event): Promise<void> {
         event.stopPropagation();
-        this.isRefreshingSingleEngine = engine.className;
+        this.IsRefreshingSingleEngine = engine.className;
         this.cdr.markForCheck();
 
         try {
@@ -3812,22 +4424,27 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
                 await engineInstance.RefreshAllItems();
                 console.log(`Refreshed engine: ${engine.className}`);
             }
-            this.refreshData();
+            this.RefreshData();
         } catch (error) {
             console.error(`Error refreshing engine ${engine.className}:`, error);
         } finally {
-            this.isRefreshingSingleEngine = null;
+            this.IsRefreshingSingleEngine = null;
             this.cdr.markForCheck();
         }
+    }
+
+    /** @deprecated Use {@link RefreshSingleEngine}. */
+    async refreshSingleEngine(engine: EngineDiagnosticInfo, event: Event): Promise<void> {
+      return this.RefreshSingleEngine(engine, event);
     }
 
     /**
      * Opens the engine detail panel for a specific engine
      */
-    openEngineDetailPanel(engine: EngineDiagnosticInfo): void {
+    OpenEngineDetailPanel(engine: EngineDiagnosticInfo): void {
         const configItems = this.getEngineConfigItems(engine.className);
 
-        this.engineDetailPanel = {
+        this.EngineDetailPanel = {
             isOpen: true,
             engine,
             configItems,
@@ -3836,11 +4453,16 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         this.cdr.markForCheck();
     }
 
+    /** @deprecated Use {@link OpenEngineDetailPanel}. */
+    openEngineDetailPanel(engine: EngineDiagnosticInfo): void {
+      return this.OpenEngineDetailPanel(engine);
+    }
+
     /**
      * Closes the engine detail panel
      */
-    closeEngineDetailPanel(): void {
-        this.engineDetailPanel = {
+    CloseEngineDetailPanel(): void {
+        this.EngineDetailPanel = {
             isOpen: false,
             engine: null,
             configItems: [],
@@ -3849,38 +4471,48 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         this.cdr.markForCheck();
     }
 
+    /** @deprecated Use {@link CloseEngineDetailPanel}. */
+    closeEngineDetailPanel(): void {
+      return this.CloseEngineDetailPanel();
+    }
+
     /**
      * Refreshes the engine shown in the detail panel
      */
-    async refreshEngineInDetailPanel(): Promise<void> {
-        if (!this.engineDetailPanel.engine) return;
+    async RefreshEngineInDetailPanel(): Promise<void> {
+        if (!this.EngineDetailPanel.engine) return;
 
-        this.engineDetailPanel.isRefreshing = true;
+        this.EngineDetailPanel.isRefreshing = true;
         this.cdr.markForCheck();
 
         try {
             const engineInstance = BaseEngineRegistry.Instance.GetEngine<{ RefreshAllItems: () => Promise<void> }>(
-                this.engineDetailPanel.engine.className
+                this.EngineDetailPanel.engine.className
             );
             if (engineInstance && typeof engineInstance.RefreshAllItems === 'function') {
                 await engineInstance.RefreshAllItems();
             }
 
             // Refresh the data and reopen panel with updated info
-            await this.refreshData();
+            await this.RefreshData();
 
             // Update the panel with refreshed data
-            const updatedEngine = this.engines.find(e => e.className === this.engineDetailPanel.engine?.className);
+            const updatedEngine = this.Engines.find(e => e.className === this.EngineDetailPanel.engine?.className);
             if (updatedEngine) {
-                this.engineDetailPanel.engine = updatedEngine;
-                this.engineDetailPanel.configItems = this.getEngineConfigItems(updatedEngine.className);
+                this.EngineDetailPanel.engine = updatedEngine;
+                this.EngineDetailPanel.configItems = this.getEngineConfigItems(updatedEngine.className);
             }
         } catch (error) {
             console.error('Error refreshing engine in detail panel:', error);
         } finally {
-            this.engineDetailPanel.isRefreshing = false;
+            this.EngineDetailPanel.isRefreshing = false;
             this.cdr.markForCheck();
         }
+    }
+
+    /** @deprecated Use {@link RefreshEngineInDetailPanel}. */
+    async refreshEngineInDetailPanel(): Promise<void> {
+      return this.RefreshEngineInDetailPanel();
     }
 
     /**
@@ -3973,15 +4605,20 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
     /**
      * Toggle expansion of a config item
      */
-    onConfigItemExpandedChange(item: EngineConfigItemDisplay, expanded: boolean): void {
+    OnConfigItemExpandedChange(item: EngineConfigItemDisplay, expanded: boolean): void {
         item.expanded = expanded;
         this.cdr.markForCheck();
+    }
+
+    /** @deprecated Use {@link OnConfigItemExpandedChange}. */
+    onConfigItemExpandedChange(item: EngineConfigItemDisplay, expanded: boolean): void {
+      return this.OnConfigItemExpandedChange(item, expanded);
     }
 
     /**
      * Get column names for sample data display
      */
-    getSampleDataColumns(item: EngineConfigItemDisplay): string[] {
+    GetSampleDataColumns(item: EngineConfigItemDisplay): string[] {
         if (item.sampleData.length === 0) return [];
 
         const sample = item.sampleData[0];
@@ -4019,10 +4656,15 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         return keys.slice(0, 6);
     }
 
+    /** @deprecated Use {@link GetSampleDataColumns}. */
+    getSampleDataColumns(item: EngineConfigItemDisplay): string[] {
+      return this.GetSampleDataColumns(item);
+    }
+
     /**
      * Get a value from sample data for display
      */
-    getSampleDataValue(row: unknown, column: string): string {
+    GetSampleDataValue(row: unknown, column: string): string {
         if (!row || typeof row !== 'object') return '';
 
         const obj = row as Record<string, unknown>;
@@ -4037,6 +4679,11 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         // For plain objects
         const value = obj[column];
         return this.formatValueForDisplay(value);
+    }
+
+    /** @deprecated Use {@link GetSampleDataValue}. */
+    getSampleDataValue(row: unknown, column: string): string {
+      return this.GetSampleDataValue(row, column);
     }
 
     /**
@@ -4055,7 +4702,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
     /**
      * Load more data for a config item (paging)
      */
-    loadMoreData(item: EngineConfigItemDisplay): void {
+    LoadMoreData(item: EngineConfigItemDisplay): void {
         if (item.isLoadingMore || item.allDataLoaded) return;
 
         item.isLoadingMore = true;
@@ -4076,10 +4723,15 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         }, 100);
     }
 
+    /** @deprecated Use {@link LoadMoreData}. */
+    loadMoreData(item: EngineConfigItemDisplay): void {
+      return this.LoadMoreData(item);
+    }
+
     /**
      * Load all remaining data for a config item
      */
-    loadAllData(item: EngineConfigItemDisplay): void {
+    LoadAllData(item: EngineConfigItemDisplay): void {
         if (item.isLoadingMore || item.allDataLoaded) return;
 
         item.isLoadingMore = true;
@@ -4094,10 +4746,15 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         }, 100);
     }
 
+    /** @deprecated Use {@link LoadAllData}. */
+    loadAllData(item: EngineConfigItemDisplay): void {
+      return this.LoadAllData(item);
+    }
+
     /**
      * Get the record ID from a row (for opening entity records)
      */
-    getRecordId(row: unknown): string | null {
+    GetRecordId(row: unknown): string | null {
         if (!row || typeof row !== 'object') return null;
 
         const obj = row as Record<string, unknown>;
@@ -4118,11 +4775,16 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         return null;
     }
 
+    /** @deprecated Use {@link GetRecordId}. */
+    getRecordId(row: unknown): string | null {
+      return this.GetRecordId(row);
+    }
+
     /**
      * Open an entity record using NavigationService
      */
-    openEntityRecord(entityName: string, row: unknown): void {
-        const recordId = this.getRecordId(row);
+    OpenEntityRecord(entityName: string, row: unknown): void {
+        const recordId = this.GetRecordId(row);
         if (!recordId || !entityName) return;
 
         // Any entity can be opened here, so resolve the key column from metadata rather than assuming ID
@@ -4131,15 +4793,25 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         this.navigationService.OpenEntityRecord(entityName, compositeKey);
     }
 
+    /** @deprecated Use {@link OpenEntityRecord}. */
+    openEntityRecord(entityName: string, row: unknown): void {
+      return this.OpenEntityRecord(entityName, row);
+    }
+
     /**
      * Open an entity in the explorer (placeholder - would need routing integration)
      */
-    openEntityInExplorer(entityName: string): void {
+    OpenEntityInExplorer(entityName: string): void {
         // This would integrate with the app's navigation/routing system
         // For now, just log and could be extended to emit an event or use router
         console.log(`Would open entity in explorer: ${entityName}`);
         // Could emit an event or use router:
         // this.router.navigate(['/entities', entityName]);
+    }
+
+    /** @deprecated Use {@link OpenEntityInExplorer}. */
+    openEntityInExplorer(entityName: string): void {
+      return this.OpenEntityInExplorer(entityName);
     }
 
     // === Deep Linking via Query Parameters ===
@@ -4164,7 +4836,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         if (params['section']) {
             const section = params['section'] as string;
             if (['engines', 'redundant', 'performance', 'cache'].includes(section)) {
-                this.activeSection = section as 'engines' | 'redundant' | 'performance' | 'cache';
+                this.ActiveSection = section as 'engines' | 'redundant' | 'performance' | 'cache';
             }
         }
 
@@ -4172,7 +4844,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         if (params['tab']) {
             const tab = params['tab'] as string;
             if (['monitor', 'overview', 'events', 'patterns', 'insights'].includes(tab)) {
-                this.perfTab = tab as 'monitor' | 'overview' | 'events' | 'patterns' | 'insights';
+                this.PerfTab = tab as 'monitor' | 'overview' | 'events' | 'patterns' | 'insights';
             }
         }
 
@@ -4180,7 +4852,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         if (params['source']) {
             const source = params['source'] as string;
             if (['client', 'server'].includes(source)) {
-                this.telemetrySource = source as 'client' | 'server';
+                this.TelemetrySource = source as 'client' | 'server';
             }
         }
 
@@ -4188,15 +4860,15 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         if (params['category']) {
             const category = params['category'] as string;
             if (category === 'all') {
-                this.categoryFilter = 'all';
+                this.CategoryFilter = 'all';
             } else {
-                this.categoryFilter = category as TelemetryCategory;
+                this.CategoryFilter = category as TelemetryCategory;
             }
         }
 
         // Search query: ?search=...
         if (params['search']) {
-            this.searchQuery = params['search'] as string;
+            this.SearchQuery = params['search'] as string;
         }
 
         // KPI cards collapsed: ?kpi=collapsed|expanded
@@ -4209,11 +4881,11 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
      */
     private updateQueryParams(): void {
         const queryParams: Record<string, string | null> = {
-            section: this.activeSection !== 'engines' ? this.activeSection : null,
-            tab: this.perfTab !== 'monitor' ? this.perfTab : null,
-            source: this.telemetrySource !== 'client' ? this.telemetrySource : null,
-            category: this.categoryFilter !== 'all' ? this.categoryFilter : null,
-            search: this.searchQuery.trim() || null
+            section: this.ActiveSection !== 'engines' ? this.ActiveSection : null,
+            tab: this.PerfTab !== 'monitor' ? this.PerfTab : null,
+            source: this.TelemetrySource !== 'client' ? this.TelemetrySource : null,
+            category: this.CategoryFilter !== 'all' ? this.CategoryFilter : null,
+            search: this.SearchQuery.trim() || null
         };
 
         this.UpdateQueryParams(queryParams);
@@ -4256,13 +4928,13 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
      * Apply loaded user preferences to component state
      */
     private applyUserPreferences(prefs: Partial<SystemDiagnosticsUserPreferences>): void {
-        if (prefs.activeSection !== undefined) this.activeSection = prefs.activeSection;
-        if (prefs.perfTab !== undefined) this.perfTab = prefs.perfTab;
-        if (prefs.telemetrySource !== undefined) this.telemetrySource = prefs.telemetrySource;
-        if (prefs.categoryFilter !== undefined) this.categoryFilter = prefs.categoryFilter;
-        if (prefs.chartZoomLevel !== undefined) this.chartZoomLevel = prefs.chartZoomLevel;
-        if (prefs.chartGapCompression !== undefined) this.chartGapCompression = prefs.chartGapCompression;
-        if (prefs.autoRefresh !== undefined) this.autoRefresh = prefs.autoRefresh;
+        if (prefs.activeSection !== undefined) this.ActiveSection = prefs.activeSection;
+        if (prefs.perfTab !== undefined) this.PerfTab = prefs.perfTab;
+        if (prefs.telemetrySource !== undefined) this.TelemetrySource = prefs.telemetrySource;
+        if (prefs.categoryFilter !== undefined) this.CategoryFilter = prefs.categoryFilter;
+        if (prefs.chartZoomLevel !== undefined) this.ChartZoomLevel = prefs.chartZoomLevel;
+        if (prefs.chartGapCompression !== undefined) this.ChartGapCompression = prefs.chartGapCompression;
+        if (prefs.autoRefresh !== undefined) this.AutoRefresh = prefs.autoRefresh;
         this.cdr.markForCheck();
     }
 
@@ -4271,13 +4943,13 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
      */
     private getCurrentPreferences(): SystemDiagnosticsUserPreferences {
         return {
-            activeSection: this.activeSection,
-            perfTab: this.perfTab,
-            telemetrySource: this.telemetrySource,
-            categoryFilter: this.categoryFilter,
-            chartZoomLevel: this.chartZoomLevel,
-            chartGapCompression: this.chartGapCompression,
-            autoRefresh: this.autoRefresh
+            activeSection: this.ActiveSection,
+            perfTab: this.PerfTab,
+            telemetrySource: this.TelemetrySource,
+            categoryFilter: this.CategoryFilter,
+            chartZoomLevel: this.ChartZoomLevel,
+            chartGapCompression: this.ChartGapCompression,
+            autoRefresh: this.AutoRefresh
         };
     }
 

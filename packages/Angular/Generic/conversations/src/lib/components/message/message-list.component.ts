@@ -30,7 +30,7 @@ import {
 } from '../../events/chat-events';
 import { RealtimeSessionTimelineCardComponent } from '../realtime/realtime-session-timeline-card.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
-import { selectDistinctLatestArtifacts } from '../../utils/distinct-artifacts';
+import { SelectDistinctLatestArtifacts } from '../../utils/distinct-artifacts';
 import {
   BuildConversationTimeline,
   ConversationTimelineItem,
@@ -108,21 +108,120 @@ function isDateJumpPeriod(value: string): value is DateJumpPeriod {
 })
 export class MessageListComponent extends BaseAngularComponent implements OnInit, OnDestroy, OnChanges, AfterViewInit, AfterViewChecked {
   @Input() public messages: MJConversationDetailEntity[] = [];
-  @Input() public conversation!: MJConversationEntity | null;
-  @Input() public currentUser!: UserInfo;
-  @Input() public isProcessing: boolean = false;
+  @Input() public Conversation!: MJConversationEntity | null;
+
+  /** @deprecated Use {@link Conversation}. */
+  @Input() public set conversation(value: MJConversationEntity | null) {
+    this.Conversation = value;
+  }
+  /** @deprecated Use {@link Conversation}. */
+  public get conversation(): MJConversationEntity | null {
+    return this.Conversation;
+  }
+  @Input() public CurrentUser!: UserInfo;
+
+  /** @deprecated Use {@link CurrentUser}. */
+  @Input() public set currentUser(value: UserInfo) {
+    this.CurrentUser = value;
+  }
+  /** @deprecated Use {@link CurrentUser}. */
+  public get currentUser(): UserInfo {
+    return this.CurrentUser;
+  }
+  @Input() public IsProcessing: boolean = false;
+
+  /** @deprecated Use {@link IsProcessing}. */
+  @Input() public set isProcessing(value: boolean) {
+    this.IsProcessing = value;
+  }
+  /** @deprecated Use {@link IsProcessing}. */
+  public get isProcessing(): boolean {
+    return this.IsProcessing;
+  }
   /** Whether the built-in "No messages yet" filler renders for empty conversations. Hosts with their own empty-state chrome set false. */
-  @Input() public showEmptyFill: boolean = true;
+  @Input() public ShowEmptyFill: boolean = true;
+
+  /** @deprecated Use {@link ShowEmptyFill}. */
+  @Input() public set showEmptyFill(value: boolean) {
+    this.ShowEmptyFill = value;
+  }
+  /** @deprecated Use {@link ShowEmptyFill}. */
+  public get showEmptyFill(): boolean {
+    return this.ShowEmptyFill;
+  }
   /** Whether the sticky date header + jump-to-date dropdown render. */
-  @Input() public showDateNavigation: boolean = true;
+  @Input() public ShowDateNavigation: boolean = true;
+
+  /** @deprecated Use {@link ShowDateNavigation}. */
+  @Input() public set showDateNavigation(value: boolean) {
+    this.ShowDateNavigation = value;
+  }
+  /** @deprecated Use {@link ShowDateNavigation}. */
+  public get showDateNavigation(): boolean {
+    return this.ShowDateNavigation;
+  }
   // Per-message feature gates — forwarded onto each MessageItemComponent instance
   // (see applyMessageItemFeatureFlags). All default true.
-  @Input() public showAgentRunDetails: boolean = true;
-  @Input() public showReactions: boolean = true;
-  @Input() public showMessageRating: boolean = true;
-  @Input() public allowPinning: boolean = true;
-  @Input() public allowMessageEdit: boolean = true;
-  @Input() public allowMessageDelete: boolean = true;
+  @Input() public ShowAgentRunDetails: boolean = true;
+
+  /** @deprecated Use {@link ShowAgentRunDetails}. */
+  @Input() public set showAgentRunDetails(value: boolean) {
+    this.ShowAgentRunDetails = value;
+  }
+  /** @deprecated Use {@link ShowAgentRunDetails}. */
+  public get showAgentRunDetails(): boolean {
+    return this.ShowAgentRunDetails;
+  }
+  @Input() public ShowReactions: boolean = true;
+
+  /** @deprecated Use {@link ShowReactions}. */
+  @Input() public set showReactions(value: boolean) {
+    this.ShowReactions = value;
+  }
+  /** @deprecated Use {@link ShowReactions}. */
+  public get showReactions(): boolean {
+    return this.ShowReactions;
+  }
+  @Input() public ShowMessageRating: boolean = true;
+
+  /** @deprecated Use {@link ShowMessageRating}. */
+  @Input() public set showMessageRating(value: boolean) {
+    this.ShowMessageRating = value;
+  }
+  /** @deprecated Use {@link ShowMessageRating}. */
+  public get showMessageRating(): boolean {
+    return this.ShowMessageRating;
+  }
+  @Input() public AllowPinning: boolean = true;
+
+  /** @deprecated Use {@link AllowPinning}. */
+  @Input() public set allowPinning(value: boolean) {
+    this.AllowPinning = value;
+  }
+  /** @deprecated Use {@link AllowPinning}. */
+  public get allowPinning(): boolean {
+    return this.AllowPinning;
+  }
+  @Input() public AllowMessageEdit: boolean = true;
+
+  /** @deprecated Use {@link AllowMessageEdit}. */
+  @Input() public set allowMessageEdit(value: boolean) {
+    this.AllowMessageEdit = value;
+  }
+  /** @deprecated Use {@link AllowMessageEdit}. */
+  public get allowMessageEdit(): boolean {
+    return this.AllowMessageEdit;
+  }
+  @Input() public AllowMessageDelete: boolean = true;
+
+  /** @deprecated Use {@link AllowMessageDelete}. */
+  @Input() public set allowMessageDelete(value: boolean) {
+    this.AllowMessageDelete = value;
+  }
+  /** @deprecated Use {@link AllowMessageDelete}. */
+  public get allowMessageDelete(): boolean {
+    return this.AllowMessageDelete;
+  }
 
   // ── Windowed-transcript paging state ────────────────────────────────────────
   // The list renders only the LOADED window, not the whole conversation. These two
@@ -238,18 +337,72 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     return this._assistantAvatarUrl;
   }
   private _assistantAvatarUrl: string | null = null;
-  @Input() public artifactMap: Map<string, LazyArtifactInfo[]> = new Map();
-  @Input() public agentRunMap: Map<string, MJAIAgentRunEntityExtended> = new Map();
-  @Input() public ratingsMap: Map<string, RatingJSON[]> = new Map();
-  @Input() public userAvatarMap: Map<string, {imageUrl: string | null; iconClass: string | null}> = new Map();
-  @Input() public attachmentsMap: Map<string, MessageAttachment[]> = new Map();
+  @Input() public ArtifactMap: Map<string, LazyArtifactInfo[]> = new Map();
+
+  /** @deprecated Use {@link ArtifactMap}. */
+  @Input() public set artifactMap(value: Map<string, LazyArtifactInfo[]>) {
+    this.ArtifactMap = value;
+  }
+  /** @deprecated Use {@link ArtifactMap}. */
+  public get artifactMap(): Map<string, LazyArtifactInfo[]> {
+    return this.ArtifactMap;
+  }
+  @Input() public AgentRunMap: Map<string, MJAIAgentRunEntityExtended> = new Map();
+
+  /** @deprecated Use {@link AgentRunMap}. */
+  @Input() public set agentRunMap(value: Map<string, MJAIAgentRunEntityExtended>) {
+    this.AgentRunMap = value;
+  }
+  /** @deprecated Use {@link AgentRunMap}. */
+  public get agentRunMap(): Map<string, MJAIAgentRunEntityExtended> {
+    return this.AgentRunMap;
+  }
+  @Input() public RatingsMap: Map<string, RatingJSON[]> = new Map();
+
+  /** @deprecated Use {@link RatingsMap}. */
+  @Input() public set ratingsMap(value: Map<string, RatingJSON[]>) {
+    this.RatingsMap = value;
+  }
+  /** @deprecated Use {@link RatingsMap}. */
+  public get ratingsMap(): Map<string, RatingJSON[]> {
+    return this.RatingsMap;
+  }
+  @Input() public UserAvatarMap: Map<string, {imageUrl: string | null; iconClass: string | null}> = new Map();
+
+  /** @deprecated Use {@link UserAvatarMap}. */
+  @Input() public set userAvatarMap(value: Map<string, {imageUrl: string | null; iconClass: string | null}>) {
+    this.UserAvatarMap = value;
+  }
+  /** @deprecated Use {@link UserAvatarMap}. */
+  public get userAvatarMap(): Map<string, {imageUrl: string | null; iconClass: string | null}> {
+    return this.UserAvatarMap;
+  }
+  @Input() public AttachmentsMap: Map<string, MessageAttachment[]> = new Map();
+
+  /** @deprecated Use {@link AttachmentsMap}. */
+  @Input() public set attachmentsMap(value: Map<string, MessageAttachment[]>) {
+    this.AttachmentsMap = value;
+  }
+  /** @deprecated Use {@link AttachmentsMap}. */
+  public get attachmentsMap(): Map<string, MessageAttachment[]> {
+    return this.AttachmentsMap;
+  }
   /**
    * Optional session-row enrichment for realtime SESSION BLOCKS, keyed by
    * `NormalizeUUID(sessionId)` (agent name / status / close reason). Details stamped
    * with an `AgentSessionID` collapse into one timeline card per session — see
    * `BuildConversationTimeline` — and this map dresses those cards up when present.
    */
-  @Input() public sessionMetaMap: Map<string, RealtimeSessionTimelineMeta> = new Map();
+  @Input() public SessionMetaMap: Map<string, RealtimeSessionTimelineMeta> = new Map();
+
+  /** @deprecated Use {@link SessionMetaMap}. */
+  @Input() public set sessionMetaMap(value: Map<string, RealtimeSessionTimelineMeta>) {
+    this.SessionMetaMap = value;
+  }
+  /** @deprecated Use {@link SessionMetaMap}. */
+  public get sessionMetaMap(): Map<string, RealtimeSessionTimelineMeta> {
+    return this.SessionMetaMap;
+  }
 
   /**
    * Optional per-iteration custom message renderer. When set, the list renders each
@@ -263,7 +416,16 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    * etc. The minimal `MJChatMessageBubbleDefaultComponent` ships as a ready-to-use
    * bubble renderer.
    */
-  @Input() public messageRendererTemplate: TemplateRef<unknown> | null = null;
+  @Input() public MessageRendererTemplate: TemplateRef<unknown> | null = null;
+
+  /** @deprecated Use {@link MessageRendererTemplate}. */
+  @Input() public set messageRendererTemplate(value: TemplateRef<unknown> | null) {
+    this.MessageRendererTemplate = value;
+  }
+  /** @deprecated Use {@link MessageRendererTemplate}. */
+  public get messageRendererTemplate(): TemplateRef<unknown> | null {
+    return this.MessageRendererTemplate;
+  }
 
   /**
    * Optional per-message additive decoration template, projected INSIDE the default
@@ -271,28 +433,181 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    * consumer projects `mjChatSlot="messageExtra"`. Ignored when
    * `messageRendererTemplate` is set (custom renderers own all per-message content).
    */
-  @Input() public messageExtraTemplate: TemplateRef<unknown> | null = null;
+  @Input() public MessageExtraTemplate: TemplateRef<unknown> | null = null;
 
-  @Output() public editMessage = new EventEmitter<MJConversationDetailEntity>();
-  @Output() public deleteMessage = new EventEmitter<MJConversationDetailEntity>();
-  @Output() public retryMessage = new EventEmitter<MJConversationDetailEntity>();
-  @Output() public testFeedbackMessage = new EventEmitter<MJConversationDetailEntity>();
-  @Output() public artifactClicked = new EventEmitter<{artifactId: string; versionId?: string}>();
-  @Output() public replyInThread = new EventEmitter<MJConversationDetailEntity>();
-  @Output() public viewThread = new EventEmitter<MJConversationDetailEntity>();
-  @Output() public messageEdited = new EventEmitter<MJConversationDetailEntity>();
-  @Output() public openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
-  @Output() public suggestedResponseSelected = new EventEmitter<{text: string; customInput?: string}>();
-  @Output() public attachmentClicked = new EventEmitter<MessageAttachment>();
-  @Output() public diagnosticRequested = new EventEmitter<string>(); // emits messageId
-  @Output() public messagePinToggled = new EventEmitter<MJConversationDetailEntity>();
+  /** @deprecated Use {@link MessageExtraTemplate}. */
+  @Input() public set messageExtraTemplate(value: TemplateRef<unknown> | null) {
+    this.MessageExtraTemplate = value;
+  }
+  /** @deprecated Use {@link MessageExtraTemplate}. */
+  public get messageExtraTemplate(): TemplateRef<unknown> | null {
+    return this.MessageExtraTemplate;
+  }
+
+  @Output() public EditMessage = new EventEmitter<MJConversationDetailEntity>();
+
+  /**
+   * @deprecated Use {@link EditMessage}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (editMessage) keeps working. Must stay AFTER EditMessage: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public editMessage = this.EditMessage;
+  @Output() public DeleteMessage = new EventEmitter<MJConversationDetailEntity>();
+
+  /**
+   * @deprecated Use {@link DeleteMessage}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (deleteMessage) keeps working. Must stay AFTER DeleteMessage: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public deleteMessage = this.DeleteMessage;
+  @Output() public RetryMessage = new EventEmitter<MJConversationDetailEntity>();
+
+  /**
+   * @deprecated Use {@link RetryMessage}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (retryMessage) keeps working. Must stay AFTER RetryMessage: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public retryMessage = this.RetryMessage;
+  @Output() public TestFeedbackMessage = new EventEmitter<MJConversationDetailEntity>();
+
+  /**
+   * @deprecated Use {@link TestFeedbackMessage}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (testFeedbackMessage) keeps working. Must stay AFTER TestFeedbackMessage: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public testFeedbackMessage = this.TestFeedbackMessage;
+  @Output() public ArtifactClicked = new EventEmitter<{artifactId: string; versionId?: string}>();
+
+  /**
+   * @deprecated Use {@link ArtifactClicked}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (artifactClicked) keeps working. Must stay AFTER ArtifactClicked: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public artifactClicked = this.ArtifactClicked;
+  @Output() public ReplyInThread = new EventEmitter<MJConversationDetailEntity>();
+
+  /**
+   * @deprecated Use {@link ReplyInThread}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (replyInThread) keeps working. Must stay AFTER ReplyInThread: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public replyInThread = this.ReplyInThread;
+  @Output() public ViewThread = new EventEmitter<MJConversationDetailEntity>();
+
+  /**
+   * @deprecated Use {@link ViewThread}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (viewThread) keeps working. Must stay AFTER ViewThread: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public viewThread = this.ViewThread;
+  @Output() public MessageEdited = new EventEmitter<MJConversationDetailEntity>();
+
+  /**
+   * @deprecated Use {@link MessageEdited}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (messageEdited) keeps working. Must stay AFTER MessageEdited: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public messageEdited = this.MessageEdited;
+  @Output() public OpenEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
+
+  /**
+   * @deprecated Use {@link OpenEntityRecord}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (openEntityRecord) keeps working. Must stay AFTER OpenEntityRecord: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public openEntityRecord = this.OpenEntityRecord;
+  @Output() public SuggestedResponseSelected = new EventEmitter<{text: string; customInput?: string}>();
+
+  /**
+   * @deprecated Use {@link SuggestedResponseSelected}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (suggestedResponseSelected) keeps working. Must stay AFTER SuggestedResponseSelected: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public suggestedResponseSelected = this.SuggestedResponseSelected;
+  @Output() public AttachmentClicked = new EventEmitter<MessageAttachment>();
+
+  /**
+   * @deprecated Use {@link AttachmentClicked}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (attachmentClicked) keeps working. Must stay AFTER AttachmentClicked: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public attachmentClicked = this.AttachmentClicked;
+  @Output() public DiagnosticRequested = new EventEmitter<string>();
+
+  /**
+   * @deprecated Use {@link DiagnosticRequested}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (diagnosticRequested) keeps working. Must stay AFTER DiagnosticRequested: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public diagnosticRequested = this.DiagnosticRequested; // emits messageId
+  @Output() public MessagePinToggled = new EventEmitter<MJConversationDetailEntity>();
+
+  /**
+   * @deprecated Use {@link MessagePinToggled}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (messagePinToggled) keeps working. Must stay AFTER MessagePinToggled: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public messagePinToggled = this.MessagePinToggled;
   /** Emitted with the `MJ: AI Agent Sessions.ID` when a realtime session block's Open affordance is clicked. */
-  @Output() public realtimeSessionOpenRequested = new EventEmitter<string>();
+  @Output() public RealtimeSessionOpenRequested = new EventEmitter<string>();
+
+  /**
+   * @deprecated Use {@link RealtimeSessionOpenRequested}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (realtimeSessionOpenRequested) keeps working. Must stay AFTER RealtimeSessionOpenRequested: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public realtimeSessionOpenRequested = this.RealtimeSessionOpenRequested;
 
   /** Forwarded from MessageItemComponent — see its docs. */
-  @Output() public beforeResponseFormSubmitted = new EventEmitter<BeforeResponseFormSubmittedEventArgs>();
+  @Output() public BeforeResponseFormSubmitted = new EventEmitter<BeforeResponseFormSubmittedEventArgs>();
+
+  /**
+   * @deprecated Use {@link BeforeResponseFormSubmitted}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (beforeResponseFormSubmitted) keeps working. Must stay AFTER BeforeResponseFormSubmitted: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public beforeResponseFormSubmitted = this.BeforeResponseFormSubmitted;
   /** Forwarded from MessageItemComponent — see its docs. */
-  @Output() public afterResponseFormSubmitted = new EventEmitter<AfterResponseFormSubmittedEventArgs>();
+  @Output() public AfterResponseFormSubmitted = new EventEmitter<AfterResponseFormSubmittedEventArgs>();
+
+  /**
+   * @deprecated Use {@link AfterResponseFormSubmitted}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (afterResponseFormSubmitted) keeps working. Must stay AFTER AfterResponseFormSubmitted: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public afterResponseFormSubmitted = this.AfterResponseFormSubmitted;
 
   /**
    * Asks the host to load the next older page. Fired when the "earlier messages"
@@ -394,16 +709,48 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    */
   private _previousFirstKey: string | null = null;
 
-  public currentDateDisplay: string = 'Today';
-  public showDateNav: boolean = false;
-  public shouldShowDateFilter: boolean = false;
+  public CurrentDateDisplay: string = 'Today';
+
+  /** @deprecated Use {@link CurrentDateDisplay}. */
+  public get currentDateDisplay(): string {
+    return this.CurrentDateDisplay;
+  }
+  /** @deprecated Use {@link CurrentDateDisplay}. */
+  public set currentDateDisplay(value: string) {
+    this.CurrentDateDisplay = value;
+  }
+  public ShowDateNav: boolean = false;
+
+  /** @deprecated Use {@link ShowDateNav}. */
+  public get showDateNav(): boolean {
+    return this.ShowDateNav;
+  }
+  /** @deprecated Use {@link ShowDateNav}. */
+  public set showDateNav(value: boolean) {
+    this.ShowDateNav = value;
+  }
+  public ShouldShowDateFilter: boolean = false;
+
+  /** @deprecated Use {@link ShouldShowDateFilter}. */
+  public get shouldShowDateFilter(): boolean {
+    return this.ShouldShowDateFilter;
+  }
+  /** @deprecated Use {@link ShouldShowDateFilter}. */
+  public set shouldShowDateFilter(value: boolean) {
+    this.ShouldShowDateFilter = value;
+  }
 
   constructor(private cdRef: ChangeDetectorRef, private hostRef: ElementRef<HTMLElement>) {
     super();
   }
 
+  public ToggleDateNav(): void {
+    this.ShowDateNav = !this.ShowDateNav;
+  }
+
+  /** @deprecated Use {@link ToggleDateNav}. */
   public toggleDateNav(): void {
-    this.showDateNav = !this.showDateNav;
+    return this.ToggleDateNav();
   }
 
   /**
@@ -414,13 +761,18 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    * {@link ScrollToDateTarget}. The label updates immediately so the dropdown feels responsive
    * while paging runs.
    */
-  public jumpToDate(period: string): void {
-    this.showDateNav = false;
+  public JumpToDate(period: string): void {
+    this.ShowDateNav = false;
     if (!isDateJumpPeriod(period)) {
       return;
     }
-    this.currentDateDisplay = DATE_JUMP_LABELS[period];
+    this.CurrentDateDisplay = DATE_JUMP_LABELS[period];
     this.DateJumpRequested.emit(period);
+  }
+
+  /** @deprecated Use {@link JumpToDate}. */
+  public jumpToDate(period: string): void {
+    return this.JumpToDate(period);
   }
 
   /**
@@ -1276,7 +1628,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    */
   private renderSessionBlock(group: RealtimeSessionTimelineGroup, timelineIndex: number): void {
     const key = this.getSessionKey(group.SessionID);
-    const meta = this.sessionMetaMap.get(NormalizeUUID(group.SessionID)) ?? null;
+    const meta = this.SessionMetaMap.get(NormalizeUUID(group.SessionID)) ?? null;
     const existing = this._renderedMessages.get(key);
 
     if (existing && existing.kind === 'realtime-session') {
@@ -1300,8 +1652,8 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     );
     componentRef.instance.Group = group;
     componentRef.instance.Meta = meta;
-    componentRef.instance.UserName = this.currentUser?.Name || 'You';
-    componentRef.instance.OpenRequested.subscribe((sessionId: string) => this.realtimeSessionOpenRequested.emit(sessionId));
+    componentRef.instance.UserName = this.CurrentUser?.Name || 'You';
+    componentRef.instance.OpenRequested.subscribe((sessionId: string) => this.RealtimeSessionOpenRequested.emit(sessionId));
     this._renderedMessages.set(key, { kind: 'realtime-session', ref: componentRef });
   }
 
@@ -1324,7 +1676,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     // boolean (last index when `isLastMessage` is true, else 0 — any non-last
     // index works since it just affects that one comparison).
     const index = isLastMessage ? messages.length - 1 : 0;
-    const useCustomRenderer = this.messageRendererTemplate !== null;
+    const useCustomRenderer = this.MessageRendererTemplate !== null;
     const existing = this._renderedMessages.get(key);
 
     if (existing && existing.kind === 'embedded' && useCustomRenderer) {
@@ -1365,15 +1717,15 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
 
     instance.message = message;
     instance.allMessages = messages;
-    instance.isProcessing = this.isProcessing;
-    instance.userAvatarMap = this.userAvatarMap;
+    instance.isProcessing = this.IsProcessing;
+    instance.userAvatarMap = this.UserAvatarMap;
     instance.isLastMessage = (index === messages.length - 1);
-    instance.messageExtraTemplate = this.messageExtraTemplate;
+    instance.messageExtraTemplate = this.MessageExtraTemplate;
     this.applyMessageItemFeatureFlags(instance);
 
-    instance.agentRun = this.agentRunMap.get(message.ID) || null;
-    instance.ratings = this.ratingsMap.get(message.ID);
-    instance.attachments = this.attachmentsMap.get(message.ID) || [];
+    instance.agentRun = this.AgentRunMap.get(message.ID) || null;
+    instance.ratings = this.RatingsMap.get(message.ID);
+    instance.attachments = this.AttachmentsMap.get(message.ID) || [];
 
     // After the inputs above, for the same reason as the create path: this can force a
     // synchronous child pass, which would otherwise paint the previous refresh's agent run,
@@ -1393,12 +1745,12 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    * paths so a mid-session rebind stays consistent.
    */
   private applyMessageItemFeatureFlags(instance: MessageItemComponent): void {
-    instance.showAgentRunDetails = this.showAgentRunDetails;
-    instance.showReactions = this.showReactions;
-    instance.showMessageRating = this.showMessageRating;
-    instance.allowPinning = this.allowPinning;
-    instance.allowMessageEdit = this.allowMessageEdit;
-    instance.allowMessageDelete = this.allowMessageDelete;
+    instance.showAgentRunDetails = this.ShowAgentRunDetails;
+    instance.showReactions = this.ShowReactions;
+    instance.showMessageRating = this.ShowMessageRating;
+    instance.allowPinning = this.AllowPinning;
+    instance.allowMessageEdit = this.AllowMessageEdit;
+    instance.allowMessageDelete = this.AllowMessageDelete;
     instance.assistantDisplayName = this.assistantDisplayName;
     instance.assistantAvatarUrl = this.assistantAvatarUrl;
   }
@@ -1417,10 +1769,10 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     useCustomRenderer: boolean,
     timelineIndex: number
   ): void {
-    if (useCustomRenderer && this.messageRendererTemplate) {
+    if (useCustomRenderer && this.MessageRendererTemplate) {
       // The slot directive carries TemplateRef<unknown>; assert the contract here
       // (consumers' `let-message` bindings consume the message context shape below).
-      const template = this.messageRendererTemplate as TemplateRef<MessageRendererContext>;
+      const template = this.MessageRendererTemplate as TemplateRef<MessageRendererContext>;
       const viewRef = this.messageContainerRef.createEmbeddedView<MessageRendererContext>(
         template,
         { $implicit: message, message },
@@ -1436,32 +1788,32 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     const instance = componentRef.instance;
 
     instance.message = message;
-    instance.conversation = this.conversation;
-    instance.currentUser = this.currentUser;
+    instance.conversation = this.Conversation;
+    instance.currentUser = this.CurrentUser;
     instance.allMessages = messages;
-    instance.isProcessing = this.isProcessing;
-    instance.userAvatarMap = this.userAvatarMap;
+    instance.isProcessing = this.IsProcessing;
+    instance.userAvatarMap = this.UserAvatarMap;
     instance.isLastMessage = (index === messages.length - 1);
-    instance.messageExtraTemplate = this.messageExtraTemplate;
+    instance.messageExtraTemplate = this.MessageExtraTemplate;
     this.applyMessageItemFeatureFlags(instance);
 
-    instance.agentRun = this.agentRunMap.get(message.ID) || null;
-    instance.ratings = this.ratingsMap.get(message.ID);
-    instance.attachments = this.attachmentsMap.get(message.ID) || [];
+    instance.agentRun = this.AgentRunMap.get(message.ID) || null;
+    instance.ratings = this.RatingsMap.get(message.ID);
+    instance.attachments = this.AttachmentsMap.get(message.ID) || [];
 
-    instance.editClicked.subscribe((msg: MJConversationDetailEntity) => this.editMessage.emit(msg));
-    instance.deleteClicked.subscribe((msg: MJConversationDetailEntity) => this.deleteMessage.emit(msg));
-    instance.retryClicked.subscribe((msg: MJConversationDetailEntity) => this.retryMessage.emit(msg));
-    instance.testFeedbackClicked.subscribe((msg: MJConversationDetailEntity) => this.testFeedbackMessage.emit(msg));
-    instance.artifactClicked.subscribe((data: {artifactId: string; versionId?: string}) => this.artifactClicked.emit(data));
-    instance.messageEdited.subscribe((msg: MJConversationDetailEntity) => this.messageEdited.emit(msg));
-    instance.openEntityRecord.subscribe((data: {entityName: string; compositeKey: CompositeKey}) => this.openEntityRecord.emit(data));
-    instance.suggestedResponseSelected.subscribe((data: {text: string; customInput?: string}) => this.suggestedResponseSelected.emit(data));
-    instance.attachmentClicked.subscribe((attachment: MessageAttachment) => this.attachmentClicked.emit(attachment));
-    instance.diagnosticRequested.subscribe((messageId: string) => this.diagnosticRequested.emit(messageId));
-    instance.messagePinToggled.subscribe((msg: MJConversationDetailEntity) => this.messagePinToggled.emit(msg));
-    instance.beforeResponseFormSubmitted.subscribe((e: BeforeResponseFormSubmittedEventArgs) => this.beforeResponseFormSubmitted.emit(e));
-    instance.afterResponseFormSubmitted.subscribe((e: AfterResponseFormSubmittedEventArgs) => this.afterResponseFormSubmitted.emit(e));
+    instance.editClicked.subscribe((msg: MJConversationDetailEntity) => this.EditMessage.emit(msg));
+    instance.deleteClicked.subscribe((msg: MJConversationDetailEntity) => this.DeleteMessage.emit(msg));
+    instance.retryClicked.subscribe((msg: MJConversationDetailEntity) => this.RetryMessage.emit(msg));
+    instance.testFeedbackClicked.subscribe((msg: MJConversationDetailEntity) => this.TestFeedbackMessage.emit(msg));
+    instance.artifactClicked.subscribe((data: {artifactId: string; versionId?: string}) => this.ArtifactClicked.emit(data));
+    instance.messageEdited.subscribe((msg: MJConversationDetailEntity) => this.MessageEdited.emit(msg));
+    instance.openEntityRecord.subscribe((data: {entityName: string; compositeKey: CompositeKey}) => this.OpenEntityRecord.emit(data));
+    instance.suggestedResponseSelected.subscribe((data: {text: string; customInput?: string}) => this.SuggestedResponseSelected.emit(data));
+    instance.attachmentClicked.subscribe((attachment: MessageAttachment) => this.AttachmentClicked.emit(attachment));
+    instance.diagnosticRequested.subscribe((messageId: string) => this.DiagnosticRequested.emit(messageId));
+    instance.messagePinToggled.subscribe((msg: MJConversationDetailEntity) => this.MessagePinToggled.emit(msg));
+    instance.beforeResponseFormSubmitted.subscribe((e: BeforeResponseFormSubmittedEventArgs) => this.BeforeResponseFormSubmitted.emit(e));
+    instance.afterResponseFormSubmitted.subscribe((e: AfterResponseFormSubmittedEventArgs) => this.AfterResponseFormSubmitted.emit(e));
 
     if (instance.artifactActionPerformed) {
       instance.artifactActionPerformed.subscribe((data: {action: string; artifactId: string}) => {
@@ -1602,11 +1954,11 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    * while genuinely distinct artifacts are all retained.
    */
   private resolveDistinctArtifacts(messageId: string): LazyArtifactInfo[] {
-    const list = this.artifactMap.get(messageId);
+    const list = this.ArtifactMap.get(messageId);
     if (!list || list.length === 0) {
       return [];
     }
-    return selectDistinctLatestArtifacts(list);
+    return SelectDistinctLatestArtifacts(list);
   }
 
   /**
@@ -1630,11 +1982,11 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     // the one case where it is most useful. `HasMoreAbove` is the only windowing-safe signal
     // that more conversation exists above, so it short-circuits the heuristic.
     if (this.HasMoreAbove) {
-      this.shouldShowDateFilter = true;
+      this.ShouldShowDateFilter = true;
       return;
     }
     if (!this.messages || this.messages.length < 20) {
-      this.shouldShowDateFilter = false;
+      this.ShouldShowDateFilter = false;
       return;
     }
 
@@ -1645,7 +1997,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
       .map(d => new Date(d!).setHours(0, 0, 0, 0));
 
     if (dates.length === 0) {
-      this.shouldShowDateFilter = false;
+      this.ShouldShowDateFilter = false;
       return;
     }
 
@@ -1653,7 +2005,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     const daySpan = uniqueDates.size;
 
     // Show filter if conversation has 20+ messages and spans 3+ days
-    this.shouldShowDateFilter = daySpan >= 3;
+    this.ShouldShowDateFilter = daySpan >= 3;
   }
 
   /**
@@ -1672,12 +2024,17 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    * Removes a message from the rendered list
    * Called externally when a message is deleted
    */
-  public removeMessage(message: MJConversationDetailEntity): void {
+  public RemoveMessage(message: MJConversationDetailEntity): void {
     const key = this.getMessageKey(message);
     const entry = this._renderedMessages.get(key);
     if (entry) {
       entry.ref.destroy();
       this._renderedMessages.delete(key);
     }
+  }
+
+  /** @deprecated Use {@link RemoveMessage}. */
+  public removeMessage(message: MJConversationDetailEntity): void {
+    return this.RemoveMessage(message);
   }
 }

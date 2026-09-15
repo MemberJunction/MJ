@@ -12,7 +12,7 @@ import {
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { RunView } from '@memberjunction/core';
-import { cacheHitRate } from '../../../services/cache-metrics';
+import { CacheHitRate } from '../../../services/cache-metrics';
 import { CompareDateCells, DateCellIso } from '../../../../shared/date-cell';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -1059,7 +1059,7 @@ export class AnalyticsPromptRunsComponent extends BaseAngularComponent implement
         const avgLatencyMs = latencies.length > 0 ? latencies.reduce((a, b) => a + b, 0) / latencies.length : 0;
         const successCount = runs.filter(r => r.Status === 'Completed').length;
         const p95 = this.percentile(latencies, 95);
-        const cacheHit = cacheHitRate({
+        const cacheHit = CacheHitRate({
             uncachedInputTokens: this.sumNullable(runs, r => r.TokensPrompt),
             cacheReadTokens: this.sumNullable(runs, r => r.TokensCacheRead),
             cacheWriteTokens: this.sumNullable(runs, r => r.TokensCacheWrite)

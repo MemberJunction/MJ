@@ -438,17 +438,22 @@ export class TreeDropdownComponent extends BaseAngularComponent implements OnIni
     /**
      * Handle trigger click
      */
-    public onTriggerClick(): void {
+    public OnTriggerClick(): void {
         
         if (!this.Disabled) {
             this.Toggle();
         }
     }
 
+    /** @deprecated Use {@link OnTriggerClick}. */
+    public onTriggerClick(): void {
+      return this.OnTriggerClick();
+    }
+
     /**
      * Handle trigger keydown
      */
-    public onTriggerKeyDown(event: KeyboardEvent): void {
+    public OnTriggerKeyDown(event: KeyboardEvent): void {
         if (this.Disabled) {
             return;
         }
@@ -469,13 +474,23 @@ export class TreeDropdownComponent extends BaseAngularComponent implements OnIni
         }
     }
 
+    /** @deprecated Use {@link OnTriggerKeyDown}. */
+    public onTriggerKeyDown(event: KeyboardEvent): void {
+      return this.OnTriggerKeyDown(event);
+    }
+
     /**
      * Handle search input
      */
-    public onSearchInput(event: Event): void {
+    public OnSearchInput(event: Event): void {
         const value = (event.target as HTMLInputElement).value;
         this.SearchText = value;
         this.searchSubject.next(value);
+    }
+
+    /** @deprecated Use {@link OnSearchInput}. */
+    public onSearchInput(event: Event): void {
+      return this.OnSearchInput(event);
     }
 
     /**
@@ -483,7 +498,7 @@ export class TreeDropdownComponent extends BaseAngularComponent implements OnIni
      * The tree's own keyboard handler doesn't fire because the search input has DOM focus,
      * so all navigation is handled here by manipulating the tree's FocusedNode visual state.
      */
-    public onSearchKeyDown(event: KeyboardEvent): void {
+    public OnSearchKeyDown(event: KeyboardEvent): void {
         switch (event.key) {
             case 'Escape':
                 event.preventDefault();
@@ -521,10 +536,15 @@ export class TreeDropdownComponent extends BaseAngularComponent implements OnIni
         }
     }
 
+    /** @deprecated Use {@link OnSearchKeyDown}. */
+    public onSearchKeyDown(event: KeyboardEvent): void {
+      return this.OnSearchKeyDown(event);
+    }
+
     /**
      * Handle clear search
      */
-    public onClearSearch(): void {
+    public OnClearSearch(): void {
         this.SearchText = '';
         this.clearSearch();
         if (this.searchInput) {
@@ -532,10 +552,15 @@ export class TreeDropdownComponent extends BaseAngularComponent implements OnIni
         }
     }
 
+    /** @deprecated Use {@link OnClearSearch}. */
+    public onClearSearch(): void {
+      return this.OnClearSearch();
+    }
+
     /**
      * Handle tree selection change
      */
-    public onTreeSelectionChange(nodes: TreeNode[]): void {
+    public OnTreeSelectionChange(nodes: TreeNode[]): void {
         
         this.SelectedNodes = nodes;
 
@@ -562,6 +587,11 @@ export class TreeDropdownComponent extends BaseAngularComponent implements OnIni
         }
 
         this.cdr.detectChanges();
+    }
+
+    /** @deprecated Use {@link OnTreeSelectionChange}. */
+    public onTreeSelectionChange(nodes: TreeNode[]): void {
+      return this.OnTreeSelectionChange(nodes);
     }
 
     /**
@@ -591,14 +621,19 @@ export class TreeDropdownComponent extends BaseAngularComponent implements OnIni
     /**
      * Handle tree data load events
      */
-    public onTreeBeforeDataLoad(event: BeforeDataLoadEventArgs): void {
+    public OnTreeBeforeDataLoad(event: BeforeDataLoadEventArgs): void {
         
         this.IsLoading = true;
         this.BeforeDataLoad.emit(event);
         this.cdr.detectChanges();
     }
 
-    public onTreeAfterDataLoad(event: AfterDataLoadEventArgs): void {
+    /** @deprecated Use {@link OnTreeBeforeDataLoad}. */
+    public onTreeBeforeDataLoad(event: BeforeDataLoadEventArgs): void {
+      return this.OnTreeBeforeDataLoad(event);
+    }
+
+    public OnTreeAfterDataLoad(event: AfterDataLoadEventArgs): void {
         
         
         this.IsLoading = false;
@@ -626,15 +661,30 @@ export class TreeDropdownComponent extends BaseAngularComponent implements OnIni
         this.cdr.detectChanges();
     }
 
+    /** @deprecated Use {@link OnTreeAfterDataLoad}. */
+    public onTreeAfterDataLoad(event: AfterDataLoadEventArgs): void {
+      return this.OnTreeAfterDataLoad(event);
+    }
+
     /**
      * Bubble tree events
      */
-    public onTreeBeforeNodeSelect(event: BeforeNodeSelectEventArgs): void {
+    public OnTreeBeforeNodeSelect(event: BeforeNodeSelectEventArgs): void {
         this.BeforeNodeSelect.emit(event);
     }
 
-    public onTreeAfterNodeSelect(event: AfterNodeSelectEventArgs): void {
+    /** @deprecated Use {@link OnTreeBeforeNodeSelect}. */
+    public onTreeBeforeNodeSelect(event: BeforeNodeSelectEventArgs): void {
+      return this.OnTreeBeforeNodeSelect(event);
+    }
+
+    public OnTreeAfterNodeSelect(event: AfterNodeSelectEventArgs): void {
         this.AfterNodeSelect.emit(event);
+    }
+
+    /** @deprecated Use {@link OnTreeAfterNodeSelect}. */
+    public onTreeAfterNodeSelect(event: AfterNodeSelectEventArgs): void {
+      return this.OnTreeAfterNodeSelect(event);
     }
 
     // ========================================
@@ -1111,7 +1161,7 @@ export class TreeDropdownComponent extends BaseAngularComponent implements OnIni
         }
 
         // Convert CompositeKey(s) to string IDs for tree selection
-        const ids = this.getSelectedIDsArray();
+        const ids = this.GetSelectedIDsArray();
 
         // Pass emitChange=false to avoid emitting SelectionChange during sync
         // This prevents unnecessary events and parent component confusion
@@ -1174,7 +1224,7 @@ export class TreeDropdownComponent extends BaseAngularComponent implements OnIni
     /**
      * Get display text for selected value(s)
      */
-    public getDisplayText(): string {
+    public GetDisplayText(): string {
         // If we have selected nodes from the tree, use those
         if (this.SelectedNodes.length > 0) {
             if (this.SelectionMode === 'single') {
@@ -1197,37 +1247,57 @@ export class TreeDropdownComponent extends BaseAngularComponent implements OnIni
         return '';
     }
 
+    /** @deprecated Use {@link GetDisplayText}. */
+    public getDisplayText(): string {
+      return this.GetDisplayText();
+    }
+
     /**
      * Get display icon for single selection
      */
-    public getDisplayIcon(): string | null {
+    public GetDisplayIcon(): string | null {
         if (!this.ShowIconInDisplay || this.SelectedNodes.length !== 1) {
             return null;
         }
         return this.SelectedNodes[0].Icon;
     }
 
+    /** @deprecated Use {@link GetDisplayIcon}. */
+    public getDisplayIcon(): string | null {
+      return this.GetDisplayIcon();
+    }
+
     /**
      * Get display color for single selection
      */
-    public getDisplayColor(): string | null {
+    public GetDisplayColor(): string | null {
         if (this.SelectedNodes.length !== 1) {
             return null;
         }
         return this.SelectedNodes[0].Color || null;
     }
 
+    /** @deprecated Use {@link GetDisplayColor}. */
+    public getDisplayColor(): string | null {
+      return this.GetDisplayColor();
+    }
+
     /**
      * Check if has selection
      */
-    public hasSelection(): boolean {
+    public HasSelection(): boolean {
         return this.SelectedNodes.length > 0 || this._pendingDisplayText != null;
+    }
+
+    /** @deprecated Use {@link HasSelection}. */
+    public hasSelection(): boolean {
+      return this.HasSelection();
     }
 
     /**
      * Get dropdown panel styles
      */
-    public getDropdownStyles(): Record<string, string> {
+    public GetDropdownStyles(): Record<string, string> {
         if (!this.Position) {
             return {};
         }
@@ -1240,24 +1310,34 @@ export class TreeDropdownComponent extends BaseAngularComponent implements OnIni
         };
     }
 
+    /** @deprecated Use {@link GetDropdownStyles}. */
+    public getDropdownStyles(): Record<string, string> {
+      return this.GetDropdownStyles();
+    }
+
     /**
      * Get trigger classes
      */
-    public getTriggerClasses(): Record<string, boolean> {
+    public GetTriggerClasses(): Record<string, boolean> {
         return {
             'tree-dropdown-trigger': true,
             'tree-dropdown-trigger--open': this.IsOpen,
             'tree-dropdown-trigger--disabled': this.Disabled,
-            'tree-dropdown-trigger--has-value': this.hasSelection(),
+            'tree-dropdown-trigger--has-value': this.HasSelection(),
             'tree-dropdown-trigger--loading': this.IsLoading && this.ShowLoadingInTrigger
         };
+    }
+
+    /** @deprecated Use {@link GetTriggerClasses}. */
+    public getTriggerClasses(): Record<string, boolean> {
+      return this.GetTriggerClasses();
     }
 
     /**
      * Get selected IDs as a string array for passing to tree component.
      * Extracts the first key value from each CompositeKey (typically the ID field).
      */
-    public getSelectedIDsArray(): string[] {
+    public GetSelectedIDsArray(): string[] {
         if (!this._value) {
             return [];
         }
@@ -1268,5 +1348,10 @@ export class TreeDropdownComponent extends BaseAngularComponent implements OnIni
             const firstValue = key.GetValueByIndex(0);
             return firstValue != null ? String(firstValue) : '';
         }).filter(id => id !== '');
+    }
+
+    /** @deprecated Use {@link GetSelectedIDsArray}. */
+    public getSelectedIDsArray(): string[] {
+      return this.GetSelectedIDsArray();
     }
 }

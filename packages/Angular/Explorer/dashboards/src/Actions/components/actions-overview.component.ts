@@ -6,8 +6,8 @@ import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-sha
 import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 import { Subject, BehaviorSubject, combineLatest } from 'rxjs';
 import { debounceTime, takeUntil, distinctUntilChanged } from 'rxjs/operators';
-import { validateEnumParam, boundNameList } from '../../shared/agent-tool-validation';
-import { findByIdOrError, findByIdOrNameOrError } from '../agent-tool-helpers';
+import { ValidateEnumParam, BoundNameList } from '../../shared/agent-tool-validation';
+import { FindByIdOrError, FindByIdOrNameOrError } from '../agent-tool-helpers';
 interface ActionMetrics {
   totalActions: number;
   activeActions: number;
@@ -45,7 +45,7 @@ interface ExecutionWithExpanded extends MJActionExecutionLogEntity {
 })
 export class ActionsOverviewComponent extends BaseResourceComponent implements OnInit, OnDestroy {
   public isLoading: boolean = true;
-  public metrics: ActionMetrics = {
+  public Metrics: ActionMetrics = {
     totalActions: 0,
     activeActions: 0,
     pendingActions: 0,
@@ -58,10 +58,55 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
     customActions: 0
   };
 
-  public categoryStats: CategoryStats[] = [];
-  public recentActions: MJActionEntity[] = [];
-  public recentExecutions: ExecutionWithExpanded[] = [];
-  public topCategories: MJActionCategoryEntity[] = [];
+  /** @deprecated Use {@link Metrics}. */
+  public get metrics(): ActionMetrics {
+    return this.Metrics;
+  }
+  /** @deprecated Use {@link Metrics}. */
+  public set metrics(value: ActionMetrics) {
+    this.Metrics = value;
+  }
+
+  public CategoryStats: CategoryStats[] = [];
+
+  /** @deprecated Use {@link CategoryStats}. */
+  public get categoryStats(): CategoryStats[] {
+    return this.CategoryStats;
+  }
+  /** @deprecated Use {@link CategoryStats}. */
+  public set categoryStats(value: CategoryStats[]) {
+    this.CategoryStats = value;
+  }
+  public RecentActions: MJActionEntity[] = [];
+
+  /** @deprecated Use {@link RecentActions}. */
+  public get recentActions(): MJActionEntity[] {
+    return this.RecentActions;
+  }
+  /** @deprecated Use {@link RecentActions}. */
+  public set recentActions(value: MJActionEntity[]) {
+    this.RecentActions = value;
+  }
+  public RecentExecutions: ExecutionWithExpanded[] = [];
+
+  /** @deprecated Use {@link RecentExecutions}. */
+  public get recentExecutions(): ExecutionWithExpanded[] {
+    return this.RecentExecutions;
+  }
+  /** @deprecated Use {@link RecentExecutions}. */
+  public set recentExecutions(value: ExecutionWithExpanded[]) {
+    this.RecentExecutions = value;
+  }
+  public TopCategories: MJActionCategoryEntity[] = [];
+
+  /** @deprecated Use {@link TopCategories}. */
+  public get topCategories(): MJActionCategoryEntity[] {
+    return this.TopCategories;
+  }
+  /** @deprecated Use {@link TopCategories}. */
+  public set topCategories(value: MJActionCategoryEntity[]) {
+    this.TopCategories = value;
+  }
 
   /** Full (un-sliced) collections retained so agent tools can resolve any id, not just the visible top-10. */
   private allActions: MJActionEntity[] = [];
@@ -71,9 +116,36 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
   /** Last action the agent (or user) selected/opened — surfaced in context as id + name. */
   private selectedAction: MJActionEntity | null = null;
 
-  public searchTerm$ = new BehaviorSubject<string>('');
-  public selectedStatus$ = new BehaviorSubject<string>('all');
-  public selectedType$ = new BehaviorSubject<string>('all');
+  public SearchTerm$ = new BehaviorSubject<string>('');
+
+  /** @deprecated Use {@link SearchTerm$}. */
+  public get searchTerm$() {
+    return this.SearchTerm$;
+  }
+  /** @deprecated Use {@link SearchTerm$}. */
+  public set searchTerm$(value) {
+    this.SearchTerm$ = value;
+  }
+  public SelectedStatus$ = new BehaviorSubject<string>('all');
+
+  /** @deprecated Use {@link SelectedStatus$}. */
+  public get selectedStatus$() {
+    return this.SelectedStatus$;
+  }
+  /** @deprecated Use {@link SelectedStatus$}. */
+  public set selectedStatus$(value) {
+    this.SelectedStatus$ = value;
+  }
+  public SelectedType$ = new BehaviorSubject<string>('all');
+
+  /** @deprecated Use {@link SelectedType$}. */
+  public get selectedType$() {
+    return this.SelectedType$;
+  }
+  /** @deprecated Use {@link SelectedType$}. */
+  public set selectedType$(value) {
+    this.SelectedType$ = value;
+  }
 
   /** Allowed status filter values (mirrors the Filter popover dropdown). */
   private readonly statusFilterValues = ['all', 'Active', 'Pending', 'Disabled'] as const;
@@ -105,9 +177,9 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
 
   private setupFilters(): void {
     combineLatest([
-      this.searchTerm$.pipe(debounceTime(300), distinctUntilChanged()),
-      this.selectedStatus$.pipe(distinctUntilChanged()),
-      this.selectedType$.pipe(distinctUntilChanged())
+      this.SearchTerm$.pipe(debounceTime(300), distinctUntilChanged()),
+      this.SelectedStatus$.pipe(distinctUntilChanged()),
+      this.SelectedType$.pipe(distinctUntilChanged())
     ]).pipe(
       takeUntil(this.destroy$)
     ).subscribe(() => {
@@ -133,27 +205,27 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
   private publishAgentContext(): void {
     this.navigationService.SetAgentContext(this, {
       // Action counts by status
-      TotalActionCount: this.metrics.totalActions,
-      ActiveActionCount: this.metrics.activeActions,
-      PendingActionCount: this.metrics.pendingActions,
-      DisabledActionCount: this.metrics.disabledActions,
+      TotalActionCount: this.Metrics.totalActions,
+      ActiveActionCount: this.Metrics.activeActions,
+      PendingActionCount: this.Metrics.pendingActions,
+      DisabledActionCount: this.Metrics.disabledActions,
       // Action counts by type
-      AIGeneratedActionCount: this.metrics.aiGeneratedActions,
-      CustomActionCount: this.metrics.customActions,
+      AIGeneratedActionCount: this.Metrics.aiGeneratedActions,
+      CustomActionCount: this.Metrics.customActions,
       // Execution metrics
-      TotalExecutionCount: this.metrics.totalExecutions,
-      RecentExecutionCount: this.metrics.recentExecutions,
-      SuccessRate: this.metrics.successRate,
+      TotalExecutionCount: this.Metrics.totalExecutions,
+      RecentExecutionCount: this.Metrics.recentExecutions,
+      SuccessRate: this.Metrics.successRate,
       // Category metrics
-      TotalCategoryCount: this.metrics.totalCategories,
+      TotalCategoryCount: this.Metrics.totalCategories,
       // Filter / search state
-      CurrentSearchTerm: this.searchTerm$.value,
-      CurrentStatusFilter: this.selectedStatus$.value,
-      CurrentTypeFilter: this.selectedType$.value,
+      CurrentSearchTerm: this.SearchTerm$.value,
+      CurrentStatusFilter: this.SelectedStatus$.value,
+      CurrentTypeFilter: this.SelectedType$.value,
       // What the user is looking at — bounded name lists so the agent can pick by name
-      VisibleActionCount: this.recentActions.length,
-      VisibleActionNames: boundNameList(this.recentActions.map(a => a.Name)),
-      TopCategoryNames: boundNameList(this.topCategories.map(c => c.Name)),
+      VisibleActionCount: this.RecentActions.length,
+      VisibleActionNames: BoundNameList(this.RecentActions.map(a => a.Name)),
+      TopCategoryNames: BoundNameList(this.TopCategories.map(c => c.Name)),
       // Current selection (id + NAME)
       SelectedActionId: this.selectedAction?.ID ?? null,
       SelectedActionName: this.selectedAction?.Name ?? null,
@@ -169,7 +241,7 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
         ParameterSchema: { type: 'object', properties: { searchTerm: { type: 'string' } }, required: ['searchTerm'] },
         Handler: async (params) => {
           const term = typeof params['searchTerm'] === 'string' ? params['searchTerm'] : '';
-          this.onSearchChange(term);
+          this.OnSearchChange(term);
           return { Success: true };
         },
       },
@@ -178,9 +250,9 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
         Description: 'Filter actions by status. Allowed: all, Active, Pending, Disabled.',
         ParameterSchema: { type: 'object', properties: { status: { type: 'string', enum: [...this.statusFilterValues] } }, required: ['status'] },
         Handler: async (params) => {
-          const v = validateEnumParam(params['status'], this.statusFilterValues, 'status');
+          const v = ValidateEnumParam(params['status'], this.statusFilterValues, 'status');
           if (!v.ok) return v.result;
-          this.onStatusFilterChange(v.value);
+          this.OnStatusFilterChange(v.value);
           return { Success: true };
         },
       },
@@ -189,9 +261,9 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
         Description: 'Filter actions by type. Allowed: all, Generated (AI-generated), Custom.',
         ParameterSchema: { type: 'object', properties: { type: { type: 'string', enum: [...this.typeFilterValues] } }, required: ['type'] },
         Handler: async (params) => {
-          const v = validateEnumParam(params['type'], this.typeFilterValues, 'type');
+          const v = ValidateEnumParam(params['type'], this.typeFilterValues, 'type');
           if (!v.ok) return v.result;
-          this.onTypeFilterChange(v.value);
+          this.OnTypeFilterChange(v.value);
           return { Success: true };
         },
       },
@@ -200,7 +272,7 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
         Description: 'Reset the status and type filters back to "all".',
         ParameterSchema: { type: 'object', properties: {} },
         Handler: async () => {
-          this.resetFilters();
+          this.ResetFilters();
           return { Success: true };
         },
       },
@@ -216,11 +288,11 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
           required: ['field'],
         },
         Handler: async (params) => {
-          const f = validateEnumParam(params['field'], this.sortFieldValues, 'field');
+          const f = ValidateEnumParam(params['field'], this.sortFieldValues, 'field');
           if (!f.ok) return f.result;
           let direction: 'asc' | 'desc' = 'asc';
           if (params['direction'] !== undefined) {
-            const d = validateEnumParam(params['direction'], this.sortDirectionValues, 'direction');
+            const d = ValidateEnumParam(params['direction'], this.sortDirectionValues, 'direction');
             if (!d.ok) return d.result;
             direction = d.value;
           }
@@ -233,9 +305,9 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
         Description: 'Open the detail record for an action by its id OR its name (navigation only — does NOT run the action). Name matching is case-insensitive (exact then contains).',
         ParameterSchema: { type: 'object', properties: { action: { type: 'string' } }, required: ['action'] },
         Handler: async (params) => {
-          const found = findByIdOrNameOrError(params['action'], this.allActions, 'action');
+          const found = FindByIdOrNameOrError(params['action'], this.allActions, 'action');
           if (!found.ok) return found.result;
-          this.openAction(found.value);
+          this.OpenAction(found.value);
           return { Success: true, Data: { Id: found.value.ID, Name: found.value.Name } };
         },
       },
@@ -244,9 +316,9 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
         Description: 'Open the detail record for an action category by its id OR its name (navigation only). Name matching is case-insensitive (exact then contains).',
         ParameterSchema: { type: 'object', properties: { category: { type: 'string' } }, required: ['category'] },
         Handler: async (params) => {
-          const found = findByIdOrNameOrError(params['category'], this.allCategories, 'category');
+          const found = FindByIdOrNameOrError(params['category'], this.allCategories, 'category');
           if (!found.ok) return found.result;
-          this.openCategory(found.value.ID);
+          this.OpenCategory(found.value.ID);
           return { Success: true, Data: { Id: found.value.ID, Name: found.value.Name } };
         },
       },
@@ -255,9 +327,9 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
         Description: 'Open the detail record for an action execution log by its id (view-only run history).',
         ParameterSchema: { type: 'object', properties: { executionId: { type: 'string' } }, required: ['executionId'] },
         Handler: async (params) => {
-          const found = findByIdOrError(params['executionId'], this.allExecutions, 'execution');
+          const found = FindByIdOrError(params['executionId'], this.allExecutions, 'execution');
           if (!found.ok) return found.result;
-          this.openExecution(found.value);
+          this.OpenExecution(found.value);
           return { Success: true };
         },
       },
@@ -313,9 +385,9 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
       this.allCategories = categories;
       this.calculateMetrics(actions, categories, executions);
       this.calculateCategoryStats(actions, categories, executions);
-      this.recentActions = actions.slice(0, 10);
-      this.recentExecutions = executions.slice(0, 10).map(e => ({ ...e, isExpanded: false } as ExecutionWithExpanded));
-      this.topCategories = categories.slice(0, 5);
+      this.RecentActions = actions.slice(0, 10);
+      this.RecentExecutions = executions.slice(0, 10).map(e => ({ ...e, isExpanded: false } as ExecutionWithExpanded));
+      this.TopCategories = categories.slice(0, 5);
       this.publishAgentContext();
     } catch (error) {
       console.error('Error loading actions overview data:', error);
@@ -332,7 +404,7 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
     categories: MJActionCategoryEntity[], 
     executions: MJActionExecutionLogEntity[]
   ): void {
-    this.metrics = {
+    this.Metrics = {
       totalActions: actions.length,
       activeActions: actions.filter(a => a.Status === 'Active').length,
       pendingActions: actions.filter(a => a.Status === 'Pending').length,
@@ -365,7 +437,7 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
     categories: MJActionCategoryEntity[], 
     executions: MJActionExecutionLogEntity[]
   ): void {
-    this.categoryStats = categories.map(category => {
+    this.CategoryStats = categories.map(category => {
       const categoryActions = actions.filter(a => UUIDsEqual(a.CategoryID, category.ID));
       const categoryExecutions = executions.filter(e => 
         categoryActions.some(a => UUIDsEqual(a.ID, e.ActionID))
@@ -383,9 +455,9 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
 
   private async loadFilteredData(): Promise<void> {
     // Implement filtered data loading based on current filter values
-    const searchTerm = this.searchTerm$.value;
-    const status = this.selectedStatus$.value;
-    const type = this.selectedType$.value;
+    const searchTerm = this.SearchTerm$.value;
+    const status = this.SelectedStatus$.value;
+    const type = this.SelectedType$.value;
 
     let extraFilter = '';
     const filters: string[] = [];
@@ -413,22 +485,37 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
         MaxRows: 1000
       });
       
-      this.recentActions = ((result.Results || []) as MJActionEntity[]).slice(0, 10);
+      this.RecentActions = ((result.Results || []) as MJActionEntity[]).slice(0, 10);
     } catch (error) {
       LogError('Failed to load filtered actions', undefined, error);
     }
   }
 
+  public OnSearchChange(searchTerm: string): void {
+    this.SearchTerm$.next(searchTerm);
+  }
+
+  /** @deprecated Use {@link OnSearchChange}. */
   public onSearchChange(searchTerm: string): void {
-    this.searchTerm$.next(searchTerm);
+    return this.OnSearchChange(searchTerm);
   }
 
+  public OnStatusFilterChange(status: string): void {
+    this.SelectedStatus$.next(status);
+  }
+
+  /** @deprecated Use {@link OnStatusFilterChange}. */
   public onStatusFilterChange(status: string): void {
-    this.selectedStatus$.next(status);
+    return this.OnStatusFilterChange(status);
   }
 
+  public OnTypeFilterChange(type: string): void {
+    this.SelectedType$.next(type);
+  }
+
+  /** @deprecated Use {@link OnTypeFilterChange}. */
   public onTypeFilterChange(type: string): void {
-    this.selectedType$.next(type);
+    return this.OnTypeFilterChange(type);
   }
 
   // ───── Filter-popover plumbing for the [actions] slot ─────
@@ -463,38 +550,53 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
     ];
   }
   public get FilterValues(): Record<string, unknown> {
-    return { status: this.selectedStatus$.value, type: this.selectedType$.value };
+    return { status: this.SelectedStatus$.value, type: this.SelectedType$.value };
   }
   public get ActiveFilterCount(): number {
     let n = 0;
-    if (this.selectedStatus$.value !== 'all') n++;
-    if (this.selectedType$.value !== 'all') n++;
+    if (this.SelectedStatus$.value !== 'all') n++;
+    if (this.SelectedType$.value !== 'all') n++;
     return n;
   }
-  public onFilterValuesChange(v: Record<string, unknown>): void {
+  public OnFilterValuesChange(v: Record<string, unknown>): void {
     const next = (v ?? {}) as { status?: string; type?: string };
-    if ((next.status ?? 'all') !== this.selectedStatus$.value) {
-      this.onStatusFilterChange(next.status ?? 'all');
+    if ((next.status ?? 'all') !== this.SelectedStatus$.value) {
+      this.OnStatusFilterChange(next.status ?? 'all');
     }
-    if ((next.type ?? 'all') !== this.selectedType$.value) {
-      this.onTypeFilterChange(next.type ?? 'all');
+    if ((next.type ?? 'all') !== this.SelectedType$.value) {
+      this.OnTypeFilterChange(next.type ?? 'all');
     }
-  }
-  public resetFilters(): void {
-    if (this.selectedStatus$.value !== 'all') this.onStatusFilterChange('all');
-    if (this.selectedType$.value !== 'all') this.onTypeFilterChange('all');
   }
 
-  public openAction(action: MJActionEntity): void {
+  /** @deprecated Use {@link OnFilterValuesChange}. */
+  public onFilterValuesChange(v: Record<string, unknown>): void {
+    return this.OnFilterValuesChange(v);
+  }
+  public ResetFilters(): void {
+    if (this.SelectedStatus$.value !== 'all') this.OnStatusFilterChange('all');
+    if (this.SelectedType$.value !== 'all') this.OnTypeFilterChange('all');
+  }
+
+  /** @deprecated Use {@link ResetFilters}. */
+  public resetFilters(): void {
+    return this.ResetFilters();
+  }
+
+  public OpenAction(action: MJActionEntity): void {
     this.selectedAction = action;
     this.publishAgentContext();
     this.navigationService.OpenEntityRecord('MJ: Actions', CompositeKey.FromID(action.ID));
   }
 
+  /** @deprecated Use {@link OpenAction}. */
+  public openAction(action: MJActionEntity): void {
+    return this.OpenAction(action);
+  }
+
   /** Sort the visible recent-actions list in place (agent tool — view-only). */
   private sortVisibleActions(field: 'name' | 'status' | 'type' | 'updated', direction: 'asc' | 'desc'): void {
     const dir = direction === 'asc' ? 1 : -1;
-    const sorted = [...this.recentActions].sort((a, b) => {
+    const sorted = [...this.RecentActions].sort((a, b) => {
       let cmp = 0;
       switch (field) {
         case 'name': cmp = (a.Name || '').localeCompare(b.Name || ''); break;
@@ -509,26 +611,41 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
       }
       return cmp * dir;
     });
-    this.recentActions = sorted;
+    this.RecentActions = sorted;
     this.publishAgentContext();
     this.cdr.detectChanges();
   }
 
-  public openCategory(categoryId: string): void {
+  public OpenCategory(categoryId: string): void {
     this.navigationService.OpenEntityRecord('MJ: Action Categories', CompositeKey.FromID(categoryId));
   }
 
-  public openExecution(execution: MJActionExecutionLogEntity): void {
+  /** @deprecated Use {@link OpenCategory}. */
+  public openCategory(categoryId: string): void {
+    return this.OpenCategory(categoryId);
+  }
+
+  public OpenExecution(execution: MJActionExecutionLogEntity): void {
     const key = CompositeKey.FromID(execution.ID);
     this.navigationService.OpenEntityRecord('MJ: Action Execution Logs', key);
   }
 
-  public isExecutionSuccess(execution: MJActionExecutionLogEntity): boolean {
+  /** @deprecated Use {@link OpenExecution}. */
+  public openExecution(execution: MJActionExecutionLogEntity): void {
+    return this.OpenExecution(execution);
+  }
+
+  public IsExecutionSuccess(execution: MJActionExecutionLogEntity): boolean {
     const code = execution.ResultCode?.toLowerCase();
     return code === 'success' || code === 'ok' || code === 'completed' || code === '200';
   }
 
-  public getStatusColor(status: string): 'success' | 'warning' | 'error' | 'info' {
+  /** @deprecated Use {@link IsExecutionSuccess}. */
+  public isExecutionSuccess(execution: MJActionExecutionLogEntity): boolean {
+    return this.IsExecutionSuccess(execution);
+  }
+
+  public GetStatusColor(status: string): 'success' | 'warning' | 'error' | 'info' {
     switch (status) {
       case 'Active': return 'success';
       case 'Pending': return 'warning';
@@ -537,7 +654,12 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
     }
   }
 
-  public getTypeIcon(type: string): string {
+  /** @deprecated Use {@link GetStatusColor}. */
+  public getStatusColor(status: string): 'success' | 'warning' | 'error' | 'info' {
+    return this.GetStatusColor(status);
+  }
+
+  public GetTypeIcon(type: string): string {
     switch (type) {
       case 'Generated': return 'fa-solid fa-robot';
       case 'Custom': return 'fa-solid fa-code';
@@ -545,31 +667,61 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
     }
   }
 
-  // Metric card click handlers - these now filter the current view
-  public onTotalActionsClick(): void {
-    // Reset filters to show all actions
-    this.selectedStatus$.next('all');
-    this.selectedType$.next('all');
+  /** @deprecated Use {@link GetTypeIcon}. */
+  public getTypeIcon(type: string): string {
+    return this.GetTypeIcon(type);
   }
 
-  public onExecutionsClick(): void {
+  // Metric card click handlers - these now filter the current view
+  public OnTotalActionsClick(): void {
+    // Reset filters to show all actions
+    this.SelectedStatus$.next('all');
+    this.SelectedType$.next('all');
+  }
+
+  /** @deprecated Use {@link OnTotalActionsClick}. */
+  public onTotalActionsClick(): void {
+    return this.OnTotalActionsClick();
+  }
+
+  public OnExecutionsClick(): void {
     // This would navigate to execution monitoring resource
   }
 
-  public onCategoriesClick(): void {
+  /** @deprecated Use {@link OnExecutionsClick}. */
+  public onExecutionsClick(): void {
+    return this.OnExecutionsClick();
+  }
+
+  public OnCategoriesClick(): void {
     // This would navigate to categories view
   }
 
-  public onAIGeneratedClick(): void {
-    // Filter to show AI generated actions in the current view
-    this.selectedType$.next('Generated');
+  /** @deprecated Use {@link OnCategoriesClick}. */
+  public onCategoriesClick(): void {
+    return this.OnCategoriesClick();
   }
 
-  public onActionGalleryClick(): void {
+  public OnAIGeneratedClick(): void {
+    // Filter to show AI generated actions in the current view
+    this.SelectedType$.next('Generated');
+  }
+
+  /** @deprecated Use {@link OnAIGeneratedClick}. */
+  public onAIGeneratedClick(): void {
+    return this.OnAIGeneratedClick();
+  }
+
+  public OnActionGalleryClick(): void {
     // This would navigate to action gallery view
   }
 
-  public formatJsonParams(params: string | null): string {
+  /** @deprecated Use {@link OnActionGalleryClick}. */
+  public onActionGalleryClick(): void {
+    return this.OnActionGalleryClick();
+  }
+
+  public FormatJsonParams(params: string | null): string {
     if (!params) return '{}';
     try {
       // Try to parse and reformat
@@ -581,12 +733,22 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
     }
   }
 
+  /** @deprecated Use {@link FormatJsonParams}. */
+  public formatJsonParams(params: string | null): string {
+    return this.FormatJsonParams(params);
+  }
+
   /**
    * Gets the icon class for an action
    * Falls back to type-based icon if no IconClass is set
    */
+  public GetActionIcon(action: MJActionEntity): string {
+    return action?.IconClass || this.GetTypeIcon(action.Type);
+  }
+
+  /** @deprecated Use {@link GetActionIcon}. */
   public getActionIcon(action: MJActionEntity): string {
-    return action?.IconClass || this.getTypeIcon(action.Type);
+    return this.GetActionIcon(action);
   }
 
   async GetResourceDisplayName(data: ResourceData): Promise<string> {

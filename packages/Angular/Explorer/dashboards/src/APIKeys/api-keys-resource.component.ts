@@ -8,9 +8,9 @@ import { TabConfig } from '@memberjunction/ng-ui-components';
 import { Subject } from 'rxjs';
 import { APIKeyFilter, APIKeyListComponent } from './api-key-list.component';
 import { APIKeyCreateResult } from './api-key-create-dialog.component';
-import { validateEnumParam, validateStringParam } from '../shared/agent-tool-validation';
+import { ValidateEnumParam, ValidateStringParam } from '../shared/agent-tool-validation';
 import {
-    buildAPIKeysAgentContext,
+    BuildAPIKeysAgentContext,
     VALID_API_KEYS_TABS,
     VALID_API_KEYS_FILTERS,
     APIKeysTab,
@@ -151,7 +151,7 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
      * key secrets, hashes, or prefixes.
      */
     private publishAgentContext(): void {
-        this.navigationService.SetAgentContext(this, buildAPIKeysAgentContext({
+        this.navigationService.SetAgentContext(this, BuildAPIKeysAgentContext({
             MainTab: this.MainTab,
             CurrentView: this.CurrentView,
             ListFilter: this.ListFilter,
@@ -165,7 +165,7 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
             NeverUsedKeys: this.NeverUsedKeys,
             ApplicationCount: this.ApplicationCount,
             ScopeCount: this.ScopeCount,
-            HealthScore: this.getHealthScore(),
+            HealthScore: this.GetHealthScore(),
 
             // Friendly display names ONLY — never key material.
             KeyLabels: this.APIKeys.map(k => k.Label).filter(l => !!l),
@@ -222,28 +222,28 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
     private static readonly API_KEYS_FILTERS = VALID_API_KEYS_FILTERS;
 
     private handleSwitchTabTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
-        const v = validateEnumParam(params?.['tab'], APIKeysResourceComponent.API_KEYS_TABS, 'tab');
+        const v = ValidateEnumParam(params?.['tab'], APIKeysResourceComponent.API_KEYS_TABS, 'tab');
         if (!v.ok) return v.result;
-        this.switchTab(v.value);
+        this.SwitchTab(v.value);
         this.publishAgentContext();
         return { Success: true };
     }
 
     private handleFilterByStatusTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
-        const v = validateEnumParam(params?.['filter'], APIKeysResourceComponent.API_KEYS_FILTERS, 'filter');
+        const v = ValidateEnumParam(params?.['filter'], APIKeysResourceComponent.API_KEYS_FILTERS, 'filter');
         if (!v.ok) return v.result;
         this.MainTab = 'keys';
-        this.showListView(v.value);
+        this.ShowListView(v.value);
         this.publishAgentContext();
         return { Success: true };
     }
 
     private handleSearchTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
-        const v = validateStringParam(params?.['searchText'], 'searchText');
+        const v = ValidateStringParam(params?.['searchText'], 'searchText');
         if (!v.ok) return v.result;
         // Ensure the list view is active so the list component (and its search box) exists.
         this.MainTab = 'keys';
-        this.showListView(this.ListFilter);
+        this.ShowListView(this.ListFilter);
         this.cdr.detectChanges();
         if (this.keyListComponent) {
             this.keyListComponent.SearchText = v.value;
@@ -260,7 +260,7 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
      * edits, revokes, or rotates.
      */
     private handleSelectKeyTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
-        const v = validateStringParam(params?.['label'], 'label');
+        const v = ValidateStringParam(params?.['label'], 'label');
         if (!v.ok) return v.result;
         const query = v.value.trim().toLowerCase();
         if (!query) return { Success: false, ErrorMessage: 'label must be a non-empty string.' };
@@ -272,13 +272,13 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
             return { Success: false, ErrorMessage: `No API key matches Label "${v.value}". Available labels: ${available || '(none)'}.` };
         }
         this.MainTab = 'keys';
-        this.openEditPanel(match);
+        this.OpenEditPanel(match);
         return { Success: true };
     }
 
     private async handleRefreshTool(): Promise<{ Success: boolean; ErrorMessage?: string }> {
         try {
-            await this.refresh();
+            await this.Refresh();
             this.publishAgentContext();
             return { Success: true };
         } catch (e) {
@@ -496,97 +496,152 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
     /**
      * Refresh all data
      */
-    public async refresh(): Promise<void> {
+    public async Refresh(): Promise<void> {
         await this.loadData();
         if (this.keyListComponent) {
             await this.keyListComponent.loadKeys();
         }
     }
 
+    /** @deprecated Use {@link Refresh}. */
+    public async refresh(): Promise<void> {
+      return this.Refresh();
+    }
+
     /**
      * Switch to list view
      */
-    public showListView(filter: APIKeyFilter = 'all'): void {
+    public ShowListView(filter: APIKeyFilter = 'all'): void {
         this.ListFilter = filter;
         this.CurrentView = 'list';
         this.publishAgentContext();
     }
 
+    /** @deprecated Use {@link ShowListView}. */
+    public showListView(filter: APIKeyFilter = 'all'): void {
+      return this.ShowListView(filter);
+    }
+
     /**
      * Switch to overview
      */
-    public showOverview(): void {
+    public ShowOverview(): void {
         this.CurrentView = 'overview';
+    }
+
+    /** @deprecated Use {@link ShowOverview}. */
+    public showOverview(): void {
+      return this.ShowOverview();
     }
 
     /**
      * Open create dialog
      */
-    public openCreateDialog(): void {
+    public OpenCreateDialog(): void {
         this.ShowCreateDialog = true;
+    }
+
+    /** @deprecated Use {@link OpenCreateDialog}. */
+    public openCreateDialog(): void {
+      return this.OpenCreateDialog();
     }
 
     /**
      * Handle key created
      */
-    public async onKeyCreated(result: APIKeyCreateResult): Promise<void> {
+    public async OnKeyCreated(result: APIKeyCreateResult): Promise<void> {
         if (result.success) {
-            await this.refresh();
+            await this.Refresh();
         }
+    }
+
+    /** @deprecated Use {@link OnKeyCreated}. */
+    public async onKeyCreated(result: APIKeyCreateResult): Promise<void> {
+      return this.OnKeyCreated(result);
     }
 
     /**
      * Handle create dialog closed
      */
-    public onCreateDialogClosed(): void {
+    public OnCreateDialogClosed(): void {
         this.ShowCreateDialog = false;
+    }
+
+    /** @deprecated Use {@link OnCreateDialogClosed}. */
+    public onCreateDialogClosed(): void {
+      return this.OnCreateDialogClosed();
     }
 
     /**
      * Open edit panel for a key
      */
-    public openEditPanel(key: MJAPIKeyEntity): void {
+    public OpenEditPanel(key: MJAPIKeyEntity): void {
         this.SelectedKeyId = key.ID;
         this.SelectedKeyLabel = key.Label;
         this.ShowEditPanel = true;
         this.publishAgentContext();
     }
 
+    /** @deprecated Use {@link OpenEditPanel}. */
+    public openEditPanel(key: MJAPIKeyEntity): void {
+      return this.OpenEditPanel(key);
+    }
+
     /**
      * Handle key from list selected
      */
+    public OnKeySelected(key: MJAPIKeyEntity): void {
+        this.OpenEditPanel(key);
+    }
+
+    /** @deprecated Use {@link OnKeySelected}. */
     public onKeySelected(key: MJAPIKeyEntity): void {
-        this.openEditPanel(key);
+      return this.OnKeySelected(key);
     }
 
     /**
      * Handle key updated
      */
+    public async OnKeyUpdated(): Promise<void> {
+        await this.Refresh();
+    }
+
+    /** @deprecated Use {@link OnKeyUpdated}. */
     public async onKeyUpdated(): Promise<void> {
-        await this.refresh();
+      return this.OnKeyUpdated();
     }
 
     /**
      * Handle key revoked
      */
+    public async OnKeyRevoked(): Promise<void> {
+        await this.Refresh();
+    }
+
+    /** @deprecated Use {@link OnKeyRevoked}. */
     public async onKeyRevoked(): Promise<void> {
-        await this.refresh();
+      return this.OnKeyRevoked();
     }
 
     /**
      * Handle edit panel closed
      */
-    public onEditPanelClosed(): void {
+    public OnEditPanelClosed(): void {
         this.ShowEditPanel = false;
         this.SelectedKeyId = null;
         this.SelectedKeyLabel = null;
         this.publishAgentContext();
     }
 
+    /** @deprecated Use {@link OnEditPanelClosed}. */
+    public onEditPanelClosed(): void {
+      return this.OnEditPanelClosed();
+    }
+
     /**
      * Get health score (0-100) based on key status
      */
-    public getHealthScore(): number {
+    public GetHealthScore(): number {
         if (this.TotalKeys === 0) return 100;
 
         let score = 100;
@@ -608,31 +663,46 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
         return Math.max(0, Math.round(score));
     }
 
+    /** @deprecated Use {@link GetHealthScore}. */
+    public getHealthScore(): number {
+      return this.GetHealthScore();
+    }
+
     /**
      * Get health label based on score
      */
-    public getHealthLabel(): string {
-        const score = this.getHealthScore();
+    public GetHealthLabel(): string {
+        const score = this.GetHealthScore();
         if (score >= 90) return 'Excellent Security';
         if (score >= 75) return 'Good Security';
         if (score >= 50) return 'Needs Attention';
         return 'Critical Issues';
     }
 
+    /** @deprecated Use {@link GetHealthLabel}. */
+    public getHealthLabel(): string {
+      return this.GetHealthLabel();
+    }
+
     /**
      * Get CSS class for health banner
      */
-    public getHealthClass(): string {
-        const score = this.getHealthScore();
+    public GetHealthClass(): string {
+        const score = this.GetHealthScore();
         if (score >= 75) return '';
         if (score >= 50) return 'health-warning';
         return 'health-critical';
     }
 
+    /** @deprecated Use {@link GetHealthClass}. */
+    public getHealthClass(): string {
+      return this.GetHealthClass();
+    }
+
     /**
      * Get donut chart offset for segment
      */
-    public getDonutOffset(index: number): number {
+    public GetDonutOffset(index: number): number {
         let offset = 0;
         for (let i = 0; i < index; i++) {
             offset -= this.ScopeStats[i].percentage * 2.51;
@@ -640,10 +710,15 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
         return offset;
     }
 
+    /** @deprecated Use {@link GetDonutOffset}. */
+    public getDonutOffset(index: number): number {
+      return this.GetDonutOffset(index);
+    }
+
     /**
      * Get activity icon based on action
      */
-    public getActionIcon(action: ActivityAction): string {
+    public GetActionIcon(action: ActivityAction): string {
         switch (action) {
             case 'Created': return 'fa-solid fa-plus';
             case 'Updated': return 'fa-solid fa-pencil';
@@ -654,10 +729,15 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
         }
     }
 
+    /** @deprecated Use {@link GetActionIcon}. */
+    public getActionIcon(action: ActivityAction): string {
+      return this.GetActionIcon(action);
+    }
+
     /**
      * Get CSS class for activity action
      */
-    public getActionClass(action: ActivityAction): string {
+    public GetActionClass(action: ActivityAction): string {
         switch (action) {
             case 'Created': return 'action-created';
             case 'Updated': return 'action-updated';
@@ -666,6 +746,11 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
             case 'Extended': return 'action-extended';
             default: return '';
         }
+    }
+
+    /** @deprecated Use {@link GetActionClass}. */
+    public getActionClass(action: ActivityAction): string {
+      return this.GetActionClass(action);
     }
 
     /**
@@ -691,7 +776,7 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
     /**
      * Format expiration for display
      */
-    public formatExpiration(date: Date | null): string {
+    public FormatExpiration(date: Date | null): string {
         if (!date) return 'Never expires';
 
         const now = new Date();
@@ -708,10 +793,15 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
         return `Expires ${expiresAt.toLocaleDateString()}`;
     }
 
+    /** @deprecated Use {@link FormatExpiration}. */
+    public formatExpiration(date: Date | null): string {
+      return this.FormatExpiration(date);
+    }
+
     /**
      * Get expiration status class
      */
-    public getExpirationClass(key: MJAPIKeyEntity): string {
+    public GetExpirationClass(key: MJAPIKeyEntity): string {
         if (!key.ExpiresAt) return '';
 
         const now = new Date();
@@ -725,28 +815,43 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
         return '';
     }
 
+    /** @deprecated Use {@link GetExpirationClass}. */
+    public getExpirationClass(key: MJAPIKeyEntity): string {
+      return this.GetExpirationClass(key);
+    }
+
     /**
      * View activity for a key
      */
-    public onActivityClick(activity: ActivityItem): void {
+    public OnActivityClick(activity: ActivityItem): void {
         const key = this.APIKeys.find(k => UUIDsEqual(k.ID, activity.keyId));
         if (key) {
-            this.openEditPanel(key);
+            this.OpenEditPanel(key);
         }
+    }
+
+    /** @deprecated Use {@link OnActivityClick}. */
+    public onActivityClick(activity: ActivityItem): void {
+      return this.OnActivityClick(activity);
     }
 
     /**
      * View scope details - now navigates to scopes tab
      */
-    public onScopeClick(_stat: ScopeStat): void {
+    public OnScopeClick(_stat: ScopeStat): void {
         this.MainTab = 'scopes';
+    }
+
+    /** @deprecated Use {@link OnScopeClick}. */
+    public onScopeClick(_stat: ScopeStat): void {
+      return this.OnScopeClick(_stat);
     }
 
     /**
      * Switch to a main tab. Resets to the overview view when returning to the
      * Keys tab so the user always lands on the dashboard, not a stale list view.
      */
-    public switchTab(tab: MainTab): void {
+    public SwitchTab(tab: MainTab): void {
         this.MainTab = tab;
         if (tab === 'keys') {
             this.CurrentView = 'overview';
@@ -754,11 +859,16 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
         this.publishAgentContext();
     }
 
+    /** @deprecated Use {@link SwitchTab}. */
+    public switchTab(tab: MainTab): void {
+      return this.SwitchTab(tab);
+    }
+
     /**
      * L2 tabs rendered as `<mj-tab-nav>` in the interior chrome's [toolbar] slot.
      * Badges reflect live counts; Usage Analytics has no badge by design.
      */
-    public get tabsConfig(): TabConfig[] {
+    public get TabsConfig(): TabConfig[] {
         return [
             { key: 'keys',         icon: 'fa-solid fa-key',           label: 'API Keys',         badge: this.TotalKeys },
             { key: 'applications', icon: 'fa-solid fa-cube',          label: 'Applications',     badge: this.ApplicationCount },
@@ -767,15 +877,25 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
         ];
     }
 
+    /** @deprecated Use {@link TabsConfig}. */
+    public get tabsConfig(): TabConfig[] {
+      return this.TabsConfig;
+    }
+
     /** Adapter for `<mj-tab-nav>`'s string-typed `(TabChange)` output. */
-    public onTabChange(key: string): void {
+    public OnTabChange(key: string): void {
         if (key === 'keys' || key === 'applications' || key === 'scopes' || key === 'usage') {
-            this.switchTab(key);
+            this.SwitchTab(key);
         }
     }
 
+    /** @deprecated Use {@link OnTabChange}. */
+    public onTabChange(key: string): void {
+      return this.OnTabChange(key);
+    }
+
     /** Title rendered in the interior chrome — varies per tab. */
-    public get currentTabTitle(): string {
+    public get CurrentTabTitle(): string {
         switch (this.MainTab) {
             case 'keys':         return 'API Keys';
             case 'applications': return 'API Applications';
@@ -784,8 +904,13 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
         }
     }
 
+    /** @deprecated Use {@link CurrentTabTitle}. */
+    public get currentTabTitle(): string {
+      return this.CurrentTabTitle;
+    }
+
     /** Subtitle rendered in the interior chrome — varies per tab to give context. */
-    public get currentTabSubtitle(): string {
+    public get CurrentTabSubtitle(): string {
         switch (this.MainTab) {
             case 'keys':         return 'Manage API keys for external integrations and services';
             case 'applications': return 'Register and manage API applications';
@@ -794,11 +919,21 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
         }
     }
 
+    /** @deprecated Use {@link CurrentTabSubtitle}. */
+    public get currentTabSubtitle(): string {
+      return this.CurrentTabSubtitle;
+    }
+
     /**
      * Handle updates from child panels
      */
-    public async onDataUpdated(): Promise<void> {
+    public async OnDataUpdated(): Promise<void> {
         await this.loadCounts();
         this.cdr.markForCheck();
+    }
+
+    /** @deprecated Use {@link OnDataUpdated}. */
+    public async onDataUpdated(): Promise<void> {
+      return this.OnDataUpdated();
     }
 }

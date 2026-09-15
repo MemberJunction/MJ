@@ -48,7 +48,7 @@ export interface FakeProviderOptions<T = unknown> {
  * const provider = createFakeProvider({ runViewResults: [{ ID: '1', Name: 'Ada' }] }); // T inferred
  * const f = renderComponentFixture(MyDataComponent, { inputs: { Provider: provider } });
  */
-export function createFakeProvider<T = unknown>(options: FakeProviderOptions<T> = {}): IMetadataProvider {
+export function CreateFakeProvider<T = unknown>(options: FakeProviderOptions<T> = {}): IMetadataProvider {
   const rowsFor = (params: RunViewParams): T[] =>
     typeof options.runViewResults === 'function' ? options.runViewResults(params) : (options.runViewResults ?? []);
 
@@ -69,4 +69,9 @@ export function createFakeProvider<T = unknown>(options: FakeProviderOptions<T> 
   // (`RunView.FromMetadataProvider`: `provider as unknown as IRunViewProvider`). This is
   // the one justified seam — everything the caller touches above is fully typed.
   return fake as unknown as IMetadataProvider;
+}
+
+/** @deprecated Use {@link CreateFakeProvider}. */
+export function createFakeProvider<T = unknown>(options: FakeProviderOptions<T> = {}): IMetadataProvider {
+  return CreateFakeProvider(options);
 }

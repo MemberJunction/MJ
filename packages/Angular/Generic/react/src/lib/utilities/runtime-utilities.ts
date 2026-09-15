@@ -66,10 +66,15 @@ export class RuntimeUtilities {
    *        passes its own `ProviderToUse`; omitting it falls back to the global default, named
    *        explicitly rather than reached for via `new Metadata()`.
    */
-  public buildUtilities(debug: boolean = false, provider?: IMetadataProvider): ComponentUtilities {
+  public BuildUtilities(debug: boolean = false, provider?: IMetadataProvider): ComponentUtilities {
     this.debug = debug;
     this.provider = provider ?? Metadata.Provider;
     return this.SetupUtilities(this.provider);
+  }
+
+  /** @deprecated Use {@link BuildUtilities}. */
+  public buildUtilities(debug: boolean = false, provider?: IMetadataProvider): ComponentUtilities {
+    return this.BuildUtilities(debug, provider);
   }
 
   /**
@@ -431,7 +436,7 @@ export class RuntimeUtilities {
  * In a Node.js environment, this will use MJ's ClassFactory for runtime substitution
  * In a browser environment, it will use the base class directly
  */
-export function createRuntimeUtilities(): RuntimeUtilities {
+export function CreateRuntimeUtilities(): RuntimeUtilities {
   // Check if we're in a Node.js environment with MJGlobal available
   if (typeof window === 'undefined') {
     try {
@@ -450,4 +455,9 @@ export function createRuntimeUtilities(): RuntimeUtilities {
   
   // Default: just use the base class
   return new RuntimeUtilities();
+}
+
+/** @deprecated Use {@link CreateRuntimeUtilities}. */
+export function createRuntimeUtilities(): RuntimeUtilities {
+  return CreateRuntimeUtilities();
 }

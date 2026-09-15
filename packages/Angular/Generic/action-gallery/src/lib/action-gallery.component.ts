@@ -51,54 +51,216 @@ export class ActionGalleryComponent extends BaseAngularComponent implements OnIn
     theme: 'light'
   };
   
-  @Input() preSelectedActions: string[] = [];
-  @Output() actionSelected = new EventEmitter<MJActionEntity>();
-  @Output() actionsSelected = new EventEmitter<MJActionEntity[]>();
-  @Output() actionTestRequested = new EventEmitter<MJActionEntity>();
+  @Input() PreSelectedActions: string[] = [];
+
+  /** @deprecated Use {@link PreSelectedActions}. */
+  @Input() set preSelectedActions(value: string[]) {
+    this.PreSelectedActions = value;
+  }
+  /** @deprecated Use {@link PreSelectedActions}. */
+  get preSelectedActions(): string[] {
+    return this.PreSelectedActions;
+  }
+  @Output() ActionSelected = new EventEmitter<MJActionEntity>();
+
+  /**
+   * @deprecated Use {@link ActionSelected}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (actionSelected) keeps working. Must stay AFTER ActionSelected: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() actionSelected = this.ActionSelected;
+  @Output() ActionsSelected = new EventEmitter<MJActionEntity[]>();
+
+  /**
+   * @deprecated Use {@link ActionsSelected}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (actionsSelected) keeps working. Must stay AFTER ActionsSelected: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() actionsSelected = this.ActionsSelected;
+  @Output() ActionTestRequested = new EventEmitter<MJActionEntity>();
+
+  /**
+   * @deprecated Use {@link ActionTestRequested}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (actionTestRequested) keeps working. Must stay AFTER ActionTestRequested: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() actionTestRequested = this.ActionTestRequested;
   
   @ViewChild('searchInput', { static: false }) searchInput: ElementRef<HTMLInputElement>;
   
   // State management
   private destroy$ = new Subject<void>();
-  actions$ = new BehaviorSubject<ActionWithDetails[]>([]);
-  categories$ = new BehaviorSubject<MJActionCategoryEntity[]>([]);
-  filteredActions$ = new BehaviorSubject<ActionWithDetails[]>([]);
-  categoryTree$ = new BehaviorSubject<CategoryNode[]>([]);
-  selectedCategory$ = new BehaviorSubject<string>('all');
-  viewMode$ = new BehaviorSubject<'grid' | 'list'>('grid');
-  isLoading$ = new BehaviorSubject<boolean>(false);
-  selectedActions$ = new BehaviorSubject<Set<string>>(new Set());
+  Actions$ = new BehaviorSubject<ActionWithDetails[]>([]);
+
+  /** @deprecated Use {@link Actions$}. */
+  get actions$() {
+    return this.Actions$;
+  }
+  /** @deprecated Use {@link Actions$}. */
+  set actions$(value) {
+    this.Actions$ = value;
+  }
+  Categories$ = new BehaviorSubject<MJActionCategoryEntity[]>([]);
+
+  /** @deprecated Use {@link Categories$}. */
+  get categories$() {
+    return this.Categories$;
+  }
+  /** @deprecated Use {@link Categories$}. */
+  set categories$(value) {
+    this.Categories$ = value;
+  }
+  FilteredActions$ = new BehaviorSubject<ActionWithDetails[]>([]);
+
+  /** @deprecated Use {@link FilteredActions$}. */
+  get filteredActions$() {
+    return this.FilteredActions$;
+  }
+  /** @deprecated Use {@link FilteredActions$}. */
+  set filteredActions$(value) {
+    this.FilteredActions$ = value;
+  }
+  CategoryTree$ = new BehaviorSubject<CategoryNode[]>([]);
+
+  /** @deprecated Use {@link CategoryTree$}. */
+  get categoryTree$() {
+    return this.CategoryTree$;
+  }
+  /** @deprecated Use {@link CategoryTree$}. */
+  set categoryTree$(value) {
+    this.CategoryTree$ = value;
+  }
+  SelectedCategory$ = new BehaviorSubject<string>('all');
+
+  /** @deprecated Use {@link SelectedCategory$}. */
+  get selectedCategory$() {
+    return this.SelectedCategory$;
+  }
+  /** @deprecated Use {@link SelectedCategory$}. */
+  set selectedCategory$(value) {
+    this.SelectedCategory$ = value;
+  }
+  ViewMode$ = new BehaviorSubject<'grid' | 'list'>('grid');
+
+  /** @deprecated Use {@link ViewMode$}. */
+  get viewMode$() {
+    return this.ViewMode$;
+  }
+  /** @deprecated Use {@link ViewMode$}. */
+  set viewMode$(value) {
+    this.ViewMode$ = value;
+  }
+  IsLoading$ = new BehaviorSubject<boolean>(false);
+
+  /** @deprecated Use {@link IsLoading$}. */
+  get isLoading$() {
+    return this.IsLoading$;
+  }
+  /** @deprecated Use {@link IsLoading$}. */
+  set isLoading$(value) {
+    this.IsLoading$ = value;
+  }
+  SelectedActions$ = new BehaviorSubject<Set<string>>(new Set());
+
+  /** @deprecated Use {@link SelectedActions$}. */
+  get selectedActions$() {
+    return this.SelectedActions$;
+  }
+  /** @deprecated Use {@link SelectedActions$}. */
+  set selectedActions$(value) {
+    this.SelectedActions$ = value;
+  }
   
   // Form controls
-  searchControl = new FormControl('');
+  SearchControl = new FormControl('');
+
+  /** @deprecated Use {@link SearchControl}. */
+  get searchControl() {
+    return this.SearchControl;
+  }
+  /** @deprecated Use {@link SearchControl}. */
+  set searchControl(value) {
+    this.SearchControl = value;
+  }
   
   // UI state
-  expandedCategories = new Set<string>();
-  hoveredAction: string | null = null;
-  animateCards = false;
+  ExpandedCategories = new Set<string>();
+
+  /** @deprecated Use {@link ExpandedCategories}. */
+  get expandedCategories() {
+    return this.ExpandedCategories;
+  }
+  /** @deprecated Use {@link ExpandedCategories}. */
+  set expandedCategories(value) {
+    this.ExpandedCategories = value;
+  }
+  HoveredAction: string | null = null;
+
+  /** @deprecated Use {@link HoveredAction}. */
+  get hoveredAction(): string | null {
+    return this.HoveredAction;
+  }
+  /** @deprecated Use {@link HoveredAction}. */
+  set hoveredAction(value: string | null) {
+    this.HoveredAction = value;
+  }
+  AnimateCards = false;
+
+  /** @deprecated Use {@link AnimateCards}. */
+  get animateCards() {
+    return this.AnimateCards;
+  }
+  /** @deprecated Use {@link AnimateCards}. */
+  set animateCards(value) {
+    this.AnimateCards = value;
+  }
   
   // Statistics
-  totalActions = 0;
-  categoryCounts = new Map<string, number>();
+  TotalActions = 0;
+
+  /** @deprecated Use {@link TotalActions}. */
+  get totalActions() {
+    return this.TotalActions;
+  }
+  /** @deprecated Use {@link TotalActions}. */
+  set totalActions(value) {
+    this.TotalActions = value;
+  }
+  CategoryCounts = new Map<string, number>();
+
+  /** @deprecated Use {@link CategoryCounts}. */
+  get categoryCounts() {
+    return this.CategoryCounts;
+  }
+  /** @deprecated Use {@link CategoryCounts}. */
+  set categoryCounts(value) {
+    this.CategoryCounts = value;
+  }
   
   constructor() {
         super();}
   
   ngOnInit() {
     // Set initial view mode
-    this.viewMode$.next(this.config.defaultView || 'grid');
+    this.ViewMode$.next(this.config.defaultView || 'grid');
     
     // Load data
     this.loadData();
     
     // Set up filtering
     combineLatest([
-      this.actions$,
-      this.searchControl.valueChanges.pipe(
+      this.Actions$,
+      this.SearchControl.valueChanges.pipe(
         debounceTime(300),
         distinctUntilChanged()
       ),
-      this.selectedCategory$
+      this.SelectedCategory$
     ]).pipe(
       takeUntil(this.destroy$)
     ).subscribe(([actions, searchTerm, category]) => {
@@ -106,13 +268,13 @@ export class ActionGalleryComponent extends BaseAngularComponent implements OnIn
     });
     
     // Initialize with pre-selected actions
-    if (this.preSelectedActions.length > 0) {
-      this.selectedActions$.next(new Set(this.preSelectedActions));
+    if (this.PreSelectedActions.length > 0) {
+      this.SelectedActions$.next(new Set(this.PreSelectedActions));
     }
     
     // Enable animations after initial load
     setTimeout(() => {
-      this.animateCards = true;
+      this.AnimateCards = true;
     }, 100);
   }
   
@@ -122,7 +284,7 @@ export class ActionGalleryComponent extends BaseAngularComponent implements OnIn
   }
   
   async loadData() {
-    this.isLoading$.next(true);
+    this.IsLoading$.next(true);
     
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
@@ -151,14 +313,14 @@ export class ActionGalleryComponent extends BaseAngularComponent implements OnIn
         const actionsWithDetails = actions.map(action => ({
           ...action,
           expanded: false,
-          selected: this.preSelectedActions.some(id => UUIDsEqual(id, action.ID))
+          selected: this.PreSelectedActions.some(id => UUIDsEqual(id, action.ID))
         } as ActionWithDetails));
         
-        this.actions$.next(actionsWithDetails);
-        this.totalActions = actions.length;
+        this.Actions$.next(actionsWithDetails);
+        this.TotalActions = actions.length;
         
         // Process categories
-        this.categories$.next(categories);
+        this.Categories$.next(categories);
         this.buildCategoryTree(categories, actions);
         
         // Initial filter
@@ -167,16 +329,16 @@ export class ActionGalleryComponent extends BaseAngularComponent implements OnIn
     } catch (error) {
       console.error('Error loading gallery data:', error);
     } finally {
-      this.isLoading$.next(false);
+      this.IsLoading$.next(false);
     }
   }
   
   private buildCategoryTree(categories: MJActionCategoryEntity[], actions: MJActionEntity[]) {
     // Count actions per category
-    this.categoryCounts.clear();
+    this.CategoryCounts.clear();
     actions.forEach(action => {
-      const count = this.categoryCounts.get(action.Category || 'Uncategorized') || 0;
-      this.categoryCounts.set(action.Category || 'Uncategorized', count + 1);
+      const count = this.CategoryCounts.get(action.Category || 'Uncategorized') || 0;
+      this.CategoryCounts.set(action.Category || 'Uncategorized', count + 1);
     });
     
     // Build tree structure
@@ -190,7 +352,7 @@ export class ActionGalleryComponent extends BaseAngularComponent implements OnIn
         name: cat.Name,
         parent: cat.ParentID || undefined,
         children: [],
-        count: this.categoryCounts.get(cat.Name) || 0,
+        count: this.CategoryCounts.get(cat.Name) || 0,
         icon: this.getCategoryIcon(cat.Name)
       };
       nodeMap.set(cat.ID, node);
@@ -212,12 +374,12 @@ export class ActionGalleryComponent extends BaseAngularComponent implements OnIn
     const allNode: CategoryNode = {
       id: 'all',
       name: 'All Actions',
-      count: this.totalActions,
+      count: this.TotalActions,
       icon: 'fa-th'
     };
     
     // Add "Uncategorized" if needed
-    const uncategorizedCount = this.categoryCounts.get('Uncategorized') || 0;
+    const uncategorizedCount = this.CategoryCounts.get('Uncategorized') || 0;
     if (uncategorizedCount > 0) {
       const uncategorizedNode: CategoryNode = {
         id: 'uncategorized',
@@ -228,7 +390,7 @@ export class ActionGalleryComponent extends BaseAngularComponent implements OnIn
       rootNodes.push(uncategorizedNode);
     }
     
-    this.categoryTree$.next([allNode, ...rootNodes]);
+    this.CategoryTree$.next([allNode, ...rootNodes]);
   }
   
   private getCategoryIcon(categoryName: string): string {
@@ -248,12 +410,17 @@ export class ActionGalleryComponent extends BaseAngularComponent implements OnIn
     return iconMap[categoryName] || 'fa-folder';
   }
   
-  getCategoryIconClass(category: CategoryNode): string {
+  GetCategoryIconClass(category: CategoryNode): string {
     // Ensure we have a valid icon
     if (!category.icon) {
       return 'fa-solid fa-folder category-icon';
     }
     return `fa-solid ${category.icon} category-icon`;
+  }
+
+  /** @deprecated Use {@link GetCategoryIconClass}. */
+  getCategoryIconClass(category: CategoryNode): string {
+    return this.GetCategoryIconClass(category);
   }
   
   private filterActions(actions: ActionWithDetails[], searchTerm: string, category: string) {
@@ -279,41 +446,61 @@ export class ActionGalleryComponent extends BaseAngularComponent implements OnIn
       );
     }
     
-    this.filteredActions$.next(filtered);
+    this.FilteredActions$.next(filtered);
   }
   
   private getCategoryName(categoryId: string): string {
-    const category = this.categories$.value.find(c => UUIDsEqual(c.ID, categoryId));
+    const category = this.Categories$.value.find(c => UUIDsEqual(c.ID, categoryId));
     return category?.Name || '';
   }
   
+  SelectCategory(categoryId: string) {
+    this.SelectedCategory$.next(categoryId);
+  }
+
+  /** @deprecated Use {@link SelectCategory}. */
   selectCategory(categoryId: string) {
-    this.selectedCategory$.next(categoryId);
+    return this.SelectCategory(categoryId);
   }
   
-  toggleCategoryExpanded(categoryId: string) {
-    if (this.expandedCategories.has(categoryId)) {
-      this.expandedCategories.delete(categoryId);
+  ToggleCategoryExpanded(categoryId: string) {
+    if (this.ExpandedCategories.has(categoryId)) {
+      this.ExpandedCategories.delete(categoryId);
     } else {
-      this.expandedCategories.add(categoryId);
+      this.ExpandedCategories.add(categoryId);
     }
   }
-  
-  toggleViewMode() {
-    const currentMode = this.viewMode$.value;
-    this.viewMode$.next(currentMode === 'grid' ? 'list' : 'grid');
+
+  /** @deprecated Use {@link ToggleCategoryExpanded}. */
+  toggleCategoryExpanded(categoryId: string) {
+    return this.ToggleCategoryExpanded(categoryId);
   }
   
-  async toggleActionExpanded(action: ActionWithDetails) {
+  ToggleViewMode() {
+    const currentMode = this.ViewMode$.value;
+    this.ViewMode$.next(currentMode === 'grid' ? 'list' : 'grid');
+  }
+
+  /** @deprecated Use {@link ToggleViewMode}. */
+  toggleViewMode() {
+    return this.ToggleViewMode();
+  }
+  
+  async ToggleActionExpanded(action: ActionWithDetails) {
     action.expanded = !action.expanded;
     
     // Load details if expanding and not already loaded
     if (action.expanded && !action.parameters) {
-      await this.loadActionDetails(action);
+      await this.LoadActionDetails(action);
     }
   }
+
+  /** @deprecated Use {@link ToggleActionExpanded}. */
+  async toggleActionExpanded(action: ActionWithDetails) {
+    return this.ToggleActionExpanded(action);
+  }
   
-  async loadActionDetails(action: ActionWithDetails) {
+  async LoadActionDetails(action: ActionWithDetails) {
     const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     
     try {
@@ -345,11 +532,16 @@ export class ActionGalleryComponent extends BaseAngularComponent implements OnIn
       console.error('Error loading action details:', error);
     }
   }
+
+  /** @deprecated Use {@link LoadActionDetails}. */
+  async loadActionDetails(action: ActionWithDetails) {
+    return this.LoadActionDetails(action);
+  }
   
-  toggleActionSelection(action: ActionWithDetails) {
+  ToggleActionSelection(action: ActionWithDetails) {
     if (!this.config.selectionMode) return;
     
-    const selected = this.selectedActions$.value;
+    const selected = this.SelectedActions$.value;
     
     if (!this.config.multiSelect) {
       // Single select mode
@@ -357,7 +549,7 @@ export class ActionGalleryComponent extends BaseAngularComponent implements OnIn
       if (!action.selected) {
         selected.add(action.ID);
         action.selected = true;
-        this.actionSelected.emit(action);
+        this.ActionSelected.emit(action);
       }
     } else {
       // Multi-select mode
@@ -370,15 +562,20 @@ export class ActionGalleryComponent extends BaseAngularComponent implements OnIn
       }
     }
     
-    this.selectedActions$.next(new Set(selected));
+    this.SelectedActions$.next(new Set(selected));
     
     if (this.config.multiSelect) {
-      const selectedActions = this.actions$.value.filter(a => selected.has(a.ID));
-      this.actionsSelected.emit(selectedActions);
+      const selectedActions = this.Actions$.value.filter(a => selected.has(a.ID));
+      this.ActionsSelected.emit(selectedActions);
     }
   }
+
+  /** @deprecated Use {@link ToggleActionSelection}. */
+  toggleActionSelection(action: ActionWithDetails) {
+    return this.ToggleActionSelection(action);
+  }
   
-  testAction(action: MJActionEntity, event: Event) {
+  TestAction(action: MJActionEntity, event: Event) {
     event.stopPropagation();
     
     if (this.config.enableQuickTest) {
@@ -386,26 +583,41 @@ export class ActionGalleryComponent extends BaseAngularComponent implements OnIn
       console.log('Test action:', action.Name);
     }
     
-    this.actionTestRequested.emit(action);
+    this.ActionTestRequested.emit(action);
+  }
+
+  /** @deprecated Use {@link TestAction}. */
+  testAction(action: MJActionEntity, event: Event) {
+    return this.TestAction(action, event);
   }
   
   // Backs the no-results empty-state "Clear Filters" CTA: resets every dimension
   // the list narrows on — search AND the selected category — so the CTA actually
   // returns results instead of appearing to do nothing.
-  clearSearch() {
-    this.searchControl.reset();
-    this.selectedCategory$.next('all');
+  ClearSearch() {
+    this.SearchControl.reset();
+    this.SelectedCategory$.next('all');
     if (this.searchInput) {
       this.searchInput.nativeElement.focus();
     }
   }
-  
-  getSelectedActions(): MJActionEntity[] {
-    const selected = this.selectedActions$.value;
-    return this.actions$.value.filter(a => selected.has(a.ID));
+
+  /** @deprecated Use {@link ClearSearch}. */
+  clearSearch() {
+    return this.ClearSearch();
   }
   
-  getActionIcon(action: MJActionEntity): string {
+  GetSelectedActions(): MJActionEntity[] {
+    const selected = this.SelectedActions$.value;
+    return this.Actions$.value.filter(a => selected.has(a.ID));
+  }
+
+  /** @deprecated Use {@link GetSelectedActions}. */
+  getSelectedActions(): MJActionEntity[] {
+    return this.GetSelectedActions();
+  }
+  
+  GetActionIcon(action: MJActionEntity): string {
     const typeIcons: { [key: string]: string } = {
       'Create': 'fa-plus-circle',
       'Update': 'fa-edit',
@@ -428,5 +640,10 @@ export class ActionGalleryComponent extends BaseAngularComponent implements OnIn
     }
     
     return 'fa-bolt';
+  }
+
+  /** @deprecated Use {@link GetActionIcon}. */
+  getActionIcon(action: MJActionEntity): string {
+    return this.GetActionIcon(action);
   }
 }

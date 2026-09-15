@@ -32,7 +32,7 @@ import { languages } from '@codemirror/language-data';
 import { ToolbarConfig, ToolbarButton, ToolbarButtonGroup, ToolbarActionEvent } from './toolbar-config';
 
 // Import composition token extension for SQL highlighting
-import { compositionTokenExtension, CompositionTokenClickEvent, CompositionTokenResolver, CompositionTokenInfo } from './composition-token-extension';
+import { CompositionTokenExtension, CompositionTokenClickEvent, CompositionTokenResolver, CompositionTokenInfo } from './composition-token-extension';
 
 // Import QueryEngine for default hover resolution
 import { QueryEngine } from '@memberjunction/core-entities';
@@ -63,7 +63,16 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
    *
    * Don't support change dynamically!
    */
-  @Input() root?: Document | ShadowRoot;
+  @Input() Root?: Document | ShadowRoot;
+
+  /** @deprecated Use {@link Root}. */
+  @Input() set root(value: Document | ShadowRoot | undefined) {
+    this.Root = value;
+  }
+  /** @deprecated Use {@link Root}. */
+  get root(): Document | ShadowRoot | undefined {
+    return this.Root;
+  }
 
   /**
    * Whether focus on the editor after init.
@@ -92,7 +101,7 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
   set value(val: string) {
     this._value = val;
     if (this.view) {
-      this.setValue(val);
+      this.SetValue(val);
     }
   }
 
@@ -102,7 +111,7 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
   set disabled(val: boolean) {
     this._disabled = val;
     if (this.view) {
-      this.setEditable(!val && !this._readonly);
+      this.SetEditable(!val && !this._readonly);
     }
   }
 
@@ -112,10 +121,10 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
   set readonly(val: boolean) {
     this._readonly = val;
     if (this.view) {
-      this.setReadonly(val);
+      this.SetReadonly(val);
       // When readonly, also make it non-editable
       if (val) {
-        this.setEditable(false);
+        this.SetEditable(false);
       }
     }
   }
@@ -126,7 +135,7 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
   set placeholder(val: string) {
     this._placeholder = val;
     if (this.view) {
-      this.setPlaceholder(val);
+      this.SetPlaceholder(val);
     }
   }
 
@@ -136,7 +145,7 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
   set indentWithTab(val: boolean) {
     this._indentWithTab = val;
     if (this.view) {
-      this.setIndentWithTab(val);
+      this.SetIndentWithTab(val);
     }
   }
 
@@ -146,7 +155,7 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
   set indentUnit(val: string) {
     this._indentUnit = val;
     if (this.view) {
-      this.setIndentUnit(val);
+      this.SetIndentUnit(val);
     }
   }
 
@@ -156,7 +165,7 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
   set lineWrapping(val: boolean) {
     this._lineWrapping = val;
     if (this.view) {
-      this.setLineWrapping(val);
+      this.SetLineWrapping(val);
     }
   }
 
@@ -166,7 +175,7 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
   set highlightWhitespace(val: boolean) {
     this._highlightWhitespace = val;
     if (this.view) {
-      this.setHighlightWhitespace(val);
+      this.SetHighlightWhitespace(val);
     }
   }
 
@@ -176,7 +185,16 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
    *
    * Don't support change dynamically!
    */
-  @Input() languages: LanguageDescription[] = languages;
+  @Input() Languages: LanguageDescription[] = languages;
+
+  /** @deprecated Use {@link Languages}. */
+  @Input() set languages(value: LanguageDescription[]) {
+    this.Languages = value;
+  }
+  /** @deprecated Use {@link Languages}. */
+  get languages(): LanguageDescription[] {
+    return this.Languages;
+  }
 
   /** The editor's language. You should set the `languages` prop at first. */
   @Input()
@@ -184,7 +202,7 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
   set language(val: string) {
     this._language = val;
     if (this.view) {
-      this.setLanguage(val);
+      this.SetLanguage(val);
     }
   }
 
@@ -198,7 +216,7 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
   set setup(val: Setup) {
     this._setup = val;
     if (this.view) {
-      this.setExtensions(this._getAllExtensions());
+      this.SetExtensions(this._getAllExtensions());
     }
   }
 
@@ -211,7 +229,7 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
   set customExtensionFactories(val: (() => Extension)[]) {
     this._customExtensionFactories = val;
     if (this.view) {
-      this.setExtensions(this._getAllExtensions());
+      this.SetExtensions(this._getAllExtensions());
     }
   }
 
@@ -224,27 +242,72 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
   set extensions(val: Extension[]) {
     this._extensions = val;
     if (this.view) {
-      this.setExtensions(this._getAllExtensions());
+      this.SetExtensions(this._getAllExtensions());
     }
   }
 
   /** Event emitted when the editor's value changes. */
-  @Output() change = new EventEmitter<string>();
+  @Output() Change = new EventEmitter<string>();
+
+  /**
+   * @deprecated Use {@link Change}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (change) keeps working. Must stay AFTER Change: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() change = this.Change;
 
   /** Event emitted when focus on the editor. */
-  @Output() focus = new EventEmitter<void>();
+  @Output() Focus = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link Focus}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (focus) keeps working. Must stay AFTER Focus: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() focus = this.Focus;
 
   /** Event emitted when the editor has lost focus. */
-  @Output() blur = new EventEmitter<void>();
+  @Output() Blur = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link Blur}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (blur) keeps working. Must stay AFTER Blur: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() blur = this.Blur;
 
   /** 
    * Toolbar configuration. Defaults to disabled.
    * Set enabled: true to show the toolbar.
    */
-  @Input() toolbar: ToolbarConfig = { enabled: false };
+  @Input() Toolbar: ToolbarConfig = { enabled: false };
+
+  /** @deprecated Use {@link Toolbar}. */
+  @Input() set toolbar(value: ToolbarConfig) {
+    this.Toolbar = value;
+  }
+  /** @deprecated Use {@link Toolbar}. */
+  get toolbar(): ToolbarConfig {
+    return this.Toolbar;
+  }
 
   /** Event emitted when a toolbar button is clicked */
-  @Output() toolbarAction = new EventEmitter<ToolbarActionEvent>();
+  @Output() ToolbarAction = new EventEmitter<ToolbarActionEvent>();
+
+  /**
+   * @deprecated Use {@link ToolbarAction}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (toolbarAction) keeps working. Must stay AFTER ToolbarAction: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() toolbarAction = this.ToolbarAction;
 
   /** Event emitted when a {{query:"..."}} composition token is clicked in SQL mode */
   @Output() CompositionTokenClick = new EventEmitter<CompositionTokenClickEvent>();
@@ -266,7 +329,7 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
     if (vu.docChanged && !vu.transactions.some((tr) => tr.annotation(External))) {
       const value = vu.state.doc.toString();
       this._onChange(value);
-      this.change.emit(value);
+      this.Change.emit(value);
     }
   });
 
@@ -419,7 +482,7 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
 
       // Add composition token highlighting for SQL mode
       ...(this._language.toLowerCase() === 'sql'
-        ? compositionTokenExtension({
+        ? CompositionTokenExtension({
             OnTokenClick: (event) => this.CompositionTokenClick.emit(event),
             OnTokenHover: (fullPath) => this.resolveCompositionToken(fullPath)
           })
@@ -474,18 +537,18 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
   /**
    * Get toolbar groups for rendering
    */
-  get toolbarGroups(): ToolbarButtonGroup[] {
-    if (!this.toolbar?.enabled) return [];
+  get ToolbarGroups(): ToolbarButtonGroup[] {
+    if (!this.Toolbar?.enabled) return [];
     
-    if (this.toolbar.groups) {
-      return this.toolbar.groups;
+    if (this.Toolbar.groups) {
+      return this.Toolbar.groups;
     }
     
     // Single group from buttons array
-    if (this.toolbar.buttons) {
+    if (this.Toolbar.buttons) {
       return [{
         id: 'default',
-        buttons: this.toolbar.buttons,
+        buttons: this.Toolbar.buttons,
         separator: false
       }];
     }
@@ -493,10 +556,15 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
     return [];
   }
 
+  /** @deprecated Use {@link ToolbarGroups}. */
+  get toolbarGroups(): ToolbarButtonGroup[] {
+    return this.ToolbarGroups;
+  }
+
   /**
    * Handle toolbar button click
    */
-  handleButtonClick(button: ToolbarButton): void {
+  HandleButtonClick(button: ToolbarButton): void {
     if (!this.view) return;
     
     if (button.handler) {
@@ -512,10 +580,15 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
     }
     
     // Emit the toolbar action event
-    this.toolbarAction.emit({
+    this.ToolbarAction.emit({
       buttonId: button.id,
       editor: this.view
     });
+  }
+
+  /** @deprecated Use {@link HandleButtonClick}. */
+  handleButtonClick(button: ToolbarButton): void {
+    return this.HandleButtonClick(button);
   }
 
   /**
@@ -563,14 +636,19 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
   /**
    * Check if a group is the last one (for separator logic)
    */
-  isLastGroup(group: ToolbarButtonGroup): boolean {
-    const groups = this.toolbarGroups;
+  IsLastGroup(group: ToolbarButtonGroup): boolean {
+    const groups = this.ToolbarGroups;
     return groups.indexOf(group) === groups.length - 1;
+  }
+
+  /** @deprecated Use {@link IsLastGroup}. */
+  isLastGroup(group: ToolbarButtonGroup): boolean {
+    return this.IsLastGroup(group);
   }
 
   ngOnInit(): void {
     this.view = new EditorView({
-      root: this.root,
+      root: this.Root,
       parent: this.editorContent.nativeElement, // Use ViewChild reference
       state: EditorState.create({ doc: this._value, extensions: this._getAllExtensions() }),
     });
@@ -581,25 +659,25 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
 
     this.view?.contentDOM.addEventListener('focus', () => {
       this._onTouched();
-      this.focus.emit();
+      this.Focus.emit();
     });
 
     this.view?.contentDOM.addEventListener('blur', () => {
       this._onTouched();
-      this.blur.emit();
+      this.Blur.emit();
     });
 
     // Apply initial configuration values
     // These are already set via setters if the properties were bound before ngOnInit
     // But we need to ensure they're applied if set via direct property assignment
-    this.setEditable(!this._disabled && !this._readonly);
-    this.setReadonly(this._readonly);
-    this.setPlaceholder(this._placeholder);
-    this.setIndentWithTab(this._indentWithTab);
-    this.setIndentUnit(this._indentUnit);
-    this.setLineWrapping(this._lineWrapping);
-    this.setHighlightWhitespace(this._highlightWhitespace);
-    this.setLanguage(this._language);
+    this.SetEditable(!this._disabled && !this._readonly);
+    this.SetReadonly(this._readonly);
+    this.SetPlaceholder(this._placeholder);
+    this.SetIndentWithTab(this._indentWithTab);
+    this.SetIndentUnit(this._indentUnit);
+    this.SetLineWrapping(this._lineWrapping);
+    this.SetHighlightWhitespace(this._highlightWhitespace);
+    this.SetLanguage(this._language);
   }
 
   ngOnDestroy(): void {
@@ -608,7 +686,7 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
 
   writeValue(value: string): void {
     if (this.view) {
-      this.setValue(value);
+      this.SetValue(value);
     }
   }
 
@@ -625,7 +703,7 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
   }
 
   /** Sets editor's value. */
-  setValue(value: string) {
+  SetValue(value: string) {
     if (!this.view) return;
     
     // Prevent unnecessary updates
@@ -638,52 +716,97 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
     });
   }
 
+  /** @deprecated Use {@link SetValue}. */
+  setValue(value: string) {
+    return this.SetValue(value);
+  }
+
   private _dispatchEffects(effects: StateEffect<any> | readonly StateEffect<any>[]) {
     return this.view?.dispatch({ effects });
   }
 
   /** Sets the root extensions of the editor. */
-  setExtensions(value: Extension[]) {
+  SetExtensions(value: Extension[]) {
     this._dispatchEffects(StateEffect.reconfigure.of(value));
   }
 
+  /** @deprecated Use {@link SetExtensions}. */
+  setExtensions(value: Extension[]) {
+    return this.SetExtensions(value);
+  }
+
   /** Sets editor's editable state. */
-  setEditable(value: boolean) {
+  SetEditable(value: boolean) {
     this._dispatchEffects(this._editableConf.reconfigure(EditorView.editable.of(value)));
   }
 
+  /** @deprecated Use {@link SetEditable}. */
+  setEditable(value: boolean) {
+    return this.SetEditable(value);
+  }
+
   /** Sets editor's readonly state. */
-  setReadonly(value: boolean) {
+  SetReadonly(value: boolean) {
     this._dispatchEffects(this._readonlyConf.reconfigure(EditorState.readOnly.of(value)));
   }
 
+  /** @deprecated Use {@link SetReadonly}. */
+  setReadonly(value: boolean) {
+    return this.SetReadonly(value);
+  }
+
   /** Sets editor's placeholder. */
-  setPlaceholder(value: string) {
+  SetPlaceholder(value: string) {
     this._dispatchEffects(this._placeholderConf.reconfigure(value ? placeholder(value) : []));
   }
 
+  /** @deprecated Use {@link SetPlaceholder}. */
+  setPlaceholder(value: string) {
+    return this.SetPlaceholder(value);
+  }
+
   /** Sets editor' indentWithTab. */
-  setIndentWithTab(value: boolean) {
+  SetIndentWithTab(value: boolean) {
     this._dispatchEffects(this._indentWithTabConf.reconfigure(value ? keymap.of([indentWithTab]) : []));
   }
 
+  /** @deprecated Use {@link SetIndentWithTab}. */
+  setIndentWithTab(value: boolean) {
+    return this.SetIndentWithTab(value);
+  }
+
   /** Sets editor's indentUnit. */
-  setIndentUnit(value: string) {
+  SetIndentUnit(value: string) {
     this._dispatchEffects(this._indentUnitConf.reconfigure(value ? indentUnit.of(value) : []));
   }
 
+  /** @deprecated Use {@link SetIndentUnit}. */
+  setIndentUnit(value: string) {
+    return this.SetIndentUnit(value);
+  }
+
   /** Sets editor's lineWrapping. */
-  setLineWrapping(value: boolean) {
+  SetLineWrapping(value: boolean) {
     this._dispatchEffects(this._lineWrappingConf.reconfigure(value ? EditorView.lineWrapping : []));
   }
 
+  /** @deprecated Use {@link SetLineWrapping}. */
+  setLineWrapping(value: boolean) {
+    return this.SetLineWrapping(value);
+  }
+
   /** Sets editor's highlightWhitespace. */
-  setHighlightWhitespace(value: boolean) {
+  SetHighlightWhitespace(value: boolean) {
     this._dispatchEffects(this._highlightWhitespaceConf.reconfigure(value ? highlightWhitespace() : []));
   }
 
+  /** @deprecated Use {@link SetHighlightWhitespace}. */
+  setHighlightWhitespace(value: boolean) {
+    return this.SetHighlightWhitespace(value);
+  }
+
   /** Sets editor's language dynamically. */
-  setLanguage(lang: string) {
+  SetLanguage(lang: string) {
     if (!lang) {
       return;
     }
@@ -702,7 +825,7 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
     }
     
     // For other languages, use dynamic loading
-    if (this.languages.length === 0) {
+    if (this.Languages.length === 0) {
       if (this.view) {
         console.error('No supported languages. Please set the `languages` prop at first.');
       }
@@ -714,10 +837,15 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
     });
   }
 
+  /** @deprecated Use {@link SetLanguage}. */
+  setLanguage(lang: string) {
+    return this.SetLanguage(lang);
+  }
+
   /** Find the language's extension by its name. Case insensitive. */
   private _findLanguage(name: string) {
     const wanted = name.toLowerCase();
-    for (const lang of this.languages) {
+    for (const lang of this.Languages) {
       for (const alias of [lang.name, ...lang.alias]) {
         if (wanted === alias.toLowerCase()) {
           return lang;
@@ -734,14 +862,14 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
     // name or alias, so it can turn a miss into a hit but can never change a match that already
     // resolved. That matters because short extensions ('r', 'md', 'ts') would otherwise be able to
     // outrank another language's real name.
-    for (const lang of this.languages) {
+    for (const lang of this.Languages) {
       if (lang.extensions.some((ext) => wanted === ext.toLowerCase())) {
         return lang;
       }
     }
 
     console.error('Language not found:', name);
-    console.info('Supported language names:', this.languages.map((lang) => lang.name).join(', '));
+    console.info('Supported language names:', this.Languages.map((lang) => lang.name).join(', '));
     return null;
   }
 }

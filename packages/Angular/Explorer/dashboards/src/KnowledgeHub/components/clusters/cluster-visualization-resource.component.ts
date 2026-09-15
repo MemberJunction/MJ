@@ -33,13 +33,13 @@ import {
 } from '@memberjunction/ng-clustering';
 import { ClusteringService, ClusterScatterComponent } from '@memberjunction/ng-clustering';
 import {
-    buildClusterAgentContext,
-    capClusterList,
-    resolveSavedVisualization,
-    buildClusterNotFoundError,
+    BuildClusterAgentContext,
+    CapClusterList,
+    ResolveSavedVisualization,
+    BuildClusterNotFoundError,
     ClusterSummary,
 } from './cluster-agent-context';
-import { validateEnumParam, validateStringParam } from '../../../shared/agent-tool-validation';
+import { ValidateEnumParam, ValidateStringParam } from '../../../shared/agent-tool-validation';
 
 /**
  * Build an environment-scoped storage key so cluster data does not bleed
@@ -173,7 +173,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
         const activeSaved = this.ActiveSavedId
             ? this.SavedVisualizations.find(s => s.Id === this.ActiveSavedId)
             : undefined;
-        this.navigationService.SetAgentContext(this, buildClusterAgentContext({
+        this.navigationService.SetAgentContext(this, BuildClusterAgentContext({
             IsVisualizationLoaded: this.HasResult,
             VisualizationTitle: this.VisualizationTitle || null,
             IsRunning: this.IsRunning,
@@ -260,14 +260,14 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
                     required: ['entityName'],
                 },
                 Handler: async (params: Record<string, unknown>) => {
-                    const check = validateStringParam(params['entityName'], 'entityName');
+                    const check = ValidateStringParam(params['entityName'], 'entityName');
                     if (!check.ok) {
                         return check.result;
                     }
                     const candidates = this.EntityOptions.map(o => ({ Id: o.Name, Name: o.Name }));
-                    const match = resolveSavedVisualization(check.value, candidates);
+                    const match = ResolveSavedVisualization(check.value, candidates);
                     if (!match) {
-                        return buildClusterNotFoundError(check.value, candidates.map(c => c.Name), 'source entity');
+                        return BuildClusterNotFoundError(check.value, candidates.map(c => c.Name), 'source entity');
                     }
                     this.OnEntitySourceChanged(match.Name);
                     return { Success: true, Data: { ConfigEntityName: match.Name } };
@@ -282,7 +282,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
                     required: ['algorithm'],
                 },
                 Handler: async (params: Record<string, unknown>) => {
-                    const check = validateEnumParam(params['algorithm'], ['kmeans', 'dbscan'] as const, 'algorithm');
+                    const check = ValidateEnumParam(params['algorithm'], ['kmeans', 'dbscan'] as const, 'algorithm');
                     if (!check.ok) {
                         return check.result;
                     }
@@ -318,13 +318,13 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
                     required: ['reference'],
                 },
                 Handler: async (params: Record<string, unknown>) => {
-                    const check = validateStringParam(params['reference'], 'reference');
+                    const check = ValidateStringParam(params['reference'], 'reference');
                     if (!check.ok) {
                         return check.result;
                     }
-                    const match = resolveSavedVisualization(check.value, this.SavedVisualizations);
+                    const match = ResolveSavedVisualization(check.value, this.SavedVisualizations);
                     if (!match) {
-                        return buildClusterNotFoundError(check.value, this.SavedVisualizations.map(s => s.Name), 'saved visualization');
+                        return BuildClusterNotFoundError(check.value, this.SavedVisualizations.map(s => s.Name), 'saved visualization');
                     }
                     await this.OnSelectSaved(match);
                     return { Success: true, Data: { Name: match.Name, ClusterCount: this.Result?.Clusters?.length ?? 0 } };
@@ -338,7 +338,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
                     return {
                         Success: true,
                         Data: {
-                            SavedVisualizations: capClusterList(this.SavedVisualizations.map(s => ({ Id: s.Id, Name: s.Name }))),
+                            SavedVisualizations: CapClusterList(this.SavedVisualizations.map(s => ({ Id: s.Id, Name: s.Name }))),
                             TotalCount: this.SavedVisualizations.length,
                         },
                     };

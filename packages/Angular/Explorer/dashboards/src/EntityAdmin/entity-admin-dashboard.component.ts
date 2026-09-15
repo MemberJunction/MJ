@@ -9,15 +9,15 @@ import { ERDCompositeComponent, ERDCompositeState } from '@memberjunction/ng-ent
 import { ResourceData, MJUserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
 
 import {
-  buildEntityAdminAgentContext,
-  buildEntityNotFoundError,
-  entityDisplayName,
-  resolveEntityByIdOrName,
+  BuildEntityAdminAgentContext,
+  BuildEntityNotFoundError,
+  EntityDisplayName,
+  ResolveEntityByIdOrName,
   EntityNameCandidate,
   RelatedEntitySummary,
   SchemaGroupSummary,
 } from './entity-admin-agent-context';
-import { AgentToolResult, validateStringParam } from '../shared/agent-tool-validation';
+import { AgentToolResult, ValidateStringParam } from '../shared/agent-tool-validation';
 
 /** Settings key for ERD state persistence */
 const ERD_SETTINGS_KEY = 'MJ.Admin.Entity.ERD';
@@ -33,14 +33,59 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
   @ViewChild('erdComposite', { static: false }) erdComposite!: ERDCompositeComponent;
 
   public isLoading = false;
-  public isRefreshingERD = false;
-  public loadingMessage = '';
+  public IsRefreshingERD = false;
+
+  /** @deprecated Use {@link IsRefreshingERD}. */
+  public get isRefreshingERD() {
+    return this.IsRefreshingERD;
+  }
+  /** @deprecated Use {@link IsRefreshingERD}. */
+  public set isRefreshingERD(value) {
+    this.IsRefreshingERD = value;
+  }
+  public LoadingMessage = '';
+
+  /** @deprecated Use {@link LoadingMessage}. */
+  public get loadingMessage() {
+    return this.LoadingMessage;
+  }
+  /** @deprecated Use {@link LoadingMessage}. */
+  public set loadingMessage(value) {
+    this.LoadingMessage = value;
+  }
   public error: string | null = null;
 
   // Filter panel visibility for header controls
-  public filterPanelVisible = true;
-  public selectedEntity: EntityInfo | null = null;
-  public filteredEntities: EntityInfo[] = [];
+  public FilterPanelVisible = true;
+
+  /** @deprecated Use {@link FilterPanelVisible}. */
+  public get filterPanelVisible() {
+    return this.FilterPanelVisible;
+  }
+  /** @deprecated Use {@link FilterPanelVisible}. */
+  public set filterPanelVisible(value) {
+    this.FilterPanelVisible = value;
+  }
+  public SelectedEntity: EntityInfo | null = null;
+
+  /** @deprecated Use {@link SelectedEntity}. */
+  public get selectedEntity(): EntityInfo | null {
+    return this.SelectedEntity;
+  }
+  /** @deprecated Use {@link SelectedEntity}. */
+  public set selectedEntity(value: EntityInfo | null) {
+    this.SelectedEntity = value;
+  }
+  public FilteredEntities: EntityInfo[] = [];
+
+  /** @deprecated Use {@link FilteredEntities}. */
+  public get filteredEntities(): EntityInfo[] {
+    return this.FilteredEntities;
+  }
+  /** @deprecated Use {@link FilteredEntities}. */
+  public set filteredEntities(value: EntityInfo[]) {
+    this.FilteredEntities = value;
+  }
 
   /** Total unfiltered entity count — feeds the chrome's X-of-Y badge. */
   public get TotalEntityCount(): number {
@@ -85,22 +130,27 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
     // Data loading is handled by ERDCompositeComponent
   }
 
-  public toggleFilterPanel(): void {
-    this.filterPanelVisible = !this.filterPanelVisible;
+  public ToggleFilterPanel(): void {
+    this.FilterPanelVisible = !this.FilterPanelVisible;
     if (this.erdComposite) {
       this.erdComposite.onToggleFilterPanel();
     }
   }
 
-  public onStateChange(state: ERDCompositeState): void {
+  /** @deprecated Use {@link ToggleFilterPanel}. */
+  public toggleFilterPanel(): void {
+    return this.ToggleFilterPanel();
+  }
+
+  public OnStateChange(state: ERDCompositeState): void {
     // Update local state to keep header controls in sync
-    this.filterPanelVisible = state.filterPanelVisible;
-    this.filteredEntities = this.erdComposite?.filteredEntities || [];
+    this.FilterPanelVisible = state.filterPanelVisible;
+    this.FilteredEntities = this.erdComposite?.filteredEntities || [];
 
     if (state.selectedEntityId && this.erdComposite) {
-      this.selectedEntity = this.erdComposite.entities.find(e => UUIDsEqual(e.ID, state.selectedEntityId)) || null;
+      this.SelectedEntity = this.erdComposite.entities.find(e => UUIDsEqual(e.ID, state.selectedEntityId)) || null;
     } else {
-      this.selectedEntity = null;
+      this.SelectedEntity = null;
     }
 
     // Load user state when data becomes available for the first time
@@ -114,16 +164,31 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
     this.publishAgentContext();
   }
 
-  public onUserStateChange(state: ERDCompositeState): void {
+  /** @deprecated Use {@link OnStateChange}. */
+  public onStateChange(state: ERDCompositeState): void {
+    return this.OnStateChange(state);
+  }
+
+  public OnUserStateChange(state: ERDCompositeState): void {
     // Queue state for debounced persistence
     this.userStateChangeSubject.next(state);
   }
 
-  public onEntityOpened(entity: EntityInfo): void {
-    this.openEntity(entity);
+  /** @deprecated Use {@link OnUserStateChange}. */
+  public onUserStateChange(state: ERDCompositeState): void {
+    return this.OnUserStateChange(state);
   }
 
-  public onOpenRecord(event: {EntityName: string, RecordID: string}): void {
+  public OnEntityOpened(entity: EntityInfo): void {
+    this.OpenEntity(entity);
+  }
+
+  /** @deprecated Use {@link OnEntityOpened}. */
+  public onEntityOpened(entity: EntityInfo): void {
+    return this.OnEntityOpened(entity);
+  }
+
+  public OnOpenRecord(event: {EntityName: string, RecordID: string}): void {
     this.OpenEntityRecord.emit({
       EntityName: event.EntityName,
       // The ERD emits records of arbitrary entities — resolve the key against the entity's metadata
@@ -131,12 +196,22 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
     });
   }
 
-  public openEntity(entity: EntityInfo): void {
+  /** @deprecated Use {@link OnOpenRecord}. */
+  public onOpenRecord(event: {EntityName: string, RecordID: string}): void {
+    return this.OnOpenRecord(event);
+  }
+
+  public OpenEntity(entity: EntityInfo): void {
     this.Interaction.emit({
       type: 'openEntity',
       entity: entity,
       data: { entityId: entity.ID, entityName: entity.Name }
     });
+  }
+
+  /** @deprecated Use {@link OpenEntity}. */
+  public openEntity(entity: EntityInfo): void {
+    return this.OpenEntity(entity);
   }
 
   /**
@@ -225,23 +300,23 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
    */
   private publishAgentContext(): void {
     const filters = this.erdComposite?.filters;
-    const context = buildEntityAdminAgentContext({
+    const context = BuildEntityAdminAgentContext({
       TotalEntityCount: this.TotalEntityCount,
-      FilteredEntityCount: this.filteredEntities.length,
-      SelectedEntityId: this.selectedEntity?.ID ?? null,
-      SelectedEntityName: this.selectedEntity?.Name ?? null,
-      SelectedEntityDisplayName: this.selectedEntity
-        ? entityDisplayName(this.selectedEntity.Name, this.selectedEntity.DisplayName)
+      FilteredEntityCount: this.FilteredEntities.length,
+      SelectedEntityId: this.SelectedEntity?.ID ?? null,
+      SelectedEntityName: this.SelectedEntity?.Name ?? null,
+      SelectedEntityDisplayName: this.SelectedEntity
+        ? EntityDisplayName(this.SelectedEntity.Name, this.SelectedEntity.DisplayName)
         : null,
-      SelectedEntitySchema: this.selectedEntity?.SchemaName ?? null,
-      SelectedEntityDescription: this.selectedEntity?.Description ?? null,
-      SelectedEntityFieldCount: this.selectedEntity?.Fields?.length ?? null,
+      SelectedEntitySchema: this.SelectedEntity?.SchemaName ?? null,
+      SelectedEntityDescription: this.SelectedEntity?.Description ?? null,
+      SelectedEntityFieldCount: this.SelectedEntity?.Fields?.length ?? null,
       RelatedEntities: this.buildRelatedEntitySummaries(),
-      FilterPanelVisible: this.filterPanelVisible,
+      FilterPanelVisible: this.FilterPanelVisible,
       SchemaFilter: filters?.schemaName ?? null,
       SearchText: filters?.entityName ?? '',
       StatusFilter: filters?.entityStatus ?? null,
-      AvailableEntityNames: this.filteredEntities.map(e => entityDisplayName(e.Name, e.DisplayName)),
+      AvailableEntityNames: this.FilteredEntities.map(e => EntityDisplayName(e.Name, e.DisplayName)),
       SchemaGroups: this.buildSchemaGroupSummaries(),
     });
     this.navigationService.SetAgentContext(this, context);
@@ -249,10 +324,10 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
 
   /** Related-entity summaries for the selected entity (display name + relationship type). */
   private buildRelatedEntitySummaries(): RelatedEntitySummary[] {
-    if (!this.selectedEntity) {
+    if (!this.SelectedEntity) {
       return [];
     }
-    return this.selectedEntity.RelatedEntities.map(re => ({
+    return this.SelectedEntity.RelatedEntities.map(re => ({
       Name: re.RelatedEntity ?? re.RelatedEntityID ?? '(unknown)',
       RelationshipType: re.Type ?? 'Related',
     }));
@@ -261,7 +336,7 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
   /** Schema-grouping summaries across the currently-visible (filtered) entities. */
   private buildSchemaGroupSummaries(): SchemaGroupSummary[] {
     const counts = new Map<string, number>();
-    for (const e of this.filteredEntities) {
+    for (const e of this.FilteredEntities) {
       const schema = e.SchemaName || '(no schema)';
       counts.set(schema, (counts.get(schema) ?? 0) + 1);
     }
@@ -302,7 +377,7 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
         Description: 'Show or hide the ERD entity filter panel.',
         ParameterSchema: { type: 'object', properties: {} },
         Handler: async () => {
-          this.toggleFilterPanel();
+          this.ToggleFilterPanel();
           this.publishAgentContext();
           return { Success: true };
         },
@@ -342,7 +417,7 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
 
   /** Resolve an entity by ID / registered name / display name and select/focus it. */
   private toolSelectEntity(params: Record<string, unknown>): AgentToolResult {
-    const validated = validateStringParam(params['entity'], 'entity');
+    const validated = ValidateStringParam(params['entity'], 'entity');
     if (!validated.ok) {
       return validated.result;
     }
@@ -350,13 +425,13 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
       return { Success: false, ErrorMessage: 'The ERD is not ready yet.' };
     }
     const candidates = this.entityCandidates;
-    const match = resolveEntityByIdOrName(validated.value, candidates);
+    const match = ResolveEntityByIdOrName(validated.value, candidates);
     if (!match) {
-      return { Success: false, ErrorMessage: buildEntityNotFoundError(validated.value, candidates) };
+      return { Success: false, ErrorMessage: BuildEntityNotFoundError(validated.value, candidates) };
     }
     const entity = this.erdComposite.entities.find(e => UUIDsEqual(e.ID, match.ID));
     if (!entity) {
-      return { Success: false, ErrorMessage: buildEntityNotFoundError(validated.value, candidates) };
+      return { Success: false, ErrorMessage: BuildEntityNotFoundError(validated.value, candidates) };
     }
     this.erdComposite.onEntitySelected(entity);
     return { Success: true, ErrorMessage: undefined };
@@ -397,7 +472,7 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
 
     const next = { ...this.erdComposite.filters };
     if (schemaRaw !== undefined) {
-      const validated = validateStringParam(schemaRaw, 'schema');
+      const validated = ValidateStringParam(schemaRaw, 'schema');
       if (!validated.ok) {
         return validated.result;
       }
@@ -415,7 +490,7 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
       }
     }
     if (searchRaw !== undefined) {
-      const validated = validateStringParam(searchRaw, 'search');
+      const validated = ValidateStringParam(searchRaw, 'search');
       if (!validated.ok) {
         return validated.result;
       }
@@ -429,14 +504,14 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
 
   /** Open an entity's record list / data view for viewing (read-only navigation). */
   private toolNavigateToEntityRecord(params: Record<string, unknown>): AgentToolResult {
-    const validated = validateStringParam(params['entity'], 'entity');
+    const validated = ValidateStringParam(params['entity'], 'entity');
     if (!validated.ok) {
       return validated.result;
     }
     const candidates = this.entityCandidates;
-    const match = resolveEntityByIdOrName(validated.value, candidates);
+    const match = ResolveEntityByIdOrName(validated.value, candidates);
     if (!match) {
-      return { Success: false, ErrorMessage: buildEntityNotFoundError(validated.value, candidates) };
+      return { Success: false, ErrorMessage: BuildEntityNotFoundError(validated.value, candidates) };
     }
     // Open the entity's dynamic record view (read-only navigation — no edit, no create).
     this.navigationService.OpenDynamicView(match.Name);

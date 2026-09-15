@@ -30,7 +30,7 @@ export class AIAgentRunCostService {
    * Get comprehensive cost metrics for an agent run including all nested sub-runs
    * Uses the high-performance CalculateAIAgentRunCost templated query
    */
-  async getAgentRunCostMetrics(agentRunId: string, useCache: boolean = true): Promise<AgentRunCostMetrics> {
+  async GetAgentRunCostMetrics(agentRunId: string, useCache: boolean = true): Promise<AgentRunCostMetrics> {
     // Check cache first
     if (useCache) {
       const cached = this.getCachedMetrics(agentRunId);
@@ -88,23 +88,38 @@ export class AIAgentRunCostService {
     }
   }
 
+  /** @deprecated Use {@link GetAgentRunCostMetrics}. */
+  async getAgentRunCostMetrics(agentRunId: string, useCache: boolean = true): Promise<AgentRunCostMetrics> {
+    return this.GetAgentRunCostMetrics(agentRunId, useCache);
+  }
+
   /**
    * Get just the total cost for display (simplified version)
    */
-  async getTotalCost(agentRunId: string, useCache: boolean = true): Promise<number> {
-    const metrics = await this.getAgentRunCostMetrics(agentRunId, useCache);
+  async GetTotalCost(agentRunId: string, useCache: boolean = true): Promise<number> {
+    const metrics = await this.GetAgentRunCostMetrics(agentRunId, useCache);
     return metrics.totalCost;
+  }
+
+  /** @deprecated Use {@link GetTotalCost}. */
+  async getTotalCost(agentRunId: string, useCache: boolean = true): Promise<number> {
+    return this.GetTotalCost(agentRunId, useCache);
   }
 
   /**
    * Clear cache for specific agent run or all cached data
    */
-  clearCache(agentRunId?: string): void {
+  ClearCache(agentRunId?: string): void {
     if (agentRunId) {
       this.costCache.delete(agentRunId);
     } else {
       this.costCache.clear();
     }
+  }
+
+  /** @deprecated Use {@link ClearCache}. */
+  clearCache(agentRunId?: string): void {
+    return this.ClearCache(agentRunId);
   }
 
   /**

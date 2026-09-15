@@ -1027,12 +1027,66 @@ interface FolderNode {
   `]
 })
 export class ConversationListComponent implements OnInit, OnDestroy {
-  @Input() environmentId!: string;
-  @Input() currentUser!: UserInfo;
-  @Input() selectedConversationId: string | null = null;
-  @Input() renamedConversationId: string | null = null;
-  @Input() isSidebarPinned: boolean = true; // Whether sidebar is pinned (stays open after selection)
-  @Input() isMobileView: boolean = false; // Whether we're on mobile (no pin options)
+  @Input() EnvironmentId!: string;
+
+  /** @deprecated Use {@link EnvironmentId}. */
+  @Input() set environmentId(value: string) {
+    this.EnvironmentId = value;
+  }
+  /** @deprecated Use {@link EnvironmentId}. */
+  get environmentId(): string {
+    return this.EnvironmentId;
+  }
+  @Input() CurrentUser!: UserInfo;
+
+  /** @deprecated Use {@link CurrentUser}. */
+  @Input() set currentUser(value: UserInfo) {
+    this.CurrentUser = value;
+  }
+  /** @deprecated Use {@link CurrentUser}. */
+  get currentUser(): UserInfo {
+    return this.CurrentUser;
+  }
+  @Input() SelectedConversationId: string | null = null;
+
+  /** @deprecated Use {@link SelectedConversationId}. */
+  @Input() set selectedConversationId(value: string | null) {
+    this.SelectedConversationId = value;
+  }
+  /** @deprecated Use {@link SelectedConversationId}. */
+  get selectedConversationId(): string | null {
+    return this.SelectedConversationId;
+  }
+  @Input() RenamedConversationId: string | null = null;
+
+  /** @deprecated Use {@link RenamedConversationId}. */
+  @Input() set renamedConversationId(value: string | null) {
+    this.RenamedConversationId = value;
+  }
+  /** @deprecated Use {@link RenamedConversationId}. */
+  get renamedConversationId(): string | null {
+    return this.RenamedConversationId;
+  }
+  @Input() IsSidebarPinned: boolean = true;
+
+  /** @deprecated Use {@link IsSidebarPinned}. */
+  @Input() set isSidebarPinned(value: boolean) {
+    this.IsSidebarPinned = value;
+  }
+  /** @deprecated Use {@link IsSidebarPinned}. */
+  get isSidebarPinned(): boolean {
+    return this.IsSidebarPinned;
+  } // Whether sidebar is pinned (stays open after selection)
+  @Input() IsMobileView: boolean = false;
+
+  /** @deprecated Use {@link IsMobileView}. */
+  @Input() set isMobileView(value: boolean) {
+    this.IsMobileView = value;
+  }
+  /** @deprecated Use {@link IsMobileView}. */
+  get isMobileView(): boolean {
+    return this.IsMobileView;
+  } // Whether we're on mobile (no pin options)
 
   // ── White-label chrome toggles (all default true = stock rendering) ──
   /** Show the search box in the list header. Flipping to false clears any active
@@ -1040,7 +1094,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   @Input()
   set showSearch(value: boolean) {
     if (!value && this._searchQuery) {
-      this.searchQuery = ''; // setter rebuilds the groupings
+      this.SearchQuery = ''; // setter rebuilds the groupings
     }
     this._showSearch = value;
   }
@@ -1049,58 +1103,319 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   }
   private _showSearch = true;
   /** Show the "New Conversation" button. */
-  @Input() showNewConversationButton: boolean = true;
+  @Input() ShowNewConversationButton: boolean = true;
+
+  /** @deprecated Use {@link ShowNewConversationButton}. */
+  @Input() set showNewConversationButton(value: boolean) {
+    this.ShowNewConversationButton = value;
+  }
+  /** @deprecated Use {@link ShowNewConversationButton}. */
+  get showNewConversationButton(): boolean {
+    return this.ShowNewConversationButton;
+  }
   /** Show the ⋯ header options menu (refresh / select / group-by / hide sidebar). */
-  @Input() showHeaderMenu: boolean = true;
+  @Input() ShowHeaderMenu: boolean = true;
+
+  /** @deprecated Use {@link ShowHeaderMenu}. */
+  @Input() set showHeaderMenu(value: boolean) {
+    this.ShowHeaderMenu = value;
+  }
+  /** @deprecated Use {@link ShowHeaderMenu}. */
+  get showHeaderMenu(): boolean {
+    return this.ShowHeaderMenu;
+  }
   /** Show the collapsible Pinned / Folders / Messages section headers. When false,
    *  the list renders FLAT and fully expanded: folder grouping is bypassed (the
    *  folder tree's root drop-zone and New Folder action live in the section
    *  header, so a headerless tree would allow one-way folder nesting) — the
    *  chrome-less rendering for embedded hosts. */
-  @Input() showSectionHeaders: boolean = true;
+  @Input() ShowSectionHeaders: boolean = true;
 
-  @Output() conversationSelected = new EventEmitter<string>();
-  @Output() conversationDeleted = new EventEmitter<string>(); // Emits the deleted conversation ID
-  @Output() newConversationRequested = new EventEmitter<void>();
-  @Output() pinSidebarRequested = new EventEmitter<void>(); // Request to pin sidebar
-  @Output() unpinSidebarRequested = new EventEmitter<void>(); // Request to unpin (collapse) sidebar
-  @Output() refreshRequested = new EventEmitter<void>(); // Emitted after list refresh so chat area can also reload
+  /** @deprecated Use {@link ShowSectionHeaders}. */
+  @Input() set showSectionHeaders(value: boolean) {
+    this.ShowSectionHeaders = value;
+  }
+  /** @deprecated Use {@link ShowSectionHeaders}. */
+  get showSectionHeaders(): boolean {
+    return this.ShowSectionHeaders;
+  }
 
-  public directMessagesExpanded: boolean = true;
-  public pinnedExpanded: boolean = true;
-  public foldersExpanded: boolean = true;
-  public ungroupedExpanded: boolean = true;
-  public openMenuConversationId: string | null = null;
-  public conversationIdsWithTasks = new Set<string>();
-  public isSelectionMode: boolean = false;
-  public selectedConversationIds = new Set<string>();
-  public isHeaderMenuOpen: boolean = false;
-  public isRefreshing: boolean = false;
+  @Output() ConversationSelected = new EventEmitter<string>();
+
+  /**
+   * @deprecated Use {@link ConversationSelected}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (conversationSelected) keeps working. Must stay AFTER ConversationSelected: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() conversationSelected = this.ConversationSelected;
+  @Output() ConversationDeleted = new EventEmitter<string>();
+
+  /**
+   * @deprecated Use {@link ConversationDeleted}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (conversationDeleted) keeps working. Must stay AFTER ConversationDeleted: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() conversationDeleted = this.ConversationDeleted; // Emits the deleted conversation ID
+  @Output() NewConversationRequested = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link NewConversationRequested}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (newConversationRequested) keeps working. Must stay AFTER NewConversationRequested: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() newConversationRequested = this.NewConversationRequested;
+  @Output() PinSidebarRequested = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link PinSidebarRequested}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (pinSidebarRequested) keeps working. Must stay AFTER PinSidebarRequested: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() pinSidebarRequested = this.PinSidebarRequested; // Request to pin sidebar
+  @Output() UnpinSidebarRequested = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link UnpinSidebarRequested}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (unpinSidebarRequested) keeps working. Must stay AFTER UnpinSidebarRequested: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() unpinSidebarRequested = this.UnpinSidebarRequested; // Request to unpin (collapse) sidebar
+  @Output() RefreshRequested = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link RefreshRequested}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (refreshRequested) keeps working. Must stay AFTER RefreshRequested: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() refreshRequested = this.RefreshRequested; // Emitted after list refresh so chat area can also reload
+
+  public DirectMessagesExpanded: boolean = true;
+
+  /** @deprecated Use {@link DirectMessagesExpanded}. */
+  public get directMessagesExpanded(): boolean {
+    return this.DirectMessagesExpanded;
+  }
+  /** @deprecated Use {@link DirectMessagesExpanded}. */
+  public set directMessagesExpanded(value: boolean) {
+    this.DirectMessagesExpanded = value;
+  }
+  public PinnedExpanded: boolean = true;
+
+  /** @deprecated Use {@link PinnedExpanded}. */
+  public get pinnedExpanded(): boolean {
+    return this.PinnedExpanded;
+  }
+  /** @deprecated Use {@link PinnedExpanded}. */
+  public set pinnedExpanded(value: boolean) {
+    this.PinnedExpanded = value;
+  }
+  public FoldersExpanded: boolean = true;
+
+  /** @deprecated Use {@link FoldersExpanded}. */
+  public get foldersExpanded(): boolean {
+    return this.FoldersExpanded;
+  }
+  /** @deprecated Use {@link FoldersExpanded}. */
+  public set foldersExpanded(value: boolean) {
+    this.FoldersExpanded = value;
+  }
+  public UngroupedExpanded: boolean = true;
+
+  /** @deprecated Use {@link UngroupedExpanded}. */
+  public get ungroupedExpanded(): boolean {
+    return this.UngroupedExpanded;
+  }
+  /** @deprecated Use {@link UngroupedExpanded}. */
+  public set ungroupedExpanded(value: boolean) {
+    this.UngroupedExpanded = value;
+  }
+  public OpenMenuConversationId: string | null = null;
+
+  /** @deprecated Use {@link OpenMenuConversationId}. */
+  public get openMenuConversationId(): string | null {
+    return this.OpenMenuConversationId;
+  }
+  /** @deprecated Use {@link OpenMenuConversationId}. */
+  public set openMenuConversationId(value: string | null) {
+    this.OpenMenuConversationId = value;
+  }
+  public ConversationIdsWithTasks = new Set<string>();
+
+  /** @deprecated Use {@link ConversationIdsWithTasks}. */
+  public get conversationIdsWithTasks() {
+    return this.ConversationIdsWithTasks;
+  }
+  /** @deprecated Use {@link ConversationIdsWithTasks}. */
+  public set conversationIdsWithTasks(value) {
+    this.ConversationIdsWithTasks = value;
+  }
+  public IsSelectionMode: boolean = false;
+
+  /** @deprecated Use {@link IsSelectionMode}. */
+  public get isSelectionMode(): boolean {
+    return this.IsSelectionMode;
+  }
+  /** @deprecated Use {@link IsSelectionMode}. */
+  public set isSelectionMode(value: boolean) {
+    this.IsSelectionMode = value;
+  }
+  public SelectedConversationIds = new Set<string>();
+
+  /** @deprecated Use {@link SelectedConversationIds}. */
+  public get selectedConversationIds() {
+    return this.SelectedConversationIds;
+  }
+  /** @deprecated Use {@link SelectedConversationIds}. */
+  public set selectedConversationIds(value) {
+    this.SelectedConversationIds = value;
+  }
+  public IsHeaderMenuOpen: boolean = false;
+
+  /** @deprecated Use {@link IsHeaderMenuOpen}. */
+  public get isHeaderMenuOpen(): boolean {
+    return this.IsHeaderMenuOpen;
+  }
+  /** @deprecated Use {@link IsHeaderMenuOpen}. */
+  public set isHeaderMenuOpen(value: boolean) {
+    this.IsHeaderMenuOpen = value;
+  }
+  public IsRefreshing: boolean = false;
+
+  /** @deprecated Use {@link IsRefreshing}. */
+  public get isRefreshing(): boolean {
+    return this.IsRefreshing;
+  }
+  /** @deprecated Use {@link IsRefreshing}. */
+  public set isRefreshing(value: boolean) {
+    this.IsRefreshing = value;
+  }
 
   /** UserInfoEngine key for persisting folder collapse state + group-by mode. */
   private static readonly FolderPrefsKey = 'mj.conversations.folderPrefs.v1';
 
   /** How the conversation list is grouped. 'project' = folders, 'none' = flat list. */
-  public groupBy: ConversationGroupBy = 'project';
+  public GroupBy: ConversationGroupBy = 'project';
+
+  /** @deprecated Use {@link GroupBy}. */
+  public get groupBy(): ConversationGroupBy {
+    return this.GroupBy;
+  }
+  /** @deprecated Use {@link GroupBy}. */
+  public set groupBy(value: ConversationGroupBy) {
+    this.GroupBy = value;
+  }
 
   /** Precomputed groupings, rebuilt whenever conversations/projects/search change. */
-  public pinnedConversations: MJConversationEntity[] = [];
-  public unpinnedConversations: MJConversationEntity[] = [];
-  public ungroupedConversations: MJConversationEntity[] = [];
-  public folderTree: FolderNode[] = [];
+  public PinnedConversations: MJConversationEntity[] = [];
+
+  /** @deprecated Use {@link PinnedConversations}. */
+  public get pinnedConversations(): MJConversationEntity[] {
+    return this.PinnedConversations;
+  }
+  /** @deprecated Use {@link PinnedConversations}. */
+  public set pinnedConversations(value: MJConversationEntity[]) {
+    this.PinnedConversations = value;
+  }
+  public UnpinnedConversations: MJConversationEntity[] = [];
+
+  /** @deprecated Use {@link UnpinnedConversations}. */
+  public get unpinnedConversations(): MJConversationEntity[] {
+    return this.UnpinnedConversations;
+  }
+  /** @deprecated Use {@link UnpinnedConversations}. */
+  public set unpinnedConversations(value: MJConversationEntity[]) {
+    this.UnpinnedConversations = value;
+  }
+  public UngroupedConversations: MJConversationEntity[] = [];
+
+  /** @deprecated Use {@link UngroupedConversations}. */
+  public get ungroupedConversations(): MJConversationEntity[] {
+    return this.UngroupedConversations;
+  }
+  /** @deprecated Use {@link UngroupedConversations}. */
+  public set ungroupedConversations(value: MJConversationEntity[]) {
+    this.UngroupedConversations = value;
+  }
+  public FolderTree: FolderNode[] = [];
+
+  /** @deprecated Use {@link FolderTree}. */
+  public get folderTree(): FolderNode[] {
+    return this.FolderTree;
+  }
+  /** @deprecated Use {@link FolderTree}. */
+  public set folderTree(value: FolderNode[]) {
+    this.FolderTree = value;
+  }
   /** Flattened folder list (depth-ordered) for the "Move to folder" menu. */
-  public flatFolders: FolderNode[] = [];
+  public FlatFolders: FolderNode[] = [];
+
+  /** @deprecated Use {@link FlatFolders}. */
+  public get flatFolders(): FolderNode[] {
+    return this.FlatFolders;
+  }
+  /** @deprecated Use {@link FlatFolders}. */
+  public set flatFolders(value: FolderNode[]) {
+    this.FlatFolders = value;
+  }
 
   /** Folder IDs (normalized) whose children are collapsed. Absent = expanded. */
   private collapsedFolderIds = new Set<string>();
 
   /** Drag-and-drop state. */
-  public draggedConversationId: string | null = null;
-  public draggedFolderId: string | null = null;
-  public dragOverTargetId: string | null = null;
+  public DraggedConversationId: string | null = null;
+
+  /** @deprecated Use {@link DraggedConversationId}. */
+  public get draggedConversationId(): string | null {
+    return this.DraggedConversationId;
+  }
+  /** @deprecated Use {@link DraggedConversationId}. */
+  public set draggedConversationId(value: string | null) {
+    this.DraggedConversationId = value;
+  }
+  public DraggedFolderId: string | null = null;
+
+  /** @deprecated Use {@link DraggedFolderId}. */
+  public get draggedFolderId(): string | null {
+    return this.DraggedFolderId;
+  }
+  /** @deprecated Use {@link DraggedFolderId}. */
+  public set draggedFolderId(value: string | null) {
+    this.DraggedFolderId = value;
+  }
+  public DragOverTargetId: string | null = null;
+
+  /** @deprecated Use {@link DragOverTargetId}. */
+  public get dragOverTargetId(): string | null {
+    return this.DragOverTargetId;
+  }
+  /** @deprecated Use {@link DragOverTargetId}. */
+  public set dragOverTargetId(value: string | null) {
+    this.DragOverTargetId = value;
+  }
 
   /** When set, the open conversation menu is showing its "Move to folder" picker. */
-  public moveSubmenuConversationId: string | null = null;
+  public MoveSubmenuConversationId: string | null = null;
+
+  /** @deprecated Use {@link MoveSubmenuConversationId}. */
+  public get moveSubmenuConversationId(): string | null {
+    return this.MoveSubmenuConversationId;
+  }
+  /** @deprecated Use {@link MoveSubmenuConversationId}. */
+  public set moveSubmenuConversationId(value: string | null) {
+    this.MoveSubmenuConversationId = value;
+  }
 
   private _searchQuery: string = '';
 
@@ -1119,26 +1434,45 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     private cdr: ChangeDetectorRef
   ) {}
 
-  get searchQuery(): string {
+  get SearchQuery(): string {
     return this._searchQuery;
   }
-  set searchQuery(value: string) {
+  set SearchQuery(value: string) {
     this._searchQuery = value ?? '';
     this.rebuildGroups();
   }
 
+  /** @deprecated Use {@link SearchQuery}. */
+  get searchQuery(): string {
+    return this.SearchQuery;
+  }
+  /** @deprecated Use {@link SearchQuery}. */
+  set searchQuery(value: string) {
+    this.SearchQuery = value;
+  }
+
   /** True when a search filter is active. */
-  get isSearching(): boolean {
+  get IsSearching(): boolean {
     return this._searchQuery.trim().length > 0;
   }
 
+  /** @deprecated Use {@link IsSearching}. */
+  get isSearching(): boolean {
+    return this.IsSearching;
+  }
+
   /** Conversations matching the current search (used by selection-mode helpers). */
-  get filteredConversations(): MJConversationEntity[] {
+  get FilteredConversations(): MJConversationEntity[] {
     return this.filterConversations(this.engine.Conversations);
   }
 
+  /** @deprecated Use {@link FilteredConversations}. */
+  get filteredConversations(): MJConversationEntity[] {
+    return this.FilteredConversations;
+  }
+
   private filterConversations(conversations: MJConversationEntity[]): MJConversationEntity[] {
-    if (!this.isSearching) {
+    if (!this.IsSearching) {
       return conversations;
     }
     const lowerQuery = this._searchQuery.toLowerCase();
@@ -1153,7 +1487,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     this.loadFolderPrefs();
 
     // Load conversations (and folders) on init
-    this.engine.LoadConversations(this.environmentId, this.currentUser, false);
+    this.engine.LoadConversations(this.EnvironmentId, this.CurrentUser, false);
 
     // Rebuild the precomputed groupings whenever conversations OR projects change
     // (pin, archive, rename, move-to-folder, folder create/rename/delete, etc.).
@@ -1175,7 +1509,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     this.activeTasksService.conversationIdsWithTasks$.pipe(
       takeUntil(this.destroy$)
     ).subscribe(conversationIds => {
-      this.conversationIdsWithTasks = conversationIds;
+      this.ConversationIdsWithTasks = conversationIds;
       this.cdr.detectChanges(); // Force change detection to ensure spinner icons update reliably
     });
   }
@@ -1188,80 +1522,135 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   @HostListener('document:click')
   onDocumentClick(): void {
     // Close menus when clicking outside
-    if (this.openMenuConversationId) {
-      this.closeMenu();
+    if (this.OpenMenuConversationId) {
+      this.CloseMenu();
     }
-    if (this.isHeaderMenuOpen) {
-      this.closeHeaderMenu();
+    if (this.IsHeaderMenuOpen) {
+      this.CloseHeaderMenu();
     }
   }
 
+  public ToggleHeaderMenu(event: Event): void {
+    event.stopPropagation();
+    this.IsHeaderMenuOpen = !this.IsHeaderMenuOpen;
+  }
+
+  /** @deprecated Use {@link ToggleHeaderMenu}. */
   public toggleHeaderMenu(event: Event): void {
-    event.stopPropagation();
-    this.isHeaderMenuOpen = !this.isHeaderMenuOpen;
+    return this.ToggleHeaderMenu(event);
   }
 
+  public CloseHeaderMenu(): void {
+    this.IsHeaderMenuOpen = false;
+  }
+
+  /** @deprecated Use {@link CloseHeaderMenu}. */
   public closeHeaderMenu(): void {
-    this.isHeaderMenuOpen = false;
+    return this.CloseHeaderMenu();
   }
 
+  public OnSelectConversationsClick(event: Event): void {
+    event.stopPropagation();
+    this.ToggleSelectionMode();
+    this.CloseHeaderMenu();
+  }
+
+  /** @deprecated Use {@link OnSelectConversationsClick}. */
   public onSelectConversationsClick(event: Event): void {
-    event.stopPropagation();
-    this.toggleSelectionMode();
-    this.closeHeaderMenu();
+    return this.OnSelectConversationsClick(event);
   }
 
+  public OnToggleGroupByClick(event: Event): void {
+    event.stopPropagation();
+    this.ToggleGroupBy();
+    this.CloseHeaderMenu();
+  }
+
+  /** @deprecated Use {@link OnToggleGroupByClick}. */
   public onToggleGroupByClick(event: Event): void {
-    event.stopPropagation();
-    this.toggleGroupBy();
-    this.closeHeaderMenu();
+    return this.OnToggleGroupByClick(event);
   }
 
-  public async onRefreshConversationsClick(event: Event): Promise<void> {
+  public async OnRefreshConversationsClick(event: Event): Promise<void> {
     event.stopPropagation();
-    if (this.isRefreshing) return;
+    if (this.IsRefreshing) return;
 
-    this.isRefreshing = true;
+    this.IsRefreshing = true;
     try {
-      await this.engine.LoadConversations(this.environmentId, this.currentUser, true);
+      await this.engine.LoadConversations(this.EnvironmentId, this.CurrentUser, true);
       // Signal parent to also reload messages in the active conversation
-      this.refreshRequested.emit();
+      this.RefreshRequested.emit();
     } catch (error) {
       console.error('Error refreshing conversations:', error);
       await this.dialogService.alert('Error', 'Failed to refresh conversations. Please try again.');
     } finally {
-      this.isRefreshing = false;
+      this.IsRefreshing = false;
       this.cdr.detectChanges();
-      this.closeHeaderMenu();
+      this.CloseHeaderMenu();
     }
   }
 
+  /** @deprecated Use {@link OnRefreshConversationsClick}. */
+  public async onRefreshConversationsClick(event: Event): Promise<void> {
+    return this.OnRefreshConversationsClick(event);
+  }
+
+  public OnPinSidebarClick(event: Event): void {
+    event.stopPropagation();
+    this.CloseHeaderMenu();
+    this.PinSidebarRequested.emit();
+  }
+
+  /** @deprecated Use {@link OnPinSidebarClick}. */
   public onPinSidebarClick(event: Event): void {
-    event.stopPropagation();
-    this.closeHeaderMenu();
-    this.pinSidebarRequested.emit();
+    return this.OnPinSidebarClick(event);
   }
 
+  public OnUnpinSidebarClick(event: Event): void {
+    event.stopPropagation();
+    this.CloseHeaderMenu();
+    this.UnpinSidebarRequested.emit();
+  }
+
+  /** @deprecated Use {@link OnUnpinSidebarClick}. */
   public onUnpinSidebarClick(event: Event): void {
-    event.stopPropagation();
-    this.closeHeaderMenu();
-    this.unpinSidebarRequested.emit();
+    return this.OnUnpinSidebarClick(event);
   }
 
+  public ToggleDirectMessages(): void {
+    this.DirectMessagesExpanded = !this.DirectMessagesExpanded;
+  }
+
+  /** @deprecated Use {@link ToggleDirectMessages}. */
   public toggleDirectMessages(): void {
-    this.directMessagesExpanded = !this.directMessagesExpanded;
+    return this.ToggleDirectMessages();
   }
 
+  public TogglePinned(): void {
+    this.PinnedExpanded = !this.PinnedExpanded;
+  }
+
+  /** @deprecated Use {@link TogglePinned}. */
   public togglePinned(): void {
-    this.pinnedExpanded = !this.pinnedExpanded;
+    return this.TogglePinned();
   }
 
+  public ToggleFolders(): void {
+    this.FoldersExpanded = !this.FoldersExpanded;
+  }
+
+  /** @deprecated Use {@link ToggleFolders}. */
   public toggleFolders(): void {
-    this.foldersExpanded = !this.foldersExpanded;
+    return this.ToggleFolders();
   }
 
+  public ToggleUngrouped(): void {
+    this.UngroupedExpanded = !this.UngroupedExpanded;
+  }
+
+  /** @deprecated Use {@link ToggleUngrouped}. */
   public toggleUngrouped(): void {
-    this.ungroupedExpanded = !this.ungroupedExpanded;
+    return this.ToggleUngrouped();
   }
 
   // ========================================================================
@@ -1274,8 +1663,8 @@ export class ConversationListComponent implements OnInit, OnDestroy {
    */
   private rebuildGroups(): void {
     const matching = this.filterConversations(this.engine.Conversations);
-    this.pinnedConversations = matching.filter(c => c.IsPinned);
-    this.unpinnedConversations = matching.filter(c => !c.IsPinned);
+    this.PinnedConversations = matching.filter(c => c.IsPinned);
+    this.UnpinnedConversations = matching.filter(c => !c.IsPinned);
 
     const projects = this.engine.Projects;
     const projectIds = new Set(projects.map(p => NormalizeUUID(p.ID)));
@@ -1284,7 +1673,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     // Pinned section). Conversations with no/unknown folder are "ungrouped".
     const conversationsByProject = new Map<string, MJConversationEntity[]>();
     const ungrouped: MJConversationEntity[] = [];
-    for (const c of this.unpinnedConversations) {
+    for (const c of this.UnpinnedConversations) {
       const pid = c.ProjectID ? NormalizeUUID(c.ProjectID) : null;
       if (pid && projectIds.has(pid)) {
         const arr = conversationsByProject.get(pid) ?? [];
@@ -1294,7 +1683,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
         ungrouped.push(c);
       }
     }
-    this.ungroupedConversations = ungrouped;
+    this.UngroupedConversations = ungrouped;
 
     // Index projects by parent. A project whose parent isn't loaded is treated
     // as a root so it never disappears from the tree.
@@ -1317,8 +1706,8 @@ export class ConversationListComponent implements OnInit, OnDestroy {
         return { project: p, depth, conversations, children, totalCount, hasContent };
       });
     };
-    this.folderTree = build(null, 0);
-    this.flatFolders = this.flattenFolders(this.folderTree);
+    this.FolderTree = build(null, 0);
+    this.FlatFolders = this.flattenFolders(this.FolderTree);
   }
 
   private flattenFolders(nodes: FolderNode[]): FolderNode[] {
@@ -1339,11 +1728,16 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     return null;
   }
 
-  public isFolderExpanded(projectId: string): boolean {
+  public IsFolderExpanded(projectId: string): boolean {
     return !this.collapsedFolderIds.has(NormalizeUUID(projectId));
   }
 
-  public toggleFolder(projectId: string): void {
+  /** @deprecated Use {@link IsFolderExpanded}. */
+  public isFolderExpanded(projectId: string): boolean {
+    return this.IsFolderExpanded(projectId);
+  }
+
+  public ToggleFolder(projectId: string): void {
     const key = NormalizeUUID(projectId);
     if (this.collapsedFolderIds.has(key)) {
       this.collapsedFolderIds.delete(key);
@@ -1353,10 +1747,20 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     this.saveFolderPrefs();
   }
 
-  public toggleGroupBy(): void {
-    this.groupBy = this.groupBy === 'project' ? 'none' : 'project';
+  /** @deprecated Use {@link ToggleFolder}. */
+  public toggleFolder(projectId: string): void {
+    return this.ToggleFolder(projectId);
+  }
+
+  public ToggleGroupBy(): void {
+    this.GroupBy = this.GroupBy === 'project' ? 'none' : 'project';
     this.saveFolderPrefs();
     this.rebuildGroups();
+  }
+
+  /** @deprecated Use {@link ToggleGroupBy}. */
+  public toggleGroupBy(): void {
+    return this.ToggleGroupBy();
   }
 
   private loadFolderPrefs(): void {
@@ -1366,7 +1770,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
       const parsed = JSON.parse(raw) as { collapsed?: string[]; groupBy?: ConversationGroupBy };
       this.collapsedFolderIds = new Set((parsed.collapsed ?? []).map(id => NormalizeUUID(id)));
       if (parsed.groupBy === 'none' || parsed.groupBy === 'project') {
-        this.groupBy = parsed.groupBy;
+        this.GroupBy = parsed.groupBy;
       }
     } catch {
       // Corrupt/legacy value — ignore and use defaults
@@ -1376,7 +1780,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   private saveFolderPrefs(): void {
     const payload = JSON.stringify({
       collapsed: Array.from(this.collapsedFolderIds),
-      groupBy: this.groupBy
+      groupBy: this.GroupBy
     });
     UserInfoEngine.Instance.SetSettingDebounced(ConversationListComponent.FolderPrefsKey, payload);
   }
@@ -1385,78 +1789,118 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   // DRAG & DROP (move conversation into/out of a folder)
   // ========================================================================
 
-  public onConversationDragStart(conversation: MJConversationEntity, event: DragEvent): void {
-    if (this.isSelectionMode) return;
-    this.draggedFolderId = null;
-    this.draggedConversationId = conversation.ID;
+  public OnConversationDragStart(conversation: MJConversationEntity, event: DragEvent): void {
+    if (this.IsSelectionMode) return;
+    this.DraggedFolderId = null;
+    this.DraggedConversationId = conversation.ID;
     if (event.dataTransfer) {
       event.dataTransfer.effectAllowed = 'move';
       event.dataTransfer.setData('text/plain', conversation.ID);
     }
   }
 
-  public onConversationDragEnd(): void {
-    this.draggedConversationId = null;
-    this.dragOverTargetId = null;
+  /** @deprecated Use {@link OnConversationDragStart}. */
+  public onConversationDragStart(conversation: MJConversationEntity, event: DragEvent): void {
+    return this.OnConversationDragStart(conversation, event);
   }
 
-  public onFolderDragStart(node: FolderNode, event: DragEvent): void {
+  public OnConversationDragEnd(): void {
+    this.DraggedConversationId = null;
+    this.DragOverTargetId = null;
+  }
+
+  /** @deprecated Use {@link OnConversationDragEnd}. */
+  public onConversationDragEnd(): void {
+    return this.OnConversationDragEnd();
+  }
+
+  public OnFolderDragStart(node: FolderNode, event: DragEvent): void {
     event.stopPropagation();
-    this.draggedConversationId = null;
-    this.draggedFolderId = node.project.ID;
+    this.DraggedConversationId = null;
+    this.DraggedFolderId = node.project.ID;
     if (event.dataTransfer) {
       event.dataTransfer.effectAllowed = 'move';
       event.dataTransfer.setData('text/plain', node.project.ID);
     }
   }
 
-  public onFolderDragEnd(): void {
-    this.draggedFolderId = null;
-    this.dragOverTargetId = null;
+  /** @deprecated Use {@link OnFolderDragStart}. */
+  public onFolderDragStart(node: FolderNode, event: DragEvent): void {
+    return this.OnFolderDragStart(node, event);
   }
 
-  public onFolderDragOver(projectId: string, event: DragEvent): void {
+  public OnFolderDragEnd(): void {
+    this.DraggedFolderId = null;
+    this.DragOverTargetId = null;
+  }
+
+  /** @deprecated Use {@link OnFolderDragEnd}. */
+  public onFolderDragEnd(): void {
+    return this.OnFolderDragEnd();
+  }
+
+  public OnFolderDragOver(projectId: string, event: DragEvent): void {
     // A conversation can drop onto any folder; a folder can drop onto any folder
     // that isn't itself or one of its own descendants (which would create a cycle).
-    const accepts = this.draggedConversationId
+    const accepts = this.DraggedConversationId
       ? true
-      : this.draggedFolderId
+      : this.DraggedFolderId
         ? this.isValidFolderDropTarget(projectId)
         : false;
     if (!accepts) return;
     event.preventDefault();
     if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
-    this.dragOverTargetId = projectId;
+    this.DragOverTargetId = projectId;
   }
 
-  public onUngroupedDragOver(event: DragEvent): void {
-    if (!this.draggedConversationId) return;
+  /** @deprecated Use {@link OnFolderDragOver}. */
+  public onFolderDragOver(projectId: string, event: DragEvent): void {
+    return this.OnFolderDragOver(projectId, event);
+  }
+
+  public OnUngroupedDragOver(event: DragEvent): void {
+    if (!this.DraggedConversationId) return;
     event.preventDefault();
     if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
-    this.dragOverTargetId = 'ungrouped';
+    this.DragOverTargetId = 'ungrouped';
+  }
+
+  /** @deprecated Use {@link OnUngroupedDragOver}. */
+  public onUngroupedDragOver(event: DragEvent): void {
+    return this.OnUngroupedDragOver(event);
   }
 
   /** The Folders section header accepts a dragged folder to move it back to the top level. */
-  public onFoldersRootDragOver(event: DragEvent): void {
-    if (!this.draggedFolderId) return;
+  public OnFoldersRootDragOver(event: DragEvent): void {
+    if (!this.DraggedFolderId) return;
     event.preventDefault();
     if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
-    this.dragOverTargetId = 'folders-root';
+    this.DragOverTargetId = 'folders-root';
   }
 
-  public onDragLeave(targetId: string): void {
-    if (this.dragOverTargetId === targetId) {
-      this.dragOverTargetId = null;
+  /** @deprecated Use {@link OnFoldersRootDragOver}. */
+  public onFoldersRootDragOver(event: DragEvent): void {
+    return this.OnFoldersRootDragOver(event);
+  }
+
+  public OnDragLeave(targetId: string): void {
+    if (this.DragOverTargetId === targetId) {
+      this.DragOverTargetId = null;
     }
   }
 
-  public onFolderDrop(project: MJProjectEntity, event: DragEvent): void {
+  /** @deprecated Use {@link OnDragLeave}. */
+  public onDragLeave(targetId: string): void {
+    return this.OnDragLeave(targetId);
+  }
+
+  public OnFolderDrop(project: MJProjectEntity, event: DragEvent): void {
     event.preventDefault();
-    const conversationId = this.draggedConversationId;
-    const folderId = this.draggedFolderId;
-    this.dragOverTargetId = null;
-    this.draggedConversationId = null;
-    this.draggedFolderId = null;
+    const conversationId = this.DraggedConversationId;
+    const folderId = this.DraggedFolderId;
+    this.DragOverTargetId = null;
+    this.DraggedConversationId = null;
+    this.DraggedFolderId = null;
     if (conversationId) {
       this.moveConversation(conversationId, project.ID);
     } else if (folderId && this.isValidFolderDropTarget(project.ID, folderId)) {
@@ -1464,31 +1908,46 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     }
   }
 
-  public onUngroupedDrop(event: DragEvent): void {
+  /** @deprecated Use {@link OnFolderDrop}. */
+  public onFolderDrop(project: MJProjectEntity, event: DragEvent): void {
+    return this.OnFolderDrop(project, event);
+  }
+
+  public OnUngroupedDrop(event: DragEvent): void {
     event.preventDefault();
-    const conversationId = this.draggedConversationId;
-    this.dragOverTargetId = null;
-    this.draggedConversationId = null;
+    const conversationId = this.DraggedConversationId;
+    this.DragOverTargetId = null;
+    this.DraggedConversationId = null;
     if (conversationId) {
       this.moveConversation(conversationId, null);
     }
   }
 
-  public onFoldersRootDrop(event: DragEvent): void {
+  /** @deprecated Use {@link OnUngroupedDrop}. */
+  public onUngroupedDrop(event: DragEvent): void {
+    return this.OnUngroupedDrop(event);
+  }
+
+  public OnFoldersRootDrop(event: DragEvent): void {
     event.preventDefault();
-    const folderId = this.draggedFolderId;
-    this.dragOverTargetId = null;
-    this.draggedFolderId = null;
+    const folderId = this.DraggedFolderId;
+    this.DragOverTargetId = null;
+    this.DraggedFolderId = null;
     if (folderId) {
       this.moveFolder(folderId, null);
     }
+  }
+
+  /** @deprecated Use {@link OnFoldersRootDrop}. */
+  public onFoldersRootDrop(event: DragEvent): void {
+    return this.OnFoldersRootDrop(event);
   }
 
   /**
    * A folder can be dropped onto a target folder only if the target isn't the dragged
    * folder itself and isn't one of its descendants (otherwise we'd create a cycle).
    */
-  private isValidFolderDropTarget(targetId: string, draggedId: string | null = this.draggedFolderId): boolean {
+  private isValidFolderDropTarget(targetId: string, draggedId: string | null = this.DraggedFolderId): boolean {
     if (!draggedId) return false;
     if (UUIDsEqual(targetId, draggedId)) return false;
     return !this.isDescendantOf(targetId, draggedId);
@@ -1512,7 +1971,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   /** Assigns a conversation to a folder (or null to ungroup) and refreshes the view. */
   private async moveConversation(conversationId: string, projectId: string | null): Promise<void> {
     try {
-      await this.engine.MoveConversationToProject(conversationId, projectId, this.currentUser);
+      await this.engine.MoveConversationToProject(conversationId, projectId, this.CurrentUser);
       // Reveal the destination folder so the user sees where it landed
       if (projectId) {
         this.collapsedFolderIds.delete(NormalizeUUID(projectId));
@@ -1535,7 +1994,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     if (sameParent) return;
 
     try {
-      await this.engine.MoveProjectToParent(folderId, parentId, this.currentUser);
+      await this.engine.MoveProjectToParent(folderId, parentId, this.CurrentUser);
       // Reveal the new parent so the moved folder is visible
       if (parentId) {
         this.collapsedFolderIds.delete(NormalizeUUID(parentId));
@@ -1552,44 +2011,74 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   // MOVE-TO-FOLDER MENU
   // ========================================================================
 
-  public openMoveSubmenu(conversationId: string, event: Event): void {
+  public OpenMoveSubmenu(conversationId: string, event: Event): void {
     event.stopPropagation();
-    this.moveSubmenuConversationId = conversationId;
+    this.MoveSubmenuConversationId = conversationId;
   }
 
-  public closeMoveSubmenu(event: Event): void {
+  /** @deprecated Use {@link OpenMoveSubmenu}. */
+  public openMoveSubmenu(conversationId: string, event: Event): void {
+    return this.OpenMoveSubmenu(conversationId, event);
+  }
+
+  public CloseMoveSubmenu(event: Event): void {
     event.stopPropagation();
-    this.moveSubmenuConversationId = null;
+    this.MoveSubmenuConversationId = null;
+  }
+
+  /** @deprecated Use {@link CloseMoveSubmenu}. */
+  public closeMoveSubmenu(event: Event): void {
+    return this.CloseMoveSubmenu(event);
   }
 
   public IsInFolder(conversation: MJConversationEntity, projectId: string): boolean {
     return !!conversation.ProjectID && UUIDsEqual(conversation.ProjectID, projectId);
   }
 
-  public selectMoveTarget(conversation: MJConversationEntity, projectId: string | null): void {
+  public SelectMoveTarget(conversation: MJConversationEntity, projectId: string | null): void {
     this.moveConversation(conversation.ID, projectId);
-    this.closeMenu();
+    this.CloseMenu();
+  }
+
+  /** @deprecated Use {@link SelectMoveTarget}. */
+  public selectMoveTarget(conversation: MJConversationEntity, projectId: string | null): void {
+    return this.SelectMoveTarget(conversation, projectId);
   }
 
   // ========================================================================
   // FOLDER CRUD (reuses the existing project form modal)
   // ========================================================================
 
-  public createFolder(parentId: string | null, event?: Event): void {
+  public CreateFolder(parentId: string | null, event?: Event): void {
     if (event) event.stopPropagation();
     this.openFolderModal(null, parentId);
   }
 
-  public editFolder(project: MJProjectEntity, event?: Event): void {
+  /** @deprecated Use {@link CreateFolder}. */
+  public createFolder(parentId: string | null, event?: Event): void {
+    return this.CreateFolder(parentId, event);
+  }
+
+  public EditFolder(project: MJProjectEntity, event?: Event): void {
     if (event) event.stopPropagation();
     this.openFolderModal(project, null);
   }
 
-  public createFolderForConversation(conversation: MJConversationEntity, event: Event): void {
+  /** @deprecated Use {@link EditFolder}. */
+  public editFolder(project: MJProjectEntity, event?: Event): void {
+    return this.EditFolder(project, event);
+  }
+
+  public CreateFolderForConversation(conversation: MJConversationEntity, event: Event): void {
     event.stopPropagation();
     const conversationId = conversation.ID;
-    this.closeMenu();
+    this.CloseMenu();
     this.openFolderModal(null, null, (created) => this.moveConversation(conversationId, created.ID));
+  }
+
+  /** @deprecated Use {@link CreateFolderForConversation}. */
+  public createFolderForConversation(conversation: MJConversationEntity, event: Event): void {
+    return this.CreateFolderForConversation(conversation, event);
   }
 
   private openFolderModal(
@@ -1605,8 +2094,8 @@ export class ConversationListComponent implements OnInit, OnDestroy {
 
     const instance = dialogRef.Content!.instance as unknown as ProjectFormModalComponent;
     instance.dialogRef = dialogRef;
-    instance.environmentId = this.environmentId;
-    instance.currentUser = this.currentUser;
+    instance.environmentId = this.EnvironmentId;
+    instance.currentUser = this.CurrentUser;
     if (project) instance.project = project;
     if (parentId) instance.parentId = parentId;
 
@@ -1622,10 +2111,10 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     });
   }
 
-  public async deleteFolder(project: MJProjectEntity, event?: Event): Promise<void> {
+  public async DeleteFolder(project: MJProjectEntity, event?: Event): Promise<void> {
     if (event) event.stopPropagation();
 
-    const node = this.findFolderNode(this.folderTree, project.ID);
+    const node = this.findFolderNode(this.FolderTree, project.ID);
     const total = node?.totalCount ?? 0;
     const childCount = node?.children.length ?? 0;
 
@@ -1646,7 +2135,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     if (!confirmed) return;
 
     try {
-      await this.engine.DeleteProject(project.ID, this.currentUser);
+      await this.engine.DeleteProject(project.ID, this.CurrentUser);
       this.collapsedFolderIds.delete(NormalizeUUID(project.ID));
       this.rebuildGroups();
       this.cdr.detectChanges();
@@ -1659,39 +2148,54 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     }
   }
 
+  /** @deprecated Use {@link DeleteFolder}. */
+  public async deleteFolder(project: MJProjectEntity, event?: Event): Promise<void> {
+    return this.DeleteFolder(project, event);
+  }
+
   IsConversationActive(conversation: MJConversationEntity): boolean {
-    return UUIDsEqual(conversation.ID, this.selectedConversationId);
+    return UUIDsEqual(conversation.ID, this.SelectedConversationId);
   }
 
   IsConversationRenamed(conversation: MJConversationEntity): boolean {
-    return UUIDsEqual(conversation.ID, this.renamedConversationId);
+    return UUIDsEqual(conversation.ID, this.RenamedConversationId);
   }
 
   IsMenuOpen(conversation: MJConversationEntity): boolean {
-    return UUIDsEqual(this.openMenuConversationId, conversation.ID);
+    return UUIDsEqual(this.OpenMenuConversationId, conversation.ID);
   }
 
   IsConversationDragging(conversation: MJConversationEntity): boolean {
-    return UUIDsEqual(this.draggedConversationId, conversation.ID);
+    return UUIDsEqual(this.DraggedConversationId, conversation.ID);
   }
 
   IsMoveSubmenuOpen(conversation: MJConversationEntity): boolean {
-    return UUIDsEqual(this.moveSubmenuConversationId, conversation.ID);
+    return UUIDsEqual(this.MoveSubmenuConversationId, conversation.ID);
   }
 
-  selectConversation(conversation: MJConversationEntity): void {
-    this.conversationSelected.emit(conversation.ID);
+  SelectConversation(conversation: MJConversationEntity): void {
+    this.ConversationSelected.emit(conversation.ID);
     // Clear unread notifications when conversation is opened
     this.notificationService.markConversationAsRead(conversation.ID);
   }
 
-  async createNewConversation(): Promise<void> {
-    // Don't create DB record yet - just show the welcome screen
-    // Conversation will be created when user sends first message
-    this.newConversationRequested.emit();
+  /** @deprecated Use {@link SelectConversation}. */
+  selectConversation(conversation: MJConversationEntity): void {
+    return this.SelectConversation(conversation);
   }
 
-  async renameConversation(conversation: MJConversationEntity): Promise<void> {
+  async CreateNewConversation(): Promise<void> {
+    // Don't create DB record yet - just show the welcome screen
+    // Conversation will be created when user sends first message
+    this.NewConversationRequested.emit();
+  }
+
+  /** @deprecated Use {@link CreateNewConversation}. */
+  async createNewConversation(): Promise<void> {
+    return this.CreateNewConversation();
+  }
+
+  async RenameConversation(conversation: MJConversationEntity): Promise<void> {
     try {
       const result = await this.dialogService.input({
         title: 'Edit Conversation',
@@ -1716,7 +2220,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
           await this.engine.SaveConversation(
             conversation.ID,
             { Name: newName, Description: newDescription || '' },
-            this.currentUser
+            this.CurrentUser
           );
         }
       }
@@ -1726,7 +2230,12 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     }
   }
 
-  async deleteConversation(conversation: MJConversationEntity): Promise<void> {
+  /** @deprecated Use {@link RenameConversation}. */
+  async renameConversation(conversation: MJConversationEntity): Promise<void> {
+    return this.RenameConversation(conversation);
+  }
+
+  async DeleteConversation(conversation: MJConversationEntity): Promise<void> {
     try {
       const confirmed = await this.dialogService.confirm({
         title: 'Delete Conversation',
@@ -1737,9 +2246,9 @@ export class ConversationListComponent implements OnInit, OnDestroy {
 
       if (confirmed) {
         const deletedId = conversation.ID;
-        await this.engine.DeleteConversation(deletedId, this.currentUser);
+        await this.engine.DeleteConversation(deletedId, this.CurrentUser);
         this.cdr.detectChanges();
-        this.conversationDeleted.emit(deletedId);
+        this.ConversationDeleted.emit(deletedId);
       }
     } catch (error) {
       console.error('Error deleting conversation:', error);
@@ -1747,70 +2256,125 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     }
   }
 
-  toggleMenu(conversationId: string, event: Event): void {
+  /** @deprecated Use {@link DeleteConversation}. */
+  async deleteConversation(conversation: MJConversationEntity): Promise<void> {
+    return this.DeleteConversation(conversation);
+  }
+
+  ToggleMenu(conversationId: string, event: Event): void {
     event.stopPropagation();
-    this.openMenuConversationId = this.openMenuConversationId === conversationId ? null : conversationId;
+    this.OpenMenuConversationId = this.OpenMenuConversationId === conversationId ? null : conversationId;
   }
 
+  /** @deprecated Use {@link ToggleMenu}. */
+  toggleMenu(conversationId: string, event: Event): void {
+    return this.ToggleMenu(conversationId, event);
+  }
+
+  CloseMenu(): void {
+    this.OpenMenuConversationId = null;
+    this.MoveSubmenuConversationId = null;
+  }
+
+  /** @deprecated Use {@link CloseMenu}. */
   closeMenu(): void {
-    this.openMenuConversationId = null;
-    this.moveSubmenuConversationId = null;
+    return this.CloseMenu();
   }
 
-  async togglePin(conversation: MJConversationEntity, event?: Event): Promise<void> {
+  async TogglePin(conversation: MJConversationEntity, event?: Event): Promise<void> {
     if (event) event.stopPropagation();
-    this.closeMenu(); // Close immediately on user action — don't wait for the async op
+    this.CloseMenu(); // Close immediately on user action — don't wait for the async op
     try {
-      await this.engine.PinConversation(conversation.ID, !conversation.IsPinned, this.currentUser);
+      await this.engine.PinConversation(conversation.ID, !conversation.IsPinned, this.CurrentUser);
     } catch (error) {
       console.error('Error toggling pin:', error);
       await this.dialogService.alert('Error', 'Failed to pin/unpin conversation. Please try again.');
     }
   }
 
+  /** @deprecated Use {@link TogglePin}. */
+  async togglePin(conversation: MJConversationEntity, event?: Event): Promise<void> {
+    return this.TogglePin(conversation, event);
+  }
+
+  HasActiveTasks(conversationId: string): boolean {
+    return this.ConversationIdsWithTasks.has(conversationId);
+  }
+
+  /** @deprecated Use {@link HasActiveTasks}. */
   hasActiveTasks(conversationId: string): boolean {
-    return this.conversationIdsWithTasks.has(conversationId);
+    return this.HasActiveTasks(conversationId);
   }
 
   /** True when this conversation was shared with the current user by someone else. */
-  isSharedWithMe(conversation: MJConversationEntity): boolean {
+  IsSharedWithMe(conversation: MJConversationEntity): boolean {
     return this.engine.GetSharedByInfo(conversation.ID) !== null;
   }
 
+  /** @deprecated Use {@link IsSharedWithMe}. */
+  isSharedWithMe(conversation: MJConversationEntity): boolean {
+    return this.IsSharedWithMe(conversation);
+  }
+
   /** Tooltip for the sidebar share icon: "Shared by {email or name}". */
-  sharedWithMeTooltip(conversation: MJConversationEntity): string {
+  SharedWithMeTooltip(conversation: MJConversationEntity): string {
     const info = this.engine.GetSharedByInfo(conversation.ID);
     if (!info) return 'Shared with you';
     return `Shared by ${info.Email ?? info.Name ?? 'another user'}`;
   }
 
+  /** @deprecated Use {@link SharedWithMeTooltip}. */
+  sharedWithMeTooltip(conversation: MJConversationEntity): string {
+    return this.SharedWithMeTooltip(conversation);
+  }
+
+  ToggleSelectionMode(): void {
+    this.IsSelectionMode = !this.IsSelectionMode;
+    if (!this.IsSelectionMode) {
+      this.SelectedConversationIds.clear();
+    }
+  }
+
+  /** @deprecated Use {@link ToggleSelectionMode}. */
   toggleSelectionMode(): void {
-    this.isSelectionMode = !this.isSelectionMode;
-    if (!this.isSelectionMode) {
-      this.selectedConversationIds.clear();
-    }
+    return this.ToggleSelectionMode();
   }
 
-  toggleConversationSelection(conversationId: string): void {
-    if (this.selectedConversationIds.has(conversationId)) {
-      this.selectedConversationIds.delete(conversationId);
+  ToggleConversationSelection(conversationId: string): void {
+    if (this.SelectedConversationIds.has(conversationId)) {
+      this.SelectedConversationIds.delete(conversationId);
     } else {
-      this.selectedConversationIds.add(conversationId);
+      this.SelectedConversationIds.add(conversationId);
     }
   }
 
-  selectAll(): void {
-    this.filteredConversations.forEach(c => {
-      this.selectedConversationIds.add(c.ID);
+  /** @deprecated Use {@link ToggleConversationSelection}. */
+  toggleConversationSelection(conversationId: string): void {
+    return this.ToggleConversationSelection(conversationId);
+  }
+
+  SelectAll(): void {
+    this.FilteredConversations.forEach(c => {
+      this.SelectedConversationIds.add(c.ID);
     });
   }
 
-  deselectAll(): void {
-    this.selectedConversationIds.clear();
+  /** @deprecated Use {@link SelectAll}. */
+  selectAll(): void {
+    return this.SelectAll();
   }
 
-  async bulkDeleteConversations(): Promise<void> {
-    const count = this.selectedConversationIds.size;
+  DeselectAll(): void {
+    this.SelectedConversationIds.clear();
+  }
+
+  /** @deprecated Use {@link DeselectAll}. */
+  deselectAll(): void {
+    return this.DeselectAll();
+  }
+
+  async BulkDeleteConversations(): Promise<void> {
+    const count = this.SelectedConversationIds.size;
 
     if (count === 0) return;
 
@@ -1824,8 +2388,8 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     if (confirmed) {
       try {
         const result = await this.engine.DeleteMultipleConversations(
-          Array.from(this.selectedConversationIds),
-          this.currentUser
+          Array.from(this.SelectedConversationIds),
+          this.CurrentUser
         );
 
         if (result.Failed.length > 0 && result.Successful.length > 0) {
@@ -1846,7 +2410,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
 
         // Emit deleted events for successful deletions
         for (const id of result.Successful) {
-          this.conversationDeleted.emit(id);
+          this.ConversationDeleted.emit(id);
         }
 
       } catch (error) {
@@ -1854,18 +2418,28 @@ export class ConversationListComponent implements OnInit, OnDestroy {
         await this.dialogService.alert('Error', 'Failed to delete conversations. Please try again.');
       } finally {
         // Always exit selection mode after an attempt, whether success or failure
-        this.selectedConversationIds.clear();
-        this.isSelectionMode = false;
+        this.SelectedConversationIds.clear();
+        this.IsSelectionMode = false;
         this.cdr.detectChanges();
       }
     }
   }
 
-  handleConversationClick(conversation: MJConversationEntity): void {
-    if (this.isSelectionMode) {
-      this.toggleConversationSelection(conversation.ID);
+  /** @deprecated Use {@link BulkDeleteConversations}. */
+  async bulkDeleteConversations(): Promise<void> {
+    return this.BulkDeleteConversations();
+  }
+
+  HandleConversationClick(conversation: MJConversationEntity): void {
+    if (this.IsSelectionMode) {
+      this.ToggleConversationSelection(conversation.ID);
     } else {
-      this.selectConversation(conversation);
+      this.SelectConversation(conversation);
     }
+  }
+
+  /** @deprecated Use {@link HandleConversationClick}. */
+  handleConversationClick(conversation: MJConversationEntity): void {
+    return this.HandleConversationClick(conversation);
   }
 }

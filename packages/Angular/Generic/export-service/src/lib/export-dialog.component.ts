@@ -28,26 +28,116 @@ import { ExportService, ExportDialogConfig, ExportDialogResult } from './export.
 })
 export class ExportDialogComponent {
   // Form state
-  selectedFormat: ExportFormat = 'excel';
-  fileName = 'export';
-  includeHeaders = true;
-  samplingMode: SamplingMode = 'all';
-  sampleCount = 100;
-  sampleInterval = 10;
+  SelectedFormat: ExportFormat = 'excel';
+
+  /** @deprecated Use {@link SelectedFormat}. */
+  get selectedFormat(): ExportFormat {
+    return this.SelectedFormat;
+  }
+  /** @deprecated Use {@link SelectedFormat}. */
+  set selectedFormat(value: ExportFormat) {
+    this.SelectedFormat = value;
+  }
+  FileName = 'export';
+
+  /** @deprecated Use {@link FileName}. */
+  get fileName() {
+    return this.FileName;
+  }
+  /** @deprecated Use {@link FileName}. */
+  set fileName(value) {
+    this.FileName = value;
+  }
+  IncludeHeaders = true;
+
+  /** @deprecated Use {@link IncludeHeaders}. */
+  get includeHeaders() {
+    return this.IncludeHeaders;
+  }
+  /** @deprecated Use {@link IncludeHeaders}. */
+  set includeHeaders(value) {
+    this.IncludeHeaders = value;
+  }
+  SamplingMode: SamplingMode = 'all';
+
+  /** @deprecated Use {@link SamplingMode}. */
+  get samplingMode(): SamplingMode {
+    return this.SamplingMode;
+  }
+  /** @deprecated Use {@link SamplingMode}. */
+  set samplingMode(value: SamplingMode) {
+    this.SamplingMode = value;
+  }
+  SampleCount = 100;
+
+  /** @deprecated Use {@link SampleCount}. */
+  get sampleCount() {
+    return this.SampleCount;
+  }
+  /** @deprecated Use {@link SampleCount}. */
+  set sampleCount(value) {
+    this.SampleCount = value;
+  }
+  SampleInterval = 10;
+
+  /** @deprecated Use {@link SampleInterval}. */
+  get sampleInterval() {
+    return this.SampleInterval;
+  }
+  /** @deprecated Use {@link SampleInterval}. */
+  set sampleInterval(value) {
+    this.SampleInterval = value;
+  }
 
   // UI state
-  isExporting = false;
-  exportError: string | null = null;
+  IsExporting = false;
+
+  /** @deprecated Use {@link IsExporting}. */
+  get isExporting() {
+    return this.IsExporting;
+  }
+  /** @deprecated Use {@link IsExporting}. */
+  set isExporting(value) {
+    this.IsExporting = value;
+  }
+  ExportError: string | null = null;
+
+  /** @deprecated Use {@link ExportError}. */
+  get exportError(): string | null {
+    return this.ExportError;
+  }
+  /** @deprecated Use {@link ExportError}. */
+  set exportError(value: string | null) {
+    this.ExportError = value;
+  }
 
   // Available options
-  availableFormats: ExportFormat[] = ['excel', 'csv', 'json'];
-  samplingModes: { mode: SamplingMode; label: string; description: string }[];
+  AvailableFormats: ExportFormat[] = ['excel', 'csv', 'json'];
+
+  /** @deprecated Use {@link AvailableFormats}. */
+  get availableFormats(): ExportFormat[] {
+    return this.AvailableFormats;
+  }
+  /** @deprecated Use {@link AvailableFormats}. */
+  set availableFormats(value: ExportFormat[]) {
+    this.AvailableFormats = value;
+  }
+  SamplingModes: { mode: SamplingMode; label: string; description: string }[];
+
+  /** @deprecated Use {@link SamplingModes}. */
+  get samplingModes(): { mode: SamplingMode; label: string; description: string }[] {
+    return this.SamplingModes;
+  }
+  /** @deprecated Use {@link SamplingModes}. */
+  set samplingModes(value: { mode: SamplingMode; label: string; description: string }[]) {
+    this.SamplingModes = value;
+  }
 
   constructor(
     private exportService: ExportService,
     private cdr: ChangeDetectorRef
   ) {
-    this.samplingModes = this.exportService.getSamplingModes();
+    this.SamplingModes = this.exportService.getSamplingModes();
   }
 
   private _visible = false;
@@ -63,90 +153,138 @@ export class ExportDialogComponent {
     this.cdr.detectChanges();
   }
 
-  @Input() config: ExportDialogConfig | null = null;
+  @Input() Config: ExportDialogConfig | null = null;
 
-  @Output() closed = new EventEmitter<ExportDialogResult>();
+  /** @deprecated Use {@link Config}. */
+  @Input() set config(value: ExportDialogConfig | null) {
+    this.Config = value;
+  }
+  /** @deprecated Use {@link Config}. */
+  get config(): ExportDialogConfig | null {
+    return this.Config;
+  }
+
+  @Output() Closed = new EventEmitter<ExportDialogResult>();
+
+  /**
+   * @deprecated Use {@link Closed}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (closed) keeps working. Must stay AFTER Closed: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() closed = this.Closed;
 
   /**
    * Initialize form from config
    */
   private initializeFromConfig(): void {
-    if (!this.config) return;
+    if (!this.Config) return;
 
-    this.selectedFormat = this.config.defaultFormat || 'excel';
-    this.fileName = this.config.defaultFileName || 'export';
-    this.samplingMode = this.config.defaultSamplingMode || 'all';
-    this.sampleCount = this.config.defaultSampleCount || 100;
-    this.availableFormats = this.config.availableFormats || ['excel', 'csv', 'json'];
-    this.exportError = null;
-    this.isExporting = false;
+    this.SelectedFormat = this.Config.defaultFormat || 'excel';
+    this.FileName = this.Config.defaultFileName || 'export';
+    this.SamplingMode = this.Config.defaultSamplingMode || 'all';
+    this.SampleCount = this.Config.defaultSampleCount || 100;
+    this.AvailableFormats = this.Config.availableFormats || ['excel', 'csv', 'json'];
+    this.ExportError = null;
+    this.IsExporting = false;
   }
 
   /**
    * Get format info for display
    */
-  getFormatInfo(format: ExportFormat) {
+  GetFormatInfo(format: ExportFormat) {
     return this.exportService.getFormatInfo(format);
+  }
+
+  /** @deprecated Use {@link GetFormatInfo}. */
+  getFormatInfo(format: ExportFormat) {
+    return this.GetFormatInfo(format);
   }
 
   /**
    * Check if sampling needs a count input
    */
+  get NeedsSampleCount(): boolean {
+    return this.SamplingMode === 'top' || this.SamplingMode === 'bottom' || this.SamplingMode === 'random';
+  }
+
+  /** @deprecated Use {@link NeedsSampleCount}. */
   get needsSampleCount(): boolean {
-    return this.samplingMode === 'top' || this.samplingMode === 'bottom' || this.samplingMode === 'random';
+    return this.NeedsSampleCount;
   }
 
   /**
    * Check if sampling needs an interval input
    */
+  get NeedsSampleInterval(): boolean {
+    return this.SamplingMode === 'every-nth';
+  }
+
+  /** @deprecated Use {@link NeedsSampleInterval}. */
   get needsSampleInterval(): boolean {
-    return this.samplingMode === 'every-nth';
+    return this.NeedsSampleInterval;
   }
 
   /**
    * Get total row count
    */
+  get TotalRows(): number {
+    return this.Config?.data?.length || 0;
+  }
+
+  /** @deprecated Use {@link TotalRows}. */
   get totalRows(): number {
-    return this.config?.data?.length || 0;
+    return this.TotalRows;
   }
 
   /**
    * Estimate exported row count
    */
-  get estimatedRows(): number {
-    const total = this.totalRows;
-    switch (this.samplingMode) {
+  get EstimatedRows(): number {
+    const total = this.TotalRows;
+    switch (this.SamplingMode) {
       case 'all':
         return total;
       case 'top':
       case 'bottom':
       case 'random':
-        return Math.min(this.sampleCount, total);
+        return Math.min(this.SampleCount, total);
       case 'every-nth':
-        return Math.ceil(total / this.sampleInterval);
+        return Math.ceil(total / this.SampleInterval);
       default:
         return total;
     }
   }
 
+  /** @deprecated Use {@link EstimatedRows}. */
+  get estimatedRows(): number {
+    return this.EstimatedRows;
+  }
+
   /**
    * Get sampling description
    */
-  get samplingDescription(): string {
-    switch (this.samplingMode) {
+  get SamplingDescription(): string {
+    switch (this.SamplingMode) {
       case 'all':
-        return `Exporting all ${this.totalRows.toLocaleString()} rows`;
+        return `Exporting all ${this.TotalRows.toLocaleString()} rows`;
       case 'top':
-        return `Exporting first ${Math.min(this.sampleCount, this.totalRows).toLocaleString()} rows`;
+        return `Exporting first ${Math.min(this.SampleCount, this.TotalRows).toLocaleString()} rows`;
       case 'bottom':
-        return `Exporting last ${Math.min(this.sampleCount, this.totalRows).toLocaleString()} rows`;
+        return `Exporting last ${Math.min(this.SampleCount, this.TotalRows).toLocaleString()} rows`;
       case 'random':
-        return `Exporting ${Math.min(this.sampleCount, this.totalRows).toLocaleString()} random rows`;
+        return `Exporting ${Math.min(this.SampleCount, this.TotalRows).toLocaleString()} random rows`;
       case 'every-nth':
-        return `Exporting every ${this.sampleInterval}${this.getOrdinalSuffix(this.sampleInterval)} row (~${this.estimatedRows.toLocaleString()} rows)`;
+        return `Exporting every ${this.SampleInterval}${this.getOrdinalSuffix(this.SampleInterval)} row (~${this.EstimatedRows.toLocaleString()} rows)`;
       default:
         return '';
     }
+  }
+
+  /** @deprecated Use {@link SamplingDescription}. */
+  get samplingDescription(): string {
+    return this.SamplingDescription;
   }
 
   /**
@@ -161,77 +299,102 @@ export class ExportDialogComponent {
   /**
    * Handle format selection
    */
+  SelectFormat(format: ExportFormat): void {
+    this.SelectedFormat = format;
+    this.ExportError = null;
+  }
+
+  /** @deprecated Use {@link SelectFormat}. */
   selectFormat(format: ExportFormat): void {
-    this.selectedFormat = format;
-    this.exportError = null;
+    return this.SelectFormat(format);
   }
 
   /**
    * Handle cancel button
    */
-  onCancel(): void {
+  OnCancel(): void {
     this._visible = false;
-    this.closed.emit({ exported: false });
+    this.Closed.emit({ exported: false });
+  }
+
+  /** @deprecated Use {@link OnCancel}. */
+  onCancel(): void {
+    return this.OnCancel();
   }
 
   /**
    * Handle export button
    */
-  async onExport(): Promise<void> {
-    if (!this.config?.data) {
-      this.exportError = 'No data to export';
+  async OnExport(): Promise<void> {
+    if (!this.Config?.data) {
+      this.ExportError = 'No data to export';
       return;
     }
 
-    this.isExporting = true;
-    this.exportError = null;
+    this.IsExporting = true;
+    this.ExportError = null;
     this.cdr.detectChanges();
 
     try {
       const options: Partial<ExportOptions> = {
-        format: this.selectedFormat,
-        fileName: this.fileName,
-        includeHeaders: this.includeHeaders,
-        columns: this.config.columns,
+        format: this.SelectedFormat,
+        fileName: this.FileName,
+        includeHeaders: this.IncludeHeaders,
+        columns: this.Config.columns,
         sampling: this.exportService.buildSamplingOptions(
-          this.samplingMode,
-          this.sampleCount,
-          this.sampleInterval
+          this.SamplingMode,
+          this.SampleCount,
+          this.SampleInterval
         )
       };
 
-      const result = await this.exportService.export(this.config.data, options);
+      const result = await this.exportService.export(this.Config.data, options);
 
       if (result.success) {
         this.exportService.downloadResult(result);
         this._visible = false;
-        this.closed.emit({
+        this.Closed.emit({
           exported: true,
           result,
           options: options as ExportOptions
         });
       } else {
-        this.exportError = result.error || 'Export failed';
+        this.ExportError = result.error || 'Export failed';
       }
     } catch (error) {
-      this.exportError = error instanceof Error ? error.message : 'Export failed';
+      this.ExportError = error instanceof Error ? error.message : 'Export failed';
     } finally {
-      this.isExporting = false;
+      this.IsExporting = false;
       this.cdr.detectChanges();
     }
+  }
+
+  /** @deprecated Use {@link OnExport}. */
+  async onExport(): Promise<void> {
+    return this.OnExport();
   }
 
   /**
    * Check if show sampling options
    */
+  get ShowSamplingOptions(): boolean {
+    return this.Config?.showSamplingOptions !== false;
+  }
+
+  /** @deprecated Use {@link ShowSamplingOptions}. */
   get showSamplingOptions(): boolean {
-    return this.config?.showSamplingOptions !== false;
+    return this.ShowSamplingOptions;
   }
 
   /**
    * Get dialog title
    */
+  get DialogTitle(): string {
+    return this.Config?.dialogTitle || 'Export Data';
+  }
+
+  /** @deprecated Use {@link DialogTitle}. */
   get dialogTitle(): string {
-    return this.config?.dialogTitle || 'Export Data';
+    return this.DialogTitle;
   }
 }

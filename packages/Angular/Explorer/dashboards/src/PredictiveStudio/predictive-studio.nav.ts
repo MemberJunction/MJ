@@ -36,28 +36,53 @@ export const MODELS_SECTIONS: readonly PSSection[] = [
 export const MODELS_NAV_LABEL = 'Models';
 
 /** Distinct left-nav group headings for a section set, in first-seen order ('' = the ungrouped lead items). */
-export function sectionGroups(sections: readonly PSSection[]): string[] {
+export function SectionGroups(sections: readonly PSSection[]): string[] {
   return [...new Set(sections.map((s) => s.group))];
 }
 
+/** @deprecated Use {@link SectionGroups}. */
+export function sectionGroups(sections: readonly PSSection[]): string[] {
+  return SectionGroups(sections);
+}
+
 /** The sections belonging to one left-nav group, preserving declaration order. */
-export function sectionsInGroup(sections: readonly PSSection[], group: string): PSSection[] {
+export function SectionsInGroup(sections: readonly PSSection[], group: string): PSSection[] {
   return sections.filter((s) => s.group === group);
 }
 
+/** @deprecated Use {@link SectionsInGroup}. */
+export function sectionsInGroup(sections: readonly PSSection[], group: string): PSSection[] {
+  return SectionsInGroup(sections, group);
+}
+
 /** Resolve a section's display label (falls back to the key when unknown — never throws). */
-export function sectionLabel(sections: readonly PSSection[], key: PSPanelKey): string {
+export function SectionLabel(sections: readonly PSSection[], key: PSPanelKey): string {
   return sections.find((s) => s.key === key)?.label ?? key;
 }
 
+/** @deprecated Use {@link SectionLabel}. */
+export function sectionLabel(sections: readonly PSSection[], key: PSPanelKey): string {
+  return SectionLabel(sections, key);
+}
+
 /** Resolve a section's icon (falls back to a neutral default when unknown). */
-export function sectionIcon(sections: readonly PSSection[], key: PSPanelKey): string {
+export function SectionIcon(sections: readonly PSSection[], key: PSPanelKey): string {
   return sections.find((s) => s.key === key)?.icon ?? 'fa-solid fa-wand-magic-sparkles';
 }
 
+/** @deprecated Use {@link SectionIcon}. */
+export function sectionIcon(sections: readonly PSSection[], key: PSPanelKey): string {
+  return SectionIcon(sections, key);
+}
+
 /** Whether `key` is a section hosted inside the given door. */
-export function hasSection(sections: readonly PSSection[], key: PSPanelKey): boolean {
+export function HasSection(sections: readonly PSSection[], key: PSPanelKey): boolean {
   return sections.some((s) => s.key === key);
+}
+
+/** @deprecated Use {@link HasSection}. */
+export function hasSection(sections: readonly PSSection[], key: PSPanelKey): boolean {
+  return HasSection(sections, key);
 }
 
 /**
@@ -73,9 +98,14 @@ export type HomeNavTarget =
   | { readonly kind: 'app'; readonly navLabel: string; readonly section: PSPanelKey }
   | { readonly kind: 'none' };
 
-export function routeHomeNavigate(key: PSPanelKey): HomeNavTarget {
+export function RouteHomeNavigate(key: PSPanelKey): HomeNavTarget {
   if (key === 'home') return { kind: 'none' };
-  if (hasSection(MODELS_SECTIONS, key)) return { kind: 'app', navLabel: MODELS_NAV_LABEL, section: key };
-  if (hasSection(STUDIO_SECTIONS, key)) return { kind: 'section', key };
+  if (HasSection(MODELS_SECTIONS, key)) return { kind: 'app', navLabel: MODELS_NAV_LABEL, section: key };
+  if (HasSection(STUDIO_SECTIONS, key)) return { kind: 'section', key };
   return { kind: 'none' };
+}
+
+/** @deprecated Use {@link RouteHomeNavigate}. */
+export function routeHomeNavigate(key: PSPanelKey): HomeNavTarget {
+  return RouteHomeNavigate(key);
 }

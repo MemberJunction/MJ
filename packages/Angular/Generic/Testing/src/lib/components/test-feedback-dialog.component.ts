@@ -462,7 +462,12 @@ export class TestFeedbackDialogComponent extends BaseAngularComponent implements
   private _visible = false;
   private dataLoaded = false;
 
-  readonly ratingNumbers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+  readonly RatingNumbers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
+  /** @deprecated Use {@link RatingNumbers}. */
+  get ratingNumbers() {
+    return this.RatingNumbers;
+  }
 
   @Input()
   set data(value: TestFeedbackDialogData) {
@@ -493,16 +498,79 @@ export class TestFeedbackDialogComponent extends BaseAngularComponent implements
     return this._visible;
   }
 
-  @Output() closed = new EventEmitter<TestFeedbackDialogResult>();
+  @Output() Closed = new EventEmitter<TestFeedbackDialogResult>();
 
-  rating = 0;
-  hoverRating = 0;
-  isCorrect: boolean | null = null;
-  comments = '';
-  isSaving = false;
+  /**
+   * @deprecated Use {@link Closed}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (closed) keeps working. Must stay AFTER Closed: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() closed = this.Closed;
+
+  Rating = 0;
+
+  /** @deprecated Use {@link Rating}. */
+  get rating() {
+    return this.Rating;
+  }
+  /** @deprecated Use {@link Rating}. */
+  set rating(value) {
+    this.Rating = value;
+  }
+  HoverRating = 0;
+
+  /** @deprecated Use {@link HoverRating}. */
+  get hoverRating() {
+    return this.HoverRating;
+  }
+  /** @deprecated Use {@link HoverRating}. */
+  set hoverRating(value) {
+    this.HoverRating = value;
+  }
+  IsCorrect: boolean | null = null;
+
+  /** @deprecated Use {@link IsCorrect}. */
+  get isCorrect(): boolean | null {
+    return this.IsCorrect;
+  }
+  /** @deprecated Use {@link IsCorrect}. */
+  set isCorrect(value: boolean | null) {
+    this.IsCorrect = value;
+  }
+  Comments = '';
+
+  /** @deprecated Use {@link Comments}. */
+  get comments() {
+    return this.Comments;
+  }
+  /** @deprecated Use {@link Comments}. */
+  set comments(value) {
+    this.Comments = value;
+  }
+  IsSaving = false;
+
+  /** @deprecated Use {@link IsSaving}. */
+  get isSaving() {
+    return this.IsSaving;
+  }
+  /** @deprecated Use {@link IsSaving}. */
+  set isSaving(value) {
+    this.IsSaving = value;
+  }
   isLoading = false;
   errorMessage = '';
-  existingFeedback: MJTestRunFeedbackEntity | null = null;
+  ExistingFeedback: MJTestRunFeedbackEntity | null = null;
+
+  /** @deprecated Use {@link ExistingFeedback}. */
+  get existingFeedback(): MJTestRunFeedbackEntity | null {
+    return this.ExistingFeedback;
+  }
+  /** @deprecated Use {@link ExistingFeedback}. */
+  set existingFeedback(value: MJTestRunFeedbackEntity | null) {
+    this.ExistingFeedback = value;
+  }
 
   private get metadata() { return this.ProviderToUse; }
 
@@ -517,14 +585,14 @@ export class TestFeedbackDialogComponent extends BaseAngularComponent implements
   }
 
   private resetForm(): void {
-    this.rating = 0;
-    this.hoverRating = 0;
-    this.isCorrect = null;
-    this.comments = '';
-    this.isSaving = false;
+    this.Rating = 0;
+    this.HoverRating = 0;
+    this.IsCorrect = null;
+    this.Comments = '';
+    this.IsSaving = false;
     this.isLoading = false;
     this.errorMessage = '';
-    this.existingFeedback = null;
+    this.ExistingFeedback = null;
   }
 
   private async initializeWithData(): Promise<void> {
@@ -545,12 +613,12 @@ export class TestFeedbackDialogComponent extends BaseAngularComponent implements
       }, this.data.currentUser);
 
       if (result.Success && result.Results && result.Results.length > 0) {
-        this.existingFeedback = result.Results[0];
+        this.ExistingFeedback = result.Results[0];
 
         // Pre-populate form with existing feedback
-        this.rating = this.existingFeedback.Rating || 0;
-        this.isCorrect = this.existingFeedback.IsCorrect;
-        this.comments = this.existingFeedback.CorrectionSummary || '';
+        this.Rating = this.ExistingFeedback.Rating || 0;
+        this.IsCorrect = this.ExistingFeedback.IsCorrect;
+        this.Comments = this.ExistingFeedback.CorrectionSummary || '';
       }
     } catch (error) {
       console.error('Error loading existing feedback:', error);
@@ -560,37 +628,52 @@ export class TestFeedbackDialogComponent extends BaseAngularComponent implements
     }
   }
 
-  setRating(value: number): void {
-    this.rating = value;
+  SetRating(value: number): void {
+    this.Rating = value;
   }
 
-  getRatingLabel(): string {
-    if (this.rating <= 3) return 'Poor';
-    if (this.rating <= 5) return 'Below Average';
-    if (this.rating <= 6) return 'Average';
-    if (this.rating <= 7) return 'Good';
-    if (this.rating <= 8) return 'Very Good';
-    if (this.rating <= 9) return 'Excellent';
+  /** @deprecated Use {@link SetRating}. */
+  setRating(value: number): void {
+    return this.SetRating(value);
+  }
+
+  GetRatingLabel(): string {
+    if (this.Rating <= 3) return 'Poor';
+    if (this.Rating <= 5) return 'Below Average';
+    if (this.Rating <= 6) return 'Average';
+    if (this.Rating <= 7) return 'Good';
+    if (this.Rating <= 8) return 'Very Good';
+    if (this.Rating <= 9) return 'Excellent';
     return 'Outstanding';
   }
 
-  canSubmit(): boolean {
-    return this.rating > 0;
+  /** @deprecated Use {@link GetRatingLabel}. */
+  getRatingLabel(): string {
+    return this.GetRatingLabel();
   }
 
-  async onSubmit(): Promise<void> {
-    if (!this.canSubmit() || this.isSaving) {
+  CanSubmit(): boolean {
+    return this.Rating > 0;
+  }
+
+  /** @deprecated Use {@link CanSubmit}. */
+  canSubmit(): boolean {
+    return this.CanSubmit();
+  }
+
+  async OnSubmit(): Promise<void> {
+    if (!this.CanSubmit() || this.IsSaving) {
       return;
     }
 
-    this.isSaving = true;
+    this.IsSaving = true;
     this.errorMessage = '';
 
     try {
       let feedback: MJTestRunFeedbackEntity;
 
-      if (this.existingFeedback) {
-        feedback = this.existingFeedback;
+      if (this.ExistingFeedback) {
+        feedback = this.ExistingFeedback;
       } else {
         feedback = await this.metadata.GetEntityObject<MJTestRunFeedbackEntity>(
           'MJ: Test Run Feedbacks',
@@ -600,31 +683,41 @@ export class TestFeedbackDialogComponent extends BaseAngularComponent implements
         feedback.ReviewerUserID = this.data.currentUser.ID;
       }
 
-      feedback.Rating = this.rating;
-      feedback.IsCorrect = this.isCorrect;
-      feedback.CorrectionSummary = this.comments.trim() || null;
+      feedback.Rating = this.Rating;
+      feedback.IsCorrect = this.IsCorrect;
+      feedback.CorrectionSummary = this.Comments.trim() || null;
 
       const result = await feedback.Save();
 
       if (result) {
-        this.closed.emit({ success: true, feedbackId: feedback.ID });
+        this.Closed.emit({ success: true, feedbackId: feedback.ID });
       } else {
         this.errorMessage = feedback.LatestResult?.Message || 'Failed to save feedback';
-        this.isSaving = false;
+        this.IsSaving = false;
       }
     } catch (error) {
       this.errorMessage = (error as Error).message || 'An error occurred while saving feedback';
-      this.isSaving = false;
+      this.IsSaving = false;
     }
+  }
+
+  /** @deprecated Use {@link OnSubmit}. */
+  async onSubmit(): Promise<void> {
+    return this.OnSubmit();
   }
 
   onCancel(): void {
-    this.closed.emit({ success: false });
+    this.Closed.emit({ success: false });
   }
 
-  onOverlayClick(event: MouseEvent): void {
-    if (event.target === event.currentTarget && !this.isSaving) {
+  OnOverlayClick(event: MouseEvent): void {
+    if (event.target === event.currentTarget && !this.IsSaving) {
       this.onCancel();
     }
+  }
+
+  /** @deprecated Use {@link OnOverlayClick}. */
+  onOverlayClick(event: MouseEvent): void {
+    return this.OnOverlayClick(event);
   }
 }

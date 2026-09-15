@@ -595,13 +595,18 @@ export class AnalyticsAgentRunsComponent extends BaseAngularComponent implements
     ];
 
     /** Bridge the local filter shape to the global shape the filter bar expects */
-    public get globalFilters(): GlobalFilterState {
+    public get GlobalFilters(): GlobalFilterState {
         return {
             Models: [],
             Agents: this.Filters.Agents,
             Prompts: [],
             Statuses: this.Filters.Statuses
         };
+    }
+
+    /** @deprecated Use {@link GlobalFilters}. */
+    public get globalFilters(): GlobalFilterState {
+        return this.GlobalFilters;
     }
 
     private agentRuns: AgentRunRecord[] = [];
