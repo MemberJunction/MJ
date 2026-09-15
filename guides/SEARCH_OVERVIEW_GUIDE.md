@@ -141,9 +141,9 @@ fails in a way another might survive.
 
 **Never let an agent choose the vendor.** An LLM picking between "Brave" and "Tavily" is making an
 infrastructure decision it has no information for — it cannot know which key is configured, which is
-cheaper, or which is rate-limited right now. Agents bind to the single `Web Search` Action and the
-`WebSearchProvider` rows decide the rest. A caller who genuinely knows better can pin one with
-`Provider`, in which case the engine **fails rather than substituting**.
+cheaper, or which is rate-limited right now. All MJ agents and skills route through the provider-neutral `Web Search`
+Action with `Provider` left unset so the engine can fail over across configured vendors; naming an explicit
+`Provider` fails closed rather than failing over (so agent prompts and workflow steps should always leave it unset).
 
 **Read `Attempts`, including on success.** If the primary provider rate-limits every call and the
 secondary quietly serves everything, the system looks healthy while the spend moves to a vendor
