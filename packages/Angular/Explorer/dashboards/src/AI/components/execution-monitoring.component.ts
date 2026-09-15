@@ -1879,12 +1879,9 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
   }
 
   private createKPICards(kpis: DashboardKPIs): KPICardData[] {
-    const cov = kpis.Coverage;
-    const runsTotal = cov ? (cov.PricedRuns + cov.UnpricedRuns + cov.UnmeasuredRuns) : 0;
-    const runsPriced = cov ? cov.PricedRuns : 0;
-    const coveragePct = cov && runsTotal > 0
-      ? Math.round((runsPriced / runsTotal) * 100)
-      : (runsTotal === 0 ? 100 : 0);
+    const coveragePct = kpis.Coverage && kpis.Coverage.RunsTotal > 0
+      ? Math.round((kpis.Coverage.RunsPriced / kpis.Coverage.RunsTotal) * 100)
+      : (kpis.Coverage?.RunsTotal === 0 ? 100 : 0);
 
     return [
       {
@@ -1906,7 +1903,7 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
         value: `${coveragePct}%`,
         icon: 'fa-shield-halved',
         color: coveragePct >= 90 ? 'success' : coveragePct >= 70 ? 'warning' : 'danger',
-        subtitle: `${runsPriced} of ${runsTotal} runs priced`
+        subtitle: `${kpis.Coverage?.RunsPriced ?? 0} of ${kpis.Coverage?.RunsTotal ?? 0} runs priced`
       },
       {
         title: 'Success Rate',

@@ -16,7 +16,7 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UUIDsEqual } from '@memberjunction/global';
 import { GlobalFilterState } from '../../../interfaces/analytics-preferences.interface';
 import { AIInstrumentationService } from '../../../services/ai-instrumentation.service';
-import { computeCoverage, computeTotalCost } from '../../../services/ai-usage-analytics.compute';
+import { computeTotalCost } from '../../../services/ai-usage-analytics.compute';
 import { AIUsageDailyRow } from '../../../services/ai-usage-analytics.types';
 
 // ── Interfaces ──
@@ -752,10 +752,8 @@ export class AnalyticsAgentRunsComponent extends BaseAngularComponent implements
         );
 
         const rowsForCoverage = agentDaily.length > 0 ? agentDaily : this.dailyRows;
-        const cov = computeCoverage(rowsForCoverage);
-        const covTotal = cov.PricedRuns + cov.UnpricedRuns + cov.UnmeasuredRuns;
-        const covPct = covTotal > 0 ? (cov.PricedRuns / covTotal) * 100 : 0;
-        const covSubtitle = covTotal > 0 ? `covers ${Math.round(covPct)}% of runs` : undefined;
+        const cov = computeTotalCost(rowsForCoverage);
+        const covSubtitle = cov.PromptRunsTotal > 0 ? `covers ${Math.round(cov.Percent)}% of runs` : undefined;
 
         this.Stats = {
             TotalRuns: total,

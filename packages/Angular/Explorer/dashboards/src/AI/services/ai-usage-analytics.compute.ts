@@ -80,20 +80,11 @@ export function parseDate(d: string | Date | null | undefined): Date | null {
   return isNaN(parsed.getTime()) ? null : parsed;
 }
 
-export interface CoverageInputRow {
-  Runs?: number;
-  PricedRuns?: number;
-  UnpricedRuns?: number;
-  UnmeasuredRuns?: number;
-  TokensPrompt?: number;
-  TokensCompletion?: number;
-}
-
 /**
- * Computes coverage metrics from aggregated rows.
+ * Computes coverage metrics from hourly aggregated rows.
  * PricedTokenShare reflects the token-weighted share of runs that were priced.
  */
-export function computeCoverage(rows: CoverageInputRow[]): AIUsageCoverage {
+export function computeCoverage(rows: AIUsageHourlyRow[]): AIUsageCoverage {
   let pricedRuns = 0;
   let unpricedRuns = 0;
   let unmeasuredRuns = 0;
