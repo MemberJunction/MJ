@@ -532,9 +532,16 @@ installs on the default path with no flag at all.
 
 - `--dangerously-ignore-dbl-underscore-schema-rule` — available on `mj app install`,
   `mj app upgrade` and `mj app remove`. Allows a `__`-prefixed schema name *outside* the
-  `__mj_` app namespace (e.g. `__bcsaas`). Exact-match reserved names remain hard-blocked
-  regardless, on both supported platforms: `__mj`, `__mj_UDT`, `information_schema`,
-  `dbo`/`sys`/`guest` (SQL Server) and `public`/`pg_catalog`/`pg_toast` (PostgreSQL).
+  `__mj_` app namespace (e.g. `__bcsaas`). Reserved schemas remain hard-blocked regardless,
+  on both supported platforms: every schema the **database** owns — `dbo`, `sys`, `guest`,
+  SQL Server's nine `db_*` fixed database-role schemas, `public`, anything starting `pg_`,
+  and `information_schema` — plus every schema **MJ** owns: `__mj` and `__mj_UDT`. Each of
+  these already exists in a stock database, so naming one would not create it, it would
+  *adopt* it — and `mj app remove` would then drop it.
+
+  If an app was installed under a name *before* that name became reserved, its schema can no
+  longer be dropped. Remove it with `mj app remove <app> --keep-data`, which unregisters the
+  app and leaves the schema in place.
 
 ```bash
 mj app install https://github.com/BlueCypress/SaaS \

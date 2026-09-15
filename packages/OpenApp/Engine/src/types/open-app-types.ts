@@ -181,9 +181,12 @@ export interface InstallOptions {
     Verbose?: boolean;
     /**
      * Allow a `__`-prefixed schema name outside the `__mj_<AppName>` app namespace, which
-     * needs no override. Exact-match reserved names stay blocked regardless, on both
-     * platforms: `__mj`, `__mj_UDT`, `dbo`, `sys`, `guest`, `public`, `pg_catalog`,
-     * `pg_toast`, `information_schema`. Dangerous; MJ-internal apps only.
+     * needs no override. This flag never unblocks a RESERVED schema, on either platform:
+     * whatever the database owns (`dbo`/`sys`/`guest`, `public`, every `pg_*` name, SQL
+     * Server's nine `db_*` fixed-role schemas, `information_schema`) and whatever MJ owns
+     * (`__mj`, `__mj_UDT`) stays blocked. `ReservedOwnerOf` in schema-manager.ts is the rule
+     * itself — treat that as the source of truth, not this summary. Dangerous;
+     * MJ-internal apps only.
      */
     AllowDoubleUnderscoreSchema?: boolean;
     /**
@@ -226,9 +229,12 @@ export interface UpgradeOptions {
     Verbose?: boolean;
     /**
      * Allow a `__`-prefixed schema name outside the `__mj_<AppName>` app namespace, which
-     * needs no override. Exact-match reserved names stay blocked regardless, on both
-     * platforms: `__mj`, `__mj_UDT`, `dbo`, `sys`, `guest`, `public`, `pg_catalog`,
-     * `pg_toast`, `information_schema`. Dangerous; MJ-internal apps only.
+     * needs no override. This flag never unblocks a RESERVED schema, on either platform:
+     * whatever the database owns (`dbo`/`sys`/`guest`, `public`, every `pg_*` name, SQL
+     * Server's nine `db_*` fixed-role schemas, `information_schema`) and whatever MJ owns
+     * (`__mj`, `__mj_UDT`) stays blocked. `ReservedOwnerOf` in schema-manager.ts is the rule
+     * itself — treat that as the source of truth, not this summary. Dangerous;
+     * MJ-internal apps only.
      */
     AllowDoubleUnderscoreSchema?: boolean;
 }
@@ -247,9 +253,12 @@ export interface RemoveOptions {
     Verbose?: boolean;
     /**
      * Allow dropping a `__`-prefixed schema outside the `__mj_<AppName>` app namespace, which
-     * needs no override. The exact-match reserved list — `dbo`, `sys`, `guest` (SQL Server),
-     * `public`, `pg_catalog`, `pg_toast` (PostgreSQL), `information_schema`, `__mj`, `__mj_UDT`
-     * — remains blocked. Dangerous; MJ-internal apps only.
+     * needs no override. Reserved schemas remain blocked: whatever the database owns
+     * (`dbo`/`sys`/`guest`, `public`, every `pg_*` name, SQL Server's nine `db_*` fixed-role
+     * schemas, `information_schema`) and whatever MJ owns (`__mj`, `__mj_UDT`). See
+     * `ReservedOwnerOf` in schema-manager.ts for the rule itself. An app installed before a
+     * name became reserved cannot have its schema dropped at all — remove it with
+     * `--keep-data`. Dangerous; MJ-internal apps only.
      */
     AllowDoubleUnderscoreSchema?: boolean;
 }
