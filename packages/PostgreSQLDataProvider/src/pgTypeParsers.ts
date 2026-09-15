@@ -39,6 +39,13 @@ export function parseNumeric(value: string): number {
  * framework's date-only rendering is built on that shape; this parser gives the
  * PostgreSQL provider the same contract. `infinity`, `-infinity`, BC dates and
  * anything else that is not a plain `YYYY-MM-DD` fall through to the pg default.
+ *
+ * The write side needs no counterpart, but it does depend on one thing staying
+ * true: the provider serializes a Date as its ISO string and CodeGen casts a DATE
+ * column straight from text — `(p_data->>'Field')::DATE` — and text-to-date
+ * ignores the time and the zone, so 2026-11-20T00:00:00.000Z lands as the 20th
+ * under any session TimeZone. Casting through TIMESTAMPTZ first would apply the
+ * session zone and write the 19th on a server west of Greenwich.
  */
 export function parseDateOnly(value: string): Date | number | null {
     const parts = value.split('-');

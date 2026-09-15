@@ -104,7 +104,7 @@ describe('DATE columns arrive as UTC midnight, the same shape the SQL Server dri
         expect(parseDateOnly('not-a-date')).toBeNull();
     });
 
-    it('leaves timestamps to the pg defaults — those are instants and carry their own zone', () => {
+    it('leaves timestamps to the pg defaults — timestamptz carries its zone; a plain timestamp is left as pg reads it', () => {
         const timestamptzParser = MJPostgresTypes.getTypeParser(1184 as never, 'text' as never);
         expect(timestamptzParser).toBe(pg.types.getTypeParser(1184 as never, 'text' as never));
         const timestampParser = MJPostgresTypes.getTypeParser(1114 as never, 'text' as never);
