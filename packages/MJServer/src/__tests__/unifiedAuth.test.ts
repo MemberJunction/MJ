@@ -73,7 +73,8 @@ vi.mock('../auth/index.js', () => ({
 
 vi.mock('../cache.js', () => {
   const map = new Map<string, boolean>();
-  return { authCache: map };
+  return { AuthCache: map,
+    get authCache() { return this.AuthCache; } };
 });
 
 vi.mock('../config.js', () => ({

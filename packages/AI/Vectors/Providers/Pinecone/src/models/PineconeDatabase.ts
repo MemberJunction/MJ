@@ -1,4 +1,4 @@
-import { pineconeDefaultIndex } from '../config';
+import { PineconeDefaultIndex } from '../config';
 import { error } from 'console';
 import { RegisterClass } from '@memberjunction/global'
 import { FetchResponse, Index, Pinecone, QueryOptions } from '@pinecone-database/pinecone';
@@ -46,8 +46,8 @@ export class PineconeDatabase extends VectorDBBase {
             return this._defaultIndex;
         }
 
-        if(pineconeDefaultIndex){
-            let defaultIndex = this.Pinecone.Index(pineconeDefaultIndex);
+        if(PineconeDefaultIndex){
+            let defaultIndex = this.Pinecone.Index(PineconeDefaultIndex);
             if(defaultIndex){
                 this._defaultIndex = defaultIndex;
                 return defaultIndex;
@@ -75,7 +75,7 @@ export class PineconeDatabase extends VectorDBBase {
      * defined in the environment variables instead.
      */
     public GetIndex(params?: BaseRequestParams): BaseResponse {
-        const name: string = params?.id || pineconeDefaultIndex;
+        const name: string = params?.id || PineconeDefaultIndex;
         if(!name){
             throw new Error("id not found in params and PINECONE_DEFAULT_INDEX not found in env variables");
         }

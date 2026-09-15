@@ -2,7 +2,7 @@ import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
 import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
-import { traverse, NodePath, CreateViolation, TruncateCode } from '../lint-utils';
+import { Traverse, NodePath, CreateViolation, TruncateCode } from '../lint-utils';
 
 /**
  * Rule: use-function-declaration
@@ -21,7 +21,7 @@ export class UseFunctionDeclarationRule extends BaseLintRule {
   Test(ast: t.File, componentName: string): Violation[] {
     const violations: Violation[] = [];
 
-    traverse(ast, {
+    Traverse(ast, {
       VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
         // Only check TOP-LEVEL declarations (not nested inside functions)
         // This prevents flagging arrow functions inside the component

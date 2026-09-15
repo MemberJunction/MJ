@@ -1,4 +1,4 @@
-import { traverse, NodePath } from '../lint-utils';
+import { Traverse, NodePath } from '../lint-utils';
 import * as t from '@babel/types';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseLintRule } from '../lint-rule';
@@ -247,7 +247,7 @@ export class ChartFieldValidationRule extends BaseLintRule {
     // that could create computed fields not in the original metadata.
     // If so, skip chart field validation since we can't statically determine field names.
     let hasDataTransformations = false;
-    traverse(ast, {
+    Traverse(ast, {
       CallExpression(p: NodePath<t.CallExpression>) {
         if (t.isMemberExpression(p.node.callee) && t.isIdentifier(p.node.callee.property)) {
           const method = p.node.callee.property.name;
@@ -258,12 +258,12 @@ export class ChartFieldValidationRule extends BaseLintRule {
         }
       },
       noScope: true,
-    } as Parameters<typeof traverse>[1]);
+    } as Parameters<typeof Traverse>[1]);
     if (hasDataTransformations) {
       return violations;
     }
 
-    traverse(ast, {
+    Traverse(ast, {
       JSXOpeningElement(path: NodePath<t.JSXOpeningElement>) {
         const nameNode = path.node.name;
         if (!t.isJSXIdentifier(nameNode)) return;

@@ -1,4 +1,4 @@
-import { traverse, NodePath, IsNullOrUndefined, IsStringLike, IsNumberLike, IsObjectLike } from '../lint-utils';
+import { Traverse, NodePath, IsNullOrUndefined, IsStringLike, IsNumberLike, IsObjectLike } from '../lint-utils';
 import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
 import { BaseLintRule } from '../lint-rule';
@@ -113,7 +113,7 @@ function collectUseStateInits(
 ): Map<string, { category: string; description: string }> {
   const stateInits = new Map<string, { category: string; description: string }>();
 
-  traverse(ast, {
+  Traverse(ast, {
     VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
       if (!t.isArrayPattern(path.node.id)) return;
       const init = path.node.init;
@@ -775,7 +775,7 @@ export class RunQueryCallValidationRule extends BaseLintRule {
     // Pre-collect useState initializers for type checking
     const stateInits = collectUseStateInits(ast);
 
-    traverse(ast, {
+    Traverse(ast, {
       CallExpression(path: NodePath<t.CallExpression>) {
         if (!isRunQueryCallee(path.node.callee)) return;
 

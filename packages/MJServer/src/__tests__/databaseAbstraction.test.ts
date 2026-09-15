@@ -87,7 +87,8 @@ vi.mock('../auth/AuthProviderFactory', () => ({
 }));
 
 vi.mock('../cache', () => ({
-  authCache: new Map(),
+  AuthCache: new Map(),
+    get authCache() { return this.AuthCache; },
 }));
 
 vi.mock('@memberjunction/core', () => ({

@@ -3,7 +3,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
-import { traverse, NodePath, CreateViolation, GetJSXElementName, HasJSXAttribute } from '../lint-utils';
+import { Traverse, NodePath, CreateViolation, GetJSXElementName, HasJSXAttribute } from '../lint-utils';
 
 /**
  * Rule: pass-standard-props
@@ -41,7 +41,7 @@ export class PassStandardPropsRule extends BaseLintRule {
       return violations;
     }
 
-    traverse(ast, {
+    Traverse(ast, {
       JSXElement(path: NodePath<t.JSXElement>) {
         const openingElement = path.node.openingElement;
         const elementName = GetJSXElementName(openingElement);

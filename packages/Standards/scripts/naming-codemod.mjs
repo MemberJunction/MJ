@@ -60,7 +60,7 @@ const SKIP_REASONS = {
 };
 
 /** Findings this codemod understands. Everything else is reported as out of scope. */
-const HANDLED = /^(exported function|public member|public parameter property) "/;
+const HANDLED = /^(exported function|public member|public parameter property|exported const) "/;
 
 // ---------------------------------------------------------------------------------------------
 // CLI
@@ -81,10 +81,23 @@ function parseArgs(argv) {
     return args;
 }
 
-/** Pull the old and new name out of the check's own message, which always quotes both. */
+/**
+ * Pull the old and new name out of the check's own message.
+ *
+ * Most messages quote both. A value const is the exception — "is neither PascalCase nor
+ * SCREAMING_SNAKE_CASE" names no replacement, because either form satisfies the rule and the gate
+ * will not choose between them. PascalCase is the choice here: it is what the guide leads with, and
+ * SCREAMING_SNAKE reads as a compile-time constant, which an exported binding often is not.
+ */
 function namesFrom(message) {
     const quoted = [...message.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
-    if (quoted.length < 2) return null;
+    if (quoted.length === 0) return null;
+    if (quoted.length < 2) {
+        if (!/^exported (const|binding) /.test(message)) return null;
+        const old = quoted[0];
+        const pascal = old.replace(/^_+/, '').replace(/^./, (c) => c.toUpperCase());
+        return pascal === old ? null : { Old: old, New: pascal };
+    }
     return { Old: quoted[0], New: quoted[quoted.length - 1] };
 }
 
@@ -252,6 +265,28 @@ function declaredNames(container) {
 /**
  * `export function foo()` → `export function Foo()`, plus a delegating `foo` beside it.
  */
+/**
+ * `export const foo = …` → `export const Foo = …`, plus a plain alias under the old name.
+ *
+ * The alias needs no type annotation: `export const foo = Foo` infers exactly Foo's type, including
+ * a literal or a const assertion, which restating the annotation could quietly widen.
+ *
+ * Only `const`. `export let dbUsername: string` is a LIVE binding that `LoadConfig()` assigns
+ * later, and a const alias would capture its value at module-init — `undefined` — rather than
+ * tracking it. Preserving that needs `export { X as y }`, which is a different edit, so those are
+ * left for a human.
+ */
+function rewriteExportedConst(ctx, node, names, statement) {
+    const { source, buffer } = ctx;
+    if (!ts.isIdentifier(node.name)) return SKIP_REASONS.BindingPattern;
+    if ((statement.declarationList.flags & ts.NodeFlags.Const) === 0) return SKIP_REASONS.Declared;
+    if (declaredNames(source).has(names.New)) return SKIP_REASONS.NameCollision;
+
+    buffer.Replace(node.name.getStart(source), node.name.end, names.New);
+    buffer.Insert(statement.end, `\n\n${docFor(names.New)}\nexport const ${names.Old} = ${names.New};`);
+    return null;
+}
+
 function rewriteFunction(ctx, node, names) {
     const { text, source, buffer, unit } = ctx;
     if (!node.body) return SKIP_REASONS.Abstract;
@@ -885,6 +920,24 @@ function rewriteFile(absPath, findings, subclassIndex) {
                 if (!entry.Skip) {
                     declarationNames.add(declaration.name);
                     functionRenames.push(entry.Names);
+                }
+            }
+        }
+        if (
+            ts.isVariableStatement(node) &&
+            (ts.getModifiers(node) ?? []).some((m) => m.kind === ts.SyntaxKind.ExportKeyword) &&
+            node.declarationList.declarations.length === 1
+        ) {
+            const declaration = node.declarationList.declarations[0];
+            if (ts.isIdentifier(declaration.name)) {
+                const entry = take(declaration.name, { Old: declaration.name.text });
+                if (entry) {
+                    entry.Skip = rewriteExportedConst(ctx, declaration, entry.Names, node);
+                    entry.Done = true;
+                    if (!entry.Skip) {
+                        declarationNames.add(declaration.name);
+                        functionRenames.push(entry.Names);
+                    }
                 }
             }
         }

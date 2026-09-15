@@ -12,7 +12,7 @@ import { MJComponentEntity, MJComponentRegistryEntity } from '@memberjunction/co
 import { setupSQLServerClient, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { DiscoverMJConfig, LoadDynamicPackages } from '@memberjunction/dynamic-packages';
 import sql from 'mssql';
-import { configInfo, componentRegistrySettings, dbDatabase, dbHost, dbPort, dbUsername, dbReadOnlyUsername, dbReadOnlyPassword } from './config.js';
+import { configInfo, componentRegistrySettings, dbDatabase, dbHost, dbPort, dbUsername, DbReadOnlyUsername, DbReadOnlyPassword } from './config.js';
 import createMSSQLConfig from './orm.js';
 import { DataSourceInfo, ComponentRegistryServerOptions, ComponentFeedbackParams, ComponentFeedbackResponse, FeedbackHandler } from './types.js';
 
@@ -212,11 +212,11 @@ export class ComponentRegistryAPIServer {
     })];
     
     // Establish a second read-only connection if credentials are provided
-    if (dbReadOnlyUsername && dbReadOnlyPassword) {
+    if (DbReadOnlyUsername && DbReadOnlyPassword) {
       const readOnlyConfig = {
         ...createMSSQLConfig(),
-        user: dbReadOnlyUsername,
-        password: dbReadOnlyPassword,
+        user: DbReadOnlyUsername,
+        password: DbReadOnlyPassword,
       };
       this.readOnlyPool = new sql.ConnectionPool(readOnlyConfig);
       this.readOnlyPool.on('error', (err) => {
@@ -231,7 +231,7 @@ export class ComponentRegistryAPIServer {
         host: dbHost, 
         port: dbPort, 
         database: dbDatabase, 
-        userName: dbReadOnlyUsername
+        userName: DbReadOnlyUsername
       }));
       LogStatus('Read-only connection pool has been initialized.');
     }

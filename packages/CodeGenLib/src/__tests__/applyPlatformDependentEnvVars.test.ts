@@ -41,7 +41,7 @@ vi.mock('cosmiconfig', () => ({
 }));
 
 import type { ConfigInfo } from '../Config/config';
-import { ApplyPlatformDependentEnvVars, _warnedEnvPrecedencePairs } from '../Config/config';
+import { ApplyPlatformDependentEnvVars, WarnedEnvPrecedencePairs } from '../Config/config';
 
 /** Build a minimal `ConfigInfo`-shaped object for tests. */
 function makeConfig(overrides: Partial<ConfigInfo> = {}): ConfigInfo {
@@ -63,7 +63,7 @@ function makeConfig(overrides: Partial<ConfigInfo> = {}): ConfigInfo {
 
 describe('applyPlatformDependentEnvVars — short-circuits', () => {
     beforeEach(() => {
-        _warnedEnvPrecedencePairs.clear();
+        WarnedEnvPrecedencePairs.clear();
         for (const key of ['PG_HOST', 'PG_PORT', 'PG_DATABASE', 'PG_USERNAME', 'PG_PASSWORD',
                             'DB_HOST', 'DB_PORT', 'DB_DATABASE', 'CODEGEN_DB_USERNAME', 'CODEGEN_DB_PASSWORD']) {
             delete process.env[key];
@@ -82,7 +82,7 @@ describe('applyPlatformDependentEnvVars — PG_* precedence on postgresql', () =
     let warnSpy: ReturnType<typeof vi.spyOn>;
 
     beforeEach(() => {
-        _warnedEnvPrecedencePairs.clear();
+        WarnedEnvPrecedencePairs.clear();
         for (const key of ['PG_HOST', 'PG_PORT', 'PG_DATABASE', 'PG_USERNAME', 'PG_PASSWORD',
                             'DB_HOST', 'DB_PORT', 'DB_DATABASE', 'CODEGEN_DB_USERNAME', 'CODEGEN_DB_PASSWORD']) {
             delete process.env[key];
@@ -157,7 +157,7 @@ describe('applyPlatformDependentEnvVars — precedence warning', () => {
     let warnSpy: ReturnType<typeof vi.spyOn>;
 
     beforeEach(() => {
-        _warnedEnvPrecedencePairs.clear();
+        WarnedEnvPrecedencePairs.clear();
         for (const key of ['PG_HOST', 'PG_PORT', 'DB_HOST', 'DB_PORT']) {
             delete process.env[key];
         }

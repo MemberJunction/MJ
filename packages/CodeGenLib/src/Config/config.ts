@@ -790,7 +790,10 @@ const _IS_PG_DEFAULT = _DEFAULT_DB_PLATFORM === 'postgresql';
  * Exported solely so tests can reset the dedup state between cases — production
  * code never mutates this set directly.
  */
-export const _warnedEnvPrecedencePairs = new Set<string>();
+export const WarnedEnvPrecedencePairs = new Set<string>();
+
+/** @deprecated Use {@link WarnedEnvPrecedencePairs}. */
+export const _warnedEnvPrecedencePairs = WarnedEnvPrecedencePairs;
 /**
  * Resolve a connection field from PG_*-prefixed env vars when `dbPlatform`
  * defaults to PostgreSQL, falling back to the SQL-Server-style env var name
@@ -812,9 +815,9 @@ function _resolveConnEnv(pgName: string, ssName: string, fallback: string): stri
     pgVal !== undefined &&
     ssVal !== undefined &&
     pgVal !== ssVal &&
-    !_warnedEnvPrecedencePairs.has(pairKey)
+    !WarnedEnvPrecedencePairs.has(pairKey)
   ) {
-    _warnedEnvPrecedencePairs.add(pairKey);
+    WarnedEnvPrecedencePairs.add(pairKey);
     // eslint-disable-next-line no-console
     console.warn(
       `[codegen-lib] ${pgName}=${pgVal} takes precedence over ${ssName}=${ssVal} on a PostgreSQL-default config. ` +
@@ -862,8 +865,8 @@ export function ApplyPlatformDependentEnvVars(config: ConfigInfo, userConfig: Pa
     if (userValue !== undefined) continue;
     const ssVal = process.env[ssEnv];
     const pairKey = `${pgEnv}:${ssEnv}`;
-    if (ssVal !== undefined && ssVal !== pgVal && !_warnedEnvPrecedencePairs.has(pairKey)) {
-      _warnedEnvPrecedencePairs.add(pairKey);
+    if (ssVal !== undefined && ssVal !== pgVal && !WarnedEnvPrecedencePairs.has(pairKey)) {
+      WarnedEnvPrecedencePairs.add(pairKey);
       // eslint-disable-next-line no-console
       console.warn(
         `[codegen-lib] ${pgEnv}=${pgVal} takes precedence over ${ssEnv}=${ssVal} on a PostgreSQL config. ` +

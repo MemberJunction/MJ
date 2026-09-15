@@ -1,4 +1,4 @@
-import { traverse, NodePath, CreateViolation, TruncateCode } from '../lint-utils';
+import { Traverse, NodePath, CreateViolation, TruncateCode } from '../lint-utils';
 import * as t from '@babel/types';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseLintRule } from '../lint-rule';
@@ -39,7 +39,7 @@ export class NoUnwrapUtilityLibsRule extends BaseLintRule {
   Test(ast: t.File, componentName: string): Violation[] {
     const violations: Violation[] = [];
 
-    traverse(ast, {
+    Traverse(ast, {
       CallExpression(path: NodePath<t.CallExpression>) {
         if (!t.isIdentifier(path.node.callee) || path.node.callee.name !== 'unwrapLibraryComponents') {
           return;

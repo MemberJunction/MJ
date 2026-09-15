@@ -15,7 +15,10 @@ import { MMKV } from 'react-native-mmkv';
  * itself; full dark-theme *rendering* is a Phase 2 task (see theme/tokens.ts).
  * Voice / push / Face-ID toggles persist here so Phase 2 features can read them.
  */
-export const prefsStorage = new MMKV({ id: 'mj-mobile-prefs' });
+export const PrefsStorage = new MMKV({ id: 'mj-mobile-prefs' });
+
+/** @deprecated Use {@link PrefsStorage}. */
+export const prefsStorage = PrefsStorage;
 
 /** The three appearance choices a user can select (`'system'` follows the OS). */
 export type AppearanceMode = 'light' | 'dark' | 'system';
@@ -42,7 +45,7 @@ export const APPEARANCE_LABEL: Record<AppearanceMode, string> = {
 
 /** Read the current appearance mode (defaults to 'system'). */
 export function GetAppearance(): AppearanceMode {
-  const raw = prefsStorage.getString(PrefKeys.appearance);
+  const raw = PrefsStorage.getString(PrefKeys.appearance);
   return raw === 'light' || raw === 'dark' || raw === 'system' ? raw : 'system';
 }
 
@@ -55,7 +58,7 @@ export function getAppearance(): AppearanceMode {
 export function CycleAppearance(): AppearanceMode {
   const current = GetAppearance();
   const next = APPEARANCE_CYCLE[(APPEARANCE_CYCLE.indexOf(current) + 1) % APPEARANCE_CYCLE.length];
-  prefsStorage.set(PrefKeys.appearance, next);
+  PrefsStorage.set(PrefKeys.appearance, next);
   return next;
 }
 
@@ -66,8 +69,8 @@ export function cycleAppearance(): AppearanceMode {
 
 /** Persist the chosen default agent (the one that answers without an @mention). */
 export function SetDefaultAgent(id: string, name: string): void {
-  prefsStorage.set(PrefKeys.defaultAgentId, id);
-  prefsStorage.set(PrefKeys.defaultAgentName, name);
+  PrefsStorage.set(PrefKeys.defaultAgentId, id);
+  PrefsStorage.set(PrefKeys.defaultAgentName, name);
 }
 
 /** @deprecated Use {@link SetDefaultAgent}. */
@@ -77,7 +80,7 @@ export function setDefaultAgent(id: string, name: string): void {
 
 /** Read the persisted default-agent display name, or `undefined` if unset. */
 export function GetDefaultAgentName(): string | undefined {
-  return prefsStorage.getString(PrefKeys.defaultAgentName);
+  return PrefsStorage.getString(PrefKeys.defaultAgentName);
 }
 
 /** @deprecated Use {@link GetDefaultAgentName}. */
@@ -87,7 +90,7 @@ export function getDefaultAgentName(): string | undefined {
 
 /** Read the persisted default-agent id, or `undefined` if unset. */
 export function GetDefaultAgentId(): string | undefined {
-  return prefsStorage.getString(PrefKeys.defaultAgentId);
+  return PrefsStorage.getString(PrefKeys.defaultAgentId);
 }
 
 /** @deprecated Use {@link GetDefaultAgentId}. */

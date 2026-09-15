@@ -1,4 +1,4 @@
-import { traverse, NodePath, LevenshteinDistance } from '../lint-utils';
+import { Traverse, NodePath, LevenshteinDistance } from '../lint-utils';
 import * as t from '@babel/types';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseLintRule } from '../lint-rule';
@@ -246,7 +246,7 @@ function buildDependencyMap(
 function collectVariableTypes(ast: t.File): Map<string, string> {
   const variableTypes = new Map<string, string>();
 
-  traverse(ast, {
+  Traverse(ast, {
     VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
       // Detect: const [foo, setFoo] = useState(initialValue)
       if (
@@ -389,7 +389,7 @@ export class ChildComponentPropValidationRule extends BaseLintRule {
     // Collect variable types from useState calls for type-checking
     const variableTypes = collectVariableTypes(ast);
 
-    traverse(ast, {
+    Traverse(ast, {
       JSXOpeningElement(path: NodePath<t.JSXOpeningElement>) {
         // Only handle simple <ComponentName ... /> elements
         if (!t.isJSXIdentifier(path.node.name)) return;

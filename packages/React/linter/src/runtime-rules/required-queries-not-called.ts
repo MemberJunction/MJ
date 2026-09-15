@@ -1,4 +1,4 @@
-import { traverse, NodePath, ExtractRunQueryNamesFromCode } from '../lint-utils';
+import { Traverse, NodePath, ExtractRunQueryNamesFromCode } from '../lint-utils';
 import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
 import { BaseLintRule } from '../lint-rule';
@@ -92,7 +92,7 @@ export class RequiredQueriesNotCalledRule extends BaseLintRule {
     // Track whether RunQuery is called anywhere in the root component's code
     let hasRunQueryCall = false;
 
-    traverse(ast, {
+    Traverse(ast, {
       CallExpression(path: NodePath<t.CallExpression>) {
         // Check for utilities.rq.RunQuery pattern
         if (

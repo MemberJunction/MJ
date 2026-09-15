@@ -1,4 +1,4 @@
-import { traverse, NodePath, FindClosestMatch } from '../lint-utils';
+import { Traverse, NodePath, FindClosestMatch } from '../lint-utils';
 import * as t from '@babel/types';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseLintRule } from '../lint-rule';
@@ -30,7 +30,7 @@ export class EventParameterValidationRule extends BaseLintRule {
     const eventTypeMap = buildEventTypeMap(componentSpec);
     if (eventTypeMap.size === 0) return violations;
 
-    traverse(ast, {
+    Traverse(ast, {
       JSXOpeningElement: (path: NodePath<t.JSXOpeningElement>) => {
         checkJSXEventHandlers(path, eventTypeMap, violations);
       },
@@ -418,7 +418,7 @@ function analyzeParameterAccess(
 
   const seen = new Set<string>();
 
-  traverse(tempFile, {
+  Traverse(tempFile, {
     MemberExpression(innerPath: NodePath<t.MemberExpression>) {
       if (!t.isIdentifier(innerPath.node.object) || innerPath.node.object.name !== paramName) return;
       if (innerPath.node.computed) return;

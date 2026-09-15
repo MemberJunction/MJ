@@ -3,7 +3,10 @@ import BodyParser from 'body-parser';
 import { LogStatusEx } from '@memberjunction/core';
 import { RESTEndpointHandler } from './RESTEndpointHandler.js';
 
-export const ___REST_API_BASE_PATH = '/api/v1';
+export const REST_API_BASE_PATH = '/api/v1';
+
+/** @deprecated Use {@link REST_API_BASE_PATH}. */
+export const ___REST_API_BASE_PATH = REST_API_BASE_PATH;
 
 /**
  * Configuration options for REST API endpoints
@@ -71,7 +74,7 @@ export function SetupRESTEndpoints(
         return;
     }
 
-    const basePath = ___REST_API_BASE_PATH;
+    const basePath = REST_API_BASE_PATH;
 
     // Create REST endpoint handler with entity and schema filters
     const restHandler = new RESTEndpointHandler({

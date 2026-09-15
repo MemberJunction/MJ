@@ -492,11 +492,17 @@ export function unwrapAllLibraryComponents(library: any, debug: boolean = false)
 }
 
 // Legacy exports for backward compatibility
-export const unwrapComponent = UnwrapLibraryComponent;
+export const UnwrapComponent = UnwrapLibraryComponent;
+
+/** @deprecated Use {@link UnwrapComponent}. */
+export const unwrapComponent = UnwrapComponent;
 export const UnwrapComponents = (library: any, exportNames: string[], debug: boolean = false) => {
   return UnwrapLibraryComponents(library, ...exportNames, debug as any);
 };
 
 /** @deprecated Use {@link UnwrapComponents}. */
 export const unwrapComponents = UnwrapComponents;
-export const unwrapAllComponents = UnwrapAllLibraryComponents;
+export const UnwrapAllComponents = UnwrapAllLibraryComponents;
+
+/** @deprecated Use {@link UnwrapAllComponents}. */
+export const unwrapAllComponents = UnwrapAllComponents;

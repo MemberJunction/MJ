@@ -7,7 +7,7 @@ import '@memberjunction/server-bootstrap-lite/mj-class-registrations';
 // Import supplemental manifest for user-defined classes (generated at prestart with --exclude-packages @memberjunction)
 import './generated/class-registrations-manifest.js';
 
-import { ___serverPort } from "./config";
+import { ServerPort } from "./config";
 import { ___runObject, HandleServerInit } from './util';
 import { MJGlobal } from '@memberjunction/global';
 import { RunCodeGenBase, SQLCodeGenBase } from '@memberjunction/codegen-lib';
@@ -17,11 +17,11 @@ const app = express();
 
 app.use(express.json());
 // get the server up and running
-app.listen(___serverPort, () => console.log('Server starting up...'));
+app.listen(ServerPort, () => console.log('Server starting up...'));
 
 // start the initialization process
 const serverInit$ = from(HandleServerInit()).pipe(
-  tap(() => console.log(`🚀 Server listening on port ${___serverPort}!\n`)) // Use tap for side effects
+  tap(() => console.log(`🚀 Server listening on port ${ServerPort}!\n`)) // Use tap for side effects
 );
 
 serverInit$.subscribe({

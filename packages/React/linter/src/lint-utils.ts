@@ -26,7 +26,10 @@ import { Violation } from './component-linter';
  * ```
  */
 type TraverseModule = typeof _traverse & { default?: typeof _traverse };
-export const traverse = (((_traverse as TraverseModule).default) ?? _traverse) as typeof _traverse;
+export const Traverse = (((_traverse as TraverseModule).default) ?? _traverse) as typeof _traverse;
+
+/** @deprecated Use {@link Traverse}. */
+export const traverse = Traverse;
 
 /** Re-export NodePath for convenience so rules don't need a separate @babel/traverse import */
 export type { NodePath };
@@ -406,7 +409,7 @@ export function ExtractRunQueryNamesFromCode(code: string): Set<string> {
       plugins: ['jsx', 'typescript'],
       errorRecovery: true,
     });
-    traverse(ast, {
+    Traverse(ast, {
       CallExpression(path: NodePath<t.CallExpression>) {
         if (IsRunQueryCall(path.node.callee)) {
           const arg = path.node.arguments[0];

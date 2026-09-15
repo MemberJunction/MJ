@@ -9,7 +9,7 @@ import { GetSigningKeys, GetSystemUser, GetValidationOptions, VerifyUserRecord, 
 import { CloneUserForSessionContext } from './auth/sessionUserClone.js';
 import { GetAPIKeyActingContextResolver } from './auth/actingContextResolver.js';
 import { TokenExpiredError, AuthProviderFactory } from '@memberjunction/auth-providers';
-import { authCache } from './cache.js';
+import { AuthCache } from './cache.js';
 import { userEmailMap, apiKey, mj_core_schema } from './config.js';
 import { BuildBoundaryLogPayload } from './logging/boundaryLogPayload.js';
 import { StartupLogger } from './logging/StartupLogger.js';
@@ -497,7 +497,7 @@ export const GetUserPayload = async (
       throw new TokenExpiredError(expiryDate);
     }
 
-    if (!authCache.has(token)) {
+    if (!AuthCache.has(token)) {
       const issuer = payload.iss;
       if (!issuer) {
         console.warn('No issuer claim on token');
@@ -512,7 +512,7 @@ export const GetUserPayload = async (
       }
 
       await verifyAsync(issuer, token);
-      authCache.set(token, true);
+      AuthCache.set(token, true);
     }
 
     // Use provider to extract user information

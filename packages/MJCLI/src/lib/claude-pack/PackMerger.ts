@@ -423,7 +423,10 @@ function walkRelativeFiles(dir: string, relativeTo: string): string[] {
 }
 
 /** Re-export for tests that want to exercise the walker in isolation. */
-export const _internals = { walkRelativeFiles, bytesEqual, collectPackPathsByPrefix };
+export const Internals = { walkRelativeFiles, bytesEqual, collectPackPathsByPrefix };
+
+/** @deprecated Use {@link Internals}. */
+export const _internals = Internals;
 
 // ManagedBlockError re-export — callers may catch it specifically.
 export { ManagedBlockError };

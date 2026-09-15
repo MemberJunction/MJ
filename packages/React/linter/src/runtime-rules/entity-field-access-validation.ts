@@ -1,4 +1,4 @@
-import { traverse, NodePath, CreateViolation, TruncateCode, FindClosestMatch, FindCaseMismatch, NUMERIC_COERCION_FUNCTIONS, NON_ENTITY_PROPERTIES } from '../lint-utils';
+import { Traverse, NodePath, CreateViolation, TruncateCode, FindClosestMatch, FindCaseMismatch, NUMERIC_COERCION_FUNCTIONS, NON_ENTITY_PROPERTIES } from '../lint-utils';
 import * as t from '@babel/types';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseLintRule } from '../lint-rule';
@@ -183,7 +183,7 @@ export class EntityFieldAccessValidationRule extends BaseLintRule {
 
     // Also discover entity names from RunView calls in the AST
     // (handles fixtures that don't have dataRequirements but do call RunView)
-    traverse(ast, {
+    Traverse(ast, {
       CallExpression(p: NodePath<t.CallExpression>) {
         const callee = p.node.callee;
         if (t.isMemberExpression(callee) && t.isIdentifier(callee.property) && callee.property.name === 'RunView') {
@@ -198,7 +198,7 @@ export class EntityFieldAccessValidationRule extends BaseLintRule {
         }
       },
       noScope: true,
-    } as Parameters<typeof traverse>[1]);
+    } as Parameters<typeof Traverse>[1]);
 
     // Emit skip-with-warning for entities discovered in RunView calls but lacking metadata
     for (const entityName of discoveredEntityNames) {
@@ -275,7 +275,7 @@ export class EntityFieldAccessValidationRule extends BaseLintRule {
     }
 
     // Traverse all member expressions and check entity-row typed variables
-    traverse(ast, {
+    Traverse(ast, {
       MemberExpression(path: NodePath<t.MemberExpression>) {
         if (path.node.computed || !t.isIdentifier(path.node.property)) return;
         const propertyName = path.node.property.name;

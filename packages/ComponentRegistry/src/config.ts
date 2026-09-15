@@ -68,8 +68,14 @@ export const {
   componentRegistrySettings,
 } = configInfo;
 
-export const dbReadOnlyUsername = configInfo.dbReadOnlyUsername || configInfo.databaseSettings?.dbReadOnlyUsername;
-export const dbReadOnlyPassword = configInfo.dbReadOnlyPassword || configInfo.databaseSettings?.dbReadOnlyPassword;
+export const DbReadOnlyUsername = configInfo.dbReadOnlyUsername || configInfo.databaseSettings?.dbReadOnlyUsername;
+
+/** @deprecated Use {@link DbReadOnlyUsername}. */
+export const dbReadOnlyUsername = DbReadOnlyUsername;
+export const DbReadOnlyPassword = configInfo.dbReadOnlyPassword || configInfo.databaseSettings?.dbReadOnlyPassword;
+
+/** @deprecated Use {@link DbReadOnlyPassword}. */
+export const dbReadOnlyPassword = DbReadOnlyPassword;
 
 export function LoadConfig(): ConfigInfo {
   const configSearchResult = explorer.search(process.cwd());

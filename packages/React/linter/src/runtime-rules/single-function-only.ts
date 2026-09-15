@@ -2,7 +2,7 @@ import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
 import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
-import { traverse, NodePath, CreateViolation } from '../lint-utils';
+import { Traverse, NodePath, CreateViolation } from '../lint-utils';
 
 /**
  * Rule: single-function-only
@@ -130,7 +130,7 @@ export class SingleFunctionOnlyRule extends BaseLintRule {
     // (e.g., leading variable declarations that destructure from React)
     if (programBody.length === 1 && t.isFunctionDeclaration(firstStatement)) {
       // Use traverse to find any problematic patterns inside
-      traverse(ast, {
+      Traverse(ast, {
         Program(path: NodePath<t.Program>) {
           // Check if there are any directives or other non-obvious code
           if (path.node.directives && path.node.directives.length > 0) {

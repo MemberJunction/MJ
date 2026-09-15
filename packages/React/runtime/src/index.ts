@@ -88,7 +88,7 @@ export {
 
 export {
   SetupStyles,
-  createDefaultComponentStyles,
+  CreateDefaultComponentStyles, createDefaultComponentStyles,
   BuildStylesFromTheme,
   ApplyStyleOverrides
 } from './utilities/component-styles';
@@ -142,9 +142,9 @@ export {
   UnwrapLibraryComponents, unwrapLibraryComponents,
   UnwrapAllLibraryComponents, unwrapAllLibraryComponents,
   // Legacy exports for backward compatibility
-  unwrapComponent,
+  UnwrapComponent, unwrapComponent,
   UnwrapComponents, unwrapComponents,
-  unwrapAllComponents
+  UnwrapAllComponents, unwrapAllComponents
 } from './utilities/component-unwrapper';
 
 export {

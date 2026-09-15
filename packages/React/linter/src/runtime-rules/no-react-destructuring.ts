@@ -2,7 +2,7 @@ import * as t from '@babel/types';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
-import { traverse, NodePath, TruncateCode } from '../lint-utils';
+import { Traverse, NodePath, TruncateCode } from '../lint-utils';
 
 /**
  * Rule: no-react-destructuring
@@ -21,7 +21,7 @@ export class NoReactDestructuringRule extends BaseLintRule {
   Test(ast: t.File): Violation[] {
     const violations: Violation[] = [];
 
-    traverse(ast, {
+    Traverse(ast, {
       VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
         // Check for destructuring from React
         if (t.isObjectPattern(path.node.id) && t.isIdentifier(path.node.init) && path.node.init.name === 'React') {

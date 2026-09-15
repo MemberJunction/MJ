@@ -1,4 +1,4 @@
-import { traverse, NodePath, CreateViolation, TruncateCode } from '../lint-utils';
+import { Traverse, NodePath, CreateViolation, TruncateCode } from '../lint-utils';
 import * as t from '@babel/types';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseLintRule } from '../lint-rule';
@@ -33,7 +33,7 @@ export class OverflowHiddenOnLayoutContainerRule extends BaseLintRule {
   Test(ast: t.File, componentName: string): Violation[] {
     const violations: Violation[] = [];
 
-    traverse(ast, {
+    Traverse(ast, {
       ObjectExpression(path: NodePath<t.ObjectExpression>) {
         if (!isInlineStyleObject(path)) {
           return;

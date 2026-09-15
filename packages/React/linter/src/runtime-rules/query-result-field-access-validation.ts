@@ -1,4 +1,4 @@
-import { traverse, NodePath, CreateViolation, TruncateCode, FindClosestMatch, FindCaseMismatch, NUMERIC_COERCION_FUNCTIONS } from '../lint-utils';
+import { Traverse, NodePath, CreateViolation, TruncateCode, FindClosestMatch, FindCaseMismatch, NUMERIC_COERCION_FUNCTIONS } from '../lint-utils';
 import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
 import { BaseLintRule } from '../lint-rule';
@@ -270,7 +270,7 @@ export class QueryResultFieldAccessValidationRule extends BaseLintRule {
         queryRowParams.set(p, queryName);
       }
 
-      traverse(body, {
+      Traverse(body, {
         MemberExpression(innerPath: NodePath<t.MemberExpression>) {
           const objName = t.isIdentifier(innerPath.node.object) ? innerPath.node.object.name : null;
           if (objName && queryRowParams.has(objName)) {
@@ -291,7 +291,7 @@ export class QueryResultFieldAccessValidationRule extends BaseLintRule {
     }
 
     // Main traversal
-    traverse(ast, {
+    Traverse(ast, {
       VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
         if (!t.isIdentifier(path.node.id)) return;
         const varName = path.node.id.name;

@@ -127,5 +127,8 @@ function isFKRedundant(cluster: OrganicKeyCluster): boolean {
 }
 
 /** Re-export for tests / observability. */
-export const __test__ = { isFKRedundant };
+export const Test__ = { isFKRedundant };
+
+/** @deprecated Use {@link Test__}. */
+export const __test__ = Test__;
 export type { OrganicKeyClusterMember };

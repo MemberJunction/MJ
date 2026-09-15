@@ -2,7 +2,7 @@ import * as t from '@babel/types';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
-import { traverse, NodePath, CreateViolation, TruncateCode } from '../lint-utils';
+import { Traverse, NodePath, CreateViolation, TruncateCode } from '../lint-utils';
 
 /**
  * Rule: no-export-statements
@@ -25,7 +25,7 @@ export class NoExportStatementsRule extends BaseLintRule {
     let mainFunctionEnd = 0;
 
     // First pass: find the main component function
-    traverse(ast, {
+    Traverse(ast, {
       FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
         if (path.node.id?.name === componentName) {
           mainFunctionEnd = path.node.loc?.end.line || 0;
@@ -51,7 +51,7 @@ export class NoExportStatementsRule extends BaseLintRule {
     });
 
     // Second pass: check for export statements
-    traverse(ast, {
+    Traverse(ast, {
       ExportNamedDeclaration(path: NodePath<t.ExportNamedDeclaration>) {
         const line = path.node.loc?.start.line || 0;
         violations.push(

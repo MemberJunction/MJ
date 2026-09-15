@@ -748,4 +748,7 @@ export class SafeExpressionEvaluator {
 /**
  * Default instance for convenience
  */
-export const defaultExpressionEvaluator = new SafeExpressionEvaluator();
+export const DefaultExpressionEvaluator = new SafeExpressionEvaluator();
+
+/** @deprecated Use {@link DefaultExpressionEvaluator}. */
+export const defaultExpressionEvaluator = DefaultExpressionEvaluator;

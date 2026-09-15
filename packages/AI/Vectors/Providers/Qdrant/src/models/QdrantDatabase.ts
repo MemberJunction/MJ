@@ -19,7 +19,7 @@ import {
     MetadataFilterCondition,
 } from '@memberjunction/ai-vectordb';
 import { LogError, LogStatus, UserInfo } from '@memberjunction/core';
-import { qdrantUrl } from '../config';
+import { QdrantUrl } from '../config';
 
 /**
  * Maps MJ's metric enum values to Qdrant distance types.
@@ -84,7 +84,7 @@ export class QdrantDatabase extends VectorDBBase {
     constructor(apiKey: string) {
         super(apiKey);
         this._client = new QdrantClient({
-            url: qdrantUrl,
+            url: QdrantUrl,
             apiKey: apiKey || undefined,
         });
     }
@@ -113,7 +113,7 @@ export class QdrantDatabase extends VectorDBBase {
                 name: c.name,
                 dimension: 0, // Not available from list endpoint
                 metric: 'cosine' as IndexModelMetricEnum,
-                host: qdrantUrl,
+                host: QdrantUrl,
             }));
             return { indexes };
         } catch (ex) {
@@ -150,7 +150,7 @@ export class QdrantDatabase extends VectorDBBase {
                 name: params.id,
                 dimension,
                 metric,
-                host: qdrantUrl,
+                host: QdrantUrl,
             };
 
             return this.wrapSuccessResponse(description);

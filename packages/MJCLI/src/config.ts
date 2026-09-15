@@ -113,7 +113,7 @@ const openAppsConfigSchema = z.object({
 // `server` is consumed by @memberjunction/server-bootstrap at MJAPI boot (B1).
 // `client` is consumed by `mj codegen manifest --open-app-client-bootstrap`, which
 // appends a side-effect import per entry to MJExplorer's class-registrations manifest.
-export const dynamicPackagesSchema = z.object({
+export const DynamicPackagesSchema = z.object({
   server: z.array(dynamicPackageEntrySchema).optional(),
   client: z.array(dynamicPackageEntrySchema).optional(),
   // Per-process on/off switch keyed by process ID or prefix (`{ 'cli:codegen': 'none' }`);
@@ -123,6 +123,9 @@ export const dynamicPackagesSchema = z.object({
   // schema than the loader turns a harmless typo into a hard failure of unrelated commands.
   policy: z.record(z.string(), z.string()).optional(),
 }).optional();
+
+/** @deprecated Use {@link DynamicPackagesSchema}. */
+export const dynamicPackagesSchema = DynamicPackagesSchema;
 
 // Schema for database-dependent config (required fields)
 const mjConfigSchema = z.object({
@@ -160,7 +163,7 @@ const mjConfigSchema = z.object({
     schemaPlaceholders: z.array(schemaPlaceholderSchema).optional(),
   }).passthrough().optional(),
   openApps: openAppsConfigSchema,
-  dynamicPackages: dynamicPackagesSchema,
+  dynamicPackages: DynamicPackagesSchema,
 });
 
 // Schema for non-database commands (all fields optional)
@@ -195,11 +198,14 @@ const mjConfigSchemaOptional = z.object({
     schemaPlaceholders: z.array(schemaPlaceholderSchema).optional(),
   }).passthrough().optional(),
   openApps: openAppsConfigSchema,
-  dynamicPackages: dynamicPackagesSchema,
+  dynamicPackages: DynamicPackagesSchema,
 });
 
 // Don't validate at module load - let commands decide when they need validated config
-export const config = result?.config as MJConfig | undefined;
+export const Config = result?.config as MJConfig | undefined;
+
+/** @deprecated Use {@link Config}. */
+export const config = Config;
 
 /**
  * The discovered mj.config.cjs BEFORE any Zod parse, plus its path. The dynamic-package loader

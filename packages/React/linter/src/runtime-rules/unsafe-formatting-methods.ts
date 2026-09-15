@@ -1,4 +1,4 @@
-import { traverse, NodePath } from '../lint-utils';
+import { Traverse, NodePath } from '../lint-utils';
 import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
 import { BaseLintRule } from '../lint-rule';
@@ -138,7 +138,7 @@ export class UnsafeFormattingMethodsRule extends BaseLintRule {
       return { found: false, nullable: false };
     };
 
-    traverse(ast, {
+    Traverse(ast, {
       // Check JSX expressions
       JSXExpressionContainer(path: NodePath<t.JSXExpressionContainer>) {
         const expr = path.node.expression;

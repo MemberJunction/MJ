@@ -2,7 +2,7 @@ import * as t from '@babel/types';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
-import { traverse, NodePath, CreateViolation, TruncateCode } from '../lint-utils';
+import { Traverse, NodePath, CreateViolation, TruncateCode } from '../lint-utils';
 
 /**
  * Rule: no-require-statements
@@ -21,7 +21,7 @@ export class NoRequireStatementsRule extends BaseLintRule {
   Test(ast: t.File, componentName: string): Violation[] {
     const violations: Violation[] = [];
 
-    traverse(ast, {
+    Traverse(ast, {
       CallExpression(path: NodePath<t.CallExpression>) {
         const callee = path.node.callee;
 
