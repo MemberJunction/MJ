@@ -1959,6 +1959,103 @@
           "primaryKey": {
             "ID": "FBC94552-BF83-4CF5-9A38-4032661501E2"
           }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FirstSearchResult",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "Description": "Details of the first search result"
+          },
+          "primaryKey": {
+            "ID": "b2576969-fc51-4a03-80b1-7a17fa8b9815"
+          },
+          "deleteRecord": {
+            "delete": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SearchResults",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Array of search result objects containing title, URL, and snippet"
+          },
+          "primaryKey": {
+            "ID": "bfa9fc38-fc0d-4826-88f4-5fd2c69c8aa7"
+          },
+          "deleteRecord": {
+            "delete": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SearchResultsCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "Description": "Total number of search results found"
+          },
+          "primaryKey": {
+            "ID": "263f09be-9f27-49c3-bc7d-75f4fb31b091"
+          },
+          "deleteRecord": {
+            "delete": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SearchUrl",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "Description": "URL of the search results page"
+          },
+          "primaryKey": {
+            "ID": "ae5c7c67-4c0c-44e5-97ae-aa7ddb1311e2"
+          },
+          "deleteRecord": {
+            "delete": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DisableQueueing",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "If true, fails immediately when rate limited instead of queueing (default: false)",
+            "IsRequired": false,
+            "DefaultValue": "false"
+          },
+          "primaryKey": {
+            "ID": "476061ff-d1ad-480a-9775-c6d3409a41bf"
+          },
+          "deleteRecord": {
+            "delete": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Region",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Regional search preference (default: 'us-en')",
+            "IsRequired": false,
+            "DefaultValue": "us-en"
+          },
+          "primaryKey": {
+            "ID": "46b4466b-7e1f-4dde-81f9-afaaab263be3"
+          },
+          "deleteRecord": {
+            "delete": true
+          }
         }
       ],
       "MJ: Action Result Codes": [

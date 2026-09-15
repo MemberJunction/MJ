@@ -77,6 +77,18 @@
             "lastModified": "2026-07-01T23:25:37.324Z",
             "checksum": "86b2b241c67c589ba11983eceb4dcfe7eb704ccd250d6f4e94018d38ff3fe315"
           }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Perplexity Search"
+          },
+          "primaryKey": {
+            "ID": "CB66E6E9-3699-496D-A91C-F00AE27ADD98"
+          },
+          "deleteRecord": {
+            "delete": true
+          }
         }
       ]
     },

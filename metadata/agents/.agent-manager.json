@@ -160,6 +160,19 @@
             "lastModified": "2026-08-20T22:30:08.905Z",
             "checksum": "4bf81cacd7d90c73dd8931843d7ddf962b5be8bec19c2134586b70150980f7c9"
           }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Perplexity Search",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "0427003E-1B67-4D6F-90BE-ADA265541B31"
+          },
+          "deleteRecord": {
+            "delete": true
+          }
         }
       ],
       "MJ: AI Agent Relationships": [
@@ -296,6 +309,19 @@
                 "sync": {
                   "lastModified": "2026-02-13T21:09:22.241Z",
                   "checksum": "eb374413b832106653fce686b208ca75da6d73946138457ddfe5dc2b1c255959"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:MJ: Actions.Name=Perplexity Search",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "5FBCC196-BFEE-42A5-B539-9AAD4E6C819B"
+                },
+                "deleteRecord": {
+                  "delete": true
                 }
               }
             ]
@@ -447,6 +473,19 @@
                 "sync": {
                   "lastModified": "2026-02-13T21:09:22.372Z",
                   "checksum": "eb374413b832106653fce686b208ca75da6d73946138457ddfe5dc2b1c255959"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:MJ: Actions.Name=Perplexity Search",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "7F347B61-92EC-4D63-9545-5DD23EE25E0D"
+                },
+                "deleteRecord": {
+                  "delete": true
                 }
               }
             ],

@@ -465,6 +465,19 @@
             "lastModified": "2026-02-13T21:09:23.990Z",
             "checksum": "28de8aa9430f37322c1e2c0ddb40b974147cfb2cffe72933bb32c9644037993b"
           }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Perplexity Search",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "581A8F56-96E6-4FF7-8BF0-D804FE48AFF8"
+          },
+          "deleteRecord": {
+            "delete": true
+          }
         }
       ],
       "MJ: AI Agent Relationships": [
