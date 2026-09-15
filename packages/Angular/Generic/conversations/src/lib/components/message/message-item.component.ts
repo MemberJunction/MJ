@@ -337,15 +337,24 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
   /** Host image URL for the AI message avatar. Null = the agent's Font Awesome icon. */
   @Input()
-  public set assistantAvatarUrl(value: string | null) {
+  public set AssistantAvatarUrl(value: string | null) {
     if (value !== this._assistantAvatarUrl) {
       this._assistantAvatarUrl = value;
       // A new URL gets a fresh chance even if the previous one 404'd.
       this.AssistantAvatarFailed = false;
     }
   }
-  public get assistantAvatarUrl(): string | null {
+  public get AssistantAvatarUrl(): string | null {
     return this._assistantAvatarUrl;
+  }
+
+  /** @deprecated Use {@link AssistantAvatarUrl}. */
+  public get assistantAvatarUrl(): string | null {
+    return this.AssistantAvatarUrl;
+  }
+  /** @deprecated Use {@link AssistantAvatarUrl}. */
+  @Input() public set assistantAvatarUrl(value: string | null) {
+    this.AssistantAvatarUrl = value;
   }
   private _assistantAvatarUrl: string | null = null;
 

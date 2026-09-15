@@ -381,7 +381,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   private _autoSentForConversationId: string | null = null;
 
   @Input()
-  set initialMessage(value: string | null) {
+  set InitialMessage(value: string | null) {
     // Handle case where an object with {text, attachments} is passed instead of just a string
     // This can happen if there's a type mismatch in the binding chain
     let actualValue = value;
@@ -397,32 +397,59 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       this.triggerInitialSend();
     }
   }
-  get initialMessage(): string | null {
+  get InitialMessage(): string | null {
     return this._initialMessage;
   }
 
+  /** @deprecated Use {@link InitialMessage}. */
+  get initialMessage(): string | null {
+    return this.InitialMessage;
+  }
+  /** @deprecated Use {@link InitialMessage}. */
+  @Input() set initialMessage(value: string | null) {
+    this.InitialMessage = value;
+  }
+
   @Input()
-  set initialAttachments(value: PendingAttachment[] | null) {
+  set InitialAttachments(value: PendingAttachment[] | null) {
     this._initialAttachments = value;
   }
-  get initialAttachments(): PendingAttachment[] | null {
+  get InitialAttachments(): PendingAttachment[] | null {
     return this._initialAttachments;
+  }
+
+  /** @deprecated Use {@link InitialAttachments}. */
+  get initialAttachments(): PendingAttachment[] | null {
+    return this.InitialAttachments;
+  }
+  /** @deprecated Use {@link InitialAttachments}. */
+  @Input() set initialAttachments(value: PendingAttachment[] | null) {
+    this.InitialAttachments = value;
   }
 
   private _conversationHistory: MJConversationDetailEntity[] = [];
   @Input()
-  public get conversationHistory(): MJConversationDetailEntity[] {
+  public get ConversationHistory(): MJConversationDetailEntity[] {
     return this._conversationHistory;
   }
-  public set conversationHistory(value: MJConversationDetailEntity[]) {
+  public set ConversationHistory(value: MJConversationDetailEntity[]) {
     this._conversationHistory = value;
+  }
+
+  /** @deprecated Use {@link ConversationHistory}. */
+  public get conversationHistory(): MJConversationDetailEntity[] {
+    return this.ConversationHistory;
+  }
+  /** @deprecated Use {@link ConversationHistory}. */
+  @Input() public set conversationHistory(value: MJConversationDetailEntity[]) {
+    this.ConversationHistory = value;
   }
 
   // Message IDs that are in-progress and need streaming reconnection
   // Using getter/setter to react immediately when value changes (avoids timing issues with ngOnChanges)
   private _inProgressMessageIds?: string[];
   @Input()
-  set inProgressMessageIds(value: string[] | undefined) {
+  set InProgressMessageIds(value: string[] | undefined) {
     this._inProgressMessageIds = value;
     // React immediately when input changes (after component initialized)
     // This ensures callbacks are registered without relying on ngOnChanges timing
@@ -436,8 +463,17 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       this.unregisterAllCallbacks();
     }
   }
-  get inProgressMessageIds(): string[] | undefined {
+  get InProgressMessageIds(): string[] | undefined {
     return this._inProgressMessageIds;
+  }
+
+  /** @deprecated Use {@link InProgressMessageIds}. */
+  get inProgressMessageIds(): string[] | undefined {
+    return this.InProgressMessageIds;
+  }
+  /** @deprecated Use {@link InProgressMessageIds}. */
+  @Input() set inProgressMessageIds(value: string[] | undefined) {
+    this.InProgressMessageIds = value;
   }
 
   /**
@@ -681,7 +717,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * host can clear its pending state.
    */
   @Input()
-  set initialDraft(value: string | null) {
+  set InitialDraft(value: string | null) {
     if (value && value !== this.appliedInitialDraft) {
       this.appliedInitialDraft = value;
       if (this.InputBox) {
@@ -692,8 +728,17 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       }
     }
   }
-  get initialDraft(): string | null {
+  get InitialDraft(): string | null {
     return this.appliedInitialDraft;
+  }
+
+  /** @deprecated Use {@link InitialDraft}. */
+  get initialDraft(): string | null {
+    return this.InitialDraft;
+  }
+  /** @deprecated Use {@link InitialDraft}. */
+  @Input() set initialDraft(value: string | null) {
+    this.InitialDraft = value;
   }
   private appliedInitialDraft: string | null = null;
   private pendingInitialDraft: string | null = null;
@@ -1418,7 +1463,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * 4. Parent component explicitly triggers reconnection
    */
   public ReconnectInProgressMessages(): void {
-    if (!this.inProgressMessageIds || this.inProgressMessageIds.length === 0) {
+    if (!this.InProgressMessageIds || this.InProgressMessageIds.length === 0) {
       return;
     }
 
@@ -1426,7 +1471,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     this.unregisterAllCallbacks();
 
     // Register new callbacks for each in-progress message
-    for (const messageId of this.inProgressMessageIds) {
+    for (const messageId of this.InProgressMessageIds) {
       // Create callback bound to this message ID
       const callback = this.createMessageProgressCallback(messageId);
 
@@ -1801,7 +1846,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         this.MessageSent.emit(detail);
 
         const mentionResult = this.parseMentionsFromMessage(detail.Message);
-        const isFirstMessage = this.conversationHistory.length === 0;
+        const isFirstMessage = this.ConversationHistory.length === 0;
         await this.routeMessage(detail, mentionResult, isFirstMessage);
         return true;
       } else {
@@ -1865,7 +1910,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     this.MessageText = '';
 
     const mentionResult = this.parseMentionsFromMessage(messageDetail.Message);
-    const isFirstMessage = this.conversationHistory.length === 0;
+    const isFirstMessage = this.ConversationHistory.length === 0;
 
     await this.routeMessage(messageDetail, mentionResult, isFirstMessage);
     this.refocusTextarea();
@@ -2093,7 +2138,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * Finds the last agent ID that isn't Sage
    */
   private findLastNonSageAgentId(): string | null {
-    const lastAIMessage = this.conversationHistory
+    const lastAIMessage = this.ConversationHistory
       .slice()
       .reverse()
       .find(msg =>
@@ -2138,7 +2183,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         this.ConversationId,
         agentId,
         message,
-        this.conversationHistory
+        this.ConversationHistory
       );
       return intent;
     } catch (error) {
@@ -2358,7 +2403,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       const result = await this.agentService.processMessage(
         conversationId,
         userMessage,
-        this.conversationHistory,
+        this.ConversationHistory,
         conversationManagerMessage.ID,
         this.createProgressCallback(conversationManagerMessage, 'Sage'),
         this.AppContext,
@@ -2750,7 +2795,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         agentName,
         conversationId,
         userMessage,
-        this.conversationHistory,
+        this.ConversationHistory,
         reasoning,
         agentResponseMessage.ID,
         previousPayload, // Pass previous payload for continuity
@@ -2804,7 +2849,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
           agentName,
           conversationId,
           userMessage,
-          this.conversationHistory,
+          this.ConversationHistory,
           reasoning,
           agentResponseMessage.ID,
           previousPayload, // Pass same payload as first attempt
@@ -2884,7 +2929,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     conversationId: string
   ): Promise<void> {
     // Find the last AI message (excluding Sage) in the conversation history
-    const lastAIMessage = this.conversationHistory
+    const lastAIMessage = this.ConversationHistory
       .slice()
       .reverse()
       .find(msg =>
@@ -2959,7 +3004,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         agentName,
         conversationId,
         userMessage,
-        this.conversationHistory,
+        this.ConversationHistory,
         'Continuing previous work based on user feedback',
         statusMessage.ID,
         previousPayload,
@@ -3080,7 +3125,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         agentName,
         conversationId,
         userMessage,
-        this.conversationHistory,
+        this.ConversationHistory,
         `User mentioned agent directly with @${agentName}`,
         agentResponseMessage.ID,
         previousPayload, // Pass previous payload for continuity
@@ -3301,7 +3346,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         agentName,
         conversationId,
         userMessage,
-        this.conversationHistory,
+        this.ConversationHistory,
         'Continuing previous conversation with user',
         agentResponseMessage.ID,
         previousPayload, // Pass previous OUTPUT artifact payload for continuity

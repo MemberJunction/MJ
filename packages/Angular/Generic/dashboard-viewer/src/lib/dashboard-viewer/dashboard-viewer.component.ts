@@ -80,35 +80,53 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
 
     /** The dashboard entity to display */
     @Input()
-    set dashboard(value: MJDashboardEntity | null) {
+    set Dashboard(value: MJDashboardEntity | null) {
         const previous = this._dashboard;
         this._dashboard = value;
         if (value && value !== previous) {
             this.onDashboardChanged();
         }
     }
-    get dashboard(): MJDashboardEntity | null {
+    get Dashboard(): MJDashboardEntity | null {
         return this._dashboard;
+    }
+
+    /** @deprecated Use {@link Dashboard}. */
+    get dashboard(): MJDashboardEntity | null {
+      return this.Dashboard;
+    }
+    /** @deprecated Use {@link Dashboard}. */
+    @Input() set dashboard(value: MJDashboardEntity | null) {
+      this.Dashboard = value;
     }
 
     /** Alternative: Load dashboard by ID */
     @Input()
-    set dashboardId(value: string | null) {
+    set DashboardId(value: string | null) {
         const previous = this._dashboardId;
         this._dashboardId = value;
         if (value && value !== previous) {
             this.loadDashboardById(value);
         }
     }
-    get dashboardId(): string | null {
+    get DashboardId(): string | null {
         return this._dashboardId;
+    }
+
+    /** @deprecated Use {@link DashboardId}. */
+    get dashboardId(): string | null {
+      return this.DashboardId;
+    }
+    /** @deprecated Use {@link DashboardId}. */
+    @Input() set dashboardId(value: string | null) {
+      this.DashboardId = value;
     }
 
     /** Whether the dashboard is in edit mode */
     private _isEditing = false;
 
     @Input()
-    set isEditing(value: boolean) {
+    set IsEditing(value: boolean) {
         const previous = this._isEditing;
         this._isEditing = value;
         // When isEditing changes (and layout exists), reinitialize to apply GL settings
@@ -117,30 +135,57 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
             this.updatePanelEditModes();
         }
     }
-    get isEditing(): boolean {
+    get IsEditing(): boolean {
         return this._isEditing;
+    }
+
+    /** @deprecated Use {@link IsEditing}. */
+    get isEditing(): boolean {
+      return this.IsEditing;
+    }
+    /** @deprecated Use {@link IsEditing}. */
+    @Input() set isEditing(value: boolean) {
+      this.IsEditing = value;
     }
 
     /** Whether to show the toolbar */
     private _showToolbar = true;
 
     @Input()
-    set showToolbar(value: boolean) {
+    set ShowToolbar(value: boolean) {
         this._showToolbar = value;
     }
-    get showToolbar(): boolean {
+    get ShowToolbar(): boolean {
         return this._showToolbar;
+    }
+
+    /** @deprecated Use {@link ShowToolbar}. */
+    get showToolbar(): boolean {
+      return this.ShowToolbar;
+    }
+    /** @deprecated Use {@link ShowToolbar}. */
+    @Input() set showToolbar(value: boolean) {
+      this.ShowToolbar = value;
     }
 
     /** Whether to auto-save layout changes */
     private _autoSave = false;
 
     @Input()
-    set autoSave(value: boolean) {
+    set AutoSave(value: boolean) {
         this._autoSave = value;
     }
-    get autoSave(): boolean {
+    get AutoSave(): boolean {
         return this._autoSave;
+    }
+
+    /** @deprecated Use {@link AutoSave}. */
+    get autoSave(): boolean {
+      return this.AutoSave;
+    }
+    /** @deprecated Use {@link AutoSave}. */
+    @Input() set autoSave(value: boolean) {
+      this.AutoSave = value;
     }
 
     /** Whether to show the breadcrumb navigation */
@@ -425,8 +470,8 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
      * Toggle edit mode
      */
     public ToggleEditMode(): void {
-        this.isEditing = !this.isEditing;
-        this.EditModeChanged.emit(this.isEditing);
+        this.IsEditing = !this.IsEditing;
+        this.EditModeChanged.emit(this.IsEditing);
         this.updatePanelEditModes();
     }
 
@@ -889,7 +934,7 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
             this.LayoutContainer.nativeElement,
             this.config.layout,
             panelFactory,
-            this.isEditing
+            this.IsEditing
         );
 
         if (pendingPanelCreations.length > 0) {
@@ -1149,7 +1194,7 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
         wrapper.style.cssText = 'display: flex; flex-direction: column; height: 100%; background: var(--mj-bg-surface);';
 
         // Only show header in edit mode - GL tabs already display the title in view mode
-        if (this.isEditing) {
+        if (this.IsEditing) {
             const header = this.createPartHeader(panel, panel.id);
             wrapper.appendChild(header);
         }
@@ -1211,7 +1256,7 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
             const instance = componentRef.instance;
             instance.Panel = panel;
             instance.PartType = partType;
-            instance.IsEditing = this.isEditing;
+            instance.IsEditing = this.IsEditing;
 
             // Subscribe to events
             instance.ConfigureRequested.subscribe(() => {
@@ -1260,7 +1305,7 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
         header.appendChild(titleSection);
 
         // Action buttons (only in edit mode)
-        if (this.isEditing) {
+        if (this.IsEditing) {
             const actions = document.createElement('div');
             actions.style.cssText = 'display: flex; gap: 4px;';
 
@@ -1556,7 +1601,7 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
         // Update IsEditing on all dynamic components
         this._panelComponents.forEach((entry) => {
             if (entry.componentRef) {
-                entry.componentRef.instance.IsEditing = this.isEditing;
+                entry.componentRef.instance.IsEditing = this.IsEditing;
             }
         });
 
@@ -1581,7 +1626,7 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
     private markDirty(): void {
         this.HasUnsavedChanges = true;
 
-        if (this.autoSave && this.config) {
+        if (this.AutoSave && this.config) {
             this.save();
         }
     }

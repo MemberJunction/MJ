@@ -281,14 +281,23 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
     
     /** @deprecated Use 'entity' instead. Kept for backward compatibility. */
     @Input() 
-    get aiAgent(): MJAIAgentEntityExtended | null {
+    get AiAgent(): MJAIAgentEntityExtended | null {
         return this.isAgentEntity(this.entity) ? this.entity : null;
     }
-    set aiAgent(value: MJAIAgentEntityExtended | null) {
+    set AiAgent(value: MJAIAgentEntityExtended | null) {
         this.entity = value;
         if (value) {
             this.Mode = 'agent';
         }
+    }
+
+    /** @deprecated Use {@link AiAgent}. */
+    get aiAgent(): MJAIAgentEntityExtended | null {
+      return this.AiAgent;
+    }
+    /** @deprecated Use {@link AiAgent}. */
+    @Input() set aiAgent(value: MJAIAgentEntityExtended | null) {
+      this.AiAgent = value;
     }
     
     /**
@@ -417,15 +426,24 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
      * This property is typically controlled by parent components or dialog wrappers.
      */
     @Input() 
-    get isVisible(): boolean {
+    get IsVisible(): boolean {
         return this._isVisible;
     }
-    set isVisible(value: boolean) {
+    set IsVisible(value: boolean) {
         const wasVisible = this._isVisible;
         this._isVisible = value;
         if (value && !wasVisible) {
             this.ResetHarness();
         }
+    }
+
+    /** @deprecated Use {@link IsVisible}. */
+    get isVisible(): boolean {
+      return this.IsVisible;
+    }
+    /** @deprecated Use {@link IsVisible}. */
+    @Input() set isVisible(value: boolean) {
+      this.IsVisible = value;
     }
 
     /** Event emitted when the visibility state changes, allowing parent components to react */
@@ -945,9 +963,9 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         console.log('📊 mode:', this.Mode);
         
         // Ensure we have an entity
-        if (!this.entity && this.aiAgent) {
+        if (!this.entity && this.AiAgent) {
             // Handle backward compatibility
-            this.entity = this.aiAgent;
+            this.entity = this.AiAgent;
             this.Mode = 'agent';
         }
         
@@ -983,8 +1001,8 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         }
         
         if (changes['aiAgent']) {
-            if (!this.entity && this.aiAgent) {
-                this.entity = this.aiAgent;
+            if (!this.entity && this.AiAgent) {
+                this.entity = this.AiAgent;
                 this.Mode = 'agent';
                 this.loadSavedConversations();
             }
@@ -1029,7 +1047,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         
         // Auto-focus message input when dialog first becomes visible
         // Use Promise.resolve to schedule this after current change detection cycle
-        if (this.isVisible && !this._hasFocused && this.messageInput) {
+        if (this.IsVisible && !this._hasFocused && this.messageInput) {
             this._hasFocused = true;
             Promise.resolve().then(() => {
                 this.messageInput?.nativeElement?.focus();

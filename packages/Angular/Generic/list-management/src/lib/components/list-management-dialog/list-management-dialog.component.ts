@@ -65,15 +65,24 @@ export class ListManagementDialogComponent extends BaseAngularComponent implemen
    * Controls dialog visibility
    */
   @Input()
-  get visible(): boolean {
+  get Visible(): boolean {
     return this._visible;
   }
-  set visible(value: boolean) {
+  set Visible(value: boolean) {
     if (value && !this._visible) {
       this._pendingInit = true;
     }
     this._visible = value;
     this.tryInitialize();
+  }
+
+  /** @deprecated Use {@link Visible}. */
+  get visible(): boolean {
+    return this.Visible;
+  }
+  /** @deprecated Use {@link Visible}. */
+  @Input() set visible(value: boolean) {
+    this.Visible = value;
   }
   private _visible = false;
 

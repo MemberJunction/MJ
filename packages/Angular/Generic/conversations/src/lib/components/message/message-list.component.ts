@@ -314,27 +314,45 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   //    until the next messages-array mutation. ──
   /** Display name shown on AI messages. Null = the engine-resolved agent name. */
   @Input()
-  public set assistantDisplayName(value: string | null) {
+  public set AssistantDisplayName(value: string | null) {
     if (value !== this._assistantDisplayName) {
       this._assistantDisplayName = value;
       this.restampAssistantIdentity();
     }
   }
-  public get assistantDisplayName(): string | null {
+  public get AssistantDisplayName(): string | null {
     return this._assistantDisplayName;
+  }
+
+  /** @deprecated Use {@link AssistantDisplayName}. */
+  public get assistantDisplayName(): string | null {
+    return this.AssistantDisplayName;
+  }
+  /** @deprecated Use {@link AssistantDisplayName}. */
+  @Input() public set assistantDisplayName(value: string | null) {
+    this.AssistantDisplayName = value;
   }
   private _assistantDisplayName: string | null = null;
 
   /** Image URL for the AI message avatar. Null = the agent's Font Awesome icon. */
   @Input()
-  public set assistantAvatarUrl(value: string | null) {
+  public set AssistantAvatarUrl(value: string | null) {
     if (value !== this._assistantAvatarUrl) {
       this._assistantAvatarUrl = value;
       this.restampAssistantIdentity();
     }
   }
-  public get assistantAvatarUrl(): string | null {
+  public get AssistantAvatarUrl(): string | null {
     return this._assistantAvatarUrl;
+  }
+
+  /** @deprecated Use {@link AssistantAvatarUrl}. */
+  public get assistantAvatarUrl(): string | null {
+    return this.AssistantAvatarUrl;
+  }
+  /** @deprecated Use {@link AssistantAvatarUrl}. */
+  @Input() public set assistantAvatarUrl(value: string | null) {
+    this.AssistantAvatarUrl = value;
   }
   private _assistantAvatarUrl: string | null = null;
   @Input() public ArtifactMap: Map<string, LazyArtifactInfo[]> = new Map();
@@ -1254,10 +1272,15 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    * Efficiently updates the DOM without re-rendering everything
    */
   @Input()
-  set messagesUpdate(messages: MJConversationDetailEntity[]) {
+  set MessagesUpdate(messages: MJConversationDetailEntity[]) {
     if (messages && this.MessageContainerRef) {
       this.updateMessages(messages);
     }
+  }
+
+  /** @deprecated Use {@link MessagesUpdate}. */
+  @Input() set messagesUpdate(value: MJConversationDetailEntity[]) {
+    this.MessagesUpdate = value;
   }
 
   /**
@@ -1778,8 +1801,8 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     instance.allowPinning = this.AllowPinning;
     instance.allowMessageEdit = this.AllowMessageEdit;
     instance.allowMessageDelete = this.AllowMessageDelete;
-    instance.assistantDisplayName = this.assistantDisplayName;
-    instance.assistantAvatarUrl = this.assistantAvatarUrl;
+    instance.assistantDisplayName = this.AssistantDisplayName;
+    instance.assistantAvatarUrl = this.AssistantAvatarUrl;
   }
 
   /**

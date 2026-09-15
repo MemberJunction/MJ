@@ -135,7 +135,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   // LOCAL STATE INPUTS - passed from parent workspace
   private _conversationId: string | null = null;
   @Input()
-  set conversationId(value: string | null) {
+  set ConversationId(value: string | null) {
     if (value !== this._conversationId) {
       // Leaving a conversation is a save point for its in-progress draft.
       // (Optional-chained: harness-constructed instances may skip field initializers.)
@@ -153,8 +153,17 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       }
     }
   }
-  get conversationId(): string | null {
+  get ConversationId(): string | null {
     return this._conversationId;
+  }
+
+  /** @deprecated Use {@link ConversationId}. */
+  get conversationId(): string | null {
+    return this.ConversationId;
+  }
+  /** @deprecated Use {@link ConversationId}. */
+  @Input() set conversationId(value: string | null) {
+    this.ConversationId = value;
   }
 
   @Input() Conversation: MJConversationEntity | null = null;
@@ -483,20 +492,29 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   private _isNewConversation: boolean = false;
   @Input()
-  set isNewConversation(value: boolean) {
+  set IsNewConversation(value: boolean) {
     this._isNewConversation = value;
     if (value) {
       this.focusEmptyStateInput();
     }
   }
-  get isNewConversation(): boolean {
+  get IsNewConversation(): boolean {
     return this._isNewConversation;
+  }
+
+  /** @deprecated Use {@link IsNewConversation}. */
+  get isNewConversation(): boolean {
+    return this.IsNewConversation;
+  }
+  /** @deprecated Use {@link IsNewConversation}. */
+  @Input() set isNewConversation(value: boolean) {
+    this.IsNewConversation = value;
   }
 
   // Using getter/setter to ensure correct type handling
   private _pendingMessage: string | null = null;
   @Input()
-  set pendingMessage(value: string | null) {
+  set PendingMessage(value: string | null) {
     const previousPendingMessage = this._pendingMessage;
     // Handle case where an object is incorrectly passed
     if (value && typeof value === 'object' && 'text' in value) {
@@ -513,8 +531,17 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this._pendingMessageReservedTargetId = null;
     }
   }
-  get pendingMessage(): string | null {
+  get PendingMessage(): string | null {
     return this._pendingMessage;
+  }
+
+  /** @deprecated Use {@link PendingMessage}. */
+  get pendingMessage(): string | null {
+    return this.PendingMessage;
+  }
+  /** @deprecated Use {@link PendingMessage}. */
+  @Input() set pendingMessage(value: string | null) {
+    this.PendingMessage = value;
   }
 
   /**
@@ -549,7 +576,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * (legacy fallback for single-conversation hosts that never swap).
    */
   public get EffectivePendingMessageTarget(): string | null {
-    return this.PendingMessageConversationId ?? this._pendingMessageTargetId ?? this.conversationId;
+    return this.PendingMessageConversationId ?? this._pendingMessageTargetId ?? this.ConversationId;
   }
 
   public ShouldDeliverPendingMessageTo(conversationId: string): boolean {
@@ -565,11 +592,20 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   // Using getter/setter to ensure reactivity
   private _pendingAttachments: PendingAttachment[] | null = null;
   @Input()
-  set pendingAttachments(value: PendingAttachment[] | null) {
+  set PendingAttachments(value: PendingAttachment[] | null) {
     this._pendingAttachments = value;
   }
-  get pendingAttachments(): PendingAttachment[] | null {
+  get PendingAttachments(): PendingAttachment[] | null {
     return this._pendingAttachments;
+  }
+
+  /** @deprecated Use {@link PendingAttachments}. */
+  get pendingAttachments(): PendingAttachment[] | null {
+    return this.PendingAttachments;
+  }
+  /** @deprecated Use {@link PendingAttachments}. */
+  @Input() set pendingAttachments(value: PendingAttachment[] | null) {
+    this.PendingAttachments = value;
   }
 
   @Input() PendingArtifactId: string | null = null;
@@ -1324,7 +1360,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * agent's name. Emits composerAgentMentionConsumed once applied.
    */
   @Input()
-  set composerAgentMention(value: string | null) {
+  set ComposerAgentMention(value: string | null) {
     if (value && value !== this._composerAgentMention) {
       this._composerAgentMention = value;
       this.applyComposerAgentMention(0);
@@ -1332,8 +1368,17 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this._composerAgentMention = null;
     }
   }
-  get composerAgentMention(): string | null {
+  get ComposerAgentMention(): string | null {
     return this._composerAgentMention;
+  }
+
+  /** @deprecated Use {@link ComposerAgentMention}. */
+  get composerAgentMention(): string | null {
+    return this.ComposerAgentMention;
+  }
+  /** @deprecated Use {@link ComposerAgentMention}. */
+  @Input() set composerAgentMention(value: string | null) {
+    this.ComposerAgentMention = value;
   }
   private _composerAgentMention: string | null = null;
 
@@ -2050,11 +2095,11 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    */
   public async TogglePinsPanel(): Promise<void> {
     this.ShowPinsPanel = !this.ShowPinsPanel;
-    if (this.ShowPinsPanel && !this.pinsHydrated && this.conversationId) {
+    if (this.ShowPinsPanel && !this.pinsHydrated && this.ConversationId) {
       this.IsLoadingPins = true;
       this.cdr.detectChanges();
       try {
-        await this.hydratePinnedMessages(this.conversationId);
+        await this.hydratePinnedMessages(this.ConversationId);
       } finally {
         this.IsLoadingPins = false;
       }
@@ -2136,7 +2181,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * user's scroll position rather than jumping.
    */
   public async OnOlderMessagesRequested(): Promise<void> {
-    const conversationId = this.conversationId;
+    const conversationId = this.ConversationId;
     await this.windowStore.LoadOlder(this.CurrentUser);
     if (!this.isActiveConversation(conversationId)) {
       return;
@@ -2189,7 +2234,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * and always reports the outcome, because the plan forbids a silent no-op here.
    */
   public async OnDateJumpRequested(period: DateJumpPeriod): Promise<void> {
-    const conversationId = this.conversationId;
+    const conversationId = this.ConversationId;
     let pagesLoaded = 0;
 
     // The loop's ONLY job is to load enough history for the jump to be answerable. It does
@@ -2622,8 +2667,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.isInitialized = true;
 
     // Initial load if there's already an active conversation
-    if (this.conversationId) {
-      await this.onConversationChanged(this.conversationId);
+    if (this.ConversationId) {
+      await this.onConversationChanged(this.ConversationId);
     }
 
     // Setup resize listeners
@@ -2653,7 +2698,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       .pipe(takeUntil(this.destroy$))
       .subscribe(async (event) => {
         // Find the message in our current conversation
-        const conversationId = this.conversationId;
+        const conversationId = this.ConversationId;
         const message = this.messages.find(m => UUIDsEqual(m.ID, event.conversationDetailId));
         if (message && conversationId) {
           await this.handleMessageCompletion(message, event.agentRunId, conversationId);
@@ -2668,7 +2713,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.agentStateService.activeAgents$
       .pipe(takeUntil(this.destroy$))
       .subscribe(async (agents) => {
-        const conversationId = this.conversationId;
+        const conversationId = this.ConversationId;
         if (!conversationId) return;
         const conversationAgents = agents.filter(a => UUIDsEqual(a.run.ConversationID, conversationId));
         const hasActiveAgents = conversationAgents.length > 0;
@@ -2823,7 +2868,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   private isActiveConversation(conversationId: string | null | undefined): boolean {
-    return UUIDsEqual(conversationId, this.conversationId);
+    return UUIDsEqual(conversationId, this.ConversationId);
   }
 
   private isActiveConversationLoad(conversationId: string | null | undefined, loadToken: number): boolean {
@@ -3000,11 +3045,11 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * we need to find the one that matches the current conversationId.
    */
   private getActiveMessageInputComponent(): MessageInputComponent | undefined {
-    if (!this.messageInputComponents || !this.conversationId) {
+    if (!this.messageInputComponents || !this.ConversationId) {
       return undefined;
     }
     return this.messageInputComponents.find(
-      component => component.conversationId === this.conversationId
+      component => component.conversationId === this.ConversationId
     );
   }
 
@@ -3453,12 +3498,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   async OnMessageSent(message: MJConversationDetailEntity): Promise<void> {
     // The draft became a message — remove it from the persisted map + snapshot.
-    const sentKey = (message.ConversationID ?? this.conversationId ?? '').trim().toLowerCase();
-    this.draftStore.ClearDraft(message.ConversationID ?? this.conversationId);
+    const sentKey = (message.ConversationID ?? this.ConversationId ?? '').trim().toLowerCase();
+    this.draftStore.ClearDraft(message.ConversationID ?? this.ConversationId);
     if (sentKey) {
       this.initialDraftSnapshots.delete(sentKey);
     }
-    if (this.pendingMessage && this.isPendingMessageTarget(message.ConversationID)) {
+    if (this.PendingMessage && this.isPendingMessageTarget(message.ConversationID)) {
       this._pendingMessageReservedTargetId = null;
       this.PendingMessageConsumed.emit();
     }
@@ -3467,7 +3512,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     // Multiple inputs are kept alive in the DOM cache (one per visited conversation) and all
     // emit events to this single parent. Without this check, a background agent's response
     // for conversation A would pollute conversation B's message list.
-    if (!UUIDsEqual(message.ConversationID, this.conversationId)) {
+    if (!UUIDsEqual(message.ConversationID, this.ConversationId)) {
       // Invalidate that conversation's cache so fresh data loads when the user switches back
       if (message.ConversationID) {
         this.resetComponentState(message.ConversationID);
@@ -3500,8 +3545,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       // Invalidate cache when new message is added.
       // Without this, navigating away and back would load stale cached data
       // that doesn't include this new message.
-      if (this.conversationId) {
-        this.resetComponentState(this.conversationId);
+      if (this.ConversationId) {
+        this.resetComponentState(this.ConversationId);
       }
 
       // Load attachments for the new message (if any were saved with it)
@@ -3537,7 +3582,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   OnInitialMessageAutoSendStarted(event: {conversationId: string}): void {
-    if (this.pendingMessage && this.isPendingMessageTarget(event.conversationId)) {
+    if (this.PendingMessage && this.isPendingMessageTarget(event.conversationId)) {
       this._pendingMessageReservedTargetId = event.conversationId;
     }
   }
@@ -3744,7 +3789,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * Called when agent completion is detected to discover newly delegated agent messages.
    */
   private async reloadMessagesForActiveConversation(): Promise<void> {
-    const conversationId = this.conversationId;
+    const conversationId = this.ConversationId;
     if (!conversationId) {
       return;
     }
@@ -3897,7 +3942,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   async OnAgentResponse(event: {message: MJConversationDetailEntity, agentResult: any}): Promise<void> {
     // Guard: ignore agent responses from background inputs for other conversations.
     // See onMessageSent() for the full explanation.
-    if (!UUIDsEqual(event.message.ConversationID, this.conversationId)) {
+    if (!UUIDsEqual(event.message.ConversationID, this.ConversationId)) {
       if (event.message.ConversationID) {
         this.resetComponentState(event.message.ConversationID);
       }
@@ -3909,8 +3954,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.messages = [...this.messages, event.message];
 
     // Invalidate cache for this conversation since we have new messages
-    if (this.conversationId) {
-      this.resetComponentState(this.conversationId);
+    if (this.ConversationId) {
+      this.resetComponentState(this.ConversationId);
     }
 
     // Where the viewport goes when the agent responds
@@ -4131,7 +4176,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   private snapshotArtifactPanelBaseline(): ArtifactPanelBaseline {
     return {
       versions: SnapshotArtifactVersions(this.allArtifactRefs()),
-      conversationId: this.conversationId,
+      conversationId: this.ConversationId,
       mapConversationId: this.lastLoadedConversationId,
       mapGeneration: this.artifactMapGeneration,
       selectionEpoch: this.artifactSelectionEpoch,
@@ -4368,7 +4413,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   async OpenArtifactFromModal(artifactId: string, versionNumber?: number): Promise<void> {
-    const conversationId = this.conversationId;
+    const conversationId = this.ConversationId;
     this.artifactSelectionEpoch++;
     this.SelectedArtifactId = artifactId;
     this.SelectedVersionNumber = versionNumber;
@@ -4567,8 +4612,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     LogStatusEx({message: 'Thread reply added', verboseOnly: true, additionalArgs: [reply]});
 
     // Reload messages to get updated thread counts
-    if (this.conversationId) {
-      const conversationId = this.conversationId;
+    if (this.ConversationId) {
+      const conversationId = this.ConversationId;
       const loadToken = ++this.conversationLoadToken;
       void this.loadMessages(conversationId, loadToken);
     }
@@ -4673,7 +4718,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
     // The paging loop deliberately skipped the per-page peripheral rebuild — pay it once,
     // here, before asking the list for element positions.
-    await this.refreshAfterPaging(this.conversationId!);
+    await this.refreshAfterPaging(this.ConversationId!);
     if (this.messageListComponent?.ScrollToMessage(messageId)) {
       this.beaconMessage(messageId);
     }
@@ -4698,7 +4743,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return false;   // not a loaded pin — nothing tells us how far back to page
     }
 
-    const conversationId = this.conversationId;
+    const conversationId = this.ConversationId;
     for (let page = 0; page < DATE_JUMP_MAX_PAGES; page++) {
       const snapshot = this.windowStore.GetSnapshot();
       const oldest = snapshot.Cursor.OldestSequence;
@@ -4767,9 +4812,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     const activeInput = this.getActiveMessageInputComponent();
 
     // If we have an active conversation with message input available, use it
-    if (activeInput && !this.isNewConversation) {
+    if (activeInput && !this.IsNewConversation) {
       await activeInput.sendMessageWithText(messageText);
-    } else if (!this.Conversation || this.isNewConversation) {
+    } else if (!this.Conversation || this.IsNewConversation) {
       // If no conversation or in new unsaved state, route through empty state handler
       // This will create the conversation and send the message
       await this.OnEmptyStateMessageSent({ text: messageText, attachments: [] });
@@ -4836,7 +4881,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this.windowStore.RemoveDetail(id);
     }
     this.messages = this.messages.filter(m => !hideIds.has(m.ID));
-    this.resetComponentState(this.conversationId!);
+    this.resetComponentState(this.ConversationId!);
     this.cdr.detectChanges();
   }
 
@@ -4923,7 +4968,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   async OnArtifactClicked(data: {artifactId: string; versionId?: string}): Promise<void> {
-    const conversationId = this.conversationId;
+    const conversationId = this.ConversationId;
     this.artifactSelectionEpoch++;
     this.SelectedArtifactId = data.artifactId;
 
@@ -5460,7 +5505,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * agent-completion refresh path, and no-ops when no conversation is open.
    */
   private async reloadActiveConversationTimeline(): Promise<void> {
-    const conversationId = this.conversationId;
+    const conversationId = this.ConversationId;
     if (!conversationId) {
       return;
     }
@@ -5556,7 +5601,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     try {
       const start = this.RealtimeSession.StartRealtimeSession(
         request.TargetAgentId,
-        request.ConversationId ?? this.conversationId,
+        request.ConversationId ?? this.ConversationId,
         request.LastSessionId,
         agentName,
         null, // preferredModelId
@@ -5607,7 +5652,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
     console.group(`%c[MJ Diagnostic Dump] Message ${messageId}`, 'color: #0076b6; font-weight: bold');
     console.log('Timestamp:', new Date().toISOString());
-    console.log('ConversationID:', this.conversationId);
+    console.log('ConversationID:', this.ConversationId);
     console.log('isInProgress (UI):', isInProgress);
     console.log('All inProgressMessageIds:', [...this.InProgressMessageIds]);
     console.log('Streaming connection:', streaming.connectionStatus);
@@ -5775,7 +5820,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * to the prior conversation turn.
    */
   async OnAnalyzeArtifact(event: { artifactId: string; snapshot: DataSnapshot }): Promise<PendingAttachment | null> {
-    const conversationId = this.conversationId;
+    const conversationId = this.ConversationId;
     if (!conversationId || !this.CurrentUser) return null;
 
     const messageInput = this.getActiveMessageInputComponent();
@@ -5848,7 +5893,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * than throwing. The user's conversation state isn't disrupted.
    */
   private async handleCaptureDataSnapshotCommand(command: CaptureDataSnapshotCommand): Promise<void> {
-    const conversationId = this.conversationId;
+    const conversationId = this.ConversationId;
     console.log('[client:capture-data-snapshot] Handler invoked', { command, conversationId });
     if (!conversationId || !this.CurrentUser) {
       console.warn('[client:capture-data-snapshot] No active conversation/user; ignoring');
@@ -6047,14 +6092,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * first, then drop the filter here.
    */
   private async findMostRecentComponentArtifactId(): Promise<string | null> {
-    if (!this.conversationId || !this.CurrentUser) return null;
+    if (!this.ConversationId || !this.CurrentUser) return null;
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       // Get all conversation detail IDs for this conversation, newest first.
       const detailsResult = await rv.RunView<MJConversationDetailEntity>(
         {
           EntityName: 'MJ: Conversation Details',
-          ExtraFilter: `ConversationID='${this.conversationId}'`,
+          ExtraFilter: `ConversationID='${this.ConversationId}'`,
           Fields: ['ID'],
           OrderBy: '__mj_CreatedAt DESC',
           ResultType: 'simple',
@@ -6441,7 +6486,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     if (!this.PendingArtifactId) {
       return; // No pending navigation
     }
-    const pendingTargetConversationId = this.PendingArtifactConversationId ?? this.conversationId;
+    const pendingTargetConversationId = this.PendingArtifactConversationId ?? this.ConversationId;
     if (!this.PendingArtifactId || !this.isActiveConversation(pendingTargetConversationId)) {
       return;
     }
@@ -6451,7 +6496,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     // Capture values before emitting consumed event
     const artifactIdToOpen = this.PendingArtifactId;
     const versionNumberToOpen = this.PendingArtifactVersionNumber;
-    const conversationId = this.conversationId;
+    const conversationId = this.ConversationId;
 
     // Notify parent that we consumed the pending artifact
     this.PendingArtifactConsumed.emit();

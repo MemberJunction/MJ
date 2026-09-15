@@ -341,7 +341,7 @@ import { ToastService } from '../../services/toast.service';
 export class ExportModalComponent {
   private _isVisible = false;
   @Input()
-  set isVisible(value: boolean) {
+  set IsVisible(value: boolean) {
     const opening = value && !this._isVisible;
     this._isVisible = value;
     if (opening) {
@@ -354,8 +354,17 @@ export class ExportModalComponent {
       this.ExportOptions.includeTheme = !!this.Branding;
     }
   }
-  get isVisible(): boolean {
+  get IsVisible(): boolean {
     return this._isVisible;
+  }
+
+  /** @deprecated Use {@link IsVisible}. */
+  get isVisible(): boolean {
+    return this.IsVisible;
+  }
+  /** @deprecated Use {@link IsVisible}. */
+  @Input() set isVisible(value: boolean) {
+    this.IsVisible = value;
   }
 
   @Input() Conversation?: MJConversationEntity;
@@ -633,6 +642,6 @@ export class ExportModalComponent {
       includeTheme: !!this.Branding,
       themeMode: 'light'
     };
-    this.isVisible = false;
+    this.IsVisible = false;
   }
 }

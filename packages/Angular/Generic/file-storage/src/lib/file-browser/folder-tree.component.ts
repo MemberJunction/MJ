@@ -46,7 +46,7 @@ export class FolderTreeComponent {
   }
 
   @Input()
-  set account(value: StorageAccountWithProvider | null) {
+  set Account(value: StorageAccountWithProvider | null) {
     const previousAccount = this._account;
     this._account = value;
 
@@ -55,8 +55,17 @@ export class FolderTreeComponent {
       this.loadFolders();
     }
   }
-  get account(): StorageAccountWithProvider | null {
+  get Account(): StorageAccountWithProvider | null {
     return this._account;
+  }
+
+  /** @deprecated Use {@link Account}. */
+  get account(): StorageAccountWithProvider | null {
+    return this.Account;
+  }
+  /** @deprecated Use {@link Account}. */
+  @Input() set account(value: StorageAccountWithProvider | null) {
+    this.Account = value;
   }
 
   /**
@@ -295,7 +304,7 @@ export class FolderTreeComponent {
    * Updates breadcrumbs based on current path
    */
   private updateBreadcrumbs(): void {
-    if (!this.account) {
+    if (!this.Account) {
       this.Breadcrumbs = [];
       return;
     }
@@ -303,7 +312,7 @@ export class FolderTreeComponent {
     // Start with account root (show account name)
     const items: BreadcrumbItem[] = [
       {
-        label: this.account.account.Name,
+        label: this.Account.account.Name,
         path: '/'
       }
     ];
@@ -342,7 +351,7 @@ export class FolderTreeComponent {
    * Loads folders from the storage account for the current path
    */
   private async loadFolders(): Promise<void> {
-    if (!this.account) {
+    if (!this.Account) {
       this.Folders = [];
       return;
     }
@@ -359,7 +368,7 @@ export class FolderTreeComponent {
       const rawPath = this.CurrentPath && this.CurrentPath !== '/' ? this.CurrentPath : '';
       const listPrefix = rawPath ? rawPath.replace(/^\/+/, '').replace(/\/+$/, '') + '/' : '';
       const listResult = await this.storageClient.ListObjects(
-        this.account.account.ID,
+        this.Account.account.ID,
         listPrefix,
         '/'
       );

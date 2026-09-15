@@ -97,12 +97,21 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
 
   /** The editor's value. */
   @Input()
-  get value(): string { return this._value; }
-  set value(val: string) {
+  get Value(): string { return this._value; }
+  set Value(val: string) {
     this._value = val;
     if (this.view) {
       this.SetValue(val);
     }
+  }
+
+  /** @deprecated Use {@link Value}. */
+  get value(): string {
+    return this.Value;
+  }
+  /** @deprecated Use {@link Value}. */
+  @Input() set value(value: string) {
+    this.Value = value;
   }
 
   /** Whether the editor is disabled. */
@@ -131,12 +140,21 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
 
   /** The editor's placeholder. */
   @Input()
-  get placeholder(): string { return this._placeholder; }
-  set placeholder(val: string) {
+  get Placeholder(): string { return this._placeholder; }
+  set Placeholder(val: string) {
     this._placeholder = val;
     if (this.view) {
       this.SetPlaceholder(val);
     }
+  }
+
+  /** @deprecated Use {@link Placeholder}. */
+  get placeholder(): string {
+    return this.Placeholder;
+  }
+  /** @deprecated Use {@link Placeholder}. */
+  @Input() set placeholder(value: string) {
+    this.Placeholder = value;
   }
 
   /** Whether indent with Tab key. */
@@ -151,12 +169,21 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
 
   /** Should be a string consisting either entirely of the same whitespace character. */
   @Input()
-  get indentUnit(): string { return this._indentUnit; }
-  set indentUnit(val: string) {
+  get IndentUnit(): string { return this._indentUnit; }
+  set IndentUnit(val: string) {
     this._indentUnit = val;
     if (this.view) {
       this.SetIndentUnit(val);
     }
+  }
+
+  /** @deprecated Use {@link IndentUnit}. */
+  get indentUnit(): string {
+    return this.IndentUnit;
+  }
+  /** @deprecated Use {@link IndentUnit}. */
+  @Input() set indentUnit(value: string) {
+    this.IndentUnit = value;
   }
 
   /** Whether the editor wraps lines. */
@@ -198,12 +225,21 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
 
   /** The editor's language. You should set the `languages` prop at first. */
   @Input()
-  get language(): string { return this._language; }
-  set language(val: string) {
+  get Language(): string { return this._language; }
+  set Language(val: string) {
     this._language = val;
     if (this.view) {
       this.SetLanguage(val);
     }
+  }
+
+  /** @deprecated Use {@link Language}. */
+  get language(): string {
+    return this.Language;
+  }
+  /** @deprecated Use {@link Language}. */
+  @Input() set language(value: string) {
+    this.Language = value;
   }
 
   /**
@@ -212,12 +248,21 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
    * [`minimal`](https://codemirror.net/docs/ref/#codemirror.minimalSetup) or `null`.
    */
   @Input()
-  get setup(): Setup { return this._setup; }
-  set setup(val: Setup) {
+  get Setup(): Setup { return this._setup; }
+  set Setup(val: Setup) {
     this._setup = val;
     if (this.view) {
       this.SetExtensions(this._getAllExtensions());
     }
+  }
+
+  /** @deprecated Use {@link Setup}. */
+  get setup(): Setup {
+    return this.Setup;
+  }
+  /** @deprecated Use {@link Setup}. */
+  @Input() set setup(value: Setup) {
+    this.Setup = value;
   }
 
   /**
@@ -225,12 +270,21 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
    * These functions will be called when initializing the editor to get the extensions.
    */
   @Input()
-  get customExtensionFactories(): (() => Extension)[] { return this._customExtensionFactories; }
-  set customExtensionFactories(val: (() => Extension)[]) {
+  get CustomExtensionFactories(): (() => Extension)[] { return this._customExtensionFactories; }
+  set CustomExtensionFactories(val: (() => Extension)[]) {
     this._customExtensionFactories = val;
     if (this.view) {
       this.SetExtensions(this._getAllExtensions());
     }
+  }
+
+  /** @deprecated Use {@link CustomExtensionFactories}. */
+  get customExtensionFactories(): (() => Extension)[] {
+    return this.CustomExtensionFactories;
+  }
+  /** @deprecated Use {@link CustomExtensionFactories}. */
+  @Input() set customExtensionFactories(value: (() => Extension)[]) {
+    this.CustomExtensionFactories = value;
   }
 
   /**
@@ -238,12 +292,21 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
    * [extensions](https://codemirror.net/docs/ref/#state.EditorStateConfig.extensions).
    */
   @Input()
-  get extensions(): Extension[] { return this._extensions; }
-  set extensions(val: Extension[]) {
+  get Extensions(): Extension[] { return this._extensions; }
+  set Extensions(val: Extension[]) {
     this._extensions = val;
     if (this.view) {
       this.SetExtensions(this._getAllExtensions());
     }
+  }
+
+  /** @deprecated Use {@link Extensions}. */
+  get extensions(): Extension[] {
+    return this.Extensions;
+  }
+  /** @deprecated Use {@link Extensions}. */
+  @Input() set extensions(value: Extension[]) {
+    this.Extensions = value;
   }
 
   /** Event emitted when the editor's value changes. */

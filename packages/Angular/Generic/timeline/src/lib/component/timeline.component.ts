@@ -152,10 +152,10 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
    * Each group defines a data source and display configuration.
    */
   @Input()
-  get groups(): TimelineGroup<T>[] {
+  get Groups(): TimelineGroup<T>[] {
     return this._groups;
   }
-  set groups(value: TimelineGroup<T>[]) {
+  set Groups(value: TimelineGroup<T>[]) {
     const prevGroups = this._groups;
     this._groups = value || [];
     const hasGroups = this._groups.length > 0;
@@ -169,7 +169,7 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
     // so ngAfterViewInit's real refresh would be skipped and the timeline would show "No events"
     // until something forced a re-refresh (e.g. changing the date field). Only refresh from the setter
     // once the view is ready.
-    if (this.allowLoad && hasGroups && this._viewReady) {
+    if (this.AllowLoad && hasGroups && this._viewReady) {
       if (!this._hasLoaded) {
         // First load
         this.Refresh();
@@ -178,6 +178,15 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
         this.Refresh(true);
       }
     }
+  }
+
+  /** @deprecated Use {@link Groups}. */
+  get groups(): TimelineGroup<T>[] {
+    return this.Groups;
+  }
+  /** @deprecated Use {@link Groups}. */
+  @Input() set groups(value: TimelineGroup<T>[]) {
+    this.Groups = value;
   }
   private _groups: TimelineGroup<T>[] = [];
   /** True once ngAfterViewInit has run — the view is ready to render refreshed events. */
@@ -206,16 +215,25 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
    * @default true
    */
   @Input()
-  get allowLoad(): boolean {
+  get AllowLoad(): boolean {
     return this._allowLoad;
   }
-  set allowLoad(value: boolean) {
+  set AllowLoad(value: boolean) {
     const wasDisabled = !this._allowLoad;
     this._allowLoad = value;
     // When allowLoad becomes true and we have groups, trigger refresh
     if (value && wasDisabled && this._groups.length > 0) {
       this.Refresh(this._hasLoaded);
     }
+  }
+
+  /** @deprecated Use {@link AllowLoad}. */
+  get allowLoad(): boolean {
+    return this.AllowLoad;
+  }
+  /** @deprecated Use {@link AllowLoad}. */
+  @Input() set allowLoad(value: boolean) {
+    this.AllowLoad = value;
   }
   private _allowLoad = true;
 
@@ -230,14 +248,23 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
    * @default 'vertical'
    */
   @Input()
-  get orientation(): TimelineOrientation {
+  get Orientation(): TimelineOrientation {
     return this._orientation;
   }
-  set orientation(value: TimelineOrientation) {
+  set Orientation(value: TimelineOrientation) {
     if (this._orientation !== value) {
       this._orientation = value;
       this.cdr.markForCheck();
     }
+  }
+
+  /** @deprecated Use {@link Orientation}. */
+  get orientation(): TimelineOrientation {
+    return this.Orientation;
+  }
+  /** @deprecated Use {@link Orientation}. */
+  @Input() set orientation(value: TimelineOrientation) {
+    this.Orientation = value;
   }
   private _orientation: TimelineOrientation = 'vertical';
 
@@ -248,14 +275,23 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
    * @default 'single'
    */
   @Input()
-  get layout(): TimelineLayout {
+  get Layout(): TimelineLayout {
     return this._layout;
   }
-  set layout(value: TimelineLayout) {
+  set Layout(value: TimelineLayout) {
     if (this._layout !== value) {
       this._layout = value;
       this.cdr.markForCheck();
     }
+  }
+
+  /** @deprecated Use {@link Layout}. */
+  get layout(): TimelineLayout {
+    return this.Layout;
+  }
+  /** @deprecated Use {@link Layout}. */
+  @Input() set layout(value: TimelineLayout) {
+    this.Layout = value;
   }
   private _layout: TimelineLayout = 'single';
 
@@ -266,10 +302,10 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
    * @default 'desc'
    */
   @Input()
-  get sortOrder(): TimelineSortOrder {
+  get SortOrder(): TimelineSortOrder {
     return this._sortOrder;
   }
-  set sortOrder(value: TimelineSortOrder) {
+  set SortOrder(value: TimelineSortOrder) {
     if (this._sortOrder !== value) {
       this._sortOrder = value;
       // Re-process events when sort order changes - force refresh since data already loaded
@@ -279,6 +315,15 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
       this.cdr.markForCheck();
     }
   }
+
+  /** @deprecated Use {@link SortOrder}. */
+  get sortOrder(): TimelineSortOrder {
+    return this.SortOrder;
+  }
+  /** @deprecated Use {@link SortOrder}. */
+  @Input() set sortOrder(value: TimelineSortOrder) {
+    this.SortOrder = value;
+  }
   private _sortOrder: TimelineSortOrder = 'desc';
 
   /**
@@ -286,10 +331,10 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
    * @default 'month'
    */
   @Input()
-  get segmentGrouping(): TimeSegmentGrouping {
+  get SegmentGrouping(): TimeSegmentGrouping {
     return this._segmentGrouping;
   }
-  set segmentGrouping(value: TimeSegmentGrouping) {
+  set SegmentGrouping(value: TimeSegmentGrouping) {
     if (this._segmentGrouping !== value) {
       this._segmentGrouping = value;
       // Re-segment events when grouping changes - force refresh since data already loaded
@@ -298,6 +343,15 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
       }
       this.cdr.markForCheck();
     }
+  }
+
+  /** @deprecated Use {@link SegmentGrouping}. */
+  get segmentGrouping(): TimeSegmentGrouping {
+    return this.SegmentGrouping;
+  }
+  /** @deprecated Use {@link SegmentGrouping}. */
+  @Input() set segmentGrouping(value: TimeSegmentGrouping) {
+    this.SegmentGrouping = value;
   }
   private _segmentGrouping: TimeSegmentGrouping = 'month';
 
@@ -397,15 +451,24 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
    * When set, the corresponding event will be highlighted with the focused style.
    */
   @Input()
-  get selectedEventId(): string | null {
+  get SelectedEventId(): string | null {
     return this._selectedEventId;
   }
-  set selectedEventId(value: string | null) {
+  set SelectedEventId(value: string | null) {
     const changed = this._selectedEventId !== value;
     this._selectedEventId = value;
     if (changed) {
       this.cdr.markForCheck();
     }
+  }
+
+  /** @deprecated Use {@link SelectedEventId}. */
+  get selectedEventId(): string | null {
+    return this.SelectedEventId;
+  }
+  /** @deprecated Use {@link SelectedEventId}. */
+  @Input() set selectedEventId(value: string | null) {
+    this.SelectedEventId = value;
   }
   private _selectedEventId: string | null = null;
 
@@ -820,7 +883,7 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
     // The view is now ready — first loads triggered by the `groups`/`allowLoad` setters were deferred
     // to here so refreshed events actually render (see the `groups` setter).
     this._viewReady = true;
-    if (this.allowLoad && !this._hasLoaded && this._groups.length > 0) {
+    if (this.AllowLoad && !this._hasLoaded && this._groups.length > 0) {
       this.Refresh();
     }
 
@@ -1539,7 +1602,7 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
    */
   IsEventSelected(event: MJTimelineEvent<T>, globalIndex: number): boolean {
     // Check selectedEventId from parent first (takes priority)
-    if (this.selectedEventId && event.id === this.selectedEventId) {
+    if (this.SelectedEventId && event.id === this.SelectedEventId) {
       return true;
     }
     // Fall back to keyboard navigation focus
@@ -1651,7 +1714,7 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
   private sortEvents(): void {
     this.AllEvents.sort((a, b) => {
       const diff = a.date.getTime() - b.date.getTime();
-      return this.sortOrder === 'asc' ? diff : -diff;
+      return this.SortOrder === 'asc' ? diff : -diff;
     });
   }
 
@@ -1663,7 +1726,7 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
    * Builds time segments from events.
    */
   private buildSegments(): void {
-    if (this.segmentGrouping === 'none') {
+    if (this.SegmentGrouping === 'none') {
       this.Segments = [];
       return;
     }
@@ -1693,7 +1756,7 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
     this.Segments = Array.from(segmentMap.values());
     this.Segments.sort((a, b) => {
       const diff = a.startDate.getTime() - b.startDate.getTime();
-      return this.sortOrder === 'asc' ? diff : -diff;
+      return this.SortOrder === 'asc' ? diff : -diff;
     });
   }
 
@@ -1705,7 +1768,7 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
     const month = date.getMonth();
     const day = date.getDate();
 
-    switch (this.segmentGrouping) {
+    switch (this.SegmentGrouping) {
       case 'day':
         return {
           label: this.formatDateInternal(date, 'MMMM d, yyyy'),

@@ -134,13 +134,18 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   @Input() ShowRoutines: boolean = true;
 
   // Navigation properties for external control (deep linking from URL)
-  @Input() set activeTabInput(value: 'conversations' | 'collections' | 'tasks' | undefined) {
+  @Input() set ActiveTabInput(value: 'conversations' | 'collections' | 'tasks' | undefined) {
     if (value && value !== this.ActiveTab) {
       this.ActiveTab = value;
     }
   }
 
-  @Input() set activeConversationInput(value: string | undefined) {
+  /** @deprecated Use {@link ActiveTabInput}. */
+  @Input() set activeTabInput(value: 'conversations' | 'collections' | 'tasks' | undefined) {
+    this.ActiveTabInput = value;
+  }
+
+  @Input() set ActiveConversationInput(value: string | undefined) {
     if (value && value !== this.SelectedConversationId) {
       console.log('🔗 Deep link to conversation:', value);
       this.ActiveTab = 'conversations';
@@ -148,7 +153,12 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     }
   }
 
-  @Input() set activeCollectionInput(value: string | undefined) {
+  /** @deprecated Use {@link ActiveConversationInput}. */
+  @Input() set activeConversationInput(value: string | undefined) {
+    this.ActiveConversationInput = value;
+  }
+
+  @Input() set ActiveCollectionInput(value: string | undefined) {
     if (value && value !== this.CollectionState.activeCollectionId) {
       console.log('🔗 Deep link to collection:', value);
       this.ActiveTab = 'collections';
@@ -156,7 +166,12 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     }
   }
 
-  @Input() set activeVersionIdInput(value: string | undefined) {
+  /** @deprecated Use {@link ActiveCollectionInput}. */
+  @Input() set activeCollectionInput(value: string | undefined) {
+    this.ActiveCollectionInput = value;
+  }
+
+  @Input() set ActiveVersionIdInput(value: string | undefined) {
     if (value && value !== this.ActiveVersionId) {
       console.log('🔗 Deep link to version:', value);
       this.ActiveTab = 'collections';
@@ -167,10 +182,20 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     }
   }
 
-  @Input() set activeTaskInput(value: string | undefined) {
+  /** @deprecated Use {@link ActiveVersionIdInput}. */
+  @Input() set activeVersionIdInput(value: string | undefined) {
+    this.ActiveVersionIdInput = value;
+  }
+
+  @Input() set ActiveTaskInput(value: string | undefined) {
     if (value && value !== this._activeTaskId) {
       this._activeTaskId = value;
     }
+  }
+
+  /** @deprecated Use {@link ActiveTaskInput}. */
+  @Input() set activeTaskInput(value: string | undefined) {
+    this.ActiveTaskInput = value;
   }
 
   private _activeTaskId?: string;

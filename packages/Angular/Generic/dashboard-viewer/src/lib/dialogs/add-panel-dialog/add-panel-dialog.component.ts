@@ -62,7 +62,7 @@ export class AddPanelDialogComponent implements AfterViewInit, OnDestroy {
 
     /** Whether the dialog is visible */
     @Input()
-    set visible(value: boolean) {
+    set Visible(value: boolean) {
         const previous = this._visible;
         this._visible = value;
         if (!value && previous) {
@@ -70,8 +70,17 @@ export class AddPanelDialogComponent implements AfterViewInit, OnDestroy {
             this.destroyConfigPanel();
         }
     }
-    get visible(): boolean {
+    get Visible(): boolean {
         return this._visible;
+    }
+
+    /** @deprecated Use {@link Visible}. */
+    get visible(): boolean {
+      return this.Visible;
+    }
+    /** @deprecated Use {@link Visible}. */
+    @Input() set visible(value: boolean) {
+      this.Visible = value;
     }
     private _visible = false;
 

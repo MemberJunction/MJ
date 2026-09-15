@@ -378,7 +378,7 @@ function rewriteProperty(ctx, node, names, classNode) {
     if (!readonly) {
         stub +=
             `\n${indent}${docFor(names.New)}\n` +
-            `${indent}${mods}set ${names.Old}(value${paramType}) {\n${indent}${unit}this.${names.New} = value;\n${indent}}`;
+            `${indent}${aliasIsInput ? '@Input() ' : ''}${mods}set ${names.Old}(value${paramType}) {\n${indent}${unit}this.${names.New} = value;\n${indent}}`;
     }
     buffer.Insert(node.end, stub);
     return null;
@@ -663,7 +663,39 @@ function referencesBareName(root, name, source) {
  */
 function rewriteAccessorPair(ctx, node, names, classNode, state) {
     const { text, source, buffer, unit } = ctx;
-    if (ts.getDecorators?.(node)?.length) return SKIP_REASONS.DecoratedAccessor;
+
+    const pair = classNode.members.filter(
+        (m) =>
+            (ts.isGetAccessorDeclaration(m) || ts.isSetAccessorDeclaration(m)) &&
+            m.name &&
+            ts.isIdentifier(m.name) &&
+            m.name.text === names.Old,
+    );
+
+    // An `@Input()` accessor pair is renameable, and is the one decorated shape here that is. The
+    // pair moves to the new name keeping its decorator, and the alias pair carries an `@Input()` of
+    // its own so a template still binding the old name keeps working — the same two-inputs-one-field
+    // shape `rewriteInput` uses for plain properties. Every other decorator is still refused.
+    let aliasIsInput = false;
+    const decorated = pair.filter((m) => (ts.getDecorators?.(m) ?? []).length > 0);
+    if (decorated.length > 0) {
+        if (decorated.flatMap((m) => decoratorNames(m)).some((n) => n !== 'Input')) {
+            return SKIP_REASONS.DecoratedAccessor;
+        }
+        for (const member of decorated) {
+            const decorator = bindingDecorator(member, 'Input');
+            // `@Input('foo')` states the binding name outright, so the accessor's own name is not
+            // the contract and renaming it changes nothing a template can see.
+            if (decorator && ts.isCallExpression(decorator) && decorator.arguments.length > 0) {
+                return SKIP_REASONS.AliasedBinding;
+            }
+        }
+        // Angular delivers an input by WRITING it. A decorated pair with no setter cannot receive
+        // one, so whatever it is doing is not a shape to guess at.
+        if (!pair.some((m) => ts.isSetAccessorDeclaration(m))) return SKIP_REASONS.DecoratedAccessor;
+        aliasIsInput = true;
+    }
+
     // A getter is part of the class's structural type exactly like a field, so a literal assigned to
     // the class has to supply its name too. `BaseResult.timeElapsed` is a getter, and renaming it
     // broke every `{ …, timeElapsed }` literal built in OTHER packages — invisible to this one.
@@ -677,15 +709,6 @@ function rewriteAccessorPair(ctx, node, names, classNode, state) {
     if (declaredNames(classNode).has(names.New)) return SKIP_REASONS.NameCollision;
     if (alreadyClaimed(ctx, classNode, names.New)) return SKIP_REASONS.NameClaimedThisRun;
     claim(ctx, classNode, names.New);
-
-    const pair = classNode.members.filter(
-        (m) =>
-            (ts.isGetAccessorDeclaration(m) || ts.isSetAccessorDeclaration(m)) &&
-            m.name &&
-            ts.isIdentifier(m.name) &&
-            m.name.text === names.Old,
-    );
-    if (pair.some((m) => ts.getDecorators?.(m)?.length)) return SKIP_REASONS.DecoratedAccessor;
 
     const getter = pair.find((m) => ts.isGetAccessorDeclaration(m));
     const setter = pair.find((m) => ts.isSetAccessorDeclaration(m));
@@ -709,7 +732,7 @@ function rewriteAccessorPair(ctx, node, names, classNode, state) {
     if (setter) {
         stub +=
             `${getter ? '\n' : '\n\n'}${indent}${docFor(names.New)}\n` +
-            `${indent}${mods}set ${names.Old}(value${paramType}) {\n${indent}${unit}this.${names.New} = value;\n${indent}}`;
+            `${indent}${aliasIsInput ? '@Input() ' : ''}${mods}set ${names.Old}(value${paramType}) {\n${indent}${unit}this.${names.New} = value;\n${indent}}`;
     }
     buffer.Insert(last.end, stub);
 

@@ -142,15 +142,24 @@ export class ExportDialogComponent {
 
   private _visible = false;
   @Input()
-  get visible(): boolean {
+  get Visible(): boolean {
     return this._visible;
   }
-  set visible(value: boolean) {
+  set Visible(value: boolean) {
     if (value && !this._visible) {
       this.initializeFromConfig();
     }
     this._visible = value;
     this.cdr.detectChanges();
+  }
+
+  /** @deprecated Use {@link Visible}. */
+  get visible(): boolean {
+    return this.Visible;
+  }
+  /** @deprecated Use {@link Visible}. */
+  @Input() set visible(value: boolean) {
+    this.Visible = value;
   }
 
   @Input() Config: ExportDialogConfig | null = null;

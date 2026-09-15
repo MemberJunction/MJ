@@ -134,7 +134,7 @@ describe('BUG 2 — session end reloads the active conversation timeline', () =>
   it('reloads the active conversation details so the just-recorded session appears', async () => {
     (h.component as unknown as Record<string, unknown>)['_conversationId'] = 'CONV-ACTIVE';
     // conversationId getter reads _conversationId
-    Object.defineProperty(h.component, 'conversationId', {
+    Object.defineProperty(h.component, 'ConversationId', {
       get() {
         return 'CONV-ACTIVE';
       },
@@ -151,7 +151,7 @@ describe('BUG 2 — session end reloads the active conversation timeline', () =>
   });
 
   it('is a safe no-op when no conversation is open', async () => {
-    Object.defineProperty(h.component, 'conversationId', {
+    Object.defineProperty(h.component, 'ConversationId', {
       get() {
         return null;
       },
@@ -165,7 +165,7 @@ describe('BUG 2 — session end reloads the active conversation timeline', () =>
   });
 
   it('onRealtimeSessionEnded reloads the timeline AND emits ready for a session-created conversation', () => {
-    Object.defineProperty(h.component, 'conversationId', {
+    Object.defineProperty(h.component, 'ConversationId', {
       get() {
         return 'CONV-ACTIVE';
       },
@@ -182,7 +182,7 @@ describe('BUG 2 — session end reloads the active conversation timeline', () =>
   });
 
   it('onRealtimeSessionEnded still refreshes the timeline when NO conversation was created (existing-conversation call)', () => {
-    Object.defineProperty(h.component, 'conversationId', {
+    Object.defineProperty(h.component, 'ConversationId', {
       get() {
         return 'CONV-ACTIVE';
       },

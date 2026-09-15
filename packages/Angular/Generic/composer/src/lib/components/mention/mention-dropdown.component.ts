@@ -25,14 +25,23 @@ export class MentionDropdownComponent implements OnInit, OnDestroy {
   private _suggestions: MentionSuggestion[] = [];
 
   @Input()
-  set suggestions(value: MentionSuggestion[]) {
+  set Suggestions(value: MentionSuggestion[]) {
     this._suggestions = value;
     // Always reset selection to first item when suggestions change
     // so there's never a state where nothing is selected
     this.SelectedIndex = 0;
   }
-  get suggestions(): MentionSuggestion[] {
+  get Suggestions(): MentionSuggestion[] {
     return this._suggestions;
+  }
+
+  /** @deprecated Use {@link Suggestions}. */
+  get suggestions(): MentionSuggestion[] {
+    return this.Suggestions;
+  }
+  /** @deprecated Use {@link Suggestions}. */
+  @Input() set suggestions(value: MentionSuggestion[]) {
+    this.Suggestions = value;
   }
 
   @Input() Position: { top: number; left: number } = { top: 0, left: 0 };
@@ -139,12 +148,12 @@ export class MentionDropdownComponent implements OnInit, OnDestroy {
       this.close();
       return;
     }
-    if (this.suggestions.length === 0) return;
+    if (this.Suggestions.length === 0) return;
 
     switch (event.key) {
       case 'ArrowDown':
         event.preventDefault();
-        this.SelectedIndex = Math.min(this.SelectedIndex + 1, this.suggestions.length - 1);
+        this.SelectedIndex = Math.min(this.SelectedIndex + 1, this.Suggestions.length - 1);
         this.scrollToSelected();
         break;
       case 'ArrowUp':
@@ -155,8 +164,8 @@ export class MentionDropdownComponent implements OnInit, OnDestroy {
       case 'Enter':
       case 'Tab':
         event.preventDefault();
-        if (this.suggestions[this.SelectedIndex]) {
-          this.SelectSuggestion(this.suggestions[this.SelectedIndex]);
+        if (this.Suggestions[this.SelectedIndex]) {
+          this.SelectSuggestion(this.Suggestions[this.SelectedIndex]);
         }
         break;
       case 'Escape':

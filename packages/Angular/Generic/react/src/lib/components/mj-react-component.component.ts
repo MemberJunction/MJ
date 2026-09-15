@@ -165,7 +165,7 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
    * to load and render the new specification.
    */
   @Input()
-  set component(value: ComponentSpec) {
+  set Component(value: ComponentSpec) {
     const previousComponent = this._component;
     this._component = value;
 
@@ -190,8 +190,17 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
       }
     }
   }
-  get component(): ComponentSpec {
+  get Component(): ComponentSpec {
     return this._component;
+  }
+
+  /** @deprecated Use {@link Component}. */
+  get component(): ComponentSpec {
+    return this.Component;
+  }
+  /** @deprecated Use {@link Component}. */
+  @Input() set component(value: ComponentSpec) {
+    this.Component = value;
   }
 
   /**
@@ -246,10 +255,10 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
   private _themeStylesKey?: string;
   private themeObserver?: MutationObserver;
   @Input()
-  set styles(value: Partial<ComponentStyles> | undefined) {
+  set Styles(value: Partial<ComponentStyles> | undefined) {
     this._styles = value;
   }
-  get styles(): Partial<ComponentStyles> {
+  get Styles(): Partial<ComponentStyles> {
     // An explicitly-provided styles input always wins — but user-requested overrides
     // still layer on top, since they represent an explicit request rather than a theme.
     if (this._styles) {
@@ -270,6 +279,15 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
     // Applied outside the theme memo so the spec's overrides survive a theme flip
     // (the memo caches the theme, not the request).
     return this.applyStyleOverridesMemoized(this._themeStyles);
+  }
+
+  /** @deprecated Use {@link Styles}. */
+  get styles(): Partial<ComponentStyles> {
+    return this.Styles;
+  }
+  /** @deprecated Use {@link Styles}. */
+  @Input() set styles(value: Partial<ComponentStyles> | undefined) {
+    this.Styles = value;
   }
 
   /**
@@ -345,15 +363,24 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
   
   private _savedUserSettings: any = {};
   @Input()
-  set savedUserSettings(value: any) {
+  set SavedUserSettings(value: any) {
     this._savedUserSettings = value || {};
     // Re-render if component is initialized
     if (this.IsInitialized) {
       this.renderComponent();
     }
   }
-  get savedUserSettings(): any {
+  get SavedUserSettings(): any {
     return this._savedUserSettings;
+  }
+
+  /** @deprecated Use {@link SavedUserSettings}. */
+  get savedUserSettings(): any {
+    return this.SavedUserSettings;
+  }
+  /** @deprecated Use {@link SavedUserSettings}. */
+  @Input() set savedUserSettings(value: any) {
+    this.SavedUserSettings = value;
   }
 
   /**
@@ -388,14 +415,23 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
    */
   private _componentProps: object = {};
   @Input()
-  set componentProps(value: object | undefined) {
+  set ComponentProps(value: object | undefined) {
     this._componentProps = value ?? {};
     if (this.IsInitialized) {
       this.renderComponent();
     }
   }
-  get componentProps(): object {
+  get ComponentProps(): object {
     return this._componentProps;
+  }
+
+  /** @deprecated Use {@link ComponentProps}. */
+  get componentProps(): object {
+    return this.ComponentProps;
+  }
+  /** @deprecated Use {@link ComponentProps}. */
+  @Input() set componentProps(value: object | undefined) {
+    this.ComponentProps = value;
   }
 
   @Output() StateChange = new EventEmitter<StateChangeEvent>();
@@ -550,7 +586,7 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
     
     console.log(`🎬 [ngAfterViewInit] Starting component initialization:`, {
       componentId: this.componentId,
-      componentName: this.component?.name,
+      componentName: this.Component?.name,
       timestamp: new Date().toISOString(),
       registrySize: registrySize
     });
@@ -641,8 +677,8 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
         const registry = this.adapter.getRegistry();
         
         console.log(`🔍 [initializeComponent] Looking for component in registry:`, {
-          name: this.component.name,
-          namespace: this.component.namespace || 'Global',
+          name: this.Component.name,
+          namespace: this.Component.namespace || 'Global',
           version: this.componentVersion
         });
         
@@ -650,8 +686,8 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
         // Note: ComponentRegistry doesn't have a list() method, so we'll skip this for now
         
         const componentWrapper = registry.get(
-          this.component.name, 
-          this.component.namespace || 'Global', 
+          this.Component.name, 
+          this.Component.namespace || 'Global', 
           this.componentVersion
         );
         
@@ -662,29 +698,29 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
         });
         
         if (!componentWrapper) {
-          const source = this.component.registry ? `external registry ${this.component.registry}` : 'local registry';
+          const source = this.Component.registry ? `external registry ${this.Component.registry}` : 'local registry';
           console.error(`❌ [initializeComponent] Component not found! Details:`, {
-            searchedName: this.component.name,
-            searchedNamespace: this.component.namespace || 'Global',
+            searchedName: this.Component.name,
+            searchedNamespace: this.Component.namespace || 'Global',
             searchedVersion: this.componentVersion,
             source: source
           });
-          throw new Error(`Component ${this.component.name} was not found in registry after registration from ${source}`);
+          throw new Error(`Component ${this.Component.name} was not found in registry after registration from ${source}`);
         }
         
         // The registry now stores ComponentObjects directly
         // Validate it has the expected structure
         if (!componentWrapper || typeof componentWrapper !== 'object') {
-          throw new Error(`Invalid component wrapper returned for ${this.component.name}: ${typeof componentWrapper}`);
+          throw new Error(`Invalid component wrapper returned for ${this.Component.name}: ${typeof componentWrapper}`);
         }
         
         if (!componentWrapper.component) {
-          throw new Error(`Component wrapper missing 'component' property for ${this.component.name}`);
+          throw new Error(`Component wrapper missing 'component' property for ${this.Component.name}`);
         }
         
         // Now that we use a regular HOC wrapper, components should always be functions
         if (typeof componentWrapper.component !== 'function') {
-          throw new Error(`Component is not a function for ${this.component.name}: ${typeof componentWrapper.component}`);
+          throw new Error(`Component is not a function for ${this.Component.name}: ${typeof componentWrapper.component}`);
         }
         
         this.compiledComponent = componentWrapper;
@@ -800,13 +836,13 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
     try {
       const manager = this.adapter.getComponentManager();
       
-      console.log(`🚀 [ComponentManager] Loading component hierarchy: ${this.component.name}`);
+      console.log(`🚀 [ComponentManager] Loading component hierarchy: ${this.Component.name}`);
       
       // Load the entire hierarchy with one simple call
-      const result = await manager.loadHierarchy(this.component, {
+      const result = await manager.loadHierarchy(this.Component, {
         contextUser: this.ProviderToUse.CurrentUser,
         defaultNamespace: 'Global',
-        defaultVersion: this.component.version || this.generateComponentHash(this.component),
+        defaultVersion: this.Component.version || this.generateComponentHash(this.Component),
         returnType: 'both'
       });
       
@@ -819,7 +855,7 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
       // Store the results (handle undefined values)
       this.ResolvedComponentSpec = this.enrichSpecWithRegistryInfo(result.resolvedSpec || null);
       this.compiledComponent = result.rootComponent || null;
-      this.componentVersion = result.resolvedSpec?.version || this.component.version || 'latest';
+      this.componentVersion = result.resolvedSpec?.version || this.Component.version || 'latest';
       
       // IMPORTANT: Store the loaded dependencies for use in renderComponent
       this.loadedDependencies = result.components || {};
@@ -846,23 +882,23 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
    */
   private async registerComponentHierarchy() {
     // Use semantic version from spec or generate hash-based version for uniqueness
-    const version = this.component.version || this.generateComponentHash(this.component);
+    const version = this.Component.version || this.generateComponentHash(this.Component);
     this.componentVersion = version;  // Store for use in resolver
     
-    console.log(`🔍 [registerComponentHierarchy] Starting registration for ${this.component.name}@${version}`, {
-      location: this.component.location,
-      registry: this.component.registry,
-      namespace: this.component.namespace,
-      hasCode: !!this.component.code,
-      codeLength: this.component.code?.length || 0
+    console.log(`🔍 [registerComponentHierarchy] Starting registration for ${this.Component.name}@${version}`, {
+      location: this.Component.location,
+      registry: this.Component.registry,
+      namespace: this.Component.namespace,
+      hasCode: !!this.Component.code,
+      codeLength: this.Component.code?.length || 0
     });
     
     // Check if already registered to avoid duplication
     const registry = this.adapter.getRegistry();
-    const checkNamespace = this.component.namespace || 'Global';
+    const checkNamespace = this.Component.namespace || 'Global';
     
     console.log(`🔍 [registerComponentHierarchy] Checking registry for existing component:`, {
-      name: this.component.name,
+      name: this.Component.name,
       namespace: checkNamespace,
       version: version,
       registrySize: registry.size(),
@@ -875,10 +911,10 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
       registryInstance: registry.registryId || 'unknown'
     });
     
-    const existingComponent = registry.get(this.component.name, checkNamespace, version);
+    const existingComponent = registry.get(this.Component.name, checkNamespace, version);
     
     if (existingComponent) {
-      console.log(`⚠️ [registerComponentHierarchy] Component ${this.component.name}@${version} already registered!`, {
+      console.log(`⚠️ [registerComponentHierarchy] Component ${this.Component.name}@${version} already registered!`, {
         existingType: typeof existingComponent,
         hasComponent: !!(existingComponent as any).component,
         registrationTime: (existingComponent as any).registeredAt || 'unknown',
@@ -887,12 +923,12 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
       
       // For registry components, we need to check the resolved spec's libraries, not the input spec
       // The input spec from Angular doesn't have library information for registry components
-      if (this.component.location === 'registry' && this.component.registry) {
+      if (this.Component.location === 'registry' && this.Component.registry) {
         console.log(`📋 [registerComponentHierarchy] Component is from registry, need to fetch full spec to check libraries`);
         // Continue to fetch the full spec below - don't return early
       } else {
         // For local components, check using the input spec
-        const requiredLibraries = this.component.libraries || [];
+        const requiredLibraries = this.Component.libraries || [];
         const runtimeLibraries = this.adapter.getRuntimeContext().libraries || {};
         const missingLibraries = requiredLibraries.filter(lib => !runtimeLibraries[lib.globalVariable]);
         
@@ -904,7 +940,7 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
           });
           // Don't return early - continue to load libraries
         } else {
-          console.log(`✅ [registerComponentHierarchy] Component ${this.component.name}@${version} already registered with all libraries, skipping`);
+          console.log(`✅ [registerComponentHierarchy] Component ${this.Component.name}@${version} already registered with all libraries, skipping`);
           return;
         }
       }
@@ -922,22 +958,22 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
       this.adapter.getRuntimeContext()
     );
     
-    console.log(`📦 [registerComponentHierarchy] Calling registrar.registerHierarchy for ${this.component.name}`, {
-      hasStyles: !!this.styles,
-      namespace: this.component.namespace || 'Global',
+    console.log(`📦 [registerComponentHierarchy] Calling registrar.registerHierarchy for ${this.Component.name}`, {
+      hasStyles: !!this.Styles,
+      namespace: this.Component.namespace || 'Global',
       version: version,
       libraryCount: ComponentMetadataEngine.Instance.ComponentLibraries?.length || 0,
-      hasCode: !!this.component.code,
-      codeLength: this.component.code?.length || 0
+      hasCode: !!this.Component.code,
+      codeLength: this.Component.code?.length || 0
     });
     
     // Register with proper configuration
     // Pass the partial spec - the React runtime will handle fetching from registries
     const result = await registrar.registerHierarchy(
-      this.component,  // Pass the original spec, not fetched
+      this.Component,  // Pass the original spec, not fetched
       {
-        styles: this.styles as ComponentStyles,
-        namespace: this.component.namespace || 'Global',
+        styles: this.Styles as ComponentStyles,
+        namespace: this.Component.namespace || 'Global',
         version: version,
         allowOverride: false,  // Each version is unique
         allLibraries: ComponentMetadataEngine.Instance.ComponentLibraries,
@@ -966,11 +1002,11 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
     console.log(`✅ [registerComponentHierarchy] Successfully registered ${result.registeredComponents.length} components:`, result.registeredComponents);
     
     // Verify the component is actually in the registry
-    const verifyComponent = registry.get(this.component.name, this.component.namespace || 'Global', version);
+    const verifyComponent = registry.get(this.Component.name, this.Component.namespace || 'Global', version);
     console.log(`🔍 [registerComponentHierarchy] Verification - component in registry after registration:`, {
       found: !!verifyComponent,
-      name: this.component.name,
-      namespace: this.component.namespace || 'Global',
+      name: this.Component.name,
+      namespace: this.Component.namespace || 'Global',
       version: version,
       componentType: verifyComponent ? typeof verifyComponent : 'not found'
     });
@@ -982,7 +1018,7 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
    * Applied to all resolved specs so any consumer of this wrapper benefits.
    */
   private enrichSpecWithRegistryInfo(spec: ComponentSpec | null): ComponentSpec | null {
-    if (!spec || !this.component) return spec;
+    if (!spec || !this.Component) return spec;
     
     // Create a deep copy to avoid mutating the original
     const enrichedSpec = JSON.parse(JSON.stringify(spec));
@@ -1038,7 +1074,7 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
       }
     };
     
-    processSpec(enrichedSpec, this.component);
+    processSpec(enrichedSpec, this.Component);
     return enrichedSpec;
   }
 
@@ -1073,7 +1109,7 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
     // SKIP this if using ComponentManager - components are already loaded!
     let components = {};
     if (!this.UseComponentManager) {
-      components = await this.resolveComponentsWithVersion(this.component, this.componentVersion);
+      components = await this.resolveComponentsWithVersion(this.Component, this.componentVersion);
     } else {
       // Use the dependencies that were already loaded and unwrapped by ComponentManager
       components = this.loadedDependencies;
@@ -1100,7 +1136,7 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
       utilities: wrappedUtilities,
       callbacks: this.currentCallbacks,
       components,
-      styles: this.styles as any,
+      styles: this.Styles as any,
       libraries, // Pass the loaded libraries to components
       savedUserSettings: this._savedUserSettings,
       onSaveUserSettings: this.handleSaveUserSettings.bind(this)
@@ -1108,13 +1144,13 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
 
     // Validate component before creating element
     if (!this.compiledComponent.component) {
-      LogError(`Component is undefined for ${this.component.name} during render`);
+      LogError(`Component is undefined for ${this.Component.name} during render`);
       return;
     }
     
     // Components should be functions after HOC wrapping
     if (typeof this.compiledComponent.component !== 'function') {
-      LogError(`Component is not a function for ${this.component.name}: ${typeof this.compiledComponent.component}`);
+      LogError(`Component is not a function for ${this.Component.name}: ${typeof this.compiledComponent.component}`);
       return;
     }
 
@@ -1134,7 +1170,7 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
       React,
       React.createElement(this.compiledComponent.component, props),
       libraries,
-      this.styles as ComponentStyles
+      this.Styles as ComponentStyles
     );
     const element = React.createElement(
       ErrorBoundary,
@@ -1325,7 +1361,7 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
     // Bubble the event up to parent containers (back-compat; no consumer required).
     this.UserSettingsChanged.emit({
       settings: this._savedUserSettings,
-      componentName: this.component?.name,
+      componentName: this.Component?.name,
       timestamp: new Date()
     });
   }
@@ -1504,7 +1540,7 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
       return table;
     });
 
-    return DataSnapshot.FromTables(tables, this.component?.title ?? this.component?.name);
+    return DataSnapshot.FromTables(tables, this.Component?.title ?? this.Component?.name);
   }
 
   /**

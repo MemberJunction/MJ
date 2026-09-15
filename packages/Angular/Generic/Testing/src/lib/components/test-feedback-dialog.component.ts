@@ -470,18 +470,27 @@ export class TestFeedbackDialogComponent extends BaseAngularComponent implements
   }
 
   @Input()
-  set data(value: TestFeedbackDialogData) {
+  set Data(value: TestFeedbackDialogData) {
     this._data = value;
     if (value && this._visible && !this.dataLoaded) {
       this.initializeWithData();
     }
   }
-  get data(): TestFeedbackDialogData {
+  get Data(): TestFeedbackDialogData {
     return this._data;
   }
 
+  /** @deprecated Use {@link Data}. */
+  get data(): TestFeedbackDialogData {
+    return this.Data;
+  }
+  /** @deprecated Use {@link Data}. */
+  @Input() set data(value: TestFeedbackDialogData) {
+    this.Data = value;
+  }
+
   @Input()
-  set visible(value: boolean) {
+  set Visible(value: boolean) {
     const wasVisible = this._visible;
     this._visible = value;
     if (value && !wasVisible) {
@@ -494,8 +503,17 @@ export class TestFeedbackDialogComponent extends BaseAngularComponent implements
       this.dataLoaded = false;
     }
   }
-  get visible(): boolean {
+  get Visible(): boolean {
     return this._visible;
+  }
+
+  /** @deprecated Use {@link Visible}. */
+  get visible(): boolean {
+    return this.Visible;
+  }
+  /** @deprecated Use {@link Visible}. */
+  @Input() set visible(value: boolean) {
+    this.Visible = value;
   }
 
   @Output() Closed = new EventEmitter<TestFeedbackDialogResult>();
@@ -608,9 +626,9 @@ export class TestFeedbackDialogComponent extends BaseAngularComponent implements
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJTestRunFeedbackEntity>({
         EntityName: 'MJ: Test Run Feedbacks',
-        ExtraFilter: `TestRunID='${this.data.testRunId}' AND ReviewerUserID='${this.data.currentUser.ID}'`,
+        ExtraFilter: `TestRunID='${this.Data.testRunId}' AND ReviewerUserID='${this.Data.currentUser.ID}'`,
         ResultType: 'entity_object'
-      }, this.data.currentUser);
+      }, this.Data.currentUser);
 
       if (result.Success && result.Results && result.Results.length > 0) {
         this.ExistingFeedback = result.Results[0];
@@ -677,10 +695,10 @@ export class TestFeedbackDialogComponent extends BaseAngularComponent implements
       } else {
         feedback = await this.metadata.GetEntityObject<MJTestRunFeedbackEntity>(
           'MJ: Test Run Feedbacks',
-          this.data.currentUser
+          this.Data.currentUser
         );
-        feedback.TestRunID = this.data.testRunId;
-        feedback.ReviewerUserID = this.data.currentUser.ID;
+        feedback.TestRunID = this.Data.testRunId;
+        feedback.ReviewerUserID = this.Data.currentUser.ID;
       }
 
       feedback.Rating = this.Rating;

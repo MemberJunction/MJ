@@ -42,43 +42,79 @@ export class DeepDiffComponent implements OnInit {
   }
 
   @Input()
-  get showUnchanged(): boolean {
+  get ShowUnchanged(): boolean {
     return this._showUnchanged;
   }
-  set showUnchanged(value: boolean) {
+  set ShowUnchanged(value: boolean) {
     this._showUnchanged = value;
     this.updateDifferConfig();
     this.generateDiff();
   }
 
+  /** @deprecated Use {@link ShowUnchanged}. */
+  get showUnchanged(): boolean {
+    return this.ShowUnchanged;
+  }
+  /** @deprecated Use {@link ShowUnchanged}. */
+  @Input() set showUnchanged(value: boolean) {
+    this.ShowUnchanged = value;
+  }
+
   @Input()
-  get maxDepth(): number {
+  get MaxDepth(): number {
     return this._maxDepth;
   }
-  set maxDepth(value: number) {
+  set MaxDepth(value: number) {
     this._maxDepth = value;
     this.updateDifferConfig();
     this.generateDiff();
   }
 
+  /** @deprecated Use {@link MaxDepth}. */
+  get maxDepth(): number {
+    return this.MaxDepth;
+  }
+  /** @deprecated Use {@link MaxDepth}. */
+  @Input() set maxDepth(value: number) {
+    this.MaxDepth = value;
+  }
+
   @Input()
-  get maxStringLength(): number {
+  get MaxStringLength(): number {
     return this._maxStringLength;
   }
-  set maxStringLength(value: number) {
+  set MaxStringLength(value: number) {
     this._maxStringLength = value;
     this.updateDifferConfig();
     this.generateDiff();
   }
 
+  /** @deprecated Use {@link MaxStringLength}. */
+  get maxStringLength(): number {
+    return this.MaxStringLength;
+  }
+  /** @deprecated Use {@link MaxStringLength}. */
+  @Input() set maxStringLength(value: number) {
+    this.MaxStringLength = value;
+  }
+
   @Input()
-  get treatNullAsUndefined(): boolean {
+  get TreatNullAsUndefined(): boolean {
     return this._treatNullAsUndefined;
   }
-  set treatNullAsUndefined(value: boolean) {
+  set TreatNullAsUndefined(value: boolean) {
     this._treatNullAsUndefined = value;
     this.updateDifferConfig();
     this.generateDiff();
+  }
+
+  /** @deprecated Use {@link TreatNullAsUndefined}. */
+  get treatNullAsUndefined(): boolean {
+    return this.TreatNullAsUndefined;
+  }
+  /** @deprecated Use {@link TreatNullAsUndefined}. */
+  @Input() set treatNullAsUndefined(value: boolean) {
+    this.TreatNullAsUndefined = value;
   }
 
   @Input() title: string = 'Deep Diff Analysis';
@@ -214,9 +250,9 @@ export class DeepDiffComponent implements OnInit {
   constructor(private cdr: ChangeDetectorRef) {
     this.differ = new DeepDiffer({
       includeUnchanged: false,
-      maxDepth: this.maxDepth,
-      maxStringLength: this.maxStringLength,
-      treatNullAsUndefined: this.treatNullAsUndefined
+      maxDepth: this.MaxDepth,
+      maxStringLength: this.MaxStringLength,
+      treatNullAsUndefined: this.TreatNullAsUndefined
     });
   }
 
@@ -227,10 +263,10 @@ export class DeepDiffComponent implements OnInit {
 
   private updateDifferConfig(): void {
     this.differ.updateConfig({
-      includeUnchanged: this.showUnchanged,
-      maxDepth: this.maxDepth,
-      maxStringLength: this.maxStringLength,
-      treatNullAsUndefined: this.treatNullAsUndefined
+      includeUnchanged: this.ShowUnchanged,
+      maxDepth: this.MaxDepth,
+      maxStringLength: this.MaxStringLength,
+      treatNullAsUndefined: this.TreatNullAsUndefined
     });
   }
 
@@ -425,8 +461,8 @@ export class DeepDiffComponent implements OnInit {
     const shouldTruncate = this.TruncateValues && !isExpanded;
 
     if (typeof value === 'string') {
-      if (shouldTruncate && value.length > this.maxStringLength) {
-        return `"${value.substring(0, this.maxStringLength)}..."`;
+      if (shouldTruncate && value.length > this.MaxStringLength) {
+        return `"${value.substring(0, this.MaxStringLength)}..."`;
       }
       return `"${value}"`;
     }
@@ -469,7 +505,7 @@ export class DeepDiffComponent implements OnInit {
 
   private computeValueTruncated(value: any): boolean {
     if (typeof value === 'string') {
-      return value.length > this.maxStringLength;
+      return value.length > this.MaxStringLength;
     }
     
     if (typeof value === 'object' && value !== null) {

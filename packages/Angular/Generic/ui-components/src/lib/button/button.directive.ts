@@ -112,14 +112,23 @@ export class MJButtonDirective implements AfterContentInit {
    * `aria-label="..."` on the element is never clobbered.
    */
   @Input()
-  set ariaLabel(value: string | null | undefined) {
+  set AriaLabel(value: string | null | undefined) {
     this._ariaLabel = value ?? undefined;
     if (this._ariaLabel) {
       this.host.nativeElement.setAttribute('aria-label', this._ariaLabel);
     }
   }
-  get ariaLabel(): string | undefined {
+  get AriaLabel(): string | undefined {
     return this._ariaLabel;
+  }
+
+  /** @deprecated Use {@link AriaLabel}. */
+  get ariaLabel(): string | undefined {
+    return this.AriaLabel;
+  }
+  /** @deprecated Use {@link AriaLabel}. */
+  @Input() set ariaLabel(value: string | null | undefined) {
+    this.AriaLabel = value;
   }
   private _ariaLabel?: string;
 

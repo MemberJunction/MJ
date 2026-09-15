@@ -148,14 +148,23 @@ export class ConversationEmptyStateComponent {
   /** When true (overlay context), suggested prompts are hidden to save space */
   private _overlayMode = false;
   @Input()
-  set overlayMode(value: boolean) {
+  set OverlayMode(value: boolean) {
       this._overlayMode = value;
       if (value) {
           this.SuggestedPrompts = [];
       }
   }
-  get overlayMode(): boolean {
+  get OverlayMode(): boolean {
       return this._overlayMode;
+  }
+
+  /** @deprecated Use {@link OverlayMode}. */
+  get overlayMode(): boolean {
+    return this.OverlayMode;
+  }
+  /** @deprecated Use {@link OverlayMode}. */
+  @Input() set overlayMode(value: boolean) {
+    this.OverlayMode = value;
   }
 
   @ViewChild(MessageInputComponent) private messageInput?: MessageInputComponent;
