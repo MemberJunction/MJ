@@ -66,6 +66,50 @@ describe('ValidateSchemaName', () => {
         }
     });
 
+    it("reserves SQL Server's fixed database-role schemas", () => {
+        // Same shape as `public`, on the other dialect. SQL Server creates these nine schemas in
+        // EVERY database (one per fixed database role). They are not MJ's and not the default
+        // schema, so nothing above catches them — but they exist, which means an app declaring
+        // one is never created, it is ADOPTED on the default path, and `mj app remove` then runs
+        // DropAllSchemaObjects + DROP SCHEMA against it. Verified droppable on SQL Server 2022.
+        // The repo already agrees they are system schemas: introspector-mssql.ts excludes this
+        // exact list from a baseline snapshot.
+        for (const name of [
+            'db_owner', 'db_accessadmin', 'db_securityadmin', 'db_ddladmin', 'db_backupoperator',
+            'db_datareader', 'db_datawriter', 'db_denydatareader', 'db_denydatawriter',
+            'DB_OWNER', 'Db_DdlAdmin',
+        ]) {
+            const result = ValidateSchemaName(name, { allowDoubleUnderscore: true });
+            expect(result.Success, `${name} must be reserved`).toBe(false);
+            expect(result.ErrorMessage).toMatch(/reserved/i);
+        }
+    });
+
+    it("reserves the whole pg_ prefix, which PostgreSQL owns", () => {
+        // PostgreSQL reserves every `pg_`-prefixed name for system use, and creates per-session
+        // `pg_temp_N` / `pg_toast_temp_N` schemas at runtime. Enumerating catalogs one at a time
+        // cannot cover names that only exist once a backend is live, so the rule is the prefix.
+        for (const name of ['pg_temp_1', 'pg_toast_temp_1', 'pg_anything', 'PG_TEMP_3']) {
+            const result = ValidateSchemaName(name, { allowDoubleUnderscore: true });
+            expect(result.Success, `${name} must be reserved`).toBe(false);
+            expect(result.ErrorMessage).toMatch(/reserved/i);
+        }
+    });
+
+    it('does not claim MemberJunction owns a platform schema it did not create', () => {
+        // `dbo`, `public` and `db_owner` belong to the database platform, not to MJ. Saying they
+        // are "reserved by MemberJunction" invites an operator to read the block as MJ policy
+        // that some flag can override, which is exactly backwards for the ones MJ cannot restore.
+        for (const name of ['dbo', 'public', 'db_owner']) {
+            const result = ValidateSchemaName(name);
+            expect(result.Success, name).toBe(false);
+            expect(result.ErrorMessage, name).not.toMatch(/reserved by MemberJunction/i);
+            expect(result.ErrorMessage, name).toMatch(/platform/i);
+        }
+        // MJ's own schemas still name MemberJunction.
+        expect(ValidateSchemaName('__mj').ErrorMessage).toMatch(/MemberJunction/i);
+    });
+
     it('matches reserved names case-insensitively (SQL Server folds, PG lowercases)', () => {
         for (const name of ['DBO', 'Dbo', 'SYS', 'Guest', 'information_schema', '__MJ']) {
             const result = ValidateSchemaName(name, { allowDoubleUnderscore: true });

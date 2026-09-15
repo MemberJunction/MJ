@@ -12,43 +12,89 @@ import { DatabaseProviderBase } from '@memberjunction/core';
 import { EscapeSQLString } from '@memberjunction/global';
 
 /**
- * Schema names an Open App may never claim, with or without the double-underscore override.
- * Two groups: the ones each supported database platform owns, and the ones MemberJunction owns.
+ * Schemas the DATABASE PLATFORM owns. MJ did not create these and cannot recreate what they
+ * carry, which is precisely why an Open App may never claim one — with or without the
+ * double-underscore override.
  *
  * Stored lowercase and matched lowercase: SQL Server compares identifiers case-insensitively
- * and PostgreSQL folds unquoted DDL to lowercase, so `DBO`, `__MJ` and `INFORMATION_SCHEMA`
- * name the same physical schemas as their canonical spellings.
+ * and PostgreSQL folds unquoted DDL to lowercase, so `DBO` and `INFORMATION_SCHEMA` name the
+ * same physical schemas as their canonical spellings.
  *
- * **Both dialects are listed, because MJ installs Open Apps on both.** `public` is PostgreSQL's
- * default schema — the exact analogue of SQL Server's `dbo` — and it exists in every PG database.
- * That combination is what makes omitting it dangerous rather than untidy: `HandleSchemaCreation`
- * finds it already present and ADOPTS it on the default path (no flag), and `mj app remove` then
- * hands it to `DropAppSchema`, whose PostgreSQL branch issues `DROP SCHEMA ... CASCADE`. MJ's own
- * generated PG migrations target it (`SET search_path TO __mj, public`), and the extensions they
- * rely on (`pgcrypto`, `uuid-ossp`) install into it by default, so dropping it takes unqualified
- * `gen_random_uuid()` with it. `pg_catalog` / `pg_toast` are PostgreSQL's catalogs, listed for the
- * same reason `sys` and `information_schema` are.
+ * **What makes this list load-bearing rather than tidy.** Every name here already exists in a
+ * stock database, so an app declaring one is never *created* — `HandleSchemaCreation` finds it
+ * present and ADOPTS it on the default path, no flag involved. `mj app remove` then hands the
+ * adopted name to `DropAppSchema`, which drops it for real. So the danger is not "MJ refuses a
+ * name it should allow", it is "MJ silently takes ownership of a schema it must never delete".
  *
- * `__mj_udt` is here because MJ core creates it (migrations/v5/V202604292210) as the sandbox
- * for user-defined tables. It sits inside the `__mj_` app namespace opened up below, so
- * without this entry an app could adopt it and `mj app remove` would CASCADE-drop every
- * user-defined table in the database.
+ * The three groups, and why each exists in every database of its platform:
+ * - `dbo` / `public` are the platforms' default schemas, and the direct analogue of each other.
+ *   MJ's own generated PG migrations target `public` (`SET search_path TO __mj, public`) and the
+ *   extensions they rely on (`pgcrypto`, `uuid-ossp`) install into it, so dropping it takes
+ *   unqualified `gen_random_uuid()` with it.
+ * - `sys` / `information_schema` are the catalogs.
+ * - `db_owner` … `db_denydatawriter` are SQL Server's nine FIXED DATABASE ROLES. SQL Server
+ *   creates one schema per fixed role in every database. They accept tables and they DROP
+ *   cleanly (verified on SQL Server 2022), which is the whole hazard. The repo already treats
+ *   them as system schemas: `MJCLI/src/baseline/introspector-mssql.ts` excludes this exact list.
+ *
+ * PostgreSQL's `pg_*` schemas are covered by {@link PG_RESERVED_PREFIX} instead of being listed,
+ * because `pg_temp_N` / `pg_toast_temp_N` are created per session and cannot be enumerated ahead
+ * of time.
  */
-const RESERVED_SCHEMAS = new Set([
-  // SQL Server
+const PLATFORM_SCHEMAS = new Set([
+  // SQL Server — default, catalogs, guest
   'dbo',
   'sys',
   'guest',
-  // PostgreSQL
+  // SQL Server — one schema per fixed database role, present in every database
+  'db_owner',
+  'db_accessadmin',
+  'db_securityadmin',
+  'db_ddladmin',
+  'db_backupoperator',
+  'db_datareader',
+  'db_datawriter',
+  'db_denydatareader',
+  'db_denydatawriter',
+  // PostgreSQL — default schema
   'public',
-  'pg_catalog',
-  'pg_toast',
   // ANSI — present on both
-  'information_schema',
-  // MemberJunction
+  'information_schema'
+]);
+
+/**
+ * PostgreSQL reserves the entire `pg_` prefix for system use, and creates `pg_temp_N` /
+ * `pg_toast_temp_N` per backend session. A prefix rule covers the per-session names that an
+ * enumerated list structurally cannot, and subsumes `pg_catalog` / `pg_toast`.
+ */
+const PG_RESERVED_PREFIX = 'pg_';
+
+/**
+ * Schemas MEMBERJUNCTION owns. Blocked by exact match regardless of the override.
+ *
+ * `__mj_udt` is here because MJ core creates it (migrations/v5/V202604292210) as the sandbox for
+ * user-defined tables. It sits inside the `__mj_` app namespace opened up below, so without this
+ * entry an app could adopt it and `mj app remove` would CASCADE-drop every user-defined table in
+ * the database.
+ */
+const MJ_SCHEMAS = new Set([
   '__mj',
   '__mj_udt'
 ]);
+
+/**
+ * Who owns `normalized`, or `undefined` if it is claimable. One decision in one place, so the
+ * error message can name the real owner instead of asserting MJ owns `dbo`.
+ */
+function ReservedOwnerOf(normalized: string): 'the database platform' | 'MemberJunction' | undefined {
+  if (PLATFORM_SCHEMAS.has(normalized) || normalized.startsWith(PG_RESERVED_PREFIX)) {
+    return 'the database platform';
+  }
+  if (MJ_SCHEMAS.has(normalized)) {
+    return 'MemberJunction';
+  }
+  return undefined;
+}
 
 /**
  * The namespace MJ Open Apps live in: `__mj_<AppName>` (`__mj_BizAppsCommon`,
@@ -115,10 +161,11 @@ export function ValidateSchemaName(
 
   const normalized = schemaName.toLowerCase();
 
-  if (RESERVED_SCHEMAS.has(normalized)) {
+  const owner = ReservedOwnerOf(normalized);
+  if (owner) {
     return {
       Success: false,
-      ErrorMessage: `Schema name '${schemaName}' is reserved by MemberJunction and cannot be used by an Open App`
+      ErrorMessage: `Schema name '${schemaName}' is reserved by ${owner} and cannot be used by an Open App`
     };
   }
 
