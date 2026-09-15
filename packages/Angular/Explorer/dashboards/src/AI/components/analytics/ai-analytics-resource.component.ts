@@ -700,9 +700,9 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
     protected registerAgentTools(): void {
         this.navigationService.SetAgentClientTools(this, [
             {
-                name: 'SwitchAnalyticsSection',
-                description: 'Switch the active section of the AI Analytics dashboard (e.g., executive-summary, prompt-runs, agent-runs, model-performance, cost-budget, error-analysis, usage-patterns, realtime-overview, realtime-sessions, realtime-management, realtime-transcripts).',
-                parameters: {
+                Name: 'SwitchAnalyticsSection',
+                Description: 'Switch the active section of the AI Analytics dashboard (e.g., executive-summary, prompt-runs, agent-runs, model-performance, cost-budget, error-analysis, usage-patterns, realtime-overview, realtime-sessions, realtime-management, realtime-transcripts).',
+                ParameterSchema: {
                     type: 'object',
                     properties: {
                         section: {
@@ -713,15 +713,18 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
                     },
                     required: ['section'],
                 },
-                handler: async (args: { section: string }) => {
-                    this.OnSectionChange(args.section);
+                Handler: async (params: Record<string, unknown>) => {
+                    const section = typeof params['section'] === 'string' ? params['section'] : '';
+                    if (section) {
+                        this.OnSectionChange(section);
+                    }
                     return { success: true, activeSection: this.ActiveSection };
                 },
             },
             {
-                name: 'SetAnalyticsTimeRange',
-                description: 'Change the time range filter for the current AI Analytics view (e.g., 1h, 6h, 24h, 7d, 30d, Today, MTD).',
-                parameters: {
+                Name: 'SetAnalyticsTimeRange',
+                Description: 'Change the time range filter for the current AI Analytics view (e.g., 1h, 6h, 24h, 7d, 30d, Today, MTD).',
+                ParameterSchema: {
                     type: 'object',
                     properties: {
                         timeRange: {
@@ -731,8 +734,11 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
                     },
                     required: ['timeRange'],
                 },
-                handler: async (args: { timeRange: string }) => {
-                    this.OnTimeRangeChange(args.timeRange);
+                Handler: async (params: Record<string, unknown>) => {
+                    const timeRange = typeof params['timeRange'] === 'string' ? params['timeRange'] : '';
+                    if (timeRange) {
+                        this.OnTimeRangeChange(timeRange);
+                    }
                     return { success: true, currentTimeRange: this.CurrentTimeRange };
                 },
             },

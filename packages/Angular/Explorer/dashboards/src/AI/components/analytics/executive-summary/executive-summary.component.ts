@@ -166,7 +166,7 @@ interface ErrorHotspot {
             </div>
           }
           @if (ErrorHotspots.length > 0) {
-            <button mjButton variant="link" size="sm" (click)="SectionNavigate.emit('error-analysis')">
+            <button mjButton variant="flat" size="sm" (click)="SectionNavigate.emit('error-analysis')">
               View All Errors <i class="fa-solid fa-arrow-right"></i>
             </button>
           }
@@ -691,12 +691,16 @@ export class AnalyticsExecutiveSummaryComponent extends BaseAngularComponent imp
       return;
     }
 
-    const coveragePct = kpis.Coverage && kpis.Coverage.RunsTotal > 0
-      ? (kpis.Coverage.RunsPriced / kpis.Coverage.RunsTotal) * 100
-      : (kpis.Coverage?.RunsTotal === 0 ? 100 : 0);
-    const prevCoveragePct = this.previousKpis?.Coverage && this.previousKpis.Coverage.RunsTotal > 0
-      ? (this.previousKpis.Coverage.RunsPriced / this.previousKpis.Coverage.RunsTotal) * 100
-      : (this.previousKpis?.Coverage?.RunsTotal === 0 ? 100 : null);
+    const covTotal = kpis.Coverage ? (kpis.Coverage.PricedRuns + kpis.Coverage.UnpricedRuns + kpis.Coverage.UnmeasuredRuns) : 0;
+    const covPriced = kpis.Coverage?.PricedRuns ?? 0;
+    const coveragePct = covTotal > 0
+      ? (covPriced / covTotal) * 100
+      : 100;
+    const prevCovTotal = this.previousKpis?.Coverage ? (this.previousKpis.Coverage.PricedRuns + this.previousKpis.Coverage.UnpricedRuns + this.previousKpis.Coverage.UnmeasuredRuns) : null;
+    const prevCovPriced = this.previousKpis?.Coverage?.PricedRuns ?? 0;
+    const prevCoveragePct = prevCovTotal !== null && prevCovTotal > 0
+      ? (prevCovPriced / prevCovTotal) * 100
+      : (prevCovTotal === 0 ? 100 : null);
 
     const trends = this.TrendsData;
     this.KpiCards = [

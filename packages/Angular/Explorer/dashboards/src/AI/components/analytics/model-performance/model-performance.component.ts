@@ -41,25 +41,18 @@ interface ModelLeaderboardRow {
     Rank: number;
     ModelID: string;
     ModelName: string;
+    ApiId: string;
     Vendor: string;
+    VendorID: string;
     Runs: number;
-    CostFormatted: string;
-    AvgLatencyFormatted: string;
-    SuccessRateFormatted: string;
-    ThroughputFormatted: string;
-    CacheHitRateFormatted: string;
-    ScoreFormatted: string;
-    TotalTokens: number;
     AvgLatencyMs: number;
+    AvgLatencyColor: string;
     P95LatencyMs: number;
     SuccessRate: number;
     CostPer1KTokens: number;
     CacheHitRate: number;
     TotalCost: number;
     RankClass: string;
-    ApiId: string;
-    VendorID: string;
-    AvgLatencyColor: string;
 }
 
 type SortByOption = 'cost-efficiency' | 'speed' | 'reliability' | 'usage-volume';
@@ -521,6 +514,7 @@ export class AnalyticsModelPerformanceComponent extends BaseAngularComponent imp
         return {
             Rank: 0,
             RankClass: 'rank-neutral',
+            ModelID: modelId,
             ModelName: firstName?.Model ?? 'Unknown',
             ApiId: apiId,
             Vendor: firstVendor?.Vendor ?? 'Unknown',

@@ -804,10 +804,14 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
             ? ((currentTotalCost - prevTotalCost) / prevTotalCost) * 100
             : null;
 
-        const coverage = computeTotalCost(this.dailyRows);
-        const covSubtitle = coverage.PromptRunsTotal > 0
-            ? `covers ${Math.round(coverage.Percent)}% of runs`
-            : undefined;
+        let totalRuns = 0;
+        let pricedRuns = 0;
+        for (const r of this.dailyRows) {
+            totalRuns += (r.Runs ?? 0);
+            pricedRuns += (r.PricedRuns ?? 0);
+        }
+        const covPct = totalRuns > 0 ? (pricedRuns / totalRuns) * 100 : 100;
+        const covSubtitle = totalRuns > 0 ? `covers ${Math.round(covPct)}% of runs` : undefined;
 
         this.CostKpis = [
             {
