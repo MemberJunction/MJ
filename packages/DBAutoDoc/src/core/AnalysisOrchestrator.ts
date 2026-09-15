@@ -408,7 +408,11 @@ export class AnalysisOrchestrator {
       if (this.config.analysis.organicKeyDetection?.enabled) {
         this.onProgress('Running organic-key detection');
         try {
-          const detector = new OrganicKeyDetector(this.config.analysis.organicKeyDetection, this.config.ai);
+          const detector = new OrganicKeyDetector(
+            this.config.analysis.organicKeyDetection,
+            this.config.ai,
+            this.config.database.provider,
+          );
           const okResult = await detector.detect(state, {
             onProgress: (msg) => this.onProgress(msg),
           });
