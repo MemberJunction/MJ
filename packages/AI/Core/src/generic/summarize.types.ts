@@ -9,13 +9,8 @@ export class SummarizeParams extends ChatParams {
 }
 
 export class SummarizeResult extends BaseResult {
-    public get Text(): string {
-        return this._text;
-    }
-
-    /** @deprecated Use {@link Text}. */
     public get text(): string {
-        return this.Text;
+        return this._text;
     }
     private _text: string;
 

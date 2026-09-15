@@ -63,16 +63,7 @@ export class LibraryLoader {
   /**
    * Enable progressive delay for library initialization (useful for test harness)
    */
-  public static EnableProgressiveDelay: boolean = false;
-
-  /** @deprecated Use {@link EnableProgressiveDelay}. */
-  public static get enableProgressiveDelay(): boolean {
-    return this.EnableProgressiveDelay;
-  }
-  /** @deprecated Use {@link EnableProgressiveDelay}. */
-  public static set enableProgressiveDelay(value: boolean) {
-    this.EnableProgressiveDelay = value;
-  }
+  public static enableProgressiveDelay: boolean = false;
 
   /**
    * Inject `<link rel="preload" as="script">` tags for core runtime libraries

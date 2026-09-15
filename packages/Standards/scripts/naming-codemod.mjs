@@ -369,15 +369,20 @@ function isDataShapeClass(classNode) {
     });
     if (decorated) return true;
 
-    // No decorator needed to be a data shape. A class of nothing but properties is one by
+    // No decorator needed to be a data shape. A class of nothing but INSTANCE behaviour is one by
     // construction: `const p: ProviderInfo = { provider, type }` type-checks precisely because there
     // is no behaviour a literal would fail to supply.
     //
-    // METHODS are the test, not the constructor. `DataObjectParams` has a constructor — one that
-    // merely defaults its fields — and is still assigned from object literals all over `baseEntity`.
-    // A constructor says nothing about whether a literal can stand in for the class; only a method,
-    // which the literal would have to supply too, does.
-    return !classNode.members.some((m) => ts.isMethodDeclaration(m));
+    // Instance methods are the test. Not the constructor — `DataObjectParams` has one that merely
+    // defaults its fields and is still built from literals all over `baseEntity`. And not a STATIC
+    // method, which lives on the constructor rather than the instance type: `ModelUsage.ForMedia` is
+    // a static factory, so a `{ promptTokens, … }` literal is still assignable to `ModelUsage` and
+    // renaming its fields still breaks that literal — in whichever package happens to write it.
+    return !classNode.members.some(
+        (m) =>
+            ts.isMethodDeclaration(m) &&
+            !(m.modifiers ?? []).some((mod) => mod.kind === ts.SyntaxKind.StaticKeyword),
+    );
 }
 
 /** The `@Input(…)` / `@Output(…)` decorator on a member, if it has one. */
@@ -495,6 +500,9 @@ function rewriteParameterProperty(ctx, node, names, classNode, ctor) {
     if (!node.type) return SKIP_REASONS.NoTypeAnnotation;
     // `constructor(public foo?: T)` declares an optional member, and an accessor cannot be optional.
     if (node.questionToken) return SKIP_REASONS.OptionalProperty;
+    if (isDataShapeClass(classNode)) return SKIP_REASONS.StructuralClass;
+    if (classNode.name && ctx.subclassProps?.get(classNode.name.text)?.has(names.Old))
+        return SKIP_REASONS.SubclassRedeclares;
     if (declaredNames(classNode).has(names.New)) return SKIP_REASONS.NameCollision;
 
     // Inside the constructor the parameter is also a plain local. Renaming it there is a separate,
@@ -552,6 +560,12 @@ function referencesBareName(root, name, source) {
 function rewriteAccessorPair(ctx, node, names, classNode, state) {
     const { text, source, buffer, unit } = ctx;
     if (ts.getDecorators?.(node)?.length) return SKIP_REASONS.DecoratedAccessor;
+    // A getter is part of the class's structural type exactly like a field, so a literal assigned to
+    // the class has to supply its name too. `BaseResult.timeElapsed` is a getter, and renaming it
+    // broke every `{ …, timeElapsed }` literal built in OTHER packages — invisible to this one.
+    if (isDataShapeClass(classNode)) return SKIP_REASONS.StructuralClass;
+    if (classNode.name && ctx.subclassProps?.get(classNode.name.text)?.has(names.Old))
+        return SKIP_REASONS.SubclassRedeclares;
     if (declaredNames(classNode).has(names.New)) return SKIP_REASONS.NameCollision;
 
     const pair = classNode.members.filter(

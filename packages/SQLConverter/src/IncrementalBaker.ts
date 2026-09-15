@@ -28,22 +28,12 @@ import type { TSQLToPGTranspiler, ConversionStatus, UnhandledStatement } from '.
  */
 export class BakeApplyError extends Error {
   constructor(
-    public readonly FileName: string,
-    public readonly TranspiledBody: string,
+    public readonly fileName: string,
+    public readonly transpiledBody: string,
     message: string,
   ) {
     super(message);
     this.name = 'BakeApplyError';
-  }
-
-  /** @deprecated Use {@link FileName}. */
-  public get fileName(): string {
-    return this.FileName;
-  }
-
-  /** @deprecated Use {@link TranspiledBody}. */
-  public get transpiledBody(): string {
-    return this.TranspiledBody;
   }
 }
 

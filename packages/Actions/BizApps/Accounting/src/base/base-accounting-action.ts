@@ -8,14 +8,9 @@ import { ACCOUNTING_ERP_INTEGRATION_NAMES, ErpPluginKey } from '../constants';
 import { ResolvedAccountingIntegration } from '../types';
 
 class AccountingIntegrationError extends Error {
-    constructor(message: string, readonly ResultCode: 'NO_ACCOUNTING_INTEGRATION' | 'AMBIGUOUS_ACCOUNTING_INTEGRATION') {
+    constructor(message: string, readonly resultCode: 'NO_ACCOUNTING_INTEGRATION' | 'AMBIGUOUS_ACCOUNTING_INTEGRATION') {
         super(message);
         this.name = 'AccountingIntegrationError';
-    }
-
-    /** @deprecated Use {@link ResultCode}. */
-    get resultCode(): 'NO_ACCOUNTING_INTEGRATION' | 'AMBIGUOUS_ACCOUNTING_INTEGRATION' {
-        return this.ResultCode;
     }
 }
 

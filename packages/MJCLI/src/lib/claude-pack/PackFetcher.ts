@@ -89,29 +89,11 @@ export class PackChecksumError extends Error {
     constructor(
         message: string,
         public path: string,
-        public Expected: string,
-        public Actual: string
+        public expected: string,
+        public actual: string
     ) {
         super(message);
         this.name = 'PackChecksumError';
-    }
-
-    /** @deprecated Use {@link Expected}. */
-    public get expected(): string {
-        return this.Expected;
-    }
-    /** @deprecated Use {@link Expected}. */
-    public set expected(value: string) {
-        this.Expected = value;
-    }
-
-    /** @deprecated Use {@link Actual}. */
-    public get actual(): string {
-        return this.Actual;
-    }
-    /** @deprecated Use {@link Actual}. */
-    public set actual(value: string) {
-        this.Actual = value;
     }
 }
 

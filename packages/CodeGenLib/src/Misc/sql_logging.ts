@@ -92,16 +92,7 @@ export class SQLLogging {
     private static _SQLLoggingFilePath: string = '';
     private static _OmitRecurringScriptsFromLog: boolean = true;
     /** CLI `--sql-output-dir`. Set before {@link initSQLLogging}. */
-    public static SqlOutputDirFlag: string | undefined;
-
-    /** @deprecated Use {@link SqlOutputDirFlag}. */
-    public static get sqlOutputDirFlag(): string | undefined {
-        return this.SqlOutputDirFlag;
-    }
-    /** @deprecated Use {@link SqlOutputDirFlag}. */
-    public static set sqlOutputDirFlag(value: string | undefined) {
-        this.SqlOutputDirFlag = value;
-    }
+    public static sqlOutputDirFlag: string | undefined;
 
     public static get SQLLoggingFilePath(): string {
         return SQLLogging._SQLLoggingFilePath;
