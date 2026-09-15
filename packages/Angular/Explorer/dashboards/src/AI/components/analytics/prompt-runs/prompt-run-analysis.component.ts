@@ -7,7 +7,7 @@
  */
 
 import {
-    Component, Input, Output, EventEmitter,
+    Component, ChangeDetectionStrategy, Input, Output, EventEmitter,
     OnInit, OnDestroy, ChangeDetectorRef, inject
 } from '@angular/core';
 import { Subject } from 'rxjs';
@@ -87,6 +87,7 @@ const PAGE_SIZE = 25;
 
 @Component({
     standalone: false,
+    changeDetection: ChangeDetectionStrategy.OnPush,
     selector: 'app-analytics-prompt-runs',
     template: `
 
@@ -266,14 +267,18 @@ const PAGE_SIZE = 25;
                 @if (TotalPages > 1) {
                     <div class="pagination">
                         <button
-                            class="page-btn"
+                            mjButton
+                            variant="secondary"
+                            size="sm"
                             [disabled]="CurrentPage === 1"
                             (click)="OnPageChange(CurrentPage - 1)">
                             <i class="fa-solid fa-chevron-left"></i>
                         </button>
                         <span class="page-info">Page {{ CurrentPage }} of {{ TotalPages }}</span>
                         <button
-                            class="page-btn"
+                            mjButton
+                            variant="secondary"
+                            size="sm"
                             [disabled]="CurrentPage === TotalPages"
                             (click)="OnPageChange(CurrentPage + 1)">
                             <i class="fa-solid fa-chevron-right"></i>

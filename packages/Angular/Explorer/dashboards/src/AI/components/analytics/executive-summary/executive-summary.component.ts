@@ -1,5 +1,5 @@
 import {
-  Component, Input, Output, EventEmitter, OnInit, OnDestroy,
+  Component, ChangeDetectionStrategy, Input, Output, EventEmitter, OnInit, OnDestroy,
   ChangeDetectorRef, inject
 } from '@angular/core';
 import { Subject, Subscription } from 'rxjs';
@@ -45,6 +45,7 @@ interface ErrorHotspot {
 
 @Component({
   standalone: false,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'app-analytics-executive-summary',
   template: `
     @if (IsLoading && KpiCards.length === 0) {
@@ -165,7 +166,7 @@ interface ErrorHotspot {
             </div>
           }
           @if (ErrorHotspots.length > 0) {
-            <button class="view-all-link" (click)="SectionNavigate.emit('error-analysis')">
+            <button mjButton variant="link" size="sm" (click)="SectionNavigate.emit('error-analysis')">
               View All Errors <i class="fa-solid fa-arrow-right"></i>
             </button>
           }

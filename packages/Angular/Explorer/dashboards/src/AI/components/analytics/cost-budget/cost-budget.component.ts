@@ -6,7 +6,7 @@
  */
 
 import {
-    Component, Input, Output, EventEmitter,
+    Component, ChangeDetectionStrategy, Input, Output, EventEmitter,
     OnInit, OnDestroy, ChangeDetectorRef, inject
 } from '@angular/core';
 import { Subject } from 'rxjs';
@@ -76,6 +76,7 @@ const TREEMAP_COLORS = [
 
 @Component({
     standalone: false,
+    changeDetection: ChangeDetectionStrategy.OnPush,
     selector: 'app-analytics-cost-budget',
     template: `
 
@@ -195,7 +196,7 @@ const TREEMAP_COLORS = [
                         <i class="fa-solid fa-table panel-header__icon"></i>
                         Cost by Model
                     </div>
-                    <button class="export-btn" (click)="ExportCSV()">
+                    <button mjButton variant="secondary" size="sm" class="export-btn" (click)="ExportCSV()">
                         <i class="fa-solid fa-download"></i>
                         Export CSV
                     </button>
