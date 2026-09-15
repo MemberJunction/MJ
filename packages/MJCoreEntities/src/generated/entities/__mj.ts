@@ -2535,8 +2535,8 @@ export const MJAIAgentRunSchema = z.object({
     TotalCost: z.number().nullable().describe(`
         * * Field Name: TotalCost
         * * Display Name: Total Cost
-        * * SQL Data Type: decimal(18, 6)
-        * * Default Value: 0.000000
+        * * SQL Data Type: decimal(19, 8)
+        * * Default Value: 0.00000000
         * * Description: Total estimated cost for all AI model usage during this agent run`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
@@ -6407,7 +6407,7 @@ export const MJAIPromptRunSchema = z.object({
     TotalCost: z.number().nullable().describe(`
         * * Field Name: TotalCost
         * * Display Name: Total Cost
-        * * SQL Data Type: decimal(18, 6)
+        * * SQL Data Type: decimal(19, 8)
         * * Description: Total cost of this prompt run including its own cost plus all descendant costs. Calculated as Cost + DescendantCost. This value is stored (not computed) for query performance. Currency is specified in CostCurrency field.`),
     Success: z.boolean().describe(`
         * * Field Name: Success
@@ -6536,7 +6536,7 @@ export const MJAIPromptRunSchema = z.object({
     DescendantCost: z.number().nullable().describe(`
         * * Field Name: DescendantCost
         * * Display Name: Descendant Cost
-        * * SQL Data Type: decimal(18, 6)
+        * * SQL Data Type: decimal(19, 8)
         * * Description: The total cost of all descendant (child and grandchild) prompt runs, excluding this run's own cost. For leaf nodes (no children), this is 0. Updated when child costs change.`),
     ValidationAttemptCount: z.number().nullable().describe(`
         * * Field Name: ValidationAttemptCount
@@ -6833,6 +6833,18 @@ export const MJAIPromptRunSchema = z.object({
     *   * NativeFallback
     *   * NativeImplicit
         * * Description: Which tool-calling path this run actually took. 'Native' = Actions declared as tools, control flow in the JSON envelope (the hybrid). 'NativeImplicit' = Actions, sub-agents, payload_change_request and ask_user declared as tools; a tool call continues the loop and plain text ends the turn. 'Envelope' = no tools declared — the vendor-agnostic JSON-envelope path, including a prompt that asked for native mode on a model/vendor without the capability (also logs a warning). 'NativeFallback' = a native attempt failed in a tools-specific way and completed via a single envelope retry. NULL = pre-feature rows or a run that never reached a model call.`),
+    AgentRunID: z.string().nullable().describe(`
+        * * Field Name: AgentRunID
+        * * Display Name: Agent Run ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+        * * Description: If this prompt run was executed as part of an AI agent run, references that agent run. May be NULL for direct prompt runs or runs that pre-date attribution; backfilled from AIAgentRunStep.`),
+    UserID: z.string().nullable().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: The user on whose behalf this prompt was executed. May be NULL for automated/unauthenticated runs or runs that pre-date attribution; backfilled from the parent AIAgentRun.`),
     Prompt: z.string().describe(`
         * * Field Name: Prompt
         * * Display Name: Prompt
@@ -6881,6 +6893,14 @@ export const MJAIPromptRunSchema = z.object({
         * * Field Name: UsageType
         * * Display Name: Usage Type
         * * SQL Data Type: nvarchar(50)`),
+    AgentRun: z.string().nullable().describe(`
+        * * Field Name: AgentRun
+        * * Display Name: Agent Run
+        * * SQL Data Type: nvarchar(255)`),
+    User: z.string().nullable().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
         * * Display Name: Root Parent
@@ -25890,6 +25910,16 @@ export const MJQuerySchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Author's declared intent that this Query should be materialized. CodeGen scans for IsMaterialized = 1 and, if the query qualifies (§9/§10), materializes it. The authoritative state lives on the linked MJ: Materialized Results row (found via the MaterializedResultQuery join table).`),
+    MaterializationRefreshSchedule: z.string().nullable().describe(`
+        * * Field Name: MaterializationRefreshSchedule
+        * * Display Name: Materialization Refresh Schedule
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Cron expression specifying the schedule for background refresh of this query when materialized.`),
+    MaterializationIntendedWorkload: z.string().nullable().describe(`
+        * * Field Name: MaterializationIntendedWorkload
+        * * Display Name: Materialization Intended Workload
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Intended workload for materialization storage (e.g. OLAP, Hybrid, InvertedIndex).`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
         * * Display Name: Category Name
@@ -32641,6 +32671,193 @@ export const MJThemeSchema = z.object({
 });
 
 export type MJThemeEntityType = z.infer<typeof MJThemeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Usage Budget Events
+ */
+export const MJUsageBudgetEventSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    BudgetID: z.string().describe(`
+        * * Field Name: BudgetID
+        * * Display Name: Budget ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Usage Budgets (vwUsageBudgets.ID)
+        * * Description: Foreign key to the UsageBudget that triggered this event.`),
+    PeriodStart: z.date().describe(`
+        * * Field Name: PeriodStart
+        * * Display Name: Period Start
+        * * SQL Data Type: datetimeoffset
+        * * Description: Start timestamp (in UTC) of the budget period during which the threshold breach occurred.`),
+    ObservedAmount: z.number().describe(`
+        * * Field Name: ObservedAmount
+        * * Display Name: Observed Amount
+        * * SQL Data Type: decimal(19, 8)
+        * * Description: The observed consumption amount at the time this threshold event was recorded.`),
+    ThresholdPercent: z.number().describe(`
+        * * Field Name: ThresholdPercent
+        * * Display Name: Threshold Percent
+        * * SQL Data Type: int
+        * * Description: The percentage threshold reached or exceeded (e.g., WarnAtPercent or 100).`),
+    Action: z.union([z.literal('Block'), z.literal('Notify'), z.literal('Throttle')]).describe(`
+        * * Field Name: Action
+        * * Display Name: Action
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Block
+    *   * Notify
+    *   * Throttle
+        * * Description: The action triggered for this event (Notify, Throttle, Block).`),
+    NotifiedAt: z.date().nullable().describe(`
+        * * Field Name: NotifiedAt
+        * * Display Name: Notified At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp when notification was sent to stakeholders for this event, or NULL if pending/skipped.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Budget: z.string().describe(`
+        * * Field Name: Budget
+        * * Display Name: Budget
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJUsageBudgetEventEntityType = z.infer<typeof MJUsageBudgetEventSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Usage Budgets
+ */
+export const MJUsageBudgetSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Human-readable name for this usage budget.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Detailed description of the purpose, scope, and rules for this usage budget.`),
+    MeasureQueryID: z.string().describe(`
+        * * Field Name: MeasureQueryID
+        * * Display Name: Measure Query ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Queries (vwQueries.ID)
+        * * Description: Foreign key to the saved Query used to calculate the consumed amount for this budget.`),
+    MeasureParameters: z.string().nullable().describe(`
+        * * Field Name: MeasureParameters
+        * * Display Name: Measure Parameters
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object containing parameters to pass into the MeasureQuery when evaluating consumption.`),
+    MeasureColumn: z.string().describe(`
+        * * Field Name: MeasureColumn
+        * * Display Name: Measure Column
+        * * SQL Data Type: nvarchar(100)
+        * * Description: The name of the result column in MeasureQuery output that contains the consumed numerical amount.`),
+    ScopeEntityID: z.string().nullable().describe(`
+        * * Field Name: ScopeEntityID
+        * * Display Name: Scope Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Optional foreign key to an Entity defining the scope of this budget (e.g., AIAgent, User, Tenant).`),
+    ScopeRecordID: z.string().nullable().describe(`
+        * * Field Name: ScopeRecordID
+        * * Display Name: Scope Record ID
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Optional identifier of the specific record within ScopeEntityID that this budget governs.`),
+    Period: z.union([z.literal('Day'), z.literal('Month'), z.literal('Week')]).describe(`
+        * * Field Name: Period
+        * * Display Name: Period
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Day
+    *   * Month
+    *   * Week
+        * * Description: Calendar or evaluation period over which the budget is measured (Day, Week, Month).`),
+    AmountLimit: z.number().describe(`
+        * * Field Name: AmountLimit
+        * * Display Name: Amount Limit
+        * * SQL Data Type: decimal(19, 8)
+        * * Description: Maximum allowed consumption or spend amount for the specified period.`),
+    Unit: z.string().describe(`
+        * * Field Name: Unit
+        * * Display Name: Unit
+        * * SQL Data Type: nvarchar(20)
+        * * Description: Measurement unit for AmountLimit and ObservedAmount (e.g., USD, Tokens, Requests).`),
+    WarnAtPercent: z.number().describe(`
+        * * Field Name: WarnAtPercent
+        * * Display Name: Warn At Percent
+        * * SQL Data Type: int
+        * * Default Value: 80
+        * * Description: Percentage of AmountLimit at which warning notifications are triggered (default 80).`),
+    Action: z.union([z.literal('Block'), z.literal('Notify'), z.literal('Throttle')]).describe(`
+        * * Field Name: Action
+        * * Display Name: Action
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Block
+    *   * Notify
+    *   * Throttle
+        * * Description: Enforcement action taken when the budget limit is reached (Notify, Throttle, Block).`),
+    Status: z.union([z.literal('Active'), z.literal('Disabled')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+        * * Description: Current operational status of this budget (Active, Disabled).`),
+    LastEvaluatedAt: z.date().nullable().describe(`
+        * * Field Name: LastEvaluatedAt
+        * * Display Name: Last Evaluated At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp when this budget was most recently evaluated by the evaluation job.`),
+    LastObservedAmount: z.number().nullable().describe(`
+        * * Field Name: LastObservedAmount
+        * * Display Name: Last Observed Amount
+        * * SQL Data Type: decimal(19, 8)
+        * * Description: Most recent consumed amount calculated by the evaluation job.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    MeasureQuery: z.string().describe(`
+        * * Field Name: MeasureQuery
+        * * Display Name: Measure Query
+        * * SQL Data Type: nvarchar(255)`),
+    ScopeEntity: z.string().nullable().describe(`
+        * * Field Name: ScopeEntity
+        * * Display Name: Scope Entity
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJUsageBudgetEntityType = z.infer<typeof MJUsageBudgetSchema>;
 
 /**
  * zod schema definition for the entity MJ: User Application Entities
@@ -41727,8 +41944,8 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
     /**
     * * Field Name: TotalCost
     * * Display Name: Total Cost
-    * * SQL Data Type: decimal(18, 6)
-    * * Default Value: 0.000000
+    * * SQL Data Type: decimal(19, 8)
+    * * Default Value: 0.00000000
     * * Description: Total estimated cost for all AI model usage during this agent run
     */
     get TotalCost(): number | null {
@@ -53526,7 +53743,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     /**
     * * Field Name: TotalCost
     * * Display Name: Total Cost
-    * * SQL Data Type: decimal(18, 6)
+    * * SQL Data Type: decimal(19, 8)
     * * Description: Total cost of this prompt run including its own cost plus all descendant costs. Calculated as Cost + DescendantCost. This value is stored (not computed) for query performance. Currency is specified in CostCurrency field.
     */
     get TotalCost(): number | null {
@@ -53841,7 +54058,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     /**
     * * Field Name: DescendantCost
     * * Display Name: Descendant Cost
-    * * SQL Data Type: decimal(18, 6)
+    * * SQL Data Type: decimal(19, 8)
     * * Description: The total cost of all descendant (child and grandchild) prompt runs, excluding this run's own cost. For leaf nodes (no children), this is 0. Updated when child costs change.
     */
     get DescendantCost(): number | null {
@@ -54571,6 +54788,34 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     }
 
     /**
+    * * Field Name: AgentRunID
+    * * Display Name: Agent Run ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+    * * Description: If this prompt run was executed as part of an AI agent run, references that agent run. May be NULL for direct prompt runs or runs that pre-date attribution; backfilled from AIAgentRunStep.
+    */
+    get AgentRunID(): string | null {
+        return this.Get('AgentRunID');
+    }
+    set AgentRunID(value: string | null) {
+        this.Set('AgentRunID', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: The user on whose behalf this prompt was executed. May be NULL for automated/unauthenticated runs or runs that pre-date attribution; backfilled from the parent AIAgentRun.
+    */
+    get UserID(): string | null {
+        return this.Get('UserID');
+    }
+    set UserID(value: string | null) {
+        this.Set('UserID', value);
+    }
+
+    /**
     * * Field Name: Prompt
     * * Display Name: Prompt
     * * SQL Data Type: nvarchar(255)
@@ -54676,6 +54921,24 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     */
     get UsageType(): string | null {
         return this.Get('UsageType');
+    }
+
+    /**
+    * * Field Name: AgentRun
+    * * Display Name: Agent Run
+    * * SQL Data Type: nvarchar(255)
+    */
+    get AgentRun(): string | null {
+        return this.Get('AgentRun');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string | null {
+        return this.Get('User');
     }
 
     /**
@@ -104936,6 +105199,32 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
     }
 
     /**
+    * * Field Name: MaterializationRefreshSchedule
+    * * Display Name: Materialization Refresh Schedule
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Cron expression specifying the schedule for background refresh of this query when materialized.
+    */
+    get MaterializationRefreshSchedule(): string | null {
+        return this.Get('MaterializationRefreshSchedule');
+    }
+    set MaterializationRefreshSchedule(value: string | null) {
+        this.Set('MaterializationRefreshSchedule', value);
+    }
+
+    /**
+    * * Field Name: MaterializationIntendedWorkload
+    * * Display Name: Materialization Intended Workload
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Intended workload for materialization storage (e.g. OLAP, Hybrid, InvertedIndex).
+    */
+    get MaterializationIntendedWorkload(): string | null {
+        return this.Get('MaterializationIntendedWorkload');
+    }
+    set MaterializationIntendedWorkload(value: string | null) {
+        this.Set('MaterializationIntendedWorkload', value);
+    }
+
+    /**
     * * Field Name: Category
     * * Display Name: Category Name
     * * SQL Data Type: nvarchar(50)
@@ -122662,6 +122951,460 @@ export class MJThemeEntity extends BaseEntity<MJThemeEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Usage Budget Events - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: UsageBudgetEvent
+ * * Base View: vwUsageBudgetEvents
+ * * @description Records threshold breach events and enforcement actions triggered during UsageBudget evaluation.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Usage Budget Events')
+export class MJUsageBudgetEventEntity extends BaseEntity<MJUsageBudgetEventEntityType> {
+    /**
+    * Loads the MJ: Usage Budget Events record from the database
+    * @param ID: string - primary key value to load the MJ: Usage Budget Events record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJUsageBudgetEventEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: BudgetID
+    * * Display Name: Budget ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Usage Budgets (vwUsageBudgets.ID)
+    * * Description: Foreign key to the UsageBudget that triggered this event.
+    */
+    get BudgetID(): string {
+        return this.Get('BudgetID');
+    }
+    set BudgetID(value: string) {
+        this.Set('BudgetID', value);
+    }
+
+    /**
+    * * Field Name: PeriodStart
+    * * Display Name: Period Start
+    * * SQL Data Type: datetimeoffset
+    * * Description: Start timestamp (in UTC) of the budget period during which the threshold breach occurred.
+    */
+    get PeriodStart(): Date {
+        return this.Get('PeriodStart');
+    }
+    set PeriodStart(value: Date) {
+        this.Set('PeriodStart', value);
+    }
+
+    /**
+    * * Field Name: ObservedAmount
+    * * Display Name: Observed Amount
+    * * SQL Data Type: decimal(19, 8)
+    * * Description: The observed consumption amount at the time this threshold event was recorded.
+    */
+    get ObservedAmount(): number {
+        return this.Get('ObservedAmount');
+    }
+    set ObservedAmount(value: number) {
+        this.Set('ObservedAmount', value);
+    }
+
+    /**
+    * * Field Name: ThresholdPercent
+    * * Display Name: Threshold Percent
+    * * SQL Data Type: int
+    * * Description: The percentage threshold reached or exceeded (e.g., WarnAtPercent or 100).
+    */
+    get ThresholdPercent(): number {
+        return this.Get('ThresholdPercent');
+    }
+    set ThresholdPercent(value: number) {
+        this.Set('ThresholdPercent', value);
+    }
+
+    /**
+    * * Field Name: Action
+    * * Display Name: Action
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Block
+    *   * Notify
+    *   * Throttle
+    * * Description: The action triggered for this event (Notify, Throttle, Block).
+    */
+    get Action(): 'Block' | 'Notify' | 'Throttle' {
+        return this.Get('Action');
+    }
+    set Action(value: 'Block' | 'Notify' | 'Throttle') {
+        this.Set('Action', value);
+    }
+
+    /**
+    * * Field Name: NotifiedAt
+    * * Display Name: Notified At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp when notification was sent to stakeholders for this event, or NULL if pending/skipped.
+    */
+    get NotifiedAt(): Date | null {
+        return this.Get('NotifiedAt');
+    }
+    set NotifiedAt(value: Date | null) {
+        this.Set('NotifiedAt', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Budget
+    * * Display Name: Budget
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Budget(): string {
+        return this.Get('Budget');
+    }
+}
+
+
+/**
+ * MJ: Usage Budgets - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: UsageBudget
+ * * Base View: vwUsageBudgets
+ * * @description Defines generic usage and spend budgets evaluated against saved MeasureQueries over sliding or calendar periods.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Usage Budgets')
+export class MJUsageBudgetEntity extends BaseEntity<MJUsageBudgetEntityType> {
+    /**
+    * Loads the MJ: Usage Budgets record from the database
+    * @param ID: string - primary key value to load the MJ: Usage Budgets record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJUsageBudgetEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Human-readable name for this usage budget.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed description of the purpose, scope, and rules for this usage budget.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: MeasureQueryID
+    * * Display Name: Measure Query ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Queries (vwQueries.ID)
+    * * Description: Foreign key to the saved Query used to calculate the consumed amount for this budget.
+    */
+    get MeasureQueryID(): string {
+        return this.Get('MeasureQueryID');
+    }
+    set MeasureQueryID(value: string) {
+        this.Set('MeasureQueryID', value);
+    }
+
+    /**
+    * * Field Name: MeasureParameters
+    * * Display Name: Measure Parameters
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object containing parameters to pass into the MeasureQuery when evaluating consumption.
+    */
+    get MeasureParameters(): string | null {
+        return this.Get('MeasureParameters');
+    }
+    set MeasureParameters(value: string | null) {
+        this.Set('MeasureParameters', value);
+    }
+
+    /**
+    * * Field Name: MeasureColumn
+    * * Display Name: Measure Column
+    * * SQL Data Type: nvarchar(100)
+    * * Description: The name of the result column in MeasureQuery output that contains the consumed numerical amount.
+    */
+    get MeasureColumn(): string {
+        return this.Get('MeasureColumn');
+    }
+    set MeasureColumn(value: string) {
+        this.Set('MeasureColumn', value);
+    }
+
+    /**
+    * * Field Name: ScopeEntityID
+    * * Display Name: Scope Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: Optional foreign key to an Entity defining the scope of this budget (e.g., AIAgent, User, Tenant).
+    */
+    get ScopeEntityID(): string | null {
+        return this.Get('ScopeEntityID');
+    }
+    set ScopeEntityID(value: string | null) {
+        this.Set('ScopeEntityID', value);
+    }
+
+    /**
+    * * Field Name: ScopeRecordID
+    * * Display Name: Scope Record ID
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Optional identifier of the specific record within ScopeEntityID that this budget governs.
+    */
+    get ScopeRecordID(): string | null {
+        return this.Get('ScopeRecordID');
+    }
+    set ScopeRecordID(value: string | null) {
+        this.Set('ScopeRecordID', value);
+    }
+
+    /**
+    * * Field Name: Period
+    * * Display Name: Period
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Day
+    *   * Month
+    *   * Week
+    * * Description: Calendar or evaluation period over which the budget is measured (Day, Week, Month).
+    */
+    get Period(): 'Day' | 'Month' | 'Week' {
+        return this.Get('Period');
+    }
+    set Period(value: 'Day' | 'Month' | 'Week') {
+        this.Set('Period', value);
+    }
+
+    /**
+    * * Field Name: AmountLimit
+    * * Display Name: Amount Limit
+    * * SQL Data Type: decimal(19, 8)
+    * * Description: Maximum allowed consumption or spend amount for the specified period.
+    */
+    get AmountLimit(): number {
+        return this.Get('AmountLimit');
+    }
+    set AmountLimit(value: number) {
+        this.Set('AmountLimit', value);
+    }
+
+    /**
+    * * Field Name: Unit
+    * * Display Name: Unit
+    * * SQL Data Type: nvarchar(20)
+    * * Description: Measurement unit for AmountLimit and ObservedAmount (e.g., USD, Tokens, Requests).
+    */
+    get Unit(): string {
+        return this.Get('Unit');
+    }
+    set Unit(value: string) {
+        this.Set('Unit', value);
+    }
+
+    /**
+    * * Field Name: WarnAtPercent
+    * * Display Name: Warn At Percent
+    * * SQL Data Type: int
+    * * Default Value: 80
+    * * Description: Percentage of AmountLimit at which warning notifications are triggered (default 80).
+    */
+    get WarnAtPercent(): number {
+        return this.Get('WarnAtPercent');
+    }
+    set WarnAtPercent(value: number) {
+        this.Set('WarnAtPercent', value);
+    }
+
+    /**
+    * * Field Name: Action
+    * * Display Name: Action
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Block
+    *   * Notify
+    *   * Throttle
+    * * Description: Enforcement action taken when the budget limit is reached (Notify, Throttle, Block).
+    */
+    get Action(): 'Block' | 'Notify' | 'Throttle' {
+        return this.Get('Action');
+    }
+    set Action(value: 'Block' | 'Notify' | 'Throttle') {
+        this.Set('Action', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    * * Description: Current operational status of this budget (Active, Disabled).
+    */
+    get Status(): 'Active' | 'Disabled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Disabled') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: LastEvaluatedAt
+    * * Display Name: Last Evaluated At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp when this budget was most recently evaluated by the evaluation job.
+    */
+    get LastEvaluatedAt(): Date | null {
+        return this.Get('LastEvaluatedAt');
+    }
+    set LastEvaluatedAt(value: Date | null) {
+        this.Set('LastEvaluatedAt', value);
+    }
+
+    /**
+    * * Field Name: LastObservedAmount
+    * * Display Name: Last Observed Amount
+    * * SQL Data Type: decimal(19, 8)
+    * * Description: Most recent consumed amount calculated by the evaluation job.
+    */
+    get LastObservedAmount(): number | null {
+        return this.Get('LastObservedAmount');
+    }
+    set LastObservedAmount(value: number | null) {
+        this.Set('LastObservedAmount', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: MeasureQuery
+    * * Display Name: Measure Query
+    * * SQL Data Type: nvarchar(255)
+    */
+    get MeasureQuery(): string {
+        return this.Get('MeasureQuery');
+    }
+
+    /**
+    * * Field Name: ScopeEntity
+    * * Display Name: Scope Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ScopeEntity(): string | null {
+        return this.Get('ScopeEntity');
     }
 }
 

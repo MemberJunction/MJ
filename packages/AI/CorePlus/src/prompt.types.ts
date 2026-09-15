@@ -499,6 +499,16 @@ export class AIPromptParams {
   parentPromptRunId?: string;
 
   /**
+   * Optional run type override for prompt execution tracking (e.g., 'ResultSelector', 'ParallelChild', 'Single').
+   */
+  runType?: 'ParallelChild' | 'ParallelParent' | 'ResultSelector' | 'Single';
+
+  /**
+   * Optional execution order within a parallel execution group or sequence.
+   */
+  executionOrder?: number;
+
+  /**
    * Additional model-specific parameters that will be passed through to the underlying model.
    * For chat/LLM models, this can include parameters like temperature, topP, topK, etc.
    * The AIPromptRunner will pass these through when building model-specific parameters.
@@ -809,6 +819,18 @@ export class AIPromptParams {
   agentId?: string;
 
   /**
+   * Attribution only; never used for behaviour. If this prompt was executed as part
+   * of an AI agent run, references that agent run (`AIPromptRun.AgentRunID`).
+   */
+  agentRunId?: string;
+
+  /**
+   * Attribution only; never used for behaviour. The user on whose behalf this prompt
+   * was executed (`AIPromptRun.UserID`). If omitted, falls back to contextUser?.ID.
+   */
+  userId?: string;
+
+  /**
    * Optional file artifacts that may be attached as native content blocks
    * when the resolved LLM driver supports the file's MIME type natively.
    *
@@ -820,9 +842,50 @@ export class AIPromptParams {
   nativeFileInputs?: NativeFileInput[];
 }
 
+/**
+ * Input parameters for resolving AgentRunID and UserID attribution for prompt runs.
+ */
+export interface ResolvePromptRunAttributionInput {
+  /** Explicit agent run ID override, if provided. */
+  agentRunId?: string | null;
+  /** Enclosing agent run or object with ID and/or UserID, if available. */
+  agentRun?: { ID?: string | null; UserID?: string | null } | null;
+  /** Explicit user ID override, if provided. */
+  userId?: string | null;
+  /** Context user on whose behalf the operation is running. */
+  contextUser?: { ID?: string | null } | null;
+}
 
+/**
+ * Resolved attribution identifiers for an AI prompt run record.
+ */
+export interface ResolvedPromptRunAttribution {
+  /** The resolved agent run ID, or null if direct/unaffiliated. */
+  agentRunId: string | null;
+  /** The resolved user ID, or null if anonymous/unspecified. */
+  userId: string | null;
+}
 
+/**
+ * Pure function to resolve AgentRunID and UserID attribution across the AI stack.
+ *
+ * Attribution precedence:
+ * - `agentRunId`: explicit `agentRunId` > `agentRun.ID` > null
+ * - `userId`: explicit `userId` > `agentRun.UserID` > `contextUser.ID` > null
+ */
+export function ResolvePromptRunAttribution(input?: ResolvePromptRunAttributionInput | null): ResolvedPromptRunAttribution {
+  const agentRunId = (input?.agentRunId !== undefined && input?.agentRunId !== null && input?.agentRunId !== '')
+    ? input.agentRunId
+    : (input?.agentRun?.ID || null);
 
+  const userId = (input?.userId !== undefined && input?.userId !== null && input?.userId !== '')
+    ? input.userId
+    : (input?.agentRun?.UserID || input?.contextUser?.ID || null);
+
+  return { agentRunId, userId };
+}
+
+export const resolvePromptRunAttribution = ResolvePromptRunAttribution;
 
 /**
  * Callback function type for execution progress updates

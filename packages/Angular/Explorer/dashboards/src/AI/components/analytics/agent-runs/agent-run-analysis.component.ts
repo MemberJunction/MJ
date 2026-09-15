@@ -7,7 +7,7 @@
  */
 
 import {
-    Component, Input, Output, EventEmitter,
+    Component, ChangeDetectionStrategy, Input, Output, EventEmitter,
     OnInit, OnDestroy, ChangeDetectorRef, inject
 } from '@angular/core';
 import { Subject } from 'rxjs';
@@ -15,6 +15,7 @@ import { RunView } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UUIDsEqual } from '@memberjunction/global';
 import { GlobalFilterState } from '../../../interfaces/analytics-preferences.interface';
+import { computeTotalCost, computeCoveragePercent } from '../../../services/ai-usage-analytics.compute';
 
 // ── Interfaces ──
 
@@ -47,9 +48,10 @@ interface PromptRunRecord {
 
 interface AgentRunStats {
     TotalRuns: number;
-    TotalCost: number;
+    TotalCost: number | null;
+    CoverageSubtitle?: string;
     PromptRuns: number;
-    AvgCostPerRun: number;
+    AvgCostPerRun: number | null;
     SuccessRate: number;
     AvgDurationSeconds: number;
 }
@@ -100,6 +102,7 @@ const COST_COLORS = [
 
 @Component({
     standalone: false,
+    changeDetection: ChangeDetectionStrategy.OnPush,
     selector: 'app-analytics-agent-runs',
     template: `
 
@@ -117,6 +120,9 @@ const COST_COLORS = [
                 <div class="stat-card accent-brand">
                     <div class="stat-label">Total Cost</div>
                     <div class="stat-value">{{ FormatCurrency(Stats.TotalCost) }}</div>
+                    @if (Stats.CoverageSubtitle) {
+                        <div class="stat-subtitle">{{ Stats.CoverageSubtitle }}</div>
+                    }
                 </div>
                 <div class="stat-card">
                     <div class="stat-label">Prompt Runs</div>
@@ -185,7 +191,7 @@ const COST_COLORS = [
                         <i class="fa-solid fa-list panel-header__icon"></i>
                         Recent Agent Runs
                     </div>
-                    <span class="panel-header__subtitle">{{ RecentRuns.length }} runs</span>
+                    <span class="panel-header__subtitle">showing latest 100</span>
                 </div>
                 <div class="table-wrapper">
                     <table class="data-table">
@@ -275,6 +281,12 @@ const COST_COLORS = [
             font-weight: 700;
             color: var(--mj-text-primary);
             letter-spacing: -0.02em;
+        }
+
+        .stat-subtitle {
+            font-size: 11px;
+            color: var(--mj-text-muted);
+            margin-top: 2px;
         }
 
         /* ── Panel ── */
@@ -642,7 +654,8 @@ export class AnalyticsAgentRunsComponent extends BaseAngularComponent implements
         this.cdr.detectChanges();
     }
 
-    public FormatCurrency(value: number, decimals = 2): string {
+    public FormatCurrency(value: number | null | undefined, decimals = 2): string {
+        if (value === null || value === undefined) return '—';
         if (value === 0) return '$0.00';
         if (value < 0.01 && decimals < 4) decimals = 4;
         return '$' + value.toFixed(decimals);
@@ -659,7 +672,7 @@ export class AnalyticsAgentRunsComponent extends BaseAngularComponent implements
             const dateFilter = this.buildDateFilter('StartedAt');
             const agentFilter = this.buildAgentFilter();
             const statusFilter = this.buildStatusFilter();
-            const extraFilter = [dateFilter, agentFilter, statusFilter].filter(Boolean).join(' AND ');
+            const extraFilter = [dateFilter, agentFilter, statusFilter, 'ParentRunID IS NULL'].filter(Boolean).join(' AND ');
 
             const promptDateFilter = this.buildDateFilter('RunAt');
 
@@ -669,6 +682,7 @@ export class AnalyticsAgentRunsComponent extends BaseAngularComponent implements
                     ExtraFilter: extraFilter,
                     Fields: AGENT_RUN_FIELDS,
                     OrderBy: 'StartedAt DESC',
+                    MaxRows: 100,
                     ResultType: 'simple'
                 },
                 {
@@ -676,6 +690,7 @@ export class AnalyticsAgentRunsComponent extends BaseAngularComponent implements
                     ExtraFilter: promptDateFilter,
                     Fields: PROMPT_RUN_FIELDS,
                     OrderBy: 'RunAt DESC',
+                    MaxRows: 1000,
                     ResultType: 'simple'
                 }
             ]);
@@ -700,7 +715,7 @@ export class AnalyticsAgentRunsComponent extends BaseAngularComponent implements
     private computeStats(): void {
         const runs = this.agentRuns;
         const total = runs.length;
-        const totalCost = runs.reduce((s, r) => s + (r.TotalCost ?? 0), 0);
+        const totalCost = computeTotalCost(runs);
         const completed = runs.filter(r => r.Status === 'Completed');
         const successCount = runs.filter(r => r.Success === true).length;
 
@@ -721,11 +736,24 @@ export class AnalyticsAgentRunsComponent extends BaseAngularComponent implements
             p => p.AgentRunID != null && this.agentRunIdSet.has(p.AgentRunID)
         );
 
+        let covPriced = 0;
+        let covUnpriced = 0;
+        for (const r of runs) {
+            if (r.TotalCost !== null && r.TotalCost !== undefined) {
+                covPriced++;
+            } else {
+                covUnpriced++;
+            }
+        }
+        const covPct = computeCoveragePercent({ PricedRuns: covPriced, UnpricedRuns: covUnpriced });
+        const covSubtitle = total > 0 ? `covers ${Math.round(covPct)}% of runs` : undefined;
+
         this.Stats = {
             TotalRuns: total,
             TotalCost: totalCost,
+            CoverageSubtitle: covSubtitle,
             PromptRuns: linkedPromptRuns.length,
-            AvgCostPerRun: total > 0 ? totalCost / total : 0,
+            AvgCostPerRun: total > 0 && totalCost !== null ? totalCost / total : null,
             SuccessRate: total > 0 ? (successCount / total) * 100 : 0,
             AvgDurationSeconds: avgDuration
         };
@@ -755,9 +783,11 @@ export class AnalyticsAgentRunsComponent extends BaseAngularComponent implements
 
             const entry = agentCostMap.get(agentKey)!;
             const vendor = pr.Vendor ?? 'Other';
-            const cost = pr.Cost ?? pr.TotalCost ?? 0;
-            entry.vendorCosts.set(vendor, (entry.vendorCosts.get(vendor) ?? 0) + cost);
-            entry.totalCost += cost;
+            const cost = pr.Cost ?? pr.TotalCost;
+            if (cost !== null && cost !== undefined) {
+                entry.vendorCosts.set(vendor, (entry.vendorCosts.get(vendor) ?? 0) + cost);
+                entry.totalCost += cost;
+            }
         }
 
         // Collect all vendors for consistent coloring
@@ -815,7 +845,7 @@ export class AnalyticsAgentRunsComponent extends BaseAngularComponent implements
             StatusClass: this.getStatusClass(r.Status),
             StepCount: promptCountMap.get(r.ID) ?? 0,
             Duration: this.formatDuration(r.StartedAt, r.CompletedAt),
-            Cost: this.FormatCurrency(r.TotalCost ?? 0),
+            Cost: this.FormatCurrency(r.TotalCost),
             Time: this.formatRelativeTime(r.StartedAt)
         }));
     }

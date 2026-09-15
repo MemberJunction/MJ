@@ -226,7 +226,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'agent-skills-live': 5,
         'agent-wire-callback': 2,
         'aggregates-cache': 3,
-        'ai-cost': 7,
+        'ai-cost': 10,
         'ai-embeddings': 5,
         'ai-permissions': 6,
         'ai-providers': 3,
@@ -299,6 +299,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'transaction-groups-batched': 5,
         'user-elevation': 4,
         'user-routines': 16,
+        'usage-budgets': 1,
         'view-execution': 12,
         'view-security': 4,
         'workflow-demo-agents': 5,
@@ -325,7 +326,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(93);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(94);
     });
 });
 

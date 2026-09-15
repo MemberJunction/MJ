@@ -13,6 +13,7 @@ export interface AIAnalyticsPreferences {
     AgentRuns: AgentRunPrefs;
     ModelPerformance: ModelPerformancePrefs;
     CostBudget: CostBudgetPrefs;
+    UsageExplorer?: UsageExplorerPrefs;
 }
 
 export interface GlobalFilterState {
@@ -50,4 +51,13 @@ export interface ModelPerformancePrefs {
 export interface CostBudgetPrefs {
     TimeRange: string;
     Filters: GlobalFilterState;
+}
+
+export interface UsageExplorerPrefs {
+    TimeRange: string;
+    Measure: string;
+    GroupBy: string;
+    SecondarySplit?: string | null;
+    Grain: 'hour' | 'day';
+    ComparisonEnabled: boolean;
 }

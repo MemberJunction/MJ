@@ -138,4 +138,26 @@ describe('BaseAgent guardrails — mid-run cost and token totals', () => {
 
         expect(verdict.exceeded).toBe(false);
     });
+
+    it('enforces a zero-cost ceiling when spend is zero or greater (§4.4)', async () => {
+        // Pre-fix: agent.MaxCostPerRun (0) and agentRun.TotalCost (0) were falsy,
+        // bypassing the guardrail completely.
+        const { agent, run } = agentWithSpend([promptStep(0, 0)]);
+        const verdict = await checkGuardrails(agent, { MaxCostPerRun: 0 }, run);
+
+        expect(verdict.exceeded).toBe(true);
+        expect(verdict.type).toBe('cost');
+        expect(verdict.current).toBe(0);
+        expect(verdict.limit).toBe(0);
+    });
+
+    it('enforces a zero-token ceiling when tokens are zero or greater (§4.4)', async () => {
+        const { agent, run } = agentWithSpend([promptStep(0, 0)]);
+        const verdict = await checkGuardrails(agent, { MaxTokensPerRun: 0 }, run);
+
+        expect(verdict.exceeded).toBe(true);
+        expect(verdict.type).toBe('tokens');
+        expect(verdict.current).toBe(0);
+        expect(verdict.limit).toBe(0);
+    });
 });

@@ -11,7 +11,7 @@
  */
 
 import {
-    Component, Input, Output, EventEmitter,
+    Component, ChangeDetectionStrategy, Input, Output, EventEmitter,
     OnInit, ChangeDetectorRef, inject
 } from '@angular/core';
 import { CompositeKey } from '@memberjunction/core';
@@ -76,6 +76,7 @@ const DONUT_COLORS = [
 
 @Component({
     standalone: false,
+    changeDetection: ChangeDetectionStrategy.OnPush,
     selector: 'app-analytics-realtime-overview',
     template: `
         @if (IsLoading) {
