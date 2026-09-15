@@ -1131,7 +1131,23 @@ function rewriteTuple(tuple: string, boolPos: Set<number>): string {
   return '(' + vals.join(',') + ')';
 }
 
-/** Split a tuple body on top-level commas, respecting single-quoted strings and nested parens. */
+/**
+ * Split a tuple body on top-level commas, respecting single-quoted strings, nested parens AND SQL
+ * comments.
+ *
+ * Comments matter because positional rewriting is only correct if the split yields exactly one
+ * entry per column. CodeGen interleaves explanatory comments between values, and one of them
+ * contains a comma:
+ *
+ *   (SELECT COALESCE(MAX("Sequence"), 0) + 1 FROM …)
+ *   /* Apply-time sequence, not the literal CodeGen emitted (MJ#4202): … *\/, 'ExposeToModel', …
+ *
+ * Counting that comma as a separator inserts a phantom value and shifts every later column by one,
+ * so the rewriter lands on the wrong ordinals — observed as PostgreSQL rejecting
+ * `column "Scale" is of type integer but expression is of type boolean`, because the flag intended
+ * for `AllowsNull` was written one position early. Comment bodies are copied through untouched;
+ * they are simply not scanned for separators.
+ */
 function splitTopLevelValues(s: string): string[] {
   const out: string[] = [];
   let cur = '', depth = 0, inStr = false;
@@ -1140,7 +1156,23 @@ function splitTopLevelValues(s: string): string[] {
     if (inStr) {
       cur += c;
       if (c === "'") { if (s[i + 1] === "'") cur += s[++i]; else inStr = false; }
-    } else if (c === "'") { inStr = true; cur += c; }
+      continue;
+    }
+    if (c === '/' && s[i + 1] === '*') {              // block comment — copy verbatim, do not scan
+      const end = s.indexOf('*/', i + 2);
+      const stop = end === -1 ? s.length : end + 2;
+      cur += s.slice(i, stop);
+      i = stop - 1;
+      continue;
+    }
+    if (c === '-' && s[i + 1] === '-') {              // line comment — runs to end of line
+      const nl = s.indexOf('\n', i);
+      const stop = nl === -1 ? s.length : nl;
+      cur += s.slice(i, stop);
+      i = stop - 1;
+      continue;
+    }
+    if (c === "'") { inStr = true; cur += c; }
     else if (c === '(') { depth++; cur += c; }
     else if (c === ')') { depth--; cur += c; }
     else if (c === ',' && depth === 0) { out.push(cur); cur = ''; }
