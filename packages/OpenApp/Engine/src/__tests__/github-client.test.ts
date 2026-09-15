@@ -178,6 +178,34 @@ describe('ValidateGitHubTag', () => {
         expect(result.ErrorMessage).not.toContain('no GitHub credential was supplied');
     });
 
+    it('blames the credential, not its absence, when the repo is configured via TokenMap and still 404s', async () => {
+        // The existing "token WAS supplied" test above drives the credential-supplied branch via
+        // `{ Token }`. The per-repo TokenMap is the configuration private-repo users actually run,
+        // and ResolveToken checks it FIRST — it must reach the same branch.
+        mocks.getRef.mockRejectedValueOnce({ status: 404 });
+        stubRepoUnreadable();
+
+        const options: GitHubClientOptions = { TokenMap: { 'https://github.com/Acme/Private': 'ghp_wrong' } };
+        const result = await ValidateGitHubTag('https://github.com/Acme/Private', '1.0.0', options);
+
+        expect(result.Exists).toBe(false);
+        expect(result.ErrorMessage).toContain('does not grant access');
+        expect(result.ErrorMessage).not.toContain('no GitHub credential was supplied');
+    });
+
+    it('does not probe visibility when the tag lookup fails with a non-404 status', async () => {
+        // Pins the probe INSIDE the 404 branch: a future refactor that hoisted DescribeNotFound out
+        // of `if (OctokitStatus(error) === 404)` would start probing on every failure, including
+        // ones the probe has nothing useful to say about.
+        mocks.getRef.mockRejectedValueOnce(Object.assign(new Error('internal server error'), { status: 500 }));
+
+        const result = await ValidateGitHubTag('https://github.com/Acme/App', '1.0.0', {});
+
+        expect(result.Exists).toBe(false);
+        expect(result.ErrorMessage).toContain('internal server error');
+        expect(mocks.get).not.toHaveBeenCalled();
+    });
+
     it('still blames the tag when the repository IS readable', async () => {
         mocks.getRef.mockRejectedValueOnce({ status: 404 });
         stubRepoReadable();
@@ -205,7 +233,7 @@ describe('ValidateGitHubTag', () => {
         // A probe that errored has NOT established the repo is readable. Saying "tag not found"
         // flatly would reintroduce the same misattribution in a narrower corner.
         mocks.getRef.mockRejectedValueOnce({ status: 404 });
-        mocks.get.mockRejectedValueOnce({ status: 429, message: 'rate limit exceeded' });
+        mocks.get.mockRejectedValueOnce(Object.assign(new Error('rate limit exceeded'), { status: 429 }));
 
         const result = await ValidateGitHubTag('https://github.com/Acme/App', '1.0.0', {});
 
@@ -405,10 +433,36 @@ describe('FetchManifestFromGitHub', () => {
 
     it('returns a not-found error on 404', async () => {
         mocks.getContent.mockRejectedValueOnce({ status: 404 });
+        stubRepoReadable();
 
         const result = await FetchManifestFromGitHub('https://github.com/Acme/App', undefined, {});
         expect(result.Success).toBe(false);
         expect(result.ErrorMessage).toContain('not found');
+    });
+
+    it('names the missing credential when the repo — not the manifest — is what 404s (#4505)', async () => {
+        // `mj app install <private-url>` with no --version never reaches tag validation: it fails
+        // here first, and "mj-app.json not found at ref HEAD" is misleading in the same way.
+        mocks.getContent.mockRejectedValueOnce({ status: 404 });
+        stubRepoUnreadable();
+
+        const result = await FetchManifestFromGitHub('https://github.com/MemberJunction/bizapps-ats', undefined, {});
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain('Cannot read MemberJunction/bizapps-ats');
+        expect(result.ErrorMessage).toContain('GITHUB_TOKEN');
+        expect(result.ErrorMessage).not.toContain('mj-app.json not found');
+    });
+
+    it('still blames the manifest path when the repository IS readable', async () => {
+        mocks.getContent.mockRejectedValueOnce({ status: 404 });
+        stubRepoReadable();
+
+        const result = await FetchManifestFromGitHub('https://github.com/Acme/App', undefined, {});
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain('mj-app.json not found in Acme/App at ref HEAD');
+        expect(result.ErrorMessage).not.toContain('GITHUB_TOKEN');
     });
 });
 

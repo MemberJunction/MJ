@@ -144,23 +144,6 @@ function OctokitStatus(error: unknown): number | undefined {
 }
 
 /**
- * Extracts a human-readable message from an Octokit error, if present. Duck-typed the same way as
- * {@link OctokitStatus} rather than requiring `instanceof Error`: Octokit's real `RequestError` is
- * an `Error` and would satisfy that check, but nothing here needs the whole `Error` shape — only
- * the `message` string — so this reads it directly off any error-like value that carries one,
- * falling back to `String(error)` only when even that is absent.
- */
-function OctokitMessage(error: unknown): string {
-    if (error && typeof error === 'object' && 'message' in error) {
-        const message = (error as { message?: unknown }).message;
-        if (typeof message === 'string') {
-            return message;
-        }
-    }
-    return String(error);
-}
-
-/**
  * Error thrown when GitHub returns 403/429 (rate limit or access denied). A 403/429 must NOT
  * look identical to "this repo has no releases/tags", which silently resolves the wrong version
  * (or falls back to HEAD). Callers should surface this rather than treat it as empty (B36).
@@ -227,12 +210,10 @@ async function ProbeRepoVisibility(
         if (OctokitStatus(error) === 404) {
             return { State: 'NotReadable' };
         }
-        // Anything else (403/429 rate limit, network) leaves visibility genuinely unknown. The
-        // reason travels with the state so the composed message can say what went wrong rather
-        // than quietly discarding it. Duck-typed on `message` (mirroring how OctokitStatus above
-        // duck-types `status`) rather than requiring `instanceof Error`, since an Octokit-shaped
-        // error-like value is not guaranteed to be a real Error instance.
-        return { State: 'Undetermined', Reason: OctokitMessage(error) };
+        // Anything else (403/429 rate limit, network) leaves visibility genuinely unknown rather
+        // than readable: the probe failed for a reason unrelated to whether the repo exists, so
+        // treating that as confirmation would be a guess dressed up as a result.
+        return { State: 'Undetermined', Reason: error instanceof Error ? error.message : String(error) };
     }
 }
 
@@ -242,14 +223,14 @@ async function ProbeRepoVisibility(
  * they already did.
  */
 function UnreadableRepoMessage(
-    parsed: { Owner: string; Repo: string },
     repoUrl: string,
+    parsed: { Owner: string; Repo: string },
     options: GitHubClientOptions
 ): string {
     const target = `${parsed.Owner}/${parsed.Repo}`;
     return ResolveToken(repoUrl, options)
         ? `Cannot read ${target}. The repository does not exist, or the GitHub credential supplied does not grant access to it — check the token is valid and carries 'repo' scope for ${target}.`
-        : `Cannot read ${target}. The repository is private or does not exist, and no GitHub credential was supplied — set GITHUB_TOKEN in the environment, or openApps.github.token in mj.config.cjs, then retry.`;
+        : `Cannot read ${target}. The repository is private or does not exist, and no GitHub credential was supplied — set GITHUB_TOKEN in the environment, or openApps.github.token (or a matching entry in openApps.github.tokens) in mj.config.cjs, then retry.`;
 }
 
 /**
@@ -279,9 +260,16 @@ async function DescribeNotFound(
         case 'Readable':
             return describeMissingTarget();
         case 'NotReadable':
-            return UnreadableRepoMessage(parsed, repoUrl, options);
+            return UnreadableRepoMessage(repoUrl, parsed, options);
         case 'Undetermined':
-            return `${describeMissingTarget()} (Could not confirm ${parsed.Owner}/${parsed.Repo} is readable: ${visibility.Reason}. If it is private, a GitHub credential may be required — set GITHUB_TOKEN or openApps.github.token.)`;
+            // Lead with the doubt, not the missing-target message: Undetermined is likeliest a
+            // rate limit on an UNAUTHENTICATED call — i.e. exactly the caller whose repo probably
+            // is NOT readable. Leading with a confident "not found" (plus the /tags link some
+            // callers' describeMissingTarget includes) invites a signed-in maintainer to check,
+            // see the tag, and conclude the CLI was wrong — the misattribution #4505 reports.
+            return `Could not confirm ${parsed.Owner}/${parsed.Repo} is readable: ${visibility.Reason}. `
+                + `If it is private, a GitHub credential may be required — set GITHUB_TOKEN or openApps.github.token. `
+                + describeMissingTarget();
     }
 }
 
@@ -385,7 +373,14 @@ export async function FetchManifestFromGitHub(
     }
     catch (error: unknown) {
         if (OctokitStatus(error) === 404) {
-            return { Success: false, ErrorMessage: `${manifestPath} not found in ${parsed.Owner}/${parsed.Repo} at ref ${ref}` };
+            // The manifest may be absent, or the whole repo may be invisible to this credential —
+            // and with no --version this is the FIRST call an install makes, so it is where a
+            // private-repo install without a token actually lands.
+            return {
+                Success: false,
+                ErrorMessage: await DescribeNotFound(repoUrl, parsed, options, () =>
+                    `${manifestPath} not found in ${parsed.Owner}/${parsed.Repo} at ref ${ref}`),
+            };
         }
         const message = error instanceof Error ? error.message : String(error);
         return { Success: false, ErrorMessage: `Failed to fetch manifest: ${message}` };
