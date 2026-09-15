@@ -12,12 +12,22 @@ import { DatabaseProviderBase } from '@memberjunction/core';
 import { EscapeSQLString } from '@memberjunction/global';
 
 /**
- * Schema names MemberJunction owns outright — an Open App may never claim one, with or
- * without the double-underscore override.
+ * Schema names an Open App may never claim, with or without the double-underscore override.
+ * Two groups: the ones each supported database platform owns, and the ones MemberJunction owns.
  *
  * Stored lowercase and matched lowercase: SQL Server compares identifiers case-insensitively
  * and PostgreSQL folds unquoted DDL to lowercase, so `DBO`, `__MJ` and `INFORMATION_SCHEMA`
  * name the same physical schemas as their canonical spellings.
+ *
+ * **Both dialects are listed, because MJ installs Open Apps on both.** `public` is PostgreSQL's
+ * default schema — the exact analogue of SQL Server's `dbo` — and it exists in every PG database.
+ * That combination is what makes omitting it dangerous rather than untidy: `HandleSchemaCreation`
+ * finds it already present and ADOPTS it on the default path (no flag), and `mj app remove` then
+ * hands it to `DropAppSchema`, whose PostgreSQL branch issues `DROP SCHEMA ... CASCADE`. MJ's own
+ * generated PG migrations target it (`SET search_path TO __mj, public`), and the extensions they
+ * rely on (`pgcrypto`, `uuid-ossp`) install into it by default, so dropping it takes unqualified
+ * `gen_random_uuid()` with it. `pg_catalog` / `pg_toast` are PostgreSQL's catalogs, listed for the
+ * same reason `sys` and `information_schema` are.
  *
  * `__mj_udt` is here because MJ core creates it (migrations/v5/V202604292210) as the sandbox
  * for user-defined tables. It sits inside the `__mj_` app namespace opened up below, so
@@ -25,10 +35,17 @@ import { EscapeSQLString } from '@memberjunction/global';
  * user-defined table in the database.
  */
 const RESERVED_SCHEMAS = new Set([
+  // SQL Server
   'dbo',
   'sys',
   'guest',
+  // PostgreSQL
+  'public',
+  'pg_catalog',
+  'pg_toast',
+  // ANSI — present on both
   'information_schema',
+  // MemberJunction
   '__mj',
   '__mj_udt'
 ]);

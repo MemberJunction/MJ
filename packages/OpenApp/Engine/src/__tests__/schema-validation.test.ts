@@ -52,6 +52,20 @@ describe('ValidateSchemaName', () => {
         }
     });
 
+    it('reserves the PostgreSQL platform schemas, not just the SQL Server ones', () => {
+        // The reserved set is the list of names an Open App may never claim, and MJ supports both
+        // dialects. `public` is PostgreSQL's default schema — the exact analogue of `dbo` — and it
+        // exists in every PG database, so an app declaring it would be ADOPTED on the default path
+        // and `mj app remove` would then issue `DROP SCHEMA "public" CASCADE`. That takes MJ's own
+        // `SET search_path TO __mj, public` target with it, along with the extensions (pgcrypto,
+        // uuid-ossp) that install into `public` and back unqualified gen_random_uuid() calls.
+        for (const name of ['public', 'PUBLIC', 'pg_catalog', 'pg_toast']) {
+            const result = ValidateSchemaName(name, { allowDoubleUnderscore: true });
+            expect(result.Success, `${name} must be reserved`).toBe(false);
+            expect(result.ErrorMessage).toMatch(/reserved/i);
+        }
+    });
+
     it('matches reserved names case-insensitively (SQL Server folds, PG lowercases)', () => {
         for (const name of ['DBO', 'Dbo', 'SYS', 'Guest', 'information_schema', '__MJ']) {
             const result = ValidateSchemaName(name, { allowDoubleUnderscore: true });
