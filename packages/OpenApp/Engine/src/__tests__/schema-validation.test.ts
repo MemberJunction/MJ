@@ -64,6 +64,21 @@ describe('ValidateSchemaName', () => {
         expect(ValidateSchemaName('   ').Success).toBe(false);
     });
 
+    it('rejects a name with leading or trailing whitespace rather than silently trimming it', () => {
+        // The trimmed forms are all valid; it is the untrimmed input that must be refused, because
+        // CreateAppSchema would go on to create the schema under the untrimmed identifier.
+        for (const name of [' __mj_BizAppsForms', '__mj_BizAppsForms ', ' bcsaas ', '\tbcsaas']) {
+            const result = ValidateSchemaName(name);
+            expect(result.Success, name).toBe(false);
+        }
+    });
+
+    it('still rejects a whitespace-only name as empty, not as untrimmed', () => {
+        const result = ValidateSchemaName('   ');
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toMatch(/required|empty/i);
+    });
+
     it('accepts __-prefixed names when allowDoubleUnderscore is true', () => {
         const result = ValidateSchemaName('__bcsaas', { allowDoubleUnderscore: true });
         expect(result.Success).toBe(true);

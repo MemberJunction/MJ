@@ -86,7 +86,17 @@ export function ValidateSchemaName(
     };
   }
 
-  const normalized = schemaName.trim().toLowerCase();
+  // Callers act on the raw `schemaName` — CreateAppSchema/DropAppSchema hand it straight to
+  // Dialect.CanonicalSchemaName, which does not trim. Accepting a name that needs trimming would
+  // validate one identifier and create a different one, so reject it instead of normalizing it.
+  if (schemaName !== schemaName.trim()) {
+    return {
+      Success: false,
+      ErrorMessage: `Schema name '${schemaName}' has leading or trailing whitespace`
+    };
+  }
+
+  const normalized = schemaName.toLowerCase();
 
   if (RESERVED_SCHEMAS.has(normalized)) {
     return {
