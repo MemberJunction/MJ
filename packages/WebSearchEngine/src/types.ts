@@ -128,6 +128,13 @@ export type WebSearchResultCode =
     | 'MISSING_QUERY'
     /** No web search providers exist in metadata at all — a setup problem, not a search failure. */
     | 'NO_PROVIDERS_CONFIGURED'
+    /**
+     * The provider list could not be READ — the view query failed, the entity is absent from
+     * metadata, or the caller lacks permission. Deliberately distinct from
+     * `NO_PROVIDERS_CONFIGURED`: that one tells an operator to add a record, which is the wrong
+     * instruction (and an actively misleading one) when the read itself never succeeded.
+     */
+    | 'PROVIDER_LOAD_FAILED'
     /** Providers exist, but none is Active, available and capable of this request. */
     | 'NO_ELIGIBLE_PROVIDER'
     /** An explicit `Provider` was named and no such provider exists in metadata. */

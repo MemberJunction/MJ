@@ -443,6 +443,12 @@ describe('WebSearchEngine selection', () => {
         it('does not report "none configured" when the metadata load actually errored', async () => {
             // RunView does not throw — if the engine ignored .Success it would report a database
             // failure as an empty, correctly-configured provider set.
+            //
+            // The assertion here is the RESULT CODE, not merely `Success === false`. A failed
+            // load also leaves the provider list empty, so the engine reported
+            // NO_PROVIDERS_CONFIGURED — which is `Success: false` too. An earlier version of this
+            // test asserted only `Success === false` and `runViewMock` having been called, and so
+            // passed against exactly the behaviour its name says it rules out.
             runViewMock.mockReset();
             runViewMock.mockResolvedValue({ Success: false, ErrorMessage: 'db down', Results: [] });
             createInstanceMock.mockReset();
@@ -451,8 +457,50 @@ describe('WebSearchEngine selection', () => {
             await engine.Config(true, USER);
             const result = await engine.Search({ Query: 'q' }, USER);
 
-            expect(result.Success).toBe(false);
-            expect(runViewMock).toHaveBeenCalled();
+            expect(result.ResultCode).toBe('PROVIDER_LOAD_FAILED');
+            expect(result.ResultCode).not.toBe('NO_PROVIDERS_CONFIGURED');
+            // The operator has to be able to tell the two apart from the message alone.
+            expect(result.ErrorMessage).toContain('db down');
+            expect(result.ErrorMessage).not.toContain('Add an Active record');
+        });
+
+        it('reports a load failure on EVERY later search, not just the one that logged it', async () => {
+            // The LogError fires once, at load. Callers keep arriving after it. If the failure
+            // reason were not held as state, the first search would be diagnosable and every
+            // subsequent one would silently degrade to "nothing is configured".
+            runViewMock.mockReset();
+            runViewMock.mockResolvedValue({ Success: false, ErrorMessage: 'db down', Results: [] });
+            createInstanceMock.mockReset();
+
+            const engine = WebSearchEngine.Instance;
+            await engine.Config(true, USER);
+
+            const first = await engine.Search({ Query: 'q' }, USER);
+            const second = await engine.Search({ Query: 'q' }, USER);
+
+            expect(first.ResultCode).toBe('PROVIDER_LOAD_FAILED');
+            expect(second.ResultCode).toBe('PROVIDER_LOAD_FAILED');
+        });
+
+        it('clears a stale load failure once a refresh succeeds', async () => {
+            runViewMock.mockReset();
+            runViewMock.mockResolvedValue({ Success: false, ErrorMessage: 'db down', Results: [] });
+            createInstanceMock.mockReset();
+
+            const engine = WebSearchEngine.Instance;
+            await engine.Config(true, USER);
+            expect((await engine.Search({ Query: 'q' }, USER)).ResultCode).toBe('PROVIDER_LOAD_FAILED');
+
+            // The database comes back. A recovered engine must not keep answering with the old
+            // reason — the error is per-load state, not a latch.
+            configureProviders([
+                { name: 'Brave', driver: 'BraveWebSearchProvider', priority: 10, provider: new FakeProvider(ok()) },
+            ]);
+            await engine.Config(true, USER);
+
+            const result = await engine.Search({ Query: 'q' }, USER);
+            expect(result.Success).toBe(true);
+            expect(result.ProviderUsed).toBe('Brave');
         });
     });
 });

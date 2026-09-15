@@ -77,6 +77,13 @@ export class WebSearchEngine extends BaseSingleton<WebSearchEngine> {
 
     private _entries: ProviderEntry[] = [];
     private _loaded = false;
+    /**
+     * Why the last provider load failed, or null if it succeeded. Held as state rather than
+     * only logged: the log line fires once, at load, while callers keep arriving afterwards —
+     * so without this the engine answers every later search with "nothing is configured" for
+     * what was a read failure.
+     */
+    private _loadError: string | null = null;
     private _loading: Promise<void> | null = null;
     private _provider: IMetadataProvider | undefined;
 
@@ -144,6 +151,21 @@ export class WebSearchEngine extends BaseSingleton<WebSearchEngine> {
         }
 
         await this.Config(false, contextUser);
+
+        // Checked BEFORE the empty-list branch: a failed read also leaves the list empty, and
+        // reporting that as "add a record" sends an operator to fix configuration that is fine.
+        if (this._loadError) {
+            return this.fail(
+                {
+                    code: 'PROVIDER_LOAD_FAILED',
+                    message:
+                        `Could not read "${WebSearchEngine.PROVIDER_ENTITY}": ${this._loadError}. ` +
+                        'This is a read failure, not a missing configuration — check that the entity ' +
+                        'exists in metadata and that the caller can read it.',
+                },
+                attempts,
+            );
+        }
 
         if (this._entries.length === 0) {
             return this.fail(
@@ -323,6 +345,7 @@ export class WebSearchEngine extends BaseSingleton<WebSearchEngine> {
     private async loadProviders(contextUser: UserInfo): Promise<void> {
         this._entries = [];
         this._unavailable = new Map();
+        this._loadError = null;
 
         const rv = this._provider
             ? RunView.FromMetadataProvider(this._provider)
@@ -344,10 +367,12 @@ export class WebSearchEngine extends BaseSingleton<WebSearchEngine> {
         // RunView does not throw — branch on Success or the engine silently reports
         // "no providers configured" for what is actually a database error.
         if (!result.Success) {
-            LogError(`WebSearchEngine: failed to load providers — ${result.ErrorMessage}`);
+            this._loadError = result.ErrorMessage || 'the provider view query failed without a message';
+            LogError(`WebSearchEngine: failed to load providers — ${this._loadError}`);
             this._loaded = true;
             return;
         }
+        this._loadError = null;
 
         for (const record of result.Results ?? []) {
             await this.initializeProvider(record, contextUser);

@@ -272,6 +272,7 @@ Four rules, each of which has a failure mode if ignored:
 | `SUCCESS` | ✅ | Served. `Hits` may legitimately be empty |
 | `MISSING_QUERY` | ❌ | `Query` was blank |
 | `NO_PROVIDERS_CONFIGURED` | ❌ | No provider rows at all — a setup problem, not a search failure |
+| `PROVIDER_LOAD_FAILED` | ❌ | The provider list could not be **read** — query failed, entity missing from metadata, or no permission. Distinct from the row above on purpose: a failed read also leaves the list empty, and telling an operator to "add a record" when the read never succeeded sends them to fix configuration that is fine |
 | `NO_ELIGIBLE_PROVIDER` | ❌ | Providers exist, none is available and capable of this request |
 | `PROVIDER_NOT_FOUND` / `_NOT_ACTIVE` / `_UNAVAILABLE` / `_LACKS_CAPABILITY` | ❌ | An explicit `Provider` could not serve — see the table above |
 | `ALL_PROVIDERS_FAILED` | ❌ | Every eligible provider was tried; see `Attempts` |
