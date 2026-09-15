@@ -11,7 +11,7 @@
  * @since 2.49.0
  */
 
-import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, FileStorageEngineBase, MJAISkillEntity, MJEnvironmentEntityExtended, MJConversationSkillEntity } from '@memberjunction/core-entities';
+import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, FileStorageEngineBase, MJAISkillEntity, MJEnvironmentEntityExtended, MJConversationSkillEntity, MJUsageBudgetEntity } from '@memberjunction/core-entities';
 import { buildActionToolSet, filterDeclarableActions, sanitizeToolName } from './native-tools/action-tool-builder';
 import { buildNativeToolSet, SUB_AGENT_TOOL_PREFIX, type NativeToolBinding } from './native-tools/control-tools';
 import { buildAssistantToolCallTurn, buildToolResultTurn, compactToolResultContent, type NativeToolResult } from './native-tools/tool-result-turns';
@@ -5116,7 +5116,7 @@ export class BaseAgent {
         agentRun: MJAIAgentRunEntityExtended
     ): Promise<{
         exceeded: boolean;
-        type?: 'cost' | 'tokens' | 'iterations' | 'time';
+        type?: 'cost' | 'tokens' | 'iterations' | 'time' | 'budget';
         limit?: number;
         current?: number;
         reason?: string;
@@ -5158,6 +5158,25 @@ export class BaseAgent {
                 current: agentRun.TotalPromptIterations,
                 reason: `Absolute maximum iteration safety limit of ${absoluteMaxIterations} exceeded. Current iterations: ${agentRun.TotalPromptIterations}. This is a system-wide safety measure to prevent infinite loops.`
             };
+        }
+
+        // Check usage budget block enforcement (O(1) comparison against pre-evaluated LastObservedAmount — no scan).
+        // Throttle is Notify plus a documented hook; not a hard execution blocker.
+        const budget = (params as { usageBudget?: MJUsageBudgetEntity; budget?: MJUsageBudgetEntity }).usageBudget ??
+            (params as { usageBudget?: MJUsageBudgetEntity; budget?: MJUsageBudgetEntity }).budget ??
+            (agent as unknown as { UsageBudget?: MJUsageBudgetEntity; Budget?: MJUsageBudgetEntity }).UsageBudget ??
+            (agent as unknown as { UsageBudget?: MJUsageBudgetEntity; Budget?: MJUsageBudgetEntity }).Budget;
+
+        if (budget && budget.Status === 'Active' && budget.Action === 'Block' && budget.AmountLimit != null && budget.LastObservedAmount != null) {
+            if (budget.LastObservedAmount >= budget.AmountLimit) {
+                return {
+                    exceeded: true,
+                    type: 'budget',
+                    limit: budget.AmountLimit,
+                    current: budget.LastObservedAmount,
+                    reason: `Usage budget "${budget.Name || budget.ID}" limit of ${budget.AmountLimit} ${budget.Unit || ''} exceeded (current observed: ${budget.LastObservedAmount} ${budget.Unit || ''}). Execution blocked.`
+                };
+            }
         }
 
         // Check cost limit
