@@ -99,7 +99,10 @@ export function bucketTimestamp(value: unknown, grain: PivotTimeGrain): string {
 
 /**
  * Computes an aggregate over an array of numeric values, ignoring nulls.
- * If all values are null/undefined, returns null.
+ * If all values are null/undefined/NaN, returns null.
+ *
+ * NOTE: For 'count' aggregation, this returns the count of non-null values
+ * for the measure column in this group (matching SQL COUNT(column) semantics).
  */
 export function aggregateValues(
     values: (number | null | undefined)[],
