@@ -299,62 +299,19 @@ Exceptions escaping a driver are caught, recorded as a transient attempt, and fa
 
 ## Setup after the migration
 
-> **This package does not compile until CodeGen has run.** The engine types its provider records as
-> `MJWebSearchProviderEntity`, the generated subclass for `MJ: Web Search Providers` — deliberately,
-> because a hand-written projection is a frozen copy that silently stops matching the table. Until
-> the migration and CodeGen have run, `tsc` reports exactly one error: that the entity does not
-> exist yet. That is expected, and it resolves with the same step that clears `check:codegen-tail`.
-
-
-The `WebSearchProvider` migration ships with an empty CodeGen tail, because it was authored without
-a database. To complete it locally:
+The migration, its CodeGen tail and the Remote Operation's server half are all committed, so a
+local database only needs the schema applied and the metadata seeded:
 
 ```bash
-pnpm mj sync push --dir metadata     # metadata FIRST — remote ops generate from rows, not schema
 pnpm run mj:migrate                  # creates __mj.WebSearchProvider
-pnpm mj codegen                      # entity subclass, resolvers, form, remote_operations.ts
-# append the CodeGen_Run_*.sql output under the migration's banner, then delete that file
-pnpm run build
+pnpm mj sync push --dir metadata     # seeds the provider rows, the Action, the scopes
+pnpm install && pnpm run build
 ```
 
-Then add the Remote Operation's server half, which needs the base class CodeGen has just emitted:
-
-```typescript
-// packages/WebSearchEngine/src/operations/WebSearchQueryOperation.ts
-import { RegisterClass } from '@memberjunction/global';
-import { BaseRemotableOperation, IMetadataProvider, UserInfo } from '@memberjunction/core';
-import { WebSearchQueryOperation, type WebSearchQueryInput, type WebSearchQueryOutput }
-  from '@memberjunction/core-entities';
-import { WebSearchEngine } from '../WebSearchEngine';
-
-@RegisterClass(BaseRemotableOperation, 'WebSearch.Query')
-export class WebSearchQueryServerOperation extends WebSearchQueryOperation {
-  protected async InternalExecute(
-    input: WebSearchQueryInput,
-    provider: IMetadataProvider,
-    user: UserInfo,
-  ): Promise<WebSearchQueryOutput> {
-    if (!input?.query?.trim()) throw new Error('query is required');   // no validation framework — guard clauses are it
-
-    await WebSearchEngine.Instance.Config(false, user, provider);
-    const result = await WebSearchEngine.Instance.Search({ /* map input */ } , user);
-    if (!result.Success) throw new Error(`${result.ResultCode}: ${result.ErrorMessage}`);
-    return { /* map output */ };
-  }
-}
-
-export function LoadWebSearchOperations(): void { void WebSearchQueryServerOperation; }
-```
-
-Three things that fail quietly if skipped:
-
-- **Extend the *generated* base**, never `BaseRemotableOperation` directly — extending it directly
-  drops `RequiredScope` from the class, which turns the resolver's scope gate into a no-op for
-  API-key callers.
-- **Call `LoadWebSearchOperations()` from the host bootstrap**, and export it from the package
-  index, or the registration is tree-shaken away.
-- **Throw on failure** rather than returning a second `Success` flag. The framework's
-  `RemoteOpResult` is the envelope a client inspects; two nested envelopes is one too many.
+**Migrate before pushing metadata.** `metadata/web-search-providers/` writes into
+`__mj.WebSearchProvider`, so the table has to exist first. (A different ordering constraint —
+metadata before `mj codegen`, because remote operations generate from rows rather than schema —
+applies when regenerating, not when applying what is already committed.)
 
 Verify before committing:
 

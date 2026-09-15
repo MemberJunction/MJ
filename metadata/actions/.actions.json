@@ -1713,7 +1713,7 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "Description": "Search query text. Required. (Accepted as either SearchTerms or Query; Query is the preferred name.)",
-            "IsRequired": true
+            "IsRequired": false
           },
           "primaryKey": {
             "ID": "2114C5EC-058A-4B5A-9F5D-A3D16A7FA00C"
@@ -1767,7 +1767,8 @@
             "Name": "SearchResultDetails",
             "Type": "Output",
             "ValueType": "Simple Object",
-            "Description": "The complete response envelope: query, results, provider used, and the full attempt list."
+            "Description": "The complete response envelope: query, results, provider used, and the full attempt list.",
+            "IsRequired": false
           },
           "primaryKey": {
             "ID": "5ED4B06C-78D3-4F23-B13E-E168A9014864"
