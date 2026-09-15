@@ -1030,7 +1030,7 @@ export class AIPromptRunner {
     }
 
     // Use existing prompt run if provided (hierarchical case) or create new one
-    const promptRun = existingPromptRun || await this.createPromptRun(prompt, selectedModel, params, renderedPromptText, startTime, params.override?.vendorId, modelSelectionInfo);
+    const promptRun = existingPromptRun || await this.createPromptRun(prompt, selectedModel, params, renderedPromptText, startTime, params.override?.vendorId, modelSelectionInfo, params.runType);
 
     // Check for cancellation before model execution
     if (params.cancellationToken?.aborted) {
@@ -3088,8 +3088,13 @@ export class AIPromptRunner {
       promptRun.SuccessfulValidationCount = 0;
       promptRun.FinalValidationPassed = false; // Will be updated after execution
 
-      if (runType) {
-        promptRun.RunType = runType;
+      if (params.executionOrder !== undefined) {
+        promptRun.ExecutionOrder = params.executionOrder;
+      }
+
+      const effectiveRunType = runType ?? params.runType;
+      if (effectiveRunType) {
+        promptRun.RunType = effectiveRunType;
       }
 
       // Persist the initial 'Running' record fire-and-forget. The ID was already assigned by

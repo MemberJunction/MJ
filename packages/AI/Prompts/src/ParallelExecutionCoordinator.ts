@@ -753,23 +753,6 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
         return results[0]; // Fallback to first result
       }
 
-      // Pre-resolve model/vendor for judge prompt so ResultSelector prompt run has ModelID/VendorID at creation
-      let judgeModelId: string | undefined;
-      let judgeVendorId: string | undefined;
-      try {
-        const selection = await this.selectModel(judgePrompt, undefined, user);
-        if (selection?.model) {
-          judgeModelId = selection.model.ID;
-          judgeVendorId = selection.selectionInfo?.vendorSelected?.ID || (selection.model as { _selectedVendorId?: string })._selectedVendorId;
-        }
-      } catch {
-        const pm = AIEngine.Instance.PromptModels.find(
-          (p) => UUIDsEqual(p.PromptID, judgePrompt.ID) && (p.Status === 'Active' || p.Status === 'Preview'),
-        );
-        judgeModelId = pm?.ModelID;
-        judgeVendorId = pm?.VendorID;
-      }
-
       // Prepare the data for the judge prompt
       const judgeData = this.formatResultsForJudge(results);
 
@@ -790,23 +773,6 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
       const agentRunId = results[0]?.task?.agentRunId;
       const userId = results[0]?.task?.userId ?? user?.ID;
 
-      // Create a ResultSelector prompt run log entry if parent ID is provided
-      let resultSelectorPromptRun: MJAIPromptRunEntityExtended | null = null;
-      if (parentPromptRunId) {
-        resultSelectorPromptRun = await this.createResultSelectorPromptRun(
-          judgePrompt,
-          judgeData,
-          parentPromptRunId,
-          results.length, // execution order after all parallel children
-          user,
-          judgeModelId,
-          judgeVendorId,
-          agentId,
-          agentRunId,
-          userId,
-        );
-      }
-
       // Execute the judge prompt
       const judgeRunner = new AIPromptRunner();
       const judgeStartTime = Date.now();
@@ -817,6 +783,9 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
         conversationMessages,
         contextUser: user,
         provider: this.Provider,
+        parentPromptRunId,
+        runType: 'ResultSelector',
+        executionOrder: results.length,
         agentId,
         agentRunId,
         userId,
@@ -824,51 +793,6 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
 
       const judgeEndTime = Date.now();
       const judgeExecutionTimeMS = judgeEndTime - judgeStartTime;
-
-      // Update the result selector prompt run with the result
-      if (resultSelectorPromptRun) {
-        resultSelectorPromptRun.CompletedAt = new Date(judgeEndTime);
-        resultSelectorPromptRun.ExecutionTimeMS = judgeExecutionTimeMS;
-        resultSelectorPromptRun.Success = judgeResult.success;
-        resultSelectorPromptRun.Status = judgeResult.success ? 'Completed' : 'Failed';
-        resultSelectorPromptRun.Result = judgeResult.rawResult || '';
-        resultSelectorPromptRun.JudgeID = judgePrompt.ID;
-
-        if (judgeResult.tokensUsed) {
-          resultSelectorPromptRun.TokensUsed = judgeResult.tokensUsed;
-        }
-
-        if (judgeResult.promptRun) {
-          if (judgeResult.promptRun.ModelID) {
-            resultSelectorPromptRun.ModelID = judgeResult.promptRun.ModelID;
-          }
-          if (judgeResult.promptRun.VendorID) {
-            resultSelectorPromptRun.VendorID = judgeResult.promptRun.VendorID;
-          }
-          if (judgeResult.promptRun.TokensPrompt != null) {
-            resultSelectorPromptRun.TokensPrompt = judgeResult.promptRun.TokensPrompt;
-          }
-          if (judgeResult.promptRun.TokensCompletion != null) {
-            resultSelectorPromptRun.TokensCompletion = judgeResult.promptRun.TokensCompletion;
-          }
-          if (judgeResult.promptRun.TokensCacheRead != null) {
-            resultSelectorPromptRun.TokensCacheRead = judgeResult.promptRun.TokensCacheRead;
-          }
-          if (judgeResult.promptRun.TokensCacheWrite != null) {
-            resultSelectorPromptRun.TokensCacheWrite = judgeResult.promptRun.TokensCacheWrite;
-          }
-          if (judgeResult.promptRun.Cost != null) {
-            resultSelectorPromptRun.Cost = judgeResult.promptRun.Cost;
-          }
-          if (judgeResult.promptRun.CostCurrency != null) {
-            resultSelectorPromptRun.CostCurrency = judgeResult.promptRun.CostCurrency;
-          }
-          if (judgeResult.promptRun.JudgeScore != null) {
-            resultSelectorPromptRun.JudgeScore = judgeResult.promptRun.JudgeScore;
-          }
-        }
-        await resultSelectorPromptRun.Save();
-      }
 
       if (!judgeResult.success || !judgeResult.rawResult) {
         LogError(`Judge prompt execution failed: ${judgeResult.errorMessage}`);
@@ -891,11 +815,14 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
       const bestResultIndex = results.findIndex((r) => r.task.taskId === bestCandidateId);
       const bestResult = bestResultIndex >= 0 ? results[bestResultIndex] : results[0];
 
-      // Update ResultSelector JudgeScore from rankings if not already set
+      // Update ResultSelector JudgeScore and JudgeID from rankings if present
       const topRanking = rankings.find((r) => r.rank === 1) || rankings[0];
-      if (resultSelectorPromptRun && resultSelectorPromptRun.JudgeScore == null && typeof topRanking?.score === 'number') {
-        resultSelectorPromptRun.JudgeScore = topRanking.score;
-        await resultSelectorPromptRun.Save();
+      if (judgeResult.promptRun) {
+        judgeResult.promptRun.JudgeID = judgePrompt.ID;
+        if (judgeResult.promptRun.JudgeScore == null && typeof topRanking?.score === 'number') {
+          judgeResult.promptRun.JudgeScore = topRanking.score;
+        }
+        await judgeResult.promptRun.Save();
       }
 
       // Update child prompt runs with judge feedback & winner selection
@@ -1166,71 +1093,7 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
     }
   }
 
-  /**
-   * Creates a ResultSelector AIPromptRun entity for judge execution tracking.
-   *
-   * @param judgePrompt - The judge prompt being executed
-   * @param judgeData - The data being sent to the judge
-   * @param parentPromptRunId - ID of the parent prompt run
-   * @param executionOrder - Execution order within the parallel group
-   * @param contextUser - Optional context user for permissions
-   * @param modelId - Pre-resolved model ID for the judge
-   * @param vendorId - Pre-resolved vendor ID for the judge
-   * @returns Promise<MJAIPromptRunEntityExtended> - The created result selector prompt run
-   */
-  private async createResultSelectorPromptRun(
-    judgePrompt: MJAIPromptEntityExtended,
-    judgeData: Record<string, unknown>,
-    parentPromptRunId: string,
-    executionOrder: number,
-    contextUser?: UserInfo,
-    modelId?: string,
-    vendorId?: string,
-    agentId?: string,
-    agentRunId?: string,
-    userId?: string,
-  ): Promise<MJAIPromptRunEntityExtended> {
-    try {
-      const promptRun = await this.Provider.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs', contextUser);
-      promptRun.NewRecord();
 
-      promptRun.PromptID = judgePrompt.ID;
-      if (modelId) {
-        promptRun.ModelID = modelId;
-      }
-      if (vendorId) {
-        promptRun.VendorID = vendorId;
-      }
-      if (agentId) {
-        promptRun.AgentID = agentId;
-      }
-      promptRun.AgentRunID = agentRunId ?? null;
-      promptRun.UserID = userId ?? contextUser?.ID ?? null;
-      promptRun.RunAt = new Date();
-      promptRun.RunType = 'ResultSelector';
-      promptRun.ParentID = parentPromptRunId;
-      promptRun.ExecutionOrder = executionOrder;
-
-      // Store the judge data as JSON in Messages field
-      promptRun.Messages = JSON.stringify({
-        judgeData,
-        candidateCount: Array.isArray((judgeData as Record<string, unknown>).candidates)
-          ? ((judgeData as Record<string, unknown>).candidates as unknown[]).length
-          : 0,
-      });
-
-      const saveResult = await promptRun.Save();
-      if (!saveResult) {
-        const error = `Failed to save ResultSelector AIPromptRun: ${promptRun.LatestResult?.Message || 'Unknown error'}`;
-        LogError(error);
-        throw new Error(error);
-      }
-      return promptRun;
-    } catch (error) {
-      LogError(`Error creating result selector prompt run record: ${error.message}`);
-      throw error;
-    }
-  }
 
   /**
    * Creates a delay for the specified number of milliseconds.

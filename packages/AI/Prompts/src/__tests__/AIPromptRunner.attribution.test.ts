@@ -256,18 +256,6 @@ describe('Spec §6 — AIPromptRunner Attribution Writers', () => {
 
     type CoordPrivates = {
       createChildPromptRun(task: ExecutionTask, startTime: Date, parentPromptRunId?: string): Promise<FakePromptRun>;
-      createResultSelectorPromptRun(
-        judgePrompt: MJAIPromptEntityExtended,
-        judgeData: Record<string, unknown>,
-        parentPromptRunId: string,
-        executionOrder: number,
-        contextUser?: UserInfo,
-        modelId?: string,
-        vendorId?: string,
-        agentId?: string,
-        agentRunId?: string,
-        userId?: string,
-      ): Promise<FakePromptRun>;
     };
     const privCoord = coordinator as unknown as CoordPrivates;
 
@@ -280,23 +268,27 @@ describe('Spec §6 — AIPromptRunner Attribution Writers', () => {
     expect(childRun.AgentRunID).toBe('task-agent-run-2');
     expect(childRun.UserID).toBe('task-user-3');
 
-    // Test result selector prompt run creation
-    const judgePrompt = { ID: 'judge-prompt-1' } as MJAIPromptEntityExtended;
-    const selectorRun = await privCoord.createResultSelectorPromptRun(
-      judgePrompt,
-      {},
-      'parent-pr-10',
-      1,
-      testUser,
-      'judge-model-1',
-      'judge-vendor-1',
-      'selector-agent-1',
-      'selector-agent-run-2',
-      'selector-user-3',
-    );
+    // Test result selector prompt run via ExecutePrompt
+    const judgePrompt = makePrompt({ ID: 'judge-prompt-1' });
+    const judgeResult = await runner.ExecutePrompt({
+      prompt: judgePrompt as never,
+      provider: fakeProvider as never,
+      parentPromptRunId: 'parent-pr-10',
+      runType: 'ResultSelector',
+      executionOrder: 1,
+      contextUser: testUser,
+      agentId: 'selector-agent-1',
+      agentRunId: 'selector-agent-run-2',
+      userId: 'selector-user-3',
+    });
+    expect(judgeResult.success).toBe(true);
+    await runner.WaitForPendingPromptRunSaves();
+
+    const selectorRun = createdPromptRuns[createdPromptRuns.length - 1];
     expect(selectorRun).toBeDefined();
     expect(selectorRun.RunType).toBe('ResultSelector');
     expect(selectorRun.ParentID).toBe('parent-pr-10');
+    expect(selectorRun.ExecutionOrder).toBe(1);
     expect(selectorRun.AgentID).toBe('selector-agent-1');
     expect(selectorRun.AgentRunID).toBe('selector-agent-run-2');
     expect(selectorRun.UserID).toBe('selector-user-3');
