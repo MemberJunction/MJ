@@ -202,6 +202,9 @@ Gemini 3.8 Live accepts **text, images, audio AND video** as input. Per the GPT-
 Gemini has and GPT-Live does not. Camera *or* screen share are the same mechanism to the model:
 frames in.
 
+> **Design now proposed in [`media-tracks-and-modalities.md`](media-tracks-and-modalities.md)** —
+> video is a media *track*, not a channel, and the two compose.
+
 **MJ cannot do this today, and the gap is narrow but real.** There is no video or image input path
 anywhere in the realtime contract — no `SendVideo`, `SendImage` or `SendFrame` on
 `BaseRealtimeClient` or `IRealtimeSession`. Two things make it an addition rather than a rebuild:
@@ -225,6 +228,12 @@ There IS a cascade, and it is the right place for this: catalog `ModelConfigurat
 (lowest) → the session `Config: JSONObject` bag under `realtime.session.*` → the runtime override,
 translated per profile (`buildTurnDetection` in `openAIRealtime.ts` is the worked example). §5.1's
 `TurnCoverage` rides that cascade and **is** the video on/off control for Gemini.
+
+> **[Superseded] See [`media-tracks-and-modalities.md`](media-tracks-and-modalities.md) §6.** The
+> passthrough option below is withdrawn as the primary answer. The rule is a normalized
+> provider-neutral setting plus per-profile mapping (the `TurnDetection` pattern) — a passthrough bag
+> survives only as an allow-listed escape hatch for provider-private knobs, never for anything MJ
+> reasons about. `TurnCoverage` already follows the rule, with Gemini as the only profile mapping it.
 
 What is genuinely missing is a **declared** per-model parameter mechanism: today a new provider
 knob needs a new typed field in `AI/Core` plus a profile translation, so every model-specific
