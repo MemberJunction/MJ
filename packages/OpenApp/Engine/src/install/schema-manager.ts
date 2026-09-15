@@ -12,15 +12,34 @@ import { DatabaseProviderBase } from '@memberjunction/core';
 import { EscapeSQLString } from '@memberjunction/global';
 
 /**
- * Reserved schema names that apps cannot claim.
+ * Schema names MemberJunction owns outright — an Open App may never claim one, with or
+ * without the double-underscore override.
+ *
+ * Stored lowercase and matched lowercase: SQL Server compares identifiers case-insensitively
+ * and PostgreSQL folds unquoted DDL to lowercase, so `DBO`, `__MJ` and `INFORMATION_SCHEMA`
+ * name the same physical schemas as their canonical spellings.
+ *
+ * `__mj_udt` is here because MJ core creates it (migrations/v5/V202604292210) as the sandbox
+ * for user-defined tables. It sits inside the `__mj_` app namespace opened up below, so
+ * without this entry an app could adopt it and `mj app remove` would CASCADE-drop every
+ * user-defined table in the database.
  */
 const RESERVED_SCHEMAS = new Set([
   'dbo',
   'sys',
   'guest',
-  'INFORMATION_SCHEMA',
-  '__mj'
+  'information_schema',
+  '__mj',
+  '__mj_udt'
 ]);
+
+/**
+ * The namespace MJ Open Apps live in: `__mj_<AppName>` (`__mj_BizAppsCommon`,
+ * `__mj_BizAppsForms`, …). It is the convention every first-party app ships and the manifest
+ * schema already permits it (see `schemaNameRegex` in manifest-schema.ts, "May start with up
+ * to two underscores"). Everything else under `__` stays reserved for MJ internals.
+ */
+const MJ_APP_SCHEMA_PREFIX = '__mj_';
 
 /**
  * Result of a schema operation.
@@ -37,14 +56,20 @@ export interface SchemaOperationResult {
  */
 export interface ValidateSchemaNameOptions {
   /**
-   * Allow schema names starting with `__`. Exact-match reserved names (e.g. `__mj`, `dbo`)
+   * Allow a `__`-prefixed schema name that is outside the `__mj_<AppName>` app namespace
+   * (which needs no override). Exact-match reserved names (`__mj`, `__mj_UDT`, `dbo`, …)
    * remain blocked regardless of this flag. Dangerous; MJ-internal apps only.
    */
   allowDoubleUnderscore?: boolean;
 }
 
 /**
- * Validates that a schema name is allowed (not reserved, no double underscores).
+ * Validates that a schema name is one an Open App is allowed to claim.
+ *
+ * The rule, in one place: MemberJunction owns the `__` namespace. Names MJ itself uses are
+ * reserved by exact match and are never available. `__mj_<AppName>` is the documented home
+ * for MJ Open Apps. Any other `__` name is rejected unless the caller passes
+ * `allowDoubleUnderscore`.
  *
  * @param schemaName - The schema name to validate
  * @param options - Optional overrides; see {@link ValidateSchemaNameOptions}
@@ -54,17 +79,31 @@ export function ValidateSchemaName(
   schemaName: string,
   options: ValidateSchemaNameOptions = {}
 ): SchemaOperationResult {
-  if (RESERVED_SCHEMAS.has(schemaName)) {
+  if (!schemaName || schemaName.trim().length === 0) {
     return {
       Success: false,
-      ErrorMessage: `Schema name '${schemaName}' is reserved and cannot be used by an Open App`
+      ErrorMessage: 'Schema name is required and cannot be empty'
     };
   }
 
-  if (!options.allowDoubleUnderscore && schemaName.startsWith('__')) {
+  const normalized = schemaName.trim().toLowerCase();
+
+  if (RESERVED_SCHEMAS.has(normalized)) {
     return {
       Success: false,
-      ErrorMessage: `Schema names starting with '__' are reserved for MJ internals`
+      ErrorMessage: `Schema name '${schemaName}' is reserved by MemberJunction and cannot be used by an Open App`
+    };
+  }
+
+  const isMJAppNamespace =
+    normalized.startsWith(MJ_APP_SCHEMA_PREFIX) && normalized.length > MJ_APP_SCHEMA_PREFIX.length;
+
+  if (!options.allowDoubleUnderscore && normalized.startsWith('__') && !isMJAppNamespace) {
+    return {
+      Success: false,
+      ErrorMessage:
+        `Schema name '${schemaName}' is not available: names starting with '__' are reserved for MemberJunction. ` +
+        `MJ Open Apps use the '${MJ_APP_SCHEMA_PREFIX}<AppName>' convention; any other app should choose a name that does not start with '__'.`
     };
   }
 

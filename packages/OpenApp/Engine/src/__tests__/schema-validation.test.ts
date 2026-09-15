@@ -13,15 +13,55 @@ describe('ValidateSchemaName', () => {
     });
 
     it('rejects exact-match reserved schemas', () => {
-        for (const name of ['dbo', 'sys', 'guest', 'INFORMATION_SCHEMA', '__mj']) {
+        for (const name of ['dbo', 'sys', 'guest', 'INFORMATION_SCHEMA', '__mj', '__mj_UDT']) {
             expect(ValidateSchemaName(name).Success).toBe(false);
         }
     });
 
-    it('rejects __-prefixed names by default', () => {
-        const result = ValidateSchemaName('__bcsaas');
-        expect(result.Success).toBe(false);
-        expect(result.ErrorMessage).toMatch(/__/);
+    it('accepts every first-party BizApp schema on the default path (#3302)', () => {
+        // These are the real names from the shipped mj-app.json of each first-party app.
+        for (const name of [
+            '__mj_BizAppsCommon',
+            '__mj_BizAppsTasks',
+            '__mj_BizAppsForms',
+            '__mj_BizAppsCaliber',
+            '__mj_BizAppsATS',
+        ]) {
+            const result = ValidateSchemaName(name);
+            expect(result.Success, `${name}: ${result.ErrorMessage}`).toBe(true);
+        }
+    });
+
+    it('rejects __-prefixed names outside the __mj_ app namespace', () => {
+        for (const name of ['__bcsaas', '__acme', '__mjx']) {
+            const result = ValidateSchemaName(name);
+            expect(result.Success, name).toBe(false);
+            expect(result.ErrorMessage).toMatch(/__/);
+        }
+    });
+
+    it('rejects a bare __mj_ prefix with no app suffix', () => {
+        expect(ValidateSchemaName('__mj_').Success).toBe(false);
+    });
+
+    it('reserves __mj_UDT — MJ core owns it (the Database Designer user-table sandbox)', () => {
+        for (const name of ['__mj_UDT', '__mj_udt', '__MJ_UDT']) {
+            const result = ValidateSchemaName(name, { allowDoubleUnderscore: true });
+            expect(result.Success, name).toBe(false);
+            expect(result.ErrorMessage).toMatch(/reserved/i);
+        }
+    });
+
+    it('matches reserved names case-insensitively (SQL Server folds, PG lowercases)', () => {
+        for (const name of ['DBO', 'Dbo', 'SYS', 'Guest', 'information_schema', '__MJ']) {
+            const result = ValidateSchemaName(name, { allowDoubleUnderscore: true });
+            expect(result.Success, name).toBe(false);
+        }
+    });
+
+    it('rejects an empty or whitespace-only schema name', () => {
+        expect(ValidateSchemaName('').Success).toBe(false);
+        expect(ValidateSchemaName('   ').Success).toBe(false);
     });
 
     it('accepts __-prefixed names when allowDoubleUnderscore is true', () => {
