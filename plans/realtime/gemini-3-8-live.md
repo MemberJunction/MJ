@@ -138,20 +138,39 @@ get told.
 
 ## 5. Design
 
-### 5.1 Capability descriptor, not `if (model === ...)`
+### 5.1 Capability descriptor, not `if (model === ...)` — and NO new columns
 
-Add to the Gemini realtime model's capability surface, driven by metadata rather than string
-comparison in the driver:
+**Corrected 2026-09-15 after checking the generated ORM.** The first draft of this section
+proposed new capability fields. Most of what is needed already exists on the AI model entities,
+so **this PR ships no DDL and no migration**:
 
-- `SupportsThinkingLevel: boolean` + `SupportedThinkingLevels: readonly ThinkingLevel[]`
-- `SupportsBlockingTools: boolean`
-- `SupportsFunctionScheduling: boolean`
-- `IdleSignal: 'turnComplete' | 'interactionStatus'`
-- `SupportsThoughtSummaries: boolean`
+| Need | Already on the entity |
+|---|---|
+| Is a thinking/effort level legal for this model | **`SupportsEffortLevel`** on both `MJ: AI Models` and `MJ: AI Model Vendors` |
+| Which level, and its bounds | **`RealtimeRemoteReasoning.Effort`** — already enumerates `'none' \| 'minimal' \| 'low' \| 'medium' \| 'high' \| 'xhigh'`. Gemini's `low`/`medium`/`high` is a subset; "`minimal` not supported" is a capability gate, not a new type |
+| Everything else per-model | **`ModelConfiguration`** — a typed JSON column on both entities, with a CodeGen'd accessor (`ModelConfigurationObject: MJAIModelVendorEntity_IAIModelConfiguration`) |
 
-Three rows, one driver. A fourth Live model arriving next quarter is then a metadata row, not a
-code change — which is the same reason model IDs are already read from
-`AIModelVendor.APIName` (`args.Model`) rather than hardcoded.
+So the remaining flags live inside `ModelConfiguration.Realtime`, alongside the
+already-shipped `Reasoning` and `TurnDetection` blocks, rather than becoming columns:
+
+- `SupportsBlockingTools?: boolean` — `false` for Extended Thinking (`BLOCKING` is a hard error there)
+- `SupportsFunctionScheduling?: boolean` — `false` for Extended Thinking
+- `IdleSignal?: 'turnComplete' | 'interactionStatus'`
+- `IncludeThoughtSummaries?: boolean`
+- `TurnCoverage?: 'audioActivityOnly' | 'audioActivityAndAllVideo'`
+
+The driver-facing half still belongs on `BaseRealtimeModel` as capability properties (the same
+shape as the existing `SupportsParallelToolCalls` / `CanReconfigureTurnMode`), fed from that JSON.
+
+Three rows, one driver. A fourth Live model next quarter is a metadata row, not a code change —
+the same reason model IDs are already read from `AIModelVendor.APIName` (`args.Model`) rather
+than hardcoded.
+
+**Operational note, because it fails silently:** CodeGen reads JSONType definitions from the
+**database**, not from `metadata/`. Extending `IAIModelConfiguration` requires `mj sync push`
+**before** `mj codegen`, or CodeGen regenerates from the stale definition and *deletes*
+properties from the generated type without erroring. That round-trip needs a live dev DB and so
+happens on the maintainer's machine, not in CI.
 
 ### 5.2 Replace `responseActive` with an outstanding-work model
 
@@ -215,6 +234,51 @@ class of failure as the duplicated `type-graphql` that breaks MJAPI schema build
 - **Changeset**: `minor` (ships metadata).
 
 ---
+
+## 7a. Cost model — Gemini is 2.2x-5.6x cheaper on the voice plane
+
+**Gemini 3.8 Live / Extended Thinking / 3.1 Flash Live Preview**, paid tier (all three share one
+price sheet). Google quotes audio two ways and they agree — input $0.005/min / $3.00 per 1M =
+1,667 tokens/min (~28/s); output $0.018/min / $12.00 per 1M = 1,500 tokens/min (25/s):
+
+| | Input | Output (**including thinking tokens**) |
+|---|---|---|
+| Text | $0.75 / 1M | $4.50 / 1M |
+| Audio | $3.00 / 1M — or **$0.005/min** | $12.00 / 1M — or **$0.018/min** |
+| Image / video | $1.00 / 1M — or $0.002/min | n/a |
+
+Google Search grounding: 5,000 free requests/month **shared across all Gemini 3.x models**, then
+$14 per 1,000.
+
+**GPT-Live** prices the voice plane as one wall-clock rate: **$0.05/min**, billed per second, not
+rounded up — **plus delegated reasoning tokens billed separately**, reported from a different
+place, plus a 15-second pre-bill on WebRTC session creation.
+
+So the two are not blendable as a single rate: GPT-Live quotes one number for the session while
+Gemini splits input from output, which makes the answer depend on the talk-time split.
+
+| Talk split | Gemini / min | vs GPT-Live $0.05 |
+|---|---|---|
+| Both directions continuously (Gemini worst case) | $0.023 | 2.2x cheaper |
+| 50/50 conversation | $0.0115 | 4.3x cheaper |
+| Model speaks 70% (agent-heavy) | $0.0141 | 3.5x cheaper |
+| Model speaks 30% (user-heavy) | $0.0089 | 5.6x cheaper |
+
+**Two effects widen the gap beyond that table.** Gemini's output rate *includes thinking tokens*,
+whereas GPT-Live bills delegated reasoning on top — so a reasoning-heavy agent diverges further.
+And GPT-Live's 15-second pre-bill is 50% overhead on a 30-second interaction, where Gemini's
+metering has no floor.
+
+**Two cost traps, both defaults rather than rates.** Video input is cheap ($0.002/min) but
+`TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO` is the DEFAULT, so it is billed unless opted out —
++17% on a 50/50 audio blend, and the reason §5.1 makes `TurnCoverage` explicit. And search
+grounding at $14/1,000 after a 5,000/month allowance *shared across the whole Gemini 3.x estate*
+is ~500 sessions/month at one search per turn over ten turns.
+
+For the `MJ: AI Model Costs` rows in step 9: the seconds-vs-tokens split is why the GPT-Live PR's
+`UsageBases?: readonly ('tokens' | 'seconds')[]` is deliberately a list and not an exclusive enum.
+Gemini is token-metered with a per-minute equivalence; GPT-Live is second-metered with separate
+token billing for delegation. Both need both bases.
 
 ## 8. Out of scope
 

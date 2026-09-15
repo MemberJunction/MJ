@@ -68,7 +68,26 @@ export interface RealtimeTurnDetectionSettings {
     Threshold?: number;
     /** Server-VAD trailing-silence duration in ms; ignored by profiles without a mapping. */
     SilenceDurationMs?: number;
+
+    /**
+     * What a turn's input is allowed to include. Distinct from DETECTION (when a turn ends):
+     * coverage is WHAT rides in it.
+     *
+     * Gemini 3.8 Live defaults to `audioActivityAndAllVideo`, which ships every video frame to the
+     * model by default — billed and consuming context. Declaring coverage explicitly keeps that a
+     * decision rather than an inherited default. Profiles without a mapping ignore it.
+     */
+    Coverage?: RealtimeTurnCoverage;
 }
+
+/**
+ * What a turn carries as input.
+ *
+ * - `'audioActivityOnly'` — audio activity only; video frames are sent deliberately, not by default.
+ * - `'audioActivityAndAllVideo'` — audio activity plus every video frame (Gemini 3.8 Live's own
+ *   default, `TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO`).
+ */
+export type RealtimeTurnCoverage = 'audioActivityOnly' | 'audioActivityAndAllVideo';
 
 /**
  * Which plane handles reasoning during a realtime session:
@@ -99,6 +118,16 @@ export interface RealtimeReasoningSettings {
     Plane?: RealtimeReasoningPlane;
     /** Remote reasoning target when Plane is 'remote'. */
     Remote?: RealtimeRemoteReasoning;
+
+    /**
+     * Ask the model to emit human-readable summaries of its own reasoning as it works
+     * (Gemini `thinkingConfig.includeThoughts`).
+     *
+     * These are NOT assistant speech — they are progress narration authored by the model, and
+     * belong on the narration transcript path rather than the spoken-response path. Absent =
+     * off; a profile with no mapping ignores it.
+     */
+    IncludeThoughtSummaries?: boolean;
 }
 
 /** The `Realtime` section — knobs the realtime drivers consume. */
@@ -115,6 +144,52 @@ export interface RealtimeConfigurationSettings {
      * Absent defaults to 'local'.
      */
     Reasoning?: RealtimeReasoningSettings;
+
+    /** Tool-execution semantics this model permits. Absent = the profile's own defaults. */
+    Tooling?: RealtimeToolingSettings;
+
+    /**
+     * Which server signal means "the session has gone idle and deferred work may be flushed".
+     *
+     * Absent = `'turnComplete'`, which is every model MJ spoke to before Gemini 3.8 Live
+     * Extended Thinking. On a model with asynchronous reasoning, `turnComplete` arrives while the
+     * server is STILL reasoning and still issuing tool calls, so treating it as idle drains queued
+     * work at the wrong moment; those models report `'interactionStatus'` instead.
+     */
+    IdleSignal?: RealtimeIdleSignal;
+}
+
+/**
+ * Which server signal a driver should treat as "idle".
+ *
+ * - `'turnComplete'` — the turn-terminal frame also means the server is done (the classic case).
+ * - `'interactionStatus'` — a separate status field carries idleness because `turnComplete` does
+ *   NOT imply it (Gemini `interaction_status`: `IN_PROGRESS` vs `IDLE`).
+ */
+export type RealtimeIdleSignal = 'turnComplete' | 'interactionStatus';
+
+/**
+ * Tool-execution semantics, declared per model because the same Live API permits different
+ * combinations per model rather than per provider.
+ *
+ * Both flags are capability DECLARATIONS, not requests: they say what the model will accept, so a
+ * driver can refuse locally with a clear message instead of emitting a frame the server rejects.
+ */
+export interface RealtimeToolingSettings {
+    /**
+     * Whether synchronous blocking tool execution is legal.
+     *
+     * `false` on models that only accept asynchronous execution — Gemini 3.8 Live Extended
+     * Thinking returns a HARD ERROR for blocking mode, so this must be caught before the frame is
+     * sent. Absent = permitted (the historical default).
+     */
+    SupportsBlockingExecution?: boolean;
+
+    /**
+     * Whether per-function scheduling hints are legal (Gemini `SILENT` / `WHEN_IDLE` /
+     * `INTERRUPTED`). Absent = not supported; only declare `true` where the model documents it.
+     */
+    SupportsScheduling?: boolean;
 }
 
 /**
