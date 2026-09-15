@@ -179,6 +179,65 @@ export const DEFAULT_RESPONSE_TYPE_INCLUSION_RULES: Required<ResponseTypeInclusi
  * };
  * ```
  */
+/**
+ * Where the loop agent's per-iteration ("volatile") state — current date/time, Scratchpad State,
+ * and the Payload — is placed in the request sent to the model.
+ *
+ * - `'systemPrompt'` (default, today's behavior): rendered at the tail of the system prompt.
+ * - `'trailingMessage'`: omitted from the system prompt and delivered instead as a single
+ *   framework-authored `user`-role message appended as the **final** message of the request,
+ *   wrapped in `<mj-runtime-state>` tags, with a static instruction in the system prompt telling
+ *   the model where to find it.
+ *
+ * Why this exists: provider prompt caching is a prefix match over `tools → system → messages`.
+ * The volatile blocks change on almost every loop iteration, and anything in `system` renders
+ * ahead of the entire message history — so with `'systemPrompt'` placement only the static part
+ * of the system prompt caches and the whole (growing) history misses on every iteration.
+ * Measured on Sage, 2026-09-14: cache reads plateaued at ~21.5K tokens while uncached input grew
+ * to 73K per call. Moving the volatile tail after the history lets the history cache incrementally.
+ *
+ * The value is read through {@link ResolveVolatileStatePlacement}, which fails closed: anything
+ * other than the exact string `'trailingMessage'` resolves to `'systemPrompt'`.
+ */
+export type VolatileStatePlacement = 'systemPrompt' | 'trailingMessage';
+
+/**
+ * Where the agent's specialization (its child prompt) is placed when `volatileStatePlacement` is
+ * `'trailingMessage'`. Irrelevant under `'systemPrompt'` placement, where the child prompt always
+ * renders inside the system prompt as today.
+ *
+ * - `'auto'` (default): relocate the specialization into the trailing message ONLY if its template
+ *   references a volatile placeholder (`_CURRENT_DATE*`, `_CURRENT_TIME*`, `_CURRENT_PAYLOAD`,
+ *   `_SCRATCHPAD_*`). A static child prompt stays in the cached system prompt.
+ * - `'systemPrompt'`: never relocate.
+ * - `'trailingMessage'`: always relocate.
+ *
+ * Why: the OS prompt cannot control what an agent designer puts in a child prompt. Nine active
+ * Loop agents embed a volatile placeholder in theirs, which mutates the system prompt every
+ * iteration from a position ahead of the catalogs and the whole history — moving the runtime-state
+ * tail does nothing for them. Measured (Gemini 2.5 Flash, volatile specialization): keeping it in
+ * the system prompt caches 19%; relocating it caches 70%. For a STATIC child prompt, relocation
+ * costs ≈3,100 uncached tokens per call for nothing, hence `'auto'`. Decided once per run so the
+ * layout never flips mid-run. Resolved through {@link ResolveSpecializationPlacement}.
+ */
+export type SpecializationPlacement = 'auto' | 'systemPrompt' | 'trailingMessage';
+
+/**
+ * Normalizes the `volatileStatePlacement` prompt param to a {@link VolatileStatePlacement}.
+ *
+ * Fails closed: only the exact string `'trailingMessage'` selects the new placement; `undefined`,
+ * `null`, a typo, or any other value resolves to `'systemPrompt'` (current behavior). Use this at
+ * every read site so the template gate and the runtime wiring can never disagree.
+ *
+ * @param promptParams The merged `__agentTypePromptParams` object (schema defaults + agent config
+ *   + runtime overrides), or nothing.
+ */
+export function ResolveVolatileStatePlacement(
+    promptParams: Record<string, unknown> | null | undefined
+): VolatileStatePlacement {
+    return promptParams?.volatileStatePlacement === 'trailingMessage' ? 'trailingMessage' : 'systemPrompt';
+}
+
 export interface LoopAgentTypePromptParams {
     // === Section Inclusion Flags ===
 
@@ -275,6 +334,26 @@ export interface LoopAgentTypePromptParams {
     includeScratchpadDocs?: boolean;
 
     /**
+     * Where the volatile per-iteration state (date/time, Scratchpad State, Payload) is placed in the
+     * request. `'systemPrompt'` keeps it at the tail of the system prompt (current behavior);
+     * `'trailingMessage'` moves it after the message history as a tagged `user`-role message so the
+     * history becomes prompt-cacheable across iterations. See {@link VolatileStatePlacement}.
+     *
+     * Only affects blocks that are enabled: a block turned off by `includeDateTimeInPrompt`,
+     * `includeScratchpadDocs`, or `includePayloadInPrompt` is omitted in either placement.
+     * @default 'systemPrompt'
+     */
+    volatileStatePlacement?: VolatileStatePlacement;
+
+    /**
+     * Where the child prompt goes under `'trailingMessage'` placement: `'auto'` relocates it only when
+     * its template is volatile; `'systemPrompt'` never; `'trailingMessage'` always. Ignored under
+     * `'systemPrompt'` placement. See {@link SpecializationPlacement}.
+     * @default 'auto'
+     */
+    specializationPlacement?: SpecializationPlacement;
+
+    /**
      * Maximum number of tasks allowed in the scratchpad task list.
      * When exceeded, completed tasks are auto-pruned oldest first.
      * @default 50
@@ -364,6 +443,8 @@ export const DEFAULT_LOOP_AGENT_PROMPT_PARAMS: Required<LoopAgentTypePromptParam
     includePayloadInPrompt: true,
     includeDateTimeInPrompt: true,
     includeScratchpadDocs: true,
+    volatileStatePlacement: 'systemPrompt',
+    specializationPlacement: 'auto',
     scratchpadMaxTasks: 50,
     includeArtifactToolsDocs: true,
     includeConversationToolsDocs: true,
