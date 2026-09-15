@@ -1824,6 +1824,15 @@ export type AgentChatMessageMetadata = {
     isConversationSummary?: boolean;
     /** On the summary message: the boundary row's Sequence — the summary covers all rows below it */
     summaryBoundarySequence?: number;
+    /**
+     * True on the framework-authored trailing message that carries the loop agent's volatile
+     * per-iteration state (date/time, Scratchpad, Payload, and a relocated specialization) under
+     * `volatileStatePlacement: 'trailingMessage'`. It is appended to a COPY of the history for a
+     * single request and never persisted. Provider adapters may use it to place prompt-cache
+     * breakpoints on the message BEFORE it, so the stable history caches and only this fragment
+     * is re-processed each iteration.
+     */
+    volatileState?: boolean;
 }
 
 /**

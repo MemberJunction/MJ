@@ -98,6 +98,18 @@
             "default": true,
             "description": "Include current date, time, and day of week in the prompt. Provides the LLM with accurate temporal context so it doesn't hallucinate dates or claim it doesn't know the current time. Disable for agents where temporal context is irrelevant."
           },
+          "volatileStatePlacement": {
+            "type": "string",
+            "enum": ["systemPrompt", "trailingMessage"],
+            "default": "systemPrompt",
+            "description": "Where the volatile per-iteration state (date/time, Scratchpad State, Payload) is placed in the request. 'systemPrompt' keeps it at the tail of the system prompt (current behavior). 'trailingMessage' omits it from the system prompt and delivers it as a single framework-authored user-role message appended as the final message of the request inside <mj-runtime-state> tags, so the message history becomes prompt-cacheable across loop iterations. Provider caching is a prefix match over tools, then system, then messages; volatile content inside system invalidates the whole history on every iteration. Any value other than 'trailingMessage' resolves to 'systemPrompt'."
+          },
+          "specializationPlacement": {
+            "type": "string",
+            "enum": ["auto", "systemPrompt", "trailingMessage"],
+            "default": "auto",
+            "description": "Where the agent's child prompt (specialization) is placed when volatileStatePlacement is 'trailingMessage'. 'auto' relocates it into the trailing message only if its template references a volatile placeholder (_CURRENT_DATE*, _CURRENT_TIME*, _CURRENT_PAYLOAD, _SCRATCHPAD_*) — a volatile child prompt mutates the system prompt every iteration ahead of the catalogs and history, so the runtime-state relocation alone recovers nothing for it. 'systemPrompt' never relocates; 'trailingMessage' always does. Decided once per run. Ignored under 'systemPrompt' placement."
+          },
           "enableTaskGraphs": {
             "type": "boolean",
             "default": false,
