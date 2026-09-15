@@ -39,6 +39,28 @@ describe('schema-output', () => {
     expect(groups.get('/default')?.map((e) => e.Name)).toEqual(['Orders']);
   });
 
+  it('keeps the default directory with an empty group when there are no entities (fresh install, #4477)', () => {
+    const groups = PartitionEntitiesByOutputDirectory([], 'EntitySubClasses', '/default', overrides);
+    expect([...groups.keys()]).toEqual(['/default']);
+    expect(groups.get('/default')).toEqual([]);
+  });
+
+  it('keeps the default directory when every entity is overridden elsewhere', () => {
+    const groups = PartitionEntitiesByOutputDirectory(
+      [{ SchemaName: 'bsd_crm', Name: 'Customers' }],
+      'EntitySubClasses',
+      '/default',
+      overrides,
+    );
+    expect([...groups.keys()].sort()).toEqual(['/default', '/demo/entities']);
+    expect(groups.get('/default')).toEqual([]);
+  });
+
+  it('emits no default group when no default directory is configured', () => {
+    const groups = PartitionEntitiesByOutputDirectory([], 'EntitySubClasses', null, overrides);
+    expect(groups.size).toBe(0);
+  });
+
   it('first matching override wins when two patterns overlap', () => {
     const overlapping = [
       { schema: 'bsd_crm', EntitySubClasses: '/exact' },

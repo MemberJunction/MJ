@@ -4,7 +4,7 @@ import {
   OnInit, OnChanges, SimpleChanges, ViewEncapsulation
 } from '@angular/core';
 import {
-  BaseEntity, EntityInfo, EntityFieldInfo, Metadata, CompositeKey
+  BaseEntity, EntityInfo, EntityFieldInfo, Metadata, CompositeKey, IsDateOnlySQLType, FormatDateOnly
 } from '@memberjunction/core';
 import { EntityHierarchyNavigationEvent } from '../types/navigation-events';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
@@ -196,9 +196,12 @@ export class MjIsaRelatedCardComponent extends BaseAngularComponent implements O
   private formatFieldValue(value: unknown, field: EntityFieldInfo): string {
     if (value == null) return '';
 
-    // Date formatting
+    // Date formatting. A `date` column is a calendar day that arrives as UTC midnight; a local-zone
+    // formatter would land on the previous day for every reader west of Greenwich (MJ#4210).
+    // A timestamp names an instant and stays in local time.
     if (value instanceof Date) {
-      return value.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      const options: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' };
+      return IsDateOnlySQLType(field.Type) ? FormatDateOnly(value, options, 'en-US') : value.toLocaleDateString('en-US', options);
     }
 
     // Number formatting

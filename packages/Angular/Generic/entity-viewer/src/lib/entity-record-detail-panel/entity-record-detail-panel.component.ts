@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ChangeDetectorRef, NgZone } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { EntityInfo, EntityRelationshipInfo, EntityOrganicKeyInfo, EntityOrganicKeyRelatedEntityInfo, RunView, Metadata, RunViewParams, EntityFieldValueListType, EntityFieldInfo, CompositeKey } from '@memberjunction/core';
+import { EntityInfo, EntityRelationshipInfo, EntityOrganicKeyInfo, EntityOrganicKeyRelatedEntityInfo, RunView, Metadata, RunViewParams, EntityFieldValueListType, EntityFieldInfo, CompositeKey, IsDateOnlySQLType, FormatDateOnly } from '@memberjunction/core';
 import { BuildCompositeKey, BuildPkString } from '../utils/record.util';
 
 interface RelatedEntityData {
@@ -537,7 +537,7 @@ export class EntityRecordDetailPanelComponent extends BaseAngularComponent imple
       if (field) {
         const value = record[field.Name];
         if (value !== null && value !== undefined) {
-          return this.formatFieldValue(value, field.Name);
+          return this.formatFieldValue(value, field);
         }
       }
     }
@@ -616,7 +616,7 @@ export class EntityRecordDetailPanelComponent extends BaseAngularComponent imple
         type: isEnum ? 'enum' : 'regular',
         name: field.Name,
         label: this.formatFieldLabel(field),
-        value: this.formatFieldValue(value, field.Name)
+        value: this.formatFieldValue(value, field)
       });
     }
 
@@ -694,12 +694,14 @@ export class EntityRecordDetailPanelComponent extends BaseAngularComponent imple
   /**
    * Format field value for display
    */
-  private formatFieldValue(value: unknown, fieldName: string): string {
+  private formatFieldValue(value: unknown, field: EntityFieldInfo): string {
     if (value === null || value === undefined) return '-';
 
-    // Handle dates
+    // Handle dates. A `date` column is a calendar day that arrives as UTC midnight; a local-zone
+    // formatter would land on the previous day for every reader west of Greenwich (MJ#4210).
+    // A timestamp names an instant and stays in local time.
     if (value instanceof Date) {
-      return value.toLocaleDateString();
+      return IsDateOnlySQLType(field.Type) ? FormatDateOnly(value) : value.toLocaleDateString();
     }
 
     // Handle booleans
@@ -709,7 +711,7 @@ export class EntityRecordDetailPanelComponent extends BaseAngularComponent imple
 
     // Handle numbers that look like currency
     if (typeof value === 'number') {
-      const nameLower = fieldName.toLowerCase();
+      const nameLower = field.Name.toLowerCase();
       if (nameLower.includes('amount') ||
           nameLower.includes('price') ||
           nameLower.includes('cost') ||
@@ -965,7 +967,7 @@ export class EntityRecordDetailPanelComponent extends BaseAngularComponent imple
       if (field) {
         const value = record[field.Name];
         if (value !== null && value !== undefined) {
-          return this.formatFieldValue(value, field.Name);
+          return this.formatFieldValue(value, field);
         }
       }
     }

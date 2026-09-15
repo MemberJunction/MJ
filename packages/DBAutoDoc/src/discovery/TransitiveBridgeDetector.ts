@@ -22,7 +22,7 @@
  */
 
 import { FindBridgePaths, FKEdge } from './FKGraphWalker.js';
-import { GenerateBridgeView, GeneratedBridgeView } from './BridgeViewSQLGenerator.js';
+import { GenerateBridgeView, GeneratedBridgeView, BridgeViewProvider } from './BridgeViewSQLGenerator.js';
 import { OrganicKeyCluster, MemberColumns } from '../types/organic-keys.js';
 import { DatabaseDocumentation, ForeignKeyReference } from '../types/state.js';
 
@@ -48,6 +48,8 @@ export interface TransitiveBridgeDetectorOptions {
     minPathConfidence?: number;
     /** Limit bridges per (hub, spoke) pair — keeps only the best path. Default true. */
     keepShortestOnly?: boolean;
+    /** Platform the generated bridge-view SQL is written for. Default `'sqlserver'`. */
+    provider?: BridgeViewProvider;
 }
 
 const DEFAULTS: Required<TransitiveBridgeDetectorOptions> = {
@@ -55,6 +57,7 @@ const DEFAULTS: Required<TransitiveBridgeDetectorOptions> = {
     minSoftFKConfidence: 0.6,
     minPathConfidence: 0.7,
     keepShortestOnly: true,
+    provider: 'sqlserver',
 };
 
 /**
@@ -72,7 +75,9 @@ export function DetectTransitiveBridges(
     state: DatabaseDocumentation,
     opts: TransitiveBridgeDetectorOptions = {},
 ): TransitiveBridgeFinding[] {
-    const o = { ...DEFAULTS, ...opts };
+    // `?? DEFAULTS.provider`: runStructuralPhase passes `{ provider }` with an optional provider,
+    // and a spread of an explicit `undefined` would overwrite the default.
+    const o = { ...DEFAULTS, ...opts, provider: opts.provider ?? DEFAULTS.provider };
 
     // ─── 1. Build the hub set from existing organic-key clusters ────────────
     // Each hub is a (schema, table) carrying one or more organic-key match field(s).
@@ -137,7 +142,7 @@ export function DetectTransitiveBridges(
         );
         if (!hubMatch) continue;
 
-        const view = GenerateBridgeView(path, spokePK);
+        const view = GenerateBridgeView(path, spokePK, { provider: o.provider });
         findings.push({
             hubSchema: hubMatch.schema,
             hubTable: hubMatch.table,

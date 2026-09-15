@@ -6,6 +6,7 @@ import { MJUserEntity, MJRoleEntity, MJUserRoleEntity } from '@memberjunction/co
 
 import { UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { EnrolledRow, serverRefusalReasons } from '../transaction-group-refusals';
 export interface UserDialogData {
   user?: MJUserEntity;
   mode: 'create' | 'edit';
@@ -323,11 +324,17 @@ export class UserDialogComponent extends BaseAngularComponent implements OnInit,
       // same reason as `UserManagementComponent.executeBulkRoleAssign`, where the transaction-group
       // semantics — and why the server-side #4282 guard is NOT what this catches — are set out in full.
       const refusals: string[] = [];
+      // Enrolled rows are kept so the SERVER's reason can be read back off them below; without
+      // that, the reason #4309 puts on LatestResult has nobody left to read it.
+      const enrolled: EnrolledRow[] = [];
 
       for (const userRole of rolesToRemove) {
         userRole.TransactionGroup = tg;
         if (!await userRole.Delete()) {
           refusals.push(`Remove ${this.describeRole(userRole.RoleID)}: ${userRole.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
+        else {
+          enrolled.push({ label: `Remove ${this.describeRole(userRole.RoleID)}`, entity: userRole });
         }
       }
 
@@ -340,6 +347,9 @@ export class UserDialogComponent extends BaseAngularComponent implements OnInit,
         if (!await userRole.Save()) {
           refusals.push(`Add ${this.describeRole(roleId)}: ${userRole.LatestResult?.CompleteMessage ?? 'unknown error'}`);
         }
+        else {
+          enrolled.push({ label: `Add ${this.describeRole(roleId)}`, entity: userRole });
+        }
       }
 
       if (refusals.length > 0) {
@@ -349,7 +359,12 @@ export class UserDialogComponent extends BaseAngularComponent implements OnInit,
       }
 
       if (!await tg.Submit()) {
-        throw new Error('Failed to update user roles — all changes have been rolled back');
+        // Every row enrolled, so this is a SERVER-side refusal (or a rollback). Since #4309 the
+        // server says which row and why, and that reason is now on each entity's LatestResult.
+        const reasons = serverRefusalReasons(enrolled);
+        throw new Error(reasons.length > 0
+          ? `Failed to update user roles — all changes have been rolled back.\n${reasons.join('\n')}`
+          : 'Failed to update user roles — all changes have been rolled back');
       }
     } catch (error) {
       console.error('Error updating user roles:', error);

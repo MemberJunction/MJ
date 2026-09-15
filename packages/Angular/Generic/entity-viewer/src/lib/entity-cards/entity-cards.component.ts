@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnChanges, OnInit, SimpleChanges, ElementRef, AfterViewChecked, ChangeDetectorRef, ViewEncapsulation } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { EntityInfo, EntityFieldInfo, EntityFieldValueListType, RunView, CoerceImageSrc } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityFieldValueListType, RunView, CoerceImageSrc, IsDateOnlySQLType, FormatDateOnly } from '@memberjunction/core';
 import { CardTemplate, CardDisplayField, CardFieldType, RecordSelectedEvent, RecordOpenedEvent } from '../types';
 import { BuildCompositeKey, BuildPkString, ComputeFieldsList } from '../utils/record.util';
 import { PillColorUtil } from '../pill/pill.component';
@@ -557,7 +557,12 @@ export class EntityCardsComponent extends BaseAngularComponent implements OnChan
     try {
       const date = value instanceof Date ? value : new Date(value as string | number);
       if (isNaN(date.getTime())) return String(value);
-      return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+      const options: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' };
+      // A `date` column is a calendar day that arrives as UTC midnight; a local-zone formatter
+      // would land on the previous day for every reader west of Greenwich (MJ#4210). A timestamp
+      // names an instant and stays in local time.
+      if (this.isDateOnlyField(fieldName)) return FormatDateOnly(date, options);
+      return date.toLocaleDateString(undefined, options);
     } catch {
       return String(value);
     }
@@ -566,6 +571,10 @@ export class EntityCardsComponent extends BaseAngularComponent implements OnChan
   /** @deprecated Use {@link GetDateValue}. */
   getDateValue(record: Record<string, unknown>, fieldName: string): string {
     return this.GetDateValue(record, fieldName);
+  }
+
+  private isDateOnlyField(fieldName: string): boolean {
+    return IsDateOnlySQLType(this.entity?.Fields.find(f => f.Name === fieldName)?.Type);
   }
 
   /**

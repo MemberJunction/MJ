@@ -71,6 +71,13 @@ export function resolveSchemaOutputDirectory(
  * Partition entities into destination directories for one artifact kind.
  * Entities whose override says `skip` are dropped. Entities with no override
  * go to `defaultDirectory` (and are dropped if that is empty).
+ *
+ * The default directory is always present in the result when it is set, even
+ * with zero entities. Every caller writes a barrel or module into that
+ * directory that the host package imports unconditionally, so an empty group
+ * must still produce an empty file. A fresh install has no non-core entities
+ * at all, and dropping the group there left `entity_subclasses.ts` unwritten
+ * and MJAPI unable to start (MemberJunction/MJ#4477).
  */
 export function PartitionEntitiesByOutputDirectory<T extends { SchemaName: string }>(
   entities: readonly T[],
@@ -79,6 +86,9 @@ export function PartitionEntitiesByOutputDirectory<T extends { SchemaName: strin
   overrides: readonly SchemaOutputOverride[] | undefined,
 ): Map<string, T[]> {
   const groups = new Map<string, T[]>();
+  if (defaultDirectory) {
+    groups.set(defaultDirectory, []);
+  }
   for (const entity of entities) {
     const resolved = ResolveSchemaOutputDirectory(entity.SchemaName, kind, overrides);
     if (resolved === null) {

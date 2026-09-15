@@ -18,6 +18,38 @@ import {
 } from "@memberjunction/sql-dialect";
 
 /**
+ * Whether a SQL type is the date-only `date` type: a calendar day with no time and no zone, as
+ * opposed to any of the timestamp types, which name an instant. The distinction decides which
+ * zone a value may be rendered in, and getting it wrong moves the day (see FormatDateOnly).
+ * The same spelling covers SQL Server and PostgreSQL.
+ */
+export function IsDateOnlySQLType(sqlType: string | null | undefined): boolean {
+    return (sqlType ?? '').trim().toLowerCase() === 'date';
+}
+
+/**
+ * Formats a date-only value as the calendar day it stores, in the reader's locale format.
+ *
+ * A `date` column arrives as a Date at UTC midnight. Passing that through a local-time formatter
+ * subtracts the reader's offset and lands on the previous day for everyone west of Greenwich: a
+ * stored 2026-11-20 renders as 11/19/2026 in America/New_York, and 2026-01-01 as 12/31/2025, the
+ * wrong year. Pinning the zone to UTC rather than switching to toISOString() keeps the reader's
+ * locale format (a US reader still sees 11/20/2026, a UK reader 20/11/2026) and changes only the
+ * zone the day is computed in. Any `options` the caller passes are honoured except the zone.
+ *
+ * @param value A Date, an epoch number, or a date string; an unparseable value is returned as-is
+ * @param options Intl date options (month/day/year styles, dateStyle, weekday); timeZone is always UTC
+ * @param locale Locale for the format; defaults to the runtime's locale
+ */
+export function FormatDateOnly(value: Date | string | number, options?: Intl.DateTimeFormatOptions, locale?: string | string[]): string {
+    const date = value instanceof Date ? value : new Date(value);
+    if (isNaN(date.getTime())) {
+        return String(value);
+    }
+    return date.toLocaleDateString(locale, { ...options, timeZone: 'UTC' });
+}
+
+/**
  * Minimal structural shape consulted by `RunMaybeSerial`. Anything that exposes
  * a boolean `IsInTransaction` (e.g. a `DatabaseProviderBase` subclass) qualifies.
  * The check is purely structural and tolerates objects that don't expose the
@@ -112,6 +144,10 @@ function FormatValueInternal(sqlType: string,
             minimumFractionDigits: decimals,
             maximumFractionDigits: decimals,
         }).format(value);
+    }
+
+    if (IsDateOnlySQLType(sqlType)) {
+        return FormatDateOnly(value);
     }
 
     if (IsDateSQLType(sqlType) || IsIntervalSQLType(sqlType)) {

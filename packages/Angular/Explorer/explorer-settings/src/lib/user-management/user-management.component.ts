@@ -7,6 +7,7 @@ import { BaseDashboard } from '@memberjunction/ng-shared';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 import { UserDialogData, UserDialogResult } from './user-dialog/user-dialog.component';
+import { EnrolledRow, serverRefusalReasons } from './transaction-group-refusals';
 import {
   BuildUserManagementAgentContext,
   IsValidUserStatusFilter,
@@ -1285,13 +1286,15 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
         // (issue #4282) lives in `@memberjunction/core-entities-server`, which no browser package
         // depends on, so it never registers here — it refuses on the server, during Submit().
         //
-        // And today that refusal reaches the user NOWHERE. `ExecuteTransactionGroup` discards the
-        // refused row's `Save()` return, so the row never enrols in the SERVER's group either; an
-        // all-refused batch submits an empty group, whose `Submit()` returns true for having
-        // nothing to do, and the screen closes with no message at all. Verified end to end against
-        // a live server: a non-Owner assigning a role they do not hold is correctly refused (no row
-        // is written) and is reported as success. Tracked as issue #4309 — fixing it belongs in the
-        // resolver, which is the only layer that still knows which row was refused and why.
+        // That server refusal used to reach the user NOWHERE: `ExecuteTransactionGroup` discarded
+        // the refused row's `Save()` return, so the row never enrolled in the SERVER's group
+        // either; an all-refused batch submitted an empty group, whose `Submit()` returns true for
+        // having nothing to do, and the screen closed reporting success having written nothing.
+        // Issue #4309 fixed that in the resolver — the only layer that still knows which row was
+        // refused and why. It now reports the refusal, `Submit()` returns FALSE, and
+        // `GraphQLTransactionGroup.recordServerFailure` copies the server's reason onto each
+        // item's `BaseEntity.LatestResult`. The `!await tg.Submit()` branch below reads it back;
+        // that is the only place a server-side refusal surfaces on this screen.
         //
         // What this check DOES catch is a CLIENT-side refusal — a CheckPermissions denial or a
         // field-rule failure — which really does return false here, leaving that row unenrolled.
@@ -1299,6 +1302,7 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
         // Submit() returns true for having nothing to do, so the screen reported success having
         // assigned nothing. That is the failure this guards; keep it.
         const refusals: string[] = [];
+        const enrolled: EnrolledRow[] = [];
         for (const userId of usersNeedingRole) {
           const userRole = await this.metadata.GetEntityObject<MJUserRoleEntity>('MJ: User Roles');
           userRole.NewRecord();
@@ -1308,6 +1312,12 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
           if (!await userRole.Save()) {
             refusals.push(`${this.describeUser(userId)}: ${userRole.LatestResult?.CompleteMessage ?? 'unknown error'}`);
           }
+          else {
+            // Kept so the SERVER's reason can be read back off it below. Without this the entity
+            // goes out of scope at the end of the iteration and the reason #4309 puts on
+            // LatestResult has nobody left to read it.
+            enrolled.push({ label: this.describeUser(userId), entity: userRole });
+          }
         }
         if (refusals.length > 0) {
           // Nothing was written: the refused rows never enrolled, and the rest are still only
@@ -1316,7 +1326,12 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
         }
 
         if (!await tg.Submit()) {
-          throw new Error('Failed to assign roles — all changes have been rolled back');
+          // Every row enrolled, so this is a SERVER-side refusal (or a rollback). Since #4309 the
+          // server says which row and why, and that reason is now on each entity's LatestResult.
+          const reasons = serverRefusalReasons(enrolled);
+          throw new Error(reasons.length > 0
+            ? `Failed to assign roles — all changes have been rolled back.\n${reasons.join('\n')}`
+            : 'Failed to assign roles — all changes have been rolled back');
         }
       }
 

@@ -255,7 +255,12 @@ export class CodeGenPhase {
       };
     }
 
-    return { Success: false, AllArtifactsVerified: false, AfterCommandsFailed: codegenResult.AfterCommandsFailed, FailureReason: 'critical artifact mj_generatedentities not found' };
+    return {
+      Success: false,
+      AllArtifactsVerified: false,
+      AfterCommandsFailed: codegenResult.AfterCommandsFailed,
+      FailureReason: `critical artifact(s) not found after codegen: ${artifacts.MissingCritical.join(', ')}`,
+    };
   }
 
   // ---------------------------------------------------------------------------
@@ -416,19 +421,30 @@ export class CodeGenPhase {
   private async verifyArtifacts(
     dir: string,
     emitter: InstallerEventEmitter
-  ): Promise<{ CriticalPassed: boolean; AllPassed: boolean }> {
-    // Critical: mj_generatedentities must exist in node_modules for the app to run.
+  ): Promise<{ CriticalPassed: boolean; AllPassed: boolean; MissingCritical: string[] }> {
+    // Critical: mj_generatedentities must exist in node_modules for the app to run, AND the
+    // barrel CodeGen writes into it must exist. The package's index.ts re-exports
+    // `./generated/entity_subclasses.js` unconditionally, so a run that prints "complete"
+    // without writing that file leaves MJAPI unable to start (MemberJunction/MJ#4477).
     // Secondary: packages/GeneratedEntities is expected but its absence is a warning, not a blocker.
     const criticalPath = path.join(dir, 'node_modules', 'mj_generatedentities');
+    const barrelPath = path.join(dir, 'packages', 'GeneratedEntities', 'src', 'generated', 'entity_subclasses.ts');
     const secondaryPath = path.join(dir, 'packages', 'GeneratedEntities');
 
     const criticalExists = await this.fileSystem.DirectoryExists(criticalPath);
+    const barrelExists = await this.fileSystem.FileExists(barrelPath);
     const secondaryExists = await this.fileSystem.DirectoryExists(secondaryPath);
 
     emitter.Emit('log', {
       Type: 'log',
       Level: 'verbose',
       Message: `[codegen] mj_generatedentities package: ${criticalExists ? 'found' : 'NOT found'}`,
+    });
+
+    emitter.Emit('log', {
+      Type: 'log',
+      Level: 'verbose',
+      Message: `[codegen] GeneratedEntities/src/generated/entity_subclasses.ts: ${barrelExists ? 'found' : 'NOT found'}`,
     });
 
     emitter.Emit('log', {
@@ -445,9 +461,14 @@ export class CodeGenPhase {
       });
     }
 
+    const missingCritical: string[] = [];
+    if (!criticalExists) missingCritical.push('node_modules/mj_generatedentities');
+    if (!barrelExists) missingCritical.push('packages/GeneratedEntities/src/generated/entity_subclasses.ts');
+
     return {
-      CriticalPassed: criticalExists,
-      AllPassed: criticalExists && secondaryExists,
+      CriticalPassed: missingCritical.length === 0,
+      AllPassed: missingCritical.length === 0 && secondaryExists,
+      MissingCritical: missingCritical,
     };
   }
 

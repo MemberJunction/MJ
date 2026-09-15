@@ -153,6 +153,7 @@ export class GraphQLConsoleComponent extends BaseResourceComponent implements On
     }
 
     public ngOnInit(): void {
+        super.ngOnInit();
         this.loadFromStorage();
         try {
             this.ApiUrl = GraphQLDataProvider.Instance.ConfigData?.URL ?? '';
@@ -162,6 +163,7 @@ export class GraphQLConsoleComponent extends BaseResourceComponent implements On
     }
 
     public ngOnDestroy(): void {
+        super.ngOnDestroy();
         this.saveToStorage();
         this.detachResizeListeners();
     }

@@ -1947,7 +1947,17 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             const graphQLTypeName = getGraphQLTypeNameBase(entity.EntityInfo);
             const mutationName = `${type}${graphQLTypeName}`
 
-            // only pass along writable fields, AND the PKEY value if this is an update.
+            // Only pass along writable fields, AND the primary key when the server must NOT mint it:
+            // on an update, and on an IS-A PROMOTION create. An IS-A child's key is ReadOnly because
+            // in IS-A the shared key IS the relationship — it belongs to the root, not to this table.
+            // A promotion is a NEW child bound to a parent that already EXISTS (an Animal that is now
+            // also a Dog): the parent's own Save() is short-circuited above (IsParentEntitySave) on
+            // the premise that this mutation carries the whole chain, so if the key were dropped
+            // here nothing would tell the server which parent row this is about — it would mint a
+            // fresh GUID and INSERT a second copy of the parent. The key is sent ONLY when the
+            // parent is saved: a whole-chain create (new parent + new child) keeps sending no key,
+            // so the server still mints the root identity and pays no parent lookup on that path.
+            //
             // NotLoaded fields are OMITTED from the mutation input entirely (legal — the
             // generated Update input types mark every non-PK field optional): their value is
             // a construction artifact the user was never shown, and the NOT-NULL fabrication
@@ -1965,10 +1975,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             // value round-trips safely and a changed one is refused. Create-denied values are
             // dropped server-side (ApplyFieldLevelCreateSuppression). Filtering either verb
             // here would replace a visible refusal with a silent success.
+            const isaPromotionCreate = !entity.IsSaved && entity.EntityInfo.IsChildType && entity.ISAParent?.IsSaved === true;
             const deniedReadFields = this.getDeniedReadFieldNamesForCurrentUser(entity.EntityInfo);
             const isDeniedRead = (fieldName: string) => deniedReadFields.has(fieldName.trim().toLowerCase());
             const filteredFields = entity.Fields.filter(f =>
-                (!f.ReadOnly || (f.IsPrimaryKey && entity.IsSaved)) &&
+                (!f.ReadOnly || (f.IsPrimaryKey && (entity.IsSaved || isaPromotionCreate))) &&
                 (f.IsPrimaryKey || (!f.NotLoaded && !isDeniedRead(f.Name))));
                 const inner = `                ${mutationName}(input: $input) {
                 ${entity.Fields.filter(f => !isDeniedRead(f.Name))
