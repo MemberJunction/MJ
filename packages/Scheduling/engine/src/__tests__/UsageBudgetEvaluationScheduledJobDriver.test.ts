@@ -266,7 +266,84 @@ describe('UsageBudgetEvaluationScheduledJobDriver', () => {
                 BreachedCount: 0,
             });
         });
-    });
+    
+        // ── Measurement fails closed ────────────────────────────────────────────────────────
+        // A successful RunQuery is not a successful measurement. Each of these states previously
+        // persisted LastObservedAmount = 0 and reported success, making "could not measure" look
+        // identical to "spent nothing" — the dangerous direction for a budget, since an
+        // unmeasurable one silently reads as far under limit.
+
+        const measurableBudget = (overrides: Record<string, unknown> = {}) => ({
+            ID: 'budget-measure',
+            Name: 'Measure Failure Budget',
+            MeasureQueryID: 'query-m',
+            MeasureParameters: '{}',
+            MeasureColumn: 'TotalSpend',
+            Period: 'Month' as const,
+            AmountLimit: 100,
+            WarnAtPercent: 80,
+            Action: 'Notify' as const,
+            Status: 'Active' as const,
+            LastEvaluatedAt: null,
+            LastObservedAmount: 42,
+            Save: vi.fn().mockResolvedValue(true),
+            ...overrides,
+        });
+
+        const measureFailureCases: Array<{ name: string; rows: unknown[] }> = [
+            { name: 'the measure query returns no rows', rows: [] },
+            { name: 'the row does not contain MeasureColumn', rows: [{ SomethingElse: 5 }] },
+            { name: 'MeasureColumn is null', rows: [{ TotalSpend: null }] },
+            { name: 'MeasureColumn is non-numeric', rows: [{ TotalSpend: 'not-a-number' }] },
+        ];
+
+        for (const tc of measureFailureCases) {
+            it(`records a failed evaluation, not 0, when ${tc.name}`, async () => {
+                const mockBudget = measurableBudget();
+                mockRunViewQueue.push({ Success: true, Results: [mockBudget] });
+                mockRunQueryQueue.push({ Success: true, Results: tc.rows });
+
+                const result = await driver.Execute(mockContext());
+
+                expect(result.Details).toMatchObject({ EvaluatedCount: 0, FailedCount: 1 });
+                // The last KNOWN observation survives; it is not replaced by a synthetic zero.
+                expect(mockBudget.LastObservedAmount).toBe(42);
+                expect(mockBudget.Save).not.toHaveBeenCalled();
+                const item = (result.Details as { Items: Array<{ Success: boolean; ErrorMessage?: string }> }).Items[0];
+                expect(item.Success).toBe(false);
+                expect(item.ErrorMessage).toContain('Measurement failed');
+            });
+        }
+
+        it('treats a measured 0 as a valid measurement, not a failure', async () => {
+            const mockBudget = measurableBudget({ LastObservedAmount: 42 });
+            mockRunViewQueue.push({ Success: true, Results: [mockBudget] });
+            mockRunQueryQueue.push({ Success: true, Results: [{ TotalSpend: 0 }] });
+
+            const result = await driver.Execute(mockContext());
+
+            expect(result.Details).toMatchObject({ EvaluatedCount: 1, FailedCount: 0 });
+            expect(mockBudget.LastObservedAmount).toBe(0);
+            expect(mockBudget.Save).toHaveBeenCalled();
+        });
+
+        it('fails the evaluation when a breach is detected but the dedupe lookup fails', async () => {
+            const mockBudget = measurableBudget({ ID: 'budget-breach', LastObservedAmount: null });
+            mockRunViewQueue.push({ Success: true, Results: [mockBudget] });      // load budgets
+            mockRunQueryQueue.push({ Success: true, Results: [{ TotalSpend: 150 }] }); // over limit
+            mockRunViewQueue.push({ Success: false, ErrorMessage: 'lookup exploded' }); // dedupe read
+
+            const result = await driver.Execute(mockContext());
+
+            // A breach that cannot be durably recorded must not report success.
+            expect(result.Details).toMatchObject({ BreachedCount: 0, FailedCount: 1 });
+            const item = (result.Details as { Items: Array<{ Success: boolean; Breached?: boolean; ErrorMessage?: string }> }).Items[0];
+            expect(item.Success).toBe(false);
+            expect(item.Breached).toBe(true);
+            expect(item.ErrorMessage).toContain('no alert could be recorded');
+        });
+
+});
 
     describe('ValidateConfiguration & FormatNotification', () => {
         it('ValidateConfiguration returns Success', () => {
