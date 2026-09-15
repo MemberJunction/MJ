@@ -2452,8 +2452,25 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   // ========================================
 
   private buildAgColumnDefs(): void {
-    if (this._gridState?.columnSettings?.length && this._entityInfo) {
-      this.agColumnDefs = this.buildAgColumnDefsFromGridState(this._gridState.columnSettings);
+    // A grid state whose settings name NONE of this entity's fields is not a column preference —
+    // it is evidence the state belongs to a different entity. `_gridState` outlives an entity
+    // change when one viewer is rebound from entity A to entity B (`EntityName` is a rebindable
+    // input), every setting is then dropped for naming a field B does not have, and taking that
+    // empty array as the answer rendered a grid with no header and no cells while the rows loaded
+    // and the row count read correctly — no error, no warning. So treat an empty result as NO
+    // usable state and fall through to the sources that describe the entity actually in hand.
+    // This is the floor `generateAgColumnDefs()` already has for an entity with no DefaultInView
+    // fields; the grid-state branch was the one path without one.
+    //
+    // Only a TOTAL miss is treated this way. One surviving setting is a real preference — a saved
+    // view whose entity has since lost a field — and discarding it would throw away the user's
+    // columns to guess at state that is legitimately theirs.
+    const fromGridState = (this._gridState?.columnSettings?.length && this._entityInfo)
+      ? this.buildAgColumnDefsFromGridState(this._gridState.columnSettings)
+      : [];
+
+    if (fromGridState.length > 0) {
+      this.agColumnDefs = fromGridState;
     } else if (this._columns.length > 0) {
       this.agColumnDefs = this._columns.map(col => this.mapColumnConfigToColDef(col));
     } else if (this._entityInfo) {
