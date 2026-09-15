@@ -218,6 +218,19 @@ async function ProbeRepoVisibility(
 }
 
 /**
+ * How to configure a GitHub credential, shared by every message that tells a caller to go set one.
+ * A single copy so the two messages that name it (the no-credential branch below, and
+ * `DescribeNotFound`'s `Undetermined` case) cannot drift apart again — they already had once: A2
+ * fixed this branch to also name the per-repo `openApps.github.tokens` map and left the other
+ * message naming only the two older options.
+ *
+ * Ordered to match `ResolveToken`'s own resolution order: the per-repo map is checked FIRST, so it
+ * is named first here too, rather than as a parenthetical afterthought to the global token.
+ */
+const CONFIGURE_CREDENTIAL_REMEDY =
+    'set GITHUB_TOKEN in the environment, or add the repo to openApps.github.tokens (or set openApps.github.token) in mj.config.cjs';
+
+/**
  * The message for a repository GitHub will not show us. Names the remedy, and names the RIGHT one:
  * telling a caller who already supplied a token to supply a token sends them to check the one thing
  * they already did.
@@ -230,7 +243,7 @@ function UnreadableRepoMessage(
     const target = `${parsed.Owner}/${parsed.Repo}`;
     return ResolveToken(repoUrl, options)
         ? `Cannot read ${target}. The repository does not exist, or the GitHub credential supplied does not grant access to it — check the token is valid and carries 'repo' scope for ${target}.`
-        : `Cannot read ${target}. The repository is private or does not exist, and no GitHub credential was supplied — set GITHUB_TOKEN in the environment, or openApps.github.token (or a matching entry in openApps.github.tokens) in mj.config.cjs, then retry.`;
+        : `Cannot read ${target}. The repository is private or does not exist, and no GitHub credential was supplied — ${CONFIGURE_CREDENTIAL_REMEDY}, then retry.`;
 }
 
 /**
@@ -266,10 +279,12 @@ async function DescribeNotFound(
             // rate limit on an UNAUTHENTICATED call — i.e. exactly the caller whose repo probably
             // is NOT readable. Leading with a confident "not found" (plus the /tags link some
             // callers' describeMissingTarget includes) invites a signed-in maintainer to check,
-            // see the tag, and conclude the CLI was wrong — the misattribution #4505 reports.
+            // see the tag, and conclude the CLI was wrong — the misattribution #4505 reports. The
+            // final clause is marked conditional ("if it is readable") rather than stated flatly,
+            // since it is exactly the claim this branch could not verify.
             return `Could not confirm ${parsed.Owner}/${parsed.Repo} is readable: ${visibility.Reason}. `
-                + `If it is private, a GitHub credential may be required — set GITHUB_TOKEN or openApps.github.token. `
-                + describeMissingTarget();
+                + `If it is private, a GitHub credential may be required — ${CONFIGURE_CREDENTIAL_REMEDY}. `
+                + `If it is readable, then: ${describeMissingTarget()}`;
     }
 }
 

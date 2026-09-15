@@ -240,6 +240,10 @@ describe('ValidateGitHubTag', () => {
         expect(result.Exists).toBe(false);
         expect(result.ErrorMessage).toContain('Could not confirm');
         expect(result.ErrorMessage).toContain('rate limit exceeded');
+        // Pins A4's inversion specifically: both assertions above also passed under the OLD
+        // `${describeMissingTarget()} (Could not confirm ...)` form, so neither would catch a
+        // revert. The doubt must be the FIRST thing in the message, not a parenthetical at the end.
+        expect(result.ErrorMessage).toMatch(/^Could not confirm/);
     });
 
     it('does not probe at all when the tag lookup succeeded', async () => {
@@ -431,15 +435,6 @@ describe('FetchManifestFromGitHub', () => {
         expect(mocks.getBlob).toHaveBeenCalledWith({ owner: 'Acme', repo: 'App', file_sha: 'bigsha' });
     });
 
-    it('returns a not-found error on 404', async () => {
-        mocks.getContent.mockRejectedValueOnce({ status: 404 });
-        stubRepoReadable();
-
-        const result = await FetchManifestFromGitHub('https://github.com/Acme/App', undefined, {});
-        expect(result.Success).toBe(false);
-        expect(result.ErrorMessage).toContain('not found');
-    });
-
     it('names the missing credential when the repo — not the manifest — is what 404s (#4505)', async () => {
         // `mj app install <private-url>` with no --version never reaches tag validation: it fails
         // here first, and "mj-app.json not found at ref HEAD" is misleading in the same way.
@@ -463,6 +458,19 @@ describe('FetchManifestFromGitHub', () => {
         expect(result.Success).toBe(false);
         expect(result.ErrorMessage).toContain('mj-app.json not found in Acme/App at ref HEAD');
         expect(result.ErrorMessage).not.toContain('GITHUB_TOKEN');
+    });
+
+    it('does not probe visibility when the manifest fetch fails with a non-404 status', async () => {
+        // Mirrors the ValidateGitHubTag test of the same shape: pins the probe inside the 404
+        // guard at THIS call site too, so a future hoist of DescribeNotFound out of
+        // `if (OctokitStatus(error) === 404)` is caught here even if the other call site is missed.
+        mocks.getContent.mockRejectedValueOnce(Object.assign(new Error('internal server error'), { status: 500 }));
+
+        const result = await FetchManifestFromGitHub('https://github.com/Acme/App', undefined, {});
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain('Failed to fetch manifest:');
+        expect(mocks.get).not.toHaveBeenCalled();
     });
 });
 
