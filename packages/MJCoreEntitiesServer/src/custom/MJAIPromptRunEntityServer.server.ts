@@ -157,6 +157,11 @@ export class MJAIPromptRunEntityServer extends MJAIPromptRunEntityExtended {
                 await this.CalculateAndSetCost();
             }
 
+            // For parallel parents where DescendantCost is not yet populated, reload descendant cost from children
+            if (this.RunType === 'ParallelParent' && (this.DescendantCost == null || this.DescendantCost === 0) && this.ID) {
+                await this.RecalculateTotalCost();
+            }
+
             // always update our TotalCost in case cost or descendant cost changed
             this.UpdateTotalCost();
             

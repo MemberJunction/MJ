@@ -91,6 +91,7 @@ class FakePromptRun {
   public ParentID?: string;
   public WasSelectedResult = false;
   public Cost?: number;
+  public DescendantCost?: number;
   public TotalCost?: number;
   public ModelID?: string;
   public VendorID?: string;
@@ -293,8 +294,10 @@ describe('Spec §5 — Parallel-execution accounting', () => {
     expect(arm2Run.ParentID).toBe(parentRun.ID);
     expect(arm3Run.ParentID).toBe(parentRun.ID);
 
-    // 5. Parent's Cost is NEVER assigned from an arm (Cost IS NULL / undefined)
+    // 5. Parent's Cost is NEVER assigned from an arm (Cost IS NULL / undefined), but DescendantCost & TotalCost reflect sum of arms
     expect(parentRun.Cost).toBeUndefined();
+    expect(parentRun.DescendantCost).toBeCloseTo(0.005 + 0.008 + 0.003, 5);
+    expect(parentRun.TotalCost).toBeCloseTo(0.005 + 0.008 + 0.003, 5);
 
     // 6. Parent WasSelectedResult = false, winner child WasSelectedResult = true
     expect(parentRun.WasSelectedResult).toBe(false);

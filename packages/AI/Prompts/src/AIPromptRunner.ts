@@ -1340,15 +1340,14 @@ export class AIPromptRunner {
       });
     }
 
-    // For parallel execution, set rollup fields to match totals (no child execution to roll up)
+    // For parallel execution, set rollup fields to match totals
     consolidatedPromptRun.TokensPromptRollup = totalPromptTokens;
     consolidatedPromptRun.TokensCompletionRollup = totalCompletionTokens;
     consolidatedPromptRun.TokensUsedRollup = totalPromptTokens + totalCompletionTokens;
     consolidatedPromptRun.TokensCacheReadRollup = totalCacheReadTokens;
     consolidatedPromptRun.TokensCacheWriteRollup = totalCacheWriteTokens;
-    // Server-side TriggerParentCostRollup maintains TotalCost from children.
-    // Keep manual sum only as a fallback when rollup did not populate TotalCost.
-    if (consolidatedPromptRun.TotalCost == null && hasCost) {
+    if (hasCost) {
+      consolidatedPromptRun.DescendantCost = totalCost;
       consolidatedPromptRun.TotalCost = totalCost;
     }
     
