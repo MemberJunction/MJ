@@ -238,6 +238,7 @@ export const REALTIME_SHARED_CONFIG_KEYS: readonly string[] = [
     'firstMessage',
     'disableAutoResponse',
     'turnDetection',
+    'reasoning',
     'endpoint',
     'sampleRate',
     'proxyBaseUrl',

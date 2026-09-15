@@ -132,11 +132,11 @@ and still issuing tool calls. `IsBusy` must become outstanding-work-based.
 
 ### Phase C — Gemini config correctness
 
-- [ ] **C1.** Never send `enable_affective_dialog` (removed from the API).
-- [ ] **C2.** Never send `proactive_audio: false` (errors).
-- [ ] **C3.** Omit `thinkingLevel`/`thinkingConfig` for `gemini-3.8-live`; send low/medium/high for
+- [x] **C1.** Never send `enable_affective_dialog` (removed from the API).
+- [x] **C2.** Never send `proactive_audio: false` (errors).
+- [x] **C3.** Omit `thinkingLevel`/`thinkingConfig` for `gemini-3.8-live`; send low/medium/high for
   Extended Thinking; reject `minimal` locally with a clear message.
-- [ ] **C4.** Set turn coverage explicitly from `TurnCoverage`; **audio-only when absent.**
+- [x] **C4.** Set turn coverage explicitly from `TurnCoverage`; **audio-only when absent.**
 - [ ] **C5.** Refuse `BLOCKING` locally for Extended Thinking rather than emitting a frame the
   server hard-errors.
 
@@ -189,8 +189,12 @@ and still issuing tool calls. `IsBusy` must become outstanding-work-based.
 - [ ] **V2.** How is a thought part marked on the wire? Gates E3.
 - [ ] **V3.** Does `interaction_status` appear on `gemini-3.8-live` too, or only Extended Thinking?
   If universal, `IdleSignal` collapses to one value and D1 simplifies.
-- [ ] **V4.** Is turn coverage settable per session, and what exactly does `audioActivityOnly` map
-  to on the wire? Gates C4.
+- [x] **V4.** RESOLVED from `@google/genai@2.8.0` types: `RealtimeInputConfig.turnCoverage` is
+  settable per session; the enum is `TURN_COVERAGE_UNSPECIFIED` / `TURN_INCLUDES_ONLY_ACTIVITY` /
+  `TURN_INCLUDES_ALL_INPUT` / `TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO`, so `audioActivityOnly`
+  maps to `TURN_INCLUDES_ONLY_ACTIVITY`. **Conflict found and made irrelevant:** the SDK's enum doc
+  says coverage defaults to `TURN_INCLUDES_ONLY_ACTIVITY` while the 3.8 model page says the default
+  includes all video. Stating coverage on every session means we never depend on which is right.
 - [ ] **V5.** Frame encoding and cadence Gemini accepts for inbound video. Gates F1/F2.
 
 ## 8. Tests
