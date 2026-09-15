@@ -107,6 +107,8 @@
     "check:codegen-tail": "node .github/scripts/check-codegen-tail.mjs",
     "check:release-notes": "node .github/scripts/check-release-notes-shape.mjs",
     "check:release-notes:test": "vitest run --config .github/scripts/vitest.config.mts __tests__/check-release-notes-shape",
+    "check:app-token-no-merge": "node .github/scripts/check-app-token-no-merge.mjs",
+    "check:app-token-no-merge:test": "vitest run --config .github/scripts/vitest.config.mts __tests__/check-app-token-no-merge",
     "check:codegen-tail:test": "vitest run --config .github/scripts/vitest.config.mts __tests__/check-codegen-tail",
     "check:browser-manifest": "node .github/scripts/check-browser-manifest-leakage.mjs",
     "check:browser-manifest:test": "vitest run --config .github/scripts/vitest.config.mts __tests__/check-browser-manifest-leakage",
