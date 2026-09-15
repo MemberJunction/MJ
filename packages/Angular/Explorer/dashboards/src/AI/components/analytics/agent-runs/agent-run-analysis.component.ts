@@ -15,9 +15,7 @@ import { RunView } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UUIDsEqual } from '@memberjunction/global';
 import { GlobalFilterState } from '../../../interfaces/analytics-preferences.interface';
-import { AIInstrumentationService } from '../../../services/ai-instrumentation.service';
 import { computeTotalCost } from '../../../services/ai-usage-analytics.compute';
-import { AIUsageDailyRow } from '../../../services/ai-usage-analytics.types';
 
 // ── Interfaces ──
 
@@ -656,9 +654,6 @@ export class AnalyticsAgentRunsComponent extends BaseAngularComponent implements
         this.cdr.detectChanges();
     }
 
-    private instrumentation = inject(AIInstrumentationService);
-    private dailyRows: AIUsageDailyRow[] = [];
-
     public FormatCurrency(value: number | null | undefined, decimals = 2): string {
         if (value === null || value === undefined) return '—';
         if (value === 0) return '$0.00';
@@ -673,7 +668,6 @@ export class AnalyticsAgentRunsComponent extends BaseAngularComponent implements
         this.cdr.detectChanges();
 
         try {
-            this.instrumentation.Provider = this.ProviderToUse;
             const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const dateFilter = this.buildDateFilter('StartedAt');
             const agentFilter = this.buildAgentFilter();
@@ -681,35 +675,28 @@ export class AnalyticsAgentRunsComponent extends BaseAngularComponent implements
             const extraFilter = [dateFilter, agentFilter, statusFilter, 'ParentRunID IS NULL'].filter(Boolean).join(' AND ');
 
             const promptDateFilter = this.buildDateFilter('RunAt');
-            const now = new Date();
-            const ms = this.timeRangeToMs(this.TimeRange);
-            const currentStart = new Date(now.getTime() - ms);
 
-            const [agentResult, promptResult, dailyRows] = await Promise.all([
-                rv.RunViews([
-                    {
-                        EntityName: 'MJ: AI Agent Runs',
-                        ExtraFilter: extraFilter,
-                        Fields: AGENT_RUN_FIELDS,
-                        OrderBy: 'StartedAt DESC',
-                        MaxRows: 100,
-                        ResultType: 'simple'
-                    },
-                    {
-                        EntityName: 'MJ: AI Prompt Runs',
-                        ExtraFilter: promptDateFilter,
-                        Fields: PROMPT_RUN_FIELDS,
-                        OrderBy: 'RunAt DESC',
-                        MaxRows: 1000,
-                        ResultType: 'simple'
-                    }
-                ]),
-                this.instrumentation.getUsageDaily(currentStart, now).catch(() => [])
-            ]).then(([rvResults, daily]) => [rvResults[0], rvResults[1], daily] as const);
+            const [agentResult, promptResult] = await rv.RunViews([
+                {
+                    EntityName: 'MJ: AI Agent Runs',
+                    ExtraFilter: extraFilter,
+                    Fields: AGENT_RUN_FIELDS,
+                    OrderBy: 'StartedAt DESC',
+                    MaxRows: 100,
+                    ResultType: 'simple'
+                },
+                {
+                    EntityName: 'MJ: AI Prompt Runs',
+                    ExtraFilter: promptDateFilter,
+                    Fields: PROMPT_RUN_FIELDS,
+                    OrderBy: 'RunAt DESC',
+                    MaxRows: 1000,
+                    ResultType: 'simple'
+                }
+            ]);
 
             this.agentRuns = (agentResult?.Results ?? []) as AgentRunRecord[];
             this.promptRuns = (promptResult?.Results ?? []) as PromptRunRecord[];
-            this.dailyRows = dailyRows;
 
             this.computeStats();
             this.computeCostAttribution();
@@ -728,9 +715,7 @@ export class AnalyticsAgentRunsComponent extends BaseAngularComponent implements
     private computeStats(): void {
         const runs = this.agentRuns;
         const total = runs.length;
-        const agentDaily = this.dailyRows.filter(r => r.AgentID != null);
-        const aggregateCost = computeTotalCost(agentDaily.length > 0 ? agentDaily : this.dailyRows);
-        const totalCost = aggregateCost ?? computeTotalCost(runs);
+        const totalCost = computeTotalCost(runs);
         const completed = runs.filter(r => r.Status === 'Completed');
         const successCount = runs.filter(r => r.Success === true).length;
 
@@ -751,15 +736,14 @@ export class AnalyticsAgentRunsComponent extends BaseAngularComponent implements
             p => p.AgentRunID != null && this.agentRunIdSet.has(p.AgentRunID)
         );
 
-        const rowsForCoverage = agentDaily.length > 0 ? agentDaily : this.dailyRows;
-        let covTotal = 0;
         let covPriced = 0;
-        for (const r of rowsForCoverage) {
-            covTotal += (r.Runs ?? 0);
-            covPriced += (r.PricedRuns ?? 0);
+        for (const r of runs) {
+            if (r.TotalCost !== null && r.TotalCost !== undefined) {
+                covPriced++;
+            }
         }
-        const covPct = covTotal > 0 ? (covPriced / covTotal) * 100 : 100;
-        const covSubtitle = covTotal > 0 ? `covers ${Math.round(covPct)}% of runs` : undefined;
+        const covPct = total > 0 ? (covPriced / total) * 100 : 100;
+        const covSubtitle = total > 0 ? `covers ${Math.round(covPct)}% of runs` : undefined;
 
         this.Stats = {
             TotalRuns: total,
