@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
     resolveSettleExit,
     SettlePollSignals,
@@ -18,6 +18,8 @@ import {
     isPageChangingAction,
     evaluateBatchStop,
     DEFAULT_MAX_ACTIONS_PER_BATCH,
+    raceStepAgainstDeadline,
+    StepDeadlineError,
 } from '../engine/step-control.js';
 
 // ─── from settle-decision ───
@@ -269,6 +271,23 @@ describe('evaluateAuthDetour', () => {
 
     it('terminates on the detour that reaches max (count 1 → 2)', () => {
         const d = evaluateAuthDetour('https://x.auth0.com', PATTERNS, 1, 2);
+        expect(d.isDetour).toBe(true);
+        expect(d.shouldTerminate).toBe(true);
+    });
+
+    // A FormLogin binding means the agent itself types credentials on the
+    // identity provider's page, so landing there is the expected path, not a
+    // session fault. The watchdog must stand down: its recovery re-applies auth,
+    // which is a no-op for FormLogin, so engaging can only bounce the agent off
+    // the login form until MaxDetours ends the run.
+    it('reports no detour on the identity provider when the agent logs in there interactively', () => {
+        const d = evaluateAuthDetour('https://x.auth0.com', PATTERNS, 0, 2, true);
+        expect(d.isDetour).toBe(false);
+        expect(d.shouldTerminate).toBe(false);
+    });
+
+    it('still terminates an interactive-login run that keeps bouncing once creds no longer apply', () => {
+        const d = evaluateAuthDetour('https://x.auth0.com', PATTERNS, 1, 2, false);
         expect(d.isDetour).toBe(true);
         expect(d.shouldTerminate).toBe(true);
     });
@@ -527,5 +546,108 @@ describe('evaluateBatchStop', () => {
 
     it('exposes a sane default cap', () => {
         expect(DEFAULT_MAX_ACTIONS_PER_BATCH).toBe(4);
+    });
+});
+
+// ─── Step deadline + abort escape ──────────────────────────────
+/**
+ * Making a step's await escapable.
+ *
+ * `timeBudgetExpiryReason` above is only consulted at the TOP of the step loop
+ * — "never START a step past budget". That gates entry, it does not bound a
+ * step's duration, so a step that blocks internally is never re-checked and the
+ * run never self-expires. `Stop()` does not rescue it either: the abort signal
+ * is wired to the LLM calls, never to browser work, so a `Stop()` issued while
+ * execution sits inside a page call only takes effect at the next cooperative
+ * checkpoint — which a blocked step never reaches.
+ *
+ * Both gaps are the same missing capability: nothing lets the engine stop
+ * WAITING on a step. `raceStepAgainstDeadline` supplies it — the underlying
+ * work may still be stuck, but the engine unwinds and scores the run instead of
+ * parking its worker forever.
+ */
+describe('raceStepAgainstDeadline', () => {
+    const never = <T,>(): Promise<T> => new Promise<T>(() => {});
+
+    it('returns the step result untouched when it finishes inside the deadline', async () => {
+        await expect(raceStepAgainstDeadline(Promise.resolve('step-record'), 1000, 'budget')).resolves.toBe(
+            'step-record'
+        );
+    });
+
+    it('propagates the step own failure rather than masking it as a deadline', async () => {
+        const boom = new Error('action failed');
+        await expect(raceStepAgainstDeadline(Promise.reject(boom), 1000, 'budget')).rejects.toBe(boom);
+    });
+
+    it('rejects with StepDeadlineError when the step overruns — the budget becomes a deadline', async () => {
+        await expect(raceStepAgainstDeadline(never<string>(), 20, 'wall-clock ceiling (60000ms)')).rejects.toBeInstanceOf(
+            StepDeadlineError
+        );
+    });
+
+    it('carries the budget reason through, so the log can name which bound fired', async () => {
+        await expect(
+            raceStepAgainstDeadline(never<string>(), 20, 'wall-clock ceiling (60000ms, settle included)')
+        ).rejects.toThrow('wall-clock ceiling (60000ms, settle included)');
+    });
+
+    it('rejects with CancellationError when Stop() aborts mid-step, without waiting out the deadline', async () => {
+        const controller = new AbortController();
+        const raced = raceStepAgainstDeadline(never<string>(), 30_000, 'budget', controller.signal);
+
+        controller.abort();
+
+        await expect(raced).rejects.toBeInstanceOf(CancellationError);
+    });
+
+    it('rejects immediately when the signal was already aborted before the step was raced', async () => {
+        const controller = new AbortController();
+        controller.abort();
+
+        await expect(raceStepAgainstDeadline(never<string>(), 30_000, 'budget', controller.signal)).rejects.toBeInstanceOf(
+            CancellationError
+        );
+    });
+
+    it('swallows a late rejection from the orphaned step (no unhandled rejection)', async () => {
+        // The losing step keeps running — a browser call cannot be cancelled.
+        // Left unguarded its eventual rejection has no handler, which crashes
+        // the process under Node's default unhandled-rejection policy.
+        let rejectLate: (e: Error) => void = () => {};
+        const late = new Promise<string>((_, reject) => {
+            rejectLate = reject;
+        });
+
+        await expect(raceStepAgainstDeadline(late, 20, 'budget')).rejects.toBeInstanceOf(StepDeadlineError);
+
+        const unhandled = vi.fn();
+        process.on('unhandledRejection', unhandled);
+        rejectLate(new Error('orphaned step failed later'));
+        await new Promise(resolve => setTimeout(resolve, 20));
+        process.off('unhandledRejection', unhandled);
+
+        expect(unhandled).not.toHaveBeenCalled();
+    });
+
+    it('still races the abort signal when no deadline is configured', async () => {
+        // A run without MaxExecutionTimeMs has no deadline to race, but Stop()
+        // must still unwind a blocked step.
+        const controller = new AbortController();
+        const raced = raceStepAgainstDeadline(never<string>(), null, 'no budget', controller.signal);
+
+        controller.abort();
+
+        await expect(raced).rejects.toBeInstanceOf(CancellationError);
+    });
+
+    it('does not hold the event loop open after the step wins', async () => {
+        // A pending timer per step would keep a 30s handle alive on every one.
+        const cleared = vi.spyOn(global, 'clearTimeout');
+
+        await raceStepAgainstDeadline(Promise.resolve('done'), 30_000, 'budget');
+
+        expect(cleared).toHaveBeenCalled();
+        cleared.mockRestore();
     });
 });

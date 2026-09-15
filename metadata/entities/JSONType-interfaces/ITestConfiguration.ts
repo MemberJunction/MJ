@@ -125,12 +125,21 @@ export interface IReplayScriptAction {
 /**
  * A multi-signal locator. `Selector` is primary; `Role` + `Name` are the heal
  * fallback, re-resolved from a fresh element list when the selector stops
- * matching; `BoundingBox` is weakest, kept only for pre-grounding recordings.
+ * matching; `Scope` disambiguates same-named twins by the region they live in;
+ * `BoundingBox` is weakest, kept only for pre-grounding recordings.
  */
 export interface IReplayScriptTarget {
     Role?: string;
     Name?: string;
     Selector?: string;
+    /**
+     * Nearest labeled ancestor region as `role:name` (e.g.
+     * `group:All applications`). Role + name are not always a unique identity —
+     * an app launcher lists each app under both a usage-ordered "Recent" grid
+     * and an alphabetical "All" grid — and the region is what tells the twins
+     * apart. Absent on recordings made before regions were captured.
+     */
+    Scope?: string;
     BoundingBox?: IReplayScriptBoundingBox;
 }
 

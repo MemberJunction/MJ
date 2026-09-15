@@ -1,0 +1,131 @@
+{
+  "TestId": "2F4CAED9-0916-433E-8A63-70C4B71B337B",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "988e50e4",
+  "RecordedAt": "2026-09-11T20:20:57.563Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "allowedDomains",
+    "baseUrl",
+    "authUsername",
+    "authDomains",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "The browser is currently on the login page. I need to click the 'Log in' button to proceed with authentication and load the dashboard.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Log in",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/div[2]/mj-login-picker[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 876,
+            "YMin": 342,
+            "XMax": 1043,
+            "YMax": 396
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "https://dev-n1t563mrdhqg0t41.us.auth0.com/u/login"
+      }
+    },
+    {
+      "Instruction": "The Auth0 login page is loaded. I will enter the provided email and password, then click Continue to log in.",
+      "UrlBefore": "https://dev-n1t563mrdhqg0t41.us.auth0.com/u/login",
+      "Action": {
+        "Method": "type",
+        "Text": "%authUsername%",
+        "PressEnter": false,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Email address *",
+          "Selector": "xpath=/html/body[1]/div[1]/main[1]/section[1]/div[1]/div[2]/div[1]/form[1]/div[2]/div[1]/div[1]/div[1]/input[1]",
+          "BoundingBox": {
+            "XMin": 480,
+            "YMin": 314,
+            "XMax": 800,
+            "YMax": 366
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "https://dev-n1t563mrdhqg0t41.us.auth0.com/u/login"
+      }
+    },
+    {
+      "Instruction": "The Auth0 login page is loaded. I will enter the provided email and password, then click Continue to log in.",
+      "UrlBefore": "https://dev-n1t563mrdhqg0t41.us.auth0.com/u/login",
+      "Action": {
+        "Method": "type",
+        "Text": "%authPassword%",
+        "PressEnter": false,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Password *",
+          "Selector": "xpath=/html/body[1]/div[1]/main[1]/section[1]/div[1]/div[2]/div[1]/form[1]/div[2]/div[1]/div[2]/div[1]/input[1]",
+          "BoundingBox": {
+            "XMin": 481,
+            "YMin": 379,
+            "XMax": 755,
+            "YMax": 431
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false
+      }
+    },
+    {
+      "Instruction": "The Auth0 login page is loaded. I will enter the provided email and password, then click Continue to log in.",
+      "UrlBefore": "https://dev-n1t563mrdhqg0t41.us.auth0.com/u/login",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Continue",
+          "Selector": "xpath=/html/body[1]/div[1]/main[1]/section[1]/div[1]/div[2]/div[1]/form[1]/div[3]/button[1]",
+          "BoundingBox": {
+            "XMin": 480,
+            "YMin": 493,
+            "XMax": 800,
+            "YMax": 545
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/home/Home",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

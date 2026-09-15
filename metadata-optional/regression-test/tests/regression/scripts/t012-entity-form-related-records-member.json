@@ -1,0 +1,121 @@
+{
+  "TestId": "44A16E03-946B-4A10-820E-EDB5603E0C91",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "b044bb47",
+  "RecordedAt": "2026-09-11T20:22:38.714Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "allowedDomains",
+    "baseUrl",
+    "authUsername",
+    "authDomains",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "Navigating directly to the Members entity grid URL to reliably load the Members grid.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "navigate",
+        "Url": "http://localhost:4200/app/data-explorer/Data?entity=Members"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=Members"
+      }
+    },
+    {
+      "Instruction": "The Members grid is loaded. I will click on the first member row to open its preview / details panel.",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/Data?entity=Members",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "row",
+          "Name": "adam.baker213@aged&boldcheeseco.com\nAdam\nBaker\nWarehouse Manager",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-data-explorer-resource[1]/div[1]/mj-data-explorer-dashboard[1]/div[1]/div[2]/div[3]/mj-view-workspace[1]/div[1]/div[2]/mj-entity-viewer[1]/div[1]/div[1]/div[3]/mj-grid-view-renderer[1]/mj-entity-data-grid[1]/div[1]/div[2]/ag-grid-angular[1]/div[3]/div[1]/div[2]/div[3]/div[1]/div[2]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 282,
+            "YMin": 328,
+            "XMax": 932,
+            "YMax": 368
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=Members"
+      }
+    },
+    {
+      "Instruction": "The member row preview panel is currently open. I will click 'Open Full Record' (index 83) to open the full Member form.",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/Data?entity=Members",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Open Full Record",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-data-explorer-resource[1]/div[1]/mj-data-explorer-dashboard[1]/div[1]/div[3]/mj-entity-record-detail-panel[1]/div[1]/div[3]/button[1]",
+          "BoundingBox": {
+            "XMin": 919,
+            "YMin": 664,
+            "XMax": 1278,
+            "YMax": 704
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=Members"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/Members/ID%7C{uuid}"
+      }
+    },
+    {
+      "Instruction": "The full Member record is open. I will click on the 'Memberships' section in the record sidebar to scroll to and expand/display that related section.",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/record/Members/ID%7C{uuid}",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Memberships",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/section[2]/div[1]/div[1]/div[1]/mj-record-resource[1]/mj-single-record[1]/mj-entity-form-host[1]/gen-associationdemomember-form[1]/mj-record-form-container[1]/div[1]/div[1]/div[1]/nav[1]/div[3]/div[7]/div[4]",
+          "BoundingBox": {
+            "XMin": 54,
+            "YMin": 656,
+            "XMax": 215,
+            "YMax": 694
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/Members/ID%7C{uuid}"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/data-explorer/record/Members/ID%7C{uuid}",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

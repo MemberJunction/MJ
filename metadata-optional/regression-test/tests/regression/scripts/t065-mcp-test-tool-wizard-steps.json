@@ -1,0 +1,186 @@
+{
+  "TestId": "FDCD25FF-DFE2-4FEE-99A7-2210B9F9285E",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "e8bcedc0",
+  "RecordedAt": "2026-09-11T20:41:30.655Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "allowedDomains",
+    "baseUrl",
+    "authUsername",
+    "authDomains",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "Clicking the application switcher dropdown next to the logo to select the AI application.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Switch application — current: Home",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 62,
+            "YMin": 12,
+            "XMax": 168,
+            "YMax": 48
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "The application launcher is open. I will click on the 'AI' application card to open the AI app.",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "AI",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/dialog[1]/div[2]/div[2]/div[2]",
+          "BoundingBox": {
+            "XMin": 502,
+            "YMin": 186,
+            "XMax": 778,
+            "YMax": 264
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/ai/Overview"
+      }
+    },
+    {
+      "Instruction": "We are now in the AI application. We need to open the MCP section. The MCP section is hidden under the '... More 5' dropdown menu in the top navigation bar. I will click on 'More navigation items' to ",
+      "UrlBefore": "http://localhost:4200/app/ai/Overview",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "More navigation items",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/nav[1]/div[4]",
+          "BoundingBox": {
+            "XMin": 601,
+            "YMin": 13,
+            "XMax": 716,
+            "YMax": 46
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/ai/Overview"
+      }
+    },
+    {
+      "Instruction": "The 'More navigation items' menu is open and 'MCP' is visible at index [9]. Clicking it will open the MCP section.",
+      "UrlBefore": "http://localhost:4200/app/ai/Overview",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "MCP",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/div[1]/div[3]",
+          "BoundingBox": {
+            "XMin": 602,
+            "YMin": 133,
+            "XMax": 800,
+            "YMax": 170
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/ai/Overview"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/ai/MCP"
+      }
+    },
+    {
+      "Instruction": "Click on the 'Tools' tab in the MCP Dashboard.",
+      "UrlBefore": "http://localhost:4200/app/ai/MCP",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "tab",
+          "Name": "Tools\n0",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-mcp-resource[1]/mj-mcp-dashboard[1]/mj-page-layout[1]/mj-page-header[1]/header[1]/div[2]/div[1]/mj-tab-nav[1]/div[1]/button[3]",
+          "BoundingBox": {
+            "XMin": 633,
+            "YMin": 170,
+            "XMax": 745,
+            "YMax": 202
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/ai/MCP"
+      }
+    },
+    {
+      "Instruction": "The 'Tools' tab is active. Now I need to click the 'Test Tool' button in the header to open the 'Test MCP Tool' dialog.",
+      "UrlBefore": "http://localhost:4200/app/ai/MCP",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Test Tool",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-mcp-resource[1]/mj-mcp-dashboard[1]/mj-page-layout[1]/mj-page-header[1]/header[1]/div[1]/div[2]/div[1]/button[2]",
+          "BoundingBox": {
+            "XMin": 1154,
+            "YMin": 89,
+            "XMax": 1256,
+            "YMax": 123
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/ai/MCP"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/ai/MCP",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

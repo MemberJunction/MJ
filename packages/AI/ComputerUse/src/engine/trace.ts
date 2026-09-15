@@ -9,7 +9,7 @@
 
 import { ComputerUseResult } from '../types/results.js';
 import { StepRecord } from '../types/judge.js';
-import type { BrowserAction, InteractiveElement, BoundingBox } from '../types/browser.js';
+import type { BrowserAction, ClickAction, InteractiveElement, BoundingBox } from '../types/browser.js';
 import {
     ComputerUseTrace,
     TraceStep,
@@ -29,6 +29,17 @@ const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi
 
 /** The token a UUID is replaced with — stable across visits/platforms. */
 export const UUID_TOKEN = '{uuid}';
+
+/**
+ * The token as the URL parser renders it once it has been through a pathname.
+ *
+ * Normalization runs twice on different inputs — at record time to build the
+ * stored pattern, and at replay time on both that pattern and the live URL — so
+ * it MUST be idempotent. It was not: `{uuid}` in a path comes back out of
+ * `new URL()` as `%7Buuid%7D`, so a stored pattern normalized to something no
+ * live URL could equal and every record-detail step diverged on a correct URL.
+ */
+const ENCODED_UUID_TOKEN_RE = /%7Buuid%7D/gi;
 
 /**
  * Normalize a URL for stable trace keying / comparison. Returns the input
@@ -59,7 +70,7 @@ export function normalizeTraceUrl(url: string, volatileParams: string[] = []): s
     });
     params.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
 
-    const path = parsed.pathname.replace(UUID_RE, UUID_TOKEN);
+    const path = parsed.pathname.replace(UUID_RE, UUID_TOKEN).replace(ENCODED_UUID_TOKEN_RE, UUID_TOKEN);
     const query = params.length > 0
         ? '?' + params.map(([n, v]) => `${n}=${v}`).join('&')
         : '';
@@ -132,6 +143,83 @@ const RECORDABLE_METHODS: Record<string, TraceActionMethod> = {
 const DROPPED_TYPES = new Set(['Wait', 'Scroll']);
 
 /**
+ * Fraction of the union two boxes must share before they are treated as the same
+ * element. Generous on purpose: a coordinate click's box and the element's own box
+ * come from different measurements of the same thing, so they agree closely but
+ * rarely exactly.
+ */
+const BOX_MATCH_MIN_OVERLAP = 0.5;
+
+/** Intersection-over-union of two boxes; 0 when they do not overlap. */
+function boxOverlap(a: BoundingBox, b: BoundingBox): number {
+    const width = Math.min(a.XMax, b.XMax) - Math.max(a.XMin, b.XMin);
+    const height = Math.min(a.YMax, b.YMax) - Math.max(a.YMin, b.YMin);
+    if (width <= 0 || height <= 0) {
+        return 0;
+    }
+    const intersection = width * height;
+    const areaA = Math.max(0, a.XMax - a.XMin) * Math.max(0, a.YMax - a.YMin);
+    const areaB = Math.max(0, b.XMax - b.XMin) * Math.max(0, b.YMax - b.YMin);
+    const union = areaA + areaB - intersection;
+    return union > 0 ? intersection / union : 0;
+}
+
+/**
+ * The element a coordinate click landed on, found by hit-testing its bounding box
+ * against the step's extracted elements.
+ *
+ * A coordinate `Click` carries pixels; the trace is built on re-resolvable identity
+ * (role + name + selector). Recording the pixels would give replay something it
+ * cannot heal and that breaks on any layout change, so instead we recover the
+ * identity the click threw away — the element list was already captured for this
+ * step, and each entry carries its own box.
+ *
+ * Returns undefined rather than guessing: an ambiguous or absent match means the
+ * step is not recordable, which is strictly better than a script that clicks the
+ * wrong thing later. A wrapper containing the target loses to the target itself
+ * because overlap is scored against the union, which a large wrapper inflates.
+ */
+export function resolveElementByBox(
+    box: BoundingBox | undefined,
+    elements: InteractiveElement[]
+): InteractiveElement | undefined {
+    if (!box) {
+        return undefined;
+    }
+    let best: InteractiveElement | undefined;
+    let bestScore = 0;
+    for (const el of elements) {
+        if (!el.BoundingBox) {
+            continue;
+        }
+        const score = boxOverlap(box, el.BoundingBox);
+        if (score > bestScore) {
+            bestScore = score;
+            best = el;
+        }
+    }
+    return bestScore >= BOX_MATCH_MIN_OVERLAP ? best : undefined;
+}
+
+/**
+ * Whether a click action needs grounding help — a coordinate click that named no
+ * selector. `ClickElement` already carries an element index, so it is never here.
+ */
+function isUngroundedClick(action: BrowserAction): action is ClickAction {
+    return action.Type === 'Click' && !action.Selector;
+}
+
+/**
+ * Whether a type action named no element. Unlike a click, a coordinate `Type`
+ * carries no bounding box, so there is nothing to hit-test and no way to recover
+ * the target: `planReplayActions` needs a selector and the healer needs a
+ * role/name, and neither exists. The run cannot be replayed and must not be kept.
+ */
+function isUngroundedType(action: BrowserAction): boolean {
+    return action.Type === 'Type' && !action.Selector;
+}
+
+/**
  * Whether a run is clean enough to record as a trace. Returns a reason on
  * refusal so the caller can log why a pass was not recorded. Layer 2 should
  * additionally require all oracles green before calling {@link recordTrace}.
@@ -156,6 +244,22 @@ export function isRecordableRun(result: ComputerUseResult): { recordable: boolea
         for (const action of successfulActions(step)) {
             if (!DROPPED_TYPES.has(action.Type) && !(action.Type in RECORDABLE_METHODS)) {
                 return { recordable: false, reason: `step ${step.StepNumber} used non-replayable action ${action.Type}` };
+            }
+            // A coordinate click we cannot tie back to an element records a target
+            // with neither a selector to act on nor a role/name to heal from. Such a
+            // step diverges on every future run, so the whole trace is worthless —
+            // refuse it here rather than storing a script that dies mid-trajectory.
+            if (isUngroundedClick(action) && !resolveElementByBox(action.BoundingBox, step.InteractiveElements)) {
+                return {
+                    recordable: false,
+                    reason: `step ${step.StepNumber} used a coordinate click that matches no extracted element (nothing to replay or heal from)`,
+                };
+            }
+            if (isUngroundedType(action)) {
+                return {
+                    recordable: false,
+                    reason: `step ${step.StepNumber} used a type action with no element selector (nothing to replay or heal from)`,
+                };
             }
         }
     }
@@ -222,7 +326,11 @@ function distillStep(
 ): TraceStep[] {
     const urlBefore = normalizeTraceUrl(step.UrlBefore || step.Url, volatile);
     const urlAfter = normalizeTraceUrl(step.UrlAfter || step.UrlBefore || step.Url, volatile);
-    const instruction = compactInstruction(step.ControllerReasoning);
+    // Tokenized like Text/Url: the controller narrates what it is doing, so a
+    // login step's reasoning quotes the very credentials it was handed
+    // ("log in using (user / hunter2)"). Untokenized, every recorded login wrote
+    // the password verbatim into metadata that gets committed.
+    const instruction = tokenize(compactInstruction(step.ControllerReasoning), variableValues) ?? '';
     const elementsByIndex = indexElements(step.InteractiveElements);
 
     const actions = successfulActions(step).filter(a => a.Type in RECORDABLE_METHODS);
@@ -277,7 +385,13 @@ function mapAction(
         case 'Click':
             ta.Button = action.Button;
             ta.ClickCount = action.ClickCount;
-            ta.Target = targetFromSelectorOrBox(action.Selector, action.BoundingBox);
+            // A coordinate click names no element, so recover the one it landed on
+            // from its box — that yields the same role/name/selector a ClickElement
+            // would have recorded, and so the same replayability and healability.
+            // `isRecordableRun` has already refused the run if this cannot resolve.
+            ta.Target =
+                targetFromElement(resolveElementByBox(action.BoundingBox, [...elementsByIndex.values()]))
+                ?? targetFromSelectorOrBox(action.Selector, action.BoundingBox);
             break;
         case 'ClickElement':
             ta.Button = action.Button;
@@ -312,6 +426,7 @@ function targetFromElement(el: InteractiveElement | undefined): TraceTarget | un
     t.Role = el.Role || undefined;
     t.Name = el.Name || undefined;
     t.Selector = el.Selector || undefined;
+    t.Scope = el.Scope || undefined;
     t.BoundingBox = el.BoundingBox;
     return t;
 }

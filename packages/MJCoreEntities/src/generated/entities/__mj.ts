@@ -32498,10 +32498,11 @@ export const MJTestSchema = z.object({
         * * Display Name: Expected Outcomes
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON object defining what success looks like. Structure varies by test type (e.g., for Agent Eval: {toolCalls, outputFormat, semanticGoals, dataAssertions})`),
-    Configuration: z.string().nullable().describe(`
+    Configuration: z.any().nullable().describe(`
         * * Field Name: Configuration
         * * Display Name: Configuration
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJTestEntity_ITestConfiguration
         * * Description: JSON object for test-specific configuration (e.g., oracles to use, rubrics, retry policies, timeout settings)`),
     Tags: z.string().nullable().describe(`
         * * Field Name: Tags
@@ -122281,12 +122282,21 @@ export interface MJTestEntity_IReplayScriptAction {
 /**
  * A multi-signal locator. `Selector` is primary; `Role` + `Name` are the heal
  * fallback, re-resolved from a fresh element list when the selector stops
- * matching; `BoundingBox` is weakest, kept only for pre-grounding recordings.
+ * matching; `Scope` disambiguates same-named twins by the region they live in;
+ * `BoundingBox` is weakest, kept only for pre-grounding recordings.
  */
 export interface MJTestEntity_IReplayScriptTarget {
     Role?: string;
     Name?: string;
     Selector?: string;
+    /**
+     * Nearest labeled ancestor region as `role:name` (e.g.
+     * `group:All applications`). Role + name are not always a unique identity —
+     * an app launcher lists each app under both a usage-ordered "Recent" grid
+     * and an alphabetical "All" grid — and the region is what tells the twins
+     * apart. Absent on recordings made before regions were captured.
+     */
+    Scope?: string;
     BoundingBox?: MJTestEntity_IReplayScriptBoundingBox;
 }
 

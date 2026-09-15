@@ -49,6 +49,14 @@ export class TraceTarget {
     public Name?: string;
     /** Selector the adapter can act on / re-resolve — the primary replay signal. */
     public Selector?: string;
+    /**
+     * The nearest labeled ancestor region, as `role:name` (e.g.
+     * `group:All applications`). Disambiguates same-named twins that live in
+     * different parts of a page — the launcher lists every app in both a
+     * "Recent applications" and an "All applications" grid, so role+name alone
+     * cannot tell them apart while the region can. Absent on older recordings.
+     */
+    public Scope?: string;
     /** Bounding box hint (weakest guard; coordinate-era recordings only). */
     public BoundingBox?: BoundingBox;
 }

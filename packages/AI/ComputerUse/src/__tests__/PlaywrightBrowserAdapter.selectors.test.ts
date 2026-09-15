@@ -51,6 +51,7 @@ interface MockMouse {
 }
 interface MockKeyboard {
     type: ReturnType<typeof vi.fn>;
+    press: ReturnType<typeof vi.fn>;
 }
 interface MockPage {
     close: ReturnType<typeof vi.fn>;
@@ -138,6 +139,7 @@ beforeEach(() => {
         },
         keyboard: {
             type: vi.fn().mockResolvedValue(undefined),
+            press: vi.fn().mockResolvedValue(undefined),
         },
     };
     context = {
@@ -357,5 +359,49 @@ describe('PlaywrightBrowserAdapter.GetVisibleText', () => {
 
         expect(text).toBe('');
         expect(page.innerText).not.toHaveBeenCalled();
+    });
+});
+
+describe('PlaywrightBrowserAdapter selector click — blocking overlay', () => {
+    // The element-grounded click path already survives this; the SELECTOR path —
+    // the one every replayed script uses — did not, so a replay whose target sat
+    // under an open popover burned the full action budget and diverged. Playwright
+    // auto-waits for actionability, but a backdrop only leaves when something
+    // dismisses it, so waiting can never succeed.
+    const overlayInterception = new Error(
+        'locator.click: Timeout 4321ms exceeded.\n' +
+        'Call log:\n  - waiting for locator("#submit")\n' +
+        '  - <div class="cdk-overlay-backdrop"></div> intercepts pointer events'
+    );
+
+    it('dismisses the overlay and retries the click once', async () => {
+        const adapter = await launchedAdapter();
+        locator.click.mockRejectedValueOnce(overlayInterception);
+
+        const result = await adapter.ExecuteAction(Object.assign(new ClickAction(), { Selector: '#submit' }));
+
+        expect(page.keyboard.press).toHaveBeenCalledWith('Escape');
+        expect(locator.click).toHaveBeenCalledTimes(2);
+        expect(result.Success).toBe(true);
+    });
+
+    it('leaves an ordinary timeout alone — nothing to dismiss', async () => {
+        const adapter = await launchedAdapter();
+        locator.click.mockRejectedValue(new Error('locator.click: Timeout 4321ms exceeded.'));
+
+        const result = await adapter.ExecuteAction(Object.assign(new ClickAction(), { Selector: '#submit' }));
+
+        expect(page.keyboard.press).not.toHaveBeenCalled();
+        expect(result.Success).toBe(false);
+    });
+
+    it('reports failure when the overlay survives the dismissal', async () => {
+        const adapter = await launchedAdapter();
+        locator.click.mockRejectedValue(overlayInterception);
+
+        const result = await adapter.ExecuteAction(Object.assign(new ClickAction(), { Selector: '#submit' }));
+
+        expect(locator.click).toHaveBeenCalledTimes(2);
+        expect(result.Success).toBe(false);
     });
 });

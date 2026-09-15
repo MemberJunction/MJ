@@ -33,6 +33,7 @@ import {
     getAccessibilitySnapshot,
     queryElement,
 } from './page-perception.js';
+import { retryPastDismissableOverlay } from './overlay-dismiss.js';
 import {
     extractInteractiveElements,
     clickInteractiveElement,
@@ -258,7 +259,7 @@ export class SharedContextBrowserAdapter extends BaseBrowserAdapter {
     private lastInteractiveElements: InteractiveElement[] = [];
 
     public override async ExtractInteractiveElements(): Promise<InteractiveElement[]> {
-        this.lastInteractiveElements = await extractInteractiveElements(this.page);
+        this.lastInteractiveElements = await extractInteractiveElements(this.page, this.config.ActionTimeoutMs);
         return this.lastInteractiveElements;
     }
 
@@ -301,12 +302,13 @@ export class SharedContextBrowserAdapter extends BaseBrowserAdapter {
                 // Ambiguous selectors are narrowed first.
                 if (action.Selector) {
                     const target = await resolveActionLocator(page, action.Selector);
-                    await target.click({
+                    // Waiting out a backdrop is unwinnable — dismiss it and retry.
+                    await retryPastDismissableOverlay(page, () => target.click({
                         button: action.Button,
                         clickCount: action.ClickCount,
                         timeout: this.config.ActionTimeoutMs,
                         ...(action.Modifiers?.length ? { modifiers: action.Modifiers } : {}),
-                    });
+                    }));
                     break;
                 }
                 let x = action.X;

@@ -513,6 +513,23 @@ export class HeadlessBrowserEngine extends BaseSingleton<HeadlessBrowserEngine> 
      * every worker in the retirement window lands here at once).
      */
     private async ensureBrowser(): Promise<void> {
+        // A crashed Chromium (OOM, renderer kill) leaves the Browser object
+        // truthy while `isConnected()` goes false. Every context handed out from
+        // it then dies on "Target page, context or browser has been closed" —
+        // and because all workers share this one process, that is the entire
+        // remaining suite, each test failing in 0s without running a step. A
+        // dead process is indistinguishable from no process, so drop it and let
+        // the launch below replace it.
+        //
+        // Never for an ATTACHED browser: the caller owns that process, we have
+        // no endpoint to re-attach to here, and launching a local Chromium in
+        // its place would silently swap the browser under the run. Mirrors the
+        // same guard in `retireBrowserIfDue`.
+        if (this._browser && !this._connected && !this._browser.isConnected()) {
+            this._browserRefs.delete(this._browser);
+            this._browser = null;
+            this._contextsSinceLaunch = 0;
+        }
         if (this._browser) {
             return;
         }

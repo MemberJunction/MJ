@@ -92,7 +92,7 @@ function evaluateOne(
 ): GoalPostconditionResult {
     if (post.Kind === 'url') {
         const met = post.UrlPattern ? traceUrlMatches(post.UrlPattern, url, volatile) : true;
-        return { post, met, detail: met ? 'URL matched' : `URL did not match ${post.UrlPattern}` };
+        return { post, met, detail: met ? 'URL matched' : `URL did not match: expected ${post.UrlPattern} — saw ${url}` };
     }
     const present = post.Target ? elementPresent(post.Target, elements) : false;
     if (post.Kind === 'visible') {
@@ -247,19 +247,30 @@ export function latchDeterministic(
  * about the PENDING visual criteria, so `Done` is precisely an assertion that
  * those are met. This also matches the trust the scalar-rubric replay path already
  * places in `Done`; the per-criterion breakdown is still preferred when present.
+ *
+ * `onlyCheckpoint` narrows the pass to a single section — required whenever the
+ * judge call itself was narrowed, so a scalar `Done` cannot vouch for sections
+ * the judge was never shown.
  */
 export function latchVisualFromVerdict(
     checkpoints: RunCheckpoint[],
     latches: Map<string, CheckpointLatch>,
     verdict: JudgeVerdict,
-    stepNumber: number
+    stepNumber: number,
+    onlyCheckpoint?: string
 ): Map<string, CheckpointLatch> {
     const byCriterion = new Map<string, CriterionVerdict>();
     for (const cv of verdict.CriteriaVerdicts ?? []) {
         byCriterion.set(cv.criterion, cv);
     }
     const scalarOnly = byCriterion.size === 0;
+    const scope = onlyCheckpoint?.trim().toLowerCase();
     for (const cp of checkpoints) {
+        // A judge call scoped to ONE section must latch only that section. The
+        // scalar fallback below reads `Done` as "all the criteria I was asked
+        // about are met" — true only while the call covered every pending
+        // criterion, which per-frame judging no longer does.
+        if (scope !== undefined && cp.Name.trim().toLowerCase() !== scope) continue;
         const latch = ensureLatch(cp, latches);
         if (latch.visualMet) continue; // already satisfied (or none declared)
         const criteria = cp.VisualCriteria ?? [];
@@ -296,6 +307,51 @@ export function unlatchedVisualCriteria(
         }
     }
     return out;
+}
+
+/** One frame of a replayed trajectory: where the run was, and what it looked like. */
+export interface ReplayFrame {
+    /** 1-based replay step this frame was captured at. */
+    stepNumber: number;
+    /** URL at capture time. */
+    url: string;
+    /** Base64 screenshot. */
+    screenshot: string;
+}
+
+/**
+ * The frame to judge a checkpoint's visual criteria against.
+ *
+ * A tour visits each section in turn, so a section is on screen for a few steps
+ * and then gone. Judging every pending criterion against the single end-state
+ * frame therefore asks the judge to confirm eleven things in a picture that can
+ * show at most the last one — which is why a tour that replayed every step
+ * perfectly still scored 0/11 and was reported incomplete.
+ *
+ * Selection is by the checkpoint's own URL assertion rather than by step index,
+ * because replay captures frames PRE-action: the frame showing what step N did is
+ * the one captured at step N+1. Matching on URL sidesteps that offset entirely.
+ * The LAST match wins — later frames of the same section have had more time to
+ * settle. Returns undefined when the checkpoint names no URL, or when the
+ * trajectory never reached it; the caller then falls back to the end state.
+ */
+export function selectCheckpointFrame(
+    checkpoint: RunCheckpoint,
+    frames: ReplayFrame[],
+    volatileParams: string[] = []
+): ReplayFrame | undefined {
+    const patterns = (checkpoint.Assertions ?? [])
+        .filter(a => a.Kind === 'url' && a.UrlPattern)
+        .map(a => a.UrlPattern as string);
+    if (patterns.length === 0) {
+        return undefined;
+    }
+    for (let i = frames.length - 1; i >= 0; i--) {
+        if (patterns.every(p => traceUrlMatches(p, frames[i].url, volatileParams))) {
+            return frames[i];
+        }
+    }
+    return undefined;
 }
 
 /** Find a checkpoint by name (case-insensitive, trimmed) — tolerant of LLM casing drift. */

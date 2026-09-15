@@ -1,0 +1,58 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T077 - Roles System-Role Edit Protection",
+    "Description": "Exercises the isSystemRole() gating that disables Edit/Delete on protected roles plus the role-card expand — governance logic unique to RoleManagement.",
+    "InputDefinition": "{\n  \"goal\": \"Assume you are already logged in at http://localhost:4200. Switch to the Admin application via the application switcher dropdown next to the logo, open 'Identity & Access', and select the 'Roles' sub-section. The list shows role cards, each with a type badge (System vs Custom) and Edit / Delete action buttons. Verify that for system roles the Edit and Delete buttons are disabled (not actionable), while custom roles have them enabled. Also expand a role card to confirm it reveals a stats section and a 'Permissions Preview' note. Success is observing the system-role action buttons being disabled and a card expanding. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 35,\n  \"judgeValidationCriteria\": [\n    \"The Roles list renders role cards with System/Custom type badges and Edit / Delete buttons\",\n    \"Edit and Delete are disabled for system roles (and enabled for custom roles when present)\",\n    \"Expanding a role card reveals a stats section and a 'Permissions Preview' note\",\n    \"No error messages, blank screens, or crash pages\"\n  ]\n}",
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      },
+      "ReplayScript": "@file:regression/scripts/t077-roles-system-role-edit-protection.json"
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,admin",
+    "Priority": 0,
+    "EstimatedDurationSeconds": null,
+    "EstimatedCostUSD": null,
+    "RepeatCount": null,
+    "MaxExecutionTimeMS": null,
+    "Variables": null,
+    "Type": "Computer Use",
+    "SkipEmbeddings": false
+  },
+  "primaryKey": {
+    "ID": "6051D3BD-95CA-4A29-AD2B-576A0ABCDD73"
+  },
+  "sync": {
+    "lastModified": "2026-09-11T21:36:53.529Z",
+    "checksum": "68373c12ffd0cff578a51866bcc54b614cb22825515138a8bd65235c7022e6ef"
+  }
+}

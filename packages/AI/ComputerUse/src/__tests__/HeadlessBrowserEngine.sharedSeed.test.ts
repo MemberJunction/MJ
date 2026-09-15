@@ -63,6 +63,7 @@ beforeEach(async () => {
             return Promise.resolve(ctx);
         }),
         close: vi.fn().mockResolvedValue(undefined),
+        isConnected: vi.fn().mockReturnValue(true),
     };
     launch.mockResolvedValue(browser);
     // Start from a fully-reset singleton (also clears any shared seed).

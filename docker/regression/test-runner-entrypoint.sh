@@ -47,7 +47,7 @@ if [ -z "${BACPAC_FILE:-}" ]; then
 # ApplicationEntity rows (with DefaultForNewUser=1) to create the matching
 # UserApplicationEntity rows.
 echo "Syncing application metadata..."
-npx mj sync push --dir=metadata --include="applications" 2>&1 || {
+node /app/packages/MJCLI/bin/run.js sync push --dir=metadata --include="applications" 2>&1 || {
     echo "  WARNING: Application metadata sync failed"
 }
 echo ""
@@ -55,10 +55,15 @@ echo ""
 # Test-scoped metadata (from docker/regression/test-metadata/):
 #   tags  — 3 global tags (vip, follow-up, regression-test)
 #   users — test user + roles + List Categories + Lists + User View Categories
-#           + User Views + User Notifications (nested as relatedEntities)
+#           + User Views + User Notifications + User Applications (nested as
+#           relatedEntities). The User Applications rows make Credentials,
+#           Archiving, Realtime Recordings and Theme Studio visible in the
+#           header's app switcher — nothing backfills them, so without these
+#           the tests that switch into those apps never find the entry.
+#   conversations — pushed separately further below (needs the test user first).
 # Tags must process first so any future UserTag references resolve.
 echo "Syncing test user metadata..."
-npx mj sync push --dir=/app/test-metadata --include="tags,users" 2>&1 || {
+node /app/packages/MJCLI/bin/run.js sync push --dir=/app/test-metadata --include="tags,users" 2>&1 || {
     echo "  WARNING: Test user metadata sync failed — falling back to SQL"
 }
 echo ""
@@ -71,16 +76,50 @@ echo "Ensuring test user, roles, apps, and example data via SQL..."
 node "$SCRIPTS/setup-test-user.cjs" 2>&1
 echo ""
 
+# Conversation fixture — deliberately pushed AFTER the SQL safety-net above,
+# because it resolves the test user with `@lookup:MJ: Users.Email=...`. Pushed
+# alongside `users` it would inherit that push's failure; here the user is
+# guaranteed to exist by either path. Seeds one conversation carrying a completed
+# AI message so T100 can exercise the per-message action controls (pin, thumbs
+# rating, reactions) without sending a live message and waiting on a real model
+# reply — which would mean an LLM call, its cost, and its flakiness every run.
+echo "Syncing conversation fixture..."
+node /app/packages/MJCLI/bin/run.js sync push --dir=/app/test-metadata --include="conversations" 2>&1 || {
+    echo "  WARNING: Conversation fixture sync failed — T100 will see an empty chat"
+}
+echo ""
+
+# Clear the regression suite's baseline-seeded members BEFORE any test push:
+# (a) makes the metadata suite-member push authoritative — the baseline seeds
+# different PKs for six of the same (SuiteID,TestID) pairs, which would UQ-collide
+# and roll back the whole member transaction; and (b) drops suite members holding
+# an FK to a Computer Use test that the delete records below prune.
+echo "Clearing baseline-seeded regression suite members..."
+node "$SCRIPTS/clear-baseline-suite-members.cjs" 2>&1 || echo "  WARNING: suite-member clear failed (non-fatal)"
+echo ""
+
 # Sync test definitions + suite mapping. Tests must process before suites
 # because suites reference tests by name.
-echo "Syncing test metadata..."
-npx mj sync push --dir=metadata --include="tests" 2>&1 || {
+# Default metadata/ tree: research-agent tests/suites + the Computer Use delete
+# records (metadata/tests/regression/.deleted-computer-use-tests.json) that prune
+# the pre-consolidation regression tests from the instance.
+echo "Syncing test metadata (incl. Computer Use delete records)..."
+node /app/packages/MJCLI/bin/run.js sync push --dir=metadata --include="tests" 2>&1 || {
     echo "  WARNING: Test metadata sync failed"
 }
 echo ""
 echo "Syncing test suites..."
-npx mj sync push --dir=metadata --include="test-suites" 2>&1 || {
+node /app/packages/MJCLI/bin/run.js sync push --dir=metadata --include="test-suites" 2>&1 || {
     echo "  WARNING: Suite metadata sync failed"
+}
+echo ""
+
+# Regression tests + suite live in the opt-in metadata-optional sibling root
+# (kept out of the base instance, like integration-test). directoryOrder pushes
+# tests before the suite so @lookup suite members resolve.
+echo "Syncing regression tests + suite from metadata-optional/regression-test..."
+node /app/packages/MJCLI/bin/run.js sync push --dir=metadata-optional/regression-test 2>&1 || {
+    echo "  WARNING: Regression metadata sync failed"
 }
 echo ""
 fi  # end: standard (non-bacpac) metadata seeding
@@ -97,7 +136,7 @@ if [ -n "${EXTRA_METADATA_DIRS:-}" ]; then
         EXTRA_DIR_TRIMMED="$(echo "$EXTRA_DIR" | xargs)"
         if [ -d "$EXTRA_DIR_TRIMMED" ]; then
             echo "Syncing extra metadata from $EXTRA_DIR_TRIMMED..."
-            npx mj sync push --dir="$EXTRA_DIR_TRIMMED" 2>&1 || {
+            node /app/packages/MJCLI/bin/run.js sync push --dir="$EXTRA_DIR_TRIMMED" 2>&1 || {
                 echo "  WARNING: Extra metadata sync from $EXTRA_DIR_TRIMMED failed"
             }
             echo ""
@@ -177,7 +216,7 @@ if [ -n "${ORACLES_MODULE:-}" ]; then
 fi
 
 set +e
-npx mj test suite --name "${SUITE_NAME}" \
+node /app/packages/MJCLI/bin/run.js test suite --name "${SUITE_NAME}" \
     --format json \
     --output "$RUN_DIR/results.json" \
     --parallel \

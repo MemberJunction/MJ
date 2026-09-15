@@ -193,6 +193,15 @@ export interface ComputerUseTestConfig {
         readinessBeacon?: string;
         /** Additional busy-marker CSS selectors (merged with the engine's app-neutral defaults). */
         busyMarkers?: string[];
+        /**
+         * Query-param names carrying a per-visit value. They are stripped before
+         * a URL is matched against a recorded pattern and before it forms a loop
+         * state signature — so a one-time login token can't make a recorded step
+         * unmatchable, and can't disguise a repeated page as a new one. Defaults
+         * to MJ's identity-provider tokens (`state`, `code`, `nonce`); pass `[]`
+         * to compare URLs verbatim.
+         */
+        volatileParams?: string[];
         /** Settle-loop timing overrides. */
         settle?: {
             maxWaitMs?: number;

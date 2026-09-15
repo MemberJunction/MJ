@@ -235,9 +235,15 @@ export function evaluateAuthDetour(
     url: string,
     patterns: string[],
     priorDetourCount: number,
-    maxDetours: number
+    maxDetours: number,
+    agentLogsInHere: boolean = false
 ): AuthDetourDecision {
-    const isDetour = isAuthDetourUrl(url, patterns);
+    // A FormLogin binding covering this URL means the agent is supposed to type
+    // credentials here — the identity provider's page is the happy path, not a
+    // session fault. Engaging the watchdog would be strictly harmful: its recovery
+    // re-applies auth, which is a documented no-op for FormLogin, so it can only
+    // bounce the agent off the login form until MaxDetours ends the run.
+    const isDetour = isAuthDetourUrl(url, patterns) && !agentLogsInHere;
     if (!isDetour) {
         return { isDetour: false, shouldTerminate: false };
     }
@@ -257,6 +263,85 @@ export class CancellationError extends Error {
         super(message);
         this.name = 'CancellationError';
     }
+}
+
+/**
+ * Thrown when a single step overruns the run's wall-clock deadline. The main
+ * loop maps it to the same graceful `TimeBudgetExceeded` expiry as the loop-top
+ * check — control flow, not an error.
+ */
+export class StepDeadlineError extends Error {
+    constructor(public readonly Reason: string) {
+        super(Reason);
+        this.name = 'StepDeadlineError';
+    }
+}
+
+/**
+ * Bound how long the engine WAITS on one step, and let `Stop()` cut that wait
+ * short.
+ *
+ * {@link timeBudgetExpiryReason} is consulted only at the top of the step loop
+ * — it gates step *entry*, it does not bound a step's *duration*. A step that
+ * blocks internally therefore never returns to that check and the run never
+ * self-expires. `Stop()` cannot rescue it either: the abort signal is wired to
+ * the LLM calls, not to browser work, so a `Stop()` raised while execution sits
+ * inside a page call only lands at the next cooperative checkpoint — which a
+ * blocked step never reaches. Both gaps are the same missing capability, so
+ * both are supplied here.
+ *
+ * Whichever way this settles, the losing step keeps running: a page call cannot
+ * be cancelled. That is the point — the engine stops *waiting* and scores the
+ * run, rather than holding its worker (and, in a parallel suite, that worker's
+ * whole remaining queue) on a promise that will never settle.
+ */
+export function raceStepAgainstDeadline<T>(
+    step: Promise<T>,
+    deadlineMs: number | null,
+    reason: string,
+    signal?: AbortSignal
+): Promise<T> {
+    // Orphan guard. Once we stop awaiting it, a later rejection from the losing
+    // step has no handler — which Node treats as an unhandled rejection and,
+    // by default, terminates the process for.
+    step.catch(() => {});
+
+    return new Promise<T>((resolve, reject) => {
+        let settled = false;
+        let timer: ReturnType<typeof setTimeout> | undefined;
+
+        // Declared, not assigned, so `cleanup` can reference it above its use.
+        function onAbort(): void {
+            settle(() => reject(new CancellationError()));
+        }
+        const cleanup = (): void => {
+            clearTimeout(timer);
+            signal?.removeEventListener('abort', onAbort);
+        };
+        const settle = (finish: () => void): void => {
+            if (settled) {
+                return;
+            }
+            settled = true;
+            cleanup();
+            finish();
+        };
+
+        if (signal?.aborted) {
+            settle(() => reject(new CancellationError()));
+            return;
+        }
+        signal?.addEventListener('abort', onAbort, { once: true });
+        // A run with no configured budget still gets the abort escape — Stop()
+        // must unwind a blocked step whether or not a deadline exists.
+        if (deadlineMs !== null) {
+            timer = setTimeout(() => settle(() => reject(new StepDeadlineError(reason))), deadlineMs);
+        }
+        step.then(
+            value => settle(() => resolve(value)),
+            error => settle(() => reject(error))
+        );
+    });
 }
 
 /**

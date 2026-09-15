@@ -1,0 +1,111 @@
+{
+  "TestId": "E3E8AFB3-FBD7-4AA2-9748-BB2EF872C9C0",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "dbdb49ef",
+  "RecordedAt": "2026-09-11T18:48:48.701Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "allowedDomains",
+    "baseUrl",
+    "authUsername",
+    "authDomains",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "Click the application switcher dropdown next to the logo to open the list of applications.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Switch application — current: Home",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 62,
+            "YMin": 12,
+            "XMax": 168,
+            "YMax": 48
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "The application switcher dialog is open. Index 32 is the link to 'Archiving'. I will click it to switch to the Archiving application.",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Archiving",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/dialog[1]/div[2]/div[4]/div[25]",
+          "BoundingBox": {
+            "XMin": 217,
+            "YMin": 1014,
+            "XMax": 492,
+            "YMax": 1092
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/archiving/Configuration"
+      }
+    },
+    {
+      "Instruction": "We are now in the Archiving application. Next step is to click 'Run History' in the top/left navigation bar.",
+      "UrlBefore": "http://localhost:4200/app/archiving/Configuration",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Run History",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/nav[1]/div[2]",
+          "BoundingBox": {
+            "XMin": 417,
+            "YMin": 13,
+            "XMax": 550,
+            "YMax": 46
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/archiving/Configuration"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/archiving/Run%20History"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/archiving/Run%20History",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

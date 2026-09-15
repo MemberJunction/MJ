@@ -1,0 +1,306 @@
+{
+  "TestId": "DABE4B5A-608A-4C9B-BA3A-412FF1EDF4F9",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "6d4de447",
+  "RecordedAt": "2026-09-11T18:51:29.702Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "allowedDomains",
+    "baseUrl",
+    "authUsername",
+    "authDomains",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "Clicking the application switcher dropdown to find and select File Browser.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Switch application — current: Home",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 62,
+            "YMin": 12,
+            "XMax": 168,
+            "YMax": 48
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "Clicking the 'File Browser' option in the application launcher menu.",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "File Browser",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/dialog[1]/div[2]/div[4]/div[19]",
+          "BoundingBox": {
+            "XMin": 217,
+            "YMin": 838,
+            "XMax": 492,
+            "YMax": 916
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/file-browser/Browse%20Files"
+      }
+    },
+    {
+      "Instruction": "The Finder layout has successfully loaded with the left storage accounts sidebar, folder breadcrumb panel, and main file listing area. I am setting the checkpoint reached to 'finder-layout' and typing",
+      "UrlBefore": "http://localhost:4200/app/file-browser/Browse%20Files",
+      "Action": {
+        "Method": "type",
+        "Text": "test",
+        "PressEnter": false,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Search files...",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-file-browser-resource[1]/div[1]/mj-file-browser[1]/div[1]/div[2]/div[2]/mj-file-grid[1]/div[1]/div[1]/div[2]/div[1]/input[1]",
+          "BoundingBox": {
+            "XMin": 586,
+            "YMin": 75,
+            "XMax": 736,
+            "YMax": 98
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/file-browser/Browse%20Files"
+      }
+    },
+    {
+      "Instruction": "The search input field now contains 'test', a 'Clear search' (x) button has appeared, and the status bar shows '0 items (filtered)'. This verifies the 'name-filter' checkpoint. Next, I will click the ",
+      "UrlBefore": "http://localhost:4200/app/file-browser/Browse%20Files",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Create New Folder",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-file-browser-resource[1]/div[1]/mj-file-browser[1]/div[1]/div[2]/div[2]/mj-file-grid[1]/div[1]/div[1]/div[2]/button[2]",
+          "BoundingBox": {
+            "XMin": 1054,
+            "YMin": 72,
+            "XMax": 1166,
+            "YMax": 101
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/file-browser/Browse%20Files"
+      }
+    },
+    {
+      "Instruction": "The 'Create New Folder' dialog is currently visible with a title, 'Enter folder name' text input, and Cancel/Create buttons. This verifies the 'new-folder-dialog' checkpoint. I will set the checkpoint",
+      "UrlBefore": "http://localhost:4200/app/file-browser/Browse%20Files",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Cancel",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-file-browser-resource[1]/div[1]/mj-file-browser[1]/div[1]/div[2]/div[2]/mj-file-grid[1]/div[2]/div[1]/div[3]/button[1]",
+          "BoundingBox": {
+            "XMin": 691,
+            "YMin": 423,
+            "XMax": 758,
+            "YMax": 452
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/file-browser/Browse%20Files"
+      }
+    },
+    {
+      "Instruction": "The 'Create New Folder' dialog was closed via Cancel. Setting checkpointReached to 'new-folder-dialog' and clicking the 'Search across all storage accounts' button (element 17) to open the multi-provi",
+      "UrlBefore": "http://localhost:4200/app/file-browser/Browse%20Files",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Search across all storage accounts",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-file-browser-resource[1]/div[1]/mj-file-browser[1]/div[1]/div[2]/div[2]/mj-file-grid[1]/div[1]/div[1]/div[2]/button[1]",
+          "BoundingBox": {
+            "XMin": 857,
+            "YMin": 72,
+            "XMax": 972,
+            "YMax": 101
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/file-browser/Browse%20Files"
+      }
+    },
+    {
+      "Instruction": "The 'Search Across Storage Accounts' panel is currently open on screen, confirming the 'multi-provider-search' checkpoint. I will now set checkpointReached to 'multi-provider-search' and click the 'Gr",
+      "UrlBefore": "http://localhost:4200/app/file-browser/Browse%20Files",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Grid View",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-file-browser-resource[1]/div[1]/mj-file-browser[1]/div[1]/div[2]/div[2]/mj-file-grid[1]/div[1]/div[1]/div[2]/div[2]/button[2]",
+          "BoundingBox": {
+            "XMin": 1014,
+            "YMin": 74,
+            "XMax": 1043,
+            "YMax": 99
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/file-browser/Browse%20Files"
+      }
+    },
+    {
+      "Instruction": "The 'Search Across Storage Accounts' panel is open, confirming the multi-provider-search checkpoint. I will set checkpointReached to 'multi-provider-search', close the search panel using the 'x' butto",
+      "UrlBefore": "http://localhost:4200/app/file-browser/Browse%20Files",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Close search",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-file-browser-resource[1]/div[1]/mj-file-browser[1]/div[1]/div[2]/div[2]/mj-file-grid[1]/div[1]/div[2]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1227,
+            "YMin": 136,
+            "XMax": 1247,
+            "YMax": 162
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/file-browser/Browse%20Files"
+      }
+    },
+    {
+      "Instruction": "The 'Search Across Storage Accounts' panel is open, confirming the multi-provider-search checkpoint. I will set checkpointReached to 'multi-provider-search', close the search panel using the 'x' butto",
+      "UrlBefore": "http://localhost:4200/app/file-browser/Browse%20Files",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "List View",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-file-browser-resource[1]/div[1]/mj-file-browser[1]/div[1]/div[2]/div[2]/mj-file-grid[1]/div[1]/div[1]/div[2]/div[2]/button[1]",
+          "BoundingBox": {
+            "XMin": 983,
+            "YMin": 74,
+            "XMax": 1012,
+            "YMax": 99
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false
+      }
+    },
+    {
+      "Instruction": "The 'Search Across Storage Accounts' panel is open, confirming the multi-provider-search checkpoint. I will set checkpointReached to 'multi-provider-search', close the search panel using the 'x' butto",
+      "UrlBefore": "http://localhost:4200/app/file-browser/Browse%20Files",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Grid View",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-file-browser-resource[1]/div[1]/mj-file-browser[1]/div[1]/div[2]/div[2]/mj-file-grid[1]/div[1]/div[1]/div[2]/div[2]/button[2]",
+          "BoundingBox": {
+            "XMin": 1014,
+            "YMin": 74,
+            "XMax": 1043,
+            "YMax": 99
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false
+      }
+    },
+    {
+      "Instruction": "I will click the 'List View' toggle button to complete exercising the view-toggle control. All five required checkpoints (finder-layout, name-filter, new-folder-dialog, multi-provider-search, and view",
+      "UrlBefore": "http://localhost:4200/app/file-browser/Browse%20Files",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "List View",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-file-browser-resource[1]/div[1]/mj-file-browser[1]/div[1]/div[2]/div[2]/mj-file-grid[1]/div[1]/div[1]/div[2]/div[2]/button[1]",
+          "BoundingBox": {
+            "XMin": 983,
+            "YMin": 74,
+            "XMax": 1012,
+            "YMax": 99
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/file-browser/Browse%20Files"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/file-browser/Browse%20Files",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

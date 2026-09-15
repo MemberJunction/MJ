@@ -1,0 +1,58 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T034 - Grid Advanced Filter Panel",
+    "Description": "Opens a grid's advanced Filters panel (distinct from the quick-filter box) and adds a filter condition, verifying the filter builder works.",
+    "InputDefinition": "{\n  \"goal\": \"Open the 'Products' entity grid — type 'Products' in the LEFT sidebar 'Search entities...' box and click it (or navigate to http://localhost:4200/app/data-explorer/Data?entity=Products). Wait for the grid to load. Click 'Configure view settings' (the sliders icon in the grid toolbar) to open the Configure View panel, then select its 'Filters' tab. Verify the advanced filter builder UI renders — it offers filter modes (e.g. Simple / Advanced / Smart) and inputs to build a condition (field / operator / value). Seeing the filter builder render in the Filters tab is success — you do NOT need to fully apply a filter, and no error should appear. Pages can take 10-30s to load — wait, don't navigate away.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 40,\n  \"judgeValidationCriteria\": [\n    \"The Configure View panel's 'Filters' tab was opened\",\n    \"The advanced filter builder UI rendered (filter mode options like Simple/Advanced/Smart and/or field/operator/value inputs)\",\n    \"No error messages or crash pages\"\n  ]\n}",
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 40,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 40
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      },
+      "ReplayScript": "@file:regression/scripts/t034-grid-advanced-filter-panel.json"
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,grid",
+    "Priority": 0,
+    "EstimatedDurationSeconds": null,
+    "EstimatedCostUSD": null,
+    "RepeatCount": null,
+    "MaxExecutionTimeMS": null,
+    "Variables": null,
+    "Type": "Computer Use",
+    "SkipEmbeddings": false
+  },
+  "primaryKey": {
+    "ID": "CE7A6A97-EAE6-4595-8908-BDF6BAE63A50"
+  },
+  "sync": {
+    "lastModified": "2026-09-11T21:36:53.258Z",
+    "checksum": "f1c4c7c1a4d36c0ce638ea8b71eccfae87f9253012fbdcef915bee2984770e70"
+  }
+}

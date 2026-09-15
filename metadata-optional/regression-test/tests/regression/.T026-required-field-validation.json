@@ -1,0 +1,58 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T026 - Required Field Validation Error",
+    "Description": "Attempts to save a new record with a required field left empty and verifies the app surfaces a validation error gracefully rather than crashing.",
+    "InputDefinition": "{\n  \"goal\": \"Open the 'Members' entity grid — type 'Members' in the LEFT sidebar 'Search entities...' box and click the EXACT 'Members' match (or navigate to http://localhost:4200/app/data-explorer/Data?entity=Members). Click the 'New Record' (New/Create) button to open a blank Member form. WITHOUT filling the required fields (those marked with a red asterisk *), click Save. Verify the app responds with a clear VALIDATION message indicating required field(s) are missing (e.g. a field-level error or a 'required' message) and does NOT crash, show a blank screen, or save an invalid record. Reaching that validation-blocked state is success. Pages can take 10-30s to load — wait, don't navigate away.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 40,\n  \"judgeValidationCriteria\": [\n    \"A new record form was opened and Save attempted with required field(s) empty\",\n    \"The app surfaced a clear validation/required-field message and blocked the invalid save\",\n    \"No crash, blank screen, or raw server error — handled gracefully\"\n  ]\n}",
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 40,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 40
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      },
+      "ReplayScript": "@file:regression/scripts/t026-required-field-validation-error.json"
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,validation",
+    "Priority": 0,
+    "EstimatedDurationSeconds": null,
+    "EstimatedCostUSD": null,
+    "RepeatCount": null,
+    "MaxExecutionTimeMS": null,
+    "Variables": null,
+    "Type": "Computer Use",
+    "SkipEmbeddings": false
+  },
+  "primaryKey": {
+    "ID": "EBA37AB4-1A44-4195-85FC-E9F776841BDE"
+  },
+  "sync": {
+    "lastModified": "2026-09-11T21:36:53.149Z",
+    "checksum": "72a3b42b4c3d6a5953eea943f91c0ff5ffe3558b6579cb2b75a220e24a5d090e"
+  }
+}

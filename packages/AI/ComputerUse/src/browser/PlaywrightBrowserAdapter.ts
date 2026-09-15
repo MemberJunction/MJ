@@ -40,6 +40,7 @@ import {
     getAccessibilitySnapshot,
     queryElement,
 } from './page-perception.js';
+import { retryPastDismissableOverlay } from './overlay-dismiss.js';
 import {
     extractInteractiveElements,
     clickInteractiveElement,
@@ -463,7 +464,7 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
     private lastInteractiveElements: InteractiveElement[] = [];
 
     public override async ExtractInteractiveElements(): Promise<InteractiveElement[]> {
-        this.lastInteractiveElements = await extractInteractiveElements(this.page);
+        this.lastInteractiveElements = await extractInteractiveElements(this.page, this.config.ActionTimeoutMs);
         return this.lastInteractiveElements;
     }
 
@@ -735,12 +736,14 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
                     // Ambiguous selectors are narrowed first — strict
                     // mode would otherwise throw on a multi-match.
                     const target = await resolveActionLocator(page, action.Selector);
-                    await target.click({
+                    // An open popover's backdrop makes this unwinnable by waiting —
+                    // the replay tier's every click comes through here.
+                    await retryPastDismissableOverlay(page, () => target.click({
                         button: action.Button,
                         clickCount: action.ClickCount,
                         timeout: this.config.ActionTimeoutMs,
                         ...(action.Modifiers?.length ? { modifiers: action.Modifiers } : {}),
-                    });
+                    }));
                 } else {
                     await this.executeClick(page, action);
                 }

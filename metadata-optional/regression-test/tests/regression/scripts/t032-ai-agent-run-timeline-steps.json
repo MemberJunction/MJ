@@ -1,0 +1,96 @@
+{
+  "TestId": "967A045A-97AF-4EF1-A38D-16E05B62DB7E",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "9d1d081c",
+  "RecordedAt": "2026-09-11T20:25:32.579Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "allowedDomains",
+    "baseUrl",
+    "authUsername",
+    "authDomains",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "Navigating directly to the AI Agent Runs grid URL as specified in the goal instructions.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "navigate",
+        "Url": "http://localhost:4200/app/data-explorer/Data?entity=MJ: AI Agent Runs"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=MJ: AI Agent Runs"
+      }
+    },
+    {
+      "Instruction": "The 'MJ: AI Agent Runs' grid is currently open. I need to click a row with Status 'Completed' to select it and reveal the preview pane / 'Open Full Record' button.",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/Data?entity=MJ: AI Agent Runs",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "row",
+          "Name": "A1575099-1576-45E9-A6FD-88102FB7E510\n—\nCompleted\nSep 11, 2026\nSep 11, 2026\n$0.00\n$0.00\n—\n—",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-data-explorer-resource[1]/div[1]/mj-data-explorer-dashboard[1]/div[1]/div[2]/div[3]/mj-view-workspace[1]/div[1]/div[2]/mj-entity-viewer[1]/div[1]/div[1]/div[3]/mj-grid-view-renderer[1]/mj-entity-data-grid[1]/div[1]/div[2]/ag-grid-angular[1]/div[3]/div[1]/div[2]/div[3]/div[1]/div[2]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 282,
+            "YMin": 328,
+            "XMax": 2042,
+            "YMax": 368
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=MJ: AI Agent Runs"
+      }
+    },
+    {
+      "Instruction": "Clicking 'Open Full Record' button [85] to open the AI Agent Run detail view.",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/Data?entity=MJ: AI Agent Runs",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Open Full Record",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-data-explorer-resource[1]/div[1]/mj-data-explorer-dashboard[1]/div[1]/div[3]/mj-entity-record-detail-panel[1]/div[1]/div[3]/button[1]",
+          "BoundingBox": {
+            "XMin": 901,
+            "YMin": 664,
+            "XMax": 1260,
+            "YMax": 704
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=MJ: AI Agent Runs"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/MJ:%20AI%20Agent%20Runs/ID%7C{uuid}"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/data-explorer/record/MJ:%20AI%20Agent%20Runs/ID%7C{uuid}",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

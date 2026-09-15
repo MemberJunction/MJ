@@ -1,0 +1,81 @@
+{
+  "TestId": "FB8724E6-22E4-4E8A-8695-82A49A27306D",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "32e81cc2",
+  "RecordedAt": "2026-09-11T20:22:16.824Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "allowedDomains",
+    "baseUrl",
+    "authUsername",
+    "authDomains",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "Navigating directly to the Members entity grid URL as specified in the goal instructions.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "navigate",
+        "Url": "http://localhost:4200/app/data-explorer/Data?entity=Members"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=Members"
+      }
+    },
+    {
+      "Instruction": "The 'Members' grid is currently loaded (2,000 records). I will now type a filter term ('Baker') into the 'Filter records...' search box (element index 16) to verify that the grid filters the loaded pa",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/Data?entity=Members",
+      "Action": {
+        "Method": "type",
+        "Text": "Baker",
+        "PressEnter": false,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Filter records... (press / to focus)",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-data-explorer-resource[1]/div[1]/mj-data-explorer-dashboard[1]/div[1]/div[2]/div[2]/div[2]/div[1]/input[1]",
+          "BoundingBox": {
+            "XMin": 592,
+            "YMin": 121,
+            "XMax": 1192,
+            "YMax": 159
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=Members"
+      }
+    },
+    {
+      "Instruction": "The text 'Baker' was typed into the quick filter box, but the grid rows haven't updated yet. I will press Enter to trigger the filter action and verify the grid responds.",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/Data?entity=Members",
+      "Action": {
+        "Method": "keypress",
+        "Key": "Enter"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=Members"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=Members",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

@@ -1,0 +1,133 @@
+{
+  "TestId": "F011EE33-C0AD-4DAB-B979-2B858BAB655C",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "68f8e3ed",
+  "RecordedAt": "2026-09-11T20:51:07.008Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "allowedDomains",
+    "baseUrl",
+    "authUsername",
+    "authDomains",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "Click on the application switcher dropdown next to the logo to open the list of applications.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Switch application — current: Home",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 62,
+            "YMin": 12,
+            "XMax": 168,
+            "YMax": 48
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "The application switcher menu is open and 'Lists' is visible in the ALL APPS section. I will click on 'Lists' to navigate to the Lists application.",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Lists",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/dialog[1]/div[2]/div[4]/div[4]",
+          "BoundingBox": {
+            "XMin": 217,
+            "YMin": 398,
+            "XMax": 492,
+            "YMax": 476
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/lists/Lists"
+      }
+    },
+    {
+      "Instruction": "We are currently in the Lists application. I will click the 'Table view' button in the toolbar to switch to table view mode.",
+      "UrlBefore": "http://localhost:4200/app/lists/Lists",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Table view",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-lists-browse-resource[1]/mj-page-layout[1]/mj-page-header[1]/header[1]/div[2]/div[1]/mj-view-toggle[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1164,
+            "YMin": 169,
+            "XMax": 1192,
+            "YMax": 197
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/lists/Lists"
+      }
+    },
+    {
+      "Instruction": "We successfully switched to Table view in the previous step. Now I will click the 'Card view' icon (or 'Category view') to switch layout modes again, demonstrating view mode toggling.",
+      "UrlBefore": "http://localhost:4200/app/lists/Lists",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Card view",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-lists-browse-resource[1]/mj-page-layout[1]/mj-page-header[1]/header[1]/div[2]/div[1]/mj-view-toggle[1]/div[1]/button[2]",
+          "BoundingBox": {
+            "XMin": 1194,
+            "YMin": 169,
+            "XMax": 1222,
+            "YMax": 197
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/lists/Lists"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/lists/Lists",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

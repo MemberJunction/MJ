@@ -1,0 +1,57 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T094 - Delete Conversation",
+    "Description": "Exercises the single-conversation delete + confirm dialog path — distinct from bulk-delete selection mode and from generic entity-grid delete.",
+    "InputDefinition": "{\n  \"goal\": \"Open the Chat application and wait for the workspace. In the left sidebar, find the conversation named 'Scratch conversation (safe to delete)' — it is seeded for exactly this test — and open its '...' (more options) menu, then click 'Delete'. If that conversation is not present, use any other conversation EXCEPT 'Membership renewal questions' (another test depends on that one). Confirm the deletion if a confirmation prompt appears. Verify the conversation is removed from the sidebar list. If no conversations exist, first create one by sending a message, then delete it. The conversation disappearing from the list after confirmation is success. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 35,\n  \"judgeValidationCriteria\": [\n    \"The conversation '...' menu offers a 'Delete' option (styled as a destructive action)\",\n    \"A confirmation step appears and, once confirmed, the conversation is removed from the sidebar list\",\n    \"The list re-renders correctly after deletion (no orphaned/broken row)\",\n    \"No error messages, blank screens, or crash pages\"\n  ]\n}",
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,chat",
+    "Priority": 0,
+    "EstimatedDurationSeconds": null,
+    "EstimatedCostUSD": null,
+    "RepeatCount": null,
+    "MaxExecutionTimeMS": null,
+    "Variables": null,
+    "Type": "Computer Use",
+    "SkipEmbeddings": false
+  },
+  "primaryKey": {
+    "ID": "87EBD34C-219A-48D7-A1E5-56FC731CD3A9"
+  },
+  "sync": {
+    "lastModified": "2026-09-11T21:36:53.755Z",
+    "checksum": "9e300c1878a6a76d17874370853674a0753b7bcea65f99926812d67ffdb23b38"
+  }
+}

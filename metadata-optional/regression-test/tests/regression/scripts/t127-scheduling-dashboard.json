@@ -1,0 +1,55 @@
+{
+  "TestId": "5961D1B9-4CCC-45CF-8A35-730C6D9EBB2F",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "29bc2587",
+  "RecordedAt": "2026-09-11T20:53:25.518Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "allowedDomains",
+    "baseUrl",
+    "authUsername",
+    "authDomains",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "The Scheduling Dashboard overview is fully loaded with System Health (100 score), KPI cards (Active Jobs, Due Next Hour, Runs 24h, Running Now), Live Executions, All Clear/Alerts, and Upcoming panels.",
+      "UrlBefore": "http://localhost:4200/app/scheduling",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Toggle auto-refresh",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-scheduling-dashboard-resource[1]/app-scheduling-overview[1]/mj-page-layout[1]/mj-page-header[1]/header[1]/div[1]/div[2]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1151,
+            "YMin": 84,
+            "XMax": 1256,
+            "YMax": 117
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/scheduling"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/scheduling/Dashboard"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/scheduling/Dashboard",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

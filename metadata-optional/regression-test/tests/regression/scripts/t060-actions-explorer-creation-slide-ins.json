@@ -1,0 +1,203 @@
+{
+  "TestId": "49903BFF-7CE5-465C-BF66-2B092F92616F",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "735f8da9",
+  "RecordedAt": "2026-09-11T20:40:50.823Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "allowedDomains",
+    "baseUrl",
+    "authUsername",
+    "authDomains",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "We are already in the Actions application. Now clicking on the 'Explorer' nav item to view the Actions Explorer UI.",
+      "UrlBefore": "http://localhost:4200/app/actions",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Explorer",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/nav[1]/div[2]",
+          "BoundingBox": {
+            "XMin": 375,
+            "YMin": 13,
+            "XMax": 488,
+            "YMax": 46
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/actions"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/actions/Explorer"
+      }
+    },
+    {
+      "Instruction": "The Actions Explorer page has finished loading. I will now click the 'New Action' button (element [11]) in the top right to open the New Action panel.",
+      "UrlBefore": "http://localhost:4200/app/actions/Explorer?sort=updated_asc&view=list",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "New Action",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-action-explorer[1]/mj-page-layout[1]/mj-page-header[1]/header[1]/div[1]/div[2]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1136,
+            "YMin": 101,
+            "XMax": 1256,
+            "YMax": 134
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/actions/Explorer?sort=updated_asc&view=list"
+      }
+    },
+    {
+      "Instruction": "The 'New Action' slide-in panel is now open. I will signal checkpointReached 'new-action-panel', select the 'AI Generated' action type card, and click 'Create Action' without typing a name to trigger ",
+      "UrlBefore": "http://localhost:4200/app/actions/Explorer?sort=updated_asc&view=list",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "AI Generated\nLet AI generate the action code from a prompt",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-action-explorer[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/mj-new-action-panel[1]/div[1]/div[1]/div[2]/div[1]/div[1]/button[2]",
+          "BoundingBox": {
+            "XMin": 804,
+            "YMin": 219,
+            "XMax": 1256,
+            "YMax": 295
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/actions/Explorer?sort=updated_asc&view=list"
+      }
+    },
+    {
+      "Instruction": "The 'New Action' slide-in panel is now open. I will signal checkpointReached 'new-action-panel', select the 'AI Generated' action type card, and click 'Create Action' without typing a name to trigger ",
+      "UrlBefore": "http://localhost:4200/app/actions/Explorer?sort=updated_asc&view=list",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Create Action",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-action-explorer[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/mj-new-action-panel[1]/div[1]/div[1]/div[3]/button[1]",
+          "BoundingBox": {
+            "XMin": 804,
+            "YMin": 660,
+            "XMax": 962,
+            "YMax": 704
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false
+      }
+    },
+    {
+      "Instruction": "The validation messages 'Action name is required' and 'Please select a category' are now visible. I will set checkpointReached to 'new-action-panel', type a name into the Action Name field to clear th",
+      "UrlBefore": "http://localhost:4200/app/actions/Explorer?sort=updated_asc&view=list",
+      "Action": {
+        "Method": "type",
+        "Text": "Test Action",
+        "PressEnter": false,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Action Name",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-action-explorer[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/mj-new-action-panel[1]/div[1]/div[1]/div[2]/div[2]/input[1]",
+          "BoundingBox": {
+            "XMin": 804,
+            "YMin": 339,
+            "XMax": 1256,
+            "YMax": 378
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/actions/Explorer?sort=updated_asc&view=list"
+      }
+    },
+    {
+      "Instruction": "The validation messages 'Action name is required' and 'Please select a category' are now visible. I will set checkpointReached to 'new-action-panel', type a name into the Action Name field to clear th",
+      "UrlBefore": "http://localhost:4200/app/actions/Explorer?sort=updated_asc&view=list",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Cancel",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-action-explorer[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/mj-new-action-panel[1]/div[1]/div[1]/div[3]/button[2]",
+          "BoundingBox": {
+            "XMin": 974,
+            "YMin": 660,
+            "XMax": 1063,
+            "YMax": 704
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false
+      }
+    },
+    {
+      "Instruction": "Clicking the '+ New Category' button in the left panel to open the 'New Category' slide-in panel and signaling checkpoint 'new-category-panel'.",
+      "UrlBefore": "http://localhost:4200/app/actions/Explorer?sort=updated_asc&view=list",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "New Category",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-action-explorer[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/mj-action-tree-panel[1]/div[1]/div[3]/button[1]",
+          "BoundingBox": {
+            "XMin": 16,
+            "YMin": 675,
+            "XMax": 263,
+            "YMax": 708
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/actions/Explorer?sort=updated_asc&view=list"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/actions/Explorer?sort=updated_asc&view=list",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

@@ -1,0 +1,186 @@
+{
+  "TestId": "1B3029D7-E86C-4923-8E93-61AFBEB101BE",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "540049ce",
+  "RecordedAt": "2026-09-11T18:48:07.705Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "allowedDomains",
+    "baseUrl",
+    "authUsername",
+    "authDomains",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "Click the application switcher dropdown next to the Home logo to open the list of applications.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Switch application — current: Home",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 62,
+            "YMin": 12,
+            "XMax": 168,
+            "YMax": 48
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "The application launcher dialog is now open and Lists is visible. Clicking the 'Lists' app link to navigate to the Lists application.",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Lists",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/dialog[1]/div[2]/div[4]/div[4]",
+          "BoundingBox": {
+            "XMin": 217,
+            "YMin": 398,
+            "XMax": 492,
+            "YMax": 476
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/lists/Lists"
+      }
+    },
+    {
+      "Instruction": "We are currently in the Lists application. I will click the 'Categories' section link in the top bar to open the Categories section.",
+      "UrlBefore": "http://localhost:4200/app/lists/Lists",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Categories",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/nav[1]/div[4]",
+          "BoundingBox": {
+            "XMin": 627,
+            "YMin": 13,
+            "XMax": 756,
+            "YMax": 46
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/lists/Lists"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/lists/Categories"
+      }
+    },
+    {
+      "Instruction": "Clicking the 'New Category' button to open the create category dialog.",
+      "UrlBefore": "http://localhost:4200/app/lists/Categories",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "New Category",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-lists-categories-resource[1]/mj-page-layout[1]/mj-page-header[1]/header[1]/div[1]/div[2]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1118,
+            "YMin": 79,
+            "XMax": 1256,
+            "YMax": 113
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/lists/Categories"
+      }
+    },
+    {
+      "Instruction": "The 'Create Category' dialog is open. I can see Name, Description, and Parent Category fields, and the 'Create' button is disabled. Next, I will type a name into the Name field to verify that the 'Cre",
+      "UrlBefore": "http://localhost:4200/app/lists/Categories",
+      "Action": {
+        "Method": "type",
+        "Text": "Test Category",
+        "PressEnter": false,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Enter category name",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-lists-categories-resource[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/div[1]/div[2]/div[1]/div[1]/input[1]",
+          "BoundingBox": {
+            "XMin": 660,
+            "YMin": 459,
+            "XMax": 1070,
+            "YMax": 493
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/lists/Categories"
+      }
+    },
+    {
+      "Instruction": "The Name field has 'Test Category' typed into it, and the 'Create' button is now enabled (blue). The Description field and Parent Category dropdown showing '(Top Level)' are visible. All requirements ",
+      "UrlBefore": "http://localhost:4200/app/lists/Categories",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Cancel",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-lists-categories-resource[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/div[1]/div[3]/button[2]",
+          "BoundingBox": {
+            "XMin": 767,
+            "YMin": 541,
+            "XMax": 845,
+            "YMax": 575
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/lists/Categories"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/lists/Categories",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

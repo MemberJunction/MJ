@@ -412,6 +412,12 @@ export class InteractiveElement {
     public Name: string = '';
     /** A selector the adapter can act on to re-resolve this element. */
     public Selector: string = '';
+    /**
+     * Nearest labeled ancestor region as `role:name` (e.g. `group:All
+     * applications`), or undefined when the element sits in no named region.
+     * Lets a re-resolution tell same-named elements apart by WHERE they live.
+     */
+    public Scope?: string;
     /** Current value for inputs (e.g. '' → rendered as "(empty)"), when applicable. */
     public Value?: string;
     /** The element's bounding box in viewport pixels, when available. */

@@ -1,0 +1,104 @@
+{
+  "TestId": "8D4D994A-7A0C-49ED-8FA1-52D857A1ACB7",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "f86da7fe",
+  "RecordedAt": "2026-09-11T20:53:44.399Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "allowedDomains",
+    "baseUrl",
+    "authUsername",
+    "authDomains",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "We are already in Bulk Operations -> Operations studio list. I will type 'stamp' into the 'Search bulk operations…' search box to test list filtering.",
+      "UrlBefore": "http://localhost:4200/app/bulk-operations",
+      "Action": {
+        "Method": "type",
+        "Text": "stamp",
+        "PressEnter": false,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Search bulk operations…",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-bulk-operations-container[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/mj-bulk-operations-operations[1]/div[1]/mj-record-process-studio[1]/div[1]/div[1]/input[1]",
+          "BoundingBox": {
+            "XMin": 260,
+            "YMin": 163,
+            "XMax": 620,
+            "YMax": 202
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/bulk-operations"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/bulk-operations/Bulk%20Operations?section=operations"
+      }
+    },
+    {
+      "Instruction": "The search query 'stamp' successfully narrowed the list from 3 rows to 1 row ('Demo: stamp Description (AI Prompts)'). Now I will clear the search box to verify that the full list returns.",
+      "UrlBefore": "http://localhost:4200/app/bulk-operations/Bulk%20Operations?section=operations",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Search bulk operations…",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-bulk-operations-container[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/mj-bulk-operations-operations[1]/div[1]/mj-record-process-studio[1]/div[1]/div[1]/input[1]",
+          "BoundingBox": {
+            "XMin": 260,
+            "YMin": 163,
+            "XMax": 620,
+            "YMax": 202
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/bulk-operations/Bulk%20Operations?section=operations"
+      }
+    },
+    {
+      "Instruction": "The search query 'stamp' successfully narrowed the list from 3 rows to 1 row ('Demo: stamp Description (AI Prompts)'). Now I will clear the search box to verify that the full list returns.",
+      "UrlBefore": "http://localhost:4200/app/bulk-operations/Bulk%20Operations?section=operations",
+      "Action": {
+        "Method": "keypress",
+        "Key": "a"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false
+      }
+    },
+    {
+      "Instruction": "The search query 'stamp' successfully narrowed the list from 3 rows to 1 row ('Demo: stamp Description (AI Prompts)'). Now I will clear the search box to verify that the full list returns.",
+      "UrlBefore": "http://localhost:4200/app/bulk-operations/Bulk%20Operations?section=operations",
+      "Action": {
+        "Method": "keypress",
+        "Key": "Backspace"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/bulk-operations/Bulk%20Operations?section=operations",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

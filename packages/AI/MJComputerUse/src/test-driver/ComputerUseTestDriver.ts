@@ -73,6 +73,7 @@ import {
     AppProfile,
     SettleConfig,
     AuthDetourConfig,
+    LoopConfig,
     hashesSimilar,
     decideReplayTier,
     recordTrace,
@@ -124,6 +125,56 @@ import { DomAssertOracle } from './oracles/DomAssertOracle.js';
 import { promises as fs } from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+
+/**
+ * MJ Explorer defaults for the app-neutral settle loop, overridable
+ * per test via `config.appProfile`. This is where MJ-specific signals live —
+ * the Layer-1 engine never names them.
+ *
+ * - Readiness beacon: `[data-mj-ready="true"]`, which MJExplorer's shell sets
+ *   on `<html>` when the active route's NotifyLoadComplete fires.
+ * - Busy markers: MJ's loading component (`mj-loading` / `.mj-loading`),
+ *   merged with the engine's app-neutral `[aria-busy]` / `[role=progressbar]`.
+ */
+export function buildAppProfile(config: ComputerUseTestConfig): AppProfile {
+    const profile = new AppProfile();
+    const cfg = config.appProfile;
+
+    profile.ReadinessBeacon = cfg?.readinessBeacon ?? '[data-mj-ready="true"]';
+    profile.BusyMarkers = cfg?.busyMarkers ?? ['mj-loading', '.mj-loading'];
+
+    if (cfg?.settle) {
+        const settle = new SettleConfig();
+        if (cfg.settle.maxWaitMs != null) settle.MaxWaitMs = cfg.settle.maxWaitMs;
+        if (cfg.settle.pollMs != null) settle.PollMs = cfg.settle.pollMs;
+        if (cfg.settle.networkIdleCapMs != null) settle.NetworkIdleCapMs = cfg.settle.networkIdleCapMs;
+        if (cfg.settle.minWaitMs != null) settle.MinWaitMs = cfg.settle.minWaitMs;
+        profile.Settle = settle;
+    }
+
+    // URL normalization. These params are stripped before a URL is compared
+    // against a recorded pattern and before it forms a loop state signature.
+    // MJ Explorer's identity providers stamp a fresh one-time value per login
+    // transaction, so without this a recorded auth step's postcondition can
+    // never match again and two visits to the same page never look the same.
+    const loop = new LoopConfig();
+    loop.VolatileParams = cfg?.volatileParams ?? ['state', 'code', 'nonce'];
+    profile.Loop = loop;
+
+    // Auth-detour watchdog. MJ Explorer authenticates via Auth0 or
+    // Microsoft Entra (MSAL); when a mid-run session invalidation bounces the
+    // page to one of those, the watchdog recovers it without charging the
+    // agent and, past MaxDetours, ends the run as an infrastructure
+    // AuthDetour. Defaulted on for the MJ suite (this is the ~13/44 failure
+    // class the plan targets); `identityProviderPatterns: []` disables it.
+    const auth = new AuthDetourConfig();
+    auth.IdentityProviderPatterns =
+        cfg?.auth?.identityProviderPatterns ?? ['auth0.com', 'login.microsoftonline.com'];
+    if (cfg?.auth?.maxDetours != null) auth.MaxDetours = cfg.auth.maxDetours;
+    profile.Auth = auth;
+
+    return profile;
+}
 
 /**
  * Test driver for Computer Use browser automation tests.
@@ -603,7 +654,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         }
 
         // Adaptive settle profile: MJ-Explorer defaults, config-overridable.
-        params.AppProfile = this.buildAppProfile(config);
+        params.AppProfile = buildAppProfile(config);
 
         // Browser config
         if (
@@ -686,47 +737,6 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         }
 
         return params;
-    }
-
-    /**
-     * MJ Explorer defaults for the app-neutral settle loop, overridable
-     * per test via `config.appProfile`. This is where MJ-specific signals live —
-     * the Layer-1 engine never names them.
-     *
-     * - Readiness beacon: `[data-mj-ready="true"]`, which MJExplorer's shell sets
-     *   on `<html>` when the active route's NotifyLoadComplete fires.
-     * - Busy markers: MJ's loading component (`mj-loading` / `.mj-loading`),
-     *   merged with the engine's app-neutral `[aria-busy]` / `[role=progressbar]`.
-     */
-    private buildAppProfile(config: ComputerUseTestConfig): AppProfile {
-        const profile = new AppProfile();
-        const cfg = config.appProfile;
-
-        profile.ReadinessBeacon = cfg?.readinessBeacon ?? '[data-mj-ready="true"]';
-        profile.BusyMarkers = cfg?.busyMarkers ?? ['mj-loading', '.mj-loading'];
-
-        if (cfg?.settle) {
-            const settle = new SettleConfig();
-            if (cfg.settle.maxWaitMs != null) settle.MaxWaitMs = cfg.settle.maxWaitMs;
-            if (cfg.settle.pollMs != null) settle.PollMs = cfg.settle.pollMs;
-            if (cfg.settle.networkIdleCapMs != null) settle.NetworkIdleCapMs = cfg.settle.networkIdleCapMs;
-            if (cfg.settle.minWaitMs != null) settle.MinWaitMs = cfg.settle.minWaitMs;
-            profile.Settle = settle;
-        }
-
-        // Auth-detour watchdog. MJ Explorer authenticates via Auth0 or
-        // Microsoft Entra (MSAL); when a mid-run session invalidation bounces the
-        // page to one of those, the watchdog recovers it without charging the
-        // agent and, past MaxDetours, ends the run as an infrastructure
-        // AuthDetour. Defaulted on for the MJ suite (this is the ~13/44 failure
-        // class the plan targets); `identityProviderPatterns: []` disables it.
-        const auth = new AuthDetourConfig();
-        auth.IdentityProviderPatterns =
-            cfg?.auth?.identityProviderPatterns ?? ['auth0.com', 'login.microsoftonline.com'];
-        if (cfg?.auth?.maxDetours != null) auth.MaxDetours = cfg.auth.maxDetours;
-        profile.Auth = auth;
-
-        return profile;
     }
 
     /**

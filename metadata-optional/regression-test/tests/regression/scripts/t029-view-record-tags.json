@@ -1,0 +1,121 @@
+{
+  "TestId": "375A6F64-D6E1-46A8-83F7-7CAAA03C29C3",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "8d29b8e0",
+  "RecordedAt": "2026-09-11T20:28:04.386Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "allowedDomains",
+    "baseUrl",
+    "authUsername",
+    "authDomains",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "Navigating directly to the Events entity grid via URL as per instructions.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "navigate",
+        "Url": "http://localhost:4200/app/data-explorer/Data?entity=Events"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=Events"
+      }
+    },
+    {
+      "Instruction": "We are currently on the Events grid. I will click the first row ('Cheese Tasting Techniques') to open its preview or record options.",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/Data?entity=Events",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "row",
+          "Name": "Cheese Tasting Techniques\nWorkshop\nSep 21, 2026\nSep 21, 2026",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-data-explorer-resource[1]/div[1]/mj-data-explorer-dashboard[1]/div[1]/div[2]/div[3]/mj-view-workspace[1]/div[1]/div[2]/mj-entity-viewer[1]/div[1]/div[1]/div[3]/mj-grid-view-renderer[1]/mj-entity-data-grid[1]/div[1]/div[2]/ag-grid-angular[1]/div[3]/div[1]/div[2]/div[3]/div[1]/div[2]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 282,
+            "YMin": 328,
+            "XMax": 932,
+            "YMax": 368
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=Events"
+      }
+    },
+    {
+      "Instruction": "The preview panel for 'Cheese Tasting Techniques' is open. I will click 'Open Full Record' (index 60) to load the full record view.",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/Data?entity=Events",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Open Full Record",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-data-explorer-resource[1]/div[1]/mj-data-explorer-dashboard[1]/div[1]/div[3]/mj-entity-record-detail-panel[1]/div[1]/div[3]/button[1]",
+          "BoundingBox": {
+            "XMin": 901,
+            "YMin": 664,
+            "XMax": 1260,
+            "YMax": 704
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=Events"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/Events/ID%7C{uuid}"
+      }
+    },
+    {
+      "Instruction": "The full record view for 'Cheese Tasting Techniques' is open. I will click the 'View tags' button (index 21) in the record toolbar.",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/record/Events/ID%7C{uuid}",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "View tags",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/section[2]/div[1]/div[1]/div[1]/mj-record-resource[1]/mj-single-record[1]/mj-entity-form-host[1]/gen-associationdemoevent-form[1]/mj-record-form-container[1]/mj-form-toolbar[1]/div[1]/div[1]/button[7]",
+          "BoundingBox": {
+            "XMin": 342,
+            "YMin": 156,
+            "XMax": 391,
+            "YMax": 189
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/Events/ID%7C{uuid}"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/data-explorer/record/Events/ID%7C{uuid}",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

@@ -7,6 +7,7 @@
  */
 
 import { TraceStep, StepPrecondition, StepPostcondition, TraceTarget } from '../types/trace.js';
+import { resolveElementByBox } from './trace.js';
 import {
     BrowserAction,
     ClickAction,
@@ -124,16 +125,29 @@ export interface GuardResult {
 }
 
 /**
+ * Describe a URL guard failure in terms of both urls.
+ *
+ * "does not match expected pattern" is unactionable: it cannot distinguish app
+ * drift (the route genuinely moved) from a state-dependent recording (the URL
+ * encodes a prior selection, so it only ever matches in the order it was
+ * recorded). Naming both makes that a one-line read instead of another
+ * instrumented run.
+ */
+export function describeUrlMismatch(pattern: string, observed?: string): string {
+    return observed ? `expected ${pattern} — saw ${observed}` : `expected pattern ${pattern}`;
+}
+
+/**
  * Pure precondition decision from observed facts. Fail-fast: a declared URL
  * pattern that doesn't match, or a required target that never became visible
  * within the bound, FAILS the step (the engine then heals or diverges).
  */
 export function evaluatePrecondition(
     pre: StepPrecondition,
-    observed: { urlMatched: boolean; targetVisible: boolean; targetChecked: boolean }
+    observed: { urlMatched: boolean; targetVisible: boolean; targetChecked: boolean; url?: string }
 ): GuardResult {
     if (pre.UrlPattern && !observed.urlMatched) {
-        return { pass: false, reason: `entry URL does not match expected pattern` };
+        return { pass: false, reason: `entry URL does not match ${describeUrlMismatch(pre.UrlPattern, observed.url)}` };
     }
     if (pre.WaitForTarget && observed.targetChecked && !observed.targetVisible) {
         return { pass: false, reason: 'target never became attached+visible within the bound' };
@@ -147,13 +161,13 @@ export function evaluatePrecondition(
  */
 export function evaluatePostcondition(
     post: StepPostcondition | undefined,
-    observed: { urlMatched: boolean; expectVisibleOk: boolean; expectChecked: boolean }
+    observed: { urlMatched: boolean; expectVisibleOk: boolean; expectChecked: boolean; url?: string }
 ): GuardResult {
     if (!post) {
         return { pass: true, reason: 'no postcondition recorded' };
     }
     if (post.UrlPattern && !observed.urlMatched) {
-        return { pass: false, reason: 'post-action URL does not match expected pattern' };
+        return { pass: false, reason: `post-action URL does not match ${describeUrlMismatch(post.UrlPattern, observed.url)}` };
     }
     if (post.ExpectVisible && observed.expectChecked && !observed.expectVisibleOk) {
         return { pass: false, reason: 'expected element not visible after the action' };
@@ -177,12 +191,30 @@ export interface HealResolution {
     reason: string;
 }
 
+
+/**
+ * Candidates that live in the recorded region, or ALL candidates when no region
+ * was recorded or none of them match it.
+ */
+function narrowByScope(candidates: InteractiveElement[], scope?: string): InteractiveElement[] {
+    const want = scope?.trim().toLowerCase();
+    if (!want) {
+        return candidates;
+    }
+    const scoped = candidates.filter(e => (e.Scope ?? '').trim().toLowerCase() === want);
+    return scoped.length > 0 ? scoped : candidates;
+}
+
 /**
  * Deterministically re-resolve a recorded target against a fresh element list by
  * accessible role + name. Confidence tiers:
- *  - 0.9  — a UNIQUE exact role+name match (the common "element moved" drift).
+ *  - 0.9  — a UNIQUE exact role+name match (the common "element moved" drift),
+ *           after narrowing to the recorded region when one survives.
+ *  - 0.75 — MULTIPLE role+name matches, one of which sits where the recording
+ *           clicked (position breaks the tie; see below).
  *  - 0.6  — a UNIQUE name-substring match (label lightly reworded).
- *  - 0.3  — MULTIPLE role+name matches (ambiguous; the LLM seam must disambiguate).
+ *  - 0.3  — MULTIPLE role+name matches and no positional evidence (ambiguous;
+ *           the LLM seam must disambiguate).
  *  - 0    — nothing plausible, or the recorded target had no role/name.
  */
 export function reresolveTarget(target: TraceTarget, elements: InteractiveElement[]): HealResolution {
@@ -192,14 +224,36 @@ export function reresolveTarget(target: TraceTarget, elements: InteractiveElemen
         return { confidence: 0, reason: 'recorded target has no role/name to re-resolve' };
     }
 
-    const exact = elements.filter(e =>
+    const all = elements.filter(e =>
         (!role || (e.Role ?? '').trim().toLowerCase() === role) &&
         (!name || (e.Name ?? '').trim().toLowerCase() === name)
     );
+    // Narrow by the region the element was recorded in, when one was recorded and
+    // the page still has it. Position goes stale on any relayout; a region is
+    // semantic and survives both reordering and relayout, so it is tried first.
+    // A region that matches nothing is a renamed or removed region — not evidence
+    // that the element is gone — so the unnarrowed candidates stand.
+    const exact = narrowByScope(all, target.Scope);
     if (exact.length === 1) {
         return { selector: exact[0].Selector, element: exact[0], confidence: 0.9, reason: 'unique role+name match' };
     }
     if (exact.length > 1) {
+        // Identical twins are common and NOT a reason to give up. An app launcher
+        // that lists each app in both a "Recent" and an "All" grid gives every
+        // recorded link a same-role, same-name sibling — and declining here is the
+        // worst branch available, because the caller then falls back to the
+        // recorded absolute XPath, the one signal a reordered list has already
+        // invalidated. The recorded box says which twin the passing run clicked,
+        // scored by the same hit-test that grounded it at record time.
+        const positioned = resolveElementByBox(target.BoundingBox, exact);
+        if (positioned) {
+            return {
+                selector: positioned.Selector,
+                element: positioned,
+                confidence: 0.75,
+                reason: `${exact.length} elements match role+name — disambiguated by recorded position`,
+            };
+        }
         return { confidence: 0.3, reason: `${exact.length} elements match role+name — ambiguous` };
     }
 

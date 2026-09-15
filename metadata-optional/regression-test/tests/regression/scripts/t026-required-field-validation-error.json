@@ -1,0 +1,96 @@
+{
+  "TestId": "EBA37AB4-1A44-4195-85FC-E9F776841BDE",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "bb89175f",
+  "RecordedAt": "2026-09-11T20:27:55.819Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "allowedDomains",
+    "baseUrl",
+    "authUsername",
+    "authDomains",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "Navigating directly to the Members entity grid URL to open the grid quickly and reliably.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "navigate",
+        "Url": "http://localhost:4200/app/data-explorer/Data?entity=Members"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=Members"
+      }
+    },
+    {
+      "Instruction": "The Members grid is currently loaded. Now I need to click the 'New' / 'Create new record' button to open a blank Member form.",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/Data?entity=Members",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Create new record",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-data-explorer-resource[1]/div[1]/mj-data-explorer-dashboard[1]/div[1]/div[2]/div[3]/mj-view-workspace[1]/div[1]/div[2]/mj-entity-viewer[1]/div[1]/div[1]/div[3]/mj-grid-view-renderer[1]/mj-entity-data-grid[1]/div[1]/div[1]/div[3]/button[1]",
+          "BoundingBox": {
+            "XMin": 862,
+            "YMin": 239,
+            "XMax": 933,
+            "YMax": 268
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=Members"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/Members/new"
+      }
+    },
+    {
+      "Instruction": "The new Member record form is loaded with required fields highlighted (Email, First Name, Last Name, Join Date have red underlines). I need to click 'Save Changes' without filling these required field",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/record/Members/new",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Save Changes",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/section[2]/div[1]/div[1]/div[1]/mj-record-resource[1]/mj-single-record[1]/mj-entity-form-host[1]/gen-associationdemomember-form[1]/mj-record-form-container[1]/mj-form-toolbar[1]/div[1]/div[2]/button[1]",
+          "BoundingBox": {
+            "XMin": 1008,
+            "YMin": 150,
+            "XMax": 1152,
+            "YMax": 183
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/Members/new"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/data-explorer/record/Members/new",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

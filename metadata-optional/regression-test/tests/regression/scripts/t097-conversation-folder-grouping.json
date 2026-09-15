@@ -1,0 +1,233 @@
+{
+  "TestId": "610BF5AD-B684-4E85-A210-8D584735002A",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "5678a184",
+  "RecordedAt": "2026-09-11T20:52:04.221Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "allowedDomains",
+    "baseUrl",
+    "authUsername",
+    "authDomains",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "Click on the application switcher dropdown to switch to the Chat application.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Switch application — current: Home",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 62,
+            "YMin": 12,
+            "XMax": 168,
+            "YMax": 48
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "The application launcher menu is open. I will click on 'Chat' to switch to the Chat application.",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Chat",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/dialog[1]/div[2]/div[2]/div[1]",
+          "BoundingBox": {
+            "XMin": 217,
+            "YMin": 186,
+            "XMax": 492,
+            "YMax": 264
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/chat/Conversations"
+      }
+    },
+    {
+      "Instruction": "The Chat app is now open. I will click the 'Options' menu button (3 dots) next to the search box in the sidebar to reveal layout options.",
+      "UrlBefore": "http://localhost:4200/app/chat/Conversations",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Options",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-chat-conversations-resource[1]/div[1]/div[1]/mj-conversation-list[1]/div[1]/div[1]/div[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 259,
+            "YMin": 69,
+            "XMax": 291,
+            "YMax": 101
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/chat/Conversations"
+      }
+    },
+    {
+      "Instruction": "Clicking 'Group by folder' from the open Options menu in the sidebar.",
+      "UrlBefore": "http://localhost:4200/app/chat/Conversations",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Group by folder",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-chat-conversations-resource[1]/div[1]/div[1]/mj-conversation-list[1]/div[1]/div[1]/div[1]/div[1]/div[1]/button[3]",
+          "BoundingBox": {
+            "XMin": 92,
+            "YMin": 180,
+            "XMax": 290,
+            "YMax": 215
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/chat/Conversations"
+      }
+    },
+    {
+      "Instruction": "The sidebar now shows 'Folders' section with 'New Folder' button and 'Messages' section below. Next, I will click 'New Folder' to confirm the dialog appears.",
+      "UrlBefore": "http://localhost:4200/app/chat/Conversations",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "New Folder",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-chat-conversations-resource[1]/div[1]/div[1]/mj-conversation-list[1]/div[1]/div[2]/div[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 259,
+            "YMin": 170,
+            "XMax": 283,
+            "YMax": 194
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/chat/Conversations"
+      }
+    },
+    {
+      "Instruction": "The 'Create Folder' modal dialog is currently open. I will click 'Cancel' to close it so I can interact with the Options menu again.",
+      "UrlBefore": "http://localhost:4200/app/chat/Conversations",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Cancel",
+          "Selector": "xpath=/html/body[1]/mj-dialog-container-internal[1]/div[1]/div[1]/div[1]/div[1]/mj-dialog[1]/div[1]/div[1]/mj-dialog-actions[1]/div[1]/button[2]",
+          "BoundingBox": {
+            "XMin": 525,
+            "YMin": 619,
+            "XMax": 613,
+            "YMax": 662
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/chat/Conversations"
+      }
+    },
+    {
+      "Instruction": "The folder creation dialog is closed. Now I will click the 'Options' menu button (...) in the sidebar to open the menu and switch back to flat list view.",
+      "UrlBefore": "http://localhost:4200/app/chat/Conversations",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Options",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-chat-conversations-resource[1]/div[1]/div[1]/mj-conversation-list[1]/div[1]/div[1]/div[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 259,
+            "YMin": 69,
+            "XMax": 291,
+            "YMax": 101
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/chat/Conversations"
+      }
+    },
+    {
+      "Instruction": "The Options menu is open. I will click 'Show as flat list' (element [13]) to switch the conversation sidebar layout back to the flat list view.",
+      "UrlBefore": "http://localhost:4200/app/chat/Conversations",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Show as flat list",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-chat-conversations-resource[1]/div[1]/div[1]/mj-conversation-list[1]/div[1]/div[1]/div[1]/div[1]/div[1]/button[3]",
+          "BoundingBox": {
+            "XMin": 92,
+            "YMin": 180,
+            "XMax": 290,
+            "YMax": 215
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/chat/Conversations"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/chat/Conversations",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

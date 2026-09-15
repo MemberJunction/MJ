@@ -32,6 +32,7 @@ import { HeadlessBrowserEngine } from '../browser/HeadlessBrowserEngine.js';
 interface MockBrowser {
     newContext: ReturnType<typeof vi.fn>;
     close: ReturnType<typeof vi.fn>;
+    isConnected: ReturnType<typeof vi.fn>;
     id: number;
 }
 
@@ -56,6 +57,7 @@ function makeBrowser(id: number): MockBrowser {
         id,
         newContext: vi.fn().mockImplementation(() => Promise.resolve(makeContext())),
         close: vi.fn().mockResolvedValue(undefined),
+        isConnected: vi.fn().mockReturnValue(true),
     };
 }
 

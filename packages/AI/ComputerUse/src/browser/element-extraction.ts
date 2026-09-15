@@ -20,12 +20,15 @@ import type { Locator, Page } from 'playwright';
 import { InteractiveElement, BoundingBox } from '../types/browser.js';
 import { TraceTarget } from '../types/trace.js';
 import { reresolveTarget, shouldAcceptHeal } from '../engine/replay.js';
+import { isBlockedByDismissableOverlay, dismissOverlay } from './overlay-dismiss.js';
 
 /** Raw per-element record the in-page probe returns (plain JSON, browser context). */
 interface RawInteractiveElement {
     role: string;
     name: string;
     xpath: string;
+    /** Nearest labeled ancestor region as `role:name`; '' when there is none. */
+    scope: string;
     value: string | null;
     x: number;
     y: number;
@@ -36,20 +39,52 @@ interface RawInteractiveElement {
 }
 
 /**
+ * Fallback bound for the in-page probe when a caller does not supply one.
+ * Matches `BrowserConfig.ActionTimeoutMs`'s default so an un-wired caller waits
+ * no longer than any other page operation.
+ */
+const DEFAULT_PROBE_TIMEOUT_MS = 10000;
+
+/**
  * Walk the current page for interactive elements and return them as an indexed
  * {@link InteractiveElement}[] in DOM order. Viewport-and-near-viewport only,
  * hidden/zero-size elements skipped. Never throws — a probe failure or absent
  * page yields an empty list (element grounding then degrades to coordinates).
+ *
+ * Bounded by `timeoutMs`, because `page.evaluate()` is the one page call that
+ * ignores `setDefaultTimeout()`: it waits forever for the in-page function to
+ * return, and a renderer that goes silent (frozen, throttled, or detached
+ * context) never rejects, so the `catch` below cannot fire. Perception runs on
+ * every step, and the engine only checks its time budget between steps — so an
+ * unbounded await here parks the run somewhere no budget, watchdog, or `Stop()`
+ * can reach it, and the caller's worker waits on a promise that never settles.
+ * Timing out degrades to the same empty list as any other probe failure.
  */
-export async function extractInteractiveElements(page: Page | null): Promise<InteractiveElement[]> {
+export async function extractInteractiveElements(
+    page: Page | null,
+    timeoutMs: number = DEFAULT_PROBE_TIMEOUT_MS
+): Promise<InteractiveElement[]> {
     if (!page) {
         return [];
     }
+    let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-        const raws = await page.evaluate(INTERACTIVITY_PROBE);
+        // `null` is the timeout's sentinel — distinguishable from the probe's
+        // own empty-list result, which is a legitimate "nothing interactive".
+        const expiry = new Promise<null>(resolve => {
+            timer = setTimeout(() => resolve(null), timeoutMs);
+        });
+        const raws = await Promise.race([page.evaluate(INTERACTIVITY_PROBE), expiry]);
+        if (raws === null) {
+            return [];
+        }
         return raws.map((r, i) => toInteractiveElement(r, i));
     } catch {
         return [];
+    } finally {
+        // Without this a fast probe still leaves the timer pending, holding the
+        // event loop open for the rest of the bound on every single step.
+        clearTimeout(timer);
     }
 }
 
@@ -60,6 +95,7 @@ function toInteractiveElement(r: RawInteractiveElement, index: number): Interact
     el.Role = r.role;
     el.Name = r.name;
     el.Selector = `xpath=${r.xpath}`;
+    el.Scope = r.scope || undefined;
     el.Value = r.value ?? undefined;
     el.Scrollable = r.scrollable;
     el.Disabled = r.disabled;
@@ -93,12 +129,16 @@ const PRECISE_ATTEMPT_TIMEOUT_MS = 2000;
  * Confidence-gated: an ambiguous match yields nothing, so we fail the step rather
  * than click the wrong element. Returns a fresh selector, or undefined.
  */
-async function healElementSelector(page: Page, element: InteractiveElement): Promise<string | undefined> {
+async function healElementSelector(
+    page: Page,
+    element: InteractiveElement,
+    probeTimeoutMs: number
+): Promise<string | undefined> {
     const target = new TraceTarget();
     target.Role = element.Role;
     target.Name = element.Name;
 
-    const resolution = reresolveTarget(target, await extractInteractiveElements(page));
+    const resolution = reresolveTarget(target, await extractInteractiveElements(page, probeTimeoutMs));
     return shouldAcceptHeal(resolution.confidence) ? resolution.selector : undefined;
 }
 
@@ -113,18 +153,6 @@ async function healElementSelector(page: Page, element: InteractiveElement): Pro
  * The original error is rethrown when no confident match exists, keeping the
  * failure message about the element the controller actually chose.
  */
-/**
- * A dismissable overlay is covering the target. Playwright reports the blocking
- * element in its actionability log; the CDK/Kendo/Material backdrops that sit over
- * an open popover, menu, or dialog all name themselves in it.
- */
-const DISMISSABLE_OVERLAY_PATTERN = /(cdk-overlay-backdrop|k-overlay|k-animation-container|mat-mdc-dialog|modal-backdrop|mj-overlay-backdrop)/i;
-
-function isBlockedByDismissableOverlay(error: unknown): boolean {
-    const message = error instanceof Error ? error.message : String(error);
-    return message.includes('intercepts pointer events') && DISMISSABLE_OVERLAY_PATTERN.test(message);
-}
-
 async function actOnElement(
     page: Page,
     element: InteractiveElement,
@@ -144,12 +172,12 @@ async function actOnElement(
         // search box, and the run died on loop detection with budget to spare.)
         if (isBlockedByDismissableOverlay(error)) {
             try {
-                await page.keyboard.press('Escape');
+                await dismissOverlay(page);
                 await act(locatorFor(page, element), preciseMs);
                 return;
             } catch { /* fall through to the selector heal below */ }
         }
-        const healedSelector = await healElementSelector(page, element);
+        const healedSelector = await healElementSelector(page, element, actionTimeoutMs);
         if (!healedSelector) {
             throw error;
         }
@@ -264,6 +292,63 @@ const INTERACTIVITY_PROBE = (): RawInteractiveElement[] => {
         return text.trim().slice(0, 120);
     };
 
+    /**
+     * Landmark roles that bound a meaningful region of the page. An element's
+     * nearest NAMED such ancestor is the semantic answer to "where does this
+     * live" — stable across the reordering and relayout that break a positional
+     * path, and the only thing that separates same-named twins in different
+     * parts of one screen.
+     */
+    const SCOPE_ROLES = new Set([
+        'group', 'region', 'dialog', 'alertdialog', 'navigation', 'main', 'form',
+        'table', 'grid', 'list', 'listbox', 'tabpanel', 'menu', 'toolbar',
+        'banner', 'complementary', 'contentinfo', 'search', 'article',
+    ]);
+    const IMPLICIT_SCOPE_ROLE: Record<string, string> = {
+        NAV: 'navigation', MAIN: 'main', FORM: 'form', DIALOG: 'dialog',
+        TABLE: 'table', SECTION: 'region', ASIDE: 'complementary',
+        HEADER: 'banner', FOOTER: 'contentinfo', UL: 'list', OL: 'list',
+        ARTICLE: 'article', SEARCH: 'search',
+    };
+
+    /** A region's accessible name — aria-label, else aria-labelledby's text. */
+    const regionName = (node: Element): string => {
+        const label = node.getAttribute('aria-label');
+        if (label && label.trim()) {
+            return label.trim();
+        }
+        const labelledBy = node.getAttribute('aria-labelledby');
+        if (!labelledBy) {
+            return '';
+        }
+        return labelledBy
+            .split(/\s+/)
+            .map(id => document.getElementById(id))
+            .map(n => (n?.textContent ?? '').trim())
+            .filter(Boolean)
+            .join(' ')
+            .trim();
+    };
+
+    /** `role:name` of the nearest NAMED landmark ancestor, or '' when there is none. */
+    const scopeOf = (el: Element): string => {
+        let node: Element | null = el.parentElement;
+        while (node && node !== document.body) {
+            const role = (node.getAttribute('role') || IMPLICIT_SCOPE_ROLE[node.tagName] || '').trim().toLowerCase();
+            if (role && SCOPE_ROLES.has(role)) {
+                const name = regionName(node);
+                // An unnamed landmark cannot be told apart from its siblings, so
+                // it is no better a discriminator than the path already is — keep
+                // climbing for one that carries a name.
+                if (name) {
+                    return `${role}:${name}`;
+                }
+            }
+            node = node.parentElement;
+        }
+        return '';
+    };
+
     const results: RawInteractiveElement[] = [];
     const vw = window.innerWidth;
     const vh = window.innerHeight;
@@ -310,6 +395,7 @@ const INTERACTIVITY_PROBE = (): RawInteractiveElement[] => {
             role: roleOf(el),
             name: nameOf(el),
             xpath: xpathOf(el),
+            scope: scopeOf(el),
             value: isFormValue ? String((el as HTMLInputElement).value ?? '') : null,
             x: rect.left,
             y: rect.top,

@@ -1,0 +1,210 @@
+{
+  "TestId": "B1241A3E-43AB-40C3-848F-4885E4BBDB81",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "bc7ff9f1",
+  "RecordedAt": "2026-09-11T18:49:40.270Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "allowedDomains",
+    "baseUrl",
+    "authUsername",
+    "authDomains",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "I need to open the application switcher dropdown to find the 'Integrations' app.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Switch application — current: Home",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 62,
+            "YMin": 12,
+            "XMax": 168,
+            "YMax": 48
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "The application launcher dialog is now open. I will click on the 'Integrations' link (index 24) to navigate to the Integrations application.",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Integrations",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/dialog[1]/div[2]/div[4]/div[17]",
+          "BoundingBox": {
+            "XMin": 502,
+            "YMin": 750,
+            "XMax": 778,
+            "YMax": 828
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/integrations/Overview"
+      }
+    },
+    {
+      "Instruction": "We are now on the Integrations application (Overview section). Next, I need to navigate to the 'Schedules' section by clicking its tab in the top navigation bar.",
+      "UrlBefore": "http://localhost:4200/app/integrations/Overview",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Schedules",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/nav[1]/div[4]",
+          "BoundingBox": {
+            "XMin": 656,
+            "YMin": 13,
+            "XMax": 780,
+            "YMax": 46
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/integrations/Overview"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/integrations/Schedules"
+      }
+    },
+    {
+      "Instruction": "I am on the Schedules page. The 'Auto-sync' toggle on the schedule card is currently off. I need to click the toggle to turn it on so the schedule configuration controls become visible.",
+      "UrlBefore": "http://localhost:4200/app/integrations/Schedules",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "switch",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-integration-schedules[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/div[1]/div[1]/div[2]/div[1]/label[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 400,
+            "YMin": 214,
+            "XMax": 440,
+            "YMax": 236
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/integrations/Schedules"
+      }
+    },
+    {
+      "Instruction": "Clicking the 'Interval' schedule type pill to verify interval preset buttons and custom-minutes input appear.",
+      "UrlBefore": "http://localhost:4200/app/integrations/Schedules",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Interval",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-integration-schedules[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/div[1]/div[1]/div[2]/div[2]/div[1]/button[2]",
+          "BoundingBox": {
+            "XMin": 399,
+            "YMin": 251,
+            "XMax": 467,
+            "YMax": 275
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/integrations/Schedules"
+      }
+    },
+    {
+      "Instruction": "The Interval pill was clicked and its presets (5m, 15m, etc.) and Custom min input are visible. Next, I need to click the 'Cron' pill (index 15) to verify cron presets and input appear.",
+      "UrlBefore": "http://localhost:4200/app/integrations/Schedules",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Cron",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-integration-schedules[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/div[1]/div[1]/div[2]/div[2]/div[1]/button[3]",
+          "BoundingBox": {
+            "XMin": 471,
+            "YMin": 251,
+            "XMax": 525,
+            "YMax": 275
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/integrations/Schedules"
+      }
+    },
+    {
+      "Instruction": "The 'Cron' pill is selected, showing preset buttons ('Every hour', 'Every 6 hours', etc.) and a cron expression textbox. I will click one of the preset buttons ('Every hour') to set an expression and ",
+      "UrlBefore": "http://localhost:4200/app/integrations/Schedules",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Every hour",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-integration-schedules[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/div[1]/div[1]/div[2]/div[3]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 325,
+            "YMin": 290,
+            "XMax": 409,
+            "YMax": 314
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/integrations/Schedules"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/integrations/Schedules",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

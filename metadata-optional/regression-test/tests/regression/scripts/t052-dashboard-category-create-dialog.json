@@ -1,0 +1,210 @@
+{
+  "TestId": "0E338E6F-5EF5-4E76-A2F5-466EE15CE459",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "0ca56981",
+  "RecordedAt": "2026-09-11T20:32:19.998Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "allowedDomains",
+    "baseUrl",
+    "authUsername",
+    "authDomains",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "Clicking the application switcher dropdown next to the logo to switch to Data Explorer.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Switch application — current: Home",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 62,
+            "YMin": 12,
+            "XMax": 168,
+            "YMax": 48
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "The application launcher dialog is open. I will click on 'Data Explorer' (index 4) to navigate to Data Explorer.",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Data Explorer",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/dialog[1]/div[2]/div[2]/div[1]",
+          "BoundingBox": {
+            "XMin": 217,
+            "YMin": 186,
+            "XMax": 492,
+            "YMax": 264
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data"
+      }
+    },
+    {
+      "Instruction": "We are in Data Explorer. I need to navigate to the 'Dashboards' section. I will click on the 'Dashboards' link in the top bar.",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/Data",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Dashboards",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/nav[1]/div[3]",
+          "BoundingBox": {
+            "XMin": 494,
+            "YMin": 13,
+            "XMax": 631,
+            "YMax": 46
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Dashboards"
+      }
+    },
+    {
+      "Instruction": "Now on the Dashboards page. I will click the '+ New' button (Index 14) to open its dropdown options ('Dashboard' and 'Category').",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/Dashboards",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "New",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-dashboard-browser-resource[1]/div[1]/mj-dashboard-browser[1]/div[1]/div[1]/div[1]/div[2]/button[1]",
+          "BoundingBox": {
+            "XMin": 1157,
+            "YMin": 78,
+            "XMax": 1256,
+            "YMax": 114
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Dashboards"
+      }
+    },
+    {
+      "Instruction": "The '+ New' dropdown is open showing 'Dashboard' and 'Category'. I will click on 'Category' (index 16) to open the 'Create Category' dialog.",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/Dashboards",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Category",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-dashboard-browser-resource[1]/div[1]/mj-dashboard-browser[1]/div[1]/div[1]/div[1]/div[2]/div[1]/button[2]",
+          "BoundingBox": {
+            "XMin": 1096,
+            "YMin": 158,
+            "XMax": 1256,
+            "YMax": 198
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Dashboards"
+      }
+    },
+    {
+      "Instruction": "The 'Create Category' dialog is now open. I will enter 'CU Test Folder 3' into the Name field and click the Create button to create the new category.",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/Dashboards",
+      "Action": {
+        "Method": "type",
+        "Text": "CU Test Folder 3",
+        "PressEnter": false,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Name *",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-dashboard-browser-resource[1]/div[1]/mj-dashboard-browser[1]/div[1]/div[4]/div[1]/div[2]/div[1]/input[1]",
+          "BoundingBox": {
+            "XMin": 460,
+            "YMin": 289,
+            "XMax": 820,
+            "YMax": 327
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Dashboards"
+      }
+    },
+    {
+      "Instruction": "The 'Create Category' dialog is now open. I will enter 'CU Test Folder 3' into the Name field and click the Create button to create the new category.",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/Dashboards",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Create",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-dashboard-browser-resource[1]/div[1]/mj-dashboard-browser[1]/div[1]/div[4]/div[1]/div[3]/button[1]",
+          "BoundingBox": {
+            "XMin": 460,
+            "YMin": 486,
+            "XMax": 555,
+            "YMax": 522
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/data-explorer/Dashboards",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

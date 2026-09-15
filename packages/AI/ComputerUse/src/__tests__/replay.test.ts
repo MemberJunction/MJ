@@ -11,7 +11,7 @@ import {
     DEFAULT_HEAL_CONFIDENCE_THRESHOLD,
 } from '../engine/replay.js';
 import { TraceStep, TraceAction, TraceTarget, StepPrecondition, StepPostcondition } from '../types/trace.js';
-import { InteractiveElement } from '../types/browser.js';
+import { InteractiveElement, BoundingBox } from '../types/browser.js';
 
 // ─── from replay-step ───
 
@@ -101,6 +101,38 @@ describe('evaluatePrecondition (fail-fast)', () => {
     });
 });
 
+describe('URL guard diagnostics', () => {
+    // A divergence reading "post-action URL does not match expected pattern" says
+    // nothing about WHICH url was seen, so every investigation needs another full
+    // run with instrumentation. The two urls are the whole finding: naming them
+    // distinguishes app drift from a state-dependent recording at a glance.
+    it('names both the expected pattern and the url actually observed (postcondition)', () => {
+        const post = Object.assign(new StepPostcondition(), { UrlPattern: '/app/actions/Overview' });
+        const r = evaluatePostcondition(post, {
+            urlMatched: false, expectVisibleOk: true, expectChecked: false,
+            url: 'http://localhost:4200/app/actions/Monitor',
+        });
+        expect(r.reason).toContain('/app/actions/Overview');
+        expect(r.reason).toContain('http://localhost:4200/app/actions/Monitor');
+    });
+
+    it('names both urls on an entry-url mismatch (precondition)', () => {
+        const r = evaluatePrecondition(
+            Object.assign(new StepPrecondition(), { UrlPattern: '/app/data', WaitForTarget: false }),
+            { urlMatched: false, targetVisible: false, targetChecked: false, url: 'http://localhost:4200/app/home/Home' },
+        );
+        expect(r.reason).toContain('/app/data');
+        expect(r.reason).toContain('http://localhost:4200/app/home/Home');
+    });
+
+    it('stays readable when no observed url was supplied', () => {
+        const post = Object.assign(new StepPostcondition(), { UrlPattern: '/app/data' });
+        const r = evaluatePostcondition(post, { urlMatched: false, expectVisibleOk: true, expectChecked: false });
+        expect(r.pass).toBe(false);
+        expect(r.reason).toContain('/app/data');
+    });
+});
+
 describe('evaluatePostcondition', () => {
     it('passes when no postcondition recorded', () => {
         expect(evaluatePostcondition(undefined, { urlMatched: false, expectVisibleOk: false, expectChecked: false }).pass).toBe(true);
@@ -183,5 +215,125 @@ describe('isSelectorHealable (flow-vs-selector drift)', () => {
     });
     it('treats postcondition (flow) divergence as NOT selector-healable', () => {
         expect(isSelectorHealable('postcondition — URL mismatch')).toBe(false);
+    });
+});
+
+// ─── ambiguity resolved by recorded geometry ───
+
+function box(xMin: number, yMin: number, xMax: number, yMax: number): BoundingBox {
+    return Object.assign(new BoundingBox(), { XMin: xMin, YMin: yMin, XMax: xMax, YMax: yMax });
+}
+function elBox(index: number, role: string, name: string, selector: string, b: BoundingBox): InteractiveElement {
+    const e = el(index, role, name, selector);
+    e.BoundingBox = b;
+    return e;
+}
+function targetAt(role: string, name: string, b: BoundingBox): TraceTarget {
+    const t = target(role, name);
+    t.BoundingBox = b;
+    return t;
+}
+
+describe('reresolveTarget — ambiguous role+name disambiguated by recorded box', () => {
+    // The app launcher renders every app TWICE (a MRU-ordered "Recent
+    // applications" grid and an alphabetical "All applications" grid), so the
+    // recorded link "AI" always has an identical twin and role+name alone is
+    // ambiguous. Declining the heal there is the worst option available: the
+    // caller then clicks the recorded absolute XPath, which is precisely the
+    // thing the MRU reorder invalidated. The recorded box says which of the
+    // equally-named candidates the run actually clicked.
+    it('picks the candidate whose box overlaps the recorded one', () => {
+        const r = reresolveTarget(targetAt('link', 'AI', box(300, 100, 400, 160)), [
+            elBox(0, 'link', 'AI', '#recent-ai', box(0, 100, 100, 160)),
+            elBox(1, 'link', 'AI', '#all-ai', box(300, 100, 400, 160)),
+        ]);
+        expect(r.selector).toBe('#all-ai');
+        expect(shouldAcceptHeal(r.confidence)).toBe(true);
+    });
+
+    it('ranks below a unique role+name match', () => {
+        const ambiguous = reresolveTarget(targetAt('link', 'AI', box(0, 0, 10, 10)), [
+            elBox(0, 'link', 'AI', '#a', box(0, 0, 10, 10)),
+            elBox(1, 'link', 'AI', '#b', box(50, 50, 60, 60)),
+        ]);
+        const unique = reresolveTarget(target('link', 'AI'), [el(0, 'link', 'AI', '#a')]);
+        expect(ambiguous.confidence).toBeLessThan(unique.confidence);
+    });
+
+    it('stays ambiguous when the recorded target carries no box', () => {
+        const r = reresolveTarget(target('link', 'AI'), [
+            elBox(0, 'link', 'AI', '#a', box(0, 0, 10, 10)),
+            elBox(1, 'link', 'AI', '#b', box(50, 50, 60, 60)),
+        ]);
+        expect(shouldAcceptHeal(r.confidence)).toBe(false);
+        expect(r.reason).toContain('ambiguous');
+    });
+
+    it('stays ambiguous when the recorded box overlaps no candidate', () => {
+        // Geometry that matches nothing is not evidence — a full relayout must
+        // escalate, not pick whichever twin happens to sit nearest the origin.
+        const r = reresolveTarget(targetAt('link', 'AI', box(900, 900, 950, 950)), [
+            elBox(0, 'link', 'AI', '#a', box(0, 0, 10, 10)),
+            elBox(1, 'link', 'AI', '#b', box(50, 50, 60, 60)),
+        ]);
+        expect(shouldAcceptHeal(r.confidence)).toBe(false);
+        expect(r.reason).toContain('ambiguous');
+    });
+});
+
+// ─── ambiguity resolved by semantic region ───
+
+function elScoped(index: number, role: string, name: string, selector: string, scope: string): InteractiveElement {
+    const e = el(index, role, name, selector);
+    e.Scope = scope;
+    return e;
+}
+function targetScoped(role: string, name: string, scope: string): TraceTarget {
+    const t = target(role, name);
+    t.Scope = scope;
+    return t;
+}
+
+describe('reresolveTarget — ambiguous role+name narrowed by recorded region', () => {
+    // Position is geometry and goes stale on any relayout; the region an element
+    // lives in is semantic and survives both reordering AND relayout. The launcher
+    // lists each app under BOTH "Recent applications" (usage-ordered) and "All
+    // applications" — same role, same name, different meaning of *where*.
+    it('picks the twin that lives in the recorded region', () => {
+        const r = reresolveTarget(targetScoped('link', 'AI', 'group:All applications'), [
+            elScoped(0, 'link', 'AI', '#recent-ai', 'group:Recent applications'),
+            elScoped(1, 'link', 'AI', '#all-ai', 'group:All applications'),
+        ]);
+        expect(r.selector).toBe('#all-ai');
+        expect(r.confidence).toBe(0.9);   // a region-unique match is as good as a globally unique one
+    });
+
+    it('outranks the positional tiebreak — semantics beat geometry', () => {
+        // The recorded box now sits over the WRONG twin (the grid reordered).
+        // Region must win, or the heal re-points to whatever moved into that spot.
+        const recorded = targetScoped('link', 'AI', 'group:All applications');
+        recorded.BoundingBox = box(0, 100, 100, 160);
+        const inRecent = elScoped(0, 'link', 'AI', '#recent-ai', 'group:Recent applications');
+        inRecent.BoundingBox = box(0, 100, 100, 160);
+        const inAll = elScoped(1, 'link', 'AI', '#all-ai', 'group:All applications');
+        inAll.BoundingBox = box(300, 100, 400, 160);
+
+        expect(reresolveTarget(recorded, [inRecent, inAll]).selector).toBe('#all-ai');
+    });
+
+    it('ignores a region that matches nothing — a renamed region is not evidence', () => {
+        const r = reresolveTarget(targetScoped('button', 'Save', 'group:Gone'), [
+            el(0, 'button', 'Save', '#save'),
+        ]);
+        expect(r.selector).toBe('#save');
+    });
+
+    it('leaves recordings without a region exactly as they were', () => {
+        const r = reresolveTarget(target('link', 'AI'), [
+            elScoped(0, 'link', 'AI', '#a', 'group:Recent applications'),
+            elScoped(1, 'link', 'AI', '#b', 'group:All applications'),
+        ]);
+        expect(shouldAcceptHeal(r.confidence)).toBe(false);
+        expect(r.reason).toContain('ambiguous');
     });
 });

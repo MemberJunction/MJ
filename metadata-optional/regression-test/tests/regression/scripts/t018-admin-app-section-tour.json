@@ -1,0 +1,441 @@
+{
+  "TestId": "41E69E45-1506-4838-97FC-22CA4870D05F",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "4e514ec6",
+  "RecordedAt": "2026-09-11T20:26:05.411Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "allowedDomains",
+    "baseUrl",
+    "authUsername",
+    "authDomains",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "Click the application switcher dropdown next to the logo to switch to the Admin application.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Switch application — current: Home",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 62,
+            "YMin": 12,
+            "XMax": 168,
+            "YMax": 48
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "The application switcher modal is now open. I will click on 'Admin' (element index 15) to navigate to the Admin application.",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Admin",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/dialog[1]/div[2]/div[4]/div[8]",
+          "BoundingBox": {
+            "XMin": 502,
+            "YMin": 486,
+            "XMax": 778,
+            "YMax": 564
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/admin/Identity%20&%20Access?section=users"
+      }
+    },
+    {
+      "Instruction": "We have arrived at Identity & Access > Users (admin-users). I will set checkpointReached to 'admin-users' and click on 'Roles' in the left sub-navigation to move to the next checkpoint.",
+      "UrlBefore": "http://localhost:4200/app/admin/Identity%20&%20Access?section=users",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Roles\nDefine roles and assignments",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-admin-identity-access[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav[1]/aside[1]/button[2]",
+          "BoundingBox": {
+            "XMin": 8,
+            "YMin": 203,
+            "XMax": 231,
+            "YMax": 256
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/admin/Identity%20&%20Access?section=users"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/admin/Identity%20&%20Access?section=roles"
+      }
+    },
+    {
+      "Instruction": "We are currently on the Roles view under Identity & Access. I will set checkpointReached to 'admin-roles' and click on 'Permissions' in the left sub-navigation to move to the next checkpoint.",
+      "UrlBefore": "http://localhost:4200/app/admin/Identity%20&%20Access?section=roles",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Permissions\nEntity-level access and audit",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-admin-identity-access[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav[1]/aside[1]/button[5]",
+          "BoundingBox": {
+            "XMin": 8,
+            "YMin": 382,
+            "XMax": 231,
+            "YMax": 435
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/admin/Identity%20&%20Access?section=roles"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/admin/Identity%20&%20Access?section=permissions"
+      }
+    },
+    {
+      "Instruction": "We have arrived at Identity & Access > Permissions ('Entity Permissions' screen). I will set checkpointReached to 'admin-permissions' and click on 'Data & Schema' in the top navigation bar to proceed ",
+      "UrlBefore": "http://localhost:4200/app/admin/Identity%20&%20Access?section=permissions",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Data & Schema",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/nav[1]/div[2]",
+          "BoundingBox": {
+            "XMin": 423,
+            "YMin": 13,
+            "XMax": 578,
+            "YMax": 46
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/admin/Identity%20&%20Access?section=permissions"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/admin/Data%20&%20Schema"
+      }
+    },
+    {
+      "Instruction": "We are currently on Data & Schema > ERD. I will set checkpointReached to 'admin-erd' and click 'Database Designer' in the left sub-navigation to move to checkpoint 5 (admin-database-designer).",
+      "UrlBefore": "http://localhost:4200/app/admin/Data%20&%20Schema?section=erd",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Database Designer\nCreate entities and fields",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-admin-data-schema[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav[1]/aside[1]/button[3]",
+          "BoundingBox": {
+            "XMin": 8,
+            "YMin": 258,
+            "XMax": 231,
+            "YMax": 311
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/admin/Data%20&%20Schema?section=erd"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/admin/Data%20&%20Schema?section=database-designer"
+      }
+    },
+    {
+      "Instruction": "We have arrived at Data & Schema > Database Designer. I will set checkpointReached to 'admin-database-designer' and click 'More navigation items' in the top bar to locate Monitoring > Diagnostics.",
+      "UrlBefore": "http://localhost:4200/app/admin/Data%20&%20Schema?section=database-designer",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "More navigation items",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/nav[1]/div[3]",
+          "BoundingBox": {
+            "XMin": 582,
+            "YMin": 13,
+            "XMax": 697,
+            "YMax": 46
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/admin/Data%20&%20Schema?section=database-designer"
+      }
+    },
+    {
+      "Instruction": "Setting checkpointReached to 'admin-database-designer' as instructed, then clicking on 'Monitoring' in the dropdown to navigate to Monitoring > Diagnostics.",
+      "UrlBefore": "http://localhost:4200/app/admin/Data%20&%20Schema?section=database-designer",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Monitoring",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 583,
+            "YMin": 59,
+            "XMax": 781,
+            "YMax": 96
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/admin/Data%20&%20Schema?section=database-designer"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/admin/Monitoring"
+      }
+    },
+    {
+      "Instruction": "We have arrived at Monitoring > Diagnostics (System Diagnostics page). Setting checkpointReached to 'admin-diagnostics' and clicking 'SQL Logging' in the left sub-navigation to proceed to the next che",
+      "UrlBefore": "http://localhost:4200/app/admin/Monitoring",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "SQL Logging\nCaptured SQL execution logs",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-admin-monitoring[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav[1]/aside[1]/button[2]",
+          "BoundingBox": {
+            "XMin": 8,
+            "YMin": 203,
+            "XMax": 231,
+            "YMax": 256
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/admin/Monitoring"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/admin/Monitoring?section=sql-logging"
+      }
+    },
+    {
+      "Instruction": "We have reached Monitoring > SQL Logging, which shows the Access Denied message (acceptable per checkpoint definition). I will set checkpointReached to 'admin-sql-logging' and navigate to Identity & A",
+      "UrlBefore": "http://localhost:4200/app/admin/Monitoring?section=sql-logging",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Identity & Access",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/nav[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 245,
+            "YMin": 13,
+            "XMax": 419,
+            "YMax": 46
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/admin/Monitoring?section=sql-logging"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/admin/Identity%20&%20Access?section=permissions"
+      }
+    },
+    {
+      "Instruction": "Setting checkpointReached to 'admin-sql-logging' for the SQL Logging section reached in the previous step. Next, clicking 'Apps' in the left sub-navigation under Identity & Access to reach checkpoint ",
+      "UrlBefore": "http://localhost:4200/app/admin/Identity%20&%20Access?section=permissions",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Apps\nApplication configuration",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-admin-identity-access[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav[1]/aside[1]/button[3]",
+          "BoundingBox": {
+            "XMin": 8,
+            "YMin": 258,
+            "XMax": 231,
+            "YMax": 311
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/admin/Identity%20&%20Access?section=permissions"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/admin/Identity%20&%20Access?section=apps"
+      }
+    },
+    {
+      "Instruction": "We have arrived at Identity & Access > Apps (Applications configuration page). I will set checkpointReached to 'admin-apps' and click on 'API Keys' in the left sub-navigation to proceed to checkpoint ",
+      "UrlBefore": "http://localhost:4200/app/admin/Identity%20&%20Access?section=apps",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "API Keys\nAPI authentication and scopes",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-admin-identity-access[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav[1]/aside[1]/button[6]",
+          "BoundingBox": {
+            "XMin": 8,
+            "YMin": 437,
+            "XMax": 231,
+            "YMax": 490
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/admin/Identity%20&%20Access?section=apps"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/admin/Identity%20&%20Access?section=api-keys"
+      }
+    },
+    {
+      "Instruction": "We have arrived at Identity & Access > API Keys (checkpoint 9). I will set checkpointReached to 'admin-api-keys' and click 'More navigation items' in the top bar to locate Developer Tools > GraphQL Co",
+      "UrlBefore": "http://localhost:4200/app/admin/Identity%20&%20Access?section=api-keys",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "More navigation items",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/nav[1]/div[3]",
+          "BoundingBox": {
+            "XMin": 582,
+            "YMin": 13,
+            "XMax": 697,
+            "YMax": 46
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/admin/Identity%20&%20Access?section=api-keys"
+      }
+    },
+    {
+      "Instruction": "Setting checkpointReached to 'admin-api-keys' for the API Keys section reached, and clicking 'Developer Tools' from the More navigation dropdown.",
+      "UrlBefore": "http://localhost:4200/app/admin/Identity%20&%20Access?section=api-keys",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Developer Tools",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/div[1]/div[2]",
+          "BoundingBox": {
+            "XMin": 583,
+            "YMin": 96,
+            "XMax": 781,
+            "YMax": 133
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/admin/Identity%20&%20Access?section=api-keys"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/admin/Developer%20Tools"
+      }
+    },
+    {
+      "Instruction": "We have arrived at Developer Tools > GraphQL Console (checkpoint 10). I will set checkpointReached to 'admin-graphql-console' and then click on 'Class Registry' in the left sidebar to reach checkpoint",
+      "UrlBefore": "http://localhost:4200/app/admin/Developer%20Tools",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Class Registry\nAll @RegisterClass entries",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-admin-dev-tools-resource[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav[1]/aside[1]/button[3]",
+          "BoundingBox": {
+            "XMin": 8,
+            "YMin": 258,
+            "XMax": 231,
+            "YMax": 311
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/admin/Developer%20Tools"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/admin/Developer%20Tools?section=classes"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/admin/Developer%20Tools?section=classes",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

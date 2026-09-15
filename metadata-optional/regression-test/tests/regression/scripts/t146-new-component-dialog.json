@@ -1,0 +1,105 @@
+{
+  "TestId": "1AEF9642-3364-428D-B805-0480F27CF90B",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "b8a0fd22",
+  "RecordedAt": "2026-09-11T18:52:04.922Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "allowedDomains",
+    "baseUrl",
+    "authUsername",
+    "authDomains",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "I need to switch to the 'Component Studio' application. Element [18] 'Component Studio' is available in the interactive elements list, so I will click it directly.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Component Studio",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-home-dashboard[1]/div[1]/div[1]/div[3]/div[1]/div[10]",
+          "BoundingBox": {
+            "XMin": 32,
+            "YMin": 1315,
+            "XMax": 424,
+            "YMax": 1471
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/component-studio/Components"
+      }
+    },
+    {
+      "Instruction": "We are currently on the Component Studio -> Components section. I will click the 'New Component' button to open the 'Create New Component' dialog.",
+      "UrlBefore": "http://localhost:4200/app/component-studio/Components",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "New Component",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-component-studio-resource[1]/div[1]/mj-component-studio-dashboard[1]/div[1]/div[2]/div[1]/mj-component-browser[1]/div[1]/div[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 14,
+            "YMin": 114,
+            "XMax": 195,
+            "YMax": 158
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/component-studio/Components"
+      }
+    },
+    {
+      "Instruction": "The 'Create New Component' dialog is currently open. I can verify: Name field (marked required with *), Type selection card grid (Dashboard, Report, Chart, Form, Component), Title field, and Descripti",
+      "UrlBefore": "http://localhost:4200/app/component-studio/Components",
+      "Action": {
+        "Method": "type",
+        "Text": "Test Component",
+        "PressEnter": false,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Name *",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-component-studio-resource[1]/div[1]/mj-component-studio-dashboard[1]/div[1]/mj-new-component-dialog[1]/mj-dialog[1]/div[1]/div[1]/div[2]/form[1]/div[1]/div[1]/input[1]",
+          "BoundingBox": {
+            "XMin": 410,
+            "YMin": 160,
+            "XMax": 870,
+            "YMax": 199
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/component-studio/Components"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/component-studio/Components",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

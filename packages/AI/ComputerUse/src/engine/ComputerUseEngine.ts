@@ -34,8 +34,9 @@ import { ToolProvider } from '../tools/ToolProvider.js';
 import { ResponseParser } from './ResponseParser.js';
 import { RunContext } from './RunContext.js';
 import { computePerceptualHash, hashesSimilar } from '../utils/perceptual-hash.js';
+import type { ReplayFrame } from './verdict.js';
 
-import { RunComputerUseParams, ModelConfig } from '../types/params.js';
+import { RunComputerUseParams, ModelConfig, RunCheckpoint } from '../types/params.js';
 import { ComputerUseResult } from '../types/results.js';
 import { ComputerUseError } from '../types/errors.js';
 import {
@@ -60,6 +61,9 @@ import {
     stateRepeatThresholdFor,
     evaluateAuthDetour,
     CancellationError,
+    StepDeadlineError,
+    raceStepAgainstDeadline,
+    wallClockCeilingMs,
     abortableDelay,
     timeBudgetExpiryReason,
     evaluateBatchStop,
@@ -93,6 +97,7 @@ import {
     synthesizeCheckpointVerdict,
     findCheckpoint,
     checkpointVisualCriteria,
+    selectCheckpointFrame,
     buildFailureMemo,
 } from './verdict.js';
 import type { ComputerUseFailureReason } from '../types/results.js';
@@ -735,16 +740,26 @@ export class ComputerUseEngine {
                 return result;
             }
 
-            // Execute one step. A Stop() mid-step unwinds as a CancellationError
-            // — catch it here and return a single clean Cancelled result
-            // rather than letting it surface as an infrastructure Error.
+            // Execute one step, bounded. Besides completing, a step has two ways
+            // out — a Stop() (CancellationError) and the run's own wall-clock
+            // deadline (StepDeadlineError) — and BOTH can arrive while the step
+            // is blocked inside work the engine cannot cancel. The check above
+            // only gates step entry, so racing the await here is what lets the
+            // engine stop waiting and score the run instead of hanging forever.
             let step: StepRecord;
             try {
-                step = await this.executeSingleStep(context, stepNumber);
+                step = await this.executeStepBounded(context, stepNumber);
             } catch (error) {
                 if (error instanceof CancellationError) {
                     this.log('Run cancelled mid-step — returning Cancelled');
                     return this.buildResult(context, 'Cancelled', false, this.terminalVerdict(context, lastVerdict));
+                }
+                if (error instanceof StepDeadlineError) {
+                    this.log(`Time budget exceeded — ${error.Reason} — DURING step ${stepNumber}; expiring gracefully`);
+                    const verdict = await this.finalVerdictOnTermination(context, stepNumber, lastVerdict);
+                    const result = this.buildResult(context, 'TimeBudgetExceeded', false, verdict);
+                    this.onRunComplete(result);
+                    return result;
                 }
                 throw error;
             }
@@ -934,6 +949,32 @@ export class ComputerUseEngine {
      * being abandoned by the TestEngine watchdog). Returns null when no budget is
      * configured.
      */
+    /**
+     * Run one step, bounded by the run's own wall-clock ceiling and cut short by
+     * `Stop()`.
+     *
+     * The ceiling is not a new budget — it is the bound the run was always going
+     * to end at, enforced DURING a step instead of only between them. The losing
+     * step keeps running (a page call cannot be cancelled); what changes is that
+     * the engine stops waiting on it, so a blocked step ends the run as a judged
+     * `TimeBudgetExceeded` rather than parking its caller forever.
+     */
+    private executeStepBounded(context: RunContext, stepNumber: number): Promise<StepRecord> {
+        const step = this.executeSingleStep(context, stepNumber);
+        const maxMs = context.Params.MaxExecutionTimeMs;
+        // No budget configured: still race the abort, so Stop() can unwind.
+        if (!maxMs || maxMs <= 0) {
+            return raceStepAgainstDeadline(step, null, 'no budget', this.abortController.signal);
+        }
+        const ceiling = wallClockCeilingMs(maxMs);
+        return raceStepAgainstDeadline(
+            step,
+            Math.max(0, ceiling - context.ElapsedMs),
+            `wall-clock ceiling (${ceiling}ms, settle included)`,
+            this.abortController.signal
+        );
+    }
+
     private timeBudgetExpiry(context: RunContext, cumulativeSettleMs: number): string | null {
         return timeBudgetExpiryReason(context.ElapsedMs, cumulativeSettleMs, context.Params.MaxExecutionTimeMs);
     }
@@ -1086,11 +1127,19 @@ export class ComputerUseEngine {
         }
 
         const currentUrl = this.browserAdapter.CurrentUrl;
+        // Stand the watchdog down when the run carries FormLogin credentials for
+        // this domain: the agent authenticates by typing into the provider's form,
+        // so arriving here is expected — on a first, unauthenticated run it is the
+        // only way in.
+        const agentLogsInHere = !!this.authHandler?.GetFormLoginCredentials(
+            NavigationGuard.ExtractDomain(currentUrl)
+        );
         const decision = evaluateAuthDetour(
             currentUrl,
             authCfg.IdentityProviderPatterns,
             context.AuthDetourCount,
-            authCfg.MaxDetours
+            authCfg.MaxDetours,
+            agentLogsInHere
         );
         if (!decision.isDetour) {
             return { recoveryMs: 0 };
@@ -1167,6 +1216,12 @@ export class ComputerUseEngine {
     private static readonly REPLAY_PRECONDITION_TIMEOUT_MS = 12_000;
     /** Poll interval while waiting for a replay target. */
     private static readonly REPLAY_POLL_MS = 250;
+    /**
+     * Poll interval while waiting for the post-action URL. Tighter than
+     * {@link REPLAY_POLL_MS} because reading `CurrentUrl` is an in-process
+     * property read, not a browser round-trip like `QueryElement`.
+     */
+    private static readonly REPLAY_URL_POLL_MS = 50;
 
     /**
      * Drive the recorded steps in order. Stops fail-fast on the first
@@ -1206,6 +1261,15 @@ export class ComputerUseEngine {
         }
 
         replay.AllStepsSucceeded = true;
+
+        // Observe the state the last action produced. Every step latches from the
+        // state at its START (replay settles, then acts), so the final action's
+        // effect — a rendered comparison, an opened drawer — is otherwise seen by
+        // nothing, and a tour whose closing section IS the point of the test scores
+        // permanently short of its own checkpoints.
+        if (isCheckpointRun(context.Params.Checkpoints)) {
+            await this.latchTerminalState(context, trace.Steps.length);
+        }
 
         // deterministic fail-fast on the distilled goal postconditions —
         // free, and a cheap gate before paying for the judge. All steps hitting
@@ -1255,6 +1319,19 @@ export class ComputerUseEngine {
         trace: ComputerUseTrace,
         volatile: string[]
     ): Promise<{ passed: boolean; detail: string }> {
+        // The goal is asserted the instant the last step returns — but the last
+        // action may still be navigating. A client-side router finishing a
+        // post-login redirect is the common case: the login trajectory replays
+        // perfectly, 0 diverged, and then fails the goal on `/?code=…&state=…`
+        // because the SPA has not yet routed to its landing page. Step
+        // postconditions already poll for exactly this; the goal check sampled
+        // once, so the two guards disagreed about the same kind of evidence.
+        for (const post of trace.GoalPostconditions) {
+            if (post.Kind === 'url' && post.UrlPattern) {
+                await this.waitForUrlMatch(post.UrlPattern, volatile, this.replayGuardTimeoutMs());
+            }
+        }
+
         let elements: InteractiveElement[] = [];
         try {
             elements = await this.browserAdapter.ExtractInteractiveElements();
@@ -1287,6 +1364,8 @@ export class ComputerUseEngine {
         stepNumber: number
     ): Promise<ComputerUseResult> {
         const checkpoints = context.Params.Checkpoints ?? [];
+        await this.judgeCheckpointsAgainstOwnFrames(context, checkpoints);
+
         const pendingVisual = unlatchedVisualCriteria(checkpoints, context.CheckpointState);
         if (pendingVisual.length > 0) {
             const verdict = await this.judgeReplayEndState(context, stepNumber);
@@ -1319,6 +1398,77 @@ export class ComputerUseEngine {
      * ValidationCriteria the LLM path uses. Never throws — a judge failure yields
      * undefined and the caller treats the end-state as goal-not-confirmed.
      */
+    /**
+     * Judge each still-pending checkpoint against the frame where that section was
+     * actually on screen.
+     *
+     * A tour visits its sections in turn, so judging every pending criterion
+     * against one end-state frame asks the judge to confirm N things in a picture
+     * that can show at most the last one — an eleven-section tour that replayed
+     * every step correctly still scored 0/11 and was reported incomplete. Replay
+     * already captures a frame per step, so this costs no extra capture; it is one
+     * judge call per unlatched section instead of one for all of them, which is
+     * the honest price of verifying N independent visual claims.
+     *
+     * A checkpoint with no URL anchor, or one the trajectory never reached, is
+     * left alone for the end-state pass that follows.
+     */
+    private async judgeCheckpointsAgainstOwnFrames(context: RunContext, checkpoints: RunCheckpoint[]): Promise<void> {
+        const frames = this.replayFrames(context);
+        if (frames.length === 0) {
+            return;
+        }
+        const volatile = context.Params.AppProfile?.Loop?.VolatileParams ?? [];
+        for (const cp of checkpoints) {
+            if (checkpointVisualCriteria(checkpoints, context.CheckpointState, cp.Name).length === 0) {
+                continue;   // nothing visual pending for this section
+            }
+            const frame = selectCheckpointFrame(cp, frames, volatile);
+            if (!frame) {
+                continue;   // no URL anchor, or never reached — the end-state pass covers it
+            }
+            const verdict = await this.judgeReplayFrame(context, frame, cp.Name);
+            if (verdict) {
+                latchVisualFromVerdict(checkpoints, context.CheckpointState, verdict, frame.stepNumber, cp.Name);
+                this.log(`Replay — checkpoint "${cp.Name}" judged at its own frame (step ${frame.stepNumber}, ${frame.url})`);
+            }
+        }
+    }
+
+    /** The replayed trajectory as judgeable frames, oldest first. */
+    private replayFrames(context: RunContext): ReplayFrame[] {
+        return context.StepHistory
+            .filter(s => s.Screenshot)
+            .map(s => ({ stepNumber: s.StepNumber, url: s.UrlBefore || s.Url, screenshot: s.Screenshot }));
+    }
+
+    /**
+     * Judge ONE checkpoint's pending visual criteria against one recorded frame.
+     *
+     * The screenshot hash is deliberately withheld: it is what keys the
+     * cross-attempt judge cache, and that key is (goal, url, frame) with no notion
+     * of WHICH criteria were asked — so two sections sharing a URL would serve each
+     * other's verdict. Correctness beats the cache hit here. Never throws; a judge
+     * failure leaves the section pending for the end-state pass.
+     */
+    private async judgeReplayFrame(
+        context: RunContext,
+        frame: ReplayFrame,
+        checkpointName: string
+    ): Promise<JudgeVerdict | undefined> {
+        const savedUrl = context.CurrentUrl;
+        try {
+            context.AddScreenshot(frame.screenshot);
+            context.CurrentUrl = frame.url;
+            return await this.evaluateJudge(context, frame.stepNumber, true, '', '', checkpointName);
+        } catch (error) {
+            this.logError(`Replay frame judge for checkpoint "${checkpointName}" failed`, error);
+            return undefined;
+        } finally {
+            context.CurrentUrl = savedUrl;
+        }
+    }
+
     private async judgeReplayEndState(
         context: RunContext,
         stepNumber: number
@@ -1371,6 +1521,12 @@ export class ComputerUseEngine {
         step.ControllerReasoning = `[replay] ${traceStep.Instruction}`;
         context.CurrentUrl = step.UrlBefore;
 
+        // One perception per replay step, with two consumers: confirming the
+        // recorded selector still points at the recorded element (below), and
+        // latching checkpoints whose assertions name elements rather than URLs.
+        step.InteractiveElements = await this.safeExtractElements();
+        const repointed = this.repointDriftedSelector(traceStep, step.InteractiveElements, step.StepNumber);
+
         const pre = await this.replayPrecondition(traceStep, volatile);
         if (!pre.pass) {
             return this.divergeOrHeal(trace, index, context, step, result, `precondition — ${pre.reason}`);
@@ -1401,8 +1557,13 @@ export class ComputerUseEngine {
             return this.divergeOrHeal(trace, index, context, step, result, `postcondition — ${post.reason}`);
         }
 
-        result.Outcome = 'hit';
-        result.Detail = 'ok';
+        // A re-pointed selector counts as a heal even though it was corrected
+        // before the action rather than after a failed one: it is the same
+        // re-resolution behind the same confidence gate, and the heal RATE is what
+        // demotes a drifting script back to the LLM tier. Reporting these as plain
+        // hits would let a script drift arbitrarily far while looking pristine.
+        result.Outcome = repointed ? 'healed' : 'hit';
+        result.Detail = repointed ? 'healed: re-pointed a drifted selector before acting' : 'ok';
         return { result, step };
     }
 
@@ -1559,13 +1720,9 @@ export class ComputerUseEngine {
         const targetChecked = pre.WaitForTarget && sel !== undefined;
         let targetVisible = false;
         if (targetChecked && sel) {
-            // Bound the wait by the configured action timeout (the plan's 10–15s),
-            // falling back to the engine default when no BrowserConfig is set.
-            const timeoutMs = this.activeParams?.BrowserConfig?.ActionTimeoutMs
-                ?? ComputerUseEngine.REPLAY_PRECONDITION_TIMEOUT_MS;
-            targetVisible = await this.waitForTargetVisible(sel, timeoutMs);
+            targetVisible = await this.waitForTargetVisible(sel, this.replayGuardTimeoutMs());
         }
-        return evaluatePrecondition(pre, { urlMatched, targetVisible, targetChecked });
+        return evaluatePrecondition(pre, { urlMatched, targetVisible, targetChecked, url: this.browserAdapter.CurrentUrl });
     }
 
     /** Evaluate a replay step's postcondition against the live page. */
@@ -1575,7 +1732,7 @@ export class ComputerUseEngine {
             return { pass: true, reason: 'no postcondition recorded' };
         }
         const urlMatched = post.UrlPattern
-            ? traceUrlMatches(post.UrlPattern, this.browserAdapter.CurrentUrl, volatile)
+            ? await this.waitForUrlMatch(post.UrlPattern, volatile, this.replayGuardTimeoutMs())
             : true;
         const sel = post.ExpectVisible?.Selector;
         const expectChecked = sel !== undefined;
@@ -1584,7 +1741,132 @@ export class ComputerUseEngine {
             const info = await this.safeQuery(sel);
             expectVisibleOk = info.Exists && info.Visible;
         }
-        return evaluatePostcondition(post, { urlMatched, expectVisibleOk, expectChecked });
+        return evaluatePostcondition(post, { urlMatched, expectVisibleOk, expectChecked, url: this.browserAdapter.CurrentUrl });
+    }
+
+    /**
+     * The bound for a replay guard's wait — the configured action timeout (the
+     * plan's 10–15s), falling back to the engine default when no BrowserConfig
+     * is set. One knob governs both guards: waiting for a target to appear and
+     * waiting for a navigation to land.
+     */
+    private replayGuardTimeoutMs(): number {
+        return this.activeParams?.BrowserConfig?.ActionTimeoutMs
+            ?? ComputerUseEngine.REPLAY_PRECONDITION_TIMEOUT_MS;
+    }
+
+    /**
+     * Poll until the live URL satisfies a recorded pattern, bounded by `timeoutMs`.
+     *
+     * A client-side router changes the URL *after* the click resolves — guards
+     * and resolvers run first — so sampling once, the instant the action
+     * returns, reads the pre-navigation URL and reports a divergence for a step
+     * that was about to succeed. The pattern IS the recorded post-action URL, so
+     * waiting for it is precisely the assertion being made; a navigation that
+     * never happens still fails, just at the bound instead of immediately.
+     *
+     * The URL is always checked at least once, so a zero bound degrades to the
+     * previous single-sample behavior rather than skipping the check.
+     */
+    private async waitForUrlMatch(pattern: string, volatile: string[], timeoutMs: number): Promise<boolean> {
+        const start = performance.now();
+        for (;;) {
+            this.ensureNotCancelled();
+            if (traceUrlMatches(pattern, this.browserAdapter.CurrentUrl, volatile)) {
+                return true;
+            }
+            if (performance.now() - start >= timeoutMs) {
+                return false;
+            }
+            await this.delay(ComputerUseEngine.REPLAY_URL_POLL_MS);
+        }
+    }
+
+    /**
+     * Settle, perceive once more, and latch any checkpoint the final state satisfies.
+     *
+     * Deliberately latch-only: no screenshot, no judge, no step appended to the run.
+     * It exists to close the one-step blind spot at the end of a replayed
+     * trajectory, not to add a phantom step to the storyboard.
+     */
+    private async latchTerminalState(context: RunContext, stepNumber: number): Promise<void> {
+        await this.settleBeforePerception(context);
+        const terminal = new StepRecord();
+        terminal.StepNumber = stepNumber;
+        terminal.InteractiveElements = await this.safeExtractElements();
+        terminal.UrlBefore = this.browserAdapter.CurrentUrl;
+        terminal.Url = terminal.UrlBefore;
+        terminal.UrlAfter = terminal.UrlBefore;
+        this.updateCheckpointLatches(context, terminal);
+    }
+
+    /** Extract the page's interactive elements, yielding an empty list on failure. */
+    private async safeExtractElements(): Promise<InteractiveElement[]> {
+        try {
+            return await this.browserAdapter.ExtractInteractiveElements();
+        } catch {
+            return [];
+        }
+    }
+
+    /**
+     * Re-point a recorded selector that no longer identifies the element it named.
+     *
+     * A recorded selector is an absolute path. After a DOM reshuffle it often still
+     * resolves — to a *different* element — so the click succeeds mechanically and
+     * does the wrong thing. The postcondition catches the consequence a step later,
+     * by which point {@link healReplayStep} rightly refuses to help: re-clicking
+     * after a wrong click has already landed is not safe.
+     *
+     * The trace records role+name alongside the selector precisely so replay can
+     * check identity *before* acting. On a confident mismatch the step is re-pointed
+     * in place; otherwise everything is left exactly as recorded, so this can only
+     * correct a drifted step, never destabilise a sound one.
+     */
+    private repointDriftedSelector(traceStep: TraceStep, elements: InteractiveElement[], stepNumber: number): boolean {
+        const recorded = traceStep.Action.Target;
+        if (!recorded?.Selector || (!recorded.Role && !recorded.Name)) {
+            return false;   // nothing recorded to verify against
+        }
+        if (elements.length === 0) {
+            // Perceiving NOTHING is not the same as perceiving a changed page,
+            // and it silently disables the whole heal ladder: without a live
+            // list there is nothing to re-resolve against, so the recorded
+            // selector is used unverified and any failure downstream looks like
+            // app drift. Say so, or the next investigation starts from a guess.
+            this.log(
+                `Replay step ${stepNumber} — perceived NO interactive elements; ` +
+                `cannot verify or re-point "${[recorded.Role, recorded.Name].filter(Boolean).join(' ')}" ` +
+                `(heal ladder unavailable this step)`
+            );
+            return false;
+        }
+        const live = elements.find(e => e.Selector === recorded.Selector);
+        const identityHolds =
+            live !== undefined &&
+            (!recorded.Role || (live.Role ?? '').trim().toLowerCase() === recorded.Role.trim().toLowerCase()) &&
+            (!recorded.Name || (live.Name ?? '').trim().toLowerCase() === recorded.Name.trim().toLowerCase());
+        if (identityHolds) {
+            return false;
+        }
+        const resolution = reresolveTarget(recorded, elements);
+        if (!shouldAcceptHeal(resolution.confidence) || !resolution.selector || resolution.selector === recorded.Selector) {
+            // Say why. A decline means the recorded selector is about to be used
+            // even though it no longer names the recorded element — the click then
+            // lands somewhere arbitrary and only a postcondition catches it, one
+            // step too late to explain. Without this the failure reads as "the app
+            // navigated somewhere else" and costs an instrumented re-run to unpick.
+            this.log(
+                `Replay step ${stepNumber} — recorded selector no longer identifies ` +
+                `"${[recorded.Role, recorded.Name].filter(Boolean).join(' ')}" and was NOT re-pointed: ` +
+                `${resolution.reason} (confidence ${resolution.confidence}, ${elements.length} elements perceived)`
+            );
+            return false;   // no confident alternative — proceed as recorded and let the guards judge
+        }
+        const identity = [recorded.Role, recorded.Name].filter(Boolean).join(' ');
+        this.log(`Replay step ${stepNumber} — recorded selector no longer identifies "${identity}"; re-pointed (${resolution.reason})`);
+        recorded.Selector = resolution.selector;
+        return true;
     }
 
     /** Poll for an element to become attached + visible, bounded by `timeoutMs`. */

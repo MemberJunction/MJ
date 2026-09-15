@@ -1,0 +1,43 @@
+{
+  "TestId": "72D0058B-6E19-4FD4-BCC9-A8238B610AE4",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "84fa8166",
+  "RecordedAt": "2026-09-11T21:11:36.709Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "allowedDomains",
+    "baseUrl",
+    "authUsername",
+    "authDomains",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "Navigate directly to the deep-link URL http://localhost:4200/app/Admin using the Navigate action.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "navigate",
+        "Url": "http://localhost:4200/app/Admin"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/Admin"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/admin/Identity%20&%20Access?section=users",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}
