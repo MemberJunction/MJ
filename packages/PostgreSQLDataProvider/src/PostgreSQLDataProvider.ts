@@ -1660,6 +1660,13 @@ WHERE ${pgDialect.QuoteIdentifier(pkName)} = '${safePKValue}';`;
      * camelCase tokens NOT preceded by `.` are left bare so column aliases
      * (`SELECT count(*) AS myCount`) keep their existing case-folded behavior.
      * SQL keywords and MJ-internal `__mj_*` names are also passed through.
+     *
+     * An ALL-CAPS word immediately followed by `(` and not preceded by `.` is a
+     * function call (`PERCENTILE_CONT(0.5)`, `DATE_TRUNC('day', d)`) and is left
+     * bare. Quoting it made PostgreSQL look for a function literally named in
+     * upper case, which never exists, so the rule can only fix calls that failed
+     * before. It is narrower than next's rule (any case): a mixed-case word before
+     * `(` still quotes exactly as it did on 5.x.
      */
     private processWord(sql: string, start: number, len: number, result: string[]): number {
         let j = start + 1;
@@ -1676,8 +1683,9 @@ WHERE ${pgDialect.QuoteIdentifier(pkName)} = '${safePKValue}';`;
         const isMJInternal = word.startsWith('__mj_');
         const startsUpper = /^[A-Z]/.test(word);
         const precededByDot = start > 0 && sql[start - 1] === '.';
+        const isAllCapsFunctionCall = word === word.toUpperCase() && sql[j] === '(' && !precededByDot;
 
-        const isQuotableIdentifier = !isKeyword && !isAllLower && !isMJInternal
+        const isQuotableIdentifier = !isKeyword && !isAllLower && !isMJInternal && !isAllCapsFunctionCall
             && (startsUpper || precededByDot);
 
         if (isQuotableIdentifier) {

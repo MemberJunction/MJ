@@ -307,4 +307,25 @@ SELECT * FROM save_result`;
                 .toBe('Select x From t Where y = 1 Order By x');
         });
     });
+
+    describe('ALL-CAPS function calls', () => {
+        it('leaves an ALL-CAPS function name bare when it is immediately followed by (', () => {
+            expect(quote('SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY x) FROM t'))
+                .toBe('SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY x) FROM t');
+            expect(quote("SELECT DATE_TRUNC('day', d), SPLIT_PART(s, ',', 1) FROM t"))
+                .toBe("SELECT DATE_TRUNC('day', d), SPLIT_PART(s, ',', 1) FROM t");
+        });
+
+        it('still quotes a dot-qualified name followed by (', () => {
+            expect(quote('SELECT __mj.SPCREATEUSER(1)')).toBe('SELECT __mj."SPCREATEUSER"(1)');
+        });
+
+        it('still quotes a mixed-case word followed by (, as before', () => {
+            expect(quote('SELECT MyFunction(1)')).toBe('SELECT "MyFunction"(1)');
+        });
+
+        it('still quotes an ALL-CAPS word that is not followed by (', () => {
+            expect(quote('SELECT ID FROM t')).toBe('SELECT "ID" FROM t');
+        });
+    });
 });
