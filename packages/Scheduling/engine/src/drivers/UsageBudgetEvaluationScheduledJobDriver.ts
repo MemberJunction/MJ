@@ -4,10 +4,11 @@
  */
 
 import { RegisterClass, SafeJSONParse } from '@memberjunction/global';
-import { ValidationResult, RunView, RunQuery, IMetadataProvider } from '@memberjunction/core';
+import { ValidationResult, RunView, RunQuery, IMetadataProvider, IRunViewProvider, IRunQueryProvider } from '@memberjunction/core';
 import { MJUsageBudgetEntity, MJUsageBudgetEventEntity } from '@memberjunction/core-entities';
 import { BaseScheduledJob, ScheduledJobExecutionContext } from '../BaseScheduledJob';
 import { ScheduledJobResult, NotificationContent } from '@memberjunction/scheduling-base-types';
+import { CronExpressionHelper } from '../CronExpressionHelper';
 
 export interface UsageBudgetEvaluationItemResult {
     BudgetID: string;
@@ -23,11 +24,9 @@ export interface UsageBudgetEvaluationItemResult {
 }
 
 /**
- * Driver for the scheduled usage budget evaluation sweep (plans/ai-usage-analytics.md §9 / MJ#4396 Part 8).
- *
- * Sweeps all active `MJ: Usage Budgets`, executes each budget's `MeasureQueryID` via `RunQuery` over
- * the current period window (Day, Week, Month UTC), persists `LastEvaluatedAt` and `LastObservedAmount`,
- * and logs `MJ: Usage Budget Events` when warning or limit thresholds are breached.
+ * Scheduled job driver that sweeps all active `MJ: Usage Budgets`, executes their configured
+ * measurement queries for the active period window, and records `MJ: Usage Budget Events` when
+ * warning or limit thresholds are breached.
  */
 @RegisterClass(BaseScheduledJob, 'UsageBudgetEvaluationScheduledJobDriver')
 export class UsageBudgetEvaluationScheduledJobDriver extends BaseScheduledJob {
@@ -60,14 +59,15 @@ export class UsageBudgetEvaluationScheduledJobDriver extends BaseScheduledJob {
     }
 
     public async Execute(context: ScheduledJobExecutionContext): Promise<ScheduledJobResult> {
-        const provider = context.Schedule?.ProviderToUse ?? context.Run?.ProviderToUse;
-        if (!provider) {
+        const rawProvider = context.Schedule?.ProviderToUse ?? context.Run?.ProviderToUse;
+        if (!rawProvider) {
             return {
                 Success: false,
                 ErrorMessage: 'No metadata provider available on scheduled job context',
                 Details: { EvaluatedCount: 0, BreachedCount: 0, FailedCount: 0, Items: [] },
             };
         }
+        const provider = rawProvider as unknown as (IMetadataProvider & IRunViewProvider & IRunQueryProvider);
 
         const rv = new RunView(provider);
         const budgetResult = await rv.RunView<MJUsageBudgetEntity>(
