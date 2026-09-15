@@ -251,6 +251,59 @@ describe('convertMigration — BIT literals in surviving entity-registration INS
     expect(r.pgSQL).not.toMatch(/'MJ: AI Usage Types',\s*1,/);
   });
 
+  it('rewrites BIT literals in UPDATE ... SET and WHERE, not just INSERT ... VALUES', async () => {
+    // The INSERT case and the UPDATE/WHERE case are different syntactic sites and need different
+    // rewriters: INSERT is positional (by ordinal in the column list), UPDATE/WHERE is by column
+    // name. The rule-based path applies both; this path applied only the first, so a CodeGen
+    // UPDATE against a core-metadata table still reached PostgreSQL as
+    // `operator does not exist: boolean = integer` and failed on apply — invisible to the
+    // converter's own "0 gaps" summary, exactly like the INSERT case before it.
+    const updates = [
+      'UPDATE ${flyway:defaultSchema}."EntityField" SET "DefaultInView" = 1',
+      'WHERE',
+      '  "ID" = \'4BEB776E-3A02-488D-979E-8A3E4FAC8DFF\' AND "AutoUpdateDefaultInView" = 1;',
+      'UPDATE ${flyway:defaultSchema}."Entity" SET "AllowUserSearchAPI" = 0',
+      'WHERE "AutoUpdateAllowUserSearchAPI" = 1;',
+    ].join('\n');
+    const r = await convert(updates);
+    expect(r.pgSQL).toContain('"DefaultInView" = TRUE');
+    expect(r.pgSQL).toContain('"AutoUpdateDefaultInView" = TRUE');
+    expect(r.pgSQL).toContain('"AllowUserSearchAPI" = FALSE');
+    expect(r.pgSQL).not.toMatch(/"DefaultInView" = 1/);
+    expect(r.pgSQL).not.toMatch(/"AllowUserSearchAPI" = 0/);
+  });
+
+  it('leaves a non-boolean column\'s numeric comparison alone', async () => {
+    // Rewriting by column name means a non-boolean column that happens to be compared to 0 or 1
+    // must be untouched — otherwise `"Sequence" = 1` would silently become `= TRUE`.
+    const r = await convert('UPDATE ${flyway:defaultSchema}."EntityField" SET "Sequence" = 1 WHERE "Length" = 0;');
+    expect(r.pgSQL).toContain('"Sequence" = 1');
+    expect(r.pgSQL).toContain('"Length" = 0');
+  });
+
+  it('does not shift ordinals when a CodeGen comment between values contains a comma', async () => {
+    // Positional rewriting is only correct if the split yields exactly one entry per column.
+    // CodeGen interleaves explanatory comments between values and one of them contains a comma
+    // ("Apply-time sequence, not the literal CodeGen emitted"). Counting that comma as a separator
+    // inserts a phantom value and shifts every later column by one — observed live as PostgreSQL
+    // rejecting `column "Scale" is of type integer but expression is of type boolean`, because the
+    // flag meant for "AllowsNull" was written one position early. "Scale" must stay numeric.
+    const insert = [
+      'INSERT INTO ${flyway:defaultSchema}."EntityField" (',
+      '  "ID", "Sequence", "Name", "Length", "Precision", "Scale", "AllowsNull", "IsVirtual"',
+      ')',
+      'VALUES',
+      "  ('97c1b392-082d-4f06-864a-e4ddb5411ccf',",
+      '   (SELECT COALESCE(MAX("Sequence"), 0) + 1 FROM __mj."EntityField")',
+      '   /* Apply-time sequence, not the literal CodeGen emitted (MJ#4202): it would collide. */,',
+      "   'ExposeToModel', 1, 1, 0, 0, 1);",
+    ].join('\n');
+    const r = await convert(insert);
+    // Scale is the 6th column and NOT boolean — it must remain 0, not become FALSE.
+    expect(r.pgSQL).toMatch(/'ExposeToModel',\s*1,\s*1,\s*0,\s*FALSE,\s*TRUE/);
+    expect(r.pgSQL).toContain('Apply-time sequence, not the literal CodeGen emitted');
+  });
+
   it('does not touch a table outside the core-metadata catalog', async () => {
     // The catalog is an allow-list of tables whose column types are known. An app table with a
     // column that merely SHARES a name must not be rewritten on that basis.
