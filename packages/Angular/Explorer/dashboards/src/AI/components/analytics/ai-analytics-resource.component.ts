@@ -21,6 +21,7 @@ import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { AIAnalyticsPreferences, GlobalFilterState } from '../../interfaces/analytics-preferences.interface';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { FilterFieldConfig, MJLeftNavItem, MJLeftNavSection } from '@memberjunction/ng-ui-components';
+import { AIInstrumentationService } from '../../services/ai-instrumentation.service';
 
 interface NavItem {
     Label?: string;
@@ -263,6 +264,7 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
     protected override destroy$ = new Subject<void>();
     private settingsLoaded = false;
     private cdr = inject(ChangeDetectorRef);
+    private instrumentation = inject(AIInstrumentationService);
 
     @ViewChild('executiveSummary') private executiveSummary?: AnalyticsExecutiveSummaryComponent;
     @ViewChild('promptRuns') private promptRuns?: AnalyticsPromptRunsComponent;
@@ -618,6 +620,7 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
 
     async ngOnInit(): Promise<void> {
         super.ngOnInit();
+        this.instrumentation.Provider = this.ProviderToUse;
         this.setupSettingsDebounce();
         // AIEngineBase is deferred at startup — ensure it's loaded, then build the
         // option lists ONCE so the precomputed filter-field config has real data.

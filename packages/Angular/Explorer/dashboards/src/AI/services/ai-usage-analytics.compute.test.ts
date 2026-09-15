@@ -24,6 +24,37 @@ import {
 } from './ai-usage-analytics.compute';
 import { AIUsageHourlyRow } from './ai-usage-analytics.types';
 
+function createHourlyRow(overrides: Partial<AIUsageHourlyRow> = {}): AIUsageHourlyRow {
+  return {
+    HourBucket: '2026-09-01T10:00:00Z',
+    AgentID: null,
+    PromptID: null,
+    ModelID: null,
+    VendorID: null,
+    UserID: null,
+    PrimaryScopeEntityID: null,
+    PrimaryScopeRecordID: null,
+    ConfigurationID: null,
+    SourceKind: 'Prompt',
+    Runs: 0,
+    SucceededRuns: 0,
+    FailedRuns: 0,
+    PricedRuns: 0,
+    UnpricedRuns: 0,
+    UnmeasuredRuns: 0,
+    ParallelParents: 0,
+    TokensPrompt: 0,
+    TokensCompletion: 0,
+    TokensCacheRead: 0,
+    TokensCacheWrite: 0,
+    OwnCost: null,
+    LatencyP50: null,
+    LatencyP95: null,
+    AvgFirstTokenMS: null,
+    ...overrides
+  };
+}
+
 describe('ai-usage-analytics.compute', () => {
   describe('parseDate', () => {
     it('returns null for null, undefined, or empty string', () => {
@@ -61,7 +92,7 @@ describe('ai-usage-analytics.compute', () => {
 
     it('handles 100% priced rows', () => {
       const rows: AIUsageHourlyRow[] = [
-        {
+        createHourlyRow({
           HourBucket: '2026-09-01T10:00:00Z',
           Runs: 10,
           PricedRuns: 10,
@@ -75,10 +106,8 @@ describe('ai-usage-analytics.compute', () => {
           FailedRuns: 0,
           LatencyP50: 200,
           LatencyP95: 400,
-          OwnCost: 0.05,
-          DirectPromptRuns: 10,
-          DirectAgentRuns: 0
-        }
+          OwnCost: 0.05
+        })
       ];
 
       const cov = computeCoverage(rows);
@@ -90,7 +119,7 @@ describe('ai-usage-analytics.compute', () => {
 
     it('handles 100% unpriced rows', () => {
       const rows: AIUsageHourlyRow[] = [
-        {
+        createHourlyRow({
           HourBucket: '2026-09-01T10:00:00Z',
           Runs: 5,
           PricedRuns: 0,
@@ -105,9 +134,7 @@ describe('ai-usage-analytics.compute', () => {
           LatencyP50: 100,
           LatencyP95: 150,
           OwnCost: null,
-          DirectPromptRuns: 5,
-          DirectAgentRuns: 0
-        }
+        })
       ];
 
       const cov = computeCoverage(rows);
@@ -119,7 +146,7 @@ describe('ai-usage-analytics.compute', () => {
 
     it('calculates weighted token share across mixed rows', () => {
       const rows: AIUsageHourlyRow[] = [
-        {
+        createHourlyRow({
           HourBucket: '2026-09-01T10:00:00Z',
           Runs: 10,
           PricedRuns: 10,
@@ -134,10 +161,8 @@ describe('ai-usage-analytics.compute', () => {
           LatencyP50: 100,
           LatencyP95: 200,
           OwnCost: 0.10,
-          DirectPromptRuns: 10,
-          DirectAgentRuns: 0
-        },
-        {
+        }),
+        createHourlyRow({
           HourBucket: '2026-09-01T11:00:00Z',
           Runs: 10,
           PricedRuns: 0,
@@ -152,9 +177,7 @@ describe('ai-usage-analytics.compute', () => {
           LatencyP50: 100,
           LatencyP95: 200,
           OwnCost: null,
-          DirectPromptRuns: 10,
-          DirectAgentRuns: 0
-        }
+        })
       ];
 
       const cov = computeCoverage(rows);
@@ -171,7 +194,7 @@ describe('ai-usage-analytics.compute', () => {
 
     it('returns null when all runs are unpriced', () => {
       const rows: AIUsageHourlyRow[] = [
-        {
+        createHourlyRow({
           HourBucket: '2026-09-01T10:00:00Z',
           Runs: 10,
           PricedRuns: 0,
@@ -186,9 +209,7 @@ describe('ai-usage-analytics.compute', () => {
           LatencyP50: 100,
           LatencyP95: 200,
           OwnCost: null,
-          DirectPromptRuns: 10,
-          DirectAgentRuns: 0
-        }
+        })
       ];
 
       expect(computeTotalCost(rows)).toBeNull();
@@ -196,7 +217,7 @@ describe('ai-usage-analytics.compute', () => {
 
     it('sums only priced rows when priced runs exist', () => {
       const rows: AIUsageHourlyRow[] = [
-        {
+        createHourlyRow({
           HourBucket: '2026-09-01T10:00:00Z',
           Runs: 10,
           PricedRuns: 10,
@@ -211,10 +232,8 @@ describe('ai-usage-analytics.compute', () => {
           LatencyP50: 100,
           LatencyP95: 200,
           OwnCost: 1.25,
-          DirectPromptRuns: 10,
-          DirectAgentRuns: 0
-        },
-        {
+        }),
+        createHourlyRow({
           HourBucket: '2026-09-01T11:00:00Z',
           Runs: 5,
           PricedRuns: 0,
@@ -229,10 +248,8 @@ describe('ai-usage-analytics.compute', () => {
           LatencyP50: 100,
           LatencyP95: 200,
           OwnCost: null,
-          DirectPromptRuns: 5,
-          DirectAgentRuns: 0
-        },
-        {
+        }),
+        createHourlyRow({
           HourBucket: '2026-09-01T12:00:00Z',
           Runs: 8,
           PricedRuns: 8,
@@ -247,9 +264,7 @@ describe('ai-usage-analytics.compute', () => {
           LatencyP50: 100,
           LatencyP95: 200,
           OwnCost: 0.75,
-          DirectPromptRuns: 8,
-          DirectAgentRuns: 0
-        }
+        })
       ];
 
       expect(computeTotalCost(rows)).toBe(2.00);
@@ -260,7 +275,7 @@ describe('ai-usage-analytics.compute', () => {
     it('sums cost for rows within the current UTC day only', () => {
       const now = new Date('2026-09-14T15:00:00Z');
       const rows: AIUsageHourlyRow[] = [
-        {
+        createHourlyRow({
           HourBucket: '2026-09-13T23:00:00Z',
           Runs: 10,
           PricedRuns: 10,
@@ -275,10 +290,8 @@ describe('ai-usage-analytics.compute', () => {
           LatencyP50: 100,
           LatencyP95: 200,
           OwnCost: 5.0,
-          DirectPromptRuns: 10,
-          DirectAgentRuns: 0
-        },
-        {
+        }),
+        createHourlyRow({
           HourBucket: '2026-09-14T02:00:00Z',
           Runs: 10,
           PricedRuns: 10,
@@ -293,10 +306,8 @@ describe('ai-usage-analytics.compute', () => {
           LatencyP50: 100,
           LatencyP95: 200,
           OwnCost: 3.0,
-          DirectPromptRuns: 10,
-          DirectAgentRuns: 0
-        },
-        {
+        }),
+        createHourlyRow({
           HourBucket: '2026-09-14T10:00:00Z',
           Runs: 10,
           PricedRuns: 10,
@@ -311,9 +322,7 @@ describe('ai-usage-analytics.compute', () => {
           LatencyP50: 100,
           LatencyP95: 200,
           OwnCost: 2.5,
-          DirectPromptRuns: 10,
-          DirectAgentRuns: 0
-        }
+        })
       ];
 
       expect(computeDailyCostBurn(rows, now)).toBe(5.5);
@@ -342,7 +351,7 @@ describe('ai-usage-analytics.compute', () => {
 
     it('calculates ratio of cache read to total input', () => {
       const rows: AIUsageHourlyRow[] = [
-        {
+        createHourlyRow({
           HourBucket: '2026-09-01T10:00:00Z',
           Runs: 1,
           PricedRuns: 1,
@@ -357,9 +366,7 @@ describe('ai-usage-analytics.compute', () => {
           LatencyP50: 100,
           LatencyP95: 100,
           OwnCost: 0.01,
-          DirectPromptRuns: 1,
-          DirectAgentRuns: 0
-        }
+        })
       ];
       expect(computeCacheHitRate(rows)).toBe(0.6);
     });
@@ -372,7 +379,7 @@ describe('ai-usage-analytics.compute', () => {
 
     it('weights latency by runs count', () => {
       const rows: AIUsageHourlyRow[] = [
-        {
+        createHourlyRow({
           HourBucket: '2026-09-01T10:00:00Z',
           Runs: 10,
           PricedRuns: 10,
@@ -387,10 +394,8 @@ describe('ai-usage-analytics.compute', () => {
           LatencyP50: 100,
           LatencyP95: 150,
           OwnCost: null,
-          DirectPromptRuns: 10,
-          DirectAgentRuns: 0
-        },
-        {
+        }),
+        createHourlyRow({
           HourBucket: '2026-09-01T11:00:00Z',
           Runs: 30,
           PricedRuns: 30,
@@ -405,9 +410,7 @@ describe('ai-usage-analytics.compute', () => {
           LatencyP50: 200,
           LatencyP95: 250,
           OwnCost: null,
-          DirectPromptRuns: 30,
-          DirectAgentRuns: 0
-        }
+        })
       ];
       expect(computeAverageExecutionTime(rows)).toBe(175);
     });
@@ -420,7 +423,7 @@ describe('ai-usage-analytics.compute', () => {
 
     it('computes succeeded / total runs', () => {
       const rows: AIUsageHourlyRow[] = [
-        {
+        createHourlyRow({
           HourBucket: '2026-09-01T10:00:00Z',
           Runs: 10,
           PricedRuns: 10,
@@ -435,9 +438,7 @@ describe('ai-usage-analytics.compute', () => {
           LatencyP50: 100,
           LatencyP95: 100,
           OwnCost: null,
-          DirectPromptRuns: 10,
-          DirectAgentRuns: 0
-        }
+        })
       ];
       expect(computeSuccessRate(rows)).toBe(0.8);
     });
@@ -446,7 +447,7 @@ describe('ai-usage-analytics.compute', () => {
   describe('computeTotalTokens', () => {
     it('sums prompt and completion tokens', () => {
       const rows: AIUsageHourlyRow[] = [
-        {
+        createHourlyRow({
           HourBucket: '2026-09-01T10:00:00Z',
           Runs: 1,
           PricedRuns: 1,
@@ -461,9 +462,7 @@ describe('ai-usage-analytics.compute', () => {
           LatencyP50: 100,
           LatencyP95: 100,
           OwnCost: null,
-          DirectPromptRuns: 1,
-          DirectAgentRuns: 0
-        }
+        })
       ];
       expect(computeTotalTokens(rows)).toBe(750);
     });
@@ -489,7 +488,7 @@ describe('ai-usage-analytics.compute', () => {
       expect(buckets.length).toBe(3);
 
       const rows: AIUsageHourlyRow[] = [
-        {
+        createHourlyRow({
           HourBucket: '2026-09-01T00:00:00Z',
           Runs: 5,
           PricedRuns: 5,
@@ -504,9 +503,7 @@ describe('ai-usage-analytics.compute', () => {
           LatencyP50: 120,
           LatencyP95: 200,
           OwnCost: 0.05,
-          DirectPromptRuns: 5,
-          DirectAgentRuns: 0
-        }
+        })
       ];
 
       const trends = computeTrends(rows, start, end);
@@ -528,7 +525,7 @@ describe('ai-usage-analytics.compute', () => {
 
     it('resolves top model and top agent with name mapping', () => {
       const rows: AIUsageHourlyRow[] = [
-        {
+        createHourlyRow({
           HourBucket: '2026-09-01T00:00:00Z',
           ModelID: 'mod-1',
           AgentID: 'agent-1',
@@ -545,10 +542,8 @@ describe('ai-usage-analytics.compute', () => {
           LatencyP50: 100,
           LatencyP95: 100,
           OwnCost: 0.1,
-          DirectPromptRuns: 10,
-          DirectAgentRuns: 0
-        },
-        {
+        }),
+        createHourlyRow({
           HourBucket: '2026-09-01T01:00:00Z',
           ModelID: 'mod-2',
           AgentID: 'agent-2',
@@ -565,9 +560,7 @@ describe('ai-usage-analytics.compute', () => {
           LatencyP50: 100,
           LatencyP95: 100,
           OwnCost: 0.25,
-          DirectPromptRuns: 25,
-          DirectAgentRuns: 0
-        }
+        })
       ];
 
       const modelNames = new Map([['mod-1', 'GPT-4o'], ['mod-2', 'Claude 3.5 Sonnet']]);
@@ -581,7 +574,7 @@ describe('ai-usage-analytics.compute', () => {
   describe('computeCostByModel', () => {
     it('groups costs and tokens by model and sorts descending by cost', () => {
       const rows: AIUsageHourlyRow[] = [
-        {
+        createHourlyRow({
           HourBucket: '2026-09-01T00:00:00Z',
           ModelID: 'mod-1',
           Runs: 10,
@@ -597,10 +590,8 @@ describe('ai-usage-analytics.compute', () => {
           LatencyP50: 100,
           LatencyP95: 100,
           OwnCost: 0.50,
-          DirectPromptRuns: 10,
-          DirectAgentRuns: 0
-        },
-        {
+        }),
+        createHourlyRow({
           HourBucket: '2026-09-01T00:00:00Z',
           ModelID: 'mod-2',
           Runs: 10,
@@ -616,9 +607,7 @@ describe('ai-usage-analytics.compute', () => {
           LatencyP50: 100,
           LatencyP95: 100,
           OwnCost: 1.50,
-          DirectPromptRuns: 10,
-          DirectAgentRuns: 0
-        }
+        })
       ];
 
       const modelNames = new Map([['mod-1', 'Model A'], ['mod-2', 'Model B']]);
@@ -634,7 +623,7 @@ describe('ai-usage-analytics.compute', () => {
   describe('computePerformanceMatrix', () => {
     it('aggregates agent and model combinations', () => {
       const rows: AIUsageHourlyRow[] = [
-        {
+        createHourlyRow({
           HourBucket: '2026-09-01T00:00:00Z',
           AgentID: 'a1',
           ModelID: 'm1',
@@ -651,9 +640,7 @@ describe('ai-usage-analytics.compute', () => {
           LatencyP50: 150,
           LatencyP95: 200,
           OwnCost: 0.1,
-          DirectPromptRuns: 10,
-          DirectAgentRuns: 0
-        }
+        })
       ];
 
       const result = computePerformanceMatrix(rows);
@@ -668,7 +655,7 @@ describe('ai-usage-analytics.compute', () => {
   describe('computeTokenEfficiency', () => {
     it('computes input vs output tokens and cost by model', () => {
       const rows: AIUsageHourlyRow[] = [
-        {
+        createHourlyRow({
           HourBucket: '2026-09-01T00:00:00Z',
           ModelID: 'm1',
           Runs: 1,
@@ -684,9 +671,7 @@ describe('ai-usage-analytics.compute', () => {
           LatencyP50: 100,
           LatencyP95: 100,
           OwnCost: 0.02,
-          DirectPromptRuns: 1,
-          DirectAgentRuns: 0
-        }
+        })
       ];
 
       const eff = computeTokenEfficiency(rows);
@@ -771,7 +756,7 @@ describe('ai-usage-analytics.compute', () => {
   describe('computeKPIs', () => {
     it('computes full DashboardKPIs contract including Coverage', () => {
       const rows: AIUsageHourlyRow[] = [
-        {
+        createHourlyRow({
           HourBucket: '2026-09-14T01:00:00Z',
           Runs: 20,
           PricedRuns: 20,
@@ -786,9 +771,7 @@ describe('ai-usage-analytics.compute', () => {
           LatencyP50: 250,
           LatencyP95: 400,
           OwnCost: 1.50,
-          DirectPromptRuns: 20,
-          DirectAgentRuns: 0
-        }
+        })
       ];
 
       const now = new Date('2026-09-14T12:00:00Z');

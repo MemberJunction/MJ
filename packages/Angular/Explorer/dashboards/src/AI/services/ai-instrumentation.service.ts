@@ -1,12 +1,17 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, from, combineLatest } from 'rxjs';
 import { switchMap, shareReplay, tap, map } from 'rxjs/operators';
-import { RunView, RunQuery, Metadata, IMetadataProvider, IRunQueryProvider } from '@memberjunction/core';
-import { AIUsageCoverage, AIUsageHourlyRow } from './ai-usage-analytics.types';
+import { RunView, RunQuery, IMetadataProvider, IRunQueryProvider } from '@memberjunction/core';
+import { NormalizeUUID } from '@memberjunction/global';
+import { TOKEN_PRICE_UNIT_TYPE_DIVISORS } from '@memberjunction/ai-engine-base';
+import { CacheRate } from './cache-metrics';
+import { AIUsageCoverage, AIUsageHourlyRow, AIUsageDailyRow, AIUsageByModelRow, AIAgentRunSubtreeCost } from './ai-usage-analytics.types';
 import {
   DashboardKPIs,
   TrendData,
   LiveExecution,
+  CostInputRow,
+  computeTotalCost,
   computeKPIs,
   computeTrends,
   computeLiveExecutions,
@@ -21,7 +26,13 @@ export {
   TrendData,
   LiveExecution,
   AIUsageCoverage,
-  AIUsageHourlyRow
+  AIUsageHourlyRow,
+  AIUsageDailyRow,
+  AIUsageByModelRow,
+  AIAgentRunSubtreeCost,
+  CostInputRow,
+  computeTotalCost,
+  CacheRate
 };
 
 /**
@@ -125,7 +136,7 @@ export class AIInstrumentationService {
     if (this._provider) {
       return this._provider;
     }
-    return Metadata.Provider;
+    throw new Error('AIInstrumentationService: MetadataProvider must be set before use');
   }
 
   public get ProviderToUse(): IMetadataProvider {
@@ -407,4 +418,189 @@ export class AIInstrumentationService {
       children
     };
   }
+
+  /**
+   * Fetch daily aggregate usage for a date range via stored query AIUsageDaily (Materialized).
+   */
+  async getUsageDaily(start: Date, end: Date): Promise<AIUsageDailyRow[]> {
+    const rq = new RunQuery(this.RunQueryToUse);
+    const res = await rq.RunQuery({
+      QueryName: 'AIUsageDaily',
+      CategoryPath: '/MJ/AI/',
+      Parameters: {
+        start: start.toISOString(),
+        end: end.toISOString()
+      },
+      DataSource: 'Materialized'
+    });
+    return (res && res.Success && Array.isArray(res.Results) ? res.Results : []) as AIUsageDailyRow[];
+  }
+
+  /**
+   * Fetch model-level aggregate usage for a date range via stored query AIUsageByModel (Materialized).
+   */
+  async getUsageByModel(start: Date, end: Date): Promise<AIUsageByModelRow[]> {
+    const rq = new RunQuery(this.RunQueryToUse);
+    const res = await rq.RunQuery({
+      QueryName: 'AIUsageByModel',
+      CategoryPath: '/MJ/AI/',
+      Parameters: {
+        start: start.toISOString(),
+        end: end.toISOString()
+      },
+      DataSource: 'Materialized'
+    });
+    return (res && res.Success && Array.isArray(res.Results) ? res.Results : []) as AIUsageByModelRow[];
+  }
+
+  /**
+   * Calculate recursive subtree cost and token metrics for an agent run via CalculateRunCost.
+   */
+  async calculateAgentRunCost(agentRunId: string): Promise<AIAgentRunSubtreeCost | null> {
+    const rq = new RunQuery(this.RunQueryToUse);
+    const res = await rq.RunQuery({
+      QueryName: 'CalculateRunCost',
+      CategoryPath: '/MJ/AI/Agents/',
+      Parameters: {
+        AIAgentRunID: agentRunId,
+        AgentRunID: agentRunId
+      }
+    });
+    if (res && res.Success && Array.isArray(res.Results) && res.Results.length > 0) {
+      const raw = res.Results[0] as AIAgentRunSubtreeCost;
+      const cost = raw.TotalCost !== null && raw.TotalCost !== undefined ? Number(raw.TotalCost) : null;
+      const toFiniteNum = (v: unknown): number => {
+        const n = Number(v);
+        return Number.isFinite(n) ? n : 0;
+      };
+      return {
+        AgentRunID: raw.AgentRunID,
+        TotalCost: cost,
+        TotalPrompts: toFiniteNum(raw.TotalPrompts),
+        TotalTokensInput: toFiniteNum(raw.TotalTokensInput),
+        TotalTokensOutput: toFiniteNum(raw.TotalTokensOutput),
+        TotalTokens: toFiniteNum(raw.TotalTokens)
+      };
+    }
+    return null;
+  }
+
+  /**
+   * Fetch model and vendor lookups for mapping IDs to display names.
+   */
+  async getModelAndVendorLookups(): Promise<{
+    models: Map<string, string>;
+    modelVendors: Map<string, string>;
+    vendors: Map<string, string>;
+    agents: Map<string, string>;
+  }> {
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+    const [modelsRes, vendorsRes, agentsRes] = await rv.RunViews([
+      {
+        EntityName: 'MJ: AI Models',
+        Fields: ['ID', 'Name', 'VendorID'],
+        MaxRows: 500,
+        ResultType: 'simple'
+      },
+      {
+        EntityName: 'MJ: AI Vendors',
+        Fields: ['ID', 'Name'],
+        MaxRows: 500,
+        ResultType: 'simple'
+      },
+      {
+        EntityName: 'MJ: AI Agents',
+        Fields: ['ID', 'Name'],
+        MaxRows: 500,
+        ResultType: 'simple'
+      }
+    ]);
+    const models = new Map<string, string>();
+    const modelVendors = new Map<string, string>();
+    const vendors = new Map<string, string>();
+    const agents = new Map<string, string>();
+
+    if (modelsRes && modelsRes.Success && Array.isArray(modelsRes.Results)) {
+      for (const m of modelsRes.Results as Array<{ ID: string; Name: string; VendorID?: string | null }>) {
+        if (m.ID) {
+          models.set(m.ID.toLowerCase(), m.Name);
+          if (m.VendorID) {
+            modelVendors.set(m.ID.toLowerCase(), m.VendorID);
+          }
+        }
+      }
+    }
+    if (vendorsRes && vendorsRes.Success && Array.isArray(vendorsRes.Results)) {
+      for (const v of vendorsRes.Results as Array<{ ID: string; Name: string }>) {
+        if (v.ID) {
+          vendors.set(v.ID.toLowerCase(), v.Name);
+        }
+      }
+    }
+    if (agentsRes && agentsRes.Success && Array.isArray(agentsRes.Results)) {
+      for (const a of agentsRes.Results as Array<{ ID: string; Name: string }>) {
+        if (a.ID) {
+          agents.set(a.ID.toLowerCase(), a.Name);
+        }
+      }
+    }
+    return { models, modelVendors, vendors, agents };
+  }
+
+  /**
+   * Fetch active realtime model pricing rates and compute currency-per-token divisors.
+   */
+  async getCacheRates(): Promise<Map<string, CacheRate>> {
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+    const [rateResult, unitTypeResult] = await rv.RunViews([
+      {
+        EntityName: 'MJ: AI Model Costs',
+        ExtraFilter: `Status='Active' AND ProcessingType='Realtime'`,
+        Fields: ['ModelID', 'VendorID', 'InputPricePerUnit', 'OutputPricePerUnit', 'CacheReadPricePerUnit', 'CacheWritePricePerUnit', 'UnitTypeID'],
+        ResultType: 'simple'
+      },
+      {
+        EntityName: 'MJ: AI Model Price Unit Types',
+        Fields: ['ID', 'DriverClass'],
+        ResultType: 'simple'
+      }
+    ]);
+
+    const cacheRates = new Map<string, CacheRate>();
+    const unitTypes = (unitTypeResult && Array.isArray(unitTypeResult.Results) ? unitTypeResult.Results : []) as Array<{ ID: string; DriverClass: string | null }>;
+    const driverClassByUnitType = new Map<string, string>(
+      unitTypes.filter(u => u.DriverClass).map(u => [NormalizeUUID(u.ID), u.DriverClass!])
+    );
+    const rows = (rateResult && Array.isArray(rateResult.Results) ? rateResult.Results : []) as Array<{
+      ModelID: string | null;
+      VendorID: string | null;
+      InputPricePerUnit: number | null;
+      OutputPricePerUnit: number | null;
+      CacheReadPricePerUnit: number | null;
+      CacheWritePricePerUnit: number | null;
+      UnitTypeID: string | null;
+    }>;
+
+    for (const row of rows) {
+      const unitTypeId = row.UnitTypeID !== null && row.UnitTypeID !== undefined ? row.UnitTypeID : '';
+      const driverClass = driverClassByUnitType.get(NormalizeUUID(unitTypeId));
+      const divisor = driverClass ? TOKEN_PRICE_UNIT_TYPE_DIVISORS[driverClass] : undefined;
+      if (divisor === undefined) {
+        continue;
+      }
+      const inputP = typeof row.InputPricePerUnit === 'number' ? row.InputPricePerUnit : 0;
+      const readP = typeof row.CacheReadPricePerUnit === 'number' ? row.CacheReadPricePerUnit : inputP;
+      const writeP = typeof row.CacheWritePricePerUnit === 'number' ? row.CacheWritePricePerUnit : inputP;
+      const inputRate = inputP / divisor;
+      const cacheReadRate = readP / divisor;
+      const cacheWriteRate = writeP / divisor;
+      const modelId = row.ModelID !== null && row.ModelID !== undefined ? row.ModelID : '';
+      const vendorId = row.VendorID !== null && row.VendorID !== undefined ? row.VendorID : '';
+      const key = `${NormalizeUUID(modelId)}|${NormalizeUUID(vendorId)}`;
+      cacheRates.set(key, { inputRate, cacheReadRate, cacheWriteRate });
+    }
+    return cacheRates;
+  }
 }
+
+

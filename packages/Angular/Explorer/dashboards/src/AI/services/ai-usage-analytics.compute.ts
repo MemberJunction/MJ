@@ -5,7 +5,7 @@
  * Doctrine rules:
  * - Pure computation only: no DOM, no Angular, no SQL, no network calls.
  * - Cost fields are always `number | null`, never `number`.
- * - No `|| 0` or `?? 0` on cost or any other expression.
+ * - No nullish-to-zero or or-zero coalescing on cost or any other expression.
  * - Unpriced runs are carried in coverage, never collapsed to $0.
  */
 
@@ -120,6 +120,14 @@ export function computeCoverage(rows: AIUsageHourlyRow[]): AIUsageCoverage {
   };
 }
 
+export interface CostInputRow {
+  PricedRuns?: number;
+  UnpricedRuns?: number;
+  OwnCost?: number | null;
+  TotalCost?: number | null;
+  Cost?: number | null;
+}
+
 /**
  * Computes total cost across rows.
  * If there are no rows, returns 0.
@@ -127,7 +135,7 @@ export function computeCoverage(rows: AIUsageHourlyRow[]): AIUsageCoverage {
  * returns null so the dashboard renders an em dash with unpriced state rather than $0.
  * When priced runs exist, sums only priced rows.
  */
-export function computeTotalCost(rows: AIUsageHourlyRow[]): number | null {
+export function computeTotalCost(rows: CostInputRow[]): number | null {
   if (rows.length === 0) {
     return 0;
   }
@@ -143,8 +151,14 @@ export function computeTotalCost(rows: AIUsageHourlyRow[]): number | null {
     pricedRuns += pRuns;
     unpricedRuns += uRuns;
 
-    if (r.OwnCost !== null && r.OwnCost !== undefined) {
-      totalCost += r.OwnCost;
+    const rowCost = r.OwnCost !== null && r.OwnCost !== undefined
+      ? r.OwnCost
+      : (r.TotalCost !== null && r.TotalCost !== undefined
+          ? r.TotalCost
+          : (r.Cost !== null && r.Cost !== undefined ? r.Cost : null));
+
+    if (rowCost !== null) {
+      totalCost += rowCost;
       hasPricedCost = true;
     }
   }

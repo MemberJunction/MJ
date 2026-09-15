@@ -194,3 +194,17 @@ export interface AIUsageUnpricedAuditRow {
   IsUnmeasured: number | boolean;
   UnpricedReason: string;
 }
+
+/**
+ * Result row from /MJ/AI/Agents/CalculateRunCost
+ * SELECT list matches metadata/queries/SQL/calculate-ai-agent-run-cost.sql
+ */
+export interface AIAgentRunSubtreeCost {
+  AgentRunID: string;
+  TotalCost: number | null;
+  TotalPrompts: number;
+  TotalTokensInput: number;
+  TotalTokensOutput: number;
+  TotalTokens: number;
+}
+
