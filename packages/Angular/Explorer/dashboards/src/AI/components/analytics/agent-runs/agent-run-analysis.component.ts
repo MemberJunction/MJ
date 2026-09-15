@@ -752,8 +752,14 @@ export class AnalyticsAgentRunsComponent extends BaseAngularComponent implements
         );
 
         const rowsForCoverage = agentDaily.length > 0 ? agentDaily : this.dailyRows;
-        const cov = computeTotalCost(rowsForCoverage);
-        const covSubtitle = cov.PromptRunsTotal > 0 ? `covers ${Math.round(cov.Percent)}% of runs` : undefined;
+        let covTotal = 0;
+        let covPriced = 0;
+        for (const r of rowsForCoverage) {
+            covTotal += (r.Runs ?? 0);
+            covPriced += (r.PricedRuns ?? 0);
+        }
+        const covPct = covTotal > 0 ? (covPriced / covTotal) * 100 : 100;
+        const covSubtitle = covTotal > 0 ? `covers ${Math.round(covPct)}% of runs` : undefined;
 
         this.Stats = {
             TotalRuns: total,

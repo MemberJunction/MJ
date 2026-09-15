@@ -723,9 +723,11 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
                     },
                     required: ['section'],
                 },
-                Handler: async (args: Record<string, unknown>) => {
-                    const section = args['section'] as string;
-                    this.OnSectionChange(section);
+                Handler: async (params: Record<string, unknown>) => {
+                    const section = typeof params['section'] === 'string' ? params['section'] : '';
+                    if (section) {
+                        this.OnSectionChange(section);
+                    }
                     return { success: true, activeSection: this.ActiveSection };
                 },
             },
@@ -742,9 +744,11 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
                     },
                     required: ['timeRange'],
                 },
-                Handler: async (args: Record<string, unknown>) => {
-                    const timeRange = args['timeRange'] as string;
-                    this.OnTimeRangeChange(timeRange);
+                Handler: async (params: Record<string, unknown>) => {
+                    const timeRange = typeof params['timeRange'] === 'string' ? params['timeRange'] : '';
+                    if (timeRange) {
+                        this.OnTimeRangeChange(timeRange);
+                    }
                     return { success: true, currentTimeRange: this.CurrentTimeRange };
                 },
             },
