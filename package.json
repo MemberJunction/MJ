@@ -103,6 +103,7 @@
     "check:peer-deps": "node .github/scripts/check-internal-peer-deps.mjs packages",
     "check:explorer-deps": "node .github/scripts/check-explorer-external-deps.mjs",
     "check:explorer-angular-compiler": "node .github/scripts/check-explorer-angular-compiler.mjs",
+    "check:explorer-angular-compiler:test": "node .github/scripts/check-explorer-angular-compiler.mjs --self-test",
     "check:esm:test": "vitest run --config .github/scripts/vitest.config.mts",
     "check:claude-md": "node .github/scripts/check-claude-md.mjs",
     "check:codegen-tail": "node .github/scripts/check-codegen-tail.mjs",

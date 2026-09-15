@@ -34,5 +34,12 @@ jobs:
         with:
           node-version: 24
 
+      - name: Self-test the detector
+        # Same rationale as changes.yml's self-test steps: the detector's pass/fail logic is
+        # load-bearing for a failure that only shows up in a host repo produced by `mj install`
+        # (issue #4427), so its fixtures run on every PR rather than the next time someone
+        # happens to touch the manifest.
+        run: node .github/scripts/check-explorer-angular-compiler.mjs --self-test
+
       - name: Check @angular/compiler declaration
         run: node .github/scripts/check-explorer-angular-compiler.mjs
