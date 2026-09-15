@@ -1,0 +1,235 @@
+# Gemini 3.8 Live + 3.8 Live Extended Thinking
+
+**Status:** proposed — not started
+**Branch:** `claude/focused-franklin-d1cy6w` (cut from `next` @ `e1fd4c1af0`)
+**Owner:** `@memberjunction/ai-realtime-client`, `@memberjunction/ai-gemini`, `@memberjunction/ai` (Core contract)
+**Shape:** ONE PR. Extend the existing Gemini driver with capability branching — **no new driver.**
+
+> Protocol facts below are taken from Google's published model pages and the Live API
+> capabilities guide (`gemini-3.8-live`, `gemini-3.8-live-extended-thinking`, "Live API
+> capabilities guide", all dated 2026-09-15), **not** from the launch blog post and not from
+> the SDK types (`ai.google.dev` and `blog.google` are both egress-blocked from the build
+> session; the docs were supplied as saved pages). Anything not stated in those pages is
+> marked **VERIFY** and must be confirmed against a live session before the code relying on
+> it is considered done. This discipline exists because the GPT-Live PR lost a cycle to a
+> wire-format claim reasoned from an adjacent protocol rather than read from the source.
+
+---
+
+## 1. Why this is not a new driver
+
+GPT-Live needed `OpenAILiveClient` as a **second driver** because it was a genuinely second
+protocol: zero event names overlapped with classic Realtime, tools existed only under
+delegation, there was no turn-detection config and no response-terminal event.
+
+Gemini 3.8 Live is the opposite case. It is **the same Live API** — same
+`client.aio.live.connect` / `ai.live.connect` entry point, same `BidiGenerateContent` frames,
+same `serverContent` / `toolCall` / `usageMetadata` shapes, same transport, and the same audio
+formats (input 16 kHz PCM little-endian as `audio/pcm;rate=16000`, output 24 kHz PCM).
+`packages/AI/RealtimeClient/src/drivers/geminiRealtimeClient.ts` already speaks it.
+
+What differs between `gemini-3.1-flash-live-preview`, `gemini-3.8-live` and
+`gemini-3.8-live-extended-thinking` is **which features are legal**, not how frames are named.
+That is a capability matrix, and MJ already has the place to put one:
+`BaseRealtimeModel` capability flags plus `ModelConfiguration.Realtime`.
+
+A second driver here would duplicate ~790 lines of working session, audio, transcript and
+barge-in handling to express three config differences. Capability branching in one driver is
+the smaller interface and the smaller thing to own.
+
+---
+
+## 2. The two models (verified)
+
+| | `gemini-3.8-live` | `gemini-3.8-live-extended-thinking` |
+|---|---|---|
+| Recommended for | default for most low-latency voice agents | when higher background reasoning is required |
+| Inputs / Output | text, image, audio, video / text + audio | same |
+| Token limits | 131,072 in / 65,536 out | same |
+| Thinking | Supported (**interleaved reasoning**). `thinkingLevel` **NOT supported — must be omitted** | Supported. `thinkingConfig.thinkingLevel` ∈ `low`\|`medium`\|`high` (**`minimal` not supported**) |
+| Thought summaries | not applicable | `thinkingConfig.includeThoughts: true` |
+| Function calling | `behavior: NON_BLOCKING` is the **default**; `BLOCKING` still allowed for back-compat | **Async ONLY** — `BLOCKING` returns a **hard error** |
+| Function scheduling | `SILENT`, `WHEN_IDLE`, `INTERRUPTED` supported | **not supported** |
+| Idle signal | `turnComplete` (see §3.1 caveat) | `turnComplete: true` **no longer means idle** — use `interaction_status` ∈ `IN_PROGRESS`\|`IDLE` |
+| Proactive audio | permanently on; `proactive_audio: false` **errors** | same |
+| Affective dialogue | **removed from the API** — `enable_affective_dialog` must not be sent | same |
+| Turn coverage | defaults to `TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO` | **VERIFY** (stated on the 3.8-live page only) |
+| Search grounding | Supported | Supported |
+| Caching / code execution / structured outputs / image gen / Maps grounding / Batch | Not supported | Not supported |
+| Session cap | audio-only sessions limited to **15 minutes** | same |
+
+Both are **Stable** (no `-preview` suffix) as of September 2026.
+
+---
+
+## 3. What actually breaks, and what only looks like it breaks
+
+### 3.1 `turn_complete=true` unconditionally interrupts generation — NOT a 3.8 change
+
+The 3.8-live migration notes list this under "updates", which reads like a behaviour change.
+It is not: the capabilities-guide comparison table states it **identically for all three
+models, including `gemini-3.1-flash-live-preview`** — the model MJ runs today.
+
+This matters because `geminiRealtimeClient.ts` deliberately uses `turnComplete: false` for
+context notes and then *commits* with a `turnComplete: true` empty turn
+(`sendToolResponseTurn`, `openClientTurn`). Its own doc comment says an open client turn makes
+the server hold generation "until a `turnComplete: true` arrives" — i.e. it treats
+`turnComplete: true` as a **release**, while the docs call it an **interrupt**.
+
+Those two readings cannot both be right. **VERIFY against a live session before changing
+anything.** Three outcomes, and the plan differs for each:
+- the commit is genuinely interrupting a turn today → a **pre-existing bug on 3.1**, fix it here and say so;
+- the server distinguishes an *empty* committing turn from a content-bearing one → the doc sentence is imprecise, add a comment recording that and move on;
+- something else → design from what we measure.
+
+Do not "fix" this from the doc sentence alone. It is the highest-risk item in the PR precisely
+because it looks like a one-line change.
+
+### 3.2 Turn serialization — the real work
+
+```ts
+/** True while a model turn is in flight; gates (queues) client-triggered sends. */
+private responseActive = false;
+/** Sends deferred while a turn is in flight; drained in order on turnComplete. */
+private queuedSends: Array<() => void> = [];
+```
+
+That is one-turn-at-a-time, drained on `turnComplete`. Under Extended Thinking, `turnComplete`
+arrives while the server is still reasoning and still issuing tool calls, and `NON_BLOCKING` is
+the *only* legal mode. So the queue drains at the wrong moment and `responseActive` stops
+describing anything real.
+
+`IsBusy` is currently `return this.responseActive`. Busy has to become a function of the
+session's actual outstanding work: reasoning in progress, tool calls outstanding, audio still
+playing.
+
+### 3.3 Config that now errors
+
+`proactive_audio: false` and `enable_affective_dialog` both fail against 3.8. Audit
+`parseSessionConfig` and anything that can inject either from `ModelConfiguration`. A config
+key that used to be inert is now a session-mint failure — the same failure class as the
+`SanitizeWireToolName` colon bug, which failed upstream of all UI code.
+
+### 3.4 Video frames now default ON
+
+`TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO` means frames ship to the model by default, billed
+and consuming context. MJ must set turn coverage deliberately rather than inherit it.
+
+---
+
+## 4. What GPT-Live already solved (reuse inventory)
+
+This is why one PR is realistic.
+
+| Need | Already exists | Reuse |
+|---|---|---|
+| Many parallel async tool calls; exactly one continuation when the set drains; safety timeout; duplicate/unknown results must not re-fire | **`RealtimeToolBatchBarrier`** — `packages/AI/Core/src/generic/realtimeToolBatchBarrier.ts`, provider-agnostic, already used by `OpenAILiveClient` | **as-is** |
+| "Model is done" with no terminal event | GPT-Live infers it: `playbackDrainInterval` + `drainSilenceStartTime` + `assistantSafetyBackstopTimer` | **do not port.** Gemini gives `interaction_status: IDLE` — an explicit signal. Use it, and keep a backstop timer only as a guard against a lost frame |
+| Spoken progress narration as a distinct transcript kind | `Kind: 'narration' \| 'normal'` in `OpenAILiveClient`; `RequestSpokenUpdate?()` in the base contract (`baseRealtime.ts:560`) | **promote.** Direction differs: GPT-Live narration is *requested by us*; Gemini thought summaries *arrive from the model*. Same rendering, opposite trigger |
+| Reasoning plane as config | Shipped in the GPT-Live PR and consumed by **no driver**: `RealtimeReasoningPlane = 'local' \| 'remote'`, `RealtimeRemoteReasoning` (effort level), `RealtimeReasoningSettings`, `BaseRealtimeModel.SupportedReasoningPlanes` | **first real consumer.** `thinkingLevel` maps onto the existing effort field |
+| Per-model capability gating | `CanReconfigureTurnMode`, `CanReconfigureDelegationMode`, `SupportsParallelToolCalls`, `SupportsDynamicToolSet` | **extend** with the §2 matrix |
+| Delegation/progress UI | `RealtimeDelegationCardVM` with `Kind: 'agent' \| 'action'`, streamed progress, expandable results, immutable-card discipline | **extend** with a third kind for model-authored narration/thinking |
+
+The `interaction_status` signal is the good news of this whole change: GPT-Live had to *infer*
+idleness from silence, and that heuristic is the least satisfying part of that driver. Here we
+get told.
+
+---
+
+## 5. Design
+
+### 5.1 Capability descriptor, not `if (model === ...)`
+
+Add to the Gemini realtime model's capability surface, driven by metadata rather than string
+comparison in the driver:
+
+- `SupportsThinkingLevel: boolean` + `SupportedThinkingLevels: readonly ThinkingLevel[]`
+- `SupportsBlockingTools: boolean`
+- `SupportsFunctionScheduling: boolean`
+- `IdleSignal: 'turnComplete' | 'interactionStatus'`
+- `SupportsThoughtSummaries: boolean`
+
+Three rows, one driver. A fourth Live model arriving next quarter is then a metadata row, not a
+code change — which is the same reason model IDs are already read from
+`AIModelVendor.APIName` (`args.Model`) rather than hardcoded.
+
+### 5.2 Replace `responseActive` with an outstanding-work model
+
+`IsBusy` becomes: reasoning in progress **or** tool batch non-empty **or** audio playing.
+`interaction_status` drives the first; `RealtimeToolBatchBarrier` already owns the second;
+`audioPlaying` already exists.
+
+`queuedSends` loses its `turnComplete` trigger and drains on **idle** instead — which on
+`gemini-3.8-live` is still `turnComplete`, and on Extended Thinking is `interaction_status:
+IDLE`. That is exactly what `IdleSignal` selects, and it is why the flag is a capability rather
+than a version check.
+
+### 5.3 Thought summaries → the narration path that already exists
+
+`includeThoughts: true` yields model-authored summaries. Route them to the narration transcript
+kind rather than inventing a parallel channel, and surface them as a third delegation-card
+`Kind`. The card work merged last week already handles streaming progress and expandable
+detail; this is a new producer for it, not new UI machinery.
+
+**VERIFY:** how a thought part is *marked* on the wire (a `thought` boolean on the part, a
+separate part type, something else). The guide documents how to *enable* summaries but the saved
+pages do not show a received frame. Read it off `@google/genai` v2.x types or a live session
+before writing the parser.
+
+### 5.4 SDK major skew — fix it here
+
+`packages/AI/RealtimeClient` pins `@google/genai@^1.40.0`; `packages/AI/Providers/Gemini` pins
+`^2.8.0`. Two majors, one repo. `thinkingConfig`, `interaction_status` and the scheduling enums
+plausibly need v2+. Bump RealtimeClient to `^2.8.0` and **prove one copy on disk**
+(`ls -d node_modules/.pnpm/@google+genai@* | wc -l` → 1), because a duplicate SDK is the same
+class of failure as the duplicated `type-graphql` that breaks MJAPI schema build.
+
+---
+
+## 6. Work breakdown (one PR, ordered commits)
+
+1. **Docs + capability contract.** This plan; capability flags in `AI/Core`; `ThinkingLevel` type. No behaviour.
+2. **SDK bump** to `@google/genai@^2.8.0` in RealtimeClient; single-copy proof; fix any v1→v2 breaks.
+3. **Protocol verification spike.** Read v2 types for `interaction_status`, thought-part marking, `behavior`/`scheduling` enums, turn coverage. Write findings into §3.1 / §5.3 and delete the VERIFY markers that are now answered. **Gate: no VERIFY item may remain unresolved at review.**
+4. **Config correctness.** Never send `enable_affective_dialog`; never send `proactive_audio: false`; omit `thinkingLevel` for `gemini-3.8-live`; set turn coverage explicitly. Unit tests asserting each is absent/present per model.
+5. **Idle model.** `IdleSignal`; `interaction_status` handling; `IsBusy` from outstanding work; `queuedSends` drains on idle. Backstop timer as a lost-frame guard only.
+6. **Async tools.** `behavior: NON_BLOCKING`; wire `RealtimeToolBatchBarrier`; `BLOCKING` refused for Extended Thinking with a clear error rather than a wire failure; scheduling gated by capability.
+7. **Thinking.** `thinkingConfig` from `ModelConfiguration.Realtime.Reasoning` — the plane's first consumer; `includeThoughts` behind a flag.
+8. **Narration + UI.** Promote the narration transcript kind; third delegation-card `Kind`; design tokens only.
+9. **Metadata.** `AIModel` + `AIModelVendor` rows for both models (`APIName` = `gemini-3.8-live` / `gemini-3.8-live-extended-thinking`), modality rows, cost rows. Declarative JSON under `metadata/` with `uuidgen` primary keys, **no `sync` block and no `*__Metadata_Sync.sql`** — that is release work (`metadata/CLAUDE.md` §1b).
+10. **Tests + changeset.** See §7.
+
+§3.1 is deliberately inside step 3, before any code depends on its answer.
+
+---
+
+## 7. Tests
+
+- **Unit, per model, table-driven** over the §2 matrix: config assembled for `gemini-3.8-live` omits `thinkingLevel`; for Extended Thinking includes it and rejects `minimal`; neither ever sends `enable_affective_dialog` or `proactive_audio: false`; `BLOCKING` rejected for Extended Thinking.
+- **Idle**: `turnComplete` while `interaction_status: IN_PROGRESS` must NOT drain `queuedSends` and must NOT clear busy; a later `IDLE` must do both. This is the regression test for the whole change.
+- **Async tools**: parallel calls, out-of-order results, a duplicate result, a never-returned call hitting the barrier timeout.
+- **Thought summaries**: a thought part becomes a narration transcript, not assistant speech.
+- **Backstop**: a lost `IDLE` frame still unwedges the session.
+- Existing `gemini-realtime-client.test.ts` / `-extended.test.ts` must stay green, or change with a stated reason — 3.1 behaviour is not being dropped.
+- Full repo unit tier + deterministic integration tier, per the Definition of Done.
+- **Changeset**: `minor` (ships metadata).
+
+---
+
+## 8. Out of scope
+
+- Live carrier/telephony media for these models (needs real credentials; separate).
+- The `Metadata_Sync` release migration (build engineer).
+- PostgreSQL counterparts (toolchain, at release).
+- Retiring `gemini-3.1-flash-live-preview` — it stays supported; the capability matrix is what makes that cheap.
+- Gemini 3.8 Flash (non-Live) — different surface, not this PR.
+
+---
+
+## 9. Open questions
+
+1. **§3.1** — is our `turnComplete: true` commit interrupting generation on 3.1 today? Highest risk in the PR.
+2. How is a thought part marked on the wire? (§5.3)
+3. Does `interaction_status` appear on `gemini-3.8-live` too, or only Extended Thinking? The comparison table names it only for the latter; if it is universal, `IdleSignal` collapses to one value and the code gets simpler.
+4. Is turn coverage configurable per session, and what does MJ want as its default given the cost of always-on video?
+5. Does `RequestSpokenUpdate`'s "narration is disposable, skip when a response is in flight" collision rule still make sense when the model can speak and reason at once?
