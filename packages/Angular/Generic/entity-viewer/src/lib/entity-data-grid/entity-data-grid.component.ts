@@ -20,6 +20,7 @@ import { UUIDsEqual } from '@memberjunction/global';
 import { EntityActionEngineBase } from '@memberjunction/actions-base';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
 import { buildPkString, canonicalizeColumnFields, computeFieldsList } from '../utils/record.util';
+import { AggregateField } from '../utils/aggregate-field.util';
 import {
   MJUserViewEntityExtended,
   ViewInfo,
@@ -1244,26 +1245,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
    * be shifted into the reader's zone (MJ#4210).
    */
   private aggregateIsDateOnly(agg: ViewGridAggregate): boolean {
-    const name = this.singleFieldOfExpression(agg.expression) ?? agg.column;
-    if (!name) return false;
-    return IsDateOnlySQLType(this._entityInfo?.Fields.find(f => f.Name === name)?.Type);
-  }
-
-  /**
-   * The one field an aggregate such as `MIN(IntakeDate)` or `MAX([Intake Date])` summarises, or
-   * null when the expression is anything more complex. Parsed positionally rather than with a
-   * pattern: a pattern over user-authored text is where backtracking blow-ups live.
-   */
-  private singleFieldOfExpression(expression: string | undefined): string | null {
-    const text = (expression ?? '').trim();
-    const open = text.indexOf('(');
-    if (open <= 0 || !text.endsWith(')') || text.indexOf(')') !== text.length - 1) return null;
-    const fn = text.substring(0, open).trim();
-    if (!/^\w+$/.test(fn)) return null;
-    let inner = text.substring(open + 1, text.length - 1).trim();
-    if (inner.startsWith('[') && inner.endsWith(']')) inner = inner.substring(1, inner.length - 1).trim();
-    if (inner.length === 0 || inner.includes('(') || inner.includes(',')) return null;
-    return inner;
+    return IsDateOnlySQLType(AggregateField(agg, this._entityInfo)?.Type);
   }
 
   // ========================================
