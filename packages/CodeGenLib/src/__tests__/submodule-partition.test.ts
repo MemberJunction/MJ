@@ -193,7 +193,7 @@ describe('submodule-partition (T9)', () => {
 
     describe('Soft limit warning on bucket overflow', () => {
         it('logs a warning when a bucket exceeds maxComponentsPerModule without splitting', () => {
-            const warnSpy = vi.spyOn(statusLogging, 'logWarning').mockImplementation(() => {});
+            const warnSpy = vi.spyOn(statusLogging, 'LogWarning').mockImplementation(() => {});
 
             const generator = new TestableAngularGenerator();
 

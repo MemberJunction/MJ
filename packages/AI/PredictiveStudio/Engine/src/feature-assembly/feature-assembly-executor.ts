@@ -191,7 +191,7 @@ export class FeatureAssemblyExecutor {
    * @param params the assembly parameters
    * @returns the matrix, feature schema, and preprocessing ops
    */
-  public async Assemble(params: FeatureAssemblyParams): Promise<FeatureAssemblyResult> {
+  public async assemble(params: FeatureAssemblyParams): Promise<FeatureAssemblyResult> {
     const dataAccess = params.dataAccess ?? new RunViewDataAccess(params.contextUser, params.provider);
     const guard = new LeakageGuardEnforcer(params.leakageGuard);
     const pkField = params.primaryKeyField ?? 'ID';
@@ -228,11 +228,6 @@ export class FeatureAssemblyExecutor {
       preprocessing,
       assembledAsOf: new Date().toISOString(),
     };
-  }
-
-  /** @deprecated Use {@link Assemble}. */
-  public async assemble(params: FeatureAssemblyParams): Promise<FeatureAssemblyResult> {
-    return this.Assemble(params);
   }
 
   /**

@@ -9,7 +9,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // resolve the spy that's defined just below.
 const openConnectionMock = vi.fn();
 vi.mock('../baseline/connection', () => ({
-  openConnection: (...args: unknown[]) => openConnectionMock(...args),
+  OpenConnection: (...args: unknown[]) => openConnectionMock(...args),
+    get openConnection() { return this.OpenConnection; },
 }));
 
 import { VerifyDatabaseConnection, type DbConnectionConfig } from '../lib/db-preflight';

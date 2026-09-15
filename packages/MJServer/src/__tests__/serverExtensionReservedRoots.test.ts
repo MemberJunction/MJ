@@ -58,7 +58,7 @@ describe('coreReservedServerExtensionRoots', () => {
 
     it('structurally guarantees every pre-auth app.use / app.get / app.post mount in index.ts is reserved', () => {
         const indexSrc = readFileSync(join(SRC, 'index.ts'), 'utf8');
-        const authMiddlewareIndex = indexSrc.indexOf('app.use(createUnifiedAuthMiddleware');
+        const authMiddlewareIndex = indexSrc.indexOf('app.use(CreateUnifiedAuthMiddleware');
         expect(authMiddlewareIndex).toBeGreaterThan(0);
         const preAuthSrc = indexSrc.substring(0, authMiddlewareIndex);
 
@@ -71,7 +71,7 @@ describe('coreReservedServerExtensionRoots', () => {
             'express.',
             'compression',
             'cookieParser',
-            'createUnifiedAuthMiddleware',
+            'CreateUnifiedAuthMiddleware',
             'mw',
         ];
         const isKnownNonPath = (t: string): boolean =>

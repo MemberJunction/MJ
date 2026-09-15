@@ -384,13 +384,8 @@ export abstract class CodeGenDatabaseProvider {
      * `IsVirtual = 1` would let the join target the base table instead,
      * removing the need for this capability flag entirely.
      */
-    CanSelfJoinViewForVirtualNameField(): boolean {
-        return false;
-    }
-
-    /** @deprecated Use {@link CanSelfJoinViewForVirtualNameField}. */
     canSelfJoinViewForVirtualNameField(): boolean {
-        return this.CanSelfJoinViewForVirtualNameField();
+        return false;
     }
 
     // ─── DROP GUARDS ─────────────────────────────────────────────────────
@@ -427,13 +422,8 @@ export abstract class CodeGenDatabaseProvider {
      * @param tableName Physical table name (convention: `materialized_<Name>`).
      * @param columns   Resolved column specs (name, engine-native SQL type, nullability, PK flag).
      */
-    GenerateMaterializedTableSQL(schema: string, tableName: string, columns: MaterializedColumnSpec[]): string {
-        throw new Error(`generateMaterializedTableSQL is not implemented for platform '${this.PlatformKey}'`);
-    }
-
-    /** @deprecated Use {@link GenerateMaterializedTableSQL}. */
     generateMaterializedTableSQL(schema: string, tableName: string, columns: MaterializedColumnSpec[]): string {
-        return this.GenerateMaterializedTableSQL(schema, tableName, columns);
+        throw new Error(`generateMaterializedTableSQL is not implemented for platform '${this.PlatformKey}'`);
     }
 
     /**
@@ -449,13 +439,8 @@ export abstract class CodeGenDatabaseProvider {
      * @param viewName  Wrapper view name (convention: `materialized_vw<Name>`).
      * @param tableName Physical table the view selects from.
      */
-    GenerateMaterializedWrapperViewSQL(schema: string, viewName: string, tableName: string): string {
-        throw new Error(`generateMaterializedWrapperViewSQL is not implemented for platform '${this.PlatformKey}'`);
-    }
-
-    /** @deprecated Use {@link GenerateMaterializedWrapperViewSQL}. */
     generateMaterializedWrapperViewSQL(schema: string, viewName: string, tableName: string): string {
-        return this.GenerateMaterializedWrapperViewSQL(schema, viewName, tableName);
+        throw new Error(`generateMaterializedWrapperViewSQL is not implemented for platform '${this.PlatformKey}'`);
     }
 
     /**
@@ -464,13 +449,8 @@ export abstract class CodeGenDatabaseProvider {
      * (the deterministic combined-key-set hashing in §5 is Phase 3 and replaces this for incremental).
      * Default throws — each engine overrides (SQL Server: `int IDENTITY(1,1)`).
      */
-    GetMaterializedSurrogateColumnType(): string {
-        throw new Error(`getMaterializedSurrogateColumnType is not implemented for platform '${this.PlatformKey}'`);
-    }
-
-    /** @deprecated Use {@link GetMaterializedSurrogateColumnType}. */
     getMaterializedSurrogateColumnType(): string {
-        return this.GetMaterializedSurrogateColumnType();
+        throw new Error(`getMaterializedSurrogateColumnType is not implemented for platform '${this.PlatformKey}'`);
     }
 
     /**
@@ -480,13 +460,8 @@ export abstract class CodeGenDatabaseProvider {
      * the minted entity's PK metadata doesn't diverge from the rebuilt table. Default throws — each engine
      * overrides (SQL Server: `varchar(64)`; PostgreSQL: `text`).
      */
-    GetMaterializedHashSurrogateColumnType(): string {
-        throw new Error(`getMaterializedHashSurrogateColumnType is not implemented for platform '${this.PlatformKey}'`);
-    }
-
-    /** @deprecated Use {@link GetMaterializedHashSurrogateColumnType}. */
     getMaterializedHashSurrogateColumnType(): string {
-        return this.GetMaterializedHashSurrogateColumnType();
+        throw new Error(`getMaterializedHashSurrogateColumnType is not implemented for platform '${this.PlatformKey}'`);
     }
 
     // ─── CRUD ROUTINES ───────────────────────────────────────────────────
@@ -770,49 +745,29 @@ export abstract class CodeGenDatabaseProvider {
     /**
      * Produces the canonical database function name for the hierarchy metadata helper function.
      */
-    GetHierarchyMetaFunctionName(entity: EntityInfo, field: EntityFieldInfo): string {
-        return `fn${entity.BaseTable}${field.Name}_GetHierarchyMeta`;
-    }
-
-    /** @deprecated Use {@link GetHierarchyMetaFunctionName}. */
     getHierarchyMetaFunctionName(entity: EntityInfo, field: EntityFieldInfo): string {
-        return this.GetHierarchyMetaFunctionName(entity, field);
+        return `fn${entity.BaseTable}${field.Name}_GetHierarchyMeta`;
     }
 
     /**
      * Produces the canonical database function name for the descendants traversal helper function.
      */
-    GetDescendantsFunctionName(entity: EntityInfo, field: EntityFieldInfo): string {
-        return `fn${entity.BaseTable}${field.Name}_GetDescendants`;
-    }
-
-    /** @deprecated Use {@link GetDescendantsFunctionName}. */
     getDescendantsFunctionName(entity: EntityInfo, field: EntityFieldInfo): string {
-        return this.GetDescendantsFunctionName(entity, field);
+        return `fn${entity.BaseTable}${field.Name}_GetDescendants`;
     }
 
     /**
      * Produces the canonical database function name for the ancestors traversal helper function.
      */
-    GetAncestorsFunctionName(entity: EntityInfo, field: EntityFieldInfo): string {
-        return `fn${entity.BaseTable}${field.Name}_GetAncestors`;
-    }
-
-    /** @deprecated Use {@link GetAncestorsFunctionName}. */
     getAncestorsFunctionName(entity: EntityInfo, field: EntityFieldInfo): string {
-        return this.GetAncestorsFunctionName(entity, field);
+        return `fn${entity.BaseTable}${field.Name}_GetAncestors`;
     }
 
     /**
      * Produces the canonical database function name for the root ID helper function.
      */
-    GetRootIDFunctionName(entity: EntityInfo, field: EntityFieldInfo): string {
-        return `fn${entity.BaseTable}${field.Name}_GetRootID`;
-    }
-
-    /** @deprecated Use {@link GetRootIDFunctionName}. */
     getRootIDFunctionName(entity: EntityInfo, field: EntityFieldInfo): string {
-        return this.GetRootIDFunctionName(entity, field);
+        return `fn${entity.BaseTable}${field.Name}_GetRootID`;
     }
 
     /**
@@ -1037,7 +992,7 @@ export abstract class CodeGenDatabaseProvider {
      * (e.g. PostgreSQL's "all params after the first DEFAULT must also have
      * DEFAULTs" rule, which the PostgreSQL provider handles via override).
      */
-    GenerateCRUDParamString(entityFields: EntityFieldInfo[], isUpdate: boolean): string {
+    generateCRUDParamString(entityFields: EntityFieldInfo[], isUpdate: boolean): string {
         const dialect = this.Dialect;
         const nullDefault = dialect.ParameterDefault(dialect.NullLiteral);
         const parts: string[] = [];
@@ -1054,11 +1009,6 @@ export abstract class CodeGenDatabaseProvider {
             parts.push(`${dialect.ParameterRef(ef.CodeName)} ${this.renderParameterType(ef)}${defaultClause}`);
         }
         return parts.join(',\n    ');
-    }
-
-    /** @deprecated Use {@link GenerateCRUDParamString}. */
-    generateCRUDParamString(entityFields: EntityFieldInfo[], isUpdate: boolean): string {
-        return this.GenerateCRUDParamString(entityFields, isUpdate);
     }
 
     /**
@@ -1469,13 +1419,8 @@ export abstract class CodeGenDatabaseProvider {
      * it alone. Must be a complete statement. The caller guards it on the outer
      * view existing (bootstrap pass).
      */
-    GenerateLayeredOuterRebindSQL(_entity: EntityInfo): string {
-        return '';
-    }
-
-    /** @deprecated Use {@link GenerateLayeredOuterRebindSQL}. */
     generateLayeredOuterRebindSQL(_entity: EntityInfo): string {
-        return this.GenerateLayeredOuterRebindSQL(_entity);
+        return '';
     }
 
     /**
@@ -1580,13 +1525,8 @@ export abstract class CodeGenDatabaseProvider {
      * SQL Server: returns `null` (objects ship in the baseline migrations).
      * PostgreSQL: returns the full support-object DDL.
      */
-    GetMetadataSupportObjectsSQL(_mjCoreSchema: string): string | null {
-        return null;
-    }
-
-    /** @deprecated Use {@link GetMetadataSupportObjectsSQL}. */
     getMetadataSupportObjectsSQL(_mjCoreSchema: string): string | null {
-        return this.GetMetadataSupportObjectsSQL(_mjCoreSchema);
+        return null;
     }
 
     // ─── METADATA MANAGEMENT: SQL FILE EXECUTION ─────────────────────
@@ -1688,13 +1628,8 @@ export abstract class CodeGenDatabaseProvider {
      *
      * @param schemas List of schemas to scan. Empty array returns no rows.
      */
-    GetRoutineNamesBySchemaSQL(_schemas: string[]): string {
-        return '';
-    }
-
-    /** @deprecated Use {@link GetRoutineNamesBySchemaSQL}. */
     getRoutineNamesBySchemaSQL(_schemas: string[]): string {
-        return this.GetRoutineNamesBySchemaSQL(_schemas);
+        return '';
     }
 
     /**
@@ -1767,7 +1702,7 @@ export abstract class CodeGenDatabaseProvider {
         if (expected.length === 0) return [];
 
         // One round-trip to fetch every routine in the relevant schemas.
-        const sql = this.GetRoutineNamesBySchemaSQL(Array.from(schemas));
+        const sql = this.getRoutineNamesBySchemaSQL(Array.from(schemas));
         if (!sql || !sql.trim()) return [];
         const result = await pool.query(sql);
         const existing = new Set<string>();

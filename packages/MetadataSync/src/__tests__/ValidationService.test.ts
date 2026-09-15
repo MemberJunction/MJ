@@ -37,7 +37,8 @@ vi.mock('minimatch', () => ({
 }));
 
 vi.mock('../lib/provider-utils', () => ({
-  getSystemUser: vi.fn().mockReturnValue({ ID: 'system-user-id' }),
+  GetSystemUser: vi.fn().mockReturnValue({ ID: 'system-user-id' }),
+    get getSystemUser() { return this.GetSystemUser; },
 }));
 
 import { ValidationService } from '../services/ValidationService';

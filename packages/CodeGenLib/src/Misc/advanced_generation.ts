@@ -252,13 +252,8 @@ export class AdvancedGeneration {
         return this.GetFeature(featureName);
     }
 
-    public FeatureEnabled(featureName: string): boolean {
-        return this.Enabled && this.GetFeature(featureName)?.enabled === true;
-    }
-
-    /** @deprecated Use {@link FeatureEnabled}. */
     public featureEnabled(featureName: string): boolean {
-        return this.FeatureEnabled(featureName);
+        return this.Enabled && this.GetFeature(featureName)?.enabled === true;
     }
 
     /**
@@ -340,11 +335,11 @@ export class AdvancedGeneration {
     /**
      * Smart Field Identification - determine name field and default in view
      */
-    public async IdentifyFields(
+    public async identifyFields(
         entity: any,
         contextUser: UserInfo
     ): Promise<SmartFieldIdentificationResult | null> {
-        if (!this.FeatureEnabled('SmartFieldIdentification')) {
+        if (!this.featureEnabled('SmartFieldIdentification')) {
             return null;
         }
 
@@ -412,14 +407,6 @@ export class AdvancedGeneration {
         }
     }
 
-    /** @deprecated Use {@link IdentifyFields}. */
-    public async identifyFields(
-        entity: any,
-        contextUser: UserInfo
-    ): Promise<SmartFieldIdentificationResult | null> {
-        return this.IdentifyFields(entity, contextUser);
-    }
-
     /**
      * Transitive Join Intelligence - detect junction tables and recommend additional fields
      */
@@ -428,7 +415,7 @@ export class AdvancedGeneration {
         targetEntity: any,
         contextUser: UserInfo
     ): Promise<TransitiveJoinResult | null> {
-        if (!this.FeatureEnabled('TransitiveJoinIntelligence')) {
+        if (!this.featureEnabled('TransitiveJoinIntelligence')) {
             return null;
         }
 
@@ -555,12 +542,12 @@ export class AdvancedGeneration {
      * @param contextUser The user context
      * @param isNewEntity If true, this is a newly created entity; if false, entityImportance will be ignored
      */
-    public async GenerateFormLayout(
+    public async generateFormLayout(
         entity: any,
         contextUser: UserInfo,
         isNewEntity: boolean = false
     ): Promise<FormLayoutResult | null> {
-        if (!this.FeatureEnabled('FormLayoutGeneration')) {
+        if (!this.featureEnabled('FormLayoutGeneration')) {
             return null;
         }
 
@@ -690,15 +677,6 @@ export class AdvancedGeneration {
         }
     }
 
-    /** @deprecated Use {@link GenerateFormLayout}. */
-    public async generateFormLayout(
-        entity: any,
-        contextUser: UserInfo,
-        isNewEntity: boolean = false
-    ): Promise<FormLayoutResult | null> {
-        return this.GenerateFormLayout(entity, contextUser, isNewEntity);
-    }
-
     /**
      * Generate entity name from table name
      */
@@ -706,7 +684,7 @@ export class AdvancedGeneration {
         tableName: string,
         contextUser: UserInfo
     ): Promise<EntityNameResult | null> {
-        if (!this.FeatureEnabled('EntityNames')) {
+        if (!this.featureEnabled('EntityNames')) {
             return null;
         }
 
@@ -754,7 +732,7 @@ export class AdvancedGeneration {
         fields: Array<{Name: string, Type: string}>,
         contextUser: UserInfo
     ): Promise<EntityDescriptionResult | null> {
-        if (!this.FeatureEnabled('EntityDescriptions')) {
+        if (!this.featureEnabled('EntityDescriptions')) {
             return null;
         }
 
@@ -800,7 +778,7 @@ export class AdvancedGeneration {
         existingMethodName: string | null,
         contextUser: UserInfo
     ): Promise<CheckConstraintParserResult | null> {
-        if (!this.FeatureEnabled('ParseCheckConstraints')) {
+        if (!this.featureEnabled('ParseCheckConstraints')) {
             return null;
         }
 
@@ -901,7 +879,7 @@ export class AdvancedGeneration {
         }>,
         contextUser: UserInfo
     ): Promise<VirtualEntityDecorationResult | null> {
-        if (!this.FeatureEnabled('VirtualEntityFieldDecoration')) {
+        if (!this.featureEnabled('VirtualEntityFieldDecoration')) {
             return null;
         }
 

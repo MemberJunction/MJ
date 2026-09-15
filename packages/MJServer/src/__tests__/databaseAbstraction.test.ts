@@ -66,11 +66,16 @@ vi.mock('mssql', () => {
 // We must also mock the auth module and its transitive deps so that importing
 // individual source files does not trigger type-graphql or reflect-metadata.
 vi.mock('../auth/index', () => ({
-  getSigningKeys: vi.fn(),
-  getSystemUser: vi.fn(),
-  getValidationOptions: vi.fn(),
-  verifyUserRecord: vi.fn(),
-  extractUserInfoFromPayload: vi.fn(),
+  GetSigningKeys: vi.fn(),
+    get getSigningKeys() { return this.GetSigningKeys; },
+  GetSystemUser: vi.fn(),
+    get getSystemUser() { return this.GetSystemUser; },
+  GetValidationOptions: vi.fn(),
+    get getValidationOptions() { return this.GetValidationOptions; },
+  VerifyUserRecord: vi.fn(),
+    get verifyUserRecord() { return this.VerifyUserRecord; },
+  ExtractUserInfoFromPayload: vi.fn(),
+    get extractUserInfoFromPayload() { return this.ExtractUserInfoFromPayload; },
   TokenExpiredError: class TokenExpiredError extends Error {},
   AuthProviderFactory: { getInstance: vi.fn(() => ({ getByIssuer: vi.fn() })) },
   IAuthProvider: {},

@@ -17,12 +17,18 @@ const { logErrorSpy, logStatusSpy, reconcileSpy } = vi.hoisted(() => ({
 vi.mock('../Misc/status_logging', () => ({
     logStatus: logStatusSpy,
     logError: logErrorSpy,
-    logWarning: vi.fn(),
-    logMessage: vi.fn(),
-    startSpinner: vi.fn(),
-    updateSpinner: vi.fn(),
-    succeedSpinner: vi.fn(),
-    failSpinner: vi.fn(),
+    LogWarning: vi.fn(),
+    get logWarning() { return this.LogWarning; },
+    LogMessage: vi.fn(),
+    get logMessage() { return this.LogMessage; },
+    StartSpinner: vi.fn(),
+    get startSpinner() { return this.StartSpinner; },
+    UpdateSpinner: vi.fn(),
+    get updateSpinner() { return this.UpdateSpinner; },
+    SucceedSpinner: vi.fn(),
+    get succeedSpinner() { return this.SucceedSpinner; },
+    FailSpinner: vi.fn(),
+    get failSpinner() { return this.FailSpinner; },
 }));
 
 vi.mock('@memberjunction/core-entities-server', () => ({

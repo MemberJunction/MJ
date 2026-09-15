@@ -12,12 +12,14 @@ import { describe, it, expect, vi } from 'vitest';
 // vars to even import. Mock those heavy imports out so this file stays a true,
 // isolated unit test of the token-tracking logic (mirrors the mocking convention
 // in RealtimeBridgeResolver.test.ts).
-vi.mock('../../index.js', () => ({ getDbType: vi.fn() }));
+vi.mock('../../index.js', () => ({ GetDbType: vi.fn(),
+    get getDbType() { return this.GetDbType; } }));
 vi.mock('@memberjunction/generic-database-provider', () => ({
   QueryCompositionEngine: vi.fn(() => ({ HasCompositionTokens: vi.fn(() => false) })),
 }));
 vi.mock('../../util.js', () => ({ GetReadOnlyDataSource: vi.fn(), GetReadOnlyProvider: vi.fn() }));
-vi.mock('../../auth/index.js', () => ({ getSystemUser: vi.fn() }));
+vi.mock('../../auth/index.js', () => ({ GetSystemUser: vi.fn(),
+    get getSystemUser() { return this.GetSystemUser; } }));
 vi.mock('mssql', () => ({ default: { Request: vi.fn() } }));
 
 import {

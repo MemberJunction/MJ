@@ -57,13 +57,13 @@ describe('applyInProcessAdvancedGenerationPolicy', () => {
         const end = src.indexOf('public async Run(', start);
         expect(start).toBeGreaterThan(-1);
         const body = src.slice(start, end);
-        const apply = body.indexOf('applyInProcessAdvancedGenerationPolicy(configInfo)');
+        const apply = body.indexOf('ApplyInProcessAdvancedGenerationPolicy(configInfo)');
         const pipeline = body.indexOf('this.executeCodeGenPipeline(');
         expect(apply).toBeGreaterThan(-1);
         expect(pipeline).toBeGreaterThan(apply);
         expect(body.slice(pipeline)).toMatch(/finally\s*\{\s*advancedGeneration\.restore\(\);/);
         // The CLI entry point keeps the config untouched.
         const cli = src.slice(end);
-        expect(cli).not.toContain('applyInProcessAdvancedGenerationPolicy');
+        expect(cli).not.toContain('ApplyInProcessAdvancedGenerationPolicy');
     });
 });

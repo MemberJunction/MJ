@@ -168,7 +168,8 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
     };
 });
 
-vi.mock('../auth/initializeProviders.js', () => ({ initializeAuthProviders: vi.fn() }));
+vi.mock('../auth/initializeProviders.js', () => ({ InitializeAuthProviders: vi.fn(),
+    get initializeAuthProviders() { return this.InitializeAuthProviders; } }));
 
 vi.mock('@memberjunction/auth-providers', () => ({
     AuthProviderFactory: {

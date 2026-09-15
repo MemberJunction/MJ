@@ -95,7 +95,7 @@ export class ExperimentOrchestrator {
    * @param options optional run tunables (concurrency, prune rules, budget override)
    * @returns the experiment, session, iterations, final leaderboard, best model, and stop reason
    */
-  public async RunSession(
+  public async runSession(
     plan: ModelingPlanSpec,
     deps: ExperimentDeps,
     options: ExperimentRunOptions = {},
@@ -167,15 +167,6 @@ export class ExperimentOrchestrator {
       bestModel: finalized,
       stopReason,
     };
-  }
-
-  /** @deprecated Use {@link RunSession}. */
-  public async runSession(
-    plan: ModelingPlanSpec,
-    deps: ExperimentDeps,
-    options: ExperimentRunOptions = {},
-  ): Promise<ExperimentSessionResult> {
-    return this.RunSession(plan, deps, options);
   }
 
   // region: approval + setup ----------------------------------------------------

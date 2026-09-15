@@ -59,11 +59,16 @@ vi.mock('jsonwebtoken', () => ({
 }));
 
 vi.mock('../auth/index.js', () => ({
-  getSigningKeys: mockGetSigningKeys,
-  getSystemUser: vi.fn(),
-  getValidationOptions: mockGetValidationOptions,
-  verifyUserRecord: mockVerifyUserRecord,
-  extractUserInfoFromPayload: mockExtractUserInfo,
+  GetSigningKeys: mockGetSigningKeys,
+    get getSigningKeys() { return this.GetSigningKeys; },
+  GetSystemUser: vi.fn(),
+    get getSystemUser() { return this.GetSystemUser; },
+  GetValidationOptions: mockGetValidationOptions,
+    get getValidationOptions() { return this.GetValidationOptions; },
+  VerifyUserRecord: mockVerifyUserRecord,
+    get verifyUserRecord() { return this.VerifyUserRecord; },
+  ExtractUserInfoFromPayload: mockExtractUserInfo,
+    get extractUserInfoFromPayload() { return this.ExtractUserInfoFromPayload; },
 }));
 
 vi.mock('../cache.js', () => {

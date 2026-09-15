@@ -93,7 +93,7 @@ export class TrainingEngine {
    * @param deps the injected dependency bundle (entity factory, loader, sidecar, store)
    * @returns the produced `Draft` model and the `Completed`/`Failed` training run
    */
-  public async TrainModel(input: TrainModelInput, deps: TrainingDeps): Promise<TrainModelResult> {
+  public async trainModel(input: TrainModelInput, deps: TrainingDeps): Promise<TrainModelResult> {
     const resolved = await this.resolvePipeline(input.pipelineId, deps);
     const run = await this.createRunRow(resolved, input, deps);
 
@@ -113,11 +113,6 @@ export class TrainingEngine {
       await this.finalizeRunFailure(run, err, deps);
       throw err;
     }
-  }
-
-  /** @deprecated Use {@link TrainModel}. */
-  public async trainModel(input: TrainModelInput, deps: TrainingDeps): Promise<TrainModelResult> {
-    return this.TrainModel(input, deps);
   }
 
   // region: pipeline resolution -------------------------------------------------

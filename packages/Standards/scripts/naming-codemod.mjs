@@ -51,6 +51,7 @@ const SKIP_REASONS = {
     OptionalProperty: 'optional property — an accessor cannot be optional, so the stub would turn `foo?` into a required member and break every object literal that omits it',
     StructuralClass: 'class is a declared data shape (@ObjectType/@InputType et al), so object literals are assigned to it and an accessor stub changes what they must supply',
     SubclassRedeclares: 'a subclass redeclares this member as a plain property, and TypeScript forbids a property overriding an accessor (TS2610)',
+    Overridden: 'a subclass overrides this member, and a @deprecated stub preserves CALLING the old name but not OVERRIDING it — the override would be silently bypassed',
     NameCollision: 'the PascalCase name is already declared in this scope',
     Declared: '`declare` member — no runtime carrier',
     ConstructorBodyRef: 'parameter property is referenced by bare name inside the constructor',
@@ -294,6 +295,12 @@ function rewriteMethod(ctx, node, names, classNode) {
     if (node.parameters.some((p) => !ts.isIdentifier(p.name))) return SKIP_REASONS.BindingPattern;
     if (node.parameters.some((p) => ts.isIdentifier(p.name) && p.name.text === 'this')) return SKIP_REASONS.ThisParameter;
     if (declaredNames(classNode).has(names.New)) return SKIP_REASONS.NameCollision;
+    // The silent one. A stub lets a caller keep using the old name, but a SUBCLASS that overrides
+    // the old name now overrides the stub, while everything internal calls the new name — so the
+    // override is simply never reached. `BaseProvider.getSupportedOperations` is overridden by every
+    // provider; renaming it made all of them dead code that still compiled.
+    if (classNode.name && ctx.subclassIndex?.Members?.get(classNode.name.text)?.has(names.Old))
+        return SKIP_REASONS.Overridden;
 
     const sameName = classNode.members.filter((m) => m.name && ts.isIdentifier(m.name) && m.name.text === names.Old);
     if (sameName.length > 1) return SKIP_REASONS.Overloaded;
@@ -326,8 +333,10 @@ function rewriteProperty(ctx, node, names, classNode) {
     // silently promotes an optional member to a required one.
     if (node.questionToken) return SKIP_REASONS.OptionalProperty;
     if (isDataShapeClass(classNode)) return SKIP_REASONS.StructuralClass;
-    if (classNode.name && ctx.subclassProps?.get(classNode.name.text)?.has(names.Old))
+    if (classNode.name && ctx.subclassIndex?.Props?.get(classNode.name.text)?.has(names.Old))
         return SKIP_REASONS.SubclassRedeclares;
+    if (classNode.name && ctx.subclassIndex?.Members?.get(classNode.name.text)?.has(names.Old))
+        return SKIP_REASONS.Overridden;
     if ((node.modifiers ?? []).some((m) => m.kind === ts.SyntaxKind.DeclareKeyword)) return SKIP_REASONS.Declared;
     if ((node.modifiers ?? []).some((m) => m.kind === ts.SyntaxKind.AbstractKeyword)) return SKIP_REASONS.Abstract;
     if (declaredNames(classNode).has(names.New)) return SKIP_REASONS.NameCollision;
@@ -501,8 +510,10 @@ function rewriteParameterProperty(ctx, node, names, classNode, ctor) {
     // `constructor(public foo?: T)` declares an optional member, and an accessor cannot be optional.
     if (node.questionToken) return SKIP_REASONS.OptionalProperty;
     if (isDataShapeClass(classNode)) return SKIP_REASONS.StructuralClass;
-    if (classNode.name && ctx.subclassProps?.get(classNode.name.text)?.has(names.Old))
+    if (classNode.name && ctx.subclassIndex?.Props?.get(classNode.name.text)?.has(names.Old))
         return SKIP_REASONS.SubclassRedeclares;
+    if (classNode.name && ctx.subclassIndex?.Members?.get(classNode.name.text)?.has(names.Old))
+        return SKIP_REASONS.Overridden;
     if (declaredNames(classNode).has(names.New)) return SKIP_REASONS.NameCollision;
 
     // Inside the constructor the parameter is also a plain local. Renaming it there is a separate,
@@ -564,8 +575,10 @@ function rewriteAccessorPair(ctx, node, names, classNode, state) {
     // the class has to supply its name too. `BaseResult.timeElapsed` is a getter, and renaming it
     // broke every `{ …, timeElapsed }` literal built in OTHER packages — invisible to this one.
     if (isDataShapeClass(classNode)) return SKIP_REASONS.StructuralClass;
-    if (classNode.name && ctx.subclassProps?.get(classNode.name.text)?.has(names.Old))
+    if (classNode.name && ctx.subclassIndex?.Props?.get(classNode.name.text)?.has(names.Old))
         return SKIP_REASONS.SubclassRedeclares;
+    if (classNode.name && ctx.subclassIndex?.Members?.get(classNode.name.text)?.has(names.Old))
+        return SKIP_REASONS.Overridden;
     if (declaredNames(classNode).has(names.New)) return SKIP_REASONS.NameCollision;
 
     const pair = classNode.members.filter(
@@ -701,11 +714,11 @@ function rewriteThisReferences(ctx, classNode, renames, skipNodes) {
  * Returns the new text plus a per-finding outcome. Findings are matched to declarations by line
  * **and** name, so a stale worklist mismatches loudly instead of renaming the wrong thing.
  */
-function rewriteFile(absPath, findings, subclassProps) {
+function rewriteFile(absPath, findings, subclassIndex) {
     const text = readFileSync(absPath, 'utf8');
     const source = ts.createSourceFile(absPath, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
     const buffer = new EditBuffer(text);
-    const ctx = { text, source, buffer, unit: indentUnit(text), subclassProps };
+    const ctx = { text, source, buffer, unit: indentUnit(text), subclassIndex };
     /** Declaration-name identifiers already rewritten; a reference pass must not touch them again. */
     const declarationNames = new Set();
     /** Renamed module-scope functions, and renamed members grouped by their owning class. */
@@ -851,6 +864,8 @@ function buildSubclassIndex(packageDir) {
     const parents = new Map();
     /** class name → names it declares as plain properties */
     const properties = new Map();
+    /** class name → every member name it declares, of any kind */
+    const members = new Map();
 
     for (const abs of collectSourceFiles(packageDir)) {
         let source;
@@ -868,34 +883,55 @@ function buildSubclassIndex(packageDir) {
                     .filter(Boolean);
                 parents.set(name, [...(parents.get(name) ?? []), ...bases]);
                 const own = properties.get(name) ?? new Set();
+                const decl = members.get(name) ?? new Set();
                 for (const m of node.members) {
-                    if (ts.isPropertyDeclaration(m) && m.name && ts.isIdentifier(m.name)) own.add(m.name.text);
+                    if (!m.name || !ts.isIdentifier(m.name)) continue;
+                    if (ts.isPropertyDeclaration(m)) own.add(m.name.text);
+                    // Every member kind counts as an override, not just properties: a method, a
+                    // getter or a setter declared on a subclass overrides the base's member of the
+                    // same name just as surely.
+                    if (
+                        ts.isPropertyDeclaration(m) ||
+                        ts.isMethodDeclaration(m) ||
+                        ts.isGetAccessorDeclaration(m) ||
+                        ts.isSetAccessorDeclaration(m)
+                    ) {
+                        decl.add(m.name.text);
+                    }
                 }
                 properties.set(name, own);
+                members.set(name, decl);
             }
             ts.forEachChild(node, visit);
         };
         ts.forEachChild(source, visit);
     }
 
-    // Invert: for each class, the union of property names declared by everything below it.
+    // Invert: for each class, what everything below it declares. Two views, because they guard
+    // different failures — `Props` is the TS2610 compile error, `Members` is the silent one where an
+    // override stops being reached at all.
     const descendantProps = new Map();
+    const descendantMembers = new Map();
     for (const [child, bases] of parents) {
         const own = properties.get(child) ?? new Set();
+        const ownAll = members.get(child) ?? new Set();
         const seen = new Set();
         const walkUp = (names) => {
             for (const base of names) {
                 if (seen.has(base)) continue;
                 seen.add(base);
-                const set = descendantProps.get(base) ?? new Set();
-                for (const n of own) set.add(n);
-                descendantProps.set(base, set);
+                const p = descendantProps.get(base) ?? new Set();
+                for (const n of own) p.add(n);
+                descendantProps.set(base, p);
+                const a = descendantMembers.get(base) ?? new Set();
+                for (const n of ownAll) a.add(n);
+                descendantMembers.set(base, a);
                 walkUp(parents.get(base) ?? []);
             }
         };
         walkUp(bases);
     }
-    return descendantProps;
+    return { Props: descendantProps, Members: descendantMembers };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -983,6 +1019,110 @@ function collectSourceFiles(dir, out = []) {
 }
 
 // ---------------------------------------------------------------------------------------------
+// Module mock factories
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * Move `vi.mock` / `jest.mock` factories onto the new export names.
+ *
+ * A module mock names its overrides as object-literal KEYS, and a key is not a reference, so the
+ * caller pass correctly leaves it alone. The result compiles and silently stops working: the factory
+ * keeps overriding `resolveFromEnvironment` while the code under test now calls
+ * `ResolveFromEnvironment`, which the `...actual` spread supplies for real. The mock never fires and
+ * the assertion fails with "expected to be called once, but got 0 times".
+ *
+ * Only inside a mock factory whose specifier resolves to a file this run renamed — narrow enough
+ * that an object key meaning something else entirely is never touched.
+ */
+function updateMockFactories(packageDir, renamesByFile) {
+    const edited = [];
+    for (const abs of collectSourceFiles(packageDir)) {
+        const text = readFileSync(abs, 'utf8');
+        if (!/\b(?:vi|jest|vitest)\s*\.\s*(?:mock|spyOn)\s*\(/.test(text)) continue;
+        const source = ts.createSourceFile(abs, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+        const buffer = new EditBuffer(text);
+
+        /** local namespace binding → the renames of the module it points at */
+        const namespaceRenames = new Map();
+        for (const statement of source.statements) {
+            if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) continue;
+            const bindings = statement.importClause?.namedBindings;
+            if (!bindings || !ts.isNamespaceImport(bindings)) continue;
+            const target = resolveSpecifier(abs, statement.moduleSpecifier.text);
+            const renames = target && renamesByFile.get(target);
+            if (renames) namespaceRenames.set(bindings.name.text, renames);
+        }
+
+        const visit = (node) => {
+            if (
+                ts.isCallExpression(node) &&
+                ts.isPropertyAccessExpression(node.expression) &&
+                node.expression.name.text === 'mock' &&
+                ts.isIdentifier(node.expression.expression) &&
+                ['vi', 'jest', 'vitest'].includes(node.expression.expression.text) &&
+                node.arguments.length >= 2 &&
+                ts.isStringLiteral(node.arguments[0])
+            ) {
+                const target = resolveSpecifier(abs, node.arguments[0].text);
+                const renames = target && renamesByFile.get(target);
+                if (renames) rewriteFactory(node.arguments[1], renames);
+            }
+            // `vi.spyOn(statusLogging, 'logWarning')` — the target is a STRING, so nothing in the
+            // rename passes would ever touch it, and the spy simply stops intercepting once the
+            // code under test moves to the new name. The namespace has to be traced back to the
+            // module it imports before the string can safely be rewritten.
+            if (
+                ts.isCallExpression(node) &&
+                ts.isPropertyAccessExpression(node.expression) &&
+                node.expression.name.text === 'spyOn' &&
+                node.arguments.length >= 2 &&
+                ts.isIdentifier(node.arguments[0]) &&
+                ts.isStringLiteral(node.arguments[1])
+            ) {
+                const renames = namespaceRenames.get(node.arguments[0].text);
+                const pair = renames?.find((r) => r.Old === node.arguments[1].text);
+                if (pair) {
+                    const lit = node.arguments[1];
+                    buffer.Replace(lit.getStart(source) + 1, lit.end - 1, pair.New);
+                }
+            }
+            ts.forEachChild(node, visit);
+        };
+
+        const rewriteFactory = (factory, renames) => {
+            const byOld = new Map(renames.map((r) => [r.Old, r]));
+            const walk = (node) => {
+                // `resolveFromEnvironment: …` — the override key itself. The key moves to the new
+                // name AND the old one is kept as a getter onto it, because a factory replaces the
+                // WHOLE module: a barrel that re-exports both names resolves both against the mock,
+                // and dropping either makes vitest fail with "No X export is defined on the mock".
+                // A getter rather than a copied expression, so both names are the same mock instance
+                // and an assertion on one sees calls made through the other.
+                if (ts.isPropertyAssignment(node) && ts.isIdentifier(node.name) && byOld.has(node.name.text)) {
+                    const pair = byOld.get(node.name.text);
+                    buffer.Replace(node.name.getStart(source), node.name.end, pair.New);
+                    buffer.Insert(node.end, `,\n    get ${pair.Old}() { return this.${pair.New}; }`);
+                }
+                // `typeof actual.resolveFromEnvironment` — a member of the real module namespace.
+                if (
+                    ts.isPropertyAccessExpression(node) &&
+                    ts.isIdentifier(node.name) &&
+                    byOld.has(node.name.text)
+                ) {
+                    buffer.Replace(node.name.getStart(source), node.name.end, byOld.get(node.name.text).New);
+                }
+                ts.forEachChild(node, walk);
+            };
+            walk(factory);
+        };
+
+        ts.forEachChild(source, visit);
+        if (buffer.Count > 0) edited.push({ Path: abs, Text: buffer.Result(), Count: buffer.Count });
+    }
+    return edited;
+}
+
+// ---------------------------------------------------------------------------------------------
 // In-package callers
 // ---------------------------------------------------------------------------------------------
 
@@ -1009,6 +1149,51 @@ function updateCallers(packageDir, renamesByFile) {
 
         // Which local bindings in THIS file name a symbol this run renamed.
         const local = new Map();
+        /** Binding elements from `const { x } = await import(…)`, which are declaration AND reference. */
+        const dynamicBindings = new Set();
+
+        // `const { foo } = await import('./x.js')` binds exactly like a static import, and MJ uses it
+        // wherever a module has to be loaded lazily. Missing it leaves the call site on the old name
+        // while the barrel, the mock factory and everything else move — which is worse than not
+        // renaming at all, because the two halves disagree.
+        const findDynamicImports = (node) => {
+            if (
+                ts.isVariableDeclaration(node) &&
+                node.name &&
+                ts.isObjectBindingPattern(node.name) &&
+                node.initializer
+            ) {
+                let call = node.initializer;
+                if (ts.isAwaitExpression(call)) call = call.expression;
+                if (
+                    ts.isCallExpression(call) &&
+                    call.expression.kind === ts.SyntaxKind.ImportKeyword &&
+                    call.arguments.length > 0 &&
+                    ts.isStringLiteral(call.arguments[0])
+                ) {
+                    const target = resolveSpecifier(abs, call.arguments[0].text);
+                    const renames = target && renamesByFile.get(target);
+                    if (renames) {
+                        for (const element of node.name.elements) {
+                            if (!ts.isIdentifier(element.name)) continue;
+                            // `{ old: alias }` — the alias is the local, only the property moves.
+                            const key = element.propertyName ?? element.name;
+                            if (!ts.isIdentifier(key)) continue;
+                            const pair = renames.find((r) => r.Old === key.text);
+                            if (!pair) continue;
+                            if (element.propertyName) {
+                                buffer.Replace(key.getStart(source), key.end, pair.New);
+                            } else {
+                                dynamicBindings.add(element.name);
+                                local.set(element.name.text, { Pair: pair, Element: element });
+                            }
+                        }
+                    }
+                }
+            }
+            ts.forEachChild(node, findDynamicImports);
+        };
+
         for (const statement of source.statements) {
             if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) continue;
             const bindings = statement.importClause?.namedBindings;
@@ -1023,9 +1208,9 @@ function updateCallers(packageDir, renamesByFile) {
                 if (pair) local.set(element.name.text, { Pair: pair, Element: element });
             }
         }
-        if (local.size === 0) continue;
-
         const buffer = new EditBuffer(text);
+        ts.forEachChild(source, findDynamicImports);
+        if (local.size === 0 && buffer.Count === 0) continue;
         const unsafe = new Set();
         const sites = [];
 
@@ -1066,6 +1251,8 @@ function updateCallers(packageDir, renamesByFile) {
                 } else if (p && ts.isExportSpecifier(p)) {
                     // Re-exported from here under the old name; the barrel pass owns this line.
                     unsafe.add(node.text);
+                } else if (dynamicBindings.has(node)) {
+                    sites.push(node);
                 } else if (p && isDeclarationName(p, node)) {
                     // Something else in this file declares the same name: the import is shadowed and
                     // no rename here can be trusted.
@@ -1144,7 +1331,9 @@ const skipped = [];
 /** @type {Map<string, {Old:string,New:string}[]>} absolute path → what this run renamed in it */
 const renamesByFile = new Map();
 // Built once: which member names each class's descendants redeclare as properties.
-const subclassProps = args.package ? buildSubclassIndex(resolve(repoRoot, args.package)) : new Map();
+// Repo-wide, not package-scoped: the subclass of an exported base class almost always lives in a
+// DIFFERENT package, which is exactly why this failure is invisible to any per-package check.
+const subclassIndex = buildSubclassIndex(resolve(repoRoot, 'packages'));
 let fixed = 0;
 let filesChanged = 0;
 
@@ -1152,7 +1341,7 @@ for (const [rel, findings] of [...byFile.entries()].sort()) {
     const abs = resolve(repoRoot, rel);
     let result;
     try {
-        result = rewriteFile(abs, findings, subclassProps);
+        result = rewriteFile(abs, findings, subclassIndex);
     } catch (err) {
         for (const f of findings) skipped.push({ Finding: f, Reason: `codemod error: ${err.message}` });
         continue;
@@ -1174,6 +1363,7 @@ let barrelsUpdated = 0;
 let namesPublished = 0;
 let callerFiles = 0;
 let callSites = 0;
+let mockKeys = 0;
 if (renamesByFile.size > 0 && args.package) {
     const packageDir = resolve(repoRoot, args.package);
     for (const edit of updateReExports(packageDir, renamesByFile)) {
@@ -1186,6 +1376,10 @@ if (renamesByFile.size > 0 && args.package) {
         callSites += edit.Count;
         if (args.apply) writeFileSync(edit.Path, edit.Text, 'utf8');
     }
+    for (const edit of updateMockFactories(packageDir, renamesByFile)) {
+        mockKeys += edit.Count;
+        if (args.apply) writeFileSync(edit.Path, edit.Text, 'utf8');
+    }
 }
 
 const mode = args.apply ? 'APPLIED' : 'DRY RUN (nothing written)';
@@ -1196,6 +1390,7 @@ console.log(`  fixed             : ${fixed}   across ${filesChanged} file(s)`);
 console.log(`  skipped in scope  : ${skipped.length}`);
 console.log(`  re-exports added  : ${namesPublished}   across ${barrelsUpdated} barrel(s)`);
 console.log(`  call sites moved  : ${callSites}   across ${callerFiles} file(s) in this package`);
+console.log(`  mock factory keys : ${mockKeys}`);
 console.log(`  out of scope      : ${outOfScope.length}`);
 
 if (skipped.length > 0) {

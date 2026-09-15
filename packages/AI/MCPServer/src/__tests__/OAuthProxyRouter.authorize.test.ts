@@ -15,8 +15,10 @@ import type { Application, Request, Response, Router } from 'express';
 // ScopeService reaches @memberjunction/server, whose config loader validates database settings
 // at import time. The authorize endpoint under test never consults scopes on its error paths.
 vi.mock('../auth/ScopeService.js', () => ({
-  loadActiveScopes: async () => [],
-  getDefaultScopes: () => [],
+  LoadActiveScopes: async () => [],
+    get loadActiveScopes() { return this.LoadActiveScopes; },
+  GetDefaultScopes: () => [],
+    get getDefaultScopes() { return this.GetDefaultScopes; },
 }));
 
 import { CreateOAuthProxyRouter } from '../auth/OAuthProxyRouter.js';

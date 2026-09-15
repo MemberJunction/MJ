@@ -6,7 +6,8 @@ import { describe, it, expect, vi } from 'vitest';
 
 // Mock the OAuthConfig module
 vi.mock('../auth/OAuthConfig.js', () => ({
-    getResourceIdentifier: () => 'http://localhost:3100',
+    GetResourceIdentifier: () => 'http://localhost:3100',
+    get getResourceIdentifier() { return this.GetResourceIdentifier; },
 }));
 
 import { BuildWWWAuthenticateHeader } from '../auth/WWWAuthenticate';
