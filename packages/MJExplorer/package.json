@@ -145,6 +145,7 @@
   "devDependencies": {
     "@angular-devkit/build-angular": "21.2.23",
     "@angular/cli": "21.2.23",
+    "@angular/compiler": "21.2.22",
     "@angular/compiler-cli": "21.2.22",
     "@memberjunction/cli": "6.1.0",
     "@types/body-parser": "^1.19.6",
