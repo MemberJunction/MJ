@@ -676,12 +676,31 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      */
     protected async RefreshAfterMetadataMemberChange(): Promise<boolean> {
         if (this.MetadataMemberRefreshMustWait) {
-            // Not now — re-arm the same window and try again once the provider is free.
+            // Not now — re-arm the same window and try again once the provider is free. Bounded:
+            // a provider that never leaves its transaction (a leaked or doomed handle) would
+            // otherwise re-arm forever on a timer that holds the process open. The next
+            // member-entity write schedules a fresh refresh, so dropping this one loses nothing
+            // that a later write does not restore.
+            this._metadataMemberRefreshWaits++;
+            if (this._metadataMemberRefreshWaits > ProviderBase.MaxMetadataMemberRefreshWaits) {
+                LogError(`Metadata refresh after a member-entity change is still waiting on an ambient transaction after ${this._metadataMemberRefreshWaits} windows of ${this.MetadataMemberRefreshDelayMs}ms; dropping it — the next member write re-arms it`);
+                this._metadataMemberRefreshWaits = 0;
+                return true;
+            }
             this.scheduleMetadataMemberRefresh();
             return true;
         }
+        this._metadataMemberRefreshWaits = 0;
         return this.Refresh();
     }
+
+    /**
+     * How many consecutive windows a member-change refresh may wait on
+     * {@link MetadataMemberRefreshMustWait} before it is dropped. At the default 500ms window
+     * this is ten seconds — far longer than any transaction a Save or Delete holds.
+     */
+    public static MaxMetadataMemberRefreshWaits: number = 20;
+    private _metadataMemberRefreshWaits = 0;
 
     /**
      * True while a member-change refresh must NOT run, e.g. the provider is inside an ambient

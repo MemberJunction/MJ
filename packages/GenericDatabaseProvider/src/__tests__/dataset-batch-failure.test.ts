@@ -37,10 +37,6 @@ class TestProvider extends GenericDatabaseProviderTestBase {
     protected BuildPaginationSQL(maxRows: number, startRow: number): string {
         return `LIMIT ${maxRows} OFFSET ${startRow}`;
     }
-    async BeginTransaction(): Promise<void> {}
-    async CommitTransaction(): Promise<void> {}
-    async RollbackTransaction(): Promise<void> {}
-
     /** The dataset-items metadata read (first ExecuteSQL call) returns these rows. */
     public datasetItems: Record<string, unknown>[] = [];
     override async ExecuteSQL<T>(): Promise<Array<T>> {
@@ -59,9 +55,15 @@ class TestProvider extends GenericDatabaseProviderTestBase {
     public setTrustLocalCache(trust: boolean): void { this._trustCache = trust; }
     override get TrustLocalCacheCompletely(): boolean { return this._trustCache; }
 
-    /** The deferral predicate is protected; expose it and the depth it reads. */
+    /** The deferral predicate is protected; expose it. */
     public get RefreshMustWait(): boolean { return this.MetadataMemberRefreshMustWait; }
-    public setTransactionDepth(depth: number): void { (this as unknown as { _transactionDepth: number })._transactionDepth = depth; }
+
+    /** A physical handle that exists between begin and commit/rollback, so the real depth accounting runs. */
+    private _physical = false;
+    protected override get HasPhysicalTransaction(): boolean { return this._physical; }
+    protected override async BeginPhysicalTransaction(): Promise<void> { this._physical = true; }
+    protected override async CommitPhysicalTransaction(): Promise<void> { this._physical = false; }
+    protected override async RollbackPhysicalTransaction(): Promise<void> { this._physical = false; }
 }
 
 const mockUser: UserInfo = { ID: 'test-user-id', Name: 'Test User', Email: 'test@test.com' } as UserInfo;
@@ -126,12 +128,14 @@ describe('GetDatasetByName when the data batch throws (MJ#4486)', () => {
 });
 
 describe('a member-change metadata refresh waits for the ambient transaction (MJ#4486)', () => {
-    it('must wait while the provider is inside a transaction, and not otherwise', () => {
+    it('must wait while the provider is inside a transaction, and not otherwise', async () => {
+        // The test base's physical begin/commit are no-ops, so this exercises the real depth
+        // accounting in GenericDatabaseProvider rather than poking the field.
         const provider = new TestProvider();
         expect(provider.RefreshMustWait).toBe(false);
-        provider.setTransactionDepth(1);
+        await provider.BeginTransaction();
         expect(provider.RefreshMustWait).toBe(true);
-        provider.setTransactionDepth(0);
+        await provider.CommitTransaction();
         expect(provider.RefreshMustWait).toBe(false);
     });
 });

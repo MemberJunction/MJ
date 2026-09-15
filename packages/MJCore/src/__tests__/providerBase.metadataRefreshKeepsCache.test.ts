@@ -17,6 +17,7 @@ class RefreshableProvider extends TestMetadataProvider {
     public schedule(): void { this.scheduleMetadataMemberRefresh(); }
     public refreshAfterChange(): Promise<boolean> { return this.RefreshAfterMetadataMemberChange(); }
     public cancelPending(): void { this.CancelPendingMetadataMemberRefresh(); }
+    public hasPendingTimer(): boolean { return (this as unknown as { _metadataMemberRefreshTimer: unknown })._metadataMemberRefreshTimer !== null; }
 }
 
 const config = () => new ProviderConfigDataBase({}, '__mj', [], [], true);
@@ -71,6 +72,29 @@ describe('a member-change refresh that must wait re-arms instead of running', ()
         await vi.advanceTimersByTimeAsync(RefreshableProvider.MetadataDatasetRefreshDebounceMs + 1);
         expect(refresh).toHaveBeenCalledTimes(1);
         provider.cancelPending();
+    });
+
+    it('stops re-arming after the cap and drops the refresh, so a stuck transaction cannot hold the process open', async () => {
+        vi.useFakeTimers();
+        const provider = new RefreshableProvider();
+        const refresh = vi.spyOn(provider, 'Refresh').mockResolvedValue(true);
+        const cap = RefreshableProvider.MaxMetadataMemberRefreshWaits;
+        provider.mustWait = true;
+        provider.schedule();
+
+        // One firing per window: the cap-th wait still re-arms, the next one drops.
+        await vi.advanceTimersByTimeAsync((RefreshableProvider.MetadataDatasetRefreshDebounceMs + 1) * (cap + 1));
+        expect(refresh).not.toHaveBeenCalled();
+        expect(provider.hasPendingTimer()).toBe(false);
+
+        // Nothing is armed now, so freeing the provider alone does not refresh...
+        provider.mustWait = false;
+        await vi.advanceTimersByTimeAsync(RefreshableProvider.MetadataDatasetRefreshDebounceMs * 5);
+        expect(refresh).not.toHaveBeenCalled();
+        // ...but the next member write does, and the wait count started over.
+        provider.schedule();
+        await vi.advanceTimersByTimeAsync(RefreshableProvider.MetadataDatasetRefreshDebounceMs + 1);
+        expect(refresh).toHaveBeenCalledTimes(1);
     });
 
     it('refreshes immediately when nothing is waiting', async () => {

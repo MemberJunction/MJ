@@ -5765,8 +5765,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * committed. Joining that transaction puts the metadata batch on the transaction's single
      * connection alongside the COMMIT, which tedious rejects (EINVALIDSTATE) or drops (ECLOSE)
      * once the handle is torn down, and a transactional query is deliberately never retried.
-     * Metadata reads are not part of anyone's unit of work; wait for the transaction to end
-     * and run on the pool (#4486, #4454).
+     * Metadata reads are not part of anyone's unit of work, so wait for the transaction to end
+     * before starting one (#4486).
+     *
+     * This narrows the window rather than closing it: the check runs when the timer fires, and
+     * the batch is issued several round trips later, so a transaction that begins in between
+     * is still joined. That case is now harmless to the process — the batch fails, the dataset
+     * reports it, and the loaded metadata stays — but the refresh itself is lost until the next
+     * member write. Running the metadata batch on the pool regardless of the ambient
+     * transaction is #4514 (alongside #4454, the commit-side half of the same window).
      */
     protected override get MetadataMemberRefreshMustWait(): boolean {
         return this.CurrentTransactionDepth > 0 || this.HasPhysicalTransaction;
