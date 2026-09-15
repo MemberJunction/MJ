@@ -9,8 +9,8 @@
 
 export {
   LiveKitRoomController,
-  defaultRoomFactory,
-  defaultRoleResolver,
+  DefaultRoomFactory, defaultRoomFactory,
+  DefaultRoleResolver, defaultRoleResolver,
   type LiveKitRoomFactory,
   type LiveKitRoleResolver,
   type LiveKitRoomControllerOptions,
@@ -19,7 +19,7 @@ export {
 export { LiveKitAudioMeter, AUDIO_METER_BIN_COUNT, AUDIO_METER_SILENCE_FLOOR, type LiveKitAudioMeterFrame } from './audio-meter';
 
 export { LiveKitMediaPreview } from './livekit-preview';
-export { applyNoiseFilter, applyBackgroundEffect } from './livekit-effects';
+export { ApplyNoiseFilter, applyNoiseFilter, ApplyBackgroundEffect, applyBackgroundEffect } from './livekit-effects';
 
 export {
   LiveKitRoomEventBus,

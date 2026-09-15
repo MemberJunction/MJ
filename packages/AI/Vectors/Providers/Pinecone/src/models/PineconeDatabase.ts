@@ -29,10 +29,15 @@ export class PineconeDatabase extends VectorDBBase {
         throw new Error('Method not implemented.');
     }
 
-    get pinecone(): Pinecone { return this._pinecone; }
+    get Pinecone(): Pinecone { return this._pinecone; }
+
+    /** @deprecated Use {@link Pinecone}. */
+    get pinecone(): Pinecone {
+        return this.Pinecone;
+    }
 
     public async GetIndexDescription(params: BaseRequestParams): Promise<IndexDescription> {
-        const description: IndexDescription = await this.pinecone.describeIndex(params.id);
+        const description: IndexDescription = await this.Pinecone.describeIndex(params.id);
         return description;
     }
 
@@ -42,7 +47,7 @@ export class PineconeDatabase extends VectorDBBase {
         }
 
         if(pineconeDefaultIndex){
-            let defaultIndex = this.pinecone.Index(pineconeDefaultIndex);
+            let defaultIndex = this.Pinecone.Index(pineconeDefaultIndex);
             if(defaultIndex){
                 this._defaultIndex = defaultIndex;
                 return defaultIndex;
@@ -52,7 +57,7 @@ export class PineconeDatabase extends VectorDBBase {
         const indexList = await this.ListIndexes();
         if(indexList && indexList.indexes && indexList.indexes.length > 0){
             const indexName: string = indexList.indexes[0].name;
-            this._defaultIndex = this.pinecone.index(indexName);
+            this._defaultIndex = this.Pinecone.index(indexName);
             return this._defaultIndex;
         }
 
@@ -61,7 +66,7 @@ export class PineconeDatabase extends VectorDBBase {
     }
 
     public async ListIndexes(): Promise<IndexList> {
-        const indexes: IndexList = await this.pinecone.listIndexes();
+        const indexes: IndexList = await this.Pinecone.listIndexes();
         return indexes;
     }
 
@@ -78,7 +83,7 @@ export class PineconeDatabase extends VectorDBBase {
         const result: BaseResponse = {
             message: "",
             success: true,
-            data: this.pinecone.Index(name)
+            data: this.Pinecone.Index(name)
         };
 
         return result;
@@ -93,7 +98,7 @@ export class PineconeDatabase extends VectorDBBase {
      */
     public async CreateIndex(options: CreateIndexParams): Promise<BaseResponse> {
         try{
-            const result = await this.pinecone.createIndex({
+            const result = await this.Pinecone.createIndex({
                 name: options.id,
                 dimension: options.dimension,
                 metric: options.metric,
@@ -110,7 +115,7 @@ export class PineconeDatabase extends VectorDBBase {
 
     public async DeleteIndex(params: BaseRequestParams): Promise<BaseResponse> {
         try{
-            await this.pinecone.deleteIndex(params.id);
+            await this.Pinecone.deleteIndex(params.id);
             return this.wrapSuccessResponse(null);
         }
         catch(ex){

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { buildMJConfig } from '../config-loader';
+import { BuildMJConfig } from '../config-loader';
 
 // Mock cosmiconfig at the module level
 vi.mock('cosmiconfig', () => ({
@@ -8,12 +8,12 @@ vi.mock('cosmiconfig', () => ({
 
 describe('buildMJConfig', () => {
     it('should return empty object when no package defaults provided', () => {
-        const result = buildMJConfig({});
+        const result = BuildMJConfig({});
         expect(result).toEqual({});
     });
 
     it('should include codegen defaults', () => {
-        const result = buildMJConfig({
+        const result = BuildMJConfig({
             codegen: { outputDir: './generated', language: 'typescript' }
         });
         expect(result.outputDir).toBe('./generated');
@@ -21,7 +21,7 @@ describe('buildMJConfig', () => {
     });
 
     it('should include server defaults', () => {
-        const result = buildMJConfig({
+        const result = BuildMJConfig({
             server: { port: 4000, host: 'localhost' }
         });
         expect(result.port).toBe(4000);
@@ -29,14 +29,14 @@ describe('buildMJConfig', () => {
     });
 
     it('should include mcpServer defaults', () => {
-        const result = buildMJConfig({
+        const result = BuildMJConfig({
             mcpServer: { mcpPort: 5000 }
         });
         expect(result.mcpPort).toBe(5000);
     });
 
     it('should include a2aServer defaults', () => {
-        const result = buildMJConfig({
+        const result = BuildMJConfig({
             a2aServer: { a2aPort: 6000 }
         });
         expect(result.a2aPort).toBe(6000);
@@ -44,14 +44,14 @@ describe('buildMJConfig', () => {
 
     it('should include queryGen defaults under queryGen key', () => {
         const queryGenConfig = { maxResults: 100, timeout: 30 };
-        const result = buildMJConfig({
+        const result = BuildMJConfig({
             queryGen: queryGenConfig
         });
         expect(result.queryGen).toEqual(queryGenConfig);
     });
 
     it('should merge multiple package defaults', () => {
-        const result = buildMJConfig({
+        const result = BuildMJConfig({
             codegen: { outputDir: './gen' },
             server: { port: 4000 }
         });
@@ -60,7 +60,7 @@ describe('buildMJConfig', () => {
     });
 
     it('should deep merge overlapping package defaults', () => {
-        const result = buildMJConfig({
+        const result = BuildMJConfig({
             codegen: { database: { host: 'localhost' } },
             server: { database: { port: 1433 } }
         });
@@ -71,7 +71,7 @@ describe('buildMJConfig', () => {
     });
 
     it('should apply user config overrides on top of package defaults', () => {
-        const result = buildMJConfig(
+        const result = BuildMJConfig(
             { server: { port: 4000, host: 'localhost' } },
             { port: 8080 }
         );
@@ -80,7 +80,7 @@ describe('buildMJConfig', () => {
     });
 
     it('should handle undefined userConfigOverrides', () => {
-        const result = buildMJConfig(
+        const result = BuildMJConfig(
             { server: { port: 4000 } },
             undefined
         );
@@ -88,7 +88,7 @@ describe('buildMJConfig', () => {
     });
 
     it('should give user overrides highest priority', () => {
-        const result = buildMJConfig(
+        const result = BuildMJConfig(
             {
                 codegen: { mode: 'codegen-mode' },
                 server: { mode: 'server-mode' }
@@ -99,7 +99,7 @@ describe('buildMJConfig', () => {
     });
 
     it('should handle all package defaults provided together', () => {
-        const result = buildMJConfig({
+        const result = BuildMJConfig({
             codegen: { codegenFlag: true },
             server: { serverFlag: true },
             mcpServer: { mcpFlag: true },

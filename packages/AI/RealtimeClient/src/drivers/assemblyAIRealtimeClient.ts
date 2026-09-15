@@ -1,10 +1,10 @@
 import { RegisterClass } from '@memberjunction/global';
 import { ClientRealtimeSessionConfig, JSONObject } from '@memberjunction/ai';
 import { BaseRealtimeClient, RealtimeClientState } from '../generic/baseRealtimeClient';
-import { base64ToArrayBuffer } from '../audio/pcmUtils';
+import { Base64ToArrayBuffer } from '../audio/pcmUtils';
 import { IRealtimePcmPlayback, RealtimePcmPlayback } from '../audio/pcmPlayback';
 import { RealtimeAudioMeter } from '../audio/audioMeter';
-import { createPcmMicCapture, IPcmMicCapture } from '../audio/micCapture';
+import { CreatePcmMicCapture, IPcmMicCapture } from '../audio/micCapture';
 
 // ── Audio constants (AssemblyAI Voice Agent wire format) ───────────────────────
 
@@ -472,7 +472,7 @@ export class AssemblyAIRealtimeClient extends BaseRealtimeClient {
         sampleRate: number,
         onPcmChunk: (base64Pcm16: string) => void
     ): Promise<IPcmMicCapture> {
-        return createPcmMicCapture(micStream, sampleRate, onPcmChunk);
+        return CreatePcmMicCapture(micStream, sampleRate, onPcmChunk);
     }
 
     /**
@@ -645,7 +645,7 @@ export class AssemblyAIRealtimeClient extends BaseRealtimeClient {
             return;
         }
         this.markGenerationStarted();
-        this.playback?.Enqueue(base64ToArrayBuffer(audioBase64));
+        this.playback?.Enqueue(Base64ToArrayBuffer(audioBase64));
     }
 
     /** User transcript: streaming deltas (`IsFinal: false`) finalized by `transcript.user`. */

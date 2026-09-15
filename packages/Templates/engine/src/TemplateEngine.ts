@@ -9,7 +9,16 @@ import { TemplateRenderResult, TemplateEngineBase } from '@memberjunction/templa
  * This class extends the nunjucks loader to allow adding templates directly to the loader
  */
 export class TemplateEntityLoader extends nunjucks.Loader {
-    public async = true; // tell nunjucks this is an async loader
+    public Async = true;
+
+    /** @deprecated Use {@link Async}. */
+    public get async() {
+        return this.Async;
+    }
+    /** @deprecated Use {@link Async}. */
+    public set async(value) {
+        this.Async = value;
+    } // tell nunjucks this is an async loader
 
     private templates: { [templateId: string]: MJTemplateEntityExtended } = {};
 
@@ -27,7 +36,7 @@ export class TemplateEntityLoader extends nunjucks.Loader {
      * @param name - this is actually the templateId but nunjucks calls it name and makes it a string, we handle it as a number internally 
      * @returns 
      */
-    public getSource(name: string, callBack: any) { 
+    public GetSource(name: string, callBack: any) { 
         const templateId = Number(name);
         const template = this.templates[templateId];
         if (template) {
@@ -37,6 +46,11 @@ export class TemplateEntityLoader extends nunjucks.Loader {
                 noCache: true
             });
         }
+    }
+
+    /** @deprecated Use {@link GetSource}. */
+    public getSource(name: string, callBack: any) {
+        return this.GetSource(name, callBack);
     }
 }
 

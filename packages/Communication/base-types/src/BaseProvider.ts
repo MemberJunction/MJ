@@ -1300,8 +1300,13 @@ export abstract class BaseCommunicationProvider {
      * Override in subclasses to accurately reflect capabilities.
      * Default implementation returns only the core abstract methods.
      */
-    public getSupportedOperations(): ProviderOperation[] {
+    public GetSupportedOperations(): ProviderOperation[] {
         return ['SendSingleMessage', 'GetMessages', 'ForwardMessage', 'ReplyToMessage', 'CreateDraft'];
+    }
+
+    /** @deprecated Use {@link GetSupportedOperations}. */
+    public getSupportedOperations(): ProviderOperation[] {
+        return this.GetSupportedOperations();
     }
 
     /**
@@ -1309,8 +1314,13 @@ export abstract class BaseCommunicationProvider {
      * @param operation - The operation to check
      * @returns true if the operation is supported
      */
+    public SupportsOperation(operation: ProviderOperation): boolean {
+        return this.GetSupportedOperations().includes(operation);
+    }
+
+    /** @deprecated Use {@link SupportsOperation}. */
     public supportsOperation(operation: ProviderOperation): boolean {
-        return this.getSupportedOperations().includes(operation);
+        return this.SupportsOperation(operation);
     }
 
     /**

@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { buildVariableValuesFromContext, substituteVariables, composeApplicationContext } from '../utils/variable-substitution.js';
+import { BuildVariableValuesFromContext, SubstituteVariables, ComposeApplicationContext } from '../utils/variable-substitution.js';
 
 describe('buildVariableValuesFromContext', () => {
     it('returns empty when there is no context and no relevant env vars', () => {
-        expect(buildVariableValuesFromContext(null, {})).toEqual({});
-        expect(buildVariableValuesFromContext(undefined, {})).toEqual({});
+        expect(BuildVariableValuesFromContext(null, {})).toEqual({});
+        expect(BuildVariableValuesFromContext(undefined, {})).toEqual({});
     });
 
     it('picks up MJ_TEST_VAR_ env vars (stripping the prefix)', () => {
@@ -13,7 +13,7 @@ describe('buildVariableValuesFromContext', () => {
             MJ_TEST_VAR_authUsername: 'alex',
             UNRELATED: 'ignored',
         };
-        expect(buildVariableValuesFromContext(null, env)).toEqual({
+        expect(BuildVariableValuesFromContext(null, env)).toEqual({
             baseUrl: 'http://byo-app:3000',
             authUsername: 'alex',
         });
@@ -22,7 +22,7 @@ describe('buildVariableValuesFromContext', () => {
     it('layers resolver values over env vars when both define the same key', () => {
         const env = { MJ_TEST_VAR_baseUrl: 'http://from-env:3000' };
         const ctx = { resolvedVariables: { values: { baseUrl: 'http://from-resolver:3000' } } };
-        expect(buildVariableValuesFromContext(ctx, env)).toEqual({
+        expect(BuildVariableValuesFromContext(ctx, env)).toEqual({
             baseUrl: 'http://from-resolver:3000',
         });
     });
@@ -30,7 +30,7 @@ describe('buildVariableValuesFromContext', () => {
     it('merges resolver values and env vars when they define different keys', () => {
         const env = { MJ_TEST_VAR_baseUrl: 'http://x.com' };
         const ctx = { resolvedVariables: { values: { authUsername: 'alex' } } };
-        expect(buildVariableValuesFromContext(ctx, env)).toEqual({
+        expect(BuildVariableValuesFromContext(ctx, env)).toEqual({
             baseUrl: 'http://x.com',
             authUsername: 'alex',
         });
@@ -39,7 +39,7 @@ describe('buildVariableValuesFromContext', () => {
     it('ignores empty-string env vars', () => {
         const env = { MJ_TEST_VAR_baseUrl: '' };
         // empty string is still defined; we include it (matches process.env behavior)
-        expect(buildVariableValuesFromContext(null, env)).toEqual({ baseUrl: '' });
+        expect(BuildVariableValuesFromContext(null, env)).toEqual({ baseUrl: '' });
     });
 
     it('JSON-parses env-var values that look like arrays/objects/scalars', () => {
@@ -51,7 +51,7 @@ describe('buildVariableValuesFromContext', () => {
             MJ_TEST_VAR_owner: 'null',
             MJ_TEST_VAR_quotedName: '"alex"',
         };
-        expect(buildVariableValuesFromContext(null, env)).toEqual({
+        expect(BuildVariableValuesFromContext(null, env)).toEqual({
             allowedDomains: ['byo-app', 'localhost'],
             authConfig: { username: 'alex', retries: 3 },
             maxSteps: 42,
@@ -66,7 +66,7 @@ describe('buildVariableValuesFromContext', () => {
             MJ_TEST_VAR_baseUrl: 'http://byo-app:3000',
             MJ_TEST_VAR_username: 'alex.tester',
         };
-        expect(buildVariableValuesFromContext(null, env)).toEqual({
+        expect(BuildVariableValuesFromContext(null, env)).toEqual({
             baseUrl: 'http://byo-app:3000',
             username: 'alex.tester',
         });
@@ -74,18 +74,18 @@ describe('buildVariableValuesFromContext', () => {
 
     it('falls back to the raw string when JSON-looking value fails to parse', () => {
         const env = { MJ_TEST_VAR_broken: '[bad json' };
-        expect(buildVariableValuesFromContext(null, env)).toEqual({ broken: '[bad json' });
+        expect(BuildVariableValuesFromContext(null, env)).toEqual({ broken: '[bad json' });
     });
 });
 
 describe('substituteVariables', () => {
     it('returns the input unchanged when values map is empty', () => {
         const input = { startUrl: '{{baseUrl}}' };
-        expect(substituteVariables(input, {})).toBe(input);
+        expect(SubstituteVariables(input, {})).toBe(input);
     });
 
     it('replaces a whole-string placeholder with the raw value, preserving non-string types', () => {
-        const out = substituteVariables(
+        const out = SubstituteVariables(
             { allowedDomains: '{{allowedDomains}}' },
             { allowedDomains: ['localhost', '*.auth0.com'] }
         );
@@ -93,7 +93,7 @@ describe('substituteVariables', () => {
     });
 
     it('replaces an embedded placeholder and coerces non-string values to string', () => {
-        const out = substituteVariables(
+        const out = SubstituteVariables(
             { msg: 'count is {{n}}' },
             { n: 42 }
         );
@@ -101,7 +101,7 @@ describe('substituteVariables', () => {
     });
 
     it('leaves unknown keys in place verbatim', () => {
-        const out = substituteVariables(
+        const out = SubstituteVariables(
             { startUrl: '{{baseUrl}}', other: '{{unknown}}' },
             { baseUrl: 'http://x.com' }
         );
@@ -109,7 +109,7 @@ describe('substituteVariables', () => {
     });
 
     it('recurses into nested objects and arrays', () => {
-        const out = substituteVariables(
+        const out = SubstituteVariables(
             {
                 input: {
                     startUrl: '{{baseUrl}}',
@@ -128,13 +128,13 @@ describe('substituteVariables', () => {
 
     it('does not mutate the input', () => {
         const input = { startUrl: '{{baseUrl}}' };
-        const out = substituteVariables(input, { baseUrl: 'http://x.com' });
+        const out = SubstituteVariables(input, { baseUrl: 'http://x.com' });
         expect(input).toEqual({ startUrl: '{{baseUrl}}' });
         expect(out).not.toBe(input);
     });
 
     it('handles whitespace inside placeholder braces', () => {
-        const out = substituteVariables(
+        const out = SubstituteVariables(
             { url: '{{ baseUrl }}', mixed: 'a {{  baseUrl  }} b' },
             { baseUrl: 'http://x.com' }
         );
@@ -142,7 +142,7 @@ describe('substituteVariables', () => {
     });
 
     it('accepts hyphens and dots in placeholder keys', () => {
-        const out = substituteVariables(
+        const out = SubstituteVariables(
             { a: '{{my-key}}', b: '{{namespace.value}}' },
             { 'my-key': 'one', 'namespace.value': 'two' }
         );
@@ -150,7 +150,7 @@ describe('substituteVariables', () => {
     });
 
     it('passes null and undefined values through untouched', () => {
-        const out = substituteVariables(
+        const out = SubstituteVariables(
             { a: null, b: undefined, c: '{{x}}' } as Record<string, unknown>,
             { x: 'set' }
         );
@@ -160,28 +160,28 @@ describe('substituteVariables', () => {
 
 describe('composeApplicationContext', () => {
     it('returns undefined when both layers are empty', () => {
-        expect(composeApplicationContext(undefined, undefined, {})).toBeUndefined();
-        expect(composeApplicationContext('', '', {})).toBeUndefined();
-        expect(composeApplicationContext('   ', '\n\t', {})).toBeUndefined();
+        expect(ComposeApplicationContext(undefined, undefined, {})).toBeUndefined();
+        expect(ComposeApplicationContext('', '', {})).toBeUndefined();
+        expect(ComposeApplicationContext('   ', '\n\t', {})).toBeUndefined();
     });
 
     it('returns just the suite-level context when no per-test override', () => {
-        const out = composeApplicationContext('## App\nMy app description', undefined, {});
+        const out = ComposeApplicationContext('## App\nMy app description', undefined, {});
         expect(out).toBe('## App\nMy app description');
     });
 
     it('returns just the per-test notes (with heading) when no suite-level context', () => {
-        const out = composeApplicationContext(undefined, 'Special case: x is null', {});
+        const out = ComposeApplicationContext(undefined, 'Special case: x is null', {});
         expect(out).toBe('## Test-specific Notes\n\nSpecial case: x is null');
     });
 
     it('concatenates suite then per-test under heading', () => {
-        const out = composeApplicationContext('Suite stuff', 'Test stuff', {});
+        const out = ComposeApplicationContext('Suite stuff', 'Test stuff', {});
         expect(out).toBe('Suite stuff\n\n## Test-specific Notes\n\nTest stuff');
     });
 
     it('applies variable substitution to both layers', () => {
-        const out = composeApplicationContext(
+        const out = ComposeApplicationContext(
             'baseUrl is {{baseUrl}}',
             'environment is {{env}}',
             { baseUrl: 'http://x.com', env: 'staging' }
@@ -192,14 +192,14 @@ describe('composeApplicationContext', () => {
     });
 
     it('leaves placeholders untouched when values map is empty', () => {
-        const out = composeApplicationContext('{{x}}', '{{y}}', {});
+        const out = ComposeApplicationContext('{{x}}', '{{y}}', {});
         expect(out).toBe('{{x}}\n\n## Test-specific Notes\n\n{{y}}');
     });
 
     it('treats whitespace-only layers as empty', () => {
-        expect(composeApplicationContext('   \n  ', 'real content', {})).toBe(
+        expect(ComposeApplicationContext('   \n  ', 'real content', {})).toBe(
             '## Test-specific Notes\n\nreal content'
         );
-        expect(composeApplicationContext('real content', '\t\n', {})).toBe('real content');
+        expect(ComposeApplicationContext('real content', '\t\n', {})).toBe('real content');
     });
 });

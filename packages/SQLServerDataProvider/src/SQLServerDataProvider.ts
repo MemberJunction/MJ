@@ -88,8 +88,13 @@ import { SQLServerDialect, SQLDialect } from '@memberjunction/sql-dialect';
  * batch-execution methods that need a live mssql connection, so this is the
  * seam where the behaviour can actually be asserted. See issue #3171.
  */
-export function escapeRegExpLiteral(literal: string): string {
+export function EscapeRegExpLiteral(literal: string): string {
   return literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** @deprecated Use {@link EscapeRegExpLiteral}. */
+export function escapeRegExpLiteral(literal: string): string {
+  return EscapeRegExpLiteral(literal);
 }
 /**
  * Checks whether an error indicates a stale/dead database connection that
@@ -403,8 +408,13 @@ export class SQLServerDataProvider
    *   console.log('Transaction active:', isActive);
    * });
    */
-  public get transactionState$(): Observable<boolean> {
+  public get TransactionState$(): Observable<boolean> {
     return this._transactionState$.asObservable();
+  }
+
+  /** @deprecated Use {@link TransactionState$}. */
+  public get transactionState$(): Observable<boolean> {
+    return this.TransactionState$;
   }
   
   /**
@@ -434,10 +444,15 @@ export class SQLServerDataProvider
   /**
    * Gets whether a transaction is currently active
    */
-  public get isTransactionActive(): boolean {
+  public get IsTransactionActive(): boolean {
     // Always return instance-level state
     // Request-specific state should be accessed via getTransactionContext
     return this._transactionState$.value;
+  }
+
+  /** @deprecated Use {@link IsTransactionActive}. */
+  public get isTransactionActive(): boolean {
+    return this.IsTransactionActive;
   }
 
   /**
@@ -1017,7 +1032,7 @@ export class SQLServerDataProvider
    * processed after transaction commit (see processDeferredTasks).
    */
   protected override EnqueueAfterSaveAIAction(params: EntityAIActionParams, user: UserInfo): void {
-    if (this.isTransactionActive) {
+    if (this.IsTransactionActive) {
       this._deferredTasks.push({ type: 'Entity AI Action', data: params, options: null, user });
     } else {
       QueueManager.AddTask('Entity AI Action', params, null, user);
@@ -2042,7 +2057,7 @@ export class SQLServerDataProvider
               // See issue #3171.
               const prefixed = `@${paramName}`;
               processedQuery = processedQuery.replace(
-                new RegExp(`@${escapeRegExpLiteral(key)}\\b`, 'g'),
+                new RegExp(`@${EscapeRegExpLiteral(key)}\\b`, 'g'),
                 () => prefixed,
               );
             }
@@ -2165,7 +2180,7 @@ export class SQLServerDataProvider
               // See issue #3171.
               const prefixed = `@${paramName}`;
               processedQuery = processedQuery.replace(
-                new RegExp(`@${escapeRegExpLiteral(key)}\\b`, 'g'),
+                new RegExp(`@${EscapeRegExpLiteral(key)}\\b`, 'g'),
                 () => prefixed,
               );
             }
@@ -2529,7 +2544,7 @@ IF ${varName} IS NOT NULL
    */
   public async RefreshIfNeeded(): Promise<boolean> {
     // Skip refresh if a transaction is active
-    if (this.isTransactionActive) {
+    if (this.IsTransactionActive) {
       LogStatus('Skipping metadata refresh - transaction is active');
       return false;
     }

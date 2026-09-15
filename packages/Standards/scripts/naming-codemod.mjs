@@ -1075,7 +1075,14 @@ function updateCallers(packageDir, renamesByFile) {
     return edited;
 }
 
-/** Is this identifier the NAME being declared by its parent, rather than a reference to one? */
+/**
+ * Is this identifier the NAME being declared by its parent, rather than a reference to one?
+ *
+ * Class members belong in this list as much as top-level declarations do. A driver that imports a
+ * `redactConnectionSecrets` function and also declares a `redactConnectionSecrets` METHOD has two
+ * unrelated symbols that merely share a spelling; treating the method's own name as a reference to
+ * the import renames the declaration while every `this.redactConnectionSecrets` call stays put.
+ */
 function isDeclarationName(parent, node) {
     return (
         (ts.isVariableDeclaration(parent) ||
@@ -1085,7 +1092,14 @@ function isDeclarationName(parent, node) {
             ts.isBindingElement(parent) ||
             ts.isTypeAliasDeclaration(parent) ||
             ts.isInterfaceDeclaration(parent) ||
-            ts.isEnumDeclaration(parent)) &&
+            ts.isEnumDeclaration(parent) ||
+            ts.isMethodDeclaration(parent) ||
+            ts.isPropertyDeclaration(parent) ||
+            ts.isGetAccessorDeclaration(parent) ||
+            ts.isSetAccessorDeclaration(parent) ||
+            ts.isMethodSignature(parent) ||
+            ts.isEnumMember(parent) ||
+            ts.isModuleDeclaration(parent)) &&
         parent.name === node
     );
 }

@@ -362,7 +362,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         // identifiers to lowercase and the actual columns/views are mixed-case.
         // Tokenizer-based quoting matches what PostgreSQLCodeGenProvider already
         // does for codegen-time SQL — runtime gets the same treatment.
-        const quotedQuery = this.autoQuoteIdentifiers(query);
+        const quotedQuery = this.AutoQuoteIdentifiers(query);
         try {
             if (options?.connectionSource) {
                 const bypass = options.connectionSource as {
@@ -552,7 +552,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         const quoted = this.quoteIdentifiersInSQL(clause, entityInfo);
         // Translate SQL Server date/time functions AFTER identifier quoting so the
         // injected PG idioms (`AT TIME ZONE`, `INTERVAL`) are not re-quoted.
-        const dialectFns = this.translateTSQLDateFunctions(quoted);
+        const dialectFns = this.TranslateTSQLDateFunctions(quoted);
         return this.coerceBooleanLiteralsInSQL(dialectFns, entityInfo);
     }
 
@@ -573,7 +573,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
      * Public so it can be unit-tested directly (same convention as
      * `autoQuoteIdentifiers`).
      */
-    public translateTSQLDateFunctions(sql: string): string {
+    public TranslateTSQLDateFunctions(sql: string): string {
         if (!sql || sql.length === 0) return sql;
         let out = sql;
         // Zero-arg "now" variants first, so a DATEADD's inner expression is
@@ -583,6 +583,11 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         out = out.replace(/\bGETDATE\s*\(\s*\)/gi, 'CURRENT_TIMESTAMP');
         out = this.translateDateAdd(out);
         return out;
+    }
+
+    /** @deprecated Use {@link TranslateTSQLDateFunctions}. */
+    public translateTSQLDateFunctions(sql: string): string {
+        return this.TranslateTSQLDateFunctions(sql);
     }
 
     /**
@@ -1341,8 +1346,13 @@ WHERE ${pgDialect.QuoteIdentifier(pkName)} = '${safePKValue}';`;
      *
      * Public so it can be unit-tested directly.
      */
-    public autoQuoteIdentifiers(sql: string): string {
+    public AutoQuoteIdentifiers(sql: string): string {
         return AutoQuotePostgreSQLIdentifiers(sql);
+    }
+
+    /** @deprecated Use {@link AutoQuoteIdentifiers}. */
+    public autoQuoteIdentifiers(sql: string): string {
+        return this.AutoQuoteIdentifiers(sql);
     }
 
 }

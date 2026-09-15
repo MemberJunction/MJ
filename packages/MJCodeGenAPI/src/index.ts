@@ -8,7 +8,7 @@ import '@memberjunction/server-bootstrap-lite/mj-class-registrations';
 import './generated/class-registrations-manifest.js';
 
 import { ___serverPort } from "./config";
-import { ___runObject, handleServerInit } from './util';
+import { ___runObject, HandleServerInit } from './util';
 import { MJGlobal } from '@memberjunction/global';
 import { RunCodeGenBase, SQLCodeGenBase } from '@memberjunction/codegen-lib';
 import { Metadata } from '@memberjunction/core';
@@ -20,7 +20,7 @@ app.use(express.json());
 app.listen(___serverPort, () => console.log('Server starting up...'));
 
 // start the initialization process
-const serverInit$ = from(handleServerInit()).pipe(
+const serverInit$ = from(HandleServerInit()).pipe(
   tap(() => console.log(`🚀 Server listening on port ${___serverPort}!\n`)) // Use tap for side effects
 );
 

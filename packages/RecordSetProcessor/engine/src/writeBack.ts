@@ -49,7 +49,7 @@ export interface WriteBackResult {
  * would write. This is what lets a dry-run of any wrapped work type (Action / Agent / Infer / ML Model)
  * compute its effect without mutating data, mirroring the `FieldRulesProcessor` dry-run preview.
  */
-export async function applyOutputMapping(opts: {
+export async function ApplyOutputMapping(opts: {
     outputMapping: OutputMappingConfig;
     result: unknown;
     record: RecordRef;
@@ -128,4 +128,17 @@ export async function applyOutputMapping(opts: {
     }
 
     return out;
+}
+
+/** @deprecated Use {@link ApplyOutputMapping}. */
+export async function applyOutputMapping(opts: {
+    outputMapping: OutputMappingConfig;
+    result: unknown;
+    record: RecordRef;
+    contextUser: UserInfo;
+    provider?: IMetadataProvider;
+    /** When true, compute + validate the mapping but do NOT save anything (returns a preview instead). */
+    dryRun?: boolean;
+}): Promise<WriteBackResult> {
+    return ApplyOutputMapping(opts);
 }
