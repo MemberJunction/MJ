@@ -160,7 +160,14 @@ SELECT
 
     -- Flags
     CASE WHEN p.[Cost] IS NOT NULL THEN 1 ELSE 0 END AS [IsPriced],
-    CASE WHEN p.[RunType] = 'ParallelParent' OR EXISTS(SELECT 1 FROM [${flyway:defaultSchema}].[AIPromptRun] c WHERE c.[ParentID] = p.[ID]) THEN 1 ELSE 0 END AS [IsParallelParent],
+    -- A parallel parent, and ONLY a parallel parent. An earlier revision also flagged any run
+    -- with a child, which is wrong: ParentID is not parallel-only. AIPromptRunner's JSON-repair
+    -- path sets it on an ordinary run (AIPromptRunner.ts, `parentPromptRunId: currentPromptRun.ID`)
+    -- and AIModelRunner sets it from EmbeddingRunParams.ParentRunID. Under the old expression a
+    -- $0.42 run that triggered a $0.01 repair was flagged as a parent and dropped from every
+    -- `IsParallelParent = 0` cost sum — the total reported $0.01, while the run still counted as
+    -- priced, so coverage read 100% with the money missing.
+    CASE WHEN p.[RunType] = 'ParallelParent' THEN 1 ELSE 0 END AS [IsParallelParent],
     CASE WHEN p.[UsageTypeID] IS NOT NULL AND p.[InputUnitsUsed] IS NULL AND p.[OutputUnitsUsed] IS NULL THEN 1 ELSE 0 END AS [IsUnmeasured],
     CASE WHEN p.[CompletedAt] IS NOT NULL THEN 1 ELSE 0 END AS [IsCompleted]
 FROM [${flyway:defaultSchema}].[AIPromptRun] p

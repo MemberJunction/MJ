@@ -55,13 +55,21 @@ function skipNote(checkId: string, reason: string): void {
     console.warn(`  ⚠ ai-cost.${checkId} SKIPPED — ${reason}`);
 }
 
-/** Helper to extract numeric aggregate value from AggregateResults by alias. */
+/**
+ * Numeric aggregate value by alias, asserting on a missing one.
+ *
+ * This deliberately matches the stricter copies in view-execution.checks.ts and
+ * runview-matrix.checks.ts. An earlier revision here opened with `if (!hit) return 0`, which made
+ * a typo'd alias yield 0 instead of failing — and 0 passes both AC8's coverage math and AC11's
+ * `diff < 0.0001` parity assert. A check that cannot fail when its own query is wrong is not a check.
+ */
 function aggregateValue(results: readonly AggregateResult[] | undefined, alias: string): number {
     const hit = (results ?? []).find(a => a.alias === alias);
-    if (!hit || hit.value == null) return 0;
-    Assert(!hit.error, `aggregate '${alias}' returned an error: ${hit.error}`);
-    const n = Number(hit.value);
-    Assert(Number.isFinite(n), `aggregate '${alias}' value is not numeric: ${JSON.stringify(hit.value)}`);
+    Assert(hit != null, `aggregate '${alias}' missing from AggregateResults`);
+    Assert(hit!.value != null, `aggregate '${alias}' returned no value`);
+    Assert(!hit!.error, `aggregate '${alias}' returned an error: ${hit!.error}`);
+    const n = Number(hit!.value);
+    Assert(Number.isFinite(n), `aggregate '${alias}' value is not numeric: ${JSON.stringify(hit!.value)}`);
     return n;
 }
 

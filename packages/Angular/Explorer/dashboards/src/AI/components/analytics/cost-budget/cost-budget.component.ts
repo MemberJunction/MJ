@@ -74,6 +74,11 @@ const TREEMAP_COLORS = [
     'var(--mj-text-disabled)'
 ];
 
+/** The UTC day key ('YYYY-MM-DD') for an instant — the same bucketing the server applies. */
+function CostBudgetUTCDayKey(d: Date): string {
+    return d.toISOString().slice(0, 10);
+}
+
 @Component({
     standalone: false,
     changeDetection: ChangeDetectionStrategy.OnPush,
@@ -784,13 +789,21 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
 
     private computeKpis(): void {
         const now = new Date();
-        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const weekStart = new Date(todayStart.getTime() - 6 * 86400000);
-        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-        const todaySpend = this.sumCostInRange(this.dailyRows, todayStart, now);
-        const weekSpend = this.sumCostInRange(this.dailyRows, weekStart, now);
-        const monthSpend = this.sumCostInRange(this.dailyRows, monthStart, now);
+        // Bounds are UTC DAY KEYS, matching how DayBucket is bucketed server-side. Building them in
+        // LOCAL time and comparing against a UTC-parsed bucket drops a whole day for any viewer west
+        // of UTC: in US/Eastern, local midnight is 04:00Z, so today's bucket (00:00Z) sorts before it
+        // and "Today's Spend" rendered $0.00 every day. The same shift dropped the oldest day of the
+        // week and the 1st of the month.
+        const todayKey = CostBudgetUTCDayKey(now);
+        const weekKey = CostBudgetUTCDayKey(new Date(Date.UTC(
+            now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 6)));
+        const monthKey = CostBudgetUTCDayKey(new Date(Date.UTC(
+            now.getUTCFullYear(), now.getUTCMonth(), 1)));
+
+        const todaySpend = this.sumCostInRange(this.dailyRows, todayKey, todayKey);
+        const weekSpend = this.sumCostInRange(this.dailyRows, weekKey, todayKey);
+        const monthSpend = this.sumCostInRange(this.dailyRows, monthKey, todayKey);
 
         const prevTotalCost = computeTotalCost(this.prevDailyRows);
         const currentTotalCost = computeTotalCost(this.dailyRows);
@@ -1006,11 +1019,16 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
 
     // ── Helpers ──
 
-    private sumCostInRange(rows: AIUsageDailyRow[], start: Date, end: Date): number | null {
+    /**
+     * Sums cost over an inclusive range of UTC day keys ('YYYY-MM-DD'). Compared as strings, which
+     * for ISO dates is the same ordering as by date, and which keeps the viewer's timezone out of a
+     * figure derived from UTC-bucketed data entirely.
+     */
+    private sumCostInRange(rows: AIUsageDailyRow[], startKey: string, endKey: string): number | null {
         const inRange = rows.filter(r => {
             if (!r.DayBucket) return false;
-            const d = new Date(r.DayBucket.slice(0, 10) + 'T00:00:00Z');
-            return d >= start && d <= end;
+            const key = r.DayBucket.slice(0, 10);
+            return key >= startKey && key <= endKey;
         });
         return computeTotalCost(inRange);
     }
