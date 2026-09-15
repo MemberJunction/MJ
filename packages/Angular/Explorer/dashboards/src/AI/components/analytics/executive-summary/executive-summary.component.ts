@@ -166,7 +166,7 @@ interface ErrorHotspot {
             </div>
           }
           @if (ErrorHotspots.length > 0) {
-            <button mjButton variant="link" size="sm" (click)="SectionNavigate.emit('error-analysis')">
+            <button mjButton variant="flat" size="sm" (click)="SectionNavigate.emit('error-analysis')">
               View All Errors <i class="fa-solid fa-arrow-right"></i>
             </button>
           }
