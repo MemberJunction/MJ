@@ -339,7 +339,11 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
 
       // Steps 6-7: Schema
       if (manifest.schema) {
-        const schemaResult = await HandleSchemaCreation(manifest, context, isReinstall || isResume, options.AllowDoubleUnderscoreSchema === true);
+        const schemaResult = await HandleSchemaCreation(manifest, context, {
+          IsReinstall: isReinstall || isResume,
+          AllowDoubleUnderscore: options.AllowDoubleUnderscoreSchema === true,
+          ThisAppId: existingApp?.ID ?? '',
+        });
         if (!schemaResult.Success) {
           return BuildFailureResult('Install', manifest.name, manifest.version, 'Schema', startTime, schemaResult.ErrorMessage ?? 'Schema creation failed');
         }
@@ -763,6 +767,20 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
       return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Schema', startTime, compatResult.Message ?? 'Incompatible MJ version');
     }
 
+    // Upgrade never reaches HandleSchemaCreation (that is install-only), so this is the ONLY
+    // place the new version's schema name is checked. A v2 manifest can name a different schema
+    // than v1 — the rename is even detected further down, to clean up config references — and
+    // without this the new name goes straight to HandleMigrations, running that version's DDL
+    // inside whatever it asked for. Before any mutation, so a rejected upgrade changes nothing.
+    if (manifest.schema) {
+      const schemaValidation = ValidateSchemaName(manifest.schema.name, {
+        allowDoubleUnderscore: options.AllowDoubleUnderscoreSchema === true,
+      });
+      if (!schemaValidation.Success) {
+        return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Schema', startTime, schemaValidation.ErrorMessage ?? 'Invalid schema name');
+      }
+    }
+
     // Step 3: Check dependency compatibility
     if (manifest.dependencies && Object.keys(manifest.dependencies).length > 0) {
       const depResult = await ResolveDependencyChain(manifest, context);
@@ -1179,13 +1197,29 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
 
       let schemaDropError: string | undefined;
       if (!options.KeepData && existingApp.SchemaName && !schemaShared) {
-        Callbacks?.OnProgress?.('Schema', `Dropping schema '${existingApp.SchemaName}'...`);
-        const dropResult = await DropAppSchema(existingApp.SchemaName, context.DatabaseProvider, {
+        // An app installed before its schema name became reserved is now un-droppable: this is
+        // the one reserved-name rejection an operator can hit WITHOUT having done anything wrong,
+        // and refusing leaves the app in status `Error`, still installed, with the reinstall path
+        // failing on the same name. Refusing is right — these are schemas MJ must never drop — so
+        // check here, where `--keep-data` is a real option, and name it. `DropAppSchema` still
+        // validates for itself; this exists to make the dead end an exit rather than a wall.
+        const nameCheck = ValidateSchemaName(existingApp.SchemaName, {
           allowDoubleUnderscore: options.AllowDoubleUnderscoreSchema === true,
         });
-        if (!dropResult.Success) {
-          schemaDropError = dropResult.ErrorMessage;
-          Callbacks?.OnError?.('Schema', `Failed to drop schema: ${dropResult.ErrorMessage}`);
+        if (!nameCheck.Success) {
+          schemaDropError =
+            `${nameCheck.ErrorMessage} '${existingApp.Name}' was installed under that name before it became reserved, ` +
+            `so its schema cannot be dropped. Re-run with --keep-data to remove the app and leave the schema in place.`;
+          Callbacks?.OnError?.('Schema', schemaDropError);
+        } else {
+          Callbacks?.OnProgress?.('Schema', `Dropping schema '${existingApp.SchemaName}'...`);
+          const dropResult = await DropAppSchema(existingApp.SchemaName, context.DatabaseProvider, {
+            allowDoubleUnderscore: options.AllowDoubleUnderscoreSchema === true,
+          });
+          if (!dropResult.Success) {
+            schemaDropError = dropResult.ErrorMessage;
+            Callbacks?.OnError?.('Schema', `Failed to drop schema: ${dropResult.ErrorMessage}`);
+          }
         }
       }
 
@@ -1594,9 +1628,53 @@ export async function ResolveDependencyVersion(
 }
 
 /**
+ * Warns when the schema an install is about to ADOPT is already owned by another installed app.
+ *
+ * Adoption stays allowed — apps legitimately share a schema via `createIfNotExists`, and refusing
+ * would break that. But it must not be silent: once this app's row exists,
+ * `CheckSchemaSharedByOtherApps` reports the schema as shared, which makes the ORIGINAL owner's
+ * `mj app remove` skip its schema drop and metadata cleanup to protect the co-tenant. So a
+ * careless adopt quietly disarms someone else's uninstall.
+ *
+ * Best-effort and never fatal: an indeterminate check (`CheckFailed`) is reported as a warning of
+ * its own rather than blocking an install that is otherwise fine. `thisAppId` excludes this app's
+ * own row so a reinstall does not warn about itself.
+ */
+async function WarnIfSchemaOwnedByAnotherApp(schemaName: string, thisAppId: string, context: OrchestratorContext): Promise<void> {
+  const share = await CheckSchemaSharedByOtherApps(context.ContextUser, schemaName, thisAppId, context.DatabaseProvider);
+  if (share.CheckFailed) {
+    context.Callbacks?.OnWarn?.(
+      'Schema',
+      `Could not determine whether another installed app already owns schema '${schemaName}': ${share.ErrorMessage ?? 'unknown error'}. ` +
+      `Proceeding with the install.`
+    );
+    return;
+  }
+  if (share.Shared) {
+    context.Callbacks?.OnWarn?.(
+      'Schema',
+      `Schema '${schemaName}' is already owned by another installed app. This app will share it, which is supported — ` +
+      `but be aware that 'mj app remove' will now SKIP dropping this schema and its entity metadata for BOTH apps, ` +
+      `to avoid destroying the co-tenant's data. Remove the other app first if you intended to take the schema over.`
+    );
+  }
+}
+
+/** Inputs to {@link HandleSchemaCreation}. Named rather than positional — three of these in a row
+ * as bare arguments (two of them booleans) reads as `(manifest, context, true, false, '')`. */
+interface HandleSchemaCreationOptions {
+  /** Reinstall or resume — an existing schema is expected, so adopt it rather than failing. */
+  IsReinstall: boolean;
+  /** Permit `__`-prefixed names outside the `__mj_<AppName>` namespace. Never unblocks a reserved name. */
+  AllowDoubleUnderscore: boolean;
+  /** This app's own row ID, excluded from the co-tenant check so a reinstall never warns about itself. */
+  ThisAppId: string;
+}
+
+/**
  * Handles schema creation for an app, including collision checks and reinstall reuse.
  */
-async function HandleSchemaCreation(manifest: MJAppManifest, context: OrchestratorContext, isReinstall: boolean = false, allowDoubleUnderscore: boolean = false): Promise<InternalResult> {
+async function HandleSchemaCreation(manifest: MJAppManifest, context: OrchestratorContext, options: HandleSchemaCreationOptions): Promise<InternalResult> {
   if (!manifest.schema) {
     return { Success: true };
   }
@@ -1607,7 +1685,7 @@ async function HandleSchemaCreation(manifest: MJAppManifest, context: Orchestrat
   // `__mj_UDT`) exist in every MJ database. Adopting one would hand it to `mj app remove`,
   // which DROPs the app's schema. CreateAppSchema validates again on the create path; that
   // duplication is deliberate — it is an exported function and must guard its own contract.
-  const validation = ValidateSchemaName(manifest.schema.name, { allowDoubleUnderscore });
+  const validation = ValidateSchemaName(manifest.schema.name, { allowDoubleUnderscore: options.AllowDoubleUnderscore });
   if (!validation.Success) {
     return { Success: false, ErrorMessage: validation.ErrorMessage };
   }
@@ -1621,11 +1699,12 @@ async function HandleSchemaCreation(manifest: MJAppManifest, context: Orchestrat
   const exists = await SchemaExists(canonicalSchemaName, context.DatabaseProvider);
 
   if (exists) {
-    if (isReinstall || manifest.schema.createIfNotExists !== false) {
+    if (options.IsReinstall || manifest.schema.createIfNotExists !== false) {
       // Schema already exists — either a reinstall (previously removed app),
       // or createIfNotExists is set (the app expects to adopt an existing schema).
       // Reuse it and let Skyway apply only new migrations.
       context.Callbacks?.OnProgress?.('Schema', `Reusing existing schema '${manifest.schema.name}'`);
+      await WarnIfSchemaOwnedByAnotherApp(manifest.schema.name, options.ThisAppId, context);
       return { Success: true, Created: false };
     }
     return { Success: false, ErrorMessage: `Schema '${manifest.schema.name}' already exists` };
@@ -1633,7 +1712,7 @@ async function HandleSchemaCreation(manifest: MJAppManifest, context: Orchestrat
 
   if (manifest.schema.createIfNotExists !== false) {
     context.Callbacks?.OnProgress?.('Schema', `Creating schema '${manifest.schema.name}'...`);
-    const result = await CreateAppSchema(manifest.schema.name, context.DatabaseProvider, { allowDoubleUnderscore });
+    const result = await CreateAppSchema(manifest.schema.name, context.DatabaseProvider, { allowDoubleUnderscore: options.AllowDoubleUnderscore });
     return { Success: result.Success, ErrorMessage: result.ErrorMessage, Created: result.Success };
   }
 
