@@ -26,7 +26,7 @@ export interface CheckResult {
  * object, a malformed value) yields an empty list so the form renders nothing
  * rather than throwing.
  */
-export function parseCheckResults(resultDetails: unknown): CheckResult[] {
+export function ParseCheckResults(resultDetails: unknown): CheckResult[] {
   if (!Array.isArray(resultDetails)) {
     return [];
   }
@@ -36,4 +36,9 @@ export function parseCheckResults(resultDetails: unknown): CheckResult[] {
     message: r?.['message'] as string | undefined
     // OracleResult has no `weight`; CheckResult.weight stays undefined.
   }));
+}
+
+/** @deprecated Use {@link ParseCheckResults}. */
+export function parseCheckResults(resultDetails: unknown): CheckResult[] {
+  return ParseCheckResults(resultDetails);
 }

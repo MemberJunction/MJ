@@ -77,7 +77,7 @@ export const DEFAULT_JUDGE_PROMPT_NAME = 'Computer Use - Judge';
  * @param supportsImageInput Predicate: does the model id accept Image input modality?
  * @returns The best vision-capable LLM, or `undefined` when none qualify.
  */
-export function pickHighestPowerVisionLLM(
+export function PickHighestPowerVisionLLM(
     models: MJAIModelEntityExtended[],
     supportsImageInput: (modelId: string) => boolean,
 ): MJAIModelEntityExtended | undefined {
@@ -88,6 +88,14 @@ export function pickHighestPowerVisionLLM(
         return undefined;
     }
     return [...visionLLMs].sort((a, b) => (b.PowerRank ?? 0) - (a.PowerRank ?? 0))[0];
+}
+
+/** @deprecated Use {@link PickHighestPowerVisionLLM}. */
+export function pickHighestPowerVisionLLM(
+    models: MJAIModelEntityExtended[],
+    supportsImageInput: (modelId: string) => boolean,
+): MJAIModelEntityExtended | undefined {
+    return PickHighestPowerVisionLLM(models, supportsImageInput);
 }
 
 export class MJComputerUseEngine extends ComputerUseEngine {
@@ -440,7 +448,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
      * fall-back case in {@link autoSelectControllerModel}.
      */
     private selectHighestPowerVisionLLM(): MJAIModelEntityExtended | undefined {
-        return pickHighestPowerVisionLLM(
+        return PickHighestPowerVisionLLM(
             AIEngine.Instance.Models,
             (modelId) => AIEngine.Instance.ModelSupportsModality(modelId, 'Image', 'Input'),
         );

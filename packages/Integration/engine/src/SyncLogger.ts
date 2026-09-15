@@ -117,13 +117,23 @@ export class SyncLogger {
     }
 
     /** Update the runId once the run record has been created. */
-    public attachRunId(runId: string): void {
+    public AttachRunId(runId: string): void {
         this.ctx.runId = runId;
     }
 
+    /** @deprecated Use {@link AttachRunId}. */
+    public attachRunId(runId: string): void {
+        return this.AttachRunId(runId);
+    }
+
     /** Set the integration name once it's resolved from LoadRunConfiguration. */
-    public attachIntegrationName(name: string | null | undefined): void {
+    public AttachIntegrationName(name: string | null | undefined): void {
         this.ctx.integration = name;
+    }
+
+    /** @deprecated Use {@link AttachIntegrationName}. */
+    public attachIntegrationName(name: string | null | undefined): void {
+        return this.AttachIntegrationName(name);
     }
 
     /**
@@ -134,8 +144,13 @@ export class SyncLogger {
      * MJAPI restart. Terminal run.complete/run.fail are owned by the caller (which
      * awaits the emitter's async terminal write), so they are NOT forwarded here.
      */
-    public attachEmitter(emitter: IntegrationProgressEmitter): void {
+    public AttachEmitter(emitter: IntegrationProgressEmitter): void {
         this.emitter = emitter;
+    }
+
+    /** @deprecated Use {@link AttachEmitter}. */
+    public attachEmitter(emitter: IntegrationProgressEmitter): void {
+        return this.AttachEmitter(emitter);
     }
 
     /**
@@ -144,8 +159,13 @@ export class SyncLogger {
      * (watermark / keyset AfterKey / cursor / batchIndex) lets the run pick back up. Best-effort —
      * no emitter attached → no-op.
      */
-    public checkpoint(stage: string, resumableState: Record<string, unknown>): void {
+    public Checkpoint(stage: string, resumableState: Record<string, unknown>): void {
         this.emitter?.checkpoint(stage, resumableState);
+    }
+
+    /** @deprecated Use {@link Checkpoint}. */
+    public checkpoint(stage: string, resumableState: Record<string, unknown>): void {
+        return this.Checkpoint(stage, resumableState);
     }
 
     /**
@@ -156,11 +176,16 @@ export class SyncLogger {
      * condition is visible over GraphQL instead of a swallowed console.warn, WITHOUT affecting
      * run success. Goes to console.warn so it's also greppable in the tee'd log.
      */
-    public warning(stage: string, code: string, message: string, data?: Record<string, unknown>): void {
-        this.emit('sync.warning', { stage, code, message, warningData: data });
+    public Warning(stage: string, code: string, message: string, data?: Record<string, unknown>): void {
+        this.Emit('sync.warning', { stage, code, message, warningData: data });
     }
 
-    public emit(event: SyncLogEvent, data: Record<string, unknown> = {}): void {
+    /** @deprecated Use {@link Warning}. */
+    public warning(stage: string, code: string, message: string, data?: Record<string, unknown>): void {
+        return this.Warning(stage, code, message, data);
+    }
+
+    public Emit(event: SyncLogEvent, data: Record<string, unknown> = {}): void {
         const entry: SyncLogEntry = {
             ts: new Date().toISOString(),
             event,
@@ -181,6 +206,11 @@ export class SyncLogger {
             console.log(line);
         }
         this.forwardToEmitter(event, data);
+    }
+
+    /** @deprecated Use {@link Emit}. */
+    public emit(event: SyncLogEvent, data: Record<string, unknown> = {}): void {
+        return this.Emit(event, data);
     }
 
     /**

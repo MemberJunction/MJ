@@ -177,12 +177,17 @@ export const METADATA_KEYWORD_PREFIXES: ReadonlyArray<string> = Object.values(ME
  * isMetadataKeyword(null)  // false
  * isMetadataKeyword('@unknown:value')  // false
  */
-export function isMetadataKeyword(value: unknown): value is string {
+export function IsMetadataKeyword(value: unknown): value is string {
   if (typeof value !== 'string') {
     return false;
   }
 
   return METADATA_KEYWORD_PREFIXES.some(prefix => value.startsWith(prefix));
+}
+
+/** @deprecated Use {@link IsMetadataKeyword}. */
+export function isMetadataKeyword(value: unknown): value is string {
+  return IsMetadataKeyword(value);
 }
 
 /**
@@ -202,7 +207,7 @@ export function isMetadataKeyword(value: unknown): value is string {
  * getMetadataKeywordType('regular string')  // null
  * getMetadataKeywordType('@unknown:value')  // null
  */
-export function getMetadataKeywordType(value: string): MetadataKeywordType | null {
+export function GetMetadataKeywordType(value: string): MetadataKeywordType | null {
   if (typeof value !== 'string') {
     return null;
   }
@@ -224,6 +229,11 @@ export function getMetadataKeywordType(value: string): MetadataKeywordType | nul
   return null;
 }
 
+/** @deprecated Use {@link GetMetadataKeywordType}. */
+export function getMetadataKeywordType(value: string): MetadataKeywordType | null {
+  return GetMetadataKeywordType(value);
+}
+
 /**
  * Type-safe check for metadata keywords that handles any value type.
  *
@@ -240,8 +250,13 @@ export function getMetadataKeywordType(value: string): MetadataKeywordType | nul
  *   const type = getMetadataKeywordType(fieldValue);
  * }
  */
+export function HasMetadataKeyword(value: unknown): value is string {
+  return IsMetadataKeyword(value);
+}
+
+/** @deprecated Use {@link HasMetadataKeyword}. */
 export function hasMetadataKeyword(value: unknown): value is string {
-  return isMetadataKeyword(value);
+  return HasMetadataKeyword(value);
 }
 
 /**
@@ -259,10 +274,15 @@ export function hasMetadataKeyword(value: unknown): value is string {
  * isNonKeywordAtSymbol('@file:template.md')  // false
  * isNonKeywordAtSymbol('regular string')  // false
  */
-export function isNonKeywordAtSymbol(value: unknown): boolean {
+export function IsNonKeywordAtSymbol(value: unknown): boolean {
   return typeof value === 'string' &&
          value.startsWith('@') &&
-         !isMetadataKeyword(value);
+         !IsMetadataKeyword(value);
+}
+
+/** @deprecated Use {@link IsNonKeywordAtSymbol}. */
+export function isNonKeywordAtSymbol(value: unknown): boolean {
+  return IsNonKeywordAtSymbol(value);
 }
 
 /**
@@ -280,12 +300,12 @@ export function isNonKeywordAtSymbol(value: unknown): boolean {
  * extractKeywordValue('@parent:ID')  // 'ID'
  * extractKeywordValue('regular string')  // null
  */
-export function extractKeywordValue(value: string): string | null {
+export function ExtractKeywordValue(value: string): string | null {
   if (typeof value !== 'string') {
     return null;
   }
 
-  const keywordType = getMetadataKeywordType(value);
+  const keywordType = GetMetadataKeywordType(value);
   if (!keywordType) {
     return null;
   }
@@ -309,6 +329,11 @@ export function extractKeywordValue(value: string): string | null {
   }
 
   return null;
+}
+
+/** @deprecated Use {@link ExtractKeywordValue}. */
+export function extractKeywordValue(value: string): string | null {
+  return ExtractKeywordValue(value);
 }
 
 /**
@@ -357,8 +382,13 @@ export const RUNTIME_KEYWORDS = [
  * isContextDependentKeyword('@root:')  // true
  * isContextDependentKeyword('@file:')  // false
  */
-export function isContextDependentKeyword(keyword: string): boolean {
+export function IsContextDependentKeyword(keyword: string): boolean {
   return CONTEXT_DEPENDENT_KEYWORDS.some(k => keyword.startsWith(k));
+}
+
+/** @deprecated Use {@link IsContextDependentKeyword}. */
+export function isContextDependentKeyword(keyword: string): boolean {
+  return IsContextDependentKeyword(keyword);
 }
 
 /**
@@ -372,8 +402,13 @@ export function isContextDependentKeyword(keyword: string): boolean {
  * isExternalReferenceKeyword('@url:')  // true
  * isExternalReferenceKeyword('@lookup:')  // false
  */
-export function isExternalReferenceKeyword(keyword: string): boolean {
+export function IsExternalReferenceKeyword(keyword: string): boolean {
   return EXTERNAL_REFERENCE_KEYWORDS.some(k => keyword.startsWith(k));
+}
+
+/** @deprecated Use {@link IsExternalReferenceKeyword}. */
+export function isExternalReferenceKeyword(keyword: string): boolean {
+  return IsExternalReferenceKeyword(keyword);
 }
 
 /**
@@ -391,7 +426,7 @@ export function isExternalReferenceKeyword(keyword: string): boolean {
  * createKeywordReference('lookup', 'Users.Email=test@example.com')  // '@lookup:Users.Email=test@example.com'
  * createKeywordReference('parent', 'ID')  // '@parent:ID'
  */
-export function createKeywordReference(type: MetadataKeywordType, value: string): string {
+export function CreateKeywordReference(type: MetadataKeywordType, value: string): string {
   const keyword = METADATA_KEYWORDS[type.toUpperCase() as keyof typeof METADATA_KEYWORDS];
 
   if (!keyword) {
@@ -404,4 +439,9 @@ export function createKeywordReference(type: MetadataKeywordType, value: string)
   }
 
   return `${keyword}${value}`;
+}
+
+/** @deprecated Use {@link CreateKeywordReference}. */
+export function createKeywordReference(type: MetadataKeywordType, value: string): string {
+  return CreateKeywordReference(type, value);
 }

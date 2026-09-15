@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { FORMAT_ENV } from '@memberjunction/cli-core';
 import {
-  resolveLegacyFormat,
+  ResolveLegacyFormat,
   CANONICAL_FORMAT_FLAG,
   TEST_FORMAT_FLAG,
   TEST_FORMAT_MAP,
@@ -10,7 +10,7 @@ import {
 
 /** `mj test *`: the family flag IS `--format`, spelled console|json|markdown. */
 function testFamily(format: string | undefined, opts: { stdoutIsTTY?: boolean; env?: NodeJS.ProcessEnv } = {}) {
-  return resolveLegacyFormat({
+  return ResolveLegacyFormat({
     format,
     legacy: 'console' as const,
     legacyDefault: 'console' as const,
@@ -26,7 +26,7 @@ function aiFamily(
   legacy: 'compact' | 'json' | 'table',
   opts: { stdoutIsTTY?: boolean; env?: NodeJS.ProcessEnv; legacyWasExplicit?: boolean } = {}
 ) {
-  return resolveLegacyFormat({
+  return ResolveLegacyFormat({
     format,
     legacy,
     legacyDefault: 'compact' as const,

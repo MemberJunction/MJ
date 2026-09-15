@@ -86,7 +86,7 @@ const DEFAULTS: Required<BridgeViewSQLGeneratorOptions> = {
     provider: 'sqlserver',
 };
 
-export function generateBridgeView(
+export function GenerateBridgeView(
     path: BridgePath,
     spokePKColumn: string,
     opts: BridgeViewSQLGeneratorOptions = {},
@@ -148,6 +148,15 @@ export function generateBridgeView(
         spokeOutputField,
         spokeJoinField: spokePKColumn,
     };
+}
+
+/** @deprecated Use {@link GenerateBridgeView}. */
+export function generateBridgeView(
+    path: BridgePath,
+    spokePKColumn: string,
+    opts: BridgeViewSQLGeneratorOptions = {},
+): GeneratedBridgeView {
+    return GenerateBridgeView(path, spokePKColumn, opts);
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────

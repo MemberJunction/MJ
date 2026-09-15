@@ -12,16 +12,16 @@ import {
 } from '@memberjunction/ng-query-viewer';
 import { CompositionTokenClickEvent } from '@memberjunction/ng-code-editor';
 import { MJConfirmService } from '@memberjunction/ng-ui-components';
-import { validateStringParam, boundNameList } from '../shared/agent-tool-validation';
+import { ValidateStringParam, BoundNameList } from '../shared/agent-tool-validation';
 import {
     DEFAULT_QUERY_MAX_ROWS,
     QUERY_MAX_ROWS_HARD_CAP,
     DEFAULT_QUERY_PAGE_SIZE,
-    normalizeMaxRows,
-    computePaging,
-    boundResultRows,
-    normalizeQueryParameters,
-    resolveTotalRowCount,
+    NormalizeMaxRows,
+    ComputePaging,
+    BoundResultRows,
+    NormalizeQueryParameters,
+    ResolveTotalRowCount,
 } from './query-execution-helpers';
 /**
  * Tree node for the query category hierarchy
@@ -98,14 +98,68 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     private static readonly MAX_PANEL_WIDTH = 600;
 
     public isLoading = true;
-    public categories: MJQueryCategoryEntity[] = [];
-    public categoryTree: CategoryNode[] = [];
+    public Categories: MJQueryCategoryEntity[] = [];
+
+    /** @deprecated Use {@link Categories}. */
+    public get categories(): MJQueryCategoryEntity[] {
+      return this.Categories;
+    }
+    /** @deprecated Use {@link Categories}. */
+    public set categories(value: MJQueryCategoryEntity[]) {
+      this.Categories = value;
+    }
+    public CategoryTree: CategoryNode[] = [];
+
+    /** @deprecated Use {@link CategoryTree}. */
+    public get categoryTree(): CategoryNode[] {
+      return this.CategoryTree;
+    }
+    /** @deprecated Use {@link CategoryTree}. */
+    public set categoryTree(value: CategoryNode[]) {
+      this.CategoryTree = value;
+    }
     /** All queries the user has permission to run */
-    public queries: MJQueryEntityExtended[] = [];
-    public filteredQueries: MJQueryEntityExtended[] = [];
+    public Queries: MJQueryEntityExtended[] = [];
+
+    /** @deprecated Use {@link Queries}. */
+    public get queries(): MJQueryEntityExtended[] {
+      return this.Queries;
+    }
+    /** @deprecated Use {@link Queries}. */
+    public set queries(value: MJQueryEntityExtended[]) {
+      this.Queries = value;
+    }
+    public FilteredQueries: MJQueryEntityExtended[] = [];
+
+    /** @deprecated Use {@link FilteredQueries}. */
+    public get filteredQueries(): MJQueryEntityExtended[] {
+      return this.FilteredQueries;
+    }
+    /** @deprecated Use {@link FilteredQueries}. */
+    public set filteredQueries(value: MJQueryEntityExtended[]) {
+      this.FilteredQueries = value;
+    }
     private filteredQueryIds = new Set<string>();
-    public selectedQuery: MJQueryEntityExtended | null = null;
-    public searchText = '';
+    public SelectedQuery: MJQueryEntityExtended | null = null;
+
+    /** @deprecated Use {@link SelectedQuery}. */
+    public get selectedQuery(): MJQueryEntityExtended | null {
+      return this.SelectedQuery;
+    }
+    /** @deprecated Use {@link SelectedQuery}. */
+    public set selectedQuery(value: MJQueryEntityExtended | null) {
+      this.SelectedQuery = value;
+    }
+    public SearchText = '';
+
+    /** @deprecated Use {@link SearchText}. */
+    public get searchText() {
+      return this.SearchText;
+    }
+    /** @deprecated Use {@link SearchText}. */
+    public set searchText(value) {
+      this.SearchText = value;
+    }
     public PanelWidth = QueryBrowserResourceComponent.DEFAULT_PANEL_WIDTH;
     public IsResizing = false;
 
@@ -278,26 +332,26 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
 
         // Bounded list of category names the user can navigate (excludes the
         // virtual Uncategorized bucket, which has no real category record).
-        const categoryNames = boundNameList(
-            this.categories.map(c => c.Name).filter((n): n is string => !!n)
+        const categoryNames = BoundNameList(
+            this.Categories.map(c => c.Name).filter((n): n is string => !!n)
         );
 
         // Bounded list of the query names currently visible (status + search
         // filters applied) — what the agent would see in the tree right now.
-        const visibleQueryNames = boundNameList(this.filteredQueries.map(q => q.Name));
+        const visibleQueryNames = BoundNameList(this.FilteredQueries.map(q => q.Name));
 
         // Whether the SELECTED query has actually executed in the embedded viewer
         // and, if so, its TRUE total row count. Only meaningful while a query is
         // selected; null/false otherwise. NO SQL, NO rows — just the count + flag.
-        const hasSelection = this.selectedQuery != null;
+        const hasSelection = this.SelectedQuery != null;
         const selectedQueryHasRun = hasSelection && this.selectedQueryHasRun;
         const selectedQueryRowCount = selectedQueryHasRun ? this.selectedQueryRowCount : null;
 
         this.navigationService.SetAgentContext(this, {
             // — Selection —
-            SelectedQueryId: this.selectedQuery?.ID ?? null,
-            SelectedQueryName: this.selectedQuery?.Name ?? null,
-            SelectedCategory: this.selectedQuery?.Category ?? null,
+            SelectedQueryId: this.SelectedQuery?.ID ?? null,
+            SelectedQueryName: this.SelectedQuery?.Name ?? null,
+            SelectedCategory: this.SelectedQuery?.Category ?? null,
             // — Selected query's executed row count (when run in the viewer) —
             // The agent can answer "how many rows?" from these WITHOUT re-running.
             // SelectedQueryHasRun=false means "select-only; run it to get the count"
@@ -305,12 +359,12 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
             SelectedQueryHasRun: selectedQueryHasRun,
             SelectedQueryRowCount: selectedQueryRowCount,
             // — Filter state —
-            SearchText: this.searchText,
+            SearchText: this.SearchText,
             ActiveStatusFilters: activeStatusFilters,
             // — Counts —
-            TotalQueryCount: this.queries.length,
-            FilteredQueryCount: this.filteredQueries.length,
-            CategoryCount: this.categories.length,
+            TotalQueryCount: this.Queries.length,
+            FilteredQueryCount: this.FilteredQueries.length,
+            CategoryCount: this.Categories.length,
             // — Bounded navigable name lists (NO SQL, NO results) —
             AvailableCategories: categoryNames,
             VisibleQueryNames: visibleQueryNames,
@@ -422,9 +476,9 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     }
 
     private handleSearchTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
-        const v = validateStringParam(params?.['searchText'], 'searchText');
+        const v = ValidateStringParam(params?.['searchText'], 'searchText');
         if (!v.ok) return v.result;
-        this.onSearchChange(v.value);
+        this.OnSearchChange(v.value);
         this.publishAgentContext();
         return { Success: true };
     }
@@ -457,8 +511,8 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         if (!trimmed) return null;
         const lowered = trimmed.toLowerCase();
         return (
-            this.queries.find(q => UUIDsEqual(q.ID, trimmed)) ??
-            this.queries.find(q => q.Name.toLowerCase() === lowered) ??
+            this.Queries.find(q => UUIDsEqual(q.ID, trimmed)) ??
+            this.Queries.find(q => q.Name.toLowerCase() === lowered) ??
             null
         );
     }
@@ -472,7 +526,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         if (!query) {
             return { Success: false, ErrorMessage: `No query named or identified by "${raw}" (or you lack permission to view it).` };
         }
-        this.selectQuery(query);
+        this.SelectQuery(query);
         this.publishAgentContext();
         return { Success: true };
     }
@@ -487,32 +541,32 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
             return { Success: false, ErrorMessage: `No query named or identified by "${raw}" (or you lack permission to view it).` };
         }
         // Opens the full Query entity record for viewing — does NOT execute it.
-        this.onOpenQueryRecord({ queryId: query.ID, queryName: query.Name });
+        this.OnOpenQueryRecord({ queryId: query.ID, queryName: query.Name });
         return { Success: true };
     }
 
     private handleFilterByCategoryTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
-        const v = validateStringParam(params?.['category'], 'category');
+        const v = ValidateStringParam(params?.['category'], 'category');
         if (!v.ok) return v.result;
         const raw = v.value.trim();
         if (!raw) {
             return { Success: false, ErrorMessage: 'A category name is required.' };
         }
         const lowered = raw.toLowerCase();
-        const category = this.categories.find(c => (c.Name ?? '').toLowerCase() === lowered);
+        const category = this.Categories.find(c => (c.Name ?? '').toLowerCase() === lowered);
         if (!category) {
-            const available = boundNameList(this.categories.map(c => c.Name).filter((n): n is string => !!n)).join(', ') || '(none)';
+            const available = BoundNameList(this.Categories.map(c => c.Name).filter((n): n is string => !!n)).join(', ') || '(none)';
             return { Success: false, ErrorMessage: `No category named "${raw}". Available categories: ${available}.` };
         }
         // The search filter already matches on category name (applyFilters), so
         // scoping the visible tree to a category reuses that read-only path.
-        this.onSearchChange(category.Name);
+        this.OnSearchChange(category.Name);
         return { Success: true };
     }
 
     private handleClearFiltersTool(): { Success: boolean; ErrorMessage?: string } {
         // Clear search text and reset status filters to the default (Approved only).
-        this.searchText = '';
+        this.SearchText = '';
         for (const s of this.AllStatuses) {
             this.StatusFilters[s] = s === 'Approved';
         }
@@ -525,12 +579,12 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     }
 
     private handleExpandAllTool(): { Success: boolean; ErrorMessage?: string } {
-        this.expandAll();
+        this.ExpandAll();
         return { Success: true };
     }
 
     private handleCollapseAllTool(): { Success: boolean; ErrorMessage?: string } {
-        this.collapseAll();
+        this.CollapseAll();
         return { Success: true };
     }
 
@@ -614,10 +668,10 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
 
             // Defensive second bound: a provider that ignored MaxRows can never
             // leak more than the cap to the agent.
-            const bounded = boundResultRows(result.Results, maxRows);
+            const bounded = BoundResultRows(result.Results, maxRows);
             // The TRUE total available, independent of the MaxRows/page cap —
             // this is what answers "how many rows does this query return?".
-            const totalRowCount = resolveTotalRowCount(result.TotalRowCount, bounded.length);
+            const totalRowCount = ResolveTotalRowCount(result.TotalRowCount, bounded.length);
             return { Success: true, Results: bounded, RowCount: bounded.length, TotalRowCount: totalRowCount };
         } catch (e) {
             return { Success: false, Results: [], RowCount: 0, TotalRowCount: 0, ErrorMessage: e instanceof Error ? e.message : 'Query execution failed.' };
@@ -629,8 +683,8 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         const resolved = this.resolveRunnableQuery(raw);
         if (!resolved.ok) return resolved.result;
 
-        const maxRows = normalizeMaxRows(params?.['MaxRows'], DEFAULT_QUERY_MAX_ROWS);
-        const parameters = normalizeQueryParameters(params?.['Parameters']);
+        const maxRows = NormalizeMaxRows(params?.['MaxRows'], DEFAULT_QUERY_MAX_ROWS);
+        const parameters = NormalizeQueryParameters(params?.['Parameters']);
 
         const exec = await this.executeStoredQuery(resolved.query, maxRows, parameters);
         if (exec.Success) {
@@ -644,8 +698,8 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         const resolved = this.resolveRunnableQuery(raw);
         if (!resolved.ok) return resolved.result;
 
-        const { startRow, pageNumber, pageSize } = computePaging(params?.['PageNumber'], params?.['PageSize']);
-        const parameters = normalizeQueryParameters(params?.['Parameters']);
+        const { startRow, pageNumber, pageSize } = ComputePaging(params?.['PageNumber'], params?.['PageSize']);
+        const parameters = NormalizeQueryParameters(params?.['Parameters']);
 
         const exec = await this.executeStoredQuery(resolved.query, pageSize, parameters, startRow);
         if (exec.Success) {
@@ -718,8 +772,8 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
 
             // Load all queries from QueryEngine (event-driven cache, returns MJQueryEntityExtended[])
             const qe = QueryEngine.Instance;
-            this.categories = qe.Categories || [];
-            this.queries = (qe.Queries || []).filter(q =>
+            this.Categories = qe.Categories || [];
+            this.Queries = (qe.Queries || []).filter(q =>
                 q.UserCanRun(this.metadata.CurrentUser).canRun
             );
 
@@ -749,10 +803,10 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         const categoryMap = new Map<string, CategoryNode>();
 
         // Use filtered queries (status + search filters applied)
-        const visibleQueries = this.filteredQueries;
+        const visibleQueries = this.FilteredQueries;
 
         // Create nodes for all categories, restoring expanded state
-        for (const category of this.categories) {
+        for (const category of this.Categories) {
             const queriesInCategory = visibleQueries.filter(q => UUIDsEqual(q.CategoryID, category.ID));
             categoryMap.set(category.ID, {
                 category,
@@ -765,7 +819,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
 
         // Build tree structure
         const roots: CategoryNode[] = [];
-        for (const category of this.categories) {
+        for (const category of this.Categories) {
             const node = categoryMap.get(category.ID)!;
             if (category.ParentID) {
                 const parent = categoryMap.get(category.ParentID);
@@ -807,32 +861,42 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         };
         sortNodes(roots);
 
-        this.categoryTree = roots;
+        this.CategoryTree = roots;
     }
 
     // ========================================
     // Search
     // ========================================
 
-    public onSearchChange(value: string): void {
-        this.searchText = value;
+    public OnSearchChange(value: string): void {
+        this.SearchText = value;
         this.applyFilters();
         this.buildCategoryTree();
 
         // Expand all categories when searching so results are visible
         if (value) {
-            this.expandAll();
+            this.ExpandAll();
         }
 
         this.cdr.markForCheck();
         this.publishAgentContext();
     }
 
-    public clearSearch(): void {
-        this.searchText = '';
+    /** @deprecated Use {@link OnSearchChange}. */
+    public onSearchChange(value: string): void {
+      return this.OnSearchChange(value);
+    }
+
+    public ClearSearch(): void {
+        this.SearchText = '';
         this.applyFilters();
         this.buildCategoryTree();
         this.cdr.markForCheck();
+    }
+
+    /** @deprecated Use {@link ClearSearch}. */
+    public clearSearch(): void {
+      return this.ClearSearch();
     }
 
     // ========================================
@@ -840,7 +904,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     // ========================================
 
     /** Toggle a status filter on/off and rebuild the tree */
-    public toggleStatusFilter(status: string): void {
+    public ToggleStatusFilter(status: string): void {
         this.StatusFilters[status] = !this.StatusFilters[status];
         this.applyFilters();
         this.buildCategoryTree();
@@ -848,13 +912,23 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         this.cdr.markForCheck();
     }
 
+    /** @deprecated Use {@link ToggleStatusFilter}. */
+    public toggleStatusFilter(status: string): void {
+      return this.ToggleStatusFilter(status);
+    }
+
     /** Get the count of queries with a given status */
+    public GetStatusCount(status: string): number {
+        return this.Queries.filter(q => q.Status === status).length;
+    }
+
+    /** @deprecated Use {@link GetStatusCount}. */
     public getStatusCount(status: string): number {
-        return this.queries.filter(q => q.Status === status).length;
+      return this.GetStatusCount(status);
     }
 
     /** Get the CSS color for a query status */
-    public getStatusColor(status: string): string {
+    public GetStatusColor(status: string): string {
         switch (status) {
             case 'Approved':  return 'var(--mj-status-success)';
             case 'Pending':   return 'var(--mj-status-warning)';
@@ -864,8 +938,13 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         }
     }
 
+    /** @deprecated Use {@link GetStatusColor}. */
+    public getStatusColor(status: string): string {
+      return this.GetStatusColor(status);
+    }
+
     /** Get the Font Awesome icon for a query status */
-    public getStatusIcon(status: string): string {
+    public GetStatusIcon(status: string): string {
         switch (status) {
             case 'Approved':  return 'fa-check-circle';
             case 'Pending':   return 'fa-clock';
@@ -875,14 +954,19 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         }
     }
 
+    /** @deprecated Use {@link GetStatusIcon}. */
+    public getStatusIcon(status: string): string {
+      return this.GetStatusIcon(status);
+    }
+
     /** Apply both status and search filters to produce filteredQueries */
     private applyFilters(): void {
         // First filter by status
-        let result = this.queries.filter(q => this.StatusFilters[q.Status] === true);
+        let result = this.Queries.filter(q => this.StatusFilters[q.Status] === true);
 
         // Then filter by search text
-        if (this.searchText.trim()) {
-            const searchLower = this.searchText.toLowerCase();
+        if (this.SearchText.trim()) {
+            const searchLower = this.SearchText.toLowerCase();
             result = result.filter(q =>
                 q.Name.toLowerCase().includes(searchLower) ||
                 q.Description?.toLowerCase().includes(searchLower) ||
@@ -890,7 +974,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
             );
         }
 
-        this.filteredQueries = result;
+        this.FilteredQueries = result;
         this.filteredQueryIds = new Set(result.map(q => q.ID.toLowerCase()));
     }
 
@@ -953,7 +1037,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     // Tree Navigation
     // ========================================
 
-    public toggleExpand(node: CategoryNode, event?: Event): void {
+    public ToggleExpand(node: CategoryNode, event?: Event): void {
         if (event) {
             event.stopPropagation();
         }
@@ -967,7 +1051,12 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         this.cdr.markForCheck();
     }
 
-    public expandAll(): void {
+    /** @deprecated Use {@link ToggleExpand}. */
+    public toggleExpand(node: CategoryNode, event?: Event): void {
+      return this.ToggleExpand(node, event);
+    }
+
+    public ExpandAll(): void {
         const expand = (nodes: CategoryNode[]): void => {
             for (const node of nodes) {
                 node.expanded = true;
@@ -975,12 +1064,17 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
                 expand(node.children);
             }
         };
-        expand(this.categoryTree);
+        expand(this.CategoryTree);
         this.saveExpandedState();
         this.cdr.markForCheck();
     }
 
-    public collapseAll(): void {
+    /** @deprecated Use {@link ExpandAll}. */
+    public expandAll(): void {
+      return this.ExpandAll();
+    }
+
+    public CollapseAll(): void {
         const collapse = (nodes: CategoryNode[]): void => {
             for (const node of nodes) {
                 node.expanded = false;
@@ -988,17 +1082,22 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
                 collapse(node.children);
             }
         };
-        collapse(this.categoryTree);
+        collapse(this.CategoryTree);
         this.saveExpandedState();
         this.cdr.markForCheck();
     }
 
-    public selectQuery(query: MJQueryEntityExtended, event?: Event): void {
+    /** @deprecated Use {@link CollapseAll}. */
+    public collapseAll(): void {
+      return this.CollapseAll();
+    }
+
+    public SelectQuery(query: MJQueryEntityExtended, event?: Event): void {
         if (event) {
             event.stopPropagation();
         }
-        const changed = !UUIDsEqual(this.selectedQuery?.ID, query.ID);
-        this.selectedQuery = query;
+        const changed = !UUIDsEqual(this.SelectedQuery?.ID, query.ID);
+        this.SelectedQuery = query;
         if (changed) {
             // New selection — the viewer will re-run; clear any prior run state.
             this.resetSelectedQueryRunState();
@@ -1012,28 +1111,43 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         this.publishAgentContext();
     }
 
-    public isQueryVisible(query: MJQueryEntityExtended): boolean {
-        if (!this.searchText) return true;
+    /** @deprecated Use {@link SelectQuery}. */
+    public selectQuery(query: MJQueryEntityExtended, event?: Event): void {
+      return this.SelectQuery(query, event);
+    }
+
+    public IsQueryVisible(query: MJQueryEntityExtended): boolean {
+        if (!this.SearchText) return true;
         return this.filteredQueryIds.has(query.ID.toLowerCase());
     }
 
-    public hasVisibleContent(node: CategoryNode): boolean {
-        if (!this.searchText) return true;
+    /** @deprecated Use {@link IsQueryVisible}. */
+    public isQueryVisible(query: MJQueryEntityExtended): boolean {
+      return this.IsQueryVisible(query);
+    }
+
+    public HasVisibleContent(node: CategoryNode): boolean {
+        if (!this.SearchText) return true;
 
         // Check if any queries in this category match
-        if (node.queries.some(q => this.isQueryVisible(q))) {
+        if (node.queries.some(q => this.IsQueryVisible(q))) {
             return true;
         }
 
         // Check if any child categories have visible content
-        return node.children.some(child => this.hasVisibleContent(child));
+        return node.children.some(child => this.HasVisibleContent(child));
+    }
+
+    /** @deprecated Use {@link HasVisibleContent}. */
+    public hasVisibleContent(node: CategoryNode): boolean {
+      return this.HasVisibleContent(node);
     }
 
     // ========================================
     // Query Viewer Events
     // ========================================
 
-    public onEntityLinkClick(event: QueryEntityLinkClickEvent): void {
+    public OnEntityLinkClick(event: QueryEntityLinkClickEvent): void {
         // Look up the entity's actual primary key field name from metadata
         const entity = this.metadata.Entities.find(e => e.Name === event.entityName);
         // Bare value or "F1|v1||F2|v2" segment — resolved against the entity's real key column(s)
@@ -1041,8 +1155,18 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         this.navigationService.OpenEntityRecord(event.entityName, compositeKey);
     }
 
-    public onRowDoubleClick(event: QueryRowClickEvent): void {
+    /** @deprecated Use {@link OnEntityLinkClick}. */
+    public onEntityLinkClick(event: QueryEntityLinkClickEvent): void {
+      return this.OnEntityLinkClick(event);
+    }
+
+    public OnRowDoubleClick(event: QueryRowClickEvent): void {
         // Could show record details or other action
+    }
+
+    /** @deprecated Use {@link OnRowDoubleClick}. */
+    public onRowDoubleClick(event: QueryRowClickEvent): void {
+      return this.OnRowDoubleClick(event);
     }
 
     /**
@@ -1054,10 +1178,15 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
      * 🚨 SAFETY: we store ONLY the count + a has-run flag here — never the SQL,
      * never the result rows. The published context honors the same boundary.
      */
-    public onViewerQueryComplete(result: RunQueryResult): void {
+    public OnViewerQueryComplete(result: RunQueryResult): void {
         this.selectedQueryHasRun = true;
-        this.selectedQueryRowCount = resolveTotalRowCount(result?.TotalRowCount, result?.RowCount ?? 0);
+        this.selectedQueryRowCount = ResolveTotalRowCount(result?.TotalRowCount, result?.RowCount ?? 0);
         this.publishAgentContext();
+    }
+
+    /** @deprecated Use {@link OnViewerQueryComplete}. */
+    public onViewerQueryComplete(result: RunQueryResult): void {
+      return this.OnViewerQueryComplete(result);
     }
 
     /**
@@ -1070,21 +1199,31 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         this.selectedQueryRowCount = null;
     }
 
-    public onOpenQueryRecord(event: { queryId: string; queryName: string }): void {
+    public OnOpenQueryRecord(event: { queryId: string; queryName: string }): void {
         // Open the Query entity record using navigation service
         this.navigationService.OpenEntityRecord('MJ: Queries', CompositeKey.FromID(event.queryId));
     }
 
-    public onCompositionTokenClick(event: CompositionTokenClickEvent): void {
+    /** @deprecated Use {@link OnOpenQueryRecord}. */
+    public onOpenQueryRecord(event: { queryId: string; queryName: string }): void {
+      return this.OnOpenQueryRecord(event);
+    }
+
+    public OnCompositionTokenClick(event: CompositionTokenClickEvent): void {
         // Find the referenced query by matching name and category path
         const targetQuery = this.findQueryByCompositionPath(event.FullPath);
         if (targetQuery) {
             this.expandTreeToQuery(targetQuery);
-            this.selectQuery(targetQuery);
+            this.SelectQuery(targetQuery);
         } else {
             // Query not in the current list — could be filtered out or in a different status
             console.warn(`Composition target query not found: "${event.FullPath}"`);
         }
+    }
+
+    /** @deprecated Use {@link OnCompositionTokenClick}. */
+    public onCompositionTokenClick(event: CompositionTokenClickEvent): void {
+      return this.OnCompositionTokenClick(event);
     }
 
     /**
@@ -1099,7 +1238,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         const categorySegments = segments.slice(0, -1);
 
         // First try: exact match on Name + CategoryPath
-        let result = this.queries.find(q => {
+        let result = this.Queries.find(q => {
             if (q.Name !== queryName) return false;
             if (categorySegments.length === 0) return true;
             const expectedPath = '/' + categorySegments.join('/') + '/';
@@ -1108,7 +1247,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
 
         // Fallback: match on Name alone if category path didn't match
         if (!result) {
-            result = this.queries.find(q => q.Name === queryName);
+            result = this.Queries.find(q => q.Name === queryName);
         }
 
         return result ?? null;
@@ -1134,13 +1273,13 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
             return false;
         };
 
-        expandInNodes(this.categoryTree);
+        expandInNodes(this.CategoryTree);
         this.cdr.markForCheck();
     }
 
     /** No-results message for the query list (echoes the search term). */
     public get NoQueryResultsMessage(): string {
-        return `No queries match "${this.searchText}".`;
+        return `No queries match "${this.SearchText}".`;
     }
 
     /** True when the current user has permission to create new queries. */
@@ -1302,9 +1441,9 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
                 const savedId = entity.ID;
                 this.ShowQueryDrawer = false;
                 await this.loadData(true);
-                const refreshed = this.queries.find(q => UUIDsEqual(q.ID, savedId));
+                const refreshed = this.Queries.find(q => UUIDsEqual(q.ID, savedId));
                 if (refreshed) {
-                    this.selectedQuery = refreshed;
+                    this.SelectedQuery = refreshed;
                     this.expandCategoryForQuery(refreshed);
                     this.UpdateQueryParams({ queryId: refreshed.ID });
                 }
@@ -1338,32 +1477,57 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     // Utilities
     // ========================================
 
-    public getTotalQueryCount(): number {
-        return this.queries.length;
+    public GetTotalQueryCount(): number {
+        return this.Queries.length;
     }
 
-    public getNodeQueryCount(node: CategoryNode): number {
+    /** @deprecated Use {@link GetTotalQueryCount}. */
+    public getTotalQueryCount(): number {
+      return this.GetTotalQueryCount();
+    }
+
+    public GetNodeQueryCount(node: CategoryNode): number {
         let count = node.queries.length;
         for (const child of node.children) {
-            count += this.getNodeQueryCount(child);
+            count += this.GetNodeQueryCount(child);
         }
         return count;
     }
 
-    public refresh(): void {
-        this.selectedQuery = null;
+    /** @deprecated Use {@link GetNodeQueryCount}. */
+    public getNodeQueryCount(node: CategoryNode): number {
+      return this.GetNodeQueryCount(node);
+    }
+
+    public Refresh(): void {
+        this.SelectedQuery = null;
         this.resetSelectedQueryRunState();
         this.UpdateQueryParams({ queryId: null });
         this.NotifyDisplayNameChanged('Queries');
         this.loadData(true);
     }
 
-    public trackByCategory(index: number, node: CategoryNode): string {
+    /** @deprecated Use {@link Refresh}. */
+    public refresh(): void {
+      return this.Refresh();
+    }
+
+    public TrackByCategory(index: number, node: CategoryNode): string {
         return node.category.ID;
     }
 
-    public trackByQuery(index: number, query: MJQueryEntityExtended): string {
+    /** @deprecated Use {@link TrackByCategory}. */
+    public trackByCategory(index: number, node: CategoryNode): string {
+      return this.TrackByCategory(index, node);
+    }
+
+    public TrackByQuery(index: number, query: MJQueryEntityExtended): string {
         return query.ID;
+    }
+
+    /** @deprecated Use {@link TrackByQuery}. */
+    public trackByQuery(index: number, query: MJQueryEntityExtended): string {
+      return this.TrackByQuery(index, query);
     }
 
     // ========================================
@@ -1375,16 +1539,16 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
      * Clears selection if no matching query is found.
      */
     private selectQueryById(queryId: string): void {
-        const query = this.queries.find(q => UUIDsEqual(q.ID, queryId));
+        const query = this.Queries.find(q => UUIDsEqual(q.ID, queryId));
         if (query) {
-            if (!UUIDsEqual(this.selectedQuery?.ID, query.ID)) {
-                this.selectedQuery = query;
+            if (!UUIDsEqual(this.SelectedQuery?.ID, query.ID)) {
+                this.SelectedQuery = query;
                 this.resetSelectedQueryRunState();
                 this.expandCategoryForQuery(query);
                 this.NotifyDisplayNameChanged(query.Name || 'Query');
             }
         } else {
-            this.selectedQuery = null;
+            this.SelectedQuery = null;
             this.resetSelectedQueryRunState();
             this.NotifyDisplayNameChanged('Queries');
         }
@@ -1400,7 +1564,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         if (params['queryId']) {
             this.selectQueryById(params['queryId']);
         } else {
-            this.selectedQuery = null;
+            this.SelectedQuery = null;
             this.resetSelectedQueryRunState();
             this.NotifyDisplayNameChanged('Queries');
             this.cdr.markForCheck();
@@ -1429,7 +1593,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
             return false;
         };
 
-        if (expandToTarget(this.categoryTree, query.CategoryID)) {
+        if (expandToTarget(this.CategoryTree, query.CategoryID)) {
             this.saveExpandedState();
         }
     }
@@ -1454,7 +1618,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     /**
      * Start resizing the left panel via drag handle
      */
-    public onResizeStart(event: MouseEvent): void {
+    public OnResizeStart(event: MouseEvent): void {
         event.preventDefault();
         this.IsResizing = true;
         this.cdr.markForCheck();
@@ -1464,6 +1628,11 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
             document.addEventListener('mousemove', this.boundOnResizeMove);
             document.addEventListener('mouseup', this.boundOnResizeEnd);
         });
+    }
+
+    /** @deprecated Use {@link OnResizeStart}. */
+    public onResizeStart(event: MouseEvent): void {
+      return this.OnResizeStart(event);
     }
 
     private onResizeMove(event: MouseEvent): void {
@@ -1500,6 +1669,6 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
 
     /** Case-insensitive UUID check whether a query is the currently selected query. */
     public IsQuerySelected(query: MJQueryEntityExtended): boolean {
-        return UUIDsEqual(this.selectedQuery?.ID, query.ID);
+        return UUIDsEqual(this.SelectedQuery?.ID, query.ID);
     }
 }

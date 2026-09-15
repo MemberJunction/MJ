@@ -9,7 +9,7 @@
  * in their canonical order and reports value-level diffs.
  */
 
-import { deepValueEqual, isoUtcSeconds, qname, stableSortBy } from './util';
+import { DeepValueEqual, IsoUtcSeconds, qname, StableSortBy } from './util';
 import type {
   BaselineCompareOptions,
   ColumnValueDiff,
@@ -34,7 +34,7 @@ export interface CompareInput {
   options: BaselineCompareOptions;
 }
 
-export function compareSnapshots(input: CompareInput): DiffReport {
+export function CompareSnapshots(input: CompareInput): DiffReport {
   const { left, right, options } = input;
   const ignored = options.ignorePattern;
   const matchesIgnore = (q: string) => {
@@ -221,15 +221,20 @@ export function compareSnapshots(input: CompareInput): DiffReport {
   };
 
   return {
-    generatedAt: isoUtcSeconds(new Date()),
+    generatedAt: IsoUtcSeconds(new Date()),
     leftLabel: left.label,
     rightLabel: right.label,
     rowCompareMode: options.rowCompareMode,
     isClean: objectsWithDiffs === 0 && tableRowDiffs.length === 0,
-    objectDiffs: stableSortBy(objectDiffs, (d) => `${d.kind}:${d.qualifiedName}`),
+    objectDiffs: StableSortBy(objectDiffs, (d) => `${d.kind}:${d.qualifiedName}`),
     tableRowDiffs,
     summary,
   };
+}
+
+/** @deprecated Use {@link CompareSnapshots}. */
+export function compareSnapshots(input: CompareInput): DiffReport {
+  return CompareSnapshots(input);
 }
 
 function diffNamedSet<T>(
@@ -427,7 +432,7 @@ function diffTableRows(
         const colName = left.columns[c];
         const rIdx = right.columns.indexOf(colName);
         if (rIdx === -1) continue;
-        if (!deepValueEqual(lRow[c], rRow[rIdx])) {
+        if (!DeepValueEqual(lRow[c], rRow[rIdx])) {
           colDiffs.push({ column: colName, leftValue: lRow[c], rightValue: rRow[rIdx] });
         }
       }

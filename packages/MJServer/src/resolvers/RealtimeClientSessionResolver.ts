@@ -62,7 +62,7 @@ import { ResolverBase } from '../generic/ResolverBase.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 import { GetReadWriteProvider } from '../util.js';
 import { SessionManager } from '../agentSessions/index.js';
-import { resolveWidgetGuestRunContext, ResolveScopedAnonymousRunUser } from '../realtimeWidget/widgetGuestElevation.js';
+import { ResolveWidgetGuestRunContext, ResolveScopedAnonymousRunUser } from '../realtimeWidget/widgetGuestElevation.js';
 
 /**
  * Progress steps worth narrating to the realtime model — mirrors the normal agent-run path's filter
@@ -2555,7 +2555,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         userPayload: UserPayload,
         providers: AppContext['providers'],
     ): Promise<number | undefined> {
-        const elevation = await resolveWidgetGuestRunContext(userPayload, GetReadWriteProvider(providers));
+        const elevation = await ResolveWidgetGuestRunContext(userPayload, GetReadWriteProvider(providers));
         const minutes = elevation?.widget.VoiceMaxSessionMinutes;
         return minutes && minutes > 0 ? minutes * 60 : undefined;
     }

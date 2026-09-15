@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { AgentRunTreeNode } from '@memberjunction/ai-core-plus';
-import { buildFlowModelFromTree } from '../flow/run-tree-flow-projection';
+import { BuildFlowModelFromTree } from '../flow/run-tree-flow-projection';
 
 function node(p: Partial<AgentRunTreeNode> & { NodeID: string }): AgentRunTreeNode {
     return {
@@ -60,11 +60,11 @@ function pipelineTree(): AgentRunTreeNode {
 
 describe('buildFlowModelFromTree', () => {
     it('returns null for no tree, so a caller can keep its previous model', () => {
-        expect(buildFlowModelFromTree(null, 'x', 'Complete', ICON)).toBeNull();
+        expect(BuildFlowModelFromTree(null, 'x', 'Complete', ICON)).toBeNull();
     });
 
     it('includes task-graph work, which the step-based model cannot see at all', () => {
-        const model = buildFlowModelFromTree(pipelineTree(), 'Content Pipeline', 'Completed', ICON)!;
+        const model = BuildFlowModelFromTree(pipelineTree(), 'Content Pipeline', 'Completed', ICON)!;
         const names = model.nodes.map((n) => n.name);
 
         expect(names).toContain('Research');
@@ -73,7 +73,7 @@ describe('buildFlowModelFromTree', () => {
     });
 
     it('maps each kind to its visual type, in BOTH vocabularies', () => {
-        const model = buildFlowModelFromTree(pipelineTree(), 'Content Pipeline', 'Completed', ICON)!;
+        const model = BuildFlowModelFromTree(pipelineTree(), 'Content Pipeline', 'Completed', ICON)!;
         const typeOf = (name: string) => model.nodes.find((n) => n.name === name)?.type;
 
         // A run step says 'Actions'/'Validation'; a task says 'Action'/'While'/'Human'.
@@ -85,7 +85,7 @@ describe('buildFlowModelFromTree', () => {
     });
 
     it('never leaves a known kind as the undifferentiated fallback', () => {
-        const model = buildFlowModelFromTree(pipelineTree(), 'Content Pipeline', 'Completed', ICON)!;
+        const model = BuildFlowModelFromTree(pipelineTree(), 'Content Pipeline', 'Completed', ICON)!;
         const untyped = model.nodes.filter((n) => n.type === 'other').map((n) => n.name);
 
         // 'other' is what makes a node invisible in the renderers — it is the bug being fixed.
@@ -93,7 +93,7 @@ describe('buildFlowModelFromTree', () => {
     });
 
     it('carries a source reference for every node, whatever entity it lives in', () => {
-        const model = buildFlowModelFromTree(pipelineTree(), 'Content Pipeline', 'Completed', ICON)!;
+        const model = BuildFlowModelFromTree(pipelineTree(), 'Content Pipeline', 'Completed', ICON)!;
         const draft = model.nodes.find((n) => n.name === 'Draft');
 
         // `raw` is typed to a run STEP and cannot hold a Task — this is why `source` exists.
@@ -102,7 +102,7 @@ describe('buildFlowModelFromTree', () => {
     });
 
     it('preserves the tree depth so renderers indent correctly', () => {
-        const model = buildFlowModelFromTree(pipelineTree(), 'Content Pipeline', 'Completed', ICON)!;
+        const model = BuildFlowModelFromTree(pipelineTree(), 'Content Pipeline', 'Completed', ICON)!;
         const depthOf = (name: string) => model.nodes.find((n) => n.name === name)?.depth;
 
         expect(depthOf('Agent Validation')).toBe(1);
@@ -115,7 +115,7 @@ describe('buildFlowModelFromTree', () => {
     });
 
     it('rolls child durations into containers', () => {
-        const model = buildFlowModelFromTree(pipelineTree(), 'Content Pipeline', 'Completed', ICON)!;
+        const model = BuildFlowModelFromTree(pipelineTree(), 'Content Pipeline', 'Completed', ICON)!;
         const graph = model.nodes.find((n) => n.name === 'Content Pipeline' && n.depth === 2)!;
 
         // 1373 + 2254 + 5372 ms of task work, in seconds.
@@ -123,7 +123,7 @@ describe('buildFlowModelFromTree', () => {
     });
 
     it('treats an unfinished node as zero rather than inventing elapsed time', () => {
-        const model = buildFlowModelFromTree(
+        const model = BuildFlowModelFromTree(
             node({ NodeID: 'r', NodeType: 'Run', Children: [node({ NodeID: 's', DurationMs: null })] }),
             'run', 'Running', ICON,
         )!;
@@ -131,7 +131,7 @@ describe('buildFlowModelFromTree', () => {
     });
 
     it('keeps a skipped branch in the model', () => {
-        const model = buildFlowModelFromTree(pipelineTree(), 'Content Pipeline', 'Completed', ICON)!;
+        const model = BuildFlowModelFromTree(pipelineTree(), 'Content Pipeline', 'Completed', ICON)!;
         const approve = model.nodes.find((n) => n.name === 'Approve');
 
         // Skipped is a normal outcome, not an absence — dropping it would hide which branch was

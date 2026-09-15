@@ -327,7 +327,7 @@ export const DEFAULT_REALTIME_UI_SIGNALS: RealtimeUiSignals = {
  * resolveRealtimeUi({ chrome: 'auto', consoleBreakpointPx: 480 }, wideSignals);
  * ```
  */
-export function resolveRealtimeUi(
+export function ResolveRealtimeUi(
   inputs: RealtimeUiInputs | null | undefined,
   signals: RealtimeUiSignals,
 ): ResolvedRealtimeUi {
@@ -396,6 +396,14 @@ export function resolveRealtimeUi(
     allowTextReveal,
     autoHideControls: cfg.autoHideControls && chrome === 'orb',
   };
+}
+
+/** @deprecated Use {@link ResolveRealtimeUi}. */
+export function resolveRealtimeUi(
+  inputs: RealtimeUiInputs | null | undefined,
+  signals: RealtimeUiSignals,
+): ResolvedRealtimeUi {
+  return ResolveRealtimeUi(inputs, signals);
 }
 
 /**

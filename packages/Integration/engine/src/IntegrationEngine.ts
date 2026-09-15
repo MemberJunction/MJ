@@ -45,14 +45,14 @@ import { FieldMappingEngine } from './FieldMappingEngine.js';
 import { MatchEngine } from './MatchEngine.js';
 import { WatermarkService } from './WatermarkService.js';
 import { SyncLogger } from './SyncLogger.js';
-import { CONTENT_HASH_COLUMN, computeContentHash } from './ContentHash.js';
+import { CONTENT_HASH_COLUMN, ComputeContentHash } from './ContentHash.js';
 import { RecordMapBatch } from './RecordMapBatch.js';
-import { buildContentHashPrefetchFilter, quoteTextLiteral } from './prefetchFilter.js';
-import { serializeKeyValue } from './KeySerialization.js';
-import { CUSTOM_OVERFLOW_COLUMN, reconcileOverflowValue, foldCustomKeyStats, type CustomKeyAccumulator } from './CustomOverflow.js';
+import { BuildContentHashPrefetchFilter, QuoteTextLiteral } from './prefetchFilter.js';
+import { SerializeKeyValue } from './KeySerialization.js';
+import { CUSTOM_OVERFLOW_COLUMN, ReconcileOverflowValue, FoldCustomKeyStats, type CustomKeyAccumulator } from './CustomOverflow.js';
 import { ComputeExcludedSourceNames } from './SyncDirectives.js';
 import { DescribeUnbindableFieldMaps, FindUnbindableFieldMaps } from './FieldMapValidation.js';
-import { partitionRecords, partitionRollupHash, diffPartitions, partitionKeyForIdentity } from './HashDiff.js';
+import { PartitionRecords, PartitionRollupHash, DiffPartitions, PartitionKeyForIdentity } from './HashDiff.js';
 import { RateLimiter } from './RateLimiter.js';
 import { AdaptiveConcurrencyController, RunAdaptive } from './AdaptiveConcurrency.js';
 import { mostRecentWinner, type RecencyWinner } from './ConflictRecency.js';
@@ -438,7 +438,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      * therefore lands on the proven per-record path: a connection has to ASK for batched writes,
      * and a malformed request is not an ask.
      */
-    private ReadWriteMode(companyIntegration: MJCompanyIntegrationEntity): string {
+    private readWriteMode(companyIntegration: MJCompanyIntegrationEntity): string {
         try {
             const raw = companyIntegration.Configuration;
             if (!raw) return '';
@@ -525,7 +525,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      * for absent, unparseable or wrongly-typed configuration — every failure mode keeps the side
      * effects ON. A connection has to ask, and a malformed request is not an ask.
      */
-    private ReadWriteSideEffects(companyIntegration: MJCompanyIntegrationEntity): string {
+    private readWriteSideEffects(companyIntegration: MJCompanyIntegrationEntity): string {
         try {
             const raw = companyIntegration.Get('Configuration') as string | null;
             if (!raw) return '';
@@ -921,7 +921,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         await RunResumesBounded(
             orphanedRuns.Results,
             ResumeConcurrency(),
-            run => this.ResumeOneOrphanedRun(run, prov, rv, contextUser)
+            run => this.resumeOneOrphanedRun(run, prov, rv, contextUser)
         );
     }
 
@@ -938,7 +938,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      * atomic with several of these in flight: an async function runs synchronously up to its first
      * await, and the pool always starts one from a synchronous call site.
      */
-    private async ResumeOneOrphanedRun(
+    private async resumeOneOrphanedRun(
         run: MJCompanyIntegrationRunEntity,
         prov: IMetadataProvider,
         rv: RunView,
@@ -1023,7 +1023,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             }
 
             // Load config and filter to only remaining entity maps (by map ID)
-            const config = await this.LoadRunConfiguration(companyIntegrationID, contextUser, resumeOptions);
+            const config = await this.loadRunConfiguration(companyIntegrationID, contextUser, resumeOptions);
             const remainingMaps = config.entityMaps.filter(
                 em => !completedMapIDs.has(em.ID.toLowerCase())
             );
@@ -1077,9 +1077,9 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             });
 
             const result = await IntegrationEngine.runContext.run(runCtx, async () => {
-                const r = await this.ExecuteEntityMaps(config, run, contextUser, undefined, abortController.signal);
+                const r = await this.executeEntityMaps(config, run, contextUser, undefined, abortController.signal);
                 r.RunID = runID;
-                await this.FinalizeRun(run, r, contextUser);
+                await this.finalizeRun(run, r, contextUser);
                 return r;
             });
             resumeResult = result;
@@ -1374,7 +1374,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
          */
         await IntegrationEngineBase.Instance.RefreshCatalog(contextUser);
 
-        const config = await this.LoadRunConfiguration(companyIntegrationID, contextUser, options);
+        const config = await this.loadRunConfiguration(companyIntegrationID, contextUser, options);
         logger.attachIntegrationName(config.companyIntegration.Integration);
         logger.emit('sync.config.loaded', {
             integration: config.companyIntegration.Integration,
@@ -1428,7 +1428,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         }
 
         // Worker mode executes a row that already exists (Status='Queued'); the direct path creates one.
-        const run = existingRun ?? await this.CreateRunRecord(config.companyIntegration, triggerType, contextUser, options?.ScheduledJobRunID, options);
+        const run = existingRun ?? await this.createRunRecord(config.companyIntegration, triggerType, contextUser, options?.ScheduledJobRunID, options);
         logger.attachRunId(run.ID);
 
         // ── Durable-run ownership (PR 1 item 3): claim before the first batch. ──
@@ -1495,13 +1495,13 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         }
 
         try {
-            const result = await this.ExecuteEntityMaps(config, run, contextUser, onProgress, abortSignal, logger);
+            const result = await this.executeEntityMaps(config, run, contextUser, onProgress, abortSignal, logger);
             result.RunID = run.ID;
             result.Duration = Date.now() - startTime;
             if (result.RecordsErrored > 0) {
                 result.ErrorMessage = `Sync completed with ${result.RecordsErrored} error(s)`;
             }
-            await this.FinalizeRun(run, result, contextUser, onNotification, abortSignal?.aborted);
+            await this.finalizeRun(run, result, contextUser, onNotification, abortSignal?.aborted);
             // Post-sync custom-column promotion (gaps.md §2 / M2). Self-gated server-side: a
             // customs-free sync does no work. Skipped for an aborted run. Never throws into the sync.
             if (!abortSignal?.aborted) {
@@ -1559,7 +1559,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 };
             }
             await this.finalizeSyncProgress(progress, 'failed', errMsg);
-            await this.FailRun(run, err, contextUser, onNotification);
+            await this.failRun(run, err, contextUser, onNotification);
             throw err;
         }
     }
@@ -1637,7 +1637,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     /**
      * Loads all configuration needed for a sync run.
      */
-    private async LoadRunConfiguration(
+    private async loadRunConfiguration(
         companyIntegrationID: string,
         contextUser: UserInfo,
         options?: IntegrationSyncOptions
@@ -1747,7 +1747,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     /**
      * Creates a new CompanyIntegrationRun record to track this sync.
      */
-    private async CreateRunRecord(
+    private async createRunRecord(
         companyIntegration: MJCompanyIntegrationEntity,
         triggerType: SyncTriggerType,
         contextUser: UserInfo,
@@ -1789,7 +1789,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     /**
      * Processes all entity maps, aggregating results with progress tracking.
      */
-    private async ExecuteEntityMaps(
+    private async executeEntityMaps(
         config: RunConfiguration,
         run: MJCompanyIntegrationRunEntity,
         contextUser: UserInfo,
@@ -1802,7 +1802,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // config parameter) read it back. Both run paths — direct and adopted — come through here.
         const runCtxForFlags = this.currentRunContext;
         if (runCtxForFlags) {
-            runCtxForFlags.suppressWriteSideEffects = this.ReadWriteSideEffects(config.companyIntegration) === 'suppressed';
+            runCtxForFlags.suppressWriteSideEffects = this.readWriteSideEffects(config.companyIntegration) === 'suppressed';
         }
         const aggregate: SyncResult = {
             Success: true,
@@ -1836,10 +1836,10 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 priority: entityMap.Priority ?? null,
             });
             try {
-                const mapResult = await this.ProcessSingleEntityMap(
+                const mapResult = await this.processSingleEntityMap(
                     config, entityMap, run, contextUser, i, totalMaps, onProgress, abortSignal, logger
                 );
-                this.MergeResult(aggregate, mapResult);
+                this.mergeResult(aggregate, mapResult);
                 aggregate.EntityMapResults!.push(this.buildEntityMapResult(entityMap, mapResult, Date.now() - mapStartTime));
                 logger?.emit('sync.entity-map.complete', {
                     externalObjectName: entityMap.ExternalObjectName,
@@ -2521,7 +2521,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      * - Push: detect MJ changes → map → push to external
      * - Bidirectional: pull first, then push
      */
-    private async ProcessSingleEntityMap(
+    private async processSingleEntityMap(
         config: RunConfiguration,
         entityMap: ICompanyIntegrationEntityMap,
         run: MJCompanyIntegrationRunEntity,
@@ -2535,17 +2535,17 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const direction = config.syncDirection ?? entityMap.SyncDirection ?? 'Pull';
 
         if (direction === 'Pull') {
-            return this.ProcessPullSync(config, entityMap, run, contextUser, entityMapIndex, totalEntityMaps, onProgress, abortSignal, logger);
+            return this.processPullSync(config, entityMap, run, contextUser, entityMapIndex, totalEntityMaps, onProgress, abortSignal, logger);
         }
 
         if (direction === 'Push') {
-            return this.ProcessPushSync(config, entityMap, run, contextUser, entityMapIndex, totalEntityMaps, onProgress, abortSignal, logger);
+            return this.processPushSync(config, entityMap, run, contextUser, entityMapIndex, totalEntityMaps, onProgress, abortSignal, logger);
         }
 
         // Bidirectional: pull first, then push
-        const pullResult = await this.ProcessPullSync(config, entityMap, run, contextUser, entityMapIndex, totalEntityMaps, onProgress, abortSignal, logger);
-        const pushResult = await this.ProcessPushSync(config, entityMap, run, contextUser, entityMapIndex, totalEntityMaps, onProgress, abortSignal, logger);
-        this.MergeResult(pullResult, pushResult);
+        const pullResult = await this.processPullSync(config, entityMap, run, contextUser, entityMapIndex, totalEntityMaps, onProgress, abortSignal, logger);
+        const pushResult = await this.processPushSync(config, entityMap, run, contextUser, entityMapIndex, totalEntityMaps, onProgress, abortSignal, logger);
+        this.mergeResult(pullResult, pushResult);
         return pullResult;
     }
 
@@ -2553,7 +2553,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
 
     /** Loads the map fresh and writes its Configuration through Save(), like every other engine write. */
-    private async SaveEntityMapConfiguration(
+    private async saveEntityMapConfiguration(
         entityMap: ICompanyIntegrationEntityMap,
         configurationJSON: string | null,
         contextUser: UserInfo
@@ -2571,7 +2571,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     /**
      * Pull sync: fetch from external → map → match → validate → apply to MJ.
      */
-    private async ProcessPullSync(
+    private async processPullSync(
         config: RunConfiguration,
         entityMap: ICompanyIntegrationEntityMap,
         run: MJCompanyIntegrationRunEntity,
@@ -2587,7 +2587,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // every run, forever, and says nothing new after the first time. While the marker is fresh
         // we spend nothing on it; once it ages out the next attempt IS the recheck, so an object
         // the account later enables heals itself with no operator action.
-        const fieldMaps = await this.LoadFieldMaps(entityMapID, contextUser);
+        const fieldMaps = await this.loadFieldMaps(entityMapID, contextUser);
         // Field-level exclusions declared by the connector (SourceFieldInfo.SyncDirective
         // -> IntegrationObjectField.Configuration). Resolved once per map, applied to every
         // batch below. Empty set on any lookup miss - exclusion can only ever narrow.
@@ -2614,7 +2614,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             watermarkType: watermark?.WatermarkType ?? null,
             fullSync: config.fullSync,
         });
-        this.WarnOnUnbindableFieldMaps(entityMap, fieldMaps, logger);
+        this.warnOnUnbindableFieldMaps(entityMap, fieldMaps, logger);
 
         // A6: Validate watermark before using it — skip entirely when FullSync requested
         let initialWatermark = config.fullSync ? null : (watermark?.WatermarkValue ?? null);
@@ -3038,7 +3038,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             // Custom-key stats: aggregate unmapped keys for EVERY mapped record here —
             // before any skip decision — so candidates + sizing stats exist even when the
             // content-hash fast path skips the row (the hash basis deliberately excludes them).
-            foldCustomKeyStats(mapped.map(r => r.UnmappedFields), customKeyAgg);
+            FoldCustomKeyStats(mapped.map(r => r.UnmappedFields), customKeyAgg);
             customKeyTotalRecords += mapped.length;
             // Partition (Merkle) reconcile defers match + apply: accumulate mapped records now; the
             // partition-diff + selective apply runs once after the full fetch (applyViaPartitionReconcile).
@@ -3070,7 +3070,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
             const beforeApply = result.RecordsCreated + result.RecordsUpdated + result.RecordsSkipped + result.RecordsErrored;
             try {
-                if (!partitionReconcile) await this.ApplyRecords(resolved, config.companyIntegration, entityMap, result, contextUser, logger, this.getSyncConcurrency(config) <= 1, this.getSyncConcurrency(config));
+                if (!partitionReconcile) await this.applyRecords(resolved, config.companyIntegration, entityMap, result, contextUser, logger, this.getSyncConcurrency(config) <= 1, this.getSyncConcurrency(config));
             } catch (applyErr) {
                 if (applyErr instanceof SchemaNotGeneratedError) {
                     // The destination spCreate/Update/Delete doesn't exist
@@ -3279,7 +3279,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // whose ExternalID isn't in fetchedExternalIDs is genuinely gone — even one inside an otherwise
         // unchanged/skipped partition). Only on a clean fetch — a partial set would delete live records.
         if ((config.fullSync || partitionReconcile) && fetchedExternalIDs.size > 0 && fetchCompletedCleanly) {
-            await this.DeleteOrphanedRecords(
+            await this.deleteOrphanedRecords(
                 config.companyIntegration, entityMap, fetchedExternalIDs, result, contextUser, logger
             );
         } else if (orphanTrackingOverflowed && fetchCompletedCleanly) {
@@ -3323,7 +3323,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             };
         }
 
-        await this.CreateRunDetail(run, entityMap, result, contextUser);
+        await this.createRunDetail(run, entityMap, result, contextUser);
         return result;
     }
 
@@ -3400,7 +3400,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      * Filters out changes made by the integration engine itself to prevent echo loops.
      * For each changed record, calls the connector's CreateRecord/UpdateRecord/DeleteRecord.
      */
-    private async ProcessPushSync(
+    private async processPushSync(
         config: RunConfiguration,
         entityMap: ICompanyIntegrationEntityMap,
         run: MJCompanyIntegrationRunEntity,
@@ -3412,8 +3412,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         logger?: SyncLogger
     ): Promise<SyncResult> {
         const entityMapID = entityMap.ID;
-        const fieldMaps = await this.LoadFieldMaps(entityMapID, contextUser);
-        this.WarnOnUnbindableFieldMaps(entityMap, fieldMaps, logger);
+        const fieldMaps = await this.loadFieldMaps(entityMapID, contextUser);
+        this.warnOnUnbindableFieldMaps(entityMap, fieldMaps, logger);
         const pushWatermark = await this.watermarkService.Load(entityMapID, contextUser, 'Push');
         const lastPushAt = pushWatermark?.WatermarkValue ?? null;
 
@@ -3427,13 +3427,13 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 supportsCreate: config.connector.SupportsCreate,
                 supportsUpdate: config.connector.SupportsUpdate,
             });
-            return this.EmptyResult();
+            return this.emptyResult();
         }
 
         // Full push: load ALL records from the MJ entity. Incremental push: only changed records.
         const changedRecords = config.fullSync
-            ? await this.LoadAllMJRecords(entityMap, config.companyIntegration, contextUser)
-            : await this.LoadChangedMJRecords(entityMap, lastPushAt, contextUser);
+            ? await this.loadAllMJRecords(entityMap, config.companyIntegration, contextUser)
+            : await this.loadChangedMJRecords(entityMap, lastPushAt, contextUser);
 
         if (changedRecords.length === 0) {
             console.log(`[IntegrationEngine] Push: no changes for ${entityMap.ExternalObjectName} since ${lastPushAt ?? 'beginning'}`);
@@ -3443,8 +3443,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 fullSync: config.fullSync,
                 sinceLastPushAt: lastPushAt,
             });
-            await this.CreateRunDetail(run, entityMap, this.EmptyResult(), contextUser);
-            return this.EmptyResult();
+            await this.createRunDetail(run, entityMap, this.emptyResult(), contextUser);
+            return this.emptyResult();
         }
 
         console.log(`[IntegrationEngine] Push: ${changedRecords.length} changed records for ${entityMap.ExternalObjectName}`);
@@ -3469,7 +3469,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // If no field maps are configured for push, skip this entity entirely
         if (pushFieldMaps.length === 0) {
             console.log(`[IntegrationEngine] Push skipped for ${entityMap.ExternalObjectName}: no field maps with push direction`);
-            return this.EmptyResult();
+            return this.emptyResult();
         }
 
         // Watermark safety: the push watermark must never advance PAST a record that FAILED to
@@ -3494,7 +3494,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             if (_abortSignal?.aborted) break;
             result.RecordsProcessed++;
             try {
-                await this.PushSingleRecord(change, config, entityMap, pushFieldMaps, result, contextUser, logger);
+                await this.pushSingleRecord(change, config, entityMap, pushFieldMaps, result, contextUser, logger);
                 if (change.ChangedAt) successfulChangeAts.push(change.ChangedAt);
             } catch (err) {
                 const errMsg = err instanceof Error ? err.message : String(err);
@@ -3536,12 +3536,12 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             `${result.RecordsDeleted} deleted, ${result.RecordsErrored} errored`
         );
 
-        await this.CreateRunDetail(run, entityMap, result, contextUser);
+        await this.createRunDetail(run, entityMap, result, contextUser);
         return result;
     }
 
     /** Loads MJ records changed since the last push watermark, excluding integration-engine changes. */
-    private async LoadChangedMJRecords(
+    private async loadChangedMJRecords(
         entityMap: ICompanyIntegrationEntityMap,
         lastPushAt: string | null,
         contextUser: UserInfo
@@ -3574,7 +3574,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // Normalize to just the value(s) so it matches CompanyIntegrationRecordMap.EntityRecordID.
         const latestByRecord = new Map<string, { RecordID: string; Type: string; ChangedAt: string; Fields: Record<string, unknown> }>();
         for (const r of result.Results) {
-            const normalizedID = this.NormalizeRecordChangeID(r.RecordID);
+            const normalizedID = this.normalizeRecordChangeID(r.RecordID);
             latestByRecord.set(normalizedID, { ...r, RecordID: normalizedID, Fields: {} });
         }
 
@@ -3592,7 +3592,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             if (change.Type === 'Delete') continue; // No fields to load for deletes
             try {
                 const entity = await md.GetEntityObject(entityMap.Entity, contextUser);
-                const loaded = await entity.InnerLoad(this.BuildEntityPrimaryKey(recordID, pkFields));
+                const loaded = await entity.InnerLoad(this.buildEntityPrimaryKey(recordID, pkFields));
                 if (loaded) {
                     change.Fields = entity.GetAll();
                 }
@@ -3609,7 +3609,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      * For each record, checks the record map to determine if it's a Create (no external ID)
      * or Update (has external ID) in the external system.
      */
-    private async LoadAllMJRecords(
+    private async loadAllMJRecords(
         entityMap: ICompanyIntegrationEntityMap,
         companyIntegration: MJCompanyIntegrationEntity,
         contextUser: UserInfo
@@ -3643,7 +3643,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // Paged: an unpaged read is silently capped at the entity's UserViewMaxRows (1000 by
         // default), and a truncated map here makes already-synced records look brand new — so
         // the push would re-CREATE them externally as duplicates.
-        const allMaps = await this.LoadAllRecordMaps(companyIntegration.ID, entityMap.EntityID, contextUser);
+        const allMaps = await this.loadAllRecordMaps(companyIntegration.ID, entityMap.EntityID, contextUser);
         if (!allMaps.Complete) {
             // Refuse rather than push a partial picture: with an incomplete map, every unmapped
             // record reads as "not yet in the external system" and gets created a second time.
@@ -3670,7 +3670,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         return allResult.Results.map(record => {
             // '|'-joined across EVERY key column — the shape EntityRecordID is stored in — so the
             // existingMaps lookup (Create vs Update) matches a composite key, not just its first column.
-            const recordID = this.ComposeEntityRecordID(record, pkFields);
+            const recordID = this.composeEntityRecordID(record, pkFields);
             return {
                 RecordID: recordID,
                 Type: existingMaps.has(recordID) ? 'Update' : 'Create',
@@ -3681,7 +3681,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     }
 
     /** Pushes a single changed MJ record to the external system. */
-    private async PushSingleRecord(
+    private async pushSingleRecord(
         change: { RecordID: string; Type: string; ChangedAt: string; Fields: Record<string, unknown> },
         config: RunConfiguration,
         entityMap: ICompanyIntegrationEntityMap,
@@ -3792,7 +3792,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             }
             // Persist the new external ID so future syncs update instead of re-creating
             if (createResult.ExternalID) {
-                await this.SaveRecordMap(
+                await this.saveRecordMap(
                     config.companyIntegration.ID as string,
                     createResult.ExternalID,
                     entityMap.EntityID,
@@ -3966,7 +3966,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             const entity = await md.GetEntityObject(entityMap.Entity, contextUser);
             const entityInfo = md.EntityByName(entityMap.Entity);
             const pkFields = entityInfo?.PrimaryKeys ?? [];
-            const loaded = await entity.InnerLoad(this.BuildEntityPrimaryKey(mjRecordID, pkFields));
+            const loaded = await entity.InnerLoad(this.buildEntityPrimaryKey(mjRecordID, pkFields));
             if (!loaded) return;
             const fields = entity.Fields ?? [];
             const hasField = (n: string) => fields.some(f => f.Name === n);
@@ -4000,7 +4000,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      * but were NOT returned by the external system during this full pull.
      * These records were deleted externally and should be removed from MJ.
      */
-    private async DeleteOrphanedRecords(
+    private async deleteOrphanedRecords(
         companyIntegration: MJCompanyIntegrationEntity,
         entityMap: ICompanyIntegrationEntityMap,
         fetchedExternalIDs: Set<string>,
@@ -4011,7 +4011,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // Paged: an unpaged read is silently capped at the entity's UserViewMaxRows (1000 by
         // default). A tenant with 5,000 orphans would clear 1,000 per run and the operator would
         // see a clean run every time — the truncation was invisible, which is the actual bug.
-        const allMaps = await this.LoadAllRecordMaps(companyIntegration.ID, entityMap.EntityID, contextUser);
+        const allMaps = await this.loadAllRecordMaps(companyIntegration.ID, entityMap.EntityID, contextUser);
 
         if (!allMaps.Complete) {
             // Deleting against a partial map is the dangerous direction: rows we simply failed to
@@ -4069,7 +4069,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         for (const orphan of orphans) {
             try {
                 const entity = await md.GetEntityObject(entityMap.Entity, contextUser);
-                const loaded = await entity.InnerLoad(this.BuildEntityPrimaryKey(orphan.EntityRecordID, pkFields));
+                const loaded = await entity.InnerLoad(this.buildEntityPrimaryKey(orphan.EntityRecordID, pkFields));
                 if (!loaded) {
                     console.log(`[IntegrationEngine] Orphan ${orphan.EntityRecordID} already deleted from MJ`);
                     // The map row outlived its record. Nothing anywhere else deletes record-map
@@ -4077,7 +4077,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     // full sync and ORPHANS_DETECTED becomes a cumulative counter of history
                     // rather than a signal about THIS run — observed live as a count that only
                     // ever grew, sync after sync.
-                    await this.DeleteRecordMapRow(orphan.ID, contextUser);
+                    await this.deleteRecordMapRow(orphan.ID, contextUser);
                     continue;
                 }
                 if (entityMap.DeleteBehavior === 'SoftDelete') {
@@ -4093,7 +4093,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     const archived = await entity.Save(this.syncSaveOptions);
                     if (archived) {
                         result.RecordsDeleted++;
-                        await this.DeleteRecordMapRow(orphan.ID, contextUser);
+                        await this.deleteRecordMapRow(orphan.ID, contextUser);
                         console.log(`[IntegrationEngine] Archived orphan ${entityMap.Entity} ${orphan.EntityRecordID} (external ${orphan.ExternalSystemRecordID} no longer exists)`);
                     } else {
                         const reason = entity.LatestResult?.CompleteMessage ?? 'unknown reason';
@@ -4104,7 +4104,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 const deleted = await entity.Delete(this.syncDeleteOptions);
                 if (deleted) {
                     result.RecordsDeleted++;
-                    await this.DeleteRecordMapRow(orphan.ID, contextUser);
+                    await this.deleteRecordMapRow(orphan.ID, contextUser);
                     console.log(`[IntegrationEngine] Deleted orphan ${entityMap.Entity} ${orphan.EntityRecordID} (external ${orphan.ExternalSystemRecordID} no longer exists)`);
                 } else {
                     const reason = entity.LatestResult?.CompleteMessage ?? 'unknown reason';
@@ -4123,7 +4123,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      * swallowed: the orphan itself was handled, and the worst consequence of a surviving map
      * row is one redundant re-detection on the next full sync.
      */
-    private async DeleteRecordMapRow(mapRowID: string, contextUser: UserInfo): Promise<void> {
+    private async deleteRecordMapRow(mapRowID: string, contextUser: UserInfo): Promise<void> {
         try {
             const md = this.ProviderToUse;
             const mapRow = await md.GetEntityObject('MJ: Company Integration Record Maps', contextUser);
@@ -4143,7 +4143,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      * "hs_object_id|465950833372" → "465950833372"
      * "contact_id|123||deal_id|456" → "123|456"
      */
-    private NormalizeRecordChangeID(recordID: string): string {
+    private normalizeRecordChangeID(recordID: string): string {
         return recordID
             .split('||')
             .map(part => { const i = part.indexOf('|'); return i >= 0 ? part.substring(i + 1) : part; })
@@ -4152,7 +4152,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
 
     /** Returns an empty SyncResult. */
-    private EmptyResult(): SyncResult {
+    private emptyResult(): SyncResult {
         return {
             Success: true, RecordsProcessed: 0, RecordsCreated: 0, RecordsUpdated: 0,
             RecordsDeleted: 0, RecordsErrored: 0, RecordsSkipped: 0, Errors: [],
@@ -4186,7 +4186,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     /**
      * Loads active field maps for a given entity map.
      */
-    private async LoadFieldMaps(
+    private async loadFieldMaps(
         entityMapID: string,
         contextUser: UserInfo
     ): Promise<ICompanyIntegrationFieldMap[]> {
@@ -4247,15 +4247,15 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     ): Promise<void> {
         const entityMapID = entityMap.ID;
         const idOf = (r: MappedRecord) => r.ExternalRecord.ExternalID;
-        const partitionOf = (r: MappedRecord) => partitionKeyForIdentity(idOf(r), partitionCount);
+        const partitionOf = (r: MappedRecord) => PartitionKeyForIdentity(idOf(r), partitionCount);
 
         // Bucket + rollup the just-fetched full set.
-        const buckets = partitionRecords(mappedRecords, idOf, partitionOf);
+        const buckets = PartitionRecords(mappedRecords, idOf, partitionOf);
         const newRollups = new Map<string, string>();
         for (const [partition, recs] of buckets) {
             // Content-hash basis: MAPPED fields only — an unmapped/custom key must never move a
             // partition rollup (its capture + promotion is handled out-of-band via CustomKeyStats).
-            newRollups.set(partition, partitionRollupHash(recs, r => r.MappedFields));
+            newRollups.set(partition, PartitionRollupHash(recs, r => r.MappedFields));
         }
 
         // Diff against last sync's snapshot; only changed/added partitions need a deep apply. On a FORCED
@@ -4266,7 +4266,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const stored = config.fullSync
             ? new Map<string, string>()
             : await this.watermarkService.LoadPartitionRollups(entityMapID, contextUser);
-        const diff = diffPartitions(newRollups, stored);
+        const diff = DiffPartitions(newRollups, stored);
         const toApply = new Set<string>([...diff.changed, ...diff.added]);
 
         let appliedRecords = 0;
@@ -4292,7 +4292,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 // connection, so when streams run in parallel (syncConcurrency>1) it must not interleave
                 // with another stream's open write transaction (else "Transaction in progress" / dirty read).
                 const resolved = await this.runWriteForMap(entityMap.ID, () => this.matchEngine.Resolve(recs, entityMap, fieldMaps, contextUser));
-                await this.ApplyRecords(resolved, config.companyIntegration, entityMap, result, contextUser, logger, this.getSyncConcurrency(config) <= 1, this.getSyncConcurrency(config));
+                await this.applyRecords(resolved, config.companyIntegration, entityMap, result, contextUser, logger, this.getSyncConcurrency(config) <= 1, this.getSyncConcurrency(config));
                 appliedRecords += recs.length;
             }
         } catch (applyErr) {
@@ -4323,7 +4323,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     /**
      * Applies resolved records to MJ, handling each individually for error isolation.
      */
-    private async ApplyRecords(
+    private async applyRecords(
         records: MappedRecord[],
         companyIntegration: MJCompanyIntegrationEntity,
         entityMap: ICompanyIntegrationEntityMap,
@@ -4366,7 +4366,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             this.ProviderToUse,
             companyIntegration.ID,
             contextUser,
-            (ciID, extID, entID, recID, user) => this.SaveRecordMap(ciID, extID, entID, recID, user),
+            (ciID, extID, entID, recID, user) => this.saveRecordMap(ciID, extID, entID, recID, user),
         );
 
         for (let i = 0; i < records.length; i += APPLY_BATCH_SIZE) {
@@ -4409,7 +4409,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             // target's whole identity is server-assigned can never enrol a record, so batching it
             // would produce an empty group and a non-atomic batch reporting success. See
             // entityMapHasIdentityOnlyPK.
-            const batchedWrites = this.ReadWriteMode(companyIntegration) === 'batched'
+            const batchedWrites = this.readWriteMode(companyIntegration) === 'batched'
                 && !this.entityMapHasIdentityOnlyPK(entityMap);
 
             // NEVER nest `runWriteExclusive`: the inner call waits on a chain that already contains
@@ -4420,7 +4420,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 : <T,>(fn: () => Promise<T>): Promise<T> => fn();
 
             const applyOneBatch = async () => {
-                const precheckHashes = await this.PrefetchContentHashes(batch, contextUser);
+                const precheckHashes = await this.prefetchContentHashes(batch, contextUser);
 
                 // PKs of records the content-hash fast path skipped this batch — still present and
                 // confirmed-unchanged on the source. Collected so we can refresh LastReconciledAt for
@@ -4501,7 +4501,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                         let enrolledSinceFlush = 0;
                         for (const record of batch) {
                             result.RecordsProcessed++;
-                            await this.ApplySingleRecord(record, companyIntegration, entityMap, result, contextUser, logger, precheckHashes, reconciledSkipIds, recordMaps);
+                            await this.applySingleRecord(record, companyIntegration, entityMap, result, contextUser, logger, precheckHashes, reconciledSkipIds, recordMaps);
                             if (flushAt === undefined) continue;
                             if (++enrolledSinceFlush < flushAt) continue;
                             enrolledSinceFlush = 0;
@@ -4608,7 +4608,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                             // §10 — bounded inline retry for provably-transient save failures (auto-commit per
                             // record, so no transaction to manage); permanent errors throw straight to dead-letter.
                             await WithRetry(
-                                () => this.ApplySingleRecord(record, companyIntegration, entityMap, result, contextUser, logger, precheckHashes, reconciledSkipIds, recordMaps),
+                                () => this.applySingleRecord(record, companyIntegration, entityMap, result, contextUser, logger, precheckHashes, reconciledSkipIds, recordMaps),
                                 undefined,
                                 (e) => !(e instanceof SchemaNotGeneratedError) && IsRetryableError(ClassifyError(e).Code),
                                 (attempt, e, delayMs) => logger?.emit('sync.record.retry', {
@@ -4654,14 +4654,14 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 // LastReconciledAt for every content-hash-skipped row in ONE set-based touch.
                 // Best-effort — a touch failure must never break the sync.
                 if (reconciledSkipIds.length > 0) {
-                    await serializeWrite(() => this.TouchLastReconciledAt(entityMap, reconciledSkipIds, contextUser, logger));
+                    await serializeWrite(() => this.touchLastReconciledAt(entityMap, reconciledSkipIds, contextUser, logger));
                 }
 
                 // Write the batch's record maps set-based, now that the records they point at are
                 // committed. Deliberately AFTER the transaction rather than inside it: the mapping
                 // is derived data that the next sync can re-establish by primary key, and keeping
                 // it out of the write transaction keeps that transaction as short as possible.
-                await serializeWrite(() => this.FlushRecordMaps(recordMaps, entityMap, logger));
+                await serializeWrite(() => this.flushRecordMaps(recordMaps, entityMap, logger));
             };
 
             // Batched: overlap freely, serializing only the writes above. Otherwise: the whole
@@ -4679,7 +4679,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      * worth telling the operator about but is not a reason to mark the record — or the run —
      * failed. Flushing itself never throws for the same reason.
      */
-    private async FlushRecordMaps(
+    private async flushRecordMaps(
         recordMaps: RecordMapBatch,
         entityMap: ICompanyIntegrationEntityMap,
         logger?: SyncLogger
@@ -4713,7 +4713,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      * mirroring PrefetchContentHashes. Keeps the column's "last confirmed present" semantics honest so
      * future unseen-since-last-reconcile logic can't misclassify a still-present unchanged record.
      */
-    private async TouchLastReconciledAt(
+    private async touchLastReconciledAt(
         entityMap: ICompanyIntegrationEntityMap,
         recordIds: string[],
         contextUser: UserInfo,
@@ -4812,14 +4812,14 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                         if (!useProviderTransaction) {
                             // Auto-commit: never touches shared provider transaction state, so
                             // concurrent entity maps cannot corrupt each other. See the parameter doc.
-                            await this.ApplySingleRecord(record, companyIntegration, entityMap, result, contextUser, logger, precheckHashes, reconciledSkipIds, recordMaps);
+                            await this.applySingleRecord(record, companyIntegration, entityMap, result, contextUser, logger, precheckHashes, reconciledSkipIds, recordMaps);
                             return;
                         }
                         // Sequential path, unchanged: apply in its own transaction so a deadlock or
                         // momentary timeout rolls back and the next attempt starts clean.
                         await provider.BeginTransaction();
                         try {
-                            await this.ApplySingleRecord(record, companyIntegration, entityMap, result, contextUser, logger, precheckHashes, reconciledSkipIds, recordMaps);
+                            await this.applySingleRecord(record, companyIntegration, entityMap, result, contextUser, logger, precheckHashes, reconciledSkipIds, recordMaps);
                             await provider.CommitTransaction();
                         } catch (e) {
                             await provider.RollbackTransaction();
@@ -4878,7 +4878,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     /**
      * Applies a single record change (Create, Update, Delete, or Skip).
      */
-    private async ApplySingleRecord(
+    private async applySingleRecord(
         record: MappedRecord,
         companyIntegration: MJCompanyIntegrationEntity,
         entityMap: ICompanyIntegrationEntityMap,
@@ -4906,17 +4906,17 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         try {
             switch (record.ChangeType) {
                 case 'Create': {
-                    const outcome = await this.CreateRecord(record, companyIntegration, entityMap, contextUser, recordMaps, logger, precheckHashes);
+                    const outcome = await this.createRecord(record, companyIntegration, entityMap, contextUser, recordMaps, logger, precheckHashes);
                     if (outcome === 'updated') result.RecordsUpdated++;
                     else if (outcome === 'skipped') result.RecordsSkipped++;
                     else result.RecordsCreated++;
                     break;
                 }
                 case 'Update':
-                    await this.UpdateRecord(record, companyIntegration, entityMap, result, contextUser, precheckHashes, reconciledSkipIds, recordMaps, logger);
+                    await this.updateRecord(record, companyIntegration, entityMap, result, contextUser, precheckHashes, reconciledSkipIds, recordMaps, logger);
                     break;
                 case 'Delete': {
-                    const didDelete = await this.DeleteRecord(record, entityMap, contextUser);
+                    const didDelete = await this.deleteRecord(record, entityMap, contextUser);
                     if (didDelete) result.RecordsDeleted++;
                     else result.RecordsErrored++;
                     break;
@@ -4977,7 +4977,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      *
      * @returns true if an existing row was updated, false if a new row was inserted (so the caller counts correctly).
      */
-    private async CreateRecord(
+    private async createRecord(
         record: MappedRecord,
         companyIntegration: MJCompanyIntegrationEntity,
         entityMap: ICompanyIntegrationEntityMap,
@@ -5014,7 +5014,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const keyless = DecideKeylessRefusal(
             mappedPK,
             pkFields as ReadonlyArray<KeyFieldLike>,
-            MissingKeyFieldNames(record.MappedFields, pkFields as ReadonlyArray<KeyFieldLike>, serializeKeyValue),
+            MissingKeyFieldNames(record.MappedFields, pkFields as ReadonlyArray<KeyFieldLike>, SerializeKeyValue),
         );
         if (keyless.Refuse) {
             const detail = DescribeKeylessRefusal(record.MJEntityName, keyless.KeyNames);
@@ -5040,7 +5040,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const provablyAbsent = this.isProvablyAbsent(mappedPK, precheck);
 
         const existed = mappedPK != null && !provablyAbsent
-            ? await entity.InnerLoad(this.BuildEntityPrimaryKey(mappedPK, pkFields))
+            ? await entity.InnerLoad(this.buildEntityPrimaryKey(mappedPK, pkFields))
             : false;
 
         if (existed) {
@@ -5057,8 +5057,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             if (hasHashColumn) {
                 const storedHash = entity.Get(CONTENT_HASH_COLUMN);
                 if (typeof storedHash === 'string' && storedHash.length > 0
-                    && storedHash === computeContentHash(record.MappedFields ?? {})) {
-                    await this.QueueRecordMap(
+                    && storedHash === ComputeContentHash(record.MappedFields ?? {})) {
+                    await this.queueRecordMap(
                         recordMaps, companyIntegration.ID, record.ExternalRecord.ExternalID, entityMap.EntityID,
                         entity.PrimaryKey.KeyValuePairs.map(kv => String(kv.Value)).join('|'), contextUser,
                     );
@@ -5069,9 +5069,9 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             // (dirty tracking after SetEntityFields, BEFORE the always-changing integration metadata),
             // re-establish the possibly-cleared record map and SKIP the write — leaving __mj_UpdatedAt
             // and the integration LastSynced columns untouched, exactly like the content-hash skip path.
-            this.SetEntityFields(entity, record.MappedFields);
+            this.setEntityFields(entity, record.MappedFields);
             if (!entity.Dirty && !this.needsSyncStateRepair(entity, entityInfo, record)) {
-                await this.QueueRecordMap(
+                await this.queueRecordMap(
                     recordMaps, companyIntegration.ID, record.ExternalRecord.ExternalID, entityMap.EntityID,
                     entity.PrimaryKey.KeyValuePairs.map(kv => String(kv.Value)).join('|'), contextUser,
                 );
@@ -5079,9 +5079,9 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             }
         } else {
             entity.NewRecord();
-            this.SetEntityFields(entity, record.MappedFields);
+            this.setEntityFields(entity, record.MappedFields);
         }
-        this.SetStandardIntegrationFields(entity, record);
+        this.setStandardIntegrationFields(entity, record);
 
         // A5: Pre-write validation
         this.validateEntity(entity, record.MJEntityName);
@@ -5111,7 +5111,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         if (!existed && mappedPK != null && precheck) {
             precheck.Present.add(mappedPK);
         }
-        await this.QueueRecordMap(
+        await this.queueRecordMap(
             recordMaps,
             companyIntegration.ID,
             record.ExternalRecord.ExternalID,
@@ -5137,7 +5137,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             const v = (pk.Name in fields) ? fields[pk.Name] : lower.get(pk.Name.toLowerCase());
             // serializeKeyValue mirrors the write-side coercion (objects → JSON, not "[object Object]")
             // so the load key equals the value stored in the column for object-valued PKs.
-            const s = serializeKeyValue(v);
+            const s = SerializeKeyValue(v);
             if (s === '') return null;
             values.push(s);
         }
@@ -5170,7 +5170,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      * If the record cannot be loaded (e.g. it was deleted or never fully created),
      * falls back to CreateRecord (upsert behavior).
      */
-    private async UpdateRecord(
+    private async updateRecord(
         record: MappedRecord,
         companyIntegration: MJCompanyIntegrationEntity,
         entityMap: ICompanyIntegrationEntityMap,
@@ -5184,7 +5184,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     ): Promise<void> {
         if (!record.MatchedMJRecordID) {
             // No matched ID — upsert by PK (insert; or update/skip if the PK already exists)
-            const outcome = await this.CreateRecord(record, companyIntegration, entityMap, contextUser, recordMaps, logger, precheckHashes);
+            const outcome = await this.createRecord(record, companyIntegration, entityMap, contextUser, recordMaps, logger, precheckHashes);
             if (outcome === 'updated') result.RecordsUpdated++;
             else if (outcome === 'skipped') result.RecordsSkipped++;
             else result.RecordsCreated++;
@@ -5198,7 +5198,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // below is the fallback for entities without the hash column.
         if (precheckHashes) {
             const stored = precheckHashes.Hashes.get(record.MatchedMJRecordID);
-            if (stored && stored === computeContentHash(record.MappedFields ?? {})) {
+            if (stored && stored === ComputeContentHash(record.MappedFields ?? {})) {
                 result.RecordsSkipped++;
                 // Re-establish the external↔MJ record map even on the content-hash skip. A record can
                 // reach UpdateRecord matched by KEY FIELDS / PK (MatchEngine.FindByKeyFields queries the
@@ -5211,7 +5211,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 // (CompanyIntegration, Entity, ExternalID) — idempotent for already-mapped records, and the
                 // CreateRecord skip branches already do exactly this. MatchedMJRecordID IS the dest PK
                 // (PrimaryKeys order, '|'-joined), which is the EntityRecordID the map stores.
-                await this.QueueRecordMap(
+                await this.queueRecordMap(
                     recordMaps, companyIntegration.ID, record.ExternalRecord.ExternalID, entityMap.EntityID,
                     record.MatchedMJRecordID, contextUser,
                 );
@@ -5231,10 +5231,10 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         this.enrolInWriteGroup(entity);
         const entityInfo = md.EntityByName(record.MJEntityName);
         const pkFields = entityInfo?.PrimaryKeys ?? [];
-        const loaded = await entity.InnerLoad(this.BuildEntityPrimaryKey(record.MatchedMJRecordID, pkFields));
+        const loaded = await entity.InnerLoad(this.buildEntityPrimaryKey(record.MatchedMJRecordID, pkFields));
         if (!loaded) {
             // Matched-ID row vanished — fall back to upsert by PK (insert; or update/skip if PK exists)
-            const outcome = await this.CreateRecord(record, companyIntegration, entityMap, contextUser, recordMaps, logger, precheckHashes);
+            const outcome = await this.createRecord(record, companyIntegration, entityMap, contextUser, recordMaps, logger, precheckHashes);
             if (outcome === 'updated') result.RecordsUpdated++;
             else if (outcome === 'skipped') result.RecordsSkipped++;
             else result.RecordsCreated++;
@@ -5249,7 +5249,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // clobbering concurrent edits to untouched columns and fabricating a record-change row
         // each time. CreateRecord's upsert branch already orders it this way; this is the same
         // footprint-clean rule applied to the matched path.
-        this.SetEntityFields(entity, record.MappedFields);
+        this.setEntityFields(entity, record.MappedFields);
 
         // Skip unchanged records — if no business field values actually changed, don't write.
         // Uses MJ's built-in dirty tracking (zero custom comparison logic). Critical for
@@ -5261,7 +5261,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             // above for the full rationale (a key-field/PK match can land here with no map row, and
             // dropping the map silently breaks the 1:1 completeness invariant + orphan detection).
             // The entity is loaded here, so use its actual PK as the EntityRecordID. Idempotent upsert.
-            await this.QueueRecordMap(
+            await this.queueRecordMap(
                 recordMaps, companyIntegration.ID, record.ExternalRecord.ExternalID, entityMap.EntityID,
                 entity.PrimaryKey.KeyValuePairs.map(kv => String(kv.Value)).join('|'), contextUser,
             );
@@ -5272,7 +5272,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             return;
         }
 
-        this.SetStandardIntegrationFields(entity, record);
+        this.setStandardIntegrationFields(entity, record);
 
         // A5: Pre-write validation
         this.validateEntity(entity, record.MJEntityName);
@@ -5291,7 +5291,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // rows and orphan/delete detection silently degrades. SaveRecordMap is an upsert keyed on
         // (CompanyIntegration, Entity, ExternalID), so this is idempotent for already-mapped records.
         const entityRecordID = entity.PrimaryKey.KeyValuePairs.map(kv => String(kv.Value)).join('|');
-        await this.QueueRecordMap(
+        await this.queueRecordMap(
             recordMaps,
             companyIntegration.ID,
             record.ExternalRecord.ExternalID,
@@ -5311,7 +5311,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      *   - nothing in the batch is an Update with a matched ID, or
      *   - the read fails (best-effort — a logging/optimization read must never break a sync).
      */
-    private async PrefetchContentHashes(
+    private async prefetchContentHashes(
         batch: MappedRecord[],
         contextUser: UserInfo
     ): Promise<BatchPrecheck | undefined> {
@@ -5357,7 +5357,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             // skip, re-writing every unchanged record each sync. Dialect-aware (SS `[key]`, PG `"key"`)
             // so it stays valid on both targets (does NOT reintroduce the SS-brackets-break-PG problem).
             const dialect = (this.ProviderToUse as DatabaseProviderBase).Dialect;
-            const extraFilter = buildContentHashPrefetchFilter(pkNames, ids, dialect);
+            const extraFilter = BuildContentHashPrefetchFilter(pkNames, ids, dialect);
             const res = await rv.RunView<Record<string, string>>({
                 EntityName: entityName,
                 Fields: [...pkNames, CONTENT_HASH_COLUMN],
@@ -5418,7 +5418,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     /**
      * Deletes (or soft-deletes) an MJ record based on the entity map's DeleteBehavior.
      */
-    private async DeleteRecord(
+    private async deleteRecord(
         record: MappedRecord,
         entityMap: ICompanyIntegrationEntityMap,
         contextUser: UserInfo
@@ -5435,7 +5435,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         this.enrolInWriteGroup(entity);
         const entityInfo = md.EntityByName(record.MJEntityName);
         const pkFields = entityInfo?.PrimaryKeys ?? [];
-        const loaded = await entity.InnerLoad(this.BuildEntityPrimaryKey(record.MatchedMJRecordID, pkFields));
+        const loaded = await entity.InnerLoad(this.buildEntityPrimaryKey(record.MatchedMJRecordID, pkFields));
         if (!loaded) {
             console.log(`[IntegrationEngine] Skipping delete for ${record.MJEntityName} ${record.MatchedMJRecordID} — record not found in MJ DB (may have been deleted already)`);
             return false;
@@ -5475,7 +5475,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      * is expected to be a '|'-delimited string of values in PK-field sequence order —
      * the same format written by BaseRESTIntegrationConnector.ToExternalRecord.
      */
-    private BuildEntityPrimaryKey(
+    private buildEntityPrimaryKey(
         recordID: string,
         pkFields: Array<{ Name: string }>
     ): CompositeKey {
@@ -5501,8 +5501,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      * primary-key column(s), in PK-field order — the shape CompanyIntegrationRecordMap.EntityRecordID
      * and a normalized RecordChange.RecordID carry. A single-column key is just its value.
      */
-    private ComposeEntityRecordID(row: Record<string, unknown>, pkFields: Array<{ Name: string }>): string {
-        return pkFields.map(pk => serializeKeyValue(row[pk.Name])).join('|');
+    private composeEntityRecordID(row: Record<string, unknown>, pkFields: Array<{ Name: string }>): string {
+        return pkFields.map(pk => SerializeKeyValue(row[pk.Name])).join('|');
     }
 
     /**
@@ -5513,7 +5513,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      * record while the run reports those records as written. Checking it here costs one metadata
      * read and happens before the first fetch, so the warning arrives before the wasted work.
      */
-    private WarnOnUnbindableFieldMaps(
+    private warnOnUnbindableFieldMaps(
         entityMap: ICompanyIntegrationEntityMap,
         fieldMaps: ICompanyIntegrationFieldMap[],
         logger?: SyncLogger,
@@ -5541,7 +5541,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     /**
      * Sets fields on a BaseEntity instance from a field value map.
      */
-    private SetEntityFields(
+    private setEntityFields(
         entity: {
             Set(fieldName: string, value: unknown): void;
             Fields?: Array<{ Name: string; EntityFieldInfo?: { Type?: string; AllowsNull?: boolean; MaxLength?: number }; Type?: string }>;
@@ -5731,7 +5731,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         if (record && has(CONTENT_HASH_COLUMN)) {
             const storedHash = entity.Get(CONTENT_HASH_COLUMN);
             if (typeof storedHash === 'string' && storedHash.length > 0
-                && storedHash !== computeContentHash(record.MappedFields ?? {})) {
+                && storedHash !== ComputeContentHash(record.MappedFields ?? {})) {
                 return true;
             }
         }
@@ -5742,7 +5742,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      * Sets standard integration columns (__mj_integration_*) on target entities.
      * Silently skips if the entity doesn't have these columns (e.g., __mj targets).
      */
-    private SetStandardIntegrationFields(
+    private setStandardIntegrationFields(
         entity: { Set(fieldName: string, value: unknown): void; Fields?: Array<{ Name: string }> },
         record: MappedRecord
     ): void {
@@ -5776,7 +5776,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // stored hash predates this basis (overflow folded in) mismatch ONCE, rewrite, and
         // converge on the new basis.
         if (hasField(CONTENT_HASH_COLUMN)) {
-            entity.Set(CONTENT_HASH_COLUMN, computeContentHash(record.MappedFields ?? {}));
+            entity.Set(CONTENT_HASH_COLUMN, ComputeContentHash(record.MappedFields ?? {}));
         }
         // Custom-overflow capture (gaps.md §2): park any source keys with no field map as JSON,
         // in THIS same row write (no extra round-trip → a customs-free sync stays byte-identical).
@@ -5789,7 +5789,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // null when there are no extras, clearing a prior overflow; it stays byte-identical for a
         // customs-free row (Set(null) on an already-null column is a no-op under dirty tracking).
         if (hasField(CUSTOM_OVERFLOW_COLUMN)) {
-            entity.Set(CUSTOM_OVERFLOW_COLUMN, reconcileOverflowValue(record.UnmappedFields));
+            entity.Set(CUSTOM_OVERFLOW_COLUMN, ReconcileOverflowValue(record.UnmappedFields));
         }
 
         // ── Per-record sync ledger (plan §2.5) ───────────────────────────────────────
@@ -5853,7 +5853,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      *     truncation this helper exists to prevent, and the orphan sweep would archive live
      *     records on the strength of it. Keyset seeks on the last ID seen and cannot shift.
      */
-    private async LoadAllRecordMaps(
+    private async loadAllRecordMaps(
         companyIntegrationID: string,
         entityID: string,
         contextUser: UserInfo
@@ -5912,7 +5912,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      * decides not to change. The `recordMaps` parameter is optional so that callers outside the
      * batched apply pass (and every existing test) keep the original immediate-write behaviour.
      */
-    private async QueueRecordMap(
+    private async queueRecordMap(
         recordMaps: RecordMapBatch | undefined,
         companyIntegrationID: string,
         externalID: string,
@@ -5927,13 +5927,13 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             recordMaps.Queue({ EntityID: entityID, ExternalID: externalID, EntityRecordID: entityRecordID });
             return;
         }
-        await this.SaveRecordMap(companyIntegrationID, externalID, entityID, entityRecordID, contextUser);
+        await this.saveRecordMap(companyIntegrationID, externalID, entityID, entityRecordID, contextUser);
     }
 
     /**
      * Creates or updates a CompanyIntegrationRecordMap entry to track the external↔MJ mapping.
      */
-    private async SaveRecordMap(
+    private async saveRecordMap(
         companyIntegrationID: string,
         externalID: string,
         entityID: string,
@@ -5954,7 +5954,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // so a value the batch would have found here must be found here too, or the fallback
         // re-creates the very duplicate the upsert exists to prevent.
         const quotedExternalID = md instanceof DatabaseProviderBase
-            ? quoteTextLiteral(externalID, md.Dialect)
+            ? QuoteTextLiteral(externalID, md.Dialect)
             : `'${externalID.replace(/'/g, "''")}'`;
         const rv = new RunView();
         const existing = await rv.RunView<{ ID: string; EntityRecordID: string }>({
@@ -5993,7 +5993,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     /**
      * Creates a CompanyIntegrationRunDetail record for audit/reporting.
      */
-    private async CreateRunDetail(
+    private async createRunDetail(
         run: MJCompanyIntegrationRunEntity,
         entityMap: ICompanyIntegrationEntityMap,
         result: SyncResult,
@@ -6039,7 +6039,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     /**
      * Merges an entity-map-level result into the aggregate result.
      */
-    private MergeResult(aggregate: SyncResult, mapResult: SyncResult): void {
+    private mergeResult(aggregate: SyncResult, mapResult: SyncResult): void {
         aggregate.RecordsProcessed += mapResult.RecordsProcessed;
         aggregate.RecordsCreated += mapResult.RecordsCreated;
         aggregate.RecordsUpdated += mapResult.RecordsUpdated;
@@ -6113,7 +6113,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     /**
      * Finalizes a successful run with aggregate totals and emits a completion notification.
      */
-    private async FinalizeRun(
+    private async finalizeRun(
         run: MJCompanyIntegrationRunEntity,
         result: SyncResult,
         contextUser: UserInfo,
@@ -6247,7 +6247,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     /**
      * Marks a run as failed after an unrecoverable error and emits a failure notification.
      */
-    private async FailRun(
+    private async failRun(
         run: MJCompanyIntegrationRunEntity,
         err: unknown,
         _contextUser: UserInfo,

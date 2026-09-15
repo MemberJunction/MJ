@@ -2005,7 +2005,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                 const selfEvident: SearchResultItem[] = [];
                 const unverified: SearchResultItem[] = [];
                 for (const item of entityResults) {
-                    (SearchEngine.LanesWithSelfEvidentOwnership.has(item.SourceType) ? selfEvident : unverified)
+                    (SearchEngine.lanesWithSelfEvidentOwnership.has(item.SourceType) ? selfEvident : unverified)
                         .push(item);
                 }
                 permitted.push(...selfEvident);
@@ -2034,7 +2034,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
      * An allowlist rather than a denylist on purpose: a `SourceType` nobody anticipated is verified by
      * default instead of trusted by default.
      */
-    private static readonly LanesWithSelfEvidentOwnership: ReadonlySet<string> =
+    private static readonly lanesWithSelfEvidentOwnership: ReadonlySet<string> =
         new Set<SearchSource>(['entity', 'fulltext']);
 
     /**

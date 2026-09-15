@@ -60,19 +60,46 @@ export class LoadingComponent {
    * Text to display below the loading animation.
    * Set to empty string or use showText=false to hide text.
    */
-  @Input() text = 'Loading...';
+  @Input() Text = 'Loading...';
+
+  /** @deprecated Use {@link Text}. */
+  @Input() set text(value: LoadingComponent['Text']) {
+    this.Text = value;
+  }
+  /** @deprecated Use {@link Text}. */
+  get text(): LoadingComponent['Text'] {
+    return this.Text;
+  }
 
   /**
    * Whether to show the text below the logo.
    * When false, only the animated logo is shown.
    */
-  @Input() showText = true;
+  @Input() ShowText = true;
+
+  /** @deprecated Use {@link ShowText}. */
+  @Input() set showText(value: LoadingComponent['ShowText']) {
+    this.ShowText = value;
+  }
+  /** @deprecated Use {@link ShowText}. */
+  get showText(): LoadingComponent['ShowText'] {
+    return this.ShowText;
+  }
 
   /**
    * Animation duration in seconds.
    * Default is 1.5 seconds for the pulse animation.
    */
-  @Input() animationDuration = 1.5;
+  @Input() AnimationDuration = 1.5;
+
+  /** @deprecated Use {@link AnimationDuration}. */
+  @Input() set animationDuration(value: LoadingComponent['AnimationDuration']) {
+    this.AnimationDuration = value;
+  }
+  /** @deprecated Use {@link AnimationDuration}. */
+  get animationDuration(): LoadingComponent['AnimationDuration'] {
+    return this.AnimationDuration;
+  }
 
   /**
    * Size preset for quick sizing.
@@ -81,13 +108,31 @@ export class LoadingComponent {
    * - 'large': 120x67px logo
    * - 'auto': fills container
    */
-  @Input() size: 'small' | 'medium' | 'large' | 'auto' = 'auto';
+  @Input() Size: 'small' | 'medium' | 'large' | 'auto' = 'auto';
+
+  /** @deprecated Use {@link Size}. */
+  @Input() set size(value: 'small' | 'medium' | 'large' | 'auto') {
+    this.Size = value;
+  }
+  /** @deprecated Use {@link Size}. */
+  get size(): 'small' | 'medium' | 'large' | 'auto' {
+    return this.Size;
+  }
 
   /**
    * CSS color for the loading text.
    * Accepts any valid CSS color value.
    */
-  @Input() textColor = '';
+  @Input() TextColor = '';
+
+  /** @deprecated Use {@link TextColor}. */
+  @Input() set textColor(value: LoadingComponent['TextColor']) {
+    this.TextColor = value;
+  }
+  /** @deprecated Use {@link TextColor}. */
+  get textColor(): LoadingComponent['TextColor'] {
+    return this.TextColor;
+  }
 
   /**
    * CSS color for the logo (solid color).
@@ -95,14 +140,32 @@ export class LoadingComponent {
    * When empty, uses --mj-logo-color CSS variable (adapts to light/dark theme).
    * Ignored if logoGradient is provided.
    */
-  @Input() logoColor = '';
+  @Input() LogoColor = '';
+
+  /** @deprecated Use {@link LogoColor}. */
+  @Input() set logoColor(value: LoadingComponent['LogoColor']) {
+    this.LogoColor = value;
+  }
+  /** @deprecated Use {@link LogoColor}. */
+  get logoColor(): LoadingComponent['LogoColor'] {
+    return this.LogoColor;
+  }
 
   /**
    * Gradient configuration for the logo.
    * When provided, creates a linear gradient fill instead of solid color.
    * Takes precedence over logoColor.
    */
-  @Input() logoGradient: LogoGradient | null = null;
+  @Input() LogoGradient: LogoGradient | null = null;
+
+  /** @deprecated Use {@link LogoGradient}. */
+  @Input() set logoGradient(value: LogoGradient | null) {
+    this.LogoGradient = value;
+  }
+  /** @deprecated Use {@link LogoGradient}. */
+  get logoGradient(): LogoGradient | null {
+    return this.LogoGradient;
+  }
 
   /**
    * Animation type for the logo.
@@ -111,21 +174,30 @@ export class LoadingComponent {
    * - 'bounce': Bounce up and down
    * - 'pulse-spin': Pulse while slowly spinning
    */
-  @Input() animation: 'pulse' | 'spin' | 'bounce' | 'pulse-spin' = 'pulse';
+  @Input() Animation: 'pulse' | 'spin' | 'bounce' | 'pulse-spin' = 'pulse';
+
+  /** @deprecated Use {@link Animation}. */
+  @Input() set animation(value: 'pulse' | 'spin' | 'bounce' | 'pulse-spin') {
+    this.Animation = value;
+  }
+  /** @deprecated Use {@link Animation}. */
+  get animation(): 'pulse' | 'spin' | 'bounce' | 'pulse-spin' {
+    return this.Animation;
+  }
 
   /** Unique ID for the gradient definition to avoid conflicts */
   readonly gradientId = `mj-logo-gradient-${Math.random().toString(36).substring(2, 11)}`;
 
   get logoClass(): string {
-    return `mj-loading-logo size-${this.size} animation-${this.animation}`;
+    return `mj-loading-logo size-${this.Size} animation-${this.Animation}`;
   }
 
   get logoStyle(): string {
-    return `animation-duration: ${this.animationDuration}s`;
+    return `animation-duration: ${this.AnimationDuration}s`;
   }
 
   get textStyle(): string {
-    return this.textColor ? `color: ${this.textColor}` : '';
+    return this.TextColor ? `color: ${this.TextColor}` : '';
   }
 
   /**
@@ -134,10 +206,10 @@ export class LoadingComponent {
    * or null to let the CSS variable (--mj-logo-color) take effect.
    */
   get logoFill(): string | null {
-    if (this.logoGradient) {
+    if (this.LogoGradient) {
       return `url(#${this.gradientId})`;
     }
-    return this.logoColor || null;
+    return this.LogoColor || null;
   }
 
   /**
@@ -145,7 +217,7 @@ export class LoadingComponent {
    * Converts angle to x1, y1, x2, y2 coordinates for SVG linearGradient.
    */
   get gradientCoords(): { x1: string; y1: string; x2: string; y2: string } {
-    const angle = this.logoGradient?.angle ?? 45;
+    const angle = this.LogoGradient?.angle ?? 45;
     // Convert angle to radians and calculate coordinates
     // SVG gradientUnits="objectBoundingBox" uses 0-1 range
     const radians = (angle * Math.PI) / 180;

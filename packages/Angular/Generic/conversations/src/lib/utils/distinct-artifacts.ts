@@ -30,7 +30,7 @@ export interface DistinctArtifactKey {
  * the whole conversation to id → max version for a before/after diff. This one is per-message and
  * returns the objects themselves.
  */
-export function selectDistinctLatestArtifacts<T extends DistinctArtifactKey>(list: readonly T[]): T[] {
+export function SelectDistinctLatestArtifacts<T extends DistinctArtifactKey>(list: readonly T[]): T[] {
   const latestByArtifact = new Map<string, T>();
   for (const info of list) {
     const key = NormalizeUUID(info.artifactId);
@@ -40,4 +40,9 @@ export function selectDistinctLatestArtifacts<T extends DistinctArtifactKey>(lis
     }
   }
   return Array.from(latestByArtifact.values());
+}
+
+/** @deprecated Use {@link SelectDistinctLatestArtifacts}. */
+export function selectDistinctLatestArtifacts<T extends DistinctArtifactKey>(list: readonly T[]): T[] {
+  return SelectDistinctLatestArtifacts(list);
 }

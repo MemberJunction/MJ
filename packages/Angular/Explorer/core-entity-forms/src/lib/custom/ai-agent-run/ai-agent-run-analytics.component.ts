@@ -150,7 +150,7 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
   }
   
   // Chart expansion states
-  expandedCharts: { [key: string]: boolean } = {
+  ExpandedCharts: { [key: string]: boolean } = {
     modelDistribution: false,
     executionTime: false,
     costByVendor: false,
@@ -162,60 +162,321 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
     actionSuccess: false,
     stepType: false
   };
+
+  /** @deprecated Use {@link ExpandedCharts}. */
+  get expandedCharts(): { [key: string]: boolean } {
+    return this.ExpandedCharts;
+  }
+  /** @deprecated Use {@link ExpandedCharts}. */
+  set expandedCharts(value: { [key: string]: boolean }) {
+    this.ExpandedCharts = value;
+  }
   
-  viewMode: 'grid' | 'expanded' = 'grid';
+  ViewMode: 'grid' | 'expanded' = 'grid';
+
+  /** @deprecated Use {@link ViewMode}. */
+  get viewMode(): 'grid' | 'expanded' {
+    return this.ViewMode;
+  }
+  /** @deprecated Use {@link ViewMode}. */
+  set viewMode(value: 'grid' | 'expanded') {
+    this.ViewMode = value;
+  }
   
   // Loading state
   isLoading = true;
   error: string | null = null;
   
   // Data
-  agentRun: SimpleAgentRun | null = null;
-  allPromptRuns: MJAIPromptRunEntity[] = [];
+  AgentRun: SimpleAgentRun | null = null;
+
+  /** @deprecated Use {@link AgentRun}. */
+  get agentRun(): SimpleAgentRun | null {
+    return this.AgentRun;
+  }
+  /** @deprecated Use {@link AgentRun}. */
+  set agentRun(value: SimpleAgentRun | null) {
+    this.AgentRun = value;
+  }
+  AllPromptRuns: MJAIPromptRunEntity[] = [];
+
+  /** @deprecated Use {@link AllPromptRuns}. */
+  get allPromptRuns(): MJAIPromptRunEntity[] {
+    return this.AllPromptRuns;
+  }
+  /** @deprecated Use {@link AllPromptRuns}. */
+  set allPromptRuns(value: MJAIPromptRunEntity[]) {
+    this.AllPromptRuns = value;
+  }
 
   // Per model+vendor cache pricing (currency-per-token), loaded from AIModelCost for the cost split.
   private cacheRates = new Map<string, { inputRate: number; outputRate: number; cacheReadRate: number; cacheWriteRate: number }>();
-  allActionLogs: SimpleActionLog[] = [];
-  allSteps: SimpleAgentRunStep[] = [];
-  subAgentRuns: SimpleAgentRun[] = [];
+  AllActionLogs: SimpleActionLog[] = [];
+
+  /** @deprecated Use {@link AllActionLogs}. */
+  get allActionLogs(): SimpleActionLog[] {
+    return this.AllActionLogs;
+  }
+  /** @deprecated Use {@link AllActionLogs}. */
+  set allActionLogs(value: SimpleActionLog[]) {
+    this.AllActionLogs = value;
+  }
+  AllSteps: SimpleAgentRunStep[] = [];
+
+  /** @deprecated Use {@link AllSteps}. */
+  get allSteps(): SimpleAgentRunStep[] {
+    return this.AllSteps;
+  }
+  /** @deprecated Use {@link AllSteps}. */
+  set allSteps(value: SimpleAgentRunStep[]) {
+    this.AllSteps = value;
+  }
+  SubAgentRuns: SimpleAgentRun[] = [];
+
+  /** @deprecated Use {@link SubAgentRuns}. */
+  get subAgentRuns(): SimpleAgentRun[] {
+    return this.SubAgentRuns;
+  }
+  /** @deprecated Use {@link SubAgentRuns}. */
+  set subAgentRuns(value: SimpleAgentRun[]) {
+    this.SubAgentRuns = value;
+  }
   
   // Metrics
-  promptMetrics: PromptMetrics = this.initializePromptMetrics();
-  actionMetrics: ActionMetrics = this.initializeActionMetrics();
-  timelineMetrics: TimelineMetrics = this.initializeTimelineMetrics();
+  PromptMetrics: PromptMetrics = this.initializePromptMetrics();
+
+  /** @deprecated Use {@link PromptMetrics}. */
+  get promptMetrics(): PromptMetrics {
+    return this.PromptMetrics;
+  }
+  /** @deprecated Use {@link PromptMetrics}. */
+  set promptMetrics(value: PromptMetrics) {
+    this.PromptMetrics = value;
+  }
+  ActionMetrics: ActionMetrics = this.initializeActionMetrics();
+
+  /** @deprecated Use {@link ActionMetrics}. */
+  get actionMetrics(): ActionMetrics {
+    return this.ActionMetrics;
+  }
+  /** @deprecated Use {@link ActionMetrics}. */
+  set actionMetrics(value: ActionMetrics) {
+    this.ActionMetrics = value;
+  }
+  TimelineMetrics: TimelineMetrics = this.initializeTimelineMetrics();
+
+  /** @deprecated Use {@link TimelineMetrics}. */
+  get timelineMetrics(): TimelineMetrics {
+    return this.TimelineMetrics;
+  }
+  /** @deprecated Use {@link TimelineMetrics}. */
+  set timelineMetrics(value: TimelineMetrics) {
+    this.TimelineMetrics = value;
+  }
   
   // Chart configurations
-  modelDistributionChartData: any;
-  executionTimeChartData: any;
-  costByVendorChartData: any;
-  tokenUsageChartData: any;
-  actionSuccessRateChartData: any;
-  stepTypeDistributionChartData: any;
+  ModelDistributionChartData: any;
+
+  /** @deprecated Use {@link ModelDistributionChartData}. */
+  get modelDistributionChartData(): any {
+    return this.ModelDistributionChartData;
+  }
+  /** @deprecated Use {@link ModelDistributionChartData}. */
+  set modelDistributionChartData(value: any) {
+    this.ModelDistributionChartData = value;
+  }
+  ExecutionTimeChartData: any;
+
+  /** @deprecated Use {@link ExecutionTimeChartData}. */
+  get executionTimeChartData(): any {
+    return this.ExecutionTimeChartData;
+  }
+  /** @deprecated Use {@link ExecutionTimeChartData}. */
+  set executionTimeChartData(value: any) {
+    this.ExecutionTimeChartData = value;
+  }
+  CostByVendorChartData: any;
+
+  /** @deprecated Use {@link CostByVendorChartData}. */
+  get costByVendorChartData(): any {
+    return this.CostByVendorChartData;
+  }
+  /** @deprecated Use {@link CostByVendorChartData}. */
+  set costByVendorChartData(value: any) {
+    this.CostByVendorChartData = value;
+  }
+  TokenUsageChartData: any;
+
+  /** @deprecated Use {@link TokenUsageChartData}. */
+  get tokenUsageChartData(): any {
+    return this.TokenUsageChartData;
+  }
+  /** @deprecated Use {@link TokenUsageChartData}. */
+  set tokenUsageChartData(value: any) {
+    this.TokenUsageChartData = value;
+  }
+  ActionSuccessRateChartData: any;
+
+  /** @deprecated Use {@link ActionSuccessRateChartData}. */
+  get actionSuccessRateChartData(): any {
+    return this.ActionSuccessRateChartData;
+  }
+  /** @deprecated Use {@link ActionSuccessRateChartData}. */
+  set actionSuccessRateChartData(value: any) {
+    this.ActionSuccessRateChartData = value;
+  }
+  StepTypeDistributionChartData: any;
+
+  /** @deprecated Use {@link StepTypeDistributionChartData}. */
+  get stepTypeDistributionChartData(): any {
+    return this.StepTypeDistributionChartData;
+  }
+  /** @deprecated Use {@link StepTypeDistributionChartData}. */
+  set stepTypeDistributionChartData(value: any) {
+    this.StepTypeDistributionChartData = value;
+  }
   
   // Expanded sections
-  promptDetailsExpanded = false;
-  actionDetailsExpanded = false;
+  PromptDetailsExpanded = false;
+
+  /** @deprecated Use {@link PromptDetailsExpanded}. */
+  get promptDetailsExpanded() {
+    return this.PromptDetailsExpanded;
+  }
+  /** @deprecated Use {@link PromptDetailsExpanded}. */
+  set promptDetailsExpanded(value) {
+    this.PromptDetailsExpanded = value;
+  }
+  ActionDetailsExpanded = false;
+
+  /** @deprecated Use {@link ActionDetailsExpanded}. */
+  get actionDetailsExpanded() {
+    return this.ActionDetailsExpanded;
+  }
+  /** @deprecated Use {@link ActionDetailsExpanded}. */
+  set actionDetailsExpanded(value) {
+    this.ActionDetailsExpanded = value;
+  }
   
   // Expansion panel states
-  panelStates = {
+  PanelStates = {
     summary: true,
     prompts: true,
     actions: true,
     models: true,
     timeline: true
   };
+
+  /** @deprecated Use {@link PanelStates}. */
+  get panelStates() {
+    return this.PanelStates;
+  }
+  /** @deprecated Use {@link PanelStates}. */
+  set panelStates(value) {
+    this.PanelStates = value;
+  }
   
   // Chart element references
-  @ViewChild('modelDistributionChart', { static: false }) modelDistributionChart!: ElementRef;
-  @ViewChild('executionTimeChart', { static: false }) executionTimeChart!: ElementRef;
-  @ViewChild('costByVendorChart', { static: false }) costByVendorChart!: ElementRef;
-  @ViewChild('tokenUsageChart', { static: false }) tokenUsageChart!: ElementRef;
-  @ViewChild('actionSuccessRateChart', { static: false }) actionSuccessRateChart!: ElementRef;
-  @ViewChild('stepTypeChart', { static: false }) stepTypeChart!: ElementRef;
-  @ViewChild('promptTimeDistributionChart', { static: false }) promptTimeDistributionChart!: ElementRef;
-  @ViewChild('promptTokenDistributionChart', { static: false }) promptTokenDistributionChart!: ElementRef;
-  @ViewChild('promptCostDistributionChart', { static: false }) promptCostDistributionChart!: ElementRef;
-  @ViewChild('promptCountByNameChart', { static: false }) promptCountByNameChart!: ElementRef;
+  @ViewChild('modelDistributionChart', { static: false }) ModelDistributionChart!: ElementRef;
+
+  /** @deprecated Use {@link ModelDistributionChart}. */
+  get modelDistributionChart(): ElementRef {
+    return this.ModelDistributionChart;
+  }
+  /** @deprecated Use {@link ModelDistributionChart}. */
+  set modelDistributionChart(value: ElementRef) {
+    this.ModelDistributionChart = value;
+  }
+  @ViewChild('executionTimeChart', { static: false }) ExecutionTimeChart!: ElementRef;
+
+  /** @deprecated Use {@link ExecutionTimeChart}. */
+  get executionTimeChart(): ElementRef {
+    return this.ExecutionTimeChart;
+  }
+  /** @deprecated Use {@link ExecutionTimeChart}. */
+  set executionTimeChart(value: ElementRef) {
+    this.ExecutionTimeChart = value;
+  }
+  @ViewChild('costByVendorChart', { static: false }) CostByVendorChart!: ElementRef;
+
+  /** @deprecated Use {@link CostByVendorChart}. */
+  get costByVendorChart(): ElementRef {
+    return this.CostByVendorChart;
+  }
+  /** @deprecated Use {@link CostByVendorChart}. */
+  set costByVendorChart(value: ElementRef) {
+    this.CostByVendorChart = value;
+  }
+  @ViewChild('tokenUsageChart', { static: false }) TokenUsageChart!: ElementRef;
+
+  /** @deprecated Use {@link TokenUsageChart}. */
+  get tokenUsageChart(): ElementRef {
+    return this.TokenUsageChart;
+  }
+  /** @deprecated Use {@link TokenUsageChart}. */
+  set tokenUsageChart(value: ElementRef) {
+    this.TokenUsageChart = value;
+  }
+  @ViewChild('actionSuccessRateChart', { static: false }) ActionSuccessRateChart!: ElementRef;
+
+  /** @deprecated Use {@link ActionSuccessRateChart}. */
+  get actionSuccessRateChart(): ElementRef {
+    return this.ActionSuccessRateChart;
+  }
+  /** @deprecated Use {@link ActionSuccessRateChart}. */
+  set actionSuccessRateChart(value: ElementRef) {
+    this.ActionSuccessRateChart = value;
+  }
+  @ViewChild('stepTypeChart', { static: false }) StepTypeChart!: ElementRef;
+
+  /** @deprecated Use {@link StepTypeChart}. */
+  get stepTypeChart(): ElementRef {
+    return this.StepTypeChart;
+  }
+  /** @deprecated Use {@link StepTypeChart}. */
+  set stepTypeChart(value: ElementRef) {
+    this.StepTypeChart = value;
+  }
+  @ViewChild('promptTimeDistributionChart', { static: false }) PromptTimeDistributionChart!: ElementRef;
+
+  /** @deprecated Use {@link PromptTimeDistributionChart}. */
+  get promptTimeDistributionChart(): ElementRef {
+    return this.PromptTimeDistributionChart;
+  }
+  /** @deprecated Use {@link PromptTimeDistributionChart}. */
+  set promptTimeDistributionChart(value: ElementRef) {
+    this.PromptTimeDistributionChart = value;
+  }
+  @ViewChild('promptTokenDistributionChart', { static: false }) PromptTokenDistributionChart!: ElementRef;
+
+  /** @deprecated Use {@link PromptTokenDistributionChart}. */
+  get promptTokenDistributionChart(): ElementRef {
+    return this.PromptTokenDistributionChart;
+  }
+  /** @deprecated Use {@link PromptTokenDistributionChart}. */
+  set promptTokenDistributionChart(value: ElementRef) {
+    this.PromptTokenDistributionChart = value;
+  }
+  @ViewChild('promptCostDistributionChart', { static: false }) PromptCostDistributionChart!: ElementRef;
+
+  /** @deprecated Use {@link PromptCostDistributionChart}. */
+  get promptCostDistributionChart(): ElementRef {
+    return this.PromptCostDistributionChart;
+  }
+  /** @deprecated Use {@link PromptCostDistributionChart}. */
+  set promptCostDistributionChart(value: ElementRef) {
+    this.PromptCostDistributionChart = value;
+  }
+  @ViewChild('promptCountByNameChart', { static: false }) PromptCountByNameChart!: ElementRef;
+
+  /** @deprecated Use {@link PromptCountByNameChart}. */
+  get promptCountByNameChart(): ElementRef {
+    return this.PromptCountByNameChart;
+  }
+  /** @deprecated Use {@link PromptCountByNameChart}. */
+  set promptCountByNameChart(value: ElementRef) {
+    this.PromptCountByNameChart = value;
+  }
   
   constructor(
     private cdr: ChangeDetectorRef,
@@ -249,16 +510,16 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
   private cleanupAllCharts() {
     // List of all chart element refs
     const chartRefs = [
-      this.modelDistributionChart,
-      this.executionTimeChart,
-      this.costByVendorChart,
-      this.tokenUsageChart,
-      this.actionSuccessRateChart,
-      this.stepTypeChart,
-      this.promptTimeDistributionChart,
-      this.promptTokenDistributionChart,
-      this.promptCostDistributionChart,
-      this.promptCountByNameChart
+      this.ModelDistributionChart,
+      this.ExecutionTimeChart,
+      this.CostByVendorChart,
+      this.TokenUsageChart,
+      this.ActionSuccessRateChart,
+      this.StepTypeChart,
+      this.PromptTimeDistributionChart,
+      this.PromptTokenDistributionChart,
+      this.PromptCostDistributionChart,
+      this.PromptCountByNameChart
     ];
     
     // More comprehensive D3 cleanup
@@ -383,15 +644,15 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
     // Process results
     
     if (results[0].Success && results[0].Results && results[0].Results.length > 0) {
-      this.agentRun = results[0].Results[0];
+      this.AgentRun = results[0].Results[0];
     }
     
     if (results[1].Success) {
-      this.subAgentRuns = results[1].Results || [];
+      this.SubAgentRuns = results[1].Results || [];
     }
     
     // Load all prompt runs for the agent run hierarchy
-    this.allPromptRuns = await this.loadAllPromptRuns(agentRunIds);
+    this.AllPromptRuns = await this.loadAllPromptRuns(agentRunIds);
 
     // Load cache pricing so cost can be split (input/output) and cache savings computed
     await this.loadCacheRates();
@@ -411,14 +672,14 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
           });
           
           if (actionResult.Success) {
-            this.allActionLogs = actionResult.Results || [];
+            this.AllActionLogs = actionResult.Results || [];
           }
         }
       }
     }
     
     if (results[3].Success) {
-      this.allSteps = results[3].Results || [];
+      this.AllSteps = results[3].Results || [];
     }
   }
   
@@ -521,7 +782,7 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
   private calculatePromptMetrics() {
     const metrics = this.initializePromptMetrics();
     
-    for (const promptRun of this.allPromptRuns) {
+    for (const promptRun of this.AllPromptRuns) {
       metrics.totalCount++;
       
       // Calculate execution time
@@ -606,13 +867,13 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
       metrics.averageExecutionTime = metrics.totalExecutionTime / metrics.totalCount;
     }
     
-    this.promptMetrics = metrics;
+    this.PromptMetrics = metrics;
   }
   
   private calculateActionMetrics() {
     const metrics = this.initializeActionMetrics();
     
-    for (const actionLog of this.allActionLogs) {
+    for (const actionLog of this.AllActionLogs) {
       metrics.totalCount++;
       
       // Calculate execution time
@@ -666,16 +927,16 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
       metrics.averageExecutionTime = metrics.totalExecutionTime / metrics.totalCount;
     }
     
-    this.actionMetrics = metrics;
+    this.ActionMetrics = metrics;
   }
   
   private calculateTimelineMetrics() {
     const metrics = this.initializeTimelineMetrics();
     
-    metrics.totalSteps = this.allSteps.length;
+    metrics.totalSteps = this.AllSteps.length;
     
     // Count steps by type
-    for (const step of this.allSteps) {
+    for (const step of this.AllSteps) {
       const type = step.StepType || 'Unknown';
       const count = metrics.stepsByType.get(type) || 0;
       metrics.stepsByType.set(type, count + 1);
@@ -684,7 +945,7 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
     // TODO: Calculate parallel executions, deepest nesting, and critical path
     // This would require more complex analysis of the step relationships
     
-    this.timelineMetrics = metrics;
+    this.TimelineMetrics = metrics;
   }
   
   private calculateExecutionTime(start: Date | null, end: Date | null): number {
@@ -694,20 +955,20 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
   
   private prepareChartData() {
     // Model distribution pie chart
-    this.modelDistributionChartData = {
-      labels: Array.from(this.promptMetrics.byModel.keys()),
+    this.ModelDistributionChartData = {
+      labels: Array.from(this.PromptMetrics.byModel.keys()),
       datasets: [{
-        data: Array.from(this.promptMetrics.byModel.values()).map(m => m.count),
-        backgroundColor: this.generateColors(this.promptMetrics.byModel.size)
+        data: Array.from(this.PromptMetrics.byModel.values()).map(m => m.count),
+        backgroundColor: this.generateColors(this.PromptMetrics.byModel.size)
       }]
     };
     
     // Execution time by vendor bar chart
-    this.executionTimeChartData = {
-      labels: Array.from(this.promptMetrics.byVendor.keys()),
+    this.ExecutionTimeChartData = {
+      labels: Array.from(this.PromptMetrics.byVendor.keys()),
       datasets: [{
         label: 'Average Execution Time (ms)',
-        data: Array.from(this.promptMetrics.byVendor.values()).map(v => v.avgTime),
+        data: Array.from(this.PromptMetrics.byVendor.values()).map(v => v.avgTime),
         backgroundColor: 'rgba(54, 162, 235, 0.5)',
         borderColor: 'rgba(54, 162, 235, 1)',
         borderWidth: 1
@@ -715,38 +976,38 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
     };
     
     // Cost by vendor doughnut chart
-    this.costByVendorChartData = {
-      labels: Array.from(this.promptMetrics.costBreakdown.byVendor.keys()),
+    this.CostByVendorChartData = {
+      labels: Array.from(this.PromptMetrics.costBreakdown.byVendor.keys()),
       datasets: [{
-        data: Array.from(this.promptMetrics.costBreakdown.byVendor.values()),
-        backgroundColor: this.generateColors(this.promptMetrics.costBreakdown.byVendor.size)
+        data: Array.from(this.PromptMetrics.costBreakdown.byVendor.values()),
+        backgroundColor: this.generateColors(this.PromptMetrics.costBreakdown.byVendor.size)
       }]
     };
     
     // Token usage stacked bar chart
-    const tokenModels = Array.from(this.promptMetrics.tokenUsage.byModel.keys());
-    this.tokenUsageChartData = {
+    const tokenModels = Array.from(this.PromptMetrics.tokenUsage.byModel.keys());
+    this.TokenUsageChartData = {
       labels: tokenModels,
       datasets: [
         {
           label: 'Input Tokens',
-          data: tokenModels.map(m => this.promptMetrics.tokenUsage.byModel.get(m)?.input || 0),
+          data: tokenModels.map(m => this.PromptMetrics.tokenUsage.byModel.get(m)?.input || 0),
           backgroundColor: 'rgba(255, 99, 132, 0.5)'
         },
         {
           label: 'Output Tokens',
-          data: tokenModels.map(m => this.promptMetrics.tokenUsage.byModel.get(m)?.output || 0),
+          data: tokenModels.map(m => this.PromptMetrics.tokenUsage.byModel.get(m)?.output || 0),
           backgroundColor: 'rgba(75, 192, 192, 0.5)'
         }
       ]
     };
     
     // Action success rate bar chart
-    this.actionSuccessRateChartData = {
-      labels: Array.from(this.actionMetrics.byAction.keys()),
+    this.ActionSuccessRateChartData = {
+      labels: Array.from(this.ActionMetrics.byAction.keys()),
       datasets: [{
         label: 'Success Rate (%)',
-        data: Array.from(this.actionMetrics.byAction.values()).map(a => a.successRate * 100),
+        data: Array.from(this.ActionMetrics.byAction.values()).map(a => a.successRate * 100),
         backgroundColor: 'rgba(75, 192, 192, 0.5)',
         borderColor: 'rgba(75, 192, 192, 1)',
         borderWidth: 1
@@ -754,11 +1015,11 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
     };
     
     // Step type distribution pie chart
-    this.stepTypeDistributionChartData = {
-      labels: Array.from(this.timelineMetrics.stepsByType.keys()),
+    this.StepTypeDistributionChartData = {
+      labels: Array.from(this.TimelineMetrics.stepsByType.keys()),
       datasets: [{
-        data: Array.from(this.timelineMetrics.stepsByType.values()),
-        backgroundColor: this.generateColors(this.timelineMetrics.stepsByType.size)
+        data: Array.from(this.TimelineMetrics.stepsByType.values()),
+        backgroundColor: this.generateColors(this.TimelineMetrics.stepsByType.size)
       }]
     };
   }
@@ -792,44 +1053,84 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
     return `${Math.floor(ms / 3600000)}h ${Math.floor((ms % 3600000) / 60000)}m`;
   }
   
-  formatCost(cost: number): string {
+  FormatCost(cost: number): string {
     if (cost < 0.01) return `$${cost.toFixed(4)}`;
     if (cost < 1) return `$${cost.toFixed(3)}`;
     return `$${cost.toFixed(2)}`;
   }
 
+  /** @deprecated Use {@link FormatCost}. */
+  formatCost(cost: number): string {
+    return this.FormatCost(cost);
+  }
+
   /** Total tokens the models processed across this run, including cached input (true throughput). */
-  get totalTokensProcessed(): number {
-    const u = this.promptMetrics.tokenUsage;
+  get TotalTokensProcessed(): number {
+    const u = this.PromptMetrics.tokenUsage;
     return u.totalInput + u.totalOutput + u.totalCacheRead + u.totalCacheWrite;
   }
 
+  /** @deprecated Use {@link TotalTokensProcessed}. */
+  get totalTokensProcessed(): number {
+    return this.TotalTokensProcessed;
+  }
+
   /** Rate-derived input-side dollars (uncached + cache read + cache write). */
-  get inputCost(): number { return this.promptMetrics.costBreakdown.inputCost; }
+  get InputCost(): number { return this.PromptMetrics.costBreakdown.inputCost; }
+
+  /** @deprecated Use {@link InputCost}. */
+  get inputCost(): number {
+    return this.InputCost;
+  }
   /** Rate-derived output dollars. */
-  get outputCost(): number { return this.promptMetrics.costBreakdown.outputCost; }
+  get OutputCost(): number { return this.PromptMetrics.costBreakdown.outputCost; }
+
+  /** @deprecated Use {@link OutputCost}. */
+  get outputCost(): number {
+    return this.OutputCost;
+  }
   /** Net dollars saved by caching vs. pricing all input at the full input rate. */
-  get cacheSavings(): number { return this.promptMetrics.costBreakdown.savings; }
+  get CacheSavings(): number { return this.PromptMetrics.costBreakdown.savings; }
+
+  /** @deprecated Use {@link CacheSavings}. */
+  get cacheSavings(): number {
+    return this.CacheSavings;
+  }
   /** Savings as a % of what the run would have cost with no caching. */
-  get cacheSavingsPct(): number {
-    const cb = this.promptMetrics.costBreakdown;
+  get CacheSavingsPct(): number {
+    const cb = this.PromptMetrics.costBreakdown;
     const fullPrice = cb.totalCost + cb.savings;
     return fullPrice > 0 ? (cb.savings / fullPrice) * 100 : 0;
   }
 
+  /** @deprecated Use {@link CacheSavingsPct}. */
+  get cacheSavingsPct(): number {
+    return this.CacheSavingsPct;
+  }
+
   /** Percentage of input tokens served from the provider's prompt cache across this agent run. */
-  get cacheHitRatePct(): number {
-    const u = this.promptMetrics.tokenUsage;
+  get CacheHitRatePct(): number {
+    const u = this.PromptMetrics.tokenUsage;
     const totalInput = u.totalInput + u.totalCacheRead + u.totalCacheWrite;
     return totalInput > 0 ? (u.totalCacheRead / totalInput) * 100 : 0;
   }
+
+  /** @deprecated Use {@link CacheHitRatePct}. */
+  get cacheHitRatePct(): number {
+    return this.CacheHitRatePct;
+  }
   
-  refresh() {
+  Refresh() {
     this.loadData();
+  }
+
+  /** @deprecated Use {@link Refresh}. */
+  refresh() {
+    return this.Refresh();
   }
   
   private renderCharts() {
-    if (!this.modelDistributionChart) return; // Charts not ready yet
+    if (!this.ModelDistributionChart) return; // Charts not ready yet
     
     this.renderModelDistributionChart();
     this.renderExecutionTimeChart();
@@ -846,8 +1147,8 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
   }
   
   private renderModelDistributionChart() {
-    const element = this.modelDistributionChart.nativeElement;
-    const data = Array.from(this.promptMetrics.byModel.entries()).map(([name, metrics]) => ({
+    const element = this.ModelDistributionChart.nativeElement;
+    const data = Array.from(this.PromptMetrics.byModel.entries()).map(([name, metrics]) => ({
       name,
       value: metrics.count
     }));
@@ -857,7 +1158,7 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
     // Clear previous chart
     d3.select(element).selectAll('*').remove();
     
-    const isExpanded = this.expandedCharts['modelDistribution'];
+    const isExpanded = this.ExpandedCharts['modelDistribution'];
     const width = isExpanded ? 500 : 300;
     const height = isExpanded ? 400 : 220;
     const radius = Math.min(width, height) / 2 - 40;
@@ -909,8 +1210,8 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
   }
   
   private renderExecutionTimeChart() {
-    const element = this.executionTimeChart.nativeElement;
-    const data = Array.from(this.promptMetrics.byVendor.entries()).map(([name, metrics]) => ({
+    const element = this.ExecutionTimeChart.nativeElement;
+    const data = Array.from(this.PromptMetrics.byVendor.entries()).map(([name, metrics]) => ({
       name,
       value: metrics.avgTime
     }));
@@ -920,7 +1221,7 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
     // Clear previous chart
     d3.select(element).selectAll('*').remove();
     
-    const isExpanded = this.expandedCharts['executionTime'];
+    const isExpanded = this.ExpandedCharts['executionTime'];
     const margin = { top: 40, right: 20, bottom: 70, left: 60 };
     const width = (isExpanded ? 600 : 320) - margin.left - margin.right;
     const height = (isExpanded ? 350 : 200) - margin.top - margin.bottom;
@@ -975,8 +1276,8 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
   }
   
   private renderCostByVendorChart() {
-    const element = this.costByVendorChart.nativeElement;
-    const data = Array.from(this.promptMetrics.costBreakdown.byVendor.entries()).map(([name, cost]) => ({
+    const element = this.CostByVendorChart.nativeElement;
+    const data = Array.from(this.PromptMetrics.costBreakdown.byVendor.entries()).map(([name, cost]) => ({
       name,
       value: cost
     }));
@@ -1029,17 +1330,17 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
   }
   
   private renderTokenUsageChart() {
-    const element = this.tokenUsageChart.nativeElement;
-    const models = Array.from(this.promptMetrics.tokenUsage.byModel.keys());
+    const element = this.TokenUsageChart.nativeElement;
+    const models = Array.from(this.PromptMetrics.tokenUsage.byModel.keys());
     const inputData = models.map(model => ({
       model,
       type: 'Input',
-      value: this.promptMetrics.tokenUsage.byModel.get(model)?.input || 0
+      value: this.PromptMetrics.tokenUsage.byModel.get(model)?.input || 0
     }));
     const outputData = models.map(model => ({
       model,
       type: 'Output',
-      value: this.promptMetrics.tokenUsage.byModel.get(model)?.output || 0
+      value: this.PromptMetrics.tokenUsage.byModel.get(model)?.output || 0
     }));
     const data = [...inputData, ...outputData];
     
@@ -1138,8 +1439,8 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
   }
   
   private renderActionSuccessRateChart() {
-    const element = this.actionSuccessRateChart.nativeElement;
-    const data = Array.from(this.actionMetrics.byAction.entries()).map(([name, metrics]) => ({
+    const element = this.ActionSuccessRateChart.nativeElement;
+    const data = Array.from(this.ActionMetrics.byAction.entries()).map(([name, metrics]) => ({
       name,
       value: metrics.successRate * 100
     }));
@@ -1203,8 +1504,8 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
   }
   
   private renderStepTypeChart() {
-    const element = this.stepTypeChart.nativeElement;
-    const data = Array.from(this.timelineMetrics.stepsByType.entries()).map(([name, value]) => ({
+    const element = this.StepTypeChart.nativeElement;
+    const data = Array.from(this.TimelineMetrics.stepsByType.entries()).map(([name, value]) => ({
       name,
       value
     }));
@@ -1267,52 +1568,72 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
       .text('Step Type Distribution');
   }
   
-  calculatePromptSuccessRate(promptName: string): string {
-    const successfulRuns = this.allPromptRuns.filter(run => 
+  CalculatePromptSuccessRate(promptName: string): string {
+    const successfulRuns = this.AllPromptRuns.filter(run => 
       run.Prompt === promptName && run.Success === true
     ).length;
-    const totalRuns = this.allPromptRuns.filter(run => 
+    const totalRuns = this.AllPromptRuns.filter(run => 
       run.Prompt === promptName
     ).length;
     
     if (totalRuns === 0) return '0';
     return ((successfulRuns / totalRuns) * 100).toFixed(1);
   }
+
+  /** @deprecated Use {@link CalculatePromptSuccessRate}. */
+  calculatePromptSuccessRate(promptName: string): string {
+    return this.CalculatePromptSuccessRate(promptName);
+  }
   
-  toggleChartExpansion(chartKey: string): void {
-    this.expandedCharts[chartKey] = !this.expandedCharts[chartKey];
+  ToggleChartExpansion(chartKey: string): void {
+    this.ExpandedCharts[chartKey] = !this.ExpandedCharts[chartKey];
     // Re-render the chart after expansion state changes
     this.setTrackedTimeout(() => {
       this.renderCharts();
     }, 100);
   }
+
+  /** @deprecated Use {@link ToggleChartExpansion}. */
+  toggleChartExpansion(chartKey: string): void {
+    return this.ToggleChartExpansion(chartKey);
+  }
   
-  toggleViewMode(): void {
-    if (this.viewMode === 'grid') {
-      this.viewMode = 'expanded';
+  ToggleViewMode(): void {
+    if (this.ViewMode === 'grid') {
+      this.ViewMode = 'expanded';
       // Expand all charts
-      Object.keys(this.expandedCharts).forEach(key => {
-        this.expandedCharts[key] = true;
+      Object.keys(this.ExpandedCharts).forEach(key => {
+        this.ExpandedCharts[key] = true;
       });
     } else {
-      this.viewMode = 'grid';
+      this.ViewMode = 'grid';
       // Collapse all charts
-      Object.keys(this.expandedCharts).forEach(key => {
-        this.expandedCharts[key] = false;
+      Object.keys(this.ExpandedCharts).forEach(key => {
+        this.ExpandedCharts[key] = false;
       });
     }
     this.setTrackedTimeout(() => {
       this.renderCharts();
     }, 100);
   }
+
+  /** @deprecated Use {@link ToggleViewMode}. */
+  toggleViewMode(): void {
+    return this.ToggleViewMode();
+  }
   
-  getActionType(actionName: string): string {
+  GetActionType(actionName: string): string {
     // Action type is not directly available on MJActionExecutionLogEntity
     return 'Action';
   }
+
+  /** @deprecated Use {@link GetActionType}. */
+  getActionType(actionName: string): string {
+    return this.GetActionType(actionName);
+  }
   
-  getTopErrors(): Array<{ message: string; count: number }> {
-    return Array.from(this.actionMetrics.errorAnalysis.entries())
+  GetTopErrors(): Array<{ message: string; count: number }> {
+    return Array.from(this.ActionMetrics.errorAnalysis.entries())
       .map(([message, count]) => {
         // Try to extract meaningful error message from potentially complex error strings
         let cleanMessage = message;
@@ -1330,11 +1651,16 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
       .sort((a, b) => b.count - a.count)
       .slice(0, 5); // Top 5 errors
   }
+
+  /** @deprecated Use {@link GetTopErrors}. */
+  getTopErrors(): Array<{ message: string; count: number }> {
+    return this.GetTopErrors();
+  }
   
-  getModelPerformanceData(): any[] {
+  GetModelPerformanceData(): any[] {
     const modelData: Map<string, any> = new Map();
     
-    for (const promptRun of this.allPromptRuns) {
+    for (const promptRun of this.AllPromptRuns) {
       const model = promptRun.Model || 'Unknown';
       const vendor = promptRun.Vendor || 'Unknown';
       const key = `${model}|${vendor}`;
@@ -1366,8 +1692,13 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
     
     return Array.from(modelData.values()).sort((a, b) => b.count - a.count);
   }
+
+  /** @deprecated Use {@link GetModelPerformanceData}. */
+  getModelPerformanceData(): any[] {
+    return this.GetModelPerformanceData();
+  }
   
-  getStepTypeIcon(stepType: string): string {
+  GetStepTypeIcon(stepType: string): string {
     const iconMap: Record<string, string> = {
       'Prompts': 'fa-microchip',
       'Actions': 'fa-cog',
@@ -1380,8 +1711,13 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
     };
     return iconMap[stepType] || 'fa-circle';
   }
+
+  /** @deprecated Use {@link GetStepTypeIcon}. */
+  getStepTypeIcon(stepType: string): string {
+    return this.GetStepTypeIcon(stepType);
+  }
   
-  getModelColor(model: string): string {
+  GetModelColor(model: string): string {
     // Return a color from the same palette used in generateColors
     const colors = [
       'rgba(255, 99, 132, 0.5)',
@@ -1403,10 +1739,15 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
     }
     return colors[Math.abs(hash) % colors.length];
   }
+
+  /** @deprecated Use {@link GetModelColor}. */
+  getModelColor(model: string): string {
+    return this.GetModelColor(model);
+  }
   
   private renderPromptTimeDistributionChart() {
-    const element = this.promptTimeDistributionChart.nativeElement;
-    const data = Array.from(this.promptMetrics.byPrompt.entries())
+    const element = this.PromptTimeDistributionChart.nativeElement;
+    const data = Array.from(this.PromptMetrics.byPrompt.entries())
       .map(([name, metrics]) => ({
         name: name.length > 20 ? name.substring(0, 20) + '...' : name,
         value: metrics.avgTime
@@ -1474,11 +1815,11 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
   }
   
   private renderPromptTokenDistributionChart() {
-    const element = this.promptTokenDistributionChart.nativeElement;
+    const element = this.PromptTokenDistributionChart.nativeElement;
     
     // Aggregate token data by prompt
     const promptTokenData = new Map<string, { input: number; output: number }>();
-    for (const run of this.allPromptRuns) {
+    for (const run of this.AllPromptRuns) {
       const promptName = run.Prompt || 'Unknown';
       const existing = promptTokenData.get(promptName) || { input: 0, output: 0 };
       existing.input += run.TokensPrompt || 0;
@@ -1601,11 +1942,11 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
   }
   
   private renderPromptCostDistributionChart() {
-    const element = this.promptCostDistributionChart.nativeElement;
+    const element = this.PromptCostDistributionChart.nativeElement;
     
     // Aggregate cost data by prompt
     const promptCostData = new Map<string, number>();
-    for (const run of this.allPromptRuns) {
+    for (const run of this.AllPromptRuns) {
       const promptName = run.Prompt || 'Unknown';
       const existing = promptCostData.get(promptName) || 0;
       promptCostData.set(promptName, existing + (run.TotalCost || 0));
@@ -1679,12 +2020,12 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
       .attr('dy', '1em')
       .style('font-size', '18px')
       .style('font-weight', 'bold')
-      .text(this.formatCost(data.reduce((sum, d) => sum + d.value, 0)));
+      .text(this.FormatCost(data.reduce((sum, d) => sum + d.value, 0)));
   }
   
   private renderPromptCountByNameChart() {
-    const element = this.promptCountByNameChart.nativeElement;
-    const data = Array.from(this.promptMetrics.byPrompt.entries())
+    const element = this.PromptCountByNameChart.nativeElement;
+    const data = Array.from(this.PromptMetrics.byPrompt.entries())
       .map(([name, metrics]) => ({
         name: name.length > 20 ? name.substring(0, 20) + '...' : name,
         value: metrics.count
@@ -1854,21 +2195,36 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
   /**
    * TrackBy function for keyvalue pipe
    */
-  trackByKey(index: number, item: { key: string; value: any }): string {
+  TrackByKey(index: number, item: { key: string; value: any }): string {
     return item.key;
+  }
+
+  /** @deprecated Use {@link TrackByKey}. */
+  trackByKey(index: number, item: { key: string; value: any }): string {
+    return this.TrackByKey(index, item);
   }
   
   /**
    * TrackBy function for error messages
    */
-  trackByErrorMessage(index: number, error: { message: string; count: number }): string {
+  TrackByErrorMessage(index: number, error: { message: string; count: number }): string {
     return error.message;
+  }
+
+  /** @deprecated Use {@link TrackByErrorMessage}. */
+  trackByErrorMessage(index: number, error: { message: string; count: number }): string {
+    return this.TrackByErrorMessage(index, error);
   }
   
   /**
    * TrackBy function for model performance data
    */
-  trackByModelName(index: number, model: any): string {
+  TrackByModelName(index: number, model: any): string {
     return model.name || index.toString();
+  }
+
+  /** @deprecated Use {@link TrackByModelName}. */
+  trackByModelName(index: number, model: any): string {
+    return this.TrackByModelName(index, model);
   }
 }

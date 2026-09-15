@@ -63,7 +63,7 @@ export class AnalysisOrchestrator {
   /**
    * Execute the full analysis workflow
    */
-  public async execute(): Promise<OrchestratorResult> {
+  public async Execute(): Promise<OrchestratorResult> {
     let db: DatabaseConnection | undefined;
     try {
       // Create run folder
@@ -481,6 +481,11 @@ export class AnalysisOrchestrator {
         message: (error as Error).message
       };
     }
+  }
+
+  /** @deprecated Use {@link Execute}. */
+  public async execute(): Promise<OrchestratorResult> {
+    return this.Execute();
   }
 
   /**

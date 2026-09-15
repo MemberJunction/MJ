@@ -863,7 +863,7 @@ export class FlowAgentType extends BaseAgentType {
      * 
      * @public
      */
-    public processActionResult<P>(
+    public ProcessActionResult<P>(
         actionResult: Record<string, unknown>,
         _stepId: string,
         outputMapping?: string,
@@ -877,6 +877,16 @@ export class FlowAgentType extends BaseAgentType {
         // Note: Special fields are ignored in this legacy method
         // Use PostProcessActionStep for full special field support
         return result.payloadChange;
+    }
+
+    /** @deprecated Use {@link ProcessActionResult}. */
+    public processActionResult<P>(
+        actionResult: Record<string, unknown>,
+        _stepId: string,
+        outputMapping?: string,
+        currentPayload?: P
+    ): AgentPayloadChangeRequest<P> | null {
+        return this.ProcessActionResult(actionResult, _stepId, outputMapping, currentPayload);
     }
     
     /**

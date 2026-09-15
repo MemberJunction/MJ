@@ -118,7 +118,12 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
     public record!: MJAIAgentEntityExtended;
 
     /** Toolbar config — hide right-hand section controls since this form has a custom layout */
-    public readonly toolbarConfig = CUSTOM_LAYOUT_TOOLBAR_CONFIG;
+    public readonly ToolbarConfig = CUSTOM_LAYOUT_TOOLBAR_CONFIG;
+
+    /** @deprecated Use {@link ToolbarConfig}. */
+    public get toolbarConfig() {
+      return this.ToolbarConfig;
+    }
 
     /** Custom-layout AI Agent form looks best full-width on first open. */
     public override getDefaultFormWidthMode(): 'centered' | 'full-width' { return 'full-width'; }
@@ -155,7 +160,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
     set customSectionContainer(container: ViewContainerRef) {
         this._customSectionContainer = container;
         // When the container becomes available, load the custom section if needed
-        if (container && this.agentType?.UIFormSectionKey && !this.customSectionLoaded) {
+        if (container && this.AgentType?.UIFormSectionKey && !this.customSectionLoaded) {
             this.setTrackedTimeout(() => this.loadCustomFormSection(), 0);
         }
     }
@@ -164,7 +169,16 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
     }
     
     /** The agent type entity for this agent */
-    public agentType: MJAIAgentTypeEntity | null = null;
+    public AgentType: MJAIAgentTypeEntity | null = null;
+
+    /** @deprecated Use {@link AgentType}. */
+    public get agentType(): MJAIAgentTypeEntity | null {
+      return this.AgentType;
+    }
+    /** @deprecated Use {@link AgentType}. */
+    public set agentType(value: MJAIAgentTypeEntity | null) {
+      this.AgentType = value;
+    }
     
     /** Reference to the dynamically loaded custom section component */
     private customSectionComponent: BaseFormSectionComponent | null = null;
@@ -186,63 +200,126 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
     
     // === Related Entity Counts ===
     /** Number of sub-agents under this agent (for backward compatibility) */
-    public get subAgentCount(): number {
+    public get SubAgentCount(): number {
         return this.allSubAgents.length;
+    }
+
+    /** @deprecated Use {@link SubAgentCount}. */
+    public get subAgentCount(): number {
+      return this.SubAgentCount;
     }
 
     /** Number of child sub-agents (ParentID-based) */
-    public get childSubAgentCount(): number {
+    public get ChildSubAgentCount(): number {
         return this.allSubAgents.filter(s => s.type === 'child').length;
     }
 
+    /** @deprecated Use {@link ChildSubAgentCount}. */
+    public get childSubAgentCount(): number {
+      return this.ChildSubAgentCount;
+    }
+
     /** Number of related sub-agents (Relationship-based) */
-    public get relatedSubAgentCount(): number {
+    public get RelatedSubAgentCount(): number {
         return this.allSubAgents.filter(s => s.type === 'related').length;
     }
 
+    /** @deprecated Use {@link RelatedSubAgentCount}. */
+    public get relatedSubAgentCount(): number {
+      return this.RelatedSubAgentCount;
+    }
+
     /** Total number of sub-agents across both types */
-    public get totalSubAgentCount(): number {
+    public get TotalSubAgentCount(): number {
         return this.allSubAgents.length;
     }
 
+    /** @deprecated Use {@link TotalSubAgentCount}. */
+    public get totalSubAgentCount(): number {
+      return this.TotalSubAgentCount;
+    }
+
     /** Number of prompts associated with this agent */
+    public get PromptCount(): number {
+        return this.AgentPrompts.length;
+    }
+
+    /** @deprecated Use {@link PromptCount}. */
     public get promptCount(): number {
-        return this.agentPrompts.length;
+      return this.PromptCount;
     }
 
     /** Number of actions configured for this agent */
+    public get ActionCount(): number {
+        return this.AgentActions.length;
+    }
+
+    /** @deprecated Use {@link ActionCount}. */
     public get actionCount(): number {
-        return this.agentActions.length;
+      return this.ActionCount;
     }
 
     /** Number of learning cycles for this agent */
+    public get LearningCycleCount(): number {
+        return this.LearningCycles.length;
+    }
+
+    /** @deprecated Use {@link LearningCycleCount}. */
     public get learningCycleCount(): number {
-        return this.learningCycles.length;
+      return this.LearningCycleCount;
     }
 
     /** Number of notes associated with this agent */
+    public get NoteCount(): number {
+        return this.AgentNotes.length;
+    }
+
+    /** @deprecated Use {@link NoteCount}. */
     public get noteCount(): number {
-        return this.agentNotes.length;
+      return this.NoteCount;
     }
 
     /** Number of execution history records */
+    public get ExecutionHistoryCount(): number {
+        return this.RecentExecutions.length;
+    }
+
+    /** @deprecated Use {@link ExecutionHistoryCount}. */
     public get executionHistoryCount(): number {
-        return this.recentExecutions.length;
+      return this.ExecutionHistoryCount;
     }
 
     // === Related Entity Data for Display ===
     /** Array of sub-agent entities for card display (DEPRECATED - use allSubAgents) */
-    public subAgents: MJAIAgentEntityExtended[] = [];
+    public SubAgents: MJAIAgentEntityExtended[] = [];
+
+    /** @deprecated Use {@link SubAgents}. */
+    public get subAgents(): MJAIAgentEntityExtended[] {
+      return this.SubAgents;
+    }
+    /** @deprecated Use {@link SubAgents}. */
+    public set subAgents(value: MJAIAgentEntityExtended[]) {
+      this.SubAgents = value;
+    }
 
     /** Unified sub-agent data (both child and related) */
     private allSubAgents: UnifiedSubAgent[] = [];
 
     /** Current filter for sub-agents display */
-    public subAgentFilter: SubAgentFilterType = 'all';
+    public SubAgentFilter: SubAgentFilterType = 'all';
+
+    /** @deprecated Use {@link SubAgentFilter}. */
+    public get subAgentFilter(): SubAgentFilterType {
+      return this.SubAgentFilter;
+    }
+    /** @deprecated Use {@link SubAgentFilter}. */
+    public set subAgentFilter(value: SubAgentFilterType) {
+      this.SubAgentFilter = value;
+    }
 
     /** Filtered sub-agents based on current filter */
-    public get filteredSubAgents(): UnifiedSubAgent[] {
-        switch (this.subAgentFilter) {
+    public get FilteredSubAgents(): UnifiedSubAgent[] {
+        switch (this.SubAgentFilter) {
             case 'child':
                 return this.allSubAgents.filter(s => s.type === 'child');
             case 'related':
@@ -251,56 +328,214 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                 return this.allSubAgents;
         }
     }
+
+    /** @deprecated Use {@link FilteredSubAgents}. */
+    public get filteredSubAgents(): UnifiedSubAgent[] {
+      return this.FilteredSubAgents;
+    }
     
     /** Array of agent prompt entities for card display */
-    public agentPrompts: MJAIPromptEntityExtended[] = [];
+    public AgentPrompts: MJAIPromptEntityExtended[] = [];
+
+    /** @deprecated Use {@link AgentPrompts}. */
+    public get agentPrompts(): MJAIPromptEntityExtended[] {
+      return this.AgentPrompts;
+    }
+    /** @deprecated Use {@link AgentPrompts}. */
+    public set agentPrompts(value: MJAIPromptEntityExtended[]) {
+      this.AgentPrompts = value;
+    }
     
     /** Array of agent action entities for card display */
-    public agentActions: MJActionEntity[] = [];
+    public AgentActions: MJActionEntity[] = [];
+
+    /** @deprecated Use {@link AgentActions}. */
+    public get agentActions(): MJActionEntity[] {
+      return this.AgentActions;
+    }
+    /** @deprecated Use {@link AgentActions}. */
+    public set agentActions(value: MJActionEntity[]) {
+      this.AgentActions = value;
+    }
     
     
     /** Array of learning cycle entities for display */
-    public learningCycles: MJAIAgentLearningCycleEntity[] = [];
+    public LearningCycles: MJAIAgentLearningCycleEntity[] = [];
+
+    /** @deprecated Use {@link LearningCycles}. */
+    public get learningCycles(): MJAIAgentLearningCycleEntity[] {
+      return this.LearningCycles;
+    }
+    /** @deprecated Use {@link LearningCycles}. */
+    public set learningCycles(value: MJAIAgentLearningCycleEntity[]) {
+      this.LearningCycles = value;
+    }
     
     /** Array of agent note entities for display */
-    public agentNotes: MJAIAgentNoteEntity[] = [];
+    public AgentNotes: MJAIAgentNoteEntity[] = [];
+
+    /** @deprecated Use {@link AgentNotes}. */
+    public get agentNotes(): MJAIAgentNoteEntity[] {
+      return this.AgentNotes;
+    }
+    /** @deprecated Use {@link AgentNotes}. */
+    public set agentNotes(value: MJAIAgentNoteEntity[]) {
+      this.AgentNotes = value;
+    }
     
     /** Array of recent execution records for history display */
-    public recentExecutions: MJAIAgentRunEntityExtended[] = [];
-    public totalExecutionHistoryCount: number = 0;
+    public RecentExecutions: MJAIAgentRunEntityExtended[] = [];
+
+    /** @deprecated Use {@link RecentExecutions}. */
+    public get recentExecutions(): MJAIAgentRunEntityExtended[] {
+      return this.RecentExecutions;
+    }
+    /** @deprecated Use {@link RecentExecutions}. */
+    public set recentExecutions(value: MJAIAgentRunEntityExtended[]) {
+      this.RecentExecutions = value;
+    }
+    public TotalExecutionHistoryCount: number = 0;
+
+    /** @deprecated Use {@link TotalExecutionHistoryCount}. */
+    public get totalExecutionHistoryCount(): number {
+      return this.TotalExecutionHistoryCount;
+    }
+    /** @deprecated Use {@link TotalExecutionHistoryCount}. */
+    public set totalExecutionHistoryCount(value: number) {
+      this.TotalExecutionHistoryCount = value;
+    }
     /** Track which execution cards are expanded */
-    public expandedExecutions: { [key: string]: boolean } = {};
+    public ExpandedExecutions: { [key: string]: boolean } = {};
+
+    /** @deprecated Use {@link ExpandedExecutions}. */
+    public get expandedExecutions(): { [key: string]: boolean } {
+      return this.ExpandedExecutions;
+    }
+    /** @deprecated Use {@link ExpandedExecutions}. */
+    public set expandedExecutions(value: { [key: string]: boolean }) {
+      this.ExpandedExecutions = value;
+    }
 
     /** Search functionality for execution history */
-    public executionSearchText: string = '';
-    public filteredExecutions: MJAIAgentRunEntityExtended[] = [];
+    public ExecutionSearchText: string = '';
+
+    /** @deprecated Use {@link ExecutionSearchText}. */
+    public get executionSearchText(): string {
+      return this.ExecutionSearchText;
+    }
+    /** @deprecated Use {@link ExecutionSearchText}. */
+    public set executionSearchText(value: string) {
+      this.ExecutionSearchText = value;
+    }
+    public FilteredExecutions: MJAIAgentRunEntityExtended[] = [];
+
+    /** @deprecated Use {@link FilteredExecutions}. */
+    public get filteredExecutions(): MJAIAgentRunEntityExtended[] {
+      return this.FilteredExecutions;
+    }
+    /** @deprecated Use {@link FilteredExecutions}. */
+    public set filteredExecutions(value: MJAIAgentRunEntityExtended[]) {
+      this.FilteredExecutions = value;
+    }
 
     /** Message shown when the execution-history search matches nothing. */
     public get ExecutionSearchEmptyMessage(): string {
-        return `No execution history found matching "${this.executionSearchText}"`;
+        return `No execution history found matching "${this.ExecutionSearchText}"`;
     }
 
     /** Which record type the Execution History section shows: agent runs (default) or realtime voice sessions */
-    public executionHistoryView: 'runs' | 'sessions' = 'runs';
+    public ExecutionHistoryView: 'runs' | 'sessions' = 'runs';
+
+    /** @deprecated Use {@link ExecutionHistoryView}. */
+    public get executionHistoryView(): 'runs' | 'sessions' {
+      return this.ExecutionHistoryView;
+    }
+    /** @deprecated Use {@link ExecutionHistoryView}. */
+    public set executionHistoryView(value: 'runs' | 'sessions') {
+      this.ExecutionHistoryView = value;
+    }
 
     /** Voice/realtime sessions where this agent is the co-agent or the delegation target */
-    public agentSessions: AgentSessionHistoryItem[] = [];
-    public totalSessionCount: number = 0;
-    public loadingSessions: boolean = false;
+    public AgentSessions: AgentSessionHistoryItem[] = [];
+
+    /** @deprecated Use {@link AgentSessions}. */
+    public get agentSessions(): AgentSessionHistoryItem[] {
+      return this.AgentSessions;
+    }
+    /** @deprecated Use {@link AgentSessions}. */
+    public set agentSessions(value: AgentSessionHistoryItem[]) {
+      this.AgentSessions = value;
+    }
+    public TotalSessionCount: number = 0;
+
+    /** @deprecated Use {@link TotalSessionCount}. */
+    public get totalSessionCount(): number {
+      return this.TotalSessionCount;
+    }
+    /** @deprecated Use {@link TotalSessionCount}. */
+    public set totalSessionCount(value: number) {
+      this.TotalSessionCount = value;
+    }
+    public LoadingSessions: boolean = false;
+
+    /** @deprecated Use {@link LoadingSessions}. */
+    public get loadingSessions(): boolean {
+      return this.LoadingSessions;
+    }
+    /** @deprecated Use {@link LoadingSessions}. */
+    public set loadingSessions(value: boolean) {
+      this.LoadingSessions = value;
+    }
 
     /** Pagination state for execution history */
-    public executionHistoryPageSize: number = 20;
-    public executionHistoryCurrentPage: number = 1;
-    public isLoadingPage: boolean = false;
+    public ExecutionHistoryPageSize: number = 20;
+
+    /** @deprecated Use {@link ExecutionHistoryPageSize}. */
+    public get executionHistoryPageSize(): number {
+      return this.ExecutionHistoryPageSize;
+    }
+    /** @deprecated Use {@link ExecutionHistoryPageSize}. */
+    public set executionHistoryPageSize(value: number) {
+      this.ExecutionHistoryPageSize = value;
+    }
+    public ExecutionHistoryCurrentPage: number = 1;
+
+    /** @deprecated Use {@link ExecutionHistoryCurrentPage}. */
+    public get executionHistoryCurrentPage(): number {
+      return this.ExecutionHistoryCurrentPage;
+    }
+    /** @deprecated Use {@link ExecutionHistoryCurrentPage}. */
+    public set executionHistoryCurrentPage(value: number) {
+      this.ExecutionHistoryCurrentPage = value;
+    }
+    public IsLoadingPage: boolean = false;
+
+    /** @deprecated Use {@link IsLoadingPage}. */
+    public get isLoadingPage(): boolean {
+      return this.IsLoadingPage;
+    }
+    /** @deprecated Use {@link IsLoadingPage}. */
+    public set isLoadingPage(value: boolean) {
+      this.IsLoadingPage = value;
+    }
     /** Cache all loaded execution records for pagination */
     private allLoadedExecutions: MJAIAgentRunEntityExtended[] = [];
     
     // === Loading States ===
     /** Main loading state for initial data load */
-    public isLoadingData = true;
+    public IsLoadingData = true;
+
+    /** @deprecated Use {@link IsLoadingData}. */
+    public get isLoadingData() {
+      return this.IsLoadingData;
+    }
+    /** @deprecated Use {@link IsLoadingData}. */
+    public set isLoadingData(value) {
+      this.IsLoadingData = value;
+    }
     
     /** Individual loading states for each section, start off true until loading complete */
-    public loadingStates = {
+    public LoadingStates = {
         executionHistory: true,
         subAgents: true,
         prompts: true,
@@ -310,6 +545,15 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         customSection: true,
         searchScopes: false
     };
+
+    /** @deprecated Use {@link LoadingStates}. */
+    public get loadingStates() {
+      return this.LoadingStates;
+    }
+    /** @deprecated Use {@link LoadingStates}. */
+    public set loadingStates(value) {
+      this.LoadingStates = value;
+    }
 
     /** Column spec for the AIAgentSearchScope child grid (mockup #5). */
     public readonly AgentSearchScopeColumns: SearchScopeChildGridColumn[] = [
@@ -452,8 +696,8 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
     /** The slice of state the tab rules read — kept small so the rules stay unit-testable. */
     private get formTabContext(): AgentFormTabContext {
         return {
-            AgentTypeName: this.agentType?.Name ?? null,
-            UIFormSectionKey: this.agentType?.UIFormSectionKey ?? null,
+            AgentTypeName: this.AgentType?.Name ?? null,
+            UIFormSectionKey: this.AgentType?.UIFormSectionKey ?? null,
             HasRecordID: !!this.record?.ID,
         };
     }
@@ -491,20 +735,47 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
 
     // === Dropdown Data ===
     /** Model selection mode options for the dropdown */
-    public modelSelectionModes = [
+    public ModelSelectionModes = [
         { text: 'Agent Type', value: 'Agent Type' },
         { text: 'Agent', value: 'Agent' }
     ];
 
+    /** @deprecated Use {@link ModelSelectionModes}. */
+    public get modelSelectionModes() {
+      return this.ModelSelectionModes;
+    }
+    /** @deprecated Use {@link ModelSelectionModes}. */
+    public set modelSelectionModes(value) {
+      this.ModelSelectionModes = value;
+    }
+
     /** Agent status options for the dropdown */
-    public statusOptions = [
+    public StatusOptions = [
         { text: 'Active', value: 'Active' },
         { text: 'Pending', value: 'Pending' },
         { text: 'Disabled', value: 'Disabled' }
     ];
 
+    /** @deprecated Use {@link StatusOptions}. */
+    public get statusOptions() {
+      return this.StatusOptions;
+    }
+    /** @deprecated Use {@link StatusOptions}. */
+    public set statusOptions(value) {
+      this.StatusOptions = value;
+    }
+
     /** Agent types loaded from the database */
-    public agentTypes: any[] = [];
+    public AgentTypes: any[] = [];
+
+    /** @deprecated Use {@link AgentTypes}. */
+    public get agentTypes(): any[] {
+      return this.AgentTypes;
+    }
+    /** @deprecated Use {@link AgentTypes}. */
+    public set agentTypes(value: any[]) {
+      this.AgentTypes = value;
+    }
 
     /** TreeDropdown configuration for the agent category field */
     public CategoryBranchConfig: TreeBranchConfig = {
@@ -531,14 +802,23 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
     }
 
     /** Currently selected context compression prompt */
-    public selectedContextCompressionPrompt: any = null;
+    public SelectedContextCompressionPrompt: any = null;
+
+    /** @deprecated Use {@link SelectedContextCompressionPrompt}. */
+    public get selectedContextCompressionPrompt(): any {
+      return this.SelectedContextCompressionPrompt;
+    }
+    /** @deprecated Use {@link SelectedContextCompressionPrompt}. */
+    public set selectedContextCompressionPrompt(value: any) {
+      this.SelectedContextCompressionPrompt = value;
+    }
 
     /**
      * Loads agent types from the database for the dropdown
      * @private
      */
     private async loadAgentTypes(): Promise<void> {
-        this.agentTypes = AIEngineBase.Instance.AgentTypes
+        this.AgentTypes = AIEngineBase.Instance.AgentTypes
     }
 
     /**
@@ -547,12 +827,12 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
      */
     private async loadContextCompressionPrompt(): Promise<void> {
         if (!this.record?.ContextCompressionPromptID) {
-            this.selectedContextCompressionPrompt = null;
+            this.SelectedContextCompressionPrompt = null;
             return;
         }
 
-        this.selectedContextCompressionPrompt = AIEngineBase.Instance.Prompts.find(p => UUIDsEqual(p.ID, this.record.ContextCompressionPromptID));
-        if (!this.selectedContextCompressionPrompt) {
+        this.SelectedContextCompressionPrompt = AIEngineBase.Instance.Prompts.find(p => UUIDsEqual(p.ID, this.record.ContextCompressionPromptID));
+        if (!this.SelectedContextCompressionPrompt) {
             console.warn('Context compression prompt not found:', this.record.ContextCompressionPromptID);
         }
     }
@@ -560,7 +840,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
     /**
      * Opens the prompt selector dialog for context compression prompt
      */
-    public async openContextCompressionPromptSelector(): Promise<void> {
+    public async OpenContextCompressionPromptSelector(): Promise<void> {
         try {
             const dialogRef = this.dialogService.open({
                 title: 'Select Context Compression Prompt',
@@ -585,7 +865,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                     if (result && result.selectedPrompts.length > 0) {
                         const selectedPrompt = result.selectedPrompts[0];
                         this.record.ContextCompressionPromptID = selectedPrompt.ID;
-                        this.selectedContextCompressionPrompt = selectedPrompt;
+                        this.SelectedContextCompressionPrompt = selectedPrompt;
                         this.cdr.detectChanges();
                     }
                 },
@@ -603,13 +883,23 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         }
     }
 
+    /** @deprecated Use {@link OpenContextCompressionPromptSelector}. */
+    public async openContextCompressionPromptSelector(): Promise<void> {
+      return this.OpenContextCompressionPromptSelector();
+    }
+
     /**
      * Clears the selected context compression prompt
      */
-    public clearContextCompressionPrompt(): void {
+    public ClearContextCompressionPrompt(): void {
         this.record.ContextCompressionPromptID = null;
-        this.selectedContextCompressionPrompt = null;
+        this.SelectedContextCompressionPrompt = null;
         this.cdr.detectChanges();
+    }
+
+    /** @deprecated Use {@link ClearContextCompressionPrompt}. */
+    public clearContextCompressionPrompt(): void {
+      return this.ClearContextCompressionPrompt();
     }
 
     // === Permission Checks for Related Entities ===
@@ -760,8 +1050,13 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
     /**
      * Clears the permission cache. Call this when user context changes or permissions are updated.
      */
-    public clearPermissionCache(): void {
+    public ClearPermissionCache(): void {
         this._permissionCache.clear();
+    }
+
+    /** @deprecated Use {@link ClearPermissionCache}. */
+    public clearPermissionCache(): void {
+      return this.ClearPermissionCache();
     }
 
     // === Transaction-based editing support ===
@@ -778,7 +1073,16 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
     public IsFormInitializing = true;
 
     /** Flag to indicate if there are unsaved changes */
-    public hasUnsavedChanges = false;
+    public HasUnsavedChanges = false;
+
+    /** @deprecated Use {@link HasUnsavedChanges}. */
+    public get hasUnsavedChanges() {
+      return this.HasUnsavedChanges;
+    }
+    /** @deprecated Use {@link HasUnsavedChanges}. */
+    public set hasUnsavedChanges(value) {
+      this.HasUnsavedChanges = value;
+    }
 
     /**
      * Surfaces the type section's own edits to the toolbar and the navigate-away guard.
@@ -893,15 +1197,15 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
 
         // Reset pagination state on refresh
         if (forceRefresh) {
-            this.executionHistoryCurrentPage = 1;
-            this.isLoadingPage = false;
+            this.ExecutionHistoryCurrentPage = 1;
+            this.IsLoadingPage = false;
             this.allLoadedExecutions = [];
             // Don't clear recentExecutions - keep existing data visible while loading
         }
 
         // Set loading state
-        this.isLoadingData = true;
-        this.loadingStates = {
+        this.IsLoadingData = true;
+        this.LoadingStates = {
             executionHistory: true,
             subAgents: true,
             prompts: true,
@@ -954,7 +1258,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
             }
 
             // Also populate the deprecated subAgents array for backward compatibility
-            this.subAgents = [...childAgents];
+            this.SubAgents = [...childAgents];
 
             // Load related sub-agents (Relationship-based)
             const rv = RunView.FromMetadataProvider(this.ProviderToUse);
@@ -996,12 +1300,12 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
             // totalSubAgentCount changes exactly once against settled state (no NG0100).
             this.allSubAgents = newSubAgents;
 
-            this.agentPrompts = AIEngineBase.Instance.Prompts.filter(p => {
+            this.AgentPrompts = AIEngineBase.Instance.Prompts.filter(p => {
                 const filteredAgentPrompts = AIEngineBase.Instance.AgentPrompts.filter(ap => UUIDsEqual(ap.AgentID, this.record.ID));
                 return filteredAgentPrompts.some(ap => UUIDsEqual(ap.PromptID, p.ID));
             });
 
-            this.agentActions = ActionEngineBase.Instance.Actions.filter(a => {
+            this.AgentActions = ActionEngineBase.Instance.Actions.filter(a => {
                 const filteredAgentActions = AIEngineBase.Instance.AgentActions.filter(aa => UUIDsEqual(aa.AgentID, this.record.ID));
                 return filteredAgentActions.some(aa => UUIDsEqual(aa.ActionID, a.ID));
             });
@@ -1033,7 +1337,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                     ],
                     ExtraFilter: `AgentID='${this.record.ID}'`,
                     OrderBy: '__mj_CreatedAt DESC',
-                    MaxRows: this.executionHistoryPageSize
+                    MaxRows: this.ExecutionHistoryPageSize
                 },
                 // Agent permissions (to determine open-to-everyone state)
                 {
@@ -1046,18 +1350,18 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
 
             // Process results in the same order as queries
             if (results && results.length > 0) {
-                this.learningCycles = results[0].Results as MJAIAgentLearningCycleEntity[] || [];
+                this.LearningCycles = results[0].Results as MJAIAgentLearningCycleEntity[] || [];
 
-                this.agentNotes = results[1].Results as MJAIAgentNoteEntity[] || [];
+                this.AgentNotes = results[1].Results as MJAIAgentNoteEntity[] || [];
 
-                this.recentExecutions = results[2].Results as MJAIAgentRunEntityExtended[] || [];
-                this.totalExecutionHistoryCount = results[2].TotalRowCount;
+                this.RecentExecutions = results[2].Results as MJAIAgentRunEntityExtended[] || [];
+                this.TotalExecutionHistoryCount = results[2].TotalRowCount;
 
                 // Initialize cache with first page of results
-                this.allLoadedExecutions = [...this.recentExecutions];
+                this.allLoadedExecutions = [...this.RecentExecutions];
 
                 // Initialize filtered executions
-                this.filteredExecutions = [...this.recentExecutions];
+                this.FilteredExecutions = [...this.RecentExecutions];
 
                 // Determine open-to-everyone state from permissions query
                 const permissionRows = results[3]?.Results || [];
@@ -1076,8 +1380,8 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
             // Set all counts to 0 on error to ensure UI shows proper empty states
         } finally {
             // Clear loading states
-            this.isLoadingData = false;
-            this.loadingStates = {
+            this.IsLoadingData = false;
+            this.LoadingStates = {
                 executionHistory: false,
                 subAgents: false,
                 prompts: false,
@@ -1100,40 +1404,50 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
      */
     private createOriginalSnapshot() {
         this.originalSnapshots = {
-            agentPrompts: [...this.agentPrompts], // Deep copy of arrays
-            agentActions: [...this.agentActions],
-            subAgents: [...this.subAgents],
-            promptCount: this.promptCount,
-            actionCount: this.actionCount,
-            subAgentCount: this.subAgentCount,
-            learningCycleCount: this.learningCycleCount,
-            noteCount: this.noteCount,
-            executionHistoryCount: this.executionHistoryCount
+            agentPrompts: [...this.AgentPrompts], // Deep copy of arrays
+            agentActions: [...this.AgentActions],
+            subAgents: [...this.SubAgents],
+            promptCount: this.PromptCount,
+            actionCount: this.ActionCount,
+            subAgentCount: this.SubAgentCount,
+            learningCycleCount: this.LearningCycleCount,
+            noteCount: this.NoteCount,
+            executionHistoryCount: this.ExecutionHistoryCount
         };
     }
 
     /**
      * Navigates to the next page of execution history
      */
-    public async goToNextPage(): Promise<void> {
-        if (!this.hasNextPage || this.isLoadingPage || !this.record?.ID) {
+    public async GoToNextPage(): Promise<void> {
+        if (!this.HasNextPage || this.IsLoadingPage || !this.record?.ID) {
             return;
         }
 
-        const nextPage = this.executionHistoryCurrentPage + 1;
+        const nextPage = this.ExecutionHistoryCurrentPage + 1;
         await this.loadPage(nextPage);
+    }
+
+    /** @deprecated Use {@link GoToNextPage}. */
+    public async goToNextPage(): Promise<void> {
+      return this.GoToNextPage();
     }
 
     /**
      * Navigates to the previous page of execution history
      */
-    public async goToPreviousPage(): Promise<void> {
-        if (!this.hasPreviousPage || this.isLoadingPage) {
+    public async GoToPreviousPage(): Promise<void> {
+        if (!this.HasPreviousPage || this.IsLoadingPage) {
             return;
         }
 
-        const previousPage = this.executionHistoryCurrentPage - 1;
+        const previousPage = this.ExecutionHistoryCurrentPage - 1;
         await this.loadPage(previousPage);
+    }
+
+    /** @deprecated Use {@link GoToPreviousPage}. */
+    public async goToPreviousPage(): Promise<void> {
+      return this.GoToPreviousPage();
     }
 
     /**
@@ -1144,24 +1458,24 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
             return;
         }
 
-        this.isLoadingPage = true;
+        this.IsLoadingPage = true;
         this.cdr.detectChanges();
 
         try {
-            const startIndex = (pageNumber - 1) * this.executionHistoryPageSize;
-            const endIndex = startIndex + this.executionHistoryPageSize;
+            const startIndex = (pageNumber - 1) * this.ExecutionHistoryPageSize;
+            const endIndex = startIndex + this.ExecutionHistoryPageSize;
 
             // Check if we have this page in cache
             const cachedPageData = this.allLoadedExecutions.slice(startIndex, endIndex);
-            const hasFullPageInCache = cachedPageData.length === this.executionHistoryPageSize;
-            const isLastPage = endIndex >= this.totalExecutionHistoryCount;
+            const hasFullPageInCache = cachedPageData.length === this.ExecutionHistoryPageSize;
+            const isLastPage = endIndex >= this.TotalExecutionHistoryCount;
             const hasPartialPageInCache = isLastPage && cachedPageData.length > 0 &&
-                                         cachedPageData.length === (this.totalExecutionHistoryCount - startIndex);
+                                         cachedPageData.length === (this.TotalExecutionHistoryCount - startIndex);
 
             if (hasFullPageInCache || hasPartialPageInCache) {
                 // We have the page in cache (either full page or complete last page)
-                this.executionHistoryCurrentPage = pageNumber;
-                this.recentExecutions = cachedPageData;
+                this.ExecutionHistoryCurrentPage = pageNumber;
+                this.RecentExecutions = cachedPageData;
                 await this.applySearchFilter();
             } else {
                 // Need to load from database
@@ -1175,7 +1489,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                     ],
                     ExtraFilter: `AgentID='${this.record.ID}'`,
                     OrderBy: '__mj_CreatedAt DESC',
-                    MaxRows: this.executionHistoryPageSize,
+                    MaxRows: this.ExecutionHistoryPageSize,
                     StartRow: startIndex > 0 ? startIndex : undefined,
                     ResultType: 'entity_object'
                 });
@@ -1189,15 +1503,15 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                     // Insert the new results into cache
                     this.allLoadedExecutions.splice(startIndex, result.Results.length, ...result.Results);
 
-                    this.executionHistoryCurrentPage = pageNumber;
-                    this.recentExecutions = result.Results;
+                    this.ExecutionHistoryCurrentPage = pageNumber;
+                    this.RecentExecutions = result.Results;
                     await this.applySearchFilter();
                 }
             }
         } catch (error) {
             console.error('Error loading page:', error);
         } finally {
-            this.isLoadingPage = false;
+            this.IsLoadingPage = false;
             this.cdr.detectChanges();
         }
     }
@@ -1205,23 +1519,38 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
     /**
      * Checks if there is a next page available
      */
+    public get HasNextPage(): boolean {
+        const maxPage = Math.ceil(this.TotalExecutionHistoryCount / this.ExecutionHistoryPageSize);
+        return this.ExecutionHistoryCurrentPage < maxPage;
+    }
+
+    /** @deprecated Use {@link HasNextPage}. */
     public get hasNextPage(): boolean {
-        const maxPage = Math.ceil(this.totalExecutionHistoryCount / this.executionHistoryPageSize);
-        return this.executionHistoryCurrentPage < maxPage;
+      return this.HasNextPage;
     }
 
     /**
      * Checks if there is a previous page available
      */
+    public get HasPreviousPage(): boolean {
+        return this.ExecutionHistoryCurrentPage > 1;
+    }
+
+    /** @deprecated Use {@link HasPreviousPage}. */
     public get hasPreviousPage(): boolean {
-        return this.executionHistoryCurrentPage > 1;
+      return this.HasPreviousPage;
     }
 
     /**
      * Gets the total number of pages
      */
+    public get TotalPages(): number {
+        return Math.ceil(this.TotalExecutionHistoryCount / this.ExecutionHistoryPageSize);
+    }
+
+    /** @deprecated Use {@link TotalPages}. */
     public get totalPages(): number {
-        return Math.ceil(this.totalExecutionHistoryCount / this.executionHistoryPageSize);
+      return this.TotalPages;
     }
 
     /**
@@ -1235,13 +1564,13 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         
         try {
             const md = this.ProviderToUse;
-            this.agentType = await md.GetEntityObject<MJAIAgentTypeEntity>('MJ: AI Agent Types');
-            if (this.agentType) {
-                await this.agentType.Load(this.record.TypeID);
+            this.AgentType = await md.GetEntityObject<MJAIAgentTypeEntity>('MJ: AI Agent Types');
+            if (this.AgentType) {
+                await this.AgentType.Load(this.record.TypeID);
             }
         } catch (error) {
             console.error('Error loading agent type:', error);
-            this.agentType = null;
+            this.AgentType = null;
         }
         // The tab strip depends on the type (only some types ship a designer), so it cannot be built
         // until the type is known.
@@ -1253,7 +1582,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
      * @private
      */
     private loadCustomFormSection(): void {
-        if (!this.agentType?.UIFormSectionKey || !this.customSectionContainer) {
+        if (!this.AgentType?.UIFormSectionKey || !this.customSectionContainer) {
             return;
         }
 
@@ -1262,12 +1591,12 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
             return;
         }
 
-        this.loadingStates.customSection = true;
+        this.LoadingStates.customSection = true;
         this.cdr.markForCheck();
 
         try {
             // Build the full registration key (Entity.Section pattern)
-            const sectionKey = `AI Agents.${this.agentType.UIFormSectionKey}`;
+            const sectionKey = `AI Agents.${this.AgentType.UIFormSectionKey}`;
 
             // Get the component registration from the class factory
             const registration = MJGlobal.Instance.ClassFactory.GetRegistration(BaseFormSectionComponent, sectionKey);
@@ -1291,7 +1620,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         } catch (error) {
             console.error('Error loading custom form section:', error);
         } finally {
-            this.loadingStates.customSection = false;
+            this.LoadingStates.customSection = false;
             this.cdr.markForCheck();
         }
     }
@@ -1300,14 +1629,19 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
      * Handles state change events for the custom section panel
      * @param event The panel bar state change event
      */
-    public onCustomSectionStateChange(event: { expanded: boolean }): void {
+    public OnCustomSectionStateChange(event: { expanded: boolean }): void {
         // When panel is expanded, check if we need to load or reload the custom section
-        if (event.expanded && this.agentType?.UIFormSectionKey) {
+        if (event.expanded && this.AgentType?.UIFormSectionKey) {
             // Always try to load on expand to handle cases where container might have been recreated
             this.setTrackedTimeout(() => {
                 this.loadCustomFormSection();
             }, 0);
         }
+    }
+
+    /** @deprecated Use {@link OnCustomSectionStateChange}. */
+    public onCustomSectionStateChange(event: { expanded: boolean }): void {
+      return this.OnCustomSectionStateChange(event);
     }
 
     // === User Preferences (Header & Section State) ===
@@ -1368,7 +1702,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
 
                 // Keep existing custom section load logic
                 if (item.id === 'custom' && item.expanded) {
-                    this.onCustomSectionStateChange({ expanded: true });
+                    this.OnCustomSectionStateChange({ expanded: true });
                 }
             }
         }
@@ -1382,12 +1716,12 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
     private restoreFromSnapshots() {
         if (this.originalSnapshots) {
             // Restore arrays (create new copies to ensure reactivity)
-            this.agentPrompts = [...this.originalSnapshots.agentPrompts];
-            this.agentActions = [...this.originalSnapshots.agentActions];
-            this.subAgents = [...this.originalSnapshots.subAgents];
+            this.AgentPrompts = [...this.originalSnapshots.agentPrompts];
+            this.AgentActions = [...this.originalSnapshots.agentActions];
+            this.SubAgents = [...this.originalSnapshots.subAgents];
             
             // Reset other UI state
-            this.hasUnsavedChanges = false;
+            this.HasUnsavedChanges = false;
                         
             // Mark for check instead of forcing immediate detection
             this.cdr.markForCheck();
@@ -1414,7 +1748,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
             this.restoreFromSnapshots();
             
             // Reset the unsaved changes flag
-            this.hasUnsavedChanges = false;
+            this.HasUnsavedChanges = false;
         } finally {
             // Always reset the flag
             this.isPerformingCancel = false;
@@ -1426,7 +1760,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
      * Validates that the agent has been saved before allowing testing.
      * Shows a notification if the agent needs to be saved first.
      */
-    public openTestHarness() {
+    public OpenTestHarness() {
         if (!this.record?.ID) {
             MJNotificationService.Instance.CreateSimpleNotification(
                 'Please save the AI agent before testing',
@@ -1441,6 +1775,11 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         this.testHarnessService.openForAgent(this.record.ID);
     }
 
+    /** @deprecated Use {@link OpenTestHarness}. */
+    public openTestHarness() {
+      return this.OpenTestHarness();
+    }
+
     /**
      * Opens the permissions management dialog for this agent.
      * Allows viewing and editing user/role-based permissions for the agent.
@@ -1451,7 +1790,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
     /** True when no explicit permission records exist (agent is open to everyone) */
     public IsOpenToEveryone = true;
 
-    public openPermissionsDialog() {
+    public OpenPermissionsDialog() {
         if (!this.record?.ID) {
             MJNotificationService.Instance.CreateSimpleNotification(
                 'Please save the AI agent before managing permissions',
@@ -1463,10 +1802,20 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         this.ShowPermissionsDialog = true;
     }
 
-    public async onPermissionsDialogClosed() {
+    /** @deprecated Use {@link OpenPermissionsDialog}. */
+    public openPermissionsDialog() {
+      return this.OpenPermissionsDialog();
+    }
+
+    public async OnPermissionsDialogClosed() {
         this.ShowPermissionsDialog = false;
         // Refresh open-to-everyone state in case permissions were added/removed
         await this.refreshPermissionState();
+    }
+
+    /** @deprecated Use {@link OnPermissionsDialogClosed}. */
+    public async onPermissionsDialogClosed() {
+      return this.OnPermissionsDialogClosed();
     }
 
     private async refreshPermissionState(): Promise<void> {
@@ -1489,13 +1838,18 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
      * Uses standard color coding: green for active, yellow for pending, gray for disabled.
      * @returns CSS color value for the status badge
      */
-    public getStatusBadgeColor(): string {
+    public GetStatusBadgeColor(): string {
         switch (this.record?.Status) {
             case 'Active': return 'var(--mj-status-success)';
             case 'Pending': return 'var(--mj-status-warning)';
             case 'Disabled': return 'var(--mj-text-muted)';
             default: return 'var(--mj-text-muted)';
         }
+    }
+
+    /** @deprecated Use {@link GetStatusBadgeColor}. */
+    public getStatusBadgeColor(): string {
+      return this.GetStatusBadgeColor();
     }
 
     /**
@@ -1507,28 +1861,43 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
     /**
      * Gets the count of sub-agents
      */
+    public GetSubAgentCount(): number {
+        return this.SubAgentCount;
+    }
+
+    /** @deprecated Use {@link GetSubAgentCount}. */
     public getSubAgentCount(): number {
-        return this.subAgentCount;
+      return this.GetSubAgentCount();
     }
 
     /**
      * Gets the count of prompts
      */
+    public GetPromptCount(): number {
+        return this.PromptCount;
+    }
+
+    /** @deprecated Use {@link GetPromptCount}. */
     public getPromptCount(): number {
-        return this.promptCount;
+      return this.GetPromptCount();
     }
 
     /**
      * Gets the count of actions
      */
+    public GetActionCount(): number {
+        return this.ActionCount;
+    }
+
+    /** @deprecated Use {@link GetActionCount}. */
     public getActionCount(): number {
-        return this.actionCount;
+      return this.GetActionCount();
     }
 
     /**
      * Gets the icon for the execution mode
      */
-    public getExecutionModeIcon(mode: string): string {
+    public GetExecutionModeIcon(mode: string): string {
         switch (mode) {
             case 'Sequential':
                 return 'fa-solid fa-list-ol';
@@ -1539,11 +1908,16 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         }
     }
 
+    /** @deprecated Use {@link GetExecutionModeIcon}. */
+    public getExecutionModeIcon(mode: string): string {
+      return this.GetExecutionModeIcon(mode);
+    }
+
     /**
      * Gets the agent's display icon
      * Prioritizes LogoURL, falls back to IconClass, then default robot icon
      */
-    public getAgentIcon(): string {
+    public GetAgentIcon(): string {
         if (this.record?.LogoURL) {
             // LogoURL is used in img tag, not here
             return '';
@@ -1551,45 +1925,70 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         return this.record?.IconClass || 'fa-solid fa-robot';
     }
 
+    /** @deprecated Use {@link GetAgentIcon}. */
+    public getAgentIcon(): string {
+      return this.GetAgentIcon();
+    }
+
     /**
      * Checks if the agent has a logo URL (for image display)
      */
-    public hasLogoURL(): boolean {
+    public HasLogoURL(): boolean {
         return !!this.record?.LogoURL;
+    }
+
+    /** @deprecated Use {@link HasLogoURL}. */
+    public hasLogoURL(): boolean {
+      return this.HasLogoURL();
     }
 
     /**
      * Gets the icon for a sub-agent
      * Prioritizes LogoURL, falls back to IconClass, then default robot icon
      */
-    public getSubAgentIcon(subAgent: MJAIAgentEntityExtended): string {
+    public GetSubAgentIcon(subAgent: MJAIAgentEntityExtended): string {
         if (subAgent?.LogoURL) {
             // LogoURL is used in img tag, not here
             return '';
         }
         return subAgent?.IconClass || 'fa-solid fa-robot';
     }
+
+    /** @deprecated Use {@link GetSubAgentIcon}. */
+    public getSubAgentIcon(subAgent: MJAIAgentEntityExtended): string {
+      return this.GetSubAgentIcon(subAgent);
+    }
     
     /**
      * Gets the icon class for an action
      * Falls back to default bolt icon if no IconClass is set
      */
-    public getActionIcon(action: MJActionEntity): string {
+    public GetActionIcon(action: MJActionEntity): string {
         return action?.IconClass || 'fa-solid fa-bolt';
+    }
+
+    /** @deprecated Use {@link GetActionIcon}. */
+    public getActionIcon(action: MJActionEntity): string {
+      return this.GetActionIcon(action);
     }
 
     /**
      * Checks if a sub-agent has a logo URL
      */
-    public hasSubAgentLogoURL(subAgent: MJAIAgentEntityExtended): boolean {
+    public HasSubAgentLogoURL(subAgent: MJAIAgentEntityExtended): boolean {
         return !!subAgent?.LogoURL;
+    }
+
+    /** @deprecated Use {@link HasSubAgentLogoURL}. */
+    public hasSubAgentLogoURL(subAgent: MJAIAgentEntityExtended): boolean {
+      return this.HasSubAgentLogoURL(subAgent);
     }
 
     /**
      * Creates a new sub-agent using the CreateAgentService slide-in panel.
      * Uses the new unified agent creation UI from @memberjunction/ng-agents.
      */
-    public async createSubAgent() {
+    public async CreateSubAgent() {
         try {
             this.createAgentService.OpenSubAgentSlideIn(
                 this.record.ID,
@@ -1617,6 +2016,11 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                 3000
             );
         }
+    }
+
+    /** @deprecated Use {@link CreateSubAgent}. */
+    public async createSubAgent() {
+      return this.CreateSubAgent();
     }
 
     /**
@@ -1660,8 +2064,8 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
             }
 
             // Update UI to show the new sub-agent
-            this.subAgents.push(subAgent);
-            this.hasUnsavedChanges = true;
+            this.SubAgents.push(subAgent);
+            this.HasUnsavedChanges = true;
 
             // Mark for check instead of forcing immediate detection
             this.cdr.markForCheck();
@@ -1684,9 +2088,9 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
     /**
      * Adds a new prompt to the agent (deferred until save)
      */
-    public async addPrompt() {
+    public async AddPrompt() {
         // Get currently linked and pending prompt IDs for pre-selection
-        const currentPromptIds = this.agentPrompts.map(ap => ap.ID);
+        const currentPromptIds = this.AgentPrompts.map(ap => ap.ID);
         const pendingAddIds = this.PendingRecords
             .filter(p => p.entityObject.EntityInfo.Name === 'MJ: AI Agent Prompts' && p.action === 'save')
             .map(p => p.entityObject.Get('PromptID'));
@@ -1733,10 +2137,10 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                             });
                         }
                         
-                        this.hasUnsavedChanges = true;
+                        this.HasUnsavedChanges = true;
                         
                         // Update UI to show the new prompts (cast to extended type for display)
-                        this.agentPrompts.push(...(newPrompts as MJAIPromptEntityExtended[]));
+                        this.AgentPrompts.push(...(newPrompts as MJAIPromptEntityExtended[]));
                         
                         // Mark for check instead of forcing immediate detection
                         this.cdr.markForCheck();
@@ -1771,10 +2175,15 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         }
     }
 
+    /** @deprecated Use {@link AddPrompt}. */
+    public async addPrompt() {
+      return this.AddPrompt();
+    }
+
     /**
      * Handle context compression toggle and reset related fields when disabled
      */
-    public onContextCompressionToggle(value: any) {
+    public OnContextCompressionToggle(value: any) {
         const enabled = value === true || value === 'true';
         if (!enabled) {
             // Reset context compression related fields to null when disabled
@@ -1787,12 +2196,17 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         }
     }
 
+    /** @deprecated Use {@link OnContextCompressionToggle}. */
+    public onContextCompressionToggle(value: any) {
+      return this.OnContextCompressionToggle(value);
+    }
+
     /**
      * Opens the modern Add Action dialog for selecting actions (deferred until save)
      */
-    public async configureActions() {
+    public async ConfigureActions() {
         // Get currently linked and pending action IDs for pre-selection
-        const currentActionIds = this.agentActions.map(aa => aa.ID);
+        const currentActionIds = this.AgentActions.map(aa => aa.ID);
         const pendingAddIds = this.PendingRecords
             .filter(p => p.entityObject.EntityInfo.Name === 'MJ: AI Agent Actions' && p.action === 'save')
             .map(p => p.entityObject.Get('ActionID'));
@@ -1835,10 +2249,10 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                         });
                     }
                     
-                    this.hasUnsavedChanges = true;
+                    this.HasUnsavedChanges = true;
                     
                     // Update UI to show the new actions
-                    this.agentActions.push(...newActions);
+                    this.AgentActions.push(...newActions);
                     
                     // Mark for check instead of forcing immediate detection
                     this.cdr.markForCheck();
@@ -1862,10 +2276,15 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         });
     }
 
+    /** @deprecated Use {@link ConfigureActions}. */
+    public async configureActions() {
+      return this.ConfigureActions();
+    }
+
     /**
      * Gets the status icon for execution runs
      */
-    public getExecutionStatusIcon(status: string): string {
+    public GetExecutionStatusIcon(status: string): string {
         switch (status?.toLowerCase()) {
             case 'completed':
             case 'success':
@@ -1883,10 +2302,15 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         }
     }
 
+    /** @deprecated Use {@link GetExecutionStatusIcon}. */
+    public getExecutionStatusIcon(status: string): string {
+      return this.GetExecutionStatusIcon(status);
+    }
+
     /**
      * Gets the status color for execution runs
      */
-    public getExecutionStatusColor(status: string): string {
+    public GetExecutionStatusColor(status: string): string {
         switch (status?.toLowerCase()) {
             case 'completed':
             case 'success':
@@ -1904,13 +2328,23 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         }
     }
 
+    /** @deprecated Use {@link GetExecutionStatusColor}. */
+    public getExecutionStatusColor(status: string): string {
+      return this.GetExecutionStatusColor(status);
+    }
+
     // ────────────────────────────────────────────────────────────────────
     // Voice/Realtime Sessions (Execution History peer record type)
     // ────────────────────────────────────────────────────────────────────
 
     /** Switches the Execution History section between agent runs and voice sessions. */
+    public SetExecutionHistoryView(view: 'runs' | 'sessions'): void {
+        this.ExecutionHistoryView = view;
+    }
+
+    /** @deprecated Use {@link SetExecutionHistoryView}. */
     public setExecutionHistoryView(view: 'runs' | 'sessions'): void {
-        this.executionHistoryView = view;
+      return this.SetExecutionHistoryView(view);
     }
 
     /**
@@ -1925,7 +2359,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         if (!this.record?.ID || !this.UserCanViewSessions) {
             return;
         }
-        this.loadingSessions = true;
+        this.LoadingSessions = true;
         try {
             const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView<AgentSessionListRow>({
@@ -1941,8 +2375,8 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                 const items = (result.Results ?? [])
                     .map(row => this.buildSessionHistoryItem(row))
                     .filter(item => item.isCoAgent || item.isTarget);
-                this.agentSessions = items;
-                this.totalSessionCount = items.length;
+                this.AgentSessions = items;
+                this.TotalSessionCount = items.length;
                 await this.loadSessionChannelCounts(items);
             } else {
                 console.error('Failed to load agent sessions:', result.ErrorMessage);
@@ -1950,7 +2384,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         } catch (error) {
             console.error('Error loading agent sessions:', error);
         } finally {
-            this.loadingSessions = false;
+            this.LoadingSessions = false;
             this.cdr.markForCheck();
         }
     }
@@ -2005,7 +2439,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
     }
 
     /** Status color for a session lifecycle status (Active / Idle / Closed). */
-    public getSessionStatusColor(status: string): string {
+    public GetSessionStatusColor(status: string): string {
         switch (status) {
             case 'Active':
                 return 'var(--mj-status-success)';
@@ -2018,8 +2452,13 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         }
     }
 
+    /** @deprecated Use {@link GetSessionStatusColor}. */
+    public getSessionStatusColor(status: string): string {
+      return this.GetSessionStatusColor(status);
+    }
+
     /** Status icon for a session lifecycle status. */
-    public getSessionStatusIcon(status: string): string {
+    public GetSessionStatusIcon(status: string): string {
         switch (status) {
             case 'Active':
                 return 'fa-solid fa-tower-broadcast';
@@ -2032,22 +2471,37 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         }
     }
 
+    /** @deprecated Use {@link GetSessionStatusIcon}. */
+    public getSessionStatusIcon(status: string): string {
+      return this.GetSessionStatusIcon(status);
+    }
+
     /** Session duration: created → closed (terminal) or last-active (still open). */
-    public formatSessionDuration(item: AgentSessionHistoryItem): string {
+    public FormatSessionDuration(item: AgentSessionHistoryItem): string {
         const end = item.row.ClosedAt ?? item.row.LastActiveAt;
         if (!end) return 'N/A';
-        return this.formatExecutionTimeFromDates(
+        return this.FormatExecutionTimeFromDates(
             item.row.__mj_CreatedAt as Date,
             end as Date
         );
     }
 
+    /** @deprecated Use {@link FormatSessionDuration}. */
+    public formatSessionDuration(item: AgentSessionHistoryItem): string {
+      return this.FormatSessionDuration(item);
+    }
+
     /** Opens an AI Agent Session record (renders via the custom session form). */
-    public openSessionRecord(sessionId: string): void {
+    public OpenSessionRecord(sessionId: string): void {
         this.sharedService.OpenEntityRecord('MJ: AI Agent Sessions', CompositeKey.FromID(sessionId));
     }
 
-    public formatExecutionTimeFromDates(startDate: Date, endDate: Date): string {
+    /** @deprecated Use {@link OpenSessionRecord}. */
+    public openSessionRecord(sessionId: string): void {
+      return this.OpenSessionRecord(sessionId);
+    }
+
+    public FormatExecutionTimeFromDates(startDate: Date, endDate: Date): string {
         if (!startDate || !endDate) return 'N/A';
 
         // check to see if we have dates or timestamps
@@ -2075,13 +2529,18 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         if (isNaN(startTime) || isNaN(endTime)) 
             return 'N/A';        
         const milliseconds = endTime - startTime;
-        return this.formatExecutionTime(milliseconds);
+        return this.FormatExecutionTime(milliseconds);
+    }
+
+    /** @deprecated Use {@link FormatExecutionTimeFromDates}. */
+    public formatExecutionTimeFromDates(startDate: Date, endDate: Date): string {
+      return this.FormatExecutionTimeFromDates(startDate, endDate);
     }
 
     /**
      * Formats execution time
      */
-    public formatExecutionTime(milliseconds: number): string {
+    public FormatExecutionTime(milliseconds: number): string {
         if (!milliseconds) return 'N/A';
         
         if (milliseconds >= 60000) {
@@ -2095,10 +2554,15 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         }
     }
 
+    /** @deprecated Use {@link FormatExecutionTime}. */
+    public formatExecutionTime(milliseconds: number): string {
+      return this.FormatExecutionTime(milliseconds);
+    }
+
     /**
      * Formats token count with appropriate units (K for thousands, M for millions)
      */
-    public formatTokenCount(tokens: number | null): string {
+    public FormatTokenCount(tokens: number | null): string {
         if (tokens == null || tokens === 0) return '0';
         
         if (tokens >= 1000000) {
@@ -2110,10 +2574,15 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         }
     }
 
+    /** @deprecated Use {@link FormatTokenCount}. */
+    public formatTokenCount(tokens: number | null): string {
+      return this.FormatTokenCount(tokens);
+    }
+
     /**
      * Formats cost with appropriate precision
      */
-    public formatCost(cost: number | null): string {
+    public FormatCost(cost: number | null): string {
         if (cost == null || cost === 0) return '0.00';
         
         if (cost >= 1) {
@@ -2125,6 +2594,11 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         }
     }
 
+    /** @deprecated Use {@link FormatCost}. */
+    public formatCost(cost: number | null): string {
+      return this.FormatCost(cost);
+    }
+
     /**
      * Gets the running time for an execution that hasn't completed yet
      * Uses a cached timestamp to avoid ExpressionChangedAfterItHasBeenCheckedError
@@ -2132,7 +2606,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
     private _runningTimeCache = new Map<string, { time: string, timestamp: number }>();
     private _runningTimeUpdater: any = null;
     
-    public getRunningTime(startDate: Date): string {
+    public GetRunningTime(startDate: Date): string {
         if (!startDate) return 'N/A';
         
         const startTime = new Date(startDate).getTime();
@@ -2145,7 +2619,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         // Update cache every second to avoid constant changes
         if (!cached || now - cached.timestamp > 1000) {
             const milliseconds = now - startTime;
-            const timeString = this.formatExecutionTime(milliseconds);
+            const timeString = this.FormatExecutionTime(milliseconds);
             this._runningTimeCache.set(cacheKey, { time: timeString, timestamp: now });
             
             // Don't trigger change detection here - let the background timer handle it
@@ -2153,6 +2627,11 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         }
         
         return cached.time;
+    }
+
+    /** @deprecated Use {@link GetRunningTime}. */
+    public getRunningTime(startDate: Date): string {
+      return this.GetRunningTime(startDate);
     }
 
     /**
@@ -2178,39 +2657,59 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
     /**
      * Gets the priority badge color
      */
-    public getPriorityBadgeColor(priority: number): string {
+    public GetPriorityBadgeColor(priority: number): string {
         if (priority <= 1) return 'var(--mj-status-error)'; // High priority - red
         if (priority <= 5) return 'var(--mj-status-warning)'; // Medium priority - yellow
         return 'var(--mj-status-success)'; // Low priority - green
     }
 
+    /** @deprecated Use {@link GetPriorityBadgeColor}. */
+    public getPriorityBadgeColor(priority: number): string {
+      return this.GetPriorityBadgeColor(priority);
+    }
+
     /**
      * Gets the priority label
      */
-    public getPriorityLabel(priority: number): string {
+    public GetPriorityLabel(priority: number): string {
         if (priority <= 1) return 'High';
         if (priority <= 5) return 'Medium';
         return 'Low';
     }
 
+    /** @deprecated Use {@link GetPriorityLabel}. */
+    public getPriorityLabel(priority: number): string {
+      return this.GetPriorityLabel(priority);
+    }
+
     /**
      * Navigates to a related entity
      */
-    public navigateToEntity(entityName: string, recordId: string) {
+    public NavigateToEntity(entityName: string, recordId: string) {
         this.sharedService.OpenEntityRecord(entityName, CompositeKey.FromURLSegment(this.ProviderToUse.EntityByName(entityName), recordId));
+    }
+
+    /** @deprecated Use {@link NavigateToEntity}. */
+    public navigateToEntity(entityName: string, recordId: string) {
+      return this.NavigateToEntity(entityName, recordId);
     }
     
     /**
      * Toggles the expanded state of an execution card
      */
+    public ToggleExecutionExpanded(executionId: string) {
+        this.ExpandedExecutions[executionId] = !this.ExpandedExecutions[executionId];
+    }
+
+    /** @deprecated Use {@link ToggleExecutionExpanded}. */
     public toggleExecutionExpanded(executionId: string) {
-        this.expandedExecutions[executionId] = !this.expandedExecutions[executionId];
+      return this.ToggleExecutionExpanded(executionId);
     }
 
     /**
      * Handles search text changes - debounced to avoid excessive processing
      */
-    public onExecutionSearchChange(): void {
+    public OnExecutionSearchChange(): void {
         // Debounce search to avoid excessive processing during typing
         if (this._searchDebounceTimer) {
             clearTimeout(this._searchDebounceTimer);
@@ -2221,19 +2720,24 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         }, 300);
     }
 
+    /** @deprecated Use {@link OnExecutionSearchChange}. */
+    public onExecutionSearchChange(): void {
+      return this.OnExecutionSearchChange();
+    }
+
     private _searchDebounceTimer: any = null;
 
     /**
      * Applies search filter across all cached records and loads from database if needed
      */
     private async applySearchFilter(): Promise<void> {
-        if (!this.executionSearchText || this.executionSearchText.trim() === '') {
+        if (!this.ExecutionSearchText || this.ExecutionSearchText.trim() === '') {
             // No search text - show current page's executions
-            this.filteredExecutions = [...this.recentExecutions];
+            this.FilteredExecutions = [...this.RecentExecutions];
             return;
         }
 
-        const searchLower = this.executionSearchText.toLowerCase().trim();
+        const searchLower = this.ExecutionSearchText.toLowerCase().trim();
 
         // First, search across all cached records
         const cachedMatches = this.allLoadedExecutions.filter(execution =>
@@ -2242,7 +2746,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
 
         if (cachedMatches.length > 0) {
             // Found matches in cache
-            this.filteredExecutions = cachedMatches;
+            this.FilteredExecutions = cachedMatches;
         } else {
             // No matches in cache - search database
             await this.searchExecutionsFromDatabase(searchLower);
@@ -2273,27 +2777,32 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
             });
 
             if (result.Success && result.Results) {
-                this.filteredExecutions = result.Results;
+                this.FilteredExecutions = result.Results;
             } else {
-                this.filteredExecutions = [];
+                this.FilteredExecutions = [];
             }
         } catch (error) {
             console.error('Error searching executions:', error);
-            this.filteredExecutions = [];
+            this.FilteredExecutions = [];
         }
     }
 
     /**
      * Opens the full execution record in a new view
      */
-    public openExecutionRecord(executionId: string) {
+    public OpenExecutionRecord(executionId: string) {
         this.sharedService.OpenEntityRecord('MJ: AI Agent Runs', CompositeKey.FromID(executionId));
+    }
+
+    /** @deprecated Use {@link OpenExecutionRecord}. */
+    public openExecutionRecord(executionId: string) {
+      return this.OpenExecutionRecord(executionId);
     }
     
     /**
      * Gets a preview of the execution result for collapsed view
      */
-    public getExecutionResultPreview(execution: MJAIAgentRunEntityExtended, trimLongMessages: boolean): string {
+    public GetExecutionResultPreview(execution: MJAIAgentRunEntityExtended, trimLongMessages: boolean): string {
         try {
             if (!execution.Result) return 'No result';
             
@@ -2324,11 +2833,16 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                 return result;
         }
     }
+
+    /** @deprecated Use {@link GetExecutionResultPreview}. */
+    public getExecutionResultPreview(execution: MJAIAgentRunEntityExtended, trimLongMessages: boolean): string {
+      return this.GetExecutionResultPreview(execution, trimLongMessages);
+    }
     
     /**
      * Gets the full execution result message for expanded view
      */
-    public getExecutionResultMessage(execution: MJAIAgentRunEntityExtended): string {
+    public GetExecutionResultMessage(execution: MJAIAgentRunEntityExtended): string {
         try {
             if (!execution.Result) return 'No result';
             
@@ -2348,10 +2862,15 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         }
     }
 
+    /** @deprecated Use {@link GetExecutionResultMessage}. */
+    public getExecutionResultMessage(execution: MJAIAgentRunEntityExtended): string {
+      return this.GetExecutionResultMessage(execution);
+    }
+
     /**
      * Refreshes the related data and updates snapshots
      */
-    public async refreshRelatedData() {
+    public async RefreshRelatedData() {
         if (this.record?.ID) {
             await this.loadRelatedCounts(true); // force refresh
             MJNotificationService.Instance.CreateSimpleNotification(
@@ -2362,11 +2881,16 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         }
     }
 
+    /** @deprecated Use {@link RefreshRelatedData}. */
+    public async refreshRelatedData() {
+      return this.RefreshRelatedData();
+    }
+
     /**
      * Manually refreshes the snapshot for cancel/revert functionality
      * Useful when you want to reset the "original state" to the current state
      */
-    public refreshSnapshot() {
+    public RefreshSnapshot() {
         this.createOriginalSnapshot();
         MJNotificationService.Instance.CreateSimpleNotification(
             'Current state saved as new baseline',
@@ -2375,18 +2899,28 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         );
     }
 
+    /** @deprecated Use {@link RefreshSnapshot}. */
+    public refreshSnapshot() {
+      return this.RefreshSnapshot();
+    }
+
     /**
      * Debug method to check current pending records state
      * Useful for troubleshooting cancel/revert issues
      */
-    public debugPendingRecords() {
+    public DebugPendingRecords() {
         // Debug method for troubleshooting - console output removed for production
+    }
+
+    /** @deprecated Use {@link DebugPendingRecords}. */
+    public debugPendingRecords() {
+      return this.DebugPendingRecords();
     }
 
     /**
      * Adds a new note to the agent
      */
-    public addNote() {
+    public AddNote() {
         MJNotificationService.Instance.CreateSimpleNotification(
             'Opening new note form...',
             'info',
@@ -2395,6 +2929,11 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         
         // In a full implementation, this would open a new AI Agent Note form
         // with AgentID pre-populated to this.record.ID
+    }
+
+    /** @deprecated Use {@link AddNote}. */
+    public addNote() {
+      return this.AddNote();
     }
 
     /**
@@ -2456,10 +2995,10 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                                 action: 'save'
                             });
 
-                            this.hasUnsavedChanges = true;
+                            this.HasUnsavedChanges = true;
 
                             // Update UI to show the new prompt
-                            this.agentPrompts.push(result.prompt);
+                            this.AgentPrompts.push(result.prompt);
 
                             // Trigger change detection to update UI
                             this.cdr.detectChanges();
@@ -2501,7 +3040,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
     /**
      * Removes a prompt from the agent (deferred until save)
      */
-    public async removePrompt(prompt: MJAIPromptEntityExtended, event: Event) {
+    public async RemovePrompt(prompt: MJAIPromptEntityExtended, event: Event) {
         event.stopPropagation(); // Prevent navigation
         
         const confirmDialog = this.dialogService.open({
@@ -2552,12 +3091,12 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                     }
 
                     // Remove from UI immediately
-                    const promptIndex = this.agentPrompts.findIndex(p => UUIDsEqual(p.ID, prompt.ID));
+                    const promptIndex = this.AgentPrompts.findIndex(p => UUIDsEqual(p.ID, prompt.ID));
                     if (promptIndex >= 0) {
-                        this.agentPrompts.splice(promptIndex, 1);
+                        this.AgentPrompts.splice(promptIndex, 1);
                     }
 
-                    this.hasUnsavedChanges = true;
+                    this.HasUnsavedChanges = true;
 
                     // Mark for check instead of forcing immediate detection
                     this.cdr.markForCheck();
@@ -2581,10 +3120,15 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         }
     }
 
+    /** @deprecated Use {@link RemovePrompt}. */
+    public async removePrompt(prompt: MJAIPromptEntityExtended, event: Event) {
+      return this.RemovePrompt(prompt, event);
+    }
+
     /**
      * Updates payload field values from code editor
      */
-    public updatePayloadField(fieldName: string, value: any) {
+    public UpdatePayloadField(fieldName: string, value: any) {
         if (this.record) {
             // Handle the value - it might be a string or an event
             const newValue = typeof value === 'string' ? value : value?.target?.value || value;
@@ -2592,10 +3136,15 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         }
     }
 
+    /** @deprecated Use {@link UpdatePayloadField}. */
+    public updatePayloadField(fieldName: string, value: any) {
+      return this.UpdatePayloadField(fieldName, value);
+    }
+
     /**    
      * Opens the sub-agent selector dialog for adding sub-agents (deferred until save)
      */
-    public async addSubAgents() {
+    public async AddSubAgents() {
         try {
             // Get list of already pending sub-agent IDs to filter duplicates
             const pendingSubAgentIds = this.PendingRecords
@@ -2603,7 +3152,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                             p.action === 'save' && 
                             p.entityObject.Get('ParentID') === this.record.ID)
                 .map(p => p.entityObject.Get('ID'));
-            const existingSubAgentIds = this.subAgents.map(agent => agent.ID);
+            const existingSubAgentIds = this.SubAgents.map(agent => agent.ID);
             const allLinkedIds = [...pendingSubAgentIds, ...existingSubAgentIds];
 
             this.agentManagementService.openSubAgentSelectorDialog({
@@ -2644,10 +3193,10 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                             });
                         }
                         
-                        this.hasUnsavedChanges = true;
+                        this.HasUnsavedChanges = true;
                         
                         // Update UI to show the new sub-agents
-                        this.subAgents.push(...newAgents);
+                        this.SubAgents.push(...newAgents);
                         
                         // Mark for check instead of forcing immediate detection
                         this.cdr.markForCheck();
@@ -2660,7 +3209,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                         );
                     } else if (result && result.createNew) {
                         // User wants to create a new sub-agent
-                        await this.createSubAgent();
+                        await this.CreateSubAgent();
                     }
                 },
                 error: (error) => {
@@ -2682,10 +3231,15 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         }
     }
 
+    /** @deprecated Use {@link AddSubAgents}. */
+    public async addSubAgents() {
+      return this.AddSubAgents();
+    }
+
     /**
      * Removes a sub-agent from this agent (deferred until save)
      */
-    public async removeSubAgent(subAgent: MJAIAgentEntityExtended, event: Event) {
+    public async RemoveSubAgent(subAgent: MJAIAgentEntityExtended, event: Event) {
         event.stopPropagation(); // Prevent navigation
         
         const confirmDialog = this.dialogService.open({
@@ -2728,12 +3282,12 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                     }
 
                     // Remove from UI immediately
-                    const subAgentIndex = this.subAgents.findIndex(sa => UUIDsEqual(sa.ID, subAgent.ID));
+                    const subAgentIndex = this.SubAgents.findIndex(sa => UUIDsEqual(sa.ID, subAgent.ID));
                     if (subAgentIndex >= 0) {
-                        this.subAgents.splice(subAgentIndex, 1);
+                        this.SubAgents.splice(subAgentIndex, 1);
                     }
 
-                    this.hasUnsavedChanges = true;
+                    this.HasUnsavedChanges = true;
 
                     // Mark for check instead of forcing immediate detection
                     this.cdr.markForCheck();
@@ -2757,38 +3311,63 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         }
     }
 
+    /** @deprecated Use {@link RemoveSubAgent}. */
+    public async removeSubAgent(subAgent: MJAIAgentEntityExtended, event: Event) {
+      return this.RemoveSubAgent(subAgent, event);
+    }
+
     /**
      * Sets the sub-agent filter to show all, child, or related sub-agents
      */
+    public SetSubAgentFilter(filter: SubAgentFilterType): void {
+        this.SubAgentFilter = filter;
+    }
+
+    /** @deprecated Use {@link SetSubAgentFilter}. */
     public setSubAgentFilter(filter: SubAgentFilterType): void {
-        this.subAgentFilter = filter;
+      return this.SetSubAgentFilter(filter);
     }
 
     /**
      * Gets the badge color for a sub-agent based on its type
      */
-    public getSubAgentBadgeColor(item: UnifiedSubAgent): string {
+    public GetSubAgentBadgeColor(item: UnifiedSubAgent): string {
         return item.type === 'child' ? 'var(--mj-status-info)' : 'var(--mj-brand-primary)';
+    }
+
+    /** @deprecated Use {@link GetSubAgentBadgeColor}. */
+    public getSubAgentBadgeColor(item: UnifiedSubAgent): string {
+      return this.GetSubAgentBadgeColor(item);
     }
 
     /**
      * Gets the badge icon for a sub-agent based on its type
      */
-    public getSubAgentBadgeIcon(item: UnifiedSubAgent): string {
+    public GetSubAgentBadgeIcon(item: UnifiedSubAgent): string {
         return item.type === 'child' ? 'fa-solid fa-link' : 'fa-solid fa-share-nodes';
+    }
+
+    /** @deprecated Use {@link GetSubAgentBadgeIcon}. */
+    public getSubAgentBadgeIcon(item: UnifiedSubAgent): string {
+      return this.GetSubAgentBadgeIcon(item);
     }
 
     /**
      * Gets the badge text for a sub-agent based on its type
      */
-    public getSubAgentBadgeText(item: UnifiedSubAgent): string {
+    public GetSubAgentBadgeText(item: UnifiedSubAgent): string {
         return item.type === 'child' ? 'CHILD' : 'RELATED';
+    }
+
+    /** @deprecated Use {@link GetSubAgentBadgeText}. */
+    public getSubAgentBadgeText(item: UnifiedSubAgent): string {
+      return this.GetSubAgentBadgeText(item);
     }
 
     /**
      * Gets the payload information string for display
      */
-    public getSubAgentPayloadInfo(item: UnifiedSubAgent): string {
+    public GetSubAgentPayloadInfo(item: UnifiedSubAgent): string {
         if (item.type === 'child') {
             return 'Shared Payload';
         } else if (item.relationship?.SubAgentOutputMapping) {
@@ -2806,10 +3385,15 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         return 'No Mapping';
     }
 
+    /** @deprecated Use {@link GetSubAgentPayloadInfo}. */
+    public getSubAgentPayloadInfo(item: UnifiedSubAgent): string {
+      return this.GetSubAgentPayloadInfo(item);
+    }
+
     /**
      * Opens a dialog to configure the output mapping for a related sub-agent
      */
-    public async configureOutputMapping(item: UnifiedSubAgent, event: Event): Promise<void> {
+    public async ConfigureOutputMapping(item: UnifiedSubAgent, event: Event): Promise<void> {
         event.stopPropagation();
         if (item.type !== 'related' || !item.relationship) return;
 
@@ -2821,10 +3405,15 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         );
     }
 
+    /** @deprecated Use {@link ConfigureOutputMapping}. */
+    public async configureOutputMapping(item: UnifiedSubAgent, event: Event): Promise<void> {
+      return this.ConfigureOutputMapping(item, event);
+    }
+
     /**
      * Unlinks a related sub-agent (removes the relationship)
      */
-    public async unlinkRelatedSubAgent(item: UnifiedSubAgent, event: Event): Promise<void> {
+    public async UnlinkRelatedSubAgent(item: UnifiedSubAgent, event: Event): Promise<void> {
         event.stopPropagation();
         if (item.type !== 'related' || !item.relationship) return;
 
@@ -2877,25 +3466,40 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         }
     }
 
+    /** @deprecated Use {@link UnlinkRelatedSubAgent}. */
+    public async unlinkRelatedSubAgent(item: UnifiedSubAgent, event: Event): Promise<void> {
+      return this.UnlinkRelatedSubAgent(item, event);
+    }
+
     /**
      * Removes a child sub-agent (updated to work with UnifiedSubAgent)
      */
-    public async removeChildSubAgent(item: UnifiedSubAgent, event: Event): Promise<void> {
+    public async RemoveChildSubAgent(item: UnifiedSubAgent, event: Event): Promise<void> {
         // Delegate to existing removeSubAgent method
-        await this.removeSubAgent(item.agent, event);
+        await this.RemoveSubAgent(item.agent, event);
+    }
+
+    /** @deprecated Use {@link RemoveChildSubAgent}. */
+    public async removeChildSubAgent(item: UnifiedSubAgent, event: Event): Promise<void> {
+      return this.RemoveChildSubAgent(item, event);
     }
 
     /**
      * Creates a new child sub-agent (renamed from createSubAgent for clarity)
      */
+    public async CreateChildSubAgent(): Promise<void> {
+        await this.CreateSubAgent();
+    }
+
+    /** @deprecated Use {@link CreateChildSubAgent}. */
     public async createChildSubAgent(): Promise<void> {
-        await this.createSubAgent();
+      return this.CreateChildSubAgent();
     }
 
     /**
      * Opens dialog to link an existing agent as a related sub-agent
      */
-    public async linkRelatedSubAgent(): Promise<void> {
+    public async LinkRelatedSubAgent(): Promise<void> {
         // TODO: Implement dialog to select existing agents and create relationship
         MJNotificationService.Instance.CreateSimpleNotification(
             'Link related sub-agent dialog coming soon',
@@ -2904,10 +3508,15 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         );
     }
 
+    /** @deprecated Use {@link LinkRelatedSubAgent}. */
+    public async linkRelatedSubAgent(): Promise<void> {
+      return this.LinkRelatedSubAgent();
+    }
+
     /**
      * Removes an action from the agent (deferred until save)
      */
-    public async removeAction(action: MJActionEntity, event: Event) {
+    public async RemoveAction(action: MJActionEntity, event: Event) {
         event.stopPropagation(); // Prevent navigation
         
         const confirmDialog = this.dialogService.open({
@@ -2958,12 +3567,12 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                 }
 
                 // Remove from UI immediately
-                const actionIndex = this.agentActions.findIndex(a => UUIDsEqual(a.ID, action.ID));
+                const actionIndex = this.AgentActions.findIndex(a => UUIDsEqual(a.ID, action.ID));
                 if (actionIndex >= 0) {
-                    this.agentActions.splice(actionIndex, 1);
+                    this.AgentActions.splice(actionIndex, 1);
                 }
 
-                this.hasUnsavedChanges = true;
+                this.HasUnsavedChanges = true;
 
                 // Mark for check instead of forcing immediate detection
                 this.cdr.markForCheck();
@@ -2987,10 +3596,15 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         }
     }
 
+    /** @deprecated Use {@link RemoveAction}. */
+    public async removeAction(action: MJActionEntity, event: Event) {
+      return this.RemoveAction(action, event);
+    }
+
     /**
      * Opens the advanced settings dialog for a prompt
      */
-    public async openPromptAdvancedSettings(prompt: MJAIPromptEntityExtended, event: Event) {
+    public async OpenPromptAdvancedSettings(prompt: MJAIPromptEntityExtended, event: Event) {
         event.stopPropagation(); // Prevent navigation
         
         try {
@@ -3072,10 +3686,15 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         }
     }
 
+    /** @deprecated Use {@link OpenPromptAdvancedSettings}. */
+    public async openPromptAdvancedSettings(prompt: MJAIPromptEntityExtended, event: Event) {
+      return this.OpenPromptAdvancedSettings(prompt, event);
+    }
+
     /**
      * Opens the advanced settings dialog for a sub-agent
      */
-    public async openSubAgentAdvancedSettings(subAgentEntity: MJAIAgentEntityExtended, event: Event) {
+    public async OpenSubAgentAdvancedSettings(subAgentEntity: MJAIAgentEntityExtended, event: Event) {
         event.stopPropagation(); // Prevent navigation
         
         try {
@@ -3107,7 +3726,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                                 );
 
                                 // Update the local sub-agent data to reflect changes
-                                const localSubAgent = this.subAgents.find(sa => UUIDsEqual(sa.ID, subAgentEntity.ID));
+                                const localSubAgent = this.SubAgents.find(sa => UUIDsEqual(sa.ID, subAgentEntity.ID));
                                 if (localSubAgent) {
                                     localSubAgent.ExecutionOrder = formData.executionOrder;
                                     localSubAgent.ExecutionMode = formData.executionMode;
@@ -3153,6 +3772,11 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                 3000
             );
         }
+    }
+
+    /** @deprecated Use {@link OpenSubAgentAdvancedSettings}. */
+    public async openSubAgentAdvancedSettings(subAgentEntity: MJAIAgentEntityExtended, event: Event) {
+      return this.OpenSubAgentAdvancedSettings(subAgentEntity, event);
     }
 
     /**
@@ -3203,7 +3827,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                 this.record.ContextCompressionMessageThreshold = null;
                 this.record.ContextCompressionPromptID = null;
                 this.record.ContextCompressionMessageRetentionCount = null;
-                this.selectedContextCompressionPrompt = null;
+                this.SelectedContextCompressionPrompt = null;
             }
 
             const md = this.ProviderToUse;
@@ -3338,7 +3962,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                 const contributed = await this.customSectionComponent.ContributeToSave(transactionGroup);
                 if (!contributed) {
                     MJNotificationService.Instance.CreateSimpleNotification(
-                        `The ${this.agentType?.Name ?? 'type'} configuration could not be prepared for saving. Nothing was saved.`,
+                        `The ${this.AgentType?.Name ?? 'type'} configuration could not be prepared for saving. Nothing was saved.`,
                         'error',
                         4000
                     );
@@ -3354,7 +3978,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                 this.customSectionComponent?.OnHostSaveCompleted();
 
                 // Clear our local state since save was successful
-                this.hasUnsavedChanges = false;
+                this.HasUnsavedChanges = false;
                 
                 // Clear pending records since they've been saved
                 this.PendingRecords.length = 0;
@@ -3390,10 +4014,15 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
     /**
      * Navigates to the parent agent when the "Child of..." badge is clicked
      */
-    public navigateToParentAgent(): void {
+    public NavigateToParentAgent(): void {
         if (this.record.ParentID) {
-            this.navigateToEntity('MJ: AI Agents', this.record.ParentID);
+            this.NavigateToEntity('MJ: AI Agents', this.record.ParentID);
         }
+    }
+
+    /** @deprecated Use {@link NavigateToParentAgent}. */
+    public navigateToParentAgent(): void {
+      return this.NavigateToParentAgent();
     }
 
     /**
@@ -3404,7 +4033,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
      * the job of this layer.
      */
     public OnInvocationOpenRequested(event: AgentInvocationOpenRequestedEventArgs): void {
-        this.navigateToEntity(event.EntityName, event.RecordID);
+        this.NavigateToEntity(event.EntityName, event.RecordID);
     }
 
     /**
@@ -3428,23 +4057,23 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         }
         
         // Clear all data arrays to release memory
-        this.subAgents.length = 0;
-        this.agentPrompts.length = 0;
-        this.agentActions.length = 0;
-        this.recentExecutions.length = 0;
-        this.learningCycles.length = 0;
-        this.agentNotes.length = 0;
+        this.SubAgents.length = 0;
+        this.AgentPrompts.length = 0;
+        this.AgentActions.length = 0;
+        this.RecentExecutions.length = 0;
+        this.LearningCycles.length = 0;
+        this.AgentNotes.length = 0;
 
         // Reset pagination state
-        this.executionHistoryCurrentPage = 1;
-        this.totalExecutionHistoryCount = 0;
-        this.isLoadingPage = false;
+        this.ExecutionHistoryCurrentPage = 1;
+        this.TotalExecutionHistoryCount = 0;
+        this.IsLoadingPage = false;
         this.allLoadedExecutions = [];
 
         // Clear maps and objects
         this._permissionCache.clear();
         this._runningTimeCache.clear();
-        this.expandedExecutions = {};
+        this.ExpandedExecutions = {};
         this.originalSnapshots = null as any;
         
         // Clean up component references
@@ -3453,7 +4082,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
             this.customSectionComponentRef = null;
         }
         this.customSectionComponent = null;
-        this.agentType = null;
+        this.AgentType = null;
     }
     
 }

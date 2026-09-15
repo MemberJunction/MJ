@@ -1,18 +1,18 @@
 import { describe, it, expect } from 'vitest';
 import path from 'node:path';
-import { isMjDefaultSqlOutputPath, resolveSQLOutputFolder } from '../Misc/sql_logging';
+import { IsMjDefaultSqlOutputPath, ResolveSQLOutputFolder } from '../Misc/sql_logging';
 
 describe('isMjDefaultSqlOutputPath', () => {
     it('detects MJ host v5/v6 trees', () => {
-        expect(isMjDefaultSqlOutputPath('./migrations/v5/')).toBe(true);
-        expect(isMjDefaultSqlOutputPath('./migrations/v5')).toBe(true);
-        expect(isMjDefaultSqlOutputPath('../../migrations/v5/')).toBe(true);
-        expect(isMjDefaultSqlOutputPath('/repo/MJ/migrations/v6/')).toBe(true);
+        expect(IsMjDefaultSqlOutputPath('./migrations/v5/')).toBe(true);
+        expect(IsMjDefaultSqlOutputPath('./migrations/v5')).toBe(true);
+        expect(IsMjDefaultSqlOutputPath('../../migrations/v5/')).toBe(true);
+        expect(IsMjDefaultSqlOutputPath('/repo/MJ/migrations/v6/')).toBe(true);
     });
 
     it('does not treat app codegen folders as MJ defaults', () => {
-        expect(isMjDefaultSqlOutputPath('./migrations/codegen')).toBe(false);
-        expect(isMjDefaultSqlOutputPath('/app/migrations/codegen/')).toBe(false);
+        expect(IsMjDefaultSqlOutputPath('./migrations/codegen')).toBe(false);
+        expect(IsMjDefaultSqlOutputPath('/app/migrations/codegen/')).toBe(false);
     });
 });
 
@@ -21,7 +21,7 @@ describe('resolveSQLOutputFolder', () => {
     const mjCwd = '/work/MJ';
 
     it('Open App cwd uses migrations/codegen and ignores MJ v5 default', () => {
-        expect(resolveSQLOutputFolder({
+        expect(ResolveSQLOutputFolder({
             cwd: appCwd,
             configuredFolderPath: './migrations/v5/',
             includeSchemas: ['__mj_BizAppsCommon'],
@@ -32,7 +32,7 @@ describe('resolveSQLOutputFolder', () => {
     });
 
     it('Open App honors an explicit non-MJ folderPath', () => {
-        expect(resolveSQLOutputFolder({
+        expect(ResolveSQLOutputFolder({
             cwd: appCwd,
             configuredFolderPath: './audit-sql',
             hasMjAppJson: true,
@@ -42,7 +42,7 @@ describe('resolveSQLOutputFolder', () => {
     });
 
     it('throws when MJ monorepo cwd generates an Open App schema', () => {
-        expect(() => resolveSQLOutputFolder({
+        expect(() => ResolveSQLOutputFolder({
             cwd: mjCwd,
             configuredFolderPath: './migrations/v5/',
             includeSchemas: ['__mj_BizAppsCommon'],
@@ -53,7 +53,7 @@ describe('resolveSQLOutputFolder', () => {
     });
 
     it('MJ monorepo cwd with only core includeSchemas keeps host folder', () => {
-        expect(resolveSQLOutputFolder({
+        expect(ResolveSQLOutputFolder({
             cwd: mjCwd,
             configuredFolderPath: './migrations/v6/',
             includeSchemas: ['__mj'],
@@ -64,7 +64,7 @@ describe('resolveSQLOutputFolder', () => {
     });
 
     it('--sql-output-dir wins on an Open App', () => {
-        expect(resolveSQLOutputFolder({
+        expect(ResolveSQLOutputFolder({
             cwd: appCwd,
             hasMjAppJson: true,
             isMjMonorepo: false,

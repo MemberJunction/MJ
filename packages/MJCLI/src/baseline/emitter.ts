@@ -28,13 +28,13 @@
  */
 
 import {
-  formatTsqlValue,
-  isoUtcSeconds,
+  FormatTsqlValue,
+  IsoUtcSeconds,
   NL,
-  quoteIdent,
-  quoteString,
-  stableSortBy,
-  topoSortRoutinesByDefinition,
+  QuoteIdent,
+  QuoteString,
+  StableSortBy,
+  TopoSortRoutinesByDefinition,
 } from './util';
 import type {
   BaselineEmitOptions,
@@ -61,7 +61,7 @@ export interface EmitInput {
   options: BaselineEmitOptions;
 }
 
-export function emitBaselineTsql(input: EmitInput): string {
+export function EmitBaselineTsql(input: EmitInput): string {
   if (input.snapshot.dialect !== 'mssql') {
     throw new Error('emitBaselineTsql requires an MSSQL snapshot');
   }
@@ -92,10 +92,10 @@ export function emitBaselineTsql(input: EmitInput): string {
   // Within each category we also topo-sort by inferred body references because
   // views can reference other views, functions can reference other functions,
   // etc. Cycles fall back to qname order so output stays deterministic.
-  parts.push(emitRoutines(topoSortRoutinesByDefinition(input.snapshot.functions), 'function'));
-  parts.push(emitViews(topoSortRoutinesByDefinition(input.snapshot.views)));
-  parts.push(emitRoutines(topoSortRoutinesByDefinition(input.snapshot.procedures), 'procedure'));
-  parts.push(emitTriggers(topoSortRoutinesByDefinition(input.snapshot.triggers)));
+  parts.push(emitRoutines(TopoSortRoutinesByDefinition(input.snapshot.functions), 'function'));
+  parts.push(emitViews(TopoSortRoutinesByDefinition(input.snapshot.views)));
+  parts.push(emitRoutines(TopoSortRoutinesByDefinition(input.snapshot.procedures), 'procedure'));
+  parts.push(emitTriggers(TopoSortRoutinesByDefinition(input.snapshot.triggers)));
   parts.push(emitForeignKeys(input.snapshot.tables));
   // Role memberships come AFTER principals + all objects exist. ALTER ROLE
   // requires both the role and the member principal to be present.
@@ -110,12 +110,17 @@ export function emitBaselineTsql(input: EmitInput): string {
   return parts.filter((p) => p.length > 0).join(NL + NL) + NL;
 }
 
+/** @deprecated Use {@link EmitBaselineTsql}. */
+export function emitBaselineTsql(input: EmitInput): string {
+  return EmitBaselineTsql(input);
+}
+
 function emitHeader(options: BaselineEmitOptions): string {
   return [
     `-- ============================================================================`,
     `-- ${options.description}`,
     `-- Baseline version : v${options.baselineVersion}.x`,
-    `-- Generated at     : ${isoUtcSeconds(options.generatedAtUtc)}`,
+    `-- Generated at     : ${IsoUtcSeconds(options.generatedAtUtc)}`,
     `-- Generator        : @memberjunction/cli baseline build`,
     `-- ============================================================================`,
     `SET ANSI_NULLS ON;`,
@@ -130,15 +135,15 @@ function emitFooter(): string {
 }
 
 function emitSchemas(snapshot: SchemaSnapshot): string {
-  const schemas = stableSortBy(snapshot.schemas, (s) => s.name.toLowerCase());
+  const schemas = StableSortBy(snapshot.schemas, (s) => s.name.toLowerCase());
   if (schemas.length === 0) return '';
   const lines: string[] = ['-- Schemas'];
   for (const schema of schemas) {
     if (schema.name.toLowerCase() === 'dbo') continue;
     lines.push(
-      `IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = ${quoteString(schema.name)})`,
+      `IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = ${QuoteString(schema.name)})`,
     );
-    lines.push(`    EXEC('CREATE SCHEMA ${quoteIdent(schema.name)}');`);
+    lines.push(`    EXEC('CREATE SCHEMA ${QuoteIdent(schema.name)}');`);
     lines.push(`GO`);
   }
   return lines.join(NL);
@@ -152,7 +157,7 @@ function emitSequences(sequences: readonly SequenceDef[]): string {
     const max = seq.maxValue ? ` MAXVALUE ${seq.maxValue}` : '';
     const cycle = seq.cycle ? ' CYCLE' : ' NO CYCLE';
     lines.push(
-      `CREATE SEQUENCE ${quoteIdent(seq.schema)}.${quoteIdent(seq.name)} ` +
+      `CREATE SEQUENCE ${QuoteIdent(seq.schema)}.${QuoteIdent(seq.name)} ` +
       `AS BIGINT START WITH ${seq.startValue} INCREMENT BY ${seq.increment}${min}${max}${cycle};`,
     );
     lines.push(`GO`);
@@ -171,7 +176,7 @@ function emitTables(tables: readonly TableDef[]): string {
 
 function emitCreateTable(t: TableDef): string {
   const lines: string[] = [];
-  lines.push(`CREATE TABLE ${quoteIdent(t.schema)}.${quoteIdent(t.name)} (`);
+  lines.push(`CREATE TABLE ${QuoteIdent(t.schema)}.${QuoteIdent(t.name)} (`);
   const columnLines: string[] = [];
   for (const c of t.columns) {
     columnLines.push('    ' + columnDefinition(c));
@@ -179,15 +184,15 @@ function emitCreateTable(t: TableDef): string {
   if (t.primaryKey) {
     const cluster = t.primaryKey.clustered ? 'CLUSTERED' : 'NONCLUSTERED';
     columnLines.push(
-      `    CONSTRAINT ${quoteIdent(t.primaryKey.name)} PRIMARY KEY ${cluster} ` +
-      `(${t.primaryKey.columns.map((n) => quoteIdent(n)).join(', ')})`,
+      `    CONSTRAINT ${QuoteIdent(t.primaryKey.name)} PRIMARY KEY ${cluster} ` +
+      `(${t.primaryKey.columns.map((n) => QuoteIdent(n)).join(', ')})`,
     );
   }
   for (const u of t.uniqueConstraints) {
     const cluster = u.clustered ? 'CLUSTERED' : 'NONCLUSTERED';
     columnLines.push(
-      `    CONSTRAINT ${quoteIdent(u.name)} UNIQUE ${cluster} ` +
-      `(${u.columns.map((n) => quoteIdent(n)).join(', ')})`,
+      `    CONSTRAINT ${QuoteIdent(u.name)} UNIQUE ${cluster} ` +
+      `(${u.columns.map((n) => QuoteIdent(n)).join(', ')})`,
     );
   }
   lines.push(columnLines.join(',' + NL));
@@ -205,9 +210,9 @@ function columnDefinition(c: ColumnDef): string {
     // returns the body WITHOUT outer parens for some shapes. Wrap defensively.
     const body = c.computedExpression.trim();
     const wrapped = body.startsWith('(') && body.endsWith(')') ? body : `(${body})`;
-    return `${quoteIdent(c.name)} AS ${wrapped}${persisted}`;
+    return `${QuoteIdent(c.name)} AS ${wrapped}${persisted}`;
   }
-  const parts = [quoteIdent(c.name), c.dataType.toUpperCase()];
+  const parts = [QuoteIdent(c.name), c.dataType.toUpperCase()];
   if (c.collation && c.dataType.toLowerCase().includes('char')) {
     parts.push(`COLLATE ${c.collation}`);
   }
@@ -226,9 +231,9 @@ function emitDefaults(tables: readonly TableDef[]): string {
         // Fall back to the synthetic format only for hand-built test fixtures.
         const constraintName = c.defaultConstraintName ?? `DF_${t.schema}_${t.name}_${c.name}`;
         stmts.push(
-          `ALTER TABLE ${quoteIdent(t.schema)}.${quoteIdent(t.name)} ` +
-          `ADD CONSTRAINT ${quoteIdent(constraintName)} DEFAULT ${c.defaultExpression} ` +
-          `FOR ${quoteIdent(c.name)};`,
+          `ALTER TABLE ${QuoteIdent(t.schema)}.${QuoteIdent(t.name)} ` +
+          `ADD CONSTRAINT ${QuoteIdent(constraintName)} DEFAULT ${c.defaultExpression} ` +
+          `FOR ${QuoteIdent(c.name)};`,
         );
         stmts.push('GO');
       }
@@ -243,8 +248,8 @@ function emitChecks(tables: readonly TableDef[]): string {
   for (const t of tables) {
     for (const c of t.checks) {
       stmts.push(
-        `ALTER TABLE ${quoteIdent(t.schema)}.${quoteIdent(t.name)} ` +
-        `ADD CONSTRAINT ${quoteIdent(c.name)} CHECK ${c.expression};`,
+        `ALTER TABLE ${QuoteIdent(t.schema)}.${QuoteIdent(t.name)} ` +
+        `ADD CONSTRAINT ${QuoteIdent(c.name)} CHECK ${c.expression};`,
       );
       stmts.push('GO');
     }
@@ -267,12 +272,12 @@ function emitIndexes(tables: readonly TableDef[]): string {
 function emitCreateIndex(t: TableDef, idx: IndexDef): string {
   const unique = idx.isUnique ? 'UNIQUE ' : '';
   const cluster = idx.isClustered ? 'CLUSTERED' : 'NONCLUSTERED';
-  const cols = idx.columns.map((n) => quoteIdent(n)).join(', ');
-  const incl = idx.includes.length ? ` INCLUDE (${idx.includes.map((n) => quoteIdent(n)).join(', ')})` : '';
+  const cols = idx.columns.map((n) => QuoteIdent(n)).join(', ');
+  const incl = idx.includes.length ? ` INCLUDE (${idx.includes.map((n) => QuoteIdent(n)).join(', ')})` : '';
   const filter = idx.filter ? ` WHERE ${idx.filter}` : '';
   return (
-    `CREATE ${unique}${cluster} INDEX ${quoteIdent(idx.name)} ON ` +
-    `${quoteIdent(t.schema)}.${quoteIdent(t.name)} (${cols})${incl}${filter};${NL}GO`
+    `CREATE ${unique}${cluster} INDEX ${QuoteIdent(idx.name)} ON ` +
+    `${QuoteIdent(t.schema)}.${QuoteIdent(t.name)} (${cols})${incl}${filter};${NL}GO`
   );
 }
 
@@ -288,14 +293,14 @@ function emitForeignKeys(tables: readonly TableDef[]): string {
 }
 
 function emitForeignKey(t: TableDef, fk: ForeignKeyDef): string {
-  const cols = fk.columns.map((n) => quoteIdent(n)).join(', ');
-  const refCols = fk.referencedColumns.map((n) => quoteIdent(n)).join(', ');
+  const cols = fk.columns.map((n) => QuoteIdent(n)).join(', ');
+  const refCols = fk.referencedColumns.map((n) => QuoteIdent(n)).join(', ');
   const onDelete = fk.onDelete !== 'NO_ACTION' ? ` ON DELETE ${fk.onDelete.replace('_', ' ')}` : '';
   const onUpdate = fk.onUpdate !== 'NO_ACTION' ? ` ON UPDATE ${fk.onUpdate.replace('_', ' ')}` : '';
   return (
-    `ALTER TABLE ${quoteIdent(t.schema)}.${quoteIdent(t.name)} ` +
-    `ADD CONSTRAINT ${quoteIdent(fk.name)} FOREIGN KEY (${cols}) ` +
-    `REFERENCES ${quoteIdent(fk.referencedSchema)}.${quoteIdent(fk.referencedTable)} (${refCols})` +
+    `ALTER TABLE ${QuoteIdent(t.schema)}.${QuoteIdent(t.name)} ` +
+    `ADD CONSTRAINT ${QuoteIdent(fk.name)} FOREIGN KEY (${cols}) ` +
+    `REFERENCES ${QuoteIdent(fk.referencedSchema)}.${QuoteIdent(fk.referencedTable)} (${refCols})` +
     `${onDelete}${onUpdate};${NL}GO`
   );
 }
@@ -317,8 +322,8 @@ function emitData(
 
 function emitTableData(table: TableDef, dump: TableDataDump, batchSize: number): string {
   const lines: string[] = [];
-  const tableRef = `${quoteIdent(table.schema)}.${quoteIdent(table.name)}`;
-  const colList = dump.columns.map((n) => quoteIdent(n)).join(', ');
+  const tableRef = `${QuoteIdent(table.schema)}.${QuoteIdent(table.name)}`;
+  const colList = dump.columns.map((n) => QuoteIdent(n)).join(', ');
 
   if (table.hasIdentity) {
     lines.push(`SET IDENTITY_INSERT ${tableRef} ON;`);
@@ -327,7 +332,7 @@ function emitTableData(table: TableDef, dump: TableDataDump, batchSize: number):
 
   for (let i = 0; i < dump.rows.length; i += batchSize) {
     const batch = dump.rows.slice(i, i + batchSize);
-    const valuesLines = batch.map((row) => '    (' + row.map(formatTsqlValue).join(', ') + ')');
+    const valuesLines = batch.map((row) => '    (' + row.map(FormatTsqlValue).join(', ') + ')');
     lines.push(`INSERT INTO ${tableRef} (${colList}) VALUES`);
     lines.push(valuesLines.join(',' + NL) + ';');
     lines.push('GO');
@@ -341,11 +346,11 @@ function emitTableData(table: TableDef, dump: TableDataDump, batchSize: number):
     if (idCol) {
       lines.push(`DECLARE @max_${table.name.replace(/\W/g, '_')} BIGINT;`);
       lines.push(
-        `SELECT @max_${table.name.replace(/\W/g, '_')} = MAX(${quoteIdent(idCol.name)}) FROM ${tableRef};`,
+        `SELECT @max_${table.name.replace(/\W/g, '_')} = MAX(${QuoteIdent(idCol.name)}) FROM ${tableRef};`,
       );
       lines.push(
         `IF @max_${table.name.replace(/\W/g, '_')} IS NOT NULL ` +
-        `DBCC CHECKIDENT (${quoteString(`${table.schema}.${table.name}`)}, RESEED, ` +
+        `DBCC CHECKIDENT (${QuoteString(`${table.schema}.${table.name}`)}, RESEED, ` +
         `@max_${table.name.replace(/\W/g, '_')});`,
       );
       lines.push('GO');
@@ -397,7 +402,7 @@ function emitTriggers(triggers: readonly TriggerDef[]): string {
 function emitUserDefinedTypes(types: readonly UserDefinedTypeDef[]): string {
   if (types.length === 0) return '';
   const lines: string[] = ['-- User-defined types (table types)'];
-  for (const t of stableSortBy(types, (u) => `${u.schema}.${u.name}`.toLowerCase())) {
+  for (const t of StableSortBy(types, (u) => `${u.schema}.${u.name}`.toLowerCase())) {
     if (t.isMemoryOptimized) {
       // MEMORY_OPTIMIZED table types require a hash/range index in their body.
       // MJ doesn't use them today; if that changes we'll need to capture the
@@ -408,7 +413,7 @@ function emitUserDefinedTypes(types: readonly UserDefinedTypeDef[]): string {
     }
     const colLines: string[] = [];
     for (const c of t.columns) {
-      const parts = [quoteIdent(c.name), c.dataType.toUpperCase()];
+      const parts = [QuoteIdent(c.name), c.dataType.toUpperCase()];
       // CREATE TYPE AS TABLE accepts COLLATE only on char-family columns, same as CREATE TABLE.
       if (c.collation && /char|text/.test(c.dataType.toLowerCase())) {
         parts.push(`COLLATE ${c.collation}`);
@@ -421,10 +426,10 @@ function emitUserDefinedTypes(types: readonly UserDefinedTypeDef[]): string {
       // by MSSQL. Use the inline `PRIMARY KEY (...)` clause.
       const cluster = t.primaryKey.clustered ? 'CLUSTERED' : 'NONCLUSTERED';
       colLines.push(
-        `    PRIMARY KEY ${cluster} (${t.primaryKey.columns.map((n) => quoteIdent(n)).join(', ')})`,
+        `    PRIMARY KEY ${cluster} (${t.primaryKey.columns.map((n) => QuoteIdent(n)).join(', ')})`,
       );
     }
-    lines.push(`CREATE TYPE ${quoteIdent(t.schema)}.${quoteIdent(t.name)} AS TABLE (`);
+    lines.push(`CREATE TYPE ${QuoteIdent(t.schema)}.${QuoteIdent(t.name)} AS TABLE (`);
     lines.push(colLines.join(',' + NL));
     lines.push(');');
     lines.push('GO');
@@ -446,18 +451,18 @@ function emitExtendedProperties(props: readonly ExtendedPropertyDef[]): string {
   const lines: string[] = ['-- Extended properties (descriptions etc.)'];
   for (const p of props) {
     const args: string[] = [
-      `@name = ${quoteString(p.name)}`,
-      `@value = ${quoteString(p.value)}`,
-      `@level0type = N'SCHEMA', @level0name = ${quoteString(p.schemaName)}`,
+      `@name = ${QuoteString(p.name)}`,
+      `@value = ${QuoteString(p.value)}`,
+      `@level0type = N'SCHEMA', @level0name = ${QuoteString(p.schemaName)}`,
     ];
     if (p.level1Type) {
       args.push(
-        `@level1type = N'${p.level1Type}', @level1name = ${quoteString(p.level1Name ?? '')}`,
+        `@level1type = N'${p.level1Type}', @level1name = ${QuoteString(p.level1Name ?? '')}`,
       );
     }
     if (p.level2Type) {
       args.push(
-        `@level2type = N'${p.level2Type}', @level2name = ${quoteString(p.level2Name ?? '')}`,
+        `@level2type = N'${p.level2Type}', @level2name = ${QuoteString(p.level2Name ?? '')}`,
       );
     }
     lines.push(`EXEC sp_addextendedproperty ${args.join(', ')};`);
@@ -488,19 +493,19 @@ function emitPrincipals(principals: readonly DatabasePrincipalDef[]): string {
   const roles = principals.filter((p) => p.kind === 'database_role' || p.kind === 'application_role');
   const users = principals.filter((p) => p.kind !== 'database_role' && p.kind !== 'application_role');
 
-  for (const r of stableSortBy(roles, (p) => p.name.toLowerCase())) {
-    const authClause = r.owner ? ` AUTHORIZATION ${quoteIdent(r.owner)}` : '';
-    lines.push(`IF DATABASE_PRINCIPAL_ID(${quoteString(r.name)}) IS NULL`);
-    lines.push(`    EXEC('CREATE ROLE ${quoteIdent(r.name)}${authClause}');`);
+  for (const r of StableSortBy(roles, (p) => p.name.toLowerCase())) {
+    const authClause = r.owner ? ` AUTHORIZATION ${QuoteIdent(r.owner)}` : '';
+    lines.push(`IF DATABASE_PRINCIPAL_ID(${QuoteString(r.name)}) IS NULL`);
+    lines.push(`    EXEC('CREATE ROLE ${QuoteIdent(r.name)}${authClause}');`);
     lines.push('GO');
   }
 
-  for (const u of stableSortBy(users, (p) => p.name.toLowerCase())) {
+  for (const u of StableSortBy(users, (p) => p.name.toLowerCase())) {
     // Windows / AAD users have a different `CREATE USER` syntax (no FOR LOGIN);
     // emit them straight if the principal isn't already in the DB.
     if (u.kind === 'windows_user' || u.kind === 'aad_user' || u.kind === 'aad_group') {
-      lines.push(`IF DATABASE_PRINCIPAL_ID(${quoteString(u.name)}) IS NULL`);
-      lines.push(`    EXEC('CREATE USER ${quoteIdent(u.name)} FROM EXTERNAL PROVIDER');`);
+      lines.push(`IF DATABASE_PRINCIPAL_ID(${QuoteString(u.name)}) IS NULL`);
+      lines.push(`    EXEC('CREATE USER ${QuoteIdent(u.name)} FROM EXTERNAL PROVIDER');`);
       lines.push('GO');
       continue;
     }
@@ -527,11 +532,11 @@ function emitPrincipals(principals: readonly DatabasePrincipalDef[]): string {
     );
     lines.push('IF @associate = 1 AND @user_exists = 0');
     lines.push('BEGIN');
-    lines.push(`    CREATE USER ${quoteIdent(u.name)} FOR LOGIN ${quoteIdent(u.name)}`);
+    lines.push(`    CREATE USER ${QuoteIdent(u.name)} FOR LOGIN ${QuoteIdent(u.name)}`);
     lines.push('END');
     lines.push('ELSE IF @user_exists = 0');
     lines.push('BEGIN');
-    lines.push(`    CREATE USER ${quoteIdent(u.name)} WITHOUT LOGIN`);
+    lines.push(`    CREATE USER ${QuoteIdent(u.name)} WITHOUT LOGIN`);
     lines.push('END');
     lines.push('GO');
   }
@@ -547,9 +552,9 @@ function emitPrincipals(principals: readonly DatabasePrincipalDef[]): string {
 function emitRoleMemberships(memberships: readonly RoleMembershipDef[]): string {
   if (memberships.length === 0) return '';
   const lines: string[] = ['-- Role memberships', 'GO'];
-  for (const m of stableSortBy(memberships, (x) => `${x.role}|${x.member}`.toLowerCase())) {
-    lines.push(`IF IS_ROLEMEMBER(${quoteString(m.role)}, ${quoteString(m.member)}) = 0`);
-    lines.push(`    ALTER ROLE ${quoteIdent(m.role)} ADD MEMBER ${quoteIdent(m.member)};`);
+  for (const m of StableSortBy(memberships, (x) => `${x.role}|${x.member}`.toLowerCase())) {
+    lines.push(`IF IS_ROLEMEMBER(${QuoteString(m.role)}, ${QuoteString(m.member)}) = 0`);
+    lines.push(`    ALTER ROLE ${QuoteIdent(m.role)} ADD MEMBER ${QuoteIdent(m.member)};`);
     lines.push('GO');
   }
   return lines.join(NL);
@@ -583,21 +588,21 @@ function formatPermission(p: PermissionDef): string {
   const tail =
     p.state === 'GRANT_WITH_GRANT_OPTION' ? ' WITH GRANT OPTION' : '';
 
-  const grantee = quoteIdent(p.grantee);
+  const grantee = QuoteIdent(p.grantee);
   const perm = p.permission;
-  const colClause = p.targetColumn ? ` (${quoteIdent(p.targetColumn)})` : '';
+  const colClause = p.targetColumn ? ` (${QuoteIdent(p.targetColumn)})` : '';
 
   switch (p.targetClass) {
     case 'database':
       return `${verb} ${perm} TO ${grantee}${tail}`;
     case 'schema':
-      return `${verb} ${perm} ON SCHEMA::${quoteIdent(p.targetSchema!)} TO ${grantee}${tail}`;
+      return `${verb} ${perm} ON SCHEMA::${QuoteIdent(p.targetSchema!)} TO ${grantee}${tail}`;
     case 'type':
-      return `${verb} ${perm} ON TYPE::${quoteIdent(p.targetSchema!)}.${quoteIdent(p.targetType!)} TO ${grantee}${tail}`;
+      return `${verb} ${perm} ON TYPE::${QuoteIdent(p.targetSchema!)}.${QuoteIdent(p.targetType!)} TO ${grantee}${tail}`;
     case 'object':
     default:
       return (
-        `${verb} ${perm}${colClause} ON ${quoteIdent(p.targetSchema!)}.${quoteIdent(p.targetObject!)} ` +
+        `${verb} ${perm}${colClause} ON ${QuoteIdent(p.targetSchema!)}.${QuoteIdent(p.targetObject!)} ` +
         `TO ${grantee}${tail}`
       );
   }

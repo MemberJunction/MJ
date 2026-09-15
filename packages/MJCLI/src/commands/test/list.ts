@@ -1,5 +1,5 @@
 import { Command, Flags } from '@oclif/core';
-import { TEST_FORMAT_FLAG, TEST_FORMAT_MAP, resolveLegacyFormat } from '../../lib/format-compat.js';
+import { TEST_FORMAT_FLAG, TEST_FORMAT_MAP, ResolveLegacyFormat } from '../../lib/format-compat.js';
 
 export default class TestList extends Command {
   static description = 'List available tests, suites, and types';
@@ -60,7 +60,7 @@ export default class TestList extends Command {
         type: flags.type,
         tag: flags.tag,
         status: flags.status,
-        format: resolveLegacyFormat({
+        format: ResolveLegacyFormat({
           format: flags.format,
           legacy: 'console' as const,
           legacyDefault: 'console' as const,

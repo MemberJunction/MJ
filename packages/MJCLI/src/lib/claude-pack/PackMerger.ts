@@ -24,15 +24,15 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import {
-    parseManagedBlock,
-    rewriteManagedBlock,
-    wrapWithManagedBlock,
+    ParseManagedBlock,
+    RewriteManagedBlock,
+    WrapWithManagedBlock,
     ManagedBlockError,
 } from './ManagedBlockEditor.js';
-import { mergeSettings } from './SettingsMerger.js';
+import { MergeSettings } from './SettingsMerger.js';
 import {
-    emptyActionLog,
-    recordOutcome,
+    EmptyActionLog,
+    RecordOutcome,
     type ActionLog,
     type FileMergeResult,
     type Manifest,
@@ -76,8 +76,8 @@ export interface PackMergeResult {
 // Main entry point
 // ---------------------------------------------------------------------------
 
-export function mergePack(opts: PackMergeOptions): PackMergeResult {
-    const actions = emptyActionLog();
+export function MergePack(opts: PackMergeOptions): PackMergeResult {
+    const actions = EmptyActionLog();
     const warnings: string[] = [];
 
     mergeRootClaudeMd(opts, actions, warnings);
@@ -93,6 +93,11 @@ export function mergePack(opts: PackMergeOptions): PackMergeResult {
     return { Actions: actions, Warnings: warnings };
 }
 
+/** @deprecated Use {@link MergePack}. */
+export function mergePack(opts: PackMergeOptions): PackMergeResult {
+    return MergePack(opts);
+}
+
 // ---------------------------------------------------------------------------
 // CLAUDE.md — managed-block rewrite
 // ---------------------------------------------------------------------------
@@ -104,15 +109,15 @@ function mergeRootClaudeMd(
 ): void {
     const packBytes = opts.PackFiles.get('CLAUDE.md');
     if (!packBytes) {
-        recordOutcome(actions, { path: 'CLAUDE.md', outcome: 'error', reason: 'absent from pack' });
+        RecordOutcome(actions, { path: 'CLAUDE.md', outcome: 'error', reason: 'absent from pack' });
         return;
     }
     const packText = decodeText(packBytes);
     let packBlock;
     try {
-        packBlock = parseManagedBlock(packText);
+        packBlock = ParseManagedBlock(packText);
     } catch (err) {
-        recordOutcome(actions, {
+        RecordOutcome(actions, {
             path: 'CLAUDE.md',
             outcome: 'error',
             reason: `pack CLAUDE.md malformed: ${(err as Error).message}`,
@@ -120,7 +125,7 @@ function mergeRootClaudeMd(
         return;
     }
     if (!packBlock) {
-        recordOutcome(actions, {
+        RecordOutcome(actions, {
             path: 'CLAUDE.md',
             outcome: 'error',
             reason: 'pack CLAUDE.md has no managed block',
@@ -132,20 +137,20 @@ function mergeRootClaudeMd(
 
     if (!existsSync(targetPath)) {
         writeFile(opts, targetPath, packText);
-        recordOutcome(actions, { path: 'CLAUDE.md', outcome: 'added' });
+        RecordOutcome(actions, { path: 'CLAUDE.md', outcome: 'added' });
         return;
     }
 
     const existing = readFileSync(targetPath, 'utf8');
     let existingBlock;
     try {
-        existingBlock = parseManagedBlock(existing);
+        existingBlock = ParseManagedBlock(existing);
     } catch (err) {
         warnings.push(
             `CLAUDE.md has malformed MJ-MANAGED markers — leaving the file alone. ` +
                 `Fix it and re-run, or pass --force to wrap the existing content. (${(err as Error).message})`
         );
-        recordOutcome(actions, {
+        RecordOutcome(actions, {
             path: 'CLAUDE.md',
             outcome: 'skipped',
             reason: 'malformed managed markers',
@@ -155,18 +160,18 @@ function mergeRootClaudeMd(
 
     let newContent: string;
     if (existingBlock === null) {
-        newContent = wrapWithManagedBlock(existing, packBlock.body, packBlock.attrs);
+        newContent = WrapWithManagedBlock(existing, packBlock.body, packBlock.attrs);
     } else {
-        newContent = rewriteManagedBlock(existing, packBlock.body, packBlock.attrs);
+        newContent = RewriteManagedBlock(existing, packBlock.body, packBlock.attrs);
     }
 
     if (newContent === existing) {
-        recordOutcome(actions, { path: 'CLAUDE.md', outcome: 'skipped', reason: 'identical' });
+        RecordOutcome(actions, { path: 'CLAUDE.md', outcome: 'skipped', reason: 'identical' });
         return;
     }
 
     writeFile(opts, targetPath, newContent);
-    recordOutcome(actions, { path: 'CLAUDE.md', outcome: 'updated' });
+    RecordOutcome(actions, { path: 'CLAUDE.md', outcome: 'updated' });
 }
 
 // ---------------------------------------------------------------------------
@@ -191,7 +196,7 @@ function mergeMjBundle(
             if (!expected.has(stale)) {
                 const absPath = path.join(opts.TargetDir, stale);
                 if (!opts.DryRun) unlinkSync(absPath);
-                recordOutcome(actions, {
+                RecordOutcome(actions, {
                     path: stale,
                     outcome: 'updated',
                     reason: 'removed (no longer shipped)',
@@ -207,11 +212,11 @@ function mergeMjBundle(
         const existed = existsSync(absPath);
         const identical = existed && bytesEqual(readFileBytes(absPath), bytes);
         if (identical) {
-            recordOutcome(actions, { path: relPath, outcome: 'skipped', reason: 'identical' });
+            RecordOutcome(actions, { path: relPath, outcome: 'skipped', reason: 'identical' });
             continue;
         }
         writeFile(opts, absPath, bytes);
-        recordOutcome(actions, { path: relPath, outcome: existed ? 'updated' : 'added' });
+        RecordOutcome(actions, { path: relPath, outcome: existed ? 'updated' : 'added' });
     }
 }
 
@@ -226,7 +231,7 @@ function mergeSettingsFile(
 ): void {
     const packBytes = opts.PackFiles.get('.claude/settings.json');
     if (!packBytes) {
-        recordOutcome(actions, {
+        RecordOutcome(actions, {
             path: '.claude/settings.json',
             outcome: 'error',
             reason: 'absent from pack',
@@ -237,7 +242,7 @@ function mergeSettingsFile(
     try {
         packJson = JSON.parse(decodeText(packBytes));
     } catch (err) {
-        recordOutcome(actions, {
+        RecordOutcome(actions, {
             path: '.claude/settings.json',
             outcome: 'error',
             reason: `pack settings.json invalid JSON: ${(err as Error).message}`,
@@ -255,7 +260,7 @@ function mergeSettingsFile(
             warnings.push(
                 `Existing .claude/settings.json is malformed JSON; leaving it alone. (${(err as Error).message})`
             );
-            recordOutcome(actions, {
+            RecordOutcome(actions, {
                 path: '.claude/settings.json',
                 outcome: 'skipped',
                 reason: 'malformed JSON',
@@ -264,9 +269,9 @@ function mergeSettingsFile(
         }
     }
 
-    const { Result, Changed } = mergeSettings({ Existing: existing, Pack: packJson });
+    const { Result, Changed } = MergeSettings({ Existing: existing, Pack: packJson });
     if (!Changed && existed) {
-        recordOutcome(actions, {
+        RecordOutcome(actions, {
             path: '.claude/settings.json',
             outcome: 'skipped',
             reason: 'identical',
@@ -275,7 +280,7 @@ function mergeSettingsFile(
     }
 
     writeFile(opts, targetPath, JSON.stringify(Result, null, 2) + '\n');
-    recordOutcome(actions, {
+    RecordOutcome(actions, {
         path: '.claude/settings.json',
         outcome: existed ? 'updated' : 'added',
     });
@@ -295,7 +300,7 @@ function mergeSeededTree(
     const paths = collectPackPathsByPrefix(opts.PackFiles, prefix);
     for (const relPath of paths) {
         const result = seedOneFile(opts, relPath, refresh, warnings);
-        recordOutcome(actions, result);
+        RecordOutcome(actions, result);
     }
 }
 
@@ -418,7 +423,10 @@ function walkRelativeFiles(dir: string, relativeTo: string): string[] {
 }
 
 /** Re-export for tests that want to exercise the walker in isolation. */
-export const _internals = { walkRelativeFiles, bytesEqual, collectPackPathsByPrefix };
+export const Internals = { walkRelativeFiles, bytesEqual, collectPackPathsByPrefix };
+
+/** @deprecated Use {@link Internals}. */
+export const _internals = Internals;
 
 // ManagedBlockError re-export — callers may catch it specifically.
 export { ManagedBlockError };

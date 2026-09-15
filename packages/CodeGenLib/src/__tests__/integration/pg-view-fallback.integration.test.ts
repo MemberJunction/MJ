@@ -26,7 +26,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { Client } from 'pg';
 import {
-    executeWithFallback,
+    ExecuteWithFallback,
     ViewFallbackRestoreError,
 } from '../../Database/providers/postgresql/viewFallback';
 
@@ -107,7 +107,7 @@ describeIfPG('PG 42P16 fallback — integration', () => {
                 SELECT "ID", "Name", "Color" FROM ${SCHEMA}."Widget"
             `);
             // Additive change — PG accepts this natively.
-            await executeWithFallback({
+            await ExecuteWithFallback({
                 client,
                 schema: SCHEMA,
                 viewName: 'vwWidgets',
@@ -139,7 +139,7 @@ describeIfPG('PG 42P16 fallback — integration', () => {
         });
 
         it('rename a column → fallback rebuilds, column renamed', async () => {
-            await executeWithFallback({
+            await ExecuteWithFallback({
                 client,
                 schema: SCHEMA,
                 viewName: 'vwWidgets',
@@ -153,7 +153,7 @@ describeIfPG('PG 42P16 fallback — integration', () => {
         });
 
         it('drop a column → fallback rebuilds, column gone', async () => {
-            await executeWithFallback({
+            await ExecuteWithFallback({
                 client,
                 schema: SCHEMA,
                 viewName: 'vwWidgets',
@@ -167,7 +167,7 @@ describeIfPG('PG 42P16 fallback — integration', () => {
         });
 
         it('reorder columns → fallback rebuilds, new order applied', async () => {
-            await executeWithFallback({
+            await ExecuteWithFallback({
                 client,
                 schema: SCHEMA,
                 viewName: 'vwWidgets',
@@ -181,7 +181,7 @@ describeIfPG('PG 42P16 fallback — integration', () => {
         });
 
         it('type change → fallback rebuilds, new type applied', async () => {
-            await executeWithFallback({
+            await ExecuteWithFallback({
                 client,
                 schema: SCHEMA,
                 viewName: 'vwWidgets',
@@ -216,7 +216,7 @@ describeIfPG('PG 42P16 fallback — integration', () => {
                 SELECT "ID", UPPER("Name") AS "U" FROM ${SCHEMA}."vwWidgets"
             `);
             // 42P16 change to vwWidgets (reorder).
-            await executeWithFallback({
+            await ExecuteWithFallback({
                 client,
                 schema: SCHEMA,
                 viewName: 'vwWidgets',
@@ -247,7 +247,7 @@ describeIfPG('PG 42P16 fallback — integration', () => {
             await client.query(`
                 CREATE VIEW ${SCHEMA}."vwC" AS SELECT "ID" FROM ${SCHEMA}."vwB"
             `);
-            await executeWithFallback({
+            await ExecuteWithFallback({
                 client,
                 schema: SCHEMA,
                 viewName: 'vwWidgets',
@@ -272,7 +272,7 @@ describeIfPG('PG 42P16 fallback — integration', () => {
                 CREATE MATERIALIZED VIEW ${SCHEMA}."mvWidgets" AS
                 SELECT "ID" FROM ${SCHEMA}."vwWidgets"
             `);
-            await executeWithFallback({
+            await ExecuteWithFallback({
                 client,
                 schema: SCHEMA,
                 viewName: 'vwWidgets',
@@ -298,7 +298,7 @@ describeIfPG('PG 42P16 fallback — integration', () => {
                 RETURNS SETOF ${SCHEMA}."vwWidgets"
                 AS $$ SELECT * FROM ${SCHEMA}."vwWidgets" $$ LANGUAGE sql
             `);
-            await executeWithFallback({
+            await ExecuteWithFallback({
                 client,
                 schema: SCHEMA,
                 viewName: 'vwWidgets',
@@ -331,7 +331,7 @@ describeIfPG('PG 42P16 fallback — integration', () => {
             await client.query(
                 `GRANT SELECT ON ${SCHEMA}."vwWidgets" TO ${TEST_ROLE} WITH GRANT OPTION`
             );
-            await executeWithFallback({
+            await ExecuteWithFallback({
                 client,
                 schema: SCHEMA,
                 viewName: 'vwWidgets',
@@ -359,7 +359,7 @@ describeIfPG('PG 42P16 fallback — integration', () => {
             await client.query(
                 `COMMENT ON VIEW ${SCHEMA}."vwWidgets" IS 'important notes about widgets'`
             );
-            await executeWithFallback({
+            await ExecuteWithFallback({
                 client,
                 schema: SCHEMA,
                 viewName: 'vwWidgets',
@@ -392,7 +392,7 @@ describeIfPG('PG 42P16 fallback — integration', () => {
                     [SCHEMA]
                 )
             ).rows[0].owner;
-            await executeWithFallback({
+            await ExecuteWithFallback({
                 client,
                 schema: SCHEMA,
                 viewName: 'vwWidgets',
@@ -425,7 +425,7 @@ describeIfPG('PG 42P16 fallback — integration', () => {
                 CREATE VIEW ${SCHEMA}."vwWidgetsUpper" AS
                 SELECT "ID", UPPER("Name") AS "U" FROM ${SCHEMA}."vwWidgets"
             `);
-            await executeWithFallback({
+            await ExecuteWithFallback({
                 client,
                 schema: SCHEMA,
                 viewName: 'vwWidgets',
@@ -468,7 +468,7 @@ describeIfPG('PG 42P16 fallback — integration', () => {
             // vwUsesColor which references the now-gone Color → restore fails,
             // transaction rolls back.
             await expect(
-                executeWithFallback({
+                ExecuteWithFallback({
                     client,
                     schema: SCHEMA,
                     viewName: 'vwWidgets',
@@ -500,7 +500,7 @@ describeIfPG('PG 42P16 fallback — integration', () => {
                 SELECT "ID", "Name" FROM ${SCHEMA}."Widget"
             `);
             await expect(
-                executeWithFallback({
+                ExecuteWithFallback({
                     client,
                     schema: SCHEMA,
                     viewName: 'vwWidgets',
@@ -518,7 +518,7 @@ describeIfPG('PG 42P16 fallback — integration', () => {
                 SELECT "ID", "Name" FROM ${SCHEMA}."Widget"
             `);
             await expect(
-                executeWithFallback({
+                ExecuteWithFallback({
                     client,
                     schema: SCHEMA,
                     viewName: 'vwWidgets',

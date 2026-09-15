@@ -27,7 +27,7 @@ import { AboutDialogService } from './services/about-dialog.service';
 import { ProfileDialogService } from './services/profile-dialog.service';
 import { IsOmnibarAvailable, IsOmnibarEnabledForUser, OMNIBAR_PROMO_DISMISSED_KEY, OMNIBAR_USER_SETTING_KEY } from '../omnibar/omnibar-user-setting';
 import { GetOmnibarShortcutLabel } from '../omnibar/omnibar-shortcut';
-import { LoadingTheme, LoadingAnimationType, AnimationStep, getActiveTheme } from './loading-themes';
+import { LoadingTheme, LoadingAnimationType, AnimationStep, GetActiveTheme } from './loading-themes';
 import { AppAccessDialogComponent, AppAccessDialogConfig, AppAccessDialogResult } from './components/dialogs/app-access-dialog.component';
 import { TabContainerComponent } from './components/tabs/tab-container.component';
 import { BaseUserMenu, UserMenuElement, UserMenuItem, UserMenuContext, isUserMenuDivider, ApplicationInfoRef } from '../user-menu';
@@ -62,11 +62,47 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   private latestSyncedConfig: WorkspaceConfiguration | null = null;
   private initialNavigationComplete = false; // Track if initial navigation has completed
 
-  activeApp: BaseApplication | null = null;
-  loading = true;
-  initialized = false;
+  ActiveApp: BaseApplication | null = null;
+
+  /** @deprecated Use {@link ActiveApp}. */
+  get activeApp(): BaseApplication | null {
+    return this.ActiveApp;
+  }
+  /** @deprecated Use {@link ActiveApp}. */
+  set activeApp(value: BaseApplication | null) {
+    this.ActiveApp = value;
+  }
+  Loading = true;
+
+  /** @deprecated Use {@link Loading}. */
+  get loading() {
+    return this.Loading;
+  }
+  /** @deprecated Use {@link Loading}. */
+  set loading(value) {
+    this.Loading = value;
+  }
+  Initialized = false;
+
+  /** @deprecated Use {@link Initialized}. */
+  get initialized() {
+    return this.Initialized;
+  }
+  /** @deprecated Use {@link Initialized}. */
+  set initialized(value) {
+    this.Initialized = value;
+  }
   private waitingForFirstResource = false;
-  tabBarVisible = true; // Controlled by workspace manager
+  TabBarVisible = true;
+
+  /** @deprecated Use {@link TabBarVisible}. */
+  get tabBarVisible() {
+    return this.TabBarVisible;
+  }
+  /** @deprecated Use {@link TabBarVisible}. */
+  set tabBarVisible(value) {
+    this.TabBarVisible = value;
+  } // Controlled by workspace manager
 
   /**
    * True when the deployment uses the records-as-tabs record-open style
@@ -78,16 +114,88 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   public get RecordTabsStyle(): boolean {
     return this.chromeFlags.recordOpenStyle === 'records';
   }
-  userMenuVisible = false; // User avatar context menu
-  mobileNavOpen = false; // Mobile navigation drawer
-  unreadNotificationCount = 0; // Notification badge count
+  UserMenuVisible = false;
+
+  /** @deprecated Use {@link UserMenuVisible}. */
+  get userMenuVisible() {
+    return this.UserMenuVisible;
+  }
+  /** @deprecated Use {@link UserMenuVisible}. */
+  set userMenuVisible(value) {
+    this.UserMenuVisible = value;
+  } // User avatar context menu
+  MobileNavOpen = false;
+
+  /** @deprecated Use {@link MobileNavOpen}. */
+  get mobileNavOpen() {
+    return this.MobileNavOpen;
+  }
+  /** @deprecated Use {@link MobileNavOpen}. */
+  set mobileNavOpen(value) {
+    this.MobileNavOpen = value;
+  } // Mobile navigation drawer
+  UnreadNotificationCount = 0;
+
+  /** @deprecated Use {@link UnreadNotificationCount}. */
+  get unreadNotificationCount() {
+    return this.UnreadNotificationCount;
+  }
+  /** @deprecated Use {@link UnreadNotificationCount}. */
+  set unreadNotificationCount(value) {
+    this.UnreadNotificationCount = value;
+  } // Notification badge count
 
   // Global Activity indicator (P3)
-  activityItems: ActivityItem[] = [];
-  activityRunningCount = 0;
-  activityOpen = false;
-  isViewingSystemTab = false; // True when viewing a resource tab (not associated with a registered app)
-  loadingAppId: string | null = null; // ID of app currently being loaded (for app switcher loading indicator)
+  ActivityItems: ActivityItem[] = [];
+
+  /** @deprecated Use {@link ActivityItems}. */
+  get activityItems(): ActivityItem[] {
+    return this.ActivityItems;
+  }
+  /** @deprecated Use {@link ActivityItems}. */
+  set activityItems(value: ActivityItem[]) {
+    this.ActivityItems = value;
+  }
+  ActivityRunningCount = 0;
+
+  /** @deprecated Use {@link ActivityRunningCount}. */
+  get activityRunningCount() {
+    return this.ActivityRunningCount;
+  }
+  /** @deprecated Use {@link ActivityRunningCount}. */
+  set activityRunningCount(value) {
+    this.ActivityRunningCount = value;
+  }
+  ActivityOpen = false;
+
+  /** @deprecated Use {@link ActivityOpen}. */
+  get activityOpen() {
+    return this.ActivityOpen;
+  }
+  /** @deprecated Use {@link ActivityOpen}. */
+  set activityOpen(value) {
+    this.ActivityOpen = value;
+  }
+  IsViewingSystemTab = false;
+
+  /** @deprecated Use {@link IsViewingSystemTab}. */
+  get isViewingSystemTab() {
+    return this.IsViewingSystemTab;
+  }
+  /** @deprecated Use {@link IsViewingSystemTab}. */
+  set isViewingSystemTab(value) {
+    this.IsViewingSystemTab = value;
+  } // True when viewing a resource tab (not associated with a registered app)
+  LoadingAppId: string | null = null;
+
+  /** @deprecated Use {@link LoadingAppId}. */
+  get loadingAppId(): string | null {
+    return this.LoadingAppId;
+  }
+  /** @deprecated Use {@link LoadingAppId}. */
+  set loadingAppId(value: string | null) {
+    this.LoadingAppId = value;
+  } // ID of app currently being loaded (for app switcher loading indicator)
 
   // Loading animation state
   private loadingMessageInterval: ReturnType<typeof setInterval> | null = null;
@@ -111,22 +219,103 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   public readonly MJVersion: string = PACKAGE_VERSION;
   private loadingResetTimeout: ReturnType<typeof setTimeout> | null = null;
   private readonly loadingResetDelayMs = 20_000; // 20 seconds before showing reset option
-  currentLoadingText: string;
-  currentLoadingColor: string;
-  currentLoadingTextColor: string;
-  currentLoadingGradient: LogoGradient | null;
-  currentLoadingAnimation: 'pulse' | 'spin' | 'bounce' | 'pulse-spin' = 'pulse';
+  CurrentLoadingText: string;
+
+  /** @deprecated Use {@link CurrentLoadingText}. */
+  get currentLoadingText(): string {
+    return this.CurrentLoadingText;
+  }
+  /** @deprecated Use {@link CurrentLoadingText}. */
+  set currentLoadingText(value: string) {
+    this.CurrentLoadingText = value;
+  }
+  CurrentLoadingColor: string;
+
+  /** @deprecated Use {@link CurrentLoadingColor}. */
+  get currentLoadingColor(): string {
+    return this.CurrentLoadingColor;
+  }
+  /** @deprecated Use {@link CurrentLoadingColor}. */
+  set currentLoadingColor(value: string) {
+    this.CurrentLoadingColor = value;
+  }
+  CurrentLoadingTextColor: string;
+
+  /** @deprecated Use {@link CurrentLoadingTextColor}. */
+  get currentLoadingTextColor(): string {
+    return this.CurrentLoadingTextColor;
+  }
+  /** @deprecated Use {@link CurrentLoadingTextColor}. */
+  set currentLoadingTextColor(value: string) {
+    this.CurrentLoadingTextColor = value;
+  }
+  CurrentLoadingGradient: LogoGradient | null;
+
+  /** @deprecated Use {@link CurrentLoadingGradient}. */
+  get currentLoadingGradient(): LogoGradient | null {
+    return this.CurrentLoadingGradient;
+  }
+  /** @deprecated Use {@link CurrentLoadingGradient}. */
+  set currentLoadingGradient(value: LogoGradient | null) {
+    this.CurrentLoadingGradient = value;
+  }
+  CurrentLoadingAnimation: 'pulse' | 'spin' | 'bounce' | 'pulse-spin' = 'pulse';
+
+  /** @deprecated Use {@link CurrentLoadingAnimation}. */
+  get currentLoadingAnimation(): 'pulse' | 'spin' | 'bounce' | 'pulse-spin' {
+    return this.CurrentLoadingAnimation;
+  }
+  /** @deprecated Use {@link CurrentLoadingAnimation}. */
+  set currentLoadingAnimation(value: 'pulse' | 'spin' | 'bounce' | 'pulse-spin') {
+    this.CurrentLoadingAnimation = value;
+  }
 
   // User avatar state
-  userImageURL = '';
-  userIconClass: string | null = null;
+  UserImageURL = '';
+
+  /** @deprecated Use {@link UserImageURL}. */
+  get userImageURL() {
+    return this.UserImageURL;
+  }
+  /** @deprecated Use {@link UserImageURL}. */
+  set userImageURL(value) {
+    this.UserImageURL = value;
+  }
+  UserIconClass: string | null = null;
+
+  /** @deprecated Use {@link UserIconClass}. */
+  get userIconClass(): string | null {
+    return this.UserIconClass;
+  }
+  /** @deprecated Use {@link UserIconClass}. */
+  set userIconClass(value: string | null) {
+    this.UserIconClass = value;
+  }
   userName = '';
-  userEmail = '';
+  UserEmail = '';
+
+  /** @deprecated Use {@link UserEmail}. */
+  get userEmail() {
+    return this.UserEmail;
+  }
+  /** @deprecated Use {@link UserEmail}. */
+  set userEmail(value) {
+    this.UserEmail = value;
+  }
   private userEntity: MJUserEntity | null = null;
 
   // User menu plugin system
   private userMenu: BaseUserMenu | null = null;
-  public userMenuElements: UserMenuElement[] = [];
+  public UserMenuElements: UserMenuElement[] = [];
+
+  /** @deprecated Use {@link UserMenuElements}. */
+  public get userMenuElements(): UserMenuElement[] {
+    return this.UserMenuElements;
+  }
+  /** @deprecated Use {@link UserMenuElements}. */
+  public set userMenuElements(value: UserMenuElement[]) {
+    this.UserMenuElements = value;
+  }
   private destroy$ = new Subject<void>();
 
   // Pin progress overlay
@@ -134,13 +323,67 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   public PinProgressText = '';
 
   // Search state
-  isSearchOpen = false;
-  searchableEntities: EntityInfo[] = [];
-  selectedEntity: EntityInfo | null = null;
-  @ViewChild('searchInput') searchInput!: ElementRef<HTMLInputElement>;
+  IsSearchOpen = false;
+
+  /** @deprecated Use {@link IsSearchOpen}. */
+  get isSearchOpen() {
+    return this.IsSearchOpen;
+  }
+  /** @deprecated Use {@link IsSearchOpen}. */
+  set isSearchOpen(value) {
+    this.IsSearchOpen = value;
+  }
+  SearchableEntities: EntityInfo[] = [];
+
+  /** @deprecated Use {@link SearchableEntities}. */
+  get searchableEntities(): EntityInfo[] {
+    return this.SearchableEntities;
+  }
+  /** @deprecated Use {@link SearchableEntities}. */
+  set searchableEntities(value: EntityInfo[]) {
+    this.SearchableEntities = value;
+  }
+  SelectedEntity: EntityInfo | null = null;
+
+  /** @deprecated Use {@link SelectedEntity}. */
+  get selectedEntity(): EntityInfo | null {
+    return this.SelectedEntity;
+  }
+  /** @deprecated Use {@link SelectedEntity}. */
+  set selectedEntity(value: EntityInfo | null) {
+    this.SelectedEntity = value;
+  }
+  @ViewChild('searchInput') SearchInput!: ElementRef<HTMLInputElement>;
+
+  /** @deprecated Use {@link SearchInput}. */
+  get searchInput(): ElementRef<HTMLInputElement> {
+    return this.SearchInput;
+  }
+  /** @deprecated Use {@link SearchInput}. */
+  set searchInput(value: ElementRef<HTMLInputElement>) {
+    this.SearchInput = value;
+  }
   /** Mobile drawer + its toggle — used to return focus to the toggle when the drawer closes. */
-  @ViewChild('mobileNavDrawer') mobileNavDrawer?: ElementRef<HTMLElement>;
-  @ViewChild('mobileNavToggle') mobileNavToggle?: ElementRef<HTMLButtonElement>;
+  @ViewChild('mobileNavDrawer') MobileNavDrawer?: ElementRef<HTMLElement>;
+
+  /** @deprecated Use {@link MobileNavDrawer}. */
+  get mobileNavDrawer(): ElementRef<HTMLElement> | undefined {
+    return this.MobileNavDrawer;
+  }
+  /** @deprecated Use {@link MobileNavDrawer}. */
+  set mobileNavDrawer(value: ElementRef<HTMLElement> | undefined) {
+    this.MobileNavDrawer = value;
+  }
+  @ViewChild('mobileNavToggle') MobileNavToggle?: ElementRef<HTMLButtonElement>;
+
+  /** @deprecated Use {@link MobileNavToggle}. */
+  get mobileNavToggle(): ElementRef<HTMLButtonElement> | undefined {
+    return this.MobileNavToggle;
+  }
+  /** @deprecated Use {@link MobileNavToggle}. */
+  set mobileNavToggle(value: ElementRef<HTMLButtonElement> | undefined) {
+    this.MobileNavToggle = value;
+  }
 
   // Legacy universal search overlay (omnibar-off MOBILE path) — opened by the
   // mobile search icon or Ctrl/Cmd+K when the inline composite isn't visible.
@@ -243,7 +486,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       // is the same guarantee read off state we already have, instead of a new
       // dirty-tracking pipeline.)
       this.workspaceManager.RecordsRegionTabFilter = this.resolvedRecordOpenStyle === 'records'
-        ? (tab) => IsRecordsRegionTab(tab.configuration) && !this.tabContainerRef?.IsRecordTabEditing(tab.id)
+        ? (tab) => IsRecordsRegionTab(tab.configuration) && !this.TabContainerRef?.IsRecordTabEditing(tab.id)
         : null;
   }
 
@@ -335,34 +578,78 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   /** Palette footer gear → My Profile (where the Command Palette section lives). */
   OnPaletteSettingsRequested(): void {
       this.profileDialogService.open(this.viewContainerRef, {
-          avatarUrl: this.userImageURL || null,
-          avatarIconClass: this.userIconClass || null
+          avatarUrl: this.UserImageURL || null,
+          avatarIconClass: this.UserIconClass || null
       });
   }
 
-  @ViewChild('omnibarPalette') omnibarPalette?: { Open(initialQuery?: string): void };
+  @ViewChild('omnibarPalette') OmnibarPalette?: { Open(initialQuery?: string): void };
+
+  /** @deprecated Use {@link OmnibarPalette}. */
+  get omnibarPalette(): { Open(initialQuery?: string): void } | undefined {
+    return this.OmnibarPalette;
+  }
+  /** @deprecated Use {@link OmnibarPalette}. */
+  set omnibarPalette(value: { Open(initialQuery?: string): void } | undefined) {
+    this.OmnibarPalette = value;
+  }
 
   /** Legacy inline search composite (omnibar-off desktop). Structural typing keeps
       the shell decoupled from the ng-search component class. */
-  @ViewChild('shellSearchComposite') shellSearchComposite: {
+  @ViewChild('shellSearchComposite') ShellSearchComposite: {
     Focus?(): void;
     MinRelevancePercent?: number;
     SelectedScopeIDs?: string[];
   } | undefined;
+
+  /** @deprecated Use {@link ShellSearchComposite}. */
+  get shellSearchComposite(): {
+    Focus?(): void;
+    MinRelevancePercent?: number;
+    SelectedScopeIDs?: string[];
+  } | undefined {
+    return this.ShellSearchComposite;
+  }
+  /** @deprecated Use {@link ShellSearchComposite}. */
+  set shellSearchComposite(value: {
+    Focus?(): void;
+    MinRelevancePercent?: number;
+    SelectedScopeIDs?: string[];
+  } | undefined) {
+    this.ShellSearchComposite = value;
+  }
 
   /** Header affordance click → open the palette. */
   OpenOmnibar(initialQuery = ''): void {
       if (!this.ShowSearchBar) {
           return;
       }
-      this.omnibarPalette?.Open(initialQuery);
+      this.OmnibarPalette?.Open(initialQuery);
   }
 
   // Tab container reference for thumbnail capture
-  @ViewChild(TabContainerComponent) tabContainerRef!: TabContainerComponent;
+  @ViewChild(TabContainerComponent) TabContainerRef!: TabContainerComponent;
+
+  /** @deprecated Use {@link TabContainerRef}. */
+  get tabContainerRef(): TabContainerComponent {
+    return this.TabContainerRef;
+  }
+  /** @deprecated Use {@link TabContainerRef}. */
+  set tabContainerRef(value: TabContainerComponent) {
+    this.TabContainerRef = value;
+  }
 
   // App access dialog
-  @ViewChild('appAccessDialog') appAccessDialog!: AppAccessDialogComponent;
+  @ViewChild('appAccessDialog') AppAccessDialog!: AppAccessDialogComponent;
+
+  /** @deprecated Use {@link AppAccessDialog}. */
+  get appAccessDialog(): AppAccessDialogComponent {
+    return this.AppAccessDialog;
+  }
+  /** @deprecated Use {@link AppAccessDialog}. */
+  set appAccessDialog(value: AppAccessDialogComponent) {
+    this.AppAccessDialog = value;
+  }
   private pendingAppPath: string | null = null; // Store the app path we tried to access
 
   /**
@@ -372,7 +659,16 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    * this is bound directly in the shell nav template's @for/@if. Filters out apps
    * that have HideNavBarIconWhenActive=true and are currently active.
    */
-  public leftOfSwitcherApps: BaseApplication[] = [];
+  public LeftOfSwitcherApps: BaseApplication[] = [];
+
+  /** @deprecated Use {@link LeftOfSwitcherApps}. */
+  public get leftOfSwitcherApps(): BaseApplication[] {
+    return this.LeftOfSwitcherApps;
+  }
+  /** @deprecated Use {@link LeftOfSwitcherApps}. */
+  public set leftOfSwitcherApps(value: BaseApplication[]) {
+    this.LeftOfSwitcherApps = value;
+  }
 
   /**
    * Nav Bar apps positioned to the left of the user menu.
@@ -380,7 +676,16 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    * (see {@link recomputeNavBarApps}). Filters out apps that have
    * HideNavBarIconWhenActive=true and are currently active.
    */
-  public leftOfUserMenuApps: BaseApplication[] = [];
+  public LeftOfUserMenuApps: BaseApplication[] = [];
+
+  /** @deprecated Use {@link LeftOfUserMenuApps}. */
+  public get leftOfUserMenuApps(): BaseApplication[] {
+    return this.LeftOfUserMenuApps;
+  }
+  /** @deprecated Use {@link LeftOfUserMenuApps}. */
+  public set leftOfUserMenuApps(value: BaseApplication[]) {
+    this.LeftOfUserMenuApps = value;
+  }
 
   /**
    * Recompute the precomputed nav-bar app arrays. Called only when the active app
@@ -388,10 +693,10 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    * (and their per-app UUIDsEqual checks) out of the per-CD-cycle hot path.
    */
   private recomputeNavBarApps(): void {
-    this.leftOfSwitcherApps = this.appManager.GetNavBarApps('Left of App Switcher')
-      .filter(app => !(app.HideNavBarIconWhenActive && UUIDsEqual(app.ID, this.activeApp?.ID)));
-    this.leftOfUserMenuApps = this.appManager.GetNavBarApps('Left of User Menu')
-      .filter(app => !(app.HideNavBarIconWhenActive && UUIDsEqual(app.ID, this.activeApp?.ID)));
+    this.LeftOfSwitcherApps = this.appManager.GetNavBarApps('Left of App Switcher')
+      .filter(app => !(app.HideNavBarIconWhenActive && UUIDsEqual(app.ID, this.ActiveApp?.ID)));
+    this.LeftOfUserMenuApps = this.appManager.GetNavBarApps('Left of User Menu')
+      .filter(app => !(app.HideNavBarIconWhenActive && UUIDsEqual(app.ID, this.ActiveApp?.ID)));
   }
 
   constructor(
@@ -410,7 +715,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     private profileDialogService: ProfileDialogService,
     private viewContainerRef: ViewContainerRef,
     private titleService: TitleService,
-    public developerModeService: DeveloperModeService,
+    public DeveloperModeService: DeveloperModeService,
     private startupValidationService: StartupValidationService,
     private commandPaletteService: CommandPaletteService,
     private themeService: ThemeService,
@@ -429,36 +734,45 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     const providerForServices = this.ProviderToUse;
     this.appManager.Provider = providerForServices;
     this.workspaceManager.Provider = providerForServices;
-    this.developerModeService.Provider = providerForServices;
+    this.DeveloperModeService.Provider = providerForServices;
     this.startupValidationService.Provider = providerForServices;
     if (SharedService.Instance) SharedService.Instance.Provider = providerForServices;
 
     // Initialize theme immediately so loading UI shows correct colors from the start
-    this.activeTheme = getActiveTheme();
+    this.activeTheme = GetActiveTheme();
 
     // Initialize animation based on theme configuration
     this.initializeAnimationFromTheme();
 
     // Set first message
-    this.currentLoadingText = this.activeTheme.messages[0];
+    this.CurrentLoadingText = this.activeTheme.messages[0];
 
     if (this.activeTheme.staticColors) {
       // Standard theme: keep MJ blue, no gradient
-      this.currentLoadingColor = this.activeTheme.colors[0];
-      this.currentLoadingTextColor = '#757575'; // Default gray text
-      this.currentLoadingGradient = null;
+      this.CurrentLoadingColor = this.activeTheme.colors[0];
+      this.CurrentLoadingTextColor = '#757575'; // Default gray text
+      this.CurrentLoadingGradient = null;
     } else {
       // Themed period: use theme colors and first gradient from the start
-      this.currentLoadingColor = this.activeTheme.colors[0];
-      this.currentLoadingTextColor = this.activeTheme.colors[0];
+      this.CurrentLoadingColor = this.activeTheme.colors[0];
+      this.CurrentLoadingTextColor = this.activeTheme.colors[0];
 
       // Set initial gradient if theme has gradients
       if (this.activeTheme.gradients && this.activeTheme.gradients.length > 0) {
-        this.currentLoadingGradient = this.activeTheme.gradients[0];
+        this.CurrentLoadingGradient = this.activeTheme.gradients[0];
       } else {
-        this.currentLoadingGradient = null;
+        this.CurrentLoadingGradient = null;
       }
     }
+  }
+
+  /** @deprecated Use {@link DeveloperModeService}. */
+  public get developerModeService(): DeveloperModeService {
+    return this.DeveloperModeService;
+  }
+  /** @deprecated Use {@link DeveloperModeService}. */
+  public set developerModeService(value: DeveloperModeService) {
+    this.DeveloperModeService = value;
   }
 
   async ngOnInit(): Promise<void> {
@@ -467,7 +781,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         if (loginEvent.event === MJEventType.LoggedIn) {
           if (this.authBase.initialPath === "/") {
             // Base route - no need to wait for NavigationEnd
-            await this.initializeShell();
+            await this.InitializeShell();
           }
           else {
             // Deep link route - wait for NavigationEnd to ensure router URL is correct
@@ -476,18 +790,18 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
               filter(() => !this.initialNavigationComplete)
             ).subscribe(async () => {
               this.initialNavigationComplete = true;
-              await this.initializeShell();
+              await this.InitializeShell();
             });
           }
         }
       });
 
     } catch (error) {
-      this.loading = false;
+      this.Loading = false;
     }
   }
 
-  async initializeShell(): Promise<void> {
+  async InitializeShell(): Promise<void> {
     // Start the loading animation with cycling messages
     this.startLoadingAnimation();
 
@@ -528,7 +842,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     // Subscribe to tab bar visibility changes
     this.subscriptions.push(
       this.workspaceManager.TabBarVisible.subscribe(visible => {
-        this.tabBarVisible = visible;
+        this.TabBarVisible = visible;
       })
     );
 
@@ -540,9 +854,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     // Subscribe to the global Activity tracker (Run Pipeline, Sync, Cluster, …)
     this.subscriptions.push(
       this.activityService.Activities$.subscribe(items => {
-        this.activityItems = items;
-        this.activityRunningCount = items.filter(i => i.Status === 'running').length;
-        if (items.length === 0) this.activityOpen = false;
+        this.ActivityItems = items;
+        this.ActivityRunningCount = items.filter(i => i.Status === 'running').length;
+        if (items.length === 0) this.ActivityOpen = false;
         this.cdr.detectChanges();
       })
     );
@@ -550,7 +864,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     // Subscribe to unread notification count changes
     this.subscriptions.push(
       MJNotificationService.UnreadCount$.subscribe(count => {
-        this.unreadNotificationCount = count;
+        this.UnreadNotificationCount = count;
         this.cdr.detectChanges();
       })
     );
@@ -558,7 +872,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     // Subscribe to active app changes
     this.subscriptions.push(
       this.appManager.ActiveApp.subscribe(async app => {
-        this.activeApp = app;
+        this.ActiveApp = app;
         this.recomputeNavBarApps();
         this.cdr.detectChanges();
 
@@ -698,7 +1012,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     // Subscribe to workspace configuration changes to sync URL and active app
     this.subscriptions.push(
       this.workspaceManager.Configuration.subscribe(async config => {
-        if (config && this.initialized) {
+        if (config && this.Initialized) {
           this.latestSyncedConfig = config;
           // Sync active app with active tab's application
           await this.syncActiveAppWithTab(config);
@@ -725,7 +1039,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       this.router.events.pipe(
         filter((event): event is NavigationEnd => event instanceof NavigationEnd)
       ).subscribe(event => {
-        if (this.initialized) {
+        if (this.Initialized) {
           this.syncWorkspaceWithUrl(event.urlAfterRedirects || event.url);
         }
       })
@@ -759,14 +1073,14 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       MJGlobal.Instance.GetEventListener(false).subscribe(async event => {
         if (event.event === MJEventType.TenantChanged) {
           if (event.eventCode === 'TenantChanging') {
-            this.currentLoadingText = 'Switching organization...';
-            this.loading = true;
+            this.CurrentLoadingText = 'Switching organization...';
+            this.Loading = true;
             this.cdr.detectChanges();
-          } else if (event.eventCode === 'TenantChanged' && this.tabContainerRef) {
+          } else if (event.eventCode === 'TenantChanged' && this.TabContainerRef) {
             try {
-              await this.tabContainerRef.ReloadAllTabs();
+              await this.TabContainerRef.ReloadAllTabs();
             } finally {
-              this.loading = false;
+              this.Loading = false;
               this.cdr.detectChanges();
             }
           }
@@ -777,7 +1091,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     // Load searchable entities for search functionality
     await this.loadSearchableEntities();
 
-    this.initialized = true;
+    this.Initialized = true;
     this.waitingForFirstResource = true;
 
     // Decide whether to restore workspace state or honor the current URL.
@@ -803,6 +1117,11 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     // state changes (apps loaded, searchableEntities populated, etc.) to prevent
     // NG0100 ExpressionChangedAfterItHasBeenCheckedError in dev mode
     this.cdr.detectChanges();
+  }
+
+  /** @deprecated Use {@link InitializeShell}. */
+  async initializeShell(): Promise<void> {
+    return this.InitializeShell();
   }
 
   /**
@@ -846,7 +1165,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     // 1. We're initialized (past the startup phase)
     // 2. App is different from current
     // 3. Either NOT in URL-based navigation mode, OR this IS a URL-based tab
-    const shouldSetActiveApp = this.initialized &&
+    const shouldSetActiveApp = this.Initialized &&
                               app &&
                               !UUIDsEqual(currentActiveApp?.ID, request.ApplicationId) &&
                               (!this.urlBasedNavigation || isUrlBasedTab);
@@ -894,7 +1213,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
 
     // Check if this is a system tab (not associated with a registered app)
     if (tabAppId === SYSTEM_APP_ID) {
-      this.isViewingSystemTab = true;
+      this.IsViewingSystemTab = true;
       this.cdr.detectChanges();
 
       // Don't try to set active app - SYSTEM_APP_ID has no registered app
@@ -904,7 +1223,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     }
 
     // Not a system tab - clear the flag
-    this.isViewingSystemTab = false;
+    this.IsViewingSystemTab = false;
     this.cdr.detectChanges();
 
     // Records style: records-REGION tabs are a GLOBAL
@@ -915,7 +1234,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     // stays wherever the user is. Records DOCKED to the workspace fall
     // through: they are ordinary main-layout tabs and DO flip app context.
     if (this.RecordTabsStyle && IsRecordsRegionTab(activeTab.configuration)) {
-      this.titleService.setContext(this.activeApp?.Name || null, activeTab.title || null);
+      this.titleService.setContext(this.ActiveApp?.Name || null, activeTab.title || null);
       return;
     }
 
@@ -1745,15 +2064,25 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    * user stays within their scoped app. Data access is still enforced
    * server-side by the user's role; this is the UI-confinement layer.
    */
-  public get appSwitchingLocked(): boolean {
+  public get AppSwitchingLocked(): boolean {
     return !!this.authBase.GetSessionScope()?.restrictedToApplicationId;
   }
 
-  onFirstResourceLoadComplete(): void {
+  /** @deprecated Use {@link AppSwitchingLocked}. */
+  public get appSwitchingLocked(): boolean {
+    return this.AppSwitchingLocked;
+  }
+
+  OnFirstResourceLoadComplete(): void {
     this.waitingForFirstResource = false;
-    this.loading = false;
+    this.Loading = false;
     this.stopLoadingAnimation();
     this.cdr.detectChanges();
+  }
+
+  /** @deprecated Use {@link OnFirstResourceLoadComplete}. */
+  onFirstResourceLoadComplete(): void {
+    return this.OnFirstResourceLoadComplete();
   }
 
   /**
@@ -1767,7 +2096,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    */
   private startLoadingAnimation(): void {
     // Select the appropriate theme based on date and locale
-    this.activeTheme = getActiveTheme();
+    this.activeTheme = GetActiveTheme();
 
     // Reset state
     this.usedMessageIndices = [0]; // Mark first message as used
@@ -1820,7 +2149,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   private startLoadingResetTimer(): void {
     this.cancelLoadingResetTimer();
     this.loadingResetTimeout = setTimeout(() => {
-      if (this.loading) {
+      if (this.Loading) {
         this.ShowResetOption = true;
         this.cdr.detectChanges();
       }
@@ -1891,24 +2220,24 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    */
   private initializeLoadingDisplay(): void {
     // Set first message
-    this.currentLoadingText = this.activeTheme.messages[0];
+    this.CurrentLoadingText = this.activeTheme.messages[0];
 
     if (this.activeTheme.staticColors) {
       // Standard theme: keep MJ blue, no gradient
-      this.currentLoadingColor = this.activeTheme.colors[0];
-      this.currentLoadingTextColor = '#757575'; // Default gray text
-      this.currentLoadingGradient = null;
+      this.CurrentLoadingColor = this.activeTheme.colors[0];
+      this.CurrentLoadingTextColor = '#757575'; // Default gray text
+      this.CurrentLoadingGradient = null;
     } else {
       // Themed period: use theme colors and first gradient from the start
-      this.currentLoadingColor = this.activeTheme.colors[0];
-      this.currentLoadingTextColor = this.activeTheme.colors[0];
+      this.CurrentLoadingColor = this.activeTheme.colors[0];
+      this.CurrentLoadingTextColor = this.activeTheme.colors[0];
 
       // Set initial gradient if theme has gradients
       if (this.activeTheme.gradients && this.activeTheme.gradients.length > 0) {
-        this.currentLoadingGradient = this.activeTheme.gradients[0];
+        this.CurrentLoadingGradient = this.activeTheme.gradients[0];
         this.usedGradientIndices = [0];
       } else {
-        this.currentLoadingGradient = null;
+        this.CurrentLoadingGradient = null;
       }
     }
   }
@@ -1938,7 +2267,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       this.loadingMessageIndex = randomIndex;
 
       // Update the message
-      this.currentLoadingText = this.activeTheme.messages[randomIndex];
+      this.CurrentLoadingText = this.activeTheme.messages[randomIndex];
 
       // Check if it's time to change colors (every 2nd message = every 5 seconds)
       // But only for non-static themes
@@ -1967,7 +2296,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       const currentIndex = this.usedGradientIndices[this.usedGradientIndices.length - 1] ?? -1;
       const nextIndex = (currentIndex + 1) % gradients.length;
       this.usedGradientIndices.push(nextIndex);
-      this.currentLoadingGradient = gradients[nextIndex];
+      this.CurrentLoadingGradient = gradients[nextIndex];
     }
 
     // Also cycle text color through theme colors
@@ -1975,8 +2304,8 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     if (colors.length > 1) {
       // Get a random color from the theme for text
       const randomIndex = Math.floor(Math.random() * colors.length);
-      this.currentLoadingColor = colors[randomIndex];
-      this.currentLoadingTextColor = colors[randomIndex];
+      this.CurrentLoadingColor = colors[randomIndex];
+      this.CurrentLoadingTextColor = colors[randomIndex];
     }
   }
 
@@ -2011,7 +2340,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
 
     // Set initial animation
     if (this.animationSequence.length > 0) {
-      this.currentLoadingAnimation = this.animationSequence[0].type;
+      this.CurrentLoadingAnimation = this.animationSequence[0].type;
     }
   }
 
@@ -2064,7 +2393,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     }
 
     const nextStep = this.animationSequence[this.currentAnimationIndex];
-    this.currentLoadingAnimation = nextStep.type;
+    this.CurrentLoadingAnimation = nextStep.type;
     this.cdr.detectChanges();
 
     // Schedule the next transition if this step has a duration
@@ -2085,12 +2414,12 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   /**
    * Handle app switch from app switcher
    */
-  async onAppSwitch(appId: string): Promise<void> {
+  async OnAppSwitch(appId: string): Promise<void> {
     // Clear the system tab flag since we're switching to a real app
-    this.isViewingSystemTab = false;
+    this.IsViewingSystemTab = false;
 
     // Show loading indicator in app switcher
-    this.loadingAppId = appId;
+    this.LoadingAppId = appId;
     this.cdr.detectChanges();
 
     try {
@@ -2102,12 +2431,12 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         const appName = systemApp?.Name || 'this application';
 
         // Clear loading indicator before showing dialog
-        this.loadingAppId = null;
+        this.LoadingAppId = null;
         this.cdr.detectChanges();
 
         // Show "Add Application?" dialog
-        if (this.appAccessDialog) {
-          this.appAccessDialog.show({
+        if (this.AppAccessDialog) {
+          this.AppAccessDialog.show({
             type: 'not_installed',
             appName: appName,
             appId: appId
@@ -2161,9 +2490,14 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       }
     } finally {
       // Clear loading indicator
-      this.loadingAppId = null;
+      this.LoadingAppId = null;
       this.cdr.detectChanges();
     }
+  }
+
+  /** @deprecated Use {@link OnAppSwitch}. */
+  async onAppSwitch(appId: string): Promise<void> {
+    return this.OnAppSwitch(appId);
   }
 
   /**
@@ -2198,21 +2532,31 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   /**
    * Handle Nav Bar app icon click (single click switches to app)
    */
-  onNavBarAppClick(app: BaseApplication, event: MouseEvent): void {
+  OnNavBarAppClick(app: BaseApplication, event: MouseEvent): void {
     // If shift key is held, force new tab
     if (event.shiftKey) {
       this.openNavBarAppInNewTab(app);
     } else {
-      this.onAppSwitch(app.ID);
+      this.OnAppSwitch(app.ID);
     }
+  }
+
+  /** @deprecated Use {@link OnNavBarAppClick}. */
+  onNavBarAppClick(app: BaseApplication, event: MouseEvent): void {
+    return this.OnNavBarAppClick(app, event);
   }
 
   /**
    * Handle Nav Bar app icon double-click (opens in new tab)
    */
-  onNavBarAppDblClick(app: BaseApplication, event: MouseEvent): void {
+  OnNavBarAppDblClick(app: BaseApplication, event: MouseEvent): void {
     event.preventDefault();
     this.openNavBarAppInNewTab(app);
+  }
+
+  /** @deprecated Use {@link OnNavBarAppDblClick}. */
+  onNavBarAppDblClick(app: BaseApplication, event: MouseEvent): void {
+    return this.OnNavBarAppDblClick(app, event);
   }
 
   /**
@@ -2223,7 +2567,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     const tabRequest = await app.CreateDefaultTab();
     if (tabRequest) {
       // Set the app as active first if it isn't already
-      if (!UUIDsEqual(this.activeApp?.ID, app.ID)) {
+      if (!UUIDsEqual(this.ActiveApp?.ID, app.ID)) {
         await this.appManager.SetActiveApp(app.ID);
       }
 
@@ -2235,8 +2579,8 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   /**
    * Handle navigation item click with shift-key detection
    */
-  onNavItemClick(event: NavItemClickEvent): void {
-    if (!this.activeApp) {
+  OnNavItemClick(event: NavItemClickEvent): void {
+    if (!this.ActiveApp) {
       return;
     }
 
@@ -2245,27 +2589,32 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     // Close mobile nav if open. Routed through closeMobileNav() rather than setting the flag
     // directly so focus does not get dropped to <body> when the drawer goes inert — tapping a
     // nav item is the most common way the drawer closes on a phone.
-    this.closeMobileNav();
+    this.CloseMobileNav();
 
     // Use NavigationService with forceNewTab option if shift was pressed
     this.navigationService.OpenNavItem(
-      this.activeApp.ID,
+      this.ActiveApp.ID,
       item,
-      this.activeApp.GetColor(),
+      this.ActiveApp.GetColor(),
       { forceNewTab: shiftKey }
     );
+  }
+
+  /** @deprecated Use {@link OnNavItemClick}. */
+  onNavItemClick(event: NavItemClickEvent): void {
+    return this.OnNavItemClick(event);
   }
 
   /**
    * Handle dismiss of a dynamic nav item (remove from recent stack)
    */
-  onNavItemDismiss(item: NavItem): void {
-    if (!this.activeApp) {
+  OnNavItemDismiss(item: NavItem): void {
+    if (!this.ActiveApp) {
       return;
     }
 
     // Delegate to HomeApplication's RemoveDynamicNavItem if available
-    const appWithRemove = this.activeApp as BaseApplication & {
+    const appWithRemove = this.ActiveApp as BaseApplication & {
       RemoveDynamicNavItem?: (item: NavItem) => void;
     };
     if (typeof appWithRemove.RemoveDynamicNavItem === 'function') {
@@ -2273,24 +2622,39 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     }
   }
 
+  /** @deprecated Use {@link OnNavItemDismiss}. */
+  onNavItemDismiss(item: NavItem): void {
+    return this.OnNavItemDismiss(item);
+  }
+
   /**
    * Toggle mobile navigation drawer
    */
-  toggleMobileNav(): void {
-    this.mobileNavOpen = !this.mobileNavOpen;
-    if (!this.mobileNavOpen) {
+  ToggleMobileNav(): void {
+    this.MobileNavOpen = !this.MobileNavOpen;
+    if (!this.MobileNavOpen) {
       this.returnFocusFromMobileNav();
     }
+  }
+
+  /** @deprecated Use {@link ToggleMobileNav}. */
+  toggleMobileNav(): void {
+    return this.ToggleMobileNav();
   }
 
   /**
    * Close mobile navigation drawer
    */
-  closeMobileNav(): void {
-    if (this.mobileNavOpen) {
-      this.mobileNavOpen = false;
+  CloseMobileNav(): void {
+    if (this.MobileNavOpen) {
+      this.MobileNavOpen = false;
       this.returnFocusFromMobileNav();
     }
+  }
+
+  /** @deprecated Use {@link CloseMobileNav}. */
+  closeMobileNav(): void {
+    return this.CloseMobileNav();
   }
 
   /**
@@ -2300,12 +2664,12 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    * (e.g. the drawer was closed from a keyboard shortcut while the user was in the content).
    */
   private returnFocusFromMobileNav(): void {
-    const drawer = this.mobileNavDrawer?.nativeElement;
+    const drawer = this.MobileNavDrawer?.nativeElement;
     const active = document.activeElement;
     if (!drawer || !active || !drawer.contains(active)) {
       return;
     }
-    this.mobileNavToggle?.nativeElement.focus();
+    this.MobileNavToggle?.nativeElement.focus();
   }
 
   /**
@@ -2314,8 +2678,13 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    * name of its own — so it is set on the BUTTON and falls back to a generic label before
    * the user record has loaded.
    */
-  get avatarAriaLabel(): string {
+  get AvatarAriaLabel(): string {
     return this.userName ? `Account: ${this.userName}` : 'Account';
+  }
+
+  /** @deprecated Use {@link AvatarAriaLabel}. */
+  get avatarAriaLabel(): string {
+    return this.AvatarAriaLabel;
   }
 
   /**
@@ -2323,7 +2692,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    * to the browser's fragment navigation: the shell's main region is a Golden Layout host,
    * and letting the URL hash change here would collide with the deep-link/tab restore path.
    */
-  skipToMainContent(event: Event): void {
+  SkipToMainContent(event: Event): void {
     event.preventDefault();
     const main = document.getElementById('mj-main-content');
     if (!main) {
@@ -2333,25 +2702,35 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     main.scrollIntoView({ block: 'start' });
   }
 
+  /** @deprecated Use {@link SkipToMainContent}. */
+  skipToMainContent(event: Event): void {
+    return this.SkipToMainContent(event);
+  }
+
   /**
    * Toggle user menu visibility
    */
-  toggleUserMenu(event: Event): void {
+  ToggleUserMenu(event: Event): void {
     event.stopPropagation();
-    this.userMenuVisible = !this.userMenuVisible;
+    this.UserMenuVisible = !this.UserMenuVisible;
 
-    if (this.userMenuVisible) {
+    if (this.UserMenuVisible) {
       // Close menu when clicking outside. CAPTURE phase so clicks whose
       // bubbling something stopped (e.g. the origin crumb's GL-focus
       // stoppers) still dismiss the menu.
       const closeHandler = () => {
-        this.userMenuVisible = false;
+        this.UserMenuVisible = false;
         document.removeEventListener('click', closeHandler, true);
       };
       setTimeout(() => {
         document.addEventListener('click', closeHandler, true);
       }, 0);
     }
+  }
+
+  /** @deprecated Use {@link ToggleUserMenu}. */
+  toggleUserMenu(event: Event): void {
+    return this.ToggleUserMenu(event);
   }
 
   /**
@@ -2368,7 +2747,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
 
     // Initialize developer mode service
     if (this.userEntity) {
-      await this.developerModeService.Initialize(this.userEntity);
+      await this.DeveloperModeService.Initialize(this.userEntity);
     }
 
     // Check org-level feedback kill switch (defaults to enabled on error)
@@ -2380,9 +2759,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       userEntity: this.userEntity!,
       shell: this as unknown as Record<string, unknown>,
       viewContainerRef: this.viewContainerRef,
-      isDeveloper: this.developerModeService.IsDeveloper,
-      developerModeEnabled: this.developerModeService.IsEnabled,
-      currentApplication: this.activeApp as unknown as ApplicationInfoRef | null,
+      isDeveloper: this.DeveloperModeService.IsDeveloper,
+      developerModeEnabled: this.DeveloperModeService.IsEnabled,
+      currentApplication: this.ActiveApp as unknown as ApplicationInfoRef | null,
       workspaceManager: this.workspaceManager,
       authService: this.authBase,
       pinService: this.homePinService,
@@ -2402,13 +2781,13 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     this.refreshMenuElements();
 
     // Subscribe to developer mode changes to refresh menu
-    this.developerModeService.IsEnabled$.pipe(
+    this.DeveloperModeService.IsEnabled$.pipe(
       takeUntil(this.destroy$)
     ).subscribe(() => {
       // Update context and refresh menu
       if (this.userMenu) {
         this.userMenu.UpdateContext({
-          developerModeEnabled: this.developerModeService.IsEnabled
+          developerModeEnabled: this.DeveloperModeService.IsEnabled
         });
       }
       this.refreshMenuElements();
@@ -2436,14 +2815,14 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    */
   private refreshMenuElements(): void {
     if (this.userMenu) {
-      this.userMenuElements = this.userMenu.GetMenuElements();
+      this.UserMenuElements = this.userMenu.GetMenuElements();
     }
   }
 
   /**
    * Handle user menu item click
    */
-  async onUserMenuItemClick(itemId: string): Promise<void> {
+  async OnUserMenuItemClick(itemId: string): Promise<void> {
     if (!this.userMenu) return;
 
     const result = await this.userMenu.HandleItemClick(itemId);
@@ -2466,13 +2845,13 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     }
 
     if (result.message === 'reset-layout') {
-      await this.onResetLayout();
+      await this.OnResetLayout();
       return;
     }
 
     if (result.message === 'pin-to-home') {
       // Close menu and show overlay immediately before any async work
-      this.userMenuVisible = false;
+      this.UserMenuVisible = false;
       this.refreshMenuElements();
       this.showPinProgress('Pinning...');
       // Let the UI render the overlay before starting the work
@@ -2490,42 +2869,47 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     }
 
     if (result.message === 'sharing-center') {
-      this.userMenuVisible = false;
+      this.UserMenuVisible = false;
       this.userSharingCenterDialogService.open(this.viewContainerRef);
       return;
     }
 
     if (result.message === 'submit-feedback') {
-      this.userMenuVisible = false;
+      this.UserMenuVisible = false;
       this.ShowFeedbackDialog();
       return;
     }
 
     if (result.message === 'about') {
-      this.userMenuVisible = false;
+      this.UserMenuVisible = false;
       this.aboutDialogService.open(this.viewContainerRef, {
-        avatarUrl: this.userImageURL || null,
-        avatarIconClass: this.userIconClass || null
+        avatarUrl: this.UserImageURL || null,
+        avatarIconClass: this.UserIconClass || null
       });
       return;
     }
 
     if (result.message === 'profile') {
-      this.userMenuVisible = false;
+      this.UserMenuVisible = false;
       this.profileDialogService.open(this.viewContainerRef, {
-        avatarUrl: this.userImageURL || null,
-        avatarIconClass: this.userIconClass || null
+        avatarUrl: this.UserImageURL || null,
+        avatarIconClass: this.UserIconClass || null
       });
       return;
     }
 
     if (result.closeMenu) {
-      this.userMenuVisible = false;
+      this.UserMenuVisible = false;
     }
 
     // Refresh menu elements (some items may have changed state)
     this.refreshMenuElements();
     this.cdr.detectChanges();
+  }
+
+  /** @deprecated Use {@link OnUserMenuItemClick}. */
+  async onUserMenuItemClick(itemId: string): Promise<void> {
+    return this.OnUserMenuItemClick(itemId);
   }
 
   /**
@@ -2539,30 +2923,50 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   /**
    * Get user menu options for template
    */
-  getUserMenuOptions() {
+  GetUserMenuOptions() {
     return this.userMenu?.GetOptions();
+  }
+
+  /** @deprecated Use {@link GetUserMenuOptions}. */
+  getUserMenuOptions() {
+    return this.GetUserMenuOptions();
   }
 
   /**
    * Get user display info for template
    */
-  getUserDisplayInfo() {
+  GetUserDisplayInfo() {
     return this.userMenu?.GetUserDisplayInfo();
+  }
+
+  /** @deprecated Use {@link GetUserDisplayInfo}. */
+  getUserDisplayInfo() {
+    return this.GetUserDisplayInfo();
   }
 
   /**
    * Check if an element is a divider (for template)
    */
-  isMenuDivider(element: UserMenuElement): boolean {
+  IsMenuDivider(element: UserMenuElement): boolean {
     return isUserMenuDivider(element);
+  }
+
+  /** @deprecated Use {@link IsMenuDivider}. */
+  isMenuDivider(element: UserMenuElement): boolean {
+    return this.IsMenuDivider(element);
   }
 
   /**
    * Cast element to UserMenuItem (for template type safety)
    * Call this only after checking !isMenuDivider(element)
    */
-  asMenuItem(element: UserMenuElement): UserMenuItem {
+  AsMenuItem(element: UserMenuElement): UserMenuItem {
     return element as UserMenuItem;
+  }
+
+  /** @deprecated Use {@link AsMenuItem}. */
+  asMenuItem(element: UserMenuElement): UserMenuItem {
+    return this.AsMenuItem(element);
   }
 
 
@@ -2596,10 +3000,10 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
 
     // Resolve nav item icon for Custom pins
     let pinIcon: string | undefined;
-    if (resourceType === 'Custom' && this.activeApp) {
+    if (resourceType === 'Custom' && this.ActiveApp) {
       const navItemName = activeTab.configuration?.['navItemName'] as string;
       if (navItemName) {
-        const navItems = await this.activeApp.GetNavItems();
+        const navItems = await this.ActiveApp.GetNavItems();
         const navItem = navItems.find(ni => ni.Label === navItemName);
         pinIcon = navItem?.Icon || undefined;
       }
@@ -2609,9 +3013,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       DisplayName: displayName,
       ResourceType: resourceType,
       ApplicationID: activeTab.applicationId,
-      ApplicationName: this.activeApp?.Name,
+      ApplicationName: this.ActiveApp?.Name,
       Icon: pinIcon,
-      Color: this.activeApp?.GetColor() || undefined,
+      Color: this.ActiveApp?.GetColor() || undefined,
       Configuration: activeTab.configuration as Record<string, unknown>
     });
 
@@ -2634,8 +3038,8 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    */
   private async captureAndAttachThumbnail(tab: WorkspaceTab, resourceType: string): Promise<void> {
     try {
-      if (!this.tabContainerRef) return;
-      const thumbnail = await this.tabContainerRef.CaptureActiveThumbnail();
+      if (!this.TabContainerRef) return;
+      const thumbnail = await this.TabContainerRef.CaptureActiveThumbnail();
       if (thumbnail) {
         const pin = this.homePinService.FindPin(resourceType, tab.configuration as Record<string, unknown>);
         if (pin) {
@@ -2705,21 +3109,26 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   /**
    * Log current workspace configuration to console (debug)
    */
-  onLogLayout(): void {
+  OnLogLayout(): void {
     const config = this.workspaceManager.GetConfiguration();
     console.log('📋 Workspace Configuration:', JSON.stringify(config, null, 2));
     console.log('📋 Workspace Configuration (object):', config);
-    this.userMenuVisible = false;
+    this.UserMenuVisible = false;
+  }
+
+  /** @deprecated Use {@link OnLogLayout}. */
+  onLogLayout(): void {
+    return this.OnLogLayout();
   }
 
   /**
    * Reset workspace layout - clears all tabs and switches to single-resource mode
    */
-  async onResetLayout(): Promise<void> {
-    this.userMenuVisible = false;
+  async OnResetLayout(): Promise<void> {
+    this.UserMenuVisible = false;
 
     // Get current active app to create a fresh default tab
-    const currentApp = this.activeApp;
+    const currentApp = this.ActiveApp;
     if (!currentApp) {
       console.warn('No active app to reset to');
       return;
@@ -2768,14 +3177,24 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     this.workspaceManager.UpdateConfiguration(freshConfig);
   }
 
+  /** @deprecated Use {@link OnResetLayout}. */
+  async onResetLayout(): Promise<void> {
+    return this.OnResetLayout();
+  }
+
   /**
    * Logout user and clear authentication data
    */
-  async onLogout(): Promise<void> {
-    this.userMenuVisible = false;
+  async OnLogout(): Promise<void> {
+    this.UserMenuVisible = false;
     this.authBase.logout();
     localStorage.removeItem('auth');
     localStorage.removeItem('claims');
+  }
+
+  /** @deprecated Use {@link OnLogout}. */
+  async onLogout(): Promise<void> {
+    return this.OnLogout();
   }
 
   /**
@@ -2816,7 +3235,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     try {
       const md = this.ProviderToUse;
       this.userName = currentUserInfo.FirstLast || currentUserInfo.Name || 'User';
-      this.userEmail = currentUserInfo.Email || '';
+      this.UserEmail = currentUserInfo.Email || '';
 
       // Load the full MJUserEntity to access avatar fields
       const currentUserEntity = await md.GetEntityObject<MJUserEntity>('MJ: Users');
@@ -2839,8 +3258,8 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     } catch (error) {
       console.warn('Could not load user avatar:', error);
       // Use fallback
-      this.userImageURL = '';
-      this.userIconClass = null;
+      this.UserImageURL = '';
+      this.UserIconClass = null;
     }
   }
 
@@ -2870,15 +3289,15 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    */
   private applyUserAvatar(user: any): void {
     if (user.UserImageURL) {
-      this.userImageURL = user.UserImageURL;
-      this.userIconClass = null;
+      this.UserImageURL = user.UserImageURL;
+      this.UserIconClass = null;
     } else if (user.UserImageIconClass) {
-      this.userIconClass = user.UserImageIconClass;
-      this.userImageURL = '';
+      this.UserIconClass = user.UserImageIconClass;
+      this.UserImageURL = '';
     } else {
       // Default fallback - show icon
-      this.userImageURL = '';
-      this.userIconClass = null;
+      this.UserImageURL = '';
+      this.UserIconClass = null;
     }
     this.cdr.detectChanges();
   }
@@ -2892,7 +3311,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     const activeTab = config.tabs?.find(tab => tab.id === config.activeTabId);
 
     // Get app name
-    const appName = this.activeApp?.Name || null;
+    const appName = this.ActiveApp?.Name || null;
 
     // Get resource name from active tab
     let resourceName: string | null = null;
@@ -2913,16 +3332,16 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    */
   private async loadSearchableEntities(): Promise<void> {
     const md = this.ProviderToUse;
-    this.searchableEntities = md.Entities.filter((e) => e.AllowUserSearchAPI).sort((a, b) => a.Name.localeCompare(b.Name));
-    if (this.searchableEntities.length > 0) {
-      this.selectedEntity = this.searchableEntities[0];
+    this.SearchableEntities = md.Entities.filter((e) => e.AllowUserSearchAPI).sort((a, b) => a.Name.localeCompare(b.Name));
+    if (this.SearchableEntities.length > 0) {
+      this.SelectedEntity = this.SearchableEntities[0];
     }
   }
 
   /**
    * Toggle search popup visibility
    */
-  toggleSearch(): void {
+  ToggleSearch(): void {
     if (!this.ShowSearchBar) {
       return;
     }
@@ -2930,41 +3349,51 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       this.OpenOmnibar();
       return;
     }
-    this.isSearchOpen = !this.isSearchOpen;
+    this.IsSearchOpen = !this.IsSearchOpen;
 
     // Focus on search input when opened
-    if (this.isSearchOpen) {
+    if (this.IsSearchOpen) {
       setTimeout(() => {
-        if (this.searchInput && this.searchInput.nativeElement) {
-          this.searchInput.nativeElement.focus();
+        if (this.SearchInput && this.SearchInput.nativeElement) {
+          this.SearchInput.nativeElement.focus();
         }
       }, 100);
     }
   }
 
+  /** @deprecated Use {@link ToggleSearch}. */
+  toggleSearch(): void {
+    return this.ToggleSearch();
+  }
+
   /**
    * Close search popup
    */
+  CloseSearch(): void {
+    this.IsSearchOpen = false;
+  }
+
+  /** @deprecated Use {@link CloseSearch}. */
   closeSearch(): void {
-    this.isSearchOpen = false;
+    return this.CloseSearch();
   }
 
   /**
    * Handle search submission
    */
-  onSearch(event: Event): void {
-    if (!this.searchInput) {
+  OnSearch(event: Event): void {
+    if (!this.SearchInput) {
       return;
     }
 
-    const inputValue = this.searchInput.nativeElement.value;
+    const inputValue = this.SearchInput.nativeElement.value;
     if (inputValue && inputValue.length > 0 && inputValue.trim().length > 2) {
-      this.searchInput.nativeElement.value = ''; // Clear input
-      this.isSearchOpen = false; // Close search popup
+      this.SearchInput.nativeElement.value = ''; // Clear input
+      this.IsSearchOpen = false; // Close search popup
 
       // Navigate to search results
-      if (this.selectedEntity) {
-        this.router.navigate(['resource', 'search', inputValue], { queryParams: { Entity: this.selectedEntity.Name } });
+      if (this.SelectedEntity) {
+        this.router.navigate(['resource', 'search', inputValue], { queryParams: { Entity: this.SelectedEntity.Name } });
       }
     } else {
       // Show warning notification
@@ -2979,6 +3408,11 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         }
       });
     }
+  }
+
+  /** @deprecated Use {@link OnSearch}. */
+  onSearch(event: Event): void {
+    return this.OnSearch(event);
   }
 
   // ========================================
@@ -3019,10 +3453,10 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       const isMobile = window.matchMedia('(max-width: 768px)').matches;
       if (this.UseOmnibar) {
           this.OpenOmnibar();
-      } else if (!isMobile && this.shellSearchComposite?.Focus) {
+      } else if (!isMobile && this.ShellSearchComposite?.Focus) {
           // Omnibar-off desktop: the inline composite is on screen — focus it and
           // let its attached suggest dropdown do the work.
-          this.shellSearchComposite.Focus();
+          this.ShellSearchComposite.Focus();
       } else {
           // Omnibar-off mobile: no visible inline composite — open the Spotlight overlay.
           this.LegacySearchOpen = true;
@@ -3072,8 +3506,8 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       composite's relevance/scope selections. */
   OnSearchSubmitted(query: string): void {
       if (query && query.trim().length >= 2) {
-          const minRelevance = this.shellSearchComposite?.MinRelevancePercent;
-          const scopeIDs = this.shellSearchComposite?.SelectedScopeIDs;
+          const minRelevance = this.ShellSearchComposite?.MinRelevancePercent;
+          const scopeIDs = this.ShellSearchComposite?.SelectedScopeIDs;
           const opts: { minRelevance?: number; scopeIDs?: string[] } = {};
           if (minRelevance) opts.minRelevance = minRelevance;
           if (scopeIDs && scopeIDs.length > 0) opts.scopeIDs = scopeIDs;
@@ -3094,22 +3528,32 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    * Show notifications page as a tab
    */
   /** Toggle the global Activity drawer. */
-  toggleActivity(event: MouseEvent): void {
+  ToggleActivity(event: MouseEvent): void {
     event.stopPropagation();
-    this.activityOpen = !this.activityOpen;
+    this.ActivityOpen = !this.ActivityOpen;
     this.cdr.detectChanges();
   }
 
+  /** @deprecated Use {@link ToggleActivity}. */
+  toggleActivity(event: MouseEvent): void {
+    return this.ToggleActivity(event);
+  }
+
   /** Clear finished activities from the tracker. */
-  clearFinishedActivity(): void {
+  ClearFinishedActivity(): void {
     this.activityService.ClearFinished();
+  }
+
+  /** @deprecated Use {@link ClearFinishedActivity}. */
+  clearFinishedActivity(): void {
+    return this.ClearFinishedActivity();
   }
 
   /** Close the Activity drawer when clicking anywhere outside it. */
   @HostListener('document:click')
   onDocumentClickCloseActivity(): void {
-    if (this.activityOpen) {
-      this.activityOpen = false;
+    if (this.ActivityOpen) {
+      this.ActivityOpen = false;
       this.cdr.detectChanges();
     }
   }
@@ -3166,8 +3610,8 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   private async captureAndAttachFeedbackScreenshot(): Promise<void> {
     try {
       let screenshot: string | undefined;
-      if (this.tabContainerRef) {
-        screenshot = await this.tabContainerRef.CaptureActiveThumbnail();
+      if (this.TabContainerRef) {
+        screenshot = await this.TabContainerRef.CaptureActiveThumbnail();
       }
       if (!screenshot) {
         const contentEl = document.querySelector('.shell-content') as HTMLElement
@@ -3218,8 +3662,8 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     // Show the dialog on top of the loading screen
     // Use setTimeout to ensure the dialog component is ready after view init
     setTimeout(() => {
-      if (this.appAccessDialog) {
-        this.appAccessDialog.show(dialogConfig);
+      if (this.AppAccessDialog) {
+        this.AppAccessDialog.show(dialogConfig);
       } else {
         // Fallback if dialog not available - redirect to a working app
         console.warn('App access dialog not available, redirecting to fallback app');
@@ -3284,12 +3728,12 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
 
     // Stop loading animation and show the dialog
     this.stopLoadingAnimation();
-    this.loading = false;
+    this.Loading = false;
     this.cdr.detectChanges();
 
     setTimeout(() => {
-      if (this.appAccessDialog) {
-        this.appAccessDialog.show({ type: 'no_apps' });
+      if (this.AppAccessDialog) {
+        this.AppAccessDialog.show({ type: 'no_apps' });
       }
     }, 0);
   }
@@ -3297,14 +3741,14 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   /**
    * Handle Golden Layout initialization failure
    */
-  handleLayoutError(): void {
+  HandleLayoutError(): void {
     LogStatus('Golden Layout initialization failed');
 
     const availableApps = this.appManager.GetAllApps();
     if (availableApps.length > 0) {
       setTimeout(() => {
-        if (this.appAccessDialog) {
-          this.appAccessDialog.show({ type: 'layout_error' });
+        if (this.AppAccessDialog) {
+          this.AppAccessDialog.show({ type: 'layout_error' });
         } else {
           // Direct redirect if dialog not available
           this.redirectToFallbackApp(availableApps);
@@ -3313,10 +3757,15 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     }
   }
 
+  /** @deprecated Use {@link HandleLayoutError}. */
+  handleLayoutError(): void {
+    return this.HandleLayoutError();
+  }
+
   /**
    * Handle dialog result (install, enable, or redirect)
    */
-  async onAppAccessDialogResult(result: AppAccessDialogResult): Promise<void> {
+  async OnAppAccessDialogResult(result: AppAccessDialogResult): Promise<void> {
     const availableApps = this.appManager.GetAllApps();
 
     switch (result.action) {
@@ -3340,6 +3789,11 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     }
   }
 
+  /** @deprecated Use {@link OnAppAccessDialogResult}. */
+  async onAppAccessDialogResult(result: AppAccessDialogResult): Promise<void> {
+    return this.OnAppAccessDialogResult(result);
+  }
+
   /**
    * Install an app for the user and navigate to it
    */
@@ -3360,12 +3814,12 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         } else {
         
           console.error('[ShellComponent] Failed to add application');
-          this.appAccessDialog?.completeProcessing();
+          this.AppAccessDialog?.completeProcessing();
           this.redirectToFallbackApp(this.appManager.GetAllApps());
       }
     } catch (error) {
       console.error('Error adding app:', error);
-      this.appAccessDialog?.completeProcessing();
+      this.AppAccessDialog?.completeProcessing();
       this.redirectToFallbackApp(this.appManager.GetAllApps());
     }
   }
@@ -3381,12 +3835,12 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         // App enabled successfully - wait for observable to sync then navigate
         await this.waitForAppAndNavigate(appId);
       } else {
-        this.appAccessDialog?.completeProcessing();
+        this.AppAccessDialog?.completeProcessing();
         this.redirectToFallbackApp(this.appManager.GetAllApps());
       }
     } catch (error) {
       console.error('Error enabling app:', error);
-      this.appAccessDialog?.completeProcessing();
+      this.AppAccessDialog?.completeProcessing();
       this.redirectToFallbackApp(this.appManager.GetAllApps());
     }
   }
@@ -3404,7 +3858,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       const app = this.appManager.GetAppById(appId);
       if (app) {
         await this.navigateToApp(app);
-        this.appAccessDialog?.completeProcessing();
+        this.AppAccessDialog?.completeProcessing();
         return;
       }
       // Wait a bit before checking again
@@ -3415,10 +3869,10 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     const systemApp = this.appManager.GetAllSystemApps().find(a => UUIDsEqual(a.ID, appId));
     if (systemApp) {
       await this.navigateToApp(systemApp);
-      this.appAccessDialog?.completeProcessing();
+      this.AppAccessDialog?.completeProcessing();
     } else {
       console.warn(`[ShellComponent] App ${appId} not found after waiting, redirecting to fallback app`);
-      this.appAccessDialog?.completeProcessing();
+      this.AppAccessDialog?.completeProcessing();
       this.redirectToFallbackApp(this.appManager.GetAllApps());
     }
   }
@@ -3443,7 +3897,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
 
   /** Case-insensitive UUID check whether an app is the currently active app. */
   public IsActiveApp(app: BaseApplication): boolean {
-    return UUIDsEqual(app.ID, this.activeApp?.ID);
+    return UUIDsEqual(app.ID, this.ActiveApp?.ID);
   }
 
   /**
@@ -3509,7 +3963,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     }
 
     // No apps available - this shouldn't happen, but handle gracefully
-    this.loading = false;
+    this.Loading = false;
     this.cdr.detectChanges();
   }
 }

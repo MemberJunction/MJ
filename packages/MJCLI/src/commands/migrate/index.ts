@@ -3,10 +3,10 @@ import { Command, Flags } from '@oclif/core';
 import { Skyway } from '@memberjunction/skyway-core';
 import type { MigrateResult, MigrationExecutionResult, ResolvedMigration, SkywayConfig } from '@memberjunction/skyway-core';
 import ora from 'ora-classic';
-import { getValidatedConfig, getSkywayConfig, type MJConfig } from '../../config';
-import { fetchMigrationSlice, resolveGitRef, type MigrationFetchResult } from '../../lib/migration-fetch';
-import { verifyDatabaseConnection } from '../../lib/db-preflight';
-import { readCurrentDbVersion } from '../../lib/db-version';
+import { GetValidatedConfig, GetSkywayConfig, type MJConfig } from '../../config';
+import { FetchMigrationSlice, ResolveGitRef, type MigrationFetchResult } from '../../lib/migration-fetch';
+import { VerifyDatabaseConnection } from '../../lib/db-preflight';
+import { ReadCurrentDbVersion } from '../../lib/db-version';
 import { executeOpenAppMetadataRefresh, isOpenAppSchema } from '@memberjunction/open-app-engine';
 
 /** Skyway's default history table — matches `@memberjunction/skyway-core`'s config default. */
@@ -36,7 +36,7 @@ export default class Migrate extends Command {
 
   async run(): Promise<void> {
     const { flags } = await this.parse(Migrate);
-    const config = getValidatedConfig();
+    const config = GetValidatedConfig();
 
     // Connection preflight: a real connect with the configured TLS/auth settings, so a
     // self-signed cert or bad credentials fails fast with an actionable hint instead of a
@@ -58,7 +58,7 @@ export default class Migrate extends Command {
 
     try {
       const sourceDir = this.resolveSourceDir(fetched, flags.dir);
-      const skywayConfig = await getSkywayConfig(config, undefined, flags.schema, sourceDir);
+      const skywayConfig = await GetSkywayConfig(config, undefined, flags.schema, sourceDir);
       this.logFetchSummary(flags.verbose, fetched);
       await this.executeMigration(config, flags, skywayConfig);
     } finally {
@@ -74,9 +74,9 @@ export default class Migrate extends Command {
   private async fetchSliceForRef(config: MJConfig, ref: string, schema: string | undefined): Promise<MigrationFetchResult> {
     const currentVersion = await this.readInstalledVersion(config, schema);
     this.logInstalledVersion(currentVersion);
-    return fetchMigrationSlice({
+    return FetchMigrationSlice({
       repoUrl: config.mjRepoUrl,
-      ref: resolveGitRef(ref),
+      ref: ResolveGitRef(ref),
       dialect: config.dbPlatform,
       currentVersion,
     });
@@ -88,8 +88,8 @@ export default class Migrate extends Command {
    */
   private async readInstalledVersion(config: MJConfig, schema: string | undefined): Promise<string | null> {
     // A throwaway config just to obtain a provider — the migration location is irrelevant here.
-    const probe = await getSkywayConfig(config, undefined, schema, undefined);
-    return readCurrentDbVersion(probe.Provider, probe.Migrations.DefaultSchema, HISTORY_TABLE);
+    const probe = await GetSkywayConfig(config, undefined, schema, undefined);
+    return ReadCurrentDbVersion(probe.Provider, probe.Migrations.DefaultSchema, HISTORY_TABLE);
   }
 
   /** Surfaces the detected installed version so the user sees what's being upgraded from. */
@@ -107,7 +107,7 @@ export default class Migrate extends Command {
    * suggestion such as DB_TRUST_SERVER_CERTIFICATE for a self-signed cert) and exits.
    */
   private async preflightConnection(config: MJConfig, checkOnly: boolean): Promise<void> {
-    const result = await verifyDatabaseConnection(config);
+    const result = await VerifyDatabaseConnection(config);
     if (!result.Ok) {
       const suggestion = result.Suggestion ? `\n→ ${result.Suggestion}` : '';
       this.error(`Database connection failed: ${result.Message ?? 'unknown error'}${suggestion}`);

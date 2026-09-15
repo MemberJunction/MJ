@@ -200,8 +200,26 @@ export class JoinGridComponent extends BaseAngularComponent implements AfterView
 
 
   /*The below members are public because the Angular template needs access to them, but by naming convention we prefix with an _ so that it is clear they are not to be used outside of the component */
-  public _GridData: JoinGridRow[] = [];
-  public _IsLoading: boolean = false;
+  public GridData: JoinGridRow[] = [];
+
+  /** @deprecated Use {@link GridData}. */
+  public get _GridData(): JoinGridRow[] {
+    return this.GridData;
+  }
+  /** @deprecated Use {@link GridData}. */
+  public set _GridData(value: JoinGridRow[]) {
+    this.GridData = value;
+  }
+  public IsLoading: boolean = false;
+
+  /** @deprecated Use {@link IsLoading}. */
+  public get _IsLoading(): boolean {
+    return this.IsLoading;
+  }
+  /** @deprecated Use {@link IsLoading}. */
+  public set _IsLoading(value: boolean) {
+    this.IsLoading = value;
+  }
 
   /* protected internal members */
   protected _rowsEntityInfo: EntityInfo | null = null;
@@ -292,7 +310,7 @@ export class JoinGridComponent extends BaseAngularComponent implements AfterView
     // go through all of the pending deletes and remove them from the array
     // and go through all of the pending inserts and remove them from the array
     // before removing stuff from arrays we need to go back through all of hte grid cells and restore to original data
-    this._GridData.forEach(row => {
+    this.GridData.forEach(row => {
       row.ColumnData.forEach(cell => {
         // for each cell, if we have a data object, look for a match in the pending inserts array, that means it is a NEW record
         if (cell.data) {
@@ -343,7 +361,7 @@ export class JoinGridComponent extends BaseAngularComponent implements AfterView
    * This method is called automatically when the component is first loaded. Call the method anytime if you want to refresh the grid.
    */
   public async Refresh() {
-    this._IsLoading = true;    // turn on the loading spinner
+    this.IsLoading = true;    // turn on the loading spinner
     this.cdr.detectChanges(); // let angular know we have changes
 
     this._pendingDeletes = [];
@@ -392,7 +410,7 @@ export class JoinGridComponent extends BaseAngularComponent implements AfterView
       this.PopulateGridData();
     }
 
-    this._IsLoading = false; // turn off the loading spinner
+    this.IsLoading = false; // turn off the loading spinner
     this.cdr.detectChanges(); // let Angular know we have changes
   }
 
@@ -484,7 +502,7 @@ export class JoinGridComponent extends BaseAngularComponent implements AfterView
 
       gridData.push(rowData);
     });
-    this._GridData = gridData;
+    this.GridData = gridData;
   }
  
 
@@ -492,7 +510,7 @@ export class JoinGridComponent extends BaseAngularComponent implements AfterView
   protected _pendingInserts: BaseEntity[] = [];
  
 
-  public async _FlipRecord(event: MouseEvent, row: JoinGridRow, cell: JoinGridCell, stopPropagation: boolean = false) {
+  public async FlipRecord(event: MouseEvent, row: JoinGridRow, cell: JoinGridCell, stopPropagation: boolean = false) {
     if (stopPropagation)
         event.stopPropagation();
 
@@ -533,8 +551,18 @@ export class JoinGridComponent extends BaseAngularComponent implements AfterView
     this.cdr.detectChanges();
   }
 
-  public _IsColumnChecked(cell: JoinGridCell): boolean {
+  /** @deprecated Use {@link FlipRecord}. */
+  public async _FlipRecord(event: MouseEvent, row: JoinGridRow, cell: JoinGridCell, stopPropagation: boolean = false) {
+    return this.FlipRecord(event, row, cell, stopPropagation);
+  }
+
+  public IsColumnChecked(cell: JoinGridCell): boolean {
     return cell?.data !== undefined;
+  }
+
+  /** @deprecated Use {@link IsColumnChecked}. */
+  public _IsColumnChecked(cell: JoinGridCell): boolean {
+    return this.IsColumnChecked(cell);
   }
 
   public OnDropdownValueChange(row: JoinGridRow, colIndex: number, newValue: unknown): void {

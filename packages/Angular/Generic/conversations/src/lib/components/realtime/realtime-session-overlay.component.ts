@@ -22,7 +22,7 @@ import {
 } from './realtime-surface-panel-prefs';
 import { RealtimeDisclosureModel, RealtimeUxDensity, SerializeUxMilestones, REALTIME_UX_PREF_KEY } from './realtime-disclosure';
 import {
-  resolveRealtimeUi, DEFAULT_REALTIME_UI_INPUTS, DEFAULT_REALTIME_UI_SIGNALS,
+  ResolveRealtimeUi, DEFAULT_REALTIME_UI_INPUTS, DEFAULT_REALTIME_UI_SIGNALS,
   RealtimeUiInputs, RealtimeUiSignals, ResolvedRealtimeUi,
   RealtimeChromeMode, RealtimeControlId, RealtimeUiConnectionState
 } from './realtime-ui-config';
@@ -385,7 +385,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   // Seed from a dependency-free baseline — this runs as a field initializer, BEFORE the
   // disclosure model / session state / ResizeObserver exist. recomputeUi() produces the real
   // value once dependencies are ready (post-init + on every wired change source).
-  private _ui: ResolvedRealtimeUi = resolveRealtimeUi(DEFAULT_REALTIME_UI_INPUTS, DEFAULT_REALTIME_UI_SIGNALS);
+  private _ui: ResolvedRealtimeUi = ResolveRealtimeUi(DEFAULT_REALTIME_UI_INPUTS, DEFAULT_REALTIME_UI_SIGNALS);
 
   /**
    * The current resolved UI view-model. Every visibility/affordance decision the template
@@ -502,7 +502,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   public ShowCaptions = false;
 
   /** UserInfoEngine key for the persisted captions (text-vs-orb) preference. */
-  private static readonly CaptionsPrefKey = 'mj.realtimeVoice.captions.v1';
+  private static readonly captionsPrefKey = 'mj.realtimeVoice.captions.v1';
 
   /**
    * Whether developer affordances (open-record links) are revealed. Per-session view
@@ -707,7 +707,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    * the resolver is pure so redundant calls are cheap. Always marks for check.
    */
   private recomputeUi(): void {
-    const next = resolveRealtimeUi(this.mergedUiInputs, this.buildSignals());
+    const next = ResolveRealtimeUi(this.mergedUiInputs, this.buildSignals());
     const prevChrome = this._ui.chrome;
     this._ui = next;
     if (next.chrome !== prevChrome) {
@@ -1017,7 +1017,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   /** Reads the persisted text-vs-orb preference (tolerant; default = voice-first OFF). */
   private loadCaptionsPref(): void {
     try {
-      this.ShowCaptions = UserInfoEngine.Instance.GetSetting(RealtimeSessionOverlayComponent.CaptionsPrefKey) === 'true';
+      this.ShowCaptions = UserInfoEngine.Instance.GetSetting(RealtimeSessionOverlayComponent.captionsPrefKey) === 'true';
     } catch {
       // UserInfoEngine not configured — voice-first default applies.
     }
@@ -1026,7 +1026,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   /** Persists the text-vs-orb preference (debounced, best-effort). */
   private persistCaptionsPref(): void {
     try {
-      UserInfoEngine.Instance.SetSettingDebounced(RealtimeSessionOverlayComponent.CaptionsPrefKey, String(this.ShowCaptions));
+      UserInfoEngine.Instance.SetSettingDebounced(RealtimeSessionOverlayComponent.captionsPrefKey, String(this.ShowCaptions));
     } catch {
       // engine unavailable — the preference still applies for this session
     }

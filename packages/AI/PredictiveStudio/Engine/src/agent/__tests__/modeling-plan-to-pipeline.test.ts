@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { DOMINANCE_THRESHOLD_DEFAULT, type ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
-import { modelingPlanToPipelineConfig } from '../modeling-plan-to-pipeline';
+import { ModelingPlanToPipelineConfig } from '../modeling-plan-to-pipeline';
 
 /**
  * The mapper is the deterministic heart of the agent's builder — it turns the conversation-accumulated
@@ -33,7 +33,7 @@ function baseSpec(overrides: Partial<ModelingPlanSpec> = {}): ModelingPlanSpec {
 
 describe('modelingPlanToPipelineConfig', () => {
   it('maps the plan into a concrete, trainable pipeline configuration', () => {
-    const cfg = modelingPlanToPipelineConfig(baseSpec());
+    const cfg = ModelingPlanToPipelineConfig(baseSpec());
     expect(cfg.targetEntityName).toBe('Memberships');
     expect(cfg.targetVariable).toBe('Status');
     expect(cfg.problemType).toBe('classification');
@@ -43,11 +43,11 @@ describe('modelingPlanToPipelineConfig', () => {
   });
 
   it('chooses the highest-priority (lowest Priority number) experiment for the algorithm', () => {
-    expect(modelingPlanToPipelineConfig(baseSpec()).algorithmName).toBe('logistic_regression'); // Priority 1 beats 2
+    expect(ModelingPlanToPipelineConfig(baseSpec()).algorithmName).toBe('logistic_regression'); // Priority 1 beats 2
   });
 
   it('builds the FeatureStep DAG: select the chosen raw columns + one-hot the categoricals', () => {
-    const cfg = modelingPlanToPipelineConfig(baseSpec());
+    const cfg = ModelingPlanToPipelineConfig(baseSpec());
     // FeatureSet limits to AutoRenew + MembershipType (TenureDays excluded — not in the chosen experiment's set)
     expect(cfg.featureSteps.Steps).toEqual([
       { Id: 'select-raw', Kind: 'select', Columns: ['AutoRenew', 'MembershipType'] },
@@ -59,7 +59,7 @@ describe('modelingPlanToPipelineConfig', () => {
     const spec = baseSpec({
       ProposedExperiments: [{ Label: 'all', AlgorithmName: 'random_forest', FeatureSet: [], Rationale: 'x', Priority: 1 }],
     });
-    const cols = modelingPlanToPipelineConfig(spec).featureSteps.Steps.find((s) => s.Kind === 'select');
+    const cols = ModelingPlanToPipelineConfig(spec).featureSteps.Steps.find((s) => s.Kind === 'select');
     expect(cols).toEqual({ Id: 'select-raw', Kind: 'select', Columns: ['AutoRenew', 'MembershipType', 'TenureDays'] });
   });
 
@@ -67,14 +67,14 @@ describe('modelingPlanToPipelineConfig', () => {
     // Agent-authored pipelines previously got their own private default of 0.85 —
     // a materially laxer guard than the 0.6 every other path used. Both now come
     // from the single shared constant.
-    expect(modelingPlanToPipelineConfig(baseSpec()).leakageGuard).toEqual({
+    expect(ModelingPlanToPipelineConfig(baseSpec()).leakageGuard).toEqual({
       DenyFields: ['CancellationDate'],
       SingleFeatureDominanceThreshold: DOMINANCE_THRESHOLD_DEFAULT,
     });
   });
 
   it('throws on a plan that cannot yield a trainable pipeline', () => {
-    expect(() => modelingPlanToPipelineConfig(baseSpec({ TargetDefinition: { EntityName: '', TargetVariable: 'Status', ProblemType: 'classification', SuccessMetric: 'AUC' } }))).toThrow(/EntityName/);
-    expect(() => modelingPlanToPipelineConfig(baseSpec({ ProposedExperiments: [] }))).toThrow(/ProposedExperiment/);
+    expect(() => ModelingPlanToPipelineConfig(baseSpec({ TargetDefinition: { EntityName: '', TargetVariable: 'Status', ProblemType: 'classification', SuccessMetric: 'AUC' } }))).toThrow(/EntityName/);
+    expect(() => ModelingPlanToPipelineConfig(baseSpec({ ProposedExperiments: [] }))).toThrow(/ProposedExperiment/);
   });
 });

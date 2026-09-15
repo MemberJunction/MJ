@@ -74,13 +74,31 @@ export interface LintContext {
  * TypeCompatibilityRule - Validates type safety across all operations
  */
 export class TypeCompatibilityRule {
-  name = 'type-compatibility';
-  appliesTo: 'all' | 'child' | 'root' = 'all';
+  Name = 'type-compatibility';
+
+  /** @deprecated Use {@link Name}. */
+  get name() {
+    return this.Name;
+  }
+  /** @deprecated Use {@link Name}. */
+  set name(value) {
+    this.Name = value;
+  }
+  AppliesTo: 'all' | 'child' | 'root' = 'all';
+
+  /** @deprecated Use {@link AppliesTo}. */
+  get appliesTo(): 'all' | 'child' | 'root' {
+    return this.AppliesTo;
+  }
+  /** @deprecated Use {@link AppliesTo}. */
+  set appliesTo(value: 'all' | 'child' | 'root') {
+    this.AppliesTo = value;
+  }
 
   /**
    * Validate type compatibility across the component
    */
-  validate(ast: t.File, context: LintContext): Violation[] {
+  Validate(ast: t.File, context: LintContext): Violation[] {
     const violations: Violation[] = [];
 
     // 1. Get type inference errors (parameter validation, etc.)
@@ -103,6 +121,11 @@ export class TypeCompatibilityRule {
     this.checkMethodCalls(ast, context, violations);
 
     return violations;
+  }
+
+  /** @deprecated Use {@link Validate}. */
+  validate(ast: t.File, context: LintContext): Violation[] {
+    return this.Validate(ast, context);
   }
 
   /**

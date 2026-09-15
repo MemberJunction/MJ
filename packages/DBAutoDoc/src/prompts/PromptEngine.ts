@@ -7,7 +7,7 @@ import { BaseLLM, ChatParams, ChatResult } from '@memberjunction/ai';
 import { PromptFileLoader } from './PromptFileLoader.js';
 import { AIConfig, RetryConfig } from '../types/config.js';
 import { PromptExecutionResult } from '../types/prompts.js';
-import { createLLMInstance } from '../utils/llm-factory.js';
+import { CreateLLMInstance } from '../utils/llm-factory.js';
 import { CleanAndParseJSON } from '@memberjunction/global';
 
 export type GuardrailCheckFn = () => { canContinue: boolean; reason?: string };
@@ -39,19 +39,29 @@ export class PromptEngine {
    * Set guardrail checking callback
    * This will be called before every LLM execution to check if we should continue
    */
-  public setGuardrailCheck(checkFn: GuardrailCheckFn): void {
+  public SetGuardrailCheck(checkFn: GuardrailCheckFn): void {
     this.guardrailCheck = checkFn;
+  }
+
+  /** @deprecated Use {@link SetGuardrailCheck}. */
+  public setGuardrailCheck(checkFn: GuardrailCheckFn): void {
+    return this.SetGuardrailCheck(checkFn);
   }
 
   /**
    * Initialize the prompt loader
    */
-  public async initialize(): Promise<void> {
+  public async Initialize(): Promise<void> {
     const env = this.nunjucksEnv as { loaders?: PromptFileLoader[] };
     const loader = env.loaders?.[0];
     if (loader) {
       await loader.loadAll();
     }
+  }
+
+  /** @deprecated Use {@link Initialize}. */
+  public async initialize(): Promise<void> {
+    return this.Initialize();
   }
 
   /**
@@ -60,7 +70,7 @@ export class PromptEngine {
    */
   private createLLM(): BaseLLM {
     // Use shared factory (DRY principle)
-    return createLLMInstance(this.config.provider, this.config.apiKey);
+    return CreateLLMInstance(this.config.provider, this.config.apiKey);
   }
 
   /**
@@ -124,7 +134,7 @@ export class PromptEngine {
    * Execute a prompt with AI/Core
    * Main entry point for DBAutoDoc analysis
    */
-  public async executePrompt<T>(
+  public async ExecutePrompt<T>(
     promptName: string,
     context: any,
     options?: {
@@ -240,11 +250,29 @@ export class PromptEngine {
     }
   }
 
+  /** @deprecated Use {@link ExecutePrompt}. */
+  public async executePrompt<T>(
+    promptName: string,
+    context: any,
+    options?: {
+      systemPrompt?: string;
+      temperature?: number;
+      maxTokens?: number;
+      responseFormat?: 'JSON' | 'Text';
+      /** Override the model for this specific call (e.g., use a stronger model for FK pruning) */
+      modelOverride?: string;
+      /** Override effort level for this specific call */
+      effortLevelOverride?: number;
+    }
+  ): Promise<PromptExecutionResult<T>> {
+    return this.ExecutePrompt(promptName, context, options);
+  }
+
   /**
    * Execute multiple prompts in parallel
    * Uses AI/Core's ChatCompletions for efficiency
    */
-  public async executePromptsParallel<T>(
+  public async ExecutePromptsParallel<T>(
     requests: Array<{
       promptName: string;
       context: any;
@@ -327,6 +355,22 @@ export class PromptEngine {
         tokensUsed: 0
       }));
     }
+  }
+
+  /** @deprecated Use {@link ExecutePromptsParallel}. */
+  public async executePromptsParallel<T>(
+    requests: Array<{
+      promptName: string;
+      context: any;
+      options?: {
+        systemPrompt?: string;
+        temperature?: number;
+        maxTokens?: number;
+        responseFormat?: 'JSON' | 'Text';
+      };
+    }>
+  ): Promise<Array<PromptExecutionResult<T>>> {
+    return this.ExecutePromptsParallel(requests);
   }
 
   /**

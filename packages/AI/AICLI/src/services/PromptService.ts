@@ -1,7 +1,7 @@
 import { UserInfo, Metadata } from '@memberjunction/core';
 import { MJAIModelEntity } from '@memberjunction/core-entities';
 import { ExecutionLogger } from '../lib/execution-logger';
-import { initializeMJProvider } from '../lib/mj-provider';
+import { InitializeMJProvider } from '../lib/mj-provider';
 import { ExecutionResult } from '../lib/output-formatter';
 
 export interface PromptExecutionOptions {
@@ -26,11 +26,11 @@ export class PromptService {
   private contextUser?: UserInfo;
   private metadata?: Metadata;
 
-  async initialize(): Promise<void> {
+  async Initialize(): Promise<void> {
     if (this.initialized) return;
 
     try {
-      await initializeMJProvider();
+      await InitializeMJProvider();
       this.metadata = new Metadata(); // global-provider-ok: CLI tool, single-provider context
       this.contextUser = await this.getContextUser();
       this.initialized = true;
@@ -39,7 +39,12 @@ export class PromptService {
     }
   }
 
-  async listPrompts(): Promise<PromptInfo[]> {
+  /** @deprecated Use {@link Initialize}. */
+  async initialize(): Promise<void> {
+    return this.Initialize();
+  }
+
+  async ListPrompts(): Promise<PromptInfo[]> {
     await this.ensureInitialized();
 
     try {
@@ -58,7 +63,12 @@ export class PromptService {
     }
   }
 
-  async executePrompt(
+  /** @deprecated Use {@link ListPrompts}. */
+  async listPrompts(): Promise<PromptInfo[]> {
+    return this.ListPrompts();
+  }
+
+  async ExecutePrompt(
     prompt: string,
     options: PromptExecutionOptions = {}
   ): Promise<ExecutionResult> {
@@ -192,7 +202,15 @@ Log file: ${logger.getLogFilePath()}`);
     }
   }
 
-  async listAvailableModels(): Promise<Array<{name: string, vendor: string, description?: string}>> {
+  /** @deprecated Use {@link ExecutePrompt}. */
+  async executePrompt(
+    prompt: string,
+    options: PromptExecutionOptions = {}
+  ): Promise<ExecutionResult> {
+    return this.ExecutePrompt(prompt, options);
+  }
+
+  async ListAvailableModels(): Promise<Array<{name: string, vendor: string, description?: string}>> {
     await this.ensureInitialized();
 
     try {
@@ -208,6 +226,11 @@ Log file: ${logger.getLogFilePath()}`);
     } catch (error: any) {
       throw new Error(`Failed to list available models: ${error?.message || 'Unknown error'}`);
     }
+  }
+
+  /** @deprecated Use {@link ListAvailableModels}. */
+  async listAvailableModels(): Promise<Array<{name: string, vendor: string, description?: string}>> {
+    return this.ListAvailableModels();
   }
 
   private async getContextUser(): Promise<UserInfo> {
@@ -239,7 +262,7 @@ This is typically a configuration or database setup issue.`);
 
   private async ensureInitialized(): Promise<void> {
     if (!this.initialized) {
-      await this.initialize();
+      await this.Initialize();
     }
   }
 }

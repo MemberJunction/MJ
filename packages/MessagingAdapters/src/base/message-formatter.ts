@@ -28,7 +28,7 @@ import { MarkdownSection } from './types.js';
  * // ]
  * ```
  */
-export function splitMarkdownIntoSections(markdown: string): MarkdownSection[] {
+export function SplitMarkdownIntoSections(markdown: string): MarkdownSection[] {
     const sections: MarkdownSection[] = [];
     const lines = markdown.split('\n');
     let currentSection: MarkdownSection | null = null;
@@ -79,6 +79,11 @@ export function splitMarkdownIntoSections(markdown: string): MarkdownSection[] {
     return sections;
 }
 
+/** @deprecated Use {@link SplitMarkdownIntoSections}. */
+export function splitMarkdownIntoSections(markdown: string): MarkdownSection[] {
+    return SplitMarkdownIntoSections(markdown);
+}
+
 /**
  * Convert standard Markdown bold syntax to Slack's `mrkdwn` bold syntax.
  * Markdown uses `**bold**`, Slack uses `*bold*`.
@@ -86,8 +91,13 @@ export function splitMarkdownIntoSections(markdown: string): MarkdownSection[] {
  * @param text - Text with Markdown formatting.
  * @returns Text with Slack-compatible bold formatting.
  */
-export function convertBoldToSlackFormat(text: string): string {
+export function ConvertBoldToSlackFormat(text: string): string {
     return text.replace(/\*\*(.+?)\*\*/g, '*$1*');
+}
+
+/** @deprecated Use {@link ConvertBoldToSlackFormat}. */
+export function convertBoldToSlackFormat(text: string): string {
+    return ConvertBoldToSlackFormat(text);
 }
 
 /**
@@ -97,8 +107,13 @@ export function convertBoldToSlackFormat(text: string): string {
  * @param text - Text with Markdown links.
  * @returns Text with Slack-compatible links.
  */
-export function convertLinksToSlackFormat(text: string): string {
+export function ConvertLinksToSlackFormat(text: string): string {
     return text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<$2|$1>');
+}
+
+/** @deprecated Use {@link ConvertLinksToSlackFormat}. */
+export function convertLinksToSlackFormat(text: string): string {
+    return ConvertLinksToSlackFormat(text);
 }
 
 /**
@@ -107,11 +122,16 @@ export function convertLinksToSlackFormat(text: string): string {
  * @param text - Raw Markdown text.
  * @returns Text formatted for Slack's `mrkdwn` format.
  */
-export function convertToSlackMrkdwn(text: string): string {
+export function ConvertToSlackMrkdwn(text: string): string {
     let result = text;
-    result = convertBoldToSlackFormat(result);
-    result = convertLinksToSlackFormat(result);
+    result = ConvertBoldToSlackFormat(result);
+    result = ConvertLinksToSlackFormat(result);
     return result;
+}
+
+/** @deprecated Use {@link ConvertToSlackMrkdwn}. */
+export function convertToSlackMrkdwn(text: string): string {
+    return ConvertToSlackMrkdwn(text);
 }
 
 /**
@@ -122,12 +142,17 @@ export function convertToSlackMrkdwn(text: string): string {
  * @param maxLength - Maximum character length (e.g., 3000 for Slack blocks).
  * @returns Truncated text with ellipsis if needed.
  */
-export function truncateText(text: string, maxLength: number): string {
+export function TruncateText(text: string, maxLength: number): string {
     if (text.length <= maxLength) {
         return text;
     }
     const truncationIndicator = '\n\n... (truncated)';
     return text.substring(0, maxLength - truncationIndicator.length) + truncationIndicator;
+}
+
+/** @deprecated Use {@link TruncateText}. */
+export function truncateText(text: string, maxLength: number): string {
+    return TruncateText(text, maxLength);
 }
 
 /**
@@ -138,7 +163,7 @@ export function truncateText(text: string, maxLength: number): string {
  * @param maxLength - Maximum character length per chunk.
  * @returns Array of text chunks.
  */
-export function splitTextIntoChunks(text: string, maxLength: number): string[] {
+export function SplitTextIntoChunks(text: string, maxLength: number): string[] {
     if (text.length <= maxLength) {
         return [text];
     }
@@ -171,6 +196,11 @@ export function splitTextIntoChunks(text: string, maxLength: number): string[] {
     }
 
     return chunks;
+}
+
+/** @deprecated Use {@link SplitTextIntoChunks}. */
+export function splitTextIntoChunks(text: string, maxLength: number): string[] {
+    return SplitTextIntoChunks(text, maxLength);
 }
 
 /**
@@ -239,7 +269,7 @@ function forceChunkByLength(text: string, maxLength: number): string[] {
  * Whether a platform will additionally refuse an openable URL — Slack rejects non-public http(s)
  * — is a separate screen; see `isButtonSafeURL` in the Slack builder.
  */
-export function isOpenableURI(url: unknown): boolean {
+export function IsOpenableURI(url: unknown): boolean {
     if (typeof url !== 'string') return false;
     try {
         const { protocol } = new URL(url.trim());
@@ -247,6 +277,11 @@ export function isOpenableURI(url: unknown): boolean {
     } catch {
         return false;
     }
+}
+
+/** @deprecated Use {@link IsOpenableURI}. */
+export function isOpenableURI(url: unknown): boolean {
+    return IsOpenableURI(url);
 }
 
 /**
@@ -257,7 +292,7 @@ export function isOpenableURI(url: unknown): boolean {
  * type (a Record can be addressed by `keys` instead), so every branch checks it rather than
  * emitting a `/resource/dashboard/undefined` URL that 404s on click.
  */
-export function buildExplorerDeepLink(cmd: OpenResourceCommand, explorerBaseURL?: string): string | null {
+export function BuildExplorerDeepLink(cmd: OpenResourceCommand, explorerBaseURL?: string): string | null {
     if (!explorerBaseURL) return null;
     const base = explorerBaseURL.replace(/\/+$/, '');
 
@@ -281,4 +316,9 @@ export function buildExplorerDeepLink(cmd: OpenResourceCommand, explorerBaseURL?
     }
 
     return null;
+}
+
+/** @deprecated Use {@link BuildExplorerDeepLink}. */
+export function buildExplorerDeepLink(cmd: OpenResourceCommand, explorerBaseURL?: string): string | null {
+    return BuildExplorerDeepLink(cmd, explorerBaseURL);
 }

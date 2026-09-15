@@ -57,7 +57,7 @@ export class ActionTreePanelComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.subscribeToState();
-    this.buildCategoryTree();
+    this.BuildCategoryTree();
   }
 
   ngOnDestroy(): void {
@@ -87,7 +87,7 @@ export class ActionTreePanelComponent implements OnInit, OnDestroy {
     });
   }
 
-  public buildCategoryTree(): void {
+  public BuildCategoryTree(): void {
     const categoryMap = new Map<string, CategoryTreeNode>();
     this.categoryParentMap.clear();
     this.categoryDescendants.clear();
@@ -170,6 +170,11 @@ export class ActionTreePanelComponent implements OnInit, OnDestroy {
     this.cdr.markForCheck();
   }
 
+  /** @deprecated Use {@link BuildCategoryTree}. */
+  public buildCategoryTree(): void {
+    return this.BuildCategoryTree();
+  }
+
   private filterTree(nodes: CategoryTreeNode[], searchTerm: string): CategoryTreeNode[] {
     const result: CategoryTreeNode[] = [];
     for (const node of nodes) {
@@ -186,66 +191,131 @@ export class ActionTreePanelComponent implements OnInit, OnDestroy {
     return result;
   }
 
-  public onSearchChange(term: string): void {
+  public OnSearchChange(term: string): void {
     this.SearchTerm = term;
     this.FilteredTree = term ? this.filterTree(this.CategoryTree, term.toLowerCase()) : this.CategoryTree;
     this.cdr.markForCheck();
   }
 
-  public getTotalActionCount(): number {
+  /** @deprecated Use {@link OnSearchChange}. */
+  public onSearchChange(term: string): void {
+    return this.OnSearchChange(term);
+  }
+
+  public GetTotalActionCount(): number {
     return this.Actions.length;
   }
 
-  public getUncategorizedCount(): number {
+  /** @deprecated Use {@link GetTotalActionCount}. */
+  public getTotalActionCount(): number {
+    return this.GetTotalActionCount();
+  }
+
+  public GetUncategorizedCount(): number {
     return this.Actions.filter(a => !a.CategoryID).length;
   }
 
-  public selectCategory(categoryId: string): void {
+  /** @deprecated Use {@link GetUncategorizedCount}. */
+  public getUncategorizedCount(): number {
+    return this.GetUncategorizedCount();
+  }
+
+  public SelectCategory(categoryId: string): void {
     this.StateService.setSelectedCategoryId(categoryId);
     this.CategorySelected.emit(categoryId);
   }
 
-  public toggleExpanded(categoryId: string, event: MouseEvent): void {
+  /** @deprecated Use {@link SelectCategory}. */
+  public selectCategory(categoryId: string): void {
+    return this.SelectCategory(categoryId);
+  }
+
+  public ToggleExpanded(categoryId: string, event: MouseEvent): void {
     event.stopPropagation();
     this.StateService.toggleCategoryExpanded(categoryId);
   }
 
-  public isExpanded(categoryId: string): boolean {
+  /** @deprecated Use {@link ToggleExpanded}. */
+  public toggleExpanded(categoryId: string, event: MouseEvent): void {
+    return this.ToggleExpanded(categoryId, event);
+  }
+
+  public IsExpanded(categoryId: string): boolean {
     return this.ExpandedCategories.has(categoryId);
   }
 
-  public isSelected(categoryId: string): boolean {
+  /** @deprecated Use {@link IsExpanded}. */
+  public isExpanded(categoryId: string): boolean {
+    return this.IsExpanded(categoryId);
+  }
+
+  public IsSelected(categoryId: string): boolean {
     return this.SelectedCategoryId === categoryId;
   }
 
-  public toggleCollapse(): void {
+  /** @deprecated Use {@link IsSelected}. */
+  public isSelected(categoryId: string): boolean {
+    return this.IsSelected(categoryId);
+  }
+
+  public ToggleCollapse(): void {
     this.StateService.toggleTreeCollapsed();
   }
 
-  public onNewCategory(parentId: string | null, event: MouseEvent): void {
+  /** @deprecated Use {@link ToggleCollapse}. */
+  public toggleCollapse(): void {
+    return this.ToggleCollapse();
+  }
+
+  public OnNewCategory(parentId: string | null, event: MouseEvent): void {
     event.stopPropagation();
     this.NewCategoryClick.emit(parentId);
   }
 
-  public onEditCategory(category: MJActionCategoryEntity, event: MouseEvent): void {
+  /** @deprecated Use {@link OnNewCategory}. */
+  public onNewCategory(parentId: string | null, event: MouseEvent): void {
+    return this.OnNewCategory(parentId, event);
+  }
+
+  public OnEditCategory(category: MJActionCategoryEntity, event: MouseEvent): void {
     event.stopPropagation();
     this.EditCategoryClick.emit(category);
   }
 
-  public expandAll(): void {
+  /** @deprecated Use {@link OnEditCategory}. */
+  public onEditCategory(category: MJActionCategoryEntity, event: MouseEvent): void {
+    return this.OnEditCategory(category, event);
+  }
+
+  public ExpandAll(): void {
     this.StateService.expandAllCategories(this.Categories.map(c => c.ID));
   }
 
-  public collapseAll(): void {
+  /** @deprecated Use {@link ExpandAll}. */
+  public expandAll(): void {
+    return this.ExpandAll();
+  }
+
+  public CollapseAll(): void {
     this.StateService.collapseAllCategories();
   }
 
+  /** @deprecated Use {@link CollapseAll}. */
+  public collapseAll(): void {
+    return this.CollapseAll();
+  }
+
   // Resize handling
-  public onResizeStart(event: MouseEvent): void {
+  public OnResizeStart(event: MouseEvent): void {
     event.preventDefault();
     this.IsResizing = true;
     document.body.style.cursor = 'ew-resize';
     document.body.style.userSelect = 'none';
+  }
+
+  /** @deprecated Use {@link OnResizeStart}. */
+  public onResizeStart(event: MouseEvent): void {
+    return this.OnResizeStart(event);
   }
 
   @HostListener('document:mousemove', ['$event'])
@@ -272,7 +342,12 @@ export class ActionTreePanelComponent implements OnInit, OnDestroy {
     }
   }
 
-  public getCategoryDescendants(categoryId: string): Set<string> {
+  public GetCategoryDescendants(categoryId: string): Set<string> {
     return this.categoryDescendants.get(categoryId) || new Set([categoryId]);
+  }
+
+  /** @deprecated Use {@link GetCategoryDescendants}. */
+  public getCategoryDescendants(categoryId: string): Set<string> {
+    return this.GetCategoryDescendants(categoryId);
   }
 }

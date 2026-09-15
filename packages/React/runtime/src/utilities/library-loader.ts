@@ -9,7 +9,7 @@ import {
   StandardLibraryManager
 } from './standard-libraries';
 import { LibraryConfiguration, ExternalLibraryConfig, LibraryLoadOptions as ConfigLoadOptions } from '../types/library-config';
-import { getCoreRuntimeLibraries, isCoreRuntimeLibrary } from './core-libraries';
+import { GetCoreRuntimeLibraries, IsCoreRuntimeLibrary } from './core-libraries';
 import { resourceManager } from './resource-manager';
 import { MJComponentLibraryEntity } from '@memberjunction/core-entities';
 import { LibraryDependencyResolver } from './library-dependency-resolver';
@@ -77,10 +77,10 @@ export class LibraryLoader {
    *
    * @param debug Whether to preload development builds (default: false = production)
    */
-  static preloadCoreScripts(debug: boolean = false): void {
+  static PreloadCoreScripts(debug: boolean = false): void {
     if (typeof document === 'undefined') return; // SSR guard
 
-    const coreLibraries = getCoreRuntimeLibraries(debug);
+    const coreLibraries = GetCoreRuntimeLibraries(debug);
     for (const lib of coreLibraries) {
       // Skip if already preloaded or loaded
       if (document.querySelector(`link[href="${lib.cdnUrl}"]`) ||
@@ -97,6 +97,11 @@ export class LibraryLoader {
     }
   }
 
+  /** @deprecated Use {@link PreloadCoreScripts}. */
+  static preloadCoreScripts(debug: boolean = false): void {
+    return this.PreloadCoreScripts(debug);
+  }
+
   /**
    * Load all standard libraries (core + UI + CSS)
    * This is the main method that should be used by test harness and Angular wrapper
@@ -104,7 +109,7 @@ export class LibraryLoader {
    * @param additionalLibraries Optional additional libraries to merge with the configuration
    * @param options Optional options including debug mode flag
    */
-  static async loadAllLibraries(
+  static async LoadAllLibraries(
     config?: LibraryConfiguration, 
     additionalLibraries?: ExternalLibraryConfig[],
     options?: { debug?: boolean }
@@ -126,20 +131,29 @@ export class LibraryLoader {
       StandardLibraryManager.setConfiguration(mergedConfig);
     }
     
-    return this.loadLibrariesFromConfig(undefined, options?.debug);
+    return this.LoadLibrariesFromConfig(undefined, options?.debug);
+  }
+
+  /** @deprecated Use {@link LoadAllLibraries}. */
+  static async loadAllLibraries(
+    config?: LibraryConfiguration, 
+    additionalLibraries?: ExternalLibraryConfig[],
+    options?: { debug?: boolean }
+  ): Promise<LibraryLoadResult> {
+    return this.LoadAllLibraries(config, additionalLibraries, options);
   }
 
   /**
    * Load libraries based on the current configuration
    */
-  static async loadLibrariesFromConfig(options?: ConfigLoadOptions, debug?: boolean): Promise<LibraryLoadResult> {
+  static async LoadLibrariesFromConfig(options?: ConfigLoadOptions, debug?: boolean): Promise<LibraryLoadResult> {
     // Load core runtime libraries in dependency order.
     // ReactDOM's UMD factory captures `window.React` at execution time,
     // so React MUST execute before ReactDOM. Loading them in parallel with
     // async scripts causes an intermittent race condition where ReactDOM
     // executes first and gets `undefined` for React, permanently breaking
     // `createRoot` on that object instance.
-    const coreLibraries = getCoreRuntimeLibraries(debug);
+    const coreLibraries = GetCoreRuntimeLibraries(debug);
     const reactLib = coreLibraries.find(lib => lib.globalVariable === 'React');
     const reactDOMLib = coreLibraries.find(lib => lib.globalVariable === 'ReactDOM');
     const babelLib = coreLibraries.find(lib => lib.globalVariable === 'Babel');
@@ -190,7 +204,7 @@ export class LibraryLoader {
     const enabledLibraries = StandardLibraryManager.getEnabledLibraries();
     
     // Filter out any core runtime libraries from plugin configuration
-    let pluginLibraries = enabledLibraries.filter(lib => !isCoreRuntimeLibrary(lib.id));
+    let pluginLibraries = enabledLibraries.filter(lib => !IsCoreRuntimeLibrary(lib.id));
     
     // Apply options filters if provided
     if (options) {
@@ -233,6 +247,11 @@ export class LibraryLoader {
     };
   }
 
+  /** @deprecated Use {@link LoadLibrariesFromConfig}. */
+  static async loadLibrariesFromConfig(options?: ConfigLoadOptions, debug?: boolean): Promise<LibraryLoadResult> {
+    return this.LoadLibrariesFromConfig(options, debug);
+  }
+
   /**
    * Load libraries with specific options (backward compatibility)
    * @deprecated Use loadLibrariesFromConfig instead
@@ -254,7 +273,7 @@ export class LibraryLoader {
       categoriesToLoad.push('ui');
     }
     
-    const result = await this.loadLibrariesFromConfig({
+    const result = await this.LoadLibrariesFromConfig({
       categories: categoriesToLoad
     });
     
@@ -634,14 +653,19 @@ export class LibraryLoader {
   /**
    * Get all loaded resources (for cleanup)
    */
-  static getLoadedResources(): Map<string, LoadedResource> {
+  static GetLoadedResources(): Map<string, LoadedResource> {
     return this.loadedResources;
+  }
+
+  /** @deprecated Use {@link GetLoadedResources}. */
+  static getLoadedResources(): Map<string, LoadedResource> {
+    return this.GetLoadedResources();
   }
 
   /**
    * Clear loaded resources cache and cleanup DOM elements
    */
-  static clearCache(): void {
+  static ClearCache(): void {
     // Remove all script and link elements we added
     this.loadedResources.forEach((resource, url) => {
       if (resource.element && resource.element.parentNode) {
@@ -656,6 +680,11 @@ export class LibraryLoader {
     resourceManager.cleanupComponent(LIBRARY_LOADER_COMPONENT_ID);
   }
 
+  /** @deprecated Use {@link ClearCache}. */
+  static clearCache(): void {
+    return this.ClearCache();
+  }
+
   /**
    * Load a library with its dependencies
    * @param libraryName - Name of the library to load
@@ -664,7 +693,7 @@ export class LibraryLoader {
    * @param options - Dependency resolution options
    * @returns Promise resolving to the loaded library global object
    */
-  static async loadLibraryWithDependencies(
+  static async LoadLibraryWithDependencies(
     libraryName: string,
     allLibraries: MJComponentLibraryEntity[],
     requestedBy: string = 'user',
@@ -781,6 +810,16 @@ export class LibraryLoader {
     return (window as any)[targetLibrary.GlobalVariable];
   }
 
+  /** @deprecated Use {@link LoadLibraryWithDependencies}. */
+  static async loadLibraryWithDependencies(
+    libraryName: string,
+    allLibraries: MJComponentLibraryEntity[],
+    requestedBy: string = 'user',
+    options?: DependencyResolutionOptions
+  ): Promise<any> {
+    return this.LoadLibraryWithDependencies(libraryName, allLibraries, requestedBy, options);
+  }
+
   /**
    * Load multiple libraries with dependency resolution
    * @param libraryNames - Names of libraries to load
@@ -789,7 +828,7 @@ export class LibraryLoader {
    * @param options - Dependency resolution options
    * @returns Map of library names to their loaded global objects
    */
-  static async loadLibrariesWithDependencies(
+  static async LoadLibrariesWithDependencies(
     libraryNames: string[],
     allLibraries: MJComponentLibraryEntity[],
     requestedBy: string = 'user',
@@ -918,12 +957,27 @@ export class LibraryLoader {
     return result;
   }
 
+  /** @deprecated Use {@link LoadLibrariesWithDependencies}. */
+  static async loadLibrariesWithDependencies(
+    libraryNames: string[],
+    allLibraries: MJComponentLibraryEntity[],
+    requestedBy: string = 'user',
+    options?: DependencyResolutionOptions
+  ): Promise<Map<string, any>> {
+    return this.LoadLibrariesWithDependencies(libraryNames, allLibraries, requestedBy, options);
+  }
+
   /**
    * Get information about loaded libraries
    * @returns Map of loaded library states
    */
-  static getLoadedLibraryStates(): Map<string, LoadedLibraryState> {
+  static GetLoadedLibraryStates(): Map<string, LoadedLibraryState> {
     return new Map(this.loadedLibraryStates);
+  }
+
+  /** @deprecated Use {@link GetLoadedLibraryStates}. */
+  static getLoadedLibraryStates(): Map<string, LoadedLibraryState> {
+    return this.GetLoadedLibraryStates();
   }
 
   /**
@@ -931,8 +985,13 @@ export class LibraryLoader {
    * @param libraryName - Name of the library
    * @returns True if the library is loaded
    */
-  static isLibraryLoaded(libraryName: string): boolean {
+  static IsLibraryLoaded(libraryName: string): boolean {
     return this.loadedLibraryStates.has(libraryName);
+  }
+
+  /** @deprecated Use {@link IsLibraryLoaded}. */
+  static isLibraryLoaded(libraryName: string): boolean {
+    return this.IsLibraryLoaded(libraryName);
   }
 
   /**
@@ -940,7 +999,12 @@ export class LibraryLoader {
    * @param libraryName - Name of the library
    * @returns Version string or undefined if not loaded
    */
-  static getLoadedLibraryVersion(libraryName: string): string | undefined {
+  static GetLoadedLibraryVersion(libraryName: string): string | undefined {
     return this.loadedLibraryStates.get(libraryName)?.version;
+  }
+
+  /** @deprecated Use {@link GetLoadedLibraryVersion}. */
+  static getLoadedLibraryVersion(libraryName: string): string | undefined {
+    return this.GetLoadedLibraryVersion(libraryName);
   }
 }

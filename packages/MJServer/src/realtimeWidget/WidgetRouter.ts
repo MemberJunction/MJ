@@ -15,9 +15,9 @@ import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
 import { LogStatus } from '@memberjunction/core';
 import { configInfo, type WidgetConfig } from '../config.js';
 import { MagicLinkKeyManager } from '../auth/magicLink/MagicLinkKeys.js';
-import { registerMagicLinkAuthProvider } from '../auth/magicLink/MagicLinkRouter.js';
+import { RegisterMagicLinkAuthProvider } from '../auth/magicLink/MagicLinkRouter.js';
 import { WidgetSessionService, type MintGuestSessionResult } from './WidgetSessionService.js';
-import { looksLikeBot } from './widgetCore.js';
+import { LooksLikeBot } from './widgetCore.js';
 
 /** The mount path for the widget public router (`/widget`). */
 export const WIDGET_MOUNT_PATH = '/widget';
@@ -41,7 +41,7 @@ function ensureWidgetSigning(publicUrl: string, widgetConfig: WidgetConfig): voi
   // Register the magic-link provider against the magic-link config (its audience),
   // which is what validates widget tokens. No-op if already registered.
   if (mlConfig) {
-    registerMagicLinkAuthProvider(publicUrl, mlConfig);
+    RegisterMagicLinkAuthProvider(publicUrl, mlConfig);
   }
 }
 
@@ -51,7 +51,7 @@ function ensureWidgetSigning(publicUrl: string, widgetConfig: WidgetConfig): voi
  * `authenticatedRouter` at the same path AFTER it (the RV4 resolve-identity endpoint needs the
  * verified principal from `req.userPayload`).
  */
-export function createWidgetHandler(publicUrl: string, config: WidgetConfig): { publicRouter: Router; authenticatedRouter: Router } {
+export function CreateWidgetHandler(publicUrl: string, config: WidgetConfig): { publicRouter: Router; authenticatedRouter: Router } {
   ensureWidgetSigning(publicUrl, config);
 
   const service = new WidgetSessionService(publicUrl, config);
@@ -104,6 +104,11 @@ export function createWidgetHandler(publicUrl: string, config: WidgetConfig): { 
   });
 
   return { publicRouter, authenticatedRouter };
+}
+
+/** @deprecated Use {@link CreateWidgetHandler}. */
+export function createWidgetHandler(publicUrl: string, config: WidgetConfig): { publicRouter: Router; authenticatedRouter: Router } {
+  return CreateWidgetHandler(publicUrl, config);
 }
 
 /** Reads the `widgetKey` from a parsed JSON body, or '' when absent (used to key the dynamic limiter). */
@@ -177,7 +182,7 @@ async function handleMint(service: WidgetSessionService, req: Request, res: Resp
 
   // W6 hardening: coarse bot/automation rejection before any DB lookup or token mint. Returns the same
   // 403 as a policy rejection so a probe can't distinguish "bot-blocked" from "bad key/origin".
-  if (looksLikeBot(req.get('user-agent'))) {
+  if (LooksLikeBot(req.get('user-agent'))) {
     res.status(403).json({ success: false, errorCode: 'origin_not_allowed', error: 'Widget mint rejected.' });
     return;
   }

@@ -47,7 +47,7 @@ vi.mock('@memberjunction/ai-core-plus', () => ({
     MJAIPromptEntityExtended: class {},
 }));
 
-import { LLMReranker, createLLMReranker } from '../LLMReranker';
+import { LLMReranker, CreateLLMReranker } from '../LLMReranker';
 
 // Helper to access protected doRerank
 interface RerankCallable {
@@ -413,19 +413,19 @@ describe('LLMReranker', () => {
 describe('createLLMReranker', () => {
     it('should create an LLMReranker instance', () => {
         const mockUser = { ID: 'user-1' } as never;
-        const reranker = createLLMReranker('prompt-123', mockUser);
+        const reranker = CreateLLMReranker('prompt-123', mockUser);
         expect(reranker).toBeInstanceOf(LLMReranker);
     });
 
     it('should set the promptID on the created instance', () => {
         const mockUser = { ID: 'user-1' } as never;
-        const reranker = createLLMReranker('prompt-789', mockUser);
+        const reranker = CreateLLMReranker('prompt-789', mockUser);
         expect(reranker.PromptID).toBe('prompt-789');
     });
 
     it('should default model name to LLM', () => {
         const mockUser = { ID: 'user-1' } as never;
-        const reranker = createLLMReranker('prompt-789', mockUser);
+        const reranker = CreateLLMReranker('prompt-789', mockUser);
         expect(reranker.ModelName).toBe('LLM');
     });
 });

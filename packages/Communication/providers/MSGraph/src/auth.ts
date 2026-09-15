@@ -37,7 +37,7 @@ function validateAzureConfig(): void {
  * Lazy initialization of GraphClient.
  * Only creates the client when first accessed, after validating configuration.
  */
-export function getGraphClient(): Client {
+export function GetGraphClient(): Client {
     if (!_graphClient) {
         validateAzureConfig();
 
@@ -62,11 +62,16 @@ export function getGraphClient(): Client {
     return _graphClient;
 }
 
+/** @deprecated Use {@link GetGraphClient}. */
+export function getGraphClient(): Client {
+    return GetGraphClient();
+}
+
 /**
  * Lazy initialization of API configuration.
  * Only creates the config when first accessed.
  */
-export function getApiConfig(): { uri: string } {
+export function GetApiConfig(): { uri: string } {
     if (!_apiConfig) {
         _apiConfig = {
             uri: Config.AZURE_GRAPH_ENDPOINT + '/v1.0/users',
@@ -75,15 +80,20 @@ export function getApiConfig(): { uri: string } {
     return _apiConfig;
 }
 
+/** @deprecated Use {@link GetApiConfig}. */
+export function getApiConfig(): { uri: string } {
+    return GetApiConfig();
+}
+
 // Backward compatibility exports (deprecated - use getter functions instead)
 export const GraphClient: Client = new Proxy({} as Client, {
     get(_target, prop) {
-        return getGraphClient()[prop as keyof Client];
+        return GetGraphClient()[prop as keyof Client];
     }
 });
 
 export const ApiConfig = new Proxy({} as { uri: string }, {
     get(_target, prop) {
-        return getApiConfig()[prop as keyof { uri: string }];
+        return GetApiConfig()[prop as keyof { uri: string }];
     }
 });

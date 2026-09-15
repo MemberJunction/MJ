@@ -47,7 +47,12 @@ export interface ValidationSummary {
 export class ValidationErrorClass extends Error {
     public readonly type: ValidationError['type'];
     public readonly severity: ValidationError['severity'];
-    public readonly file: string;
+    public readonly File: string;
+
+    /** @deprecated Use {@link File}. */
+    public get file(): string {
+        return this.File;
+    }
     public readonly entity?: string;
     public readonly field?: string;
     public readonly suggestion?: string;
@@ -59,7 +64,7 @@ export class ValidationErrorClass extends Error {
         this.name = 'ValidationError';
         this.type = error.type;
         this.severity = error.severity;
-        this.file = error.file;
+        this.File = error.file;
         this.entity = error.entity;
         this.field = error.field;
         this.suggestion = error.suggestion;
@@ -77,7 +82,7 @@ export class ValidationErrorClass extends Error {
     /**
      * Get formatted error message with location info
      */
-    getFormattedMessage(): string {
+    GetFormattedMessage(): string {
         let msg = this.message;
         if (this.line) {
             msg += ` (line ${this.line}`;
@@ -88,6 +93,11 @@ export class ValidationErrorClass extends Error {
         }
         return msg;
     }
+
+    /** @deprecated Use {@link GetFormattedMessage}. */
+    getFormattedMessage(): string {
+        return this.GetFormattedMessage();
+    }
 }
 
 /**
@@ -96,7 +106,12 @@ export class ValidationErrorClass extends Error {
 export class ValidationWarningClass extends Error {
     public readonly type: ValidationWarning['type'];
     public readonly severity: ValidationWarning['severity'];
-    public readonly file: string;
+    public readonly File: string;
+
+    /** @deprecated Use {@link File}. */
+    public get file(): string {
+        return this.File;
+    }
     public readonly entity?: string;
     public readonly field?: string;
     public readonly suggestion?: string;
@@ -108,7 +123,7 @@ export class ValidationWarningClass extends Error {
         this.name = 'ValidationWarning';
         this.type = warning.type;
         this.severity = warning.severity;
-        this.file = warning.file;
+        this.File = warning.file;
         this.entity = warning.entity;
         this.field = warning.field;
         this.suggestion = warning.suggestion;
@@ -126,7 +141,7 @@ export class ValidationWarningClass extends Error {
     /**
      * Get formatted warning message with location info
      */
-    getFormattedMessage(): string {
+    GetFormattedMessage(): string {
         let msg = this.message;
         if (this.line) {
             msg += ` (line ${this.line}`;
@@ -136,6 +151,11 @@ export class ValidationWarningClass extends Error {
             msg += ')';
         }
         return msg;
+    }
+
+    /** @deprecated Use {@link GetFormattedMessage}. */
+    getFormattedMessage(): string {
+        return this.GetFormattedMessage();
     }
 }
 

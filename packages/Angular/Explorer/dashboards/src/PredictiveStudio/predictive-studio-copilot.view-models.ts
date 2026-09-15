@@ -72,7 +72,7 @@ function ensureSentence(text: string): string {
  * dead-end into a next step. Names the prediction + why it's held so the agent can propose concrete
  * improvements (more/better data, different target framing, algorithm, more history). Pure + deterministic.
  */
-export function buildImprovePrompt(input: ImprovePromptInput): string {
+export function BuildImprovePrompt(input: ImprovePromptInput): string {
   const name = trim(input.name) || 'this prediction';
   const grade = trim(input.trustGrade);
   const reason = trim(input.reason);
@@ -82,4 +82,9 @@ export function buildImprovePrompt(input: ImprovePromptInput): string {
     `The "${name}" prediction${gradePart} isn't trustworthy enough to use yet.${why} ` +
     'Help me improve it — what would make it reliable? Consider more or cleaner training data, more history, a clearer outcome definition, or a different algorithm, then rebuild it if that helps.'
   );
+}
+
+/** @deprecated Use {@link BuildImprovePrompt}. */
+export function buildImprovePrompt(input: ImprovePromptInput): string {
+  return BuildImprovePrompt(input);
 }

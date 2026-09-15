@@ -261,10 +261,46 @@ export interface EntitySelectorConfig {
 export class EntitySelectorDialogComponent extends BaseAngularComponent implements OnInit {
     @Input() config!: EntitySelectorConfig;
 
-    public entities: any[] = [];
-    public filteredEntities: any[] = [];
-    public selectedEntity: any = null;
-    public searchText: string = '';
+    public Entities: any[] = [];
+
+    /** @deprecated Use {@link Entities}. */
+    public get entities(): any[] {
+      return this.Entities;
+    }
+    /** @deprecated Use {@link Entities}. */
+    public set entities(value: any[]) {
+      this.Entities = value;
+    }
+    public FilteredEntities: any[] = [];
+
+    /** @deprecated Use {@link FilteredEntities}. */
+    public get filteredEntities(): any[] {
+      return this.FilteredEntities;
+    }
+    /** @deprecated Use {@link FilteredEntities}. */
+    public set filteredEntities(value: any[]) {
+      this.FilteredEntities = value;
+    }
+    public SelectedEntity: any = null;
+
+    /** @deprecated Use {@link SelectedEntity}. */
+    public get selectedEntity(): any {
+      return this.SelectedEntity;
+    }
+    /** @deprecated Use {@link SelectedEntity}. */
+    public set selectedEntity(value: any) {
+      this.SelectedEntity = value;
+    }
+    public SearchText: string = '';
+
+    /** @deprecated Use {@link SearchText}. */
+    public get searchText(): string {
+      return this.SearchText;
+    }
+    /** @deprecated Use {@link SearchText}. */
+    public set searchText(value: string) {
+      this.SearchText = value;
+    }
     public isLoading: boolean = true;
 
     @Output() DialogClosed = new EventEmitter<Record<string, unknown> | null>();
@@ -276,16 +312,16 @@ export class EntitySelectorDialogComponent extends BaseAngularComponent implemen
 
     /** Title for the empty/no-results placeholder, echoing the active search term when narrowed. */
     public get EmptyStateTitle(): string {
-        return this.searchText
-            ? `No ${this.config.entityName} match "${this.searchText}"`
+        return this.SearchText
+            ? `No ${this.config.entityName} match "${this.SearchText}"`
             : `No ${this.config.entityName} found`;
     }
 
     async ngOnInit() {
-        await this.loadEntities();
+        await this.LoadEntities();
     }
 
-    async loadEntities() {
+    async LoadEntities() {
         this.isLoading = true;
         try {
             const rv = RunView.FromMetadataProvider(this.ProviderToUse);
@@ -295,23 +331,28 @@ export class EntitySelectorDialogComponent extends BaseAngularComponent implemen
                 OrderBy: this.config.orderBy 
             });
 
-            this.entities = result.Results;
-            this.filteredEntities = [...this.entities];
+            this.Entities = result.Results;
+            this.FilteredEntities = [...this.Entities];
         } catch (error) {
             console.error('Error loading entities:', error);
-            this.entities = [];
-            this.filteredEntities = [];
+            this.Entities = [];
+            this.FilteredEntities = [];
         } finally {
             this.isLoading = false;
         }
     }
 
-    onSearchChange() {
-        if (!this.searchText) {
-            this.filteredEntities = [...this.entities];
+    /** @deprecated Use {@link LoadEntities}. */
+    async loadEntities() {
+      return this.LoadEntities();
+    }
+
+    OnSearchChange() {
+        if (!this.SearchText) {
+            this.FilteredEntities = [...this.Entities];
         } else {
-            const searchLower = this.searchText.toLowerCase();
-            this.filteredEntities = this.entities.filter(entity => {
+            const searchLower = this.SearchText.toLowerCase();
+            this.FilteredEntities = this.Entities.filter(entity => {
                 const displayValue = entity[this.config.displayField] || '';
                 const descriptionValue = this.config.descriptionField ? (entity[this.config.descriptionField] || '') : '';
                 return displayValue.toLowerCase().includes(searchLower) || 
@@ -320,22 +361,42 @@ export class EntitySelectorDialogComponent extends BaseAngularComponent implemen
         }
     }
 
-    selectEntity(entity: any) {
-        this.selectedEntity = entity;
+    /** @deprecated Use {@link OnSearchChange}. */
+    onSearchChange() {
+      return this.OnSearchChange();
     }
 
-    onSelect() {
-        if (this.selectedEntity) {
-            this.DialogClosed.emit({ entity: this.selectedEntity });
+    SelectEntity(entity: any) {
+        this.SelectedEntity = entity;
+    }
+
+    /** @deprecated Use {@link SelectEntity}. */
+    selectEntity(entity: any) {
+      return this.SelectEntity(entity);
+    }
+
+    OnSelect() {
+        if (this.SelectedEntity) {
+            this.DialogClosed.emit({ entity: this.SelectedEntity });
         }
     }
 
-    createNew() {
+    /** @deprecated Use {@link OnSelect}. */
+    onSelect() {
+      return this.OnSelect();
+    }
+
+    CreateNew() {
         this.DialogClosed.emit({ createNew: true });
     }
 
+    /** @deprecated Use {@link CreateNew}. */
+    createNew() {
+      return this.CreateNew();
+    }
+
     IsEntitySelected(entity: Record<string, unknown>): boolean {
-        return UUIDsEqual(this.selectedEntity?.ID, entity.ID as string);
+        return UUIDsEqual(this.SelectedEntity?.ID, entity.ID as string);
     }
 
     onCancel() {

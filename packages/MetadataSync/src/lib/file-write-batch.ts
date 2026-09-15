@@ -33,13 +33,18 @@ export class FileWriteBatch {
    * @param filePath - Path to the file
    * @param data - RecordData or array of RecordData to write
    */
-  queueWrite(filePath: string, data: RecordData | RecordData[]): void {
+  QueueWrite(filePath: string, data: RecordData | RecordData[]): void {
     const absolutePath = path.resolve(filePath);
     this.addChange(absolutePath, {
       filePath: absolutePath,
       operation: 'write',
       data
     });
+  }
+
+  /** @deprecated Use {@link QueueWrite}. */
+  queueWrite(filePath: string, data: RecordData | RecordData[]): void {
+    return this.QueueWrite(filePath, data);
   }
   
   /**
@@ -48,7 +53,7 @@ export class FileWriteBatch {
    * @param updatedRecord - The updated record data
    * @param primaryKeyLookup - Primary key lookup string to identify the record
    */
-  queueArrayUpdate(filePath: string, updatedRecord: RecordData, primaryKeyLookup: string): void {
+  QueueArrayUpdate(filePath: string, updatedRecord: RecordData, primaryKeyLookup: string): void {
     // Array updates match entries by primary key. A record whose key has no value ({ ID: undefined },
     // written to the file as `primaryKey: {}`) matches every other such record, so each queued record
     // would overwrite the last and a batch of N new records would write exactly one (#3415).
@@ -67,19 +72,29 @@ export class FileWriteBatch {
       primaryKeyLookup
     });
   }
+
+  /** @deprecated Use {@link QueueArrayUpdate}. */
+  queueArrayUpdate(filePath: string, updatedRecord: RecordData, primaryKeyLookup: string): void {
+    return this.QueueArrayUpdate(filePath, updatedRecord, primaryKeyLookup);
+  }
   
   /**
    * Queue a single record update operation
    * @param filePath - Path to the file
    * @param updatedRecord - The updated record data
    */
-  queueSingleUpdate(filePath: string, updatedRecord: RecordData): void {
+  QueueSingleUpdate(filePath: string, updatedRecord: RecordData): void {
     const absolutePath = path.resolve(filePath);
     this.addChange(absolutePath, {
       filePath: absolutePath,
       operation: 'update-single',
       data: updatedRecord
     });
+  }
+
+  /** @deprecated Use {@link QueueSingleUpdate}. */
+  queueSingleUpdate(filePath: string, updatedRecord: RecordData): void {
+    return this.QueueSingleUpdate(filePath, updatedRecord);
   }
   
   /**
@@ -162,7 +177,7 @@ export class FileWriteBatch {
    * Write all batched changes to files using JsonWriteHelper for consistent ordering
    * @returns Number of files written
    */
-  async flush(): Promise<number> {
+  async Flush(): Promise<number> {
     if (this.changes.size === 0) {
       return 0;
     }
@@ -189,31 +204,51 @@ export class FileWriteBatch {
     const filesWritten = this.fileContents.size;
     
     // Clear all batched changes
-    this.clear();
+    this.Clear();
     
     return filesWritten;
+  }
+
+  /** @deprecated Use {@link Flush}. */
+  async flush(): Promise<number> {
+    return this.Flush();
   }
   
   /**
    * Clear all batched changes without writing
    */
-  clear(): void {
+  Clear(): void {
     this.changes.clear();
     this.fileContents.clear();
+  }
+
+  /** @deprecated Use {@link Clear}. */
+  clear(): void {
+    return this.Clear();
   }
   
   /**
    * Get the number of files that will be written
    */
-  getPendingFileCount(): number {
+  GetPendingFileCount(): number {
     return this.changes.size;
+  }
+
+  /** @deprecated Use {@link GetPendingFileCount}. */
+  getPendingFileCount(): number {
+    return this.GetPendingFileCount();
   }
   
   /**
    * Get all pending file paths
    */
-  getPendingFiles(): string[] {
+  GetPendingFiles(): string[] {
     return Array.from(this.changes.keys());
+  }
+
+  /** @deprecated Use {@link GetPendingFiles}. */
+  getPendingFiles(): string[] {
+    return this.GetPendingFiles();
   }
   
   /**

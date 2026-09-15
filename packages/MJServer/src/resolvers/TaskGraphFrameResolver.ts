@@ -137,7 +137,7 @@ export interface TaskGraphFrameFilterContext {
  * another user's workflow — including its per-step error messages. **Fails closed** — a missing
  * identity on either side never matches.
  */
-export function taskGraphFrameFilter(data: {
+export function TaskGraphFrameFilter(data: {
   payload: TaskGraphFramePayload;
   args: TaskGraphFrameArgs;
   context: TaskGraphFrameFilterContext | undefined;
@@ -154,6 +154,15 @@ export function taskGraphFrameFilter(data: {
     return false; // fail closed
   }
   return UUIDsEqual(payload.ownerUserId, connectionUserId);
+}
+
+/** @deprecated Use {@link TaskGraphFrameFilter}. */
+export function taskGraphFrameFilter(data: {
+  payload: TaskGraphFramePayload;
+  args: TaskGraphFrameArgs;
+  context: TaskGraphFrameFilterContext | undefined;
+}): boolean {
+  return TaskGraphFrameFilter(data);
 }
 
 /**
@@ -189,7 +198,7 @@ export class TaskGraphFrameResolver {
   @Subscription(() => TaskGraphFrameNotification, {
     topics: TASK_GRAPH_FRAMES_TOPIC,
     filter: (data: ResolverFilterData<TaskGraphFramePayload, TaskGraphFrameArgs, TaskGraphFrameFilterContext>) =>
-      taskGraphFrameFilter(data),
+      TaskGraphFrameFilter(data),
   })
   taskGraphFrames(
     @Root() payload: TaskGraphFramePayload,

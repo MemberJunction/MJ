@@ -125,18 +125,28 @@ export class MJDialogComponent implements OnDestroy {
     return this.DialogId;
   }
 
-  get resolvedWidth(): string {
+  get ResolvedWidth(): string {
     if (this.Width) {
       return typeof this.Width === 'number' ? `${this.Width}px` : this.Width;
     }
     return SIZE_MAP[this.Size] ?? 'auto';
   }
 
-  get resolvedHeight(): string {
+  /** @deprecated Use {@link ResolvedWidth}. */
+  get resolvedWidth(): string {
+    return this.ResolvedWidth;
+  }
+
+  get ResolvedHeight(): string {
     if (this.Height) {
       return typeof this.Height === 'number' ? `${this.Height}px` : this.Height;
     }
     return 'auto';
+  }
+
+  /** @deprecated Use {@link ResolvedHeight}. */
+  get resolvedHeight(): string {
+    return this.ResolvedHeight;
   }
 
   @HostListener('document:keydown.escape')

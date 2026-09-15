@@ -54,7 +54,7 @@ const normalize = (name: string): string => name.trim().toLowerCase();
  * is typed by a human while the one in the trace comes from the catalog — a casing difference is
  * never the failure anyone means to report.
  */
-export function evaluateSubAgentTrace(facts: SubAgentTraceFacts, config: SubAgentTraceConfig): SubAgentTraceResult {
+export function EvaluateSubAgentTrace(facts: SubAgentTraceFacts, config: SubAgentTraceConfig): SubAgentTraceResult {
     const dispatched = new Set(facts.dispatchedAgents.map(normalize));
 
     const missingAgents = (config.requiredAgents ?? []).filter((name) => !dispatched.has(normalize(name)));
@@ -101,4 +101,9 @@ export function evaluateSubAgentTrace(facts: SubAgentTraceFacts, config: SubAgen
         ? `dispatched ${facts.dispatchedAgents.length} sub-agent step(s): ${[...new Set(facts.dispatchedAgents)].join(', ')}`
         : 'no sub-agents dispatched (none required)';
     return { passed: true, score: 1, message: `${summary}; ${facts.iterations} iteration(s)`, details };
+}
+
+/** @deprecated Use {@link EvaluateSubAgentTrace}. */
+export function evaluateSubAgentTrace(facts: SubAgentTraceFacts, config: SubAgentTraceConfig): SubAgentTraceResult {
+    return EvaluateSubAgentTrace(facts, config);
 }

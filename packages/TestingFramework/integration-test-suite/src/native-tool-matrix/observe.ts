@@ -73,7 +73,7 @@ export interface CellObservation {
 }
 
 /** Reads one argument through one matcher. Missing arguments always fail. */
-export function matchArgument(matcher: ArgumentMatcher, args: Record<string, unknown>): boolean {
+export function MatchArgument(matcher: ArgumentMatcher, args: Record<string, unknown>): boolean {
     const value = args[matcher.parameter];
     switch (matcher.kind) {
         case 'nonEmptyString':
@@ -87,18 +87,28 @@ export function matchArgument(matcher: ArgumentMatcher, args: Record<string, unk
     }
 }
 
+/** @deprecated Use {@link MatchArgument}. */
+export function matchArgument(matcher: ArgumentMatcher, args: Record<string, unknown>): boolean {
+    return MatchArgument(matcher, args);
+}
+
 /**
  * Strips the markdown fence models add even when told not to, so a fenced-but-otherwise-correct
  * envelope counts as parsed. Fencing is a formatting habit, not a decision error, and conflating
  * the two would inflate the malformed rate this matrix is meant to measure honestly.
  */
-export function stripJsonFence(text: string): string {
+export function StripJsonFence(text: string): string {
     const trimmed = text.trim();
     if (!trimmed.startsWith('```')) {
         return trimmed;
     }
     const withoutOpen = trimmed.replace(/^```[a-zA-Z]*\s*\n?/, '');
     return withoutOpen.replace(/\n?```\s*$/, '').trim();
+}
+
+/** @deprecated Use {@link StripJsonFence}. */
+export function stripJsonFence(text: string): string {
+    return StripJsonFence(text);
 }
 
 /** The subset of `LoopAgentResponse` the envelope probe asks for and this module reads back. */
@@ -112,13 +122,13 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 }
 
 /** Parses the envelope and says whether it satisfies the contract the loop branches on. */
-export function readEnvelope(text: string): { parsed: boolean; valid: boolean; envelope: ParsedEnvelope | null } {
+export function ReadEnvelope(text: string): { parsed: boolean; valid: boolean; envelope: ParsedEnvelope | null } {
     if (!text || text.trim().length === 0) {
         return { parsed: false, valid: false, envelope: null };
     }
     let candidate: unknown;
     try {
-        candidate = JSON.parse(stripJsonFence(text));
+        candidate = JSON.parse(StripJsonFence(text));
     } catch {
         return { parsed: false, valid: false, envelope: null };
     }
@@ -132,6 +142,11 @@ export function readEnvelope(text: string): { parsed: boolean; valid: boolean; e
     const nextStepTyped = typeof envelope.nextStep?.type === 'string';
     const valid = hasCompletion && (envelope.taskComplete === true || nextStepTyped);
     return { parsed: true, valid, envelope };
+}
+
+/** @deprecated Use {@link ReadEnvelope}. */
+export function readEnvelope(text: string): { parsed: boolean; valid: boolean; envelope: ParsedEnvelope | null } {
+    return ReadEnvelope(text);
 }
 
 /** Lifts `nextStep.actions` into the same shape as a native call so one comparison serves both. */
@@ -163,7 +178,7 @@ function nativeCallWellFormed(call: ChatToolCall, declaredNames: Set<string>): b
 }
 
 /** Scores observed calls against the expectation: right names in any order, then argument fidelity. */
-export function scoreCalls(expected: ExpectedToolCall[], observed: ObservedCall[]): { namesMatch: boolean; argumentMatchRate: number | null } {
+export function ScoreCalls(expected: ExpectedToolCall[], observed: ObservedCall[]): { namesMatch: boolean; argumentMatchRate: number | null } {
     const expectedNames = [...expected.map((e) => e.toolName)].sort();
     const observedNames = [...observed.map((o) => o.name)].sort();
     const namesMatch = expectedNames.length === observedNames.length && expectedNames.every((n, i) => n === observedNames[i]);
@@ -176,12 +191,17 @@ export function scoreCalls(expected: ExpectedToolCall[], observed: ObservedCall[
         const match = observed.find((o) => o.name === expectation.toolName);
         for (const matcher of expectation.arguments) {
             checked++;
-            if (match && matchArgument(matcher, match.arguments)) {
+            if (match && MatchArgument(matcher, match.arguments)) {
                 passed++;
             }
         }
     }
     return { namesMatch, argumentMatchRate: checked === 0 ? null : passed / checked };
+}
+
+/** @deprecated Use {@link ScoreCalls}. */
+export function scoreCalls(expected: ExpectedToolCall[], observed: ObservedCall[]): { namesMatch: boolean; argumentMatchRate: number | null } {
+    return ScoreCalls(expected, observed);
 }
 
 /**
@@ -190,7 +210,7 @@ export function scoreCalls(expected: ExpectedToolCall[], observed: ObservedCall[
  * `no-tools` and `auto` impose nothing, so they report `null` rather than a vacuous `true` — a
  * rate computed over cells that could not fail would be meaningless.
  */
-export function evaluateToolChoice(mode: ProbeToolMode, forcedToolName: string | undefined, calls: ChatToolCall[]): boolean | null {
+export function EvaluateToolChoice(mode: ProbeToolMode, forcedToolName: string | undefined, calls: ChatToolCall[]): boolean | null {
     switch (mode) {
         case 'none':
             return calls.length === 0;
@@ -204,6 +224,11 @@ export function evaluateToolChoice(mode: ProbeToolMode, forcedToolName: string |
         default:
             return null;
     }
+}
+
+/** @deprecated Use {@link EvaluateToolChoice}. */
+export function evaluateToolChoice(mode: ProbeToolMode, forcedToolName: string | undefined, calls: ChatToolCall[]): boolean | null {
+    return EvaluateToolChoice(mode, forcedToolName, calls);
 }
 
 /** Picks the channel the model actually answered through. */
@@ -253,7 +278,7 @@ function failedObservation(errorMessage: string): CellObservation {
  * the same scenario with nothing declared — an undeclared-name check against the scenario's tool
  * list would then flag every envelope action as hallucinated.
  */
-export function observeChatResult(
+export function ObserveChatResult(
     result: ChatResult,
     scenario: ProbeScenario,
     mode: ProbeToolMode,
@@ -271,14 +296,14 @@ export function observeChatResult(
     const nativeCalls = choice.message?.toolCalls ?? [];
     const declaredNames = new Set(toolsDeclared ? scenario.tools.map((t) => t.name) : []);
 
-    const envelope = scenario.expectation.envelopeRequested ? readEnvelope(text) : null;
+    const envelope = scenario.expectation.envelopeRequested ? ReadEnvelope(text) : null;
     const envelopeCalls = envelopeActionsAsCalls(envelope?.envelope ?? null);
     // Native calls win: a model that emitted both has made its decision natively, and the envelope
     // is at most a narration of it.
     const observedCalls = nativeCalls.length > 0 ? nativeCallsAsObserved(nativeCalls) : envelopeCalls;
 
     const expectation: ProbeExpectation = scenario.expectation;
-    const { namesMatch, argumentMatchRate } = scoreCalls(expectation.calls, observedCalls);
+    const { namesMatch, argumentMatchRate } = ScoreCalls(expectation.calls, observedCalls);
     const decisionCorrect = expectation.toolCallWarranted ? namesMatch : observedCalls.length === 0;
 
     const textPresent = text.trim().length > 0;
@@ -300,8 +325,18 @@ export function observeChatResult(
         observedArguments: observedCalls.map((c) => truncateArguments(c.arguments)),
         decisionCorrect,
         argumentMatchRate,
-        toolChoiceHonored: evaluateToolChoice(mode, scenario.forcedToolName, nativeCalls),
+        toolChoiceHonored: EvaluateToolChoice(mode, scenario.forcedToolName, nativeCalls),
         promptTokens: result.data?.usage?.promptTokens ?? null,
         completionTokens: result.data?.usage?.completionTokens ?? null
     };
+}
+
+/** @deprecated Use {@link ObserveChatResult}. */
+export function observeChatResult(
+    result: ChatResult,
+    scenario: ProbeScenario,
+    mode: ProbeToolMode,
+    toolsDeclared: boolean
+): CellObservation {
+    return ObserveChatResult(result, scenario, mode, toolsDeclared);
 }

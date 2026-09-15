@@ -16,7 +16,7 @@
 import { createHash } from 'node:crypto';
 import https from 'node:https';
 import type { Manifest, ManifestEntry } from './PackTypes.js';
-import { buildRemoteUrlPrefix } from './PackPaths.js';
+import { BuildRemoteUrlPrefix } from './PackPaths.js';
 
 // ---------------------------------------------------------------------------
 // HTTP injection point
@@ -44,7 +44,7 @@ export type HttpGetter = (url: string) => Promise<HttpResponse>;
  * (`Buffer`) doesn't cleanly assign to `Uint8Array` in the strict @types/node
  * generics that ship with v20+, even though Buffer extends Uint8Array.
  */
-export const realHttpGet: HttpGetter = (url) =>
+export const RealHttpGet: HttpGetter = (url) =>
     new Promise<HttpResponse>((resolve, reject) => {
         const req = https.get(url, (res) => {
             const chunks: Uint8Array[] = [];
@@ -59,6 +59,9 @@ export const realHttpGet: HttpGetter = (url) =>
             req.destroy(new Error(`Timed out after 30s fetching ${url}`));
         });
     });
+
+/** @deprecated Use {@link RealHttpGet}. */
+export const realHttpGet: HttpGetter = RealHttpGet;
 
 function concatBytes(chunks: readonly Uint8Array[]): Uint8Array {
     const total = chunks.reduce((s, c) => s + c.byteLength, 0);
@@ -141,8 +144,8 @@ export interface FetchedPack {
  * sha256 along the way. Falls back from a specific tag to `main` if the
  * manifest 404s.
  */
-export async function fetchPack(opts: FetchPackOptions): Promise<FetchedPack> {
-    const httpGet = opts.HttpGet ?? realHttpGet;
+export async function FetchPack(opts: FetchPackOptions): Promise<FetchedPack> {
+    const httpGet = opts.HttpGet ?? RealHttpGet;
     const requestedRef = opts.Ref ?? 'main';
     const onProgress = opts.OnProgress ?? (() => {});
 
@@ -176,6 +179,11 @@ export async function fetchPack(opts: FetchPackOptions): Promise<FetchedPack> {
     return { Manifest: manifest, Files: files, RefUsed: refUsed, BaseUrl: baseUrl };
 }
 
+/** @deprecated Use {@link FetchPack}. */
+export async function fetchPack(opts: FetchPackOptions): Promise<FetchedPack> {
+    return FetchPack(opts);
+}
+
 // ---------------------------------------------------------------------------
 // Internals
 // ---------------------------------------------------------------------------
@@ -187,7 +195,7 @@ async function fetchManifestWithFallback(
     onProgress: (m: string) => void
 ): Promise<{ manifest: Manifest; refUsed: string; baseUrl: string }> {
     const tryRef = async (ref: string) => {
-        const baseUrl = buildRemoteUrlPrefix(major, ref);
+        const baseUrl = BuildRemoteUrlPrefix(major, ref);
         const manifestUrl = baseUrl + '.claude/mj/MANIFEST.json';
         onProgress(`fetching manifest from ref=${ref}`);
         const res = await httpGet(manifestUrl);

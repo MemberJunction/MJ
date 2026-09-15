@@ -41,13 +41,67 @@ export type BatchWorkerOptions<TContext = Record<string, unknown>> = {
  * The stream operates in object mode and emits processed records.
  */
 export class BatchWorker<TRecord = Record<string, unknown>, TContext = Record<string, unknown>> extends Transform {
-  _batchSize = 10;
-  _workerFile = './worker.js';
-  _workerContext: TContext | Record<string, never> = {};
-  _concurrencyLimit = 4;
-  _running = 0;
+  BatchSize = 10;
 
-  _buffer: Array<TRecord> = [];
+  /** @deprecated Use {@link BatchSize}. */
+  get _batchSize() {
+    return this.BatchSize;
+  }
+  /** @deprecated Use {@link BatchSize}. */
+  set _batchSize(value) {
+    this.BatchSize = value;
+  }
+  WorkerFile = './worker.js';
+
+  /** @deprecated Use {@link WorkerFile}. */
+  get _workerFile() {
+    return this.WorkerFile;
+  }
+  /** @deprecated Use {@link WorkerFile}. */
+  set _workerFile(value) {
+    this.WorkerFile = value;
+  }
+  WorkerContext: TContext | Record<string, never> = {};
+
+  /** @deprecated Use {@link WorkerContext}. */
+  get _workerContext(): TContext | Record<string, never> {
+    return this.WorkerContext;
+  }
+  /** @deprecated Use {@link WorkerContext}. */
+  set _workerContext(value: TContext | Record<string, never>) {
+    this.WorkerContext = value;
+  }
+  ConcurrencyLimit = 4;
+
+  /** @deprecated Use {@link ConcurrencyLimit}. */
+  get _concurrencyLimit() {
+    return this.ConcurrencyLimit;
+  }
+  /** @deprecated Use {@link ConcurrencyLimit}. */
+  set _concurrencyLimit(value) {
+    this.ConcurrencyLimit = value;
+  }
+  Running = 0;
+
+  /** @deprecated Use {@link Running}. */
+  get _running() {
+    return this.Running;
+  }
+  /** @deprecated Use {@link Running}. */
+  set _running(value) {
+    this.Running = value;
+  }
+
+  Buffer: Array<TRecord> = [];
+
+  /** @deprecated Use {@link Buffer}. */
+  get _buffer(): Array<TRecord> {
+    return this.Buffer;
+  }
+  /** @deprecated Use {@link Buffer}. */
+  set _buffer(value: Array<TRecord>) {
+    this.Buffer = value;
+  }
 
   _queue: Array<() => Promise<void>> = [];
 
@@ -58,38 +112,48 @@ export class BatchWorker<TRecord = Record<string, unknown>, TContext = Record<st
    */
   constructor(options: BatchWorkerOptions<TContext> = {}) {
     super({ objectMode: true });
-    this._batchSize = options.batchSize ?? this._batchSize;
-    this._workerFile = options.workerFile ?? this._workerFile;
-    this._workerContext = options.workerContext ?? this._workerContext;
-    this._concurrencyLimit = options.concurrencyLimit ?? this._concurrencyLimit;
+    this.BatchSize = options.batchSize ?? this.BatchSize;
+    this.WorkerFile = options.workerFile ?? this.WorkerFile;
+    this.WorkerContext = options.workerContext ?? this.WorkerContext;
+    this.ConcurrencyLimit = options.concurrencyLimit ?? this.ConcurrencyLimit;
     this._contextUser = options.contextUser ?? this._contextUser;
   }
 
   /**
    * Starts the next task in the queue
    */
-  _next() {
-    if (this._queue.length > 0 && this._running < this._concurrencyLimit) {
+  Next() {
+    if (this._queue.length > 0 && this.Running < this.ConcurrencyLimit) {
       const task = this._queue.shift();
-      task && task().then(() => this._next());
+      task && task().then(() => this.Next());
     }
+  }
+
+  /** @deprecated Use {@link Next}. */
+  _next() {
+    return this.Next();
   }
 
   /**
    * Enqueues a task to be processed
    * @param task - The task to enqueue
    */
-  _enqueue(task: () => Promise<void>) {
+  Enqueue(task: () => Promise<void>) {
     this._queue.push(task);
-    this._next();
+    this.Next();
   }
 
-  async _transform(chunk: TRecord, encoding: BufferEncoding, callback: TransformCallback) {
-    this._buffer.push(chunk);
-    if (this._buffer.length >= this._batchSize) {
-      const batch = this._buffer.splice(0, this._batchSize);
-      this._enqueue(() =>
-        this._processBatchInWorker(batch)
+  /** @deprecated Use {@link Enqueue}. */
+  _enqueue(task: () => Promise<void>) {
+    return this.Enqueue(task);
+  }
+
+  async Transform(chunk: TRecord, encoding: BufferEncoding, callback: TransformCallback) {
+    this.Buffer.push(chunk);
+    if (this.Buffer.length >= this.BatchSize) {
+      const batch = this.Buffer.splice(0, this.BatchSize);
+      this.Enqueue(() =>
+        this.ProcessBatchInWorker(batch)
           .then(() => callback())
           .catch((error) => {
             console.log('Error processing batch:', error);
@@ -101,10 +165,15 @@ export class BatchWorker<TRecord = Record<string, unknown>, TContext = Record<st
     }
   }
 
-  async _flush(callback: TransformCallback) {
-    if (this._buffer.length > 0) {
-      this._enqueue(() =>
-        this._processBatchInWorker(this._buffer)
+  /** @deprecated Use {@link Transform}. */
+  async _transform(chunk: TRecord, encoding: BufferEncoding, callback: TransformCallback) {
+    return this.Transform(chunk, encoding, callback);
+  }
+
+  async Flush(callback: TransformCallback) {
+    if (this.Buffer.length > 0) {
+      this.Enqueue(() =>
+        this.ProcessBatchInWorker(this.Buffer)
           .then(() => callback())
           .catch((error) => {
             console.log('Error flushing:', error);
@@ -116,24 +185,34 @@ export class BatchWorker<TRecord = Record<string, unknown>, TContext = Record<st
     }
   }
 
-  _processBatchInWorker(batch: Array<TRecord>): Promise<void> {
+  /** @deprecated Use {@link Flush}. */
+  async _flush(callback: TransformCallback) {
+    return this.Flush(callback);
+  }
+
+  ProcessBatchInWorker(batch: Array<TRecord>): Promise<void> {
     return new Promise((resolve, reject) => {
-      this._running++;
-      const worker = new Worker(this._workerFile, { workerData: { batch, context: this._workerContext } });
+      this.Running++;
+      const worker = new Worker(this.WorkerFile, { workerData: { batch, context: this.WorkerContext } });
       worker.on('message', ({ batch }: WorkerData<TContext, TRecord>) => {
         // Push batch rows to the stream for reading
         batch.forEach((row) => this.push(row));
 
         // Decrement _running on successful processing
-        this._running--;
+        this.Running--;
         resolve();
       });
       worker.on('error', (error) => {
         console.log('Error processing batch in worker:', error);
         // Decrement _running and reject on error
-        this._running--;
+        this.Running--;
         reject(error);
       });
     });
+  }
+
+  /** @deprecated Use {@link ProcessBatchInWorker}. */
+  _processBatchInWorker(batch: Array<TRecord>): Promise<void> {
+    return this.ProcessBatchInWorker(batch);
   }
 }

@@ -183,7 +183,7 @@ export interface LiveKitNativeSdkConfig {
 }
 
 /** Normalizes the native client's free-form role string onto the seam's {@link LiveKitParticipantRole}. */
-export function mapNativeRole(role?: string): LiveKitParticipantRole {
+export function MapNativeRole(role?: string): LiveKitParticipantRole {
     switch ((role ?? '').trim().toLowerCase()) {
         case 'host':
             return 'Host';
@@ -195,17 +195,27 @@ export function mapNativeRole(role?: string): LiveKitParticipantRole {
     }
 }
 
+/** @deprecated Use {@link MapNativeRole}. */
+export function mapNativeRole(role?: string): LiveKitParticipantRole {
+    return MapNativeRole(role);
+}
+
 /**
  * **Pure mapping** of one native participant onto the seam's {@link LiveKitParticipant}. Isolated from the
  * native client and from I/O so it is unit-tested directly.
  */
-export function mapNativeParticipant(p: NativeRoomParticipant): LiveKitParticipant {
+export function MapNativeParticipant(p: NativeRoomParticipant): LiveKitParticipant {
     return {
         Identity: String(p.identity),
         DisplayName: p.name,
-        Role: mapNativeRole(p.role),
+        Role: MapNativeRole(p.role),
         IsLocal: p.isLocal,
     };
+}
+
+/** @deprecated Use {@link MapNativeParticipant}. */
+export function mapNativeParticipant(p: NativeRoomParticipant): LiveKitParticipant {
+    return MapNativeParticipant(p);
 }
 
 /**
@@ -213,7 +223,7 @@ export function mapNativeParticipant(p: NativeRoomParticipant): LiveKitParticipa
  * window of a view (so the result never aliases a larger backing buffer). The LiveKit package has no
  * pre-existing PCM-coercion helper to reuse, so this is defined here; it is the single such export.
  */
-export function toArrayBuffer(data: Uint8Array | ArrayBuffer): ArrayBuffer {
+export function ToArrayBuffer(data: Uint8Array | ArrayBuffer): ArrayBuffer {
     if (data instanceof ArrayBuffer) {
         return data;
     }
@@ -222,17 +232,27 @@ export function toArrayBuffer(data: Uint8Array | ArrayBuffer): ArrayBuffer {
     return copy.buffer;
 }
 
+/** @deprecated Use {@link ToArrayBuffer}. */
+export function toArrayBuffer(data: Uint8Array | ArrayBuffer): ArrayBuffer {
+    return ToArrayBuffer(data);
+}
+
 /**
  * **Pure mapping** of one native inbound audio frame onto the seam's diarized {@link LiveKitAudioFrame}.
  * Copies the PCM (see {@link toArrayBuffer}) and resolves the speaker label. Isolated for direct testing.
  */
-export function mapNativeAudioFrame(frame: NativeRoomAudioFrame): LiveKitAudioFrame {
+export function MapNativeAudioFrame(frame: NativeRoomAudioFrame): LiveKitAudioFrame {
     return {
-        Pcm: toArrayBuffer(frame.data),
+        Pcm: ToArrayBuffer(frame.data),
         ParticipantIdentity: String(frame.participantIdentity),
         DisplayName: frame.name,
         TimestampMs: typeof frame.timestampMs === 'number' ? frame.timestampMs : Date.now(),
     };
+}
+
+/** @deprecated Use {@link MapNativeAudioFrame}. */
+export function mapNativeAudioFrame(frame: NativeRoomAudioFrame): LiveKitAudioFrame {
+    return MapNativeAudioFrame(frame);
 }
 
 /**
@@ -271,7 +291,7 @@ function unwrapDefault(mod: unknown): unknown {
  * VERIFY against the native LiveKit Node SDK wrapper: the module's default/namespace interop + that it
  * exposes `createRoomClient`.
  */
-export const defaultNativeLoader: NativeModuleLoader = async (specifier: string): Promise<NativeRoomModule> => {
+export const DefaultNativeLoader: NativeModuleLoader = async (specifier: string): Promise<NativeRoomModule> => {
     try {
         const mod: unknown = await import(/* @vite-ignore */ specifier);
         const resolved = unwrapDefault(mod);
@@ -288,6 +308,9 @@ export const defaultNativeLoader: NativeModuleLoader = async (specifier: string)
         );
     }
 };
+
+/** @deprecated Use {@link DefaultNativeLoader}. */
+export const defaultNativeLoader: NativeModuleLoader = DefaultNativeLoader;
 
 /**
  * A **real, two-way** {@link ILiveKitRoomSdk} over the native LiveKit Node room SDK (publish + subscribe).
@@ -323,7 +346,7 @@ export class LiveKitNativeMeetingSdk implements ILiveKitRoomSdk {
      * @param config Resolved credentials + the native module specifier.
      * @param loadModule The native-module loader (defaults to the lazy specifier loader).
      */
-    constructor(config: LiveKitNativeSdkConfig, loadModule: NativeModuleLoader = defaultNativeLoader) {
+    constructor(config: LiveKitNativeSdkConfig, loadModule: NativeModuleLoader = DefaultNativeLoader) {
         this.config = config;
         this.loadModule = loadModule;
     }
@@ -447,7 +470,7 @@ export class LiveKitNativeMeetingSdk implements ILiveKitRoomSdk {
             return [];
         }
         const natives = await this.client.getParticipants();
-        return natives.map(mapNativeParticipant);
+        return natives.map(MapNativeParticipant);
     }
 
     /** Registers the room-disconnected handler. */
@@ -471,8 +494,8 @@ export class LiveKitNativeMeetingSdk implements ILiveKitRoomSdk {
 
     /** Wires the native client's callbacks to this adapter's handlers, mapping native shapes to the seam. */
     private wireClient(client: NativeRoomClient): void {
-        client.onAudioFrame((frame) => this.audioHandler?.(mapNativeAudioFrame(frame)));
-        client.onParticipantConnected((p) => this.joinHandler?.(mapNativeParticipant(p)));
+        client.onAudioFrame((frame) => this.audioHandler?.(MapNativeAudioFrame(frame)));
+        client.onParticipantConnected((p) => this.joinHandler?.(MapNativeParticipant(p)));
         client.onParticipantDisconnected((id) => this.leaveHandler?.(String(id)));
         client.onDisconnected(() => this.disconnectedHandler?.());
     }
@@ -495,9 +518,9 @@ export class LiveKitNativeMeetingSdk implements ILiveKitRoomSdk {
  * @returns A factory `(config) => LiveKitNativeMeetingSdk`.
  */
 export function BindLiveKitNative(
-    loadModule: NativeModuleLoader = defaultNativeLoader,
+    loadModule: NativeModuleLoader = DefaultNativeLoader,
 ): (config?: Record<string, unknown>) => LiveKitNativeMeetingSdk {
-    return (config?: Record<string, unknown>) => new LiveKitNativeMeetingSdk(readNativeConfig(config), loadModule);
+    return (config?: Record<string, unknown>) => new LiveKitNativeMeetingSdk(ReadNativeConfig(config), loadModule);
 }
 
 /**
@@ -506,7 +529,7 @@ export function BindLiveKitNative(
  * clean, partially-resolved object (and {@link LiveKitNativeMeetingSdk.connect} then throws a precise
  * error if the required specifier is absent) rather than a half-typed blob.
  */
-export function readNativeConfig(config?: Record<string, unknown>): LiveKitNativeSdkConfig {
+export function ReadNativeConfig(config?: Record<string, unknown>): LiveKitNativeSdkConfig {
     const cfg = config ?? {};
     return {
         Url: readString(cfg.Url),
@@ -518,6 +541,11 @@ export function readNativeConfig(config?: Record<string, unknown>): LiveKitNativ
         InboundSampleRate: readNumber(cfg.InboundSampleRate),
         OutboundSampleRate: readNumber(cfg.OutboundSampleRate),
     };
+}
+
+/** @deprecated Use {@link ReadNativeConfig}. */
+export function readNativeConfig(config?: Record<string, unknown>): LiveKitNativeSdkConfig {
+    return ReadNativeConfig(config);
 }
 
 /** Reads a value as a non-empty string, or `undefined`. */

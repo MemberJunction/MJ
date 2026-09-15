@@ -45,7 +45,7 @@ import { InteractionType } from '@azure/msal-browser';
 //***********************************************************
 import { AppComponent } from './app.component';
 import { GeneratedFormsModule } from './generated/generated-forms.module';
-import { environment } from '../environments/environment';
+import { Environment } from '../environments/environment';
 
 /**
  * Set your default interaction type for MSALGuard here. If you have any
@@ -62,8 +62,13 @@ export function MSALGuardConfigFactory(): MsalGuardConfiguration {
  * This ensures MSAL can process OAuth redirect responses before Angular's router
  * consumes the URL hash
  */
-export function initializeAuth(authService: MJAuthBase): () => Promise<void> {
+export function InitializeAuth(authService: MJAuthBase): () => Promise<void> {
   return () => authService.initialize();
+}
+
+/** @deprecated Use {@link InitializeAuth}. */
+export function initializeAuth(authService: MJAuthBase): () => Promise<void> {
+  return InitializeAuth(authService);
 }
 
 @NgModule({
@@ -83,10 +88,10 @@ export function initializeAuth(authService: MJAuthBase): () => Promise<void> {
     // Auth (needs forRoot configuration)
     // Resolves against the provider catalog preloaded in main.ts (see AuthProviderCatalog.Preload).
     // No catalog => falls back to environment.AUTH_TYPE, exactly as before.
-    AuthServicesModule.forRoot(environment),
+    AuthServicesModule.forRoot(Environment),
 
     // Explorer App Shell (includes login UI, validation, and mj-shell wrapper)
-    MJExplorerAppModule.forRoot(environment),
+    MJExplorerAppModule.forRoot(Environment),
 
     // App-specific modules
     GeneratedFormsModule
@@ -96,7 +101,7 @@ export function initializeAuth(authService: MJAuthBase): () => Promise<void> {
     provideHttpClient(withInterceptorsFromDi()),
     {
       provide: APP_INITIALIZER,
-      useFactory: initializeAuth,
+      useFactory: InitializeAuth,
       deps: [MJAuthBase],
       multi: true
     },

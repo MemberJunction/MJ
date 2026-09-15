@@ -52,7 +52,7 @@ const hostIdentityProvider = new HostIdentityProvider({
  * asserted visitor identity. Thin adapter over {@link HostIdentityProvider.VerifyHostAssertion} (the single
  * implementation, registered in the AuthProviderFactory) preserving this module's result shape. Never throws.
  */
-export function verifyHostAssertion(
+export function VerifyHostAssertion(
     assertion: string | undefined,
     hostPublicKeyPem: string | undefined,
     expectedAudience: string,
@@ -72,8 +72,17 @@ export function verifyHostAssertion(
     };
 }
 
+/** @deprecated Use {@link VerifyHostAssertion}. */
+export function verifyHostAssertion(
+    assertion: string | undefined,
+    hostPublicKeyPem: string | undefined,
+    expectedAudience: string,
+): HostAssertionResult {
+    return VerifyHostAssertion(assertion, hostPublicKeyPem, expectedAudience);
+}
+
 /** Pulls the visitor identity from a verified host-assertion payload (delegates to the provider). */
-export function extractHostIdentity(payload: jwt.JwtPayload): HostAssertedIdentity {
+export function ExtractHostIdentity(payload: jwt.JwtPayload): HostAssertedIdentity {
     const info = hostIdentityProvider.extractUserInfo(payload);
     return {
         email: info.email ?? '',
@@ -81,4 +90,9 @@ export function extractHostIdentity(payload: jwt.JwtPayload): HostAssertedIdenti
         lastName: info.lastName,
         hostUserId: typeof payload.sub === 'string' ? payload.sub : undefined,
     };
+}
+
+/** @deprecated Use {@link ExtractHostIdentity}. */
+export function extractHostIdentity(payload: jwt.JwtPayload): HostAssertedIdentity {
+    return ExtractHostIdentity(payload);
 }

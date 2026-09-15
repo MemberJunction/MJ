@@ -15,8 +15,8 @@
 import { DatabaseDocumentation } from '../types/state.js';
 import { OrganicKeyCluster } from '../types/organic-keys.js';
 import {
-    detectTransitiveBridges,
-    collectFKEdgesFromState,
+    DetectTransitiveBridges,
+    CollectFKEdgesFromState,
     TransitiveBridgeFinding,
 } from './TransitiveBridgeDetector.js';
 import { BridgeViewProvider } from './BridgeViewSQLGenerator.js';
@@ -29,7 +29,7 @@ export interface StructuralPhaseResult {
 /**
  * @param provider - Platform of the analyzed database; bridge-view SQL is written in its dialect.
  */
-export function runStructuralPhase(
+export function RunStructuralPhase(
     state: DatabaseDocumentation,
     clusters: OrganicKeyCluster[],
     provider?: BridgeViewProvider,
@@ -37,7 +37,16 @@ export function runStructuralPhase(
     if (clusters.length === 0) {
         return { bridges: [], summary: { transitiveBridgesFound: 0 } };
     }
-    const edges = collectFKEdgesFromState(state);
-    const bridges = detectTransitiveBridges(clusters, edges, state, { provider });
+    const edges = CollectFKEdgesFromState(state);
+    const bridges = DetectTransitiveBridges(clusters, edges, state, { provider });
     return { bridges, summary: { transitiveBridgesFound: bridges.length } };
+}
+
+/** @deprecated Use {@link RunStructuralPhase}. */
+export function runStructuralPhase(
+    state: DatabaseDocumentation,
+    clusters: OrganicKeyCluster[],
+    provider?: BridgeViewProvider,
+): StructuralPhaseResult {
+    return RunStructuralPhase(state, clusters, provider);
 }

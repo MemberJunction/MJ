@@ -46,32 +46,140 @@ export class CreatePromptDialogComponent extends BaseAngularComponent implements
   
   // State management
   private destroy$ = new Subject<void>();
-  public result = new Subject<CreatePromptResult | null>();
+  public Result = new Subject<CreatePromptResult | null>();
+
+  /** @deprecated Use {@link Result}. */
+  public get result() {
+    return this.Result;
+  }
+  /** @deprecated Use {@link Result}. */
+  public set result(value) {
+    this.Result = value;
+  }
   
   // Form and validation
-  promptForm: FormGroup;
-  isLoading$ = new BehaviorSubject<boolean>(false);
-  isSaving$ = new BehaviorSubject<boolean>(false);
+  PromptForm: FormGroup;
+
+  /** @deprecated Use {@link PromptForm}. */
+  get promptForm(): FormGroup {
+    return this.PromptForm;
+  }
+  /** @deprecated Use {@link PromptForm}. */
+  set promptForm(value: FormGroup) {
+    this.PromptForm = value;
+  }
+  IsLoading$ = new BehaviorSubject<boolean>(false);
+
+  /** @deprecated Use {@link IsLoading$}. */
+  get isLoading$() {
+    return this.IsLoading$;
+  }
+  /** @deprecated Use {@link IsLoading$}. */
+  set isLoading$(value) {
+    this.IsLoading$ = value;
+  }
+  IsSaving$ = new BehaviorSubject<boolean>(false);
+
+  /** @deprecated Use {@link IsSaving$}. */
+  get isSaving$() {
+    return this.IsSaving$;
+  }
+  /** @deprecated Use {@link IsSaving$}. */
+  set isSaving$(value) {
+    this.IsSaving$ = value;
+  }
   
   // Data
-  availablePromptTypes$ = new BehaviorSubject<MJAIPromptTypeEntity[]>([]);
+  AvailablePromptTypes$ = new BehaviorSubject<MJAIPromptTypeEntity[]>([]);
+
+  /** @deprecated Use {@link AvailablePromptTypes$}. */
+  get availablePromptTypes$() {
+    return this.AvailablePromptTypes$;
+  }
+  /** @deprecated Use {@link AvailablePromptTypes$}. */
+  set availablePromptTypes$(value) {
+    this.AvailablePromptTypes$ = value;
+  }
   
   // Entities (not saved to database)
-  promptEntity: MJAIPromptEntityExtended | null = null;
-  templateEntity: MJTemplateEntity | null = null;
-  templateContents: MJTemplateContentEntity[] = [];
+  PromptEntity: MJAIPromptEntityExtended | null = null;
+
+  /** @deprecated Use {@link PromptEntity}. */
+  get promptEntity(): MJAIPromptEntityExtended | null {
+    return this.PromptEntity;
+  }
+  /** @deprecated Use {@link PromptEntity}. */
+  set promptEntity(value: MJAIPromptEntityExtended | null) {
+    this.PromptEntity = value;
+  }
+  TemplateEntity: MJTemplateEntity | null = null;
+
+  /** @deprecated Use {@link TemplateEntity}. */
+  get templateEntity(): MJTemplateEntity | null {
+    return this.TemplateEntity;
+  }
+  /** @deprecated Use {@link TemplateEntity}. */
+  set templateEntity(value: MJTemplateEntity | null) {
+    this.TemplateEntity = value;
+  }
+  TemplateContents: MJTemplateContentEntity[] = [];
+
+  /** @deprecated Use {@link TemplateContents}. */
+  get templateContents(): MJTemplateContentEntity[] {
+    return this.TemplateContents;
+  }
+  /** @deprecated Use {@link TemplateContents}. */
+  set templateContents(value: MJTemplateContentEntity[]) {
+    this.TemplateContents = value;
+  }
   
   // Template editor
-  @ViewChild('templateEditor') templateEditor: any; // Template editor component reference
-  showTemplateEditor = false;
-  templateEditorConfig: TemplateEditorConfig = {
+  @ViewChild('templateEditor') TemplateEditor: any;
+
+  /** @deprecated Use {@link TemplateEditor}. */
+  get templateEditor(): any {
+    return this.TemplateEditor;
+  }
+  /** @deprecated Use {@link TemplateEditor}. */
+  set templateEditor(value: any) {
+    this.TemplateEditor = value;
+  } // Template editor component reference
+  ShowTemplateEditor = false;
+
+  /** @deprecated Use {@link ShowTemplateEditor}. */
+  get showTemplateEditor() {
+    return this.ShowTemplateEditor;
+  }
+  /** @deprecated Use {@link ShowTemplateEditor}. */
+  set showTemplateEditor(value) {
+    this.ShowTemplateEditor = value;
+  }
+  TemplateEditorConfig: TemplateEditorConfig = {
     allowEdit: true,
     showRunButton: false,
     compactMode: true  // Compact mode for dialog
   };
+
+  /** @deprecated Use {@link TemplateEditorConfig}. */
+  get templateEditorConfig(): TemplateEditorConfig {
+    return this.TemplateEditorConfig;
+  }
+  /** @deprecated Use {@link TemplateEditorConfig}. */
+  set templateEditorConfig(value: TemplateEditorConfig) {
+    this.TemplateEditorConfig = value;
+  }
   
   // Template state
-  templateMode: 'new' | 'existing' = 'new';
+  TemplateMode: 'new' | 'existing' = 'new';
+
+  /** @deprecated Use {@link TemplateMode}. */
+  get templateMode(): 'new' | 'existing' {
+    return this.TemplateMode;
+  }
+  /** @deprecated Use {@link TemplateMode}. */
+  set templateMode(value: 'new' | 'existing') {
+    this.TemplateMode = value;
+  }
 
   @Output() DialogClose = new EventEmitter<void>();
 
@@ -80,7 +188,7 @@ export class CreatePromptDialogComponent extends BaseAngularComponent implements
     private aiPromptManagementService: AIPromptManagementService
   ) {
     super();
-    this.promptForm = this.createForm();
+    this.PromptForm = this.createForm();
   }
 
   ngOnInit() {
@@ -106,16 +214,16 @@ export class CreatePromptDialogComponent extends BaseAngularComponent implements
 
   private setupFormWatching() {
     // Watch template mode changes
-    this.promptForm.get('templateMode')?.valueChanges
+    this.PromptForm.get('templateMode')?.valueChanges
       .pipe(takeUntil(this.destroy$))
       .subscribe(mode => {
-        this.templateMode = mode;
-        this.handleTemplateModeChange(mode);
+        this.TemplateMode = mode;
+        this.HandleTemplateModeChange(mode);
       });
   }
 
   private async loadInitialData() {
-    this.isLoading$.next(true);
+    this.IsLoading$.next(true);
     
     try {
       // Load prompt types
@@ -127,28 +235,28 @@ export class CreatePromptDialogComponent extends BaseAngularComponent implements
       });
 
       if (typesResult.Success && typesResult.Results) {
-        this.availablePromptTypes$.next(typesResult.Results);
+        this.AvailablePromptTypes$.next(typesResult.Results);
         
         // Set default type if not specified
         if (!this.config.initialTypeID && typesResult.Results.length > 0) {
-          this.promptForm.patchValue({ typeID: typesResult.Results[0].ID });
+          this.PromptForm.patchValue({ typeID: typesResult.Results[0].ID });
         }
       }
 
       // Create the prompt entity
       const md = this.ProviderToUse;
-      this.promptEntity = await md.GetEntityObject<MJAIPromptEntityExtended>('MJ: AI Prompts');
-      this.promptEntity.NewRecord();
+      this.PromptEntity = await md.GetEntityObject<MJAIPromptEntityExtended>('MJ: AI Prompts');
+      this.PromptEntity.NewRecord();
       
       // Set default values
-      this.promptEntity.Status = 'Pending';
-      this.promptEntity.OutputType = 'string';
-      this.promptEntity.ValidationBehavior = 'None';
-      this.promptEntity.EnableCaching = false;
+      this.PromptEntity.Status = 'Pending';
+      this.PromptEntity.OutputType = 'string';
+      this.PromptEntity.ValidationBehavior = 'None';
+      this.PromptEntity.EnableCaching = false;
 
       // Create default template since it's required
       await this.createNewTemplate();
-      this.showTemplateEditor = true;
+      this.ShowTemplateEditor = true;
 
     } catch (error) {
       console.error('Error loading prompt creation data:', error);
@@ -158,14 +266,14 @@ export class CreatePromptDialogComponent extends BaseAngularComponent implements
         3000
       );
     } finally {
-      this.isLoading$.next(false);
+      this.IsLoading$.next(false);
     }
   }
 
-  public async handleTemplateModeChange(mode: string) {
+  public async HandleTemplateModeChange(mode: string) {
     if (mode === 'new') {
       await this.createNewTemplate();
-      this.showTemplateEditor = true;
+      this.ShowTemplateEditor = true;
     } else if (mode === 'existing') {
       await this.openTemplateSelector();
     }
@@ -173,24 +281,29 @@ export class CreatePromptDialogComponent extends BaseAngularComponent implements
     this.cdr.detectChanges();
   }
 
+  /** @deprecated Use {@link HandleTemplateModeChange}. */
+  public async handleTemplateModeChange(mode: string) {
+    return this.HandleTemplateModeChange(mode);
+  }
+
   private async createNewTemplate() {
-    if (!this.promptEntity) return;
+    if (!this.PromptEntity) return;
 
     try {
       const md = this.ProviderToUse;
       
       // Create template entity
-      this.templateEntity = await md.GetEntityObject<MJTemplateEntity>('MJ: Templates');
-      this.templateEntity.NewRecord();
+      this.TemplateEntity = await md.GetEntityObject<MJTemplateEntity>('MJ: Templates');
+      this.TemplateEntity.NewRecord();
       
-      const promptName = this.promptForm.get('name')?.value || 'New Prompt';
-      this.templateEntity.Name = `${promptName} Template`;
-      this.templateEntity.Description = `Template for ${promptName}`;
+      const promptName = this.PromptForm.get('name')?.value || 'New Prompt';
+      this.TemplateEntity.Name = `${promptName} Template`;
+      this.TemplateEntity.Description = `Template for ${promptName}`;
       // Set UserID on template (required field)
-      this.templateEntity.UserID = md.CurrentUser.ID;
+      this.TemplateEntity.UserID = md.CurrentUser.ID;
       
       // Link template to prompt
-      this.promptEntity.TemplateID = this.templateEntity.ID;
+      this.PromptEntity.TemplateID = this.TemplateEntity.ID;
 
     } catch (error) {
       console.error('Error creating new template:', error);
@@ -202,12 +315,17 @@ export class CreatePromptDialogComponent extends BaseAngularComponent implements
     }
   }
 
+  public OnTemplateContentChange(contents: MJTemplateContentEntity[]) {
+    this.TemplateContents = contents || [];
+  }
+
+  /** @deprecated Use {@link OnTemplateContentChange}. */
   public onTemplateContentChange(contents: MJTemplateContentEntity[]) {
-    this.templateContents = contents || [];
+    return this.OnTemplateContentChange(contents);
   }
 
   public async save() {
-    if (!this.promptForm.valid || !this.promptEntity) {
+    if (!this.PromptForm.valid || !this.PromptEntity) {
       MJNotificationService.Instance.CreateSimpleNotification(
         'Please fill in all required fields',
         'warning',
@@ -216,39 +334,39 @@ export class CreatePromptDialogComponent extends BaseAngularComponent implements
       return;
     }
 
-    this.isSaving$.next(true);
+    this.IsSaving$.next(true);
 
     try {
       // Update prompt entity with form values
-      const formValue = this.promptForm.value;
-      this.promptEntity.Name = formValue.name;
-      this.promptEntity.Description = formValue.description || '';
-      this.promptEntity.TypeID = formValue.typeID;
-      this.promptEntity.Status = formValue.status;
-      this.promptEntity.OutputType = formValue.outputType;
+      const formValue = this.PromptForm.value;
+      this.PromptEntity.Name = formValue.name;
+      this.PromptEntity.Description = formValue.description || '';
+      this.PromptEntity.TypeID = formValue.typeID;
+      this.PromptEntity.Status = formValue.status;
+      this.PromptEntity.OutputType = formValue.outputType;
 
       // Get template contents if template editor is active
-      if (this.templateEditor && this.showTemplateEditor) {
+      if (this.TemplateEditor && this.ShowTemplateEditor) {
         // Get the template contents from the editor without saving
         // The parent form will handle saving in the proper order
-        this.templateContents = this.templateEditor.templateContents || [];
+        this.TemplateContents = this.TemplateEditor.templateContents || [];
         
         // Ensure the template contents have the correct TemplateID
-        if (this.templateContents && this.templateEntity) {
-          this.templateContents.forEach(content => {
-            content.TemplateID = this.templateEntity!.ID;
+        if (this.TemplateContents && this.TemplateEntity) {
+          this.TemplateContents.forEach(content => {
+            content.TemplateID = this.TemplateEntity!.ID;
           });
         }
       }
 
       // Return the created entities (not saved to database)
       const result: CreatePromptResult = {
-        prompt: this.promptEntity,
-        template: this.templateEntity || undefined,
-        templateContents: this.templateContents.length > 0 ? this.templateContents : undefined
+        prompt: this.PromptEntity,
+        template: this.TemplateEntity || undefined,
+        templateContents: this.TemplateContents.length > 0 ? this.TemplateContents : undefined
       };
 
-      this.result.next(result);
+      this.Result.next(result);
       this.DialogClose.emit();
 
     } catch (error) {
@@ -259,12 +377,12 @@ export class CreatePromptDialogComponent extends BaseAngularComponent implements
         3000
       );
     } finally {
-      this.isSaving$.next(false);
+      this.IsSaving$.next(false);
     }
   }
 
   public cancel() {
-    this.result.next(null);
+    this.Result.next(null);
     this.DialogClose.emit();
   }
 
@@ -284,22 +402,22 @@ export class CreatePromptDialogComponent extends BaseAngularComponent implements
       
       if (result && result.selectedTemplates && result.selectedTemplates.length > 0) {
         // Link the selected template
-        this.templateEntity = result.selectedTemplates[0];
-        this.promptEntity!.TemplateID = this.templateEntity.ID;
+        this.TemplateEntity = result.selectedTemplates[0];
+        this.PromptEntity!.TemplateID = this.TemplateEntity.ID;
         
         // Update UI to show selected template info
-        this.showTemplateEditor = false;
+        this.ShowTemplateEditor = false;
         
         MJNotificationService.Instance.CreateSimpleNotification(
-          `Template "${this.templateEntity.Name}" linked successfully`,
+          `Template "${this.TemplateEntity.Name}" linked successfully`,
           'success',
           3000
         );
       } else {
         // User cancelled, revert to new template mode
-        this.promptForm.patchValue({ templateMode: 'new' });
+        this.PromptForm.patchValue({ templateMode: 'new' });
         await this.createNewTemplate();
-        this.showTemplateEditor = true;
+        this.ShowTemplateEditor = true;
       }
     } catch (error) {
       console.error('Error opening template selector:', error);
@@ -310,14 +428,19 @@ export class CreatePromptDialogComponent extends BaseAngularComponent implements
       );
       
       // Revert to new template mode
-      this.promptForm.patchValue({ templateMode: 'new' });
+      this.PromptForm.patchValue({ templateMode: 'new' });
       await this.createNewTemplate();
-      this.showTemplateEditor = true;
+      this.ShowTemplateEditor = true;
     }
   }
 
   // Getter for template debugging
+  public get CurrentTemplate(): MJTemplateEntity | null {
+    return this.TemplateEntity;
+  }
+
+  /** @deprecated Use {@link CurrentTemplate}. */
   public get currentTemplate(): MJTemplateEntity | null {
-    return this.templateEntity;
+    return this.CurrentTemplate;
   }
 }

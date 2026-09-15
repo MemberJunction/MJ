@@ -27,7 +27,7 @@ export interface FieldBindingScanResult {
  * @param code The full source of a form-role component.
  * @returns The set of field names referenced. Empty set if `code` is falsy.
  */
-export function scanFieldBindings(code: string | null | undefined): FieldBindingScanResult {
+export function ScanFieldBindings(code: string | null | undefined): FieldBindingScanResult {
     if (!code || code.trim().length === 0) {
         return { boundFields: new Set(), usedAst: false };
     }
@@ -47,6 +47,11 @@ export function scanFieldBindings(code: string | null | undefined): FieldBinding
     }
 
     return scanViaRegex(code);
+}
+
+/** @deprecated Use {@link ScanFieldBindings}. */
+export function scanFieldBindings(code: string | null | undefined): FieldBindingScanResult {
+    return ScanFieldBindings(code);
 }
 
 /** Walks the Babel AST for MemberExpression / OptionalMemberExpression nodes. */

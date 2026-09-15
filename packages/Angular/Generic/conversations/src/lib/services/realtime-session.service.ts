@@ -546,7 +546,7 @@ export class RealtimeSessionService {
   /** 0-based index of the next recording shard to upload. */
   private segmentIndex = 0;
   /** How often crash-recovery shards are flushed during a recording. */
-  private static readonly SegmentFlushMs = 15000;
+  private static readonly segmentFlushMs = 15000;
 
   // ── Server-side liveness ───────────────────────────────────────────────────
   /**
@@ -560,7 +560,7 @@ export class RealtimeSessionService {
    * live session is reaped, and well above `SessionManager`'s heartbeat write-coalescing window
    * so the DB sees at most a trickle of writes per session.
    */
-  private static readonly LivenessPulseMs = 60000;
+  private static readonly livenessPulseMs = 60000;
   /**
    * Recording-relative ms offset at which the IN-FLIGHT (not-yet-finalized) turn's audio
    * actually BEGAN — captured the moment that turn's audio/text starts flowing (its first
@@ -586,15 +586,15 @@ export class RealtimeSessionService {
 
   // ── Delegated-run progress streaming ───────────────────────────────────────
   /** First spoken update fires no earlier than this long after delegated work starts. */
-  private static readonly FirstNarrationDelayMs = 5000;
+  private static readonly firstNarrationDelayMs = 5000;
   /** Minimum gap between SUBSEQUENT spoken updates (the 7–10s band; floods aggregate). */
-  private static readonly NarrationIntervalMs = 8000;
+  private static readonly narrationIntervalMs = 8000;
   /** Retry delay when the fire moment finds the model busy / audio still playing. */
-  private static readonly NarrationBusyRetryMs = 1500;
+  private static readonly narrationBusyRetryMs = 1500;
   /** Max progress messages aggregated into one spoken digest. */
-  private static readonly MaxDigestMessages = 4;
+  private static readonly maxDigestMessages = 4;
   /** Max prior spoken narrations chained into the instructions (anti-repetition). */
-  private static readonly MaxPriorNarrations = 3;
+  private static readonly maxPriorNarrations = 3;
   /**
    * Aggregation buffer: distinct progress messages since the last spoken update (oldest
    * first, capped at {@link RealtimeSessionService.MaxDigestMessages}). A flood of small
@@ -621,7 +621,7 @@ export class RealtimeSessionService {
 
   // ── Usage telemetry relay (B7) ─────────────────────────────────────────────
   /** Debounce window for relaying accumulated usage deltas to the server. */
-  private static readonly UsageFlushDebounceMs = 10000;
+  private static readonly usageFlushDebounceMs = 10000;
   /** Accumulated input-token delta since the last flush. */
   private pendingUsageInput = 0;
   /** Accumulated output-token delta since the last flush. */
@@ -651,7 +651,7 @@ export class RealtimeSessionService {
 
   // ── Interactive channels (registry-resolved plugins) ───────────────────────
   /** Debounce window for persisting a channel's state of record after a change burst. */
-  private static readonly ChannelSaveDebounceMs = 3000;
+  private static readonly channelSaveDebounceMs = 3000;
   /**
    * Pending DEBOUNCED channel-state saves, keyed by channel name. Each entry keeps the
    * LATEST serialized state plus the session id captured while the session was live —
@@ -1082,7 +1082,7 @@ export class RealtimeSessionService {
   /** Begins flushing ~15s crash-recovery shards to the server for the duration of the recording. */
   private startSegmentFlushing(): void {
     this.segmentIndex = 0;
-    this.segmentTimer = setInterval(() => { void this.flushRecordingSegment(); }, RealtimeSessionService.SegmentFlushMs);
+    this.segmentTimer = setInterval(() => { void this.flushRecordingSegment(); }, RealtimeSessionService.segmentFlushMs);
   }
 
   /** Stops the periodic crash-recovery shard flush. */
@@ -1117,7 +1117,7 @@ export class RealtimeSessionService {
    */
   private startLivenessPulse(): void {
     this.stopLivenessPulse();
-    this.livenessTimer = setInterval(() => { void this.pulseLiveness(); }, RealtimeSessionService.LivenessPulseMs);
+    this.livenessTimer = setInterval(() => { void this.pulseLiveness(); }, RealtimeSessionService.livenessPulseMs);
   }
 
   /** Stops the liveness pulse. Idempotent — safe on a session that never started one. */
@@ -1577,7 +1577,7 @@ export class RealtimeSessionService {
       clearTimeout(pending.Timer);
     }
     this.pendingChannelSaves.set(channelName, {
-      Timer: setTimeout(() => this.flushChannelSave(channelName), RealtimeSessionService.ChannelSaveDebounceMs),
+      Timer: setTimeout(() => this.flushChannelSave(channelName), RealtimeSessionService.channelSaveDebounceMs),
       StateJson: stateJson,
       SessionID: this.agentSessionId ?? pending?.SessionID ?? null
     });
@@ -1772,7 +1772,7 @@ export class RealtimeSessionService {
         this._delegationNarration$.next({ Text: transcript.Text });
         // Remember what was actually SAID so later updates build on it instead of repeating.
         this.spokenNarrations.push(transcript.Text);
-        if (this.spokenNarrations.length > RealtimeSessionService.MaxPriorNarrations) {
+        if (this.spokenNarrations.length > RealtimeSessionService.maxPriorNarrations) {
           this.spokenNarrations.shift();
         }
       } else if (transcript.ReplacesPrevious) {
@@ -2318,7 +2318,7 @@ export class RealtimeSessionService {
       this.usageFlushTimer = setTimeout(() => {
         this.usageFlushTimer = null;
         void this.flushPendingUsage();
-      }, RealtimeSessionService.UsageFlushDebounceMs);
+      }, RealtimeSessionService.usageFlushDebounceMs);
     }
   }
 
@@ -2567,7 +2567,7 @@ export class RealtimeSessionService {
       return;
     }
     this.pendingNarrationMessages.push(message);
-    if (this.pendingNarrationMessages.length > RealtimeSessionService.MaxDigestMessages) {
+    if (this.pendingNarrationMessages.length > RealtimeSessionService.maxDigestMessages) {
       this.pendingNarrationMessages.shift();
     }
   }
@@ -2581,10 +2581,10 @@ export class RealtimeSessionService {
   private nextNarrationDelayMs(): number {
     const now = Date.now();
     const firstAnchor = this.narrationCount === 0
-      ? this.delegationBurstStartedAt + RealtimeSessionService.FirstNarrationDelayMs
+      ? this.delegationBurstStartedAt + RealtimeSessionService.firstNarrationDelayMs
       : 0;
     const spacingFloor = this.lastDelegationNarrationAt > 0
-      ? this.lastDelegationNarrationAt + RealtimeSessionService.NarrationIntervalMs
+      ? this.lastDelegationNarrationAt + RealtimeSessionService.narrationIntervalMs
       : 0;
     return Math.max(250, Math.max(firstAnchor, spacingFloor) - now);
   }
@@ -2602,7 +2602,7 @@ export class RealtimeSessionService {
       return;
     }
     if (client.IsBusy || client.IsAudioPlaying) {
-      this.narrationTimer = setTimeout(() => this.fireDeferredNarration(), RealtimeSessionService.NarrationBusyRetryMs);
+      this.narrationTimer = setTimeout(() => this.fireDeferredNarration(), RealtimeSessionService.narrationBusyRetryMs);
       return;
     }
     const digest = this.pendingNarrationMessages.join(' → ');
@@ -2633,7 +2633,7 @@ export class RealtimeSessionService {
    */
   private buildNarrationInstructions(digest: string): string {
     return BuildNarrationInstructions(this.narrationTemplate, digest, {
-      PriorNarrations: this.spokenNarrations.slice(-RealtimeSessionService.MaxPriorNarrations),
+      PriorNarrations: this.spokenNarrations.slice(-RealtimeSessionService.maxPriorNarrations),
       UpdateNumber: this.narrationCount
     });
   }

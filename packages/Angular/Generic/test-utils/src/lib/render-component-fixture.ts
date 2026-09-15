@@ -75,7 +75,7 @@ export interface RenderComponentFixtureOptions<T> {
  *
  * (For a component that needs projected *children*, use `renderTemplate` instead.)
  */
-export function renderComponentFixture<T>(component: Type<T>, options: RenderComponentFixtureOptions<T> = {}): ComponentFixture<T> {
+export function RenderComponentFixture<T>(component: Type<T>, options: RenderComponentFixtureOptions<T> = {}): ComponentFixture<T> {
   if (options.imports || options.declarations || options.providers) {
     TestBed.configureTestingModule({
       imports: options.imports ?? [],
@@ -94,4 +94,9 @@ export function renderComponentFixture<T>(component: Type<T>, options: RenderCom
     fixture.detectChanges();
   }
   return fixture;
+}
+
+/** @deprecated Use {@link RenderComponentFixture}. */
+export function renderComponentFixture<T>(component: Type<T>, options: RenderComponentFixtureOptions<T> = {}): ComponentFixture<T> {
+  return RenderComponentFixture(component, options);
 }

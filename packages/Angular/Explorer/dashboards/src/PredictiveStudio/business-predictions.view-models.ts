@@ -35,7 +35,7 @@ export interface BusinessPredictionCard {
 }
 
 /** Map a published model into a business catalog card, applying the trust gate. */
-export function toBusinessPredictionCard(input: BusinessPredictionInput): BusinessPredictionCard {
+export function ToBusinessPredictionCard(input: BusinessPredictionInput): BusinessPredictionCard {
   const trust = deriveTrustVerdict(input);
   return {
     modelId: input.modelId,
@@ -51,9 +51,19 @@ export function toBusinessPredictionCard(input: BusinessPredictionInput): Busine
   };
 }
 
+/** @deprecated Use {@link ToBusinessPredictionCard}. */
+export function toBusinessPredictionCard(input: BusinessPredictionInput): BusinessPredictionCard {
+  return ToBusinessPredictionCard(input);
+}
+
 const GRADE_ORDER: Record<TrustVerdict['grade'], number> = { Excellent: 0, Good: 1, Fair: 2, Poor: 3 };
 
 /** Build the business catalog from published models, most-trustworthy first (Poor/blocked sinks to the bottom). */
+export function BuildBusinessCatalog(inputs: BusinessPredictionInput[]): BusinessPredictionCard[] {
+  return inputs.map(ToBusinessPredictionCard).sort((a, b) => GRADE_ORDER[a.trust.grade] - GRADE_ORDER[b.trust.grade]);
+}
+
+/** @deprecated Use {@link BuildBusinessCatalog}. */
 export function buildBusinessCatalog(inputs: BusinessPredictionInput[]): BusinessPredictionCard[] {
-  return inputs.map(toBusinessPredictionCard).sort((a, b) => GRADE_ORDER[a.trust.grade] - GRADE_ORDER[b.trust.grade]);
+  return BuildBusinessCatalog(inputs);
 }

@@ -23,8 +23,26 @@ import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
  * Class that specializes in vectorizing entities using embedding models and upserting them into Vector Databases 
  */
 export class EntityVectorSyncer extends VectorBase {
-  _startTime: Date;
-  _endTime: Date;
+  StartTime: Date;
+
+  /** @deprecated Use {@link StartTime}. */
+  get _startTime(): Date {
+    return this.StartTime;
+  }
+  /** @deprecated Use {@link StartTime}. */
+  set _startTime(value: Date) {
+    this.StartTime = value;
+  }
+  EndTime: Date;
+
+  /** @deprecated Use {@link EndTime}. */
+  get _endTime(): Date {
+    return this.EndTime;
+  }
+  /** @deprecated Use {@link EndTime}. */
+  set _endTime(value: Date) {
+    this.EndTime = value;
+  }
   /** Accumulates render errors across batches so they can be reported through the progress callback */
   private _renderErrors: { RecordID: string; Message: string }[] = [];
   /** Accumulates vector-DB upsert errors across batches so a failed upsert is reflected in the run's success flag */
@@ -87,7 +105,7 @@ export class EntityVectorSyncer extends VectorBase {
     await TemplateEngineServer.Instance.Config(false, contextUser);
 
     const entityDocument: MJEntityDocumentEntity = await this.GetEntityDocument(params.entityDocumentID);
-    const vectorIndexEntity: MJVectorIndexEntity = this.GetVectorIndexForEntityDocument(entityDocument);
+    const vectorIndexEntity: MJVectorIndexEntity = this.getVectorIndexForEntityDocument(entityDocument);
     const obj: VectorEmeddingData = await this.GetVectorDatabaseAndEmbeddingClassByEntityDocumentID(params.entityDocumentID);
 
     // Parse configuration for pipeline tuning
@@ -1073,7 +1091,7 @@ export class EntityVectorSyncer extends VectorBase {
    * using the cached KnowledgeHubMetadataEngine. If VectorIndexID is not set on the
    * EntityDocument, throws a descriptive error instructing the user to configure it.
    */
-  private GetVectorIndexForEntityDocument(entityDocument: MJEntityDocumentEntity): MJVectorIndexEntity {
+  private getVectorIndexForEntityDocument(entityDocument: MJEntityDocumentEntity): MJVectorIndexEntity {
     if (!entityDocument.VectorIndexID) {
       throw new Error(
         `Entity Document "${entityDocument.Name}" (ID: ${entityDocument.ID}) does not have a VectorIndexID configured. ` +

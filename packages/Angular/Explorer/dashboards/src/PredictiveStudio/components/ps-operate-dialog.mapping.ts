@@ -90,7 +90,7 @@ function buildScope(state: OperateModelState):
  *
  * Returns a discriminated result so the component can surface a precise, non-throwing error.
  */
-export function mapStateToCreateScoringInput(state: OperateModelState): OperateMappingResult {
+export function MapStateToCreateScoringInput(state: OperateModelState): OperateMappingResult {
   const modelId = state.modelId?.trim();
   if (!modelId) return { ok: false, error: 'missing-model' };
 
@@ -116,8 +116,13 @@ export function mapStateToCreateScoringInput(state: OperateModelState): OperateM
   return { ok: true, input };
 }
 
+/** @deprecated Use {@link MapStateToCreateScoringInput}. */
+export function mapStateToCreateScoringInput(state: OperateModelState): OperateMappingResult {
+  return MapStateToCreateScoringInput(state);
+}
+
 /** A short, user-facing message for a mapping error (used by the dialog's notifications). */
-export function describeOperateMappingError(error: OperateMappingError): string {
+export function DescribeOperateMappingError(error: OperateMappingError): string {
   switch (error) {
     case 'missing-model':
       return 'No model selected to operate.';
@@ -130,4 +135,9 @@ export function describeOperateMappingError(error: OperateMappingError): string 
     case 'missing-output-field':
       return 'Enter the column to write predictions into.';
   }
+}
+
+/** @deprecated Use {@link DescribeOperateMappingError}. */
+export function describeOperateMappingError(error: OperateMappingError): string {
+  return DescribeOperateMappingError(error);
 }

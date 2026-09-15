@@ -122,7 +122,7 @@ const METRIC_ALIASES: Record<string, PSMetricKey> = {
  * @param json The raw JSON string, or null/undefined.
  * @returns A metric map containing only the recognized, numeric metrics present in the source.
  */
-export function parseMetrics(json: string | null | undefined): PSMetricMap {
+export function ParseMetrics(json: string | null | undefined): PSMetricMap {
   if (!json) return {};
   let parsed: unknown;
   try {
@@ -133,27 +133,42 @@ export function parseMetrics(json: string | null | undefined): PSMetricMap {
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
   const out: PSMetricMap = {};
   for (const [rawKey, rawVal] of Object.entries(parsed as Record<string, unknown>)) {
-    const value = coerceFiniteNumber(rawVal);
+    const value = CoerceFiniteNumber(rawVal);
     if (value == null) continue;
-    const canonical = canonicalMetricKey(rawKey);
+    const canonical = CanonicalMetricKey(rawKey);
     if (canonical && out[canonical] == null) out[canonical] = value;
   }
   return out;
 }
 
+/** @deprecated Use {@link ParseMetrics}. */
+export function parseMetrics(json: string | null | undefined): PSMetricMap {
+  return ParseMetrics(json);
+}
+
 /** Resolve a raw metric key to its canonical form (exact match first, then alias), or null. */
-export function canonicalMetricKey(rawKey: string): PSMetricKey | null {
+export function CanonicalMetricKey(rawKey: string): PSMetricKey | null {
   const exact = PS_KNOWN_METRIC_KEYS.find((k) => k === rawKey);
   if (exact) return exact;
   return METRIC_ALIASES[rawKey.trim().toLowerCase()] ?? null;
 }
 
+/** @deprecated Use {@link CanonicalMetricKey}. */
+export function canonicalMetricKey(rawKey: string): PSMetricKey | null {
+  return CanonicalMetricKey(rawKey);
+}
+
 /** The primary AUC/score of a model: holdout AUC preferred, else training AUC, else null. */
-export function primaryAuc(model: Pick<PSModelRow, 'Metrics' | 'HoldoutMetrics'>): number | null {
-  const holdout = parseMetrics(model.HoldoutMetrics);
+export function PrimaryAuc(model: Pick<PSModelRow, 'Metrics' | 'HoldoutMetrics'>): number | null {
+  const holdout = ParseMetrics(model.HoldoutMetrics);
   if (holdout.AUC != null) return holdout.AUC;
-  const train = parseMetrics(model.Metrics);
+  const train = ParseMetrics(model.Metrics);
   return train.AUC ?? null;
+}
+
+/** @deprecated Use {@link PrimaryAuc}. */
+export function primaryAuc(model: Pick<PSModelRow, 'Metrics' | 'HoldoutMetrics'>): number | null {
+  return PrimaryAuc(model);
 }
 
 /** A labeled metric ready for display (value formatted to a sensible precision). */
@@ -184,33 +199,48 @@ const METRIC_LABELS: Record<PSMetricKey, string> = {
  * @param metrics The parsed metric map.
  * @param options.excludeAuc When true (default), omit AUC from the secondary stat list.
  */
-export function metricsToDisplay(metrics: PSMetricMap, options?: { excludeAuc?: boolean }): PSMetricDisplay[] {
+export function MetricsToDisplay(metrics: PSMetricMap, options?: { excludeAuc?: boolean }): PSMetricDisplay[] {
   const excludeAuc = options?.excludeAuc ?? true;
   const out: PSMetricDisplay[] = [];
   for (const key of PS_KNOWN_METRIC_KEYS) {
     if (excludeAuc && key === 'AUC') continue;
     const value = metrics[key];
     if (value == null) continue;
-    out.push({ key, label: METRIC_LABELS[key], value: formatMetricValue(key, value) });
+    out.push({ key, label: METRIC_LABELS[key], value: FormatMetricValue(key, value) });
   }
   return out;
 }
 
+/** @deprecated Use {@link MetricsToDisplay}. */
+export function metricsToDisplay(metrics: PSMetricMap, options?: { excludeAuc?: boolean }): PSMetricDisplay[] {
+  return MetricsToDisplay(metrics, options);
+}
+
 /** Format a metric value: 3 decimals for ratio metrics, 2 for the rest. */
-export function formatMetricValue(key: PSMetricKey, value: number): string {
+export function FormatMetricValue(key: PSMetricKey, value: number): string {
   const threeDecimals: PSMetricKey[] = ['AUC', 'LogLoss', 'Brier', 'RMSE', 'MAE', 'R2'];
   return value.toFixed(threeDecimals.includes(key) ? 3 : 2);
+}
+
+/** @deprecated Use {@link FormatMetricValue}. */
+export function formatMetricValue(key: PSMetricKey, value: number): string {
+  return FormatMetricValue(key, value);
 }
 
 /**
  * The train-vs-holdout overfit gap (train AUC − holdout AUC), or null when either is missing.
  * Positive means the model does better in-sample than out-of-sample (the expected direction).
  */
-export function overfitGap(model: Pick<PSModelRow, 'Metrics' | 'HoldoutMetrics'>): number | null {
-  const train = parseMetrics(model.Metrics).AUC;
-  const holdout = parseMetrics(model.HoldoutMetrics).AUC;
+export function OverfitGap(model: Pick<PSModelRow, 'Metrics' | 'HoldoutMetrics'>): number | null {
+  const train = ParseMetrics(model.Metrics).AUC;
+  const holdout = ParseMetrics(model.HoldoutMetrics).AUC;
   if (train == null || holdout == null) return null;
   return train - holdout;
+}
+
+/** @deprecated Use {@link OverfitGap}. */
+export function overfitGap(model: Pick<PSModelRow, 'Metrics' | 'HoldoutMetrics'>): number | null {
+  return OverfitGap(model);
 }
 
 // ---------------------------------------------------------------------------
@@ -232,7 +262,7 @@ export const PS_FEATURE_DOMINANCE_THRESHOLD = 0.6;
  * @param json The raw feature-importance JSON, or null/undefined.
  * @param topN Maximum bars to return (default 6).
  */
-export function parseFeatureImportance(json: string | null | undefined, topN = 6): PSFeatureBar[] {
+export function ParseFeatureImportance(json: string | null | undefined, topN = 6): PSFeatureBar[] {
   const entries = extractImportanceEntries(json);
   if (entries.length === 0) return [];
   const sorted = entries.sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
@@ -248,11 +278,21 @@ export function parseFeatureImportance(json: string | null | undefined, topN = 6
   });
 }
 
+/** @deprecated Use {@link ParseFeatureImportance}. */
+export function parseFeatureImportance(json: string | null | undefined, topN = 6): PSFeatureBar[] {
+  return ParseFeatureImportance(json, topN);
+}
+
 /** The single largest absolute feature importance (the dominance number), or null. */
-export function maxFeatureImportance(json: string | null | undefined): number | null {
+export function MaxFeatureImportance(json: string | null | undefined): number | null {
   const entries = extractImportanceEntries(json);
   if (entries.length === 0) return null;
   return entries.reduce((max, e) => Math.max(max, Math.abs(e.value)), 0);
+}
+
+/** @deprecated Use {@link MaxFeatureImportance}. */
+export function maxFeatureImportance(json: string | null | undefined): number | null {
+  return MaxFeatureImportance(json);
 }
 
 /** Internal: tolerant extraction of `{ name, value }[]` from either object or array JSON. */
@@ -270,14 +310,14 @@ function extractImportanceEntries(json: string | null | undefined): { name: stri
       if (!item || typeof item !== 'object') continue;
       const rec = item as Record<string, unknown>;
       const name = (rec['name'] ?? rec['feature'] ?? rec['Name'] ?? rec['Feature']) as unknown;
-      const value = coerceFiniteNumber(rec['importance'] ?? rec['value'] ?? rec['Importance'] ?? rec['Value']);
+      const value = CoerceFiniteNumber(rec['importance'] ?? rec['value'] ?? rec['Importance'] ?? rec['Value']);
       if (typeof name === 'string' && name.length > 0 && value != null) out.push({ name, value });
     }
     return out;
   }
   if (parsed && typeof parsed === 'object') {
     for (const [name, rawVal] of Object.entries(parsed as Record<string, unknown>)) {
-      const value = coerceFiniteNumber(rawVal);
+      const value = CoerceFiniteNumber(rawVal);
       if (value != null) out.push({ name, value });
     }
   }
@@ -333,9 +373,9 @@ export interface PSKanbanColumns {
  * @param iterations The session's iterations (any order — sorted by Sequence internally).
  * @returns The three populated kanban columns.
  */
-export function groupIterationsToKanban(iterations: PSIterationRow[]): PSKanbanColumns {
+export function GroupIterationsToKanban(iterations: PSIterationRow[]): PSKanbanColumns {
   const sorted = [...iterations].sort((a, b) => a.Sequence - b.Sequence);
-  const bestScore = bestIterationScore(sorted);
+  const bestScore = BestIterationScore(sorted);
 
   const running: PSIterationCard[] = [];
   const completed: PSIterationCard[] = [];
@@ -356,14 +396,24 @@ export function groupIterationsToKanban(iterations: PSIterationRow[]): PSKanbanC
   return { running, completed, pruned };
 }
 
+/** @deprecated Use {@link GroupIterationsToKanban}. */
+export function groupIterationsToKanban(iterations: PSIterationRow[]): PSKanbanColumns {
+  return GroupIterationsToKanban(iterations);
+}
+
 /** The highest Completed-iteration score in a set (the leaderboard top), or null. */
-export function bestIterationScore(iterations: PSIterationRow[]): number | null {
+export function BestIterationScore(iterations: PSIterationRow[]): number | null {
   let best: number | null = null;
   for (const it of iterations) {
     if (it.Status !== 'Completed' || it.Score == null) continue;
     if (best == null || it.Score > best) best = it.Score;
   }
   return best;
+}
+
+/** @deprecated Use {@link BestIterationScore}. */
+export function bestIterationScore(iterations: PSIterationRow[]): number | null {
+  return BestIterationScore(iterations);
 }
 
 /**
@@ -374,7 +424,7 @@ export function bestIterationScore(iterations: PSIterationRow[]): number | null 
  * @param iterations The session's iterations.
  * @param topN Maximum leaderboard entries (default 6).
  */
-export function deriveLeaderboard(iterations: PSIterationRow[], topN = 6): PSLeaderboardEntry[] {
+export function DeriveLeaderboard(iterations: PSIterationRow[], topN = 6): PSLeaderboardEntry[] {
   const scored = iterations.filter((it) => it.Score != null);
   scored.sort((a, b) => (b.Score as number) - (a.Score as number));
   return scored.slice(0, topN).map((it, idx) => {
@@ -391,6 +441,11 @@ export function deriveLeaderboard(iterations: PSIterationRow[], topN = 6): PSLea
       pruned: it.Status === 'Pruned' || it.Status === 'Failed',
     };
   });
+}
+
+/** @deprecated Use {@link DeriveLeaderboard}. */
+export function deriveLeaderboard(iterations: PSIterationRow[], topN = 6): PSLeaderboardEntry[] {
+  return DeriveLeaderboard(iterations, topN);
 }
 
 /** Build a Running/Pending iteration card (indeterminate progress — no live percent available). */
@@ -469,7 +524,7 @@ export interface PSHomeKpis {
  * across the supplied recent scoring runs (already filtered to ML-scoring, non-dry-run, last 7 days
  * by the caller). Everything degrades gracefully to '—' / 0 when data is absent.
  */
-export function computeHomeKpis(
+export function ComputeHomeKpis(
   models: PSModelRow[],
   runningSessionCount: number,
   recentScoringRuns: PSProcessRunRow[],
@@ -477,7 +532,7 @@ export function computeHomeKpis(
 ): PSHomeKpis {
   const published = models.filter((m) => m.Status === 'Published');
   const bestHoldoutNum = published.reduce<number | null>((best, m) => {
-    const auc = parseMetrics(m.HoldoutMetrics).AUC;
+    const auc = ParseMetrics(m.HoldoutMetrics).AUC;
     if (auc == null) return best;
     return best == null ? auc : Math.max(best, auc);
   }, null);
@@ -489,6 +544,16 @@ export function computeHomeKpis(
     scoredThisWeek: scored.toLocaleString(),
     experimentRuns: experimentRunCount,
   };
+}
+
+/** @deprecated Use {@link ComputeHomeKpis}. */
+export function computeHomeKpis(
+  models: PSModelRow[],
+  runningSessionCount: number,
+  recentScoringRuns: PSProcessRunRow[],
+  experimentRunCount: number,
+): PSHomeKpis {
+  return ComputeHomeKpis(models, runningSessionCount, recentScoringRuns, experimentRunCount);
 }
 
 /** A vertical activity-feed item, with the icon/kind chosen by {@link buildActivityFeed}. */
@@ -512,7 +577,7 @@ export interface PSActivityFeedItem {
  * @param now Reference time for the relative "when" strings.
  * @param limit Max feed items (default 6).
  */
-export function buildActivityFeed(
+export function BuildActivityFeed(
   scoringRuns: PSProcessRunRow[],
   modelEvents: PSModelEvent[],
   now: Date,
@@ -523,7 +588,7 @@ export function buildActivityFeed(
   for (const run of scoringRuns) {
     // Never let a missing/invalid timestamp crash the whole feed — fall back to `now` so the run
     // still appears (a just-created run can transiently arrive with no usable date).
-    const when = toDate(run.StartTime) ?? toDate(run.CreatedAt) ?? now;
+    const when = ToDate(run.StartTime) ?? ToDate(run.CreatedAt) ?? now;
     const failed = run.Status === 'Failed';
     items.push({
       kind: failed ? 'warn' : 'run',
@@ -532,14 +597,14 @@ export function buildActivityFeed(
         ? `Scoring run failed${run.ProcessName ? ` — ${run.ProcessName}` : ''}`
         : `Scored ${run.SuccessCount.toLocaleString()} ${run.EntityName ?? 'records'}`,
       detail: `${run.ProcessName ?? 'ML scoring'}${run.DryRun ? ' · dry run' : ''} · ${run.Status}`,
-      when: relativeTime(when, now),
+      when: RelativeTime(when, now),
       sortMs: when.getTime(),
     });
   }
 
   for (const ev of modelEvents) {
     const isArchive = ev.kind === 'archive';
-    const when = toDate(ev.when) ?? now;
+    const when = ToDate(ev.when) ?? now;
     items.push({
       kind: isArchive ? 'archive' : 'promote',
       icon: isArchive ? 'fa-solid fa-box-archive' : 'fa-solid fa-arrow-up',
@@ -547,13 +612,23 @@ export function buildActivityFeed(
         ? `${ev.name} archived`
         : `${ev.name} promoted to ${ev.status}`,
       detail: ev.auc != null ? `${ev.algorithm ?? 'model'} · holdout AUC ${ev.auc.toFixed(3)}` : (ev.algorithm ?? 'model'),
-      when: relativeTime(when, now),
+      when: RelativeTime(when, now),
       sortMs: when.getTime(),
     });
   }
 
   items.sort((a, b) => b.sortMs - a.sortMs);
   return items.slice(0, limit);
+}
+
+/** @deprecated Use {@link BuildActivityFeed}. */
+export function buildActivityFeed(
+  scoringRuns: PSProcessRunRow[],
+  modelEvents: PSModelEvent[],
+  now: Date,
+  limit = 6,
+): PSActivityFeedItem[] {
+  return BuildActivityFeed(scoringRuns, modelEvents, now, limit);
 }
 
 /** A model lifecycle event (promotion / archive) feeding the activity timeline. */
@@ -574,17 +649,22 @@ export interface PSModelEvent {
  * @param models Model rows extended with a display name + last-updated time.
  * @param limit Max events (default 8).
  */
-export function deriveModelEvents(models: PSModelEventSource[], limit = 8): PSModelEvent[] {
+export function DeriveModelEvents(models: PSModelEventSource[], limit = 8): PSModelEvent[] {
   const events: PSModelEvent[] = [];
   for (const m of models) {
     if (m.Status === 'Published' || m.Status === 'Validated') {
-      events.push({ kind: 'promote', name: m.Name, status: m.Status, algorithm: m.Algorithm, auc: primaryAuc(m), when: m.UpdatedAt });
+      events.push({ kind: 'promote', name: m.Name, status: m.Status, algorithm: m.Algorithm, auc: PrimaryAuc(m), when: m.UpdatedAt });
     } else if (m.Status === 'Archived') {
-      events.push({ kind: 'archive', name: m.Name, status: m.Status, algorithm: m.Algorithm, auc: primaryAuc(m), when: m.UpdatedAt });
+      events.push({ kind: 'archive', name: m.Name, status: m.Status, algorithm: m.Algorithm, auc: PrimaryAuc(m), when: m.UpdatedAt });
     }
   }
   events.sort((a, b) => b.when.getTime() - a.when.getTime());
   return events.slice(0, limit);
+}
+
+/** @deprecated Use {@link DeriveModelEvents}. */
+export function deriveModelEvents(models: PSModelEventSource[], limit = 8): PSModelEvent[] {
+  return DeriveModelEvents(models, limit);
 }
 
 /** Source row for {@link deriveModelEvents} — a model plus its resolved display name + timestamp. */
@@ -599,13 +679,18 @@ export interface PSModelEventSource extends Pick<PSModelRow, 'Metrics' | 'Holdou
  * "2 days ago", or a date for older). Deterministic given `now` — testable.
  */
 /** Coerce a possibly-null / string / Date value to a valid Date, or `null` when there isn't one. */
-export function toDate(value: Date | string | null | undefined): Date | null {
+export function ToDate(value: Date | string | null | undefined): Date | null {
   if (!value) return null;
   const d = value instanceof Date ? value : new Date(value);
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-export function relativeTime(when: Date, now: Date): string {
+/** @deprecated Use {@link ToDate}. */
+export function toDate(value: Date | string | null | undefined): Date | null {
+  return ToDate(value);
+}
+
+export function RelativeTime(when: Date, now: Date): string {
   const ms = now.getTime() - when.getTime();
   if (ms < 0) return 'just now';
   const minutes = Math.floor(ms / 60000);
@@ -617,6 +702,11 @@ export function relativeTime(when: Date, now: Date): string {
   if (days === 1) return 'Yesterday';
   if (days < 7) return `${days} days ago`;
   return when.toLocaleDateString();
+}
+
+/** @deprecated Use {@link RelativeTime}. */
+export function relativeTime(when: Date, now: Date): string {
+  return RelativeTime(when, now);
 }
 
 // ---------------------------------------------------------------------------
@@ -645,7 +735,7 @@ export interface PSCompareColumn {
  * @param iterations The session's iterations.
  * @param maxRuns Maximum run columns to compare (default 3).
  */
-export function deriveCompareColumns(iterations: PSIterationRow[], maxRuns = 3): PSCompareColumn[] {
+export function DeriveCompareColumns(iterations: PSIterationRow[], maxRuns = 3): PSCompareColumn[] {
   const scored = iterations.filter((it) => it.Score != null);
   scored.sort((a, b) => (b.Score as number) - (a.Score as number));
   return scored.slice(0, maxRuns).map((it, idx) => {
@@ -665,6 +755,11 @@ export function deriveCompareColumns(iterations: PSIterationRow[], maxRuns = 3):
   });
 }
 
+/** @deprecated Use {@link DeriveCompareColumns}. */
+export function deriveCompareColumns(iterations: PSIterationRow[], maxRuns = 3): PSCompareColumn[] {
+  return DeriveCompareColumns(iterations, maxRuns);
+}
+
 /** A compare metric row (label + per-run formatted values + which column is best). */
 export interface PSCompareMetricRow {
   label: string;
@@ -678,7 +773,7 @@ export interface PSCompareMetricRow {
  * (higher is better) and Compute Cost (lower is better) — the two universally-available iteration
  * metrics — formatting absent values as '—' and marking the best column per row.
  */
-export function buildCompareMetricRows(columns: PSCompareColumn[]): PSCompareMetricRow[] {
+export function BuildCompareMetricRows(columns: PSCompareColumn[]): PSCompareMetricRow[] {
   if (columns.length === 0) return [];
   const aucs = columns.map((c) => c.holdoutAuc);
   const costs = columns.map((c) => c.computeCost);
@@ -696,6 +791,11 @@ export function buildCompareMetricRows(columns: PSCompareColumn[]): PSCompareMet
       bestIndex: indexOfExtreme(costs, 'min'),
     },
   ];
+}
+
+/** @deprecated Use {@link BuildCompareMetricRows}. */
+export function buildCompareMetricRows(columns: PSCompareColumn[]): PSCompareMetricRow[] {
+  return BuildCompareMetricRows(columns);
 }
 
 /** Index of the max/min finite value in an array (−1 when all null). */
@@ -717,7 +817,7 @@ function indexOfExtreme(values: (number | null)[], dir: 'max' | 'min'): number {
 // ---------------------------------------------------------------------------
 
 /** Coerce an unknown value to a finite number, or null. Accepts numeric strings. */
-export function coerceFiniteNumber(value: unknown): number | null {
+export function CoerceFiniteNumber(value: unknown): number | null {
   if (typeof value === 'number') return Number.isFinite(value) ? value : null;
   if (typeof value === 'string') {
     const trimmed = value.trim();
@@ -726,4 +826,9 @@ export function coerceFiniteNumber(value: unknown): number | null {
     return Number.isFinite(n) ? n : null;
   }
   return null;
+}
+
+/** @deprecated Use {@link CoerceFiniteNumber}. */
+export function coerceFiniteNumber(value: unknown): number | null {
+  return CoerceFiniteNumber(value);
 }

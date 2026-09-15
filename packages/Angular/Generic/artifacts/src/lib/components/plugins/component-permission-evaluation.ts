@@ -71,7 +71,7 @@ function evaluateComponentPermissionsSingle(
  * Recursively evaluates permissions for a component and all its dependencies.
  * Walks the full dependency tree, deduplicating results.
  */
-export function evaluateComponentPermissions(
+export function EvaluateComponentPermissions(
     spec: ComponentSpec,
     currentUser: UserInfo,
     provider?: IMetadataProvider
@@ -79,7 +79,7 @@ export function evaluateComponentPermissions(
     const result = evaluateComponentPermissionsSingle(spec, currentUser, provider);
 
     for (const dep of spec.dependencies ?? []) {
-        const depResult = evaluateComponentPermissions(dep, currentUser, provider);
+        const depResult = EvaluateComponentPermissions(dep, currentUser, provider);
         result.missingEntities.push(...depResult.missingEntities);
         result.missingQueries.push(...depResult.missingQueries);
     }
@@ -90,4 +90,13 @@ export function evaluateComponentPermissions(
     result.canRun = result.missingEntities.length === 0 && result.missingQueries.length === 0;
 
     return result;
+}
+
+/** @deprecated Use {@link EvaluateComponentPermissions}. */
+export function evaluateComponentPermissions(
+    spec: ComponentSpec,
+    currentUser: UserInfo,
+    provider?: IMetadataProvider
+): PermissionEvaluationResult {
+    return EvaluateComponentPermissions(spec, currentUser, provider);
 }

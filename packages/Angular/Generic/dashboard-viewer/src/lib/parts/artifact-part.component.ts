@@ -118,14 +118,77 @@ export class ArtifactPartComponent extends BaseDashboardPart implements AfterVie
      */
     @Input() EnvironmentId: string = '';
 
-    public hasArtifact = false;
+    public HasArtifact = false;
+
+    /** @deprecated Use {@link HasArtifact}. */
+    public get hasArtifact() {
+      return this.HasArtifact;
+    }
+    /** @deprecated Use {@link HasArtifact}. */
+    public set hasArtifact(value) {
+      this.HasArtifact = value;
+    }
     public artifactId: string | null = null;
-    public versionNumber: number | undefined;
-    public showHeader: boolean = false; // Default to false for dashboard embedding
-    public showTabs: boolean = true;
-    public showCloseButton: boolean = false; // Always false in dashboard context - close handled by dashboard
-    public showMaximizeButton: boolean = false; // Always false in dashboard context - maximize handled by dashboard
-    public refreshTrigger = new Subject<{ artifactId: string; versionNumber: number }>();
+    public VersionNumber: number | undefined;
+
+    /** @deprecated Use {@link VersionNumber}. */
+    public get versionNumber(): number | undefined {
+      return this.VersionNumber;
+    }
+    /** @deprecated Use {@link VersionNumber}. */
+    public set versionNumber(value: number | undefined) {
+      this.VersionNumber = value;
+    }
+    public ShowHeader: boolean = false;
+
+    /** @deprecated Use {@link ShowHeader}. */
+    public get showHeader(): boolean {
+      return this.ShowHeader;
+    }
+    /** @deprecated Use {@link ShowHeader}. */
+    public set showHeader(value: boolean) {
+      this.ShowHeader = value;
+    } // Default to false for dashboard embedding
+    public ShowTabs: boolean = true;
+
+    /** @deprecated Use {@link ShowTabs}. */
+    public get showTabs(): boolean {
+      return this.ShowTabs;
+    }
+    /** @deprecated Use {@link ShowTabs}. */
+    public set showTabs(value: boolean) {
+      this.ShowTabs = value;
+    }
+    public ShowCloseButton: boolean = false;
+
+    /** @deprecated Use {@link ShowCloseButton}. */
+    public get showCloseButton(): boolean {
+      return this.ShowCloseButton;
+    }
+    /** @deprecated Use {@link ShowCloseButton}. */
+    public set showCloseButton(value: boolean) {
+      this.ShowCloseButton = value;
+    } // Always false in dashboard context - close handled by dashboard
+    public ShowMaximizeButton: boolean = false;
+
+    /** @deprecated Use {@link ShowMaximizeButton}. */
+    public get showMaximizeButton(): boolean {
+      return this.ShowMaximizeButton;
+    }
+    /** @deprecated Use {@link ShowMaximizeButton}. */
+    public set showMaximizeButton(value: boolean) {
+      this.ShowMaximizeButton = value;
+    } // Always false in dashboard context - maximize handled by dashboard
+    public RefreshTrigger = new Subject<{ artifactId: string; versionNumber: number }>();
+
+    /** @deprecated Use {@link RefreshTrigger}. */
+    public get refreshTrigger() {
+      return this.RefreshTrigger;
+    }
+    /** @deprecated Use {@link RefreshTrigger}. */
+    public set refreshTrigger(value) {
+      this.RefreshTrigger = value;
+    }
 
     // Expose for template
     public get currentUser(): UserInfo {
@@ -163,7 +226,7 @@ export class ArtifactPartComponent extends BaseDashboardPart implements AfterVie
         const artifactId = config?.['artifactId'] as string | undefined;
 
         if (!artifactId) {
-            this.hasArtifact = false;
+            this.HasArtifact = false;
             this.cdr.detectChanges();
             return;
         }
@@ -173,11 +236,11 @@ export class ArtifactPartComponent extends BaseDashboardPart implements AfterVie
         try {
             // Set artifact ID and version from config
             this.artifactId = artifactId;
-            this.versionNumber = config?.['versionNumber'] as number | undefined;
+            this.VersionNumber = config?.['versionNumber'] as number | undefined;
             // Display options - showHeader defaults to false for clean dashboard embedding
-            this.showHeader = (config?.['showHeader'] as boolean) ?? false;
-            this.showTabs = (config?.['showTabs'] as boolean) ?? true;
-            this.hasArtifact = true;
+            this.ShowHeader = (config?.['showHeader'] as boolean) ?? false;
+            this.ShowTabs = (config?.['showTabs'] as boolean) ?? true;
+            this.HasArtifact = true;
 
             this.setLoading(false);
         } catch (error) {
@@ -188,19 +251,24 @@ export class ArtifactPartComponent extends BaseDashboardPart implements AfterVie
     /**
      * Refresh the artifact display
      */
-    public refresh(): void {
-        if (this.artifactId && this.versionNumber) {
-            this.refreshTrigger.next({
+    public Refresh(): void {
+        if (this.artifactId && this.VersionNumber) {
+            this.RefreshTrigger.next({
                 artifactId: this.artifactId,
-                versionNumber: this.versionNumber
+                versionNumber: this.VersionNumber
             });
         }
+    }
+
+    /** @deprecated Use {@link Refresh}. */
+    public refresh(): void {
+      return this.Refresh();
     }
 
     /**
      * Handle navigation link events from artifact viewer (conversation/collection links)
      */
-    public onNavigateToLink(event: { type: 'conversation' | 'collection'; id: string; artifactId?: string; versionNumber?: number; versionId?: string }): void {
+    public OnNavigateToLink(event: { type: 'conversation' | 'collection'; id: string; artifactId?: string; versionNumber?: number; versionId?: string }): void {
         // Emit data change event for navigation link (for listeners)
         this.emitDataChanged({
             type: 'navigate-to-link',
@@ -215,10 +283,15 @@ export class ArtifactPartComponent extends BaseDashboardPart implements AfterVie
         // For now, these are emitted as data change events for parent components to handle
     }
 
+    /** @deprecated Use {@link OnNavigateToLink}. */
+    public onNavigateToLink(event: { type: 'conversation' | 'collection'; id: string; artifactId?: string; versionNumber?: number; versionId?: string }): void {
+      return this.OnNavigateToLink(event);
+    }
+
     /**
      * Handle entity record navigation events from artifact viewer
      */
-    public onOpenEntityRecord(event: { entityName: string; compositeKey: CompositeKey }): void {
+    public OnOpenEntityRecord(event: { entityName: string; compositeKey: CompositeKey }): void {
         // Emit data change event for listeners
         this.emitDataChanged({
             type: 'open-entity-record',
@@ -237,10 +310,15 @@ export class ArtifactPartComponent extends BaseDashboardPart implements AfterVie
         }
     }
 
+    /** @deprecated Use {@link OnOpenEntityRecord}. */
+    public onOpenEntityRecord(event: { entityName: string; compositeKey: CompositeKey }): void {
+      return this.OnOpenEntityRecord(event);
+    }
+
     /**
      * Handle general navigation request events from artifact viewer plugins
      */
-    public onNavigationRequest(event: NavigationRequest): void {
+    public OnNavigationRequest(event: NavigationRequest): void {
         this.RequestOpenNavItem(
             event.navItemName,
             event.appName,
@@ -249,13 +327,18 @@ export class ArtifactPartComponent extends BaseDashboardPart implements AfterVie
         );
     }
 
+    /** @deprecated Use {@link OnNavigationRequest}. */
+    public onNavigationRequest(event: NavigationRequest): void {
+      return this.OnNavigationRequest(event);
+    }
+
     /**
      * Handler for the Analyze button on the embedded artifact viewer.
      * Captures the live DataSnapshot, creates an analysis conversation with
      * the snapshot attached as input, and emits a navigation request to open
      * the new conversation in the host application.
      */
-    public async onAnalyzeRequested(event: { artifactId: string; snapshot: DataSnapshot }): Promise<void> {
+    public async OnAnalyzeRequested(event: { artifactId: string; snapshot: DataSnapshot }): Promise<void> {
         try {
             const result = await this.analyzeService.StartAnalysisConversation({
                 snapshot: event.snapshot,
@@ -274,9 +357,14 @@ export class ArtifactPartComponent extends BaseDashboardPart implements AfterVie
         }
     }
 
+    /** @deprecated Use {@link OnAnalyzeRequested}. */
+    public async onAnalyzeRequested(event: { artifactId: string; snapshot: DataSnapshot }): Promise<void> {
+      return this.OnAnalyzeRequested(event);
+    }
+
     protected override cleanup(): void {
-        this.refreshTrigger.complete();
+        this.RefreshTrigger.complete();
         this.artifactId = null;
-        this.versionNumber = undefined;
+        this.VersionNumber = undefined;
     }
 }

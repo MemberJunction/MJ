@@ -19,7 +19,7 @@ import {
 } from '@memberjunction/ai-mcp-client';
 import { AppContext } from '../types.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
-import { publishStatusUpdate } from '../generic/PushStatusResolver.js';
+import { PublishStatusUpdate } from '../generic/PushStatusResolver.js';
 import { GraphQLJSONObject } from 'graphql-type-json';
 import { configInfo } from '../config.js';
 
@@ -1361,7 +1361,7 @@ export class MCPResolver extends ResolverBase {
             result
         };
 
-        publishStatusUpdate(pubSub, { sessionId, ownerUserId, message: JSON.stringify(progressMessage) });
+        PublishStatusUpdate(pubSub, { sessionId, ownerUserId, message: JSON.stringify(progressMessage) });
     }
 
     /**
@@ -1653,7 +1653,7 @@ export class MCPResolver extends ResolverBase {
  * @param pubSub - PubSub engine
  * @param event - OAuth event details
  */
-export async function publishMCPOAuthEvent(
+export async function PublishMCPOAuthEvent(
     pubSub: PubSubEngine,
     event: {
         eventType: MCPOAuthEventType;
@@ -1675,4 +1675,19 @@ export async function publishMCPOAuthEvent(
     };
 
     await pubSub.publish(MCP_OAUTH_EVENTS_TOPIC, payload);
+}
+
+/** @deprecated Use {@link PublishMCPOAuthEvent}. */
+export async function publishMCPOAuthEvent(
+    pubSub: PubSubEngine,
+    event: {
+        eventType: MCPOAuthEventType;
+        connectionId: string;
+        authorizationUrl?: string;
+        stateParameter?: string;
+        errorMessage?: string;
+        requiresReauthorization?: boolean;
+    }
+): Promise<void> {
+    return PublishMCPOAuthEvent(pubSub, event);
 }

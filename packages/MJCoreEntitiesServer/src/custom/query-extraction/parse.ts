@@ -11,7 +11,7 @@ import type { ParseResult } from "./types";
  * @param sql - The query SQL to parse
  * @param platform - The database platform to use for dialect selection (defaults to 'sqlserver')
  */
-export function parseQuerySQL(sql: string, platform: DatabasePlatform = 'sqlserver'): ParseResult {
+export function ParseQuerySQL(sql: string, platform: DatabasePlatform = 'sqlserver'): ParseResult {
     const dialect: SQLParserDialect = GetDialect(platform);
     const analysis = SQLParser.Analyze(sql);
     const deterministicParams = SQLParser.ExtractParameterInfo(sql);
@@ -19,4 +19,9 @@ export function parseQuerySQL(sql: string, platform: DatabasePlatform = 'sqlserv
     const selectColumns = SQLParser.ExtractSelectColumns(sql, dialect);
 
     return { analysis, deterministicParams, tableRefs, selectColumns };
+}
+
+/** @deprecated Use {@link ParseQuerySQL}. */
+export function parseQuerySQL(sql: string, platform: DatabasePlatform = 'sqlserver'): ParseResult {
+    return ParseQuerySQL(sql, platform);
 }

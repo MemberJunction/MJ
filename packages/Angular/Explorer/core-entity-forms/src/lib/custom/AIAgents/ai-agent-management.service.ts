@@ -38,7 +38,7 @@ export class AIAgentManagementService {
    * @param config Configuration for the action selection dialog
    * @returns Observable that emits the selected actions when dialog is closed
    */
-  openAddActionDialog(config: {
+  OpenAddActionDialog(config: {
     agentId: string;
     agentName: string;
     existingActionIds: string[];
@@ -63,6 +63,16 @@ export class AIAgentManagementService {
     return componentInstance.result.asObservable();
   }
 
+  /** @deprecated Use {@link OpenAddActionDialog}. */
+  openAddActionDialog(config: {
+    agentId: string;
+    agentName: string;
+    existingActionIds: string[];
+    viewContainerRef?: ViewContainerRef;
+  }): Observable<MJActionEntity[]> {
+    return this.OpenAddActionDialog(config);
+  }
+
 
   // === Prompt Management ===
 
@@ -72,7 +82,7 @@ export class AIAgentManagementService {
    * @param config Configuration for the prompt selection dialog
    * @returns Observable that emits the selected prompts when dialog is closed
    */
-  openPromptSelectorDialog(config: {
+  OpenPromptSelectorDialog(config: {
     title?: string;
     multiSelect?: boolean;
     selectedPromptIds?: string[];
@@ -107,18 +117,31 @@ export class AIAgentManagementService {
     return componentInstance.result.asObservable();
   }
 
+  /** @deprecated Use {@link OpenPromptSelectorDialog}. */
+  openPromptSelectorDialog(config: {
+    title?: string;
+    multiSelect?: boolean;
+    selectedPromptIds?: string[];
+    showCreateNew?: boolean;
+    extraFilter?: string;
+    linkedPromptIds?: string[];
+    viewContainerRef?: ViewContainerRef;
+  }): Observable<PromptSelectorResult | null> {
+    return this.OpenPromptSelectorDialog(config);
+  }
+
   /**
    * Opens the prompt selector for selecting a context compression prompt (single select)
    * 
    * @param config Configuration for the context compression prompt selection
    * @returns Observable that emits the selected prompt when dialog is closed
    */
-  openContextCompressionPromptSelector(config: {
+  OpenContextCompressionPromptSelector(config: {
     currentPromptId?: string;
     viewContainerRef?: ViewContainerRef;
   }): Observable<MJAIPromptEntityExtended | null> {
     return new Observable(observer => {
-      this.openPromptSelectorDialog({
+      this.OpenPromptSelectorDialog({
         title: 'Select Context Compression Prompt',
         multiSelect: false,
         selectedPromptIds: config.currentPromptId ? [config.currentPromptId] : [],
@@ -136,6 +159,14 @@ export class AIAgentManagementService {
     });
   }
 
+  /** @deprecated Use {@link OpenContextCompressionPromptSelector}. */
+  openContextCompressionPromptSelector(config: {
+    currentPromptId?: string;
+    viewContainerRef?: ViewContainerRef;
+  }): Observable<MJAIPromptEntityExtended | null> {
+    return this.OpenContextCompressionPromptSelector(config);
+  }
+
   // === Sub-Agent Management ===
 
   /**
@@ -144,7 +175,7 @@ export class AIAgentManagementService {
    * @param config Configuration for the sub-agent selection dialog
    * @returns Observable that emits the selected agents when dialog is closed
    */
-  openSubAgentSelectorDialog(config: {
+  OpenSubAgentSelectorDialog(config: {
     title?: string;
     multiSelect?: boolean;
     selectedAgentIds?: string[];
@@ -177,6 +208,18 @@ export class AIAgentManagementService {
     return componentInstance.result.asObservable();
   }
 
+  /** @deprecated Use {@link OpenSubAgentSelectorDialog}. */
+  openSubAgentSelectorDialog(config: {
+    title?: string;
+    multiSelect?: boolean;
+    selectedAgentIds?: string[];
+    showCreateNew?: boolean;
+    parentAgentId: string;
+    viewContainerRef?: ViewContainerRef;
+  }): Observable<SubAgentSelectorResult | null> {
+    return this.OpenSubAgentSelectorDialog(config);
+  }
+
   // === Advanced Settings for Related Entities ===
 
   /**
@@ -185,7 +228,7 @@ export class AIAgentManagementService {
    * @param config Configuration for the agent prompt advanced settings dialog
    * @returns Observable that emits the form data when dialog is closed, or null if cancelled
    */
-  openAgentPromptAdvancedSettingsDialog(config: {
+  OpenAgentPromptAdvancedSettingsDialog(config: {
     agentPrompt: MJAIAgentPromptEntity;
     allAgentPrompts: MJAIAgentPromptEntity[];
     viewContainerRef?: ViewContainerRef;
@@ -208,13 +251,22 @@ export class AIAgentManagementService {
     return componentInstance.result.asObservable();
   }
 
+  /** @deprecated Use {@link OpenAgentPromptAdvancedSettingsDialog}. */
+  openAgentPromptAdvancedSettingsDialog(config: {
+    agentPrompt: MJAIAgentPromptEntity;
+    allAgentPrompts: MJAIAgentPromptEntity[];
+    viewContainerRef?: ViewContainerRef;
+  }): Observable<AgentPromptAdvancedSettingsFormData | null> {
+    return this.OpenAgentPromptAdvancedSettingsDialog(config);
+  }
+
   /**
    * Opens the advanced settings dialog for a Sub-Agent
    * 
    * @param config Configuration for the sub-agent advanced settings dialog
    * @returns Observable that emits the form data when dialog is closed, or null if cancelled
    */
-  openSubAgentAdvancedSettingsDialog(config: {
+  OpenSubAgentAdvancedSettingsDialog(config: {
     subAgent: MJAIAgentEntityExtended;
     allSubAgents: MJAIAgentEntityExtended[];
     viewContainerRef?: ViewContainerRef;
@@ -237,6 +289,15 @@ export class AIAgentManagementService {
     return componentInstance.result.asObservable();
   }
 
+  /** @deprecated Use {@link OpenSubAgentAdvancedSettingsDialog}. */
+  openSubAgentAdvancedSettingsDialog(config: {
+    subAgent: MJAIAgentEntityExtended;
+    allSubAgents: MJAIAgentEntityExtended[];
+    viewContainerRef?: ViewContainerRef;
+  }): Observable<SubAgentAdvancedSettingsFormData | null> {
+    return this.OpenSubAgentAdvancedSettingsDialog(config);
+  }
+
   // === Prompt Creation ===
 
   /**
@@ -246,7 +307,7 @@ export class AIAgentManagementService {
    * @param config Configuration for prompt creation
    * @returns Observable that emits the created prompt and related entities when dialog is closed
    */
-  openCreatePromptDialog(config: {
+  OpenCreatePromptDialog(config: {
     title?: string;
     initialName?: string;
     initialTypeID?: string;
@@ -275,6 +336,16 @@ export class AIAgentManagementService {
     return componentInstance.result.asObservable();
   }
 
+  /** @deprecated Use {@link OpenCreatePromptDialog}. */
+  openCreatePromptDialog(config: {
+    title?: string;
+    initialName?: string;
+    initialTypeID?: string;
+    viewContainerRef?: ViewContainerRef;
+  }): Observable<CreatePromptResult | null> {
+    return this.OpenCreatePromptDialog(config);
+  }
+
   // === Sub-Agent Creation ===
 
   /**
@@ -284,7 +355,7 @@ export class AIAgentManagementService {
    * @param config Configuration for sub-agent creation
    * @returns Observable that emits the created sub-agent and related entities when dialog is closed
    */
-  openCreateSubAgentDialog(config: {
+  OpenCreateSubAgentDialog(config: {
     title?: string;
     initialName?: string;
     initialTypeID?: string;
@@ -317,6 +388,18 @@ export class AIAgentManagementService {
     return componentInstance.result.asObservable();
   }
 
+  /** @deprecated Use {@link OpenCreateSubAgentDialog}. */
+  openCreateSubAgentDialog(config: {
+    title?: string;
+    initialName?: string;
+    initialTypeID?: string;
+    parentAgentId: string;
+    parentAgentName?: string;
+    viewContainerRef?: ViewContainerRef;
+  }): Observable<CreateSubAgentResult | null> {
+    return this.OpenCreateSubAgentDialog(config);
+  }
+
   // === Future: Agent Creation ===
 
   /**
@@ -326,7 +409,7 @@ export class AIAgentManagementService {
    * @param config Configuration for agent creation
    * @returns Observable that emits the created agent when dialog is closed
    */
-  openCreateAgentDialog(config: {
+  OpenCreateAgentDialog(config: {
     parentAgentId?: string;
     initialData?: Partial<MJAIAgentEntityExtended>;
     viewContainerRef?: ViewContainerRef;
@@ -337,13 +420,22 @@ export class AIAgentManagementService {
     throw new Error('Agent creation dialog not yet implemented');
   }
 
+  /** @deprecated Use {@link OpenCreateAgentDialog}. */
+  openCreateAgentDialog(config: {
+    parentAgentId?: string;
+    initialData?: Partial<MJAIAgentEntityExtended>;
+    viewContainerRef?: ViewContainerRef;
+  }): Observable<MJAIAgentEntityExtended | null> {
+    return this.OpenCreateAgentDialog(config);
+  }
+
   // === Utility Methods ===
 
   /**
    * Validates agent configuration and relationships
    * Used by both creation and editing workflows
    */
-  validateAgentConfiguration(agent: MJAIAgentEntityExtended): { isValid: boolean; errors: string[] } {
+  ValidateAgentConfiguration(agent: MJAIAgentEntityExtended): { isValid: boolean; errors: string[] } {
     const errors: string[] = [];
 
     // ParentID vs ExposeAsAction validation
@@ -370,6 +462,11 @@ export class AIAgentManagementService {
     };
   }
 
+  /** @deprecated Use {@link ValidateAgentConfiguration}. */
+  validateAgentConfiguration(agent: MJAIAgentEntityExtended): { isValid: boolean; errors: string[] } {
+    return this.ValidateAgentConfiguration(agent);
+  }
+
   // === Sub-Agent Management ===
 
   /**
@@ -377,7 +474,7 @@ export class AIAgentManagementService {
    * This will handle ParentID, ExecutionOrder, and ExecutionMode
    * in the context of the parent agent's sub-agents section
    */
-  openSubAgentManagementDialog(config: {
+  OpenSubAgentManagementDialog(config: {
     parentAgent: MJAIAgentEntityExtended;
     subAgent?: MJAIAgentEntityExtended; // For editing existing sub-agent relationship
     viewContainerRef?: ViewContainerRef;
@@ -385,6 +482,15 @@ export class AIAgentManagementService {
     // TODO: Implement sub-agent management dialog
     // This will handle the hierarchy settings that were removed from Advanced Settings
     throw new Error('Sub-agent management dialog not yet implemented');
+  }
+
+  /** @deprecated Use {@link OpenSubAgentManagementDialog}. */
+  openSubAgentManagementDialog(config: {
+    parentAgent: MJAIAgentEntityExtended;
+    subAgent?: MJAIAgentEntityExtended; // For editing existing sub-agent relationship
+    viewContainerRef?: ViewContainerRef;
+  }): Observable<any> {
+    return this.OpenSubAgentManagementDialog(config);
   }
 
 }

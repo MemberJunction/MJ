@@ -78,11 +78,19 @@ export const BRIDGE_FEATURE_KEYS: readonly BridgeFeatureKey[] =
  * Read a single flag from a (possibly null) features object. Absent or false
  * both resolve to false.
  */
-export function isFeatureEnabled(
+export function IsFeatureEnabled(
     features: MJAIBridgeProviderEntity_IBridgeProviderFeatures | null,
     key: BridgeFeatureKey,
 ): boolean {
     return features?.[key] === true;
+}
+
+/** @deprecated Use {@link IsFeatureEnabled}. */
+export function isFeatureEnabled(
+    features: MJAIBridgeProviderEntity_IBridgeProviderFeatures | null,
+    key: BridgeFeatureKey,
+): boolean {
+    return IsFeatureEnabled(features, key);
 }
 
 /**
@@ -93,7 +101,7 @@ export function isFeatureEnabled(
  * Never mutates the input; the typed accessor's cache invalidation depends on a
  * fresh object reference being assigned back through the setter.
  */
-export function setFeature(
+export function SetFeature(
     features: MJAIBridgeProviderEntity_IBridgeProviderFeatures | null,
     key: BridgeFeatureKey,
     enabled: boolean,
@@ -107,10 +115,26 @@ export function setFeature(
     return next;
 }
 
+/** @deprecated Use {@link SetFeature}. */
+export function setFeature(
+    features: MJAIBridgeProviderEntity_IBridgeProviderFeatures | null,
+    key: BridgeFeatureKey,
+    enabled: boolean,
+): MJAIBridgeProviderEntity_IBridgeProviderFeatures {
+    return SetFeature(features, key, enabled);
+}
+
 /** Count of enabled flags across all groups — used for the panel header badge. */
-export function countEnabledFeatures(
+export function CountEnabledFeatures(
     features: MJAIBridgeProviderEntity_IBridgeProviderFeatures | null,
 ): number {
     if (!features) return 0;
     return BRIDGE_FEATURE_KEYS.reduce((n, key) => (features[key] === true ? n + 1 : n), 0);
+}
+
+/** @deprecated Use {@link CountEnabledFeatures}. */
+export function countEnabledFeatures(
+    features: MJAIBridgeProviderEntity_IBridgeProviderFeatures | null,
+): number {
+    return CountEnabledFeatures(features);
 }

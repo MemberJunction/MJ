@@ -74,7 +74,7 @@ export class PropValueExtractor {
    * PropValueExtractor.extract(attr) // => { _type: 'identifier', name: 'userName' }
    * ```
    */
-  static extract(attr: t.JSXAttribute): ExtractedValue {
+  static Extract(attr: t.JSXAttribute): ExtractedValue {
     // Boolean shorthand: <Component show />
     if (!attr.value) {
       return true;
@@ -106,6 +106,11 @@ export class PropValueExtractor {
     }
 
     return undefined;
+  }
+
+  /** @deprecated Use {@link Extract}. */
+  static extract(attr: t.JSXAttribute): ExtractedValue {
+    return this.Extract(attr);
   }
 
   /**
@@ -215,7 +220,7 @@ export class PropValueExtractor {
         const value = this.extractExpression(expr);
 
         // If any expression is dynamic, the whole template is dynamic
-        if (this.isDynamicValue(value)) {
+        if (this.IsDynamicValue(value)) {
           return {
             _type: 'expression',
             description: 'template literal with dynamic expressions',
@@ -331,7 +336,7 @@ export class PropValueExtractor {
     if (computed && t.isExpression(key)) {
       // Computed property: { [expr]: value }
       const value = this.extractExpression(key);
-      if (!this.isDynamicValue(value)) {
+      if (!this.IsDynamicValue(value)) {
         return String(value);
       }
     }
@@ -348,7 +353,7 @@ export class PropValueExtractor {
   private static extractUnaryExpression(node: t.UnaryExpression): ExtractedValue {
     const operand = this.extractExpression(node.argument);
 
-    if (this.isDynamicValue(operand)) {
+    if (this.IsDynamicValue(operand)) {
       return operand;
     }
 
@@ -392,7 +397,7 @@ export class PropValueExtractor {
     const right = this.extractExpression(node.right);
 
     // If either side is dynamic, can't compute
-    if (this.isDynamicValue(left) || this.isDynamicValue(right)) {
+    if (this.IsDynamicValue(left) || this.IsDynamicValue(right)) {
       return {
         _type: 'expression',
         description: `binary ${node.operator}`,
@@ -467,7 +472,7 @@ export class PropValueExtractor {
     const test = this.extractExpression(node.test);
 
     // If test is dynamic, we can't determine which branch is taken
-    if (this.isDynamicValue(test)) {
+    if (this.IsDynamicValue(test)) {
       return {
         _type: 'expression',
         description: 'conditional expression',
@@ -487,7 +492,7 @@ export class PropValueExtractor {
    * @param value - The extracted value
    * @returns True if the value is dynamic
    */
-  static isDynamicValue(value: ExtractedValue): value is DynamicValue {
+  static IsDynamicValue(value: ExtractedValue): value is DynamicValue {
     return (
       typeof value === 'object' &&
       value !== null &&
@@ -496,21 +501,31 @@ export class PropValueExtractor {
     );
   }
 
+  /** @deprecated Use {@link IsDynamicValue}. */
+  static isDynamicValue(value: ExtractedValue): value is DynamicValue {
+    return this.IsDynamicValue(value);
+  }
+
   /**
    * Check if an array contains any dynamic values
    *
    * @param arr - The array to check
    * @returns True if any element is dynamic
    */
-  static hasAnyDynamicValue(arr: ExtractedValue[]): boolean {
+  static HasAnyDynamicValue(arr: ExtractedValue[]): boolean {
     return arr.some((val) => {
-      if (this.isDynamicValue(val)) return true;
-      if (Array.isArray(val)) return this.hasAnyDynamicValue(val);
+      if (this.IsDynamicValue(val)) return true;
+      if (Array.isArray(val)) return this.HasAnyDynamicValue(val);
       if (typeof val === 'object' && val !== null && !('_type' in val)) {
-        return Object.values(val).some((v) => this.isDynamicValue(v));
+        return Object.values(val).some((v) => this.IsDynamicValue(v));
       }
       return false;
     });
+  }
+
+  /** @deprecated Use {@link HasAnyDynamicValue}. */
+  static hasAnyDynamicValue(arr: ExtractedValue[]): boolean {
+    return this.HasAnyDynamicValue(arr);
   }
 
   /**
@@ -519,11 +534,11 @@ export class PropValueExtractor {
    * @param value - The extracted value
    * @returns Description string
    */
-  static describe(value: ExtractedValue): string {
+  static Describe(value: ExtractedValue): string {
     if (value === null) return 'null';
     if (value === undefined) return 'undefined';
 
-    if (this.isDynamicValue(value)) {
+    if (this.IsDynamicValue(value)) {
       if (value._type === 'identifier' && value.name) {
         return `identifier '${value.name}'`;
       }
@@ -544,5 +559,10 @@ export class PropValueExtractor {
     }
 
     return String(value);
+  }
+
+  /** @deprecated Use {@link Describe}. */
+  static describe(value: ExtractedValue): string {
+    return this.Describe(value);
   }
 }

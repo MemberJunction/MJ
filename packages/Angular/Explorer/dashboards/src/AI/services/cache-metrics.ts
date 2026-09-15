@@ -33,14 +33,24 @@ export interface CacheTokenTotals {
  * Denominator is the TOTAL input processed (uncached + cache reads + cache writes), so a run that
  * only wrote to cache (first call) reads as 0% and a fully-cached follow-up approaches 100%.
  */
-export function cacheHitRate(totals: CacheTokenTotals): number {
+export function CacheHitRate(totals: CacheTokenTotals): number {
     const totalInput = totals.uncachedInputTokens + totals.cacheReadTokens + totals.cacheWriteTokens;
     return totalInput > 0 ? totals.cacheReadTokens / totalInput : 0;
 }
 
+/** @deprecated Use {@link CacheHitRate}. */
+export function cacheHitRate(totals: CacheTokenTotals): number {
+    return CacheHitRate(totals);
+}
+
 /** True when caching actually engaged (any read or write), so a 0% hit rate can be shown meaningfully. */
-export function hasCacheActivity(totals: CacheTokenTotals): boolean {
+export function HasCacheActivity(totals: CacheTokenTotals): boolean {
     return totals.cacheReadTokens > 0 || totals.cacheWriteTokens > 0;
+}
+
+/** @deprecated Use {@link HasCacheActivity}. */
+export function hasCacheActivity(totals: CacheTokenTotals): boolean {
+    return HasCacheActivity(totals);
 }
 
 /**
@@ -54,7 +64,7 @@ export function hasCacheActivity(totals: CacheTokenTotals): boolean {
  * Returns 0 when no rate is supplied (rates unconfigured); combine with {@link hasCacheActivity}
  * to distinguish "no caching happened" from "caching happened but rates aren't configured yet".
  */
-export function netCacheSavings(totals: CacheTokenTotals, rate: CacheRate | undefined): number {
+export function NetCacheSavings(totals: CacheTokenTotals, rate: CacheRate | undefined): number {
     if (!rate) {
         return 0;
     }
@@ -64,7 +74,17 @@ export function netCacheSavings(totals: CacheTokenTotals, rate: CacheRate | unde
     );
 }
 
+/** @deprecated Use {@link NetCacheSavings}. */
+export function netCacheSavings(totals: CacheTokenTotals, rate: CacheRate | undefined): number {
+    return NetCacheSavings(totals, rate);
+}
+
 /** The no-cache counterfactual cost = actual cost + net savings. Useful for "X% cheaper" framing. */
-export function uncachedCounterfactualCost(actualCost: number, savings: number): number {
+export function UncachedCounterfactualCost(actualCost: number, savings: number): number {
     return actualCost + savings;
+}
+
+/** @deprecated Use {@link UncachedCounterfactualCost}. */
+export function uncachedCounterfactualCost(actualCost: number, savings: number): number {
+    return UncachedCounterfactualCost(actualCost, savings);
 }

@@ -45,7 +45,7 @@ vi.mock('../config.js', () => ({
   },
 }));
 
-import { variablesLoggingMiddleware } from '../logging/variablesLoggingMiddleware.js';
+import { VariablesLoggingMiddleware } from '../logging/variablesLoggingMiddleware.js';
 
 /**
  * Build a synthetic GraphQLResolveInfo-shaped object that matches what type-graphql passes
@@ -99,7 +99,7 @@ describe('variablesLoggingMiddleware', () => {
 
   it('skips field resolvers (info.path.prev !== undefined) without logging', async () => {
     const next = vi.fn(async () => 'next-result');
-    const result = await variablesLoggingMiddleware(
+    const result = await VariablesLoggingMiddleware(
       {
         root: undefined,
         args: { x: 1 },
@@ -126,7 +126,7 @@ describe('variablesLoggingMiddleware', () => {
       ],
     };
 
-    await variablesLoggingMiddleware(
+    await VariablesLoggingMiddleware(
       {
         root: undefined,
         args: { input: { ID: 'abc', Name: 'HubSpot', Values: 'FAKE_SECRET' } },
@@ -165,7 +165,7 @@ describe('variablesLoggingMiddleware', () => {
       Entities: [{ ClassName: 'SomeUnrelatedEntity', EncryptedFields: [] }],
     };
 
-    await variablesLoggingMiddleware(
+    await VariablesLoggingMiddleware(
       {
         root: undefined,
         args: { token: 'plaintext-leak' },
@@ -196,7 +196,7 @@ describe('variablesLoggingMiddleware', () => {
     const next = vi.fn(async () => undefined);
     const fakeProvider = { Entities: [] };
 
-    await variablesLoggingMiddleware(
+    await VariablesLoggingMiddleware(
       {
         root: undefined,
         args: { input: { Values: 'FAKE_SECRET' } },

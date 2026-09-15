@@ -192,7 +192,7 @@ export interface ConversationDetailParsed extends MJConversationDetailEntityType
 /**
  * Helper: parse a raw ConversationDetailComplete row into typed arrays.
  */
-export function parseConversationDetailComplete(
+export function ParseConversationDetailComplete(
     queryResult: ConversationDetailComplete
 ): ConversationDetailParsed {
     return {
@@ -207,6 +207,13 @@ export function parseConversationDetailComplete(
             ? JSON.parse(queryResult.RatingsJSON) as RatingJSON[]
             : []
     };
+}
+
+/** @deprecated Use {@link ParseConversationDetailComplete}. */
+export function parseConversationDetailComplete(
+    queryResult: ConversationDetailComplete
+): ConversationDetailParsed {
+    return ParseConversationDetailComplete(queryResult);
 }
 
 /** User avatar info extracted from the query */
@@ -1595,7 +1602,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         for (const row of rawData) {
             if (!row.ID) continue;
 
-            const parsed = parseConversationDetailComplete(row);
+            const parsed = ParseConversationDetailComplete(row);
 
             // Agent runs
             if (parsed.agentRuns.length > 0) {
@@ -1850,7 +1857,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
                 existing.Details.push(newDetail);
             }
 
-            const parsed = parseConversationDetailComplete(row);
+            const parsed = ParseConversationDetailComplete(row);
 
             // Merge agent runs: update in-place or add.
             //

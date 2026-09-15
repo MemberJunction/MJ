@@ -348,8 +348,8 @@ export class AIOverviewHubComponent extends BaseResourceComponent implements OnI
 
   override async ngOnInit(): Promise<void> {
     super.ngOnInit();
-    this.LoadStats();
-    this.BuildCards();
+    this.loadStats();
+    this.buildCards();
     this.NotifyLoadComplete();
     this.cdr.markForCheck();
   }
@@ -370,7 +370,7 @@ export class AIOverviewHubComponent extends BaseResourceComponent implements OnI
    * Reads counts from the in-memory AIEngineBase singleton.
    * No database queries are made.
    */
-  private LoadStats(): void {
+  private loadStats(): void {
     const engine = AIEngineBase.Instance;
     this.ActiveAgentCount = engine.Agents.filter(a => a.Status === 'Active').length;
     this.ModelCount = engine.Models.length;
@@ -381,7 +381,7 @@ export class AIOverviewHubComponent extends BaseResourceComponent implements OnI
   /**
    * Constructs the navigation card definitions with live stat data.
    */
-  private BuildCards(): void {
+  private buildCards(): void {
     const engine = AIEngineBase.Instance;
 
     this.Cards = [

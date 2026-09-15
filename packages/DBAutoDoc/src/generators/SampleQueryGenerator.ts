@@ -138,7 +138,7 @@ export class SampleQueryGenerator {
     private pricing?: TokenPricingConfig
   ) {}
 
-  public async generateQueries(
+  public async GenerateQueries(
     schemas: SchemaDefinition[]
   ): Promise<SampleQueryGenerationResult> {
     this.startTime = Date.now();
@@ -279,6 +279,13 @@ export class SampleQueryGenerator {
         errorMessage: (error as Error).message
       };
     }
+  }
+
+  /** @deprecated Use {@link GenerateQueries}. */
+  public async generateQueries(
+    schemas: SchemaDefinition[]
+  ): Promise<SampleQueryGenerationResult> {
+    return this.GenerateQueries(schemas);
   }
 
   private async generateQueriesForSchema(

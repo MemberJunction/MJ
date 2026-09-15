@@ -23,25 +23,106 @@ import {
 })
 export class QueryConfigPanelComponent extends BaseConfigPanel {
     // ViewChild reference
-    @ViewChild('queryDropdown') queryDropdown!: TreeDropdownComponent;
+    @ViewChild('queryDropdown') QueryDropdown!: TreeDropdownComponent;
+
+    /** @deprecated Use {@link QueryDropdown}. */
+    get queryDropdown(): TreeDropdownComponent {
+      return this.QueryDropdown;
+    }
+    /** @deprecated Use {@link QueryDropdown}. */
+    set queryDropdown(value: TreeDropdownComponent) {
+      this.QueryDropdown = value;
+    }
 
     // Form fields
     public title = '';
-    public queryId = '';
-    public queryName = '';
-    public showParameterControls = true;
-    public parameterLayout: 'header' | 'sidebar' | 'dialog' = 'header';
-    public autoRefreshSeconds = 0;
-    public showExecutionMetadata = true;
+    public QueryId = '';
+
+    /** @deprecated Use {@link QueryId}. */
+    public get queryId() {
+      return this.QueryId;
+    }
+    /** @deprecated Use {@link QueryId}. */
+    public set queryId(value) {
+      this.QueryId = value;
+    }
+    public QueryName = '';
+
+    /** @deprecated Use {@link QueryName}. */
+    public get queryName() {
+      return this.QueryName;
+    }
+    /** @deprecated Use {@link QueryName}. */
+    public set queryName(value) {
+      this.QueryName = value;
+    }
+    public ShowParameterControls = true;
+
+    /** @deprecated Use {@link ShowParameterControls}. */
+    public get showParameterControls() {
+      return this.ShowParameterControls;
+    }
+    /** @deprecated Use {@link ShowParameterControls}. */
+    public set showParameterControls(value) {
+      this.ShowParameterControls = value;
+    }
+    public ParameterLayout: 'header' | 'sidebar' | 'dialog' = 'header';
+
+    /** @deprecated Use {@link ParameterLayout}. */
+    public get parameterLayout(): 'header' | 'sidebar' | 'dialog' {
+      return this.ParameterLayout;
+    }
+    /** @deprecated Use {@link ParameterLayout}. */
+    public set parameterLayout(value: 'header' | 'sidebar' | 'dialog') {
+      this.ParameterLayout = value;
+    }
+    public AutoRefreshSeconds = 0;
+
+    /** @deprecated Use {@link AutoRefreshSeconds}. */
+    public get autoRefreshSeconds() {
+      return this.AutoRefreshSeconds;
+    }
+    /** @deprecated Use {@link AutoRefreshSeconds}. */
+    public set autoRefreshSeconds(value) {
+      this.AutoRefreshSeconds = value;
+    }
+    public ShowExecutionMetadata = true;
+
+    /** @deprecated Use {@link ShowExecutionMetadata}. */
+    public get showExecutionMetadata() {
+      return this.ShowExecutionMetadata;
+    }
+    /** @deprecated Use {@link ShowExecutionMetadata}. */
+    public set showExecutionMetadata(value) {
+      this.ShowExecutionMetadata = value;
+    }
 
     // Track previous selection name for smart title updates
     private previousQueryName = '';
 
     // Collapsible section state
-    public showAdvancedOptions = false;
+    public ShowAdvancedOptions = false;
+
+    /** @deprecated Use {@link ShowAdvancedOptions}. */
+    public get showAdvancedOptions() {
+      return this.ShowAdvancedOptions;
+    }
+    /** @deprecated Use {@link ShowAdvancedOptions}. */
+    public set showAdvancedOptions(value) {
+      this.ShowAdvancedOptions = value;
+    }
 
     // Validation
-    public queryError = '';
+    public QueryError = '';
+
+    /** @deprecated Use {@link QueryError}. */
+    public get queryError() {
+      return this.QueryError;
+    }
+    /** @deprecated Use {@link QueryError}. */
+    public set queryError(value) {
+      this.QueryError = value;
+    }
 
     // Tree configuration for Query Categories (branches) and Queries (leaves)
     public QueryCategoryConfig: TreeBranchConfig = {
@@ -72,52 +153,52 @@ export class QueryConfigPanelComponent extends BaseConfigPanel {
      * Get the queryId as a CompositeKey for the tree dropdown
      */
     public get QueryIdAsKey(): CompositeKey | null {
-        return this.queryId ? CompositeKey.FromID(this.queryId) : null; // first-pk-ok: queryId is an MJ: Queries record (QueryLeafConfig) — core entity keyed by ID
+        return this.QueryId ? CompositeKey.FromID(this.QueryId) : null; // first-pk-ok: queryId is an MJ: Queries record (QueryLeafConfig) — core entity keyed by ID
     }
 
     public initFromConfig(config: PanelConfig | null): void {
         if (config && config.type === 'Query') {
-            this.queryId = (config['queryId'] as string) || '';
-            this.queryName = (config['queryName'] as string) || '';
-            this.showParameterControls = (config['showParameterControls'] as boolean) ?? true;
-            this.parameterLayout = (config['parameterLayout'] as 'header' | 'sidebar' | 'dialog') || 'header';
-            this.autoRefreshSeconds = (config['autoRefreshSeconds'] as number) || 0;
-            this.showExecutionMetadata = (config['showExecutionMetadata'] as boolean) ?? true;
+            this.QueryId = (config['queryId'] as string) || '';
+            this.QueryName = (config['queryName'] as string) || '';
+            this.ShowParameterControls = (config['showParameterControls'] as boolean) ?? true;
+            this.ParameterLayout = (config['parameterLayout'] as 'header' | 'sidebar' | 'dialog') || 'header';
+            this.AutoRefreshSeconds = (config['autoRefreshSeconds'] as number) || 0;
+            this.ShowExecutionMetadata = (config['showExecutionMetadata'] as boolean) ?? true;
         } else {
             // Defaults for new Query panel
-            this.queryId = '';
-            this.queryName = '';
-            this.showParameterControls = true;
-            this.parameterLayout = 'header';
-            this.autoRefreshSeconds = 0;
-            this.showExecutionMetadata = true;
+            this.QueryId = '';
+            this.QueryName = '';
+            this.ShowParameterControls = true;
+            this.ParameterLayout = 'header';
+            this.AutoRefreshSeconds = 0;
+            this.ShowExecutionMetadata = true;
         }
 
         this.title = this.panel?.title || '';
         this.previousQueryName = '';
-        this.queryError = '';
+        this.QueryError = '';
         this.cdr.detectChanges();
     }
 
     public buildConfig(): PanelConfig {
         return {
             type: 'Query',
-            queryId: this.queryId.trim() || undefined,
-            queryName: this.queryName.trim() || undefined,
-            showParameterControls: this.showParameterControls,
-            parameterLayout: this.parameterLayout,
-            autoRefreshSeconds: this.autoRefreshSeconds,
-            showExecutionMetadata: this.showExecutionMetadata
+            queryId: this.QueryId.trim() || undefined,
+            queryName: this.QueryName.trim() || undefined,
+            showParameterControls: this.ShowParameterControls,
+            parameterLayout: this.ParameterLayout,
+            autoRefreshSeconds: this.AutoRefreshSeconds,
+            showExecutionMetadata: this.ShowExecutionMetadata
         };
     }
 
     public override validate(): { valid: boolean; errors: string[] } {
         const errors: string[] = [];
-        this.queryError = '';
+        this.QueryError = '';
 
-        if (!this.queryId.trim() && !this.queryName.trim()) {
-            this.queryError = 'Please select a query';
-            errors.push(this.queryError);
+        if (!this.QueryId.trim() && !this.QueryName.trim()) {
+            this.QueryError = 'Please select a query';
+            errors.push(this.QueryError);
         }
 
         this.cdr.detectChanges();
@@ -125,8 +206,8 @@ export class QueryConfigPanelComponent extends BaseConfigPanel {
     }
 
     public getDefaultTitle(): string {
-        if (this.queryName) {
-            return this.queryName;
+        if (this.QueryName) {
+            return this.QueryName;
         }
         return 'Query';
     }
@@ -136,27 +217,32 @@ export class QueryConfigPanelComponent extends BaseConfigPanel {
     }
 
     // Form event handlers
-    public onTitleChange(): void {
+    public OnTitleChange(): void {
         this.emitConfigChanged();
+    }
+
+    /** @deprecated Use {@link OnTitleChange}. */
+    public onTitleChange(): void {
+      return this.OnTitleChange();
     }
 
     /**
      * Handle query selection from tree dropdown
      */
-    public onQuerySelection(node: TreeNode | TreeNode[] | null): void {
+    public OnQuerySelection(node: TreeNode | TreeNode[] | null): void {
         // Ignore null/empty selections (these happen during sync, not user interaction)
         if (!node || (Array.isArray(node) && node.length === 0)) {
             return;
         }
 
-        this.queryError = '';
+        this.QueryError = '';
 
         if (!Array.isArray(node)) {
             // Only accept leaf nodes (actual queries, not categories)
             if (node.Type === 'leaf') {
-                const oldQueryName = this.queryName;
-                this.queryId = node.ID;
-                this.queryName = node.Label;
+                const oldQueryName = this.QueryName;
+                this.QueryId = node.ID;
+                this.QueryName = node.Label;
 
                 // Smart title update: if title matches old name, update to new name
                 if (!this.title || this.title === oldQueryName || this.title === this.previousQueryName) {
@@ -170,20 +256,40 @@ export class QueryConfigPanelComponent extends BaseConfigPanel {
         this.cdr.detectChanges();
     }
 
+    /** @deprecated Use {@link OnQuerySelection}. */
+    public onQuerySelection(node: TreeNode | TreeNode[] | null): void {
+      return this.OnQuerySelection(node);
+    }
+
+    public OnParameterLayoutChange(): void {
+        this.emitConfigChanged();
+    }
+
+    /** @deprecated Use {@link OnParameterLayoutChange}. */
     public onParameterLayoutChange(): void {
+      return this.OnParameterLayoutChange();
+    }
+
+    public OnAutoRefreshChange(): void {
         this.emitConfigChanged();
     }
 
+    /** @deprecated Use {@link OnAutoRefreshChange}. */
     public onAutoRefreshChange(): void {
+      return this.OnAutoRefreshChange();
+    }
+
+    public OnOptionChange(): void {
         this.emitConfigChanged();
     }
 
+    /** @deprecated Use {@link OnOptionChange}. */
     public onOptionChange(): void {
-        this.emitConfigChanged();
+      return this.OnOptionChange();
     }
 
-    public getParameterLayoutDescription(): string {
-        switch (this.parameterLayout) {
+    public GetParameterLayoutDescription(): string {
+        switch (this.ParameterLayout) {
             case 'sidebar':
                 return 'Parameters displayed in a collapsible sidebar';
             case 'dialog':
@@ -191,5 +297,10 @@ export class QueryConfigPanelComponent extends BaseConfigPanel {
             default:
                 return 'Parameters displayed in the header area above results';
         }
+    }
+
+    /** @deprecated Use {@link GetParameterLayoutDescription}. */
+    public getParameterLayoutDescription(): string {
+      return this.GetParameterLayoutDescription();
     }
 }

@@ -31,7 +31,7 @@ import { ProcessRunner } from '../adapters/ProcessRunner.js';
 import { FileSystemAdapter } from '../adapters/FileSystemAdapter.js';
 import { SqlServerAdapter } from '../adapters/SqlServerAdapter.js';
 import { Diagnostics, type DiagnosticCheck, type EnvironmentInfo } from '../models/Diagnostics.js';
-import { resolvePackageManager, type PackageManagerType } from '../models/PackageManager.js';
+import { ResolvePackageManager, type PackageManagerType } from '../models/PackageManager.js';
 
 /** Hard minimum Node.js major version. Update this when MJ raises the floor. */
 const MIN_NODE_VERSION = 22;
@@ -108,7 +108,7 @@ export class PreflightPhase {
     const hardFailures: string[] = [];
 
     // Gather environment info
-    const packageManager = resolvePackageManager(context.Config.PackageManager);
+    const packageManager = ResolvePackageManager(context.Config.PackageManager);
     const environment = await this.gatherEnvironment(packageManager, context.TargetDir);
     const diagnostics = new Diagnostics(environment);
     const detectedOS = this.detectOS();

@@ -8,9 +8,9 @@ import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 import { RoleDialogData, RoleDialogResult } from './role-dialog/role-dialog.component';
 import {
-  buildRoleManagementAgentContext,
-  isValidRoleTypeFilter,
-  resolveRoleByIDOrName,
+  BuildRoleManagementAgentContext,
+  IsValidRoleTypeFilter,
+  ResolveRoleByIDOrName,
   RoleManagementAgentContextInput,
   RolePermissionSummary,
 } from './role-management-agent-context';
@@ -36,38 +36,137 @@ interface FilterOptions {
 @RegisterClass(BaseDashboard, 'RoleManagement')
 export class RoleManagementComponent extends BaseDashboard implements OnDestroy {
   // State management
-  public roles: MJRoleEntity[] = [];
-  public filteredRoles: MJRoleEntity[] = [];
-  public selectedRole: MJRoleEntity | null = null;
+  public Roles: MJRoleEntity[] = [];
+
+  /** @deprecated Use {@link Roles}. */
+  public get roles(): MJRoleEntity[] {
+    return this.Roles;
+  }
+  /** @deprecated Use {@link Roles}. */
+  public set roles(value: MJRoleEntity[]) {
+    this.Roles = value;
+  }
+  public FilteredRoles: MJRoleEntity[] = [];
+
+  /** @deprecated Use {@link FilteredRoles}. */
+  public get filteredRoles(): MJRoleEntity[] {
+    return this.FilteredRoles;
+  }
+  /** @deprecated Use {@link FilteredRoles}. */
+  public set filteredRoles(value: MJRoleEntity[]) {
+    this.FilteredRoles = value;
+  }
+  public SelectedRole: MJRoleEntity | null = null;
+
+  /** @deprecated Use {@link SelectedRole}. */
+  public get selectedRole(): MJRoleEntity | null {
+    return this.SelectedRole;
+  }
+  /** @deprecated Use {@link SelectedRole}. */
+  public set selectedRole(value: MJRoleEntity | null) {
+    this.SelectedRole = value;
+  }
   public isLoading = false;
   public error: string | null = null;
 
   // Dialog state
-  public showRoleDialog = false;
-  public roleDialogData: RoleDialogData | null = null;
+  public ShowRoleDialog = false;
+
+  /** @deprecated Use {@link ShowRoleDialog}. */
+  public get showRoleDialog() {
+    return this.ShowRoleDialog;
+  }
+  /** @deprecated Use {@link ShowRoleDialog}. */
+  public set showRoleDialog(value) {
+    this.ShowRoleDialog = value;
+  }
+  public RoleDialogData: RoleDialogData | null = null;
+
+  /** @deprecated Use {@link RoleDialogData}. */
+  public get roleDialogData(): RoleDialogData | null {
+    return this.RoleDialogData;
+  }
+  /** @deprecated Use {@link RoleDialogData}. */
+  public set roleDialogData(value: RoleDialogData | null) {
+    this.RoleDialogData = value;
+  }
 
   // Stats
-  public stats: RoleStats = {
+  public Stats: RoleStats = {
     totalRoles: 0,
     systemRoles: 0,
     customRoles: 0,
     activeRoles: 0
   };
 
+  /** @deprecated Use {@link Stats}. */
+  public get stats(): RoleStats {
+    return this.Stats;
+  }
+  /** @deprecated Use {@link Stats}. */
+  public set stats(value: RoleStats) {
+    this.Stats = value;
+  }
+
   // Filters
-  public filters$ = new BehaviorSubject<FilterOptions>({
+  public Filters$ = new BehaviorSubject<FilterOptions>({
     type: 'all',
     search: ''
   });
 
+  /** @deprecated Use {@link Filters$}. */
+  public get filters$() {
+    return this.Filters$;
+  }
+  /** @deprecated Use {@link Filters$}. */
+  public set filters$(value) {
+    this.Filters$ = value;
+  }
+
   // UI State
   public showCreateDialog = false;
-  public showEditDialog = false;
-  public showDeleteConfirm = false;
-  public expandedRoleId: string | null = null;
+  public ShowEditDialog = false;
+
+  /** @deprecated Use {@link ShowEditDialog}. */
+  public get showEditDialog() {
+    return this.ShowEditDialog;
+  }
+  /** @deprecated Use {@link ShowEditDialog}. */
+  public set showEditDialog(value) {
+    this.ShowEditDialog = value;
+  }
+  public ShowDeleteConfirm = false;
+
+  /** @deprecated Use {@link ShowDeleteConfirm}. */
+  public get showDeleteConfirm() {
+    return this.ShowDeleteConfirm;
+  }
+  /** @deprecated Use {@link ShowDeleteConfirm}. */
+  public set showDeleteConfirm(value) {
+    this.ShowDeleteConfirm = value;
+  }
+  public ExpandedRoleId: string | null = null;
+
+  /** @deprecated Use {@link ExpandedRoleId}. */
+  public get expandedRoleId(): string | null {
+    return this.ExpandedRoleId;
+  }
+  /** @deprecated Use {@link ExpandedRoleId}. */
+  public set expandedRoleId(value: string | null) {
+    this.ExpandedRoleId = value;
+  }
 
   // Role permissions (simplified view)
-  public rolePermissions: Map<string, string[]> = new Map();
+  public RolePermissions: Map<string, string[]> = new Map();
+
+  /** @deprecated Use {@link RolePermissions}. */
+  public get rolePermissions(): Map<string, string[]> {
+    return this.RolePermissions;
+  }
+  /** @deprecated Use {@link RolePermissions}. */
+  public set rolePermissions(value: Map<string, string[]>) {
+    this.RolePermissions = value;
+  }
 
   // Read-only entity-permission summary per role id (lazily loaded on selection),
   // used only to surface a non-sensitive count summary to the agent context.
@@ -90,7 +189,7 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
   }
 
   protected loadData(): void {
-    this.loadInitialData();
+    this.LoadInitialData();
   }
 
   // ================================================================
@@ -115,22 +214,22 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
    * pure {@link buildRoleManagementAgentContext} helper (unit-tested in isolation).
    */
   private publishAgentContext(): void {
-    const selected = this.expandedRoleId
-      ? this.roles.find(r => UUIDsEqual(r.ID, this.expandedRoleId!)) ?? null
+    const selected = this.ExpandedRoleId
+      ? this.Roles.find(r => UUIDsEqual(r.ID, this.ExpandedRoleId!)) ?? null
       : null;
     const input: RoleManagementAgentContextInput = {
-      TotalRoleCount: this.roles.length,
-      FilteredRoleCount: this.filteredRoles.length,
-      SystemRoleCount: this.stats.systemRoles,
-      CustomRoleCount: this.stats.customRoles,
-      TypeFilter: this.filters$.value.type,
-      SearchText: this.filters$.value.search,
+      TotalRoleCount: this.Roles.length,
+      FilteredRoleCount: this.FilteredRoles.length,
+      SystemRoleCount: this.Stats.systemRoles,
+      CustomRoleCount: this.Stats.customRoles,
+      TypeFilter: this.Filters$.value.type,
+      SearchText: this.Filters$.value.search,
       SelectedRoleId: selected?.ID ?? null,
       SelectedRoleName: selected?.Name ?? null,
-      VisibleRoleNames: this.filteredRoles.map(r => r.Name ?? '').filter(n => n !== ''),
+      VisibleRoleNames: this.FilteredRoles.map(r => r.Name ?? '').filter(n => n !== ''),
       SelectedRolePermissions: selected ? this.selectedRolePermissionSummary : null,
     };
-    this.navigationService.SetAgentContext(this, buildRoleManagementAgentContext(input));
+    this.navigationService.SetAgentContext(this, BuildRoleManagementAgentContext(input));
   }
 
   /**
@@ -181,10 +280,10 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
 
   private handleFilterByTypeTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
     const type = params?.['type'];
-    if (!isValidRoleTypeFilter(type)) {
+    if (!IsValidRoleTypeFilter(type)) {
       return { Success: false, ErrorMessage: `Invalid type "${String(type)}". Expected one of: all, system, custom.` };
     }
-    this.onTypeFilterChange(type);
+    this.OnTypeFilterChange(type);
     this.publishAgentContext();
     return { Success: true };
   }
@@ -194,18 +293,18 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
     if (typeof searchText !== 'string') {
       return { Success: false, ErrorMessage: 'searchText must be a string.' };
     }
-    this.updateFilter({ search: searchText });
+    this.UpdateFilter({ search: searchText });
     this.publishAgentContext();
     return { Success: true };
   }
 
   private async handleSelectRoleTool(params: Record<string, unknown>): Promise<{ Success: boolean; ErrorMessage?: string }> {
     const raw = String(params?.['role'] ?? '');
-    const resolved = resolveRoleByIDOrName(raw, this.roles.map(r => ({ ID: r.ID, Name: r.Name ?? '' })));
+    const resolved = ResolveRoleByIDOrName(raw, this.Roles.map(r => ({ ID: r.ID, Name: r.Name ?? '' })));
     if (!resolved.ok) {
       return { Success: false, ErrorMessage: resolved.error };
     }
-    this.expandedRoleId = resolved.match.ID;
+    this.ExpandedRoleId = resolved.match.ID;
     this.selectedRolePermissionSummary = await this.loadPermissionSummary(resolved.match.ID);
     this.cdr.markForCheck();
     this.publishAgentContext();
@@ -214,7 +313,7 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
 
   private handleNavigateToRoleRecordTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
     const raw = String(params?.['role'] ?? '');
-    const resolved = resolveRoleByIDOrName(raw, this.roles.map(r => ({ ID: r.ID, Name: r.Name ?? '' })));
+    const resolved = ResolveRoleByIDOrName(raw, this.Roles.map(r => ({ ID: r.ID, Name: r.Name ?? '' })));
     if (!resolved.ok) {
       return { Success: false, ErrorMessage: resolved.error };
     }
@@ -250,7 +349,7 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
   }
 
   private handleClearFiltersTool(): { Success: boolean } {
-    this.resetAllFiltersAndSearch();
+    this.ResetAllFiltersAndSearch();
     this.publishAgentContext();
     return { Success: true };
   }
@@ -259,7 +358,7 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
     try {
       this.permissionSummaryCache.clear();
       this.selectedRolePermissionSummary = null;
-      await this.loadInitialData();
+      await this.LoadInitialData();
       this.publishAgentContext();
       return { Success: true };
     } catch (e) {
@@ -273,14 +372,14 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
     super.ngOnDestroy();
   }
   
-  public async loadInitialData(): Promise<void> {
+  public async LoadInitialData(): Promise<void> {
     try {
       this.isLoading = true;
       this.error = null;
       
       // Load roles
       const roles = await this.loadRoles();
-      this.roles = roles;
+      this.Roles = roles;
       this.calculateStats();
       this.applyFilters();
       
@@ -296,6 +395,11 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
     }
   }
 
+  /** @deprecated Use {@link LoadInitialData}. */
+  public async loadInitialData(): Promise<void> {
+    return this.LoadInitialData();
+  }
+
   private async loadRoles(): Promise<MJRoleEntity[]> {
     const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const result = await rv.RunView<MJRoleEntity>({
@@ -308,7 +412,7 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
   }
   
   private setupFilterSubscription(): void {
-    this.filters$
+    this.Filters$
       .pipe(
         debounceTime(300),
         distinctUntilChanged((a, b) => JSON.stringify(a) === JSON.stringify(b)),
@@ -321,13 +425,13 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
   }
 
   private applyFilters(): void {
-    const filters = this.filters$.value;
-    let filtered = [...this.roles];
+    const filters = this.Filters$.value;
+    let filtered = [...this.Roles];
     
     // Apply type filter
     if (filters.type !== 'all') {
       filtered = filtered.filter(role => {
-        const isSystem = this.isSystemRole(role);
+        const isSystem = this.IsSystemRole(role);
         return filters.type === 'system' ? isSystem : !isSystem;
       });
     }
@@ -341,34 +445,44 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
       );
     }
     
-    this.filteredRoles = filtered;
+    this.FilteredRoles = filtered;
   }
   
   private calculateStats(): void {
-    const systemRoles = this.roles.filter(r => this.isSystemRole(r));
+    const systemRoles = this.Roles.filter(r => this.IsSystemRole(r));
     
-    this.stats = {
-      totalRoles: this.roles.length,
+    this.Stats = {
+      totalRoles: this.Roles.length,
       systemRoles: systemRoles.length,
-      customRoles: this.roles.length - systemRoles.length,
-      activeRoles: this.roles.length // All roles are considered active for now
+      customRoles: this.Roles.length - systemRoles.length,
+      activeRoles: this.Roles.length // All roles are considered active for now
     };
   }
   
-  public isSystemRole(role: MJRoleEntity): boolean {
+  public IsSystemRole(role: MJRoleEntity): boolean {
     // System roles typically have certain naming patterns or flags
     const systemRoleNames = ['Administrator', 'User', 'Guest', 'Developer'];
     return systemRoleNames.includes(role.Name || '');
   }
-  
-  // Public methods for template
-  public onTypeFilterChange(type: 'all' | 'system' | 'custom'): void {
-    this.updateFilter({ type });
+
+  /** @deprecated Use {@link IsSystemRole}. */
+  public isSystemRole(role: MJRoleEntity): boolean {
+    return this.IsSystemRole(role);
   }
   
-  public updateFilter(partial: Partial<FilterOptions>): void {
-    this.filters$.next({
-      ...this.filters$.value,
+  // Public methods for template
+  public OnTypeFilterChange(type: 'all' | 'system' | 'custom'): void {
+    this.UpdateFilter({ type });
+  }
+
+  /** @deprecated Use {@link OnTypeFilterChange}. */
+  public onTypeFilterChange(type: 'all' | 'system' | 'custom'): void {
+    return this.OnTypeFilterChange(type);
+  }
+  
+  public UpdateFilter(partial: Partial<FilterOptions>): void {
+    this.Filters$.next({
+      ...this.Filters$.value,
       ...partial
     });
     // Discrete changes (chips) apply immediately. Text search still goes
@@ -379,9 +493,14 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
     }
   }
 
+  /** @deprecated Use {@link UpdateFilter}. */
+  public updateFilter(partial: Partial<FilterOptions>): void {
+    return this.UpdateFilter(partial);
+  }
+
   // -- Concise chrome: one Filter popover (Type) + applied-filter chips -------
 
-  public get filterFields(): FilterFieldConfig[] {
+  public get FilterFields(): FilterFieldConfig[] {
     return [
       {
         key: 'type',
@@ -396,47 +515,72 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
     ];
   }
 
+  /** @deprecated Use {@link FilterFields}. */
+  public get filterFields(): FilterFieldConfig[] {
+    return this.FilterFields;
+  }
+
+  public get FilterValues(): Record<string, unknown> {
+    return { type: this.Filters$.value.type };
+  }
+
+  /** @deprecated Use {@link FilterValues}. */
   public get filterValues(): Record<string, unknown> {
-    return { type: this.filters$.value.type };
+    return this.FilterValues;
   }
 
   /** Total active filters (Type) — drives the Filter button badge. */
   public get TotalActiveFilterCount(): number {
-    return this.filters$.value.type !== 'all' ? 1 : 0;
+    return this.Filters$.value.type !== 'all' ? 1 : 0;
   }
 
-  public onFilterPanelChange(values: Record<string, unknown>): void {
+  public OnFilterPanelChange(values: Record<string, unknown>): void {
     if ('type' in values) {
-      this.updateFilter({ type: (values['type'] as FilterOptions['type']) || 'all' });
+      this.UpdateFilter({ type: (values['type'] as FilterOptions['type']) || 'all' });
     }
   }
 
+  /** @deprecated Use {@link OnFilterPanelChange}. */
+  public onFilterPanelChange(values: Record<string, unknown>): void {
+    return this.OnFilterPanelChange(values);
+  }
+
   /** Clear all filters (Type); search persists. */
+  public ClearAllAppliedFilters(): void {
+    this.UpdateFilter({ type: 'all' });
+  }
+
+  /** @deprecated Use {@link ClearAllAppliedFilters}. */
   public clearAllAppliedFilters(): void {
-    this.updateFilter({ type: 'all' });
+    return this.ClearAllAppliedFilters();
   }
 
   /** True when search and/or panel filters are narrowing the list — gates the
    *  no-results empty-state "Reset filters" CTA. */
   public get IsListNarrowed(): boolean {
-    return this.filters$.value.search !== '' || this.TotalActiveFilterCount > 0;
+    return this.Filters$.value.search !== '' || this.TotalActiveFilterCount > 0;
   }
 
   /** Reset everything narrowing the list (search + Type) and refresh
    *  immediately. Wired to the no-results empty-state CTA. Unlike
    *  clearAllAppliedFilters(), this also clears the search box. */
-  public resetAllFiltersAndSearch(): void {
-    this.filters$.next({ type: 'all', search: '' });
+  public ResetAllFiltersAndSearch(): void {
+    this.Filters$.next({ type: 'all', search: '' });
     this.applyFilters();
     this.cdr.markForCheck();
   }
+
+  /** @deprecated Use {@link ResetAllFiltersAndSearch}. */
+  public resetAllFiltersAndSearch(): void {
+    return this.ResetAllFiltersAndSearch();
+  }
   
-  public toggleRoleExpansion(roleId: string): void {
-    this.expandedRoleId = this.expandedRoleId === roleId ? null : roleId;
-    if (this.expandedRoleId) {
+  public ToggleRoleExpansion(roleId: string): void {
+    this.ExpandedRoleId = this.ExpandedRoleId === roleId ? null : roleId;
+    if (this.ExpandedRoleId) {
       // Lazy-load the read-only permission summary so the agent context reflects
       // the user's current selection; fire-and-forget (re-publishes on completion).
-      void this.loadPermissionSummary(this.expandedRoleId).then(summary => {
+      void this.loadPermissionSummary(this.ExpandedRoleId).then(summary => {
         this.selectedRolePermissionSummary = summary;
         this.publishAgentContext();
       });
@@ -445,45 +589,70 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
     }
     this.publishAgentContext();
   }
-  
-  public isRoleExpanded(roleId: string): boolean {
-    return this.expandedRoleId === roleId;
+
+  /** @deprecated Use {@link ToggleRoleExpansion}. */
+  public toggleRoleExpansion(roleId: string): void {
+    return this.ToggleRoleExpansion(roleId);
   }
   
-  public createNewRole(): void {
-    this.roleDialogData = {
+  public IsRoleExpanded(roleId: string): boolean {
+    return this.ExpandedRoleId === roleId;
+  }
+
+  /** @deprecated Use {@link IsRoleExpanded}. */
+  public isRoleExpanded(roleId: string): boolean {
+    return this.IsRoleExpanded(roleId);
+  }
+  
+  public CreateNewRole(): void {
+    this.RoleDialogData = {
       mode: 'create'
     };
-    this.showRoleDialog = true;
+    this.ShowRoleDialog = true;
+  }
+
+  /** @deprecated Use {@link CreateNewRole}. */
+  public createNewRole(): void {
+    return this.CreateNewRole();
   }
   
-  public editRole(role: MJRoleEntity): void {
-    this.roleDialogData = {
+  public EditRole(role: MJRoleEntity): void {
+    this.RoleDialogData = {
       role: role,
       mode: 'edit'
     };
-    this.showRoleDialog = true;
+    this.ShowRoleDialog = true;
+  }
+
+  /** @deprecated Use {@link EditRole}. */
+  public editRole(role: MJRoleEntity): void {
+    return this.EditRole(role);
   }
   
+  public ConfirmDeleteRole(role: MJRoleEntity): void {
+    this.SelectedRole = role;
+    this.ShowDeleteConfirm = true;
+  }
+
+  /** @deprecated Use {@link ConfirmDeleteRole}. */
   public confirmDeleteRole(role: MJRoleEntity): void {
-    this.selectedRole = role;
-    this.showDeleteConfirm = true;
+    return this.ConfirmDeleteRole(role);
   }
   
-  public async deleteRole(): Promise<void> {
-    if (!this.selectedRole) return;
+  public async DeleteRole(): Promise<void> {
+    if (!this.SelectedRole) return;
     
     try {
       // Load role entity to delete
       const role = await this.metadata.GetEntityObject<MJRoleEntity>('MJ: Roles');
-      const loadResult = await role.Load(this.selectedRole.ID);
+      const loadResult = await role.Load(this.SelectedRole.ID);
       
       if (loadResult) {
         const deleteResult = await role.Delete();
         if (deleteResult) {
-          this.showDeleteConfirm = false;
-          this.selectedRole = null;
-          await this.loadInitialData();
+          this.ShowDeleteConfirm = false;
+          this.SelectedRole = null;
+          await this.LoadInitialData();
         } else {
           throw new Error(role.LatestResult?.Message || 'Failed to delete role');
         }
@@ -498,33 +667,63 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
       });
     }
   }
+
+  /** @deprecated Use {@link DeleteRole}. */
+  public async deleteRole(): Promise<void> {
+    return this.DeleteRole();
+  }
   
-  public getRoleIcon(role: MJRoleEntity): string {
-    if (this.isSystemRole(role)) {
+  public GetRoleIcon(role: MJRoleEntity): string {
+    if (this.IsSystemRole(role)) {
       return 'fa-shield-halved';
     }
     return 'fa-user-tag';
   }
-  
-  public getRoleTypeLabel(role: MJRoleEntity): string {
-    return this.isSystemRole(role) ? 'System' : 'Custom';
+
+  /** @deprecated Use {@link GetRoleIcon}. */
+  public getRoleIcon(role: MJRoleEntity): string {
+    return this.GetRoleIcon(role);
   }
   
-  public getRoleTypeClass(role: MJRoleEntity): string {
-    return this.isSystemRole(role) ? 'badge-system' : 'badge-custom';
-  }
-  
-  public refreshData(): void {
-    this.loadInitialData();
+  public GetRoleTypeLabel(role: MJRoleEntity): string {
+    return this.IsSystemRole(role) ? 'System' : 'Custom';
   }
 
-  public onRoleDialogResult(result: RoleDialogResult): void {
-    this.showRoleDialog = false;
-    this.roleDialogData = null;
+  /** @deprecated Use {@link GetRoleTypeLabel}. */
+  public getRoleTypeLabel(role: MJRoleEntity): string {
+    return this.GetRoleTypeLabel(role);
+  }
+  
+  public GetRoleTypeClass(role: MJRoleEntity): string {
+    return this.IsSystemRole(role) ? 'badge-system' : 'badge-custom';
+  }
+
+  /** @deprecated Use {@link GetRoleTypeClass}. */
+  public getRoleTypeClass(role: MJRoleEntity): string {
+    return this.GetRoleTypeClass(role);
+  }
+  
+  public RefreshData(): void {
+    this.LoadInitialData();
+  }
+
+  /** @deprecated Use {@link RefreshData}. */
+  public refreshData(): void {
+    return this.RefreshData();
+  }
+
+  public OnRoleDialogResult(result: RoleDialogResult): void {
+    this.ShowRoleDialog = false;
+    this.RoleDialogData = null;
     
     if (result.action === 'save') {
       // Refresh the role list to show changes
-      this.loadInitialData();
+      this.LoadInitialData();
     }
+  }
+
+  /** @deprecated Use {@link OnRoleDialogResult}. */
+  public onRoleDialogResult(result: RoleDialogResult): void {
+    return this.OnRoleDialogResult(result);
   }
 }

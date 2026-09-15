@@ -13,7 +13,7 @@
  */
 import type { ChatTool } from '@memberjunction/ai';
 import type { ProbeResponseFormat, ProbeScenario } from './types';
-import { buildToolFromAction, getActionFixture, type OpaqueStrategy, type ScalarStrategy } from './actionTools';
+import { BuildToolFromAction, GetActionFixture, type OpaqueStrategy, type ScalarStrategy } from './actionTools';
 
 /** Looks up weather. The workhorse: one obvious call, one required argument, one enum. */
 const GET_WEATHER: ChatTool = {
@@ -158,18 +158,28 @@ export const PROBE_SCENARIOS: ProbeScenario[] = [
 export const JSON_MODE_PROMPT_SUFFIX = '\n\nReply in JSON.';
 
 /** The user turn for a cell — the scenario's prompt, plus the JSON-mode suffix when it applies. */
-export function buildUserPrompt(scenario: ProbeScenario, responseFormat: ProbeResponseFormat): string {
+export function BuildUserPrompt(scenario: ProbeScenario, responseFormat: ProbeResponseFormat): string {
     return responseFormat === 'JSON' ? scenario.userPrompt + JSON_MODE_PROMPT_SUFFIX : scenario.userPrompt;
 }
 
+/** @deprecated Use {@link BuildUserPrompt}. */
+export function buildUserPrompt(scenario: ProbeScenario, responseFormat: ProbeResponseFormat): string {
+    return BuildUserPrompt(scenario, responseFormat);
+}
+
 /** Looks a scenario up by id, throwing rather than returning undefined — a typo is a config bug. */
-export function getScenario(id: string): ProbeScenario {
+export function GetScenario(id: string): ProbeScenario {
     const all = [...PROBE_SCENARIOS, ...MJ_ACTION_SCENARIOS];
     const found = all.find((s) => s.id === id);
     if (!found) {
         throw new Error(`Unknown probe scenario '${id}'. Known: ${all.map((s) => s.id).join(', ')}`);
     }
     return found;
+}
+
+/** @deprecated Use {@link GetScenario}. */
+export function getScenario(id: string): ProbeScenario {
+    return GetScenario(id);
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -188,7 +198,7 @@ export function getScenario(id: string): ProbeScenario {
 const MJ_ACTION_NAMES = ['Calculate Expression', 'Run Ad-hoc Query', 'Get Entity Details'];
 
 function mjActionTools(strategy: ScalarStrategy, opaque: OpaqueStrategy): ChatTool[] {
-    return MJ_ACTION_NAMES.map((name) => buildToolFromAction(getActionFixture(name), strategy, opaque));
+    return MJ_ACTION_NAMES.map((name) => BuildToolFromAction(GetActionFixture(name), strategy, opaque));
 }
 
 /**

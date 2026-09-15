@@ -71,7 +71,7 @@ let cachedConfig: MJConfig | null = null;
  *
  * @returns Full MJ configuration
  */
-export async function loadMJConfig(): Promise<MJConfig> {
+export async function LoadMJConfig(): Promise<MJConfig> {
     if (cachedConfig) {
         return cachedConfig;
     }
@@ -97,12 +97,17 @@ export async function loadMJConfig(): Promise<MJConfig> {
     return cachedConfig;
 }
 
+/** @deprecated Use {@link LoadMJConfig}. */
+export async function loadMJConfig(): Promise<MJConfig> {
+    return LoadMJConfig();
+}
+
 /**
  * Load testing CLI configuration with defaults
  *
  * @returns CLI configuration
  */
-export function loadCLIConfig(): CLIConfig {
+export function LoadCLIConfig(): CLIConfig {
     // Synchronous version for backward compatibility
     // Uses cached config if available, otherwise returns defaults
     const testingConfig = cachedConfig?.testing || {};
@@ -123,4 +128,9 @@ export function loadCLIConfig(): CLIConfig {
             schema: cachedConfig?.coreSchema || '__mj'
         }
     };
+}
+
+/** @deprecated Use {@link LoadCLIConfig}. */
+export function loadCLIConfig(): CLIConfig {
+    return LoadCLIConfig();
 }

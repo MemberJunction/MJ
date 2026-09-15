@@ -3,7 +3,10 @@ import BodyParser from 'body-parser';
 import { LogStatusEx } from '@memberjunction/core';
 import { RESTEndpointHandler } from './RESTEndpointHandler.js';
 
-export const ___REST_API_BASE_PATH = '/api/v1';
+export const REST_API_BASE_PATH = '/api/v1';
+
+/** @deprecated Use {@link REST_API_BASE_PATH}. */
+export const ___REST_API_BASE_PATH = REST_API_BASE_PATH;
 
 /**
  * Configuration options for REST API endpoints
@@ -56,7 +59,7 @@ export const DEFAULT_REST_API_OPTIONS: RESTApiOptions = {
  * @param options Configuration options for REST API
  * @param authMiddleware Optional authentication middleware to use
  */
-export function setupRESTEndpoints(
+export function SetupRESTEndpoints(
     app: express.Application,
     options?: Partial<RESTApiOptions>,
     authMiddleware?: express.RequestHandler
@@ -71,7 +74,7 @@ export function setupRESTEndpoints(
         return;
     }
 
-    const basePath = ___REST_API_BASE_PATH;
+    const basePath = REST_API_BASE_PATH;
 
     // Create REST endpoint handler with entity and schema filters
     const restHandler = new RESTEndpointHandler({
@@ -90,4 +93,13 @@ export function setupRESTEndpoints(
     }
 
     LogStatusEx({ message: `REST API endpoints have been set up at ${basePath}`, verboseOnly: true });
+}
+
+/** @deprecated Use {@link SetupRESTEndpoints}. */
+export function setupRESTEndpoints(
+    app: express.Application,
+    options?: Partial<RESTApiOptions>,
+    authMiddleware?: express.RequestHandler
+): void {
+    return SetupRESTEndpoints(app, options, authMiddleware);
 }

@@ -69,7 +69,7 @@ export class ResourceManager {
   /**
    * Register a timeout with automatic cleanup
    */
-  setTimeout(
+  SetTimeout(
     componentId: string,
     callback: () => void,
     delay: number,
@@ -90,10 +90,20 @@ export class ResourceManager {
     return id as any;
   }
 
+  /** @deprecated Use {@link SetTimeout}. */
+  setTimeout(
+    componentId: string,
+    callback: () => void,
+    delay: number,
+    metadata?: Record<string, any>
+  ): number {
+    return this.SetTimeout(componentId, callback, delay, metadata);
+  }
+
   /**
    * Register an interval with automatic cleanup
    */
-  setInterval(
+  SetInterval(
     componentId: string,
     callback: () => void,
     delay: number,
@@ -111,17 +121,27 @@ export class ResourceManager {
     return id as any;
   }
 
+  /** @deprecated Use {@link SetInterval}. */
+  setInterval(
+    componentId: string,
+    callback: () => void,
+    delay: number,
+    metadata?: Record<string, any>
+  ): number {
+    return this.SetInterval(componentId, callback, delay, metadata);
+  }
+
   /**
    * Register an animation frame with automatic cleanup
    */
-  requestAnimationFrame(
+  RequestAnimationFrame(
     componentId: string,
     callback: FrameRequestCallback,
     metadata?: Record<string, any>
   ): TimerId {
     if (!timers.requestAnimationFrame) {
       // Fallback to setTimeout in non-browser environments
-      return this.setTimeout(componentId, () => callback(Date.now()), 16, metadata);
+      return this.SetTimeout(componentId, () => callback(Date.now()), 16, metadata);
     }
 
     const id = timers.requestAnimationFrame((time) => {
@@ -139,26 +159,45 @@ export class ResourceManager {
     return id as any;
   }
 
+  /** @deprecated Use {@link RequestAnimationFrame}. */
+  requestAnimationFrame(
+    componentId: string,
+    callback: FrameRequestCallback,
+    metadata?: Record<string, any>
+  ): TimerId {
+    return this.RequestAnimationFrame(componentId, callback, metadata);
+  }
+
   /**
    * Clear a specific timeout
    */
-  clearTimeout(componentId: string, id: number): void {
+  ClearTimeout(componentId: string, id: number): void {
     timers.clearTimeout(id);
     this.removeResource(componentId, 'timer', id);
+  }
+
+  /** @deprecated Use {@link ClearTimeout}. */
+  clearTimeout(componentId: string, id: number): void {
+    return this.ClearTimeout(componentId, id);
   }
 
   /**
    * Clear a specific interval
    */
-  clearInterval(componentId: string, id: number): void {
+  ClearInterval(componentId: string, id: number): void {
     timers.clearInterval(id);
     this.removeResource(componentId, 'interval', id);
+  }
+
+  /** @deprecated Use {@link ClearInterval}. */
+  clearInterval(componentId: string, id: number): void {
+    return this.ClearInterval(componentId, id);
   }
 
   /**
    * Cancel a specific animation frame
    */
-  cancelAnimationFrame(componentId: string, id: TimerId): void {
+  CancelAnimationFrame(componentId: string, id: TimerId): void {
     if (timers.cancelAnimationFrame) {
       timers.cancelAnimationFrame(id as number);
     } else {
@@ -168,10 +207,15 @@ export class ResourceManager {
     this.removeResource(componentId, 'animationFrame', id);
   }
 
+  /** @deprecated Use {@link CancelAnimationFrame}. */
+  cancelAnimationFrame(componentId: string, id: TimerId): void {
+    return this.CancelAnimationFrame(componentId, id);
+  }
+
   /**
    * Register an event listener with automatic cleanup
    */
-  addEventListener(
+  AddEventListener(
     componentId: string,
     target: EventTarget,
     type: string,
@@ -196,10 +240,21 @@ export class ResourceManager {
     }
   }
 
+  /** @deprecated Use {@link AddEventListener}. */
+  addEventListener(
+    componentId: string,
+    target: EventTarget,
+    type: string,
+    listener: EventListener,
+    options?: AddEventListenerOptions
+  ): void {
+    return this.AddEventListener(componentId, target, type, listener, options);
+  }
+
   /**
    * Register a DOM element that needs cleanup
    */
-  registerDOMElement(
+  RegisterDOMElement(
     componentId: string,
     element: any, // Use 'any' to avoid HTMLElement type in Node.js
     cleanup?: () => void
@@ -223,10 +278,19 @@ export class ResourceManager {
     }
   }
 
+  /** @deprecated Use {@link RegisterDOMElement}. */
+  registerDOMElement(
+    componentId: string,
+    element: any, // Use 'any' to avoid HTMLElement type in Node.js
+    cleanup?: () => void
+  ): void {
+    return this.RegisterDOMElement(componentId, element, cleanup);
+  }
+
   /**
    * Register a React root for cleanup
    */
-  registerReactRoot(
+  RegisterReactRoot(
     componentId: string,
     root: any,
     unmountFn: () => void
@@ -239,21 +303,40 @@ export class ResourceManager {
     });
   }
 
+  /** @deprecated Use {@link RegisterReactRoot}. */
+  registerReactRoot(
+    componentId: string,
+    root: any,
+    unmountFn: () => void
+  ): void {
+    return this.RegisterReactRoot(componentId, root, unmountFn);
+  }
+
   /**
    * Register a generic cleanup callback for a component
    */
-  registerCleanup(componentId: string, cleanup: () => void): void {
+  RegisterCleanup(componentId: string, cleanup: () => void): void {
     if (!this.cleanupCallbacks.has(componentId)) {
       this.cleanupCallbacks.set(componentId, []);
     }
     this.cleanupCallbacks.get(componentId)!.push(cleanup);
   }
 
+  /** @deprecated Use {@link RegisterCleanup}. */
+  registerCleanup(componentId: string, cleanup: () => void): void {
+    return this.RegisterCleanup(componentId, cleanup);
+  }
+
   /**
    * Register a global resource (not tied to a specific component)
    */
-  registerGlobalResource(resource: ManagedResource): void {
+  RegisterGlobalResource(resource: ManagedResource): void {
     this.globalResources.add(resource);
+  }
+
+  /** @deprecated Use {@link RegisterGlobalResource}. */
+  registerGlobalResource(resource: ManagedResource): void {
+    return this.RegisterGlobalResource(resource);
   }
 
   /**
@@ -288,7 +371,7 @@ export class ResourceManager {
   /**
    * Clean up all resources for a specific component
    */
-  cleanupComponent(componentId: string): void {
+  CleanupComponent(componentId: string): void {
     // Clean up tracked resources
     const componentResources = this.resources.get(componentId);
     if (componentResources) {
@@ -316,10 +399,15 @@ export class ResourceManager {
     }
   }
 
+  /** @deprecated Use {@link CleanupComponent}. */
+  cleanupComponent(componentId: string): void {
+    return this.CleanupComponent(componentId);
+  }
+
   /**
    * Clean up all global resources
    */
-  cleanupGlobal(): void {
+  CleanupGlobal(): void {
     this.globalResources.forEach(resource => {
       try {
         resource.cleanup();
@@ -330,23 +418,33 @@ export class ResourceManager {
     this.globalResources.clear();
   }
 
+  /** @deprecated Use {@link CleanupGlobal}. */
+  cleanupGlobal(): void {
+    return this.CleanupGlobal();
+  }
+
   /**
    * Clean up all resources (components and global)
    */
-  cleanupAll(): void {
+  CleanupAll(): void {
     // Clean up all component resources
     for (const componentId of this.resources.keys()) {
-      this.cleanupComponent(componentId);
+      this.CleanupComponent(componentId);
     }
 
     // Clean up global resources
-    this.cleanupGlobal();
+    this.CleanupGlobal();
+  }
+
+  /** @deprecated Use {@link CleanupAll}. */
+  cleanupAll(): void {
+    return this.CleanupAll();
   }
 
   /**
    * Get resource statistics for debugging
    */
-  getStats(): {
+  GetStats(): {
     componentCount: number;
     resourceCounts: Record<string, number>;
     globalResourceCount: number;
@@ -364,6 +462,15 @@ export class ResourceManager {
       resourceCounts,
       globalResourceCount: this.globalResources.size
     };
+  }
+
+  /** @deprecated Use {@link GetStats}. */
+  getStats(): {
+    componentCount: number;
+    resourceCounts: Record<string, number>;
+    globalResourceCount: number;
+  } {
+    return this.GetStats();
   }
 }
 

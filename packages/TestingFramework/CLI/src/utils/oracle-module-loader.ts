@@ -63,7 +63,7 @@ export interface LoadedOracleSummary {
  *
  * @throws if the module file doesn't exist or the import itself fails.
  */
-export async function loadOraclesModule(
+export async function LoadOraclesModule(
     modulePath: string,
     engine: TestEngine,
 ): Promise<LoadedOracleSummary> {
@@ -152,4 +152,12 @@ export async function loadOraclesModule(
     }
 
     return { modulePath: absPath, registered, skipped };
+}
+
+/** @deprecated Use {@link LoadOraclesModule}. */
+export async function loadOraclesModule(
+    modulePath: string,
+    engine: TestEngine,
+): Promise<LoadedOracleSummary> {
+    return LoadOraclesModule(modulePath, engine);
 }

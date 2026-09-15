@@ -60,8 +60,17 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
     public override record!: MJListEntity;
 
     // Navigation
-    public activeSection: ListSection = 'overview';
-    public navItems = [
+    public ActiveSection: ListSection = 'overview';
+
+    /** @deprecated Use {@link ActiveSection}. */
+    public get activeSection(): ListSection {
+      return this.ActiveSection;
+    }
+    /** @deprecated Use {@link ActiveSection}. */
+    public set activeSection(value: ListSection) {
+      this.ActiveSection = value;
+    }
+    public NavItems = [
         { id: 'overview' as ListSection, icon: 'fa-solid fa-house', label: 'Overview' },
         { id: 'items' as ListSection, icon: 'fa-solid fa-list', label: 'Items', badge: 0 },
         { id: 'sharing' as ListSection, icon: 'fa-solid fa-share-nodes', label: 'Sharing', badge: 0, disabled: false },
@@ -69,72 +78,383 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         { id: 'settings' as ListSection, icon: 'fa-solid fa-gear', label: 'Settings' }
     ];
 
+    /** @deprecated Use {@link NavItems}. */
+    public get navItems() {
+      return this.NavItems;
+    }
+    /** @deprecated Use {@link NavItems}. */
+    public set navItems(value) {
+      this.NavItems = value;
+    }
+
     // Data
-    public listItems: ListItemViewModel[] = [];
-    public categories: MJListCategoryEntity[] = [];
+    public ListItems: ListItemViewModel[] = [];
+
+    /** @deprecated Use {@link ListItems}. */
+    public get listItems(): ListItemViewModel[] {
+      return this.ListItems;
+    }
+    /** @deprecated Use {@link ListItems}. */
+    public set listItems(value: ListItemViewModel[]) {
+      this.ListItems = value;
+    }
+    public Categories: MJListCategoryEntity[] = [];
+
+    /** @deprecated Use {@link Categories}. */
+    public get categories(): MJListCategoryEntity[] {
+      return this.Categories;
+    }
+    /** @deprecated Use {@link Categories}. */
+    public set categories(value: MJListCategoryEntity[]) {
+      this.Categories = value;
+    }
     public entityInfo: EntityInfo | null = null;
-    public stats: ListStats = {
+    public Stats: ListStats = {
         itemCount: 0,
         shareCount: 0,
         invitationCount: 0,
         lastUpdated: null
     };
 
+    /** @deprecated Use {@link Stats}. */
+    public get stats(): ListStats {
+      return this.Stats;
+    }
+    /** @deprecated Use {@link Stats}. */
+    public set stats(value: ListStats) {
+      this.Stats = value;
+    }
+
     // Loading states
-    public isLoadingItems = false;
-    public isLoadingStats = false;
-    public explorerError: string | null = null;
+    public IsLoadingItems = false;
+
+    /** @deprecated Use {@link IsLoadingItems}. */
+    public get isLoadingItems() {
+      return this.IsLoadingItems;
+    }
+    /** @deprecated Use {@link IsLoadingItems}. */
+    public set isLoadingItems(value) {
+      this.IsLoadingItems = value;
+    }
+    public IsLoadingStats = false;
+
+    /** @deprecated Use {@link IsLoadingStats}. */
+    public get isLoadingStats() {
+      return this.IsLoadingStats;
+    }
+    /** @deprecated Use {@link IsLoadingStats}. */
+    public set isLoadingStats(value) {
+      this.IsLoadingStats = value;
+    }
+    public ExplorerError: string | null = null;
+
+    /** @deprecated Use {@link ExplorerError}. */
+    public get explorerError(): string | null {
+      return this.ExplorerError;
+    }
+    /** @deprecated Use {@link ExplorerError}. */
+    public set explorerError(value: string | null) {
+      this.ExplorerError = value;
+    }
 
     // Items section
-    public itemSearchTerm = '';
-    public selectedItems = new Set<string>();
-    public isSelectAllChecked = false;
+    public ItemSearchTerm = '';
+
+    /** @deprecated Use {@link ItemSearchTerm}. */
+    public get itemSearchTerm() {
+      return this.ItemSearchTerm;
+    }
+    /** @deprecated Use {@link ItemSearchTerm}. */
+    public set itemSearchTerm(value) {
+      this.ItemSearchTerm = value;
+    }
+    public SelectedItems = new Set<string>();
+
+    /** @deprecated Use {@link SelectedItems}. */
+    public get selectedItems() {
+      return this.SelectedItems;
+    }
+    /** @deprecated Use {@link SelectedItems}. */
+    public set selectedItems(value) {
+      this.SelectedItems = value;
+    }
+    public IsSelectAllChecked = false;
+
+    /** @deprecated Use {@link IsSelectAllChecked}. */
+    public get isSelectAllChecked() {
+      return this.IsSelectAllChecked;
+    }
+    /** @deprecated Use {@link IsSelectAllChecked}. */
+    public set isSelectAllChecked(value) {
+      this.IsSelectAllChecked = value;
+    }
 
     // Items pagination — the Items grid loads one page at a time so large
     // lists (thousands of members) don't pull the entire membership into the
     // browser. Display-name resolution is likewise batched per page.
-    public itemsPage = 0;
-    public readonly itemsPageSize = 100;
+    public ItemsPage = 0;
+
+    /** @deprecated Use {@link ItemsPage}. */
+    public get itemsPage() {
+      return this.ItemsPage;
+    }
+    /** @deprecated Use {@link ItemsPage}. */
+    public set itemsPage(value) {
+      this.ItemsPage = value;
+    }
+    public readonly ItemsPageSize = 100;
+
+    /** @deprecated Use {@link ItemsPageSize}. */
+    public get itemsPageSize() {
+      return this.ItemsPageSize;
+    }
 
     // Edit state
-    public isEditingName = false;
-    public isEditingDescription = false;
-    public editingName = '';
-    public editingDescription = '';
+    public IsEditingName = false;
+
+    /** @deprecated Use {@link IsEditingName}. */
+    public get isEditingName() {
+      return this.IsEditingName;
+    }
+    /** @deprecated Use {@link IsEditingName}. */
+    public set isEditingName(value) {
+      this.IsEditingName = value;
+    }
+    public IsEditingDescription = false;
+
+    /** @deprecated Use {@link IsEditingDescription}. */
+    public get isEditingDescription() {
+      return this.IsEditingDescription;
+    }
+    /** @deprecated Use {@link IsEditingDescription}. */
+    public set isEditingDescription(value) {
+      this.IsEditingDescription = value;
+    }
+    public EditingName = '';
+
+    /** @deprecated Use {@link EditingName}. */
+    public get editingName() {
+      return this.EditingName;
+    }
+    /** @deprecated Use {@link EditingName}. */
+    public set editingName(value) {
+      this.EditingName = value;
+    }
+    public EditingDescription = '';
+
+    /** @deprecated Use {@link EditingDescription}. */
+    public get editingDescription() {
+      return this.EditingDescription;
+    }
+    /** @deprecated Use {@link EditingDescription}. */
+    public set editingDescription(value) {
+      this.EditingDescription = value;
+    }
 
     // Add Records dialog
-    public showAddRecordsDialog = false;
-    public addDialogLoading = false;
-    public addDialogSaving = false;
-    public addableRecords: AddableRecord[] = [];
-    public addRecordsSearchFilter = '';
-    public existingListDetailIds = new Set<string>();
-    public addProgress = 0;
-    public addTotal = 0;
+    public ShowAddRecordsDialog = false;
+
+    /** @deprecated Use {@link ShowAddRecordsDialog}. */
+    public get showAddRecordsDialog() {
+      return this.ShowAddRecordsDialog;
+    }
+    /** @deprecated Use {@link ShowAddRecordsDialog}. */
+    public set showAddRecordsDialog(value) {
+      this.ShowAddRecordsDialog = value;
+    }
+    public AddDialogLoading = false;
+
+    /** @deprecated Use {@link AddDialogLoading}. */
+    public get addDialogLoading() {
+      return this.AddDialogLoading;
+    }
+    /** @deprecated Use {@link AddDialogLoading}. */
+    public set addDialogLoading(value) {
+      this.AddDialogLoading = value;
+    }
+    public AddDialogSaving = false;
+
+    /** @deprecated Use {@link AddDialogSaving}. */
+    public get addDialogSaving() {
+      return this.AddDialogSaving;
+    }
+    /** @deprecated Use {@link AddDialogSaving}. */
+    public set addDialogSaving(value) {
+      this.AddDialogSaving = value;
+    }
+    public AddableRecords: AddableRecord[] = [];
+
+    /** @deprecated Use {@link AddableRecords}. */
+    public get addableRecords(): AddableRecord[] {
+      return this.AddableRecords;
+    }
+    /** @deprecated Use {@link AddableRecords}. */
+    public set addableRecords(value: AddableRecord[]) {
+      this.AddableRecords = value;
+    }
+    public AddRecordsSearchFilter = '';
+
+    /** @deprecated Use {@link AddRecordsSearchFilter}. */
+    public get addRecordsSearchFilter() {
+      return this.AddRecordsSearchFilter;
+    }
+    /** @deprecated Use {@link AddRecordsSearchFilter}. */
+    public set addRecordsSearchFilter(value) {
+      this.AddRecordsSearchFilter = value;
+    }
+    public ExistingListDetailIds = new Set<string>();
+
+    /** @deprecated Use {@link ExistingListDetailIds}. */
+    public get existingListDetailIds() {
+      return this.ExistingListDetailIds;
+    }
+    /** @deprecated Use {@link ExistingListDetailIds}. */
+    public set existingListDetailIds(value) {
+      this.ExistingListDetailIds = value;
+    }
+    public AddProgress = 0;
+
+    /** @deprecated Use {@link AddProgress}. */
+    public get addProgress() {
+      return this.AddProgress;
+    }
+    /** @deprecated Use {@link AddProgress}. */
+    public set addProgress(value) {
+      this.AddProgress = value;
+    }
+    public AddTotal = 0;
+
+    /** @deprecated Use {@link AddTotal}. */
+    public get addTotal() {
+      return this.AddTotal;
+    }
+    /** @deprecated Use {@link AddTotal}. */
+    public set addTotal(value) {
+      this.AddTotal = value;
+    }
     private searchSubject = new Subject<string>();
 
     // Add From View dialog
-    public showAddFromViewDialog = false;
-    public showAddFromViewLoader = false;
-    public userViews: MJUserViewEntityExtended[] | null = null;
-    public userViewsToAdd: MJUserViewEntityExtended[] = [];
+    public ShowAddFromViewDialog = false;
+
+    /** @deprecated Use {@link ShowAddFromViewDialog}. */
+    public get showAddFromViewDialog() {
+      return this.ShowAddFromViewDialog;
+    }
+    /** @deprecated Use {@link ShowAddFromViewDialog}. */
+    public set showAddFromViewDialog(value) {
+      this.ShowAddFromViewDialog = value;
+    }
+    public ShowAddFromViewLoader = false;
+
+    /** @deprecated Use {@link ShowAddFromViewLoader}. */
+    public get showAddFromViewLoader() {
+      return this.ShowAddFromViewLoader;
+    }
+    /** @deprecated Use {@link ShowAddFromViewLoader}. */
+    public set showAddFromViewLoader(value) {
+      this.ShowAddFromViewLoader = value;
+    }
+    public UserViews: MJUserViewEntityExtended[] | null = null;
+
+    /** @deprecated Use {@link UserViews}. */
+    public get userViews(): MJUserViewEntityExtended[] | null {
+      return this.UserViews;
+    }
+    /** @deprecated Use {@link UserViews}. */
+    public set userViews(value: MJUserViewEntityExtended[] | null) {
+      this.UserViews = value;
+    }
+    public UserViewsToAdd: MJUserViewEntityExtended[] = [];
+
+    /** @deprecated Use {@link UserViewsToAdd}. */
+    public get userViewsToAdd(): MJUserViewEntityExtended[] {
+      return this.UserViewsToAdd;
+    }
+    /** @deprecated Use {@link UserViewsToAdd}. */
+    public set userViewsToAdd(value: MJUserViewEntityExtended[]) {
+      this.UserViewsToAdd = value;
+    }
     /**
      * Normalized-UUID set of the IDs in {@link userViewsToAdd}, kept in sync with that
      * array. Lets {@link isViewSelected} (bound per-row in the dialog's @for, ~2x/row)
      * do an O(1) lookup instead of scanning the array with UUIDsEqual on every check.
      */
     private userViewsToAddIds: Set<string> = new Set<string>();
-    public addFromViewProgress = 0;
-    public addFromViewTotal = 0;
-    public fetchingRecordsToSave = false;
+    public AddFromViewProgress = 0;
+
+    /** @deprecated Use {@link AddFromViewProgress}. */
+    public get addFromViewProgress() {
+      return this.AddFromViewProgress;
+    }
+    /** @deprecated Use {@link AddFromViewProgress}. */
+    public set addFromViewProgress(value) {
+      this.AddFromViewProgress = value;
+    }
+    public AddFromViewTotal = 0;
+
+    /** @deprecated Use {@link AddFromViewTotal}. */
+    public get addFromViewTotal() {
+      return this.AddFromViewTotal;
+    }
+    /** @deprecated Use {@link AddFromViewTotal}. */
+    public set addFromViewTotal(value) {
+      this.AddFromViewTotal = value;
+    }
+    public FetchingRecordsToSave = false;
+
+    /** @deprecated Use {@link FetchingRecordsToSave}. */
+    public get fetchingRecordsToSave() {
+      return this.FetchingRecordsToSave;
+    }
+    /** @deprecated Use {@link FetchingRecordsToSave}. */
+    public set fetchingRecordsToSave(value) {
+      this.FetchingRecordsToSave = value;
+    }
 
     // Share dialog
-    public showShareDialog = false;
-    public shareDialogConfig: ListShareDialogConfig | null = null;
+    public ShowShareDialog = false;
+
+    /** @deprecated Use {@link ShowShareDialog}. */
+    public get showShareDialog() {
+      return this.ShowShareDialog;
+    }
+    /** @deprecated Use {@link ShowShareDialog}. */
+    public set showShareDialog(value) {
+      this.ShowShareDialog = value;
+    }
+    public ShareDialogConfig: ListShareDialogConfig | null = null;
+
+    /** @deprecated Use {@link ShareDialogConfig}. */
+    public get shareDialogConfig(): ListShareDialogConfig | null {
+      return this.ShareDialogConfig;
+    }
+    /** @deprecated Use {@link ShareDialogConfig}. */
+    public set shareDialogConfig(value: ListShareDialogConfig | null) {
+      this.ShareDialogConfig = value;
+    }
 
     // Invitations / audit log dialogs — opened from the share dialog.
-    public showInvitationsDialog = false;
-    public showAuditLogDialog = false;
+    public ShowInvitationsDialog = false;
+
+    /** @deprecated Use {@link ShowInvitationsDialog}. */
+    public get showInvitationsDialog() {
+      return this.ShowInvitationsDialog;
+    }
+    /** @deprecated Use {@link ShowInvitationsDialog}. */
+    public set showInvitationsDialog(value) {
+      this.ShowInvitationsDialog = value;
+    }
+    public ShowAuditLogDialog = false;
+
+    /** @deprecated Use {@link ShowAuditLogDialog}. */
+    public get showAuditLogDialog() {
+      return this.ShowAuditLogDialog;
+    }
+    /** @deprecated Use {@link ShowAuditLogDialog}. */
+    public set showAuditLogDialog(value) {
+      this.ShowAuditLogDialog = value;
+    }
 
     private destroy$ = new Subject<void>();
     private get metadata() { return this.ProviderToUse; }
@@ -178,7 +498,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
             this.updateNavBadges();
         } catch (error) {
             console.error('Error loading list data:', error);
-            this.explorerError = 'Failed to load list data';
+            this.ExplorerError = 'Failed to load list data';
         } finally {
             this.cdr.detectChanges();
         }
@@ -192,14 +512,14 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
             ResultType: 'entity_object'
         });
         if (result.Success) {
-            this.categories = result.Results;
+            this.Categories = result.Results;
         }
     }
 
     private async loadItems(page: number = 0): Promise<void> {
         if (!this.record?.IsSaved) return;
 
-        this.isLoadingItems = true;
+        this.IsLoadingItems = true;
         this.cdr.detectChanges();
 
         try {
@@ -208,20 +528,20 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
                 EntityName: 'MJ: List Details',
                 ExtraFilter: `ListID = '${this.record.ID}'`,
                 OrderBy: '__mj_CreatedAt DESC',
-                StartRow: page * this.itemsPageSize,
-                MaxRows: this.itemsPageSize,
+                StartRow: page * this.ItemsPageSize,
+                MaxRows: this.ItemsPageSize,
                 ResultType: 'entity_object'
             });
 
             if (result.Success) {
-                this.itemsPage = page;
-                this.listItems = result.Results.map(detail => ({
+                this.ItemsPage = page;
+                this.ListItems = result.Results.map(detail => ({
                     detail,
                     recordName: detail.RecordID || 'Loading...',
                     isLoading: true
                 }));
-                this.selectedItems.clear();
-                this.isSelectAllChecked = false;
+                this.SelectedItems.clear();
+                this.IsSelectAllChecked = false;
 
                 // Resolve display names for this page in one batched query
                 await this.loadRecordNames();
@@ -229,7 +549,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         } catch (error) {
             console.error('Error loading list items:', error);
         } finally {
-            this.isLoadingItems = false;
+            this.IsLoadingItems = false;
             this.cdr.detectChanges();
         }
     }
@@ -240,11 +560,11 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
      */
     private async loadRecordNames(): Promise<void> {
         const finish = () => {
-            for (const item of this.listItems) item.isLoading = false;
+            for (const item of this.ListItems) item.isLoading = false;
             this.cdr.detectChanges();
         };
 
-        if (!this.entityInfo || this.listItems.length === 0) {
+        if (!this.entityInfo || this.ListItems.length === 0) {
             finish();
             return;
         }
@@ -254,7 +574,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         const displayField = GetRecordDisplayField(this.entityInfo);
         if (!displayField.Field) {
             // Entity has only key fields — the record ID is the best label available
-            for (const item of this.listItems) {
+            for (const item of this.ListItems) {
                 item.recordName = item.detail.RecordID || 'Unknown';
             }
             finish();
@@ -266,7 +586,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         // Keyed by the compact key segment (raw value for a single-column key, "F1|v1||F2|v2" for a
         // composite one) — the same form ListDetail.RecordID stores, so the lookups below line up.
         const valueMap = new Map<string, unknown>();
-        const ids = this.listItems
+        const ids = this.ListItems
             .map(i => i.detail.RecordID)
             .filter((id): id is string => !!id);
 
@@ -291,7 +611,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
             }
         }
 
-        for (const item of this.listItems) {
+        for (const item of this.ListItems) {
             const id = item.detail.RecordID || 'Unknown';
             const value = item.detail.RecordID ? valueMap.get(NormalizeUUID(item.detail.RecordID)) : undefined;
             item.recordName = FormatRecordDisplayValue(id, value, displayField);
@@ -317,19 +637,29 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
 
     // === Items pagination ===
 
-    public get totalPages(): number {
-        return Math.max(1, Math.ceil(this.stats.itemCount / this.itemsPageSize));
+    public get TotalPages(): number {
+        return Math.max(1, Math.ceil(this.Stats.itemCount / this.ItemsPageSize));
     }
 
-    public async goToPage(page: number): Promise<void> {
-        if (page < 0 || page >= this.totalPages || page === this.itemsPage) return;
+    /** @deprecated Use {@link TotalPages}. */
+    public get totalPages(): number {
+      return this.TotalPages;
+    }
+
+    public async GoToPage(page: number): Promise<void> {
+        if (page < 0 || page >= this.TotalPages || page === this.ItemsPage) return;
         await this.loadItems(page);
+    }
+
+    /** @deprecated Use {@link GoToPage}. */
+    public async goToPage(page: number): Promise<void> {
+      return this.GoToPage(page);
     }
 
     private async loadStats(): Promise<void> {
         if (!this.record?.IsSaved) return;
 
-        this.isLoadingStats = true;
+        this.IsLoadingStats = true;
 
         try {
             const rv = RunView.FromMetadataProvider(this.ProviderToUse);
@@ -351,7 +681,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
                 }
             ]);
 
-            this.stats = {
+            this.Stats = {
                 itemCount: itemsResult.Success ? itemsResult.TotalRowCount : 0,
                 shareCount: sharesResult.Success ? sharesResult.TotalRowCount : 0,
                 invitationCount: invitationsResult.Success ? invitationsResult.TotalRowCount : 0,
@@ -360,18 +690,18 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         } catch (error) {
             console.error('Error loading stats:', error);
         } finally {
-            this.isLoadingStats = false;
+            this.IsLoadingStats = false;
             this.cdr.detectChanges();
         }
     }
 
     private updateNavBadges(): void {
-        this.navItems = this.navItems.map(item => {
+        this.NavItems = this.NavItems.map(item => {
             switch (item.id) {
                 case 'items':
-                    return { ...item, badge: this.stats.itemCount };
+                    return { ...item, badge: this.Stats.itemCount };
                 case 'sharing':
-                    return { ...item, badge: this.stats.shareCount + this.stats.invitationCount };
+                    return { ...item, badge: this.Stats.shareCount + this.Stats.invitationCount };
                 default:
                     return item;
             }
@@ -380,58 +710,78 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
 
     // === Navigation ===
 
-    public setActiveSection(section: ListSection): void {
-        const navItem = this.navItems.find(n => n.id === section);
+    public SetActiveSection(section: ListSection): void {
+        const navItem = this.NavItems.find(n => n.id === section);
         if (navItem?.disabled) return;
 
-        this.activeSection = section;
+        this.ActiveSection = section;
         this.cdr.detectChanges();
+    }
+
+    /** @deprecated Use {@link SetActiveSection}. */
+    public setActiveSection(section: ListSection): void {
+      return this.SetActiveSection(section);
     }
 
     // === Items Management ===
 
-    public get filteredItems(): ListItemViewModel[] {
-        if (!this.itemSearchTerm) return this.listItems;
+    public get FilteredItems(): ListItemViewModel[] {
+        if (!this.ItemSearchTerm) return this.ListItems;
 
-        const term = this.itemSearchTerm.toLowerCase();
-        return this.listItems.filter(item =>
+        const term = this.ItemSearchTerm.toLowerCase();
+        return this.ListItems.filter(item =>
             item.recordName.toLowerCase().includes(term) ||
             item.detail.RecordID?.toLowerCase().includes(term)
         );
     }
 
-    public toggleItemSelection(item: ListItemViewModel): void {
+    /** @deprecated Use {@link FilteredItems}. */
+    public get filteredItems(): ListItemViewModel[] {
+      return this.FilteredItems;
+    }
+
+    public ToggleItemSelection(item: ListItemViewModel): void {
         const id = item.detail.ID;
-        if (this.selectedItems.has(id)) {
-            this.selectedItems.delete(id);
+        if (this.SelectedItems.has(id)) {
+            this.SelectedItems.delete(id);
         } else {
-            this.selectedItems.add(id);
+            this.SelectedItems.add(id);
         }
         this.updateSelectAllState();
         this.cdr.detectChanges();
     }
 
-    public toggleSelectAll(): void {
-        if (this.isSelectAllChecked) {
-            this.selectedItems.clear();
+    /** @deprecated Use {@link ToggleItemSelection}. */
+    public toggleItemSelection(item: ListItemViewModel): void {
+      return this.ToggleItemSelection(item);
+    }
+
+    public ToggleSelectAll(): void {
+        if (this.IsSelectAllChecked) {
+            this.SelectedItems.clear();
         } else {
-            for (const item of this.filteredItems) {
-                this.selectedItems.add(item.detail.ID);
+            for (const item of this.FilteredItems) {
+                this.SelectedItems.add(item.detail.ID);
             }
         }
-        this.isSelectAllChecked = !this.isSelectAllChecked;
+        this.IsSelectAllChecked = !this.IsSelectAllChecked;
         this.cdr.detectChanges();
     }
 
-    private updateSelectAllState(): void {
-        this.isSelectAllChecked = this.filteredItems.length > 0 &&
-            this.filteredItems.every(item => this.selectedItems.has(item.detail.ID));
+    /** @deprecated Use {@link ToggleSelectAll}. */
+    public toggleSelectAll(): void {
+      return this.ToggleSelectAll();
     }
 
-    public async removeSelectedItems(): Promise<void> {
-        if (this.selectedItems.size === 0) return;
+    private updateSelectAllState(): void {
+        this.IsSelectAllChecked = this.FilteredItems.length > 0 &&
+            this.FilteredItems.every(item => this.SelectedItems.has(item.detail.ID));
+    }
 
-        const count = this.selectedItems.size;
+    public async RemoveSelectedItems(): Promise<void> {
+        if (this.SelectedItems.size === 0) return;
+
+        const count = this.SelectedItems.size;
         const confirmMessage = `Remove ${count} item${count > 1 ? 's' : ''} from this list?`;
 
         if (!(await this.confirmService.ConfirmDelete({ message: confirmMessage }))) return;
@@ -445,8 +795,8 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
             const tg = await this.metadata.CreateTransactionGroup();
             let queued = 0;
             let failedToQueue = 0;
-            for (const id of this.selectedItems) {
-                const item = this.listItems.find(i => UUIDsEqual(i.detail.ID, id));
+            for (const id of this.SelectedItems) {
+                const item = this.ListItems.find(i => UUIDsEqual(i.detail.ID, id));
                 if (item) {
                     item.detail.TransactionGroup = tg;
                     // With a TransactionGroup set, Delete() returns true once
@@ -480,9 +830,9 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
                 );
             }
 
-            this.selectedItems.clear();
+            this.SelectedItems.clear();
             await this.loadStats();
-            await this.loadItems(Math.min(this.itemsPage, this.totalPages - 1));
+            await this.loadItems(Math.min(this.ItemsPage, this.TotalPages - 1));
             this.updateNavBadges();
         } catch (error) {
             console.error('Error removing items:', error);
@@ -494,7 +844,12 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         }
     }
 
-    public openRecord(item: ListItemViewModel): void {
+    /** @deprecated Use {@link RemoveSelectedItems}. */
+    public async removeSelectedItems(): Promise<void> {
+      return this.RemoveSelectedItems();
+    }
+
+    public OpenRecord(item: ListItemViewModel): void {
         if (!this.entityInfo || !item.detail.RecordID) return;
 
         // ListDetail.RecordID is the compact CompositeKey segment: the raw value for a single-column
@@ -503,21 +858,31 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         SharedService.Instance.OpenEntityRecord(this.entityInfo.Name, CompositeKey.FromURLSegment(this.entityInfo, item.detail.RecordID));
     }
 
+    /** @deprecated Use {@link OpenRecord}. */
+    public openRecord(item: ListItemViewModel): void {
+      return this.OpenRecord(item);
+    }
+
     // === Inline Editing ===
 
-    public startEditingName(): void {
-        this.editingName = this.record.Name;
-        this.isEditingName = true;
+    public StartEditingName(): void {
+        this.EditingName = this.record.Name;
+        this.IsEditingName = true;
         this.cdr.detectChanges();
     }
 
-    public async saveNameEdit(): Promise<void> {
-        if (!this.editingName.trim()) {
-            this.cancelNameEdit();
+    /** @deprecated Use {@link StartEditingName}. */
+    public startEditingName(): void {
+      return this.StartEditingName();
+    }
+
+    public async SaveNameEdit(): Promise<void> {
+        if (!this.EditingName.trim()) {
+            this.CancelNameEdit();
             return;
         }
 
-        this.record.Name = this.editingName.trim();
+        this.record.Name = this.EditingName.trim();
         const saved = await this.record.Save();
 
         if (saved) {
@@ -526,23 +891,38 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
             this.showNotification('Failed to update name', 'error', 3000);
         }
 
-        this.isEditingName = false;
+        this.IsEditingName = false;
         this.cdr.detectChanges();
     }
 
+    /** @deprecated Use {@link SaveNameEdit}. */
+    public async saveNameEdit(): Promise<void> {
+      return this.SaveNameEdit();
+    }
+
+    public CancelNameEdit(): void {
+        this.IsEditingName = false;
+        this.cdr.detectChanges();
+    }
+
+    /** @deprecated Use {@link CancelNameEdit}. */
     public cancelNameEdit(): void {
-        this.isEditingName = false;
+      return this.CancelNameEdit();
+    }
+
+    public StartEditingDescription(): void {
+        this.EditingDescription = this.record.Description || '';
+        this.IsEditingDescription = true;
         this.cdr.detectChanges();
     }
 
+    /** @deprecated Use {@link StartEditingDescription}. */
     public startEditingDescription(): void {
-        this.editingDescription = this.record.Description || '';
-        this.isEditingDescription = true;
-        this.cdr.detectChanges();
+      return this.StartEditingDescription();
     }
 
-    public async saveDescriptionEdit(): Promise<void> {
-        this.record.Description = this.editingDescription.trim() || null;
+    public async SaveDescriptionEdit(): Promise<void> {
+        this.record.Description = this.EditingDescription.trim() || null;
         const saved = await this.record.Save();
 
         if (saved) {
@@ -551,38 +931,68 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
             this.showNotification('Failed to update description', 'error', 3000);
         }
 
-        this.isEditingDescription = false;
+        this.IsEditingDescription = false;
         this.cdr.detectChanges();
     }
 
-    public cancelDescriptionEdit(): void {
-        this.isEditingDescription = false;
+    /** @deprecated Use {@link SaveDescriptionEdit}. */
+    public async saveDescriptionEdit(): Promise<void> {
+      return this.SaveDescriptionEdit();
+    }
+
+    public CancelDescriptionEdit(): void {
+        this.IsEditingDescription = false;
         this.cdr.detectChanges();
+    }
+
+    /** @deprecated Use {@link CancelDescriptionEdit}. */
+    public cancelDescriptionEdit(): void {
+      return this.CancelDescriptionEdit();
     }
 
     // === Helpers ===
 
-    public get entityDisplayName(): string {
+    public get EntityDisplayName(): string {
         return this.entityInfo?.DisplayName || this.entityInfo?.Name || this.record?.Entity || 'Unknown';
     }
 
-    public get entityIcon(): string {
+    /** @deprecated Use {@link EntityDisplayName}. */
+    public get entityDisplayName(): string {
+      return this.EntityDisplayName;
+    }
+
+    public get EntityIcon(): string {
         return this.entityInfo?.Icon || 'fa-solid fa-table';
     }
 
-    public get categoryName(): string {
+    /** @deprecated Use {@link EntityIcon}. */
+    public get entityIcon(): string {
+      return this.EntityIcon;
+    }
+
+    public get CategoryName(): string {
         if (!this.record?.CategoryID) return 'Uncategorized';
-        const category = this.categories.find(c => UUIDsEqual(c.ID, this.record.CategoryID));
+        const category = this.Categories.find(c => UUIDsEqual(c.ID, this.record.CategoryID));
         return category?.Name || 'Unknown';
     }
 
-    public get formattedItemCount(): string {
-        return this.stats.itemCount.toLocaleString();
+    /** @deprecated Use {@link CategoryName}. */
+    public get categoryName(): string {
+      return this.CategoryName;
     }
 
-    public get formattedLastUpdated(): string {
-        if (!this.stats.lastUpdated) return 'Never';
-        const date = new Date(this.stats.lastUpdated);
+    public get FormattedItemCount(): string {
+        return this.Stats.itemCount.toLocaleString();
+    }
+
+    /** @deprecated Use {@link FormattedItemCount}. */
+    public get formattedItemCount(): string {
+      return this.FormattedItemCount;
+    }
+
+    public get FormattedLastUpdated(): string {
+        if (!this.Stats.lastUpdated) return 'Never';
+        const date = new Date(this.Stats.lastUpdated);
         const now = new Date();
         const diffMs = now.getTime() - date.getTime();
         const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
@@ -593,15 +1003,30 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         return date.toLocaleDateString();
     }
 
-    public getOwnerName(): string {
+    /** @deprecated Use {@link FormattedLastUpdated}. */
+    public get formattedLastUpdated(): string {
+      return this.FormattedLastUpdated;
+    }
+
+    public GetOwnerName(): string {
         return this.record?.User || 'Unknown';
     }
 
-    public isCurrentUserOwner(): boolean {
+    /** @deprecated Use {@link GetOwnerName}. */
+    public getOwnerName(): string {
+      return this.GetOwnerName();
+    }
+
+    public IsCurrentUserOwner(): boolean {
         return UUIDsEqual(this.record?.UserID, this.metadata.CurrentUser?.ID);
     }
 
-    public async onCategoryChange(categoryId: string | null): Promise<void> {
+    /** @deprecated Use {@link IsCurrentUserOwner}. */
+    public isCurrentUserOwner(): boolean {
+      return this.IsCurrentUserOwner();
+    }
+
+    public async OnCategoryChange(categoryId: string | null): Promise<void> {
         this.record.CategoryID = categoryId;
         const saved = await this.record.Save();
 
@@ -614,38 +1039,58 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         this.cdr.detectChanges();
     }
 
-    public async refreshItems(): Promise<void> {
+    /** @deprecated Use {@link OnCategoryChange}. */
+    public async onCategoryChange(categoryId: string | null): Promise<void> {
+      return this.OnCategoryChange(categoryId);
+    }
+
+    public async RefreshItems(): Promise<void> {
         await this.loadStats();
-        await this.loadItems(Math.min(this.itemsPage, this.totalPages - 1));
+        await this.loadItems(Math.min(this.ItemsPage, this.TotalPages - 1));
         this.updateNavBadges();
+    }
+
+    /** @deprecated Use {@link RefreshItems}. */
+    public async refreshItems(): Promise<void> {
+      return this.RefreshItems();
     }
 
     // ==========================================
     // Add Records Dialog
     // ==========================================
 
-    public async openAddRecordsDialog(): Promise<void> {
-        this.showAddRecordsDialog = true;
-        this.addableRecords = [];
-        this.addRecordsSearchFilter = '';
-        this.addDialogLoading = true;
-        this.addDialogSaving = false;
+    public async OpenAddRecordsDialog(): Promise<void> {
+        this.ShowAddRecordsDialog = true;
+        this.AddableRecords = [];
+        this.AddRecordsSearchFilter = '';
+        this.AddDialogLoading = true;
+        this.AddDialogSaving = false;
 
         // Load existing list detail IDs to mark which records are already in the list
         await this.loadExistingListDetailIds();
-        this.addDialogLoading = false;
+        this.AddDialogLoading = false;
         this.cdr.detectChanges();
     }
 
-    public closeAddRecordsDialog(): void {
-        this.showAddRecordsDialog = false;
-        this.addableRecords = [];
-        this.addRecordsSearchFilter = '';
-        this.existingListDetailIds.clear();
-        this.addDialogSaving = false;
-        this.addProgress = 0;
-        this.addTotal = 0;
+    /** @deprecated Use {@link OpenAddRecordsDialog}. */
+    public async openAddRecordsDialog(): Promise<void> {
+      return this.OpenAddRecordsDialog();
+    }
+
+    public CloseAddRecordsDialog(): void {
+        this.ShowAddRecordsDialog = false;
+        this.AddableRecords = [];
+        this.AddRecordsSearchFilter = '';
+        this.ExistingListDetailIds.clear();
+        this.AddDialogSaving = false;
+        this.AddProgress = 0;
+        this.AddTotal = 0;
         this.cdr.detectChanges();
+    }
+
+    /** @deprecated Use {@link CloseAddRecordsDialog}. */
+    public closeAddRecordsDialog(): void {
+      return this.CloseAddRecordsDialog();
     }
 
     private async loadExistingListDetailIds(): Promise<void> {
@@ -660,28 +1105,33 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         }, this.metadata.CurrentUser);
 
         if (result.Success) {
-            this.existingListDetailIds = new Set(result.Results.map(r => NormalizeUUID(r.RecordID)));
+            this.ExistingListDetailIds = new Set(result.Results.map(r => NormalizeUUID(r.RecordID)));
         }
     }
 
-    public onAddRecordsSearchChange(value: string): void {
-        this.addRecordsSearchFilter = value;
+    public OnAddRecordsSearchChange(value: string): void {
+        this.AddRecordsSearchFilter = value;
         this.searchSubject.next(value);
+    }
+
+    /** @deprecated Use {@link OnAddRecordsSearchChange}. */
+    public onAddRecordsSearchChange(value: string): void {
+      return this.OnAddRecordsSearchChange(value);
     }
 
     private async searchRecords(searchText: string): Promise<void> {
         if (!this.record || !searchText || searchText.length < 2) {
-            this.addableRecords = [];
+            this.AddableRecords = [];
             this.cdr.detectChanges();
             return;
         }
 
-        this.addDialogLoading = true;
+        this.AddDialogLoading = true;
         this.cdr.detectChanges();
 
         const sourceEntityInfo = this.metadata.EntityByID(this.record.EntityID);
         if (!sourceEntityInfo) {
-            this.addDialogLoading = false;
+            this.AddDialogLoading = false;
             this.cdr.detectChanges();
             return;
         }
@@ -705,7 +1155,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         });
 
         if (result.Success) {
-            this.addableRecords = result.Results.map((record: Record<string, unknown>) => {
+            this.AddableRecords = result.Results.map((record: Record<string, unknown>) => {
                 // Compact key segment (raw value, or "F1|v1||F2|v2" for a composite key) — the form ListDetail.RecordID stores
                 const recordId = CompositeKey.FromEntityRecord(sourceEntityInfo, record).ToCompactURLSegment();
                 return {
@@ -713,45 +1163,65 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
                     Name: displayField.Field
                         ? FormatRecordDisplayValue(recordId, record[displayField.Field.Name], displayField)
                         : recordId,
-                    isInList: this.existingListDetailIds.has(NormalizeUUID(recordId)),
+                    isInList: this.ExistingListDetailIds.has(NormalizeUUID(recordId)),
                     isSelected: false
                 };
             });
         }
 
-        this.addDialogLoading = false;
+        this.AddDialogLoading = false;
         this.cdr.detectChanges();
     }
 
-    public toggleRecordSelection(record: AddableRecord): void {
+    public ToggleRecordSelection(record: AddableRecord): void {
         if (record.isInList) return; // Can't select records already in list
         record.isSelected = !record.isSelected;
         this.cdr.detectChanges();
     }
 
-    public get selectedAddableRecords(): AddableRecord[] {
-        return this.addableRecords.filter(r => r.isSelected);
+    /** @deprecated Use {@link ToggleRecordSelection}. */
+    public toggleRecordSelection(record: AddableRecord): void {
+      return this.ToggleRecordSelection(record);
     }
 
-    public selectAllAddable(): void {
-        this.addableRecords.forEach(r => {
+    public get SelectedAddableRecords(): AddableRecord[] {
+        return this.AddableRecords.filter(r => r.isSelected);
+    }
+
+    /** @deprecated Use {@link SelectedAddableRecords}. */
+    public get selectedAddableRecords(): AddableRecord[] {
+      return this.SelectedAddableRecords;
+    }
+
+    public SelectAllAddable(): void {
+        this.AddableRecords.forEach(r => {
             if (!r.isInList) r.isSelected = true;
         });
         this.cdr.detectChanges();
     }
 
-    public deselectAllAddable(): void {
-        this.addableRecords.forEach(r => r.isSelected = false);
+    /** @deprecated Use {@link SelectAllAddable}. */
+    public selectAllAddable(): void {
+      return this.SelectAllAddable();
+    }
+
+    public DeselectAllAddable(): void {
+        this.AddableRecords.forEach(r => r.isSelected = false);
         this.cdr.detectChanges();
     }
 
-    public async confirmAddRecords(): Promise<void> {
-        const recordsToAdd = this.selectedAddableRecords;
+    /** @deprecated Use {@link DeselectAllAddable}. */
+    public deselectAllAddable(): void {
+      return this.DeselectAllAddable();
+    }
+
+    public async ConfirmAddRecords(): Promise<void> {
+        const recordsToAdd = this.SelectedAddableRecords;
         if (recordsToAdd.length === 0 || !this.record) return;
 
-        this.addDialogSaving = true;
-        this.addTotal = recordsToAdd.length;
-        this.addProgress = 0;
+        this.AddDialogSaving = true;
+        this.AddTotal = recordsToAdd.length;
+        this.AddProgress = 0;
         this.cdr.detectChanges();
 
         // Use transaction group for bulk insert
@@ -768,51 +1238,66 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         const success = await tg.Submit();
 
         if (success) {
-            this.addProgress = this.addTotal;
+            this.AddProgress = this.AddTotal;
             this.showNotification(
                 `Added ${recordsToAdd.length} record${recordsToAdd.length !== 1 ? 's' : ''} to list`,
                 'success',
                 2500
             );
-            this.closeAddRecordsDialog();
-            await this.refreshItems();
+            this.CloseAddRecordsDialog();
+            await this.RefreshItems();
         } else {
             LogError('Error adding records to list');
             this.showNotification('Failed to add some records', 'error', 2500);
-            this.addDialogSaving = false;
+            this.AddDialogSaving = false;
             this.cdr.detectChanges();
         }
+    }
+
+    /** @deprecated Use {@link ConfirmAddRecords}. */
+    public async confirmAddRecords(): Promise<void> {
+      return this.ConfirmAddRecords();
     }
 
     // ==========================================
     // Add From View Dialog
     // ==========================================
 
-    public async openAddFromViewDialog(): Promise<void> {
-        this.showAddFromViewDialog = true;
-        this.userViewsToAdd = [];
+    public async OpenAddFromViewDialog(): Promise<void> {
+        this.ShowAddFromViewDialog = true;
+        this.UserViewsToAdd = [];
         this.userViewsToAddIds.clear();
         this.cdr.detectChanges();
 
-        if (!this.userViews) {
+        if (!this.UserViews) {
             await this.loadEntityViews();
         }
     }
 
-    public closeAddFromViewDialog(): void {
-        this.showAddFromViewDialog = false;
-        this.userViewsToAdd = [];
+    /** @deprecated Use {@link OpenAddFromViewDialog}. */
+    public async openAddFromViewDialog(): Promise<void> {
+      return this.OpenAddFromViewDialog();
+    }
+
+    public CloseAddFromViewDialog(): void {
+        this.ShowAddFromViewDialog = false;
+        this.UserViewsToAdd = [];
         this.userViewsToAddIds.clear();
-        this.showAddFromViewLoader = false;
-        this.addFromViewProgress = 0;
-        this.addFromViewTotal = 0;
+        this.ShowAddFromViewLoader = false;
+        this.AddFromViewProgress = 0;
+        this.AddFromViewTotal = 0;
         this.cdr.detectChanges();
+    }
+
+    /** @deprecated Use {@link CloseAddFromViewDialog}. */
+    public closeAddFromViewDialog(): void {
+      return this.CloseAddFromViewDialog();
     }
 
     private async loadEntityViews(): Promise<void> {
         if (!this.record || !this.record.Entity) return;
 
-        this.showAddFromViewLoader = true;
+        this.ShowAddFromViewLoader = true;
         this.cdr.detectChanges();
 
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
@@ -825,34 +1310,44 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         if (!runViewResult.Success) {
             LogError(`Error loading User Views for entity ${this.record.Entity}`);
         } else {
-            this.userViews = runViewResult.Results;
+            this.UserViews = runViewResult.Results;
         }
 
-        this.showAddFromViewLoader = false;
+        this.ShowAddFromViewLoader = false;
         this.cdr.detectChanges();
     }
 
-    public toggleViewSelection(view: MJUserViewEntityExtended): void {
-        const index = this.userViewsToAdd.findIndex(v => UUIDsEqual(v.ID, view.ID));
+    public ToggleViewSelection(view: MJUserViewEntityExtended): void {
+        const index = this.UserViewsToAdd.findIndex(v => UUIDsEqual(v.ID, view.ID));
         if (index >= 0) {
-            this.userViewsToAdd.splice(index, 1);
+            this.UserViewsToAdd.splice(index, 1);
             this.userViewsToAddIds.delete(NormalizeUUID(view.ID));
         } else {
-            this.userViewsToAdd.push(view);
+            this.UserViewsToAdd.push(view);
             this.userViewsToAddIds.add(NormalizeUUID(view.ID));
         }
         this.cdr.detectChanges();
     }
 
-    public isViewSelected(view: MJUserViewEntityExtended): boolean {
+    /** @deprecated Use {@link ToggleViewSelection}. */
+    public toggleViewSelection(view: MJUserViewEntityExtended): void {
+      return this.ToggleViewSelection(view);
+    }
+
+    public IsViewSelected(view: MJUserViewEntityExtended): boolean {
         return this.userViewsToAddIds.has(NormalizeUUID(view.ID));
     }
 
-    public async confirmAddFromView(): Promise<void> {
-        if (!this.record || this.userViewsToAdd.length === 0) return;
+    /** @deprecated Use {@link IsViewSelected}. */
+    public isViewSelected(view: MJUserViewEntityExtended): boolean {
+      return this.IsViewSelected(view);
+    }
 
-        this.showAddFromViewLoader = true;
-        this.fetchingRecordsToSave = true;
+    public async ConfirmAddFromView(): Promise<void> {
+        if (!this.record || this.UserViewsToAdd.length === 0) return;
+
+        this.ShowAddFromViewLoader = true;
+        this.FetchingRecordsToSave = true;
         this.cdr.detectChanges();
 
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
@@ -860,7 +1355,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         // Collect all unique record IDs from selected views
         const recordIdSet = new Set<string>();
 
-        for (const userView of this.userViewsToAdd) {
+        for (const userView of this.UserViewsToAdd) {
             const runViewResult = await rv.RunView({
                 ViewID: userView.ID,
                 ViewEntity: userView,
@@ -875,16 +1370,16 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
 
         // Filter out records already in the list
         await this.loadExistingListDetailIds();
-        const recordsToAdd = [...recordIdSet].filter(id => !this.existingListDetailIds.has(id));
+        const recordsToAdd = [...recordIdSet].filter(id => !this.ExistingListDetailIds.has(id));
 
-        this.addFromViewTotal = recordsToAdd.length;
-        this.addFromViewProgress = 0;
-        this.fetchingRecordsToSave = false;
+        this.AddFromViewTotal = recordsToAdd.length;
+        this.AddFromViewProgress = 0;
+        this.FetchingRecordsToSave = false;
         this.cdr.detectChanges();
 
         if (recordsToAdd.length === 0) {
             this.showNotification('All records already in list', 'info', 2500);
-            this.showAddFromViewLoader = false;
+            this.ShowAddFromViewLoader = false;
             this.cdr.detectChanges();
             return;
         }
@@ -905,42 +1400,52 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         const success = await tg.Submit();
 
         if (success) {
-            this.addFromViewProgress = this.addFromViewTotal;
+            this.AddFromViewProgress = this.AddFromViewTotal;
             this.showNotification(
                 `Added ${recordsToAdd.length} record${recordsToAdd.length !== 1 ? 's' : ''} to list`,
                 'success',
                 2500
             );
-            this.closeAddFromViewDialog();
-            await this.refreshItems();
+            this.CloseAddFromViewDialog();
+            await this.RefreshItems();
         } else {
             LogError('Error adding records from view to list');
             this.showNotification('Failed to add some records', 'error', 2500);
-            this.showAddFromViewLoader = false;
+            this.ShowAddFromViewLoader = false;
             this.cdr.detectChanges();
         }
+    }
+
+    /** @deprecated Use {@link ConfirmAddFromView}. */
+    public async confirmAddFromView(): Promise<void> {
+      return this.ConfirmAddFromView();
     }
 
     // ==========================================
     // Share Dialog
     // ==========================================
 
-    public openShareDialog(): void {
+    public OpenShareDialog(): void {
         if (!this.record?.IsSaved) return;
 
-        this.shareDialogConfig = {
+        this.ShareDialogConfig = {
             listId: this.record.ID,
             listName: this.record.Name,
             currentUserId: this.metadata.CurrentUser.ID,
-            isOwner: this.isCurrentUserOwner()
+            isOwner: this.IsCurrentUserOwner()
         };
-        this.showShareDialog = true;
+        this.ShowShareDialog = true;
         this.cdr.detectChanges();
     }
 
-    public onShareDialogComplete(result: ListShareDialogResult): void {
-        this.showShareDialog = false;
-        this.shareDialogConfig = null;
+    /** @deprecated Use {@link OpenShareDialog}. */
+    public openShareDialog(): void {
+      return this.OpenShareDialog();
+    }
+
+    public OnShareDialogComplete(result: ListShareDialogResult): void {
+        this.ShowShareDialog = false;
+        this.ShareDialogConfig = null;
 
         if (result.action === 'apply') {
             // Refresh stats to update share counts
@@ -952,38 +1457,68 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         this.cdr.detectChanges();
     }
 
-    public onShareDialogCancel(): void {
-        this.showShareDialog = false;
-        this.shareDialogConfig = null;
+    /** @deprecated Use {@link OnShareDialogComplete}. */
+    public onShareDialogComplete(result: ListShareDialogResult): void {
+      return this.OnShareDialogComplete(result);
+    }
+
+    public OnShareDialogCancel(): void {
+        this.ShowShareDialog = false;
+        this.ShareDialogConfig = null;
         this.cdr.detectChanges();
+    }
+
+    /** @deprecated Use {@link OnShareDialogCancel}. */
+    public onShareDialogCancel(): void {
+      return this.OnShareDialogCancel();
     }
 
     // ==========================================
     // Invitations / Audit Log dialogs (mockups 16, 18)
     // ==========================================
 
-    public openInvitationsDialog(): void {
+    public OpenInvitationsDialog(): void {
         // Closing share dialog so it doesn't stack visually. User can
         // reopen via toolbar; the share dialog isn't stateful enough to
         // need preservation across this transition.
-        this.showShareDialog = false;
-        this.showInvitationsDialog = true;
+        this.ShowShareDialog = false;
+        this.ShowInvitationsDialog = true;
         this.cdr.detectChanges();
     }
 
+    /** @deprecated Use {@link OpenInvitationsDialog}. */
+    public openInvitationsDialog(): void {
+      return this.OpenInvitationsDialog();
+    }
+
+    public CloseInvitationsDialog(): void {
+        this.ShowInvitationsDialog = false;
+        this.cdr.detectChanges();
+    }
+
+    /** @deprecated Use {@link CloseInvitationsDialog}. */
     public closeInvitationsDialog(): void {
-        this.showInvitationsDialog = false;
+      return this.CloseInvitationsDialog();
+    }
+
+    public OpenAuditLogDialog(): void {
+        this.ShowShareDialog = false;
+        this.ShowAuditLogDialog = true;
         this.cdr.detectChanges();
     }
 
+    /** @deprecated Use {@link OpenAuditLogDialog}. */
     public openAuditLogDialog(): void {
-        this.showShareDialog = false;
-        this.showAuditLogDialog = true;
+      return this.OpenAuditLogDialog();
+    }
+
+    public CloseAuditLogDialog(): void {
+        this.ShowAuditLogDialog = false;
         this.cdr.detectChanges();
     }
 
+    /** @deprecated Use {@link CloseAuditLogDialog}. */
     public closeAuditLogDialog(): void {
-        this.showAuditLogDialog = false;
-        this.cdr.detectChanges();
+      return this.CloseAuditLogDialog();
     }
 }

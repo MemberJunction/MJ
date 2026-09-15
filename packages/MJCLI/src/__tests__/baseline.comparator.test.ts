@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compareSnapshots } from '../baseline/comparator';
+import { CompareSnapshots } from '../baseline/comparator';
 import type { SchemaSnapshot, TableDataDump, BaselineCompareOptions } from '../baseline/types';
 
 function emptySnapshot(overrides: Partial<SchemaSnapshot> = {}): SchemaSnapshot {
@@ -54,7 +54,7 @@ const compareOpts: BaselineCompareOptions = {
 
 describe('baseline/comparator', () => {
   it('reports clean for two identical empty snapshots', () => {
-    const report = compareSnapshots({
+    const report = CompareSnapshots({
       left: { snapshot: emptySnapshot(), data: [], label: 'L' },
       right: { snapshot: emptySnapshot(), data: [], label: 'R' },
       options: compareOpts,
@@ -65,7 +65,7 @@ describe('baseline/comparator', () => {
   });
 
   it('reports missing table on left', () => {
-    const report = compareSnapshots({
+    const report = CompareSnapshots({
       left: { snapshot: emptySnapshot(), data: [], label: 'L' },
       right: { snapshot: emptySnapshot({ tables: [makeTable('Customer')] }), data: [], label: 'R' },
       options: compareOpts,
@@ -83,7 +83,7 @@ describe('baseline/comparator', () => {
     const right = emptySnapshot({
       tables: [makeTable('Customer', { columns: [{ name: 'ID', type: 'bigint' }] })],
     });
-    const report = compareSnapshots({
+    const report = CompareSnapshots({
       left: { snapshot: left, data: [], label: 'L' },
       right: { snapshot: right, data: [], label: 'R' },
       options: compareOpts,
@@ -94,7 +94,7 @@ describe('baseline/comparator', () => {
   it('reports view body differences', () => {
     const left = emptySnapshot({ views: [{ schema: 'dbo', name: 'V1', definition: 'SELECT 1' }] });
     const right = emptySnapshot({ views: [{ schema: 'dbo', name: 'V1', definition: 'SELECT 2' }] });
-    const report = compareSnapshots({
+    const report = CompareSnapshots({
       left: { snapshot: left, data: [], label: 'L' },
       right: { snapshot: right, data: [], label: 'R' },
       options: compareOpts,
@@ -105,7 +105,7 @@ describe('baseline/comparator', () => {
   it('treats whitespace-only differences in view bodies as equal', () => {
     const left = emptySnapshot({ views: [{ schema: 'dbo', name: 'V1', definition: 'SELECT  1' }] });
     const right = emptySnapshot({ views: [{ schema: 'dbo', name: 'V1', definition: 'SELECT 1' }] });
-    const report = compareSnapshots({
+    const report = CompareSnapshots({
       left: { snapshot: left, data: [], label: 'L' },
       right: { snapshot: right, data: [], label: 'R' },
       options: compareOpts,
@@ -127,7 +127,7 @@ describe('baseline/comparator', () => {
       rows: [[1, 'Alice'], [2, 'Bobby']],
       rowCount: 2,
     };
-    const report = compareSnapshots({
+    const report = CompareSnapshots({
       left: { snapshot, data: [dumpA], label: 'L' },
       right: { snapshot, data: [dumpB], label: 'R' },
       options: compareOpts,
@@ -151,7 +151,7 @@ describe('baseline/comparator', () => {
       rows: [[1, 'Alice']],
       rowCount: 1,
     };
-    const report = compareSnapshots({
+    const report = CompareSnapshots({
       left: { snapshot, data: [dumpA], label: 'L' },
       right: { snapshot, data: [dumpB], label: 'R' },
       options: compareOpts,
@@ -169,7 +169,7 @@ describe('baseline/comparator', () => {
       schema: 'dbo', table: 'Customer', columns: ['ID', 'Name'],
       rows: [[1, 'a'], [2, 'changed']], rowCount: 2,
     };
-    const report = compareSnapshots({
+    const report = CompareSnapshots({
       left: { snapshot, data: [dumpA], label: 'L' },
       right: { snapshot, data: [dumpB], label: 'R' },
       options: { ...compareOpts, rowCompareMode: 'counts' },
@@ -182,7 +182,7 @@ describe('baseline/comparator', () => {
       tables: [makeTable('flyway_schema_history')],
     });
     const right = emptySnapshot();
-    const report = compareSnapshots({
+    const report = CompareSnapshots({
       left: { snapshot: left, data: [], label: 'L' },
       right: { snapshot: right, data: [], label: 'R' },
       options: { ...compareOpts, ignorePattern: /^flyway_schema_history$/i },
@@ -206,7 +206,7 @@ describe('baseline/comparator', () => {
     const right = emptySnapshot({
       tables: [{ ...makeTable('Order'), foreignKeys: [{ ...fkBase, onDelete: 'NO_ACTION' as const }] }],
     });
-    const report = compareSnapshots({
+    const report = CompareSnapshots({
       left: { snapshot: left, data: [], label: 'L' },
       right: { snapshot: right, data: [], label: 'R' },
       options: compareOpts,

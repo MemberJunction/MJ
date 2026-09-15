@@ -62,9 +62,14 @@ async function initializeRuntime(): Promise<InteractiveRuntime> {
  *   same promise is returned on every call, so the 3 MB Babel bundle is fetched
  *   and initialized only once.
  */
-export function getInteractiveRuntime(): Promise<InteractiveRuntime> {
+export function GetInteractiveRuntime(): Promise<InteractiveRuntime> {
     if (!runtimePromise) {
         runtimePromise = initializeRuntime();
     }
     return runtimePromise;
+}
+
+/** @deprecated Use {@link GetInteractiveRuntime}. */
+export function getInteractiveRuntime(): Promise<InteractiveRuntime> {
+    return GetInteractiveRuntime();
 }

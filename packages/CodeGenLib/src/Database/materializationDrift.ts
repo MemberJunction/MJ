@@ -60,7 +60,7 @@ const lc = (s: string) => s.trim().toLowerCase();
  * positives from incomplete provenance — the §10 bias runs the other way for drift (only flag on a
  * definite broken dependency).
  */
-export function evaluateMaterializationDrift(facts: MaterializationDriftFacts): MaterializationDriftVerdict {
+export function EvaluateMaterializationDrift(facts: MaterializationDriftFacts): MaterializationDriftVerdict {
     if (facts.sourceType === 'EntityBaseView' && facts.baseView) {
         const bv = facts.baseView;
         if (!bv.sourceEntityExists) {
@@ -120,4 +120,9 @@ export function evaluateMaterializationDrift(facts: MaterializationDriftFacts): 
     }
 
     return { drift: false };
+}
+
+/** @deprecated Use {@link EvaluateMaterializationDrift}. */
+export function evaluateMaterializationDrift(facts: MaterializationDriftFacts): MaterializationDriftVerdict {
+    return EvaluateMaterializationDrift(facts);
 }

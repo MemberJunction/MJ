@@ -16,36 +16,158 @@ import { BaseDashboard } from '@memberjunction/ng-shared';
 })
 export class SingleDashboardComponent extends BaseDashboard implements OnInit {
 
-  @ViewChild('dashboardNameInput') dashboardNameInput!: ElementRef<HTMLInputElement>
+  @ViewChild('dashboardNameInput') DashboardNameInput!: ElementRef<HTMLInputElement>
+
+  /** @deprecated Use {@link DashboardNameInput}. */
+  get dashboardNameInput(): ElementRef<HTMLInputElement> {
+    return this.DashboardNameInput;
+  }
+  /** @deprecated Use {@link DashboardNameInput}. */
+  set dashboardNameInput(value: ElementRef<HTMLInputElement>) {
+    this.DashboardNameInput = value;
+  }
 
   @Input() public ResourceData!: ResourceData;
-  @Output() public dashboardSaved: EventEmitter<MJDashboardEntityExtended> = new EventEmitter<MJDashboardEntityExtended>();
+  @Output() public DashboardSaved: EventEmitter<MJDashboardEntityExtended> = new EventEmitter<MJDashboardEntityExtended>();
+
+  /**
+   * @deprecated Use {@link DashboardSaved}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (dashboardSaved) keeps working. Must stay AFTER DashboardSaved: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public dashboardSaved = this.DashboardSaved;
   @Output() public loadComplete: EventEmitter<any> = new EventEmitter<any>();
   @Output() public loadStarted: EventEmitter<any> = new EventEmitter<any>();
 
-  public items: DashboardItem[] = [];
-  public dashboardEntity!: MJDashboardEntityExtended;
+  public Items: DashboardItem[] = [];
+
+  /** @deprecated Use {@link Items}. */
+  public get items(): DashboardItem[] {
+    return this.Items;
+  }
+  /** @deprecated Use {@link Items}. */
+  public set items(value: DashboardItem[]) {
+    this.Items = value;
+  }
+  public DashboardEntity!: MJDashboardEntityExtended;
+
+  /** @deprecated Use {@link DashboardEntity}. */
+  public get dashboardEntity(): MJDashboardEntityExtended {
+    return this.DashboardEntity;
+  }
+  /** @deprecated Use {@link DashboardEntity}. */
+  public set dashboardEntity(value: MJDashboardEntityExtended) {
+    this.DashboardEntity = value;
+  }
   public config: DashboardConfigDetails = new DashboardConfigDetails();
-  public isItemDialogOpened: boolean = false;
-  public isEditDialogOpened: boolean = false;
-  public isEditDashboardNameDialogOpened: boolean = false;
-  public isDeletingDashboardItem: boolean = false;
-  public allowResize: boolean = false;
-  public allowReorder: boolean = false;
-  public isEditingDashboard: boolean = false;
-  public selectedResource!: MJResourceTypeEntity | null;
-  public selectedDashboardItem!: DashboardItem | null;
+  public IsItemDialogOpened: boolean = false;
+
+  /** @deprecated Use {@link IsItemDialogOpened}. */
+  public get isItemDialogOpened(): boolean {
+    return this.IsItemDialogOpened;
+  }
+  /** @deprecated Use {@link IsItemDialogOpened}. */
+  public set isItemDialogOpened(value: boolean) {
+    this.IsItemDialogOpened = value;
+  }
+  public IsEditDialogOpened: boolean = false;
+
+  /** @deprecated Use {@link IsEditDialogOpened}. */
+  public get isEditDialogOpened(): boolean {
+    return this.IsEditDialogOpened;
+  }
+  /** @deprecated Use {@link IsEditDialogOpened}. */
+  public set isEditDialogOpened(value: boolean) {
+    this.IsEditDialogOpened = value;
+  }
+  public IsEditDashboardNameDialogOpened: boolean = false;
+
+  /** @deprecated Use {@link IsEditDashboardNameDialogOpened}. */
+  public get isEditDashboardNameDialogOpened(): boolean {
+    return this.IsEditDashboardNameDialogOpened;
+  }
+  /** @deprecated Use {@link IsEditDashboardNameDialogOpened}. */
+  public set isEditDashboardNameDialogOpened(value: boolean) {
+    this.IsEditDashboardNameDialogOpened = value;
+  }
+  public IsDeletingDashboardItem: boolean = false;
+
+  /** @deprecated Use {@link IsDeletingDashboardItem}. */
+  public get isDeletingDashboardItem(): boolean {
+    return this.IsDeletingDashboardItem;
+  }
+  /** @deprecated Use {@link IsDeletingDashboardItem}. */
+  public set isDeletingDashboardItem(value: boolean) {
+    this.IsDeletingDashboardItem = value;
+  }
+  public AllowResize: boolean = false;
+
+  /** @deprecated Use {@link AllowResize}. */
+  public get allowResize(): boolean {
+    return this.AllowResize;
+  }
+  /** @deprecated Use {@link AllowResize}. */
+  public set allowResize(value: boolean) {
+    this.AllowResize = value;
+  }
+  public AllowReorder: boolean = false;
+
+  /** @deprecated Use {@link AllowReorder}. */
+  public get allowReorder(): boolean {
+    return this.AllowReorder;
+  }
+  /** @deprecated Use {@link AllowReorder}. */
+  public set allowReorder(value: boolean) {
+    this.AllowReorder = value;
+  }
+  public IsEditingDashboard: boolean = false;
+
+  /** @deprecated Use {@link IsEditingDashboard}. */
+  public get isEditingDashboard(): boolean {
+    return this.IsEditingDashboard;
+  }
+  /** @deprecated Use {@link IsEditingDashboard}. */
+  public set isEditingDashboard(value: boolean) {
+    this.IsEditingDashboard = value;
+  }
+  public SelectedResource!: MJResourceTypeEntity | null;
+
+  /** @deprecated Use {@link SelectedResource}. */
+  public get selectedResource(): MJResourceTypeEntity | null {
+    return this.SelectedResource;
+  }
+  /** @deprecated Use {@link SelectedResource}. */
+  public set selectedResource(value: MJResourceTypeEntity | null) {
+    this.SelectedResource = value;
+  }
+  public SelectedDashboardItem!: DashboardItem | null;
+
+  /** @deprecated Use {@link SelectedDashboardItem}. */
+  public get selectedDashboardItem(): DashboardItem | null {
+    return this.SelectedDashboardItem;
+  }
+  /** @deprecated Use {@link SelectedDashboardItem}. */
+  public set selectedDashboardItem(value: DashboardItem | null) {
+    this.SelectedDashboardItem = value;
+  }
   private saveChangesSubject: Subject<any> = new Subject();
   private editOnLoad: boolean = false;
   private recentAccessService: RecentAccessService;
 
-  public get contentLoading(): boolean {
-    for (const item of this.items) {
+  public get ContentLoading(): boolean {
+    for (const item of this.Items) {
       if (item.contentLoading) {
         return true;
       }
     }
     return false;
+  }
+
+  /** @deprecated Use {@link ContentLoading}. */
+  public get contentLoading(): boolean {
+    return this.ContentLoading;
   }
 
   protected initDashboard(): void {
@@ -59,7 +181,7 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
     return "Dashboard"
   }
 
-  constructor(private route: ActivatedRoute, public sharedService: SharedService) {
+  constructor(private route: ActivatedRoute, public SharedService: SharedService) {
     super();
     this.recentAccessService = new RecentAccessService();
 
@@ -75,6 +197,15 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
     }
   }
 
+  /** @deprecated Use {@link SharedService}. */
+  public get sharedService(): SharedService {
+    return this.SharedService;
+  }
+  /** @deprecated Use {@link SharedService}. */
+  public set sharedService(value: SharedService) {
+    this.SharedService = value;
+  }
+
   async ngOnInit(): Promise<void> {
     super.ngOnInit();
     // load up the dashboard
@@ -83,14 +214,14 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
     if (this.ResourceData) {
       const md = this.ProviderToUse;
       let uiConfig: any = {items:[]};
-      this.dashboardEntity = await md.GetEntityObject<MJDashboardEntityExtended>('MJ: Dashboards');
+      this.DashboardEntity = await md.GetEntityObject<MJDashboardEntityExtended>('MJ: Dashboards');
       if (this.ResourceData.ResourceRecordID && this.ResourceData.ResourceRecordID.length > 0) {
-        await this.dashboardEntity.Load(this.ResourceData.ResourceRecordID);
+        await this.DashboardEntity.Load(this.ResourceData.ResourceRecordID);
         // Log access to dashboard (fire-and-forget, don't await)
         this.recentAccessService.logAccess('Dashboards', this.ResourceData.ResourceRecordID, 'dashboard');
 
         // now we have loaded and we need to get the UIConfigDetails
-        const raw = this.dashboardEntity.UIConfigDetails;
+        const raw = this.DashboardEntity.UIConfigDetails;
         if (raw) {
           uiConfig = JSON.parse(raw);
           this.config.columns = uiConfig.columns;
@@ -103,16 +234,16 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
         //and we only want to show the edit view once
         if(this.editOnLoad){
           this.editOnLoad = false;
-          this.toggleEditDashboard(true);
+          this.ToggleEditDashboard(true);
         }
       }
       else {
-        this.dashboardEntity.NewRecord(); // creating a new dashboard
-        this.dashboardEntity.UserID = md.CurrentUser.ID;
+        this.DashboardEntity.NewRecord(); // creating a new dashboard
+        this.DashboardEntity.UserID = md.CurrentUser.ID;
         
         // We should never get here now because dashboard creation is handled in dashboard-browser
         // But just in case, set a better default name
-        this.dashboardEntity.Name = 'My Dashboard';
+        this.DashboardEntity.Name = 'My Dashboard';
         
         // Set default configuration
         this.config.columns = 4;  // 4-column layout
@@ -122,16 +253,16 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
         
         // Automatically show edit mode for new dashboards to encourage adding items
         setTimeout(() => {
-          this.toggleEditDashboard(true);
+          this.ToggleEditDashboard(true);
         }, 500);
       }
 
       // now we need to load up the items
-      this.items = [];
+      this.Items = [];
       //const tempItems = uiConfig.items.sort((a: any, b: any) => a.order - b.order);
       for (const item of uiConfig.items) {
         const dashboardItem = this.CreateDashboardItem(item);
-        this.items.push(dashboardItem);
+        this.Items.push(dashboardItem);
       }
     }
 
@@ -152,95 +283,140 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
     return dashboardItem;
   }
 
-  public loadingStarted(resourceComponent: ResourceContainerComponent) {
+  public LoadingStarted(resourceComponent: ResourceContainerComponent) {
     // look up the copmonent in the 
-    const item = this.items.find(i => i.ResourceData === resourceComponent.Data);
+    const item = this.Items.find(i => i.ResourceData === resourceComponent.Data);
     if (item) {
       item.contentLoading = true;
       this.loadStarted.emit();
     }
   }
 
-  public loadingComplete(resourceComponent: ResourceContainerComponent) {
+  /** @deprecated Use {@link LoadingStarted}. */
+  public loadingStarted(resourceComponent: ResourceContainerComponent) {
+    return this.LoadingStarted(resourceComponent);
+  }
+
+  public LoadingComplete(resourceComponent: ResourceContainerComponent) {
     // look up the copmonent in the 
-    const item = this.items.find(i => i.ResourceData === resourceComponent.Data);
+    const item = this.Items.find(i => i.ResourceData === resourceComponent.Data);
     if (item) {
       item.contentLoading = false;
-      if (!this.contentLoading) {
+      if (!this.ContentLoading) {
         this.loadComplete.emit();
       }
     }
   }
 
-  public addItem(resourceType: any = null): void {
-    this.selectedResource = resourceType;
-    this.isItemDialogOpened = true;
-    this.isEditDialogOpened = false;
+  /** @deprecated Use {@link LoadingComplete}. */
+  public loadingComplete(resourceComponent: ResourceContainerComponent) {
+    return this.LoadingComplete(resourceComponent);
   }
 
-  public closeDialog(data: any): void {
+  public AddItem(resourceType: any = null): void {
+    this.SelectedResource = resourceType;
+    this.IsItemDialogOpened = true;
+    this.IsEditDialogOpened = false;
+  }
+
+  /** @deprecated Use {@link AddItem}. */
+  public addItem(resourceType: any = null): void {
+    return this.AddItem(resourceType);
+  }
+
+  public CloseDialog(data: any): void {
     if(data) {
       const dashboardItem = this.CreateDashboardItem(data);
-      this.items.push(dashboardItem);
+      this.Items.push(dashboardItem);
       console.log(dashboardItem);
         this.saveChangesSubject.next(true);
     }
-    this.selectedResource = null;
-    this.isItemDialogOpened = false;
+    this.SelectedResource = null;
+    this.IsItemDialogOpened = false;
   }
 
+  /** @deprecated Use {@link CloseDialog}. */
+  public closeDialog(data: any): void {
+    return this.CloseDialog(data);
+  }
+
+  public ToggleEditDashboard(allowEdit: boolean): void {
+    this.AllowReorder = allowEdit;
+    this.AllowResize = allowEdit;
+    this.IsEditingDashboard = allowEdit;
+    this.ToggleInlineNameEdit(false);
+  }
+
+  /** @deprecated Use {@link ToggleEditDashboard}. */
   public toggleEditDashboard(allowEdit: boolean): void {
-    this.allowReorder = allowEdit;
-    this.allowResize = allowEdit;
-    this.isEditingDashboard = allowEdit;
-    this.toggleInlineNameEdit(false);
+    return this.ToggleEditDashboard(allowEdit);
   }
 
-  public async onClickSaveDashboard(): Promise<void> {
-    this.toggleEditDashboard(false);
+  public async OnClickSaveDashboard(): Promise<void> {
+    this.ToggleEditDashboard(false);
     let result = await this.SaveDashboard();
     if(result){
-      this.sharedService.CreateSimpleNotification("Dashboard changes have been saved.", "success", 1000);
+      this.SharedService.CreateSimpleNotification("Dashboard changes have been saved.", "success", 1000);
       await this.ngOnInit();
     }
     else{
-      this.sharedService.CreateSimpleNotification("An error occured saving the dashboard changes", "error", 1000);
+      this.SharedService.CreateSimpleNotification("An error occured saving the dashboard changes", "error", 1000);
     }
   }
 
-  public async onclickCancelChanges(): Promise<void> {
-    this.toggleEditDashboard(false);
+  /** @deprecated Use {@link OnClickSaveDashboard}. */
+  public async onClickSaveDashboard(): Promise<void> {
+    return this.OnClickSaveDashboard();
+  }
+
+  public async OnclickCancelChanges(): Promise<void> {
+    this.ToggleEditDashboard(false);
     await this.ngOnInit();
   }
 
-  public closeDashboardDialog(data: any = null){
-    this.isEditDialogOpened = false;
+  /** @deprecated Use {@link OnclickCancelChanges}. */
+  public async onclickCancelChanges(): Promise<void> {
+    return this.OnclickCancelChanges();
   }
 
-  saveChanges(data: any): void {
+  public CloseDashboardDialog(data: any = null){
+    this.IsEditDialogOpened = false;
+  }
+
+  /** @deprecated Use {@link CloseDashboardDialog}. */
+  public closeDashboardDialog(data: any = null) {
+    return this.CloseDashboardDialog(data);
+  }
+
+  SaveChanges(data: any): void {
     if(data.config){
       this.config = data.config;
     }
     if(data.itemsChanged && data.items){
-      this.items = data.items;
-      this.sharedService.InvokeManualResize();
+      this.Items = data.items;
+      this.SharedService.InvokeManualResize();
     }
     this.SaveDashboard();
-    this.closeDashboardDialog();
+    this.CloseDashboardDialog();
+  }
+
+  /** @deprecated Use {@link SaveChanges}. */
+  saveChanges(data: any): void {
+    return this.SaveChanges(data);
   }
 
   public async SaveDashboard(): Promise<boolean> {
-    if (this.dashboardEntity) {
+    if (this.DashboardEntity) {
       const configData = {
         columns: this.config.columns,
         rowHeight: this.config.rowHeight,
         resizable: this.config.resizable,
         reorderable: this.config.reorderable,
-        items: this.items
+        items: this.Items
       }
       const configJSON = JSON.stringify(configData);
-      this.dashboardEntity.UIConfigDetails = configJSON;
-      const result = await this.dashboardEntity.Save();
+      this.DashboardEntity.UIConfigDetails = configJSON;
+      const result = await this.DashboardEntity.Save();
       
       return result;
     }
@@ -248,90 +424,155 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
       return false;
   }
 
-  public dashboardSaveComplete(entity: MJDashboardEntityExtended): void {
-    this.dashboardSaved.emit(entity);
+  public DashboardSaveComplete(entity: MJDashboardEntityExtended): void {
+    this.DashboardSaved.emit(entity);
   }
 
-  public toggleInlineNameEdit(visible: boolean): void {
-    this.isEditDashboardNameDialogOpened = visible;
-    if(this.isEditDashboardNameDialogOpened){
-      this.dashboardNameInput?.nativeElement?.focus();
+  /** @deprecated Use {@link DashboardSaveComplete}. */
+  public dashboardSaveComplete(entity: MJDashboardEntityExtended): void {
+    return this.DashboardSaveComplete(entity);
+  }
+
+  public ToggleInlineNameEdit(visible: boolean): void {
+    this.IsEditDashboardNameDialogOpened = visible;
+    if(this.IsEditDashboardNameDialogOpened){
+      this.DashboardNameInput?.nativeElement?.focus();
     }
   }
 
-  public saveDashboardName(): void {
-    this.toggleInlineNameEdit(true);
-    const inputValue = this.dashboardNameInput.nativeElement.value;
+  /** @deprecated Use {@link ToggleInlineNameEdit}. */
+  public toggleInlineNameEdit(visible: boolean): void {
+    return this.ToggleInlineNameEdit(visible);
+  }
+
+  public SaveDashboardName(): void {
+    this.ToggleInlineNameEdit(true);
+    const inputValue = this.DashboardNameInput.nativeElement.value;
     if(inputValue && inputValue.length > 3){
-      this.dashboardEntity.Name = inputValue;
+      this.DashboardEntity.Name = inputValue;
       this.SaveDashboard();
     }
     else {
-      this.sharedService.CreateSimpleNotification('Invalid dashboard name: Must be at least 3 characters.','warning', 1000);
+      this.SharedService.CreateSimpleNotification('Invalid dashboard name: Must be at least 3 characters.','warning', 1000);
     }
   }
 
+  /** @deprecated Use {@link SaveDashboardName}. */
+  public saveDashboardName(): void {
+    return this.SaveDashboardName();
+  }
+
+  public CancelNameChange(): void {
+    this.ToggleInlineNameEdit(false);
+  }
+
+  /** @deprecated Use {@link CancelNameChange}. */
   public cancelNameChange(): void {
-    this.toggleInlineNameEdit(false);
+    return this.CancelNameChange();
   }
 
+  public CloseDeleteItemComponent(): void {
+    this.SelectedDashboardItem = null;
+    this.IsDeletingDashboardItem = false;
+  }
+
+  /** @deprecated Use {@link CloseDeleteItemComponent}. */
   public closeDeleteItemComponent(): void {
-    this.selectedDashboardItem = null;
-    this.isDeletingDashboardItem = false;
+    return this.CloseDeleteItemComponent();
   }
 
+  public ShowConfirmDeleteDashboardItem(item: DashboardItem): void {
+    this.SelectedDashboardItem = item;
+    this.IsDeletingDashboardItem = true;
+  }
+
+  /** @deprecated Use {@link ShowConfirmDeleteDashboardItem}. */
   public showConfirmDeleteDashboardItem(item: DashboardItem): void {
-    this.selectedDashboardItem = item;
-    this.isDeletingDashboardItem = true;
+    return this.ShowConfirmDeleteDashboardItem(item);
   }
 
-  public async deleteDashboardItem(item: DashboardItem): Promise<void> {
-    this.items = this.items.filter(i => i.uniqueId != item.uniqueId);
+  public async DeleteDashboardItem(item: DashboardItem): Promise<void> {
+    this.Items = this.Items.filter(i => i.uniqueId != item.uniqueId);
     let result = await this.SaveDashboard();
     if(result){
-      this.sharedService.CreateSimpleNotification(`Dashboard item ${item.uniqueId} deleted successfully`, "success", 1000);
+      this.SharedService.CreateSimpleNotification(`Dashboard item ${item.uniqueId} deleted successfully`, "success", 1000);
     }
     else{
-      this.sharedService.CreateSimpleNotification(`Unable to delete dashboard item ${item.uniqueId}`, "error", 1000);
+      this.SharedService.CreateSimpleNotification(`Unable to delete dashboard item ${item.uniqueId}`, "error", 1000);
     }
-    this.selectedDashboardItem = null;
-    this.isDeletingDashboardItem = false;
+    this.SelectedDashboardItem = null;
+    this.IsDeletingDashboardItem = false;
   }
 
+  /** @deprecated Use {@link DeleteDashboardItem}. */
+  public async deleteDashboardItem(item: DashboardItem): Promise<void> {
+    return this.DeleteDashboardItem(item);
+  }
+
+  public GetIsEditingItemBodyStyle(): string {
+    return this.IsEditingDashboard ? "bg-light-grey" : "";
+  }
+
+  /** @deprecated Use {@link GetIsEditingItemBodyStyle}. */
   public getIsEditingItemBodyStyle(): string {
-    return this.isEditingDashboard ? "bg-light-grey" : "";
+    return this.GetIsEditingItemBodyStyle();
   }
 
+  public GetIsEditingItemHeaderStyle(): string {
+    return this.IsEditingDashboard ? "bg-dark-grey" : "bg-blue";
+  }
+
+  /** @deprecated Use {@link GetIsEditingItemHeaderStyle}. */
   public getIsEditingItemHeaderStyle(): string {
-    return this.isEditingDashboard ? "bg-dark-grey" : "bg-blue";
+    return this.GetIsEditingItemHeaderStyle();
   }
 
-  onReorder(e: { oldIndex: number; newIndex: number; newCol?: number; newRow?: number; uniqueId?: number }): void {
-    const item = e.uniqueId != null ? this.items.find(i => i.uniqueId === e.uniqueId) : this.items[e.oldIndex];
+  OnReorder(e: { oldIndex: number; newIndex: number; newCol?: number; newRow?: number; uniqueId?: number }): void {
+    const item = e.uniqueId != null ? this.Items.find(i => i.uniqueId === e.uniqueId) : this.Items[e.oldIndex];
     if (item) {
       if (e.oldIndex !== e.newIndex) {
-        this.items.splice(e.oldIndex, 1);
-        this.items.splice(e.newIndex, 0, item);
+        this.Items.splice(e.oldIndex, 1);
+        this.Items.splice(e.newIndex, 0, item);
       }
       item.col = e.newCol ?? item.col;
       item.row = e.newRow ?? item.row;
     }
   }
 
-  onResize(e: { newColSpan: number; newRowSpan: number; uniqueId?: number }): void {
-    const item = e.uniqueId != null ? this.items.find(i => i.uniqueId === e.uniqueId) : undefined;
+  /** @deprecated Use {@link OnReorder}. */
+  onReorder(e: { oldIndex: number; newIndex: number; newCol?: number; newRow?: number; uniqueId?: number }): void {
+    return this.OnReorder(e);
+  }
+
+  OnResize(e: { newColSpan: number; newRowSpan: number; uniqueId?: number }): void {
+    const item = e.uniqueId != null ? this.Items.find(i => i.uniqueId === e.uniqueId) : undefined;
     if (item) {
       item.colSpan = e.newColSpan;
       item.rowSpan = e.newRowSpan;
     }
   }
 
-  onMouseEnter(e: MouseEvent): void {
+  /** @deprecated Use {@link OnResize}. */
+  onResize(e: { newColSpan: number; newRowSpan: number; uniqueId?: number }): void {
+    return this.OnResize(e);
+  }
+
+  OnMouseEnter(e: MouseEvent): void {
     // Available for future drag-and-drop support
   }
 
-  onMouseOut(e: MouseEvent): void {
+  /** @deprecated Use {@link OnMouseEnter}. */
+  onMouseEnter(e: MouseEvent): void {
+    return this.OnMouseEnter(e);
+  }
+
+  OnMouseOut(e: MouseEvent): void {
     // Available for future drag-and-drop support
+  }
+
+  /** @deprecated Use {@link OnMouseOut}. */
+  onMouseOut(e: MouseEvent): void {
+    return this.OnMouseOut(e);
   }
 
   /**
@@ -339,7 +580,7 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
    * @param resourceType The type of resource
    * @returns FontAwesome icon class
    */
-  getResourceIcon(resourceType: string | undefined): string {
+  GetResourceIcon(resourceType: string | undefined): string {
     // Default to a cube icon if type is undefined
     if (!resourceType) return 'fa-solid fa-cube';
     
@@ -352,6 +593,11 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
     };
     
     return iconMap[resourceType] || iconMap['default'];
+  }
+
+  /** @deprecated Use {@link GetResourceIcon}. */
+  getResourceIcon(resourceType: string | undefined): string {
+    return this.GetResourceIcon(resourceType);
   }
 }
 
@@ -368,15 +614,87 @@ export class DashboardItem {
     return DashboardItem.nextUniqueId++;
   }
   constructor() {
-    this.uniqueId = this.getNextUniqueID();
+    this.UniqueId = this.getNextUniqueID();
   }
-  uniqueId!: number;
-  title!: string;
-  col!: number;
-  row!: number;
-  rowSpan!: number;
-  colSpan!: number;
-  order!: number;
+  UniqueId!: number;
+
+  /** @deprecated Use {@link UniqueId}. */
+  get uniqueId(): number {
+    return this.UniqueId;
+  }
+  /** @deprecated Use {@link UniqueId}. */
+  set uniqueId(value: number) {
+    this.UniqueId = value;
+  }
+  Title!: string;
+
+  /** @deprecated Use {@link Title}. */
+  get title(): string {
+    return this.Title;
+  }
+  /** @deprecated Use {@link Title}. */
+  set title(value: string) {
+    this.Title = value;
+  }
+  Col!: number;
+
+  /** @deprecated Use {@link Col}. */
+  get col(): number {
+    return this.Col;
+  }
+  /** @deprecated Use {@link Col}. */
+  set col(value: number) {
+    this.Col = value;
+  }
+  Row!: number;
+
+  /** @deprecated Use {@link Row}. */
+  get row(): number {
+    return this.Row;
+  }
+  /** @deprecated Use {@link Row}. */
+  set row(value: number) {
+    this.Row = value;
+  }
+  RowSpan!: number;
+
+  /** @deprecated Use {@link RowSpan}. */
+  get rowSpan(): number {
+    return this.RowSpan;
+  }
+  /** @deprecated Use {@link RowSpan}. */
+  set rowSpan(value: number) {
+    this.RowSpan = value;
+  }
+  ColSpan!: number;
+
+  /** @deprecated Use {@link ColSpan}. */
+  get colSpan(): number {
+    return this.ColSpan;
+  }
+  /** @deprecated Use {@link ColSpan}. */
+  set colSpan(value: number) {
+    this.ColSpan = value;
+  }
+  Order!: number;
+
+  /** @deprecated Use {@link Order}. */
+  get order(): number {
+    return this.Order;
+  }
+  /** @deprecated Use {@link Order}. */
+  set order(value: number) {
+    this.Order = value;
+  }
   ResourceData!: ResourceData;
-  contentLoading: boolean = false;
+  ContentLoading: boolean = false;
+
+  /** @deprecated Use {@link ContentLoading}. */
+  get contentLoading(): boolean {
+    return this.ContentLoading;
+  }
+  /** @deprecated Use {@link ContentLoading}. */
+  set contentLoading(value: boolean) {
+    this.ContentLoading = value;
+  }
 }

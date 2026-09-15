@@ -6,7 +6,7 @@ import { AIPromptParams, AIPromptRunResult } from "@memberjunction/ai-core-plus"
 import { MJAIPromptEntityExtended } from "@memberjunction/ai-core-plus";
 import { AIEngine } from "@memberjunction/aiengine";
 import { CodeGenReporter } from "./codegen-reporter";
-import { normalizeSmartFieldResultShape } from "../Database/search-guardrails";
+import { NormalizeSmartFieldResultShape } from "../Database/search-guardrails";
 
 export type EntityNameResult = { entityName: string, tableName: string }
 export type EntityDescriptionResult = { entityDescription: string, tableName: string }
@@ -32,7 +32,7 @@ const NON_NAME_SENTINELS: ReadonlySet<string> = new Set([
  * constraints, the failure was logged and swallowed, and CodeGen carried on reporting success with the
  * table silently absent. Eleven of twenty-seven tables vanished from one connector that way.
  */
-export function isPlausibleEntityName(candidate: unknown): candidate is string {
+export function IsPlausibleEntityName(candidate: unknown): candidate is string {
     if (typeof candidate !== 'string') {
         return false;
     }
@@ -44,6 +44,11 @@ export function isPlausibleEntityName(candidate: unknown): candidate is string {
         return false;
     }
     return /[A-Za-z]{2,}/.test(name);
+}
+
+/** @deprecated Use {@link IsPlausibleEntityName}. */
+export function isPlausibleEntityName(candidate: unknown): candidate is string {
+    return IsPlausibleEntityName(candidate);
 }
 
 export type SmartFieldIdentificationResult = {
@@ -164,8 +169,13 @@ export class AdvancedGeneration {
         this._promptRunner = new AIPromptRunner();
     }
 
-    public get enabled(): boolean {
+    public get Enabled(): boolean {
         return configInfo.advancedGeneration?.enableAdvancedGeneration ?? false;
+    }
+
+    /** @deprecated Use {@link Enabled}. */
+    public get enabled(): boolean {
+        return this.Enabled;
     }
 
     /**
@@ -224,16 +234,26 @@ export class AdvancedGeneration {
         }
     }
 
-    public features(): AdvancedGenerationFeature[] | undefined {
+    public Features(): AdvancedGenerationFeature[] | undefined {
         return configInfo.advancedGeneration?.features;
     }
 
+    /** @deprecated Use {@link Features}. */
+    public features(): AdvancedGenerationFeature[] | undefined {
+        return this.Features();
+    }
+
+    public GetFeature(featureName: string): AdvancedGenerationFeature | undefined {
+        return this.Features()?.find(f => f.name === featureName);
+    }
+
+    /** @deprecated Use {@link GetFeature}. */
     public getFeature(featureName: string): AdvancedGenerationFeature | undefined {
-        return this.features()?.find(f => f.name === featureName);
+        return this.GetFeature(featureName);
     }
 
     public featureEnabled(featureName: string): boolean {
-        return this.enabled && this.getFeature(featureName)?.enabled === true;
+        return this.Enabled && this.GetFeature(featureName)?.enabled === true;
     }
 
     /**
@@ -376,7 +396,7 @@ export class AdvancedGeneration {
                 // with allowUserSearch=true). The full code-level guardrail pipeline runs
                 // in ManageMetadataBase.normalizeSearchFlagsInPlace; this is just the
                 // first-pass cleanup so any caller of identifyFields() gets a coherent result.
-                return normalizeSmartFieldResultShape(r);
+                return NormalizeSmartFieldResultShape(r);
             } else {
                 LogError(`AdvancedGeneration:Smart field identification failed or returned a non-object result: ${result.errorMessage ?? `got ${typeof result.result}`}`);
                 return null;
@@ -390,7 +410,7 @@ export class AdvancedGeneration {
     /**
      * Transitive Join Intelligence - detect junction tables and recommend additional fields
      */
-    public async analyzeTransitiveJoin(
+    public async AnalyzeTransitiveJoin(
         sourceEntity: any,
         targetEntity: any,
         contextUser: UserInfo
@@ -436,6 +456,15 @@ export class AdvancedGeneration {
             LogError(`AdvancedGeneration:Error in analyzeTransitiveJoin: ${error}`);
             return null;
         }
+    }
+
+    /** @deprecated Use {@link AnalyzeTransitiveJoin}. */
+    public async analyzeTransitiveJoin(
+        sourceEntity: any,
+        targetEntity: any,
+        contextUser: UserInfo
+    ): Promise<TransitiveJoinResult | null> {
+        return this.AnalyzeTransitiveJoin(sourceEntity, targetEntity, contextUser);
     }
 
     /**
@@ -651,7 +680,7 @@ export class AdvancedGeneration {
     /**
      * Generate entity name from table name
      */
-    public async generateEntityName(
+    public async GenerateEntityName(
         tableName: string,
         contextUser: UserInfo
     ): Promise<EntityNameResult | null> {
@@ -670,7 +699,7 @@ export class AdvancedGeneration {
             const result = await this.executePrompt<EntityNameResult>(params);
 
             if (result.success && result.result) {
-                if (!isPlausibleEntityName(result.result.entityName)) {
+                if (!IsPlausibleEntityName(result.result.entityName)) {
                     LogError(`AdvancedGeneration:Entity name generation for ${tableName} returned ${JSON.stringify(result.result.entityName)}, which is not a name; the table-derived name will be used instead`);
                     return null;
                 }
@@ -686,10 +715,18 @@ export class AdvancedGeneration {
         }
     }
 
+    /** @deprecated Use {@link GenerateEntityName}. */
+    public async generateEntityName(
+        tableName: string,
+        contextUser: UserInfo
+    ): Promise<EntityNameResult | null> {
+        return this.GenerateEntityName(tableName, contextUser);
+    }
+
     /**
      * Generate entity description
      */
-    public async generateEntityDescription(
+    public async GenerateEntityDescription(
         entityName: string,
         tableName: string,
         fields: Array<{Name: string, Type: string}>,
@@ -722,10 +759,20 @@ export class AdvancedGeneration {
         }
     }
 
+    /** @deprecated Use {@link GenerateEntityDescription}. */
+    public async generateEntityDescription(
+        entityName: string,
+        tableName: string,
+        fields: Array<{Name: string, Type: string}>,
+        contextUser: UserInfo
+    ): Promise<EntityDescriptionResult | null> {
+        return this.GenerateEntityDescription(entityName, tableName, fields, contextUser);
+    }
+
     /**
      * Parse CHECK constraint and generate TypeScript validation method
      */
-    public async parseCheckConstraint(
+    public async ParseCheckConstraint(
         constraintText: string,
         entityFieldList: string,
         existingMethodName: string | null,
@@ -772,6 +819,16 @@ export class AdvancedGeneration {
         }
     }
 
+    /** @deprecated Use {@link ParseCheckConstraint}. */
+    public async parseCheckConstraint(
+        constraintText: string,
+        entityFieldList: string,
+        existingMethodName: string | null,
+        contextUser: UserInfo
+    ): Promise<CheckConstraintParserResult | null> {
+        return this.ParseCheckConstraint(constraintText, entityFieldList, existingMethodName, contextUser);
+    }
+
     /**
      * Decorates virtual entity fields using LLM analysis of the view definition.
      * Identifies primary keys, foreign keys, generates field descriptions,
@@ -788,7 +845,7 @@ export class AdvancedGeneration {
      * @param contextUser The context user for AI operations
      * @returns Decoration result or null if feature disabled or LLM call fails
      */
-    public async decorateVirtualEntityFields(
+    public async DecorateVirtualEntityFields(
         entityName: string,
         schemaName: string,
         viewName: string,
@@ -857,5 +914,43 @@ export class AdvancedGeneration {
             LogError(`AdvancedGeneration:Error in decorateVirtualEntityFields for ${entityName}: ${error}`);
             return null;
         }
+    }
+
+    /** @deprecated Use {@link DecorateVirtualEntityFields}. */
+    public async decorateVirtualEntityFields(
+        entityName: string,
+        schemaName: string,
+        viewName: string,
+        viewDefinition: string,
+        entityDescription: string,
+        fields: Array<{
+            Name: string;
+            Type: string;
+            Length: number;
+            AllowsNull: boolean;
+            IsPrimaryKey: boolean;
+            RelatedEntityName: string | null;
+        }>,
+        availableEntities: Array<{
+            Name: string;
+            SchemaName: string;
+            BaseTable: string;
+            PrimaryKeyField: string;
+        }>,
+        sourceEntities: Array<{
+            Name: string;
+            Description: string;
+            Fields: Array<{
+                Name: string;
+                Type: string;
+                Description: string;
+                Category: string | null;
+                IsPrimaryKey: boolean;
+                IsForeignKey: boolean;
+            }>;
+        }>,
+        contextUser: UserInfo
+    ): Promise<VirtualEntityDecorationResult | null> {
+        return this.DecorateVirtualEntityFields(entityName, schemaName, viewName, viewDefinition, entityDescription, fields, availableEntities, sourceEntities, contextUser);
     }
 }

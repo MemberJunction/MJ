@@ -43,7 +43,7 @@ export type AppLock = {
  *
  * @returns The current lock {@link AppLockState} and an imperative `unlock()`.
  */
-export function useAppLock(): AppLock {
+export function UseAppLock(): AppLock {
     const [lockEnabled] = useMMKVBoolean(PrefKeys.faceIdLock, prefsStorage);
     const [state, setState] = useState<AppLockState>(() => (lockEnabled ? 'locked' : 'unlocked'));
 
@@ -91,4 +91,9 @@ export function useAppLock(): AppLock {
     }, [lockEnabled, unlock]);
 
     return { state, unlock };
+}
+
+/** @deprecated Use {@link UseAppLock}. */
+export function useAppLock(): AppLock {
+    return UseAppLock();
 }

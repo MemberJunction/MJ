@@ -863,15 +863,25 @@ export class OAuthCallbackHandler {
     /**
      * Gets the router for unauthenticated callback endpoint.
      */
-    public getCallbackRouter(): express.Router {
+    public GetCallbackRouter(): express.Router {
         return this.callbackRouter;
+    }
+
+    /** @deprecated Use {@link GetCallbackRouter}. */
+    public getCallbackRouter(): express.Router {
+        return this.GetCallbackRouter();
     }
 
     /**
      * Gets the router for authenticated OAuth endpoints.
      */
-    public getAuthenticatedRouter(): express.Router {
+    public GetAuthenticatedRouter(): express.Router {
         return this.authenticatedRouter;
+    }
+
+    /** @deprecated Use {@link GetAuthenticatedRouter}. */
+    public getAuthenticatedRouter(): express.Router {
+        return this.GetAuthenticatedRouter();
     }
 }
 
@@ -881,7 +891,7 @@ export class OAuthCallbackHandler {
  * @param options - Handler configuration
  * @returns Object with callback and authenticated routers
  */
-export function createOAuthCallbackHandler(options: OAuthCallbackHandlerOptions): {
+export function CreateOAuthCallbackHandler(options: OAuthCallbackHandlerOptions): {
     callbackRouter: express.Router;
     authenticatedRouter: express.Router;
 } {
@@ -890,4 +900,12 @@ export function createOAuthCallbackHandler(options: OAuthCallbackHandlerOptions)
         callbackRouter: handler.getCallbackRouter(),
         authenticatedRouter: handler.getAuthenticatedRouter()
     };
+}
+
+/** @deprecated Use {@link CreateOAuthCallbackHandler}. */
+export function createOAuthCallbackHandler(options: OAuthCallbackHandlerOptions): {
+    callbackRouter: express.Router;
+    authenticatedRouter: express.Router;
+} {
+    return CreateOAuthCallbackHandler(options);
 }

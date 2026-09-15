@@ -15,7 +15,7 @@ import { AppContext, UserPayload } from '../types.js';
 import { LogError, LogStatus, UserInfo } from '@memberjunction/core';
 import { TestEngine } from '@memberjunction/testing-engine';
 import { ResolverBase } from '../generic/ResolverBase.js';
-import { startLivenessPulse } from '../generic/FireAndForgetHeartbeat.js';
+import { StartLivenessPulse } from '../generic/FireAndForgetHeartbeat.js';
 import { TestRunVariables, TestLogMessage, TestRunResult as EngineTestRunResult } from '@memberjunction/testing-engine-base';
 
 // ===== GraphQL Types =====
@@ -256,7 +256,7 @@ export class RunTestResolver extends ResolverBase {
     ): void {
         // Keep-alive pulse so a long-running test never trips the client idle timeout.
         // The client captures the testRunId from progress events for reconciliation.
-        const pulse = startLivenessPulse({ pubSub, sessionId: userPayload.sessionId, ownerUserId: userPayload.userRecord.ID, resolver: 'RunTestResolver' });
+        const pulse = StartLivenessPulse({ pubSub, sessionId: userPayload.sessionId, ownerUserId: userPayload.userRecord.ID, resolver: 'RunTestResolver' });
 
         this.executeTest(testId, verbose, environment, tags, variables, pubSub, userPayload, user)
             .catch((error: unknown) => {
@@ -352,7 +352,7 @@ export class RunTestResolver extends ResolverBase {
         // (Suite reconciliation isn't wired: suite progress carries the per-test run id, not the
         // Test Suite Run id, so the client has no handle to reconcile against — the pulse is the
         // protection here.)
-        const pulse = startLivenessPulse({ pubSub, sessionId: userPayload.sessionId, ownerUserId: userPayload.userRecord.ID, resolver: 'RunTestResolver' });
+        const pulse = StartLivenessPulse({ pubSub, sessionId: userPayload.sessionId, ownerUserId: userPayload.userRecord.ID, resolver: 'RunTestResolver' });
 
         this.executeSuite(
             suiteId, verbose, environment, parallel, tags, variables,

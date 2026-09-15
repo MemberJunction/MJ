@@ -97,7 +97,7 @@ function normalizeDeclaration(key: string, value: unknown): unknown {
  * @param style A single inline style object as authored for web React.
  * @returns A new object containing only React-Native-valid declarations.
  */
-export function normalizeWebStyle(style: Record<string, unknown>): Record<string, unknown> {
+export function NormalizeWebStyle(style: Record<string, unknown>): Record<string, unknown> {
     const normalized: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(style)) {
         const kept = normalizeDeclaration(key, value);
@@ -106,4 +106,9 @@ export function normalizeWebStyle(style: Record<string, unknown>): Record<string
         }
     }
     return normalized;
+}
+
+/** @deprecated Use {@link NormalizeWebStyle}. */
+export function normalizeWebStyle(style: Record<string, unknown>): Record<string, unknown> {
+    return NormalizeWebStyle(style);
 }

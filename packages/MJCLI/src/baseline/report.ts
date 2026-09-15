@@ -2,10 +2,10 @@
  * Diff report rendering: JSON (machine-readable) + Markdown (human-readable).
  */
 
-import { ellipsize } from './util';
+import { Ellipsize } from './util';
 import type { DiffReport, ObjectDiff, RowDiff, TableRowDiff } from './types';
 
-export function renderJson(report: DiffReport): string {
+export function RenderJson(report: DiffReport): string {
   return JSON.stringify(
     report,
     (_k, v) => {
@@ -19,7 +19,12 @@ export function renderJson(report: DiffReport): string {
   );
 }
 
-export function renderMarkdown(report: DiffReport): string {
+/** @deprecated Use {@link RenderJson}. */
+export function renderJson(report: DiffReport): string {
+  return RenderJson(report);
+}
+
+export function RenderMarkdown(report: DiffReport): string {
   const lines: string[] = [];
   lines.push(`# Baseline Comparison Report`);
   lines.push('');
@@ -75,8 +80,13 @@ export function renderMarkdown(report: DiffReport): string {
   return lines.join('\n') + '\n';
 }
 
+/** @deprecated Use {@link RenderMarkdown}. */
+export function renderMarkdown(report: DiffReport): string {
+  return RenderMarkdown(report);
+}
+
 function formatObjectDiffRow(diff: ObjectDiff): string {
-  const details = diff.details ? ellipsize(diff.details, 120) : '';
+  const details = diff.details ? Ellipsize(diff.details, 120) : '';
   return `| ${diff.kind} | \`${diff.qualifiedName}\` | ${diff.diffKind} | ${details} |`;
 }
 
@@ -92,18 +102,18 @@ function formatRowDiffsForTable(t: TableRowDiff): string {
 
 function formatRowDiff(r: RowDiff): string {
   if (r.diffKind !== 'changed' || !r.columnDiffs?.length) {
-    return `- ${r.diffKind}: \`${ellipsize(r.key, 80)}\``;
+    return `- ${r.diffKind}: \`${Ellipsize(r.key, 80)}\``;
   }
   const cols = r.columnDiffs
     .map((c) => `\`${c.column}\`: ${formatVal(c.leftValue)} → ${formatVal(c.rightValue)}`)
     .join('; ');
-  return `- changed \`${ellipsize(r.key, 60)}\`: ${cols}`;
+  return `- changed \`${Ellipsize(r.key, 60)}\`: ${cols}`;
 }
 
 function formatVal(v: unknown): string {
   if (v === null || v === undefined) return '`null`';
-  if (typeof v === 'string') return `\`"${ellipsize(v, 40)}"\``;
+  if (typeof v === 'string') return `\`"${Ellipsize(v, 40)}"\``;
   if (v instanceof Date) return `\`${v.toISOString()}\``;
-  if (Buffer.isBuffer(v)) return `\`0x${ellipsize(v.toString('hex'), 20)}\``;
-  return `\`${ellipsize(String(v), 40)}\``;
+  if (Buffer.isBuffer(v)) return `\`0x${Ellipsize(v.toString('hex'), 20)}\``;
+  return `\`${Ellipsize(String(v), 40)}\``;
 }

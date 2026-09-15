@@ -690,8 +690,13 @@ export class FlowAgentEditorComponent extends BaseAngularComponent implements On
   }
 
   /** Whether editing is currently allowed — combines parent EditMode + fullscreen self-contained edit */
-  get isEditingActive(): boolean {
+  get IsEditingActive(): boolean {
     return this.EditMode || this.fullscreenEditMode;
+  }
+
+  /** @deprecated Use {@link IsEditingActive}. */
+  get isEditingActive(): boolean {
+    return this.IsEditingActive;
   }
 
   protected toggleFullscreenEditMode(): void {

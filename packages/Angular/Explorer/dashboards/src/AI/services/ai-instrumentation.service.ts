@@ -148,7 +148,12 @@ export class AIInstrumentationService {
   private readonly _isLoading$ = new BehaviorSubject<boolean>(false);
 
   // Expose loading state as observable
-  readonly isLoading$ = this._isLoading$.asObservable();
+  readonly IsLoading$ = this._isLoading$.asObservable();
+
+  /** @deprecated Use {@link IsLoading$}. */
+  get isLoading$() {
+    return this.IsLoading$;
+  }
 
   constructor() {}
 
@@ -164,32 +169,62 @@ export class AIInstrumentationService {
   );
 
   // Derived streams — pure in-memory transforms, no extra DB queries
-  readonly kpis$ = this.rawData$.pipe(
+  readonly Kpis$ = this.rawData$.pipe(
     map(data => this.computeKPIs(data.promptRuns, data.agentRuns)),
     shareReplay(1)
   );
 
-  readonly trends$ = this.rawData$.pipe(
+  /** @deprecated Use {@link Kpis$}. */
+  get kpis$() {
+    return this.Kpis$;
+  }
+
+  readonly Trends$ = this.rawData$.pipe(
     map(data => this.computeTrends(data.promptRuns, data.agentRuns)),
     shareReplay(1)
   );
 
-  readonly liveExecutions$ = this.rawData$.pipe(
+  /** @deprecated Use {@link Trends$}. */
+  get trends$() {
+    return this.Trends$;
+  }
+
+  readonly LiveExecutions$ = this.rawData$.pipe(
     map(data => this.computeLiveExecutions(data.livePromptRuns, data.liveAgentRuns)),
     shareReplay(1)
   );
 
-  readonly chartData$ = combineLatest([this.rawData$, this.trends$]).pipe(
+  /** @deprecated Use {@link LiveExecutions$}. */
+  get liveExecutions$() {
+    return this.LiveExecutions$;
+  }
+
+  readonly ChartData$ = combineLatest([this.rawData$, this.Trends$]).pipe(
     map(([data, executionTrends]) => this.computeChartData(data.promptRuns, executionTrends)),
     shareReplay(1)
   );
 
-  setDateRange(start: Date, end: Date): void {
+  /** @deprecated Use {@link ChartData$}. */
+  get chartData$() {
+    return this.ChartData$;
+  }
+
+  SetDateRange(start: Date, end: Date): void {
     this._dateRange$.next({ start, end });
   }
 
-  refresh(): void {
+  /** @deprecated Use {@link SetDateRange}. */
+  setDateRange(start: Date, end: Date): void {
+    return this.SetDateRange(start, end);
+  }
+
+  Refresh(): void {
     this._refreshTrigger$.next(this._refreshTrigger$.value + 1);
+  }
+
+  /** @deprecated Use {@link Refresh}. */
+  refresh(): void {
+    return this.Refresh();
   }
 
   /**
@@ -561,7 +596,7 @@ export class AIInstrumentationService {
 
   // ─── Execution Details (on-demand, not part of initial load) ──────
 
-  async getExecutionDetails(executionId: string, type: 'prompt' | 'agent'): Promise<ExecutionDetails | null> {
+  async GetExecutionDetails(executionId: string, type: 'prompt' | 'agent'): Promise<ExecutionDetails | null> {
     try {
       if (type === 'prompt') {
         return await this.getPromptExecutionDetails(executionId);
@@ -572,6 +607,11 @@ export class AIInstrumentationService {
       console.error('Error loading execution details:', error);
       return null;
     }
+  }
+
+  /** @deprecated Use {@link GetExecutionDetails}. */
+  async getExecutionDetails(executionId: string, type: 'prompt' | 'agent'): Promise<ExecutionDetails | null> {
+    return this.GetExecutionDetails(executionId, type);
   }
 
   private async getPromptExecutionDetails(promptRunId: string): Promise<ExecutionDetails> {

@@ -23,7 +23,7 @@ export class NewAgentDialogService {
    * @param viewContainerRef Optional ViewContainerRef for proper positioning
    * @returns Observable that emits the result when dialog closes
    */
-  open(config: NewAgentConfig = {}, viewContainerRef?: ViewContainerRef): Observable<NewAgentDialogResult> {
+  Open(config: NewAgentConfig = {}, viewContainerRef?: ViewContainerRef): Observable<NewAgentDialogResult> {
     const resultSubject = new Subject<NewAgentDialogResult>();
 
     const dialogSettings: MJDialogSettings = {
@@ -55,40 +55,65 @@ export class NewAgentDialogService {
     return resultSubject.asObservable();
   }
 
+  /** @deprecated Use {@link Open}. */
+  open(config: NewAgentConfig = {}, viewContainerRef?: ViewContainerRef): Observable<NewAgentDialogResult> {
+    return this.Open(config, viewContainerRef);
+  }
+
   /**
    * Opens the dialog to create a top-level agent
    */
-  openForNewAgent(viewContainerRef?: ViewContainerRef): Observable<NewAgentDialogResult> {
-    return this.open({
+  OpenForNewAgent(viewContainerRef?: ViewContainerRef): Observable<NewAgentDialogResult> {
+    return this.Open({
       redirectToForm: true
     }, viewContainerRef);
+  }
+
+  /** @deprecated Use {@link OpenForNewAgent}. */
+  openForNewAgent(viewContainerRef?: ViewContainerRef): Observable<NewAgentDialogResult> {
+    return this.OpenForNewAgent(viewContainerRef);
   }
 
   /**
    * Opens the dialog to create a sub-agent
    */
-  openForSubAgent(parentAgentId: string, parentAgentName: string, viewContainerRef?: ViewContainerRef): Observable<NewAgentDialogResult> {
-    return this.open({
+  OpenForSubAgent(parentAgentId: string, parentAgentName: string, viewContainerRef?: ViewContainerRef): Observable<NewAgentDialogResult> {
+    return this.Open({
       parentAgentId,
       parentAgentName,
       redirectToForm: false
     }, viewContainerRef);
   }
 
+  /** @deprecated Use {@link OpenForSubAgent}. */
+  openForSubAgent(parentAgentId: string, parentAgentName: string, viewContainerRef?: ViewContainerRef): Observable<NewAgentDialogResult> {
+    return this.OpenForSubAgent(parentAgentId, parentAgentName, viewContainerRef);
+  }
+
   /**
    * Closes the currently open dialog
    */
-  close(): void {
+  Close(): void {
     if (this.dialogRef) {
       this.dialogRef.Close();
       this.dialogRef = null;
     }
   }
 
+  /** @deprecated Use {@link Close}. */
+  close(): void {
+    return this.Close();
+  }
+
   /**
    * Checks if a dialog is currently open
    */
-  isOpen(): boolean {
+  IsOpen(): boolean {
     return this.dialogRef !== null;
+  }
+
+  /** @deprecated Use {@link IsOpen}. */
+  isOpen(): boolean {
+    return this.IsOpen();
   }
 }

@@ -79,7 +79,7 @@ function isHostOf(hostname: string, domain: string): boolean {
  * @param issuer - The provider's OIDC issuer URL
  * @returns The upstream flavor to derive endpoints for
  */
-export function detectUpstreamFlavor(issuer: string | undefined): UpstreamFlavor {
+export function DetectUpstreamFlavor(issuer: string | undefined): UpstreamFlavor {
   const hostname = issuerHostname(issuer);
   if (isHostOf(hostname, 'microsoftonline.com') || isHostOf(hostname, 'sts.windows.net')) {
     return 'azure-ad';
@@ -88,6 +88,11 @@ export function detectUpstreamFlavor(issuer: string | undefined): UpstreamFlavor
     return 'cognito';
   }
   return 'generic';
+}
+
+/** @deprecated Use {@link DetectUpstreamFlavor}. */
+export function detectUpstreamFlavor(issuer: string | undefined): UpstreamFlavor {
+  return DetectUpstreamFlavor(issuer);
 }
 
 /**
@@ -110,9 +115,9 @@ function normalizeDomain(domain: string): string {
  * @throws If the provider is Cognito but no hosted-UI domain is configured — Cognito's
  *         issuer host serves no OAuth endpoints, so there is nothing safe to guess.
  */
-export function resolveUpstreamOAuthEndpoints(provider: UpstreamProviderInfo): UpstreamOAuthEndpoints {
+export function ResolveUpstreamOAuthEndpoints(provider: UpstreamProviderInfo): UpstreamOAuthEndpoints {
   const issuer = provider.issuer;
-  const flavor = detectUpstreamFlavor(issuer);
+  const flavor = DetectUpstreamFlavor(issuer);
 
   if (flavor === 'azure-ad') {
     // Azure AD v2.0: issuer is https://login.microsoftonline.com/{tenant}/v2.0
@@ -149,4 +154,9 @@ export function resolveUpstreamOAuthEndpoints(provider: UpstreamProviderInfo): U
     authorizationEndpoint: `${issuerBase}/authorize`,
     tokenEndpoint: `${issuerBase}/oauth/token`,
   };
+}
+
+/** @deprecated Use {@link ResolveUpstreamOAuthEndpoints}. */
+export function resolveUpstreamOAuthEndpoints(provider: UpstreamProviderInfo): UpstreamOAuthEndpoints {
+  return ResolveUpstreamOAuthEndpoints(provider);
 }

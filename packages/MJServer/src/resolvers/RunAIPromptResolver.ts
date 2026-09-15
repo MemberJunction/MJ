@@ -418,7 +418,7 @@ export class RunAIPromptResolver extends ResolverBase {
     }
 
     /** The `AI Model Types.Name` that means "a chat LLM", compared lowercased. */
-    private static readonly SimplePromptLLMTypeName = 'llm';
+    private static readonly simplePromptLLMTypeName = 'llm';
 
     /**
      * Selects a runnable model + vendor for simple prompt execution.
@@ -551,7 +551,7 @@ export class RunAIPromptResolver extends ResolverBase {
      */
     private isLLMModel(model: MJAIModelEntityExtended): boolean {
         const typeName = AIEngine.Instance.ModelTypesByID.get(model.AIModelTypeID)?.Name ?? model.AIModelType;
-        return typeName?.trim().toLowerCase() === RunAIPromptResolver.SimplePromptLLMTypeName;
+        return typeName?.trim().toLowerCase() === RunAIPromptResolver.simplePromptLLMTypeName;
     }
 
     /**

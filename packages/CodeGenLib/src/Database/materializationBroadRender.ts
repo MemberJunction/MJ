@@ -1,7 +1,7 @@
 import { SQLParser } from '@memberjunction/sql-parser';
 import type { SQLParserDialect } from '@memberjunction/sql-dialect';
 import {
-    COMPARISON_OPS, isObject, nodeType, isLiteralNode, columnName, isAllLiteralBag,
+    COMPARISON_OPS, IsObject, NodeType, IsLiteralNode, ColumnName, IsAllLiteralBag,
     type AstNode, type AstObject,
 } from './materializationSqlAst';
 
@@ -55,7 +55,7 @@ export interface BroadRenderResult {
 
 /** Flattens a top-level AND-chain into its individual conjuncts (non-AND leaves). */
 function collectConjuncts(node: AstNode): AstNode[] {
-    if (nodeType(node) === 'binary_expr' && isObject(node) && node.operator === 'AND') {
+    if (NodeType(node) === 'binary_expr' && IsObject(node) && node.operator === 'AND') {
         return [...collectConjuncts(node.left), ...collectConjuncts(node.right)];
     }
     return [node];
@@ -67,22 +67,22 @@ function collectConjuncts(node: AstNode): AstNode[] {
  * literal / all-literal bag. Anything else (OR-expr, function, column=column, subquery) is kept.
  */
 function isRemovablePredicate(conjunct: AstNode, cols: Set<string>): boolean {
-    if (nodeType(conjunct) !== 'binary_expr' || !isObject(conjunct)) {
+    if (NodeType(conjunct) !== 'binary_expr' || !IsObject(conjunct)) {
         return false;
     }
     const op = conjunct.operator;
     if (typeof op !== 'string' || !COMPARISON_OPS.has(op)) {
         return false;
     }
-    const leftCol = columnName(conjunct.left);
-    const rightCol = columnName(conjunct.right);
+    const leftCol = ColumnName(conjunct.left);
+    const rightCol = ColumnName(conjunct.right);
     const leftMatches = leftCol != null && cols.has(leftCol.trim().toLowerCase());
     const rightMatches = rightCol != null && cols.has(rightCol.trim().toLowerCase());
     if (leftMatches && !rightMatches) {
-        return isLiteralNode(conjunct.right) || isAllLiteralBag(conjunct.right);
+        return IsLiteralNode(conjunct.right) || IsAllLiteralBag(conjunct.right);
     }
     if (rightMatches && !leftMatches) {
-        return isLiteralNode(conjunct.left) || isAllLiteralBag(conjunct.left);
+        return IsLiteralNode(conjunct.left) || IsAllLiteralBag(conjunct.left);
     }
     return false;
 }
@@ -102,7 +102,7 @@ function rebuildWhere(kept: AstNode[]): AstNode {
 /** Returns the sole statement of an AST, or null if it is not exactly one statement. */
 function soleStatement(ast: AstNode): AstObject | null {
     const node = Array.isArray(ast) ? (ast.length === 1 ? ast[0] : null) : ast;
-    return isObject(node) ? node : null;
+    return IsObject(node) ? node : null;
 }
 
 /**
@@ -123,7 +123,7 @@ function soleStatement(ast: AstNode): AstObject | null {
  * than silently broadened). Omit `expectedRemovals` to keep the legacy "strip all matches" behavior
  * with `ambiguous` always false.
  */
-export function buildBroadRowFilterSQL(
+export function BuildBroadRowFilterSQL(
     renderedSQL: string,
     rowFilterColumns: string[],
     dialect: SQLParserDialect,
@@ -143,7 +143,7 @@ export function buildBroadRowFilterSQL(
         return verdict(renderedSQL, 0);
     }
     const stmt = soleStatement(parsed.ast);
-    if (stmt == null || nodeType(stmt) !== 'select' || stmt.where == null) {
+    if (stmt == null || NodeType(stmt) !== 'select' || stmt.where == null) {
         return verdict(renderedSQL, 0);
     }
 
@@ -164,4 +164,14 @@ export function buildBroadRowFilterSQL(
     stmt.where = rebuildWhere(kept);
     const sql = SQLParser.SqlifyAST(parsed.ast as Parameters<typeof SQLParser.SqlifyAST>[0], dialect);
     return verdict(sql, removedCount);
+}
+
+/** @deprecated Use {@link BuildBroadRowFilterSQL}. */
+export function buildBroadRowFilterSQL(
+    renderedSQL: string,
+    rowFilterColumns: string[],
+    dialect: SQLParserDialect,
+    expectedRemovals?: number,
+): BroadRenderResult {
+    return BuildBroadRowFilterSQL(renderedSQL, rowFilterColumns, dialect, expectedRemovals);
 }

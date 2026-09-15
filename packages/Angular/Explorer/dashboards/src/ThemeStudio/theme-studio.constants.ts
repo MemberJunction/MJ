@@ -14,8 +14,13 @@ import { ContrastCheck, DerivedTheme, hexToOKLCH, oklchToHex, ThemeSeeds } from 
 export const MJ_BUILTIN_THEME_ID = '64A6B519-CFBA-4F25-98D4-8398D397E21C';
 
 /** Whether a theme id is the protected built-in MemberJunction theme (case-insensitive). */
-export function isBuiltInTheme(id: string | null | undefined): boolean {
+export function IsBuiltInTheme(id: string | null | undefined): boolean {
   return !!id && id.toUpperCase() === MJ_BUILTIN_THEME_ID;
+}
+
+/** @deprecated Use {@link IsBuiltInTheme}. */
+export function isBuiltInTheme(id: string | null | undefined): boolean {
+  return IsBuiltInTheme(id);
 }
 
 /** A chrome selector a themer can target from Custom CSS, with a one-line description. */
@@ -200,7 +205,7 @@ export const THEME_RECIPES: ThemeRecipe[] = [
 ];
 
 /** Parse a persisted Overrides JSON map: trims keys, drops blanks, coerces values to strings. */
-export function parseOverridesJson(json: string | null): Record<string, string> {
+export function ParseOverridesJson(json: string | null): Record<string, string> {
   if (!json) return {};
   try {
     const obj = JSON.parse(json) as Record<string, string>;
@@ -214,12 +219,17 @@ export function parseOverridesJson(json: string | null): Record<string, string> 
   }
 }
 
+/** @deprecated Use {@link ParseOverridesJson}. */
+export function parseOverridesJson(json: string | null): Record<string, string> {
+  return ParseOverridesJson(json);
+}
+
 /**
  * Pick the WORST of the light/dark text-on-primary contrast checks (Q1#3) — a failing
  * dark pair must not hide while previewing light. A failing mode always beats a passing
  * one; between two of the same outcome, lower ratio wins.
  */
-export function pickWorstOnPrimary(
+export function PickWorstOnPrimary(
   light: ContrastCheck | undefined,
   dark: ContrastCheck | undefined,
 ): { check: ContrastCheck; mode: 'light' | 'dark' } | undefined {
@@ -233,8 +243,16 @@ export function pickWorstOnPrimary(
   return light.ratio <= dark.ratio ? { check: light, mode: 'light' } : { check: dark, mode: 'dark' };
 }
 
+/** @deprecated Use {@link PickWorstOnPrimary}. */
+export function pickWorstOnPrimary(
+  light: ContrastCheck | undefined,
+  dark: ContrastCheck | undefined,
+): { check: ContrastCheck; mode: 'light' | 'dark' } | undefined {
+  return PickWorstOnPrimary(light, dark);
+}
+
 /** Inline custom-CSS validation (Q3#6): @import removal notice + unknown --mj-* names. */
-export function buildCssWarnings(css: string, knownTokens: ReadonlySet<string>): string[] {
+export function BuildCssWarnings(css: string, knownTokens: ReadonlySet<string>): string[] {
   const warnings: string[] = [];
   if (/@import\b/i.test(css)) {
     warnings.push('@import is not supported and is removed on save.');
@@ -251,4 +269,9 @@ export function buildCssWarnings(css: string, knownTokens: ReadonlySet<string>):
     );
   }
   return warnings;
+}
+
+/** @deprecated Use {@link BuildCssWarnings}. */
+export function buildCssWarnings(css: string, knownTokens: ReadonlySet<string>): string[] {
+  return BuildCssWarnings(css, knownTokens);
 }

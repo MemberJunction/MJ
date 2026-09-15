@@ -240,3 +240,6 @@ migrations/v*/*__RSU_*.sql
 # .github/scripts/stage-package-licenses.mjs. The root LICENSE is the only
 # source of truth; committing 300 copies would let them drift from it.
 packages/**/LICENSE
+
+# Standards gate finding dump (CI artifact / local --json output)
+standards-findings.json

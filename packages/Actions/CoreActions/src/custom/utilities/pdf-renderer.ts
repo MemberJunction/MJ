@@ -37,7 +37,7 @@ export const DEFAULT_PDF_OPTIONS: PDFOptions = {
 /**
  * Render an array of PDFNodeType nodes to a PDF buffer using pdfkit.
  */
-export function renderPDFFromNodes(nodes: PDFNodeType[], options: PDFOptions): Promise<Buffer> {
+export function RenderPDFFromNodes(nodes: PDFNodeType[], options: PDFOptions): Promise<Buffer> {
     return new Promise((resolve, reject) => {
         try {
             const doc = new PDFDocument({
@@ -60,16 +60,29 @@ export function renderPDFFromNodes(nodes: PDFNodeType[], options: PDFOptions): P
     });
 }
 
+/** @deprecated Use {@link RenderPDFFromNodes}. */
+export function renderPDFFromNodes(nodes: PDFNodeType[], options: PDFOptions): Promise<Buffer> {
+    return RenderPDFFromNodes(nodes, options);
+}
+
 /**
  * Render an HTML string to a PDF buffer.
  * If contentType is 'markdown', converts to HTML first using the provided marked function.
  */
+export async function RenderPDFFromHTML(
+    htmlContent: string,
+    options: PDFOptions
+): Promise<Buffer> {
+    const nodes = ParseHTML(htmlContent);
+    return RenderPDFFromNodes(nodes, options);
+}
+
+/** @deprecated Use {@link RenderPDFFromHTML}. */
 export async function renderPDFFromHTML(
     htmlContent: string,
     options: PDFOptions
 ): Promise<Buffer> {
-    const nodes = parseHTML(htmlContent);
-    return renderPDFFromNodes(nodes, options);
+    return RenderPDFFromHTML(htmlContent, options);
 }
 
 // ── Internal renderers ────────────────────────────────────────────────────────
@@ -198,7 +211,7 @@ function renderHR(doc: InstanceType<typeof PDFDocument>, options: PDFOptions): v
 /**
  * Parse an HTML string into a flat list of renderable nodes using htmlparser2.
  */
-export function parseHTML(html: string): PDFNodeType[] {
+export function ParseHTML(html: string): PDFNodeType[] {
     const nodes: PDFNodeType[] = [];
 
     const tagStack: string[] = [];
@@ -337,4 +350,9 @@ export function parseHTML(html: string): PDFNodeType[] {
     parser.end();
 
     return nodes;
+}
+
+/** @deprecated Use {@link ParseHTML}. */
+export function parseHTML(html: string): PDFNodeType[] {
+    return ParseHTML(html);
 }

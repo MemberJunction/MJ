@@ -3,9 +3,9 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { PSResourceBase } from './ps-resource-base';
 import { PSPanelKey } from '../predictive-studio.types';
-import { MODELS_SECTIONS, PSSection, sectionGroups, sectionsInGroup, sectionLabel, hasSection } from '../predictive-studio.nav';
-import { buildModelsAgentContext, resolvePSRecord, buildPSNotFoundError } from '../predictive-studio-agent-context';
-import { validateStringParam } from '../../shared/agent-tool-validation';
+import { MODELS_SECTIONS, PSSection, SectionGroups, SectionsInGroup, SectionLabel, HasSection } from '../predictive-studio.nav';
+import { BuildModelsAgentContext, ResolvePSRecord, BuildPSNotFoundError } from '../predictive-studio-agent-context';
+import { ValidateStringParam } from '../../shared/agent-tool-validation';
 
 /**
  * **Models** — the trained-model lifecycle door (one of Predictive Studio's three consolidated nav
@@ -90,19 +90,28 @@ export class PSModelsResourceComponent extends PSResourceBase {
 
   private readonly cdrLocal = inject(ChangeDetectorRef);
 
-  public activeSection: PSPanelKey = 'registry';
+  public ActiveSection: PSPanelKey = 'registry';
+
+  /** @deprecated Use {@link ActiveSection}. */
+  public get activeSection(): PSPanelKey {
+    return this.ActiveSection;
+  }
+  /** @deprecated Use {@link ActiveSection}. */
+  public set activeSection(value: PSPanelKey) {
+    this.ActiveSection = value;
+  }
   public readonly sections: readonly PSSection[] = MODELS_SECTIONS;
 
   override ngOnInit(): void {
     super.ngOnInit();
     const initial = this.GetQueryParams()['section'] as PSPanelKey | undefined;
-    if (initial && hasSection(this.sections, initial)) this.activeSection = initial;
+    if (initial && HasSection(this.sections, initial)) this.ActiveSection = initial;
   }
 
   protected override OnQueryParamsChanged(params: Record<string, string>, _source: 'popstate' | 'deeplink'): void {
     const next = params['section'] as PSPanelKey | undefined;
-    if (next && next !== this.activeSection && hasSection(this.sections, next)) {
-      this.activeSection = next;
+    if (next && next !== this.ActiveSection && HasSection(this.sections, next)) {
+      this.ActiveSection = next;
       this.cdrLocal.detectChanges();
     }
   }
@@ -110,9 +119,9 @@ export class PSModelsResourceComponent extends PSResourceBase {
   /** Deep agent context for the Models door: active section + trained-model lifecycle counts. */
   protected override extraAgentContext(): Record<string, unknown> {
     const models = this.engine.Models;
-    return buildModelsAgentContext({
-      ActiveSection: this.activeSection,
-      ActiveSectionLabel: this.activeLabel,
+    return BuildModelsAgentContext({
+      ActiveSection: this.ActiveSection,
+      ActiveSectionLabel: this.ActiveLabel,
       SectionLabels: this.sections.map((s) => s.label),
       TotalModelCount: models.length,
       PublishedModelCount: this.engine.PublishedModels.length,
@@ -133,11 +142,11 @@ export class PSModelsResourceComponent extends PSResourceBase {
         Description: 'Switch the Models door to a section. Pass the section key or label (see SectionLabels): Model Registry or Models in Production.',
         ParameterSchema: { type: 'object', properties: { section: { type: 'string', description: 'The section key or label to switch to' } } },
         Handler: async (params: Record<string, unknown>) => {
-          const check = validateStringParam(params['section'], 'section');
+          const check = ValidateStringParam(params['section'], 'section');
           if (!check.ok) return check.result;
           const candidates = this.sections.map((s) => ({ ID: s.key, Name: s.label }));
-          const match = resolvePSRecord(check.value, candidates);
-          if (!match) return { Success: false, ErrorMessage: buildPSNotFoundError(check.value, candidates, 'section') };
+          const match = ResolvePSRecord(check.value, candidates);
+          if (!match) return { Success: false, ErrorMessage: BuildPSNotFoundError(check.value, candidates, 'section') };
           this.selectSection(match.ID as PSPanelKey);
           return { Success: true, Data: { activeSection: match.Name } };
         },
@@ -145,22 +154,42 @@ export class PSModelsResourceComponent extends PSResourceBase {
     ]);
   }
 
-  public get groups(): string[] { return sectionGroups(this.sections); }
-  public itemsForGroup(group: string): PSSection[] { return sectionsInGroup(this.sections, group); }
-  public get activeLabel(): string { return sectionLabel(this.sections, this.activeSection); }
+  public get Groups(): string[] { return SectionGroups(this.sections); }
+
+  /** @deprecated Use {@link Groups}. */
+  public get groups(): string[] {
+    return this.Groups;
+  }
+  public ItemsForGroup(group: string): PSSection[] { return SectionsInGroup(this.sections, group); }
+
+  /** @deprecated Use {@link ItemsForGroup}. */
+  public itemsForGroup(group: string): PSSection[] {
+    return this.ItemsForGroup(group);
+  }
+  public get ActiveLabel(): string { return SectionLabel(this.sections, this.ActiveSection); }
+
+  /** @deprecated Use {@link ActiveLabel}. */
+  public get activeLabel(): string {
+    return this.ActiveLabel;
+  }
 
   /** Section-specific subtitle for the interior header. */
-  public get activeSubtitle(): string {
+  public get ActiveSubtitle(): string {
     const map: Record<string, string> = {
       registry: 'Versioned trained models, their metrics, and lineage.',
       production: "What's scoring live, and its recent runs.",
     };
-    return map[this.activeSection] ?? '';
+    return map[this.ActiveSection] ?? '';
+  }
+
+  /** @deprecated Use {@link ActiveSubtitle}. */
+  public get activeSubtitle(): string {
+    return this.ActiveSubtitle;
   }
 
   public selectSection(key: PSPanelKey): void {
-    if (this.activeSection === key) return;
-    this.activeSection = key;
+    if (this.ActiveSection === key) return;
+    this.ActiveSection = key;
     this.UpdateQueryParams({ section: key });
     this.publishAgentContext();
     this.cdrLocal.detectChanges();

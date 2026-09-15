@@ -25,7 +25,7 @@ export class ConversationService {
   private conversationMessages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
   private rl?: readline.Interface;
 
-  async startChat(
+  async StartChat(
     agentName: string, 
     initialPrompt?: string, 
     options: ConversationOptions = {}
@@ -81,6 +81,15 @@ Next steps:
 Log file: ${logger.getLogFilePath()}`);
       }
     }
+  }
+
+  /** @deprecated Use {@link StartChat}. */
+  async startChat(
+    agentName: string, 
+    initialPrompt?: string, 
+    options: ConversationOptions = {}
+  ): Promise<void> {
+    return this.StartChat(agentName, initialPrompt, options);
   }
 
   private async conversationLoop(
@@ -280,15 +289,25 @@ Log file: ${logger.getLogFilePath()}`);
     return exitCommands.includes(input.toLowerCase());
   }
 
-  public getConversationHistory(): ConversationTurn[] {
+  public GetConversationHistory(): ConversationTurn[] {
     return [...this.conversationHistory];
   }
 
-  public clearHistory(): void {
+  /** @deprecated Use {@link GetConversationHistory}. */
+  public getConversationHistory(): ConversationTurn[] {
+    return this.GetConversationHistory();
+  }
+
+  public ClearHistory(): void {
     this.conversationHistory = [];
   }
 
-  public async exportConversation(filePath?: string): Promise<string> {
+  /** @deprecated Use {@link ClearHistory}. */
+  public clearHistory(): void {
+    return this.ClearHistory();
+  }
+
+  public async ExportConversation(filePath?: string): Promise<string> {
     const exportData = {
       timestamp: new Date().toISOString(),
       totalTurns: this.conversationHistory.length,
@@ -306,6 +325,11 @@ Log file: ${logger.getLogFilePath()}`);
     }
 
     return exportJson;
+  }
+
+  /** @deprecated Use {@link ExportConversation}. */
+  public async exportConversation(filePath?: string): Promise<string> {
+    return this.ExportConversation(filePath);
   }
 
   private extractAgentResponse(result: any): string {

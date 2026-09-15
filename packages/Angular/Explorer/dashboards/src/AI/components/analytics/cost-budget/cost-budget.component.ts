@@ -13,7 +13,7 @@ import { Subject } from 'rxjs';
 import { RunView } from '@memberjunction/core';
 import { NormalizeUUID } from '@memberjunction/global';
 import { TOKEN_PRICE_UNIT_TYPE_DIVISORS } from '@memberjunction/ai-engine-base';
-import { CacheRate, CacheTokenTotals, cacheHitRate, hasCacheActivity, netCacheSavings } from '../../../services/cache-metrics';
+import { CacheRate, CacheTokenTotals, CacheHitRate, HasCacheActivity, NetCacheSavings } from '../../../services/cache-metrics';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { GlobalFilterState } from '../../../interfaces/analytics-preferences.interface';
 
@@ -616,7 +616,7 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
     set TimeRange(value: string) {
         const prev = this._timeRange;
         this._timeRange = value;
-        if (prev !== value && this.initialized) this.LoadData();
+        if (prev !== value && this.initialized) this.loadData();
     }
     get TimeRange(): string { return this._timeRange; }
 
@@ -626,7 +626,7 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
         const next = value ?? { Models: [], Agents: [], Prompts: [], Statuses: [] };
         const changed = !this.shallowFiltersEqual(this._filters, next);
         this._filters = next;
-        if (changed && this.initialized) this.LoadData();
+        if (changed && this.initialized) this.loadData();
     }
     get Filters(): GlobalFilterState { return this._filters; }
 
@@ -661,7 +661,7 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
 
     ngOnInit(): void {
         this.initialized = true;
-        this.LoadData();
+        this.loadData();
     }
 
     ngOnDestroy(): void {
@@ -674,13 +674,13 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
     public OnTimeRangeChange(range: string): void {
         this.TimeRange = range;
         this.TimeRangeChange.emit(range);
-        this.LoadData();
+        this.loadData();
     }
 
     public OnFiltersChange(filters: GlobalFilterState): void {
         this.Filters = filters;
         this.FiltersChange.emit(filters);
-        this.LoadData();
+        this.loadData();
     }
 
     public FormatCurrency(value: number, decimals = 2): string {
@@ -700,7 +700,7 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
 
     // ── Data Loading ──
 
-    private async LoadData(): Promise<void> {
+    private async loadData(): Promise<void> {
         this.IsLoading = true;
         this.cdr.detectChanges();
 
@@ -809,7 +809,7 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
 
     /** Sum net cache savings across a set of runs using each run's model+vendor rate. */
     private sumCacheSavings(runs: PromptRunRecord[]): number {
-        return runs.reduce((total, run) => total + netCacheSavings({
+        return runs.reduce((total, run) => total + NetCacheSavings({
             uncachedInputTokens: 0,
             cacheReadTokens: run.TokensCacheRead ?? 0,
             cacheWriteTokens: run.TokensCacheWrite ?? 0
@@ -884,11 +884,11 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
             totals.cacheWriteTokens += r.TokensCacheWrite ?? 0;
         }
         const savings = this.sumCacheSavings(this.allRuns);
-        const activity = hasCacheActivity(totals);
+        const activity = HasCacheActivity(totals);
 
         this.CostKpis.push({
             Label: 'Cache Hit Rate',
-            Value: (cacheHitRate(totals) * 100).toFixed(1) + '%',
+            Value: (CacheHitRate(totals) * 100).toFixed(1) + '%',
             Delta: null,
             DeltaDirection: 'stable',
             Highlighted: false,
@@ -991,7 +991,7 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
                 OutputTokens: outputTokens,
                 CacheReadTokens: cacheReadTokens,
                 CacheWriteTokens: cacheWriteTokens,
-                CacheHitRate: cacheHitRate({ uncachedInputTokens: inputTokens, cacheReadTokens, cacheWriteTokens }),
+                CacheHitRate: CacheHitRate({ uncachedInputTokens: inputTokens, cacheReadTokens, cacheWriteTokens }),
                 CacheSavings: this.sumCacheSavings(modelRuns),
                 InputCost: inputCost,
                 OutputCost: outputCost,

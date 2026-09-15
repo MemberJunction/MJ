@@ -132,7 +132,7 @@ export abstract class BaseAutoDocDriver {
    * Get simplified column statistics for discovery
    * Uses existing getColumnStatistics but with simpler parameters
    */
-  public async getColumnStatisticsForDiscovery(
+  public async GetColumnStatisticsForDiscovery(
     schemaName: string,
     tableName: string,
     columnName: string,
@@ -164,6 +164,17 @@ export abstract class BaseAutoDocDriver {
       avgLength: stats.avgLength,
       sampleValues: stats.sampleValues || []
     };
+  }
+
+  /** @deprecated Use {@link GetColumnStatisticsForDiscovery}. */
+  public async getColumnStatisticsForDiscovery(
+    schemaName: string,
+    tableName: string,
+    columnName: string,
+    columnType: string,
+    maxSampleSize: number = 1000
+  ): Promise<import('../types/discovery.js').ColumnStatistics> {
+    return this.GetColumnStatisticsForDiscovery(schemaName, tableName, columnName, columnType, maxSampleSize);
   }
 
   /**
@@ -320,7 +331,12 @@ export abstract class BaseAutoDocDriver {
   /**
    * Get database provider name
    */
-  public getProviderName(): string {
+  public GetProviderName(): string {
     return this.config.provider;
+  }
+
+  /** @deprecated Use {@link GetProviderName}. */
+  public getProviderName(): string {
+    return this.GetProviderName();
   }
 }

@@ -121,7 +121,7 @@ export interface VersionHistoryGraphAgentContextInput {
  * @param input - the component's current state snapshot
  * @returns a flat key-value object suitable for `SetAgentContext`
  */
-export function buildVersionHistoryGraphAgentContext(
+export function BuildVersionHistoryGraphAgentContext(
     input: VersionHistoryGraphAgentContextInput,
 ): Record<string, unknown> {
     const context: Record<string, unknown> = {
@@ -170,6 +170,13 @@ export function buildVersionHistoryGraphAgentContext(
     return context;
 }
 
+/** @deprecated Use {@link BuildVersionHistoryGraphAgentContext}. */
+export function buildVersionHistoryGraphAgentContext(
+    input: VersionHistoryGraphAgentContextInput,
+): Record<string, unknown> {
+    return BuildVersionHistoryGraphAgentContext(input);
+}
+
 /** Minimal name/id-bearing entity descriptor for {@link resolveGraphEntity}. */
 export interface GraphEntityCandidate {
     ID: string;
@@ -192,7 +199,7 @@ export type GraphEntityResolution<T extends GraphEntityCandidate> =
  * @param candidates - the entities available in the graph
  * @returns the matched entity, or a clear error message
  */
-export function resolveGraphEntity<T extends GraphEntityCandidate>(
+export function ResolveGraphEntity<T extends GraphEntityCandidate>(
     reference: string,
     candidates: readonly T[],
 ): GraphEntityResolution<T> {
@@ -214,4 +221,12 @@ export function resolveGraphEntity<T extends GraphEntityCandidate>(
     }
     const sample = capNames(candidates.map((c) => c.Name)).join(', ');
     return { ok: false, error: `Entity "${reference}" was not found in the dependency graph. Available entities include: ${sample}.` };
+}
+
+/** @deprecated Use {@link ResolveGraphEntity}. */
+export function resolveGraphEntity<T extends GraphEntityCandidate>(
+    reference: string,
+    candidates: readonly T[],
+): GraphEntityResolution<T> {
+    return ResolveGraphEntity(reference, candidates);
 }

@@ -52,13 +52,18 @@ interface LatestVersion {
  * Keys are NORMALIZED UUIDs, so lookups are case-insensitive by construction (SQL Server returns
  * upper case, PostgreSQL lower) at O(1) rather than by scanning every key for a `UUIDsEqual` hit.
  */
-export function snapshotArtifactVersions(refs: Iterable<ArtifactVersionRef>): Map<string, number> {
+export function SnapshotArtifactVersions(refs: Iterable<ArtifactVersionRef>): Map<string, number> {
   const latest = new Map<string, number>();
   for (const ref of refs) {
     const key = NormalizeUUID(ref.artifactId);
     latest.set(key, Math.max(latest.get(key) ?? 0, ref.versionNumber));
   }
   return latest;
+}
+
+/** @deprecated Use {@link SnapshotArtifactVersions}. */
+export function snapshotArtifactVersions(refs: Iterable<ArtifactVersionRef>): Map<string, number> {
+  return SnapshotArtifactVersions(refs);
 }
 
 /** Same reduction as {@link snapshotArtifactVersions}, keeping the timestamp for ordering. */
@@ -125,7 +130,7 @@ function bestCandidate(entries: Array<[string, LatestVersion]>): LatestVersion {
  * @param input.userChangedSelection - Defaults to false. True when the user picked or closed an
  *   artifact while the turn was in flight; the panel is then left where they put it.
  */
-export function decideArtifactPanelAction(input: {
+export function DecideArtifactPanelAction(input: {
   panelOpen: boolean;
   selectedArtifactId: string | null;
   before: Map<string, number>;
@@ -180,4 +185,16 @@ export function decideArtifactPanelAction(input: {
 
   const latest = bestCandidate(bumped);
   return { kind: 'open', artifactId: latest.artifactId, versionNumber: latest.versionNumber };
+}
+
+/** @deprecated Use {@link DecideArtifactPanelAction}. */
+export function decideArtifactPanelAction(input: {
+  panelOpen: boolean;
+  selectedArtifactId: string | null;
+  before: Map<string, number>;
+  after: ArtifactVersionRef[];
+  baselineComparable?: boolean;
+  userChangedSelection?: boolean;
+}): ArtifactPanelAction {
+  return DecideArtifactPanelAction(input);
 }

@@ -15,7 +15,7 @@
  * `BakerWorkingDB`, so SQLConverter stays free of a `@memberjunction/codegen-lib`
  * dependency — mirroring how `convertMigration` takes an injected transpiler.
  */
-import { convertMigration } from './MigrationConverter.js';
+import { ConvertMigration } from './MigrationConverter.js';
 import type { TSQLToPGTranspiler, ConversionStatus, UnhandledStatement } from './MigrationConverter.js';
 
 /**
@@ -152,8 +152,8 @@ export class IncrementalBaker {
    * gaps (`needs-hand-authoring`); they aren't referenced by base views/sprocs, so the capture is
    * complete regardless and the caller authors them into the final `.pg.sql`.
    */
-  async bakeMigration(ssSql: string, fileName: string, committedPgSql?: string): Promise<BakedMigrationResult> {
-    const conv = await convertMigration(ssSql, fileName, {
+  async BakeMigration(ssSql: string, fileName: string, committedPgSql?: string): Promise<BakedMigrationResult> {
+    const conv = await ConvertMigration(ssSql, fileName, {
       transpiler: this.opts.transpiler,
       schema: this.schema,
       coreSchema: this.coreSchema,
@@ -213,6 +213,11 @@ export class IncrementalBaker {
     });
   }
 
+  /** @deprecated Use {@link BakeMigration}. */
+  async bakeMigration(ssSql: string, fileName: string, committedPgSql?: string): Promise<BakedMigrationResult> {
+    return this.BakeMigration(ssSql, fileName, committedPgSql);
+  }
+
   /**
    * Run one bake path's working-DB apply/capture; on ANY failure, rethrow it as a BakeApplyError
    * carrying `preservedBody` so the CLI can still write the transpiled artifact to `.needs-hand`
@@ -237,7 +242,7 @@ export class IncrementalBaker {
     const captured: string[] = [];
     for (const entity of entities) {
       const result = await this.opts.db.captureEntity(entity);
-      captured.push(stripVolatileHeaders(result.sql).trim());
+      captured.push(StripVolatileHeaders(result.sql).trim());
     }
     return captured;
   }
@@ -289,9 +294,14 @@ export class IncrementalBaker {
  * baked-mode flag in `PostgreSQLCodeGenProvider.generateSQLFileHeader` (§6.4); doing it here
  * keeps the change contained to the converter and is provider-agnostic.
  */
-export function stripVolatileHeaders(sql: string): string {
+export function StripVolatileHeaders(sql: string): string {
   return sql
     .split('\n')
     .filter((line) => !/^\s*--\s*Generated at:/i.test(line))
     .join('\n');
+}
+
+/** @deprecated Use {@link StripVolatileHeaders}. */
+export function stripVolatileHeaders(sql: string): string {
+  return StripVolatileHeaders(sql);
 }

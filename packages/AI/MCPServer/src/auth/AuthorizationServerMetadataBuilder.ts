@@ -47,7 +47,7 @@ export interface AuthorizationServerMetadataOptions {
  * // }
  * ```
  */
-export function buildAuthorizationServerMetadata(
+export function BuildAuthorizationServerMetadata(
   options: AuthorizationServerMetadataOptions
 ): AuthorizationServerMetadata {
   const { baseUrl } = options;
@@ -104,13 +104,20 @@ export function buildAuthorizationServerMetadata(
   return metadata;
 }
 
+/** @deprecated Use {@link BuildAuthorizationServerMetadata}. */
+export function buildAuthorizationServerMetadata(
+  options: AuthorizationServerMetadataOptions
+): AuthorizationServerMetadata {
+  return BuildAuthorizationServerMetadata(options);
+}
+
 /**
  * Validates that required fields are present in Authorization Server Metadata.
  *
  * @param metadata - The metadata to validate
  * @returns Array of validation error messages (empty if valid)
  */
-export function validateAuthorizationServerMetadata(
+export function ValidateAuthorizationServerMetadata(
   metadata: AuthorizationServerMetadata
 ): string[] {
   const errors: string[] = [];
@@ -137,4 +144,11 @@ export function validateAuthorizationServerMetadata(
   }
 
   return errors;
+}
+
+/** @deprecated Use {@link ValidateAuthorizationServerMetadata}. */
+export function validateAuthorizationServerMetadata(
+  metadata: AuthorizationServerMetadata
+): string[] {
+  return ValidateAuthorizationServerMetadata(metadata);
 }

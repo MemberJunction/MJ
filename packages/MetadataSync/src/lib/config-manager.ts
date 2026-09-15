@@ -75,12 +75,17 @@ export class ConfigManager extends BaseSingleton<ConfigManager> {
    * 
    * @returns The original working directory path
    */
-  getOriginalCwd(): string {
+  GetOriginalCwd(): string {
     if (!this.originalCwd) {
       // Capture on first access
       this.originalCwd = process.cwd();
     }
     return this.originalCwd;
+  }
+
+  /** @deprecated Use {@link GetOriginalCwd}. */
+  getOriginalCwd(): string {
+    return this.GetOriginalCwd();
   }
   
   /**
@@ -88,8 +93,13 @@ export class ConfigManager extends BaseSingleton<ConfigManager> {
    * 
    * @param cwd - The working directory to use as original
    */
-  setOriginalCwd(cwd: string): void {
+  SetOriginalCwd(cwd: string): void {
     this.originalCwd = cwd;
+  }
+
+  /** @deprecated Use {@link SetOriginalCwd}. */
+  setOriginalCwd(cwd: string): void {
+    return this.SetOriginalCwd(cwd);
   }
 
   /**
@@ -109,7 +119,7 @@ export class ConfigManager extends BaseSingleton<ConfigManager> {
    *
    * Result is cached for subsequent calls; pass `forceReload=true` to invalidate.
    */
-  loadMJConfig(forceReload = false): MJConfig | null {
+  LoadMJConfig(forceReload = false): MJConfig | null {
     if (this.configLoaded && !forceReload) {
       return this.mjConfig;
     }
@@ -124,15 +134,15 @@ export class ConfigManager extends BaseSingleton<ConfigManager> {
         // absolute path or a path relative to where the user invoked the CLI.
         const resolved = path.isAbsolute(envOverride)
           ? envOverride
-          : path.resolve(this.getOriginalCwd(), envOverride);
+          : path.resolve(this.GetOriginalCwd(), envOverride);
         if (!fs.existsSync(resolved)) {
           console.error(`MJ_CONFIG_FILE points at "${resolved}" which does not exist; falling back to cosmiconfig search`);
-          result = explorer.search(this.getOriginalCwd());
+          result = explorer.search(this.GetOriginalCwd());
         } else {
           result = explorer.load(resolved);
         }
       } else {
-        result = explorer.search(this.getOriginalCwd());
+        result = explorer.search(this.GetOriginalCwd());
       }
 
       // Merge user config with DEFAULT_SYNC_CONFIG (user config takes precedence)
@@ -150,16 +160,26 @@ export class ConfigManager extends BaseSingleton<ConfigManager> {
     }
   }
 
+  /** @deprecated Use {@link LoadMJConfig}. */
+  loadMJConfig(forceReload = false): MJConfig | null {
+    return this.LoadMJConfig(forceReload);
+  }
+
   /**
    * Get the cached MJ configuration
    * 
    * @returns The cached MJConfig or null if not loaded
    */
-  getMJConfig(): MJConfig | null {
+  GetMJConfig(): MJConfig | null {
     if (!this.configLoaded) {
-      return this.loadMJConfig();
+      return this.LoadMJConfig();
     }
     return this.mjConfig;
+  }
+
+  /** @deprecated Use {@link GetMJConfig}. */
+  getMJConfig(): MJConfig | null {
+    return this.GetMJConfig();
   }
 }
 

@@ -120,7 +120,7 @@ function classify(typeName: string, content: string): Classification {
  * @param contextUser Optional acting user (server-side scoping); defaults to `Metadata.CurrentUser`.
  * @returns A {@link LoadedArtifact}, or `null` if the artifact can't be loaded.
  */
-export async function loadArtifact(artifactId: string, contextUser?: UserInfo): Promise<LoadedArtifact | null> {
+export async function LoadArtifact(artifactId: string, contextUser?: UserInfo): Promise<LoadedArtifact | null> {
     const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
     const currentUser = contextUser ?? md.CurrentUser;
 
@@ -160,6 +160,11 @@ export async function loadArtifact(artifactId: string, contextUser?: UserInfo): 
         spec,
         language,
     };
+}
+
+/** @deprecated Use {@link LoadArtifact}. */
+export async function loadArtifact(artifactId: string, contextUser?: UserInfo): Promise<LoadedArtifact | null> {
+    return LoadArtifact(artifactId, contextUser);
 }
 
 // ---------------------------------------------------------------------------
@@ -219,7 +224,7 @@ function quotedIdList(ids: string[]): string {
  * @param conversationId The conversation whose artifacts to load.
  * @param contextUser    Optional acting user (server-side scoping).
  */
-export async function loadConversationArtifacts(conversationId: string, contextUser?: UserInfo): Promise<ArtifactSummary[]> {
+export async function LoadConversationArtifacts(conversationId: string, contextUser?: UserInfo): Promise<ArtifactSummary[]> {
     const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
     const currentUser = contextUser ?? md.CurrentUser;
     const rv = new RunView();
@@ -256,6 +261,11 @@ export async function loadConversationArtifacts(conversationId: string, contextU
             agentName: agentId ? (agentNameById.get(agentId) ?? null) : null,
         } satisfies ArtifactSummary;
     });
+}
+
+/** @deprecated Use {@link LoadConversationArtifacts}. */
+export async function loadConversationArtifacts(conversationId: string, contextUser?: UserInfo): Promise<ArtifactSummary[]> {
+    return LoadConversationArtifacts(conversationId, contextUser);
 }
 
 /** Load the latest version content for each artifact id. */

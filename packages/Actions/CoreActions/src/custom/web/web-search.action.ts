@@ -1,7 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
-import { getDuckDuckGoRateLimiter, SearchRequest } from "./duckduckgo-rate-limiter";
+import { GetDuckDuckGoRateLimiter, SearchRequest } from "./duckduckgo-rate-limiter";
 
 /**
  * Action that performs web search using DuckDuckGo's Instant Answer API
@@ -77,7 +77,7 @@ export class WebSearchAction extends BaseAction {
             }
 
             // Get the rate limiter instance
-            const rateLimiter = getDuckDuckGoRateLimiter();
+            const rateLimiter = GetDuckDuckGoRateLimiter();
             
             // Try DuckDuckGo Instant Answer API first (JSON response)
             let response: Response;

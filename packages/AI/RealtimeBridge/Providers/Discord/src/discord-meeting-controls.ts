@@ -45,13 +45,18 @@ function mapRole(role: DiscordMemberRole, isSelf: boolean | undefined): BridgeMe
 }
 
 /** Maps one Discord member onto the channel's {@link BridgeMeetingParticipant} shape. */
-export function toMeetingParticipant(m: DiscordMember): BridgeMeetingParticipant {
+export function ToMeetingParticipant(m: DiscordMember): BridgeMeetingParticipant {
     return {
         ParticipantId: m.UserId,
         DisplayName: m.DisplayName,
         Role: mapRole(m.Role, m.IsSelf),
         IsAgent: m.IsSelf === true,
     };
+}
+
+/** @deprecated Use {@link ToMeetingParticipant}. */
+export function toMeetingParticipant(m: DiscordMember): BridgeMeetingParticipant {
+    return ToMeetingParticipant(m);
 }
 
 /**
@@ -102,7 +107,7 @@ export class DiscordMeetingControlsEventSource implements IBridgeMeetingControls
     public IngestRoster(members: DiscordMember[]): void {
         this.roster.clear();
         for (const m of members) {
-            this.roster.set(this.key(m.UserId), toMeetingParticipant(m));
+            this.roster.set(this.key(m.UserId), ToMeetingParticipant(m));
         }
         this.emitRoster();
     }

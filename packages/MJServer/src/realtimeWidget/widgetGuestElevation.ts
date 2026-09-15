@@ -47,7 +47,7 @@ export interface WidgetGuestRunContext {
  * Never throws: a resolution failure (no system user, widget not found, read error) returns `null`,
  * so the caller falls back to the normal (guest-principal) path rather than failing the request.
  */
-export async function resolveWidgetGuestRunContext(
+export async function ResolveWidgetGuestRunContext(
   userPayload: UserPayload,
   provider: DatabaseProviderBase,
 ): Promise<WidgetGuestRunContext | null> {
@@ -75,6 +75,14 @@ export async function resolveWidgetGuestRunContext(
     pinnedAgentId: widget.PinnedAgentID,
     sessionScopeId: guest.MagicLinkScope?.ResourceID,
   };
+}
+
+/** @deprecated Use {@link ResolveWidgetGuestRunContext}. */
+export async function resolveWidgetGuestRunContext(
+  userPayload: UserPayload,
+  provider: DatabaseProviderBase,
+): Promise<WidgetGuestRunContext | null> {
+  return ResolveWidgetGuestRunContext(userPayload, provider);
 }
 
 /**
@@ -123,13 +131,18 @@ export function ResolveScopedAnonymousRunUser(contextUser: UserInfo): UserInfo {
  * preserving the guest's `sessionId` — so progress/streaming PubSub still routes to the guest's
  * live websocket, but all AI run-entity writes happen under the trusted server principal.
  */
-export function elevateUserPayload(userPayload: UserPayload, elevatedUser: UserInfo): UserPayload {
+export function ElevateUserPayload(userPayload: UserPayload, elevatedUser: UserInfo): UserPayload {
   return {
     ...userPayload,
     email: elevatedUser.Email,
     userRecord: elevatedUser,
     isSystemUser: true,
   };
+}
+
+/** @deprecated Use {@link ElevateUserPayload}. */
+export function elevateUserPayload(userPayload: UserPayload, elevatedUser: UserInfo): UserPayload {
+  return ElevateUserPayload(userPayload, elevatedUser);
 }
 
 /** Loads a single widget instance by id under the elevated principal (read-only). */

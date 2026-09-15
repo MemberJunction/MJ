@@ -30,7 +30,7 @@ import {
     type FormCanvasElement,
     type FormCanvasModel,
     type FormCanvasSection,
-    buildEmptySection,
+    BuildEmptySection,
 } from './form-canvas-model';
 
 /** A typed agent client-tool, matching the shape NavigationService expects. */
@@ -59,7 +59,7 @@ export interface CanvasTransformResult {
 // ──────────────────────────────────────────────────────────────────────────
 
 /** Find an element by id across all sections. Returns null when absent. */
-export function findElement(
+export function FindElement(
     canvas: FormCanvasModel,
     elementId: string,
 ): FormCanvasElement | null {
@@ -70,16 +70,32 @@ export function findElement(
     return null;
 }
 
+/** @deprecated Use {@link FindElement}. */
+export function findElement(
+    canvas: FormCanvasModel,
+    elementId: string,
+): FormCanvasElement | null {
+    return FindElement(canvas, elementId);
+}
+
 /** Find a section by id. Returns null when absent. */
-export function findSection(
+export function FindSection(
     canvas: FormCanvasModel,
     sectionId: string,
 ): FormCanvasSection | null {
     return canvas.sections.find(s => s.id === sectionId) ?? null;
 }
 
+/** @deprecated Use {@link FindSection}. */
+export function findSection(
+    canvas: FormCanvasModel,
+    sectionId: string,
+): FormCanvasSection | null {
+    return FindSection(canvas, sectionId);
+}
+
 /** Distinct field names currently placed on the canvas, in display order. */
-export function collectFieldNames(canvas: FormCanvasModel): string[] {
+export function CollectFieldNames(canvas: FormCanvasModel): string[] {
     const seen = new Set<string>();
     const out: string[] = [];
     for (const section of canvas.sections) {
@@ -93,12 +109,25 @@ export function collectFieldNames(canvas: FormCanvasModel): string[] {
     return out;
 }
 
+/** @deprecated Use {@link CollectFieldNames}. */
+export function collectFieldNames(canvas: FormCanvasModel): string[] {
+    return CollectFieldNames(canvas);
+}
+
 /** Find the section that contains the given element id. Null when absent. */
-export function findSectionOfElement(
+export function FindSectionOfElement(
     canvas: FormCanvasModel,
     elementId: string,
 ): FormCanvasSection | null {
     return canvas.sections.find(s => s.elements.some(e => e.id === elementId)) ?? null;
+}
+
+/** @deprecated Use {@link FindSectionOfElement}. */
+export function findSectionOfElement(
+    canvas: FormCanvasModel,
+    elementId: string,
+): FormCanvasSection | null {
+    return FindSectionOfElement(canvas, elementId);
 }
 
 /**
@@ -107,8 +136,13 @@ export function findSectionOfElement(
  * the tolerant resolvers below) can talk about elements by a human label, not
  * just opaque ids.
  */
-export function elementDisplayLabel(el: FormCanvasElement): string {
+export function ElementDisplayLabel(el: FormCanvasElement): string {
     return el.label?.trim() || el.fieldName?.trim() || el.type;
+}
+
+/** @deprecated Use {@link ElementDisplayLabel}. */
+export function elementDisplayLabel(el: FormCanvasElement): string {
+    return ElementDisplayLabel(el);
 }
 
 /**
@@ -119,35 +153,51 @@ export function elementDisplayLabel(el: FormCanvasElement): string {
  * co-agent rarely has the synthetic element id to hand — it heard "the email
  * field" — so accepting the label keeps the granular tools usable by voice.
  */
-export function resolveElement(
+export function ResolveElement(
     canvas: FormCanvasModel,
     idOrLabel: string,
 ): FormCanvasElement | null {
-    const byId = findElement(canvas, idOrLabel);
+    const byId = FindElement(canvas, idOrLabel);
     if (byId) return byId;
     const needle = idOrLabel.trim().toLowerCase();
     if (!needle) return null;
     const all: FormCanvasElement[] = canvas.sections.flatMap(s => s.elements);
-    const exact = all.find(e => elementDisplayLabel(e).toLowerCase() === needle);
+    const exact = all.find(e => ElementDisplayLabel(e).toLowerCase() === needle);
     if (exact) return exact;
-    return all.find(e => elementDisplayLabel(e).toLowerCase().includes(needle)) ?? null;
+    return all.find(e => ElementDisplayLabel(e).toLowerCase().includes(needle)) ?? null;
+}
+
+/** @deprecated Use {@link ResolveElement}. */
+export function resolveElement(
+    canvas: FormCanvasModel,
+    idOrLabel: string,
+): FormCanvasElement | null {
+    return ResolveElement(canvas, idOrLabel);
 }
 
 /**
  * Resolve a section by id OR by its title, case-insensitively (exact id →
  * exact title → partial-contains). Same rationale as {@link resolveElement}.
  */
-export function resolveSection(
+export function ResolveSection(
     canvas: FormCanvasModel,
     idOrTitle: string,
 ): FormCanvasSection | null {
-    const byId = findSection(canvas, idOrTitle);
+    const byId = FindSection(canvas, idOrTitle);
     if (byId) return byId;
     const needle = idOrTitle.trim().toLowerCase();
     if (!needle) return null;
     const exact = canvas.sections.find(s => (s.title ?? '').trim().toLowerCase() === needle);
     if (exact) return exact;
     return canvas.sections.find(s => (s.title ?? '').trim().toLowerCase().includes(needle)) ?? null;
+}
+
+/** @deprecated Use {@link ResolveSection}. */
+export function resolveSection(
+    canvas: FormCanvasModel,
+    idOrTitle: string,
+): FormCanvasSection | null {
+    return ResolveSection(canvas, idOrTitle);
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -160,12 +210,12 @@ export function resolveSection(
  * containing section and the target element are reconstructed immutably.
  * No-op (returns the same canvas reference) when the element is absent.
  */
-export function updateElementInCanvas(
+export function UpdateElementInCanvas(
     canvas: FormCanvasModel,
     elementId: string,
     patch: Partial<FormCanvasElement>,
 ): FormCanvasModel {
-    if (!findElement(canvas, elementId)) return canvas;
+    if (!FindElement(canvas, elementId)) return canvas;
     return {
         ...canvas,
         sections: canvas.sections.map(section => {
@@ -179,12 +229,21 @@ export function updateElementInCanvas(
     };
 }
 
+/** @deprecated Use {@link UpdateElementInCanvas}. */
+export function updateElementInCanvas(
+    canvas: FormCanvasModel,
+    elementId: string,
+    patch: Partial<FormCanvasElement>,
+): FormCanvasModel {
+    return UpdateElementInCanvas(canvas, elementId, patch);
+}
+
 /** Return a NEW canvas with the given element removed from its section. */
-export function removeElementFromCanvas(
+export function RemoveElementFromCanvas(
     canvas: FormCanvasModel,
     elementId: string,
 ): FormCanvasModel {
-    if (!findElement(canvas, elementId)) return canvas;
+    if (!FindElement(canvas, elementId)) return canvas;
     return {
         ...canvas,
         sections: canvas.sections.map(section => ({
@@ -194,19 +253,27 @@ export function removeElementFromCanvas(
     };
 }
 
+/** @deprecated Use {@link RemoveElementFromCanvas}. */
+export function removeElementFromCanvas(
+    canvas: FormCanvasModel,
+    elementId: string,
+): FormCanvasModel {
+    return RemoveElementFromCanvas(canvas, elementId);
+}
+
 /**
  * Return a NEW canvas with a freshly-created field element appended to the
  * target section. The new element id is supplied by the caller (so the host
  * can use its own id generator) — pure functions don't reach for randomness.
  * No-op when the section is absent.
  */
-export function addFieldToCanvas(
+export function AddFieldToCanvas(
     canvas: FormCanvasModel,
     sectionId: string,
     fieldName: string,
     newElementId: string,
 ): FormCanvasModel {
-    if (!findSection(canvas, sectionId)) return canvas;
+    if (!FindSection(canvas, sectionId)) return canvas;
     const element: FormCanvasElement = {
         id: newElementId,
         type: 'field',
@@ -222,6 +289,16 @@ export function addFieldToCanvas(
     };
 }
 
+/** @deprecated Use {@link AddFieldToCanvas}. */
+export function addFieldToCanvas(
+    canvas: FormCanvasModel,
+    sectionId: string,
+    fieldName: string,
+    newElementId: string,
+): FormCanvasModel {
+    return AddFieldToCanvas(canvas, sectionId, fieldName, newElementId);
+}
+
 /**
  * Return a NEW canvas with the element identified by `elementId` MOVED to the
  * end of the target section (or to `index` within it, clamped). No-op (same
@@ -229,15 +306,15 @@ export function addFieldToCanvas(
  * element is already the only thing where it'd land in the same spot. Moving
  * within the same section acts as a reposition.
  */
-export function moveElementToSection(
+export function MoveElementToSection(
     canvas: FormCanvasModel,
     elementId: string,
     targetSectionId: string,
     index?: number,
 ): FormCanvasModel {
-    const el = findElement(canvas, elementId);
+    const el = FindElement(canvas, elementId);
     if (!el) return canvas;
-    if (!findSection(canvas, targetSectionId)) return canvas;
+    if (!FindSection(canvas, targetSectionId)) return canvas;
     // First strip the element from wherever it is, then insert into target.
     const stripped = canvas.sections.map(section => ({
         ...section,
@@ -255,17 +332,27 @@ export function moveElementToSection(
     return { ...canvas, sections };
 }
 
+/** @deprecated Use {@link MoveElementToSection}. */
+export function moveElementToSection(
+    canvas: FormCanvasModel,
+    elementId: string,
+    targetSectionId: string,
+    index?: number,
+): FormCanvasModel {
+    return MoveElementToSection(canvas, elementId, targetSectionId, index);
+}
+
 /**
  * Return a NEW canvas with a DUPLICATE of `elementId` inserted immediately
  * after the original, in the same section. The clone's id is caller-supplied
  * (purity). No-op when the source element is absent.
  */
-export function duplicateElementInCanvas(
+export function DuplicateElementInCanvas(
     canvas: FormCanvasModel,
     elementId: string,
     newElementId: string,
 ): FormCanvasModel {
-    const source = findElement(canvas, elementId);
+    const source = FindElement(canvas, elementId);
     if (!source) return canvas;
     const clone: FormCanvasElement = { ...source, id: newElementId };
     return {
@@ -280,17 +367,26 @@ export function duplicateElementInCanvas(
     };
 }
 
+/** @deprecated Use {@link DuplicateElementInCanvas}. */
+export function duplicateElementInCanvas(
+    canvas: FormCanvasModel,
+    elementId: string,
+    newElementId: string,
+): FormCanvasModel {
+    return DuplicateElementInCanvas(canvas, elementId, newElementId);
+}
+
 // ──────────────────────────────────────────────────────────────────────────
 // Immutable section transforms
 // ──────────────────────────────────────────────────────────────────────────
 
 /** Return a NEW canvas with a shallow patch applied to one section. */
-export function updateSectionInCanvas(
+export function UpdateSectionInCanvas(
     canvas: FormCanvasModel,
     sectionId: string,
     patch: Partial<Omit<FormCanvasSection, 'id' | 'elements'>>,
 ): FormCanvasModel {
-    if (!findSection(canvas, sectionId)) return canvas;
+    if (!FindSection(canvas, sectionId)) return canvas;
     return {
         ...canvas,
         sections: canvas.sections.map(section =>
@@ -300,16 +396,33 @@ export function updateSectionInCanvas(
     };
 }
 
+/** @deprecated Use {@link UpdateSectionInCanvas}. */
+export function updateSectionInCanvas(
+    canvas: FormCanvasModel,
+    sectionId: string,
+    patch: Partial<Omit<FormCanvasSection, 'id' | 'elements'>>,
+): FormCanvasModel {
+    return UpdateSectionInCanvas(canvas, sectionId, patch);
+}
+
 /** Return a NEW canvas with the given section removed. */
-export function removeSectionFromCanvas(
+export function RemoveSectionFromCanvas(
     canvas: FormCanvasModel,
     sectionId: string,
 ): FormCanvasModel {
-    if (!findSection(canvas, sectionId)) return canvas;
+    if (!FindSection(canvas, sectionId)) return canvas;
     return {
         ...canvas,
         sections: canvas.sections.filter(s => s.id !== sectionId),
     };
+}
+
+/** @deprecated Use {@link RemoveSectionFromCanvas}. */
+export function removeSectionFromCanvas(
+    canvas: FormCanvasModel,
+    sectionId: string,
+): FormCanvasModel {
+    return RemoveSectionFromCanvas(canvas, sectionId);
 }
 
 /**
@@ -317,13 +430,13 @@ export function removeSectionFromCanvas(
  * to [0, sections.length]; an out-of-range or omitted index appends). The new
  * section's id is caller-supplied for the same purity reason as fields.
  */
-export function addSectionToCanvas(
+export function AddSectionToCanvas(
     canvas: FormCanvasModel,
     newSectionId: string,
     title?: string,
     index?: number,
 ): FormCanvasModel {
-    const section: FormCanvasSection = { ...buildEmptySection(title), id: newSectionId };
+    const section: FormCanvasSection = { ...BuildEmptySection(title), id: newSectionId };
     const sections = [...canvas.sections];
     const clamped = index == null || index < 0
         ? sections.length
@@ -332,18 +445,28 @@ export function addSectionToCanvas(
     return { ...canvas, sections };
 }
 
+/** @deprecated Use {@link AddSectionToCanvas}. */
+export function addSectionToCanvas(
+    canvas: FormCanvasModel,
+    newSectionId: string,
+    title?: string,
+    index?: number,
+): FormCanvasModel {
+    return AddSectionToCanvas(canvas, newSectionId, title, index);
+}
+
 /**
  * Return a NEW canvas with the target section's elements reordered to match
  * `orderedElementIds`. The provided ids must be exactly the section's current
  * element ids (a permutation) — otherwise the transform refuses and returns
  * the same canvas reference, so a bad reorder can't silently drop elements.
  */
-export function reorderSectionElements(
+export function ReorderSectionElements(
     canvas: FormCanvasModel,
     sectionId: string,
     orderedElementIds: ReadonlyArray<string>,
 ): FormCanvasModel {
-    const section = findSection(canvas, sectionId);
+    const section = FindSection(canvas, sectionId);
     if (!section) return canvas;
     if (!isPermutationOfIds(section.elements, orderedElementIds)) return canvas;
     const byId = new Map(section.elements.map(e => [e.id, e] as const));
@@ -355,13 +478,22 @@ export function reorderSectionElements(
     };
 }
 
+/** @deprecated Use {@link ReorderSectionElements}. */
+export function reorderSectionElements(
+    canvas: FormCanvasModel,
+    sectionId: string,
+    orderedElementIds: ReadonlyArray<string>,
+): FormCanvasModel {
+    return ReorderSectionElements(canvas, sectionId, orderedElementIds);
+}
+
 /**
  * Return a NEW canvas with its sections reordered to match `orderedSectionIds`.
  * The ids must be exactly a permutation of the canvas's current section ids —
  * otherwise the transform refuses (same reference), so a bad reorder can't
  * silently drop a section.
  */
-export function reorderSections(
+export function ReorderSections(
     canvas: FormCanvasModel,
     orderedSectionIds: ReadonlyArray<string>,
 ): FormCanvasModel {
@@ -370,12 +502,20 @@ export function reorderSections(
     return { ...canvas, sections: orderedSectionIds.map(id => byId.get(id)!) };
 }
 
+/** @deprecated Use {@link ReorderSections}. */
+export function reorderSections(
+    canvas: FormCanvasModel,
+    orderedSectionIds: ReadonlyArray<string>,
+): FormCanvasModel {
+    return ReorderSections(canvas, orderedSectionIds);
+}
+
 /**
  * Move a single section to a new 0-based position (clamped to range). Thin
  * convenience over {@link reorderSections} for the "move THIS section up/to
  * the top" voice command. No-op when the section is absent.
  */
-export function moveSectionToIndex(
+export function MoveSectionToIndex(
     canvas: FormCanvasModel,
     sectionId: string,
     index: number,
@@ -386,7 +526,16 @@ export function moveSectionToIndex(
     ids.splice(current, 1);
     const clamped = index < 0 ? 0 : Math.min(index, ids.length);
     ids.splice(clamped, 0, sectionId);
-    return reorderSections(canvas, ids);
+    return ReorderSections(canvas, ids);
+}
+
+/** @deprecated Use {@link MoveSectionToIndex}. */
+export function moveSectionToIndex(
+    canvas: FormCanvasModel,
+    sectionId: string,
+    index: number,
+): FormCanvasModel {
+    return MoveSectionToIndex(canvas, sectionId, index);
 }
 
 /** True iff `ids` is exactly a permutation of `elements`' ids (no dup/miss). */
@@ -429,8 +578,13 @@ function isSectionPermutation(
  * value >= 2 collapses to full-width, anything else to half-width. Keeps the
  * tool tolerant of an agent passing "make it span 12" loosely.
  */
-export function normalizeSpan(requested: number): 1 | 2 {
+export function NormalizeSpan(requested: number): 1 | 2 {
     return requested >= 2 ? 2 : 1;
+}
+
+/** @deprecated Use {@link NormalizeSpan}. */
+export function normalizeSpan(requested: number): 1 | 2 {
+    return NormalizeSpan(requested);
 }
 
 /** The element `type` values the canvas understands, for SetFieldType. */
@@ -438,9 +592,14 @@ export const CANVAS_ELEMENT_TYPES: ReadonlyArray<FormCanvasElement['type']> =
     ['field', 'static-text', 'spacer', 'computed'];
 
 /** Coerce a loose `type` request to a valid {@link FormCanvasElement} type, or null. */
-export function normalizeElementType(requested: string): FormCanvasElement['type'] | null {
+export function NormalizeElementType(requested: string): FormCanvasElement['type'] | null {
     const t = requested.trim().toLowerCase();
     return CANVAS_ELEMENT_TYPES.find(v => v === t) ?? null;
+}
+
+/** @deprecated Use {@link NormalizeElementType}. */
+export function normalizeElementType(requested: string): FormCanvasElement['type'] | null {
+    return NormalizeElementType(requested);
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -520,7 +679,7 @@ function summariseElement(el: FormCanvasElement, sectionId: string): ElementSumm
     return {
         id: el.id,
         type: el.type,
-        label: elementDisplayLabel(el),
+        label: ElementDisplayLabel(el),
         fieldName: el.fieldName ?? null,
         sectionId,
         required: el.required ?? false,
@@ -536,7 +695,7 @@ function summariseElement(el: FormCanvasElement, sectionId: string): ElementSumm
  * @param selectedElementId  the host's current element selection, if any.
  * @param selectedSectionId  the host's current section selection, if any.
  */
-export function buildCanvasStateSummary(
+export function BuildCanvasStateSummary(
     canvas: FormCanvasModel | null,
     schemaFieldNames: ReadonlyArray<string>,
     selectedElementId: string | null,
@@ -550,13 +709,13 @@ export function buildCanvasStateSummary(
             allElements.push(summariseElement(el, section.id));
         }
     }
-    const placedFieldNames = collectFieldNames(canvas);
+    const placedFieldNames = CollectFieldNames(canvas);
     const placedSet = new Set(placedFieldNames.map(n => n.toLowerCase()));
     const available = schemaFieldNames.filter(n => !placedSet.has(n.toLowerCase()));
 
-    const selEl = selectedElementId ? findElement(canvas, selectedElementId) : null;
-    const selElSection = selEl ? findSectionOfElement(canvas, selEl.id) : null;
-    const selSec = selectedSectionId ? findSection(canvas, selectedSectionId) : null;
+    const selEl = selectedElementId ? FindElement(canvas, selectedElementId) : null;
+    const selElSection = selEl ? FindSectionOfElement(canvas, selEl.id) : null;
+    const selSec = selectedSectionId ? FindSection(canvas, selectedSectionId) : null;
 
     return {
         EntityName: canvas.entityName,
@@ -575,6 +734,16 @@ export function buildCanvasStateSummary(
         SelectedElement: selEl && selElSection ? summariseElement(selEl, selElSection.id) : null,
         SelectedSection: selSec ? summariseSection(selSec) : null,
     };
+}
+
+/** @deprecated Use {@link BuildCanvasStateSummary}. */
+export function buildCanvasStateSummary(
+    canvas: FormCanvasModel | null,
+    schemaFieldNames: ReadonlyArray<string>,
+    selectedElementId: string | null,
+    selectedSectionId: string | null,
+): CanvasStateSummary | null {
+    return BuildCanvasStateSummary(canvas, schemaFieldNames, selectedElementId, selectedSectionId);
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -616,7 +785,7 @@ function elementNotFound(canvas: FormCanvasModel, idOrLabel: string): CanvasEdit
     const labels = canvas.sections
         .flatMap(s => s.elements)
         .slice(0, CANVAS_CONTEXT_LIST_CAP)
-        .map(elementDisplayLabel);
+        .map(ElementDisplayLabel);
     return {
         Success: false,
         ErrorMessage: `No field matching '${idOrLabel}'. Available: ${labels.join(', ') || '(none)'}.`,
@@ -644,7 +813,7 @@ function sectionNotFound(canvas: FormCanvasModel, idOrTitle: string): CanvasEdit
  * descriptive `ErrorMessage` when the id isn't found — so the agent gets a
  * clear "no such field" instead of a silent no-op.
  */
-export function buildCanvasEditClientTools(host: CanvasEditHost): CanvasEditClientTool[] {
+export function BuildCanvasEditClientTools(host: CanvasEditHost): CanvasEditClientTool[] {
     /** Shared apply-if-changed wrapper for transform tools. */
     const applyTransform = (
         transform: (canvas: FormCanvasModel) => FormCanvasModel,
@@ -677,11 +846,11 @@ export function buildCanvasEditClientTools(host: CanvasEditHost): CanvasEditClie
                 if (!canvas) return noCanvas();
                 const sectionId = asString(params['sectionId']) ?? canvas.sections[0]?.id ?? null;
                 if (!sectionId) return { Success: false, ErrorMessage: 'Form has no section to add the field to.' };
-                if (!findSection(canvas, sectionId)) {
+                if (!FindSection(canvas, sectionId)) {
                     return { Success: false, ErrorMessage: `No section '${sectionId}' on the form.` };
                 }
                 const newId = host.NewElementId();
-                host.ApplyCanvas(addFieldToCanvas(canvas, sectionId, fieldName, newId));
+                host.ApplyCanvas(AddFieldToCanvas(canvas, sectionId, fieldName, newId));
                 return { Success: true, Data: { elementId: newId, fieldName, sectionId } };
             },
         },
@@ -697,8 +866,8 @@ export function buildCanvasEditClientTools(host: CanvasEditHost): CanvasEditClie
                 const elementId = asString(params['elementId']);
                 if (!elementId) return { Success: false, ErrorMessage: 'elementId is required.' };
                 return applyTransform(
-                    c => removeElementFromCanvas(c, elementId),
-                    (before) => findElement(before, elementId)
+                    c => RemoveElementFromCanvas(c, elementId),
+                    (before) => FindElement(before, elementId)
                         ? { Success: true, Data: { elementId } }
                         : { Success: false, ErrorMessage: `No element '${elementId}' on the form.` },
                 );
@@ -720,8 +889,8 @@ export function buildCanvasEditClientTools(host: CanvasEditHost): CanvasEditClie
                 if (!elementId) return { Success: false, ErrorMessage: 'elementId is required.' };
                 const label = asString(params['label']);
                 return applyTransform(
-                    c => updateElementInCanvas(c, elementId, { label: label && label.trim() ? label : undefined }),
-                    (before) => findElement(before, elementId)
+                    c => UpdateElementInCanvas(c, elementId, { label: label && label.trim() ? label : undefined }),
+                    (before) => FindElement(before, elementId)
                         ? { Success: true, Data: { elementId, label: label ?? null } }
                         : { Success: false, ErrorMessage: `No element '${elementId}' on the form.` },
                 );
@@ -743,11 +912,11 @@ export function buildCanvasEditClientTools(host: CanvasEditHost): CanvasEditClie
                 if (!elementId) return { Success: false, ErrorMessage: 'elementId is required.' };
                 const canvas = host.GetCanvas();
                 if (!canvas) return noCanvas();
-                const el = findElement(canvas, elementId);
+                const el = FindElement(canvas, elementId);
                 if (!el) return { Success: false, ErrorMessage: `No element '${elementId}' on the form.` };
                 const explicit = params['required'];
                 const nextRequired = typeof explicit === 'boolean' ? explicit : !(el.required ?? false);
-                host.ApplyCanvas(updateElementInCanvas(canvas, elementId, { required: nextRequired }));
+                host.ApplyCanvas(UpdateElementInCanvas(canvas, elementId, { required: nextRequired }));
                 return { Success: true, Data: { elementId, required: nextRequired } };
             },
         },
@@ -767,10 +936,10 @@ export function buildCanvasEditClientTools(host: CanvasEditHost): CanvasEditClie
                 if (!elementId) return { Success: false, ErrorMessage: 'elementId is required.' };
                 const rawSpan = asNumber(params['span']);
                 if (rawSpan == null) return { Success: false, ErrorMessage: 'span must be a number.' };
-                const span = normalizeSpan(rawSpan);
+                const span = NormalizeSpan(rawSpan);
                 return applyTransform(
-                    c => updateElementInCanvas(c, elementId, { span }),
-                    (before) => findElement(before, elementId)
+                    c => UpdateElementInCanvas(c, elementId, { span }),
+                    (before) => FindElement(before, elementId)
                         ? { Success: true, Data: { elementId, span } }
                         : { Success: false, ErrorMessage: `No element '${elementId}' on the form.` },
                 );
@@ -794,9 +963,9 @@ export function buildCanvasEditClientTools(host: CanvasEditHost): CanvasEditClie
                 if (!fieldIds) return { Success: false, ErrorMessage: 'fieldIds must be an array of element ids.' };
                 const canvas = host.GetCanvas();
                 if (!canvas) return noCanvas();
-                const section = findSection(canvas, sectionId);
+                const section = FindSection(canvas, sectionId);
                 if (!section) return { Success: false, ErrorMessage: `No section '${sectionId}' on the form.` };
-                const next = reorderSectionElements(canvas, sectionId, fieldIds);
+                const next = ReorderSectionElements(canvas, sectionId, fieldIds);
                 if (next === canvas) {
                     return { Success: false, ErrorMessage: 'fieldIds must be exactly a permutation of the section\'s current element ids.' };
                 }
@@ -821,7 +990,7 @@ export function buildCanvasEditClientTools(host: CanvasEditHost): CanvasEditClie
                 const title = asString(params['title']);
                 const index = asNumber(params['index']);
                 const newId = host.NewSectionId();
-                host.ApplyCanvas(addSectionToCanvas(canvas, newId, title ?? undefined, index ?? undefined));
+                host.ApplyCanvas(AddSectionToCanvas(canvas, newId, title ?? undefined, index ?? undefined));
                 return { Success: true, Data: { sectionId: newId, title: title ?? 'Untitled Section' } };
             },
         },
@@ -837,8 +1006,8 @@ export function buildCanvasEditClientTools(host: CanvasEditHost): CanvasEditClie
                 const sectionId = asString(params['sectionId']);
                 if (!sectionId) return { Success: false, ErrorMessage: 'sectionId is required.' };
                 return applyTransform(
-                    c => removeSectionFromCanvas(c, sectionId),
-                    (before) => findSection(before, sectionId)
+                    c => RemoveSectionFromCanvas(c, sectionId),
+                    (before) => FindSection(before, sectionId)
                         ? { Success: true, Data: { sectionId } }
                         : { Success: false, ErrorMessage: `No section '${sectionId}' on the form.` },
                 );
@@ -861,8 +1030,8 @@ export function buildCanvasEditClientTools(host: CanvasEditHost): CanvasEditClie
                 if (!sectionId) return { Success: false, ErrorMessage: 'sectionId is required.' };
                 if (title == null) return { Success: false, ErrorMessage: 'title is required.' };
                 return applyTransform(
-                    c => updateSectionInCanvas(c, sectionId, { title }),
-                    (before) => findSection(before, sectionId)
+                    c => UpdateSectionInCanvas(c, sectionId, { title }),
+                    (before) => FindSection(before, sectionId)
                         ? { Success: true, Data: { sectionId, title } }
                         : { Success: false, ErrorMessage: `No section '${sectionId}' on the form.` },
                 );
@@ -884,14 +1053,14 @@ export function buildCanvasEditClientTools(host: CanvasEditHost): CanvasEditClie
                 if (!ref) return { Success: false, ErrorMessage: 'field is required.' };
                 const canvas = host.GetCanvas();
                 if (!canvas) return noCanvas();
-                const el = resolveElement(canvas, ref);
+                const el = ResolveElement(canvas, ref);
                 if (!el) return elementNotFound(canvas, ref);
                 const rawType = asString(params['elementType']);
-                const type = rawType ? normalizeElementType(rawType) : null;
+                const type = rawType ? NormalizeElementType(rawType) : null;
                 if (!type) {
                     return { Success: false, ErrorMessage: `elementType must be one of: ${CANVAS_ELEMENT_TYPES.join(', ')}.` };
                 }
-                host.ApplyCanvas(updateElementInCanvas(canvas, el.id, { type }));
+                host.ApplyCanvas(UpdateElementInCanvas(canvas, el.id, { type }));
                 return { Success: true, Data: { elementId: el.id, type } };
             },
         },
@@ -911,11 +1080,11 @@ export function buildCanvasEditClientTools(host: CanvasEditHost): CanvasEditClie
                 if (!ref) return { Success: false, ErrorMessage: 'field is required.' };
                 const canvas = host.GetCanvas();
                 if (!canvas) return noCanvas();
-                const el = resolveElement(canvas, ref);
+                const el = ResolveElement(canvas, ref);
                 if (!el) return elementNotFound(canvas, ref);
                 const helpText = asString(params['helpText']);
                 const helper = helpText && helpText.trim() ? helpText : undefined;
-                host.ApplyCanvas(updateElementInCanvas(canvas, el.id, { helper }));
+                host.ApplyCanvas(UpdateElementInCanvas(canvas, el.id, { helper }));
                 return { Success: true, Data: { elementId: el.id, helper: helper ?? null } };
             },
         },
@@ -938,12 +1107,12 @@ export function buildCanvasEditClientTools(host: CanvasEditHost): CanvasEditClie
                 if (!sectionRef) return { Success: false, ErrorMessage: 'section is required.' };
                 const canvas = host.GetCanvas();
                 if (!canvas) return noCanvas();
-                const el = resolveElement(canvas, fieldRef);
+                const el = ResolveElement(canvas, fieldRef);
                 if (!el) return elementNotFound(canvas, fieldRef);
-                const section = resolveSection(canvas, sectionRef);
+                const section = ResolveSection(canvas, sectionRef);
                 if (!section) return sectionNotFound(canvas, sectionRef);
                 const index = asNumber(params['index']);
-                host.ApplyCanvas(moveElementToSection(canvas, el.id, section.id, index ?? undefined));
+                host.ApplyCanvas(MoveElementToSection(canvas, el.id, section.id, index ?? undefined));
                 return { Success: true, Data: { elementId: el.id, sectionId: section.id, index: index ?? null } };
             },
         },
@@ -962,10 +1131,10 @@ export function buildCanvasEditClientTools(host: CanvasEditHost): CanvasEditClie
                 if (!ref) return { Success: false, ErrorMessage: 'field is required.' };
                 const canvas = host.GetCanvas();
                 if (!canvas) return noCanvas();
-                const el = resolveElement(canvas, ref);
+                const el = ResolveElement(canvas, ref);
                 if (!el) return elementNotFound(canvas, ref);
                 const newId = host.NewElementId();
-                host.ApplyCanvas(duplicateElementInCanvas(canvas, el.id, newId));
+                host.ApplyCanvas(DuplicateElementInCanvas(canvas, el.id, newId));
                 return { Success: true, Data: { sourceElementId: el.id, newElementId: newId } };
             },
         },
@@ -985,11 +1154,11 @@ export function buildCanvasEditClientTools(host: CanvasEditHost): CanvasEditClie
                 if (!ref) return { Success: false, ErrorMessage: 'section is required.' };
                 const canvas = host.GetCanvas();
                 if (!canvas) return noCanvas();
-                const section = resolveSection(canvas, ref);
+                const section = ResolveSection(canvas, ref);
                 if (!section) return sectionNotFound(canvas, ref);
                 const explicit = params['collapsible'];
                 const collapsible = typeof explicit === 'boolean' ? explicit : !section.collapsible;
-                host.ApplyCanvas(updateSectionInCanvas(canvas, section.id, { collapsible }));
+                host.ApplyCanvas(UpdateSectionInCanvas(canvas, section.id, { collapsible }));
                 return { Success: true, Data: { sectionId: section.id, collapsible } };
             },
         },
@@ -1009,12 +1178,12 @@ export function buildCanvasEditClientTools(host: CanvasEditHost): CanvasEditClie
                 if (!ref) return { Success: false, ErrorMessage: 'section is required.' };
                 const canvas = host.GetCanvas();
                 if (!canvas) return noCanvas();
-                const section = resolveSection(canvas, ref);
+                const section = ResolveSection(canvas, ref);
                 if (!section) return sectionNotFound(canvas, ref);
                 const rawCols = asNumber(params['columns']);
                 if (rawCols == null) return { Success: false, ErrorMessage: 'columns must be a number (1 or 2).' };
                 const columns: 1 | 2 = rawCols >= 2 ? 2 : 1;
-                host.ApplyCanvas(updateSectionInCanvas(canvas, section.id, { columns }));
+                host.ApplyCanvas(UpdateSectionInCanvas(canvas, section.id, { columns }));
                 return { Success: true, Data: { sectionId: section.id, columns } };
             },
         },
@@ -1036,9 +1205,9 @@ export function buildCanvasEditClientTools(host: CanvasEditHost): CanvasEditClie
                 if (index == null) return { Success: false, ErrorMessage: 'index must be a number.' };
                 const canvas = host.GetCanvas();
                 if (!canvas) return noCanvas();
-                const section = resolveSection(canvas, ref);
+                const section = ResolveSection(canvas, ref);
                 if (!section) return sectionNotFound(canvas, ref);
-                host.ApplyCanvas(moveSectionToIndex(canvas, section.id, index));
+                host.ApplyCanvas(MoveSectionToIndex(canvas, section.id, index));
                 return { Success: true, Data: { sectionId: section.id, index } };
             },
         },
@@ -1083,6 +1252,11 @@ export function buildCanvasEditClientTools(host: CanvasEditHost): CanvasEditClie
     }
 
     return tools;
+}
+
+/** @deprecated Use {@link BuildCanvasEditClientTools}. */
+export function buildCanvasEditClientTools(host: CanvasEditHost): CanvasEditClientTool[] {
+    return BuildCanvasEditClientTools(host);
 }
 
 // ──────────────────────────────────────────────────────────────────────────

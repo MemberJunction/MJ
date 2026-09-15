@@ -60,7 +60,7 @@ export interface ParameterTypeInfo {
 /**
  * Maps SQL Server types to JavaScript types
  */
-export function mapSQLTypeToJSType(sqlType: string): string {
+export function MapSQLTypeToJSType(sqlType: string): string {
   const type = sqlType.toLowerCase();
 
   // If already a JavaScript type, return it directly
@@ -100,6 +100,11 @@ export function mapSQLTypeToJSType(sqlType: string): string {
   }
 
   return 'unknown';
+}
+
+/** @deprecated Use {@link MapSQLTypeToJSType}. */
+export function mapSQLTypeToJSType(sqlType: string): string {
+  return MapSQLTypeToJSType(sqlType);
 }
 
 /**
@@ -143,7 +148,7 @@ export class TypeContext {
           name: p.name,
           // Type may be in extended format or inferred from testValue
           type: extendedParam.type
-            ? mapSQLTypeToJSType(extendedParam.type)
+            ? MapSQLTypeToJSType(extendedParam.type)
             : this.inferTypeFromValue(p.testValue || p.value),
           isRequired: extendedParam.isRequired ?? (p.value === '@runtime'),
           sqlType: extendedParam.type
@@ -157,7 +162,7 @@ export class TypeContext {
       const fields = new Map<string, FieldTypeInfo>();
       for (const field of (query as any).fields) {
         fields.set(field.name, {
-          type: mapSQLTypeToJSType(field.type || 'nvarchar'),
+          type: MapSQLTypeToJSType(field.type || 'nvarchar'),
           fromMetadata: true,
           sqlType: field.type,
           nullable: field.nullable
@@ -183,14 +188,19 @@ export class TypeContext {
   /**
    * Load entity field types from metadata (async version)
    */
+  async LoadEntityFieldTypes(entityName: string, contextUser?: UserInfo): Promise<Map<string, FieldTypeInfo>> {
+    return this.GetEntityFieldTypesSync(entityName);
+  }
+
+  /** @deprecated Use {@link LoadEntityFieldTypes}. */
   async loadEntityFieldTypes(entityName: string, contextUser?: UserInfo): Promise<Map<string, FieldTypeInfo>> {
-    return this.getEntityFieldTypesSync(entityName);
+    return this.LoadEntityFieldTypes(entityName, contextUser);
   }
 
   /**
    * Get entity field types from metadata (synchronous - uses pre-loaded metadata)
    */
-  getEntityFieldTypesSync(entityName: string): Map<string, FieldTypeInfo> {
+  GetEntityFieldTypesSync(entityName: string): Map<string, FieldTypeInfo> {
     // Check cache first
     if (this.entityFieldCache.has(entityName)) {
       return this.entityFieldCache.get(entityName)!;
@@ -205,7 +215,7 @@ export class TypeContext {
       if (entity) {
         for (const field of entity.Fields) {
           fields.set(field.Name, {
-            type: mapSQLTypeToJSType(field.Type),
+            type: MapSQLTypeToJSType(field.Type),
             fromMetadata: true,
             sqlType: field.Type,
             nullable: field.AllowsNull
@@ -221,10 +231,15 @@ export class TypeContext {
     return fields;
   }
 
+  /** @deprecated Use {@link GetEntityFieldTypesSync}. */
+  getEntityFieldTypesSync(entityName: string): Map<string, FieldTypeInfo> {
+    return this.GetEntityFieldTypesSync(entityName);
+  }
+
   /**
    * Get query field types from spec
    */
-  getQueryFieldTypes(queryName: string, categoryPath?: string): Map<string, FieldTypeInfo> | undefined {
+  GetQueryFieldTypes(queryName: string, categoryPath?: string): Map<string, FieldTypeInfo> | undefined {
     const queryKey = categoryPath ? `${categoryPath}/${queryName}` : queryName;
     const result = this.queryFieldCache.get(queryKey);
     if (result) return result;
@@ -242,25 +257,40 @@ export class TypeContext {
     return undefined;
   }
 
+  /** @deprecated Use {@link GetQueryFieldTypes}. */
+  getQueryFieldTypes(queryName: string, categoryPath?: string): Map<string, FieldTypeInfo> | undefined {
+    return this.GetQueryFieldTypes(queryName, categoryPath);
+  }
+
   /**
    * Get query parameter types from spec
    */
-  getQueryParameters(queryName: string, categoryPath?: string): ParameterTypeInfo[] | undefined {
+  GetQueryParameters(queryName: string, categoryPath?: string): ParameterTypeInfo[] | undefined {
     const queryKey = categoryPath ? `${categoryPath}/${queryName}` : queryName;
     return this.queryParamCache.get(queryKey);
+  }
+
+  /** @deprecated Use {@link GetQueryParameters}. */
+  getQueryParameters(queryName: string, categoryPath?: string): ParameterTypeInfo[] | undefined {
+    return this.GetQueryParameters(queryName, categoryPath);
   }
 
   /**
    * Enter a new scope (function, block, etc.)
    */
-  enterScope(scopeName: string): void {
+  EnterScope(scopeName: string): void {
     this.scopeStack.push(scopeName);
+  }
+
+  /** @deprecated Use {@link EnterScope}. */
+  enterScope(scopeName: string): void {
+    return this.EnterScope(scopeName);
   }
 
   /**
    * Exit the current scope
    */
-  exitScope(): void {
+  ExitScope(): void {
     // For static analysis, we keep variables around even after exiting scope
     // This allows the linter to check them during subsequent traversals
     // We just pop the scope stack to update the "current" scope
@@ -269,6 +299,11 @@ export class TypeContext {
     // Note: Variables are NOT deleted. They remain in the typeContext with their
     // fully-qualified scoped names (e.g., "fillMissingMonths:result").
     // The getVariableType() method will still find them by searching parent scopes.
+  }
+
+  /** @deprecated Use {@link ExitScope}. */
+  exitScope(): void {
+    return this.ExitScope();
   }
 
   /**
@@ -288,15 +323,20 @@ export class TypeContext {
   /**
    * Set a variable's type in the current scope
    */
-  setVariableType(name: string, type: TypeInfo): void {
+  SetVariableType(name: string, type: TypeInfo): void {
     const scopedName = this.getScopedName(name);
     this.variableTypes.set(scopedName, type);
+  }
+
+  /** @deprecated Use {@link SetVariableType}. */
+  setVariableType(name: string, type: TypeInfo): void {
+    return this.SetVariableType(name, type);
   }
 
   /**
    * Get a variable's type, searching from current scope up to global
    */
-  getVariableType(name: string): TypeInfo | undefined {
+  GetVariableType(name: string): TypeInfo | undefined {
     // First check current scope
     const scopedName = this.getScopedName(name);
     if (this.variableTypes.has(scopedName)) {
@@ -332,17 +372,27 @@ export class TypeContext {
     return undefined;
   }
 
+  /** @deprecated Use {@link GetVariableType}. */
+  getVariableType(name: string): TypeInfo | undefined {
+    return this.GetVariableType(name);
+  }
+
   /**
    * Check if a variable exists in any accessible scope
    */
+  HasVariable(name: string): boolean {
+    return this.GetVariableType(name) !== undefined;
+  }
+
+  /** @deprecated Use {@link HasVariable}. */
   hasVariable(name: string): boolean {
-    return this.getVariableType(name) !== undefined;
+    return this.HasVariable(name);
   }
 
   /**
    * Get all variables in the current scope
    */
-  getCurrentScopeVariables(): Map<string, TypeInfo> {
+  GetCurrentScopeVariables(): Map<string, TypeInfo> {
     const prefix = this.getCurrentScopePrefix();
     const result = new Map<string, TypeInfo>();
 
@@ -356,10 +406,15 @@ export class TypeContext {
     return result;
   }
 
+  /** @deprecated Use {@link GetCurrentScopeVariables}. */
+  getCurrentScopeVariables(): Map<string, TypeInfo> {
+    return this.GetCurrentScopeVariables();
+  }
+
   /**
    * Create TypeInfo for a RunView result
    */
-  createRunViewResultType(entityName: string, entityFields?: Map<string, FieldTypeInfo>): TypeInfo {
+  CreateRunViewResultType(entityName: string, entityFields?: Map<string, FieldTypeInfo>): TypeInfo {
     const resultFields = new Map<string, FieldTypeInfo>([
       ['Success', { type: 'boolean', fromMetadata: true }],
       ['Results', { type: 'array', fromMetadata: true }],
@@ -378,10 +433,15 @@ export class TypeContext {
     };
   }
 
+  /** @deprecated Use {@link CreateRunViewResultType}. */
+  createRunViewResultType(entityName: string, entityFields?: Map<string, FieldTypeInfo>): TypeInfo {
+    return this.CreateRunViewResultType(entityName, entityFields);
+  }
+
   /**
    * Create TypeInfo for a RunQuery result
    */
-  createRunQueryResultType(queryName: string, queryFields?: Map<string, FieldTypeInfo>): TypeInfo {
+  CreateRunQueryResultType(queryName: string, queryFields?: Map<string, FieldTypeInfo>): TypeInfo {
     const resultFields = new Map<string, FieldTypeInfo>([
       ['QueryID', { type: 'string', fromMetadata: true }],
       ['QueryName', { type: 'string', fromMetadata: true }],
@@ -405,10 +465,15 @@ export class TypeContext {
     };
   }
 
+  /** @deprecated Use {@link CreateRunQueryResultType}. */
+  createRunQueryResultType(queryName: string, queryFields?: Map<string, FieldTypeInfo>): TypeInfo {
+    return this.CreateRunQueryResultType(queryName, queryFields);
+  }
+
   /**
    * Create TypeInfo for an entity row
    */
-  createEntityRowType(entityName: string, fields: Map<string, FieldTypeInfo>): TypeInfo {
+  CreateEntityRowType(entityName: string, fields: Map<string, FieldTypeInfo>): TypeInfo {
     return {
       type: 'entity-row',
       entityName,
@@ -417,10 +482,15 @@ export class TypeContext {
     };
   }
 
+  /** @deprecated Use {@link CreateEntityRowType}. */
+  createEntityRowType(entityName: string, fields: Map<string, FieldTypeInfo>): TypeInfo {
+    return this.CreateEntityRowType(entityName, fields);
+  }
+
   /**
    * Create TypeInfo for a query result row
    */
-  createQueryRowType(queryName: string, fields: Map<string, FieldTypeInfo>): TypeInfo {
+  CreateQueryRowType(queryName: string, fields: Map<string, FieldTypeInfo>): TypeInfo {
     return {
       type: 'query-row',
       queryName,
@@ -429,22 +499,37 @@ export class TypeContext {
     };
   }
 
+  /** @deprecated Use {@link CreateQueryRowType}. */
+  createQueryRowType(queryName: string, fields: Map<string, FieldTypeInfo>): TypeInfo {
+    return this.CreateQueryRowType(queryName, fields);
+  }
+
   /**
    * Clear all variable types (reset context)
    */
-  clear(): void {
+  Clear(): void {
     this.variableTypes.clear();
     this.scopeStack = [];
+  }
+
+  /** @deprecated Use {@link Clear}. */
+  clear(): void {
+    return this.Clear();
   }
 
   /**
    * Get debug information about current state
    */
-  getDebugInfo(): { scopes: string[], variables: [string, TypeInfo][] } {
+  GetDebugInfo(): { scopes: string[], variables: [string, TypeInfo][] } {
     return {
       scopes: [...this.scopeStack],
       variables: [...this.variableTypes.entries()]
     };
+  }
+
+  /** @deprecated Use {@link GetDebugInfo}. */
+  getDebugInfo(): { scopes: string[], variables: [string, TypeInfo][] } {
+    return this.GetDebugInfo();
   }
 }
 
@@ -470,7 +555,7 @@ export const StandardTypes = {
 /**
  * Helper to check if two types are compatible
  */
-export function areTypesCompatible(expected: TypeInfo, actual: TypeInfo): boolean {
+export function AreTypesCompatible(expected: TypeInfo, actual: TypeInfo): boolean {
   // Unknown types are always compatible (we can't prove they're wrong)
   if (expected.type === 'unknown' || actual.type === 'unknown') {
     return true;
@@ -494,10 +579,15 @@ export function areTypesCompatible(expected: TypeInfo, actual: TypeInfo): boolea
   return false;
 }
 
+/** @deprecated Use {@link AreTypesCompatible}. */
+export function areTypesCompatible(expected: TypeInfo, actual: TypeInfo): boolean {
+  return AreTypesCompatible(expected, actual);
+}
+
 /**
  * Get a human-readable description of a type
  */
-export function describeType(type: TypeInfo): string {
+export function DescribeType(type: TypeInfo): string {
   if (type.entityName) {
     return `${type.entityName} row`;
   }
@@ -505,7 +595,12 @@ export function describeType(type: TypeInfo): string {
     return `${type.queryName} result row`;
   }
   if (type.type === 'array' && type.arrayElementType) {
-    return `array of ${describeType(type.arrayElementType)}`;
+    return `array of ${DescribeType(type.arrayElementType)}`;
   }
   return type.type;
+}
+
+/** @deprecated Use {@link DescribeType}. */
+export function describeType(type: TypeInfo): string {
+  return DescribeType(type);
 }

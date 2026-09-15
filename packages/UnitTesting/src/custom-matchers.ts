@@ -4,7 +4,7 @@ import { expect } from 'vitest';
  * Install MemberJunction-specific custom matchers for Vitest.
  * Call this once in your setup file or at the top of your test.
  */
-export function installCustomMatchers(): void {
+export function InstallCustomMatchers(): void {
   expect.extend({
     /**
      * Asserts that a value looks like a valid MJ entity (has a non-empty ID)
@@ -55,4 +55,9 @@ export function installCustomMatchers(): void {
       };
     },
   });
+}
+
+/** @deprecated Use {@link InstallCustomMatchers}. */
+export function installCustomMatchers(): void {
+  return InstallCustomMatchers();
 }

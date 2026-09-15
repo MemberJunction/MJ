@@ -132,7 +132,7 @@ export class RerankerService extends BaseSingleton<RerankerService> {
      * @param promptID - Optional prompt ID for LLM-based rerankers
      * @returns Reranker instance or null if unavailable
      */
-    public async getReranker(
+    public async GetReranker(
         modelID: string,
         contextUser: UserInfo,
         promptID?: string
@@ -213,6 +213,15 @@ export class RerankerService extends BaseSingleton<RerankerService> {
         }
     }
 
+    /** @deprecated Use {@link GetReranker}. */
+    public async getReranker(
+        modelID: string,
+        contextUser: UserInfo,
+        promptID?: string
+    ): Promise<BaseReranker | null> {
+        return this.GetReranker(modelID, contextUser, promptID);
+    }
+
     /**
      * Get driver class and API key information for a model.
      * Looks up ModelVendor relationships to find the active vendor.
@@ -280,7 +289,7 @@ export class RerankerService extends BaseSingleton<RerankerService> {
      * @returns Reranked notes sorted by relevance
      * @throws Error if reranker is unavailable or reranking fails
      */
-    public async rerankNotes(
+    public async RerankNotes(
         notes: NoteMatchResult[],
         query: string,
         config: RerankerConfiguration,
@@ -316,7 +325,7 @@ export class RerankerService extends BaseSingleton<RerankerService> {
 
         try {
             // Get or create reranker - throws if unavailable
-            const reranker = await this.getReranker(
+            const reranker = await this.GetReranker(
                 config.rerankerModelId,
                 contextUser,
                 config.rerankPromptID
@@ -388,6 +397,17 @@ export class RerankerService extends BaseSingleton<RerankerService> {
         }
     }
 
+    /** @deprecated Use {@link RerankNotes}. */
+    public async rerankNotes(
+        notes: NoteMatchResult[],
+        query: string,
+        config: RerankerConfiguration,
+        contextUser: UserInfo,
+        options?: RerankObservabilityOptions
+    ): Promise<RerankServiceResult> {
+        return this.RerankNotes(notes, query, config, contextUser, options);
+    }
+
     /**
      * Build document text from note entity for reranking.
      * Includes note text and optional context fields.
@@ -416,8 +436,13 @@ export class RerankerService extends BaseSingleton<RerankerService> {
      * Clear the reranker cache.
      * Useful for testing or when models are updated.
      */
-    public clearCache(): void {
+    public ClearCache(): void {
         this._rerankerCache.clear();
+    }
+
+    /** @deprecated Use {@link ClearCache}. */
+    public clearCache(): void {
+        return this.ClearCache();
     }
 
     /**

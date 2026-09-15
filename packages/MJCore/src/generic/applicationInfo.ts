@@ -116,8 +116,13 @@ export class ApplicationEntityInfo extends BaseInfo {
         return this._EntityInfo
     }
 
-    _setEntity(entity: EntityInfo) {
+    SetEntity(entity: EntityInfo) {
         this._EntityInfo = entity
+    }
+
+    /** @deprecated Use {@link SetEntity}. */
+    _setEntity(entity: EntityInfo) {
+        return this.SetEntity(entity);
     }
 
     constructor (initData: any = null) {

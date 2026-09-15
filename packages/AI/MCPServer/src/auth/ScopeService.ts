@@ -39,7 +39,7 @@ const SCOPE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
  * // ]
  * ```
  */
-export async function loadActiveScopes(): Promise<APIScopeInfo[]> {
+export async function LoadActiveScopes(): Promise<APIScopeInfo[]> {
   // Check cache
   const now = Date.now();
   if (scopeCache && now < scopeCacheExpiry) {
@@ -108,13 +108,23 @@ export async function loadActiveScopes(): Promise<APIScopeInfo[]> {
   }
 }
 
+/** @deprecated Use {@link LoadActiveScopes}. */
+export async function loadActiveScopes(): Promise<APIScopeInfo[]> {
+  return LoadActiveScopes();
+}
+
 /**
  * Clears the scope cache, forcing a refresh on next load.
  * Useful for testing or after administrative changes to scopes.
  */
-export function clearScopeCache(): void {
+export function ClearScopeCache(): void {
   scopeCache = null;
   scopeCacheExpiry = 0;
+}
+
+/** @deprecated Use {@link ClearScopeCache}. */
+export function clearScopeCache(): void {
+  return ClearScopeCache();
 }
 
 /**
@@ -123,9 +133,14 @@ export function clearScopeCache(): void {
  * @param name - The scope name to find (e.g., "entity:read")
  * @returns The scope info if found, undefined otherwise
  */
-export async function getScopeByName(name: string): Promise<APIScopeInfo | undefined> {
-  const scopes = await loadActiveScopes();
+export async function GetScopeByName(name: string): Promise<APIScopeInfo | undefined> {
+  const scopes = await LoadActiveScopes();
   return scopes.find((s) => s.FullPath === name);
+}
+
+/** @deprecated Use {@link GetScopeByName}. */
+export async function getScopeByName(name: string): Promise<APIScopeInfo | undefined> {
+  return GetScopeByName(name);
 }
 
 /**
@@ -134,12 +149,12 @@ export async function getScopeByName(name: string): Promise<APIScopeInfo | undef
  * @param requestedScopes - Array of scope names to validate
  * @returns Object with valid flag and arrays of valid/invalid scopes
  */
-export async function validateScopes(requestedScopes: string[]): Promise<{
+export async function ValidateScopes(requestedScopes: string[]): Promise<{
   valid: boolean;
   validScopes: string[];
   invalidScopes: string[];
 }> {
-  const availableScopes = await loadActiveScopes();
+  const availableScopes = await LoadActiveScopes();
   const availableScopeNames = new Set(availableScopes.map((s) => s.FullPath));
 
   const validScopes: string[] = [];
@@ -160,13 +175,22 @@ export async function validateScopes(requestedScopes: string[]): Promise<{
   };
 }
 
+/** @deprecated Use {@link ValidateScopes}. */
+export async function validateScopes(requestedScopes: string[]): Promise<{
+  valid: boolean;
+  validScopes: string[];
+  invalidScopes: string[];
+}> {
+  return ValidateScopes(requestedScopes);
+}
+
 /**
  * Groups scopes by category for display on consent screens.
  *
  * @param scopes - Array of scope info to group
  * @returns Map of category name to scopes in that category
  */
-export function groupScopesByCategory(
+export function GroupScopesByCategory(
   scopes: APIScopeInfo[]
 ): Map<string, APIScopeInfo[]> {
   const grouped = new Map<string, APIScopeInfo[]>();
@@ -181,15 +205,27 @@ export function groupScopesByCategory(
   return grouped;
 }
 
+/** @deprecated Use {@link GroupScopesByCategory}. */
+export function groupScopesByCategory(
+  scopes: APIScopeInfo[]
+): Map<string, APIScopeInfo[]> {
+  return GroupScopesByCategory(scopes);
+}
+
 /**
  * Gets default scopes to use when no specific scopes are requested.
  * Returns all active scopes by default.
  *
  * @returns Array of default scope names
  */
-export async function getDefaultScopes(): Promise<string[]> {
-  const scopes = await loadActiveScopes();
+export async function GetDefaultScopes(): Promise<string[]> {
+  const scopes = await LoadActiveScopes();
   return scopes.map((s) => s.FullPath);
+}
+
+/** @deprecated Use {@link GetDefaultScopes}. */
+export async function getDefaultScopes(): Promise<string[]> {
+  return GetDefaultScopes();
 }
 
 /**
@@ -232,7 +268,7 @@ export interface HierarchicalScopeGroups {
  * @param scopes - Array of scope info to group
  * @returns Hierarchical grouping with full_access separated
  */
-export function groupScopesHierarchically(scopes: APIScopeInfo[]): HierarchicalScopeGroups {
+export function GroupScopesHierarchically(scopes: APIScopeInfo[]): HierarchicalScopeGroups {
   // Extract full_access scope for special treatment
   const fullAccessScope = scopes.find((s) => s.FullPath === 'full_access') ?? null;
   const remainingScopes = scopes.filter((s) => s.FullPath !== 'full_access');
@@ -313,6 +349,11 @@ export function groupScopesHierarchically(scopes: APIScopeInfo[]): HierarchicalS
   };
 }
 
+/** @deprecated Use {@link GroupScopesHierarchically}. */
+export function groupScopesHierarchically(scopes: APIScopeInfo[]): HierarchicalScopeGroups {
+  return GroupScopesHierarchically(scopes);
+}
+
 /**
  * Gets all child scope FullPaths for a given parent scope.
  * Used to determine which scopes are implied when a parent is selected.
@@ -321,11 +362,16 @@ export function groupScopesHierarchically(scopes: APIScopeInfo[]): HierarchicalS
  * @param scopes - All available scopes
  * @returns Array of child scope FullPaths
  */
-export function getChildScopeFullPaths(parentFullPath: string, scopes: APIScopeInfo[]): string[] {
+export function GetChildScopeFullPaths(parentFullPath: string, scopes: APIScopeInfo[]): string[] {
   const parent = scopes.find((s) => s.FullPath === parentFullPath);
   if (!parent) return [];
 
   return scopes
     .filter((s) => UUIDsEqual(s.ParentID, parent.ID))
     .map((s) => s.FullPath);
+}
+
+/** @deprecated Use {@link GetChildScopeFullPaths}. */
+export function getChildScopeFullPaths(parentFullPath: string, scopes: APIScopeInfo[]): string[] {
+  return GetChildScopeFullPaths(parentFullPath, scopes);
 }

@@ -11,8 +11,8 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ListSharingService, ListSharingSummary, ListShareDialogConfig, ListShareDialogResult } from '@memberjunction/ng-list-management';
 import { CapabilitiesForLevel, type ListCapabilities, type SharePermissionLevel } from '@memberjunction/lists-base';
 import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
-import { validateEnumParam, validateStringParam } from '../../shared/agent-tool-validation';
-import { buildListBrowseAgentContext, resolveNamedRecord, buildNotFoundError } from '../lists-agent-context';
+import { ValidateEnumParam, ValidateStringParam } from '../../shared/agent-tool-validation';
+import { BuildListBrowseAgentContext, ResolveNamedRecord, BuildNotFoundError } from '../lists-agent-context';
 interface BrowseListItem {
   list: MJListEntity;
   itemCount: number;
@@ -1744,18 +1744,72 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
   protected override destroy$ = new Subject<void>();
 
   isLoading = true;
-  searchTerm = '';
-  viewMode: ViewMode = 'card';
-  selectedEntity = 'all';
-  selectedOwner = 'mine';
-  selectedSort = 'name';
+  SearchTerm = '';
+
+  /** @deprecated Use {@link SearchTerm}. */
+  get searchTerm() {
+    return this.SearchTerm;
+  }
+  /** @deprecated Use {@link SearchTerm}. */
+  set searchTerm(value) {
+    this.SearchTerm = value;
+  }
+  ViewMode: ViewMode = 'card';
+
+  /** @deprecated Use {@link ViewMode}. */
+  get viewMode(): ViewMode {
+    return this.ViewMode;
+  }
+  /** @deprecated Use {@link ViewMode}. */
+  set viewMode(value: ViewMode) {
+    this.ViewMode = value;
+  }
+  SelectedEntity = 'all';
+
+  /** @deprecated Use {@link SelectedEntity}. */
+  get selectedEntity() {
+    return this.SelectedEntity;
+  }
+  /** @deprecated Use {@link SelectedEntity}. */
+  set selectedEntity(value) {
+    this.SelectedEntity = value;
+  }
+  SelectedOwner = 'mine';
+
+  /** @deprecated Use {@link SelectedOwner}. */
+  get selectedOwner() {
+    return this.SelectedOwner;
+  }
+  /** @deprecated Use {@link SelectedOwner}. */
+  set selectedOwner(value) {
+    this.SelectedOwner = value;
+  }
+  SelectedSort = 'name';
+
+  /** @deprecated Use {@link SelectedSort}. */
+  get selectedSort() {
+    return this.SelectedSort;
+  }
+  /** @deprecated Use {@link SelectedSort}. */
+  set selectedSort(value) {
+    this.SelectedSort = value;
+  }
 
   /**
    * Active tag filters (Phase 4.3). Multi-tag = AND — a list must have
    * every active tag to appear. URL state mirrors this via the `tags`
    * query param (comma-separated tag IDs).
    */
-  tagFilters: Array<{ TagID: string; Name: string }> = [];
+  TagFilters: Array<{ TagID: string; Name: string }> = [];
+
+  /** @deprecated Use {@link TagFilters}. */
+  get tagFilters(): Array<{ TagID: string; Name: string }> {
+    return this.TagFilters;
+  }
+  /** @deprecated Use {@link TagFilters}. */
+  set tagFilters(value: Array<{ TagID: string; Name: string }>) {
+    this.TagFilters = value;
+  }
 
   /**
    * Set of List IDs that match the current `tagFilters` (intersection).
@@ -1770,68 +1824,356 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
    * existing `MJ: User Favorites` entity. `null` while loading; a Set
    * once populated so card-side toggling is O(1).
    */
-  favoriteListIds: Set<string> = new Set();
+  FavoriteListIds: Set<string> = new Set();
+
+  /** @deprecated Use {@link FavoriteListIds}. */
+  get favoriteListIds(): Set<string> {
+    return this.FavoriteListIds;
+  }
+  /** @deprecated Use {@link FavoriteListIds}. */
+  set favoriteListIds(value: Set<string>) {
+    this.FavoriteListIds = value;
+  }
 
   /** When true, only favorited lists appear in the grid. */
-  showOnlyFavorites = false;
+  ShowOnlyFavorites = false;
 
-  allLists: BrowseListItem[] = [];
-  filteredLists: BrowseListItem[] = [];
-  categories: MJListCategoryEntity[] = [];
-  categoryTree: CategoryNode[] = [];
-  flatCategories: Array<{ ID: string; displayName: string }> = [];
-  availableEntities: Array<{ ID: string; Name: string }> = [];
-  filteredEntitiesList: Array<{ ID: string; Name: string }> = [];
+  /** @deprecated Use {@link ShowOnlyFavorites}. */
+  get showOnlyFavorites() {
+    return this.ShowOnlyFavorites;
+  }
+  /** @deprecated Use {@link ShowOnlyFavorites}. */
+  set showOnlyFavorites(value) {
+    this.ShowOnlyFavorites = value;
+  }
 
-  entityOptions: Array<{ name: string; value: string }> = [{ name: 'All Entities', value: 'all' }];
-  ownerOptions: Array<{ name: string; value: string }> = [
+  AllLists: BrowseListItem[] = [];
+
+  /** @deprecated Use {@link AllLists}. */
+  get allLists(): BrowseListItem[] {
+    return this.AllLists;
+  }
+  /** @deprecated Use {@link AllLists}. */
+  set allLists(value: BrowseListItem[]) {
+    this.AllLists = value;
+  }
+  FilteredLists: BrowseListItem[] = [];
+
+  /** @deprecated Use {@link FilteredLists}. */
+  get filteredLists(): BrowseListItem[] {
+    return this.FilteredLists;
+  }
+  /** @deprecated Use {@link FilteredLists}. */
+  set filteredLists(value: BrowseListItem[]) {
+    this.FilteredLists = value;
+  }
+  Categories: MJListCategoryEntity[] = [];
+
+  /** @deprecated Use {@link Categories}. */
+  get categories(): MJListCategoryEntity[] {
+    return this.Categories;
+  }
+  /** @deprecated Use {@link Categories}. */
+  set categories(value: MJListCategoryEntity[]) {
+    this.Categories = value;
+  }
+  CategoryTree: CategoryNode[] = [];
+
+  /** @deprecated Use {@link CategoryTree}. */
+  get categoryTree(): CategoryNode[] {
+    return this.CategoryTree;
+  }
+  /** @deprecated Use {@link CategoryTree}. */
+  set categoryTree(value: CategoryNode[]) {
+    this.CategoryTree = value;
+  }
+  FlatCategories: Array<{ ID: string; displayName: string }> = [];
+
+  /** @deprecated Use {@link FlatCategories}. */
+  get flatCategories(): Array<{ ID: string; displayName: string }> {
+    return this.FlatCategories;
+  }
+  /** @deprecated Use {@link FlatCategories}. */
+  set flatCategories(value: Array<{ ID: string; displayName: string }>) {
+    this.FlatCategories = value;
+  }
+  AvailableEntities: Array<{ ID: string; Name: string }> = [];
+
+  /** @deprecated Use {@link AvailableEntities}. */
+  get availableEntities(): Array<{ ID: string; Name: string }> {
+    return this.AvailableEntities;
+  }
+  /** @deprecated Use {@link AvailableEntities}. */
+  set availableEntities(value: Array<{ ID: string; Name: string }>) {
+    this.AvailableEntities = value;
+  }
+  FilteredEntitiesList: Array<{ ID: string; Name: string }> = [];
+
+  /** @deprecated Use {@link FilteredEntitiesList}. */
+  get filteredEntitiesList(): Array<{ ID: string; Name: string }> {
+    return this.FilteredEntitiesList;
+  }
+  /** @deprecated Use {@link FilteredEntitiesList}. */
+  set filteredEntitiesList(value: Array<{ ID: string; Name: string }>) {
+    this.FilteredEntitiesList = value;
+  }
+
+  EntityOptions: Array<{ name: string; value: string }> = [{ name: 'All Entities', value: 'all' }];
+
+  /** @deprecated Use {@link EntityOptions}. */
+  get entityOptions(): Array<{ name: string; value: string }> {
+    return this.EntityOptions;
+  }
+  /** @deprecated Use {@link EntityOptions}. */
+  set entityOptions(value: Array<{ name: string; value: string }>) {
+    this.EntityOptions = value;
+  }
+  OwnerOptions: Array<{ name: string; value: string }> = [
     { name: 'My Lists', value: 'mine' },
     { name: 'All Lists', value: 'all' },
     { name: 'Others', value: 'others' }
   ];
-  sortOptions: Array<{ name: string; value: string }> = [
+
+  /** @deprecated Use {@link OwnerOptions}. */
+  get ownerOptions(): Array<{ name: string; value: string }> {
+    return this.OwnerOptions;
+  }
+  /** @deprecated Use {@link OwnerOptions}. */
+  set ownerOptions(value: Array<{ name: string; value: string }>) {
+    this.OwnerOptions = value;
+  }
+  SortOptions: Array<{ name: string; value: string }> = [
     { name: 'Name', value: 'name' },
     { name: 'Recently Updated', value: 'updated' },
     { name: 'Most Items', value: 'items' },
     { name: 'Entity', value: 'entity' }
   ];
 
+  /** @deprecated Use {@link SortOptions}. */
+  get sortOptions(): Array<{ name: string; value: string }> {
+    return this.SortOptions;
+  }
+  /** @deprecated Use {@link SortOptions}. */
+  set sortOptions(value: Array<{ name: string; value: string }>) {
+    this.SortOptions = value;
+  }
+
   // Context menu state
-  showContextMenu = false;
-  contextMenuX = 0;
-  contextMenuY = 0;
-  selectedContextItem: BrowseListItem | null = null;
+  ShowContextMenu = false;
+
+  /** @deprecated Use {@link ShowContextMenu}. */
+  get showContextMenu() {
+    return this.ShowContextMenu;
+  }
+  /** @deprecated Use {@link ShowContextMenu}. */
+  set showContextMenu(value) {
+    this.ShowContextMenu = value;
+  }
+  ContextMenuX = 0;
+
+  /** @deprecated Use {@link ContextMenuX}. */
+  get contextMenuX() {
+    return this.ContextMenuX;
+  }
+  /** @deprecated Use {@link ContextMenuX}. */
+  set contextMenuX(value) {
+    this.ContextMenuX = value;
+  }
+  ContextMenuY = 0;
+
+  /** @deprecated Use {@link ContextMenuY}. */
+  get contextMenuY() {
+    return this.ContextMenuY;
+  }
+  /** @deprecated Use {@link ContextMenuY}. */
+  set contextMenuY(value) {
+    this.ContextMenuY = value;
+  }
+  SelectedContextItem: BrowseListItem | null = null;
+
+  /** @deprecated Use {@link SelectedContextItem}. */
+  get selectedContextItem(): BrowseListItem | null {
+    return this.SelectedContextItem;
+  }
+  /** @deprecated Use {@link SelectedContextItem}. */
+  set selectedContextItem(value: BrowseListItem | null) {
+    this.SelectedContextItem = value;
+  }
 
   // Create/Edit dialog state
   showCreateDialog = false;
-  editingList: MJListEntity | null = null;
-  newListName = '';
-  newListDescription = '';
-  selectedEntityId = '';
-  selectedCategoryId: string | null = null;
-  entitySearchTerm = '';
-  showEntityDropdown = false;
-  entityDropdownPosition = { top: 0, left: 0, width: 0, openAbove: false };
+  EditingList: MJListEntity | null = null;
+
+  /** @deprecated Use {@link EditingList}. */
+  get editingList(): MJListEntity | null {
+    return this.EditingList;
+  }
+  /** @deprecated Use {@link EditingList}. */
+  set editingList(value: MJListEntity | null) {
+    this.EditingList = value;
+  }
+  NewListName = '';
+
+  /** @deprecated Use {@link NewListName}. */
+  get newListName() {
+    return this.NewListName;
+  }
+  /** @deprecated Use {@link NewListName}. */
+  set newListName(value) {
+    this.NewListName = value;
+  }
+  NewListDescription = '';
+
+  /** @deprecated Use {@link NewListDescription}. */
+  get newListDescription() {
+    return this.NewListDescription;
+  }
+  /** @deprecated Use {@link NewListDescription}. */
+  set newListDescription(value) {
+    this.NewListDescription = value;
+  }
+  SelectedEntityId = '';
+
+  /** @deprecated Use {@link SelectedEntityId}. */
+  get selectedEntityId() {
+    return this.SelectedEntityId;
+  }
+  /** @deprecated Use {@link SelectedEntityId}. */
+  set selectedEntityId(value) {
+    this.SelectedEntityId = value;
+  }
+  SelectedCategoryId: string | null = null;
+
+  /** @deprecated Use {@link SelectedCategoryId}. */
+  get selectedCategoryId(): string | null {
+    return this.SelectedCategoryId;
+  }
+  /** @deprecated Use {@link SelectedCategoryId}. */
+  set selectedCategoryId(value: string | null) {
+    this.SelectedCategoryId = value;
+  }
+  EntitySearchTerm = '';
+
+  /** @deprecated Use {@link EntitySearchTerm}. */
+  get entitySearchTerm() {
+    return this.EntitySearchTerm;
+  }
+  /** @deprecated Use {@link EntitySearchTerm}. */
+  set entitySearchTerm(value) {
+    this.EntitySearchTerm = value;
+  }
+  ShowEntityDropdown = false;
+
+  /** @deprecated Use {@link ShowEntityDropdown}. */
+  get showEntityDropdown() {
+    return this.ShowEntityDropdown;
+  }
+  /** @deprecated Use {@link ShowEntityDropdown}. */
+  set showEntityDropdown(value) {
+    this.ShowEntityDropdown = value;
+  }
+  EntityDropdownPosition = { top: 0, left: 0, width: 0, openAbove: false };
+
+  /** @deprecated Use {@link EntityDropdownPosition}. */
+  get entityDropdownPosition() {
+    return this.EntityDropdownPosition;
+  }
+  /** @deprecated Use {@link EntityDropdownPosition}. */
+  set entityDropdownPosition(value) {
+    this.EntityDropdownPosition = value;
+  }
 
   // Delete confirmation state
-  showDeleteConfirm = false;
-  deleteListName = '';
-  listToDelete: MJListEntity | null = null;
+  ShowDeleteConfirm = false;
+
+  /** @deprecated Use {@link ShowDeleteConfirm}. */
+  get showDeleteConfirm() {
+    return this.ShowDeleteConfirm;
+  }
+  /** @deprecated Use {@link ShowDeleteConfirm}. */
+  set showDeleteConfirm(value) {
+    this.ShowDeleteConfirm = value;
+  }
+  DeleteListName = '';
+
+  /** @deprecated Use {@link DeleteListName}. */
+  get deleteListName() {
+    return this.DeleteListName;
+  }
+  /** @deprecated Use {@link DeleteListName}. */
+  set deleteListName(value) {
+    this.DeleteListName = value;
+  }
+  ListToDelete: MJListEntity | null = null;
+
+  /** @deprecated Use {@link ListToDelete}. */
+  get listToDelete(): MJListEntity | null {
+    return this.ListToDelete;
+  }
+  /** @deprecated Use {@link ListToDelete}. */
+  set listToDelete(value: MJListEntity | null) {
+    this.ListToDelete = value;
+  }
 
   // Operation states
-  isSaving = false;
-  isDeleting = false;
+  IsSaving = false;
+
+  /** @deprecated Use {@link IsSaving}. */
+  get isSaving() {
+    return this.IsSaving;
+  }
+  /** @deprecated Use {@link IsSaving}. */
+  set isSaving(value) {
+    this.IsSaving = value;
+  }
+  IsDeleting = false;
+
+  /** @deprecated Use {@link IsDeleting}. */
+  get isDeleting() {
+    return this.IsDeleting;
+  }
+  /** @deprecated Use {@link IsDeleting}. */
+  set isDeleting(value) {
+    this.IsDeleting = value;
+  }
 
   // Sharing dialog state
-  showShareDialog = false;
-  shareDialogConfig: ListShareDialogConfig | null = null;
+  ShowShareDialog = false;
+
+  /** @deprecated Use {@link ShowShareDialog}. */
+  get showShareDialog() {
+    return this.ShowShareDialog;
+  }
+  /** @deprecated Use {@link ShowShareDialog}. */
+  set showShareDialog(value) {
+    this.ShowShareDialog = value;
+  }
+  ShareDialogConfig: ListShareDialogConfig | null = null;
+
+  /** @deprecated Use {@link ShareDialogConfig}. */
+  get shareDialogConfig(): ListShareDialogConfig | null {
+    return this.ShareDialogConfig;
+  }
+  /** @deprecated Use {@link ShareDialogConfig}. */
+  set shareDialogConfig(value: ListShareDialogConfig | null) {
+    this.ShareDialogConfig = value;
+  }
 
   // Viewer-perspective gating (Phase 2.8). Capabilities are computed
   // lazily when the user opens the context menu — running per-card
   // would mean N permission-resolve calls per browse render. The
   // resolved level is cached on the item so re-opening the same menu
   // doesn't refetch.
-  public contextItemCapabilities: ListCapabilities = CapabilitiesForLevel('Owner');
+  public ContextItemCapabilities: ListCapabilities = CapabilitiesForLevel('Owner');
+
+  /** @deprecated Use {@link ContextItemCapabilities}. */
+  public get contextItemCapabilities(): ListCapabilities {
+    return this.ContextItemCapabilities;
+  }
+  /** @deprecated Use {@link ContextItemCapabilities}. */
+  public set contextItemCapabilities(value: ListCapabilities) {
+    this.ContextItemCapabilities = value;
+  }
   private capabilityCache = new Map<string, SharePermissionLevel | null>();
 
   /**
@@ -1841,7 +2183,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
    * only when the delete would actually succeed: the List's owner, or a Developer/Integration user.
    */
   public get CanDeleteContextItem(): boolean {
-    const list = this.selectedContextItem?.list;
+    const list = this.SelectedContextItem?.list;
     if (!list) {
       return false;
     }
@@ -1861,10 +2203,46 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
   // tracked by `activeShareListId`/`activeShareListName` lifted from
   // shareDialogConfig at open time so we keep the context after the
   // share dialog closes.
-  showInvitationsDialog = false;
-  showAuditLogDialog = false;
-  activeShareListId: string | null = null;
-  activeShareListName: string | null = null;
+  ShowInvitationsDialog = false;
+
+  /** @deprecated Use {@link ShowInvitationsDialog}. */
+  get showInvitationsDialog() {
+    return this.ShowInvitationsDialog;
+  }
+  /** @deprecated Use {@link ShowInvitationsDialog}. */
+  set showInvitationsDialog(value) {
+    this.ShowInvitationsDialog = value;
+  }
+  ShowAuditLogDialog = false;
+
+  /** @deprecated Use {@link ShowAuditLogDialog}. */
+  get showAuditLogDialog() {
+    return this.ShowAuditLogDialog;
+  }
+  /** @deprecated Use {@link ShowAuditLogDialog}. */
+  set showAuditLogDialog(value) {
+    this.ShowAuditLogDialog = value;
+  }
+  ActiveShareListId: string | null = null;
+
+  /** @deprecated Use {@link ActiveShareListId}. */
+  get activeShareListId(): string | null {
+    return this.ActiveShareListId;
+  }
+  /** @deprecated Use {@link ActiveShareListId}. */
+  set activeShareListId(value: string | null) {
+    this.ActiveShareListId = value;
+  }
+  ActiveShareListName: string | null = null;
+
+  /** @deprecated Use {@link ActiveShareListName}. */
+  get activeShareListName(): string | null {
+    return this.ActiveShareListName;
+  }
+  /** @deprecated Use {@link ActiveShareListName}. */
+  set activeShareListName(value: string | null) {
+    this.ActiveShareListName = value;
+  }
 
   private entityColorMap: Map<string, string> = new Map();
   private entityIconMap: Map<string, string> = new Map();
@@ -1883,27 +2261,27 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
 
   @HostListener('document:click', ['$event'])
   onDocumentClick(event: MouseEvent) {
-    if (this.showEntityDropdown) {
+    if (this.ShowEntityDropdown) {
       const target = event.target as HTMLElement;
       if (!target.closest('.custom-select-wrapper') && !target.closest('.entity-dropdown-portal')) {
-        this.showEntityDropdown = false;
+        this.ShowEntityDropdown = false;
       }
     }
   }
 
   @HostListener('document:keydown.escape')
   onEscapeKey() {
-    if (this.showContextMenu) {
-      this.closeContextMenu();
+    if (this.ShowContextMenu) {
+      this.CloseContextMenu();
     }
     if (this.showCreateDialog) {
-      this.closeCreateDialog();
+      this.CloseCreateDialog();
     }
-    if (this.showDeleteConfirm) {
-      this.cancelDelete();
+    if (this.ShowDeleteConfirm) {
+      this.CancelDelete();
     }
-    if (this.showEntityDropdown) {
-      this.closeEntityDropdown();
+    if (this.ShowEntityDropdown) {
+      this.CloseEntityDropdown();
     }
   }
 
@@ -1914,7 +2292,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
   private persistFavoritesFilter(): void {
     UserInfoEngine.Instance.SetSettingDebounced(
       ListsBrowseResource.FAVORITES_FILTER_PREF_KEY,
-      String(this.showOnlyFavorites),
+      String(this.ShowOnlyFavorites),
     );
   }
 
@@ -1922,7 +2300,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     super.ngOnInit();
     // Restore the favorites-only filter preference (synchronous cache hit —
     // UserInfoEngine is populated during app bootstrap)
-    this.showOnlyFavorites = UserInfoEngine.Instance.GetSetting(
+    this.ShowOnlyFavorites = UserInfoEngine.Instance.GetSetting(
       ListsBrowseResource.FAVORITES_FILTER_PREF_KEY,
     ) === 'true';
     this.subscribeToCategoryChanges();
@@ -1955,19 +2333,19 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
    * what the user is looking at.
    */
   private publishAgentContext(): void {
-    this.navigationService.SetAgentContext(this, buildListBrowseAgentContext({
-      SearchTerm: this.searchTerm,
-      ViewMode: this.viewMode,
-      AllListCount: this.allLists.length,
-      FilteredListCount: this.filteredLists.length,
+    this.navigationService.SetAgentContext(this, BuildListBrowseAgentContext({
+      SearchTerm: this.SearchTerm,
+      ViewMode: this.ViewMode,
+      AllListCount: this.AllLists.length,
+      FilteredListCount: this.FilteredLists.length,
       // Deep context: the NAMES of the lists currently on screen (bounded), so
       // the agent can refer to / open them by name rather than an opaque GUID.
-      VisibleListNames: this.filteredLists.map(i => i.list.Name),
-      SelectedSort: this.selectedSort,
+      VisibleListNames: this.FilteredLists.map(i => i.list.Name),
+      SelectedSort: this.SelectedSort,
       ActiveFilterCount: this.TotalActiveFilterCount,
-      SelectedOwner: this.selectedOwner,
-      SelectedEntity: this.selectedEntity,
-      ShowOnlyFavorites: this.showOnlyFavorites,
+      SelectedOwner: this.SelectedOwner,
+      SelectedEntity: this.SelectedEntity,
+      ShowOnlyFavorites: this.ShowOnlyFavorites,
     }));
   }
 
@@ -1977,11 +2355,11 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
    * the pure {@link resolveNamedRecord} helper over the filtered lists' rows.
    */
   private resolveBrowseListItem(input: string): BrowseListItem | null {
-    const match = resolveNamedRecord(input, this.allLists.map(i => ({ ID: i.list.ID, Name: i.list.Name })));
+    const match = ResolveNamedRecord(input, this.AllLists.map(i => ({ ID: i.list.ID, Name: i.list.Name })));
     if (!match) {
       return null;
     }
-    return this.allLists.find(i => UUIDsEqual(i.list.ID, match.ID)) ?? null;
+    return this.AllLists.find(i => UUIDsEqual(i.list.ID, match.ID)) ?? null;
   }
 
   /**
@@ -1996,11 +2374,11 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
         Description: 'Open a list in a new tab by its ID or name. Pass the list name the user says (see VisibleListNames) — the tool resolves an exact ID, an exact name, or a partial name match.',
         ParameterSchema: { type: 'object', properties: { list: { type: 'string', description: 'The list ID or name to open' }, listId: { type: 'string', description: 'Deprecated alias for "list".' } } },
         Handler: async (params: Record<string, unknown>) => {
-          const idCheck = validateStringParam(params['list'] ?? params['listId'], 'list');
+          const idCheck = ValidateStringParam(params['list'] ?? params['listId'], 'list');
           if (!idCheck.ok) return idCheck.result;
           const item = this.resolveBrowseListItem(idCheck.value);
-          if (!item) return { Success: false, ErrorMessage: buildNotFoundError(idCheck.value, this.allLists.map(i => ({ ID: i.list.ID, Name: i.list.Name })), 'list') };
-          this.openList(item);
+          if (!item) return { Success: false, ErrorMessage: BuildNotFoundError(idCheck.value, this.AllLists.map(i => ({ ID: i.list.ID, Name: i.list.Name })), 'list') };
+          this.OpenList(item);
           return { Success: true, Data: { listName: item.list.Name } };
         },
       },
@@ -2009,11 +2387,11 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
         Description: 'Set the search term that filters the visible lists by name, description, entity, or owner.',
         ParameterSchema: { type: 'object', properties: { searchTerm: { type: 'string', description: 'Text to search for' } }, required: ['searchTerm'] },
         Handler: async (params: Record<string, unknown>) => {
-          const check = validateStringParam(params['searchTerm'], 'searchTerm');
+          const check = ValidateStringParam(params['searchTerm'], 'searchTerm');
           if (!check.ok) return check.result;
-          this.onSearchChange(check.value);
+          this.OnSearchChange(check.value);
           this.publishAgentContext();
-          return { Success: true, Data: { resultCount: this.filteredLists.length } };
+          return { Success: true, Data: { resultCount: this.FilteredLists.length } };
         },
       },
       {
@@ -2028,25 +2406,25 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
           },
         },
         Handler: async (params: Record<string, unknown>) => {
-          const next: Record<string, unknown> = { ...this.listFilterValues };
+          const next: Record<string, unknown> = { ...this.ListFilterValues };
           if (params['owner'] !== undefined) {
-            const ownerCheck = validateEnumParam(params['owner'], ['mine', 'all', 'others'] as const, 'owner');
+            const ownerCheck = ValidateEnumParam(params['owner'], ['mine', 'all', 'others'] as const, 'owner');
             if (!ownerCheck.ok) return ownerCheck.result;
             next['selectedOwner'] = ownerCheck.value;
           }
           if (params['entity'] !== undefined) {
-            const entityCheck = validateStringParam(params['entity'], 'entity');
+            const entityCheck = ValidateStringParam(params['entity'], 'entity');
             if (!entityCheck.ok) return entityCheck.result;
             next['selectedEntity'] = entityCheck.value;
           }
           if (params['favorites'] !== undefined) {
-            const favCheck = validateEnumParam(params['favorites'], ['favorites', 'all'] as const, 'favorites');
+            const favCheck = ValidateEnumParam(params['favorites'], ['favorites', 'all'] as const, 'favorites');
             if (!favCheck.ok) return favCheck.result;
             next['favorites'] = favCheck.value;
           }
-          this.onFilterValuesChange(next);
+          this.OnFilterValuesChange(next);
           this.publishAgentContext();
-          return { Success: true, Data: { resultCount: this.filteredLists.length, activeFilterCount: this.TotalActiveFilterCount } };
+          return { Success: true, Data: { resultCount: this.FilteredLists.length, activeFilterCount: this.TotalActiveFilterCount } };
         },
       },
       {
@@ -2054,9 +2432,9 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
         Description: 'Clear all applied filters (Owner, Entity, Favorites, Tags).',
         ParameterSchema: { type: 'object', properties: {} },
         Handler: async () => {
-          this.clearAllAppliedFilters();
+          this.ClearAllAppliedFilters();
           this.publishAgentContext();
-          return { Success: true, Data: { resultCount: this.filteredLists.length } };
+          return { Success: true, Data: { resultCount: this.FilteredLists.length } };
         },
       },
       {
@@ -2064,9 +2442,9 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
         Description: 'Set the list view mode: "table", "card", or "hierarchy".',
         ParameterSchema: { type: 'object', properties: { mode: { type: 'string', enum: ['table', 'card', 'hierarchy'] } }, required: ['mode'] },
         Handler: async (params: Record<string, unknown>) => {
-          const check = validateEnumParam(params['mode'], ['table', 'card', 'hierarchy'] as const, 'mode');
+          const check = ValidateEnumParam(params['mode'], ['table', 'card', 'hierarchy'] as const, 'mode');
           if (!check.ok) return check.result;
-          this.setViewMode(check.value);
+          this.SetViewMode(check.value);
           this.publishAgentContext();
           return { Success: true };
         },
@@ -2076,10 +2454,10 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
         Description: 'Sort the lists by a field: "name", "updated", "items", or "entity".',
         ParameterSchema: { type: 'object', properties: { field: { type: 'string', enum: ['name', 'updated', 'items', 'entity'] } }, required: ['field'] },
         Handler: async (params: Record<string, unknown>) => {
-          const check = validateEnumParam(params['field'], ['name', 'updated', 'items', 'entity'] as const, 'field');
+          const check = ValidateEnumParam(params['field'], ['name', 'updated', 'items', 'entity'] as const, 'field');
           if (!check.ok) return check.result;
-          this.selectedSort = check.value;
-          this.onSortChange(check.value);
+          this.SelectedSort = check.value;
+          this.OnSortChange(check.value);
           this.publishAgentContext();
           return { Success: true };
         },
@@ -2092,7 +2470,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
         Description: 'Open the "Create New List" dialog. The user confirms the name and entity in the dialog; nothing is saved until they do.',
         ParameterSchema: { type: 'object', properties: {} },
         Handler: async () => {
-          this.createNewList();
+          this.CreateNewList();
           return { Success: true };
         },
       },
@@ -2166,16 +2544,16 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
       }
 
       const lists = listsResult.Results as MJListEntity[];
-      this.categories = (categoriesResult.Results || []) as MJListCategoryEntity[];
+      this.Categories = (categoriesResult.Results || []) as MJListCategoryEntity[];
 
       // Build category map
       this.categoryMap.clear();
-      for (const cat of this.categories) {
+      for (const cat of this.Categories) {
         this.categoryMap.set(cat.ID, cat);
       }
 
       // Build flat categories for dropdown
-      this.flatCategories = this.buildFlatCategories(this.categories);
+      this.FlatCategories = this.buildFlatCategories(this.Categories);
       // loadData() already pulled fresh categories — clear the dirty
       // flag so the first dialog open doesn't redundantly refetch.
       this.categoriesDirty = false;
@@ -2206,14 +2584,14 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
       }
 
       // Build available entities for dropdown
-      this.availableEntities = entities
+      this.AvailableEntities = entities
         .filter(e => e.IncludeInAPI)
         .map(e => ({ ID: e.ID, Name: e.Name }))
         .sort((a, b) => a.Name.localeCompare(b.Name));
-      this.filteredEntitiesList = [...this.availableEntities];
+      this.FilteredEntitiesList = [...this.AvailableEntities];
 
       // Build list items
-      this.allLists = lists.map(list => {
+      this.AllLists = lists.map(list => {
         const entityName = list.Entity || 'Unknown';
         entitySet.add(entityName);
         return {
@@ -2226,7 +2604,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
       });
 
       // Build entity filter options
-      this.entityOptions = [
+      this.EntityOptions = [
         { name: 'All Entities', value: 'all' },
         ...Array.from(entitySet).sort().map(e => ({ name: e, value: e }))
       ];
@@ -2273,7 +2651,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     const categoryNodes = new Map<string, CategoryNode>();
 
     // Create nodes for all categories
-    for (const cat of this.categories) {
+    for (const cat of this.Categories) {
       categoryNodes.set(cat.ID, {
         category: cat,
         lists: [],
@@ -2283,7 +2661,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     }
 
     // Build tree structure
-    for (const cat of this.categories) {
+    for (const cat of this.Categories) {
       const node = categoryNodes.get(cat.ID)!;
       if (cat.ParentID && categoryNodes.has(cat.ParentID)) {
         categoryNodes.get(cat.ParentID)!.children.push(node);
@@ -2294,7 +2672,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
 
     // Assign lists to categories
     const uncategorizedLists: BrowseListItem[] = [];
-    for (const item of this.filteredLists) {
+    for (const item of this.FilteredLists) {
       if (item.list.CategoryID && categoryNodes.has(item.list.CategoryID)) {
         categoryNodes.get(item.list.CategoryID)!.lists.push(item);
       } else {
@@ -2312,47 +2690,62 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
       });
     }
 
-    this.categoryTree = rootNodes;
+    this.CategoryTree = rootNodes;
   }
 
-  setViewMode(mode: ViewMode) {
-    this.viewMode = mode;
+  SetViewMode(mode: ViewMode) {
+    this.ViewMode = mode;
     this.publishAgentContext();
   }
 
+  /** @deprecated Use {@link SetViewMode}. */
+  setViewMode(mode: ViewMode) {
+    return this.SetViewMode(mode);
+  }
+
   /** View-mode options for the shared <mj-view-toggle>. */
-  public readonly listViewOptions = [
+  public readonly ListViewOptions = [
     { key: 'table',     icon: 'fa-solid fa-table-list',  title: 'Table view' },
     { key: 'card',      icon: 'fa-solid fa-grip',        title: 'Card view' },
     { key: 'hierarchy', icon: 'fa-solid fa-folder-tree', title: 'Category view' },
   ];
 
+  /** @deprecated Use {@link ListViewOptions}. */
+  public get listViewOptions() {
+    return this.ListViewOptions;
+  }
+
   /** Values record consumed by the centralized <mj-filter-panel>. */
-  public get listFilterValues(): Record<string, unknown> {
+  public get ListFilterValues(): Record<string, unknown> {
     return {
-      selectedOwner: this.selectedOwner,
-      selectedEntity: this.selectedEntity,
-      favorites: this.showOnlyFavorites ? 'favorites' : 'all',
+      selectedOwner: this.SelectedOwner,
+      selectedEntity: this.SelectedEntity,
+      favorites: this.ShowOnlyFavorites ? 'favorites' : 'all',
     };
   }
 
+  /** @deprecated Use {@link ListFilterValues}. */
+  public get listFilterValues(): Record<string, unknown> {
+    return this.ListFilterValues;
+  }
+
   /** Field config consumed by the centralized <mj-filter-panel>. */
-  public get listFilterFields(): FilterFieldConfig[] {
+  public get ListFilterFields(): FilterFieldConfig[] {
     return [
       {
         key: 'selectedOwner',
         type: 'dropdown',
         label: 'Owner',
         icon: 'fa-solid fa-user',
-        options: this.ownerOptions.map(o => ({ text: o.name, value: o.value })),
+        options: this.OwnerOptions.map(o => ({ text: o.name, value: o.value })),
       },
       {
         key: 'selectedEntity',
         type: 'dropdown',
         label: 'Entity',
         icon: 'fa-solid fa-table',
-        filterable: this.entityOptions.length > 10,
-        options: this.entityOptions.map(o => ({ text: o.name, value: o.value })),
+        filterable: this.EntityOptions.length > 10,
+        options: this.EntityOptions.map(o => ({ text: o.name, value: o.value })),
       },
       {
         key: 'favorites',
@@ -2366,108 +2759,158 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     ];
   }
 
+  /** @deprecated Use {@link ListFilterFields}. */
+  public get listFilterFields(): FilterFieldConfig[] {
+    return this.ListFilterFields;
+  }
+
   /** Receive popover updates and apply them. */
-  public onFilterValuesChange(values: Record<string, unknown>): void {
-    this.selectedOwner  = (values['selectedOwner']  as string) ?? 'mine';
-    this.selectedEntity = (values['selectedEntity'] as string) ?? 'all';
-    this.showOnlyFavorites = values['favorites'] === 'favorites';
+  public OnFilterValuesChange(values: Record<string, unknown>): void {
+    this.SelectedOwner  = (values['selectedOwner']  as string) ?? 'mine';
+    this.SelectedEntity = (values['selectedEntity'] as string) ?? 'all';
+    this.ShowOnlyFavorites = values['favorites'] === 'favorites';
     this.persistFavoritesFilter();
     this.applyFilters();
     this.buildCategoryTree();
     this.publishAgentContext();
   }
 
+  /** @deprecated Use {@link OnFilterValuesChange}. */
+  public onFilterValuesChange(values: Record<string, unknown>): void {
+    return this.OnFilterValuesChange(values);
+  }
+
   /** Reset the popover's own fields (Owner · Entity · Favorites); leaves search + tags alone. */
-  public resetPopoverFilters(): void {
-    this.selectedOwner = 'mine';
-    this.selectedEntity = 'all';
-    this.showOnlyFavorites = false;
+  public ResetPopoverFilters(): void {
+    this.SelectedOwner = 'mine';
+    this.SelectedEntity = 'all';
+    this.ShowOnlyFavorites = false;
     this.persistFavoritesFilter();
     this.applyFilters();
     this.buildCategoryTree();
+  }
+
+  /** @deprecated Use {@link ResetPopoverFilters}. */
+  public resetPopoverFilters(): void {
+    return this.ResetPopoverFilters();
   }
 
   /** Active popover-field count for the badge (Owner + Entity; excludes search). */
   public get ActiveFilterCount(): number {
     let n = 0;
-    if (this.selectedOwner  && this.selectedOwner  !== 'mine') n++;
-    if (this.selectedEntity && this.selectedEntity !== 'all')  n++;
+    if (this.SelectedOwner  && this.SelectedOwner  !== 'mine') n++;
+    if (this.SelectedEntity && this.SelectedEntity !== 'all')  n++;
     return n;
   }
 
   /** Total active filters (Owner + Entity + Favorites + Tags) — drives the Filter button badge. */
   public get TotalActiveFilterCount(): number {
-    return this.ActiveFilterCount + (this.showOnlyFavorites ? 1 : 0) + this.tagFilters.length;
+    return this.ActiveFilterCount + (this.ShowOnlyFavorites ? 1 : 0) + this.TagFilters.length;
   }
 
   /** Clear every filter (Owner · Entity · Favorites · Tags). Leaves search. */
-  public clearAllAppliedFilters(): void {
-    this.selectedOwner = 'mine';
-    this.selectedEntity = 'all';
-    this.showOnlyFavorites = false;
+  public ClearAllAppliedFilters(): void {
+    this.SelectedOwner = 'mine';
+    this.SelectedEntity = 'all';
+    this.ShowOnlyFavorites = false;
     this.persistFavoritesFilter();
-    this.tagFilters = [];
+    this.TagFilters = [];
     void this.recomputeTagMembership();
     this.buildCategoryTree();
     this.publishAgentContext();
   }
 
+  /** @deprecated Use {@link ClearAllAppliedFilters}. */
+  public clearAllAppliedFilters(): void {
+    return this.ClearAllAppliedFilters();
+  }
+
+  OnSearchChange(term: string) {
+    this.SearchTerm = term;
+    this.applyFilters();
+    this.buildCategoryTree();
+    this.publishAgentContext();
+  }
+
+  /** @deprecated Use {@link OnSearchChange}. */
   onSearchChange(term: string) {
-    this.searchTerm = term;
-    this.applyFilters();
-    this.buildCategoryTree();
-    this.publishAgentContext();
+    return this.OnSearchChange(term);
   }
 
+  OnEntityFilterChange(_value: string) {
+    this.applyFilters();
+    this.buildCategoryTree();
+  }
+
+  /** @deprecated Use {@link OnEntityFilterChange}. */
   onEntityFilterChange(_value: string) {
+    return this.OnEntityFilterChange(_value);
+  }
+
+  OnOwnerFilterChange(_value: string) {
     this.applyFilters();
     this.buildCategoryTree();
   }
 
+  /** @deprecated Use {@link OnOwnerFilterChange}. */
   onOwnerFilterChange(_value: string) {
-    this.applyFilters();
-    this.buildCategoryTree();
+    return this.OnOwnerFilterChange(_value);
   }
 
-  onSortChange(_value: string) {
+  OnSortChange(_value: string) {
     this.applyFilters();
     this.buildCategoryTree();
     this.publishAgentContext();
   }
 
-  clearSearch() {
-    this.searchTerm = '';
+  /** @deprecated Use {@link OnSortChange}. */
+  onSortChange(_value: string) {
+    return this.OnSortChange(_value);
+  }
+
+  ClearSearch() {
+    this.SearchTerm = '';
     this.applyFilters();
     this.buildCategoryTree();
   }
 
-  clearFilters() {
+  /** @deprecated Use {@link ClearSearch}. */
+  clearSearch() {
+    return this.ClearSearch();
+  }
+
+  ClearFilters() {
     // Reset EVERY dimension applyFilters() narrows on — search, owner, entity,
     // favorites, and tags — so the empty-state "Reset filters" CTA actually clears
     // the no-results state (favorites/tags were previously left active).
-    this.searchTerm = '';
-    this.selectedEntity = 'all';
-    this.selectedOwner = 'mine';
-    this.showOnlyFavorites = false;
+    this.SearchTerm = '';
+    this.SelectedEntity = 'all';
+    this.SelectedOwner = 'mine';
+    this.ShowOnlyFavorites = false;
     this.persistFavoritesFilter();
-    this.tagFilters = [];
+    this.TagFilters = [];
     void this.recomputeTagMembership(); // empty tagFilters → clears tagFilteredListIds + re-applies
     this.buildCategoryTree();
   }
 
+  /** @deprecated Use {@link ClearFilters}. */
+  clearFilters() {
+    return this.ClearFilters();
+  }
+
   private applyFilters() {
-    let result = [...this.allLists];
+    let result = [...this.AllLists];
 
     // Owner filter
-    if (this.selectedOwner === 'mine') {
+    if (this.SelectedOwner === 'mine') {
       result = result.filter(item => item.isOwner);
-    } else if (this.selectedOwner === 'others') {
+    } else if (this.SelectedOwner === 'others') {
       result = result.filter(item => !item.isOwner);
     }
 
     // Search filter
-    if (this.searchTerm) {
-      const term = this.searchTerm.toLowerCase();
+    if (this.SearchTerm) {
+      const term = this.SearchTerm.toLowerCase();
       result = result.filter(item =>
         item.list.Name.toLowerCase().includes(term) ||
         (item.list.Description && item.list.Description.toLowerCase().includes(term)) ||
@@ -2477,8 +2920,8 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     }
 
     // Entity filter
-    if (this.selectedEntity !== 'all') {
-      result = result.filter(item => item.entityName === this.selectedEntity);
+    if (this.SelectedEntity !== 'all') {
+      result = result.filter(item => item.entityName === this.SelectedEntity);
     }
 
     // Tag filter (Phase 4.3 — intersection of all active tags).
@@ -2488,13 +2931,13 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     }
 
     // Favorites-only toggle (Phase 5.3).
-    if (this.showOnlyFavorites) {
-      const favs = this.favoriteListIds;
+    if (this.ShowOnlyFavorites) {
+      const favs = this.FavoriteListIds;
       result = result.filter(item => favs.has(item.list.ID));
     }
 
     // Sort
-    switch (this.selectedSort) {
+    switch (this.SelectedSort) {
       case 'name':
         result.sort((a, b) => a.list.Name.localeCompare(b.list.Name));
         break;
@@ -2513,27 +2956,47 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
         break;
     }
 
-    this.filteredLists = result;
+    this.FilteredLists = result;
   }
 
-  toggleCategory(node: CategoryNode) {
+  ToggleCategory(node: CategoryNode) {
     node.isExpanded = !node.isExpanded;
   }
 
-  getListCountInCategory(node: CategoryNode): number {
+  /** @deprecated Use {@link ToggleCategory}. */
+  toggleCategory(node: CategoryNode) {
+    return this.ToggleCategory(node);
+  }
+
+  GetListCountInCategory(node: CategoryNode): number {
     let count = node.lists.length;
     for (const child of node.children) {
-      count += this.getListCountInCategory(child);
+      count += this.GetListCountInCategory(child);
     }
     return count;
   }
 
-  getEntityColor(entityName: string): string {
+  /** @deprecated Use {@link GetListCountInCategory}. */
+  getListCountInCategory(node: CategoryNode): number {
+    return this.GetListCountInCategory(node);
+  }
+
+  GetEntityColor(entityName: string): string {
     return this.entityColorMap.get(entityName) || '#607D8B';
   }
 
-  getEntityIcon(entityName: string): string {
+  /** @deprecated Use {@link GetEntityColor}. */
+  getEntityColor(entityName: string): string {
+    return this.GetEntityColor(entityName);
+  }
+
+  GetEntityIcon(entityName: string): string {
     return this.entityIconMap.get(entityName) || 'fa-solid fa-table';
+  }
+
+  /** @deprecated Use {@link GetEntityIcon}. */
+  getEntityIcon(entityName: string): string {
+    return this.GetEntityIcon(entityName);
   }
 
   private generateEntityColor(entityName: string): string {
@@ -2561,9 +3024,14 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     return d.toLocaleDateString();
   }
 
-  openList(item: BrowseListItem) {
+  OpenList(item: BrowseListItem) {
     const appId = this.Data?.Configuration?.applicationId || '';
     this.tabService.OpenList(item.list.ID, item.list.Name, appId);
+  }
+
+  /** @deprecated Use {@link OpenList}. */
+  openList(item: BrowseListItem) {
+    return this.OpenList(item);
   }
 
   /**
@@ -2572,23 +3040,38 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
    * component emits the (TagID, Name) pair so we can both display
    * the chip name and filter by ID.
    */
-  onCardTagClicked(payload: { TagID: string; Name: string }): void {
-    if (this.tagFilters.some((f) => f.TagID === payload.TagID)) return;
-    this.tagFilters = [...this.tagFilters, payload];
+  OnCardTagClicked(payload: { TagID: string; Name: string }): void {
+    if (this.TagFilters.some((f) => f.TagID === payload.TagID)) return;
+    this.TagFilters = [...this.TagFilters, payload];
     void this.recomputeTagMembership();
+  }
+
+  /** @deprecated Use {@link OnCardTagClicked}. */
+  onCardTagClicked(payload: { TagID: string; Name: string }): void {
+    return this.OnCardTagClicked(payload);
   }
 
   /** Remove a tag from the filter row. */
-  removeTagFilter(tagId: string): void {
-    this.tagFilters = this.tagFilters.filter((f) => f.TagID !== tagId);
+  RemoveTagFilter(tagId: string): void {
+    this.TagFilters = this.TagFilters.filter((f) => f.TagID !== tagId);
     void this.recomputeTagMembership();
   }
 
+  /** @deprecated Use {@link RemoveTagFilter}. */
+  removeTagFilter(tagId: string): void {
+    return this.RemoveTagFilter(tagId);
+  }
+
   /** Clear all active tag filters. */
-  clearTagFilters(): void {
-    this.tagFilters = [];
+  ClearTagFilters(): void {
+    this.TagFilters = [];
     this.tagFilteredListIds = null;
     this.applyFilters();
+  }
+
+  /** @deprecated Use {@link ClearTagFilters}. */
+  clearTagFilters(): void {
+    return this.ClearTagFilters();
   }
 
   /**
@@ -2597,7 +3080,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
    * Result is cached on `tagFilteredListIds`; `applyFilters` consumes it.
    */
   private async recomputeTagMembership(): Promise<void> {
-    if (this.tagFilters.length === 0) {
+    if (this.TagFilters.length === 0) {
       this.tagFilteredListIds = null;
       this.applyFilters();
       return;
@@ -2610,7 +3093,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
         this.applyFilters();
         return;
       }
-      const tagIds = this.tagFilters.map((f) => `'${f.TagID}'`).join(',');
+      const tagIds = this.TagFilters.map((f) => `'${f.TagID}'`).join(',');
       const rv = RunView.FromMetadataProvider(md);
       const result = await rv.RunView<{ RecordID: string; TagID: string }>({
         EntityName: 'MJ: Tagged Items',
@@ -2625,7 +3108,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
         const id = String(row.RecordID);
         counts.set(id, (counts.get(id) ?? 0) + 1);
       }
-      const required = this.tagFilters.length;
+      const required = this.TagFilters.length;
       const matches = new Set<string>();
       for (const [id, count] of counts) {
         if (count >= required) matches.add(id);
@@ -2658,10 +3141,10 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
         Fields: ['RecordID'],
         ResultType: 'simple',
       });
-      this.favoriteListIds = new Set((result.Results ?? []).map((r) => String(r.RecordID)));
+      this.FavoriteListIds = new Set((result.Results ?? []).map((r) => String(r.RecordID)));
     } catch {
       // Silent — favorites are a polish feature, not load-bearing.
-      this.favoriteListIds = new Set();
+      this.FavoriteListIds = new Set();
     }
   }
 
@@ -2669,12 +3152,12 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
    * Toggle a list's favorite state. Optimistic: flips the local Set
    * first, then writes through. Reverts on failure.
    */
-  async toggleFavorite(event: Event, item: BrowseListItem): Promise<void> {
+  async ToggleFavorite(event: Event, item: BrowseListItem): Promise<void> {
     event.stopPropagation();
-    const wasFav = this.favoriteListIds.has(item.list.ID);
+    const wasFav = this.FavoriteListIds.has(item.list.ID);
     // Optimistic update.
-    if (wasFav) this.favoriteListIds.delete(item.list.ID);
-    else this.favoriteListIds.add(item.list.ID);
+    if (wasFav) this.FavoriteListIds.delete(item.list.ID);
+    else this.FavoriteListIds.add(item.list.ID);
     // Re-trigger filter recompute since the favorites-only toggle
     // may be on.
     this.applyFilters();
@@ -2704,32 +3187,47 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
       }
     } catch {
       // Revert on failure.
-      if (wasFav) this.favoriteListIds.add(item.list.ID);
-      else this.favoriteListIds.delete(item.list.ID);
+      if (wasFav) this.FavoriteListIds.add(item.list.ID);
+      else this.FavoriteListIds.delete(item.list.ID);
       this.applyFilters();
     }
   }
 
-  isFavorite(listId: string): boolean {
-    return this.favoriteListIds.has(listId);
+  /** @deprecated Use {@link ToggleFavorite}. */
+  async toggleFavorite(event: Event, item: BrowseListItem): Promise<void> {
+    return this.ToggleFavorite(event, item);
   }
 
-  toggleShowOnlyFavorites(): void {
-    this.showOnlyFavorites = !this.showOnlyFavorites;
+  IsFavorite(listId: string): boolean {
+    return this.FavoriteListIds.has(listId);
+  }
+
+  /** @deprecated Use {@link IsFavorite}. */
+  isFavorite(listId: string): boolean {
+    return this.IsFavorite(listId);
+  }
+
+  ToggleShowOnlyFavorites(): void {
+    this.ShowOnlyFavorites = !this.ShowOnlyFavorites;
     this.applyFilters();
   }
 
-  openListMenu(event: Event, item: BrowseListItem) {
+  /** @deprecated Use {@link ToggleShowOnlyFavorites}. */
+  toggleShowOnlyFavorites(): void {
+    return this.ToggleShowOnlyFavorites();
+  }
+
+  OpenListMenu(event: Event, item: BrowseListItem) {
     event.stopPropagation();
     const mouseEvent = event as MouseEvent;
-    this.selectedContextItem = item;
-    this.contextMenuX = mouseEvent.clientX;
-    this.contextMenuY = mouseEvent.clientY;
+    this.SelectedContextItem = item;
+    this.ContextMenuX = mouseEvent.clientX;
+    this.ContextMenuY = mouseEvent.clientY;
     // Fast path: owners always have full capabilities. Avoid an extra
     // permission-resolve round trip for the common case.
     if (item.isOwner) {
-      this.contextItemCapabilities = CapabilitiesForLevel('Owner');
-      this.showContextMenu = true;
+      this.ContextItemCapabilities = CapabilitiesForLevel('Owner');
+      this.ShowContextMenu = true;
       return;
     }
     // Render the menu immediately with a conservative viewer-level cap
@@ -2737,12 +3235,17 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     // — and viewers/editors stay correctly gated even if resolve fails.
     const cached = this.capabilityCache.get(item.list.ID);
     if (cached !== undefined) {
-      this.contextItemCapabilities = CapabilitiesForLevel(cached);
+      this.ContextItemCapabilities = CapabilitiesForLevel(cached);
     } else {
-      this.contextItemCapabilities = CapabilitiesForLevel('View');
+      this.ContextItemCapabilities = CapabilitiesForLevel('View');
       void this.refineContextCapabilities(item.list.ID);
     }
-    this.showContextMenu = true;
+    this.ShowContextMenu = true;
+  }
+
+  /** @deprecated Use {@link OpenListMenu}. */
+  openListMenu(event: Event, item: BrowseListItem) {
+    return this.OpenListMenu(event, item);
   }
 
   /** Resolve the current user's permission level for a list and update
@@ -2764,8 +3267,8 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
       this.capabilityCache.set(listId, level);
       // Only mutate state if the user is still on this same menu — they
       // may have closed it before resolve finished.
-      if (this.showContextMenu && this.selectedContextItem && UUIDsEqual(this.selectedContextItem.list.ID, listId)) {
-        this.contextItemCapabilities = CapabilitiesForLevel(level);
+      if (this.ShowContextMenu && this.SelectedContextItem && UUIDsEqual(this.SelectedContextItem.list.ID, listId)) {
+        this.ContextItemCapabilities = CapabilitiesForLevel(level);
         this.cdr.detectChanges();
       }
     } catch {
@@ -2773,19 +3276,24 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     }
   }
 
-  closeContextMenu() {
-    this.showContextMenu = false;
-    this.selectedContextItem = null;
+  CloseContextMenu() {
+    this.ShowContextMenu = false;
+    this.SelectedContextItem = null;
   }
 
-  createNewList() {
-    this.editingList = null;
-    this.newListName = '';
-    this.newListDescription = '';
-    this.selectedEntityId = '';
-    this.entitySearchTerm = '';
-    this.selectedCategoryId = null;
-    this.showEntityDropdown = false;
+  /** @deprecated Use {@link CloseContextMenu}. */
+  closeContextMenu() {
+    return this.CloseContextMenu();
+  }
+
+  CreateNewList() {
+    this.EditingList = null;
+    this.NewListName = '';
+    this.NewListDescription = '';
+    this.SelectedEntityId = '';
+    this.EntitySearchTerm = '';
+    this.SelectedCategoryId = null;
+    this.ShowEntityDropdown = false;
     this.showCreateDialog = true;
     // Refresh categories so newly-created ones appear without a page
     // reload. Cheap RunView; runs in the background while the user is
@@ -2793,28 +3301,38 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     void this.refreshCategoriesForDialog();
   }
 
-  editList() {
-    if (!this.selectedContextItem) return;
+  /** @deprecated Use {@link CreateNewList}. */
+  createNewList() {
+    return this.CreateNewList();
+  }
 
-    const list = this.selectedContextItem.list;
-    this.editingList = list;
-    this.newListName = list.Name;
-    this.newListDescription = list.Description || '';
-    this.selectedEntityId = list.EntityID;
-    this.entitySearchTerm = list.Entity || '';
-    this.selectedCategoryId = list.CategoryID || null;
+  EditList() {
+    if (!this.SelectedContextItem) return;
+
+    const list = this.SelectedContextItem.list;
+    this.EditingList = list;
+    this.NewListName = list.Name;
+    this.NewListDescription = list.Description || '';
+    this.SelectedEntityId = list.EntityID;
+    this.EntitySearchTerm = list.Entity || '';
+    this.SelectedCategoryId = list.CategoryID || null;
     // Ensure no stale state from a previous Create attempt — the entity
     // dropdown portal renders at z-index 10002 and could otherwise sit on
     // top of the edit dialog and block interaction.
-    this.showEntityDropdown = false;
+    this.ShowEntityDropdown = false;
     // Close the context menu BEFORE opening the dialog. Doing it after
     // leaves a one-tick window where both the menu and the modal-overlay
     // are stacked, and the menu's outer click-overlay can swallow the
     // first click into the form fields below it.
-    this.closeContextMenu();
+    this.CloseContextMenu();
     this.showCreateDialog = true;
     this.cdr.detectChanges();
     void this.refreshCategoriesForDialog();
+  }
+
+  /** @deprecated Use {@link EditList}. */
+  editList() {
+    return this.EditList();
   }
 
   /** Re-pull MJ: List Categories so the dropdown reflects any
@@ -2834,10 +3352,10 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
         ResultType: 'simple',
       });
       if (!result.Success) return;
-      this.categories = (result.Results ?? []) as MJListCategoryEntity[];
+      this.Categories = (result.Results ?? []) as MJListCategoryEntity[];
       this.categoryMap.clear();
-      for (const cat of this.categories) this.categoryMap.set(cat.ID, cat);
-      this.flatCategories = this.buildFlatCategories(this.categories);
+      for (const cat of this.Categories) this.categoryMap.set(cat.ID, cat);
+      this.FlatCategories = this.buildFlatCategories(this.Categories);
       this.categoriesDirty = false;
       this.cdr.detectChanges();
     } catch {
@@ -2845,51 +3363,71 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     }
   }
 
-  selectEntity(entity: { ID: string; Name: string }) {
-    this.selectedEntityId = entity.ID;
-    this.entitySearchTerm = entity.Name;
-    this.showEntityDropdown = false;
+  SelectEntity(entity: { ID: string; Name: string }) {
+    this.SelectedEntityId = entity.ID;
+    this.EntitySearchTerm = entity.Name;
+    this.ShowEntityDropdown = false;
   }
 
-  filterEntities(term: string) {
+  /** @deprecated Use {@link SelectEntity}. */
+  selectEntity(entity: { ID: string; Name: string }) {
+    return this.SelectEntity(entity);
+  }
+
+  FilterEntities(term: string) {
     const lowerTerm = term.toLowerCase();
-    this.filteredEntitiesList = this.availableEntities.filter(e =>
+    this.FilteredEntitiesList = this.AvailableEntities.filter(e =>
       e.Name.toLowerCase().includes(lowerTerm)
     );
     // Ensure dropdown is visible while typing
-    if (!this.showEntityDropdown && term) {
-      this.showEntityDropdown = true;
+    if (!this.ShowEntityDropdown && term) {
+      this.ShowEntityDropdown = true;
     }
     // Clear selection when user modifies the search text
-    this.selectedEntityId = '';
+    this.SelectedEntityId = '';
   }
 
-  openEntityDropdown(inputElement: HTMLInputElement) {
+  /** @deprecated Use {@link FilterEntities}. */
+  filterEntities(term: string) {
+    return this.FilterEntities(term);
+  }
+
+  OpenEntityDropdown(inputElement: HTMLInputElement) {
     const rect = inputElement.getBoundingClientRect();
     const viewportHeight = window.innerHeight;
     const dropdownHeight = 200;
     const spaceBelow = viewportHeight - rect.bottom;
     const openAbove = spaceBelow < dropdownHeight && rect.top > dropdownHeight;
 
-    this.entityDropdownPosition = {
+    this.EntityDropdownPosition = {
       top: openAbove ? rect.top - dropdownHeight : rect.bottom,
       left: rect.left,
       width: rect.width,
       openAbove
     };
-    this.showEntityDropdown = true;
-    this.filteredEntitiesList = [...this.availableEntities];
+    this.ShowEntityDropdown = true;
+    this.FilteredEntitiesList = [...this.AvailableEntities];
   }
 
+  /** @deprecated Use {@link OpenEntityDropdown}. */
+  openEntityDropdown(inputElement: HTMLInputElement) {
+    return this.OpenEntityDropdown(inputElement);
+  }
+
+  CloseEntityDropdown() {
+    this.ShowEntityDropdown = false;
+  }
+
+  /** @deprecated Use {@link CloseEntityDropdown}. */
   closeEntityDropdown() {
-    this.showEntityDropdown = false;
+    return this.CloseEntityDropdown();
   }
 
-  async duplicateList() {
-    if (!this.selectedContextItem) return;
+  async DuplicateList() {
+    if (!this.SelectedContextItem) return;
 
-    const listToDuplicate = this.selectedContextItem.list;
-    this.closeContextMenu();
+    const listToDuplicate = this.SelectedContextItem.list;
+    this.CloseContextMenu();
 
     this.isLoading = true;
     this.cdr.detectChanges();
@@ -2971,24 +3509,39 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     }
   }
 
+  /** @deprecated Use {@link DuplicateList}. */
+  async duplicateList() {
+    return this.DuplicateList();
+  }
+
+  ConfirmDeleteList() {
+    if (!this.SelectedContextItem) return;
+    this.ListToDelete = this.SelectedContextItem.list;
+    this.DeleteListName = this.SelectedContextItem.list.Name;
+    this.ShowDeleteConfirm = true;
+    this.CloseContextMenu();
+  }
+
+  /** @deprecated Use {@link ConfirmDeleteList}. */
   confirmDeleteList() {
-    if (!this.selectedContextItem) return;
-    this.listToDelete = this.selectedContextItem.list;
-    this.deleteListName = this.selectedContextItem.list.Name;
-    this.showDeleteConfirm = true;
-    this.closeContextMenu();
+    return this.ConfirmDeleteList();
   }
 
+  CancelDelete() {
+    this.ShowDeleteConfirm = false;
+    this.ListToDelete = null;
+    this.DeleteListName = '';
+  }
+
+  /** @deprecated Use {@link CancelDelete}. */
   cancelDelete() {
-    this.showDeleteConfirm = false;
-    this.listToDelete = null;
-    this.deleteListName = '';
+    return this.CancelDelete();
   }
 
-  async deleteList() {
-    if (!this.listToDelete) return;
+  async DeleteList() {
+    if (!this.ListToDelete) return;
 
-    const listToDelete = this.listToDelete;
+    const listToDelete = this.ListToDelete;
     const listName = listToDelete.Name;
 
     // Defense-in-depth: re-check the ownership rule before deleting so a stale/forced menu can't
@@ -3002,7 +3555,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
       return;
     }
 
-    this.isDeleting = true;
+    this.IsDeleting = true;
     this.cdr.detectChanges();
 
     try {
@@ -3031,7 +3584,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
         // again (which hangs because the in-memory entity still has the
         // now-deleted record's ID).
         const deletedId = listToDelete.ID;
-        this.allLists = this.allLists.filter(item => !UUIDsEqual(item.list.ID, deletedId));
+        this.AllLists = this.AllLists.filter(item => !UUIDsEqual(item.list.ID, deletedId));
         this.applyFilters();
         this.buildCategoryTree();
         this.cdr.detectChanges();
@@ -3040,7 +3593,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
         console.error('Failed to delete list:', listToDelete.LatestResult);
         this.notificationService.CreateSimpleNotification(`Failed to delete list: ${errorMessage}`, 'error', 6000);
       }
-      this.cancelDelete();
+      this.CancelDelete();
       // Authoritative refresh — loadData() now sets BypassCache: true on
       // the 'MJ: Lists' RunView, so this no longer races the optimistic
       // local removal against a stale cache.
@@ -3050,9 +3603,14 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.notificationService.CreateSimpleNotification(`Error deleting list: ${errorMessage}`, 'error', 6000);
     } finally {
-      this.isDeleting = false;
+      this.IsDeleting = false;
       this.cdr.detectChanges();
     }
+  }
+
+  /** @deprecated Use {@link DeleteList}. */
+  async deleteList() {
+    return this.DeleteList();
   }
 
   /** Delete every MJ: List Details row for a given list in a single
@@ -3085,34 +3643,39 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     return ok;
   }
 
-  closeCreateDialog() {
+  CloseCreateDialog() {
     this.showCreateDialog = false;
-    this.editingList = null;
-    this.showEntityDropdown = false;
+    this.EditingList = null;
+    this.ShowEntityDropdown = false;
   }
 
-  async saveList() {
-    this.isSaving = true;
+  /** @deprecated Use {@link CloseCreateDialog}. */
+  closeCreateDialog() {
+    return this.CloseCreateDialog();
+  }
+
+  async SaveList() {
+    this.IsSaving = true;
     this.cdr.detectChanges();
 
-    const isEditing = !!this.editingList;
-    const listName = this.newListName;
+    const isEditing = !!this.EditingList;
+    const listName = this.NewListName;
 
     try {
       const md = this.ProviderToUse;
       let list: MJListEntity;
 
-      if (this.editingList) {
-        list = this.editingList;
+      if (this.EditingList) {
+        list = this.EditingList;
       } else {
         list = await md.GetEntityObject<MJListEntity>('MJ: Lists', md.CurrentUser);
         list.UserID = md.CurrentUser!.ID;
-        list.EntityID = this.selectedEntityId;
+        list.EntityID = this.SelectedEntityId;
       }
 
-      list.Name = this.newListName;
-      list.Description = this.newListDescription || null;
-      list.CategoryID = this.selectedCategoryId || null;
+      list.Name = this.NewListName;
+      list.Description = this.NewListDescription || null;
+      list.CategoryID = this.SelectedCategoryId || null;
 
       const saved = await list.Save();
       if (saved) {
@@ -3121,7 +3684,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
           'success',
           3000
         );
-        this.closeCreateDialog();
+        this.CloseCreateDialog();
         await this.loadData();
       } else {
         const errorMessage = list.LatestResult?.Message || 'Unknown error occurred';
@@ -3138,74 +3701,114 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.notificationService.CreateSimpleNotification(`Error saving list: ${errorMessage}`, 'error', 6000);
     } finally {
-      this.isSaving = false;
+      this.IsSaving = false;
       this.cdr.detectChanges();
     }
   }
 
-  // Sharing methods
-  openShareDialog() {
-    if (!this.selectedContextItem) return;
+  /** @deprecated Use {@link SaveList}. */
+  async saveList() {
+    return this.SaveList();
+  }
 
-    const item = this.selectedContextItem;
-    this.shareDialogConfig = {
+  // Sharing methods
+  OpenShareDialog() {
+    if (!this.SelectedContextItem) return;
+
+    const item = this.SelectedContextItem;
+    this.ShareDialogConfig = {
       listId: item.list.ID,
       listName: item.list.Name,
       currentUserId: this.currentUserId,
       isOwner: item.isOwner
     };
-    this.showShareDialog = true;
-    this.closeContextMenu();
+    this.ShowShareDialog = true;
+    this.CloseContextMenu();
   }
 
-  onShareComplete(_result: ListShareDialogResult) {
-    this.showShareDialog = false;
-    this.shareDialogConfig = null;
+  /** @deprecated Use {@link OpenShareDialog}. */
+  openShareDialog() {
+    return this.OpenShareDialog();
+  }
+
+  OnShareComplete(_result: ListShareDialogResult) {
+    this.ShowShareDialog = false;
+    this.ShareDialogConfig = null;
     // Reload sharing info for all lists
     this.loadSharingInfo();
     this.cdr.detectChanges();
   }
 
+  /** @deprecated Use {@link OnShareComplete}. */
+  onShareComplete(_result: ListShareDialogResult) {
+    return this.OnShareComplete(_result);
+  }
+
+  OnShareCancel() {
+    this.ShowShareDialog = false;
+    this.ShareDialogConfig = null;
+  }
+
+  /** @deprecated Use {@link OnShareCancel}. */
   onShareCancel() {
-    this.showShareDialog = false;
-    this.shareDialogConfig = null;
+    return this.OnShareCancel();
   }
 
   /** "Manage Invitations" clicked inside the share dialog — opens a
    *  modal hosting `<mj-list-invitations>` for the same list. The
    *  share dialog is closed so dialogs don't visually stack. */
-  onManageInvitations() {
-    if (!this.shareDialogConfig) return;
-    this.activeShareListId = this.shareDialogConfig.listId;
-    this.activeShareListName = this.shareDialogConfig.listName;
-    this.showShareDialog = false;
-    this.showInvitationsDialog = true;
+  OnManageInvitations() {
+    if (!this.ShareDialogConfig) return;
+    this.ActiveShareListId = this.ShareDialogConfig.listId;
+    this.ActiveShareListName = this.ShareDialogConfig.listName;
+    this.ShowShareDialog = false;
+    this.ShowInvitationsDialog = true;
     this.cdr.detectChanges();
   }
 
-  closeInvitationsDialog() {
-    this.showInvitationsDialog = false;
+  /** @deprecated Use {@link OnManageInvitations}. */
+  onManageInvitations() {
+    return this.OnManageInvitations();
+  }
+
+  CloseInvitationsDialog() {
+    this.ShowInvitationsDialog = false;
     this.cdr.detectChanges();
+  }
+
+  /** @deprecated Use {@link CloseInvitationsDialog}. */
+  closeInvitationsDialog() {
+    return this.CloseInvitationsDialog();
   }
 
   /** "View audit log" link in share dialog. */
-  onViewAuditLog() {
-    if (!this.shareDialogConfig) return;
-    this.activeShareListId = this.shareDialogConfig.listId;
-    this.activeShareListName = this.shareDialogConfig.listName;
-    this.showShareDialog = false;
-    this.showAuditLogDialog = true;
+  OnViewAuditLog() {
+    if (!this.ShareDialogConfig) return;
+    this.ActiveShareListId = this.ShareDialogConfig.listId;
+    this.ActiveShareListName = this.ShareDialogConfig.listName;
+    this.ShowShareDialog = false;
+    this.ShowAuditLogDialog = true;
     this.cdr.detectChanges();
   }
 
-  closeAuditLogDialog() {
-    this.showAuditLogDialog = false;
+  /** @deprecated Use {@link OnViewAuditLog}. */
+  onViewAuditLog() {
+    return this.OnViewAuditLog();
+  }
+
+  CloseAuditLogDialog() {
+    this.ShowAuditLogDialog = false;
     this.cdr.detectChanges();
+  }
+
+  /** @deprecated Use {@link CloseAuditLogDialog}. */
+  closeAuditLogDialog() {
+    return this.CloseAuditLogDialog();
   }
 
   private async loadSharingInfo() {
     // Load sharing summaries for all lists that the user owns
-    const ownedLists = this.allLists.filter(item => item.isOwner);
+    const ownedLists = this.AllLists.filter(item => item.isOwner);
 
     for (const item of ownedLists) {
       try {

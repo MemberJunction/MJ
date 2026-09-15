@@ -16,7 +16,16 @@ export abstract class TemplateExtensionBase {
     /**
      * One or more tags that represent case-sensitive tag names that will invoke this extension.
      */
-    public tags: string[] = [];
+    public Tags: string[] = [];
+
+    /** @deprecated Use {@link Tags}. */
+    public get tags(): string[] {
+        return this.Tags;
+    }
+    /** @deprecated Use {@link Tags}. */
+    public set tags(value: string[]) {
+        this.Tags = value;
+    }
 
     public get ContextUser(): UserInfo {
         return this._contextUser;

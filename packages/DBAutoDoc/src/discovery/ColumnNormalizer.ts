@@ -27,10 +27,10 @@
  */
 
 import { BaseLLM, ChatParams, ChatResult } from '@memberjunction/ai';
-import { createLLMInstance } from '../utils/llm-factory.js';
+import { CreateLLMInstance } from '../utils/llm-factory.js';
 import { AIConfig } from '../types/config.js';
 import { OrganicKeyNormalizationStrategy } from '../types/organic-keys.js';
-import { cleanAndParseJSON } from '../utils/json.js';
+import { CleanAndParseJSON } from '../utils/json.js';
 
 /** One column's input to the normalizer. */
 export interface NormalizerInputColumn {
@@ -92,11 +92,11 @@ export class TableNormalizer {
     private readonly llm: BaseLLM;
 
     constructor(private readonly aiConfig: AIConfig) {
-        this.llm = createLLMInstance(aiConfig.provider, aiConfig.apiKey);
+        this.llm = CreateLLMInstance(aiConfig.provider, aiConfig.apiKey);
     }
 
     /** Normalize one table — one LLM call returning per-column entries. */
-    public async normalizeTable(
+    public async NormalizeTable(
         input: TableNormalizationInput,
         maxRetries = 2,
     ): Promise<{
@@ -145,7 +145,7 @@ export class TableNormalizer {
 
             let parsed: LLMTableResponse | null = null;
             try {
-                parsed = cleanAndParseJSON<LLMTableResponse>(content);
+                parsed = CleanAndParseJSON<LLMTableResponse>(content);
             } catch (err) {
                 lastError = `JSON parse threw: ${(err as Error).message}. Content prefix: ${content.slice(0, 200)}`;
                 if (attempt < maxRetries) continue;
@@ -180,8 +180,20 @@ export class TableNormalizer {
         return { normalized: [], tokens: cumTokens, errorMessage: lastError || 'unknown failure after retries' };
     }
 
+    /** @deprecated Use {@link NormalizeTable}. */
+    public async normalizeTable(
+        input: TableNormalizationInput,
+        maxRetries = 2,
+    ): Promise<{
+        normalized: NormalizedColumn[];
+        tokens: { total: number; input: number; output: number };
+        errorMessage?: string;
+    }> {
+      return this.NormalizeTable(input, maxRetries);
+    }
+
     /** Batch normalize many tables with bounded concurrency. */
-    public async normalizeAll(
+    public async NormalizeAll(
         tables: TableNormalizationInput[],
         opts: NormalizerOptions = {},
     ): Promise<NormalizationBatchResult> {
@@ -201,7 +213,7 @@ export class TableNormalizer {
             while (true) {
                 const idx = cursor++;
                 if (idx >= tables.length) return;
-                const r = await this.normalizeTable(tables[idx], maxRetries);
+                const r = await this.NormalizeTable(tables[idx], maxRetries);
                 total += r.tokens.total;
                 input += r.tokens.input;
                 output += r.tokens.output;
@@ -220,6 +232,14 @@ export class TableNormalizer {
         });
         await Promise.all(runners);
         return { normalized: allNormalized, rejected, errors, tokens: { total, input, output } };
+    }
+
+    /** @deprecated Use {@link NormalizeAll}. */
+    public async normalizeAll(
+        tables: TableNormalizationInput[],
+        opts: NormalizerOptions = {},
+    ): Promise<NormalizationBatchResult> {
+      return this.NormalizeAll(tables, opts);
     }
 }
 

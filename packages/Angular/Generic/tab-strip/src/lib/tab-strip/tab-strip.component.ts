@@ -181,7 +181,7 @@ export class MJTabStripComponent implements AfterContentInit, AfterContentChecke
     this._viewInitialized = true;
     // Dev-mode guard: the .mj-tabs* chrome lives in a global stylesheet a standalone host must
     // import; a missing import renders bare divs with no error. Warn instead of staying silent.
-    warnIfTabChromeMissing(this.tabInnerContainer?.nativeElement?.closest('.mj-tabs') ?? undefined);
+    warnIfTabChromeMissing(this.TabInnerContainer?.nativeElement?.closest('.mj-tabs') ?? undefined);
     this.SelectedTabIndex = this.SelectedTabIndex; // force a refresh of the tab visibility
     this.syncTabIndexes();
     this.checkTabScrollButtons();
@@ -305,16 +305,48 @@ export class MJTabStripComponent implements AfterContentInit, AfterContentChecke
   }
 
 
-  public handleTabContextMenu($event: MouseEvent, tab: MJTabComponent) {
+  public HandleTabContextMenu($event: MouseEvent, tab: MJTabComponent) {
     this.TabContextMenu.emit({ index: tab.index, tab: tab, body: this.tabBodies.toArray()[tab.index], mouseEvent: $event });
+  }
+
+  /** @deprecated Use {@link HandleTabContextMenu}. */
+  public handleTabContextMenu($event: MouseEvent, tab: MJTabComponent) {
+    return this.HandleTabContextMenu($event, tab);
   }
 
 
   /* INTERNAL IMPLEMENTATION */
-  @ViewChild('tabInnerContainer') tabInnerContainer!: ElementRef;
+  @ViewChild('tabInnerContainer') TabInnerContainer!: ElementRef;
 
-  showLeftButton: boolean = false;
-  showRightButton: boolean = false;
+  /** @deprecated Use {@link TabInnerContainer}. */
+  get tabInnerContainer(): ElementRef {
+    return this.TabInnerContainer;
+  }
+  /** @deprecated Use {@link TabInnerContainer}. */
+  set tabInnerContainer(value: ElementRef) {
+    this.TabInnerContainer = value;
+  }
+
+  ShowLeftButton: boolean = false;
+
+  /** @deprecated Use {@link ShowLeftButton}. */
+  get showLeftButton(): boolean {
+    return this.ShowLeftButton;
+  }
+  /** @deprecated Use {@link ShowLeftButton}. */
+  set showLeftButton(value: boolean) {
+    this.ShowLeftButton = value;
+  }
+  ShowRightButton: boolean = false;
+
+  /** @deprecated Use {@link ShowRightButton}. */
+  get showRightButton(): boolean {
+    return this.ShowRightButton;
+  }
+  /** @deprecated Use {@link ShowRightButton}. */
+  set showRightButton(value: boolean) {
+    this.ShowRightButton = value;
+  }
 
   @HostListener('window:resize', ['$event'])
   onResize(event: any) {
@@ -322,21 +354,21 @@ export class MJTabStripComponent implements AfterContentInit, AfterContentChecke
   }
 
   protected checkTabScrollButtons() {
-    if (this.tabInnerContainer && this.tabInnerContainer.nativeElement) {
+    if (this.TabInnerContainer && this.TabInnerContainer.nativeElement) {
       // The list itself is the scroller now (`.mj-tabs__list` is `overflow-x: auto`), so overflow
       // and position are read off its NATIVE scroll state — the old scheme of animating a `left`
       // offset against a relatively-positioned wrapper is gone with the wrapper's CSS.
-      const container: HTMLElement = this.tabInnerContainer.nativeElement;
+      const container: HTMLElement = this.TabInnerContainer.nativeElement;
       const overflow = container.scrollWidth - container.clientWidth;
-      this.showLeftButton = overflow > 0 && container.scrollLeft > 0;
-      this.showRightButton = overflow > 0 && container.scrollLeft < overflow - 1;
+      this.ShowLeftButton = overflow > 0 && container.scrollLeft > 0;
+      this.ShowRightButton = overflow > 0 && container.scrollLeft < overflow - 1;
     }
   }
 
   protected scrollTabHeader(scrollAmount: number) {
     // Positive amount = reveal content to the LEFT (the old `left`-offset convention, preserved so
     // ScrollAmount and the button wiring keep their meaning); native scrollLeft counts the other way.
-    const container: HTMLElement = this.tabInnerContainer.nativeElement;
+    const container: HTMLElement = this.TabInnerContainer.nativeElement;
     container.scrollBy({ left: -scrollAmount, behavior: 'smooth' });
     // Smooth scrolling settles asynchronously; re-evaluate the buttons when it has.
     setTimeout(() => this.checkTabScrollButtons(), 300);
@@ -347,11 +379,21 @@ export class MJTabStripComponent implements AfterContentInit, AfterContentChecke
    * This property determines how many pixels to scroll when the scrollLeft or scrollRight methods are called.
    */
   @Input() ScrollAmount: number = 150;
-  public scrollLeft() {
+  public ScrollLeft() {
     this.scrollTabHeader(150)
   }
-  public scrollRight() {
+
+  /** @deprecated Use {@link ScrollLeft}. */
+  public scrollLeft() {
+    return this.ScrollLeft();
+  }
+  public ScrollRight() {
     this.scrollTabHeader(-150)
+  }
+
+  /** @deprecated Use {@link ScrollRight}. */
+  public scrollRight() {
+    return this.ScrollRight();
   }
 
   /**
@@ -362,11 +404,16 @@ export class MJTabStripComponent implements AfterContentInit, AfterContentChecke
    * view — arrowing to a tab hidden behind the overflow edge would otherwise move focus somewhere
    * the user cannot see.
    */
-  public onTabActivateRequested(request: { Index: number }): void {
+  public OnTabActivateRequested(request: { Index: number }): void {
     if (request.Index >= 0 && request.Index < this.tabs.length) {
       this.SelectedTabIndex = request.Index;
-      this.scrollIntoView(request.Index);
+      this.ScrollIntoView(request.Index);
     }
+  }
+
+  /** @deprecated Use {@link OnTabActivateRequested}. */
+  public onTabActivateRequested(request: { Index: number }): void {
+    return this.OnTabActivateRequested(request);
   }
 
   /**
@@ -374,11 +421,16 @@ export class MJTabStripComponent implements AfterContentInit, AfterContentChecke
    * close button uses, so the cancelable `BeforeTabClosed` contract holds for keyboard users too.
    * Ignored for tabs that are not closeable.
    */
-  public onTabCloseRequested(request: { Index: number }): void {
+  public OnTabCloseRequested(request: { Index: number }): void {
     const tab = this.tabs?.toArray()[request.Index];
     if (tab?.TabCloseable) {
       void this.CloseTab(request.Index);
     }
+  }
+
+  /** @deprecated Use {@link OnTabCloseRequested}. */
+  public onTabCloseRequested(request: { Index: number }): void {
+    return this.OnTabCloseRequested(request);
   }
 
 
@@ -386,7 +438,7 @@ export class MJTabStripComponent implements AfterContentInit, AfterContentChecke
    * This method will scroll the specified tab index into view if it is not currently visible in the tab strip.
    * @param tabIndex 
    */
-  public scrollIntoView(tabIndex: number) {
+  public ScrollIntoView(tabIndex: number) {
     // We do NOT change tab selection — the caller does that separately if they want to. The list
     // is a native horizontal scroller now, so the browser's own logic does the geometry.
     if (tabIndex >= 0 && tabIndex < this.tabs.length) {
@@ -394,5 +446,10 @@ export class MJTabStripComponent implements AfterContentInit, AfterContentChecke
       tabElement?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
       setTimeout(() => this.checkTabScrollButtons(), 300);
     }
+  }
+
+  /** @deprecated Use {@link ScrollIntoView}. */
+  public scrollIntoView(tabIndex: number) {
+    return this.ScrollIntoView(tabIndex);
   }
 }

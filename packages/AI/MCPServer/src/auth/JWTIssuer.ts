@@ -60,7 +60,7 @@ export interface SignJWTResult {
  * });
  * ```
  */
-export function createJWTIssuer(config: JWTIssuerConfig) {
+export function CreateJWTIssuer(config: JWTIssuerConfig) {
   const { signingSecret, expiresIn, issuer, audience } = config;
 
   /**
@@ -140,6 +140,11 @@ export function createJWTIssuer(config: JWTIssuerConfig) {
   };
 }
 
+/** @deprecated Use {@link CreateJWTIssuer}. */
+export function createJWTIssuer(config: JWTIssuerConfig) {
+  return CreateJWTIssuer(config);
+}
+
 /**
  * Parses an expiration string (e.g., '1h', '30m', '1d') to seconds.
  */
@@ -174,7 +179,7 @@ function parseExpiresIn(expiresIn: string): number {
  * @param secret - The secret to validate
  * @returns Object with valid flag and error message if invalid
  */
-export function validateSigningSecret(secret: string): {
+export function ValidateSigningSecret(secret: string): {
   valid: boolean;
   error?: string;
 } {
@@ -212,4 +217,12 @@ export function validateSigningSecret(secret: string): {
   return { valid: true };
 }
 
-export type JWTIssuer = ReturnType<typeof createJWTIssuer>;
+/** @deprecated Use {@link ValidateSigningSecret}. */
+export function validateSigningSecret(secret: string): {
+  valid: boolean;
+  error?: string;
+} {
+  return ValidateSigningSecret(secret);
+}
+
+export type JWTIssuer = ReturnType<typeof CreateJWTIssuer>;

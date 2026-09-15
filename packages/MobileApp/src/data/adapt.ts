@@ -57,7 +57,7 @@ function relativeTimeLabel(when: Date, now: Date = new Date()): string {
  * @param item The loaded conversation list item from the conversations service.
  * @returns The UI-shaped conversation summary for the list.
  */
-export function adaptConversationToSummary(item: ConversationListItem): ConversationSummary {
+export function AdaptConversationToSummary(item: ConversationListItem): ConversationSummary {
     const conv = item.entity;
     const agents: ConversationParticipantAgent[] = item.agentIds.length === 0
         ? [{ id: 'unknown', name: 'Skip', color: Colors.agentFallback, initial: 'A' }]
@@ -82,6 +82,11 @@ export function adaptConversationToSummary(item: ConversationListItem): Conversa
     };
 }
 
+/** @deprecated Use {@link AdaptConversationToSummary}. */
+export function adaptConversationToSummary(item: ConversationListItem): ConversationSummary {
+    return AdaptConversationToSummary(item);
+}
+
 /**
  * Group conversations into Pinned / Today / Yesterday / Earlier buckets,
  * matching the visual structure of the mockup.
@@ -101,7 +106,7 @@ export type GroupedConversations = {
  * @param items The loaded conversation list items.
  * @returns The four grouped, UI-shaped summary buckets.
  */
-export function groupConversations(items: ConversationListItem[]): GroupedConversations {
+export function GroupConversations(items: ConversationListItem[]): GroupedConversations {
     const out: GroupedConversations = { pinned: [], today: [], yesterday: [], earlier: [] };
     const now = new Date();
     const todayStr = now.toDateString();
@@ -110,7 +115,7 @@ export function groupConversations(items: ConversationListItem[]): GroupedConver
     const yesterdayStr = yesterday.toDateString();
 
     for (const item of items) {
-        const summary = adaptConversationToSummary(item);
+        const summary = AdaptConversationToSummary(item);
         if (summary.pinned) {
             out.pinned.push(summary);
             continue;
@@ -121,6 +126,11 @@ export function groupConversations(items: ConversationListItem[]): GroupedConver
         else out.earlier.push(summary);
     }
     return out;
+}
+
+/** @deprecated Use {@link GroupConversations}. */
+export function groupConversations(items: ConversationListItem[]): GroupedConversations {
+    return GroupConversations(items);
 }
 
 /** UI reference to an agent (id + name + derived avatar color/initial). */
@@ -140,7 +150,7 @@ export type AdaptedAgentRef = {
  * @param name Agent display name; null/undefined becomes `'Agent'`.
  * @returns The UI-ready agent reference.
  */
-export function adaptAgentRef(id: string | null | undefined, name: string | null | undefined): AdaptedAgentRef {
+export function AdaptAgentRef(id: string | null | undefined, name: string | null | undefined): AdaptedAgentRef {
     const safeName = name ?? 'Agent';
     return {
         id: id ?? 'unknown',
@@ -148,6 +158,11 @@ export function adaptAgentRef(id: string | null | undefined, name: string | null
         color: colorForAgent(safeName),
         initial: initialsOf(safeName),
     };
+}
+
+/** @deprecated Use {@link AdaptAgentRef}. */
+export function adaptAgentRef(id: string | null | undefined, name: string | null | undefined): AdaptedAgentRef {
+    return AdaptAgentRef(id, name);
 }
 
 /**
@@ -178,7 +193,7 @@ export type AdaptedMessage =
  * @param msg The service-layer conversation message.
  * @returns The UI-shaped message union member.
  */
-export function adaptMessage(msg: ConversationMessage): AdaptedMessage {
+export function AdaptMessage(msg: ConversationMessage): AdaptedMessage {
     const d = msg.detail;
     const createdAt = (d as unknown as { __mj_CreatedAt?: Date | string }).__mj_CreatedAt;
     const date = createdAt ? new Date(createdAt) : new Date();
@@ -205,13 +220,18 @@ export function adaptMessage(msg: ConversationMessage): AdaptedMessage {
     return {
         kind: 'agent',
         id: d.ID,
-        agent: adaptAgentRef(d.AgentID, msg.agentName),
+        agent: AdaptAgentRef(d.AgentID, msg.agentName),
         body: d.Message ?? (d.Error ?? ''),
         createdAt: date,
         status: d.Status ?? 'Complete',
         suggestedResponses,
         completionMs: d.CompletionTime ?? null,
     };
+}
+
+/** @deprecated Use {@link AdaptMessage}. */
+export function adaptMessage(msg: ConversationMessage): AdaptedMessage {
+    return AdaptMessage(msg);
 }
 
 /**
@@ -224,11 +244,11 @@ export function adaptMessage(msg: ConversationMessage): AdaptedMessage {
  * @returns A UI-shaped object with `id`, `title`, `participants`, `messageCount`,
  *          `live`, `messages`, and `artifacts`.
  */
-export function adaptConversation(load: ConversationDetailLoad) {
+export function AdaptConversation(load: ConversationDetailLoad) {
     const participants = new Map<string, AdaptedAgentRef>();
     for (const msg of load.messages) {
         if (msg.detail.AgentID) {
-            const ref = adaptAgentRef(msg.detail.AgentID, msg.agentName);
+            const ref = AdaptAgentRef(msg.detail.AgentID, msg.agentName);
             if (!participants.has(ref.id)) participants.set(ref.id, ref);
         }
     }
@@ -238,7 +258,12 @@ export function adaptConversation(load: ConversationDetailLoad) {
         participants: Array.from(participants.values()),
         messageCount: load.messages.length,
         live: load.messages.some((m) => m.detail.Status === 'In-Progress'),
-        messages: load.messages.map(adaptMessage),
+        messages: load.messages.map(AdaptMessage),
         artifacts: load.artifacts,
     };
+}
+
+/** @deprecated Use {@link AdaptConversation}. */
+export function adaptConversation(load: ConversationDetailLoad) {
+    return AdaptConversation(load);
 }

@@ -249,20 +249,20 @@ export interface RealtimeSessionResult {
  */
 export class RealtimeSessionRunner {
     /** Default upper bound (ms) on the teardown transcript drain — see `TranscriptFlushTimeoutMs`. */
-    private static readonly DefaultTranscriptFlushTimeoutMs = 5000;
+    private static readonly defaultTranscriptFlushTimeoutMs = 5000;
 
     // ── Delegated-run progress narration (server-bridged B3) ──────────────────
     /** First spoken update fires no earlier than this long after a delegation burst starts. */
-    private static readonly FirstNarrationDelayMs = 5000;
+    private static readonly firstNarrationDelayMs = 5000;
     /** Minimum gap between SUBSEQUENT spoken updates (floods aggregate into one digest). */
     private static readonly NarrationIntervalMs = 8000;
     /** Max progress messages aggregated into one spoken digest. */
-    private static readonly MaxDigestMessages = 4;
+    private static readonly maxDigestMessages = 4;
     /**
      * Progress steps worth narrating — mirrors the client-direct resolver's filter so both
      * topologies narrate the same signal and drop the same initialization/finalization noise.
      */
-    private static readonly SignificantProgressSteps = [
+    private static readonly significantProgressSteps = [
         'prompt_execution', 'action_execution', 'subagent_execution', 'decision_processing'
     ];
 
@@ -593,7 +593,7 @@ export class RealtimeSessionRunner {
         if (!flush) {
             return;
         }
-        const timeoutMs = this.deps.TranscriptFlushTimeoutMs ?? RealtimeSessionRunner.DefaultTranscriptFlushTimeoutMs;
+        const timeoutMs = this.deps.TranscriptFlushTimeoutMs ?? RealtimeSessionRunner.defaultTranscriptFlushTimeoutMs;
         let timer: ReturnType<typeof setTimeout> | null = null;
         try {
             await Promise.race([
@@ -845,7 +845,7 @@ export class RealtimeSessionRunner {
      *    `RequestSpokenUpdate` contract, so the runner does not gate on busy state.
      */
     private handleDelegationProgress(progress: { step: string; message: string }): void {
-        if (!RealtimeSessionRunner.SignificantProgressSteps.includes(progress.step)) {
+        if (!RealtimeSessionRunner.significantProgressSteps.includes(progress.step)) {
             return;
         }
         const session = this.session;
@@ -868,7 +868,7 @@ export class RealtimeSessionRunner {
             return;
         }
         this.pendingNarrationMessages.push(message);
-        if (this.pendingNarrationMessages.length > RealtimeSessionRunner.MaxDigestMessages) {
+        if (this.pendingNarrationMessages.length > RealtimeSessionRunner.maxDigestMessages) {
             this.pendingNarrationMessages.shift();
         }
     }
@@ -881,7 +881,7 @@ export class RealtimeSessionRunner {
     private nextNarrationDelayMs(): number {
         const now = Date.now();
         const firstAnchor = this.narrationCount === 0
-            ? this.narrationBurstStartedAt + RealtimeSessionRunner.FirstNarrationDelayMs
+            ? this.narrationBurstStartedAt + RealtimeSessionRunner.firstNarrationDelayMs
             : 0;
         const spacingFloor = this.lastNarrationAt > 0
             ? this.lastNarrationAt + this.narrationIntervalMs()

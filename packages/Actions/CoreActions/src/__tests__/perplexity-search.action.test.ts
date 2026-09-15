@@ -39,7 +39,8 @@ vi.mock('@memberjunction/network-utils', () => ({
 const getApiIntegrationsConfigMock = vi.fn();
 
 vi.mock('../config', () => ({
-    getApiIntegrationsConfig: () => getApiIntegrationsConfigMock(),
+    GetApiIntegrationsConfig: () => getApiIntegrationsConfigMock(),
+    get getApiIntegrationsConfig() { return this.GetApiIntegrationsConfig; },
 }));
 
 import { PerplexitySearchAction } from '../custom/web/perplexity-search.action';

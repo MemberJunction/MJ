@@ -12,31 +12,73 @@ import { ComponentDataRequirements, ComponentEntityDataRequirement, ComponentQue
   styleUrls: ['./data-requirements-viewer.component.css']
 })
 export class DataRequirementsViewerComponent {
-  @Input() dataRequirements: ComponentDataRequirements | null = null;
+  @Input() DataRequirements: ComponentDataRequirements | null = null;
+
+  /** @deprecated Use {@link DataRequirements}. */
+  @Input() set dataRequirements(value: ComponentDataRequirements | null) {
+    this.DataRequirements = value;
+  }
+  /** @deprecated Use {@link DataRequirements}. */
+  get dataRequirements(): ComponentDataRequirements | null {
+    return this.DataRequirements;
+  }
 
   // Track expanded state for entities and queries
-  expandedEntities: Set<string> = new Set();
-  expandedQueries: Set<string> = new Set();
+  ExpandedEntities: Set<string> = new Set();
 
+  /** @deprecated Use {@link ExpandedEntities}. */
+  get expandedEntities(): Set<string> {
+    return this.ExpandedEntities;
+  }
+  /** @deprecated Use {@link ExpandedEntities}. */
+  set expandedEntities(value: Set<string>) {
+    this.ExpandedEntities = value;
+  }
+  ExpandedQueries: Set<string> = new Set();
+
+  /** @deprecated Use {@link ExpandedQueries}. */
+  get expandedQueries(): Set<string> {
+    return this.ExpandedQueries;
+  }
+  /** @deprecated Use {@link ExpandedQueries}. */
+  set expandedQueries(value: Set<string>) {
+    this.ExpandedQueries = value;
+  }
+
+  get HasData(): boolean {
+    return !!this.DataRequirements;
+  }
+
+  /** @deprecated Use {@link HasData}. */
   get hasData(): boolean {
-    return !!this.dataRequirements;
+    return this.HasData;
   }
 
+  get Mode(): string {
+    return this.DataRequirements?.mode || 'views';
+  }
+
+  /** @deprecated Use {@link Mode}. */
   get mode(): string {
-    return this.dataRequirements?.mode || 'views';
+    return this.Mode;
   }
 
-  get modeLabel(): string {
-    switch (this.mode) {
+  get ModeLabel(): string {
+    switch (this.Mode) {
       case 'views': return 'Entity Views';
       case 'queries': return 'Stored Queries';
       case 'hybrid': return 'Hybrid (Views + Queries)';
-      default: return this.mode;
+      default: return this.Mode;
     }
   }
 
-  get modeIcon(): string {
-    switch (this.mode) {
+  /** @deprecated Use {@link ModeLabel}. */
+  get modeLabel(): string {
+    return this.ModeLabel;
+  }
+
+  get ModeIcon(): string {
+    switch (this.Mode) {
       case 'views': return 'fa-table';
       case 'queries': return 'fa-database';
       case 'hybrid': return 'fa-layer-group';
@@ -44,58 +86,108 @@ export class DataRequirementsViewerComponent {
     }
   }
 
+  /** @deprecated Use {@link ModeIcon}. */
+  get modeIcon(): string {
+    return this.ModeIcon;
+  }
+
+  get Entities(): ComponentEntityDataRequirement[] {
+    return this.DataRequirements?.entities || [];
+  }
+
+  /** @deprecated Use {@link Entities}. */
   get entities(): ComponentEntityDataRequirement[] {
-    return this.dataRequirements?.entities || [];
+    return this.Entities;
   }
 
+  get Queries(): ComponentQueryDataRequirement[] {
+    return this.DataRequirements?.queries || [];
+  }
+
+  /** @deprecated Use {@link Queries}. */
   get queries(): ComponentQueryDataRequirement[] {
-    return this.dataRequirements?.queries || [];
+    return this.Queries;
   }
 
+  get Description(): string {
+    return this.DataRequirements?.description || '';
+  }
+
+  /** @deprecated Use {@link Description}. */
   get description(): string {
-    return this.dataRequirements?.description || '';
+    return this.Description;
   }
 
-  get totalFieldCount(): number {
+  get TotalFieldCount(): number {
     let count = 0;
-    for (const entity of this.entities) {
+    for (const entity of this.Entities) {
       count += entity.fieldMetadata?.length || 0;
     }
-    for (const query of this.queries) {
+    for (const query of this.Queries) {
       count += query.fields?.length || 0;
     }
     return count;
   }
 
+  /** @deprecated Use {@link TotalFieldCount}. */
+  get totalFieldCount(): number {
+    return this.TotalFieldCount;
+  }
+
+  ToggleEntity(entityName: string): void {
+    if (this.ExpandedEntities.has(entityName)) {
+      this.ExpandedEntities.delete(entityName);
+    } else {
+      this.ExpandedEntities.add(entityName);
+    }
+  }
+
+  /** @deprecated Use {@link ToggleEntity}. */
   toggleEntity(entityName: string): void {
-    if (this.expandedEntities.has(entityName)) {
-      this.expandedEntities.delete(entityName);
+    return this.ToggleEntity(entityName);
+  }
+
+  ToggleQuery(queryKey: string): void {
+    if (this.ExpandedQueries.has(queryKey)) {
+      this.ExpandedQueries.delete(queryKey);
     } else {
-      this.expandedEntities.add(entityName);
+      this.ExpandedQueries.add(queryKey);
     }
   }
 
+  /** @deprecated Use {@link ToggleQuery}. */
   toggleQuery(queryKey: string): void {
-    if (this.expandedQueries.has(queryKey)) {
-      this.expandedQueries.delete(queryKey);
-    } else {
-      this.expandedQueries.add(queryKey);
-    }
+    return this.ToggleQuery(queryKey);
   }
 
+  IsEntityExpanded(entityName: string): boolean {
+    return this.ExpandedEntities.has(entityName);
+  }
+
+  /** @deprecated Use {@link IsEntityExpanded}. */
   isEntityExpanded(entityName: string): boolean {
-    return this.expandedEntities.has(entityName);
+    return this.IsEntityExpanded(entityName);
   }
 
+  IsQueryExpanded(queryKey: string): boolean {
+    return this.ExpandedQueries.has(queryKey);
+  }
+
+  /** @deprecated Use {@link IsQueryExpanded}. */
   isQueryExpanded(queryKey: string): boolean {
-    return this.expandedQueries.has(queryKey);
+    return this.IsQueryExpanded(queryKey);
   }
 
-  getQueryKey(query: ComponentQueryDataRequirement): string {
+  GetQueryKey(query: ComponentQueryDataRequirement): string {
     return `${query.categoryPath}/${query.name}`;
   }
 
-  getPermissionIcon(permission: string): string {
+  /** @deprecated Use {@link GetQueryKey}. */
+  getQueryKey(query: ComponentQueryDataRequirement): string {
+    return this.GetQueryKey(query);
+  }
+
+  GetPermissionIcon(permission: string): string {
     switch (permission) {
       case 'read': return 'fa-eye';
       case 'create': return 'fa-plus';
@@ -105,7 +197,12 @@ export class DataRequirementsViewerComponent {
     }
   }
 
-  getPermissionColor(permission: string): string {
+  /** @deprecated Use {@link GetPermissionIcon}. */
+  getPermissionIcon(permission: string): string {
+    return this.GetPermissionIcon(permission);
+  }
+
+  GetPermissionColor(permission: string): string {
     switch (permission) {
       case 'read': return '#2196F3';
       case 'create': return '#4CAF50';
@@ -115,7 +212,12 @@ export class DataRequirementsViewerComponent {
     }
   }
 
-  getFieldTypeIcon(type: string): string {
+  /** @deprecated Use {@link GetPermissionColor}. */
+  getPermissionColor(permission: string): string {
+    return this.GetPermissionColor(permission);
+  }
+
+  GetFieldTypeIcon(type: string): string {
     const lowerType = (type || '').toLowerCase();
     if (lowerType.includes('int') || lowerType.includes('decimal') || lowerType.includes('float') || lowerType.includes('numeric') || lowerType.includes('money')) {
       return 'fa-hashtag';
@@ -138,7 +240,12 @@ export class DataRequirementsViewerComponent {
     return 'fa-circle';
   }
 
-  getFieldTypeColor(type: string): string {
+  /** @deprecated Use {@link GetFieldTypeIcon}. */
+  getFieldTypeIcon(type: string): string {
+    return this.GetFieldTypeIcon(type);
+  }
+
+  GetFieldTypeColor(type: string): string {
     const lowerType = (type || '').toLowerCase();
     if (lowerType.includes('int') || lowerType.includes('decimal') || lowerType.includes('float') || lowerType.includes('numeric') || lowerType.includes('money')) {
       return '#9C27B0';
@@ -158,11 +265,21 @@ export class DataRequirementsViewerComponent {
     return '#9E9E9E';
   }
 
-  formatFieldType(type: string): string {
+  /** @deprecated Use {@link GetFieldTypeColor}. */
+  getFieldTypeColor(type: string): string {
+    return this.GetFieldTypeColor(type);
+  }
+
+  FormatFieldType(type: string): string {
     return type || 'unknown';
   }
 
-  getFieldUsageTags(field: SimpleEntityFieldInfo, entity: ComponentEntityDataRequirement): string[] {
+  /** @deprecated Use {@link FormatFieldType}. */
+  formatFieldType(type: string): string {
+    return this.FormatFieldType(type);
+  }
+
+  GetFieldUsageTags(field: SimpleEntityFieldInfo, entity: ComponentEntityDataRequirement): string[] {
     const tags: string[] = [];
     if (field.isPrimaryKey) {
       tags.push('PK');
@@ -179,7 +296,12 @@ export class DataRequirementsViewerComponent {
     return tags;
   }
 
-  getTagColor(tag: string): string {
+  /** @deprecated Use {@link GetFieldUsageTags}. */
+  getFieldUsageTags(field: SimpleEntityFieldInfo, entity: ComponentEntityDataRequirement): string[] {
+    return this.GetFieldUsageTags(field, entity);
+  }
+
+  GetTagColor(tag: string): string {
     switch (tag) {
       case 'PK': return '#E91E63';
       case 'Display': return '#2196F3';
@@ -187,5 +309,10 @@ export class DataRequirementsViewerComponent {
       case 'Sort': return '#9C27B0';
       default: return '#9E9E9E';
     }
+  }
+
+  /** @deprecated Use {@link GetTagColor}. */
+  getTagColor(tag: string): string {
+    return this.GetTagColor(tag);
   }
 }

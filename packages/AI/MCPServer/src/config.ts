@@ -305,7 +305,7 @@ let _initialized = false;
  * The dynamic import ensures dotenv has already populated process.env
  * before @memberjunction/server reads environment variables.
  */
-export async function initConfig(): Promise<ConfigInfo> {
+export async function InitConfig(): Promise<ConfigInfo> {
   if (_initialized) {
     return configInfo;
   }
@@ -344,6 +344,11 @@ export async function initConfig(): Promise<ConfigInfo> {
 
   _initialized = true;
   return configInfo;
+}
+
+/** @deprecated Use {@link InitConfig}. */
+export async function initConfig(): Promise<ConfigInfo> {
+  return InitConfig();
 }
 
 /** Minimum required length for JWT signing secret (32 bytes = 256 bits) */

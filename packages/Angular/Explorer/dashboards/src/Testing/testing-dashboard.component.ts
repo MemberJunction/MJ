@@ -8,10 +8,10 @@ import { TestingDialogService, TestingExecutionService, ActiveRun } from '@membe
 import { TabConfig } from '@memberjunction/ng-ui-components';
 import { TestingInstrumentationService, TestingDashboardKPIs } from './services/testing-instrumentation.service';
 import {
-  buildTestingAgentContext,
-  isValidTestingTab,
-  isValidTestingStatusFilter,
-  isValidTestingTimeRange,
+  BuildTestingAgentContext,
+  IsValidTestingTab,
+  IsValidTestingStatusFilter,
+  IsValidTestingTimeRange,
   TESTING_TABS,
   TESTING_STATUS_FILTERS,
   TESTING_TIME_RANGES,
@@ -23,7 +23,7 @@ import {
   TestingAnalyticsSurfaceState,
   TestingReviewSurfaceState,
 } from './testing-agent-context';
-import { validateStringParam, AgentToolResult } from '../shared/agent-tool-validation';
+import { ValidateStringParam, AgentToolResult } from '../shared/agent-tool-validation';
 import { TestEngineBase } from '@memberjunction/testing-engine-base';
 
 /**
@@ -57,8 +57,26 @@ interface TestingDashboardState {
 export class TestingDashboardComponent extends BaseDashboard implements AfterViewInit, OnDestroy {
 
   public isLoading = false;
-  public activeTab = 'dashboard';
-  public selectedIndex = 0;
+  public ActiveTab = 'dashboard';
+
+  /** @deprecated Use {@link ActiveTab}. */
+  public get activeTab() {
+    return this.ActiveTab;
+  }
+  /** @deprecated Use {@link ActiveTab}. */
+  public set activeTab(value) {
+    this.ActiveTab = value;
+  }
+  public SelectedIndex = 0;
+
+  /** @deprecated Use {@link SelectedIndex}. */
+  public get selectedIndex() {
+    return this.SelectedIndex;
+  }
+  /** @deprecated Use {@link SelectedIndex}. */
+  public set selectedIndex(value) {
+    this.SelectedIndex = value;
+  }
 
   // Active test runs from execution service
   public ActiveRuns: ActiveRun[] = [];
@@ -73,23 +91,77 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
   private lastRegisteredToolMode: TestingTab | null = null;
 
   // Component states
-  public dashboardState: Record<string, unknown> | null = null;
-  public runsState: Record<string, unknown> | null = null;
-  public analyticsState: Record<string, unknown> | null = null;
-  public reviewState: Record<string, unknown> | null = null;
+  public DashboardState: Record<string, unknown> | null = null;
+
+  /** @deprecated Use {@link DashboardState}. */
+  public get dashboardState(): Record<string, unknown> | null {
+    return this.DashboardState;
+  }
+  /** @deprecated Use {@link DashboardState}. */
+  public set dashboardState(value: Record<string, unknown> | null) {
+    this.DashboardState = value;
+  }
+  public RunsState: Record<string, unknown> | null = null;
+
+  /** @deprecated Use {@link RunsState}. */
+  public get runsState(): Record<string, unknown> | null {
+    return this.RunsState;
+  }
+  /** @deprecated Use {@link RunsState}. */
+  public set runsState(value: Record<string, unknown> | null) {
+    this.RunsState = value;
+  }
+  public AnalyticsState: Record<string, unknown> | null = null;
+
+  /** @deprecated Use {@link AnalyticsState}. */
+  public get analyticsState(): Record<string, unknown> | null {
+    return this.AnalyticsState;
+  }
+  /** @deprecated Use {@link AnalyticsState}. */
+  public set analyticsState(value: Record<string, unknown> | null) {
+    this.AnalyticsState = value;
+  }
+  public ReviewState: Record<string, unknown> | null = null;
+
+  /** @deprecated Use {@link ReviewState}. */
+  public get reviewState(): Record<string, unknown> | null {
+    return this.ReviewState;
+  }
+  /** @deprecated Use {@link ReviewState}. */
+  public set reviewState(value: Record<string, unknown> | null) {
+    this.ReviewState = value;
+  }
 
   // Track visited tabs for lazy loading
   private visitedTabs = new Set<string>();
 
   // Navigation items
-  public navigationItems: string[] = ['dashboard', 'runs', 'analytics', 'review'];
+  public NavigationItems: string[] = ['dashboard', 'runs', 'analytics', 'review'];
 
-  public navigationConfig = [
+  /** @deprecated Use {@link NavigationItems}. */
+  public get navigationItems(): string[] {
+    return this.NavigationItems;
+  }
+  /** @deprecated Use {@link NavigationItems}. */
+  public set navigationItems(value: string[]) {
+    this.NavigationItems = value;
+  }
+
+  public NavigationConfig = [
     { text: 'Dashboard', icon: 'fa-solid fa-gauge-high', selected: false },
     { text: 'Runs', icon: 'fa-solid fa-play-circle', selected: false },
     { text: 'Analytics', icon: 'fa-solid fa-chart-bar', selected: false },
     { text: 'Review', icon: 'fa-solid fa-clipboard-check', selected: false }
   ];
+
+  /** @deprecated Use {@link NavigationConfig}. */
+  public get navigationConfig() {
+    return this.NavigationConfig;
+  }
+  /** @deprecated Use {@link NavigationConfig}. */
+  public set navigationConfig(value) {
+    this.NavigationConfig = value;
+  }
 
   public get Tabs(): TabConfig[] {
     return [
@@ -111,7 +183,7 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
 
   constructor(
     private cdr: ChangeDetectorRef,
-    public testingDialogService: TestingDialogService,
+    public TestingDialogService: TestingDialogService,
     private executionService: TestingExecutionService,
     private instrumentationService: TestingInstrumentationService
   ) {
@@ -120,12 +192,21 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
     this.updateNavigationSelection();
   }
 
+  /** @deprecated Use {@link TestingDialogService}. */
+  public get testingDialogService(): TestingDialogService {
+    return this.TestingDialogService;
+  }
+  /** @deprecated Use {@link TestingDialogService}. */
+  public set testingDialogService(value: TestingDialogService) {
+    this.TestingDialogService = value;
+  }
+
   async GetResourceDisplayName(data: ResourceData): Promise<string> {
     return 'Testing';
   }
 
   ngAfterViewInit(): void {
-    this.visitedTabs.add(this.activeTab);
+    this.visitedTabs.add(this.ActiveTab);
     this.updateNavigationSelection();
     this.emitStateChange();
 
@@ -149,10 +230,10 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
     this.emitAgentContext();
     this.syncAgentToolsForMode();
 
-    this.testingDialogService.PanelStateChanged$.pipe(
+    this.TestingDialogService.PanelStateChanged$.pipe(
       takeUntil(this.destroy$)
     ).subscribe((isOpen) => {
-      console.log('[TestingDashboard] PanelStateChanged$:', isOpen, 'IsPanelOpen:', this.testingDialogService.IsPanelOpen);
+      console.log('[TestingDashboard] PanelStateChanged$:', isOpen, 'IsPanelOpen:', this.TestingDialogService.IsPanelOpen);
       this.cdr.detectChanges();
     });
 
@@ -166,10 +247,10 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
     this.stateChangeSubject.complete();
   }
 
-  public onTabChange(tabId: string): void {
-    this.activeTab = tabId;
-    const index = this.navigationItems.indexOf(tabId);
-    this.selectedIndex = index >= 0 ? index : 0;
+  public OnTabChange(tabId: string): void {
+    this.ActiveTab = tabId;
+    const index = this.NavigationItems.indexOf(tabId);
+    this.SelectedIndex = index >= 0 ? index : 0;
     this.updateNavigationSelection();
     this.visitedTabs.add(tabId);
     this.emitStateChange();
@@ -178,8 +259,18 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
     this.cdr.markForCheck();
   }
 
-  public hasVisited(tabId: string): boolean {
+  /** @deprecated Use {@link OnTabChange}. */
+  public onTabChange(tabId: string): void {
+    return this.OnTabChange(tabId);
+  }
+
+  public HasVisited(tabId: string): boolean {
     return this.visitedTabs.has(tabId);
+  }
+
+  /** @deprecated Use {@link HasVisited}. */
+  public hasVisited(tabId: string): boolean {
+    return this.HasVisited(tabId);
   }
 
   private setupStateManagement(): void {
@@ -193,55 +284,80 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
 
   private emitStateChange(): void {
     const state: TestingDashboardState = {
-      activeTab: this.activeTab,
-      dashboardState: (this.dashboardState || {}) as Record<string, unknown>,
-      runsState: (this.runsState || {}) as Record<string, unknown>,
-      analyticsState: (this.analyticsState || {}) as Record<string, unknown>,
-      reviewState: (this.reviewState || {}) as Record<string, unknown>
+      activeTab: this.ActiveTab,
+      dashboardState: (this.DashboardState || {}) as Record<string, unknown>,
+      runsState: (this.RunsState || {}) as Record<string, unknown>,
+      analyticsState: (this.AnalyticsState || {}) as Record<string, unknown>,
+      reviewState: (this.ReviewState || {}) as Record<string, unknown>
     };
 
     this.stateChangeSubject.next(state);
   }
 
+  public OnDashboardStateChange(state: Record<string, unknown>): void {
+    this.DashboardState = state;
+    this.emitStateChange();
+    this.emitAgentContext();
+  }
+
+  /** @deprecated Use {@link OnDashboardStateChange}. */
   public onDashboardStateChange(state: Record<string, unknown>): void {
-    this.dashboardState = state;
+    return this.OnDashboardStateChange(state);
+  }
+
+  public OnRunsStateChange(state: Record<string, unknown>): void {
+    this.RunsState = state;
     this.emitStateChange();
     this.emitAgentContext();
   }
 
+  /** @deprecated Use {@link OnRunsStateChange}. */
   public onRunsStateChange(state: Record<string, unknown>): void {
-    this.runsState = state;
+    return this.OnRunsStateChange(state);
+  }
+
+  public OnAnalyticsStateChange(state: Record<string, unknown>): void {
+    this.AnalyticsState = state;
     this.emitStateChange();
     this.emitAgentContext();
   }
 
+  /** @deprecated Use {@link OnAnalyticsStateChange}. */
   public onAnalyticsStateChange(state: Record<string, unknown>): void {
-    this.analyticsState = state;
+    return this.OnAnalyticsStateChange(state);
+  }
+
+  public OnReviewStateChange(state: Record<string, unknown>): void {
+    this.ReviewState = state;
     this.emitStateChange();
     this.emitAgentContext();
   }
 
+  /** @deprecated Use {@link OnReviewStateChange}. */
   public onReviewStateChange(state: Record<string, unknown>): void {
-    this.reviewState = state;
-    this.emitStateChange();
-    this.emitAgentContext();
+    return this.OnReviewStateChange(state);
   }
 
-  public loadUserState(state: Partial<TestingDashboardState>): void {
+  public LoadUserState(state: Partial<TestingDashboardState>): void {
     if (state.activeTab) {
-      this.activeTab = state.activeTab;
-      const index = this.navigationItems.indexOf(state.activeTab);
-      this.selectedIndex = index >= 0 ? index : 0;
+      this.ActiveTab = state.activeTab;
+      const index = this.NavigationItems.indexOf(state.activeTab);
+      this.SelectedIndex = index >= 0 ? index : 0;
       this.visitedTabs.add(state.activeTab);
       this.updateNavigationSelection();
     }
 
-    if (state.dashboardState) this.dashboardState = state.dashboardState;
-    if (state.runsState) this.runsState = state.runsState;
-    if (state.analyticsState) this.analyticsState = state.analyticsState;
-    if (state.reviewState) this.reviewState = state.reviewState;
+    if (state.dashboardState) this.DashboardState = state.dashboardState;
+    if (state.runsState) this.RunsState = state.runsState;
+    if (state.analyticsState) this.AnalyticsState = state.analyticsState;
+    if (state.reviewState) this.ReviewState = state.reviewState;
 
     this.cdr.markForCheck();
+  }
+
+  /** @deprecated Use {@link LoadUserState}. */
+  public loadUserState(state: Partial<TestingDashboardState>): void {
+    return this.LoadUserState(state);
   }
 
   initDashboard(): void {
@@ -260,7 +376,7 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
     if (this.Config?.userState) {
       setTimeout(() => {
         if (this.Config?.userState) {
-          this.loadUserState(this.Config.userState);
+          this.LoadUserState(this.Config.userState);
         }
       }, 0);
     }
@@ -268,29 +384,34 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
     this.NotifyLoadComplete();
   }
 
+  public GetCurrentTabLabel(): string {
+    const tabIndex = this.NavigationItems.indexOf(this.ActiveTab);
+    return tabIndex >= 0 ? this.NavigationConfig[tabIndex].text : 'Testing Dashboard';
+  }
+
+  /** @deprecated Use {@link GetCurrentTabLabel}. */
   public getCurrentTabLabel(): string {
-    const tabIndex = this.navigationItems.indexOf(this.activeTab);
-    return tabIndex >= 0 ? this.navigationConfig[tabIndex].text : 'Testing Dashboard';
+    return this.GetCurrentTabLabel();
   }
 
   public OnPanelClosed(): void {
-    this.testingDialogService.ClosePanel();
+    this.TestingDialogService.ClosePanel();
     this.cdr.markForCheck();
   }
 
   public OnViewActiveRun(run: ActiveRun): void {
-    this.testingDialogService.OpenTestPanel(run.TestId);
+    this.TestingDialogService.OpenTestPanel(run.TestId);
     this.cdr.markForCheck();
   }
 
   public OnViewRunningTestFromTab(testId: string): void {
-    this.testingDialogService.OpenTestPanel(testId);
+    this.TestingDialogService.OpenTestPanel(testId);
     this.cdr.detectChanges();
   }
 
   private updateNavigationSelection(): void {
-    this.navigationConfig.forEach((item, index) => {
-      item.selected = this.navigationItems[index] === this.activeTab;
+    this.NavigationConfig.forEach((item, index) => {
+      item.selected = this.NavigationItems[index] === this.ActiveTab;
     });
   }
 
@@ -308,8 +429,8 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
    */
   private emitAgentContext(): void {
     const k = this.latestKPIs;
-    const tab: TestingTab = isValidTestingTab(this.activeTab) ? this.activeTab : 'dashboard';
-    this.navigationService.SetAgentContext(this, buildTestingAgentContext({
+    const tab: TestingTab = IsValidTestingTab(this.ActiveTab) ? this.ActiveTab : 'dashboard';
+    this.navigationService.SetAgentContext(this, BuildTestingAgentContext({
       ActiveTab: tab,
       ActiveRunCount: this.ActiveRuns.length,
       TotalTestsRun: k?.totalTestRuns ?? 0,
@@ -349,12 +470,12 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
 
   /** Read the Runs-surface slice from the child component's reported state. */
   private buildRunsSurfaceState(): TestingRunsSurfaceState {
-    const s = this.runsState ?? {};
+    const s = this.RunsState ?? {};
     const status = s['status'];
     const timeRange = s['timeRange'];
     return {
-      StatusFilter: isValidTestingStatusFilter(status) ? status : 'all',
-      TimeRange: isValidTestingTimeRange(timeRange) ? timeRange : 'month',
+      StatusFilter: IsValidTestingStatusFilter(status) ? status : 'all',
+      TimeRange: IsValidTestingTimeRange(timeRange) ? timeRange : 'month',
       SearchText: typeof s['searchText'] === 'string' ? s['searchText'] : '',
       VisibleRunCount: typeof s['visibleRunCount'] === 'number' ? s['visibleRunCount'] : 0,
       VisibleRunNames: this.toStringArray(s['visibleRunNames']),
@@ -366,7 +487,7 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
 
   /** Read the Analytics-surface slice from the child component's reported state. */
   private buildAnalyticsSurfaceState(): TestingAnalyticsSurfaceState {
-    const s = this.analyticsState ?? {};
+    const s = this.AnalyticsState ?? {};
     return {
       SelectedDays: typeof s['selectedDays'] === 'number' ? s['selectedDays'] : 30,
       TopFailingTests: this.toStringArray(s['topFailingTests']),
@@ -378,7 +499,7 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
 
   /** Read the Review-surface slice from the child component's reported state. */
   private buildReviewSurfaceState(): TestingReviewSurfaceState {
-    const s = this.reviewState ?? {};
+    const s = this.ReviewState ?? {};
     const view = s['viewMode'];
     return {
       View: (view === 'queue' || view === 'history') ? (view as TestingReviewView) : 'queue',
@@ -421,7 +542,7 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
    * add execute/run tools without an explicit user-confirmation design.
    */
   private syncAgentToolsForMode(): void {
-    const tab: TestingTab = isValidTestingTab(this.activeTab) ? this.activeTab : 'dashboard';
+    const tab: TestingTab = IsValidTestingTab(this.ActiveTab) ? this.ActiveTab : 'dashboard';
     if (this.lastRegisteredToolMode === tab) {
       return;
     }
@@ -459,10 +580,10 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
         ParameterSchema: { type: 'object', properties: { tab: { type: 'string', enum: [...TESTING_TABS] } }, required: ['tab'] },
         Handler: async (params: Record<string, unknown>): Promise<AgentToolResult> => {
           const tab = params['tab'];
-          if (!isValidTestingTab(tab)) {
+          if (!IsValidTestingTab(tab)) {
             return { Success: false, ErrorMessage: `Invalid tab. Expected one of: ${TESTING_TABS.join(', ')}.` };
           }
-          this.onTabChange(tab as TestingTab);
+          this.OnTabChange(tab as TestingTab);
           return { Success: true };
         },
       },
@@ -481,7 +602,7 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
         ParameterSchema: { type: 'object', properties: { range: { type: 'string', enum: [...TESTING_TIME_RANGES] } }, required: ['range'] },
         Handler: async (params: Record<string, unknown>): Promise<AgentToolResult> => {
           const range = params['range'];
-          if (!isValidTestingTimeRange(range)) {
+          if (!IsValidTestingTimeRange(range)) {
             return { Success: false, ErrorMessage: `Invalid range. Expected one of: ${TESTING_TIME_RANGES.join(', ')}.` };
           }
           this.instrumentationService.setDateRangeByName(range as TestingTimeRange);
@@ -493,7 +614,7 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
         Description: 'Get read-only details for a single test run by its ID (name, status, score, cost, duration, human feedback).',
         ParameterSchema: { type: 'object', properties: { runId: { type: 'string' } }, required: ['runId'] },
         Handler: async (params: Record<string, unknown>): Promise<AgentToolResult & { Data?: Record<string, unknown> }> => {
-          const validated = validateStringParam(params['runId'], 'runId');
+          const validated = ValidateStringParam(params['runId'], 'runId');
           if (!validated.ok) {
             return validated.result;
           }
@@ -512,10 +633,10 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
         ParameterSchema: { type: 'object', properties: { status: { type: 'string', enum: [...TESTING_STATUS_FILTERS] } }, required: ['status'] },
         Handler: async (params: Record<string, unknown>): Promise<AgentToolResult> => {
           const status = params['status'];
-          if (!isValidTestingStatusFilter(status)) {
+          if (!IsValidTestingStatusFilter(status)) {
             return { Success: false, ErrorMessage: `Invalid status. Expected one of: ${TESTING_STATUS_FILTERS.join(', ')}.` };
           }
-          this.onTabChange('runs');
+          this.OnTabChange('runs');
           this.instrumentationService.setRunsFilterIntent({ status: status as TestingStatusFilter });
           return { Success: true };
         },
@@ -525,11 +646,11 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
         Description: 'Search/filter the test runs list by test name (substring match). Pass an empty string to clear.',
         ParameterSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
         Handler: async (params: Record<string, unknown>): Promise<AgentToolResult> => {
-          const validated = validateStringParam(params['query'], 'query');
+          const validated = ValidateStringParam(params['query'], 'query');
           if (!validated.ok) {
             return validated.result;
           }
-          this.onTabChange('runs');
+          this.OnTabChange('runs');
           this.instrumentationService.setRunsFilterIntent({ searchText: validated.value });
           return { Success: true };
         },
@@ -564,10 +685,10 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
         ParameterSchema: { type: 'object', properties: { range: { type: 'string', enum: [...TESTING_TIME_RANGES] } }, required: ['range'] },
         Handler: async (params: Record<string, unknown>): Promise<AgentToolResult> => {
           const range = params['range'];
-          if (!isValidTestingTimeRange(range)) {
+          if (!IsValidTestingTimeRange(range)) {
             return { Success: false, ErrorMessage: `Invalid range. Expected one of: ${TESTING_TIME_RANGES.join(', ')}.` };
           }
-          this.onTabChange('analytics');
+          this.OnTabChange('analytics');
           this.instrumentationService.setDateRangeByName(range as TestingTimeRange);
           return { Success: true };
         },
@@ -624,7 +745,7 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
    * is visible. Read-only navigation — no test execution.
    */
   private async selectTestRun(params: Record<string, unknown>): Promise<AgentToolResult> {
-    const validated = validateStringParam(params['runId'], 'runId');
+    const validated = ValidateStringParam(params['runId'], 'runId');
     if (!validated.ok) {
       return validated.result;
     }
@@ -638,7 +759,7 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
       return { Success: false, ErrorMessage: lookup.ErrorMessage };
     }
     const open = params['open'] === true;
-    this.onTabChange('runs');
+    this.OnTabChange('runs');
     this.instrumentationService.setRunSelectionIntent(runId, open);
     return { Success: true };
   }
@@ -670,7 +791,7 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
 
   /** Validate and submit human feedback for an existing test run. */
   private async submitTestFeedback(params: Record<string, unknown>): Promise<AgentToolResult> {
-    const runIdValidated = validateStringParam(params['runId'], 'runId');
+    const runIdValidated = ValidateStringParam(params['runId'], 'runId');
     if (!runIdValidated.ok) {
       return runIdValidated.result;
     }

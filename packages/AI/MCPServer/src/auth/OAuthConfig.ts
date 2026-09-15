@@ -15,8 +15,13 @@ import type { AuthMode } from './types.js';
  *
  * @returns The configured auth mode ('apiKey', 'oauth', 'both', or 'none')
  */
-export function getAuthMode(): AuthMode {
+export function GetAuthMode(): AuthMode {
   return mcpServerAuth?.mode ?? 'apiKey';
+}
+
+/** @deprecated Use {@link GetAuthMode}. */
+export function getAuthMode(): AuthMode {
+  return GetAuthMode();
 }
 
 /**
@@ -28,7 +33,7 @@ export function getAuthMode(): AuthMode {
  *
  * @returns The resource identifier URL (e.g., "http://localhost:3100")
  */
-export function getResourceIdentifier(): string {
+export function GetResourceIdentifier(): string {
   // Return configured or auto-generated value
   if (mcpServerAuth?.resourceIdentifier) {
     return mcpServerAuth.resourceIdentifier;
@@ -37,6 +42,11 @@ export function getResourceIdentifier(): string {
   // Fallback to auto-generated (should already be set by resolveAuthSettings)
   const port = mcpServerSettings?.port ?? 3100;
   return `http://localhost:${port}`;
+}
+
+/** @deprecated Use {@link GetResourceIdentifier}. */
+export function getResourceIdentifier(): string {
+  return GetResourceIdentifier();
 }
 
 /**
@@ -51,7 +61,7 @@ export function getTokenAudience(): string {
   if (mcpServerAuth?.tokenAudience) {
     return mcpServerAuth.tokenAudience;
   }
-  return getResourceIdentifier();
+  return GetResourceIdentifier();
 }
 
 /**
@@ -62,12 +72,17 @@ export function getTokenAudience(): string {
  *
  * @returns Array of OAuth scope strings
  */
-export function getScopes(): string[] {
+export function GetScopes(): string[] {
   if (mcpServerAuth?.scopes && mcpServerAuth.scopes.length > 0) {
     return mcpServerAuth.scopes;
   }
   // Default to standard OIDC scopes
   return ['openid', 'profile', 'email'];
+}
+
+/** @deprecated Use {@link GetScopes}. */
+export function getScopes(): string[] {
+  return GetScopes();
 }
 
 /**
@@ -77,9 +92,14 @@ export function getScopes(): string[] {
  *
  * @returns true if OAuth authentication is enabled
  */
-export function isOAuthEnabled(): boolean {
-  const mode = getAuthMode();
+export function IsOAuthEnabled(): boolean {
+  const mode = GetAuthMode();
   return mode === 'oauth' || mode === 'both';
+}
+
+/** @deprecated Use {@link IsOAuthEnabled}. */
+export function isOAuthEnabled(): boolean {
+  return IsOAuthEnabled();
 }
 
 /**
@@ -89,9 +109,14 @@ export function isOAuthEnabled(): boolean {
  *
  * @returns true if API key authentication is enabled
  */
-export function isApiKeyEnabled(): boolean {
-  const mode = getAuthMode();
+export function IsApiKeyEnabled(): boolean {
+  const mode = GetAuthMode();
   return mode === 'apiKey' || mode === 'both';
+}
+
+/** @deprecated Use {@link IsApiKeyEnabled}. */
+export function isApiKeyEnabled(): boolean {
+  return IsApiKeyEnabled();
 }
 
 /**
@@ -101,8 +126,13 @@ export function isApiKeyEnabled(): boolean {
  *
  * @returns true if authentication is required
  */
+export function IsAuthRequired(): boolean {
+  return GetAuthMode() !== 'none';
+}
+
+/** @deprecated Use {@link IsAuthRequired}. */
 export function isAuthRequired(): boolean {
-  return getAuthMode() !== 'none';
+  return IsAuthRequired();
 }
 
 /**
@@ -129,15 +159,15 @@ export interface OAuthConfigValidationResult {
  * @param hasProviders - Whether any auth providers are configured in MJServer
  * @returns Validation result with effective mode and any warnings/errors
  */
-export function validateOAuthConfig(hasProviders: boolean): OAuthConfigValidationResult {
+export function ValidateOAuthConfig(hasProviders: boolean): OAuthConfigValidationResult {
   const result: OAuthConfigValidationResult = {
     valid: true,
     warnings: [],
     errors: [],
-    effectiveMode: getAuthMode(),
+    effectiveMode: GetAuthMode(),
   };
 
-  const mode = getAuthMode();
+  const mode = GetAuthMode();
 
   // No validation needed for apiKey-only or none modes
   if (mode === 'apiKey' || mode === 'none') {
@@ -159,7 +189,7 @@ export function validateOAuthConfig(hasProviders: boolean): OAuthConfigValidatio
   }
 
   // Check resource identifier for OAuth modes
-  if (isOAuthEnabled() && !mcpServerAuth?.resourceIdentifier && !mcpServerAuth?.autoResourceIdentifier) {
+  if (IsOAuthEnabled() && !mcpServerAuth?.resourceIdentifier && !mcpServerAuth?.autoResourceIdentifier) {
     result.warnings.push(
       'No resourceIdentifier configured and autoResourceIdentifier is disabled. ' +
       'OAuth audience validation may fail.'
@@ -169,13 +199,18 @@ export function validateOAuthConfig(hasProviders: boolean): OAuthConfigValidatio
   return result;
 }
 
+/** @deprecated Use {@link ValidateOAuthConfig}. */
+export function validateOAuthConfig(hasProviders: boolean): OAuthConfigValidationResult {
+  return ValidateOAuthConfig(hasProviders);
+}
+
 /**
  * Logs the authentication configuration at startup.
  *
  * @param effectiveMode - The effective auth mode after validation
  * @param providerNames - Names of configured auth providers (if any)
  */
-export function logAuthConfig(effectiveMode: AuthMode, providerNames: string[]): void {
+export function LogAuthConfig(effectiveMode: AuthMode, providerNames: string[]): void {
   console.log(`MCP Server: Auth mode: ${effectiveMode}`);
 
   if (effectiveMode === 'none') {
@@ -184,11 +219,16 @@ export function logAuthConfig(effectiveMode: AuthMode, providerNames: string[]):
 
   if (effectiveMode === 'oauth' || effectiveMode === 'both') {
     console.log(`MCP Server: OAuth enabled with providers: ${providerNames.join(', ') || 'none'}`);
-    console.log(`MCP Server: Resource identifier (MCP metadata): ${getResourceIdentifier()}`);
+    console.log(`MCP Server: Resource identifier (MCP metadata): ${GetResourceIdentifier()}`);
     // Token audience is now derived from auth provider config (same as MJExplorer)
   }
 
   if (effectiveMode === 'apiKey' || effectiveMode === 'both') {
     console.log('MCP Server: API key authentication enabled');
   }
+}
+
+/** @deprecated Use {@link LogAuthConfig}. */
+export function logAuthConfig(effectiveMode: AuthMode, providerNames: string[]): void {
+  return LogAuthConfig(effectiveMode, providerNames);
 }

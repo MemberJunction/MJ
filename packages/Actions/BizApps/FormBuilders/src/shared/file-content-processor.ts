@@ -47,7 +47,7 @@ export class FileContentProcessor {
     /**
      * Process file content based on content type and requested format
      */
-    static async processContent(
+    static async ProcessContent(
         buffer: Buffer,
         contentType: string,
         options: FileContentProcessorOptions = {}
@@ -113,6 +113,15 @@ export class FileContentProcessor {
                 success: false
             };
         }
+    }
+
+    /** @deprecated Use {@link ProcessContent}. */
+    static async processContent(
+        buffer: Buffer,
+        contentType: string,
+        options: FileContentProcessorOptions = {}
+    ): Promise<FileContentProcessorResult> {
+        return this.ProcessContent(buffer, contentType, options);
     }
 
     /**
@@ -276,7 +285,7 @@ export class FileContentProcessor {
     /**
      * Extract filename from URL or Content-Disposition header
      */
-    static extractFilename(fileUrl: string, contentDisposition?: string): string {
+    static ExtractFilename(fileUrl: string, contentDisposition?: string): string {
         // Try to extract from Content-Disposition header first
         if (contentDisposition) {
             const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
@@ -299,10 +308,15 @@ export class FileContentProcessor {
         return cleanFilename || 'download';
     }
 
+    /** @deprecated Use {@link ExtractFilename}. */
+    static extractFilename(fileUrl: string, contentDisposition?: string): string {
+        return this.ExtractFilename(fileUrl, contentDisposition);
+    }
+
     /**
      * Get content format description for easy processing
      */
-    static getContentFormat(contentType: string): string {
+    static GetContentFormat(contentType: string): string {
         const normalizedContentType = contentType.toLowerCase();
         
         if (this.isImage(normalizedContentType)) {
@@ -318,5 +332,10 @@ export class FileContentProcessor {
         } else {
             return 'binary';
         }
+    }
+
+    /** @deprecated Use {@link GetContentFormat}. */
+    static getContentFormat(contentType: string): string {
+        return this.GetContentFormat(contentType);
     }
 }

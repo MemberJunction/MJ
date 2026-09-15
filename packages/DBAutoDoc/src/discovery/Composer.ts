@@ -17,8 +17,8 @@ import { OrganicKeyCluster, OrganicKeyClusterMember } from '../types/organic-key
 import {
     DetectedOrganicKeysOutput,
     TransitiveSpokeInput,
-    translateClusters,
-    countOutputEntries,
+    TranslateClusters,
+    CountOutputEntries,
 } from './OrganicKeyTranslator.js';
 import { TransitiveBridgeFinding } from './TransitiveBridgeDetector.js';
 
@@ -41,7 +41,7 @@ export interface ComposerResult {
  * declared foreign key — kept but flagged, not dropped). Matching transitive bridges are
  * attached as spokes. Returns the JSON plus the annotated clusters and emit counts.
  */
-export function compose(
+export function Compose(
     clusters: OrganicKeyCluster[],
     bridges: TransitiveBridgeFinding[],
 ): ComposerResult {
@@ -71,8 +71,8 @@ export function compose(
             hubConcept: b.hubConcept,
         }));
 
-    const output = translateClusters(annotated, spokes);
-    const counts = countOutputEntries(output);
+    const output = TranslateClusters(annotated, spokes);
+    const counts = CountOutputEntries(output);
 
     return {
         output,
@@ -86,6 +86,14 @@ export function compose(
             outputSpokes: counts.spokes,
         },
     };
+}
+
+/** @deprecated Use {@link Compose}. */
+export function compose(
+    clusters: OrganicKeyCluster[],
+    bridges: TransitiveBridgeFinding[],
+): ComposerResult {
+    return Compose(clusters, bridges);
 }
 
 /**
@@ -119,5 +127,8 @@ function isFKRedundant(cluster: OrganicKeyCluster): boolean {
 }
 
 /** Re-export for tests / observability. */
-export const __test__ = { isFKRedundant };
+export const Test__ = { isFKRedundant };
+
+/** @deprecated Use {@link Test__}. */
+export const __test__ = Test__;
 export type { OrganicKeyClusterMember };

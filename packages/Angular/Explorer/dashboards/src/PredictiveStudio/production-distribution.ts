@@ -42,7 +42,7 @@ export interface DistributionResult {
  * @param values raw column values (may contain null/undefined/empty — those are dropped)
  * @param numeric whether the bound column is numeric (caller derives this from entity field metadata)
  */
-export function buildDistribution(values: ReadonlyArray<unknown>, numeric: boolean): DistributionResult {
+export function BuildDistribution(values: ReadonlyArray<unknown>, numeric: boolean): DistributionResult {
   const cleaned = values.filter((v) => v !== null && v !== undefined && v !== '');
   const sampled = cleaned.length;
   const capped = sampled >= PRODUCTION_SAMPLE_CAP;
@@ -52,6 +52,11 @@ export function buildDistribution(values: ReadonlyArray<unknown>, numeric: boole
   return numeric
     ? buildNumericTerciles(cleaned, sampled, capped)
     : buildCategorical(cleaned, sampled, capped);
+}
+
+/** @deprecated Use {@link BuildDistribution}. */
+export function buildDistribution(values: ReadonlyArray<unknown>, numeric: boolean): DistributionResult {
+  return BuildDistribution(values, numeric);
 }
 
 const MAX_CATEGORICAL_BUCKETS = 8;
@@ -141,7 +146,7 @@ function formatNum(n: number): string {
  *
  * Field order: [second?] minute hour dayOfMonth month dayOfWeek
  */
-export function humanizeCron(cron: string | null | undefined): string | null {
+export function HumanizeCron(cron: string | null | undefined): string | null {
   if (!cron) return null;
   const raw = cron.trim();
   if (!raw) return null;
@@ -192,6 +197,11 @@ export function humanizeCron(cron: string | null | undefined): string | null {
   return raw;
 }
 
+/** @deprecated Use {@link HumanizeCron}. */
+export function humanizeCron(cron: string | null | undefined): string | null {
+  return HumanizeCron(cron);
+}
+
 /** True when a cron field is a single integer literal (no `*`, ranges, lists, or steps). */
 function isNumericField(field: string): boolean {
   return /^\d+$/.test(field);
@@ -238,17 +248,22 @@ export type StatusVariant = 'green' | 'amber' | 'red' | 'gray' | 'blue';
  * @param pipeline denormalized pipeline name (may be null/empty/whitespace)
  * @param version  model version number (null when the model couldn't be resolved)
  */
-export function modelLabel(pipeline: string | null | undefined, version: number | null | undefined): string {
+export function ModelLabel(pipeline: string | null | undefined, version: number | null | undefined): string {
   if (version == null) return 'Unknown model';
   const name = pipeline?.trim();
   return name ? `${name} v${version}` : `Model v${version}`;
+}
+
+/** @deprecated Use {@link ModelLabel}. */
+export function modelLabel(pipeline: string | null | undefined, version: number | null | undefined): string {
+  return ModelLabel(pipeline, version);
 }
 
 /**
  * Map a Process-Run status to a {@link StatusVariant} pill colour. Unknown/empty statuses fall back
  * to neutral gray so a new run state never renders an undefined badge.
  */
-export function runStatusVariant(status: string | null | undefined): StatusVariant {
+export function RunStatusVariant(status: string | null | undefined): StatusVariant {
   switch (status) {
     case 'Completed':
       return 'green';
@@ -266,8 +281,13 @@ export function runStatusVariant(status: string | null | undefined): StatusVaria
   }
 }
 
+/** @deprecated Use {@link RunStatusVariant}. */
+export function runStatusVariant(status: string | null | undefined): StatusVariant {
+  return RunStatusVariant(status);
+}
+
 /** Map a scoring mode to its badge colour. OnDemand/unknown → neutral gray. */
-export function modeBadgeClass(mode: string | null | undefined): StatusVariant {
+export function ModeBadgeClass(mode: string | null | undefined): StatusVariant {
   switch (mode) {
     case 'Scheduled':
       return 'blue';
@@ -276,6 +296,11 @@ export function modeBadgeClass(mode: string | null | undefined): StatusVariant {
     default:
       return 'gray';
   }
+}
+
+/** @deprecated Use {@link ModeBadgeClass}. */
+export function modeBadgeClass(mode: string | null | undefined): StatusVariant {
+  return ModeBadgeClass(mode);
 }
 
 /** Minimal raw shape of a Process Run consumed by {@link summarizeRun} (decoupled from the entity). */
@@ -307,14 +332,19 @@ export interface RunSummary {
  *
  * @param run the latest run, or null/undefined when the binding has never run
  */
-export function summarizeRun(run: RawRun | null | undefined): RunSummary | null {
+export function SummarizeRun(run: RawRun | null | undefined): RunSummary | null {
   if (!run) return null;
   return {
     status: run.Status,
-    statusVariant: runStatusVariant(run.Status),
+    statusVariant: RunStatusVariant(run.Status),
     when: run.EndTime ?? run.StartTime ?? run.CreatedAt ?? null,
     successCount: run.SuccessCount ?? 0,
     errorCount: run.ErrorCount ?? 0,
     totalCount: run.TotalItemCount ?? null,
   };
+}
+
+/** @deprecated Use {@link SummarizeRun}. */
+export function summarizeRun(run: RawRun | null | undefined): RunSummary | null {
+  return SummarizeRun(run);
 }

@@ -23,7 +23,7 @@ export type EntityListItem = {
  * Entities the user can browse. We surface entities that are not system/
  * internal and that the current user can read. Sorted by display name.
  */
-export function loadEntities(): EntityListItem[] {
+export function LoadEntities(): EntityListItem[] {
     const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
     return md.Entities
         .filter((e) => e.AllowUserSearchAPI !== false && !e.Name.startsWith('__'))
@@ -36,9 +36,19 @@ export function loadEntities(): EntityListItem[] {
         .sort((a, b) => a.displayName.localeCompare(b.displayName));
 }
 
+/** @deprecated Use {@link LoadEntities}. */
+export function loadEntities(): EntityListItem[] {
+    return LoadEntities();
+}
+
 /** Total number of entities known to the metadata (all, unfiltered). */
-export function entityCount(): number {
+export function EntityCount(): number {
     return new Metadata().Entities.length;  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
+}
+
+/** @deprecated Use {@link EntityCount}. */
+export function entityCount(): number {
+    return EntityCount();
 }
 
 /**
@@ -88,7 +98,7 @@ export type EntityRecordsLoad = {
  * Load records for an entity (read-only, card view). Uses `simple` ResultType
  * with a narrowed field set for performance (CLAUDE.md RunView guidance).
  */
-export async function loadEntityRecords(
+export async function LoadEntityRecords(
     entityName: string,
     contextUser?: UserInfo,
     maxRows = 100,
@@ -142,6 +152,15 @@ export async function loadEntityRecords(
     return { entity, rows, totalShown: rows.length };
 }
 
+/** @deprecated Use {@link LoadEntityRecords}. */
+export async function loadEntityRecords(
+    entityName: string,
+    contextUser?: UserInfo,
+    maxRows = 100,
+): Promise<EntityRecordsLoad | null> {
+    return LoadEntityRecords(entityName, contextUser, maxRows);
+}
+
 /** A single displayable field of a record: its key, label, and stringified value. */
 export type RecordFieldRow = { key: string; label: string; value: string };
 
@@ -156,7 +175,7 @@ export type RecordDetailLoad = {
  * Load a single record's fields (read-only). Uses GetEntityObject + Load so
  * we get the full strongly-typed entity, then projects displayable fields.
  */
-export async function loadRecordDetail(
+export async function LoadRecordDetail(
     entityName: string,
     recordId: string,
     contextUser?: UserInfo,
@@ -189,6 +208,15 @@ export async function loadRecordDetail(
     return { entity: entityInfo, title, fields };
 }
 
+/** @deprecated Use {@link LoadRecordDetail}. */
+export async function loadRecordDetail(
+    entityName: string,
+    recordId: string,
+    contextUser?: UserInfo,
+): Promise<RecordDetailLoad | null> {
+    return LoadRecordDetail(entityName, recordId, contextUser);
+}
+
 // ---------------------------------------------------------------------------
 // Queries
 // ---------------------------------------------------------------------------
@@ -207,7 +235,7 @@ export type QueryListItem = {
  *
  * @returns The approved queries as {@link QueryListItem}s.
  */
-export function loadQueries(): QueryListItem[] {
+export function LoadQueries(): QueryListItem[] {
     const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
     return md.Queries
         .filter((q) => q.Status === 'Approved')
@@ -220,9 +248,19 @@ export function loadQueries(): QueryListItem[] {
         .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/** @deprecated Use {@link LoadQueries}. */
+export function loadQueries(): QueryListItem[] {
+    return LoadQueries();
+}
+
 /** Count of approved saved queries in metadata. */
-export function queryCount(): number {
+export function QueryCount(): number {
     return new Metadata().Queries.filter((q) => q.Status === 'Approved').length;  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
+}
+
+/** @deprecated Use {@link QueryCount}. */
+export function queryCount(): number {
+    return QueryCount();
 }
 
 /** Result of running a saved query: column names, row objects, count, and success/error. */
@@ -286,7 +324,7 @@ export type DashboardListItem = {
  * @param contextUser Optional acting user (server-side scoping).
  * @returns The dashboards as {@link DashboardListItem}s.
  */
-export async function loadDashboards(contextUser?: UserInfo): Promise<DashboardListItem[]> {
+export async function LoadDashboards(contextUser?: UserInfo): Promise<DashboardListItem[]> {
     const rv = new RunView();
     const result = await rv.RunView<{ ID: string; Name: string; Description: string | null }>(
         {
@@ -300,6 +338,11 @@ export async function loadDashboards(contextUser?: UserInfo): Promise<DashboardL
     );
     if (!result.Success) return [];
     return (result.Results ?? []).map((d) => ({ id: d.ID, name: d.Name, description: d.Description }));
+}
+
+/** @deprecated Use {@link LoadDashboards}. */
+export async function loadDashboards(contextUser?: UserInfo): Promise<DashboardListItem[]> {
+    return LoadDashboards(contextUser);
 }
 
 /** Renderable dashboard part kinds (mirrors MJ's Dashboard Part Types). */
@@ -403,7 +446,7 @@ function parsePanels(uiConfigDetails: string): RawPanel[] {
  * @param dashboardId The dashboard to load.
  * @param contextUser Optional acting user (server-side scoping).
  */
-export async function loadDashboard(dashboardId: string, contextUser?: UserInfo): Promise<DashboardLoad | null> {
+export async function LoadDashboard(dashboardId: string, contextUser?: UserInfo): Promise<DashboardLoad | null> {
     const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
     const currentUser = contextUser ?? md.CurrentUser;
 
@@ -437,6 +480,11 @@ export async function loadDashboard(dashboardId: string, contextUser?: UserInfo)
         parts,
         desktopOnlyCount: parts.filter((p) => p.kind === 'unknown' || p.kind === 'weburl' || p.kind === 'view').length,
     };
+}
+
+/** @deprecated Use {@link LoadDashboard}. */
+export async function loadDashboard(dashboardId: string, contextUser?: UserInfo): Promise<DashboardLoad | null> {
+    return LoadDashboard(dashboardId, contextUser);
 }
 
 /** Map Dashboard Part Type id → name (small lookup table). */

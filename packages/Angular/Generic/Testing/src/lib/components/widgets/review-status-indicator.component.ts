@@ -147,54 +147,138 @@ export type ReviewStatus = 'reviewed' | 'needs-review' | 'not-reviewed';
 })
 export class ReviewStatusIndicatorComponent {
   /** Whether this single item has been reviewed */
-  @Input() hasReview: boolean = false;
+  @Input() HasReview: boolean = false;
+
+  /** @deprecated Use {@link HasReview}. */
+  @Input() set hasReview(value: boolean) {
+    this.HasReview = value;
+  }
+  /** @deprecated Use {@link HasReview}. */
+  get hasReview(): boolean {
+    return this.HasReview;
+  }
 
   /** Count of reviewed items (for aggregate display) */
-  @Input() reviewedCount: number = 0;
+  @Input() ReviewedCount: number = 0;
+
+  /** @deprecated Use {@link ReviewedCount}. */
+  @Input() set reviewedCount(value: number) {
+    this.ReviewedCount = value;
+  }
+  /** @deprecated Use {@link ReviewedCount}. */
+  get reviewedCount(): number {
+    return this.ReviewedCount;
+  }
 
   /** Total count of items (for aggregate display) */
-  @Input() totalCount: number = 0;
+  @Input() TotalCount: number = 0;
+
+  /** @deprecated Use {@link TotalCount}. */
+  @Input() set totalCount(value: number) {
+    this.TotalCount = value;
+  }
+  /** @deprecated Use {@link TotalCount}. */
+  get totalCount(): number {
+    return this.TotalCount;
+  }
 
   /** Display mode */
-  @Input() mode: 'badge' | 'count' | 'progress' = 'badge';
+  @Input() Mode: 'badge' | 'count' | 'progress' = 'badge';
+
+  /** @deprecated Use {@link Mode}. */
+  @Input() set mode(value: 'badge' | 'count' | 'progress') {
+    this.Mode = value;
+  }
+  /** @deprecated Use {@link Mode}. */
+  get mode(): 'badge' | 'count' | 'progress' {
+    return this.Mode;
+  }
 
   /** Whether to show text label in badge mode */
-  @Input() showText: boolean = true;
+  @Input() ShowText: boolean = true;
+
+  /** @deprecated Use {@link ShowText}. */
+  @Input() set showText(value: boolean) {
+    this.ShowText = value;
+  }
+  /** @deprecated Use {@link ShowText}. */
+  get showText(): boolean {
+    return this.ShowText;
+  }
 
   /** Whether to show "reviewed" label in count mode */
-  @Input() showLabel: boolean = false;
+  @Input() ShowLabel: boolean = false;
 
-  getStatusClass(): string {
-    if (this.hasReview) return 'reviewed';
+  /** @deprecated Use {@link ShowLabel}. */
+  @Input() set showLabel(value: boolean) {
+    this.ShowLabel = value;
+  }
+  /** @deprecated Use {@link ShowLabel}. */
+  get showLabel(): boolean {
+    return this.ShowLabel;
+  }
+
+  GetStatusClass(): string {
+    if (this.HasReview) return 'reviewed';
     return 'not-reviewed';
   }
 
-  getStatusIcon(): string {
-    if (this.hasReview) return 'fa-solid fa-clipboard-check';
+  /** @deprecated Use {@link GetStatusClass}. */
+  getStatusClass(): string {
+    return this.GetStatusClass();
+  }
+
+  GetStatusIcon(): string {
+    if (this.HasReview) return 'fa-solid fa-clipboard-check';
     return 'fa-solid fa-clipboard-question';
   }
 
-  getStatusText(): string {
-    if (this.hasReview) return 'Reviewed';
+  /** @deprecated Use {@link GetStatusIcon}. */
+  getStatusIcon(): string {
+    return this.GetStatusIcon();
+  }
+
+  GetStatusText(): string {
+    if (this.HasReview) return 'Reviewed';
     return 'Needs Review';
   }
 
-  getCountClass(): string {
-    if (this.totalCount === 0) return 'none';
-    if (this.reviewedCount >= this.totalCount) return 'complete';
-    if (this.reviewedCount > 0) return 'partial';
+  /** @deprecated Use {@link GetStatusText}. */
+  getStatusText(): string {
+    return this.GetStatusText();
+  }
+
+  GetCountClass(): string {
+    if (this.TotalCount === 0) return 'none';
+    if (this.ReviewedCount >= this.TotalCount) return 'complete';
+    if (this.ReviewedCount > 0) return 'partial';
     return 'none';
   }
 
-  getCountIcon(): string {
-    if (this.totalCount === 0) return 'fa-solid fa-minus';
-    if (this.reviewedCount >= this.totalCount) return 'fa-solid fa-check-circle';
-    if (this.reviewedCount > 0) return 'fa-solid fa-clock';
+  /** @deprecated Use {@link GetCountClass}. */
+  getCountClass(): string {
+    return this.GetCountClass();
+  }
+
+  GetCountIcon(): string {
+    if (this.TotalCount === 0) return 'fa-solid fa-minus';
+    if (this.ReviewedCount >= this.TotalCount) return 'fa-solid fa-check-circle';
+    if (this.ReviewedCount > 0) return 'fa-solid fa-clock';
     return 'fa-solid fa-clipboard';
   }
 
+  /** @deprecated Use {@link GetCountIcon}. */
+  getCountIcon(): string {
+    return this.GetCountIcon();
+  }
+
+  GetPercentage(): number {
+    if (this.TotalCount === 0) return 0;
+    return (this.ReviewedCount / this.TotalCount) * 100;
+  }
+
+  /** @deprecated Use {@link GetPercentage}. */
   getPercentage(): number {
-    if (this.totalCount === 0) return 0;
-    return (this.reviewedCount / this.totalCount) * 100;
+    return this.GetPercentage();
   }
 }

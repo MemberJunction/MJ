@@ -16,8 +16,8 @@ import { RunView, type IMetadataProvider, type UserInfo, type EntityInfo, LogErr
 import type { MJMLTrainingPipelineEntity, MJMLModelEntity } from '@memberjunction/core-entities';
 import { type ModelingPlanSpec, deriveTrustVerdict, type TrustVerdict } from '@memberjunction/predictive-studio-core';
 
-import { modelingPlanToPipelineConfig, type PipelineConfig } from './modeling-plan-to-pipeline';
-import { trainModelViaEngine, wasTrainingLeakageFlagged } from '../operations/delegation';
+import { ModelingPlanToPipelineConfig, type PipelineConfig } from './modeling-plan-to-pipeline';
+import { TrainModelViaEngine, WasTrainingLeakageFlagged } from '../operations/delegation';
 
 /** Inputs for {@link PredictiveStudioPipelineBuilder.build}. */
 export interface BuildPredictionInput {
@@ -59,15 +59,15 @@ export class PredictiveStudioPipelineBuilder {
    * Build a prediction from an approved plan: create the pipeline, train, and publish if the trust
    * verdict clears the bar. Never throws — returns a typed result with `success`/`errorMessage`.
    */
-  public async build(input: BuildPredictionInput): Promise<BuildPredictionResult> {
+  public async Build(input: BuildPredictionInput): Promise<BuildPredictionResult> {
     const { spec, provider, user, autoPublish = true, sidecarVersion = 'predictive-studio-agent' } = input;
     try {
-      const config = modelingPlanToPipelineConfig(spec);
+      const config = ModelingPlanToPipelineConfig(spec);
       const pipeline = await this.createPipeline(config, provider, user);
-      const trainResult = await trainModelViaEngine({ pipelineId: pipeline.ID, sidecarVersion }, provider, user);
+      const trainResult = await TrainModelViaEngine({ pipelineId: pipeline.ID, sidecarVersion }, provider, user);
       const model = trainResult.model;
       const trust = deriveTrustVerdict(model);
-      const leakageFlagged = wasTrainingLeakageFlagged(trainResult);
+      const leakageFlagged = WasTrainingLeakageFlagged(trainResult);
 
       const { published, heldReason } = await this.maybePublish(model, trust, leakageFlagged, autoPublish);
       return {
@@ -85,6 +85,11 @@ export class PredictiveStudioPipelineBuilder {
       LogError(`PredictiveStudioPipelineBuilder.build failed: ${errorMessage}`);
       return { success: false, published: false, leakageFlagged: false, heldReason: null, errorMessage };
     }
+  }
+
+  /** @deprecated Use {@link Build}. */
+  public async build(input: BuildPredictionInput): Promise<BuildPredictionResult> {
+    return this.Build(input);
   }
 
   /** Create + save the `MJ: ML Training Pipelines` row from the resolved config. */

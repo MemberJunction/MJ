@@ -34,7 +34,7 @@ const NO_AGENT_NCCO = [{ action: 'talk', text: 'Sorry, no agent is available to 
  * Builds the Vonage telephony handler: the public answer/event router + a function to attach the media
  * WSS to the shared HTTP server.
  */
-export function createVonageTelephonyHandler(
+export function CreateVonageTelephonyHandler(
     publicUrl: string,
     config: VonageTelephonyConfig,
 ): {
@@ -60,6 +60,19 @@ export function createVonageTelephonyHandler(
         registry,
         service,
     };
+}
+
+/** @deprecated Use {@link CreateVonageTelephonyHandler}. */
+export function createVonageTelephonyHandler(
+    publicUrl: string,
+    config: VonageTelephonyConfig,
+): {
+    publicRouter: Router;
+    attachMediaStreamServer: () => void;
+    registry: VonageCallMediaRegistry;
+    service: VonageTelephonyService;
+} {
+    return CreateVonageTelephonyHandler(publicUrl, config);
 }
 
 /** Handles the inbound answer webhook: verify → resolve → start bridge → return the connect-websocket NCCO. */

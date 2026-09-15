@@ -134,12 +134,17 @@ async function drainQueue(): Promise<ReplayResult> {
  *
  * @returns A {@link ReplayResult} tallying what synced and what was dropped.
  */
-export async function replayQueue(): Promise<ReplayResult> {
+export async function ReplayQueue(): Promise<ReplayResult> {
     if (inFlight) return inFlight;
     inFlight = drainQueue().finally(() => {
         inFlight = null;
     });
     return inFlight;
+}
+
+/** @deprecated Use {@link ReplayQueue}. */
+export async function replayQueue(): Promise<ReplayResult> {
+    return ReplayQueue();
 }
 
 /**
@@ -148,6 +153,11 @@ export async function replayQueue(): Promise<ReplayResult> {
  *
  * @returns The {@link ReplayResult} of the pass.
  */
+export async function SyncNow(): Promise<ReplayResult> {
+    return ReplayQueue();
+}
+
+/** @deprecated Use {@link SyncNow}. */
 export async function syncNow(): Promise<ReplayResult> {
-    return replayQueue();
+    return SyncNow();
 }

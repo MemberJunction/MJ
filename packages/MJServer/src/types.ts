@@ -2,7 +2,7 @@ import { AggregateExpression, CompositeKey, DatabaseProviderBase, UserInfo } fro
 import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { GraphQLSchema } from 'graphql';
 import sql from 'mssql';
-import { getSystemUser } from './auth/index.js';
+import { GetSystemUser } from './auth/index.js';
 import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
 
 /**
@@ -133,12 +133,12 @@ export class MJServerEvent {
 
 export const MJ_SERVER_EVENT_CODE = 'MJ_SERVER_EVENT';
 
-export async function raiseEvent(type: MJServerEvent['type'], dataSources: DataSourceInfo[], userPayload: UserPayload, component?: any) {
+export async function RaiseEvent(type: MJServerEvent['type'], dataSources: DataSourceInfo[], userPayload: UserPayload, component?: any) {
   const event = new MJServerEvent();
   event.type = type;
   event.dataSources = dataSources;
   event.userPayload = userPayload;
-  event.systemUser = await getSystemUser();
+  event.systemUser = await GetSystemUser();
 
   const mje = new MJEvent();
   mje.args = event;
@@ -146,4 +146,9 @@ export async function raiseEvent(type: MJServerEvent['type'], dataSources: DataS
   mje.event = MJEventType.ComponentEvent;
   mje.eventCode = MJ_SERVER_EVENT_CODE;
   MJGlobal.Instance.RaiseEvent(mje);
+}
+
+/** @deprecated Use {@link RaiseEvent}. */
+export async function raiseEvent(type: MJServerEvent['type'], dataSources: DataSourceInfo[], userPayload: UserPayload, component?: any) {
+  return RaiseEvent(type, dataSources, userPayload, component);
 }

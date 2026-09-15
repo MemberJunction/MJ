@@ -53,7 +53,7 @@ export interface SemanticSearchOutcome {
  * that don't thread a provider (agents, MCP, CLI, scheduled jobs) — exactly
  * like every other action.
  */
-export async function runSemanticEntitySearch(
+export async function RunSemanticEntitySearch(
     params: RunActionParams,
     entityName: string,
     searchText: string,
@@ -91,17 +91,39 @@ export async function runSemanticEntitySearch(
     return { ok: true, results };
 }
 
+/** @deprecated Use {@link RunSemanticEntitySearch}. */
+export async function runSemanticEntitySearch(
+    params: RunActionParams,
+    entityName: string,
+    searchText: string,
+    topK: number,
+    minScore: number,
+    mode: 'semantic' | 'hybrid' | 'lexical' = 'semantic'
+): Promise<SemanticSearchOutcome> {
+    return RunSemanticEntitySearch(params, entityName, searchText, topK, minScore, mode);
+}
+
 /** Case-insensitive lookup of a raw action parameter value. */
-export function getActionParamValue(params: RunActionParams, name: string): unknown {
+export function GetActionParamValue(params: RunActionParams, name: string): unknown {
     const param = params.Params.find(p => p.Name.toLowerCase() === name.toLowerCase());
     return param?.Value;
 }
 
+/** @deprecated Use {@link GetActionParamValue}. */
+export function getActionParamValue(params: RunActionParams, name: string): unknown {
+    return GetActionParamValue(params, name);
+}
+
 /** Case-insensitive boolean parameter accessor with a default. */
-export function getActionBooleanParam(params: RunActionParams, name: string, defaultValue: boolean): boolean {
-    const value = getActionParamValue(params, name);
+export function GetActionBooleanParam(params: RunActionParams, name: string, defaultValue: boolean): boolean {
+    const value = GetActionParamValue(params, name);
     if (value === undefined || value === null) return defaultValue;
     if (typeof value === 'boolean') return value;
     if (typeof value === 'string') return value.toLowerCase() === 'true';
     return defaultValue;
+}
+
+/** @deprecated Use {@link GetActionBooleanParam}. */
+export function getActionBooleanParam(params: RunActionParams, name: string, defaultValue: boolean): boolean {
+    return GetActionBooleanParam(params, name, defaultValue);
 }

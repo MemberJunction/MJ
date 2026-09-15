@@ -122,7 +122,7 @@ function imageResultToAttachment(result: ImagePicker.ImagePickerResult): Capture
  * @returns The chosen image as a {@link CapturedAttachment}, or `null` when the
  *   user cancels, denies library access, or a native error occurs.
  */
-export async function pickImageFromLibrary(): Promise<CapturedAttachment | null> {
+export async function PickImageFromLibrary(): Promise<CapturedAttachment | null> {
     const allowed = await ensurePermission(
         () => ImagePicker.getMediaLibraryPermissionsAsync(),
         () => ImagePicker.requestMediaLibraryPermissionsAsync(),
@@ -139,6 +139,11 @@ export async function pickImageFromLibrary(): Promise<CapturedAttachment | null>
     }
 }
 
+/** @deprecated Use {@link PickImageFromLibrary}. */
+export async function pickImageFromLibrary(): Promise<CapturedAttachment | null> {
+    return PickImageFromLibrary();
+}
+
 /**
  * Capture a new photo with the camera.
  *
@@ -148,7 +153,7 @@ export async function pickImageFromLibrary(): Promise<CapturedAttachment | null>
  *
  * @returns The captured photo as a {@link CapturedAttachment}, or `null`.
  */
-export async function capturePhoto(): Promise<CapturedAttachment | null> {
+export async function CapturePhoto(): Promise<CapturedAttachment | null> {
     const allowed = await ensurePermission(
         () => ImagePicker.getCameraPermissionsAsync(),
         () => ImagePicker.requestCameraPermissionsAsync(),
@@ -163,6 +168,11 @@ export async function capturePhoto(): Promise<CapturedAttachment | null> {
     }
 }
 
+/** @deprecated Use {@link CapturePhoto}. */
+export async function capturePhoto(): Promise<CapturedAttachment | null> {
+    return CapturePhoto();
+}
+
 /**
  * Pick an arbitrary document (PDF, spreadsheet, etc.) via the system Files UI.
  * No runtime permission is required for the document picker.
@@ -170,7 +180,7 @@ export async function capturePhoto(): Promise<CapturedAttachment | null> {
  * @returns The chosen document as a {@link CapturedAttachment}, or `null` on
  *   cancel / native error.
  */
-export async function pickDocument(): Promise<CapturedAttachment | null> {
+export async function PickDocument(): Promise<CapturedAttachment | null> {
     try {
         // copyToCacheDirectory guarantees a readable local URI for base64 inlining.
         const result = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true });
@@ -188,6 +198,11 @@ export async function pickDocument(): Promise<CapturedAttachment | null> {
     }
 }
 
+/** @deprecated Use {@link PickDocument}. */
+export async function pickDocument(): Promise<CapturedAttachment | null> {
+    return PickDocument();
+}
+
 /**
  * Read a captured attachment's bytes as a base64 string, for callers that need
  * to inline the payload (e.g. an eventual upload body). Uses the `expo-file-system`
@@ -196,12 +211,17 @@ export async function pickDocument(): Promise<CapturedAttachment | null> {
  * @param att The attachment whose bytes to read.
  * @returns The base64-encoded contents, or `null` if the file can't be read.
  */
-export async function readAttachmentBase64(att: CapturedAttachment): Promise<string | null> {
+export async function ReadAttachmentBase64(att: CapturedAttachment): Promise<string | null> {
     try {
         return await new File(att.uri).base64();
     } catch {
         return null;
     }
+}
+
+/** @deprecated Use {@link ReadAttachmentBase64}. */
+export async function readAttachmentBase64(att: CapturedAttachment): Promise<string | null> {
+    return ReadAttachmentBase64(att);
 }
 
 /** Human-readable byte size, e.g. `842 B`, `12 KB`, `3.4 MB`. */
@@ -218,10 +238,15 @@ function formatBytes(bytes: number): string {
  *
  * @example `[Attached image: IMG_0421.jpg (image/jpeg, 245 KB)]`
  */
-export function describeAttachment(att: CapturedAttachment): string {
+export function DescribeAttachment(att: CapturedAttachment): string {
     const size = att.size != null ? `, ${formatBytes(att.size)}` : '';
     const label = att.kind === 'image' ? 'image' : 'file';
     return `[Attached ${label}: ${att.name} (${att.mimeType}${size})]`;
+}
+
+/** @deprecated Use {@link DescribeAttachment}. */
+export function describeAttachment(att: CapturedAttachment): string {
+    return DescribeAttachment(att);
 }
 
 /**
@@ -234,11 +259,16 @@ export function describeAttachment(att: CapturedAttachment): string {
  * @param att The chosen attachment, or `null`.
  * @returns The message text to actually send (never empty when an attachment is set).
  */
-export function composeMessageWithAttachment(text: string, att: CapturedAttachment | null): string {
+export function ComposeMessageWithAttachment(text: string, att: CapturedAttachment | null): string {
     const trimmed = text.trim();
     if (!att) return trimmed;
-    const note = describeAttachment(att);
+    const note = DescribeAttachment(att);
     return trimmed.length > 0 ? `${trimmed}\n\n${note}` : note;
+}
+
+/** @deprecated Use {@link ComposeMessageWithAttachment}. */
+export function composeMessageWithAttachment(text: string, att: CapturedAttachment | null): string {
+    return ComposeMessageWithAttachment(text, att);
 }
 
 /**
@@ -279,7 +309,7 @@ async function resolveActiveStorageProviderId(contextUser?: UserInfo): Promise<s
  * @param contextUser Optional acting user (falls back to the current user).
  * @returns `{ id }` of the created File record, or `null` on failure.
  */
-export async function persistAttachment(
+export async function PersistAttachment(
     att: CapturedAttachment,
     contextUser?: UserInfo,
 ): Promise<{ id: string } | null> {
@@ -300,4 +330,12 @@ export async function persistAttachment(
     const saved = await file.Save();
     if (!saved) return null;
     return { id: file.ID };
+}
+
+/** @deprecated Use {@link PersistAttachment}. */
+export async function persistAttachment(
+    att: CapturedAttachment,
+    contextUser?: UserInfo,
+): Promise<{ id: string } | null> {
+    return PersistAttachment(att, contextUser);
 }

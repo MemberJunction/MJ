@@ -544,10 +544,15 @@ export abstract class CodeGenDatabaseProvider {
      * primary-key/virtual-field exclusions that PostgreSQL had. See
      * {@link isIndexableForeignKey}.
      */
-    generateForeignKeyIndexes(entity: EntityInfo): string[] {
+    GenerateForeignKeyIndexes(entity: EntityInfo): string[] {
         return entity.Fields
             .filter((f) => this.isIndexableForeignKey(f))
             .map((f) => this.formatIndexStatement(entity, f, this.foreignKeyIndexName(entity, f)));
+    }
+
+    /** @deprecated Use {@link GenerateForeignKeyIndexes}. */
+    generateForeignKeyIndexes(entity: EntityInfo): string[] {
+        return this.GenerateForeignKeyIndexes(entity);
     }
 
     /**
@@ -605,7 +610,7 @@ export abstract class CodeGenDatabaseProvider {
      * columns under a different name will not be recognised, and this will add a second one —
      * drop the hand-made one rather than disabling this.
      */
-    generateSoftPrimaryKeyIndex(entity: EntityInfo): string[] {
+    GenerateSoftPrimaryKeyIndex(entity: EntityInfo): string[] {
         const keyFields = this.softPrimaryKeyFields(entity);
         if (keyFields.length === 0) {
             return [];
@@ -628,6 +633,11 @@ export abstract class CodeGenDatabaseProvider {
         }
 
         return [this.formatCompositeIndexStatement(entity, keyFields, this.softPrimaryKeyIndexName(entity))];
+    }
+
+    /** @deprecated Use {@link GenerateSoftPrimaryKeyIndex}. */
+    generateSoftPrimaryKeyIndex(entity: EntityInfo): string[] {
+        return this.GenerateSoftPrimaryKeyIndex(entity);
     }
 
     /**
@@ -1069,7 +1079,7 @@ export abstract class CodeGenDatabaseProvider {
      *   - `formatInsertDefaultValue(ef)` render hook (for type-strict
      *     dialects that need to massage default values).
      */
-    generateInsertFieldString(entity: EntityInfo, entityFields: EntityFieldInfo[], prefix: string, excludePrimaryKey: boolean = false): string {
+    GenerateInsertFieldString(entity: EntityInfo, entityFields: EntityFieldInfo[], prefix: string, excludePrimaryKey: boolean = false): string {
         const dialect = this.Dialect;
         const usingParameterPrefix = !!prefix && prefix.length > 0;
         const parts: string[] = [];
@@ -1138,6 +1148,11 @@ export abstract class CodeGenDatabaseProvider {
         return parts.join(',\n                ');
     }
 
+    /** @deprecated Use {@link GenerateInsertFieldString}. */
+    generateInsertFieldString(entity: EntityInfo, entityFields: EntityFieldInfo[], prefix: string, excludePrimaryKey: boolean = false): string {
+        return this.GenerateInsertFieldString(entity, entityFields, prefix, excludePrimaryKey);
+    }
+
     /**
      * Generates the SET clause body for an UPDATE statement with tolerant
      * merge semantics. Each non-PK column wraps the parameter with the
@@ -1154,7 +1169,7 @@ export abstract class CodeGenDatabaseProvider {
      * `IsNull`, `NullLiteral`). Subclasses can override to customize line
      * formatting if a future dialect needs something different.
      */
-    generateUpdateFieldString(entityFields: EntityFieldInfo[]): string {
+    GenerateUpdateFieldString(entityFields: EntityFieldInfo[]): string {
         const dialect = this.Dialect;
         const parts: string[] = [];
         for (const ef of entityFields) {
@@ -1177,6 +1192,11 @@ export abstract class CodeGenDatabaseProvider {
             }
         }
         return parts.join(',\n        ');
+    }
+
+    /** @deprecated Use {@link GenerateUpdateFieldString}. */
+    generateUpdateFieldString(entityFields: EntityFieldInfo[]): string {
+        return this.GenerateUpdateFieldString(entityFields);
     }
 
     // ─── ROUTINE NAMING ──────────────────────────────────────────────────
@@ -1675,7 +1695,7 @@ export abstract class CodeGenDatabaseProvider {
      * platform-specific shortcuts (e.g. checking only `sys.procedures` on
      * SQL Server) but the default is fine for all current dialects.
      */
-    async validateExpectedCRUDFunctions(
+    async ValidateExpectedCRUDFunctions(
         pool: CodeGenConnection,
         entities: EntityInfo[],
     ): Promise<CRUDValidationMissing[]> {
@@ -1732,6 +1752,14 @@ export abstract class CodeGenDatabaseProvider {
         );
     }
 
+    /** @deprecated Use {@link ValidateExpectedCRUDFunctions}. */
+    async validateExpectedCRUDFunctions(
+        pool: CodeGenConnection,
+        entities: EntityInfo[],
+    ): Promise<CRUDValidationMissing[]> {
+        return this.ValidateExpectedCRUDFunctions(pool, entities);
+    }
+
     /**
      * Cross-check every entity's declared fields against the columns its base view
      * actually produces.
@@ -1754,7 +1782,7 @@ export abstract class CodeGenDatabaseProvider {
      *
      * Read-only — this reports, it does not repair.
      */
-    async validateEntityFieldsResolve(
+    async ValidateEntityFieldsResolve(
         pool: CodeGenConnection,
         entities: EntityInfo[],
     ): Promise<FieldResolutionGap[]> {
@@ -1801,6 +1829,14 @@ export abstract class CodeGenDatabaseProvider {
             }
         }
         return gaps;
+    }
+
+    /** @deprecated Use {@link ValidateEntityFieldsResolve}. */
+    async validateEntityFieldsResolve(
+        pool: CodeGenConnection,
+        entities: EntityInfo[],
+    ): Promise<FieldResolutionGap[]> {
+        return this.ValidateEntityFieldsResolve(pool, entities);
     }
 
     /**
@@ -1887,7 +1923,7 @@ export interface PhasedExecutionResult {
  * @returns The resolved provider subclass instance.
  * @throws Error if no provider is registered for the given platform.
  */
-export function resolveCodeGenDatabaseProvider(platform: DatabasePlatform): CodeGenDatabaseProvider {
+export function ResolveCodeGenDatabaseProvider(platform: DatabasePlatform): CodeGenDatabaseProvider {
     const provider = MJGlobal.Instance.ClassFactory.CreateInstance<CodeGenDatabaseProvider>(
         CodeGenDatabaseProvider,
         platform,
@@ -1899,4 +1935,9 @@ export function resolveCodeGenDatabaseProvider(platform: DatabasePlatform): Code
         );
     }
     return provider;
+}
+
+/** @deprecated Use {@link ResolveCodeGenDatabaseProvider}. */
+export function resolveCodeGenDatabaseProvider(platform: DatabasePlatform): CodeGenDatabaseProvider {
+    return ResolveCodeGenDatabaseProvider(platform);
 }

@@ -45,13 +45,23 @@ export interface OrganicKeyClusterMember {
 }
 
 /** Helper: returns the complete column list for a member (single or compound). */
-export function memberColumns(m: OrganicKeyClusterMember): string[] {
+export function MemberColumns(m: OrganicKeyClusterMember): string[] {
     return [m.column, ...(m.additionalColumns ?? [])];
 }
 
+/** @deprecated Use {@link MemberColumns}. */
+export function memberColumns(m: OrganicKeyClusterMember): string[] {
+    return MemberColumns(m);
+}
+
 /** Helper: true when the member represents a compound tuple (Pattern 2). */
-export function isCompoundMember(m: OrganicKeyClusterMember): boolean {
+export function IsCompoundMember(m: OrganicKeyClusterMember): boolean {
     return (m.additionalColumns?.length ?? 0) > 0;
+}
+
+/** @deprecated Use {@link IsCompoundMember}. */
+export function isCompoundMember(m: OrganicKeyClusterMember): boolean {
+    return IsCompoundMember(m);
 }
 
 

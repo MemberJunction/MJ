@@ -36,7 +36,7 @@ export const MAX_DRIVERS = 5;
 /**
  * Coerce a dynamic field value into a finite number, or null when it isn't one.
  */
-export function toNumber(value: unknown): number | null {
+export function ToNumber(value: unknown): number | null {
     if (typeof value === 'number') {
         return Number.isFinite(value) ? value : null;
     }
@@ -47,13 +47,18 @@ export function toNumber(value: unknown): number | null {
     return null;
 }
 
+/** @deprecated Use {@link ToNumber}. */
+export function toNumber(value: unknown): number | null {
+    return ToNumber(value);
+}
+
 /**
  * Decide how to render a value given the model's problem type and the value.
  *  - regression + numeric → 'numeric'
  *  - classification + value in [0,1] → 'probability' (a confidence/score we can gauge)
  *  - everything else (a class label, a missing value) → 'class'
  */
-export function valueKind(problemType: ModelProblemType, numeric: number | null): PredictionValueKind {
+export function ValueKind(problemType: ModelProblemType, numeric: number | null): PredictionValueKind {
     const isRegression = problemType === 'regression';
     if (isRegression && numeric != null) {
         return 'numeric';
@@ -64,20 +69,35 @@ export function valueKind(problemType: ModelProblemType, numeric: number | null)
     return 'class';
 }
 
+/** @deprecated Use {@link ValueKind}. */
+export function valueKind(problemType: ModelProblemType, numeric: number | null): PredictionValueKind {
+    return ValueKind(problemType, numeric);
+}
+
 /**
  * Neutral tercile for a 0–1 value. Position on the value axis only — no
  * assumption that high is good or bad. Values are clamped to [0,1].
  */
-export function bandFor(value: number): PredictionBand {
+export function BandFor(value: number): PredictionBand {
     const v = Math.max(0, Math.min(1, value));
     if (v < 1 / 3) return 'low';
     if (v < 2 / 3) return 'mid';
     return 'high';
 }
 
+/** @deprecated Use {@link BandFor}. */
+export function bandFor(value: number): PredictionBand {
+    return BandFor(value);
+}
+
 /** Round a 0–1 probability to an integer 0–100 gauge fill, clamped. */
-export function gaugePct(value: number): number {
+export function GaugePct(value: number): number {
     return Math.round(Math.max(0, Math.min(1, value)) * 100);
+}
+
+/** @deprecated Use {@link GaugePct}. */
+export function gaugePct(value: number): number {
+    return GaugePct(value);
 }
 
 /**
@@ -87,9 +107,9 @@ export function gaugePct(value: number): number {
  *  - class label → the label string
  *  - missing/empty → "—" (em dash)
  */
-export function formatValue(rawValue: unknown, numeric: number | null, kind: PredictionValueKind): string {
+export function FormatValue(rawValue: unknown, numeric: number | null, kind: PredictionValueKind): string {
     if (kind === 'probability' && numeric != null) {
-        return `${gaugePct(numeric)}%`;
+        return `${GaugePct(numeric)}%`;
     }
     if (kind === 'numeric' && numeric != null) {
         return numeric.toLocaleString(undefined, { maximumFractionDigits: 4 });
@@ -100,11 +120,16 @@ export function formatValue(rawValue: unknown, numeric: number | null, kind: Pre
     return String(rawValue);
 }
 
+/** @deprecated Use {@link FormatValue}. */
+export function formatValue(rawValue: unknown, numeric: number | null, kind: PredictionValueKind): string {
+    return FormatValue(rawValue, numeric, kind);
+}
+
 /**
  * Pick the human label for a prediction: prefer the model's target variable,
  * then the bound column name, then a generic fallback.
  */
-export function resolveLabel(targetVariable: string | null, targetColumn: string | null): string {
+export function ResolveLabel(targetVariable: string | null, targetColumn: string | null): string {
     const target = targetVariable?.trim();
     if (target) return target;
     const col = targetColumn?.trim();
@@ -112,12 +137,17 @@ export function resolveLabel(targetVariable: string | null, targetColumn: string
     return 'Prediction';
 }
 
+/** @deprecated Use {@link ResolveLabel}. */
+export function resolveLabel(targetVariable: string | null, targetColumn: string | null): string {
+    return ResolveLabel(targetVariable, targetColumn);
+}
+
 /**
  * Parse a model's `FeatureImportance` JSON (`Record<string, number>`) into the
  * top-N sorted drivers with relative bar widths. Returns [] on null / invalid /
  * empty input — the caller omits the drivers section cleanly when empty.
  */
-export function parseDrivers(featureImportanceJson: string | null): PredictionDriver[] {
+export function ParseDrivers(featureImportanceJson: string | null): PredictionDriver[] {
     if (!featureImportanceJson) {
         return [];
     }
@@ -131,7 +161,7 @@ export function parseDrivers(featureImportanceJson: string | null): PredictionDr
         return [];
     }
     const entries = Object.entries(parsed as Record<string, unknown>)
-        .map(([name, raw]) => ({ name, importance: Math.abs(toNumber(raw) ?? 0) }))
+        .map(([name, raw]) => ({ name, importance: Math.abs(ToNumber(raw) ?? 0) }))
         .filter(d => d.importance > 0)
         .sort((a, b) => b.importance - a.importance)
         .slice(0, MAX_DRIVERS);
@@ -143,8 +173,13 @@ export function parseDrivers(featureImportanceJson: string | null): PredictionDr
     }));
 }
 
+/** @deprecated Use {@link ParseDrivers}. */
+export function parseDrivers(featureImportanceJson: string | null): PredictionDriver[] {
+    return ParseDrivers(featureImportanceJson);
+}
+
 /** Format a last-scored timestamp to a short date, or null when absent/invalid. */
-export function formatLastScored(lastScoredAt: Date | string | null): string | null {
+export function FormatLastScored(lastScoredAt: Date | string | null): string | null {
     if (!lastScoredAt) {
         return null;
     }
@@ -153,4 +188,9 @@ export function formatLastScored(lastScoredAt: Date | string | null): string | n
         return null;
     }
     return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+/** @deprecated Use {@link FormatLastScored}. */
+export function formatLastScored(lastScoredAt: Date | string | null): string | null {
+    return FormatLastScored(lastScoredAt);
 }

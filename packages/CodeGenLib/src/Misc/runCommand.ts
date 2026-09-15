@@ -17,7 +17,7 @@ const FAILURE_OUTPUT_TAIL_LINES = 40;
  * Combine the exit-code message with a tail of captured stdout/stderr so AFTER
  * failures show the actual tsc/pnpm diagnostic instead of just "exited with code N".
  */
-export function formatCommandFailureDetail(result: CommandExecutionResult, tailLines: number = FAILURE_OUTPUT_TAIL_LINES): string {
+export function FormatCommandFailureDetail(result: CommandExecutionResult, tailLines: number = FAILURE_OUTPUT_TAIL_LINES): string {
   const parts: string[] = [];
   const errorText = (result.error || '').trim();
   if (errorText) {
@@ -32,18 +32,23 @@ export function formatCommandFailureDetail(result: CommandExecutionResult, tailL
   return parts.join('\n');
 }
 
+/** @deprecated Use {@link FormatCommandFailureDetail}. */
+export function formatCommandFailureDetail(result: CommandExecutionResult, tailLines: number = FAILURE_OUTPUT_TAIL_LINES): string {
+  return FormatCommandFailureDetail(result, tailLines);
+}
+
 /**
  * Base class that handles the process of running commands which can be done executed from any other area of the system, typically done by the main runMemberJunctionCodeGen process
  */
 export class RunCommandsBase {
-  public async runCommands(commands: CommandInfo[]): Promise<CommandExecutionResult[]>{
+  public async RunCommands(commands: CommandInfo[]): Promise<CommandExecutionResult[]>{
     try {
       const results: CommandExecutionResult[] = [];
 
       for (const command of commands) {
         try {
           // do this in a safe way so that if one command fails, the others can still run
-          results.push(await this.runCommand(command));
+          results.push(await this.RunCommand(command));
         }
         catch (e) {
           // A failed command (non-zero exit / spawn error) rejects. Record it as a
@@ -64,8 +69,13 @@ export class RunCommandsBase {
     }
   }
 
+  /** @deprecated Use {@link RunCommands}. */
+  public async runCommands(commands: CommandInfo[]): Promise<CommandExecutionResult[]> {
+    return this.RunCommands(commands);
+  }
 
-  public async runCommand(command: CommandInfo ): Promise<CommandExecutionResult> {
+
+  public async RunCommand(command: CommandInfo ): Promise<CommandExecutionResult> {
     let cp: ChildProcess = null!;
     try {
       let output = '';
@@ -174,5 +184,10 @@ export class RunCommandsBase {
       }
       throw e;
     }
+  }
+
+  /** @deprecated Use {@link RunCommand}. */
+  public async runCommand(command: CommandInfo ): Promise<CommandExecutionResult> {
+    return this.RunCommand(command);
   }
 }

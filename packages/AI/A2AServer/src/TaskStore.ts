@@ -124,23 +124,53 @@ export class TaskStore implements IShutdownable {
         return evicted;
     }
 
-    public set(id: string, task: Task): this {
+    public Set(id: string, task: Task): this {
         this._tasks.set(id, task);
         return this;
     }
-    public get(id: string): Task | undefined {
+
+    /** @deprecated Use {@link Set}. */
+    public set(id: string, task: Task): this {
+        return this.Set(id, task);
+    }
+    public Get(id: string): Task | undefined {
         return this._tasks.get(id);
     }
-    public has(id: string): boolean {
+
+    /** @deprecated Use {@link Get}. */
+    public get(id: string): Task | undefined {
+        return this.Get(id);
+    }
+    public Has(id: string): boolean {
         return this._tasks.has(id);
     }
-    public delete(id: string): boolean {
+
+    /** @deprecated Use {@link Has}. */
+    public has(id: string): boolean {
+        return this.Has(id);
+    }
+    public Delete(id: string): boolean {
         return this._tasks.delete(id);
     }
-    public get size(): number {
+
+    /** @deprecated Use {@link Delete}. */
+    public delete(id: string): boolean {
+        return this.Delete(id);
+    }
+    public get Size(): number {
         return this._tasks.size;
     }
-    public values(): IterableIterator<Task> {
+
+    /** @deprecated Use {@link Size}. */
+    public get size(): number {
+        return this.Size;
+    }
+    public Values(): IterableIterator<Task> {
         return this._tasks.values();
+    }
+
+    /** @deprecated Use {@link Values}. */
+    public values(): IterableIterator<Task> {
+        return this.Values();
     }
 }

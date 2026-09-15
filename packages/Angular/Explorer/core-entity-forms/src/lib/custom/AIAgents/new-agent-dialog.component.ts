@@ -27,14 +27,68 @@ export class NewAgentDialogComponent extends BaseAngularComponent implements OnI
     redirectToForm: true
   };
   
-  form!: FormGroup;
-  isLoading$ = new BehaviorSubject<boolean>(false);
-  models$ = new BehaviorSubject<MJAIModelEntityExtended[]>([]);
-  agentTypes$ = new BehaviorSubject<MJAIAgentTypeEntity[]>([]);
-  isSubmitting = false;
+  Form!: FormGroup;
+
+  /** @deprecated Use {@link Form}. */
+  get form(): FormGroup {
+    return this.Form;
+  }
+  /** @deprecated Use {@link Form}. */
+  set form(value: FormGroup) {
+    this.Form = value;
+  }
+  IsLoading$ = new BehaviorSubject<boolean>(false);
+
+  /** @deprecated Use {@link IsLoading$}. */
+  get isLoading$() {
+    return this.IsLoading$;
+  }
+  /** @deprecated Use {@link IsLoading$}. */
+  set isLoading$(value) {
+    this.IsLoading$ = value;
+  }
+  Models$ = new BehaviorSubject<MJAIModelEntityExtended[]>([]);
+
+  /** @deprecated Use {@link Models$}. */
+  get models$() {
+    return this.Models$;
+  }
+  /** @deprecated Use {@link Models$}. */
+  set models$(value) {
+    this.Models$ = value;
+  }
+  AgentTypes$ = new BehaviorSubject<MJAIAgentTypeEntity[]>([]);
+
+  /** @deprecated Use {@link AgentTypes$}. */
+  get agentTypes$() {
+    return this.AgentTypes$;
+  }
+  /** @deprecated Use {@link AgentTypes$}. */
+  set agentTypes$(value) {
+    this.AgentTypes$ = value;
+  }
+  IsSubmitting = false;
+
+  /** @deprecated Use {@link IsSubmitting}. */
+  get isSubmitting() {
+    return this.IsSubmitting;
+  }
+  /** @deprecated Use {@link IsSubmitting}. */
+  set isSubmitting(value) {
+    this.IsSubmitting = value;
+  }
   
   /** Set by NewAgentDialogService after creation */
-  public dialogRef: MJDialogRef | null = null;
+  public DialogRef: MJDialogRef | null = null;
+
+  /** @deprecated Use {@link DialogRef}. */
+  public get dialogRef(): MJDialogRef | null {
+    return this.DialogRef;
+  }
+  /** @deprecated Use {@link DialogRef}. */
+  public set dialogRef(value: MJDialogRef | null) {
+    this.DialogRef = value;
+  }
 
   constructor(
     private fb: FormBuilder,
@@ -48,7 +102,7 @@ export class NewAgentDialogComponent extends BaseAngularComponent implements OnI
   }
   
   private initializeForm() {
-    this.form = this.fb.group({
+    this.Form = this.fb.group({
       name: ['', [Validators.required, Validators.maxLength(255)]],
       description: [''],
       modelId: ['', Validators.required],
@@ -61,7 +115,7 @@ export class NewAgentDialogComponent extends BaseAngularComponent implements OnI
   }
   
   private async loadData() {
-    this.isLoading$.next(true);
+    this.IsLoading$.next(true);
     
     try {
       const engine = AIEngineBase.Instance;
@@ -71,29 +125,29 @@ export class NewAgentDialogComponent extends BaseAngularComponent implements OnI
         return a.Name.localeCompare(b.Name);
       });
       
-      this.models$.next(models || []);
+      this.Models$.next(models || []);
       
       // Pre-select first model if available
       if (models && models.length > 0) {
-        this.form.patchValue({ modelId: models[0].ID });
+        this.Form.patchValue({ modelId: models[0].ID });
       }
       
       const agentTypes = engine.AgentTypes;
-      this.agentTypes$.next(agentTypes as MJAIAgentTypeEntity[] || []);
+      this.AgentTypes$.next(agentTypes as MJAIAgentTypeEntity[] || []);
     } catch (error) {
       console.error('Error loading data:', error);
       console.error('Failed to load required data');
     } finally {
-      this.isLoading$.next(false);
+      this.IsLoading$.next(false);
     }
   }
   
-  async onSubmit() {
-    if (this.form.invalid || this.isSubmitting) {
+  async OnSubmit() {
+    if (this.Form.invalid || this.IsSubmitting) {
       return;
     }
     
-    this.isSubmitting = true;
+    this.IsSubmitting = true;
     
     try {
       const md = this.ProviderToUse;
@@ -104,8 +158,8 @@ export class NewAgentDialogComponent extends BaseAngularComponent implements OnI
       }
       
       // Set agent properties
-      agent.Name = this.form.value.name;
-      agent.Description = this.form.value.description;
+      agent.Name = this.Form.value.name;
+      agent.Description = this.Form.value.description;
       
       // Set parent agent if provided
       if (this.config.parentAgentId) {
@@ -124,7 +178,7 @@ export class NewAgentDialogComponent extends BaseAngularComponent implements OnI
         MJNotificationService.Instance.CreateSimpleNotification('Agent created successfully!', 'success', 3000);
 
         // Close dialog with the new agent
-        this.dialogRef?.Close({ agent, action: 'created' });
+        this.DialogRef?.Close({ agent, action: 'created' });
 
         // Redirect to form if configured
         if (this.config.redirectToForm && !this.config.parentAgentId) {
@@ -141,11 +195,16 @@ export class NewAgentDialogComponent extends BaseAngularComponent implements OnI
       console.error('Error creating agent:', error);
       MJNotificationService.Instance.CreateSimpleNotification('Failed to create agent: ' + errorMessage, 'error', 5000);
     } finally {
-      this.isSubmitting = false;
+      this.IsSubmitting = false;
     }
   }
 
+  /** @deprecated Use {@link OnSubmit}. */
+  async onSubmit() {
+    return this.OnSubmit();
+  }
+
   onCancel() {
-    this.dialogRef?.Close({ action: 'cancelled' });
+    this.DialogRef?.Close({ action: 'cancelled' });
   }
 }

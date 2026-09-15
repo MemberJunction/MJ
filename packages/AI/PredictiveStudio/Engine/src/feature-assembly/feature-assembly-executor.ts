@@ -48,7 +48,7 @@ import type { AIPromptParams } from '@memberjunction/ai-core-plus';
 import type { VisionLLMFeatureStep } from '@memberjunction/predictive-studio-core';
 
 import { type IFeatureDataAccess, RunViewDataAccess, type SourceRow } from './data-access';
-import { type DatedRow, resolveAsOfDate, daysSinceLastActivityAsOf, activityCountAsOf } from './as-of';
+import { type DatedRow, ResolveAsOfDate, DaysSinceLastActivityAsOf, ActivityCountAsOf } from './as-of';
 import { LeakageGuardEnforcer } from './leakage-guard';
 import { VisionFeatureExtractor, type IVisionPromptRunner } from './vision-llm';
 
@@ -645,7 +645,7 @@ export class FeatureAssemblyExecutor {
     const rows: Array<Array<string | number | boolean | null>> = [];
     for (const record of records) {
       const recordId = String(record[pkField] ?? '');
-      const asOfDate = resolveAsOfDate(params.asOf, record, params.labelEventDates?.[recordId] ?? null);
+      const asOfDate = ResolveAsOfDate(params.asOf, record, params.labelEventDates?.[recordId] ?? null);
 
       const rowValues: Array<string | number | boolean | null> = [];
       for (const emitter of plan.emitters) {
@@ -708,9 +708,9 @@ export class FeatureAssemblyExecutor {
     const datedRows = bySource?.get(recordId) ?? [];
     switch (emitter.datedFeature.Aggregate) {
       case 'days_since_last_activity':
-        return daysSinceLastActivityAsOf(datedRows, asOfDate);
+        return DaysSinceLastActivityAsOf(datedRows, asOfDate);
       case 'activity_count':
-        return activityCountAsOf(datedRows, asOfDate);
+        return ActivityCountAsOf(datedRows, asOfDate);
       default:
         return null;
     }

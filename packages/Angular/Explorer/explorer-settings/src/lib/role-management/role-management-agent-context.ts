@@ -21,13 +21,23 @@ export type RoleTypeFilter = (typeof VALID_ROLE_TYPE_FILTERS)[number];
 export const ROLE_AGENT_CONTEXT_NAME_LIST_CAP = 25;
 
 /** Type-guard for a role-type filter string. Keeps the FilterRolesByType tool tolerant. */
-export function isValidRoleTypeFilter(value: unknown): value is RoleTypeFilter {
+export function IsValidRoleTypeFilter(value: unknown): value is RoleTypeFilter {
     return typeof value === 'string' && (VALID_ROLE_TYPE_FILTERS as readonly string[]).includes(value);
 }
 
+/** @deprecated Use {@link IsValidRoleTypeFilter}. */
+export function isValidRoleTypeFilter(value: unknown): value is RoleTypeFilter {
+    return IsValidRoleTypeFilter(value);
+}
+
 /** Cap a list of names to {@link ROLE_AGENT_CONTEXT_NAME_LIST_CAP}. Pure + deterministic. */
-export function capRoleNames(names: readonly string[]): string[] {
+export function CapRoleNames(names: readonly string[]): string[] {
     return names.slice(0, ROLE_AGENT_CONTEXT_NAME_LIST_CAP);
+}
+
+/** @deprecated Use {@link CapRoleNames}. */
+export function capRoleNames(names: readonly string[]): string[] {
+    return CapRoleNames(names);
 }
 
 /** A minimal descriptor of a role (id + display name) supplied by the component. */
@@ -50,7 +60,7 @@ export type RoleLookupResult =
  * Pure + deterministic. On a miss, returns a clear error listing a sample of available role
  * names so the agent can correct itself.
  */
-export function resolveRoleByIDOrName(input: string, candidates: readonly RoleNameCandidate[]): RoleLookupResult {
+export function ResolveRoleByIDOrName(input: string, candidates: readonly RoleNameCandidate[]): RoleLookupResult {
     const needle = input.trim().toLowerCase();
     if (!needle) {
         return { ok: false, error: 'Provide a role ID or name to select.' };
@@ -69,6 +79,11 @@ export function resolveRoleByIDOrName(input: string, candidates: readonly RoleNa
     }
     const sample = candidates.slice(0, 8).map(c => c.Name).join(', ');
     return { ok: false, error: `No role matches "${input}". Available roles: ${sample || '(none loaded)'}.` };
+}
+
+/** @deprecated Use {@link ResolveRoleByIDOrName}. */
+export function resolveRoleByIDOrName(input: string, candidates: readonly RoleNameCandidate[]): RoleLookupResult {
+    return ResolveRoleByIDOrName(input, candidates);
 }
 
 /**
@@ -121,7 +136,7 @@ export interface RoleManagementAgentContextInput {
  * role-name list and emits a companion total-count when truncated; surfaces the read-only
  * permission summary only when a role is selected and its permissions have been loaded.
  */
-export function buildRoleManagementAgentContext(input: RoleManagementAgentContextInput): Record<string, unknown> {
+export function BuildRoleManagementAgentContext(input: RoleManagementAgentContextInput): Record<string, unknown> {
     const context: Record<string, unknown> = {
         TotalRoleCount: input.TotalRoleCount,
         FilteredRoleCount: input.FilteredRoleCount,
@@ -134,7 +149,7 @@ export function buildRoleManagementAgentContext(input: RoleManagementAgentContex
     };
 
     if (input.VisibleRoleNames.length > 0) {
-        context['VisibleRoleNames'] = capRoleNames(input.VisibleRoleNames);
+        context['VisibleRoleNames'] = CapRoleNames(input.VisibleRoleNames);
         if (input.VisibleRoleNames.length > ROLE_AGENT_CONTEXT_NAME_LIST_CAP) {
             context['VisibleRoleCount'] = input.VisibleRoleNames.length;
         }
@@ -147,4 +162,9 @@ export function buildRoleManagementAgentContext(input: RoleManagementAgentContex
     }
 
     return context;
+}
+
+/** @deprecated Use {@link BuildRoleManagementAgentContext}. */
+export function buildRoleManagementAgentContext(input: RoleManagementAgentContextInput): Record<string, unknown> {
+    return BuildRoleManagementAgentContext(input);
 }

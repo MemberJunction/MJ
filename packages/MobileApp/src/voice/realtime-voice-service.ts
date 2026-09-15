@@ -36,11 +36,11 @@ import {
 import type { ClientRealtimeSessionConfig, JSONObject } from '@memberjunction/ai';
 import {
     LoadRNVoiceDrivers,
-    acquireVoiceInputStream,
-    configureVoiceAudioSession,
-    isRealtimePcmAudioSupported,
-    requestMicrophonePermission,
-    resetVoiceAudioSession,
+    AcquireVoiceInputStream,
+    ConfigureVoiceAudioSession,
+    IsRealtimePcmAudioSupported,
+    RequestMicrophonePermission,
+    ResetVoiceAudioSession,
 } from './rn-audio-adapter';
 
 // Keep the RN driver's @RegisterClass side effect alive under the bundler (see the adapter).
@@ -144,9 +144,14 @@ export class RealtimeVoiceService {
      * Subscribe to session events (state changes, transcripts, errors). Returns an unsubscribe
      * function. Safe to call more than once; each subscriber receives every event kind.
      */
-    public on(handler: (event: VoiceServiceEvent) => void): () => void {
+    public On(handler: (event: VoiceServiceEvent) => void): () => void {
         this.handlers.add(handler);
         return () => this.handlers.delete(handler);
+    }
+
+    /** @deprecated Use {@link On}. */
+    public on(handler: (event: VoiceServiceEvent) => void): () => void {
+        return this.On(handler);
     }
 
     /**
@@ -155,8 +160,13 @@ export class RealtimeVoiceService {
      * Audio meters, so this returns `null` and the UI falls back to turn-state animation — sampled
      * cheaply per animation frame by the screen.
      */
-    public getAudioActivity(): RealtimeAudioActivity | null {
+    public GetAudioActivity(): RealtimeAudioActivity | null {
         return this.client?.GetAudioActivity() ?? null;
+    }
+
+    /** @deprecated Use {@link GetAudioActivity}. */
+    public getAudioActivity(): RealtimeAudioActivity | null {
+        return this.GetAudioActivity();
     }
 
     /**
@@ -164,7 +174,7 @@ export class RealtimeVoiceService {
      * `'unavailable'` / `'error'`); further progress arrives via {@link on}. Never throws — every
      * failure path emits a state event and returns.
      */
-    public async start(options: StartVoiceSessionOptions): Promise<void> {
+    public async Start(options: StartVoiceSessionOptions): Promise<void> {
         if (this.state !== 'idle' && this.state !== 'closed' && this.state !== 'unavailable') {
             return; // a session is already in progress
         }
@@ -172,16 +182,16 @@ export class RealtimeVoiceService {
 
         // Gate 1 — audio plane. An expo-audio-only build cannot stream PCM (see the adapter),
         // so there is no point minting a server session that could carry no audio.
-        if (!isRealtimePcmAudioSupported()) {
+        if (!IsRealtimePcmAudioSupported()) {
             this.setUnavailable('audio');
             return;
         }
         // Gate 2 — microphone permission (real expo-audio flow).
-        if (!(await requestMicrophonePermission())) {
+        if (!(await RequestMicrophonePermission())) {
             this.setUnavailable('permission');
             return;
         }
-        await configureVoiceAudioSession();
+        await ConfigureVoiceAudioSession();
         this.setState('connecting');
 
         // Gate 3 — server session mint.
@@ -204,19 +214,24 @@ export class RealtimeVoiceService {
         this.wireClientHandlers(client);
 
         try {
-            await client.Connect(this.buildClientConfig(session), acquireVoiceInputStream());
+            await client.Connect(this.buildClientConfig(session), AcquireVoiceInputStream());
         } catch (error) {
             this.emitError(this.describeError(error), true);
             this.setState('error');
-            await this.stop();
+            await this.Stop();
         }
+    }
+
+    /** @deprecated Use {@link Start}. */
+    public async start(options: StartVoiceSessionOptions): Promise<void> {
+        return this.Start(options);
     }
 
     /**
      * End the session: disconnect the provider socket, close the server-side agent session, and
      * revert the audio session. Safe to call when nothing is active; never throws.
      */
-    public async stop(): Promise<void> {
+    public async Stop(): Promise<void> {
         const client = this.client;
         this.client = null;
         if (client) {
@@ -227,11 +242,16 @@ export class RealtimeVoiceService {
             }
         }
         await this.closeServerSession();
-        await resetVoiceAudioSession();
+        await ResetVoiceAudioSession();
         if (this.state !== 'error' && this.state !== 'unavailable') {
             this.setState('closed');
         }
         this.agentSessionId = null;
+    }
+
+    /** @deprecated Use {@link Stop}. */
+    public async stop(): Promise<void> {
+        return this.Stop();
     }
 
     // ── Session mint ────────────────────────────────────────────────────────────

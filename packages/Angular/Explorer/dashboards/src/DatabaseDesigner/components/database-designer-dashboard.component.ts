@@ -29,16 +29,16 @@ import { DatabaseModifyComponent } from './modify/database-modify.component.js';
 import { EntityListComponent } from './entity-list.component.js';
 import type { AccessibleEntity, AccessibleEntityDetail } from '../database-designer.types.js';
 import {
-    buildDatabaseDesignerAgentContext,
-    buildEntityNotFoundError,
-    entityDisplayName,
-    resolveEntityByIdOrName,
+    BuildDatabaseDesignerAgentContext,
+    BuildEntityNotFoundError,
+    EntityDisplayName,
+    ResolveEntityByIdOrName,
     type EntityNameCandidate,
     type FieldSummary,
     type RelatedEntitySummary,
     type SchemaGroupSummary,
 } from '../database-designer-agent-context.js';
-import { AgentToolResult, validateStringParam } from '../../shared/agent-tool-validation.js';
+import { AgentToolResult, ValidateStringParam } from '../../shared/agent-tool-validation.js';
 
 @Component({
     standalone: false,
@@ -330,7 +330,7 @@ export class DatabaseDesignerDashboardComponent extends BaseDashboard implements
 
     /** The on-screen DISPLAY label for an accessible entity (DisplayName, else prefix-stripped Name). */
     private displayNameForEntity(entity: AccessibleEntity): string {
-        return entityDisplayName(entity.entityName, this.lookupEntityInfo(entity.entityName)?.DisplayName);
+        return EntityDisplayName(entity.entityName, this.lookupEntityInfo(entity.entityName)?.DisplayName);
     }
 
     /** Bounded-by-the-helper list of the DISPLAY names of the currently-filtered entities. */
@@ -391,7 +391,7 @@ export class DatabaseDesignerDashboardComponent extends BaseDashboard implements
         const selectedEntity = this.ModifyEntityId
             ? this.Entities.find(e => e.entityId === this.ModifyEntityId) ?? null
             : null;
-        const context = buildDatabaseDesignerAgentContext({
+        const context = BuildDatabaseDesignerAgentContext({
             EntityCount: this.Entities.length,
             FilteredEntityCount: this.filteredEntityCount,
             SearchText: this.currentSearchText,
@@ -465,7 +465,7 @@ export class DatabaseDesignerDashboardComponent extends BaseDashboard implements
 
     /** Apply a read-only search filter to the entity list via the child list component. */
     private toolSearchEntities(params: Record<string, unknown>): AgentToolResult {
-        const validated = validateStringParam(params['searchText'], 'searchText');
+        const validated = ValidateStringParam(params['searchText'], 'searchText');
         if (!validated.ok) {
             return validated.result;
         }
@@ -484,17 +484,17 @@ export class DatabaseDesignerDashboardComponent extends BaseDashboard implements
      * agent only opens it for browsing — it applies nothing.
      */
     private toolSelectEntity(params: Record<string, unknown>): AgentToolResult {
-        const validated = validateStringParam(params['entity'], 'entity');
+        const validated = ValidateStringParam(params['entity'], 'entity');
         if (!validated.ok) {
             return validated.result;
         }
-        const candidate = resolveEntityByIdOrName(validated.value, this.buildEntityCandidates());
+        const candidate = ResolveEntityByIdOrName(validated.value, this.buildEntityCandidates());
         if (!candidate) {
-            return { Success: false, ErrorMessage: buildEntityNotFoundError(validated.value, this.buildEntityCandidates()) };
+            return { Success: false, ErrorMessage: BuildEntityNotFoundError(validated.value, this.buildEntityCandidates()) };
         }
         const entity = this.Entities.find(e => UUIDsEqual(e.entityId, candidate.ID));
         if (!entity) {
-            return { Success: false, ErrorMessage: buildEntityNotFoundError(validated.value, this.buildEntityCandidates()) };
+            return { Success: false, ErrorMessage: BuildEntityNotFoundError(validated.value, this.buildEntityCandidates()) };
         }
         this.openModifyPanel(entity);
         return { Success: true };
@@ -502,7 +502,7 @@ export class DatabaseDesignerDashboardComponent extends BaseDashboard implements
 
     /** Narrow the entity list to a schema (empty string clears it). Read-only. */
     private toolFilterBySchema(params: Record<string, unknown>): AgentToolResult {
-        const validated = validateStringParam(params['schema'], 'schema');
+        const validated = ValidateStringParam(params['schema'], 'schema');
         if (!validated.ok) {
             return validated.result;
         }
@@ -531,13 +531,13 @@ export class DatabaseDesignerDashboardComponent extends BaseDashboard implements
      * Resolves by ID / registered name / display name. Read-only navigation.
      */
     private toolNavigateToEntityRecord(params: Record<string, unknown>): AgentToolResult {
-        const validated = validateStringParam(params['entity'], 'entity');
+        const validated = ValidateStringParam(params['entity'], 'entity');
         if (!validated.ok) {
             return validated.result;
         }
-        const candidate = resolveEntityByIdOrName(validated.value, this.buildEntityCandidates());
+        const candidate = ResolveEntityByIdOrName(validated.value, this.buildEntityCandidates());
         if (!candidate) {
-            return { Success: false, ErrorMessage: buildEntityNotFoundError(validated.value, this.buildEntityCandidates()) };
+            return { Success: false, ErrorMessage: BuildEntityNotFoundError(validated.value, this.buildEntityCandidates()) };
         }
         this.navigationService.OpenEntityRecord('MJ: Entities', CompositeKey.FromID(candidate.ID));
         return { Success: true };

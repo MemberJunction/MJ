@@ -46,7 +46,7 @@ export interface FieldMetadataUpdate {
    skipped: Array<{ column: string; reason: SkipReason }>;
 }
 
-export function computeFieldMetadataUpdate(
+export function ComputeFieldMetadataUpdate(
    field: FieldMetadataState,
    proposal: FieldMetadataProposal,
    ctx: FieldLockContext,
@@ -192,4 +192,15 @@ export function computeFieldMetadataUpdate(
    }
 
    return update;
+}
+
+/** @deprecated Use {@link ComputeFieldMetadataUpdate}. */
+export function computeFieldMetadataUpdate(
+   field: FieldMetadataState,
+   proposal: FieldMetadataProposal,
+   ctx: FieldLockContext,
+   validateExtendedType: (v: string) => string | null,
+   sanitizeCodeType: (v: string | null | undefined, fieldName?: string, entityName?: string) => string | null | undefined
+): FieldMetadataUpdate {
+   return ComputeFieldMetadataUpdate(field, proposal, ctx, validateExtendedType, sanitizeCodeType);
 }

@@ -497,79 +497,119 @@ export interface TelemetryAnalyzer {
 /**
  * Type guard to check if params represent a batch RunViews operation
  */
-export function isBatchRunViewParams(params: TelemetryParamsUnion): params is TelemetryRunViewsBatchParams {
+export function IsBatchRunViewParams(params: TelemetryParamsUnion): params is TelemetryRunViewsBatchParams {
     return typeof params === 'object' &&
            params !== null &&
            'Entities' in params &&
            Array.isArray((params as TelemetryRunViewsBatchParams).Entities);
 }
 
+/** @deprecated Use {@link IsBatchRunViewParams}. */
+export function isBatchRunViewParams(params: TelemetryParamsUnion): params is TelemetryRunViewsBatchParams {
+    return IsBatchRunViewParams(params);
+}
+
 /**
  * Type guard to check if params represent a single RunView operation
  */
-export function isSingleRunViewParams(params: TelemetryParamsUnion): params is TelemetryRunViewParams {
+export function IsSingleRunViewParams(params: TelemetryParamsUnion): params is TelemetryRunViewParams {
     return typeof params === 'object' &&
            params !== null &&
-           !isBatchRunViewParams(params) &&
+           !IsBatchRunViewParams(params) &&
            ('EntityName' in params || 'ViewID' in params || 'ViewName' in params);
+}
+
+/** @deprecated Use {@link IsSingleRunViewParams}. */
+export function isSingleRunViewParams(params: TelemetryParamsUnion): params is TelemetryRunViewParams {
+    return IsSingleRunViewParams(params);
 }
 
 /**
  * Type guard to check if params represent a single RunQuery operation
  */
-export function isSingleRunQueryParams(params: TelemetryParamsUnion): params is TelemetryRunQueryParams {
+export function IsSingleRunQueryParams(params: TelemetryParamsUnion): params is TelemetryRunQueryParams {
     return typeof params === 'object' &&
            params !== null &&
-           !isBatchRunQueryParams(params) &&
+           !IsBatchRunQueryParams(params) &&
            ('QueryID' in params || 'QueryName' in params);
+}
+
+/** @deprecated Use {@link IsSingleRunQueryParams}. */
+export function isSingleRunQueryParams(params: TelemetryParamsUnion): params is TelemetryRunQueryParams {
+    return IsSingleRunQueryParams(params);
 }
 
 /**
  * Type guard to check if params represent a batch RunQueries operation
  */
-export function isBatchRunQueryParams(params: TelemetryParamsUnion): params is TelemetryRunQueriesBatchParams {
+export function IsBatchRunQueryParams(params: TelemetryParamsUnion): params is TelemetryRunQueriesBatchParams {
     return typeof params === 'object' &&
            params !== null &&
            'Queries' in params &&
            Array.isArray((params as TelemetryRunQueriesBatchParams).Queries);
 }
 
+/** @deprecated Use {@link IsBatchRunQueryParams}. */
+export function isBatchRunQueryParams(params: TelemetryParamsUnion): params is TelemetryRunQueriesBatchParams {
+    return IsBatchRunQueryParams(params);
+}
+
 /**
  * Type guard to check if params represent an Engine operation
  */
-export function isEngineParams(params: TelemetryParamsUnion): params is TelemetryEngineParams {
+export function IsEngineParams(params: TelemetryParamsUnion): params is TelemetryEngineParams {
     return typeof params === 'object' &&
            params !== null &&
            'engineClass' in params &&
            'operation' in params;
 }
 
+/** @deprecated Use {@link IsEngineParams}. */
+export function isEngineParams(params: TelemetryParamsUnion): params is TelemetryEngineParams {
+    return IsEngineParams(params);
+}
+
 /**
  * Type guard to check if params represent an AI operation
  */
-export function isAIParams(params: TelemetryParamsUnion): params is TelemetryAIParams {
+export function IsAIParams(params: TelemetryParamsUnion): params is TelemetryAIParams {
     return typeof params === 'object' &&
            params !== null &&
            ('modelID' in params || 'modelName' in params || 'promptID' in params);
 }
 
+/** @deprecated Use {@link IsAIParams}. */
+export function isAIParams(params: TelemetryParamsUnion): params is TelemetryAIParams {
+    return IsAIParams(params);
+}
+
 /**
  * Type guard to check if params represent a Cache operation
  */
-export function isCacheParams(params: TelemetryParamsUnion): params is TelemetryCacheParams {
+export function IsCacheParams(params: TelemetryParamsUnion): params is TelemetryCacheParams {
     return typeof params === 'object' &&
            params !== null &&
            'cacheType' in params &&
            'operation' in params;
 }
 
+/** @deprecated Use {@link IsCacheParams}. */
+export function isCacheParams(params: TelemetryParamsUnion): params is TelemetryCacheParams {
+    return IsCacheParams(params);
+}
+
 /**
  * Type guard to check if params represent a Network operation
  */
-export function isNetworkParams(params: TelemetryParamsUnion): params is TelemetryNetworkParams {
+export function IsNetworkParams(params: TelemetryParamsUnion): params is TelemetryNetworkParams {
     return typeof params === 'object' &&
            params !== null &&
            ('method' in params || 'url' in params || 'statusCode' in params);
+}
+
+/** @deprecated Use {@link IsNetworkParams}. */
+export function isNetworkParams(params: TelemetryParamsUnion): params is TelemetryNetworkParams {
+    return IsNetworkParams(params);
 }
 
 // ============================================================================
@@ -596,7 +636,7 @@ class EngineOverlapAnalyzer implements TelemetryAnalyzer {
         if (params._fromEngine) return null;
 
         // Only check single RunView operations, not batches
-        if (!isSingleRunViewParams(params)) return null;
+        if (!IsSingleRunViewParams(params)) return null;
 
         const entityName = params.EntityName;
         if (!entityName) return null;
@@ -634,7 +674,7 @@ class SameEntityMultipleCallsAnalyzer implements TelemetryAnalyzer {
         if (event.category !== 'RunView') return null;
 
         const params = event.params as TelemetryRunViewParams | TelemetryRunViewsBatchParams;
-        if (!isSingleRunViewParams(params)) return null;
+        if (!IsSingleRunViewParams(params)) return null;
 
         const entityName = params.EntityName;
         if (!entityName) return null;
@@ -643,7 +683,7 @@ class SameEntityMultipleCallsAnalyzer implements TelemetryAnalyzer {
         const entityEvents = context.recentEvents.filter(e => {
             if (e.category !== 'RunView') return false;
             const p = e.params as TelemetryRunViewParams | TelemetryRunViewsBatchParams;
-            return isSingleRunViewParams(p) && p.EntityName === entityName;
+            return IsSingleRunViewParams(p) && p.EntityName === entityName;
         });
 
         // Get unique fingerprints (different filter/orderBy combinations)
@@ -700,7 +740,7 @@ class ParallelizationOpportunityAnalyzer implements TelemetryAnalyzer {
         if (event.category !== 'RunView') return null;
 
         // Guard 1: an already-batched RunViews call is not a candidate to be batched.
-        if (!isSingleRunViewParams(event.params)) return null;
+        if (!IsSingleRunViewParams(event.params)) return null;
 
         // Guard 2 (best-effort): when this event carries a stack trace, attribute it to a caller and
         // require neighbors to match. Absent stack traces (standard level), callSite is null and the
@@ -713,7 +753,7 @@ class ParallelizationOpportunityAnalyzer implements TelemetryAnalyzer {
             if (e.id === event.id) return false;
             if (!e.endTime) return false;
             // Guard 1 (neighbors): only single RunViews can be merged into a batch.
-            if (!isSingleRunViewParams(e.params)) return false;
+            if (!IsSingleRunViewParams(e.params)) return false;
             // Guard 2 (neighbors): when both sides have call sites, they must match.
             if (callSite && e.stackTrace && this.callSiteOf(e.stackTrace) !== callSite) return false;
             // Previous event ended shortly before this one started.
@@ -725,7 +765,7 @@ class ParallelizationOpportunityAnalyzer implements TelemetryAnalyzer {
             const allEvents = [...recentSequential, event];
             const entities = allEvents.map(e => {
                 const p = e.params as TelemetryRunViewParams | TelemetryRunViewsBatchParams;
-                return isSingleRunViewParams(p) ? p.EntityName : 'batch';
+                return IsSingleRunViewParams(p) ? p.EntityName : 'batch';
             });
 
             return {
@@ -766,9 +806,9 @@ class DuplicateRunViewAnalyzer implements TelemetryAnalyzer {
             const params = event.params as TelemetryRunViewParams | TelemetryRunViewsBatchParams;
 
             // Handle both single RunView (EntityName) and batch RunViews (Entities array)
-            const entityName = isSingleRunViewParams(params)
+            const entityName = IsSingleRunViewParams(params)
                 ? params.EntityName || 'Unknown'
-                : isBatchRunViewParams(params)
+                : IsBatchRunViewParams(params)
                     ? params.Entities.filter(Boolean).join(', ')
                     : 'Unknown';
 
@@ -1598,7 +1638,7 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
      * Generate fingerprint for RunView operations
      */
     private generateRunViewFingerprint(params: TelemetryRunViewParams | TelemetryRunViewsBatchParams): Record<string, unknown> {
-        if (isBatchRunViewParams(params)) {
+        if (IsBatchRunViewParams(params)) {
             // Batch operation - fingerprint from per-view (entity, filter, orderBy, cursor) tuples.
             // Including the per-view filter/orderBy (when recorded) means two batches over the
             // SAME entity set but DIFFERENT filters get DISTINCT fingerprints — previously they
@@ -1660,7 +1700,7 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
      * Generate fingerprint for RunQuery operations
      */
     private generateRunQueryFingerprint(params: TelemetryRunQueryParams | TelemetryRunQueriesBatchParams): Record<string, unknown> {
-        if (isBatchRunQueryParams(params)) {
+        if (IsBatchRunQueryParams(params)) {
             // Batch operation - create fingerprint from sorted query list
             const sortedQueries = [...params.Queries]
                 .map(q => q?.toLowerCase().trim())

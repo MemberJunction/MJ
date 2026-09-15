@@ -1,5 +1,5 @@
 import type { QuerySyncContext, ExtractedField, ResolveResult } from "./types";
-import { parseQuerySQL } from "./parse";
+import { ParseQuerySQL } from "./parse";
 import {
     ResolveCompositionReferences,
     BuildPassthroughParams,
@@ -34,7 +34,7 @@ export interface PipelineResult {
  */
 export async function RunExtractionPipeline(ctx: QuerySyncContext): Promise<PipelineResult> {
     // ── STAGE 1: PARSE ──
-    const parseResult = parseQuerySQL(ctx.sql, ctx.platform);
+    const parseResult = ParseQuerySQL(ctx.sql, ctx.platform);
 
     // ── STAGE 2: RESOLVE ──
     const resolveResult = resolve(ctx, parseResult);
@@ -73,7 +73,7 @@ export async function CleanupQueryData(ctx: QuerySyncContext): Promise<void> {
 
 // ─── Internal stage helpers ──────────────────────────────────────────────────
 
-function resolve(ctx: QuerySyncContext, parseResult: ReturnType<typeof parseQuerySQL>): ResolveResult {
+function resolve(ctx: QuerySyncContext, parseResult: ReturnType<typeof ParseQuerySQL>): ResolveResult {
     const md = ctx.metadataProvider;
     const allQueries = QueryEngine.Instance.Queries;
 
@@ -103,7 +103,7 @@ function resolve(ctx: QuerySyncContext, parseResult: ReturnType<typeof parseQuer
 function merge(
     resolveResult: ResolveResult,
     llmResult: ReturnType<typeof RunLLMEnrichment> extends Promise<infer T> ? T : never,
-    parseResult: ReturnType<typeof parseQuerySQL>,
+    parseResult: ReturnType<typeof ParseQuerySQL>,
     ctx: QuerySyncContext
 ): { finalParams: ReturnType<typeof MergeParametersWithLLM> | null; finalFields: ExtractedField[] | null } {
     const md = ctx.metadataProvider;

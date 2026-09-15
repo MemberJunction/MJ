@@ -7,7 +7,7 @@
 import { BaseLLM, ChatParams, ChatResult } from '@memberjunction/ai';
 import { PKCandidate, FKCandidate } from '../types/discovery.js';
 import { AIConfig } from '../types/config.js';
-import { createLLMInstance } from '../utils/llm-factory.js';
+import { CreateLLMInstance } from '../utils/llm-factory.js';
 import { ColumnStatsCache } from './ColumnStatsCache.js';
 
 export interface SanityCheckResult {
@@ -34,14 +34,14 @@ export class LLMSanityChecker {
 
   constructor(private aiConfig: AIConfig, private statsCache?: ColumnStatsCache) {
     // Create LLM instance using shared factory (DRY principle)
-    this.llm = createLLMInstance(aiConfig.provider, aiConfig.apiKey);
+    this.llm = CreateLLMInstance(aiConfig.provider, aiConfig.apiKey);
   }
 
   /**
    * Review all detected PKs and FKs for obvious errors
    * This is a one-time macro review after statistical detection
    */
-  public async reviewCandidates(
+  public async ReviewCandidates(
     pkCandidates: PKCandidate[],
     fkCandidates: FKCandidate[]
   ): Promise<SanityCheckResult> {
@@ -116,6 +116,14 @@ export class LLMSanityChecker {
         outputTokens: usage?.completionTokens || 0
       };
     }
+  }
+
+  /** @deprecated Use {@link ReviewCandidates}. */
+  public async reviewCandidates(
+    pkCandidates: PKCandidate[],
+    fkCandidates: FKCandidate[]
+  ): Promise<SanityCheckResult> {
+    return this.ReviewCandidates(pkCandidates, fkCandidates);
   }
 
   /**

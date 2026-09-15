@@ -4,7 +4,7 @@ import { EscapeSQLString, MJGlobal, RegisterClass, UUIDsEqual } from '@memberjun
 import { UserInfo } from '@memberjunction/core';
 import { MJCompanyIntegrationEntity, MJIntegrationEntity } from '@memberjunction/core-entities';
 import { IMetadataProvider, Metadata, RunView } from '@memberjunction/core';
-import { ACCOUNTING_ERP_INTEGRATION_NAMES, erpPluginKey } from '../constants';
+import { ACCOUNTING_ERP_INTEGRATION_NAMES, ErpPluginKey } from '../constants';
 import { ResolvedAccountingIntegration } from '../types';
 
 class AccountingIntegrationError extends Error {
@@ -327,7 +327,7 @@ export abstract class BaseAccountingAction extends BaseAction {
             };
         }
 
-        const pluginKey = erpPluginKey(verb, integration.Name);
+        const pluginKey = ErpPluginKey(verb, integration.Name);
         const resolved = MJGlobal.Instance.ClassFactory.TryCreateInstance<BaseAction>(BaseAction, pluginKey);
         if (!resolved.Resolved || !resolved.Instance) {
             return {

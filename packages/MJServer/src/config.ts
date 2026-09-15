@@ -813,7 +813,7 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
  */
 export let configFilePath: string | undefined;
 
-export const configInfo: ConfigInfo = loadConfig();
+export const configInfo: ConfigInfo = LoadConfig();
 
 export const {
   dbUsername,
@@ -840,7 +840,7 @@ export const {
   restApiOptions: RESTApiOptions,
 } = configInfo;
 
-export function loadConfig() {
+export function LoadConfig() {
   const configSearchResult = explorer.search(process.cwd());
 
   // Start with DEFAULT_SERVER_CONFIG as base
@@ -866,4 +866,9 @@ export function loadConfig() {
     throw new Error('Configuration validation failed');
   }
   return configParsing.data;
+}
+
+/** @deprecated Use {@link LoadConfig}. */
+export function loadConfig() {
+  return LoadConfig();
 }

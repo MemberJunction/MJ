@@ -3,7 +3,7 @@ import { QuickBooksBaseAction } from '../quickbooks-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { UserInfo } from '@memberjunction/core';
 import { BaseAction } from '@memberjunction/actions';
-import { ACCOUNTING_VERBS, ERP_INTEGRATION, erpPluginKey } from '../../../constants';
+import { ACCOUNTING_VERBS, ERP_INTEGRATION, ErpPluginKey } from '../../../constants';
 import { AccountBalance } from '../../../types';
 
 export type { AccountBalance } from '../../../types';
@@ -22,7 +22,7 @@ export interface TrialBalanceSummary {
 /**
  * Action to retrieve account balances (trial balance) from QuickBooks Online
  */
-@RegisterClass(BaseAction, erpPluginKey(ACCOUNTING_VERBS.GetAccountBalances, ERP_INTEGRATION.QuickBooksOnline))
+@RegisterClass(BaseAction, ErpPluginKey(ACCOUNTING_VERBS.GetAccountBalances, ERP_INTEGRATION.QuickBooksOnline))
 @RegisterClass(BaseAction, 'GetQuickBooksAccountBalancesAction')
 export class GetQuickBooksAccountBalancesAction extends QuickBooksBaseAction {
     

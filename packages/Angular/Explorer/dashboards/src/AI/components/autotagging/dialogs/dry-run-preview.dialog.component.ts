@@ -24,7 +24,7 @@ import { TagEngineBase } from '@memberjunction/tag-engine-base';
 import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
 import { SourceCard, DryRunDispositionCount, DryRunEstimate } from '../shared/classify.types';
 import {
-    previewDispositions, DryRunInput, DryRunConfig, DryRunRow, ResolveResult, Disposition,
+    PreviewDispositions, DryRunInput, DryRunConfig, DryRunRow, ResolveResult, Disposition,
 } from '../shared/classify.dryrun';
 
 /** Default routing config when a source has no explicit Configuration blob. */
@@ -122,7 +122,7 @@ export class ClassifyDryRunPreviewDialogComponent extends BaseAngularComponent {
             }
 
             const resolve = this.buildResolver();
-            this.Rows = previewDispositions(inputs, cfg, resolve);
+            this.Rows = PreviewDispositions(inputs, cfg, resolve);
             this.Counts = this.tally(this.Rows);
             this.Estimate = this.estimate(inputs.length);
         } catch (error) {

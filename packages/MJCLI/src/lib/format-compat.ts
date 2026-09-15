@@ -106,7 +106,7 @@ export interface LegacyFormatInput<TLegacy extends string> {
  * never override an intentional choice — which is precisely why rule 2 needs
  * {@link LegacyFormatInput.legacyWasExplicit} rather than a value comparison.
  */
-export function resolveLegacyFormat<TLegacy extends string>(input: LegacyFormatInput<TLegacy>): TLegacy {
+export function ResolveLegacyFormat<TLegacy extends string>(input: LegacyFormatInput<TLegacy>): TLegacy {
   const explicitCanonical = NormalizeFormatAlias(input.format);
   if (explicitCanonical) return input.map[explicitCanonical];
 
@@ -123,6 +123,11 @@ export function resolveLegacyFormat<TLegacy extends string>(input: LegacyFormatI
   // 'tty-default' means nothing at all asked for a format — keep the family's own
   // default rather than flattening every human rendering to a generic 'text'.
   return reason === 'tty-default' ? input.legacyDefault : input.map[format];
+}
+
+/** @deprecated Use {@link ResolveLegacyFormat}. */
+export function resolveLegacyFormat<TLegacy extends string>(input: LegacyFormatInput<TLegacy>): TLegacy {
+  return ResolveLegacyFormat(input);
 }
 
 /** Canonical → `mj test *` vocabulary. */

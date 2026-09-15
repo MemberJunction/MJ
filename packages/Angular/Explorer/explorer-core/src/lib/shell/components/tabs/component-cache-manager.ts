@@ -103,17 +103,22 @@ export class ComponentCacheManager {
   /**
    * Check if a component exists in cache and is available for reuse.
    */
-  hasAvailableComponent(resourceType: string, recordId: string, appId: string, discriminator?: string): boolean {
+  HasAvailableComponent(resourceType: string, recordId: string, appId: string, discriminator?: string): boolean {
     const key = this.getCacheKey(resourceType, recordId, appId, discriminator);
     const info = this.cache.get(key);
     return info !== undefined && !info.isAttached;
+  }
+
+  /** @deprecated Use {@link HasAvailableComponent}. */
+  hasAvailableComponent(resourceType: string, recordId: string, appId: string, discriminator?: string): boolean {
+    return this.HasAvailableComponent(resourceType, recordId, appId, discriminator);
   }
 
   /**
    * Get a cached component if available (not currently attached).
    * Lookup is by resource identity, not tab ID.
    */
-  getCachedComponent(resourceType: string, recordId: string, appId: string, discriminator?: string): CachedComponentInfo | null {
+  GetCachedComponent(resourceType: string, recordId: string, appId: string, discriminator?: string): CachedComponentInfo | null {
     const key = this.getCacheKey(resourceType, recordId, appId, discriminator);
     const info = this.cache.get(key);
 
@@ -129,10 +134,15 @@ export class ComponentCacheManager {
     return info;
   }
 
+  /** @deprecated Use {@link GetCachedComponent}. */
+  getCachedComponent(resourceType: string, recordId: string, appId: string, discriminator?: string): CachedComponentInfo | null {
+    return this.GetCachedComponent(resourceType, recordId, appId, discriminator);
+  }
+
   /**
    * Store a component in the cache and mark as attached.
    */
-  cacheComponent(
+  CacheComponent(
     componentRef: ComponentRef<BaseResourceComponent>,
     wrapperElement: HTMLElement,
     resourceData: ResourceData,
@@ -171,10 +181,20 @@ export class ComponentCacheManager {
     this.cache.set(key, info);
   }
 
+  /** @deprecated Use {@link CacheComponent}. */
+  cacheComponent(
+    componentRef: ComponentRef<BaseResourceComponent>,
+    wrapperElement: HTMLElement,
+    resourceData: ResourceData,
+    tabId: string
+  ): void {
+    return this.CacheComponent(componentRef, wrapperElement, resourceData, tabId);
+  }
+
   /**
    * Mark a component as attached. Lookup by resource identity.
    */
-  markAsAttached(resourceType: string, recordId: string, appId: string, tabId: string, discriminator?: string): void {
+  MarkAsAttached(resourceType: string, recordId: string, appId: string, tabId: string, discriminator?: string): void {
     const key = this.getCacheKey(resourceType, recordId, appId, discriminator);
     const info = this.cache.get(key);
 
@@ -188,13 +208,18 @@ export class ComponentCacheManager {
     }
   }
 
+  /** @deprecated Use {@link MarkAsAttached}. */
+  markAsAttached(resourceType: string, recordId: string, appId: string, tabId: string, discriminator?: string): void {
+    return this.MarkAsAttached(resourceType, recordId, appId, tabId, discriminator);
+  }
+
   /**
    * Mark a component as detached (available for reuse). Lookup by resource identity.
    *
    * This is the ONLY way to detach a component. Both single-resource mode and
    * Golden Layout mode use this same method to ensure consistent cache behavior.
    */
-  markAsDetached(resourceType: string, recordId: string, appId: string, discriminator?: string): CachedComponentInfo | null {
+  MarkAsDetached(resourceType: string, recordId: string, appId: string, discriminator?: string): CachedComponentInfo | null {
     const key = this.getCacheKey(resourceType, recordId, appId, discriminator);
     const info = this.cache.get(key);
     if (!info) return null;
@@ -205,8 +230,13 @@ export class ComponentCacheManager {
     // Clear this surface's agent client tools on detach so the previous app's tools aren't offered to
     // the AI agent on the next surface. NotifyResourceReattached replays them if the user returns.
     this.navigationService?.NotifyResourceDetached(info.componentRef.instance);
-    this.EvictIfNeeded();
+    this.evictIfNeeded();
     return info;
+  }
+
+  /** @deprecated Use {@link MarkAsDetached}. */
+  markAsDetached(resourceType: string, recordId: string, appId: string, discriminator?: string): CachedComponentInfo | null {
+    return this.MarkAsDetached(resourceType, recordId, appId, discriminator);
   }
 
   /**
@@ -220,7 +250,7 @@ export class ComponentCacheManager {
    * Preserves the live component instance — only the cache key + stored identity change.
    * Returns true if a matching entry was found and re-keyed, false otherwise.
    */
-  rekeyComponent(
+  RekeyComponent(
     resourceType: string,
     oldRecordId: string,
     newRecordId: string,
@@ -253,27 +283,44 @@ export class ComponentCacheManager {
     return true;
   }
 
+  /** @deprecated Use {@link RekeyComponent}. */
+  rekeyComponent(
+    resourceType: string,
+    oldRecordId: string,
+    newRecordId: string,
+    appId: string,
+    oldDiscriminator?: string,
+    newDiscriminator?: string
+  ): boolean {
+    return this.RekeyComponent(resourceType, oldRecordId, newRecordId, appId, oldDiscriminator, newDiscriminator);
+  }
+
   /**
    * Find a cached component by tab ID and detach it.
    * This is a convenience wrapper for callers that only know the tab ID
    * (e.g., Golden Layout tab close events). It resolves the tab ID to
    * resource identity, then delegates to the identity-based markAsDetached.
    */
-  findAndDetachByTabId(tabId: string): CachedComponentInfo | null {
+  FindAndDetachByTabId(tabId: string): CachedComponentInfo | null {
     const entry = Array.from(this.cache.entries())
       .find(([_, info]) => info.attachedToTabId === tabId);
 
     if (!entry) return null;
 
     const [_, info] = entry;
-    return this.markAsDetached(info.resourceType, info.resourceRecordId, info.applicationId, info.keyDiscriminator);
+    return this.MarkAsDetached(info.resourceType, info.resourceRecordId, info.applicationId, info.keyDiscriminator);
+  }
+
+  /** @deprecated Use {@link FindAndDetachByTabId}. */
+  findAndDetachByTabId(tabId: string): CachedComponentInfo | null {
+    return this.FindAndDetachByTabId(tabId);
   }
 
   /**
    * Evict least-recently-used detached components when over the limit.
    * Only evicts components that are not currently attached.
    */
-  private EvictIfNeeded(): void {
+  private evictIfNeeded(): void {
     if (ComponentCacheManager.MaxDetachedComponents <= 0) return;
 
     const detached = Array.from(this.cache.entries())
@@ -294,17 +341,22 @@ export class ComponentCacheManager {
    * Get component info by tab ID (for finding what's attached to a tab).
    * Uses linear scan since tabId is metadata, not a key.
    */
-  getComponentByTabId(tabId: string): CachedComponentInfo | null {
+  GetComponentByTabId(tabId: string): CachedComponentInfo | null {
     const entry = Array.from(this.cache.entries())
       .find(([_, info]) => info.attachedToTabId === tabId);
 
     return entry ? entry[1] : null;
   }
 
+  /** @deprecated Use {@link GetComponentByTabId}. */
+  getComponentByTabId(tabId: string): CachedComponentInfo | null {
+    return this.GetComponentByTabId(tabId);
+  }
+
   /**
    * Remove and destroy a specific component from cache by resource identity.
    */
-  destroyComponent(resourceType: string, recordId: string, appId: string, discriminator?: string): void {
+  DestroyComponent(resourceType: string, recordId: string, appId: string, discriminator?: string): void {
     const key = this.getCacheKey(resourceType, recordId, appId, discriminator);
     const info = this.cache.get(key);
 
@@ -316,10 +368,15 @@ export class ComponentCacheManager {
     this.cache.delete(key);
   }
 
+  /** @deprecated Use {@link DestroyComponent}. */
+  destroyComponent(resourceType: string, recordId: string, appId: string, discriminator?: string): void {
+    return this.DestroyComponent(resourceType, recordId, appId, discriminator);
+  }
+
   /**
    * Remove and destroy component by tab ID (convenience for Golden Layout tab close).
    */
-  destroyComponentByTabId(tabId: string): void {
+  DestroyComponentByTabId(tabId: string): void {
     const entry = Array.from(this.cache.entries())
       .find(([_, info]) => info.attachedToTabId === tabId);
 
@@ -331,16 +388,26 @@ export class ComponentCacheManager {
     this.cache.delete(key);
   }
 
+  /** @deprecated Use {@link DestroyComponentByTabId}. */
+  destroyComponentByTabId(tabId: string): void {
+    return this.DestroyComponentByTabId(tabId);
+  }
+
   /**
    * Clear the entire cache, destroying all components.
    * Call this on user logout or app shutdown.
    */
-  clearCache(): void {
+  ClearCache(): void {
     this.cache.forEach(info => {
       this.appRef.detachView(info.componentRef.hostView);
       info.componentRef.destroy();
     });
     this.cache.clear();
+  }
+
+  /** @deprecated Use {@link ClearCache}. */
+  clearCache(): void {
+    return this.ClearCache();
   }
 
   /**
@@ -376,7 +443,7 @@ export class ComponentCacheManager {
   /**
    * Get cache statistics for debugging.
    */
-  getCacheStats(): {
+  GetCacheStats(): {
     total: number;
     attached: number;
     detached: number;
@@ -401,5 +468,15 @@ export class ComponentCacheManager {
     });
 
     return stats;
+  }
+
+  /** @deprecated Use {@link GetCacheStats}. */
+  getCacheStats(): {
+    total: number;
+    attached: number;
+    detached: number;
+    byResourceType: Map<string, number>;
+  } {
+    return this.GetCacheStats();
   }
 }

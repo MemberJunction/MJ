@@ -41,17 +41,32 @@ export const COMPARISON_OPS = new Set<string>([
     'IN', 'NOT IN', 'LIKE', 'NOT LIKE', 'IS', 'IS NOT', 'BETWEEN', 'NOT BETWEEN',
 ]);
 
-export function isObject(v: AstNode): v is AstObject {
+export function IsObject(v: AstNode): v is AstObject {
     return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
-export function nodeType(v: AstNode): string | undefined {
-    return isObject(v) && typeof v.type === 'string' ? v.type : undefined;
+/** @deprecated Use {@link IsObject}. */
+export function isObject(v: AstNode): v is AstObject {
+    return IsObject(v);
 }
 
-export function isLiteralNode(v: AstNode): boolean {
-    const t = nodeType(v);
+export function NodeType(v: AstNode): string | undefined {
+    return IsObject(v) && typeof v.type === 'string' ? v.type : undefined;
+}
+
+/** @deprecated Use {@link NodeType}. */
+export function nodeType(v: AstNode): string | undefined {
+    return NodeType(v);
+}
+
+export function IsLiteralNode(v: AstNode): boolean {
+    const t = NodeType(v);
     return t !== undefined && LITERAL_NODE_TYPES.has(t);
+}
+
+/** @deprecated Use {@link IsLiteralNode}. */
+export function isLiteralNode(v: AstNode): boolean {
+    return IsLiteralNode(v);
 }
 
 /**
@@ -64,7 +79,7 @@ function identifierText(v: AstNode): string | null {
     if (typeof v === 'string') {
         return v;
     }
-    if (isObject(v) && isObject(v.expr) && typeof v.expr.value === 'string') {
+    if (IsObject(v) && IsObject(v.expr) && typeof v.expr.value === 'string') {
         return v.expr.value;
     }
     return null;
@@ -81,11 +96,16 @@ function identifierText(v: AstNode): string | null {
  * {@link columnQualifier} — see {@link qualifiedColumn}. Matching on the bare name alone silently conflates
  * same-named columns from different tables in a join.
  */
-export function columnName(v: AstNode): string | null {
-    if (nodeType(v) !== 'column_ref' || !isObject(v)) {
+export function ColumnName(v: AstNode): string | null {
+    if (NodeType(v) !== 'column_ref' || !IsObject(v)) {
         return null;
     }
     return identifierText(v.column);
+}
+
+/** @deprecated Use {@link ColumnName}. */
+export function columnName(v: AstNode): string | null {
+    return ColumnName(v);
 }
 
 /**
@@ -93,11 +113,16 @@ export function columnName(v: AstNode): string | null {
  * when no alias is declared). Returns null when the reference is unqualified (`Status`) or when the node is
  * not a `column_ref`. Dialect-tolerant in the same way as {@link columnName}.
  */
-export function columnQualifier(v: AstNode): string | null {
-    if (nodeType(v) !== 'column_ref' || !isObject(v)) {
+export function ColumnQualifier(v: AstNode): string | null {
+    if (NodeType(v) !== 'column_ref' || !IsObject(v)) {
         return null;
     }
     return identifierText(v.table);
+}
+
+/** @deprecated Use {@link ColumnQualifier}. */
+export function columnQualifier(v: AstNode): string | null {
+    return ColumnQualifier(v);
 }
 
 /** A `column_ref` split into its optional table qualifier and its bare column name. */
@@ -114,19 +139,24 @@ export interface QualifiedColumn {
  * column reference — the qualifier is what distinguishes `o.Status` from `c.Status`.
  */
 export function qualifiedColumn(v: AstNode): QualifiedColumn | null {
-    const column = columnName(v);
+    const column = ColumnName(v);
     if (column == null) {
         return null;
     }
-    return { qualifier: columnQualifier(v), column };
+    return { qualifier: ColumnQualifier(v), column };
 }
 
 /** Case- and whitespace-insensitive SQL identifier equality. Null/undefined never matches anything. */
-export function identifiersEqual(a: string | null | undefined, b: string | null | undefined): boolean {
+export function IdentifiersEqual(a: string | null | undefined, b: string | null | undefined): boolean {
     if (a == null || b == null) {
         return false;
     }
     return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+/** @deprecated Use {@link IdentifiersEqual}. */
+export function identifiersEqual(a: string | null | undefined, b: string | null | undefined): boolean {
+    return IdentifiersEqual(a, b);
 }
 
 /**
@@ -140,8 +170,13 @@ export function identifiersEqual(a: string | null | undefined, b: string | null 
  * from that root is silently reasoning about a fraction of the query. All such analyzers MUST refuse a
  * set-op root outright (§10 refuse-under-uncertainty).
  */
+export function IsSetOperationRoot(node: AstNode): boolean {
+    return IsObject(node) && (node.set_op != null || node._next != null);
+}
+
+/** @deprecated Use {@link IsSetOperationRoot}. */
 export function isSetOperationRoot(node: AstNode): boolean {
-    return isObject(node) && (node.set_op != null || node._next != null);
+    return IsSetOperationRoot(node);
 }
 
 /**
@@ -149,17 +184,27 @@ export function isSetOperationRoot(node: AstNode): boolean {
  * A multi-statement script cannot be analyzed from its first statement alone, so callers refuse
  * rather than inspect only `ast[0]`.
  */
-export function soleStatement(ast: AstNode): AstNode | null {
+export function SoleStatement(ast: AstNode): AstNode | null {
     if (Array.isArray(ast)) {
         return ast.length === 1 ? ast[0] : null;
     }
     return ast;
 }
 
+/** @deprecated Use {@link SoleStatement}. */
+export function soleStatement(ast: AstNode): AstNode | null {
+    return SoleStatement(ast);
+}
+
 /** True when every element of an `expr_list` value array is a literal leaf (an all-literal bag). */
-export function isAllLiteralBag(v: AstNode): boolean {
-    if (nodeType(v) !== 'expr_list' || !isObject(v) || !Array.isArray(v.value)) {
+export function IsAllLiteralBag(v: AstNode): boolean {
+    if (NodeType(v) !== 'expr_list' || !IsObject(v) || !Array.isArray(v.value)) {
         return false;
     }
-    return v.value.length > 0 && v.value.every(isLiteralNode);
+    return v.value.length > 0 && v.value.every(IsLiteralNode);
+}
+
+/** @deprecated Use {@link IsAllLiteralBag}. */
+export function isAllLiteralBag(v: AstNode): boolean {
+    return IsAllLiteralBag(v);
 }

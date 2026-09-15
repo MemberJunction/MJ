@@ -32,7 +32,7 @@ export type OfflineQueueState = {
  * Track the pending offline-queue count and drive replay on foreground / manual sync.
  * @returns `{ count, syncing, syncNow }` for a badge or settings row to consume.
  */
-export function useOfflineQueue(): OfflineQueueState {
+export function UseOfflineQueue(): OfflineQueueState {
     const [count, setCount] = useState<number>(() => queueCount());
     const [syncing, setSyncing] = useState(false);
 
@@ -62,4 +62,9 @@ export function useOfflineQueue(): OfflineQueueState {
     }, [syncNow]);
 
     return { count, syncing, syncNow };
+}
+
+/** @deprecated Use {@link UseOfflineQueue}. */
+export function useOfflineQueue(): OfflineQueueState {
+    return UseOfflineQueue();
 }

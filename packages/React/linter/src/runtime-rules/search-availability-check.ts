@@ -1,4 +1,4 @@
-import { traverse, NodePath } from '../lint-utils';
+import { Traverse, NodePath } from '../lint-utils';
 import * as t from '@babel/types';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseLintRule } from '../lint-rule';
@@ -142,7 +142,7 @@ function isUtilitiesSearchAccess(node: t.Node): boolean {
  */
 function isInConsequent(targetNode: t.Node, ifStatement: t.IfStatement): boolean {
   let found = false;
-  traverse(ifStatement.consequent, {
+  Traverse(ifStatement.consequent, {
     enter(innerPath: NodePath) {
       if (innerPath.node === targetNode) {
         found = true;
@@ -192,7 +192,7 @@ export class SearchAvailabilityCheckRule extends BaseLintRule {
     // First pass: count total utilities.search accesses (guarded and unguarded)
     // If the component uses utilities.search extensively, it's designed for search environments
     let totalSearchAccesses = 0;
-    traverse(ast, {
+    Traverse(ast, {
       MemberExpression(path: NodePath<t.MemberExpression>) {
         if (isUtilitiesSearchMethodAccess(path.node)) totalSearchAccesses++;
       },
@@ -205,7 +205,7 @@ export class SearchAvailabilityCheckRule extends BaseLintRule {
     // If >=3 total accesses, the component is designed for search environments — skip
     if (totalSearchAccesses >= 3) return violations;
 
-    traverse(ast, {
+    Traverse(ast, {
       MemberExpression(path: NodePath<t.MemberExpression>) {
         // We want to find utilities.search.Search or utilities.search.PreviewSearch
         if (!isUtilitiesSearchMethodAccess(path.node)) return;

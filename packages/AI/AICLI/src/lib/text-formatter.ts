@@ -15,7 +15,7 @@ export class TextFormatter {
   /**
    * Wraps text to fit within console width, preserving formatting
    */
-  static formatText(text: string, options: TextFormattingOptions = {}): string {
+  static FormatText(text: string, options: TextFormattingOptions = {}): string {
     const {
       maxWidth = this.getConsoleWidth(),
       indent = this.DEFAULT_INDENT,
@@ -58,16 +58,26 @@ export class TextFormatter {
     return result;
   }
 
+  /** @deprecated Use {@link FormatText}. */
+  static formatText(text: string, options: TextFormattingOptions = {}): string {
+    return this.FormatText(text, options);
+  }
+
   /**
    * Formats JSON output with syntax highlighting
    */
-  static formatJSON(obj: any, indent: number = 2): string {
+  static FormatJSON(obj: any, indent: number = 2): string {
     try {
       const json = JSON.stringify(obj, null, indent);
       return this.highlightJSON(json);
     } catch {
       return JSON.stringify(obj, null, indent);
     }
+  }
+
+  /** @deprecated Use {@link FormatJSON}. */
+  static formatJSON(obj: any, indent: number = 2): string {
+    return this.FormatJSON(obj, indent);
   }
 
   /**
@@ -191,15 +201,20 @@ export class TextFormatter {
   /**
    * Format a divider line
    */
-  static divider(char: string = '─', width?: number): string {
+  static Divider(char: string = '─', width?: number): string {
     const w = width || this.getConsoleWidth();
     return chalk.dim(char.repeat(w));
+  }
+
+  /** @deprecated Use {@link Divider}. */
+  static divider(char: string = '─', width?: number): string {
+    return this.Divider(char, width);
   }
 
   /**
    * Format with a box border
    */
-  static box(text: string, options: { padding?: number; width?: number } = {}): string {
+  static Box(text: string, options: { padding?: number; width?: number } = {}): string {
     const { padding = 1, width = this.getConsoleWidth() - 4 } = options;
     const lines = text.split('\n');
     const paddingStr = ' '.repeat(padding);
@@ -215,5 +230,10 @@ export class TextFormatter {
     }).join('\n');
     
     return chalk.dim(top) + '\n' + content + '\n' + chalk.dim(bottom);
+  }
+
+  /** @deprecated Use {@link Box}. */
+  static box(text: string, options: { padding?: number; width?: number } = {}): string {
+    return this.Box(text, options);
   }
 }

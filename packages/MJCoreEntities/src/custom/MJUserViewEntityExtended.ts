@@ -270,7 +270,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
      */
     public get UserCanEdit(): boolean {
         if (this._cachedCanUserEdit === null) {
-            this._cachedCanUserEdit = this.CalculateUserCanEdit()
+            this._cachedCanUserEdit = this.calculateUserCanEdit()
         }
         return this._cachedCanUserEdit;
     }
@@ -282,11 +282,11 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
      */
     public get UserCanView(): boolean {
         if (this._cachedCanUserView === null) {
-            this._cachedCanUserView = this.CalculateUserCanView()
+            this._cachedCanUserView = this.calculateUserCanView()
         }
         return this._cachedCanUserView;
     }
-    private CalculateUserCanView(): boolean {
+    private calculateUserCanView(): boolean {
         const md = this.ProviderToUse as unknown as IMetadataProvider;
         // Prefer the context user (set on server-side / per-request rendering) over the global
         // current user, consistent with CalculateUserCanEdit/CalculateUserCanDelete. Without this,
@@ -326,7 +326,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
      */
     public get UserCanDelete(): boolean {
         if (this._cachedUserCanDelete === null) {
-            this._cachedUserCanDelete = this.CalculateUserCanDelete()
+            this._cachedUserCanDelete = this.calculateUserCanDelete()
         }
         return this._cachedUserCanDelete;
     }
@@ -339,7 +339,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
         this._cachedCanUserView = null;
     }
 
-    private CalculateUserCanDelete(): boolean {
+    private calculateUserCanDelete(): boolean {
         if (!this.IsSaved)
             return false; // new records can't be deleted
         else {
@@ -358,7 +358,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
         }
     }
 
-    private CalculateUserCanEdit(): boolean {
+    private calculateUserCanEdit(): boolean {
         if (!this.IsSaved) {
             return this.CheckPermissions(EntityPermissionType.Create, false); // new records an be edited so long as we have Create permissions
         }
@@ -383,16 +383,16 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
      * Returns the ID of the Resource Type metadata record that corresponds to the User Views entity
      */
     public get ViewResourceTypeID(): string {
-        if (!this._ViewResourceTypeID) {
+        if (!this._viewResourceTypeID) {
             const rt = ResourcePermissionEngine.Instance.ResourceTypes;
             const rtUV = rt.find(r => r.Entity === 'MJ: User Views');
             if (!rtUV)
                 throw new Error('Unable to find Resource Type for User Views entity');
-            this._ViewResourceTypeID = rtUV.ID;
+            this._viewResourceTypeID = rtUV.ID;
         }
-        return this._ViewResourceTypeID;
+        return this._viewResourceTypeID;
     }
-    private _ViewResourceTypeID: string = null
+    private _viewResourceTypeID: string = null
 
     override async Load(ID: string, EntityRelationshipsToLoad?: string[]): Promise<boolean> {
         // first load up the view info, use the superclass to do this

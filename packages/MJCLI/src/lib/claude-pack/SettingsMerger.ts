@@ -54,8 +54,8 @@ export interface MergeSettingsResult {
     Changed: boolean;
 }
 
-export function mergeSettings(opts: MergeSettingsOptions): MergeSettingsResult {
-    const packMeta = readManagedMeta(opts.Pack);
+export function MergeSettings(opts: MergeSettingsOptions): MergeSettingsResult {
+    const packMeta = ReadManagedMeta(opts.Pack);
     if (!packMeta) {
         throw new SettingsMergeError(
             'Pack settings.json has no __mj_managed.keys block — cannot determine what to merge.'
@@ -64,11 +64,11 @@ export function mergeSettings(opts: MergeSettingsOptions): MergeSettingsResult {
 
     const result = deepClone(opts.Existing);
     for (const dottedPath of packMeta.keys) {
-        const packValue = getAtPath(opts.Pack, dottedPath);
+        const packValue = GetAtPath(opts.Pack, dottedPath);
         if (packValue === undefined) continue; // pack declares the key but didn't ship a value — skip
-        const existingValue = getAtPath(result, dottedPath);
+        const existingValue = GetAtPath(result, dottedPath);
         const merged = mergeValues(existingValue, packValue);
-        setAtPath(result, dottedPath, merged);
+        SetAtPath(result, dottedPath, merged);
     }
 
     // Replace __mj_managed wholesale so version + mjMajor stamps refresh.
@@ -79,10 +79,15 @@ export function mergeSettings(opts: MergeSettingsOptions): MergeSettingsResult {
     return { Result: result, Changed: changed };
 }
 
+/** @deprecated Use {@link MergeSettings}. */
+export function mergeSettings(opts: MergeSettingsOptions): MergeSettingsResult {
+    return MergeSettings(opts);
+}
+
 /** Read the `__mj_managed` block out of a settings object, or null if absent. */
-export function readManagedMeta(settings: Record<string, unknown>): ManagedSettingsMeta | null {
+export function ReadManagedMeta(settings: Record<string, unknown>): ManagedSettingsMeta | null {
     const raw = settings.__mj_managed;
-    if (!isPlainObject(raw)) return null;
+    if (!IsPlainObject(raw)) return null;
     const obj = raw as Record<string, unknown>;
     if (typeof obj.version !== 'string') return null;
     if (!Array.isArray(obj.keys)) return null;
@@ -94,6 +99,11 @@ export function readManagedMeta(settings: Record<string, unknown>): ManagedSetti
     };
 }
 
+/** @deprecated Use {@link ReadManagedMeta}. */
+export function readManagedMeta(settings: Record<string, unknown>): ManagedSettingsMeta | null {
+    return ReadManagedMeta(settings);
+}
+
 // ---------------------------------------------------------------------------
 // Merge primitives
 // ---------------------------------------------------------------------------
@@ -102,7 +112,7 @@ function mergeValues(existing: unknown, pack: unknown): unknown {
     if (Array.isArray(pack) && Array.isArray(existing)) {
         return mergeArrays(existing, pack);
     }
-    if (isPlainObject(pack) && isPlainObject(existing)) {
+    if (IsPlainObject(pack) && IsPlainObject(existing)) {
         return mergeObjects(existing, pack);
     }
     // Type mismatch or primitive — pack wins.
@@ -138,17 +148,22 @@ function mergeObjects(
 // Path helpers
 // ---------------------------------------------------------------------------
 
-export function getAtPath(obj: Record<string, unknown>, dottedPath: string): unknown {
+export function GetAtPath(obj: Record<string, unknown>, dottedPath: string): unknown {
     const parts = dottedPath.split('.');
     let cur: unknown = obj;
     for (const p of parts) {
-        if (!isPlainObject(cur)) return undefined;
+        if (!IsPlainObject(cur)) return undefined;
         cur = (cur as Record<string, unknown>)[p];
     }
     return cur;
 }
 
-export function setAtPath(
+/** @deprecated Use {@link GetAtPath}. */
+export function getAtPath(obj: Record<string, unknown>, dottedPath: string): unknown {
+    return GetAtPath(obj, dottedPath);
+}
+
+export function SetAtPath(
     obj: Record<string, unknown>,
     dottedPath: string,
     value: unknown
@@ -159,7 +174,7 @@ export function setAtPath(
     let cur: Record<string, unknown> = obj;
     for (const p of parts) {
         const next = cur[p];
-        if (!isPlainObject(next)) {
+        if (!IsPlainObject(next)) {
             cur[p] = {};
         }
         cur = cur[p] as Record<string, unknown>;
@@ -167,12 +182,26 @@ export function setAtPath(
     cur[last] = value;
 }
 
+/** @deprecated Use {@link SetAtPath}. */
+export function setAtPath(
+    obj: Record<string, unknown>,
+    dottedPath: string,
+    value: unknown
+): void {
+    return SetAtPath(obj, dottedPath, value);
+}
+
 // ---------------------------------------------------------------------------
 // Misc utilities
 // ---------------------------------------------------------------------------
 
-export function isPlainObject(v: unknown): v is Record<string, unknown> {
+export function IsPlainObject(v: unknown): v is Record<string, unknown> {
     return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+/** @deprecated Use {@link IsPlainObject}. */
+export function isPlainObject(v: unknown): v is Record<string, unknown> {
+    return IsPlainObject(v);
 }
 
 function deepClone<T>(value: T): T {

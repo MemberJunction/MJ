@@ -42,7 +42,7 @@ import { GetReadOnlyProvider } from '../util.js';
 import { configInfo } from '../config.js';
 import { MediaAccessKeyManager } from '../rest/MediaAccessKeys.js';
 import { UploadTokenManager } from '../rest/UploadTokenManager.js';
-import { deriveSidecarPath, parsePeaksSidecar } from './peaksSidecar.js';
+import { DeriveSidecarPath, ParsePeaksSidecar } from './peaksSidecar.js';
 
 @InputType()
 export class CreateUploadURLInput {
@@ -503,7 +503,7 @@ export class FileResolver extends FileResolverBase {
   private async tryReadPeaksSidecar(file: MJFileEntity, contextUser: UserInfo): Promise<number[] | undefined> {
     try {
       // The sidecar lives next to the recording: replace the final path segment with peaks.json.
-      const sidecarPath = deriveSidecarPath(file.ProviderKey);
+      const sidecarPath = DeriveSidecarPath(file.ProviderKey);
       if (!sidecarPath) {
         return undefined;
       }
@@ -524,7 +524,7 @@ export class FileResolver extends FileResolverBase {
       if (!bytes || bytes.length === 0) {
         return undefined;
       }
-      return parsePeaksSidecar(bytes);
+      return ParsePeaksSidecar(bytes);
     } catch {
       // No sidecar / unreadable / parse failure — peaks are optional, never surface the error.
       return undefined;

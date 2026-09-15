@@ -83,48 +83,93 @@ export interface AITestHarnessWindowData {
     `]
 })
 export class AITestHarnessWindowComponent extends BaseAngularComponent implements OnInit  {
-    @Input() data: AITestHarnessWindowData = {};
-    @Output() closeWindow = new EventEmitter<void>();
+    @Input() Data: AITestHarnessWindowData = {};
+
+    /** @deprecated Use {@link Data}. */
+    @Input() set data(value: AITestHarnessWindowData) {
+      this.Data = value;
+    }
+    /** @deprecated Use {@link Data}. */
+    get data(): AITestHarnessWindowData {
+      return this.Data;
+    }
+    @Output() CloseWindow = new EventEmitter<void>();
+
+    /**
+     * @deprecated Use {@link CloseWindow}.
+     *
+     * The same emitter under the old binding name, so a template still binding
+     * (closeWindow) keeps working. Must stay AFTER CloseWindow: class fields
+     * initialise in order, and the other way round this captures undefined.
+     */
+    @Output() closeWindow = this.CloseWindow;
     
-    windowTitle = 'AI Test Harness';
+    WindowTitle = 'AI Test Harness';
+
+    /** @deprecated Use {@link WindowTitle}. */
+    get windowTitle() {
+      return this.WindowTitle;
+    }
+    /** @deprecated Use {@link WindowTitle}. */
+    set windowTitle(value) {
+      this.WindowTitle = value;
+    }
     width: number = 1200;
     height: number = 800;
-    loading = true;
+    Loading = true;
+
+    /** @deprecated Use {@link Loading}. */
+    get loading() {
+      return this.Loading;
+    }
+    /** @deprecated Use {@link Loading}. */
+    set loading(value) {
+      this.Loading = value;
+    }
     error = '';
     
     agent?: MJAIAgentEntityExtended;
     prompt?: MJAIPromptEntityExtended;
-    mode: 'agent' | 'prompt' = 'agent';
+    Mode: 'agent' | 'prompt' = 'agent';
+
+    /** @deprecated Use {@link Mode}. */
+    get mode(): 'agent' | 'prompt' {
+      return this.Mode;
+    }
+    /** @deprecated Use {@link Mode}. */
+    set mode(value: 'agent' | 'prompt') {
+      this.Mode = value;
+    }
     
     private metadata = this.ProviderToUse;
     
     ngOnInit() {
-        console.log('🪟 AITestHarnessWindowComponent.ngOnInit - data:', this.data);
-        console.log('📌 promptRunId:', this.data.promptRunId);
+        console.log('🪟 AITestHarnessWindowComponent.ngOnInit - data:', this.Data);
+        console.log('📌 promptRunId:', this.Data.promptRunId);
         
         // Set window dimensions
-        this.width = this.convertToNumber(this.data.width) || 1200;
-        this.height = this.convertToNumber(this.data.height) || 800;
+        this.width = this.convertToNumber(this.Data.width) || 1200;
+        this.height = this.convertToNumber(this.Data.height) || 800;
         
         // Determine mode
-        this.mode = this.data.mode || (this.data.promptId || this.data.prompt ? 'prompt' : 'agent');
+        this.Mode = this.Data.mode || (this.Data.promptId || this.Data.prompt ? 'prompt' : 'agent');
         
         // Load entity
-        this.loadEntity();
+        this.LoadEntity();
     }
     
-    async loadEntity() {
+    async LoadEntity() {
         try {
-            if (this.mode === 'agent') {
-                if (this.data.agent) {
-                    this.agent = this.data.agent;
-                    this.windowTitle = this.data.title || `Test Agent: ${this.agent.Name}`;
-                } else if (this.data.agentId) {
+            if (this.Mode === 'agent') {
+                if (this.Data.agent) {
+                    this.agent = this.Data.agent;
+                    this.WindowTitle = this.Data.title || `Test Agent: ${this.agent.Name}`;
+                } else if (this.Data.agentId) {
                     const agentEntity = await this.metadata.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents');
-                    await agentEntity.Load(this.data.agentId);
+                    await agentEntity.Load(this.Data.agentId);
                     if (agentEntity.IsSaved) {
                         this.agent = agentEntity;
-                        this.windowTitle = this.data.title || `Test Agent: ${this.agent.Name}`;
+                        this.WindowTitle = this.Data.title || `Test Agent: ${this.agent.Name}`;
                     } else {
                         throw new Error('Agent not found');
                     }
@@ -132,15 +177,15 @@ export class AITestHarnessWindowComponent extends BaseAngularComponent implement
                     throw new Error('No agent provided');
                 }
             } else {
-                if (this.data.prompt) {
-                    this.prompt = this.data.prompt;
-                    this.windowTitle = this.data.title || `Test Prompt: ${this.prompt.Name}`;
-                } else if (this.data.promptId) {
+                if (this.Data.prompt) {
+                    this.prompt = this.Data.prompt;
+                    this.WindowTitle = this.Data.title || `Test Prompt: ${this.prompt.Name}`;
+                } else if (this.Data.promptId) {
                     const promptEntity = await this.metadata.GetEntityObject<MJAIPromptEntityExtended>('MJ: AI Prompts');
-                    await promptEntity.Load(this.data.promptId);
+                    await promptEntity.Load(this.Data.promptId);
                     if (promptEntity.IsSaved) {
                         this.prompt = promptEntity;
-                        this.windowTitle = this.data.title || `Test Prompt: ${this.prompt.Name}`;
+                        this.WindowTitle = this.Data.title || `Test Prompt: ${this.prompt.Name}`;
                     } else {
                         throw new Error('Prompt not found');
                     }
@@ -149,21 +194,36 @@ export class AITestHarnessWindowComponent extends BaseAngularComponent implement
                 }
             }
             
-            this.loading = false;
+            this.Loading = false;
         } catch (err: any) {
             this.error = err.message || 'Failed to load entity';
-            this.loading = false;
+            this.Loading = false;
         }
     }
-    
-    onClose() {
-        this.closeWindow.emit();
+
+    /** @deprecated Use {@link LoadEntity}. */
+    async loadEntity() {
+      return this.LoadEntity();
     }
     
-    onMinimizeRequested() {
+    OnClose() {
+        this.CloseWindow.emit();
+    }
+
+    /** @deprecated Use {@link OnClose}. */
+    onClose() {
+      return this.OnClose();
+    }
+    
+    OnMinimizeRequested() {
         // Since Kendo Window doesn't support minimize functionality,
         // we'll close the window when navigating to view the agent run
-        this.closeWindow.emit();
+        this.CloseWindow.emit();
+    }
+
+    /** @deprecated Use {@link OnMinimizeRequested}. */
+    onMinimizeRequested() {
+      return this.OnMinimizeRequested();
     }
     
     private convertToNumber(value: string | number | undefined): number | undefined {

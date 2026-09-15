@@ -11,7 +11,7 @@ export class DiscoveryTriggerAnalyzer {
   /**
    * Analyze whether relationship discovery should be triggered
    */
-  public static analyzeSchemas(schemas: SchemaDefinition[]): DiscoveryTriggerAnalysis {
+  public static AnalyzeSchemas(schemas: SchemaDefinition[]): DiscoveryTriggerAnalysis {
     const stats = this.calculateSchemaStatistics(schemas);
     const expectedMinFKs = this.calculateExpectedFKs(stats.totalTables);
     const fkDeficit = expectedMinFKs - stats.totalFKs;
@@ -46,6 +46,11 @@ export class DiscoveryTriggerAnalyzer {
         fkDeficitPercentage
       }
     };
+  }
+
+  /** @deprecated Use {@link AnalyzeSchemas}. */
+  public static analyzeSchemas(schemas: SchemaDefinition[]): DiscoveryTriggerAnalysis {
+    return this.AnalyzeSchemas(schemas);
   }
 
   /**
@@ -140,7 +145,7 @@ export class DiscoveryTriggerAnalyzer {
   /**
    * Get detailed explanation of the trigger formula
    */
-  public static getFormulaExplanation(): string {
+  public static GetFormulaExplanation(): string {
     return `
 Discovery Trigger Formula:
 -------------------------
@@ -169,17 +174,27 @@ Discovery Trigger Formula:
     `.trim();
   }
 
+  /** @deprecated Use {@link GetFormulaExplanation}. */
+  public static getFormulaExplanation(): string {
+    return this.GetFormulaExplanation();
+  }
+
   /**
    * Analyze a specific schema in isolation
    */
+  public static AnalyzeSchema(schema: SchemaDefinition): DiscoveryTriggerAnalysis {
+    return this.AnalyzeSchemas([schema]);
+  }
+
+  /** @deprecated Use {@link AnalyzeSchema}. */
   public static analyzeSchema(schema: SchemaDefinition): DiscoveryTriggerAnalysis {
-    return this.analyzeSchemas([schema]);
+    return this.AnalyzeSchema(schema);
   }
 
   /**
    * Get tables without primary keys
    */
-  public static getTablesWithoutPK(schemas: SchemaDefinition[]): Array<{
+  public static GetTablesWithoutPK(schemas: SchemaDefinition[]): Array<{
     schema: string;
     table: string;
   }> {
@@ -200,10 +215,18 @@ Discovery Trigger Formula:
     return tables;
   }
 
+  /** @deprecated Use {@link GetTablesWithoutPK}. */
+  public static getTablesWithoutPK(schemas: SchemaDefinition[]): Array<{
+    schema: string;
+    table: string;
+  }> {
+    return this.GetTablesWithoutPK(schemas);
+  }
+
   /**
    * Get FK statistics by schema
    */
-  public static getFKStatisticsBySchema(schemas: SchemaDefinition[]): Array<{
+  public static GetFKStatisticsBySchema(schemas: SchemaDefinition[]): Array<{
     schema: string;
     tableCount: number;
     totalFKs: number;
@@ -229,5 +252,17 @@ Discovery Trigger Formula:
         deficitPercentage
       };
     });
+  }
+
+  /** @deprecated Use {@link GetFKStatisticsBySchema}. */
+  public static getFKStatisticsBySchema(schemas: SchemaDefinition[]): Array<{
+    schema: string;
+    tableCount: number;
+    totalFKs: number;
+    expectedFKs: number;
+    deficit: number;
+    deficitPercentage: number;
+  }> {
+    return this.GetFKStatisticsBySchema(schemas);
   }
 }

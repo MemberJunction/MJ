@@ -98,7 +98,7 @@ export class AuthorizationStateManager {
    * @param params - The state parameters
    * @returns The generated state string to use with the upstream provider
    */
-  createState(params: Omit<AuthorizationState, 'createdAt'>): string {
+  CreateState(params: Omit<AuthorizationState, 'createdAt'>): string {
     const proxyState = this.generateStateString();
     const now = Date.now();
 
@@ -114,6 +114,11 @@ export class AuthorizationStateManager {
     return proxyState;
   }
 
+  /** @deprecated Use {@link CreateState}. */
+  createState(params: Omit<AuthorizationState, 'createdAt'>): string {
+    return this.CreateState(params);
+  }
+
   /**
    * Retrieves and removes an authorization state.
    *
@@ -122,7 +127,7 @@ export class AuthorizationStateManager {
    * @param proxyState - The state string
    * @returns The authorization state, or undefined if not found/expired
    */
-  getState(proxyState: string): AuthorizationState | undefined {
+  GetState(proxyState: string): AuthorizationState | undefined {
     const state = this.states.get(proxyState);
     if (!state) {
       return undefined;
@@ -139,13 +144,18 @@ export class AuthorizationStateManager {
     return state;
   }
 
+  /** @deprecated Use {@link GetState}. */
+  getState(proxyState: string): AuthorizationState | undefined {
+    return this.GetState(proxyState);
+  }
+
   /**
    * Creates and stores an authorization code.
    *
    * @param params - The code parameters (excluding code, createdAt, expiresAt)
    * @returns The generated authorization code
    */
-  createAuthorizationCode(
+  CreateAuthorizationCode(
     params: Omit<StoredAuthorizationCode, 'code' | 'createdAt' | 'expiresAt'>
   ): string {
     const code = this.generateAuthorizationCode();
@@ -165,6 +175,13 @@ export class AuthorizationStateManager {
     return code;
   }
 
+  /** @deprecated Use {@link CreateAuthorizationCode}. */
+  createAuthorizationCode(
+    params: Omit<StoredAuthorizationCode, 'code' | 'createdAt' | 'expiresAt'>
+  ): string {
+    return this.CreateAuthorizationCode(params);
+  }
+
   /**
    * Retrieves and removes an authorization code.
    *
@@ -173,7 +190,7 @@ export class AuthorizationStateManager {
    * @param code - The authorization code
    * @returns The stored code data, or undefined if not found/expired
    */
-  getAuthorizationCode(code: string): StoredAuthorizationCode | undefined {
+  GetAuthorizationCode(code: string): StoredAuthorizationCode | undefined {
     const storedCode = this.codes.get(code);
     if (!storedCode) {
       return undefined;
@@ -190,6 +207,11 @@ export class AuthorizationStateManager {
     return storedCode;
   }
 
+  /** @deprecated Use {@link GetAuthorizationCode}. */
+  getAuthorizationCode(code: string): StoredAuthorizationCode | undefined {
+    return this.GetAuthorizationCode(code);
+  }
+
   /**
    * Validates a PKCE code verifier against a stored code challenge.
    *
@@ -198,7 +220,7 @@ export class AuthorizationStateManager {
    * @param method - The challenge method (S256 or plain)
    * @returns true if the verifier is valid
    */
-  validatePKCE(
+  ValidatePKCE(
     codeVerifier: string,
     codeChallenge: string,
     method: string = 'S256'
@@ -221,13 +243,22 @@ export class AuthorizationStateManager {
     return false;
   }
 
+  /** @deprecated Use {@link ValidatePKCE}. */
+  validatePKCE(
+    codeVerifier: string,
+    codeChallenge: string,
+    method: string = 'S256'
+  ): boolean {
+    return this.ValidatePKCE(codeVerifier, codeChallenge, method);
+  }
+
   /**
    * Creates and stores a consent request.
    *
    * @param params - The consent request parameters (excluding requestId and requestedAt)
    * @returns The generated request ID
    */
-  createConsentRequest(
+  CreateConsentRequest(
     params: Omit<ConsentRequest, 'requestId' | 'requestedAt'>
   ): string {
     const requestId = this.generateStateString();
@@ -246,6 +277,13 @@ export class AuthorizationStateManager {
     return requestId;
   }
 
+  /** @deprecated Use {@link CreateConsentRequest}. */
+  createConsentRequest(
+    params: Omit<ConsentRequest, 'requestId' | 'requestedAt'>
+  ): string {
+    return this.CreateConsentRequest(params);
+  }
+
   /**
    * Retrieves a consent request without removing it.
    * Useful for displaying the consent form.
@@ -253,7 +291,7 @@ export class AuthorizationStateManager {
    * @param requestId - The consent request ID
    * @returns The consent request, or undefined if not found/expired
    */
-  getConsentRequest(requestId: string): ConsentRequest | undefined {
+  GetConsentRequest(requestId: string): ConsentRequest | undefined {
     const request = this.consentRequests.get(requestId);
     if (!request) {
       return undefined;
@@ -269,6 +307,11 @@ export class AuthorizationStateManager {
     return request;
   }
 
+  /** @deprecated Use {@link GetConsentRequest}. */
+  getConsentRequest(requestId: string): ConsentRequest | undefined {
+    return this.GetConsentRequest(requestId);
+  }
+
   /**
    * Consumes a consent request (retrieves and removes).
    * Used after the user submits their consent decision.
@@ -276,40 +319,60 @@ export class AuthorizationStateManager {
    * @param requestId - The consent request ID
    * @returns The consent request, or undefined if not found/expired
    */
-  consumeConsentRequest(requestId: string): ConsentRequest | undefined {
-    const request = this.getConsentRequest(requestId);
+  ConsumeConsentRequest(requestId: string): ConsentRequest | undefined {
+    const request = this.GetConsentRequest(requestId);
     if (request) {
       this.consentRequests.delete(requestId);
     }
     return request;
   }
 
+  /** @deprecated Use {@link ConsumeConsentRequest}. */
+  consumeConsentRequest(requestId: string): ConsentRequest | undefined {
+    return this.ConsumeConsentRequest(requestId);
+  }
+
   /**
    * Gets the number of active consent requests.
    */
-  get consentRequestCount(): number {
+  get ConsentRequestCount(): number {
     return this.consentRequests.size;
+  }
+
+  /** @deprecated Use {@link ConsentRequestCount}. */
+  get consentRequestCount(): number {
+    return this.ConsentRequestCount;
   }
 
   /**
    * Gets the number of active states.
    */
-  get stateCount(): number {
+  get StateCount(): number {
     return this.states.size;
+  }
+
+  /** @deprecated Use {@link StateCount}. */
+  get stateCount(): number {
+    return this.StateCount;
   }
 
   /**
    * Gets the number of active authorization codes.
    */
-  get codeCount(): number {
+  get CodeCount(): number {
     return this.codes.size;
+  }
+
+  /** @deprecated Use {@link CodeCount}. */
+  get codeCount(): number {
+    return this.CodeCount;
   }
 
   /**
    * Stops the cleanup timer and clears all data.
    * Call this when shutting down the server.
    */
-  shutdown(): void {
+  Shutdown(): void {
     if (this.cleanupTimer) {
       clearInterval(this.cleanupTimer);
       this.cleanupTimer = null;
@@ -318,6 +381,11 @@ export class AuthorizationStateManager {
     this.codes.clear();
     this.consentRequests.clear();
     console.log('OAuth Proxy: Authorization state manager shut down');
+  }
+
+  /** @deprecated Use {@link Shutdown}. */
+  shutdown(): void {
+    return this.Shutdown();
   }
 
   /**
@@ -409,7 +477,7 @@ let stateManagerInstance: AuthorizationStateManager | null = null;
  * @param options - Options to use when creating the manager (only used on first call)
  * @returns The shared AuthorizationStateManager instance
  */
-export function getAuthorizationStateManager(
+export function GetAuthorizationStateManager(
   options?: AuthorizationStateManagerOptions
 ): AuthorizationStateManager {
   if (!stateManagerInstance) {
@@ -418,12 +486,24 @@ export function getAuthorizationStateManager(
   return stateManagerInstance;
 }
 
+/** @deprecated Use {@link GetAuthorizationStateManager}. */
+export function getAuthorizationStateManager(
+  options?: AuthorizationStateManagerOptions
+): AuthorizationStateManager {
+  return GetAuthorizationStateManager(options);
+}
+
 /**
  * Resets the singleton state manager (for testing).
  */
-export function resetAuthorizationStateManager(): void {
+export function ResetAuthorizationStateManager(): void {
   if (stateManagerInstance) {
     stateManagerInstance.shutdown();
     stateManagerInstance = null;
   }
+}
+
+/** @deprecated Use {@link ResetAuthorizationStateManager}. */
+export function resetAuthorizationStateManager(): void {
+  return ResetAuthorizationStateManager();
 }

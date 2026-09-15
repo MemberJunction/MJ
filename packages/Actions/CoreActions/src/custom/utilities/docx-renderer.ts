@@ -56,7 +56,7 @@ type RawSectionItem = Record<string, unknown>;
 /**
  * Render an array of DocxSection to a DOCX buffer.
  */
-export async function renderDocxFromSections(sections: DocxSection[], options: WordOptions): Promise<Buffer> {
+export async function RenderDocxFromSections(sections: DocxSection[], options: WordOptions): Promise<Buffer> {
     const children: (Paragraph | Table)[] = [];
 
     for (const section of sections) {
@@ -91,6 +91,11 @@ export async function renderDocxFromSections(sections: DocxSection[], options: W
     });
 
     return Packer.toBuffer(doc) as Promise<Buffer>;
+}
+
+/** @deprecated Use {@link RenderDocxFromSections}. */
+export async function renderDocxFromSections(sections: DocxSection[], options: WordOptions): Promise<Buffer> {
+    return RenderDocxFromSections(sections, options);
 }
 
 // ── Element builders ──────────────────────────────────────────────────────────
@@ -256,7 +261,7 @@ function resolveAlignment(align?: string): typeof AlignmentType[keyof typeof Ali
  * Flat (what most LLM agents naturally emit):
  *   [{ type: "heading", level: 1, text: "Title" }, { type: "paragraph", text: "..." }]
  */
-export function normalizeSections(items: RawSectionItem[]): DocxSection[] {
+export function NormalizeSections(items: RawSectionItem[]): DocxSection[] {
     if (items.length === 0) return [];
 
     const isStructured = items.some(i => 'heading' in i || 'content' in i);
@@ -265,6 +270,11 @@ export function normalizeSections(items: RawSectionItem[]): DocxSection[] {
     }
 
     return normalizeFlatItems(items);
+}
+
+/** @deprecated Use {@link NormalizeSections}. */
+export function normalizeSections(items: RawSectionItem[]): DocxSection[] {
+    return NormalizeSections(items);
 }
 
 function normalizeStructuredSection(raw: RawSectionItem): DocxSection {
@@ -354,7 +364,7 @@ function normalizeTable(raw: RawSectionItem): DocxContentItem {
 /**
  * Lightweight HTML → structured sections converter using htmlparser2.
  */
-export function htmlToSections(html: string): DocxSection[] {
+export function HtmlToSections(html: string): DocxSection[] {
     const sections: DocxSection[] = [];
     let currentSection: DocxSection = { content: [] };
 
@@ -431,4 +441,9 @@ export function htmlToSections(html: string): DocxSection[] {
     flushSection();
 
     return sections;
+}
+
+/** @deprecated Use {@link HtmlToSections}. */
+export function htmlToSections(html: string): DocxSection[] {
+    return HtmlToSections(html);
 }

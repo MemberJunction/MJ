@@ -4,16 +4,16 @@ import * as path from 'node:path';
 import ora from 'ora-classic';
 import chalk from 'chalk';
 
-import { resolveConnection, isTty } from '../../baseline/cli-helpers';
-import { openConnection } from '../../baseline/connection';
-import { introspectMssql } from '../../baseline/introspector-mssql';
-import { dumpTables } from '../../baseline/data-dumper';
-import { emitBaselineTsql } from '../../baseline/emitter';
+import { ResolveConnection, IsTty } from '../../baseline/cli-helpers';
+import { OpenConnection } from '../../baseline/connection';
+import { IntrospectMssql } from '../../baseline/introspector-mssql';
+import { DumpTables } from '../../baseline/data-dumper';
+import { EmitBaselineTsql } from '../../baseline/emitter';
 import {
-  baselineFilename,
-  computeAutoBaselineStamp,
-  discoverMigrationsSourceDir,
-  findLatestVersionedMigration,
+  BaselineFilename,
+  ComputeAutoBaselineStamp,
+  DiscoverMigrationsSourceDir,
+  FindLatestVersionedMigration,
 } from '../../baseline/util';
 
 export default class BaselineBuild extends Command {
@@ -76,7 +76,7 @@ export default class BaselineBuild extends Command {
 
     const { baselineVersion, generatedAtUtc, autoSource } = this.resolveVersionAndStamp(flags);
 
-    const connectionParams = resolveConnection({ database: flags.database }, 'mssql');
+    const connectionParams = ResolveConnection({ database: flags.database }, 'mssql');
 
     const excludedDataTables = new Set<string>(
       flags['exclude-data']
@@ -88,7 +88,7 @@ export default class BaselineBuild extends Command {
     excludedDataTables.add('flyway_schema_history');
     excludedDataTables.add('dbo.flyway_schema_history');
 
-    const useSpinner = isTty();
+    const useSpinner = IsTty();
     const spinner = useSpinner ? ora() : null;
 
     const phase = (text: string) => {
@@ -108,13 +108,13 @@ export default class BaselineBuild extends Command {
       this.log(chalk.dim(`  Auto timestamp        : ${autoSource.timestamp} + 1m`));
     }
     phase(`Connecting to ${connectionParams.database}@${connectionParams.host}`);
-    const db = await openConnection(connectionParams);
+    const db = await OpenConnection(connectionParams);
 
     try {
       succeed(`Connected to ${connectionParams.database}`);
 
       phase(`Introspecting schema`);
-      const snapshot = await introspectMssql(db, {
+      const snapshot = await IntrospectMssql(db, {
         onPhase: (p) => { if (flags.verbose) this.log(`  - ${p}`); },
       });
       succeed(
@@ -126,7 +126,7 @@ export default class BaselineBuild extends Command {
 
       const dumps = flags['no-data'] ? [] : await (async () => {
         phase(`Dumping table data (every row, every column)`);
-        const result = await dumpTables(
+        const result = await DumpTables(
           db,
           snapshot.tables,
           { excludedTables: excludedDataTables },
@@ -143,7 +143,7 @@ export default class BaselineBuild extends Command {
       })();
 
       phase('Emitting baseline SQL');
-      const sql = emitBaselineTsql({
+      const sql = EmitBaselineTsql({
         snapshot,
         dataDumps: dumps,
         options: {
@@ -162,7 +162,7 @@ export default class BaselineBuild extends Command {
         return;
       }
 
-      const filename = baselineFilename({ generatedAtUtc, baselineVersion });
+      const filename = BaselineFilename({ generatedAtUtc, baselineVersion });
       fs.mkdirSync(flags.out, { recursive: true });
       const fullPath = path.resolve(flags.out, filename);
       fs.writeFileSync(fullPath, sql, 'utf8');
@@ -202,20 +202,20 @@ export default class BaselineBuild extends Command {
       }
       return { baselineVersion: explicit, generatedAtUtc: new Date(), autoSource: null };
     }
-    const sourceDir = flags['source-dir'] ?? discoverMigrationsSourceDir(process.cwd());
+    const sourceDir = flags['source-dir'] ?? DiscoverMigrationsSourceDir(process.cwd());
     if (!sourceDir) {
       this.error(
         'No --baseline-version provided and could not auto-discover a migrations directory. ' +
           'Pass --source-dir or --baseline-version.',
       );
     }
-    const latest = findLatestVersionedMigration(sourceDir);
+    const latest = FindLatestVersionedMigration(sourceDir);
     if (!latest) {
       this.error(
         `No V-files found in ${sourceDir}. Pass --baseline-version explicitly or point --source-dir at a folder with V<ts>__v<Major>.<Minor>...sql migrations.`,
       );
     }
-    const { generatedAtUtc } = computeAutoBaselineStamp(latest.timestamp);
+    const { generatedAtUtc } = ComputeAutoBaselineStamp(latest.timestamp);
     return {
       baselineVersion: latest.majorMinor,
       generatedAtUtc,

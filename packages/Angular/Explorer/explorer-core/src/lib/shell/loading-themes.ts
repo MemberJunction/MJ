@@ -883,11 +883,16 @@ export const ALL_THEMES: LoadingTheme[] = [
 /**
  * Get the user's browser locale.
  */
-export function getBrowserLocale(): string {
+export function GetBrowserLocale(): string {
   if (typeof navigator !== 'undefined') {
     return navigator.language || (navigator as { userLanguage?: string }).userLanguage || 'en';
   }
   return 'en';
+}
+
+/** @deprecated Use {@link GetBrowserLocale}. */
+export function getBrowserLocale(): string {
+  return GetBrowserLocale();
 }
 
 /**
@@ -936,8 +941,8 @@ function localeMatches(userLocale: string, themeLocales?: string[]): boolean {
  * Find the best matching theme for the current date and locale.
  * Returns the highest priority matching theme, or STANDARD_THEME if none match.
  */
-export function getActiveTheme(date: Date = new Date(), locale?: string): LoadingTheme {
-  const userLocale = locale || getBrowserLocale();
+export function GetActiveTheme(date: Date = new Date(), locale?: string): LoadingTheme {
+  const userLocale = locale || GetBrowserLocale();
   const today = { month: date.getMonth() + 1, day: date.getDate() };
 
   // Find all matching themes
@@ -960,4 +965,9 @@ export function getActiveTheme(date: Date = new Date(), locale?: string): Loadin
   }
 
   return matchingThemes[0];
+}
+
+/** @deprecated Use {@link GetActiveTheme}. */
+export function getActiveTheme(date: Date = new Date(), locale?: string): LoadingTheme {
+  return GetActiveTheme(date, locale);
 }

@@ -109,26 +109,55 @@ export interface DockItem {
     `]
 })
 export class WindowDockComponent {
-    dockItems: DockItem[] = [];
+    DockItems: DockItem[] = [];
+
+    /** @deprecated Use {@link DockItems}. */
+    get dockItems(): DockItem[] {
+        return this.DockItems;
+    }
+    /** @deprecated Use {@link DockItems}. */
+    set dockItems(value: DockItem[]) {
+        this.DockItems = value;
+    }
     
+    AddItem(item: DockItem) {
+        this.DockItems.push(item);
+    }
+
+    /** @deprecated Use {@link AddItem}. */
     addItem(item: DockItem) {
-        this.dockItems.push(item);
+        return this.AddItem(item);
     }
     
+    RemoveItem(windowId: string) {
+        this.DockItems = this.DockItems.filter(item => item.windowId !== windowId);
+    }
+
+    /** @deprecated Use {@link RemoveItem}. */
     removeItem(windowId: string) {
-        this.dockItems = this.dockItems.filter(item => item.windowId !== windowId);
+        return this.RemoveItem(windowId);
     }
     
-    restoreWindow(item: DockItem) {
+    RestoreWindow(item: DockItem) {
         item.restoreCallback();
-        this.removeItem(item.windowId);
+        this.RemoveItem(item.windowId);
+    }
+
+    /** @deprecated Use {@link RestoreWindow}. */
+    restoreWindow(item: DockItem) {
+        return this.RestoreWindow(item);
     }
     
-    getTruncatedTitle(title: string): string {
+    GetTruncatedTitle(title: string): string {
         // Remove "Test: " prefix for the label to save space
         const cleanTitle = title.startsWith('Test: ') ? title.substring(6) : title;
         // Truncate to first 8 characters for the label
         return cleanTitle.length > 8 ? cleanTitle.substring(0, 8) + '...' : cleanTitle;
+    }
+
+    /** @deprecated Use {@link GetTruncatedTitle}. */
+    getTruncatedTitle(title: string): string {
+        return this.GetTruncatedTitle(title);
     }
 }
 
@@ -157,7 +186,7 @@ export class WindowDockService {
         }
     }
     
-    addWindow(windowId: string, title: string, icon?: string, restoreCallback?: () => void, iconUrl?: string, progress?: number) {
+    AddWindow(windowId: string, title: string, icon?: string, restoreCallback?: () => void, iconUrl?: string, progress?: number) {
         this.ensureDockExists();
         if (this.dockComponent) {
             this.dockComponent.instance.addItem({
@@ -170,8 +199,13 @@ export class WindowDockService {
             });
         }
     }
+
+    /** @deprecated Use {@link AddWindow}. */
+    addWindow(windowId: string, title: string, icon?: string, restoreCallback?: () => void, iconUrl?: string, progress?: number) {
+        return this.AddWindow(windowId, title, icon, restoreCallback, iconUrl, progress);
+    }
     
-    removeWindow(windowId: string) {
+    RemoveWindow(windowId: string) {
         if (this.dockComponent) {
             this.dockComponent.instance.removeItem(windowId);
             
@@ -183,13 +217,23 @@ export class WindowDockService {
             }
         }
     }
+
+    /** @deprecated Use {@link RemoveWindow}. */
+    removeWindow(windowId: string) {
+        return this.RemoveWindow(windowId);
+    }
     
-    updateWindowProgress(windowId: string, progress: number | undefined) {
+    UpdateWindowProgress(windowId: string, progress: number | undefined) {
         if (this.dockComponent) {
             const item = this.dockComponent.instance.dockItems.find(i => i.windowId === windowId);
             if (item) {
                 item.progress = progress;
             }
         }
+    }
+
+    /** @deprecated Use {@link UpdateWindowProgress}. */
+    updateWindowProgress(windowId: string, progress: number | undefined) {
+        return this.UpdateWindowProgress(windowId, progress);
     }
 }

@@ -281,7 +281,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       artifact_b64: model.artifactB64,
       fitted_preprocessing: model.fittedPreprocessing,
       feature_schema: model.featureSchema,
-      rows: matrixToFeatureRows(assembly.matrix, model.featureSchema),
+      rows: MatrixToFeatureRows(assembly.matrix, model.featureSchema),
     };
     return this.deps.sidecar.predict(req);
   }
@@ -363,7 +363,7 @@ interface ResolvedScoringPipeline {
  * present in the matrix but not in the schema are dropped; schema columns missing
  * from the matrix are emitted as `null` (the sidecar imputes via fitted params).
  */
-export function matrixToFeatureRows(
+export function MatrixToFeatureRows(
   matrix: MatrixData,
   featureSchema: FeatureSchemaEntry[],
 ): Array<Record<string, string | number | boolean | null>> {
@@ -378,6 +378,14 @@ export function matrixToFeatureRows(
     }
     return obj;
   });
+}
+
+/** @deprecated Use {@link MatrixToFeatureRows}. */
+export function matrixToFeatureRows(
+  matrix: MatrixData,
+  featureSchema: FeatureSchemaEntry[],
+): Array<Record<string, string | number | boolean | null>> {
+  return MatrixToFeatureRows(matrix, featureSchema);
 }
 
 /** Parse a possibly-null JSON column, falling back to a default on null/parse error. */

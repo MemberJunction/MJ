@@ -8,22 +8,37 @@ export class PagedRecords extends Readable {
     super({ objectMode: true });
   }
 
-  _read() {
+  Read() {
     // no-op
+  }
+
+  /** @deprecated Use {@link Read}. */
+  _read() {
+    return this.Read();
   }
 
   /**
    * Adds a page of results to the stream
    * @param {Array<Record<string,unknown>>} page - The page of results to add to the stream
    */
-  addPage(page) {
+  AddPage(page) {
     page.forEach((row) => this.push(row));
+  }
+
+  /** @deprecated Use {@link AddPage}. */
+  addPage(page) {
+    return this.AddPage(page);
   }
 
   /**
    * Called when there are no more pages to add to the stream
    */
-  endStream() {
+  EndStream() {
     this.push(null);
+  }
+
+  /** @deprecated Use {@link EndStream}. */
+  endStream() {
+    return this.EndStream();
   }
 }

@@ -1,6 +1,6 @@
 import { Command, Flags } from '@oclif/core';
 import ora from 'ora-classic';
-import { AI_FORMAT_MAP, CANONICAL_FORMAT_FLAG, resolveLegacyFormat } from '../../../lib/format-compat.js';
+import { AI_FORMAT_MAP, CANONICAL_FORMAT_FLAG, ResolveLegacyFormat } from '../../../lib/format-compat.js';
 
 export default class ActionsRun extends Command {
   static description = 'Execute an AI action with parameters';
@@ -50,7 +50,7 @@ export default class ActionsRun extends Command {
 
     const { flags, metadata } = await this.parse(ActionsRun);
     const service = new ActionService();
-    const formatter = new OutputFormatter(resolveLegacyFormat({
+    const formatter = new OutputFormatter(ResolveLegacyFormat({
         format: flags.format,
         legacy: flags.output as 'compact' | 'json' | 'table',
         legacyDefault: 'compact' as const,

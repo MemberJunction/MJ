@@ -15,7 +15,7 @@ import { AuthProviderFactory } from '@memberjunction/auth-providers';
 import { configInfo, type MagicLinkConfig } from '../../config.js';
 import { MagicLinkKeyManager } from './MagicLinkKeys.js';
 import { MagicLinkService } from './MagicLinkService.js';
-import { buildRedeemLandingHtml } from './redeemLanding.js';
+import { BuildRedeemLandingHtml } from './redeemLanding.js';
 import type { CreateMagicLinkInviteParams, RedeemMagicLinkResult } from './types.js';
 
 /** The mount path for both routers (`/magic-link`). */
@@ -28,7 +28,7 @@ export const MAGIC_LINK_JWKS_PATH = `${MAGIC_LINK_MOUNT_PATH}/jwks.json`;
  * Builds the magic-link routers. The caller mounts `publicRouter` before the
  * auth middleware and `authenticatedRouter` after it (both at MAGIC_LINK_MOUNT_PATH).
  */
-export function createMagicLinkHandler(publicUrl: string, config: MagicLinkConfig): {
+export function CreateMagicLinkHandler(publicUrl: string, config: MagicLinkConfig): {
   publicRouter: Router;
   authenticatedRouter: Router;
 } {
@@ -113,7 +113,7 @@ export function createMagicLinkHandler(publicUrl: string, config: MagicLinkConfi
     res
       .status(200)
       .type('html')
-      .send(buildRedeemLandingHtml(token, `${MAGIC_LINK_MOUNT_PATH}/redeem`));
+      .send(BuildRedeemLandingHtml(token, `${MAGIC_LINK_MOUNT_PATH}/redeem`));
   });
 
   // POST /redeem performs the actual (side-effectful) redemption. Token arrives
@@ -177,6 +177,14 @@ export function createMagicLinkHandler(publicUrl: string, config: MagicLinkConfi
   return { publicRouter, authenticatedRouter };
 }
 
+/** @deprecated Use {@link CreateMagicLinkHandler}. */
+export function createMagicLinkHandler(publicUrl: string, config: MagicLinkConfig): {
+  publicRouter: Router;
+  authenticatedRouter: Router;
+} {
+  return CreateMagicLinkHandler(publicUrl, config);
+}
+
 /**
  * A minimal PUBLIC router that serves ONLY the JWKS endpoint (the magic-link
  * signing key's public half). Mount this when the full magic-link flow is
@@ -186,12 +194,17 @@ export function createMagicLinkHandler(publicUrl: string, config: MagicLinkConfi
  * request 401s. Assumes the key is already initialized (the widget handler does
  * this via `MagicLinkKeyManager.Instance.Initialize` at startup).
  */
-export function createMagicLinkJwksRouter(): Router {
+export function CreateMagicLinkJwksRouter(): Router {
   const router = Router();
   router.get('/jwks.json', (_req: Request, res: Response) => {
     res.status(200).json(MagicLinkKeyManager.Instance.GetJWKS());
   });
   return router;
+}
+
+/** @deprecated Use {@link CreateMagicLinkJwksRouter}. */
+export function createMagicLinkJwksRouter(): Router {
+  return CreateMagicLinkJwksRouter();
 }
 
 /**
@@ -202,7 +215,7 @@ export function createMagicLinkJwksRouter(): Router {
  * Also appends the provider to `configInfo.authProviders` so a later
  * `initializeAuthProviders()` (which clears + repopulates from config) keeps it.
  */
-export function registerMagicLinkAuthProvider(publicUrl: string, config: MagicLinkConfig): void {
+export function RegisterMagicLinkAuthProvider(publicUrl: string, config: MagicLinkConfig): void {
   const base = publicUrl.replace(/\/$/, '');
   const providerConfig: AuthProviderConfig = {
     name: 'magic-link',
@@ -223,4 +236,9 @@ export function registerMagicLinkAuthProvider(publicUrl: string, config: MagicLi
   } catch (e) {
     LogError(`[MagicLink] Failed to register auth provider: ${e instanceof Error ? e.message : String(e)}`);
   }
+}
+
+/** @deprecated Use {@link RegisterMagicLinkAuthProvider}. */
+export function registerMagicLinkAuthProvider(publicUrl: string, config: MagicLinkConfig): void {
+  return RegisterMagicLinkAuthProvider(publicUrl, config);
 }

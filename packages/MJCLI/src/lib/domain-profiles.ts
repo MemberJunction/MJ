@@ -138,6 +138,11 @@ export const DOMAIN_PROFILES: Readonly<Record<string, DomainProfile>> = {
 };
 
 /** The profile for a domain, falling back to {@link DEFAULT_DOMAIN_PROFILE}. */
-export function getDomainProfile(domain: string): DomainProfile {
+export function GetDomainProfile(domain: string): DomainProfile {
   return DOMAIN_PROFILES[domain] ?? DEFAULT_DOMAIN_PROFILE;
+}
+
+/** @deprecated Use {@link GetDomainProfile}. */
+export function getDomainProfile(domain: string): DomainProfile {
+  return GetDomainProfile(domain);
 }
