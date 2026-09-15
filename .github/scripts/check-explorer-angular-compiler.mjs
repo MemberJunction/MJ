@@ -132,9 +132,17 @@ export const SELF_TEST_FIXTURES = [
         },
     ],
     [
-        'passes when only one of the two peers is declared, as long as it matches',
+        'passes when compiler is declared and exact-pinned but neither peer is present to compare against',
         true,
         { dependencies: {}, devDependencies: { '@angular/compiler': '21.2.22' } },
+    ],
+    [
+        'passes when only @angular/compiler-cli is declared and matches (platform-browser-dynamic absent)',
+        true,
+        {
+            dependencies: {},
+            devDependencies: { '@angular/compiler': '21.2.22', '@angular/compiler-cli': '21.2.22' },
+        },
     ],
     ['fails when @angular/compiler is missing entirely', false, { dependencies: {}, devDependencies: {} }],
     [
