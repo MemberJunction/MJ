@@ -94,13 +94,11 @@ describe('client routing honours platform', () => {
 
         setupConfigFile(bareConfig());
         expect(AddClientDynamicPackages(REPO_ROOT, manifest).Success).toBe(true);
-        // The only candidate package is node-only, so GetClientPackagesFromManifest returns zero
-        // entries and AddClientDynamicPackages's pre-existing empty-set guard (config-manager.ts)
-        // short-circuits before ever touching the file — no write is the correct outcome here, not
-        // just an acceptable one, so guard the same way the sibling server-side test above does.
-        if (mockedWriteFileSync.mock.calls.length > 0) {
-            expect(arrayBody(writtenContent(), 'client')).not.toContain('@acme/acme-actions');
-        }
+        // The only candidate is node-only, so GetClientPackagesFromManifest returns zero entries and
+        // AddClientDynamicPackages short-circuits at its empty-set guard before touching the file.
+        // Assert that positively: if the platform filter regressed, an entry would be produced and a
+        // write WOULD happen, so this fails loudly rather than passing vacuously.
+        expect(mockedWriteFileSync).not.toHaveBeenCalled();
     });
 });
 
@@ -124,9 +122,11 @@ describe('server routing honours platform', () => {
 
         setupConfigFile(bareConfig());
         AddServerDynamicPackages(REPO_ROOT, manifest);
-        if (mockedWriteFileSync.mock.calls.length > 0) {
-            expect(arrayBody(writtenContent(), 'server')).not.toContain('@acme/acme-widgets');
-        }
+        // The only candidate is browser-only, so GetServerPackagesFromManifest returns zero entries
+        // and AddServerDynamicPackages short-circuits at its empty-set guard before touching the
+        // file. Assert that positively: if the platform filter regressed, an entry would be produced
+        // and a write WOULD happen, so this fails loudly rather than passing vacuously.
+        expect(mockedWriteFileSync).not.toHaveBeenCalled();
     });
 });
 
