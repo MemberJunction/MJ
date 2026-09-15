@@ -42,7 +42,11 @@
 --     deliberately left as follow-up, not folded into this fix.
 -- ════════════════════════════════════════════════════════════════════════════════════════
 
-ALTER PROC [${flyway:defaultSchema}].[spDeleteEntityWithCoreDependencies]
+-- CREATE OR ALTER, not ALTER: a bare ALTER against a database that does not already have this
+-- proc fails the whole migration, which is precisely the class of hard-fail this PR exists to
+-- remove. (The repo already uses this form in v6 -- see
+-- V202608260829__v6.1.x__Heal_SPs_IncludedSchemaNames.sql.)
+CREATE OR ALTER PROC [${flyway:defaultSchema}].[spDeleteEntityWithCoreDependencies]
   @EntityID uniqueidentifier
 AS
 SET XACT_ABORT ON
@@ -60,6 +64,13 @@ INSERT INTO @Handled (Pair) VALUES
  ('ResourceType.CategoryEntityID'), ('DatasetItem.EntityID'), ('UserViewCategory.EntityID'),
  ('UserView.EntityID'), ('EntityAIAction.EntityID'), ('EntityAIAction.OutputEntityID'),
  ('EntityCommunicationMessageType.EntityID');
+
+-- Entity.ParentID is deliberately absent from @Handled, so the guard reports it as a blocker
+-- like any other unhandled reference. That asymmetry with V202608061704 -- which nulls
+-- Entity.ParentID outright for its own 11 retired entities -- is intentional: re-parenting or
+-- deleting an entity's CHILD entities is a metadata decision only the caller can make, and a
+-- generic proc silently orphaning a subtree is a worse outcome than refusing and saying so.
+-- The retirement migration owns that call explicitly, for a hand-audited set of 11 entities.
 
 -- Deterministic concatenation (M-1): the += accumulator pattern this replaced
 -- (SELECT @probe = @probe + ...) is the row-concatenation idiom Microsoft documents as having
@@ -134,8 +145,13 @@ DELETE FROM [${flyway:defaultSchema}].[UserApplicationEntity] WHERE [EntityID] =
 UPDATE [${flyway:defaultSchema}].Dataset SET __mj_UpdatedAt=GETUTCDATE() WHERE ID IN (SELECT DatasetID FROM [${flyway:defaultSchema}].DatasetItem WHERE EntityID=@EntityID)
 DELETE FROM [${flyway:defaultSchema}].[DatasetItem] WHERE [EntityID] = @EntityID;
 
-DELETE FROM [${flyway:defaultSchema}].[UserViewCategory] WHERE [EntityID] = @EntityID;
+-- ORDER MATTERS -- do not swap these two back. UserView.CategoryID references
+-- UserViewCategory.ID with NO_ACTION, so deleting the categories first raises error 547
+-- (FK_UserView_UserViewCategory) on any database where a saved view of this entity was filed
+-- in one of this entity's own view categories -- i.e. on any database where the entity was
+-- actually used. Children before parents.
 DELETE FROM [${flyway:defaultSchema}].[UserView] WHERE [EntityID] = @EntityID;
+DELETE FROM [${flyway:defaultSchema}].[UserViewCategory] WHERE [EntityID] = @EntityID;
 
 DELETE FROM [${flyway:defaultSchema}].[EntityAIAction] WHERE [EntityID] = @EntityID;
 DELETE FROM [${flyway:defaultSchema}].[EntityCommunicationMessageType] WHERE [EntityID] = @EntityID;

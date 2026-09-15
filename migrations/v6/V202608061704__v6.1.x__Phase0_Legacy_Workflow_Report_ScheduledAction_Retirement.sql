@@ -301,8 +301,13 @@ DELETE FROM [${flyway:defaultSchema}].[UserApplicationEntity] WHERE [EntityID] =
 UPDATE [${flyway:defaultSchema}].Dataset SET __mj_UpdatedAt=GETUTCDATE() WHERE ID IN (SELECT DatasetID FROM [${flyway:defaultSchema}].DatasetItem WHERE EntityID=@EntityID)
 DELETE FROM [${flyway:defaultSchema}].[DatasetItem] WHERE [EntityID] = @EntityID;
 
-DELETE FROM [${flyway:defaultSchema}].[UserViewCategory] WHERE [EntityID] = @EntityID;
+-- ORDER MATTERS -- do not swap these two back. UserView.CategoryID references
+-- UserViewCategory.ID with NO_ACTION, so deleting the categories first raises error 547
+-- (FK_UserView_UserViewCategory) on any database where a saved view of this entity was filed
+-- in one of this entity's own view categories -- i.e. on any database where the entity was
+-- actually used. Children before parents.
 DELETE FROM [${flyway:defaultSchema}].[UserView] WHERE [EntityID] = @EntityID;
+DELETE FROM [${flyway:defaultSchema}].[UserViewCategory] WHERE [EntityID] = @EntityID;
 
 DELETE FROM [${flyway:defaultSchema}].[EntityAIAction] WHERE [EntityID] = @EntityID;
 DELETE FROM [${flyway:defaultSchema}].[EntityCommunicationMessageType] WHERE [EntityID] = @EntityID;
@@ -335,9 +340,15 @@ GO
 -- This block clears those references up front so the generated block below cannot fail, and
 -- THROWs rather than leaving an entity half-pruned if it cannot.
 --
--- Everything runs in ONE batch deliberately: #Retired and #Refs must outlive each statement,
--- and relying on temp tables surviving a GO would be an assumption about the migration
--- runner's connection handling that nothing here needs to make.
+-- It also DETECTS -- without clearing -- the second-order case: rows referencing rows the proc's
+-- own cascade is about to delete. Those are user data (conversation history, agent sessions,
+-- entity documents), so this migration names them and stops rather than destroying them. See the
+-- "Second-order blockers" section further down.
+--
+-- Everything runs in ONE batch deliberately: the temp tables it builds (#Retired, #Refs, and the
+-- second-order set further down) must outlive each statement, and relying on temp tables
+-- surviving a GO would be an assumption about the migration runner's connection handling that
+-- nothing here needs to make.
 -- ════════════════════════════════════════════════════════════════════════════════════════
 
 -- The retry loop below catches FK-ordering errors and retries. XACT_ABORT must be OFF for that
@@ -397,11 +408,52 @@ IF EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ResourceType]
            WHERE [EntityID] IN (SELECT ID FROM #Retired) OR [CategoryEntityID] IN (SELECT ID FROM #Retired))
     THROW 50000, 'Retirement pre-clean: a ResourceType row for a retired entity survived. A new inbound foreign key into ResourceType exists that this migration does not clear.', 1;
 
+-- ── The saved-view run chain ────────────────────────────────────────────────────────────
+-- spDeleteEntityWithCoreDependencies deletes the entity's UserView rows, but it has never
+-- touched their run history. UserViewRun.UserViewID is NOT NULL and NO_ACTION, so on any
+-- database where somebody actually RAN a saved view of one of these entities, the proc's
+-- `DELETE FROM UserView` hard-fails -- the same shape of failure as #4483 itself.
+--
+-- The generic sweep below cannot cover it: UserView.EntityID is deliberately on the sweep's
+-- exclusion list (the proc owns that delete, and sweeping it fights the proc's ordering), so
+-- UserView's own dependents are never reached from the Entity side at all.
+--
+-- Cleared here rather than merely detected further down because run history is derived data:
+-- a UserViewRun records that a view executed and which record IDs came back. Once the view and
+-- its entity are gone the rows describe nothing. That is not the judgement call that deleting
+-- conversations or entity documents would be -- those are DETECTED only, see the second-order
+-- block below.
+--
+-- Named tables, dependents first: UserViewRunDetail -> UserViewRun -> UserView (the proc). The
+-- postcondition immediately after proves the list is complete on every database that runs this,
+-- so a newly added dependent of UserViewRun cannot silently go unhandled.
+DECLARE @RetiredUserViews TABLE (ID uniqueidentifier PRIMARY KEY);
+INSERT INTO @RetiredUserViews (ID)
+SELECT uv.[ID]
+FROM [${flyway:defaultSchema}].[UserView] uv
+WHERE uv.[EntityID] IN (SELECT ID FROM #Retired);
+
+DELETE FROM [${flyway:defaultSchema}].[UserViewRunDetail]
+WHERE [UserViewRunID] IN (SELECT [ID] FROM [${flyway:defaultSchema}].[UserViewRun]
+                          WHERE [UserViewID] IN (SELECT ID FROM @RetiredUserViews));
+DELETE FROM [${flyway:defaultSchema}].[UserViewRun]
+WHERE [UserViewID] IN (SELECT ID FROM @RetiredUserViews);
+
+IF EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[UserViewRun]
+           WHERE [UserViewID] IN (SELECT ID FROM @RetiredUserViews))
+    THROW 50000, 'Retirement pre-clean: a UserViewRun row for a retired entity''s saved view survived. A new inbound foreign key into UserViewRun exists that this migration does not clear.', 1;
+
 -- ── Generic sweep of every remaining inbound Entity reference ────────────────────────────
 -- Discovered from sys.foreign_keys so the whole set is covered rather than the handful the
 -- proc knows about. Nullable FK columns are NULLED; NOT NULL columns mean the row itself has
 -- to go -- the schema's own statement about whether the child can exist without the parent.
-SELECT  sch       = SCHEMA_NAME(pt.schema_id),
+-- DISTINCT because a composite foreign key, or two separate constraints declared on the same
+-- column, produce one sys.foreign_key_columns row each and would otherwise put duplicate
+-- (schema, table, column) entries into #Refs -- duplicated UPDATEs in pass 1, a table visited
+-- twice per attempt in pass 2, and the same name printed twice in the diagnostic below.
+-- Matches the same guard in V202609142100's precondition.
+SELECT  DISTINCT
+        sch       = SCHEMA_NAME(pt.schema_id),
         tblName   = pt.name,
         colName   = pc.name,
         tbl       = QUOTENAME(SCHEMA_NAME(pt.schema_id)) + '.' + QUOTENAME(pt.name),
@@ -415,7 +467,14 @@ JOIN sys.tables rt ON rt.object_id = fk.referenced_object_id
 JOIN sys.tables pt ON pt.object_id = fk.parent_object_id
 JOIN sys.foreign_key_columns fkc ON fkc.constraint_object_id = fk.object_id
 JOIN sys.columns pc ON pc.object_id = pt.object_id AND pc.column_id = fkc.parent_column_id
-WHERE NOT (pt.name = 'Entity' AND SCHEMA_NAME(pt.schema_id) = '${flyway:defaultSchema}');
+-- Only a NO_ACTION foreign key can block DELETE FROM Entity. CASCADE / SET NULL / SET DEFAULT
+-- (delete_referential_action 1/2/3) are cleared by SQL Server itself, and a disabled (NOCHECK'd)
+-- constraint is not enforced at all -- so sweeping either kind would delete or null rows the
+-- database was going to handle correctly on its own. Same filter, same reason, as
+-- V202609142100's precondition, which this list must stay in step with.
+WHERE fk.delete_referential_action = 0
+  AND fk.is_disabled = 0
+  AND NOT (pt.name = 'Entity' AND SCHEMA_NAME(pt.schema_id) = '${flyway:defaultSchema}');
     -- Entity.ParentID is a self-reference, handled after the children below. Schema-qualified
     -- so a same-named table in a DIFFERENT schema with its own FK into Entity is swept, not
     -- silently skipped by matching on the bare name alone.
@@ -445,11 +504,22 @@ WHERE r.sch = '${flyway:defaultSchema}'
 
 DECLARE @sql nvarchar(max);
 
+-- Every string built from a rowset in this block uses FOR XML PATH(''), TYPE + .value(), never
+-- the `SELECT @v = @v + ...` aggregate-concatenation idiom. That idiom has no defined semantics
+-- in T-SQL: with a sort, a parallel plan, or a non-trivial expression in the SELECT list the
+-- optimizer may visit rows more than once or not at all, and the variable silently ends up with
+-- a subset of the rows. Here that would mean a sweep statement never generated, or a blocker
+-- never named in the THROW -- a silent under-report by exactly the machinery that exists to stop
+-- silence. V202609142100 replaced the same idiom for the same reason.
+-- ISNULL(..., N'') reproduces the empty-set behaviour of the old `SET @sql = N''` seed: FOR XML
+-- over zero rows returns NULL, and EXEC sp_executesql N'' is a no-op.
+
 -- Pass 1 -- nullable references simply stop pointing at the retired entity.
-SET @sql = N'';
-SELECT @sql = @sql + N'UPDATE ' + tbl + N' SET ' + col + N' = NULL WHERE ' + col
-                   + N' IN (SELECT ID FROM #Retired);' + CHAR(10)
-FROM #Refs WHERE nullable = 1;
+SET @sql = ISNULL((
+    SELECT N'UPDATE ' + tbl + N' SET ' + col + N' = NULL WHERE ' + col
+         + N' IN (SELECT ID FROM #Retired);' + CHAR(10)
+    FROM #Refs WHERE nullable = 1
+    FOR XML PATH(''), TYPE).value('.', 'nvarchar(max)'), N'');
 EXEC sp_executesql @sql;
 
 -- Pass 2 -- NOT NULL references mean the row itself must go. Bounded retry loop, because
@@ -498,6 +568,144 @@ END
 -- Children of a retired entity would otherwise block its delete via Entity.ParentID.
 UPDATE [${flyway:defaultSchema}].[Entity] SET ParentID = NULL WHERE ParentID IN (SELECT ID FROM #Retired);
 
+-- ── Second-order blockers: rows pointing at rows the CASCADE itself is about to delete ───
+-- Everything above this point is FIRST-ORDER -- references INTO Entity, which sys.foreign_keys
+-- can enumerate from Entity. But spDeleteEntityWithCoreDependencies also deletes rows from
+-- ~20 other tables (Conversation, EntityDocument, List, UserView, UserViewCategory,
+-- RecordChange, ResourceType, ...), and a row referencing one of THOSE rows has no foreign key
+-- back to Entity at all. The postcondition below cannot see it, and neither can the proc's own
+-- precondition in V202609142100. It surfaces only when the generated block further down runs
+-- the cascade and dies mid-way on a bare constraint name, with the entity's fields, permissions
+-- and relationships already stripped -- the half-pruned state #3546 describes.
+--
+-- So: find them from the catalog and THROW, naming schema.table.column and what each one is
+-- blocking, while the migration can still abort cleanly and roll back.
+--
+-- DETECTION ONLY -- deliberately does NOT delete these rows. They are conversation history,
+-- agent sessions, entity documents: user data. Destroying them is an operator's decision, not
+-- a side effect of an upgrade, and it is explicitly out of scope here. Turning an opaque
+-- mid-cascade 547 into "clear exactly these rows first" is the entire value of this step.
+
+-- The cascade's own Entity-scoped DELETE targets, as (table, column) pairs -- this mirrors the
+-- proc body above. EntityFieldValue (scoped by EntityFieldID) and ListDetail (scoped by ListID)
+-- are absent on purpose: they are dependents the proc clears BEFORE their parent, so they never
+-- block it. They are the only two such cases, and they are excluded by name below.
+SELECT tblName = CONVERT(nvarchar(128), v.t), colName = CONVERT(nvarchar(128), v.c)
+INTO   #ProcScoped
+FROM (VALUES
+    ('Conversation','LinkedEntityID'),           ('EntityDocument','EntityID'),
+    ('List','EntityID'),                         ('UserView','EntityID'),
+    ('UserViewCategory','EntityID'),             ('RecordChange','EntityID'),
+    ('ResourceType','EntityID'),                 ('AuditLog','EntityID'),
+    ('DatasetItem','EntityID'),                  ('CompanyIntegrationRecordMap','EntityID'),
+    ('ApplicationEntity','EntityID'),            ('UserApplicationEntity','EntityID'),
+    ('EntitySetting','EntityID'),                ('EntityPermission','EntityID'),
+    ('EntityField','EntityID'),                  ('EntityRelationship','EntityID'),
+    ('EntityRelationship','RelatedEntityID'),    ('EntityAIAction','EntityID'),
+    ('EntityAIAction','OutputEntityID'),         ('EntityCommunicationMessageType','EntityID')
+) v(t, c);
+
+-- Two predicate fragments per scoped table, differing only in the alias they are written for:
+--   predT  (alias t) -- "this target row IS about to be deleted"
+--   predPN (alias p) -- "this referencing row is NOT itself about to be deleted"
+-- predPN is written in negated, NULL-safe form (`IS NULL OR NOT IN`) rather than as NOT(predT):
+-- `NULL NOT IN (...)` is UNKNOWN, and NOT(UNKNOWN) is UNKNOWN, which would drop every row whose
+-- scope column is NULL -- precisely the rows that are NOT being deleted and so DO block.
+-- A table with two scope columns (EntityRelationship, EntityAIAction) gets both, OR'd / AND'd.
+SELECT d.tblName,
+       predT  = STUFF((SELECT N' OR t.' + QUOTENAME(x.colName) + N' IN (SELECT ID FROM #Retired)'
+                       FROM #ProcScoped x WHERE x.tblName = d.tblName
+                       ORDER BY x.colName
+                       FOR XML PATH(''), TYPE).value('.', 'nvarchar(max)'), 1, 4, N''),
+       predPN = STUFF((SELECT N' AND (p.' + QUOTENAME(x.colName) + N' IS NULL OR p.'
+                            + QUOTENAME(x.colName) + N' NOT IN (SELECT ID FROM #Retired))'
+                       FROM #ProcScoped x WHERE x.tblName = d.tblName
+                       ORDER BY x.colName
+                       FOR XML PATH(''), TYPE).value('.', 'nvarchar(max)'), 1, 5, N'')
+INTO   #ScopePred
+FROM   (SELECT DISTINCT tblName FROM #ProcScoped) d;
+
+-- Every inbound foreign key pointing AT one of those tables. Same NO_ACTION / not-disabled
+-- filter as #Refs above, and for the same reason: a CASCADE or SET NULL foreign key is cleared
+-- by SQL Server during the cascade and never blocks it, so reporting one would be a false alarm
+-- that an operator cannot act on.
+-- COLLATE DATABASE_DEFAULT on the catalog side: sys.tables.name is sysname in the catalog's own
+-- collation, while #ProcScoped holds string literals in the database's -- which differ on a
+-- stock MJ database and raise "Cannot resolve collation conflict" without this.
+SELECT DISTINCT
+       pSch = SCHEMA_NAME(pt.schema_id),
+       pTbl = pt.name,
+       pCol = pc.name,
+       tTbl = rt.name,
+       pQ   = QUOTENAME(SCHEMA_NAME(pt.schema_id)) + '.' + QUOTENAME(pt.name),
+       pC   = QUOTENAME(pc.name),
+       tQ   = QUOTENAME('${flyway:defaultSchema}') + '.' + QUOTENAME(rt.name),
+       tC   = QUOTENAME(rc.name)
+INTO   #SecondOrder
+FROM sys.foreign_keys fk
+JOIN sys.tables rt ON rt.object_id = fk.referenced_object_id
+     AND SCHEMA_NAME(rt.schema_id) = '${flyway:defaultSchema}'
+JOIN sys.tables pt ON pt.object_id = fk.parent_object_id
+JOIN sys.foreign_key_columns fkc ON fkc.constraint_object_id = fk.object_id
+JOIN sys.columns pc ON pc.object_id = pt.object_id AND pc.column_id = fkc.parent_column_id
+JOIN sys.columns rc ON rc.object_id = rt.object_id AND rc.column_id = fkc.referenced_column_id
+JOIN #ProcScoped tgt ON tgt.tblName = rt.name COLLATE DATABASE_DEFAULT
+WHERE fk.delete_referential_action = 0
+  AND fk.is_disabled = 0
+  AND NOT (SCHEMA_NAME(pt.schema_id) = '${flyway:defaultSchema}'
+           AND pt.name + '.' + pc.name IN ('EntityFieldValue.EntityFieldID', 'ListDetail.ListID'));
+
+CREATE TABLE #Blocked (pSch nvarchar(128) COLLATE DATABASE_DEFAULT,
+                       pTbl nvarchar(128) COLLATE DATABASE_DEFAULT,
+                       pCol nvarchar(128) COLLATE DATABASE_DEFAULT,
+                       tTbl nvarchar(128) COLLATE DATABASE_DEFAULT,
+                       cnt  int);
+SET @sql = N'SELECT CAST(NULL AS nvarchar(128)) pSch, CAST(NULL AS nvarchar(128)) pTbl,'
+         + N' CAST(NULL AS nvarchar(128)) pCol, CAST(NULL AS nvarchar(128)) tTbl, 0 AS cnt WHERE 1 = 0'
+         + ISNULL((
+             SELECT N' UNION ALL SELECT ''' + REPLACE(s.pSch, '''', '''''') + N''', '''
+                  + REPLACE(s.pTbl, '''', '''''') + N''', ''' + REPLACE(s.pCol, '''', '''''')
+                  + N''', ''' + REPLACE(s.tTbl, '''', '''''') + N''', COUNT(*) FROM '
+                  + s.pQ + N' p WHERE p.' + s.pC + N' IN (SELECT t.' + s.tC + N' FROM '
+                  + s.tQ + N' t WHERE ' + tp.predT + N')'
+                  + ISNULL(N' AND ' + pp.predPN, N'')
+             FROM #SecondOrder s
+             JOIN      #ScopePred tp ON tp.tblName = s.tTbl COLLATE DATABASE_DEFAULT
+             LEFT JOIN #ScopePred pp ON pp.tblName = s.pTbl COLLATE DATABASE_DEFAULT
+             FOR XML PATH(''), TYPE).value('.', 'nvarchar(max)'), N'');
+SET @sql = N'INSERT INTO #Blocked (pSch, pTbl, pCol, tTbl, cnt) SELECT pSch, pTbl, pCol, tTbl, cnt FROM ('
+         + @sql + N') x WHERE cnt > 0;';
+EXEC sp_executesql @sql;
+
+IF EXISTS (SELECT 1 FROM #Blocked)
+BEGIN
+    -- Same shape as the first-order diagnostic below, plus the table each reference is blocking,
+    -- because "ConversationDetail.ConversationID" alone does not say why a Reports retirement
+    -- cares. Truncated well inside THROW's nvarchar(2048) limit: the fixed text either side of
+    -- @diag2 is ~400 characters.
+    DECLARE @diag2 nvarchar(2048) = ISNULL(STUFF((
+        SELECT N'; ' + b.pSch + N'.' + b.pTbl + N'.' + b.pCol + N' -> ' + b.tTbl
+             + N' (' + CAST(b.cnt AS nvarchar(20))
+             + CASE WHEN b.cnt = 1 THEN N' row)' ELSE N' rows)' END
+        FROM #Blocked b
+        ORDER BY b.pSch, b.pTbl, b.pCol
+        FOR XML PATH(''), TYPE).value('.', 'nvarchar(max)'), 1, 2, N''), N'');
+    SET @diag2 = LEFT(@diag2, 1500);
+
+    DECLARE @msg2 nvarchar(2048) = N'Retirement pre-clean: rows reference records that the '
+        + N'entity-deletion cascade is about to delete for the retired entities. They would fail '
+        + N'it mid-way and leave the metadata half-pruned, so the migration stops here instead. '
+        + N'Blocking (referencing table.column -> table being cleared): ' + @diag2
+        + N'. Clear these rows, then re-run the migration; this migration will not delete them '
+        + N'for you -- they are user data.';
+    THROW 50000, @msg2, 1;
+END
+
+DROP TABLE #Blocked;
+DROP TABLE #SecondOrder;
+DROP TABLE #ScopePred;
+DROP TABLE #ProcScoped;
+
 -- Postcondition -- nothing THIS BLOCK is responsible for (every entry in #Refs, i.e. every
 -- inbound FK to Entity that the proc above does not already cascade) may still point at a
 -- retired entity. It does not re-check Entity.ParentID (nulled unconditionally just above) or
@@ -508,11 +716,13 @@ UPDATE [${flyway:defaultSchema}].[Entity] SET ParentID = NULL WHERE ParentID IN 
 -- failure is actionable instead of context-free.
 CREATE TABLE #Remaining (sch nvarchar(128), tblName nvarchar(128), colName nvarchar(128), cnt int);
 SET @sql = N'SELECT CAST(NULL AS nvarchar(128)) sch, CAST(NULL AS nvarchar(128)) tblName,'
-         + N' CAST(NULL AS nvarchar(128)) colName, 0 AS cnt WHERE 1 = 0';
-SELECT @sql = @sql + N' UNION ALL SELECT ''' + REPLACE(sch, '''', '''''') + N''', '''
-                   + REPLACE(tblName, '''', '''''') + N''', ''' + REPLACE(colName, '''', '''''')
-                   + N''', COUNT(*) FROM ' + tbl + N' WHERE ' + col + N' IN (SELECT ID FROM #Retired)'
-FROM #Refs;
+         + N' CAST(NULL AS nvarchar(128)) colName, 0 AS cnt WHERE 1 = 0'
+         + ISNULL((
+             SELECT N' UNION ALL SELECT ''' + REPLACE(sch, '''', '''''') + N''', '''
+                  + REPLACE(tblName, '''', '''''') + N''', ''' + REPLACE(colName, '''', '''''')
+                  + N''', COUNT(*) FROM ' + tbl + N' WHERE ' + col + N' IN (SELECT ID FROM #Retired)'
+             FROM #Refs
+             FOR XML PATH(''), TYPE).value('.', 'nvarchar(max)'), N'');
 SET @sql = N'INSERT INTO #Remaining (sch, tblName, colName, cnt) SELECT sch, tblName, colName, cnt FROM ('
          + @sql + N') x WHERE cnt > 0;';
 EXEC sp_executesql @sql;
@@ -523,14 +733,17 @@ BEGIN
     -- Name what's still blocking, the same way the ResourceType guard earlier in this batch
     -- does, instead of the context-free message this used to throw. Truncated to stay inside
     -- THROW's nvarchar(2048) limit if an unusually large number of tables are ever involved.
-    DECLARE @diag nvarchar(2048) = N'';
-    SELECT @diag = @diag + CASE WHEN @diag = N'' THEN N'' ELSE N'; ' END
-                 + r.sch + N'.' + r.tblName + N'.' + r.colName + N' (' + CAST(r.cnt AS nvarchar(20))
-                 + CASE WHEN r.cnt = 1 THEN N' row)' ELSE N' rows)' END
-                 + ISNULL(N' [' + LEFT(f.lastError, 100) + N']', N'')
-    FROM #Remaining r
-    LEFT JOIN #Refs f ON f.sch = r.sch AND f.tblName = r.tblName AND f.colName = r.colName
-    ORDER BY r.sch, r.tblName, r.colName;
+    -- STUFF(..., 1, 2, N'') drops the leading '; ' of the first entry, which is what the old
+    -- CASE WHEN @diag = N'' guard did positionally. This accumulator carried an ORDER BY, the
+    -- form of `SELECT @v = @v + ...` Microsoft documents as specifically unreliable.
+    DECLARE @diag nvarchar(2048) = ISNULL(STUFF((
+        SELECT N'; ' + r.sch + N'.' + r.tblName + N'.' + r.colName + N' (' + CAST(r.cnt AS nvarchar(20))
+             + CASE WHEN r.cnt = 1 THEN N' row)' ELSE N' rows)' END
+             + ISNULL(N' [' + LEFT(f.lastError, 100) + N']', N'')
+        FROM #Remaining r
+        LEFT JOIN #Refs f ON f.sch = r.sch AND f.tblName = r.tblName AND f.colName = r.colName
+        ORDER BY r.sch, r.tblName, r.colName
+        FOR XML PATH(''), TYPE).value('.', 'nvarchar(max)'), 1, 2, N''), N'');
     SET @diag = LEFT(@diag, 1800);
 
     DECLARE @msg nvarchar(2048) = N'Retirement pre-clean could not clear all inbound references '
