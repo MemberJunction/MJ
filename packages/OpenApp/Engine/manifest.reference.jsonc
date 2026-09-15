@@ -54,8 +54,9 @@
   //
   // Naming: MemberJunction reserves the `__` prefix. MJ's own Open Apps use
   // `__mj_<AppName>` (e.g. `__mj_BizAppsForms`); third-party apps pick a name that does not
-  // start with `__`. `dbo`, `sys`, `guest`, `information_schema`, `__mj` and `__mj_UDT` are
-  // reserved outright and can never be claimed.
+  // start with `__`. Reserved outright and never claimable, on either platform:
+  // `dbo`, `sys`, `guest` (SQL Server), `public`, `pg_catalog`, `pg_toast` (PostgreSQL),
+  // `information_schema`, `__mj` and `__mj_UDT`.
   "schema": {
     "name": "acme_crm",                                    // REQUIRED within schema — SQL schema name
     "createIfNotExists": true,                             // OPTIONAL — default true

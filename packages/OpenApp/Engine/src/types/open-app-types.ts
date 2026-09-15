@@ -181,8 +181,9 @@ export interface InstallOptions {
     Verbose?: boolean;
     /**
      * Allow a `__`-prefixed schema name outside the `__mj_<AppName>` app namespace, which
-     * needs no override. Exact-match reserved names (`__mj`, `__mj_UDT`, `dbo`, `sys`,
-     * `guest`, `information_schema`) stay blocked regardless. Dangerous; MJ-internal apps only.
+     * needs no override. Exact-match reserved names stay blocked regardless, on both
+     * platforms: `__mj`, `__mj_UDT`, `dbo`, `sys`, `guest`, `public`, `pg_catalog`,
+     * `pg_toast`, `information_schema`. Dangerous; MJ-internal apps only.
      */
     AllowDoubleUnderscoreSchema?: boolean;
     /**
@@ -225,8 +226,9 @@ export interface UpgradeOptions {
     Verbose?: boolean;
     /**
      * Allow a `__`-prefixed schema name outside the `__mj_<AppName>` app namespace, which
-     * needs no override. Exact-match reserved names (`__mj`, `__mj_UDT`, `dbo`, `sys`,
-     * `guest`, `information_schema`) stay blocked regardless. Dangerous; MJ-internal apps only.
+     * needs no override. Exact-match reserved names stay blocked regardless, on both
+     * platforms: `__mj`, `__mj_UDT`, `dbo`, `sys`, `guest`, `public`, `pg_catalog`,
+     * `pg_toast`, `information_schema`. Dangerous; MJ-internal apps only.
      */
     AllowDoubleUnderscoreSchema?: boolean;
 }
@@ -245,8 +247,9 @@ export interface RemoveOptions {
     Verbose?: boolean;
     /**
      * Allow dropping a `__`-prefixed schema outside the `__mj_<AppName>` app namespace, which
-     * needs no override. The exact-match reserved list (`dbo`, `sys`, `guest`,
-     * `information_schema`, `__mj`, `__mj_UDT`) remains blocked. Dangerous; MJ-internal apps only.
+     * needs no override. The exact-match reserved list — `dbo`, `sys`, `guest` (SQL Server),
+     * `public`, `pg_catalog`, `pg_toast` (PostgreSQL), `information_schema`, `__mj`, `__mj_UDT`
+     * — remains blocked. Dangerous; MJ-internal apps only.
      */
     AllowDoubleUnderscoreSchema?: boolean;
 }
