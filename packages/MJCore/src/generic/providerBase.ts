@@ -675,7 +675,21 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * timestamp comparison can disconfirm.
      */
     protected async RefreshAfterMetadataMemberChange(): Promise<boolean> {
+        if (this.MetadataMemberRefreshMustWait) {
+            // Not now — re-arm the same window and try again once the provider is free.
+            this.scheduleMetadataMemberRefresh();
+            return true;
+        }
         return this.Refresh();
+    }
+
+    /**
+     * True while a member-change refresh must NOT run, e.g. the provider is inside an ambient
+     * transaction. The base never waits; a database provider overrides this so a timer-driven
+     * refresh cannot land inside a caller's transaction (see GenericDatabaseProvider, #4486).
+     */
+    protected get MetadataMemberRefreshMustWait(): boolean {
+        return false;
     }
 
     /**
@@ -4895,7 +4909,17 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // Get the dataset and cache it for anyone else who wants to use it
             // When forceRefresh is true (from a hard Refresh() call), bypass LocalCacheManager
             const d = await this.GetDatasetByName(ProviderBase._mjMetadataDatasetName, null, this.CurrentUser, providerToUse, forceRefresh);
-            if (d && d.Success) {
+            // A dataset with no entities is a failed read, whatever its Success flag says: there
+            // is no deployment in which MJ_Metadata legitimately holds zero entities. Returning
+            // undefined here keeps the metadata already loaded (Config() treats undefined as
+            // "not updated") instead of replacing it with an empty set that fails every
+            // EntityByName until the process restarts (#4486).
+            const entitiesItem = d?.Success ? d.Results?.find(r => r.Code === 'Entities') : undefined;
+            const hasEntities = Array.isArray(entitiesItem?.Results) && entitiesItem.Results.length > 0;
+            if (d && d.Success && !hasEntities) {
+                LogError(`GetAllMetadata() - the ${ProviderBase._mjMetadataDatasetName} dataset returned no entities; keeping the metadata already loaded`);
+            }
+            else if (d && d.Success) {
                 // cache the dataset for anyone who wants to use it
                 await this.CacheDataset(ProviderBase._mjMetadataDatasetName, null, d);
 

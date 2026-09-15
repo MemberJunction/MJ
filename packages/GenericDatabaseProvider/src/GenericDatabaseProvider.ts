@@ -5242,12 +5242,20 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
         // Phase 2: Execute SQL only for cache misses
         let batchResults: Record<string, unknown>[][] = [];
+        // A batch that throws is a FAILED read, not an empty one. Falling through with empty
+        // results made every uncached item report Success with zero rows, the dataset report
+        // Success overall, and — for MJ_Metadata — GetAllMetadata replace a good metadata cache
+        // with an empty one, after which every EntityByName in the process fails until restart.
+        // One dropped connection during a background refresh did exactly that (#4486). The
+        // error is carried on each affected item and on the dataset so callers can keep what
+        // they already have.
+        let batchError: string | null = null;
         if (uncachedQueries.length > 0) {
             try {
                 batchResults = await provider.ExecuteSQLBatch(uncachedQueries, undefined, undefined, contextUser);
             } catch (err) {
-                LogError(`GetDatasetByName: Batch execution failed: ${err instanceof Error ? err.message : String(err)}`);
-                // Fall through with empty results
+                batchError = err instanceof Error ? err.message : String(err);
+                LogError(`GetDatasetByName("${datasetName}"): Batch execution failed: ${batchError}`);
             }
         }
 
@@ -5260,6 +5268,21 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const entityID = String(item['EntityID']);
             const code = String(item['Code']);
             const dateFieldToCheck = String(item['DateFieldToCheck'] ?? '__mj_UpdatedAt');
+
+            if (batchError !== null) {
+                // Nothing is written through to the cache for a failed read: an empty slot
+                // would be served as a genuine empty result until it expired.
+                sqlResults.push({
+                    EntityID: entityID,
+                    EntityName: entityName,
+                    Code: code,
+                    Results: [],
+                    LatestUpdateDate: new Date(0),
+                    Success: false,
+                    Status: batchError,
+                });
+                continue;
+            }
 
             let itemData = batchResults[i] || [];
 
@@ -5323,8 +5346,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             verboseOnly: true
         });
 
-        // Aggregate results
+        // Aggregate results. A failed item fails the dataset, and its error becomes the
+        // dataset's Status so the caller sees WHY rather than an empty success.
         const bSuccess = results.every(result => result.Success);
+        const firstFailure = results.find(result => !result.Success);
         const latestUpdateDate = results.reduce(
             (acc, result) => {
                 if (result?.LatestUpdateDate) {
@@ -5340,7 +5365,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             DatasetID: String(items[0]['DatasetID']),
             DatasetName: datasetName,
             Success: bSuccess,
-            Status: '',
+            Status: bSuccess ? '' : (firstFailure?.Status ?? 'One or more dataset items failed to load'),
             LatestUpdateDate: latestUpdateDate,
             Results: results,
         };
@@ -5734,6 +5759,19 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * — outermost begin has depth 1 before the handle is published, and
      * concurrent reads on SQL Server legitimately use the pool in that window.
      */
+    /**
+     * A debounced metadata refresh is timer-driven, so it can fire at any point of a caller's
+     * unit of work — including the microtask window while the ambient transaction is being
+     * committed. Joining that transaction puts the metadata batch on the transaction's single
+     * connection alongside the COMMIT, which tedious rejects (EINVALIDSTATE) or drops (ECLOSE)
+     * once the handle is torn down, and a transactional query is deliberately never retried.
+     * Metadata reads are not part of anyone's unit of work; wait for the transaction to end
+     * and run on the pool (#4486, #4454).
+     */
+    protected override get MetadataMemberRefreshMustWait(): boolean {
+        return this.CurrentTransactionDepth > 0 || this.HasPhysicalTransaction;
+    }
+
     protected AssertAmbientTransactionUsable(): void {
         if (this._doomed) {
             throw new DoomedTransactionError(
