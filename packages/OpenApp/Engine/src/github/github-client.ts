@@ -228,7 +228,9 @@ async function ProbeRepoVisibility(
  * env var is the fastest way to get unblocked. Within `mj.config.cjs`, `openApps.github.tokens` is
  * named before `openApps.github.token` because `ResolveToken` (below) checks the per-repo map first.
  *
- * The EFFECTIVE precedence is the reverse of this list. `buildGitHubOptions`
+ * The EFFECTIVE precedence does not simply reverse this list: `GITHUB_TOKEN` is listed first for
+ * speed but resolves LAST, while the two `mj.config.cjs` options keep the same relative order in
+ * both the string and in resolution. `buildGitHubOptions`
  * (packages/MJCLI/src/utils/open-app-context.ts) resolves `Token` as
  * `config.openApps?.github?.token ?? process.env.GITHUB_TOKEN`, so a configured `token` already beats
  * `GITHUB_TOKEN` before this module ever sees either one; `ResolveToken` then checks `TokenMap`
