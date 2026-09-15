@@ -7,6 +7,13 @@
  */
 
 import { Metadata, RunView, type UserInfo } from '@memberjunction/core';
+import {
+    CollectRealtimeSessionIDs,
+    MapRealtimeSessionMeta,
+    REALTIME_SESSION_META_FIELDS,
+    type RealtimeSessionMetaRow,
+    type RealtimeSessionTimelineMeta,
+} from '@memberjunction/conversations-runtime';
 import type {
     MJConversationEntity,
     MJConversationDetailEntity,
@@ -159,6 +166,12 @@ export type ConversationDetailLoad = {
     conversation: MJConversationEntity;
     messages: ConversationMessage[];
     artifacts: MJConversationArtifactEntity[];
+    /**
+     * Realtime-session rows for any voice sessions this conversation contains, keyed by
+     * normalized id. Empty when there were none — or when the lookup failed, which is deliberate:
+     * a session card degrades to its generic label rather than the thread failing to load.
+     */
+    sessionMeta: Map<string, RealtimeSessionTimelineMeta>;
 };
 
 /**
@@ -233,5 +246,49 @@ export async function LoadConversation(
         ? ((artifactsResult.Results as MJConversationArtifactEntity[]) ?? [])
         : [];
 
-    return { conversation, messages, artifacts };
+    const sessionMeta = await LoadRealtimeSessionMeta(details, currentUser);
+
+    return { conversation, messages, artifacts, sessionMeta };
+}
+
+/**
+ * Reads the `MJ: AI Agent Sessions` rows behind whatever voice sessions the loaded details
+ * reference, so each collapsed session card can show the agent name and a status chip.
+ *
+ * Costs nothing for a conversation with no voice in it — no stamped rows means no query at all.
+ *
+ * Tolerant on purpose: a failure logs and returns an empty map, leaving the cards on their generic
+ * label. The chip is enrichment; losing it must never cost the user the thread.
+ *
+ * @param details The conversation's loaded detail rows.
+ * @param contextUser The acting user (server-side scoping).
+ */
+async function LoadRealtimeSessionMeta(
+    details: MJConversationDetailEntity[],
+    contextUser?: UserInfo,
+): Promise<Map<string, RealtimeSessionTimelineMeta>> {
+    // Both the id collection and the row mapping come from the runtime, so this keys its map
+    // exactly as the web does — the ids differ in case between SQL Server and PostgreSQL, and a
+    // second implementation of that rule is how one surface silently stops finding its own rows.
+    const sessionIds = CollectRealtimeSessionIDs(details);
+    if (sessionIds.length === 0) {
+        return new Map();
+    }
+    try {
+        const idList = sessionIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(',');
+        const rv = new RunView();
+        const result = await rv.RunView<RealtimeSessionMetaRow>(
+            {
+                EntityName: 'MJ: AI Agent Sessions',
+                ExtraFilter: `ID IN (${idList})`,
+                Fields: [...REALTIME_SESSION_META_FIELDS],
+                ResultType: 'simple',
+            },
+            contextUser,
+        );
+        return result.Success ? MapRealtimeSessionMeta(result.Results) : new Map();
+    } catch (error) {
+        console.warn('Realtime session meta lookup failed — session cards render without status chips:', error);
+        return new Map();
+    }
 }

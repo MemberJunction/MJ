@@ -22,6 +22,7 @@ import { SendMessage, GetConversationDetailStatus, type SendProgress } from '@/d
 import { AttachCapturedFile, ComposeMessageWithAttachment, type CapturedAttachment } from '@/data/services/attachments';
 import { GetDefaultAgentId } from '@/data/preferences';
 import { MentionsToPlainText } from '@/data/mention-display';
+import { MJRealtimeSessionCard } from '@/chat/realtime/RealtimeSessionCard';
 import { FindActiveTrigger, ApplyMention, MentionedAgentId, SerializeDraft, type InsertedMention } from '@/chat/mentions/trigger';
 import { MentionSuggestions } from '@/chat/mentions/MentionSuggestions';
 import { MJComposer } from '@/chat/composer/MJComposer';
@@ -264,7 +265,26 @@ export default function ChatThreadScreen() {
                     ) : (
                         <>
                             <Text style={styles.dayDivider}>Conversation</Text>
-                            {view.messages.map((msg) => <MessageRenderer key={msg.id} message={msg} />)}
+                            {/*
+                              * The TIMELINE, not the flat message list. Voice turns are ordinary
+                              * `MJ: Conversation Detail` rows stamped with an `AgentSessionID`, so
+                              * rendering them flat buried the typed conversation under a whole
+                              * call. `BuildThreadTimeline` collapses each session into one card at
+                              * the position of its first turn — the same grouping pass the web
+                              * message list runs.
+                              */}
+                            {view.timeline.map((item) =>
+                                item.kind === 'message' ? (
+                                    <MessageRenderer key={item.message.id} message={item.message} />
+                                ) : (
+                                    <MJRealtimeSessionCard
+                                        key={`session:${item.group.SessionID}`}
+                                        Group={item.group}
+                                        Meta={item.meta}
+                                        Turns={item.turns}
+                                    />
+                                ),
+                            )}
                         </>
                     )}
 

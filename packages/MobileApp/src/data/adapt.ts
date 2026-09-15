@@ -10,6 +10,15 @@ import type {
     ConversationSummary,
 } from '@/data/types';
 import { Colors, ColorForAgent } from '@/theme/tokens';
+import { NormalizeUUID } from '@memberjunction/global';
+import {
+    BuildConversationTimeline,
+    FindRealtimeSessionMeta,
+    IsVisibleRealtimeTurn,
+    type RealtimeSessionTimelineGroup,
+    type RealtimeSessionTimelineMeta,
+    type RealtimeTimelineSourceDetail,
+} from '@memberjunction/conversations-runtime';
 import { MentionsToPlainText } from './mention-display';
 
 /**
@@ -174,6 +183,27 @@ export type AdaptedMessage =
     };
 
 /**
+ * One renderable entry in the thread: an ordinary message, or a whole voice session collapsed
+ * into a single element.
+ *
+ * The collapse is not cosmetic. Every turn of a live voice call is persisted as a normal
+ * `MJ: Conversation Detail` stamped with its `AgentSessionID`, so a forty-turn call rendered
+ * flat buries the text conversation around it. The web has collapsed these into a session card
+ * since the feature shipped; this screen did not, which is the divergence this type closes.
+ */
+export type AdaptedTimelineItem =
+    | { kind: 'message'; message: AdaptedMessage }
+    | {
+        kind: 'session';
+        /** The collapsed block: time range, turn count, last-turn preview. */
+        group: RealtimeSessionTimelineGroup;
+        /** Session row enrichment (agent name, status, close reason), or null when unavailable. */
+        meta: RealtimeSessionTimelineMeta | null;
+        /** The session's visible turns, so the card can expand in place instead of leaving a dead end. */
+        turns: AdaptedMessage[];
+    };
+
+/**
  * Convert a service-layer {@link ConversationMessage} (wrapping an MJ
  * `MJ: Conversation Details` row) into a UI {@link AdaptedMessage}. `Role='User'`
  * rows become `user` messages; all others ('AI'/'Error') become `agent` messages,
@@ -245,6 +275,57 @@ export function AdaptConversation(load: ConversationDetailLoad) {
         messageCount: load.messages.length,
         live: load.messages.some((m) => m.detail.Status === 'In-Progress'),
         messages: load.messages.map(AdaptMessage),
+        timeline: BuildThreadTimeline(load),
         artifacts: load.artifacts,
     };
+}
+
+/**
+ * Builds the renderable thread: ordinary messages in order, with each voice session's stamped
+ * rows collapsed into one element at the position of its first turn.
+ *
+ * The grouping itself is `BuildConversationTimeline` from the shared runtime — the same pass the
+ * web message list runs — so the two surfaces cannot disagree about what counts as a session or
+ * where it belongs in the order. What is added here is the per-session turn list the card expands
+ * to show, selected with the runtime's own visible-turn rule so its length matches the turn count
+ * the card prints above it.
+ *
+ * @param load The conversation, its messages, its artifacts and its session meta.
+ */
+export function BuildThreadTimeline(load: ConversationDetailLoad): AdaptedTimelineItem[] {
+    // The grouping pass reads a structural row shape; carrying the adapted message alongside it
+    // avoids a second lookup to get from a grouped row back to what should be rendered.
+    type Source = RealtimeTimelineSourceDetail & { Adapted: AdaptedMessage; Visible: boolean };
+    const sources: Source[] = load.messages.map((m) => {
+        const row: RealtimeTimelineSourceDetail = {
+            ID: m.detail.ID,
+            AgentSessionID: m.detail.AgentSessionID ?? null,
+            Role: m.detail.Role,
+            Message: m.detail.Message,
+            HiddenToUser: m.detail.HiddenToUser ?? false,
+            __mj_CreatedAt: (m.detail as unknown as { __mj_CreatedAt?: Date | null }).__mj_CreatedAt ?? null,
+        };
+        return { ...row, Adapted: AdaptMessage(m), Visible: IsVisibleRealtimeTurn(row) };
+    });
+
+    const turnsBySession = new Map<string, AdaptedMessage[]>();
+    for (const src of sources) {
+        const sessionId = src.AgentSessionID?.trim();
+        if (!sessionId || !src.Visible) continue;
+        const key = NormalizeUUID(sessionId);
+        const turns = turnsBySession.get(key);
+        if (turns) turns.push(src.Adapted);
+        else turnsBySession.set(key, [src.Adapted]);
+    }
+
+    return BuildConversationTimeline(sources).map((item) =>
+        item.Kind === 'message'
+            ? { kind: 'message' as const, message: item.Detail.Adapted }
+            : {
+                kind: 'session' as const,
+                group: item.Group,
+                meta: FindRealtimeSessionMeta(load.sessionMeta, item.Group.SessionID),
+                turns: turnsBySession.get(NormalizeUUID(item.Group.SessionID)) ?? [],
+            },
+    );
 }

@@ -173,6 +173,71 @@ it, the mirror is wrong.
 
 ---
 
+## 3.5 Voice sessions in the thread
+
+A live voice call persists every turn as an ordinary `MJ: Conversation Detail`, stamped with its
+`AgentSessionID`. Rendering those as normal chat bubbles is wrong in the specific sense that a
+forty-turn call buries the typed conversation around it — so both surfaces collapse each session
+into **one** element at the position of its first turn.
+
+The grouping pass and every decision the card makes live in `@memberjunction/conversations-runtime`:
+
+```ts
+import {
+    BuildConversationTimeline,   // rows -> [ message | session ] in order
+    CollectRealtimeSessionIDs,   // the distinct session ids to look up
+    MapRealtimeSessionMeta,      // session rows -> card meta, keyed case-insensitively
+    FindRealtimeSessionMeta,
+    IsVisibleRealtimeTurn,       // which rows count as a turn
+    SessionCardTitle,
+    SessionCardStatusChip,       // { Label, Tone } — Tone is semantic, not a colour
+    SessionCardIsSameDayRange,
+} from '@memberjunction/conversations-runtime';
+```
+
+These were extracted from `ng-conversations`, which is where they had always been — pure TypeScript
+sitting behind an Angular import, which is why the React Native thread had no collapse at all. Both
+surfaces now run the same pass. `ng-conversations` re-exports them from
+`lib/utils/realtime-session-timeline`, so its own call sites were unaffected.
+
+Two things differ between the surfaces, deliberately:
+
+| | Web | React Native |
+|---|---|---|
+| Opening a session | a session-review **overlay** | expands **in place** |
+| Replacing the card | fixed component | `realtimeSessionCard` slot |
+
+The expand is not a cheaper overlay — on a phone a modal would be a second way to read a transcript
+the thread is already showing. It reveals exactly the turns the card counted, because both come
+from `IsVisibleRealtimeTurn`.
+
+> **Asymmetry to close.** `realtimeSessionCard` has no counterpart in `MJChatSlotName` yet: the web
+> creates `RealtimeSessionTimelineCardComponent` as a fixed class from its message list, so hosts
+> cannot replace it there. The mobile slot is named and shaped so the web can grow one without
+> changing this contract.
+
+### Context flows both ways
+
+Voice and text share one conversation, and until recently the sharing was one-directional:
+
+| Direction | Mechanism |
+|---|---|
+| Voice → text | every caption turn is persisted as a `Conversation Detail` — always worked |
+| Text → voice | `ConversationMessages` hydrated at session mint — **was a hardcoded `[]`** |
+
+The consumer had been written all along (`formatConversationHistory` frames it as *"Conversation
+so far"*); only the plumbing was missing, so a call started mid-thread opened knowing nothing about
+what had been typed. It now loads the conversation's turns, newest 30 and at most 8,000 characters
+with the oldest dropped first — the same caps the session-resume path uses.
+
+One subtlety worth knowing before changing it: voice turns are conversation rows too, so a *resumed*
+session would otherwise receive its previous leg twice — once as `PriorTranscript` and once as
+history. The prior-transcript loader returns its leg ids alongside the text, and those legs are
+excluded from the history. Earlier calls that are **not** being resumed stay in, because they are
+genuinely part of the conversation.
+
+---
+
 ## 4. The mention wire format
 
 A message composed anywhere must be the same message. Mentions serialize to JSON tokens inside the
@@ -219,5 +284,7 @@ the same rather than copying: a second copy of a permission rule is the copy tha
 | Angular slot contracts | `…/components/slots/slot-interfaces.ts` |
 | Native surface | `packages/MobileApp/src/chat/` |
 | Native slot contracts | `packages/MobileApp/src/chat/slots.ts` |
+| Session-timeline grouping + card logic | `packages/ConversationsRuntime/src/timeline/RealtimeSessionTimeline.ts` |
+| Voice-session context hydration | `packages/MJServer/src/resolvers/RealtimeClientSessionResolver.ts` |
 | Native deep-dive | [`packages/MobileApp/src/chat/README.md`](../packages/MobileApp/src/chat/README.md) |
 | Hosting an app on mobile | [MOBILE_APP_HOSTING_GUIDE.md](MOBILE_APP_HOSTING_GUIDE.md) |

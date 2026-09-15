@@ -1,5 +1,10 @@
 import type { ComponentType } from 'react';
 import type { MJConversationDetailEntity, MJConversationEntity } from '@memberjunction/core-entities';
+import type {
+    RealtimeSessionTimelineGroup,
+    RealtimeSessionTimelineMeta,
+} from '@memberjunction/conversations-runtime';
+import type { AdaptedMessage } from '@/data/adapt';
 
 /**
  * @fileoverview The chat surface's slot contracts — the React Native counterpart of
@@ -123,6 +128,24 @@ export type MJChatMessageRendererProps = {
 };
 
 /**
+ * Contract for the `realtimeSessionCard` slot — the element a voice session collapses to.
+ *
+ * NOTE: this slot has no counterpart in `@memberjunction/ng-conversations` yet. The web renders
+ * `RealtimeSessionTimelineCardComponent` as a fixed class from its message list, so the card is not
+ * replaceable there. Named and shaped so it can become one without changing this contract.
+ */
+export type MJChatRealtimeSessionCardProps = {
+    /** The collapsed session block. */
+    Group: RealtimeSessionTimelineGroup;
+    /** Session-row enrichment (agent name, status, close reason), or null when unavailable. */
+    Meta: RealtimeSessionTimelineMeta | null;
+    /** The session's visible turns, oldest first. */
+    Turns: AdaptedMessage[];
+    /** Display name used for the user's own turns. */
+    UserName?: string;
+};
+
+/**
  * Every slot the chat surface exposes.
  *
  * Names and semantics mirror `MJChatSlotName` in `@memberjunction/ng-conversations`. Omitting a
@@ -137,4 +160,5 @@ export type MJChatSlots = {
     messageExtra?: ComponentType<MJChatMessageExtraProps>;
     demonstrationSurface?: ComponentType<MJChatDemonstrationSurfaceProps>;
     messageRenderer?: ComponentType<MJChatMessageRendererProps>;
+    realtimeSessionCard?: ComponentType<MJChatRealtimeSessionCardProps>;
 };

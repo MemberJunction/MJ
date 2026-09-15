@@ -36,11 +36,18 @@ A renderer owns **pixels and gestures**. Everything else — which agents you ma
 skills an agent accepts, how a turn is routed, what a mention serializes to — belongs to the
 runtime, so both surfaces cannot disagree.
 
-**When you find logic in a renderer that isn't about pixels, promote it.** Two things have already
-made this trip: `RealtimeSessionRuntime` (2,768 lines) and `MentionAutocomplete` (503 lines). Both
-were pure TypeScript sitting in an Angular package, and both were blocking mobile until they moved.
-The test is simple: *does this file import anything from `@angular/*`?* If not, and a native host
-needs it, it is in the wrong package.
+**When you find logic in a renderer that isn't about pixels, promote it.** Three things have already
+made this trip: `RealtimeSessionRuntime` (2,768 lines), `MentionAutocomplete` (503 lines), and the
+realtime-session **timeline grouping** with its card derivations. All were pure TypeScript sitting
+in an Angular package, and each was blocking mobile until it moved. The test is simple: *does this
+file import anything from `@angular/*`?* If not, and a native host needs it, it is in the wrong
+package.
+
+The third is the clearest illustration of why the test matters. Its own file header said it was
+pure and existed so the grouping could be unit-tested — and it was both of those things. It was
+still in the wrong package, and the cost was not theoretical: this app rendered every voice turn as
+an ordinary chat bubble, which is exactly what that header describes as wrong, because the only
+implementation of the rule was behind an Angular import.
 
 ---
 
@@ -175,6 +182,25 @@ interesting cases are all false positives:
 - a space closes the query
 - a caret inside an already-inserted `@{"type":…}` token must not reopen anything
 
+### What Return does
+
+Same precedence as the web composer (`mention-editor.component.ts`): an open picker **with results**
+completes the mention, Shift+Return inserts a newline, otherwise Return sends.
+
+Native React Native cannot express that faithfully — `TextInputKeyPressEventData` is `{ key: string }`
+with **no modifier bits**, so a hardware Shift+Return is indistinguishable from a plain Return on
+iOS and Android. React-native-web does report `shiftKey`, and `ResolveEnterAction` honours it
+wherever a platform supplies one rather than branching on `Platform.OS`.
+
+That is why `SubmitOnEnter` defaults to `hardware-keyboard` rather than `always`: an on-screen
+keyboard has no Shift to escape to, so sending there would leave a user unable to type a second line
+at all. `useHardwareKeyboard` infers it from whether a soft keyboard actually appeared, since the
+platforms only raise one when there is no physical keyboard.
+
+The lever that suppresses the newline is `submitBehavior="submit"` on the `TextInput`, computed
+before the press — RN decides inside the native text view, and there is no `preventDefault` to reach
+for afterwards.
+
 ---
 
 ## 5. Visual parity with Explorer
@@ -207,7 +233,25 @@ src/chat/
   MJChat.types.ts        ← props, events, imperative handle
   slots/
     defaults.tsx         ← the shipped default for each slot; exported so hosts can WRAP them
+  composer/
+    MJComposer.tsx       ← the ONE composer, shared by the thread and new-conversation
+    enter-key.ts         ← what Return does (pure, tested); see §4
   mentions/
     trigger.ts           ← trigger detection + mention serialization (pure, tested)
     MentionSuggestions.tsx ← the suggestion list; everything behind it is the runtime's
+    ChipText.tsx         ← renders inserted mentions as chips inside the TextInput
+  realtime/
+    RealtimeSessionCard.tsx ← a whole voice session, collapsed to one timeline element
+    session-card-view.ts    ← what that card displays (pure, tested)
 ```
+
+### Voice sessions in the thread
+
+Every turn of a live call is persisted as an ordinary `MJ: Conversation Detail` stamped with its
+`AgentSessionID`. `BuildThreadTimeline` (`src/data/adapt.ts`) runs the runtime's
+`BuildConversationTimeline` over the loaded rows and collapses each session into a single card at
+the position of its first turn, expandable in place to the turns it counted.
+
+Everything the card decides — the title, the status chip and its tone, whether the time range needs
+a second date, which rows count as turns — comes from the runtime, so this card and the web's
+cannot describe the same session two different ways.

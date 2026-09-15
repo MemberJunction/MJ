@@ -175,6 +175,7 @@ describe('adapt', () => {
                     message({ ID: '3', Role: 'AI', Message: '', AgentID: 'a1', Status: 'In-Progress' }, 'Sage'),
                 ],
                 artifacts: [],
+                sessionMeta: new Map(),
             };
             const adapted = AdaptConversation(load);
             expect(adapted.id).toBe('c1');
@@ -218,6 +219,7 @@ describe('mention tokens in titles and snippets', () => {
             conversation: { ID: 'c1', Name: `${MENTION} pipeline` } as unknown as ConversationDetailLoad['conversation'],
             messages: [],
             artifacts: [],
+            sessionMeta: new Map(),
         });
         expect(adapted.title).toBe('@Sage pipeline');
     });

@@ -1,9 +1,17 @@
 import { describe, it, expect } from 'vitest';
 import {
   BuildConversationTimeline,
+  CollectRealtimeSessionIDs,
   ConversationTimelineItem,
-  RealtimeTimelineSourceDetail
-} from '../lib/utils/realtime-session-timeline';
+  FindRealtimeSessionMeta,
+  MapRealtimeSessionMeta,
+  RealtimeSessionTimelineGroup,
+  RealtimeSessionTimelineMeta,
+  RealtimeTimelineSourceDetail,
+  SessionCardIsSameDayRange,
+  SessionCardStatusChip,
+  SessionCardTitle
+} from '../timeline/RealtimeSessionTimeline';
 
 /**
  * The PURE grouping pass behind the conversation timeline's realtime SESSION BLOCKS:
@@ -157,5 +165,116 @@ describe('BuildConversationTimeline — turn counting mirrors review-mode visibi
     if (block.Kind !== 'session') throw new Error('expected a session block');
     expect(block.Group.StartedAt?.toISOString()).toBe('2026-06-01T10:00:00.000Z');
     expect(block.Group.EndedAt?.toISOString()).toBe('2026-06-01T10:05:00.000Z');
+  });
+});
+
+/**
+ * The card's presentation derivations and the session-meta lookup helpers.
+ *
+ * These lived as private getters and an inline loop inside Angular components. They are here
+ * because the React Native thread renders the same card, and a second implementation is how one
+ * surface ends up deciding that `Janitor` reads as "Timed out" while the other says "Closed".
+ */
+describe('session card presentation', () => {
+  const meta = (o: Partial<RealtimeSessionTimelineMeta> = {}): RealtimeSessionTimelineMeta => ({
+    SessionID: 'S-1',
+    AgentName: null,
+    Status: null,
+    CloseReason: null,
+    ClosedAt: null,
+    ...o,
+  });
+
+  describe('SessionCardTitle', () => {
+    it('names the agent when the lookup supplied one', () => {
+      expect(SessionCardTitle(meta({ AgentName: 'Sage' }))).toBe('Realtime session · Sage');
+    });
+
+    it('falls back to the generic label for a blank or absent name', () => {
+      expect(SessionCardTitle(meta({ AgentName: '   ' }))).toBe('Realtime session');
+      expect(SessionCardTitle(null)).toBe('Realtime session');
+    });
+  });
+
+  describe('SessionCardStatusChip', () => {
+    it('shows no chip at all when the session row could not be read', () => {
+      // Deliberate: a card that cannot know the status should say nothing, not guess "Closed".
+      expect(SessionCardStatusChip(null)).toBeNull();
+      expect(SessionCardStatusChip(meta({ Status: null }))).toBeNull();
+    });
+
+    it('marks an active session live', () => {
+      expect(SessionCardStatusChip(meta({ Status: 'Active' }))).toEqual({ Label: 'Live', Tone: 'live' });
+    });
+
+    it('humanizes each close reason', () => {
+      const chip = (r: string | null) => SessionCardStatusChip(meta({ Status: 'Closed', CloseReason: r }));
+      expect(chip('Explicit')).toEqual({ Label: 'Ended', Tone: 'neutral' });
+      expect(chip('Janitor')).toEqual({ Label: 'Timed out', Tone: 'neutral' });
+      expect(chip('Shutdown')).toEqual({ Label: 'Server shutdown', Tone: 'neutral' });
+      expect(chip('Error')).toEqual({ Label: 'Error', Tone: 'error' });
+    });
+
+    it('falls back to Closed for legacy rows with no close reason', () => {
+      expect(SessionCardStatusChip(meta({ Status: 'Closed', CloseReason: null }))).toEqual({
+        Label: 'Closed',
+        Tone: 'neutral',
+      });
+    });
+  });
+
+  describe('SessionCardIsSameDayRange', () => {
+    it('is true within one day and false across a boundary', () => {
+      const group = (s: Date | null, e: Date | null): RealtimeSessionTimelineGroup => ({
+        SessionID: 'S-1', StartedAt: s, EndedAt: e,
+        TurnCount: 0, DetailCount: 0, LastTurnRole: null, LastTurnPreview: null,
+      });
+      // Built from LOCAL components on purpose. The rule is about the reader's calendar day, so
+      // `toDateString()` reads local time — a UTC fixture would pass or fail on the runner's offset
+      // rather than on the behaviour.
+      expect(SessionCardIsSameDayRange(group(new Date(2026, 8, 14, 9, 0), new Date(2026, 8, 14, 9, 40)))).toBe(true);
+      expect(SessionCardIsSameDayRange(group(new Date(2026, 8, 14, 23, 50), new Date(2026, 8, 15, 0, 10)))).toBe(false);
+    });
+
+    it('treats an incomplete range as same-day, since there is no second date to show', () => {
+      const partial: RealtimeSessionTimelineGroup = {
+        SessionID: 'S-1', StartedAt: new Date('2026-09-14T09:00:00Z'), EndedAt: null,
+        TurnCount: 0, DetailCount: 0, LastTurnRole: null, LastTurnPreview: null,
+      };
+      expect(SessionCardIsSameDayRange(partial)).toBe(true);
+    });
+  });
+});
+
+describe('session meta lookup helpers', () => {
+  it('collects distinct stamped ids in first-seen order, keeping the original casing', () => {
+    // The casing matters: the id goes straight into an `ID IN (…)` filter.
+    const ids = CollectRealtimeSessionIDs([
+      detail({ AgentSessionID: null }),
+      detail({ AgentSessionID: 'AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE' }),
+      detail({ AgentSessionID: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' }),
+      detail({ AgentSessionID: '   ' }),
+      detail({ AgentSessionID: 'F1111111-2222-3333-4444-555555555555' }),
+    ]);
+    expect(ids).toEqual(['AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE', 'F1111111-2222-3333-4444-555555555555']);
+  });
+
+  it('keys mapped meta case-insensitively so either database casing resolves', () => {
+    const map = MapRealtimeSessionMeta([
+      { ID: 'AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE', Agent: 'Sage', Status: 'Closed', CloseReason: 'Explicit', ClosedAt: '2026-09-14T10:00:00Z' },
+    ]);
+    const found = FindRealtimeSessionMeta(map, 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
+    expect(found?.AgentName).toBe('Sage');
+    expect(found?.ClosedAt).toBeInstanceOf(Date);
+  });
+
+  it('nulls an unparseable ClosedAt rather than rendering "Invalid Date"', () => {
+    const map = MapRealtimeSessionMeta([{ ID: 'S-1', ClosedAt: 'not-a-date' }]);
+    expect(FindRealtimeSessionMeta(map, 'S-1')?.ClosedAt).toBeNull();
+  });
+
+  it('returns null for an unknown session and for an absent map', () => {
+    expect(FindRealtimeSessionMeta(new Map(), 'S-9')).toBeNull();
+    expect(FindRealtimeSessionMeta(null, 'S-9')).toBeNull();
   });
 });
