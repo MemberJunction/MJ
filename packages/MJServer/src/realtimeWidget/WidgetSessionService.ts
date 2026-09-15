@@ -19,13 +19,13 @@ import { MJLruCache, UUIDsEqual } from '@memberjunction/global';
 import type { MJConversationWidgetInstanceEntity, MJConversationEntity } from '@memberjunction/core-entities';
 import { ResolveConfiguredPrincipal } from '../auth/principals.js';
 import { MagicLinkKeyManager } from '../auth/magicLink/MagicLinkKeys.js';
-import { generateSessionId } from '../auth/magicLink/magicLinkCore.js';
+import { GenerateSessionId } from '../auth/magicLink/magicLinkCore.js';
 import { MagicLinkService } from '../auth/magicLink/MagicLinkService.js';
 import { configInfo, type WidgetConfig } from '../config.js';
-import { buildWidgetGuestClaims, evaluateWidgetMint, parseEnabledChannels, type WidgetMintErrorCode } from './widgetCore.js';
-import { verifyHostAssertion, type HostAssertedIdentity } from './host-identity.js';
-import { writeReturningVisitorRecap } from '../agentSessions/ReturningVisitorRecap.js';
-import { resolveIdentityByEmail, mergeVisitorIdentity, forgetVisitor, type ResolvedVisitorIdentity } from './visitorIdentity.js';
+import { BuildWidgetGuestClaims, EvaluateWidgetMint, ParseEnabledChannels, type WidgetMintErrorCode } from './widgetCore.js';
+import { VerifyHostAssertion, type HostAssertedIdentity } from './host-identity.js';
+import { WriteReturningVisitorRecap } from '../agentSessions/ReturningVisitorRecap.js';
+import { ResolveIdentityByEmail, MergeVisitorIdentity, ForgetVisitor, type ResolvedVisitorIdentity } from './visitorIdentity.js';
 
 const WIDGET_ENTITY = 'MJ: Conversation Widget Instances';
 const CONVERSATIONS_ENTITY = 'MJ: Conversations';
@@ -229,7 +229,7 @@ export class WidgetSessionService {
         return this.audited({ success: false, errorCode: 'not_found', error: 'Unknown widget key.' }, input, undefined);
       }
 
-      const eligibility = evaluateWidgetMint(
+      const eligibility = EvaluateWidgetMint(
         { Status: widget.Status, AllowedOrigins: widget.AllowedOrigins, Modality: widget.Modality },
         input.origin,
       );
@@ -361,7 +361,7 @@ export class WidgetSessionService {
       if (!widget) {
         return { success: false, errorCode: 'not_found', error: 'Unknown widget key.' };
       }
-      const eligibility = evaluateWidgetMint({ Status: widget.Status, AllowedOrigins: widget.AllowedOrigins, Modality: widget.Modality }, input.origin);
+      const eligibility = EvaluateWidgetMint({ Status: widget.Status, AllowedOrigins: widget.AllowedOrigins, Modality: widget.Modality }, input.origin);
       if (!eligibility.ok) {
         return { success: false, errorCode: eligibility.errorCode, error: 'Widget upgrade rejected.' };
       }
@@ -397,7 +397,7 @@ export class WidgetSessionService {
     // Prefer the per-instance HostPublicKey column (Phase 3 — no config-resident keys); fall back to the
     // interim config map (keyed by PublicKey) for deployments that haven't migrated their key yet.
     const hostKey = widget.HostPublicKey ?? this.config.hostPublicKeys?.[widget.PublicKey];
-    const result = verifyHostAssertion(assertion, hostKey, widget.PublicKey);
+    const result = VerifyHostAssertion(assertion, hostKey, widget.PublicKey);
     if (result.ok && result.identity) {
       return result.identity;
     }
@@ -417,8 +417,8 @@ export class WidgetSessionService {
     const ttlMinutes = widget.SessionTTLMinutes || this.config.defaultSessionTtlMinutes;
     // Generated once and returned to the client: the widget stamps Conversation.ExternalID with
     // this id so the Widget Guest RLS filters ({{ScopeResourceID}}) isolate this guest's rows.
-    const sessionId = generateSessionId();
-    const claims = buildWidgetGuestClaims({
+    const sessionId = GenerateSessionId();
+    const claims = BuildWidgetGuestClaims({
       issuer: this.publicUrl,
       audience: this.config.audience,
       widgetId: widget.ID,
@@ -452,7 +452,7 @@ export class WidgetSessionService {
       sessionId,
       // Phase 2: which interactive channels this widget may attach during a voice session. Read from the
       // per-instance EnabledChannels column (added by the Widget_Public_Hardening migration + CodeGen).
-      enabledChannels: parseEnabledChannels(widget.EnabledChannels),
+      enabledChannels: ParseEnabledChannels(widget.EnabledChannels),
       voiceMaxSessionMinutes: widget.VoiceMaxSessionMinutes ?? undefined,
       rememberReturningVisitors: !!returningVisitor,
       visitorKey: returningVisitor?.visitorKey,
@@ -477,11 +477,11 @@ export class WidgetSessionService {
     if (!widget.RememberReturningVisitors || !hostIdentity?.email || !returningVisitor?.visitorKey) {
       return undefined;
     }
-    const identity = await resolveIdentityByEmail(hostIdentity.email, contextUser, Metadata.Provider, this.config.identityResolution); // global-provider-ok: server-side mint under the single default provider
+    const identity = await ResolveIdentityByEmail(hostIdentity.email, contextUser, Metadata.Provider, this.config.identityResolution); // global-provider-ok: server-side mint under the single default provider
     if (!identity) {
       return undefined;
     }
-    await mergeVisitorIdentity({
+    await MergeVisitorIdentity({
       visitorKey: returningVisitor.visitorKey,
       applicationId: widget.ApplicationID,
       identity,
@@ -503,12 +503,12 @@ export class WidgetSessionService {
       if (!gate.ok) {
         return { success: false, errorCode: gate.errorCode, error: gate.error };
       }
-      const identity = await resolveIdentityByEmail(input.verifiedEmail, gate.contextUser, Metadata.Provider, this.config.identityResolution); // global-provider-ok: server-side mint under the single default provider
+      const identity = await ResolveIdentityByEmail(input.verifiedEmail, gate.contextUser, Metadata.Provider, this.config.identityResolution); // global-provider-ok: server-side mint under the single default provider
       if (!identity) {
         // Verified, but no record matches the email under the configured target — nothing to merge.
         return { success: true, mergedConversations: 0 };
       }
-      const mergedConversations = await mergeVisitorIdentity({
+      const mergedConversations = await MergeVisitorIdentity({
         visitorKey: input.visitorKey,
         applicationId: gate.widget.ApplicationID,
         identity,
@@ -533,7 +533,7 @@ export class WidgetSessionService {
       if (!gate.ok) {
         return { success: false, errorCode: gate.errorCode, error: gate.error };
       }
-      const { notesArchived, conversationsCleared } = await forgetVisitor({
+      const { notesArchived, conversationsCleared } = await ForgetVisitor({
         visitorKey: input.visitorKey,
         applicationId: gate.widget.ApplicationID,
         contextUser: gate.contextUser,
@@ -564,7 +564,7 @@ export class WidgetSessionService {
     if (!widget) {
       return { ok: false, errorCode: 'not_found', error: 'Unknown widget key.' };
     }
-    const eligibility = evaluateWidgetMint(
+    const eligibility = EvaluateWidgetMint(
       { Status: widget.Status, AllowedOrigins: widget.AllowedOrigins, Modality: widget.Modality },
       origin,
     );
@@ -597,7 +597,7 @@ export class WidgetSessionService {
     }
     const presented = (presentedKey ?? '').trim();
     const isReturning = VISITOR_KEY_PATTERN.test(presented);
-    const visitorKey = isReturning ? presented : generateSessionId();
+    const visitorKey = isReturning ? presented : GenerateSessionId();
     const lastConversationId = isReturning
       ? await this.findPreviousConversationByVisitorKey(visitorKey, widget.ApplicationID, contextUser)
       : undefined;
@@ -622,7 +622,7 @@ export class WidgetSessionService {
       return;
     }
     // global-provider-ok: server-side mint under the single default provider (same rationale as resolveGuestRoleName).
-    await writeReturningVisitorRecap(
+    await WriteReturningVisitorRecap(
       priorConversationId,
       widget.PinnedAgentID,
       contextUser,

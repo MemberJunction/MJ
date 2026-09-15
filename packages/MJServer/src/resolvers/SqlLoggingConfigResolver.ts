@@ -5,7 +5,7 @@ import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 import { v4 as uuidv4 } from 'uuid';
 import * as path from 'path';
 import * as fs from 'fs/promises';
-import { loadConfig } from '../config.js';
+import { LoadConfig } from '../config.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadOnlyProvider } from '../util.js';
 import { UserCache, SqlLoggingOptions as ProviderSqlLoggingOptions } from '@memberjunction/generic-database-provider';
@@ -314,7 +314,7 @@ export class SqlLoggingConfigResolver extends ResolverBase {
   @Query(() => SqlLoggingConfig)
   async sqlLoggingConfig(@Ctx() context: AppContext): Promise<SqlLoggingConfig> {
     await this.checkOwnerAccess(context);
-    const config = await loadConfig();
+    const config = await LoadConfig();
     const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true}) as unknown as SQLServerDataProvider;
     const activeSessions = provider.GetActiveSqlLoggingSessions();
 
@@ -427,7 +427,7 @@ export class SqlLoggingConfigResolver extends ResolverBase {
     @Ctx() context: AppContext
   ): Promise<SqlLoggingSession> {
     await this.checkOwnerAccess(context);
-    const config = await loadConfig();
+    const config = await LoadConfig();
     
     // Check if SQL logging is enabled
     if (!config.sqlLogging?.enabled) {
@@ -604,7 +604,7 @@ export class SqlLoggingConfigResolver extends ResolverBase {
     await this.checkOwnerAccess(context);
     // Note: This updates the runtime configuration only, not the file
     // In a production system, you might want to persist this to a database
-    const config = await loadConfig();
+    const config = await LoadConfig();
     if (!config.sqlLogging) {
       throw new Error('SQL logging configuration not found');
     }
@@ -646,7 +646,7 @@ export class SqlLoggingConfigResolver extends ResolverBase {
     @Ctx() context: AppContext
   ): Promise<string> {
     await this.checkOwnerAccess(context);
-    const config = await loadConfig();
+    const config = await LoadConfig();
     
     // Check if SQL logging is enabled
     if (!config.sqlLogging?.enabled) {

@@ -26,7 +26,7 @@ import {
   StorageListResult,
   StorageObjectMetadata,
 } from '../generic/FileStorageBase';
-import { getProviderConfig } from '../config';
+import { GetProviderConfig } from '../config';
 
 import { StorageProviderConfig } from '../generic/FileStorageBase';
 
@@ -104,7 +104,7 @@ export class AWSFileStorage extends FileStorageBase {
     super();
 
     // Try to get config from centralized configuration
-    const config = getProviderConfig('aws');
+    const config = GetProviderConfig('aws');
 
     // Extract values from config, fall back to env vars
     const region = config?.region || env.get('STORAGE_AWS_REGION').required().asString();

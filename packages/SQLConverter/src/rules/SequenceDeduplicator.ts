@@ -72,7 +72,7 @@ export interface SequenceEntry {
  * @param migrationsDir - Directory containing .pg.sql files (e.g., migrations-pg/v5)
  * @param dryRun - If true, detect collisions but don't modify files
  */
-export function deduplicateEntityFieldSequences(
+export function DeduplicateEntityFieldSequences(
   migrationsDir: string,
   dryRun: boolean = false
 ): DeduplicationResult {
@@ -178,6 +178,14 @@ export function deduplicateEntityFieldSequences(
     fixes,
     collisions,
   };
+}
+
+/** @deprecated Use {@link DeduplicateEntityFieldSequences}. */
+export function deduplicateEntityFieldSequences(
+  migrationsDir: string,
+  dryRun: boolean = false
+): DeduplicationResult {
+  return DeduplicateEntityFieldSequences(migrationsDir, dryRun);
 }
 
 /**

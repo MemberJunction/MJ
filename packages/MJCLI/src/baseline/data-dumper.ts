@@ -8,7 +8,7 @@
  */
 
 import type { QueryRunner } from './connection';
-import { quoteIdent, stableSortBy } from './util';
+import { QuoteIdent, StableSortBy } from './util';
 import type { ColumnDef, TableDataDump, TableDef } from './types';
 
 export interface DumpProgress {
@@ -22,7 +22,7 @@ export interface DumpOptions {
 }
 
 /** Dump every non-excluded table. Computed columns are skipped. */
-export async function dumpTables(
+export async function DumpTables(
   db: QueryRunner,
   tables: readonly TableDef[],
   options: DumpOptions,
@@ -38,9 +38,9 @@ export async function dumpTables(
 
     const rows: unknown[][] = [];
     let count = 0;
-    const orderBy = buildOrderBy(table);
+    const orderBy = BuildOrderBy(table);
     const select = `SELECT ${includedColumns.map(selectExpressionForColumn).join(', ')} ` +
-      `FROM ${quoteIdent(table.schema)}.${quoteIdent(table.name)} ${orderBy}`;
+      `FROM ${QuoteIdent(table.schema)}.${QuoteIdent(table.name)} ${orderBy}`;
     let truncated = false;
 
     await db.stream(select, (row) => {
@@ -67,21 +67,36 @@ export async function dumpTables(
   return dumps;
 }
 
+/** @deprecated Use {@link DumpTables}. */
+export async function dumpTables(
+  db: QueryRunner,
+  tables: readonly TableDef[],
+  options: DumpOptions,
+  progress: DumpProgress = {},
+): Promise<TableDataDump[]> {
+  return DumpTables(db, tables, options, progress);
+}
+
 /** Construct an ORDER BY clause for deterministic streaming. */
-export function buildOrderBy(table: TableDef): string {
+export function BuildOrderBy(table: TableDef): string {
   const orderColumns = (() => {
     if (table.primaryKey && table.primaryKey.columns.length) return table.primaryKey.columns;
     if (table.uniqueConstraints[0]?.columns.length) return table.uniqueConstraints[0].columns;
     // Fall back to ALL non-LOB columns sorted by ordinal so we still get a
     // deterministic order. LOB types can't appear in ORDER BY in MSSQL.
-    const sortable = stableSortBy(
+    const sortable = StableSortBy(
       table.columns.filter((c) => !c.isComputed && !isLobType(c.dataType)),
       (c) => String(c.ordinal).padStart(6, '0'),
     );
     return sortable.map((c) => c.name);
   })();
   if (orderColumns.length === 0) return '';
-  return 'ORDER BY ' + orderColumns.map((n) => quoteIdent(n)).join(', ');
+  return 'ORDER BY ' + orderColumns.map((n) => QuoteIdent(n)).join(', ');
+}
+
+/** @deprecated Use {@link BuildOrderBy}. */
+export function buildOrderBy(table: TableDef): string {
+  return BuildOrderBy(table);
 }
 
 function isLobType(dataType: string): boolean {
@@ -112,7 +127,7 @@ function isLobType(dataType: string): boolean {
 function selectExpressionForColumn(c: ColumnDef): string {
   const lc = c.dataType.toLowerCase();
   if (lc.startsWith('datetime2') || lc.startsWith('datetimeoffset') || lc.startsWith('time')) {
-    return `CONVERT(NVARCHAR(50), ${quoteIdent(c.name)}, 121) AS ${quoteIdent(c.name)}`;
+    return `CONVERT(NVARCHAR(50), ${QuoteIdent(c.name)}, 121) AS ${QuoteIdent(c.name)}`;
   }
-  return quoteIdent(c.name);
+  return QuoteIdent(c.name);
 }

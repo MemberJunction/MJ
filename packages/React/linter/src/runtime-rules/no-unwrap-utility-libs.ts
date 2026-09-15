@@ -1,4 +1,4 @@
-import { traverse, NodePath, createViolation, truncateCode } from '../lint-utils';
+import { traverse, NodePath, CreateViolation, TruncateCode } from '../lint-utils';
 import * as t from '@babel/types';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseLintRule } from '../lint-rule';
@@ -62,12 +62,12 @@ export class NoUnwrapUtilityLibsRule extends BaseLintRule {
           `(e.g., ${libInfo.example}). unwrapLibraryComponents() is only for UI component libraries like antd.`;
 
         violations.push(
-          createViolation(
+          CreateViolation(
             'no-unwrap-utility-libs',
             'critical',
             path.node,
             message,
-            truncateCode(path.toString()),
+            TruncateCode(path.toString()),
             {
               text: 'Remove the unwrapLibraryComponents() call and use the library global directly.',
               example:

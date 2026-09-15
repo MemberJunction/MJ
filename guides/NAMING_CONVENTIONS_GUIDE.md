@@ -171,11 +171,72 @@ The gate ignores anything carrying a `@deprecated` tag, so the stub is not itsel
 reports how many findings it suppressed that way, so the exclusion stays visible rather than
 becoming a quiet hiding place.
 
+### Doing it in bulk
+
+Most findings are the same four or five shapes repeated, so there is a codemod that writes the
+rename and the stub for you, one package at a time:
+
+```bash
+node packages/Standards/bin/run.js check --json findings.json
+node packages/Standards/scripts/naming-codemod.mjs --findings findings.json --package packages/SQLConverter
+#   ...then re-run with --apply once the dry run looks right
+```
+
+It handles exported functions, `export const fn = () => {}`, class methods, typed class properties
+and constructor parameter properties. Alongside each rename it adds the new name to any barrel that
+re-exports the old one — otherwise the correct name is never published and nobody can migrate onto
+it — and moves the package's **own** call sites across. Consumers in other packages keep using the
+deprecated name until their own slice runs, which is what the stub is for.
+
+**It refuses anything it cannot prove equivalent** and prints why, so the residue is a worklist
+rather than a silent gap. Decorated members, untyped properties, `get`/`set` pairs, generators,
+destructured parameters and overload sets are all left for a human. So are type members — an
+interface has no runtime carrier, so no stub exists (above). Run the package's build and tests
+afterwards; the codemod is careful, not clairvoyant.
+
+### Angular members
+
 ⚠️ **Renaming a public member of an Angular component is not a TypeScript-only edit.** 875 `.html`
-files and 336 inline `template:` strings bind to these names; the template must be rewritten in
-lockstep or the binding silently breaks at runtime. For `@Input` there is a cheaper route already in
-use in `base-forms` — `@Input('oldName') set _deprecatedOldName(v) { this.NewName = v; }` keeps the
-old template binding working without touching a single consumer template.
+files and 336 inline `template:` strings bind these names, and **`tsc --noEmit` does not type-check
+templates** — only `ngc` does. A rename that breaks every template in a package still passes a plain
+typecheck. Always run the package's real build.
+
+The good news is that a correctly shaped stub keeps templates working untouched, because the old
+name survives as a real member. Each binding kind needs its own shape:
+
+**Plain members and methods** — nothing extra. The `@deprecated` getter or delegating method the
+stub already adds is what the template reads or calls.
+
+**`@Input`** — a **readable accessor pair**, not just a setter:
+
+```typescript
+@Input() IsOpen = false;
+
+/** @deprecated Use {@link IsOpen}. */
+@Input() set isOpen(value: MyComponent['IsOpen']) { this.IsOpen = value; }
+/** @deprecated Use {@link IsOpen}. */
+get isOpen(): MyComponent['IsOpen'] { return this.IsOpen; }
+```
+
+A setter alone accepts `[isOpen]="x"` but makes `@if (isOpen)` and `{{ isOpen }}` a compile error,
+because a component's own template **reads** its inputs as well as receiving them. `base-forms`'
+`@Input('sectionKey') set _deprecatedSectionKey(…)` is write-only and only safe where nothing reads
+the old name — which is not something to assume.
+
+**`@Output`** — two outputs sharing **one emitter**:
+
+```typescript
+@Output() Saved = new EventEmitter<Thing>();
+
+/** @deprecated Use {@link Saved}. */
+@Output() saved = this.Saved;
+```
+
+An output cannot be forwarded the way an input can: Angular takes hold of the `EventEmitter` object
+itself and subscribes once, so there is no call to intercept. Both names must *be* the same emitter.
+The alias **must be declared after** the canonical one — class fields initialise in declaration
+order, so reversed it captures `undefined` and Angular throws on subscribe. The pattern is held down
+by [`deprecated-output-alias.dom.test.ts`](../packages/Angular/Generic/base-forms/src/lib/deprecated-output-alias.dom.test.ts).
 
 ### Reading the output
 

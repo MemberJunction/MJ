@@ -81,8 +81,26 @@ export interface LintContext {
  * 5. Unknown props warning
  */
 export class ComponentPropRule {
-  name = 'component-props';
-  appliesTo: 'all' | 'child' | 'root' = 'all';
+  Name = 'component-props';
+
+  /** @deprecated Use {@link Name}. */
+  get name() {
+    return this.Name;
+  }
+  /** @deprecated Use {@link Name}. */
+  set name(value) {
+    this.Name = value;
+  }
+  AppliesTo: 'all' | 'child' | 'root' = 'all';
+
+  /** @deprecated Use {@link AppliesTo}. */
+  get appliesTo(): 'all' | 'child' | 'root' {
+    return this.AppliesTo;
+  }
+  /** @deprecated Use {@link AppliesTo}. */
+  set appliesTo(value: 'all' | 'child' | 'root') {
+    this.AppliesTo = value;
+  }
 
   // Standard props that are always allowed on any component
   private readonly standardProps = new Set([
@@ -113,7 +131,7 @@ export class ComponentPropRule {
   /**
    * Validate component props
    */
-  validate(ast: t.File, context: LintContext): Violation[] {
+  Validate(ast: t.File, context: LintContext): Violation[] {
     this._sqlDialect = context.sqlDialect;
     const violations: Violation[] = [];
 
@@ -173,6 +191,11 @@ export class ComponentPropRule {
     });
 
     return violations;
+  }
+
+  /** @deprecated Use {@link Validate}. */
+  validate(ast: t.File, context: LintContext): Violation[] {
+    return this.Validate(ast, context);
   }
 
   /**

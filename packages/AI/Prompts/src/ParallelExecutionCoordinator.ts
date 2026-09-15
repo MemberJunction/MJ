@@ -41,27 +41,42 @@ class ParallelProgressTracker {
     this.progressCallbacks = progressCallbacks;
   }
 
-  updateProgress(currentGroup: number): void {
+  UpdateProgress(currentGroup: number): void {
     this.currentGroup = currentGroup;
     this.sendProgressUpdate();
   }
 
-  addActiveTask(taskId: string): void {
+  /** @deprecated Use {@link UpdateProgress}. */
+  updateProgress(currentGroup: number): void {
+    return this.UpdateProgress(currentGroup);
+  }
+
+  AddActiveTask(taskId: string): void {
     if (!this.activeTasks.includes(taskId)) {
       this.activeTasks.push(taskId);
     }
   }
 
-  removeActiveTask(taskId: string): void {
+  /** @deprecated Use {@link AddActiveTask}. */
+  addActiveTask(taskId: string): void {
+    return this.AddActiveTask(taskId);
+  }
+
+  RemoveActiveTask(taskId: string): void {
     const index = this.activeTasks.indexOf(taskId);
     if (index > -1) {
       this.activeTasks.splice(index, 1);
     }
   }
 
-  taskCompleted(result: ExecutionTaskResult): void {
+  /** @deprecated Use {@link RemoveActiveTask}. */
+  removeActiveTask(taskId: string): void {
+    return this.RemoveActiveTask(taskId);
+  }
+
+  TaskCompleted(result: ExecutionTaskResult): void {
     this.completedTasks++;
-    this.removeActiveTask(result.task.taskId);
+    this.RemoveActiveTask(result.task.taskId);
 
     if (result.success) {
       this.successfulTasks++;
@@ -83,6 +98,11 @@ class ParallelProgressTracker {
     }
 
     this.sendProgressUpdate();
+  }
+
+  /** @deprecated Use {@link TaskCompleted}. */
+  taskCompleted(result: ExecutionTaskResult): void {
+    return this.TaskCompleted(result);
   }
 
   private getCurrentProgress(): ParallelExecutionProgress {

@@ -53,13 +53,18 @@ const PROVIDER_DEFAULT_MODEL: Partial<Record<EmbeddingProviderName, string>> = {
     ollama: 'nomic-embed-text',
 };
 
-export function createEmbeddingProvider(config: EmbeddingProviderConfig): EmbeddingProvider {
+export function CreateEmbeddingProvider(config: EmbeddingProviderConfig): EmbeddingProvider {
     const driverClass = PROVIDER_TO_DRIVER_CLASS[config.provider];
     if (!driverClass) {
         const supported = Object.keys(PROVIDER_TO_DRIVER_CLASS).join(', ');
         throw new Error(`Embedding provider not supported: ${config.provider}. Supported: ${supported}`);
     }
     return new MJEmbeddingProvider(config, driverClass);
+}
+
+/** @deprecated Use {@link CreateEmbeddingProvider}. */
+export function createEmbeddingProvider(config: EmbeddingProviderConfig): EmbeddingProvider {
+    return CreateEmbeddingProvider(config);
 }
 
 /** Wraps a registered `BaseEmbeddings` driver behind the simple `embed(texts)` contract. */

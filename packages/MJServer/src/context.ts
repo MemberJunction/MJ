@@ -5,13 +5,13 @@ import 'reflect-metadata';
 import { Subject, firstValueFrom } from 'rxjs';
 import { AuthenticationError, AuthorizationError } from 'type-graphql';
 import sql from 'mssql';
-import { getSigningKeys, getSystemUser, getValidationOptions, verifyUserRecord, extractUserInfoFromPayload } from './auth/index.js';
+import { GetSigningKeys, GetSystemUser, GetValidationOptions, VerifyUserRecord, ExtractUserInfoFromPayload } from './auth/index.js';
 import { CloneUserForSessionContext } from './auth/sessionUserClone.js';
 import { GetAPIKeyActingContextResolver } from './auth/actingContextResolver.js';
 import { TokenExpiredError, AuthProviderFactory } from '@memberjunction/auth-providers';
 import { authCache } from './cache.js';
 import { userEmailMap, apiKey, mj_core_schema } from './config.js';
-import { buildBoundaryLogPayload } from './logging/boundaryLogPayload.js';
+import { BuildBoundaryLogPayload } from './logging/boundaryLogPayload.js';
 import { StartupLogger } from './logging/StartupLogger.js';
 import { DataSourceInfo, UserPayload } from './types.js';
 import { GetReadOnlyDataSource, GetReadWriteDataSource } from './util.js';
@@ -110,7 +110,7 @@ async function writeSessionAudit(args: {
     // as them silently fails the permission check (this is exactly why the built-in
     // CreateAuditLogRecord, which saves as `user`, drops guest session rows). We record
     // the real session user in UserID but write the row as the system user.
-    const writer = await getSystemUser();
+    const writer = await GetSystemUser();
     const auditType = provider.AuditLogTypes?.find(
       (t) => t?.Name?.trim().toLowerCase() === args.auditTypeName.trim().toLowerCase(),
     );
@@ -170,7 +170,7 @@ async function auditLoginFailure(
       return; // already logged this failing identity/token — don't let a retry loop spam
     }
     // No-arg: getSystemUser pulls from the process-global UserCache (no ConnectionPool needed here).
-    const systemUser = await getSystemUser();
+    const systemUser = await GetSystemUser();
     if (!systemUser) {
       return;
     }
@@ -316,7 +316,7 @@ function extractWidgetGuestContext(payload: jwt.JwtPayload): WidgetGuestContext 
 
 const verifyAsync = async (issuer: string, token: string): Promise<jwt.JwtPayload> =>
   new Promise((resolve, reject) => {
-    const options = getValidationOptions(issuer);
+    const options = GetValidationOptions(issuer);
     
     if (!options) {
       reject(new Error(`No validation options found for issuer ${issuer}`));
@@ -336,14 +336,14 @@ const verifyAsync = async (issuer: string, token: string): Promise<jwt.JwtPayloa
       verifyOptions.audience = options.audience;
     }
 
-    jwt.verify(token, getSigningKeys(issuer), verifyOptions, (err, jwt) => {
+    jwt.verify(token, GetSigningKeys(issuer), verifyOptions, (err, jwt) => {
       if (jwt && typeof jwt !== 'string' && !err) {
         const payload = jwt.payload ?? jwt;
 
         // Per-request token confirmation — debug-only (one of the worst
         // "constantly on" offenders on an authenticated server).
         if (isDebugLogLevel()) {
-          const userInfo = extractUserInfoFromPayload(payload);
+          const userInfo = ExtractUserInfoFromPayload(payload);
           console.log(`Valid token: ${userInfo.fullName || 'Unknown'} (${userInfo.email || userInfo.preferredUsername || 'Unknown'})`);
         }
         resolve(payload);
@@ -370,7 +370,7 @@ export interface RequestContext {
   userAgent?: string;
 }
 
-export const getUserPayload = async (
+export const GetUserPayload = async (
   bearerToken: string,
   sessionId = 'default',
   dataSources: DataSourceInfo[],
@@ -388,7 +388,7 @@ export const getUserPayload = async (
     // This authenticates as the specific user who owns the API key
     if (userApiKey && userApiKey !== String(undefined)) {
       // Use system user as context for validation operations
-      const systemUser = await getSystemUser(readOnlyDataSource);
+      const systemUser = await GetSystemUser(readOnlyDataSource);
       const apiKeyEngine = GetAPIKeyEngine();
       const validationResult = await apiKeyEngine.ValidateAPIKey(
         {
@@ -463,7 +463,7 @@ export const getUserPayload = async (
       const systemKeyDigest = createHash('sha256').update(String(systemApiKey)).digest();
       const providedKeyDigest = createHash('sha256').update(String(apiKey)).digest();
       if (timingSafeEqual(systemKeyDigest, providedKeyDigest)) {
-        const systemUser = await getSystemUser(readOnlyDataSource);
+        const systemUser = await GetSystemUser(readOnlyDataSource);
         return {
           userRecord: systemUser,
           email: systemUser.Email,
@@ -516,10 +516,10 @@ export const getUserPayload = async (
     }
 
     // Use provider to extract user information
-    const userInfo = extractUserInfoFromPayload(payload);
+    const userInfo = ExtractUserInfoFromPayload(payload);
     const email = userInfo.email ? ((userEmailMap ?? {})[userInfo.email] ?? userInfo.email) : userInfo.preferredUsername;
     
-    const userRecord = await verifyUserRecord(
+    const userRecord = await VerifyUserRecord(
       email, 
       userInfo.firstName, 
       userInfo.lastName, 
@@ -602,6 +602,9 @@ export const getUserPayload = async (
   }
 };
 
+/** @deprecated Use {@link GetUserPayload}. */
+export const getUserPayload = GetUserPayload;
+
 /**
  * Extracts auth headers and builds a RequestContext from an Express request.
  * Shared by both the unified auth middleware and the WebSocket context.
@@ -665,7 +668,7 @@ function extractAuthInputs(req: IncomingMessage): {
  *
  * Register OAuth callback routes BEFORE this middleware so they remain unauthenticated.
  */
-export function createUnifiedAuthMiddleware(
+export function CreateUnifiedAuthMiddleware(
   dataSources: DataSourceInfo[]
 ): RequestHandler {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -680,7 +683,7 @@ export function createUnifiedAuthMiddleware(
       const { bearerToken, sessionId, requestDomain, systemApiKey, userApiKey, requestContext } =
         extractAuthInputs(req);
 
-      const userPayload = await getUserPayload(
+      const userPayload = await GetUserPayload(
         bearerToken,
         sessionId,
         dataSources,
@@ -730,13 +733,20 @@ export function createUnifiedAuthMiddleware(
   };
 }
 
+/** @deprecated Use {@link CreateUnifiedAuthMiddleware}. */
+export function createUnifiedAuthMiddleware(
+  dataSources: DataSourceInfo[]
+): RequestHandler {
+  return CreateUnifiedAuthMiddleware(dataSources);
+}
+
 /**
  * Creates the GraphQL context from an already-authenticated request.
  *
  * The unified auth middleware has already resolved `req.userPayload` before this runs.
  * This function reads the payload and creates per-request database providers.
  */
-export const contextFunction =
+export const ContextFunction =
   ({ setupComplete$, dataSource, dataSources }: { setupComplete$: Subject<unknown>; dataSource: sql.ConnectionPool, dataSources: DataSourceInfo[] }) =>
   async ({ req }: { req: IncomingMessage }) => {
     await firstValueFrom(setupComplete$); // wait for setup to complete before processing the request
@@ -748,7 +758,7 @@ export const contextFunction =
     // Per-request GraphQL boundary line — debug-only. Kept (not deleted) so the
     // data is available when an operator opts into debug, but off by default.
     if (operationName !== 'IntrospectionQuery' && isDebugLogLevel()) {
-      console.dir(buildBoundaryLogPayload(operationName), { depth: null, breakLength: 200 });
+      console.dir(BuildBoundaryLogPayload(operationName), { depth: null, breakLength: 200 });
     }
 
     // Auth already happened in the unified auth middleware — just read the result
@@ -772,6 +782,9 @@ export const contextFunction =
       providers,
     };
   };
+
+/** @deprecated Use {@link ContextFunction}. */
+export const contextFunction = ContextFunction;
 
 /**
  * Creates per-request DatabaseProviderBase instances for the GraphQL context.

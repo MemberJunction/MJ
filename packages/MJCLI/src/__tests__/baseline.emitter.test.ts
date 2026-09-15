@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { emitBaselineTsql } from '../baseline/emitter';
+import { EmitBaselineTsql } from '../baseline/emitter';
 import type { SchemaSnapshot, TableDataDump } from '../baseline/types';
 
 function snapshotFixture(): SchemaSnapshot {
@@ -85,19 +85,19 @@ describe('baseline/emitter', () => {
   };
 
   it('emits a non-empty T-SQL script', () => {
-    const sql = emitBaselineTsql({ snapshot: snapshotFixture(), dataDumps: dataFixture(), options: baseOpts });
+    const sql = EmitBaselineTsql({ snapshot: snapshotFixture(), dataDumps: dataFixture(), options: baseOpts });
     expect(sql.length).toBeGreaterThan(100);
     expect(sql).toContain('-- ============================================================================');
   });
 
   it('is deterministic across runs (byte-identical)', () => {
-    const a = emitBaselineTsql({ snapshot: snapshotFixture(), dataDumps: dataFixture(), options: baseOpts });
-    const b = emitBaselineTsql({ snapshot: snapshotFixture(), dataDumps: dataFixture(), options: baseOpts });
+    const a = EmitBaselineTsql({ snapshot: snapshotFixture(), dataDumps: dataFixture(), options: baseOpts });
+    const b = EmitBaselineTsql({ snapshot: snapshotFixture(), dataDumps: dataFixture(), options: baseOpts });
     expect(a).toBe(b);
   });
 
   it('places foreign keys after table creation', () => {
-    const sql = emitBaselineTsql({ snapshot: snapshotFixture(), dataDumps: [], options: { ...baseOpts, includeData: false } });
+    const sql = EmitBaselineTsql({ snapshot: snapshotFixture(), dataDumps: [], options: { ...baseOpts, includeData: false } });
     const tableIdx = sql.indexOf('CREATE TABLE [dbo].[Order]');
     const fkIdx = sql.indexOf('FK_Order_Customer');
     expect(tableIdx).toBeGreaterThan(-1);
@@ -105,7 +105,7 @@ describe('baseline/emitter', () => {
   });
 
   it('places views after data inserts', () => {
-    const sql = emitBaselineTsql({ snapshot: snapshotFixture(), dataDumps: dataFixture(), options: baseOpts });
+    const sql = EmitBaselineTsql({ snapshot: snapshotFixture(), dataDumps: dataFixture(), options: baseOpts });
     const dataIdx = sql.indexOf('INSERT INTO [dbo].[Customer]');
     const viewIdx = sql.indexOf('CREATE VIEW dbo.vCustomerSummary');
     expect(dataIdx).toBeGreaterThan(-1);
@@ -113,32 +113,32 @@ describe('baseline/emitter', () => {
   });
 
   it('wraps identity table inserts with SET IDENTITY_INSERT bookends', () => {
-    const sql = emitBaselineTsql({ snapshot: snapshotFixture(), dataDumps: dataFixture(), options: baseOpts });
+    const sql = EmitBaselineTsql({ snapshot: snapshotFixture(), dataDumps: dataFixture(), options: baseOpts });
     expect(sql).toContain('SET IDENTITY_INSERT [dbo].[Customer] ON;');
     expect(sql).toContain('SET IDENTITY_INSERT [dbo].[Customer] OFF;');
     expect(sql).toContain('DBCC CHECKIDENT');
   });
 
   it('escapes string literals correctly', () => {
-    const sql = emitBaselineTsql({ snapshot: snapshotFixture(), dataDumps: dataFixture(), options: baseOpts });
+    const sql = EmitBaselineTsql({ snapshot: snapshotFixture(), dataDumps: dataFixture(), options: baseOpts });
     expect(sql).toContain("N'O''Brien'");
   });
 
   it('omits data section when includeData is false', () => {
-    const sql = emitBaselineTsql({ snapshot: snapshotFixture(), dataDumps: dataFixture(), options: { ...baseOpts, includeData: false } });
+    const sql = EmitBaselineTsql({ snapshot: snapshotFixture(), dataDumps: dataFixture(), options: { ...baseOpts, includeData: false } });
     expect(sql).not.toContain('INSERT INTO');
     expect(sql).not.toContain('SET IDENTITY_INSERT');
   });
 
   it('honors excluded tables', () => {
-    const sql = emitBaselineTsql({
+    const sql = EmitBaselineTsql({
       snapshot: snapshotFixture(),
       dataDumps: dataFixture(),
       options: { ...baseOpts, excludedDataTables: new Set(['dbo.customer']) },
     });
     // The emitter relies on the dumper to skip — so this test mainly proves
     // that absent dumps yield no INSERTs:
-    const sqlAlt = emitBaselineTsql({
+    const sqlAlt = EmitBaselineTsql({
       snapshot: snapshotFixture(),
       dataDumps: [],
       options: baseOpts,
@@ -148,7 +148,7 @@ describe('baseline/emitter', () => {
   });
 
   it('emits CREATE SCHEMA for non-dbo schemas only', () => {
-    const sql = emitBaselineTsql({ snapshot: snapshotFixture(), dataDumps: [], options: { ...baseOpts, includeData: false } });
+    const sql = EmitBaselineTsql({ snapshot: snapshotFixture(), dataDumps: [], options: { ...baseOpts, includeData: false } });
     expect(sql).toContain("CREATE SCHEMA [__mj]");
     expect(sql).not.toContain("CREATE SCHEMA [dbo]");
   });
@@ -172,7 +172,7 @@ describe('baseline/emitter', () => {
       { name: 'MJ_CodeGen', kind: 'sql_user', defaultSchema: 'dbo' },
       { name: 'cdp_UI', kind: 'database_role', owner: 'db_securityadmin' },
     ];
-    const sql = emitBaselineTsql({
+    const sql = EmitBaselineTsql({
       snapshot,
       dataDumps: [],
       options: { ...baseOpts, includeData: false },
@@ -198,7 +198,7 @@ describe('baseline/emitter', () => {
     snapshot.principals = [
       { name: 'cdp_UI', kind: 'database_role', owner: 'db_securityadmin' },
     ];
-    const sql = emitBaselineTsql({
+    const sql = EmitBaselineTsql({
       snapshot,
       dataDumps: [],
       options: { ...baseOpts, includeData: false },

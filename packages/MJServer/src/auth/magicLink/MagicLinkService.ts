@@ -35,7 +35,7 @@ import { CommunicationEngine } from '@memberjunction/communication-engine';
 import { Message } from '@memberjunction/communication-types';
 import { configInfo, type MagicLinkConfig } from '../../config.js';
 import { MagicLinkKeyManager } from './MagicLinkKeys.js';
-import { generateRawToken, generateSessionId, hashToken, evaluateInvite, buildSessionClaims, buildConsumeInviteSQL, canIssueInvites, isRoleGrantable, MAGIC_LINK_TOKEN_PREFIX } from './magicLinkCore.js';
+import { GenerateRawToken, GenerateSessionId, HashToken, EvaluateInvite, BuildSessionClaims, BuildConsumeInviteSQL, CanIssueInvites, IsRoleGrantable, MAGIC_LINK_TOKEN_PREFIX } from './magicLinkCore.js';
 import type {
   CreateMagicLinkInviteParams,
   CreateMagicLinkInviteResult,
@@ -90,7 +90,7 @@ export class MagicLinkService {
       // external user already holding a restricted magic-link session — could
       // issue invites and escalate.
       const callerRoleNames = (creatingUser.UserRoles ?? []).map((r) => r.Role).filter((n): n is string => !!n);
-      if (!canIssueInvites(creatingUser.Type, callerRoleNames, this.config.inviteIssuerRoleNames)) {
+      if (!CanIssueInvites(creatingUser.Type, callerRoleNames, this.config.inviteIssuerRoleNames)) {
         return { success: false, errorCode: 'forbidden', error: 'Not authorized to issue magic-link invites.' };
       }
 
@@ -106,7 +106,7 @@ export class MagicLinkService {
       if (!roleToGrant) {
         return { success: false, errorCode: 'invalid_role', error: `Role '${roleId}' not found.` };
       }
-      if (!isRoleGrantable(roleToGrant.Name, this.config.restrictedRoleName, this.config.grantableRoleNames)) {
+      if (!IsRoleGrantable(roleToGrant.Name, this.config.restrictedRoleName, this.config.grantableRoleNames)) {
         return {
           success: false,
           errorCode: 'invalid_role',
@@ -119,13 +119,13 @@ export class MagicLinkService {
         return { success: false, error: `Application '${params.applicationId}' not found.` };
       }
 
-      const rawToken = generateRawToken();
+      const rawToken = GenerateRawToken();
       const expiresInHours = params.expiresInHours ?? this.config.defaultExpiresInHours;
       const expiresAt = new Date(Date.now() + expiresInHours * 3600 * 1000);
 
       const invite = await md.GetEntityObject<MJMagicLinkInviteEntity>(INVITE_ENTITY, creatingUser);
       invite.NewRecord();
-      invite.TokenHash = hashToken(rawToken);
+      invite.TokenHash = HashToken(rawToken);
       invite.Email = params.email;
       invite.ApplicationID = params.applicationId;
       invite.RoleID = roleId;
@@ -208,7 +208,7 @@ export class MagicLinkService {
       const md = Metadata.Provider; // global-provider-ok: server-side magic-link service; runs under the server's single default provider
       const provider = md as DatabaseProviderBase;
 
-      const tokenHash = hashToken(rawToken);
+      const tokenHash = HashToken(rawToken);
       const rv = new RunView();
       const found = await rv.RunView<MJMagicLinkInviteEntity>(
         {
@@ -231,7 +231,7 @@ export class MagicLinkService {
 
       // Fast, friendly pre-check (returns a precise reason). NOT the authority —
       // the atomic consume below is what actually enforces single-use.
-      const eligibility = evaluateInvite(invite, Date.now());
+      const eligibility = EvaluateInvite(invite, Date.now());
       if (!eligibility.ok) {
         return done({ success: false, errorCode: eligibility.errorCode, error: `Invite is ${eligibility.errorCode}.` });
       }
@@ -259,7 +259,7 @@ export class MagicLinkService {
         // Lost the race or the invite expired between the pre-check and the
         // consume. The in-memory copy still looks eligible if only the DB-side
         // use count changed, so default that case to 'consumed'.
-        const recheck = evaluateInvite(invite, Date.now());
+        const recheck = EvaluateInvite(invite, Date.now());
         return done({ success: false, errorCode: recheck.ok ? 'consumed' : recheck.errorCode, error: 'Invite already redeemed or expired.' });
       }
 
@@ -273,7 +273,7 @@ export class MagicLinkService {
 
       const nowSeconds = Math.floor(Date.now() / 1000);
       const isAnon = invite.IdentityMode === 'anonymous';
-      const claims = buildSessionClaims({
+      const claims = BuildSessionClaims({
         issuer: this.publicUrl,
         audience: this.config.audience,
         inviteId: invite.ID,
@@ -286,7 +286,7 @@ export class MagicLinkService {
         anonymous: isAnon,
         // Per-session id for anon forensics (correlates one session's activity since all
         // anon redemptions share the Anonymous principal). Carried into the redemption audit row.
-        sessionId: isAnon ? generateSessionId() : undefined,
+        sessionId: isAnon ? GenerateSessionId() : undefined,
         // Resource-share scope (Phase 5): the single shared resource this link grants.
         resourceId: invite.ResourceID ?? undefined,
         nowSeconds,
@@ -666,7 +666,7 @@ export class MagicLinkService {
       // pass the bare `schema.table`; SQL Server takes the bracket-quoted form.
       const table = isPg ? `${entityInfo.SchemaName}.${entityInfo.BaseTable}` : `[${entityInfo.SchemaName}].[${entityInfo.BaseTable}]`;
       // OUTPUT/RETURNING yields one row iff the WHERE matched — the atomic single-use gate.
-      const sql = buildConsumeInviteSQL(table, isPg ? 'postgresql' : 'sqlserver');
+      const sql = BuildConsumeInviteSQL(table, isPg ? 'postgresql' : 'sqlserver');
       const rows = await provider.ExecuteSQL<{ ID: string }>(sql, [invite.ID], { isMutation: true }, contextUser);
       return Array.isArray(rows) && rows.length === 1;
     } catch (e) {

@@ -2,7 +2,7 @@ import * as t from '@babel/types';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
-import { traverse, NodePath, createViolation, truncateCode } from '../lint-utils';
+import { traverse, NodePath, CreateViolation, TruncateCode } from '../lint-utils';
 
 /**
  * Rule: no-import-statements
@@ -24,12 +24,12 @@ export class NoImportStatementsRule extends BaseLintRule {
     traverse(ast, {
       ImportDeclaration(path: NodePath<t.ImportDeclaration>) {
         violations.push(
-          createViolation(
+          CreateViolation(
             'no-import-statements',
             'critical',
             path.node,
             `Component "${componentName}" contains an import statement. Interactive components cannot use import statements - all dependencies must be passed as props.`,
-            truncateCode(path.toString()),
+            TruncateCode(path.toString()),
             {
               text: 'Remove all import statements. Interactive components receive everything through props.',
               example: `// ❌ WRONG - Using import statements:

@@ -5,19 +5,19 @@ import * as path from 'node:path';
 import ora from 'ora-classic';
 import chalk from 'chalk';
 
-import { resolveConnection, isTty } from '../../baseline/cli-helpers';
-import { openConnection } from '../../baseline/connection';
-import { introspectMssql } from '../../baseline/introspector-mssql';
-import { introspectPostgres } from '../../baseline/introspector-postgres';
-import { dumpTables } from '../../baseline/data-dumper';
-import { emitBaselineTsql } from '../../baseline/emitter';
-import { compareSnapshots } from '../../baseline/comparator';
-import { renderJson, renderMarkdown } from '../../baseline/report';
+import { ResolveConnection, IsTty } from '../../baseline/cli-helpers';
+import { OpenConnection } from '../../baseline/connection';
+import { IntrospectMssql } from '../../baseline/introspector-mssql';
+import { IntrospectPostgres } from '../../baseline/introspector-postgres';
+import { DumpTables } from '../../baseline/data-dumper';
+import { EmitBaselineTsql } from '../../baseline/emitter';
+import { CompareSnapshots } from '../../baseline/comparator';
+import { RenderJson, RenderMarkdown } from '../../baseline/report';
 import {
-  baselineFilename,
-  computeAutoBaselineStamp,
-  discoverMigrationsSourceDir,
-  findLatestVersionedMigration,
+  BaselineFilename,
+  ComputeAutoBaselineStamp,
+  DiscoverMigrationsSourceDir,
+  FindLatestVersionedMigration,
 } from '../../baseline/util';
 
 export default class BaselineRoundtrip extends Command {
@@ -79,27 +79,27 @@ export default class BaselineRoundtrip extends Command {
       this.log(chalk.dim(`  Auto timestamp        : ${autoSource.timestamp} + 1m`));
     }
     const dialect = flags.dialect as 'mssql' | 'postgres';
-    const useSpinner = isTty();
+    const useSpinner = IsTty();
     const spinner = useSpinner ? ora() : null;
     const phase = (text: string) => { if (spinner) { spinner.text = text; if (!spinner.isSpinning) spinner.start(); } else this.log(`• ${text}`); };
     const succeed = (text: string) => spinner ? spinner.succeed(text) : this.log(`✓ ${text}`);
     const fail = (text: string) => spinner ? spinner.fail(text) : this.logToStderr(`✗ ${text}`);
 
-    const sourceParams = resolveConnection({ database: flags.source }, 'mssql');
+    const sourceParams = ResolveConnection({ database: flags.source }, 'mssql');
     fs.mkdirSync(flags.out, { recursive: true });
 
     // 1. Introspect source + dump rows
     phase(`Connecting to ${sourceParams.database} (gold)`);
-    const sourceDb = await openConnection(sourceParams);
+    const sourceDb = await OpenConnection(sourceParams);
     let sourceSnapshot;
     let sourceDumps;
     try {
       succeed(`Connected to ${sourceParams.database}`);
       phase('Introspecting gold database');
-      sourceSnapshot = await introspectMssql(sourceDb);
+      sourceSnapshot = await IntrospectMssql(sourceDb);
       succeed(`Gold: ${sourceSnapshot.tables.length} tables`);
       phase('Dumping all rows from gold');
-      sourceDumps = await dumpTables(sourceDb, sourceSnapshot.tables, { excludedTables: new Set() });
+      sourceDumps = await DumpTables(sourceDb, sourceSnapshot.tables, { excludedTables: new Set() });
       succeed(`Gold: dumped ${sourceDumps.reduce((s, d) => s + d.rowCount, 0).toLocaleString()} rows`);
     } finally {
       await sourceDb.close();
@@ -107,7 +107,7 @@ export default class BaselineRoundtrip extends Command {
 
     // 2. Emit baseline
     phase('Emitting baseline SQL');
-    const sql = emitBaselineTsql({
+    const sql = EmitBaselineTsql({
       snapshot: sourceSnapshot,
       dataDumps: sourceDumps,
       options: {
@@ -119,7 +119,7 @@ export default class BaselineRoundtrip extends Command {
         batchSize: 1000,
       },
     });
-    const filename = baselineFilename({ generatedAtUtc, baselineVersion });
+    const filename = BaselineFilename({ generatedAtUtc, baselineVersion });
     const baselinePath = path.resolve(flags.out, filename);
     fs.writeFileSync(baselinePath, sql, 'utf8');
     succeed(`Baseline emitted: ${baselinePath}`);
@@ -152,7 +152,7 @@ export default class BaselineRoundtrip extends Command {
     }
 
     // 4. Apply baseline to target
-    const targetParams = resolveConnection({ database: flags.target }, dialect);
+    const targetParams = ResolveConnection({ database: flags.target }, dialect);
     phase(`Applying baseline to ${targetParams.database}`);
     const applyResult = applyBaseline(applyPath, targetParams, flags['apply-cmd']);
     if (applyResult.status !== 0) {
@@ -163,17 +163,17 @@ export default class BaselineRoundtrip extends Command {
 
     // 5. Compare target vs source
     phase('Re-introspecting target for comparison');
-    const targetDb = await openConnection(targetParams);
+    const targetDb = await OpenConnection(targetParams);
     let report;
     try {
       const targetSnapshot = dialect === 'mssql'
-        ? await introspectMssql(targetDb)
-        : await introspectPostgres(targetDb);
-      const targetDumps = await dumpTables(targetDb, targetSnapshot.tables, { excludedTables: new Set() });
+        ? await IntrospectMssql(targetDb)
+        : await IntrospectPostgres(targetDb);
+      const targetDumps = await DumpTables(targetDb, targetSnapshot.tables, { excludedTables: new Set() });
       succeed(`Target: ${targetSnapshot.tables.length} tables, ${targetDumps.reduce((s, d) => s + d.rowCount, 0).toLocaleString()} rows`);
 
       phase('Comparing snapshots');
-      report = compareSnapshots({
+      report = CompareSnapshots({
         left: { snapshot: sourceSnapshot, data: sourceDumps, label: sourceParams.database },
         right: { snapshot: targetSnapshot, data: targetDumps, label: targetParams.database },
         options: {
@@ -193,8 +193,8 @@ export default class BaselineRoundtrip extends Command {
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
     const jsonPath = path.resolve(flags.out, `baseline-compare-${stamp}.json`);
     const mdPath = path.resolve(flags.out, `baseline-compare-${stamp}.md`);
-    fs.writeFileSync(jsonPath, renderJson(report), 'utf8');
-    fs.writeFileSync(mdPath, renderMarkdown(report), 'utf8');
+    fs.writeFileSync(jsonPath, RenderJson(report), 'utf8');
+    fs.writeFileSync(mdPath, RenderMarkdown(report), 'utf8');
     this.log('');
     this.log(chalk.bold(report.isClean ? chalk.green('ROUNDTRIP CLEAN ✓') : chalk.red('ROUNDTRIP HAS DIFFS ✗')));
     this.log(chalk.dim(`  Baseline : ${baselinePath}`));
@@ -222,20 +222,20 @@ export default class BaselineRoundtrip extends Command {
       }
       return { baselineVersion: explicit, generatedAtUtc: new Date(), autoSource: null };
     }
-    const sourceDir = flags['source-dir'] ?? discoverMigrationsSourceDir(process.cwd());
+    const sourceDir = flags['source-dir'] ?? DiscoverMigrationsSourceDir(process.cwd());
     if (!sourceDir) {
       this.error(
         'No --baseline-version provided and could not auto-discover a migrations directory. ' +
           'Pass --source-dir or --baseline-version.',
       );
     }
-    const latest = findLatestVersionedMigration(sourceDir);
+    const latest = FindLatestVersionedMigration(sourceDir);
     if (!latest) {
       this.error(
         `No V-files found in ${sourceDir}. Pass --baseline-version explicitly or point --source-dir at a folder with V<ts>__v<Major>.<Minor>...sql migrations.`,
       );
     }
-    const { generatedAtUtc } = computeAutoBaselineStamp(latest.timestamp);
+    const { generatedAtUtc } = ComputeAutoBaselineStamp(latest.timestamp);
     return {
       baselineVersion: latest.majorMinor,
       generatedAtUtc,
@@ -244,7 +244,7 @@ export default class BaselineRoundtrip extends Command {
   }
 }
 
-function applyBaseline(file: string, params: ReturnType<typeof resolveConnection>, applyCmd?: string): { status: number | null } {
+function applyBaseline(file: string, params: ReturnType<typeof ResolveConnection>, applyCmd?: string): { status: number | null } {
   if (applyCmd) {
     const cmd = applyCmd.replace('{file}', file).replace('{database}', params.database);
     const result = spawnSync('sh', ['-c', cmd], { stdio: 'inherit' });

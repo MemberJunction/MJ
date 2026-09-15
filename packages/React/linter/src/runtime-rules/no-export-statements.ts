@@ -2,7 +2,7 @@ import * as t from '@babel/types';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
-import { traverse, NodePath, createViolation, truncateCode } from '../lint-utils';
+import { traverse, NodePath, CreateViolation, TruncateCode } from '../lint-utils';
 
 /**
  * Rule: no-export-statements
@@ -55,12 +55,12 @@ export class NoExportStatementsRule extends BaseLintRule {
       ExportNamedDeclaration(path: NodePath<t.ExportNamedDeclaration>) {
         const line = path.node.loc?.start.line || 0;
         violations.push(
-          createViolation(
+          CreateViolation(
             'no-export-statements',
             'critical',
             path.node,
             `Component "${componentName}" contains an export statement${mainFunctionEnd > 0 && line > mainFunctionEnd ? ' after the component function' : ''}. Interactive components are self-contained and cannot export values.`,
-            truncateCode(path.toString()),
+            TruncateCode(path.toString()),
             {
               text: 'Remove all export statements. The component function should be the only code, not exported.',
               example: `// ❌ WRONG - Using export:
@@ -91,12 +91,12 @@ function MyComponent({ utilities, styles, components }) {
       ExportDefaultDeclaration(path: NodePath<t.ExportDefaultDeclaration>) {
         const line = path.node.loc?.start.line || 0;
         violations.push(
-          createViolation(
+          CreateViolation(
             'no-export-statements',
             'critical',
             path.node,
             `Component "${componentName}" contains an export default statement${mainFunctionEnd > 0 && line > mainFunctionEnd ? ' after the component function' : ''}. Interactive components are self-contained and cannot export values.`,
-            truncateCode(path.toString()),
+            TruncateCode(path.toString()),
             {
               text: 'Remove all export statements. The component function should be the only code, not exported.',
               example: `// ❌ WRONG - Using export:
@@ -127,12 +127,12 @@ function MyComponent({ utilities, styles, components }) {
       ExportAllDeclaration(path: NodePath<t.ExportAllDeclaration>) {
         const line = path.node.loc?.start.line || 0;
         violations.push(
-          createViolation(
+          CreateViolation(
             'no-export-statements',
             'critical',
             path.node,
             `Component "${componentName}" contains an export * statement${mainFunctionEnd > 0 && line > mainFunctionEnd ? ' after the component function' : ''}. Interactive components are self-contained and cannot export values.`,
-            truncateCode(path.toString()),
+            TruncateCode(path.toString()),
             {
               text: 'Remove all export statements. The component function should be the only code, not exported.',
               example: `// ❌ WRONG - Using export:

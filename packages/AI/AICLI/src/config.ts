@@ -23,7 +23,7 @@ export interface AICliConfig {
   };
 }
 
-export async function loadAIConfig(): Promise<AICliConfig> {
+export async function LoadAIConfig(): Promise<AICliConfig> {
   const explorer = cosmiconfig('mj');
   const result = await explorer.search();
   
@@ -42,4 +42,9 @@ For help configuring MJ, see: https://docs.memberjunction.org`);
   }
   
   return result.config;
+}
+
+/** @deprecated Use {@link LoadAIConfig}. */
+export async function loadAIConfig(): Promise<AICliConfig> {
+  return LoadAIConfig();
 }

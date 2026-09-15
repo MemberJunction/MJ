@@ -12,7 +12,7 @@ import { ErrorBoundaryOptions, ComponentError } from '../types';
  * @param options - Error boundary options
  * @returns Error boundary component class
  */
-export function createErrorBoundary(React: any, options: ErrorBoundaryOptions = {}): any {
+export function CreateErrorBoundary(React: any, options: ErrorBoundaryOptions = {}): any {
   const {
     onError,
     fallback,
@@ -24,11 +24,20 @@ export function createErrorBoundary(React: any, options: ErrorBoundaryOptions = 
    * Error boundary component class
    */
   return class ErrorBoundary extends React.Component {
-    state: { hasError: boolean; error: Error | null; errorInfo: any; retryCount: number };
+    State: { hasError: boolean; error: Error | null; errorInfo: any; retryCount: number };
+
+    /** @deprecated Use {@link State}. */
+    get state(): { hasError: boolean; error: Error | null; errorInfo: any; retryCount: number } {
+      return this.State;
+    }
+    /** @deprecated Use {@link State}. */
+    set state(value: { hasError: boolean; error: Error | null; errorInfo: any; retryCount: number }) {
+      this.State = value;
+    }
 
     constructor(props: any) {
       super(props);
-      this.state = {
+      this.State = {
         hasError: false,
         error: null,
         errorInfo: null,
@@ -36,12 +45,17 @@ export function createErrorBoundary(React: any, options: ErrorBoundaryOptions = 
       };
     }
 
-    static getDerivedStateFromError(error: Error): any {
+    static GetDerivedStateFromError(error: Error): any {
       // Update state to trigger fallback UI
       return { hasError: true, error };
     }
 
-    componentDidCatch(error: Error, errorInfo: any) {
+    /** @deprecated Use {@link GetDerivedStateFromError}. */
+    static getDerivedStateFromError(error: Error): any {
+      return this.GetDerivedStateFromError(error);
+    }
+
+    ComponentDidCatch(error: Error, errorInfo: any) {
       // Log error if enabled
       if (logErrors) {
         console.error('React Error Boundary caught error:', error);
@@ -61,7 +75,12 @@ export function createErrorBoundary(React: any, options: ErrorBoundaryOptions = 
       this.setState({ errorInfo });
     }
 
-    handleRetry = () => {
+    /** @deprecated Use {@link ComponentDidCatch}. */
+    componentDidCatch(error: Error, errorInfo: any) {
+      return this.ComponentDidCatch(error, errorInfo);
+    }
+
+    HandleRetry = () => {
       this.setState((prevState: any) => ({
         hasError: false,
         error: null,
@@ -70,7 +89,16 @@ export function createErrorBoundary(React: any, options: ErrorBoundaryOptions = 
       }));
     };
 
-    handleReset = () => {
+    /** @deprecated Use {@link HandleRetry}. */
+    get handleRetry() {
+      return this.HandleRetry;
+    }
+    /** @deprecated Use {@link HandleRetry}. */
+    set handleRetry(value) {
+      this.HandleRetry = value;
+    }
+
+    HandleReset = () => {
       this.setState({
         hasError: false,
         error: null,
@@ -79,24 +107,33 @@ export function createErrorBoundary(React: any, options: ErrorBoundaryOptions = 
       });
     };
 
+    /** @deprecated Use {@link HandleReset}. */
+    get handleReset() {
+      return this.HandleReset;
+    }
+    /** @deprecated Use {@link HandleReset}. */
+    set handleReset(value) {
+      this.HandleReset = value;
+    }
+
     render() {
-      if (this.state.hasError) {
+      if (this.State.hasError) {
         // Use custom fallback if provided
         if (fallback) {
           if (typeof fallback === 'function') {
             return fallback({
-              error: this.state.error,
-              errorInfo: this.state.errorInfo,
-              retry: this.handleRetry,
-              reset: this.handleReset,
-              retryCount: this.state.retryCount
+              error: this.State.error,
+              errorInfo: this.State.errorInfo,
+              retry: this.HandleRetry,
+              reset: this.HandleReset,
+              retryCount: this.State.retryCount
             });
           }
           return fallback;
         }
 
         // Default error UI
-        const showRetry = recovery === 'retry' && this.state.retryCount < 3;
+        const showRetry = recovery === 'retry' && this.State.retryCount < 3;
         const showReset = recovery === 'reset';
 
         return React.createElement(
@@ -116,7 +153,7 @@ export function createErrorBoundary(React: any, options: ErrorBoundaryOptions = 
             { style: { color: '#666' } },
             'An error occurred while rendering this component.'
           ),
-          this.state.error && React.createElement(
+          this.State.error && React.createElement(
             'details',
             { style: { marginTop: '10px' } },
             React.createElement(
@@ -135,9 +172,9 @@ export function createErrorBoundary(React: any, options: ErrorBoundaryOptions = 
                   fontSize: '12px'
                 }
               },
-              this.state.error.toString(),
+              this.State.error.toString(),
               '\n\n',
-              this.state.error.stack
+              this.State.error.stack
             )
           ),
           (showRetry || showReset) && React.createElement(
@@ -146,7 +183,7 @@ export function createErrorBoundary(React: any, options: ErrorBoundaryOptions = 
             showRetry && React.createElement(
               'button',
               {
-                onClick: this.handleRetry,
+                onClick: this.HandleRetry,
                 style: {
                   padding: '8px 16px',
                   marginRight: '10px',
@@ -157,12 +194,12 @@ export function createErrorBoundary(React: any, options: ErrorBoundaryOptions = 
                   cursor: 'pointer'
                 }
               },
-              `Retry (${3 - this.state.retryCount} attempts left)`
+              `Retry (${3 - this.State.retryCount} attempts left)`
             ),
             showReset && React.createElement(
               'button',
               {
-                onClick: this.handleReset,
+                onClick: this.HandleReset,
                 style: {
                   padding: '8px 16px',
                   backgroundColor: '#757575',
@@ -183,6 +220,11 @@ export function createErrorBoundary(React: any, options: ErrorBoundaryOptions = 
   };
 }
 
+/** @deprecated Use {@link CreateErrorBoundary}. */
+export function createErrorBoundary(React: any, options: ErrorBoundaryOptions = {}): any {
+  return CreateErrorBoundary(React, options);
+}
+
 /**
  * Creates a functional error boundary wrapper using React hooks
  * @param React - React library instance
@@ -190,8 +232,8 @@ export function createErrorBoundary(React: any, options: ErrorBoundaryOptions = 
  * @param options - Error boundary options
  * @returns Wrapped component with error boundary
  */
-export function withErrorBoundary(React: any, Component: any, options: ErrorBoundaryOptions = {}): any {
-  const ErrorBoundaryComponent = createErrorBoundary(React, options);
+export function WithErrorBoundary(React: any, Component: any, options: ErrorBoundaryOptions = {}): any {
+  const ErrorBoundaryComponent = CreateErrorBoundary(React, options);
   
   return (props: any) => {
     return React.createElement(
@@ -202,6 +244,11 @@ export function withErrorBoundary(React: any, Component: any, options: ErrorBoun
   };
 }
 
+/** @deprecated Use {@link WithErrorBoundary}. */
+export function withErrorBoundary(React: any, Component: any, options: ErrorBoundaryOptions = {}): any {
+  return WithErrorBoundary(React, Component, options);
+}
+
 /**
  * Formats a component error for display or logging
  * @param error - Error to format
@@ -209,7 +256,7 @@ export function withErrorBoundary(React: any, Component: any, options: ErrorBoun
  * @param phase - Phase when error occurred
  * @returns Formatted component error
  */
-export function formatComponentError(
+export function FormatComponentError(
   error: Error,
   componentName: string,
   phase: ComponentError['phase']
@@ -226,12 +273,21 @@ export function formatComponentError(
   };
 }
 
+/** @deprecated Use {@link FormatComponentError}. */
+export function formatComponentError(
+  error: Error,
+  componentName: string,
+  phase: ComponentError['phase']
+): ComponentError {
+  return FormatComponentError(error, componentName, phase);
+}
+
 /**
  * Creates a simple error logger for error boundaries
  * @param componentName - Name of the component
  * @returns Error logging function
  */
-export function createErrorLogger(componentName: string): (error: Error, errorInfo: any) => void {
+export function CreateErrorLogger(componentName: string): (error: Error, errorInfo: any) => void {
   return (error: Error, errorInfo: any) => {
     console.group(`🚨 React Component Error: ${componentName}`);
     console.error('Error:', error);
@@ -239,4 +295,9 @@ export function createErrorLogger(componentName: string): (error: Error, errorIn
     console.error('Props:', errorInfo.props);
     console.groupEnd();
   };
+}
+
+/** @deprecated Use {@link CreateErrorLogger}. */
+export function createErrorLogger(componentName: string): (error: Error, errorInfo: any) => void {
+  return CreateErrorLogger(componentName);
 }

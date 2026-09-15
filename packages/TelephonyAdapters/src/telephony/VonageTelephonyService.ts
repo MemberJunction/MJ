@@ -155,7 +155,7 @@ export class VonageTelephonyService {
             Address: args.address,
             Direction: args.direction,
             Configuration: this.buildSessionConfiguration(args.direction, args.fromNumber, args.inboundCallId),
-            BindSdk: this.buildBindSdk(),
+            BindSdk: this.BuildBindSdk(),
             ContextUser: args.contextUser,
             MetadataProvider: args.provider,
         });
@@ -170,7 +170,7 @@ export class VonageTelephonyService {
         return provider;
     }
 
-    public buildBindSdk(): BridgeNativeSdkBinding {
+    public BuildBindSdk(): BridgeNativeSdkBinding {
         return (driver) => {
             const telephony = driver as BaseTelephonyBridge;
             telephony.SetSdkFactory(() =>
@@ -184,6 +184,11 @@ export class VonageTelephonyService {
                 ),
             );
         };
+    }
+
+    /** @deprecated Use {@link BuildBindSdk}. */
+    public buildBindSdk(): BridgeNativeSdkBinding {
+        return this.BuildBindSdk();
     }
 
     private buildSessionConfiguration(direction: 'Inbound' | 'Outbound', fromNumber?: string, inboundCallId?: string): Record<string, unknown> {

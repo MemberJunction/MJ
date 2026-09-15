@@ -95,7 +95,7 @@ let _config: CoreActionsConfig | null = null;
  * Gets the Core Actions configuration, loading it from mj.config.cjs if not already loaded
  * @returns The Core Actions configuration object
  */
-export function getCoreActionsConfig(): CoreActionsConfig {
+export function GetCoreActionsConfig(): CoreActionsConfig {
   if (_config) {
     return _config;
   }
@@ -144,18 +144,33 @@ export function getCoreActionsConfig(): CoreActionsConfig {
   }
 }
 
+/** @deprecated Use {@link GetCoreActionsConfig}. */
+export function getCoreActionsConfig(): CoreActionsConfig {
+  return GetCoreActionsConfig();
+}
+
 /**
  * Gets the API integrations configuration
  * @returns The API integrations configuration object
  */
-export function getApiIntegrationsConfig(): ApiIntegrationsConfig {
-  const config = getCoreActionsConfig();
+export function GetApiIntegrationsConfig(): ApiIntegrationsConfig {
+  const config = GetCoreActionsConfig();
   return config.apiIntegrations;
+}
+
+/** @deprecated Use {@link GetApiIntegrationsConfig}. */
+export function getApiIntegrationsConfig(): ApiIntegrationsConfig {
+  return GetApiIntegrationsConfig();
 }
 
 /**
  * Clears the cached configuration (useful for testing)
  */
-export function clearCoreActionsConfig(): void {
+export function ClearCoreActionsConfig(): void {
   _config = null;
+}
+
+/** @deprecated Use {@link ClearCoreActionsConfig}. */
+export function clearCoreActionsConfig(): void {
+  return ClearCoreActionsConfig();
 }

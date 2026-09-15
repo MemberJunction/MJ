@@ -6,7 +6,7 @@
  * all related entities are saved atomically with rollback capability.
  */
 
-import { getDataProvider } from './provider-utils';
+import { GetDataProvider } from './provider-utils';
 import { SQLLogger } from './sql-logger';
 
 export interface TransactionOptions {
@@ -37,12 +37,12 @@ export class TransactionManager {
    * `IsInTransaction` defaults to `false` on `DatabaseProviderBase` and the
    * SQL Server provider doesn't override it.
    */
-  async beginTransaction(options?: TransactionOptions): Promise<void> {
+  async BeginTransaction(options?: TransactionOptions): Promise<void> {
     if (this.inTransaction) {
       throw new Error('Transaction already in progress');
     }
 
-    const provider = getDataProvider();
+    const provider = GetDataProvider();
     if (!provider) {
       throw new Error('No data provider available');
     }
@@ -55,15 +55,20 @@ export class TransactionManager {
     }
   }
 
+  /** @deprecated Use {@link BeginTransaction}. */
+  async beginTransaction(options?: TransactionOptions): Promise<void> {
+    return this.BeginTransaction(options);
+  }
+
   /**
    * Commit the current transaction.
    */
-  async commitTransaction(): Promise<void> {
+  async CommitTransaction(): Promise<void> {
     if (!this.inTransaction) {
       return; // No transaction to commit
     }
 
-    const provider = getDataProvider();
+    const provider = GetDataProvider();
     if (!provider) {
       throw new Error('No data provider available');
     }
@@ -76,16 +81,21 @@ export class TransactionManager {
     }
   }
 
+  /** @deprecated Use {@link CommitTransaction}. */
+  async commitTransaction(): Promise<void> {
+    return this.CommitTransaction();
+  }
+
   /**
    * Rollback the current transaction.
    * Returns true if rollback succeeded or no transaction was active, false if rollback failed.
    */
-  async rollbackTransaction(): Promise<boolean> {
+  async RollbackTransaction(): Promise<boolean> {
     if (!this.inTransaction) {
       return true; // No transaction to rollback
     }
 
-    const provider = getDataProvider();
+    const provider = GetDataProvider();
     if (!provider) {
       throw new Error('No data provider available');
     }
@@ -101,29 +111,47 @@ export class TransactionManager {
     }
   }
 
+  /** @deprecated Use {@link RollbackTransaction}. */
+  async rollbackTransaction(): Promise<boolean> {
+    return this.RollbackTransaction();
+  }
+
   /**
    * Execute a function within a transaction
    */
+  async ExecuteInTransaction<T>(
+    fn: () => Promise<T>,
+    options?: TransactionOptions
+  ): Promise<T> {
+    await this.BeginTransaction(options);
+
+    try {
+      const result = await fn();
+      await this.CommitTransaction();
+      return result;
+    } catch (error) {
+      await this.RollbackTransaction();
+      throw error;
+    }
+  }
+
+  /** @deprecated Use {@link ExecuteInTransaction}. */
   async executeInTransaction<T>(
     fn: () => Promise<T>,
     options?: TransactionOptions
   ): Promise<T> {
-    await this.beginTransaction(options);
-
-    try {
-      const result = await fn();
-      await this.commitTransaction();
-      return result;
-    } catch (error) {
-      await this.rollbackTransaction();
-      throw error;
-    }
+    return this.ExecuteInTransaction(fn, options);
   }
 
   /**
    * Check if currently in a transaction.
    */
-  get isInTransaction(): boolean {
+  get IsInTransaction(): boolean {
     return this.inTransaction;
+  }
+
+  /** @deprecated Use {@link IsInTransaction}. */
+  get isInTransaction(): boolean {
+    return this.IsInTransaction;
   }
 }

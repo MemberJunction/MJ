@@ -1,6 +1,6 @@
 import { PubSubEngine } from 'type-graphql';
 import { LogError } from '@memberjunction/core';
-import { publishStatusUpdate } from './PushStatusResolver.js';
+import { PublishStatusUpdate } from './PushStatusResolver.js';
 
 /** Default cadence for fire-and-forget liveness pulses (5 minutes). */
 export const DEFAULT_PULSE_INTERVAL_MS = 5 * 60 * 1000;
@@ -60,7 +60,7 @@ export interface LivenessPulseOptions {
  * (`{ message: JSON.stringify({ resolver, type, status, data }), sessionId }`),
  * so the client receives it through the same subscription with no special parsing.
  */
-export function startLivenessPulse(options: LivenessPulseOptions): LivenessPulseHandle {
+export function StartLivenessPulse(options: LivenessPulseOptions): LivenessPulseHandle {
     const { pubSub, sessionId, ownerUserId, resolver, readStatus } = options;
     const intervalMs = options.intervalMs ?? DEFAULT_PULSE_INTERVAL_MS;
 
@@ -73,7 +73,7 @@ export function startLivenessPulse(options: LivenessPulseOptions): LivenessPulse
             LogError(`[LivenessPulse:${resolver}] readStatus failed: ${(e as Error).message}`);
         }
 
-        publishStatusUpdate(pubSub, {
+        PublishStatusUpdate(pubSub, {
             sessionId,
             ownerUserId,
             message: JSON.stringify({
@@ -88,4 +88,9 @@ export function startLivenessPulse(options: LivenessPulseOptions): LivenessPulse
     return {
         stop: () => clearInterval(timer),
     };
+}
+
+/** @deprecated Use {@link StartLivenessPulse}. */
+export function startLivenessPulse(options: LivenessPulseOptions): LivenessPulseHandle {
+    return StartLivenessPulse(options);
 }

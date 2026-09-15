@@ -10,12 +10,12 @@
 import { describe, expect, it } from 'vitest';
 import { ChatResult } from '@memberjunction/ai';
 import type { ChatResultChoice, ChatToolCall } from '@memberjunction/ai';
-import { evaluateToolChoice, matchArgument, observeChatResult, readEnvelope, scoreCalls, stripJsonFence } from '../native-tool-matrix/observe';
-import { buildManifest, cellId, DEFAULT_MATRIX_SPEC, expandMatrix } from '../native-tool-matrix/matrix';
-import { buildUserPrompt, getScenario, JSON_MODE_PROMPT_SUFFIX, PROBE_SCENARIOS } from '../native-tool-matrix/scenarios';
-import { renderScorecard, summarizeCells } from '../native-tool-matrix/report';
-import { AUTH_FAILURE_MARKERS, isAuthFailure } from '../native-tool-matrix/credentials';
-import { ACTION_FIXTURES, buildToolFromAction, getActionFixture, sanitizeToolName } from '../native-tool-matrix/actionTools';
+import { EvaluateToolChoice, MatchArgument, ObserveChatResult, ReadEnvelope, ScoreCalls, StripJsonFence } from '../native-tool-matrix/observe';
+import { BuildManifest, CellId, DEFAULT_MATRIX_SPEC, ExpandMatrix } from '../native-tool-matrix/matrix';
+import { BuildUserPrompt, GetScenario, JSON_MODE_PROMPT_SUFFIX, PROBE_SCENARIOS } from '../native-tool-matrix/scenarios';
+import { RenderScorecard, SummarizeCells } from '../native-tool-matrix/report';
+import { AUTH_FAILURE_MARKERS, IsAuthFailure } from '../native-tool-matrix/credentials';
+import { ACTION_FIXTURES, BuildToolFromAction, GetActionFixture, SanitizeToolName } from '../native-tool-matrix/actionTools';
 import type { ProbeRecord } from '../native-tool-matrix/report';
 
 /** Builds a successful ChatResult with the given assistant turn — the shape a driver returns. */
@@ -41,49 +41,49 @@ const timeCall: ChatToolCall = { id: 'call_2', name: 'get_time', arguments: { ti
 
 describe('matchArgument', () => {
     it('accepts a non-empty string and rejects blank or missing', () => {
-        expect(matchArgument({ kind: 'nonEmptyString', parameter: 'sql' }, { sql: 'SELECT 1' })).toBe(true);
-        expect(matchArgument({ kind: 'nonEmptyString', parameter: 'sql' }, { sql: '   ' })).toBe(false);
-        expect(matchArgument({ kind: 'nonEmptyString', parameter: 'sql' }, {})).toBe(false);
+        expect(MatchArgument({ kind: 'nonEmptyString', parameter: 'sql' }, { sql: 'SELECT 1' })).toBe(true);
+        expect(MatchArgument({ kind: 'nonEmptyString', parameter: 'sql' }, { sql: '   ' })).toBe(false);
+        expect(MatchArgument({ kind: 'nonEmptyString', parameter: 'sql' }, {})).toBe(false);
     });
 
     it('compares case-insensitively for free text — an LLM writing "paris, france" is still right', () => {
-        expect(matchArgument({ kind: 'containsIgnoreCase', parameter: 'location', value: 'paris' }, { location: 'Paris, France' })).toBe(true);
-        expect(matchArgument({ kind: 'containsIgnoreCase', parameter: 'location', value: 'paris' }, { location: 'Lyon' })).toBe(false);
+        expect(MatchArgument({ kind: 'containsIgnoreCase', parameter: 'location', value: 'paris' }, { location: 'Paris, France' })).toBe(true);
+        expect(MatchArgument({ kind: 'containsIgnoreCase', parameter: 'location', value: 'paris' }, { location: 'Lyon' })).toBe(false);
     });
 
     it('enforces enums exactly', () => {
         const matcher = { kind: 'oneOf' as const, parameter: 'unit', values: ['celsius', 'fahrenheit'] };
-        expect(matchArgument(matcher, { unit: 'celsius' })).toBe(true);
-        expect(matchArgument(matcher, { unit: 'Celsius' })).toBe(false);
+        expect(MatchArgument(matcher, { unit: 'celsius' })).toBe(true);
+        expect(MatchArgument(matcher, { unit: 'Celsius' })).toBe(false);
     });
 });
 
 describe('stripJsonFence', () => {
     it('unwraps a fenced object, with or without a language tag', () => {
-        expect(stripJsonFence('```json\n{"a":1}\n```')).toBe('{"a":1}');
-        expect(stripJsonFence('```\n{"a":1}\n```')).toBe('{"a":1}');
+        expect(StripJsonFence('```json\n{"a":1}\n```')).toBe('{"a":1}');
+        expect(StripJsonFence('```\n{"a":1}\n```')).toBe('{"a":1}');
     });
 
     it('leaves unfenced text alone', () => {
-        expect(stripJsonFence('  {"a":1}  ')).toBe('{"a":1}');
+        expect(StripJsonFence('  {"a":1}  ')).toBe('{"a":1}');
     });
 });
 
 describe('readEnvelope', () => {
     it('accepts a terminal envelope carrying only taskComplete', () => {
-        const read = readEnvelope('{"taskComplete": true, "message": "Paris is the capital."}');
+        const read = ReadEnvelope('{"taskComplete": true, "message": "Paris is the capital."}');
         expect(read).toMatchObject({ parsed: true, valid: true });
     });
 
     it('requires a continuing envelope to name its next step', () => {
-        expect(readEnvelope('{"taskComplete": false}')).toMatchObject({ parsed: true, valid: false });
-        expect(readEnvelope('{"taskComplete": false, "nextStep": {"type": "Actions"}}')).toMatchObject({ parsed: true, valid: true });
+        expect(ReadEnvelope('{"taskComplete": false}')).toMatchObject({ parsed: true, valid: false });
+        expect(ReadEnvelope('{"taskComplete": false, "nextStep": {"type": "Actions"}}')).toMatchObject({ parsed: true, valid: true });
     });
 
     it('reports prose and arrays as unparsed rather than throwing', () => {
-        expect(readEnvelope('Sure! Let me look that up.')).toMatchObject({ parsed: false, valid: false });
-        expect(readEnvelope('[1,2,3]')).toMatchObject({ parsed: false, valid: false });
-        expect(readEnvelope('')).toMatchObject({ parsed: false, valid: false });
+        expect(ReadEnvelope('Sure! Let me look that up.')).toMatchObject({ parsed: false, valid: false });
+        expect(ReadEnvelope('[1,2,3]')).toMatchObject({ parsed: false, valid: false });
+        expect(ReadEnvelope('')).toMatchObject({ parsed: false, valid: false });
     });
 });
 
@@ -98,7 +98,7 @@ describe('scoreCalls', () => {
             { name: 'get_time', arguments: { timezone: 'Asia/Tokyo' }, channel: 'tool-call' as const },
             { name: 'get_weather', arguments: { location: 'Paris' }, channel: 'tool-call' as const }
         ];
-        expect(scoreCalls(expected, observed)).toEqual({ namesMatch: true, argumentMatchRate: 1 });
+        expect(ScoreCalls(expected, observed)).toEqual({ namesMatch: true, argumentMatchRate: 1 });
     });
 
     it('reports partial argument fidelity when a call is right but its arguments are not', () => {
@@ -106,41 +106,41 @@ describe('scoreCalls', () => {
             { name: 'get_weather', arguments: { location: 'Paris' }, channel: 'tool-call' as const },
             { name: 'get_time', arguments: { timezone: 'UTC' }, channel: 'tool-call' as const }
         ];
-        expect(scoreCalls(expected, observed)).toEqual({ namesMatch: true, argumentMatchRate: 0.5 });
+        expect(ScoreCalls(expected, observed)).toEqual({ namesMatch: true, argumentMatchRate: 0.5 });
     });
 
     it('reports null argument fidelity when no matchers apply', () => {
-        expect(scoreCalls([], []).argumentMatchRate).toBeNull();
+        expect(ScoreCalls([], []).argumentMatchRate).toBeNull();
     });
 });
 
 describe('evaluateToolChoice', () => {
     it("holds 'none' to zero calls and 'required' to at least one", () => {
-        expect(evaluateToolChoice('none', undefined, [])).toBe(true);
-        expect(evaluateToolChoice('none', undefined, [weatherCall])).toBe(false);
-        expect(evaluateToolChoice('required', undefined, [weatherCall])).toBe(true);
-        expect(evaluateToolChoice('required', undefined, [])).toBe(false);
+        expect(EvaluateToolChoice('none', undefined, [])).toBe(true);
+        expect(EvaluateToolChoice('none', undefined, [weatherCall])).toBe(false);
+        expect(EvaluateToolChoice('required', undefined, [weatherCall])).toBe(true);
+        expect(EvaluateToolChoice('required', undefined, [])).toBe(false);
     });
 
     it("holds a named choice to that tool alone", () => {
-        expect(evaluateToolChoice('named', 'get_weather', [weatherCall])).toBe(true);
-        expect(evaluateToolChoice('named', 'get_weather', [weatherCall, timeCall])).toBe(false);
-        expect(evaluateToolChoice('named', 'get_weather', [])).toBe(false);
+        expect(EvaluateToolChoice('named', 'get_weather', [weatherCall])).toBe(true);
+        expect(EvaluateToolChoice('named', 'get_weather', [weatherCall, timeCall])).toBe(false);
+        expect(EvaluateToolChoice('named', 'get_weather', [])).toBe(false);
     });
 
     it('reports null for the modes that force nothing, rather than a vacuous pass', () => {
-        expect(evaluateToolChoice('auto', undefined, [])).toBeNull();
-        expect(evaluateToolChoice('no-tools', undefined, [])).toBeNull();
+        expect(EvaluateToolChoice('auto', undefined, [])).toBeNull();
+        expect(EvaluateToolChoice('no-tools', undefined, [])).toBeNull();
     });
 });
 
 describe('observeChatResult', () => {
-    const singleCall = getScenario('single-call');
-    const noCallNeeded = getScenario('no-call-needed');
-    const envelope = getScenario('envelope');
+    const singleCall = GetScenario('single-call');
+    const noCallNeeded = GetScenario('no-call-needed');
+    const envelope = GetScenario('envelope');
 
     it('scores a clean, text-free tool call as correct — the case Gemini used to report as no output', () => {
-        const observation = observeChatResult(chatResult({ toolCalls: [weatherCall], finishReason: 'tool_calls' }), singleCall, 'auto', true);
+        const observation = ObserveChatResult(chatResult({ toolCalls: [weatherCall], finishReason: 'tool_calls' }), singleCall, 'auto', true);
         expect(observation).toMatchObject({
             driverSucceeded: true, textPresent: false, nativeToolCallCount: 1,
             nativeCallsWellFormed: true, channel: 'tool-call', decisionCorrect: true, argumentMatchRate: 1
@@ -148,19 +148,19 @@ describe('observeChatResult', () => {
     });
 
     it('records text and calls arriving together without treating either as an error', () => {
-        const observation = observeChatResult(chatResult({ content: 'Let me check.', toolCalls: [weatherCall] }), singleCall, 'auto', true);
+        const observation = ObserveChatResult(chatResult({ content: 'Let me check.', toolCalls: [weatherCall] }), singleCall, 'auto', true);
         expect(observation.textAndCallsTogether).toBe(true);
         expect(observation.decisionCorrect).toBe(true);
     });
 
     it('captures the arguments the model sent, so a fidelity failure can be diagnosed', () => {
-        const observation = observeChatResult(chatResult({ toolCalls: [weatherCall] }), singleCall, 'auto', true);
+        const observation = ObserveChatResult(chatResult({ toolCalls: [weatherCall] }), singleCall, 'auto', true);
         expect(observation.observedArguments).toEqual([{ location: 'Paris' }]);
     });
 
     it('truncates a runaway argument value rather than storing it whole', () => {
         const huge: ChatToolCall = { id: 'x', name: 'get_weather', arguments: { location: 'x'.repeat(1000) } };
-        const observation = observeChatResult(chatResult({ toolCalls: [huge] }), singleCall, 'auto', true);
+        const observation = ObserveChatResult(chatResult({ toolCalls: [huge] }), singleCall, 'auto', true);
         const stored = String(observation.observedArguments[0].location);
         expect(stored.length).toBeLessThan(1000);
         expect(stored.endsWith('…[truncated]')).toBe(true);
@@ -168,47 +168,47 @@ describe('observeChatResult', () => {
 
     it('flags a call to a tool that was never declared', () => {
         const rogue: ChatToolCall = { id: 'x', name: 'delete_everything', arguments: {} };
-        const observation = observeChatResult(chatResult({ toolCalls: [rogue] }), singleCall, 'auto', true);
+        const observation = ObserveChatResult(chatResult({ toolCalls: [rogue] }), singleCall, 'auto', true);
         expect(observation.nativeCallsWellFormed).toBe(false);
         expect(observation.undeclaredToolNames).toEqual(['delete_everything']);
         expect(observation.decisionCorrect).toBe(false);
     });
 
     it('counts a spurious call as the failure it is when no call was warranted', () => {
-        const answered = observeChatResult(chatResult({ content: 'Paris.' }), noCallNeeded, 'auto', true);
+        const answered = ObserveChatResult(chatResult({ content: 'Paris.' }), noCallNeeded, 'auto', true);
         expect(answered.decisionCorrect).toBe(true);
-        const reached = observeChatResult(chatResult({ toolCalls: [weatherCall] }), noCallNeeded, 'auto', true);
+        const reached = ObserveChatResult(chatResult({ toolCalls: [weatherCall] }), noCallNeeded, 'auto', true);
         expect(reached.decisionCorrect).toBe(false);
     });
 
     it('reads an envelope decision through the same expectation as a native call', () => {
         const body = JSON.stringify({ taskComplete: false, nextStep: { type: 'Actions', actions: [{ name: 'get_weather', params: { location: 'Paris' } }] } });
-        const observation = observeChatResult(chatResult({ content: body }), envelope, 'no-tools', false);
+        const observation = ObserveChatResult(chatResult({ content: body }), envelope, 'no-tools', false);
         expect(observation).toMatchObject({ channel: 'envelope', envelopeParsed: true, envelopeValid: true, decisionCorrect: true, argumentMatchRate: 1 });
     });
 
     it('prefers the native call when a model answers through both channels', () => {
         const body = JSON.stringify({ taskComplete: false, nextStep: { type: 'Actions', actions: [{ name: 'run_query', params: { sql: 'SELECT 1' } }] } });
-        const observation = observeChatResult(chatResult({ content: body, toolCalls: [weatherCall] }), envelope, 'auto', true);
+        const observation = ObserveChatResult(chatResult({ content: body, toolCalls: [weatherCall] }), envelope, 'auto', true);
         expect(observation.channel).toBe('tool-call');
         expect(observation.observedCallNames).toEqual(['get_weather']);
     });
 
     it('leaves envelope fields null on scenarios that never asked for one', () => {
-        const observation = observeChatResult(chatResult({ content: 'Paris.' }), noCallNeeded, 'auto', true);
+        const observation = ObserveChatResult(chatResult({ content: 'Paris.' }), noCallNeeded, 'auto', true);
         expect(observation.envelopeParsed).toBeNull();
         expect(observation.envelopeValid).toBeNull();
     });
 
     it('turns a provider failure into a row rather than a gap', () => {
-        const observation = observeChatResult(failedResult('400 function calling is not enabled for models with response mime type'), singleCall, 'auto', true);
+        const observation = ObserveChatResult(failedResult('400 function calling is not enabled for models with response mime type'), singleCall, 'auto', true);
         expect(observation).toMatchObject({ driverSucceeded: false, channel: 'error', decisionCorrect: false });
         expect(observation.errorMessage).toContain('function calling is not enabled');
     });
 
     it('does not flag envelope actions as undeclared in a no-tools cell', () => {
         const body = JSON.stringify({ taskComplete: false, nextStep: { type: 'Actions', actions: [{ name: 'get_weather', params: { location: 'Paris' } }] } });
-        const observation = observeChatResult(chatResult({ content: body }), envelope, 'no-tools', false);
+        const observation = ObserveChatResult(chatResult({ content: body }), envelope, 'no-tools', false);
         expect(observation.undeclaredToolNames).toEqual([]);
     });
 });
@@ -221,9 +221,9 @@ describe('scenarios', () => {
     });
 
     it("appends the JSON-mode suffix only in JSON cells — OpenAI's json_object rejects a prompt without it", () => {
-        const scenario = getScenario('single-call');
-        expect(buildUserPrompt(scenario, 'Any')).toBe(scenario.userPrompt);
-        expect(buildUserPrompt(scenario, 'JSON')).toBe(scenario.userPrompt + JSON_MODE_PROMPT_SUFFIX);
+        const scenario = GetScenario('single-call');
+        expect(BuildUserPrompt(scenario, 'Any')).toBe(scenario.userPrompt);
+        expect(BuildUserPrompt(scenario, 'JSON')).toBe(scenario.userPrompt + JSON_MODE_PROMPT_SUFFIX);
     });
 
     it('keeps every tool schema inside the cross-provider common subset Gemini accepts', () => {
@@ -238,31 +238,31 @@ describe('scenarios', () => {
     });
 
     it('throws on an unknown scenario id rather than silently running nothing', () => {
-        expect(() => getScenario('nope')).toThrow(/Unknown probe scenario/);
+        expect(() => GetScenario('nope')).toThrow(/Unknown probe scenario/);
     });
 });
 
 describe('expandMatrix', () => {
     it('drops only vacuous combinations, and says why for each', () => {
-        const expanded = expandMatrix(DEFAULT_MATRIX_SPEC);
+        const expanded = ExpandMatrix(DEFAULT_MATRIX_SPEC);
         expect(expanded.cells.length).toBeGreaterThan(0);
         expect(expanded.skipped.length).toBeGreaterThan(0);
         expect(expanded.skipped.every((s) => s.reason.length > 0)).toBe(true);
     });
 
     it("never runs a call-warranting scenario with no tools declared and no envelope to read", () => {
-        const expanded = expandMatrix(DEFAULT_MATRIX_SPEC);
+        const expanded = ExpandMatrix(DEFAULT_MATRIX_SPEC);
         const bad = expanded.cells.filter((c) => c.toolMode === 'no-tools' && c.scenarioId === 'single-call');
         expect(bad).toEqual([]);
     });
 
     it('never forces a named tool on the parallel-call scenario', () => {
-        const expanded = expandMatrix(DEFAULT_MATRIX_SPEC);
+        const expanded = ExpandMatrix(DEFAULT_MATRIX_SPEC);
         expect(expanded.cells.filter((c) => c.toolMode === 'named' && c.scenarioId === 'parallel-call')).toEqual([]);
     });
 
     it('sweeps the thinking axis only on the models that declare effort levels', () => {
-        const expanded = expandMatrix(DEFAULT_MATRIX_SPEC);
+        const expanded = ExpandMatrix(DEFAULT_MATRIX_SPEC);
         const thinking = expanded.cells.filter((c) => c.effortLevel !== null);
         expect(thinking.length).toBeGreaterThan(0);
         expect(thinking.every((c) => c.toolMode === 'auto' && c.responseFormat === 'Any')).toBe(true);
@@ -270,14 +270,14 @@ describe('expandMatrix', () => {
     });
 
     it('gives every cell a unique id', () => {
-        const expanded = expandMatrix(DEFAULT_MATRIX_SPEC);
+        const expanded = ExpandMatrix(DEFAULT_MATRIX_SPEC);
         expect(new Set(expanded.cells.map((c) => c.id)).size).toBe(expanded.cells.length);
     });
 
     it('sizes the manifest off the real prompts, and scales with reps', () => {
-        const expanded = expandMatrix(DEFAULT_MATRIX_SPEC);
-        const one = buildManifest(expanded, 1);
-        const three = buildManifest(expanded, 3);
+        const expanded = ExpandMatrix(DEFAULT_MATRIX_SPEC);
+        const one = BuildManifest(expanded, 1);
+        const three = BuildManifest(expanded, 3);
         expect(one.callCount).toBe(expanded.cells.length);
         expect(three.callCount).toBe(one.callCount * 3);
         expect(three.estimatedPromptTokens).toBe(one.estimatedPromptTokens * 3);
@@ -287,7 +287,7 @@ describe('expandMatrix', () => {
 
 describe('summarizeCells and renderScorecard', () => {
     const model = DEFAULT_MATRIX_SPEC.models[0];
-    const id = cellId(model, 'single-call', 'auto', 'Any', null);
+    const id = CellId(model, 'single-call', 'auto', 'Any', null);
 
     function record(rep: number, decisionCorrect: boolean, calls: number): ProbeRecord {
         return {
@@ -307,7 +307,7 @@ describe('summarizeCells and renderScorecard', () => {
     }
 
     it('turns repetitions into rates rather than a pass/fail', () => {
-        const summaries = summarizeCells([record(1, true, 1), record(2, false, 1), record(3, true, 2)]);
+        const summaries = SummarizeCells([record(1, true, 1), record(2, false, 1), record(3, true, 2)]);
         expect(summaries).toHaveLength(1);
         expect(summaries[0]).toMatchObject({ reps: 3, errorCount: 0, nativeCallRate: 1, parallelRate: 1 / 3 });
         expect(summaries[0].decisionCorrectRate).toBeCloseTo(2 / 3);
@@ -317,7 +317,7 @@ describe('summarizeCells and renderScorecard', () => {
     it('reports success-conditioned metrics as null, not zero, when every repetition errored', () => {
         const errored = { ...record(1, false, 0) };
         errored.observation = { ...errored.observation, driverSucceeded: false, errorMessage: '400 unsupported', channel: 'error', finishReason: null };
-        const [summary] = summarizeCells([errored, { ...errored, rep: 2 }]);
+        const [summary] = SummarizeCells([errored, { ...errored, rep: 2 }]);
         // A cell where every call was rejected must not read as "the model chose not to call a tool".
         expect(summary.nativeCallRate).toBeNull();
         expect(summary.meanNativeCalls).toBeNull();
@@ -331,13 +331,13 @@ describe('summarizeCells and renderScorecard', () => {
         const second = DEFAULT_MATRIX_SPEC.models.find((m) => m.developer !== model.developer);
         expect(second).toBeDefined();
         const other: ProbeRecord = { ...record(1, true, 1), modelLabel: second!.label, apiName: second!.apiName, developer: second!.developer, cellId: 'other' };
-        const forward = renderScorecard(summarizeCells([record(1, true, 1), other]), { label: 'u', startedAt: 'a', finishedAt: 'b', reps: 1, cellCount: 2, skippedCount: null, callCount: 2 });
-        const reversed = renderScorecard(summarizeCells([other, record(1, true, 1)]), { label: 'u', startedAt: 'a', finishedAt: 'b', reps: 1, cellCount: 2, skippedCount: null, callCount: 2 });
+        const forward = RenderScorecard(SummarizeCells([record(1, true, 1), other]), { label: 'u', startedAt: 'a', finishedAt: 'b', reps: 1, cellCount: 2, skippedCount: null, callCount: 2 });
+        const reversed = RenderScorecard(SummarizeCells([other, record(1, true, 1)]), { label: 'u', startedAt: 'a', finishedAt: 'b', reps: 1, cellCount: 2, skippedCount: null, callCount: 2 });
         expect(forward).toBe(reversed);
     });
 
     it('renders every question section, and says so plainly when nothing failed', () => {
-        const markdown = renderScorecard(summarizeCells([record(1, true, 1)]), {
+        const markdown = RenderScorecard(SummarizeCells([record(1, true, 1)]), {
             label: 'unit', startedAt: 'a', finishedAt: 'b', reps: 1, cellCount: 1, skippedCount: 0, callCount: 1
         });
         for (const heading of ['Forcing semantics', 'responseFormat: JSON', 'Parallel calls', 'Coherence', 'envelope under declared tools', 'Call shape', 'Finish-reason', 'Cost profile']) {
@@ -357,7 +357,7 @@ describe('isAuthFailure', () => {
         ['generic 403', 'Error: 403 Forbidden'],
         ['permission denied', '{"error":{"code":403,"status":"PERMISSION_DENIED"}}']
     ])('treats a %s credential rejection as an auth failure', (_provider, message) => {
-        expect(isAuthFailure(message)).toBe(true);
+        expect(IsAuthFailure(message)).toBe(true);
     });
 
     // A false positive abandons a model that would have produced data, so these must NOT match.
@@ -371,18 +371,18 @@ describe('isAuthFailure', () => {
         ['a token count that contains 401', 'Request failed: prompt was 1401 tokens, over the limit'],
         ['a request id that contains 403', 'Request req_88403912 failed after 3 retries']
     ])('does not mistake a %s for an auth failure', (_kind, message) => {
-        expect(isAuthFailure(message)).toBe(false);
+        expect(IsAuthFailure(message)).toBe(false);
     });
 
     it('handles absent messages rather than throwing', () => {
-        expect(isAuthFailure(null)).toBe(false);
-        expect(isAuthFailure(undefined)).toBe(false);
-        expect(isAuthFailure('')).toBe(false);
+        expect(IsAuthFailure(null)).toBe(false);
+        expect(IsAuthFailure(undefined)).toBe(false);
+        expect(IsAuthFailure('')).toBe(false);
     });
 
     it('matches case-insensitively, since providers do not agree on casing', () => {
-        expect(isAuthFailure('UNAUTHORIZED')).toBe(true);
-        expect(isAuthFailure('Authentication_Error')).toBe(true);
+        expect(IsAuthFailure('UNAUTHORIZED')).toBe(true);
+        expect(IsAuthFailure('Authentication_Error')).toBe(true);
     });
 
     it('keeps every marker lower-cased, or the case-insensitive compare silently never fires', () => {
@@ -391,45 +391,45 @@ describe('isAuthFailure', () => {
 });
 
 describe('buildToolFromAction — the §8.2 Action→ChatTool mapping', () => {
-    const calc = getActionFixture('Calculate Expression');
-    const query = getActionFixture('Run Ad-hoc Query');
+    const calc = GetActionFixture('Calculate Expression');
+    const query = GetActionFixture('Run Ad-hoc Query');
 
     it('sanitizes Action names to the provider-legal form §8.2 specifies', () => {
-        expect(sanitizeToolName('Run Ad-hoc Query')).toBe('run_ad_hoc_query');
-        expect(sanitizeToolName('Get Entity Details')).toBe('get_entity_details');
+        expect(SanitizeToolName('Run Ad-hoc Query')).toBe('run_ad_hoc_query');
+        expect(SanitizeToolName('Get Entity Details')).toBe('get_entity_details');
         // Providers allow [a-zA-Z0-9_-] only, ≤64 chars.
         for (const name of ACTION_FIXTURES.map((a) => a.Name)) {
-            const sanitized = sanitizeToolName(name);
+            const sanitized = SanitizeToolName(name);
             expect(sanitized).toMatch(/^[a-z0-9_]+$/);
             expect(sanitized.length).toBeLessThanOrEqual(64);
         }
     });
 
     it('names collide-free across the fixture set, which §8.2 makes a hard error', () => {
-        const names = ACTION_FIXTURES.map((a) => sanitizeToolName(a.Name));
+        const names = ACTION_FIXTURES.map((a) => SanitizeToolName(a.Name));
         expect(new Set(names).size).toBe(names.length);
     });
 
     it('puts required params in required[] and leaves optional ones out', () => {
-        const tool = buildToolFromAction(query, 'string');
+        const tool = BuildToolFromAction(query, 'string');
         // Run Ad-hoc Query has exactly one required input: Query.
         expect(tool.inputSchema.required).toEqual(['Query']);
         expect(Object.keys(tool.inputSchema.properties as Record<string, unknown>).length).toBe(query.Params.length);
     });
 
     it('emits the plan\'s literal union type for Scalar under the union strategy', () => {
-        const props = buildToolFromAction(calc, 'union').inputSchema.properties as Record<string, Record<string, unknown>>;
+        const props = BuildToolFromAction(calc, 'union').inputSchema.properties as Record<string, Record<string, unknown>>;
         expect(props.Expression.type).toEqual(['string', 'number', 'boolean']);
     });
 
     it('emits a plain string type for Scalar under the conservative strategy', () => {
-        const props = buildToolFromAction(calc, 'string').inputSchema.properties as Record<string, Record<string, unknown>>;
+        const props = BuildToolFromAction(calc, 'string').inputSchema.properties as Record<string, Record<string, unknown>>;
         expect(props.Expression.type).toBe('string');
     });
 
     it("types a ValueType 'Other' param per the opaque strategy — the measured 60%-vs-100% choice", () => {
-        const asObject = buildToolFromAction(query, 'string', 'object').inputSchema.properties as Record<string, Record<string, unknown>>;
-        const asString = buildToolFromAction(query, 'string', 'string').inputSchema.properties as Record<string, Record<string, unknown>>;
+        const asObject = BuildToolFromAction(query, 'string', 'object').inputSchema.properties as Record<string, Record<string, unknown>>;
+        const asString = BuildToolFromAction(query, 'string', 'string').inputSchema.properties as Record<string, Record<string, unknown>>;
         expect(asObject.Query.type).toBe('object');
         expect(asString.Query.type).toBe('string');
     });
@@ -437,19 +437,19 @@ describe('buildToolFromAction — the §8.2 Action→ChatTool mapping', () => {
     it('folds DefaultValue into the description, since the permissive mapping has nowhere else', () => {
         const withDefault = query.Params.find((p) => p.DefaultValue);
         expect(withDefault, 'fixture should contain a param with a DefaultValue').toBeDefined();
-        const props = buildToolFromAction(query, 'string').inputSchema.properties as Record<string, Record<string, unknown>>;
+        const props = BuildToolFromAction(query, 'string').inputSchema.properties as Record<string, Record<string, unknown>>;
         expect(String(props[withDefault!.Name].description)).toContain(`Default: ${withDefault!.DefaultValue}`);
     });
 
     it('phrases the tool description prescriptively, which §8.2 says improves should-call rates', () => {
-        expect(buildToolFromAction(calc, 'string').description).toMatch(/^Call this when/);
+        expect(BuildToolFromAction(calc, 'string').description).toMatch(/^Call this when/);
     });
 
     it('keeps every emitted schema inside the cross-provider common subset', () => {
         const allowed = new Set(['type', 'description', 'enum', 'items', 'properties', 'required']);
         for (const action of ACTION_FIXTURES) {
             for (const scalar of ['union', 'string'] as const) {
-                const schema = buildToolFromAction(action, scalar).inputSchema;
+                const schema = BuildToolFromAction(action, scalar).inputSchema;
                 expect(Object.keys(schema).every((k) => allowed.has(k))).toBe(true);
                 for (const prop of Object.values(schema.properties as Record<string, Record<string, unknown>>)) {
                     expect(Object.keys(prop).every((k) => allowed.has(k))).toBe(true);
@@ -459,6 +459,6 @@ describe('buildToolFromAction — the §8.2 Action→ChatTool mapping', () => {
     });
 
     it('throws on an unknown Action rather than building an empty tool', () => {
-        expect(() => getActionFixture('No Such Action')).toThrow(/No action fixture named/);
+        expect(() => GetActionFixture('No Such Action')).toThrow(/No action fixture named/);
     });
 });

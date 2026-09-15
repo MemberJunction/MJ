@@ -1,4 +1,4 @@
-import { traverse, NodePath, extractRunQueryNamesFromCode } from '../lint-utils';
+import { traverse, NodePath, ExtractRunQueryNamesFromCode } from '../lint-utils';
 import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
 import { BaseLintRule } from '../lint-rule';
@@ -59,7 +59,7 @@ export class RequiredQueriesNotCalledRule extends BaseLintRule {
 
         // Method 2: Parse child code AST and extract actual RunQuery QueryName values
         if (dep.code) {
-          for (const name of extractRunQueryNamesFromCode(dep.code)) {
+          for (const name of ExtractRunQueryNamesFromCode(dep.code)) {
             childClaimedQueries.add(name);
           }
         }
@@ -73,7 +73,7 @@ export class RequiredQueriesNotCalledRule extends BaseLintRule {
               }
             }
             if (grandchild.code) {
-              for (const name of extractRunQueryNamesFromCode(grandchild.code)) {
+              for (const name of ExtractRunQueryNamesFromCode(grandchild.code)) {
                 childClaimedQueries.add(name);
               }
             }

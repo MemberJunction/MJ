@@ -391,11 +391,26 @@ export class OAuthAuthorizationRequiredError extends Error {
     /** Error code for identification */
     public readonly code = 'OAUTH_AUTHORIZATION_REQUIRED';
     /** Authorization URL to open in browser */
-    public readonly authorizationUrl: string;
+    public readonly AuthorizationUrl: string;
+
+    /** @deprecated Use {@link AuthorizationUrl}. */
+    public get authorizationUrl(): string {
+        return this.AuthorizationUrl;
+    }
     /** State parameter for tracking */
-    public readonly stateParameter: string;
+    public readonly StateParameter: string;
+
+    /** @deprecated Use {@link StateParameter}. */
+    public get stateParameter(): string {
+        return this.StateParameter;
+    }
     /** When the authorization expires */
-    public readonly expiresAt: Date;
+    public readonly ExpiresAt: Date;
+
+    /** @deprecated Use {@link ExpiresAt}. */
+    public get expiresAt(): Date {
+        return this.ExpiresAt;
+    }
 
     constructor(
         message: string,
@@ -405,9 +420,9 @@ export class OAuthAuthorizationRequiredError extends Error {
     ) {
         super(message);
         this.name = 'OAuthAuthorizationRequiredError';
-        this.authorizationUrl = authorizationUrl;
-        this.stateParameter = stateParameter;
-        this.expiresAt = expiresAt;
+        this.AuthorizationUrl = authorizationUrl;
+        this.StateParameter = stateParameter;
+        this.ExpiresAt = expiresAt;
     }
 }
 
@@ -418,7 +433,12 @@ export class OAuthReauthorizationRequiredError extends Error {
     /** Error code for identification */
     public readonly code = 'OAUTH_REAUTHORIZATION_REQUIRED';
     /** Reason for requiring re-authorization */
-    public readonly reason: string;
+    public readonly Reason: string;
+
+    /** @deprecated Use {@link Reason}. */
+    public get reason(): string {
+        return this.Reason;
+    }
     /** Original error that caused the failure */
     public readonly originalError?: string;
     /** Authorization URL if a new flow was initiated */
@@ -435,7 +455,7 @@ export class OAuthReauthorizationRequiredError extends Error {
     ) {
         super(message);
         this.name = 'OAuthReauthorizationRequiredError';
-        this.reason = reason;
+        this.Reason = reason;
         this.originalError = originalError;
         this.authorizationUrl = authorizationUrl;
         this.stateParameter = stateParameter;

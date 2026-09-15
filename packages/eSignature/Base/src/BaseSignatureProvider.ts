@@ -77,8 +77,13 @@ export abstract class BaseSignatureProvider {
     public abstract getSupportedOperations(): SignatureOperation[];
 
     /** Convenience predicate over {@link getSupportedOperations}. */
-    public supportsOperation(op: SignatureOperation): boolean {
+    public SupportsOperation(op: SignatureOperation): boolean {
         return this.getSupportedOperations().includes(op);
+    }
+
+    /** @deprecated Use {@link SupportsOperation}. */
+    public supportsOperation(op: SignatureOperation): boolean {
+        return this.SupportsOperation(op);
     }
 
     // ---- Inbound webhook (Connect / event callbacks) --------------------------------------------

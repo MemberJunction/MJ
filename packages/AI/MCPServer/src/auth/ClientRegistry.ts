@@ -79,7 +79,7 @@ export class ClientRegistry {
    * @param request - The client registration request
    * @returns The registration response with client_id and client_secret
    */
-  registerClient(request: ClientRegistrationRequest): ClientRegistrationResponse {
+  RegisterClient(request: ClientRegistrationRequest): ClientRegistrationResponse {
     // Generate unique client ID
     const clientId = this.generateClientId();
 
@@ -143,13 +143,18 @@ export class ClientRegistry {
     return response;
   }
 
+  /** @deprecated Use {@link RegisterClient}. */
+  registerClient(request: ClientRegistrationRequest): ClientRegistrationResponse {
+    return this.RegisterClient(request);
+  }
+
   /**
    * Gets a registered client by ID.
    *
    * @param clientId - The client ID to look up
    * @returns The registered client, or undefined if not found or expired
    */
-  getClient(clientId: string): RegisteredClient | undefined {
+  GetClient(clientId: string): RegisteredClient | undefined {
     const client = this.clients.get(clientId);
     if (!client) {
       return undefined;
@@ -164,6 +169,11 @@ export class ClientRegistry {
     return client;
   }
 
+  /** @deprecated Use {@link GetClient}. */
+  getClient(clientId: string): RegisteredClient | undefined {
+    return this.GetClient(clientId);
+  }
+
   /**
    * Validates a client secret against a registered client.
    *
@@ -171,7 +181,7 @@ export class ClientRegistry {
    * @param providedSecret - The secret to validate
    * @returns true if the secret is valid
    */
-  validateClientSecret(client: RegisteredClient, providedSecret: string): boolean {
+  ValidateClientSecret(client: RegisteredClient, providedSecret: string): boolean {
     if (!client.clientSecretHash) {
       // Public client (no secret required)
       return true;
@@ -189,6 +199,11 @@ export class ClientRegistry {
     );
   }
 
+  /** @deprecated Use {@link ValidateClientSecret}. */
+  validateClientSecret(client: RegisteredClient, providedSecret: string): boolean {
+    return this.ValidateClientSecret(client, providedSecret);
+  }
+
   /**
    * Validates that a redirect URI is allowed for a client.
    *
@@ -196,9 +211,14 @@ export class ClientRegistry {
    * @param redirectUri - The redirect URI to validate
    * @returns true if the redirect URI is allowed
    */
-  validateRedirectUri(client: RegisteredClient, redirectUri: string): boolean {
+  ValidateRedirectUri(client: RegisteredClient, redirectUri: string): boolean {
     // Exact match required per RFC 6749 section 3.1.2.3
     return client.redirectUris.includes(redirectUri);
+  }
+
+  /** @deprecated Use {@link ValidateRedirectUri}. */
+  validateRedirectUri(client: RegisteredClient, redirectUri: string): boolean {
+    return this.ValidateRedirectUri(client, redirectUri);
   }
 
   /**
@@ -208,8 +228,13 @@ export class ClientRegistry {
    * @param grantType - The grant type to validate
    * @returns true if the grant type is allowed
    */
-  validateGrantType(client: RegisteredClient, grantType: string): boolean {
+  ValidateGrantType(client: RegisteredClient, grantType: string): boolean {
     return client.grantTypes.includes(grantType);
+  }
+
+  /** @deprecated Use {@link ValidateGrantType}. */
+  validateGrantType(client: RegisteredClient, grantType: string): boolean {
+    return this.ValidateGrantType(client, grantType);
   }
 
   /**
@@ -218,7 +243,7 @@ export class ClientRegistry {
    * @param clientId - The client ID to remove
    * @returns true if the client was removed
    */
-  removeClient(clientId: string): boolean {
+  RemoveClient(clientId: string): boolean {
     const removed = this.clients.delete(clientId);
     if (removed) {
       console.log(`OAuth Proxy: Removed client ${clientId}`);
@@ -226,24 +251,39 @@ export class ClientRegistry {
     return removed;
   }
 
+  /** @deprecated Use {@link RemoveClient}. */
+  removeClient(clientId: string): boolean {
+    return this.RemoveClient(clientId);
+  }
+
   /**
    * Gets the number of registered clients.
    */
-  get size(): number {
+  get Size(): number {
     return this.clients.size;
+  }
+
+  /** @deprecated Use {@link Size}. */
+  get size(): number {
+    return this.Size;
   }
 
   /**
    * Stops the cleanup timer and clears all clients.
    * Call this when shutting down the server.
    */
-  shutdown(): void {
+  Shutdown(): void {
     if (this.cleanupTimer) {
       clearInterval(this.cleanupTimer);
       this.cleanupTimer = null;
     }
     this.clients.clear();
     console.log('OAuth Proxy: Client registry shut down');
+  }
+
+  /** @deprecated Use {@link Shutdown}. */
+  shutdown(): void {
+    return this.Shutdown();
   }
 
   /**
@@ -322,19 +362,29 @@ let registryInstance: ClientRegistry | null = null;
  * @param options - Options to use when creating the registry (only used on first call)
  * @returns The shared ClientRegistry instance
  */
-export function getClientRegistry(options?: ClientRegistryOptions): ClientRegistry {
+export function GetClientRegistry(options?: ClientRegistryOptions): ClientRegistry {
   if (!registryInstance) {
     registryInstance = new ClientRegistry(options);
   }
   return registryInstance;
 }
 
+/** @deprecated Use {@link GetClientRegistry}. */
+export function getClientRegistry(options?: ClientRegistryOptions): ClientRegistry {
+  return GetClientRegistry(options);
+}
+
 /**
  * Resets the singleton registry (for testing).
  */
-export function resetClientRegistry(): void {
+export function ResetClientRegistry(): void {
   if (registryInstance) {
     registryInstance.shutdown();
     registryInstance = null;
   }
+}
+
+/** @deprecated Use {@link ResetClientRegistry}. */
+export function resetClientRegistry(): void {
+  return ResetClientRegistry();
 }

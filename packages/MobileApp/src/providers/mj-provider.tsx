@@ -70,10 +70,15 @@ const MJContext = createContext<MJState | null>(null);
  * @returns The current {@link MJState} (status, auth handlers, sign-out).
  * @throws If called outside a `<MJProviderRoot>` subtree.
  */
-export function useMJ(): MJState {
+export function UseMJ(): MJState {
     const ctx = useContext(MJContext);
     if (!ctx) throw new Error('useMJ must be used inside <MJProviderRoot>');
     return ctx;
+}
+
+/** @deprecated Use {@link UseMJ}. */
+export function useMJ(): MJState {
+    return UseMJ();
 }
 
 /**

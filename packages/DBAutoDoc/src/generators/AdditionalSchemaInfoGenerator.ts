@@ -104,7 +104,7 @@ export class AdditionalSchemaInfoGenerator {
    * When discoveredOnly is true, only source (2) is included — useful when
    * CodeGen already handles the hard constraints from the database.
    */
-  public generate(
+  public Generate(
     state: DatabaseDocumentation,
     options: AdditionalSchemaInfoOptions = {}
   ): string {
@@ -165,6 +165,14 @@ export class AdditionalSchemaInfoGenerator {
     }
 
     return JSON.stringify(result, null, 4);
+  }
+
+  /** @deprecated Use {@link Generate}. */
+  public generate(
+    state: DatabaseDocumentation,
+    options: AdditionalSchemaInfoOptions = {}
+  ): string {
+    return this.Generate(state, options);
   }
 
   /**

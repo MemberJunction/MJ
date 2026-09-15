@@ -11,19 +11,19 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-    scanFile,
-    fixFile,
-    buildClassRenameRules,
-    buildMultiWordNameRules,
-    loadEmbeddedRenameMap,
+    ScanFile,
+    FixFile,
+    BuildClassRenameRules,
+    BuildMultiWordNameRules,
+    LoadEmbeddedRenameMap,
     ENTITY_RENAME_MAP,
     SUBCLASS_RENAME_MAP,
     type RegexRule,
     type MultiWordNameRule,
     type SubclassRenameEntry,
 } from '../EntityNameScanner/EntityNameScanner';
-import { scanHtmlFile, fixHtmlFile } from '../EntityNameScanner/HtmlEntityNameScanner';
-import { scanMetadataFile, fixMetadataFile } from '../EntityNameScanner/MetadataNameScanner';
+import { ScanHtmlFile, FixHtmlFile } from '../EntityNameScanner/HtmlEntityNameScanner';
+import { ScanMetadataFile, FixMetadataFile } from '../EntityNameScanner/MetadataNameScanner';
 
 // ---------------------------------------------------------------------------
 // Shared rename map used across all tests
@@ -46,7 +46,7 @@ function makeRenameMap(): Map<string, string> {
 
 // Small set of class rename rules for testing
 function makeClassRules(): RegexRule[] {
-    return buildClassRenameRules([
+    return BuildClassRenameRules([
         {
             oldName: 'Actions', newName: 'MJ: Actions', nameChanged: true,
             oldClassName: 'Action', newClassName: 'MJAction', classNameChanged: true,
@@ -87,7 +87,7 @@ function makeClassRules(): RegexRule[] {
 
 // Small set of multi-word entity name rules for testing
 function makeMultiWordRules(): MultiWordNameRule[] {
-    return buildMultiWordNameRules([
+    return BuildMultiWordNameRules([
         {
             oldName: 'AI Models', newName: 'MJ: AI Models', nameChanged: true,
             oldClassName: 'AIModel', newClassName: 'MJAIModel', classNameChanged: true,
@@ -122,7 +122,7 @@ describe('EntityNameScanner (TypeScript)', () => {
     describe('Method call detection', () => {
         it('should detect GetEntityObject with old entity name', () => {
             const src = `const e = md.GetEntityObject<ActionEntity>('Actions');`;
-            const findings = scanFile('test.ts', src, renameMap);
+            const findings = ScanFile('test.ts', src, renameMap);
             expect(findings).toHaveLength(1);
             expect(findings[0].OldName).toBe('Actions');
             expect(findings[0].NewName).toBe('MJ: Actions');
@@ -131,7 +131,7 @@ describe('EntityNameScanner (TypeScript)', () => {
 
         it('should detect OpenEntityRecord with old entity name', () => {
             const src = `this.OpenEntityRecord('Entities', someId);`;
-            const findings = scanFile('test.ts', src, renameMap);
+            const findings = ScanFile('test.ts', src, renameMap);
             expect(findings).toHaveLength(1);
             expect(findings[0].OldName).toBe('Entities');
             expect(findings[0].NewName).toBe('MJ: Entities');
@@ -140,7 +140,7 @@ describe('EntityNameScanner (TypeScript)', () => {
 
         it('should detect EntityByName with old entity name', () => {
             const src = `const c = md.EntityByName('Conversations');`;
-            const findings = scanFile('test.ts', src, renameMap);
+            const findings = ScanFile('test.ts', src, renameMap);
             expect(findings).toHaveLength(1);
             expect(findings[0].OldName).toBe('Conversations');
             expect(findings[0].NewName).toBe('MJ: Conversations');
@@ -149,7 +149,7 @@ describe('EntityNameScanner (TypeScript)', () => {
 
         it('should detect navigateToEntity with old entity name', () => {
             const src = `this.navigateToEntity('Libraries', libId);`;
-            const findings = scanFile('test.ts', src, renameMap);
+            const findings = ScanFile('test.ts', src, renameMap);
             expect(findings).toHaveLength(1);
             expect(findings[0].OldName).toBe('Libraries');
             expect(findings[0].PatternKind).toBe('EntityNameMethod');
@@ -157,20 +157,20 @@ describe('EntityNameScanner (TypeScript)', () => {
 
         it('should detect GetEntityObjectByRecord', () => {
             const src = `const e = md.GetEntityObjectByRecord('Users', record);`;
-            const findings = scanFile('test.ts', src, renameMap);
+            const findings = ScanFile('test.ts', src, renameMap);
             expect(findings).toHaveLength(1);
             expect(findings[0].PatternKind).toBe('EntityNameMethod');
         });
 
         it('should NOT flag already-prefixed names', () => {
             const src = `const e = md.GetEntityObject<ActionEntity>('MJ: Actions');`;
-            const findings = scanFile('test.ts', src, renameMap);
+            const findings = ScanFile('test.ts', src, renameMap);
             expect(findings).toHaveLength(0);
         });
 
         it('should NOT flag variable arguments to entity methods', () => {
             const src = `const e = md.GetEntityObject(entityName);`;
-            const findings = scanFile('test.ts', src, renameMap);
+            const findings = ScanFile('test.ts', src, renameMap);
             expect(findings).toHaveLength(0);
         });
     });
@@ -180,7 +180,7 @@ describe('EntityNameScanner (TypeScript)', () => {
     describe('EntityName property assignment', () => {
         it('should detect EntityName property with old name', () => {
             const src = `const config = { EntityName: 'Actions' };`;
-            const findings = scanFile('test.ts', src, renameMap);
+            const findings = ScanFile('test.ts', src, renameMap);
             expect(findings).toHaveLength(1);
             expect(findings[0].OldName).toBe('Actions');
             expect(findings[0].PatternKind).toBe('EntityNameProperty');
@@ -188,7 +188,7 @@ describe('EntityNameScanner (TypeScript)', () => {
 
         it('should detect item.EntityName = assignment', () => {
             const src = `item.EntityName = 'Users';`;
-            const findings = scanFile('test.ts', src, renameMap);
+            const findings = ScanFile('test.ts', src, renameMap);
             expect(findings).toHaveLength(1);
             expect(findings[0].OldName).toBe('Users');
             expect(findings[0].PatternKind).toBe('EntityNameProperty');
@@ -196,7 +196,7 @@ describe('EntityNameScanner (TypeScript)', () => {
 
         it('should NOT flag non-entity property assignments', () => {
             const src = `const config = { SomeProp: 'Actions' };`;
-            const findings = scanFile('test.ts', src, renameMap);
+            const findings = ScanFile('test.ts', src, renameMap);
             expect(findings).toHaveLength(0);
         });
     });
@@ -206,21 +206,21 @@ describe('EntityNameScanner (TypeScript)', () => {
     describe('Comparison patterns', () => {
         it('should detect .Entity === "OldName"', () => {
             const src = `if (item.Entity === 'Actions') { }`;
-            const findings = scanFile('test.ts', src, renameMap);
+            const findings = ScanFile('test.ts', src, renameMap);
             expect(findings).toHaveLength(1);
             expect(findings[0].PatternKind).toBe('NameComparison');
         });
 
         it('should detect .LinkedEntity === "OldName"', () => {
             const src = `if (this.LinkedEntity === 'Queries') { }`;
-            const findings = scanFile('test.ts', src, renameMap);
+            const findings = ScanFile('test.ts', src, renameMap);
             expect(findings).toHaveLength(1);
             expect(findings[0].PatternKind).toBe('NameComparison');
         });
 
         it('should detect .EntityInfo.Name === "OldName" (Case 5)', () => {
             const src = `const t = this.PendingRecords.filter(p => p.entityObject.EntityInfo.Name === 'Templates');`;
-            const findings = scanFile('test.ts', src, renameMap);
+            const findings = ScanFile('test.ts', src, renameMap);
             expect(findings).toHaveLength(1);
             expect(findings[0].OldName).toBe('Templates');
             expect(findings[0].PatternKind).toBe('NameComparison');
@@ -228,7 +228,7 @@ describe('EntityNameScanner (TypeScript)', () => {
 
         it('should detect .Entities.find(e => e.Name === "OldName") (Case 6)', () => {
             const src = `const e = md.Entities.find(e => e.Name === 'Entities');`;
-            const findings = scanFile('test.ts', src, renameMap);
+            const findings = ScanFile('test.ts', src, renameMap);
             expect(findings).toHaveLength(1);
             expect(findings[0].OldName).toBe('Entities');
             expect(findings[0].PatternKind).toBe('NameComparison');
@@ -236,7 +236,7 @@ describe('EntityNameScanner (TypeScript)', () => {
 
         it('should detect .Entities.filter(e => e.Name !== "OldName") (Case 6)', () => {
             const src = `const filtered = md.Entities.filter(e => e.Name !== 'Templates');`;
-            const findings = scanFile('test.ts', src, renameMap);
+            const findings = ScanFile('test.ts', src, renameMap);
             expect(findings).toHaveLength(1);
             expect(findings[0].OldName).toBe('Templates');
         });
@@ -244,19 +244,19 @@ describe('EntityNameScanner (TypeScript)', () => {
         it('should NOT flag bare .Name === on non-entity objects (false positive prevention)', () => {
             // This is the Action params false positive case: p.Name === 'Users'
             const src = `const match = params.find(p => p.Name === 'Users');`;
-            const findings = scanFile('test.ts', src, renameMap);
+            const findings = ScanFile('test.ts', src, renameMap);
             expect(findings).toHaveLength(0);
         });
 
         it('should NOT flag ResourceType .Name comparisons (false positive prevention)', () => {
             const src = `const rt = ResourceTypes.find(rt => rt.Name === 'Dashboards');`;
-            const findings = scanFile('test.ts', src, renameMap);
+            const findings = ScanFile('test.ts', src, renameMap);
             expect(findings).toHaveLength(0);
         });
 
         it('should NOT flag random .Name comparisons', () => {
             const src = `if (user.Name === 'Actions') doSomething();`;
-            const findings = scanFile('test.ts', src, renameMap);
+            const findings = ScanFile('test.ts', src, renameMap);
             expect(findings).toHaveLength(0);
         });
     });
@@ -269,7 +269,7 @@ describe('EntityNameScanner (TypeScript)', () => {
 @RegisterClass(BaseEntity, 'Actions')
 class ActionEntity extends BaseEntity { }
 `;
-            const findings = scanFile('test.ts', src, renameMap);
+            const findings = ScanFile('test.ts', src, renameMap);
             expect(findings).toHaveLength(1);
             expect(findings[0].PatternKind).toBe('RegisterClass');
         });
@@ -279,7 +279,7 @@ class ActionEntity extends BaseEntity { }
 @RegisterClass(SomeOtherBase, 'Actions')
 class ActionComponent { }
 `;
-            const findings = scanFile('test.ts', src, renameMap);
+            const findings = ScanFile('test.ts', src, renameMap);
             expect(findings).toHaveLength(1);
             expect(findings[0].PatternKind).toBe('RegisterClass');
         });
@@ -293,7 +293,7 @@ class ActionComponent { }
 @RegisterClassEx(BaseEntity, { key: 'Actions' })
 class ActionEntity extends BaseEntity { }
 `;
-            const findings = scanFile('test.ts', src, renameMap);
+            const findings = ScanFile('test.ts', src, renameMap);
             expect(findings).toHaveLength(1);
             expect(findings[0].PatternKind).toBe('RegisterClass');
             expect(findings[0].OldName).toBe('Actions');
@@ -304,8 +304,8 @@ class ActionEntity extends BaseEntity { }
 @RegisterClassEx(BaseEntity, { key: 'Actions', skipNullKeyWarning: true })
 class ActionEntity extends BaseEntity { }
 `;
-            const findings = scanFile('test.ts', src, renameMap);
-            const fixed = fixFile(src, findings);
+            const findings = ScanFile('test.ts', src, renameMap);
+            const fixed = FixFile(src, findings);
             expect(fixed).toContain("key: 'MJ: Actions'");
         });
 
@@ -313,7 +313,7 @@ class ActionEntity extends BaseEntity { }
             const src = `
 const config = { key: 'Actions' };
 `;
-            const findings = scanFile('test.ts', src, renameMap);
+            const findings = ScanFile('test.ts', src, renameMap);
             expect(findings).toHaveLength(0);
         });
     });
@@ -327,7 +327,7 @@ const e1 = md.GetEntityObject<ActionEntity>('Actions');
 const e2 = md.EntityByName('Users');
 this.navigateToEntity('Templates', id);
 `;
-            const findings = scanFile('test.ts', src, renameMap);
+            const findings = ScanFile('test.ts', src, renameMap);
             expect(findings).toHaveLength(3);
             expect(findings.map(f => f.OldName).sort()).toEqual(['Actions', 'Templates', 'Users']);
         });
@@ -338,8 +338,8 @@ this.navigateToEntity('Templates', id);
     describe('fixFile (AST-based)', () => {
         it('should replace old names with new names at correct positions', () => {
             const src = `const e = md.GetEntityObject<ActionEntity>('Actions');`;
-            const findings = scanFile('test.ts', src, renameMap);
-            const fixed = fixFile(src, findings);
+            const findings = ScanFile('test.ts', src, renameMap);
+            const fixed = FixFile(src, findings);
             expect(fixed).toContain("'MJ: Actions'");
             expect(fixed).not.toContain("'Actions'");
         });
@@ -349,10 +349,10 @@ this.navigateToEntity('Templates', id);
 const e1 = md.GetEntityObject<ActionEntity>('Actions');
 const e2 = md.EntityByName('Users');
 `;
-            const findings = scanFile('test.ts', src, renameMap);
+            const findings = ScanFile('test.ts', src, renameMap);
             expect(findings).toHaveLength(2);
 
-            const fixed = fixFile(src, findings);
+            const fixed = FixFile(src, findings);
             expect(fixed).toContain("'MJ: Actions'");
             expect(fixed).toContain("'MJ: Users'");
             // Original old names should be gone
@@ -362,15 +362,15 @@ const e2 = md.EntityByName('Users');
 
         it('should preserve surrounding code', () => {
             const src = `const x = md.GetEntityObject<ActionEntity>('Actions'); // comment`;
-            const findings = scanFile('test.ts', src, renameMap);
-            const fixed = fixFile(src, findings);
+            const findings = ScanFile('test.ts', src, renameMap);
+            const fixed = FixFile(src, findings);
             expect(fixed).toBe(`const x = md.GetEntityObject<ActionEntity>('MJ: Actions'); // comment`);
         });
 
         it('should preserve double-quote style', () => {
             const src = `const x = md.EntityByName("Users");`;
-            const findings = scanFile('test.ts', src, renameMap);
-            const fixed = fixFile(src, findings);
+            const findings = ScanFile('test.ts', src, renameMap);
+            const fixed = FixFile(src, findings);
             expect(fixed).toContain('"MJ: Users"');
         });
     });
@@ -380,7 +380,7 @@ const e2 = md.EntityByName('Users');
     describe('Quick-check optimization', () => {
         it('should return empty for files with no matching strings', () => {
             const src = `const x = 42; function foo() { return 'hello'; }`;
-            const findings = scanFile('test.ts', src, renameMap);
+            const findings = ScanFile('test.ts', src, renameMap);
             expect(findings).toHaveLength(0);
         });
     });
@@ -396,7 +396,7 @@ describe('EntityNameScanner — Class Name Renames', () => {
     describe('Class name detection', () => {
         it('should detect import of old class name', () => {
             const src = `import { ActionEntity, ActionParamEntity } from '@memberjunction/core-entities';`;
-            const findings = scanFile('test.ts', src, renameMap, classRules);
+            const findings = ScanFile('test.ts', src, renameMap, classRules);
             const classFindings = findings.filter(f => f.PatternKind === 'ClassName');
             expect(classFindings.length).toBeGreaterThanOrEqual(2);
             expect(classFindings.map(f => f.OldName)).toContain('ActionEntity');
@@ -405,7 +405,7 @@ describe('EntityNameScanner — Class Name Renames', () => {
 
         it('should detect class name in type annotation', () => {
             const src = `private _resultCodes: ActionResultCodeEntity[] = null;`;
-            const findings = scanFile('test.ts', src, renameMap, classRules);
+            const findings = ScanFile('test.ts', src, renameMap, classRules);
             const classFindings = findings.filter(f => f.PatternKind === 'ClassName');
             expect(classFindings).toHaveLength(1);
             expect(classFindings[0].OldName).toBe('ActionResultCodeEntity');
@@ -414,7 +414,7 @@ describe('EntityNameScanner — Class Name Renames', () => {
 
         it('should detect class name in extends clause', () => {
             const src = `export class ActionEntityExtended extends ActionEntity { }`;
-            const findings = scanFile('test.ts', src, renameMap, classRules);
+            const findings = ScanFile('test.ts', src, renameMap, classRules);
             const classFindings = findings.filter(f => f.PatternKind === 'ClassName');
             // Auto-suffix only covers Entity/Schema/EntityType; ActionEntityExtended
             // requires an explicit subclass map entry (tested in Subclass Suffix section)
@@ -424,7 +424,7 @@ describe('EntityNameScanner — Class Name Renames', () => {
 
         it('should detect class name in generic type parameter', () => {
             const src = `const e = await md.GetEntityObject<AIModelEntity>('MJ: AI Models');`;
-            const findings = scanFile('test.ts', src, renameMap, classRules);
+            const findings = ScanFile('test.ts', src, renameMap, classRules);
             const classFindings = findings.filter(f => f.PatternKind === 'ClassName');
             expect(classFindings).toHaveLength(1);
             expect(classFindings[0].OldName).toBe('AIModelEntity');
@@ -433,7 +433,7 @@ describe('EntityNameScanner — Class Name Renames', () => {
 
         it('should detect Schema suffix variants', () => {
             const src = `const schema = AIModelSchema;`;
-            const findings = scanFile('test.ts', src, renameMap, classRules);
+            const findings = ScanFile('test.ts', src, renameMap, classRules);
             const classFindings = findings.filter(f => f.PatternKind === 'ClassName');
             expect(classFindings).toHaveLength(1);
             expect(classFindings[0].OldName).toBe('AIModelSchema');
@@ -442,7 +442,7 @@ describe('EntityNameScanner — Class Name Renames', () => {
 
         it('should detect EntityType suffix variants', () => {
             const src = `type MyType = ActionEntityType;`;
-            const findings = scanFile('test.ts', src, renameMap, classRules);
+            const findings = ScanFile('test.ts', src, renameMap, classRules);
             const classFindings = findings.filter(f => f.PatternKind === 'ClassName');
             expect(classFindings).toHaveLength(1);
             expect(classFindings[0].OldName).toBe('ActionEntityType');
@@ -452,7 +452,7 @@ describe('EntityNameScanner — Class Name Renames', () => {
         it('should NOT rename class names inside file path strings', () => {
             // The negative lookbehind for / and . prevents matching inside paths
             const src = `import { X } from './custom/ActionEntity';`;
-            const findings = scanFile('test.ts', src, renameMap, classRules);
+            const findings = ScanFile('test.ts', src, renameMap, classRules);
             const classFindings = findings.filter(f => f.PatternKind === 'ClassName');
             // The path portion should not be renamed (lookbehind (?<![/.]) )
             expect(classFindings.every(f => {
@@ -463,7 +463,7 @@ describe('EntityNameScanner — Class Name Renames', () => {
 
         it('should NOT rename already-prefixed class names', () => {
             const src = `import { MJActionEntity } from '@memberjunction/core-entities';`;
-            const findings = scanFile('test.ts', src, renameMap, classRules);
+            const findings = ScanFile('test.ts', src, renameMap, classRules);
             const classFindings = findings.filter(f => f.PatternKind === 'ClassName');
             // MJActionEntity should not match ActionEntity rule because word boundary
             // won't match since MJ precedes Action
@@ -472,7 +472,7 @@ describe('EntityNameScanner — Class Name Renames', () => {
 
         it('should NOT rename already-prefixed extended class names', () => {
             const src = `import { MJActionEntityExtended } from './custom/ActionEntity-Extended';`;
-            const findings = scanFile('test.ts', src, renameMap, classRules);
+            const findings = ScanFile('test.ts', src, renameMap, classRules);
             const classFindings = findings.filter(f => f.PatternKind === 'ClassName');
             expect(classFindings).toHaveLength(0);
         });
@@ -481,8 +481,8 @@ describe('EntityNameScanner — Class Name Renames', () => {
     describe('fixFile (class names)', () => {
         it('should rename class imports correctly', () => {
             const src = `import { ActionEntity, ActionLibraryEntity, ActionParamEntity, ActionResultCodeEntity } from "@memberjunction/core-entities";`;
-            const findings = scanFile('test.ts', src, renameMap, classRules);
-            const fixed = fixFile(src, findings);
+            const findings = ScanFile('test.ts', src, renameMap, classRules);
+            const fixed = FixFile(src, findings);
             expect(fixed).toContain('MJActionEntity');
             expect(fixed).toContain('MJActionLibraryEntity');
             expect(fixed).toContain('MJActionParamEntity');
@@ -492,8 +492,8 @@ describe('EntityNameScanner — Class Name Renames', () => {
 
         it('should rename base class in extends clause', () => {
             const src = `export class ActionEntityExtended extends ActionEntity { }`;
-            const findings = scanFile('test.ts', src, renameMap, classRules);
-            const fixed = fixFile(src, findings);
+            const findings = ScanFile('test.ts', src, renameMap, classRules);
+            const fixed = FixFile(src, findings);
             // Only ActionEntity (base class) is renamed by auto-suffix;
             // ActionEntityExtended requires an explicit subclass map entry
             expect(fixed).toContain('extends MJActionEntity');
@@ -501,15 +501,15 @@ describe('EntityNameScanner — Class Name Renames', () => {
 
         it('should rename class in type annotations', () => {
             const src = `private _params: ActionParamEntity[] = null;`;
-            const findings = scanFile('test.ts', src, renameMap, classRules);
-            const fixed = fixFile(src, findings);
+            const findings = ScanFile('test.ts', src, renameMap, classRules);
+            const fixed = FixFile(src, findings);
             expect(fixed).toContain('MJActionParamEntity[]');
         });
 
         it('should rename generics', () => {
             const src = `const e = await md.GetEntityObject<AIModelEntity>('MJ: AI Models');`;
-            const findings = scanFile('test.ts', src, renameMap, classRules);
-            const fixed = fixFile(src, findings);
+            const findings = ScanFile('test.ts', src, renameMap, classRules);
+            const fixed = FixFile(src, findings);
             expect(fixed).toContain('GetEntityObject<MJAIModelEntity>');
         });
 
@@ -526,7 +526,7 @@ describe('EntityNameScanner — Multi-word Entity Names', () => {
     describe('Multi-word entity name detection', () => {
         it('should detect multi-word name in single quotes', () => {
             const src = `const r = await rv.RunView({ EntityName: 'AI Models' });`;
-            const findings = scanFile('test.ts', src, renameMap, undefined, multiWordRules);
+            const findings = ScanFile('test.ts', src, renameMap, undefined, multiWordRules);
             const multiWordFindings = findings.filter(f => f.PatternKind === 'MultiWordEntityName');
             expect(multiWordFindings).toHaveLength(1);
             expect(multiWordFindings[0].OldName).toBe('AI Models');
@@ -535,7 +535,7 @@ describe('EntityNameScanner — Multi-word Entity Names', () => {
 
         it('should detect multi-word name in double quotes', () => {
             const src = `const r = await rv.RunView({ EntityName: "AI Vendors" });`;
-            const findings = scanFile('test.ts', src, renameMap, undefined, multiWordRules);
+            const findings = ScanFile('test.ts', src, renameMap, undefined, multiWordRules);
             const multiWordFindings = findings.filter(f => f.PatternKind === 'MultiWordEntityName');
             expect(multiWordFindings).toHaveLength(1);
             expect(multiWordFindings[0].OldName).toBe('AI Vendors');
@@ -543,7 +543,7 @@ describe('EntityNameScanner — Multi-word Entity Names', () => {
 
         it('should detect multi-word name in backticks', () => {
             const src = 'const n = `Action Params`;';
-            const findings = scanFile('test.ts', src, renameMap, undefined, multiWordRules);
+            const findings = ScanFile('test.ts', src, renameMap, undefined, multiWordRules);
             const multiWordFindings = findings.filter(f => f.PatternKind === 'MultiWordEntityName');
             expect(multiWordFindings).toHaveLength(1);
             expect(multiWordFindings[0].OldName).toBe('Action Params');
@@ -551,7 +551,7 @@ describe('EntityNameScanner — Multi-word Entity Names', () => {
 
         it('should NOT detect already-prefixed multi-word names', () => {
             const src = `const r = { EntityName: 'MJ: AI Models' };`;
-            const findings = scanFile('test.ts', src, renameMap, undefined, multiWordRules);
+            const findings = ScanFile('test.ts', src, renameMap, undefined, multiWordRules);
             const multiWordFindings = findings.filter(f => f.PatternKind === 'MultiWordEntityName');
             expect(multiWordFindings).toHaveLength(0);
         });
@@ -562,7 +562,7 @@ const a = { EntityName: 'AI Models' };
 const b = { EntityName: 'AI Vendors' };
 const c = { EntityName: 'Action Params' };
 `;
-            const findings = scanFile('test.ts', src, renameMap, undefined, multiWordRules);
+            const findings = ScanFile('test.ts', src, renameMap, undefined, multiWordRules);
             const multiWordFindings = findings.filter(f => f.PatternKind === 'MultiWordEntityName');
             expect(multiWordFindings).toHaveLength(3);
         });
@@ -571,8 +571,8 @@ const c = { EntityName: 'Action Params' };
     describe('fixFile (multi-word entity names)', () => {
         it('should replace multi-word names in quotes', () => {
             const src = `const r = await rv.RunView({ EntityName: 'AI Models' });`;
-            const findings = scanFile('test.ts', src, renameMap, undefined, multiWordRules);
-            const fixed = fixFile(src, findings);
+            const findings = ScanFile('test.ts', src, renameMap, undefined, multiWordRules);
+            const fixed = FixFile(src, findings);
             expect(fixed).toContain("'MJ: AI Models'");
             expect(fixed).not.toContain("'AI Models'");
         });
@@ -599,7 +599,7 @@ export class ActionEntityExtended extends ActionEntity {
     }
 }
 `;
-        const findings = scanFile('test.ts', src, renameMap, classRules, multiWordRules);
+        const findings = ScanFile('test.ts', src, renameMap, classRules, multiWordRules);
 
         const classFindings = findings.filter(f => f.PatternKind === 'ClassName');
         const multiWordFindings = findings.filter(f => f.PatternKind === 'MultiWordEntityName');
@@ -616,8 +616,8 @@ export class ActionEntityExtended extends ActionEntity {
         const src = `import { ActionEntity, ActionParamEntity } from '@memberjunction/core-entities';
 const e = md.GetEntityObject<ActionEntity>('Actions');
 const p = await rv.RunView<ActionParamEntity>({ EntityName: 'Action Params' });`;
-        const findings = scanFile('test.ts', src, renameMap, classRules, multiWordRules);
-        const fixed = fixFile(src, findings);
+        const findings = ScanFile('test.ts', src, renameMap, classRules, multiWordRules);
+        const fixed = FixFile(src, findings);
 
         // Class names
         expect(fixed).toContain('MJActionEntity');
@@ -664,8 +664,8 @@ export class ActionEntityExtended extends ActionEntity {
         return this._libs;
     }
 }`;
-        const findings = scanFile('test.ts', src, renameMap, classRulesWithSubclass, multiWordRules);
-        const fixed = fixFile(src, findings);
+        const findings = ScanFile('test.ts', src, renameMap, classRulesWithSubclass, multiWordRules);
+        const fixed = FixFile(src, findings);
 
         // Class names should be updated (including extended subclass name via explicit map)
         expect(fixed).toContain('import { MJActionEntity,');
@@ -694,7 +694,7 @@ describe('EntityNameScanner — Duplicate Prevention', () => {
         const multiWordRules = makeMultiWordRules();
 
         const src = `const r = await rv.RunView({ EntityName: 'AI Models' });`;
-        const findings = scanFile('test.ts', src, renameMap, undefined, multiWordRules);
+        const findings = ScanFile('test.ts', src, renameMap, undefined, multiWordRules);
 
         // Should find 'AI Models' via multi-word regex
         const multiWordFindings = findings.filter(f => f.PatternKind === 'MultiWordEntityName');
@@ -716,8 +716,8 @@ describe('EntityNameScanner — Duplicate Prevention', () => {
         const rules = makeMultiWordRules();
 
         const src = `const r = { EntityName: "AI Vendors" };`;
-        const findings = scanFile('test.ts', src, map, undefined, rules);
-        const fixed = fixFile(src, findings);
+        const findings = ScanFile('test.ts', src, map, undefined, rules);
+        const fixed = FixFile(src, findings);
 
         expect(fixed).not.toContain('Vendors"ors');      // No corruption
         expect(fixed).toContain('"MJ: AI Vendors"');      // Correct replacement
@@ -733,8 +733,8 @@ describe('EntityNameScanner — Duplicate Prevention', () => {
 
         const src = `const r = await rv.RunView({ EntityName: 'AI Models' });
 const e = md.GetEntityObject('Actions');`;
-        const findings = scanFile('test.ts', src, singleWordMap, undefined, multiWordRules);
-        const fixed = fixFile(src, findings);
+        const findings = ScanFile('test.ts', src, singleWordMap, undefined, multiWordRules);
+        const fixed = FixFile(src, findings);
 
         expect(fixed).toContain("'MJ: AI Models'");
         expect(fixed).toContain("'MJ: Actions'");
@@ -750,28 +750,28 @@ describe('EntityNameScanner — Property Assignment Variants', () => {
 
     it('should detect entityName (camelCase) property assignment', () => {
         const src = `const config = { entityName: 'Actions' };`;
-        const findings = scanFile('test.ts', src, renameMap);
+        const findings = ScanFile('test.ts', src, renameMap);
         expect(findings).toHaveLength(1);
         expect(findings[0].PatternKind).toBe('EntityNameProperty');
     });
 
     it('should detect Entity property assignment', () => {
         const src = `const config = { Entity: 'Actions' };`;
-        const findings = scanFile('test.ts', src, renameMap);
+        const findings = ScanFile('test.ts', src, renameMap);
         expect(findings).toHaveLength(1);
         expect(findings[0].PatternKind).toBe('EntityNameProperty');
     });
 
     it('should detect item.entityName = binary assignment', () => {
         const src = `item.entityName = 'Users';`;
-        const findings = scanFile('test.ts', src, renameMap);
+        const findings = ScanFile('test.ts', src, renameMap);
         expect(findings).toHaveLength(1);
         expect(findings[0].PatternKind).toBe('EntityNameProperty');
     });
 
     it('should detect item.Entity = binary assignment', () => {
         const src = `item.Entity = 'Users';`;
-        const findings = scanFile('test.ts', src, renameMap);
+        const findings = ScanFile('test.ts', src, renameMap);
         expect(findings).toHaveLength(1);
         expect(findings[0].PatternKind).toBe('EntityNameProperty');
     });
@@ -796,7 +796,7 @@ function makeSubclassMap(): SubclassRenameEntry[] {
 
 // Class rules WITH subclass overrides
 function makeClassRulesWithSubclass(): RegexRule[] {
-    return buildClassRenameRules([
+    return BuildClassRenameRules([
         {
             oldName: 'Actions', newName: 'MJ: Actions', nameChanged: true,
             oldClassName: 'Action', newClassName: 'MJAction', classNameChanged: true,
@@ -881,7 +881,7 @@ describe('EntityNameScanner — Subclass Suffix Standardization', () => {
     describe('Explicit subclass rule priority', () => {
         it('should map ActionEntityServerEntity to MJActionEntityServer (not MJActionEntityServerEntity)', () => {
             const src = `export class ActionEntityServerEntity extends ActionEntityExtended { }`;
-            const findings = scanFile('test.ts', src, renameMap, classRules);
+            const findings = ScanFile('test.ts', src, renameMap, classRules);
             const f = findings.find(f => f.OldName === 'ActionEntityServerEntity');
             expect(f).toBeDefined();
             expect(f!.NewName).toBe('MJActionEntityServer');
@@ -889,7 +889,7 @@ describe('EntityNameScanner — Subclass Suffix Standardization', () => {
 
         it('should map UserEntity_Server to MJUserEntityServer (underscore removed)', () => {
             const src = `export class UserEntity_Server extends UserEntityExtended { }`;
-            const findings = scanFile('test.ts', src, renameMap, classRules);
+            const findings = ScanFile('test.ts', src, renameMap, classRules);
             const f = findings.find(f => f.OldName === 'UserEntity_Server');
             expect(f).toBeDefined();
             expect(f!.NewName).toBe('MJUserEntityServer');
@@ -897,7 +897,7 @@ describe('EntityNameScanner — Subclass Suffix Standardization', () => {
 
         it('should map ActionEntityExtended_Server to MJActionEntityServer (combined suffix collapsed)', () => {
             const src = `export class ActionEntityExtended_Server extends ActionEntityExtended { }`;
-            const findings = scanFile('test.ts', src, renameMap, classRules);
+            const findings = ScanFile('test.ts', src, renameMap, classRules);
             const f = findings.find(f => f.OldName === 'ActionEntityExtended_Server');
             expect(f).toBeDefined();
             expect(f!.NewName).toBe('MJActionEntityServer');
@@ -905,7 +905,7 @@ describe('EntityNameScanner — Subclass Suffix Standardization', () => {
 
         it('should map AIModelEntityExtendedServer to MJAIModelEntityServer (combined suffix collapsed)', () => {
             const src = `export class AIModelEntityExtendedServer extends AIModelEntityExtended { }`;
-            const findings = scanFile('test.ts', src, renameMap, classRules);
+            const findings = ScanFile('test.ts', src, renameMap, classRules);
             const f = findings.find(f => f.OldName === 'AIModelEntityExtendedServer');
             expect(f).toBeDefined();
             expect(f!.NewName).toBe('MJAIModelEntityServer');
@@ -913,7 +913,7 @@ describe('EntityNameScanner — Subclass Suffix Standardization', () => {
 
         it('should map Angular form anomaly ActionFormExtendedComponent to MJActionFormComponentExtended', () => {
             const src = `export class ActionFormExtendedComponent extends MJActionFormComponent { }`;
-            const findings = scanFile('test.ts', src, renameMap, classRules);
+            const findings = ScanFile('test.ts', src, renameMap, classRules);
             const f = findings.find(f => f.OldName === 'ActionFormExtendedComponent');
             expect(f).toBeDefined();
             expect(f!.NewName).toBe('MJActionFormComponentExtended');
@@ -921,7 +921,7 @@ describe('EntityNameScanner — Subclass Suffix Standardization', () => {
 
         it('should still handle standard EntityExtended via explicit rule', () => {
             const src = `import { ActionEntityExtended } from './ActionEntity-Extended';`;
-            const findings = scanFile('test.ts', src, renameMap, classRules);
+            const findings = ScanFile('test.ts', src, renameMap, classRules);
             const f = findings.find(f => f.OldName === 'ActionEntityExtended');
             expect(f).toBeDefined();
             expect(f!.NewName).toBe('MJActionEntityExtended');
@@ -929,7 +929,7 @@ describe('EntityNameScanner — Subclass Suffix Standardization', () => {
 
         it('should detect FormComponentExtended suffix via auto-generation', () => {
             const src = `export class ActionFormComponentExtended extends MJActionFormComponent { }`;
-            const findings = scanFile('test.ts', src, renameMap, classRules);
+            const findings = ScanFile('test.ts', src, renameMap, classRules);
             const f = findings.find(f => f.OldName === 'ActionFormComponentExtended');
             expect(f).toBeDefined();
             expect(f!.NewName).toBe('MJActionFormComponentExtended');
@@ -941,16 +941,16 @@ describe('EntityNameScanner — Subclass Suffix Standardization', () => {
             const src = `export class ActionEntityServerEntity extends ActionEntityExtended {
     async validate() { return true; }
 }`;
-            const findings = scanFile('test.ts', src, renameMap, classRules);
-            const fixed = fixFile(src, findings);
+            const findings = ScanFile('test.ts', src, renameMap, classRules);
+            const fixed = FixFile(src, findings);
             expect(fixed).toContain('class MJActionEntityServer extends MJActionEntityExtended');
             expect(fixed).not.toContain('ActionEntityServerEntity');
         });
 
         it('should fix UserEntity_Server to MJUserEntityServer', () => {
             const src = `import { UserEntity_Server } from './userViewEntity.server';`;
-            const findings = scanFile('test.ts', src, renameMap, classRules);
-            const fixed = fixFile(src, findings);
+            const findings = ScanFile('test.ts', src, renameMap, classRules);
+            const fixed = FixFile(src, findings);
             expect(fixed).toContain('MJUserEntityServer');
             expect(fixed).not.toMatch(/\bUserEntity_Server\b/);
         });
@@ -958,8 +958,8 @@ describe('EntityNameScanner — Subclass Suffix Standardization', () => {
         it('should fix Angular form anomaly names', () => {
             const src = `@RegisterClass(BaseFormComponent, 'MJ: Actions')
 export class ActionFormExtendedComponent extends MJActionFormComponent { }`;
-            const findings = scanFile('test.ts', src, renameMap, classRules);
-            const fixed = fixFile(src, findings);
+            const findings = ScanFile('test.ts', src, renameMap, classRules);
+            const fixed = FixFile(src, findings);
             expect(fixed).toContain('class MJActionFormComponentExtended extends MJActionFormComponent');
         });
 
@@ -975,8 +975,8 @@ export class ActionEntityServerEntity extends ActionEntityExtended {
         return true;
     }
 }`;
-            const findings = scanFile('test.ts', src, renameMap, classRules);
-            const fixed = fixFile(src, findings);
+            const findings = ScanFile('test.ts', src, renameMap, classRules);
+            const fixed = FixFile(src, findings);
             expect(fixed).toContain('class MJActionEntityServer extends MJActionEntityExtended');
             expect(fixed).not.toContain('ActionEntityServerEntity');
             expect(fixed).not.toMatch(/\bActionEntityExtended\b/);
@@ -1007,7 +1007,7 @@ describe('Embedded Rename Map', () => {
     });
 
     it('should build entity name map with only nameChanged entries', () => {
-        const map = loadEmbeddedRenameMap();
+        const map = LoadEmbeddedRenameMap();
         const nameChangedCount = ENTITY_RENAME_MAP.filter(e => e.nameChanged).length;
         expect(map.size).toBe(nameChangedCount);
     });
@@ -1026,26 +1026,26 @@ describe('Embedded Rename Map', () => {
     });
 
     it('should have exactly 161 name-changed entries in embedded map', () => {
-        const map = loadEmbeddedRenameMap();
+        const map = LoadEmbeddedRenameMap();
         expect(map.size).toBe(161);
     });
 
     it('should sort class rename rules longest-first', () => {
-        const rules = buildClassRenameRules(ENTITY_RENAME_MAP);
+        const rules = BuildClassRenameRules(ENTITY_RENAME_MAP);
         for (let i = 0; i < rules.length - 1; i++) {
             expect(rules[i].old.length).toBeGreaterThanOrEqual(rules[i + 1].old.length);
         }
     });
 
     it('should sort class rename rules longest-first even with subclass map', () => {
-        const rules = buildClassRenameRules(ENTITY_RENAME_MAP, SUBCLASS_RENAME_MAP);
+        const rules = BuildClassRenameRules(ENTITY_RENAME_MAP, SUBCLASS_RENAME_MAP);
         for (let i = 0; i < rules.length - 1; i++) {
             expect(rules[i].old.length).toBeGreaterThanOrEqual(rules[i + 1].old.length);
         }
     });
 
     it('should include explicit subclass rules with correct new names', () => {
-        const rules = buildClassRenameRules(ENTITY_RENAME_MAP, SUBCLASS_RENAME_MAP);
+        const rules = BuildClassRenameRules(ENTITY_RENAME_MAP, SUBCLASS_RENAME_MAP);
         // ActionEntityServerEntity should map to MJActionEntityServer (from explicit map)
         const actionServerRule = rules.find(r => r.old === 'ActionEntityServerEntity');
         expect(actionServerRule).toBeDefined();
@@ -1053,7 +1053,7 @@ describe('Embedded Rename Map', () => {
     });
 
     it('should sort multi-word rules longest-first', () => {
-        const rules = buildMultiWordNameRules(ENTITY_RENAME_MAP);
+        const rules = BuildMultiWordNameRules(ENTITY_RENAME_MAP);
         for (let i = 0; i < rules.length - 1; i++) {
             expect(rules[i].old.length).toBeGreaterThanOrEqual(rules[i + 1].old.length);
         }
@@ -1069,7 +1069,7 @@ describe('HtmlEntityNameScanner', () => {
     describe('Method call detection in templates', () => {
         it('should detect navigateToEntity in (click) binding', () => {
             const src = `<div (click)="navigateToEntity('Actions', item.ID)">Click</div>`;
-            const findings = scanHtmlFile('test.html', src, renameMap);
+            const findings = ScanHtmlFile('test.html', src, renameMap);
             expect(findings).toHaveLength(1);
             expect(findings[0].OldName).toBe('Actions');
             expect(findings[0].NewName).toBe('MJ: Actions');
@@ -1077,35 +1077,35 @@ describe('HtmlEntityNameScanner', () => {
 
         it('should detect OpenEntityRecord in template', () => {
             const src = `<a (click)="OpenEntityRecord('Entities', record.ID)">Open</a>`;
-            const findings = scanHtmlFile('test.html', src, renameMap);
+            const findings = ScanHtmlFile('test.html', src, renameMap);
             expect(findings).toHaveLength(1);
             expect(findings[0].OldName).toBe('Entities');
         });
 
         it('should detect openEntityRecord (lowercase)', () => {
             const src = `<a (click)="openEntityRecord('Users', id)">Open</a>`;
-            const findings = scanHtmlFile('test.html', src, renameMap);
+            const findings = ScanHtmlFile('test.html', src, renameMap);
             expect(findings).toHaveLength(1);
             expect(findings[0].OldName).toBe('Users');
         });
 
         it('should detect RowsEntityName attribute', () => {
             const src = `<mj-grid RowsEntityName="Users"></mj-grid>`;
-            const findings = scanHtmlFile('test.html', src, renameMap);
+            const findings = ScanHtmlFile('test.html', src, renameMap);
             expect(findings).toHaveLength(1);
             expect(findings[0].OldName).toBe('Users');
         });
 
         it('should detect JoinEntityName attribute', () => {
             const src = `<mj-grid JoinEntityName="Roles"></mj-grid>`;
-            const findings = scanHtmlFile('test.html', src, renameMap);
+            const findings = ScanHtmlFile('test.html', src, renameMap);
             expect(findings).toHaveLength(1);
             expect(findings[0].OldName).toBe('Roles');
         });
 
         it('should NOT flag already-prefixed names', () => {
             const src = `<div (click)="navigateToEntity('MJ: Actions', item.ID)">Click</div>`;
-            const findings = scanHtmlFile('test.html', src, renameMap);
+            const findings = ScanHtmlFile('test.html', src, renameMap);
             expect(findings).toHaveLength(0);
         });
     });
@@ -1113,15 +1113,15 @@ describe('HtmlEntityNameScanner', () => {
     describe('fixHtmlFile', () => {
         it('should replace old names in method calls', () => {
             const src = `<div (click)="navigateToEntity('Actions', item.ID)">Click</div>`;
-            const findings = scanHtmlFile('test.html', src, renameMap);
-            const fixed = fixHtmlFile(src, findings);
+            const findings = ScanHtmlFile('test.html', src, renameMap);
+            const fixed = FixHtmlFile(src, findings);
             expect(fixed).toContain("navigateToEntity('MJ: Actions'");
         });
 
         it('should replace old names in attribute values', () => {
             const src = `<mj-grid RowsEntityName="Users"></mj-grid>`;
-            const findings = scanHtmlFile('test.html', src, renameMap);
-            const fixed = fixHtmlFile(src, findings);
+            const findings = ScanHtmlFile('test.html', src, renameMap);
+            const fixed = FixHtmlFile(src, findings);
             expect(fixed).toContain('RowsEntityName="MJ: Users"');
         });
     });
@@ -1140,7 +1140,7 @@ describe('MetadataNameScanner', () => {
                     EntityID: '@lookup:Entities.ID=Dashboards'
                 }
             }, null, 2);
-            const findings = scanMetadataFile('test.json', src, renameMap);
+            const findings = ScanMetadataFile('test.json', src, renameMap);
             const entityFinding = findings.find(f => f.OldName === 'Entities');
             expect(entityFinding).toBeDefined();
             expect(entityFinding!.NewName).toBe('MJ: Entities');
@@ -1152,7 +1152,7 @@ describe('MetadataNameScanner', () => {
                     EntityID: '@lookup:MJ: Entities.Name=Dashboards'
                 }
             }, null, 2);
-            const findings = scanMetadataFile('test.json', src, renameMap);
+            const findings = ScanMetadataFile('test.json', src, renameMap);
             const dashboardFinding = findings.find(f => f.OldName === 'Dashboards');
             expect(dashboardFinding).toBeDefined();
         });
@@ -1163,7 +1163,7 @@ describe('MetadataNameScanner', () => {
                     EntityID: '@lookup:MJ: Entities.Name=MJ: Dashboards'
                 }
             }, null, 2);
-            const findings = scanMetadataFile('test.json', src, renameMap);
+            const findings = ScanMetadataFile('test.json', src, renameMap);
             expect(findings).toHaveLength(0);
         });
     });
@@ -1174,7 +1174,7 @@ describe('MetadataNameScanner', () => {
                 entity: 'Dashboards',
                 primaryKey: { ID: '123' }
             }, null, 2);
-            const findings = scanMetadataFile('.mj-sync.json', src, renameMap);
+            const findings = ScanMetadataFile('.mj-sync.json', src, renameMap);
             const finding = findings.find(f => f.OldName === 'Dashboards');
             expect(finding).toBeDefined();
         });
@@ -1184,7 +1184,7 @@ describe('MetadataNameScanner', () => {
                 entityName: 'Actions',
                 someProp: 'value'
             }, null, 2);
-            const findings = scanMetadataFile('.mj-folder.json', src, renameMap);
+            const findings = ScanMetadataFile('.mj-folder.json', src, renameMap);
             const finding = findings.find(f => f.OldName === 'Actions');
             expect(finding).toBeDefined();
         });
@@ -1199,7 +1199,7 @@ describe('MetadataNameScanner', () => {
                     'MJ: Templates': []
                 }
             }, null, 2);
-            const findings = scanMetadataFile('test.json', src, renameMap);
+            const findings = ScanMetadataFile('test.json', src, renameMap);
             const finding = findings.find(f => f.OldName === 'Actions');
             expect(finding).toBeDefined();
         });
@@ -1211,7 +1211,7 @@ describe('MetadataNameScanner', () => {
                     'MJ: Templates': []
                 }
             }, null, 2);
-            const findings = scanMetadataFile('test.json', src, renameMap);
+            const findings = ScanMetadataFile('test.json', src, renameMap);
             expect(findings).toHaveLength(0);
         });
     });
@@ -1224,7 +1224,7 @@ describe('MetadataNameScanner', () => {
                     Description: 'Some description'
                 }
             }, null, 2);
-            const findings = scanMetadataFile('test.json', src, renameMap, true);
+            const findings = ScanMetadataFile('test.json', src, renameMap, true);
             const finding = findings.find(f => f.OldName === 'Actions');
             expect(finding).toBeDefined();
         });
@@ -1236,7 +1236,7 @@ describe('MetadataNameScanner', () => {
                     Description: 'Some description'
                 }
             }, null, 2);
-            const findings = scanMetadataFile('test.json', src, renameMap, false);
+            const findings = ScanMetadataFile('test.json', src, renameMap, false);
             const nameFinding = findings.find(f => f.OldName === 'Actions' && f.PatternKind === 'entityNameField');
             expect(nameFinding).toBeUndefined();
         });
@@ -1249,8 +1249,8 @@ describe('MetadataNameScanner', () => {
                     EntityID: '@lookup:Entities.ID=Dashboards'
                 }
             }, null, 2);
-            const findings = scanMetadataFile('test.json', src, renameMap);
-            const fixed = fixMetadataFile(src, findings);
+            const findings = ScanMetadataFile('test.json', src, renameMap);
+            const fixed = FixMetadataFile(src, findings);
             expect(fixed).toContain('MJ: Entities');
         });
 
@@ -1260,8 +1260,8 @@ describe('MetadataNameScanner', () => {
                     'Actions': [{ id: '1' }]
                 }
             }, null, 2);
-            const findings = scanMetadataFile('test.json', src, renameMap);
-            const fixed = fixMetadataFile(src, findings);
+            const findings = ScanMetadataFile('test.json', src, renameMap);
+            const fixed = FixMetadataFile(src, findings);
             expect(fixed).toContain('"MJ: Actions"');
             expect(fixed).not.toMatch(/"Actions"/);
         });
@@ -1272,7 +1272,7 @@ describe('MetadataNameScanner', () => {
             const src = JSON.stringify({
                 fields: { Name: 'SomethingNotInMap', Value: 42 }
             }, null, 2);
-            const findings = scanMetadataFile('test.json', src, renameMap);
+            const findings = ScanMetadataFile('test.json', src, renameMap);
             expect(findings).toHaveLength(0);
         });
     });

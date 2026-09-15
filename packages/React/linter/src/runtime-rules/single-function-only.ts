@@ -2,7 +2,7 @@ import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
 import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
-import { traverse, NodePath, createViolation } from '../lint-utils';
+import { traverse, NodePath, CreateViolation } from '../lint-utils';
 
 /**
  * Rule: single-function-only
@@ -27,7 +27,7 @@ export class SingleFunctionOnlyRule extends BaseLintRule {
     // First, check if there's anything other than a single function declaration
     if (programBody.length === 0) {
       violations.push(
-        createViolation(
+        CreateViolation(
           'single-function-only',
           'critical',
           null,
@@ -41,7 +41,7 @@ export class SingleFunctionOnlyRule extends BaseLintRule {
     if (programBody.length > 1) {
       // Multiple top-level statements - not allowed
       violations.push(
-        createViolation(
+        CreateViolation(
           'single-function-only',
           'critical',
           programBody[1],
@@ -63,7 +63,7 @@ export class SingleFunctionOnlyRule extends BaseLintRule {
         }
 
         violations.push(
-          createViolation(
+          CreateViolation(
             'single-function-only',
             'critical',
             stmt,
@@ -99,7 +99,7 @@ export class SingleFunctionOnlyRule extends BaseLintRule {
       }
 
       violations.push(
-        createViolation(
+        CreateViolation(
           'single-function-only',
           'critical',
           firstStatement,
@@ -116,7 +116,7 @@ export class SingleFunctionOnlyRule extends BaseLintRule {
     const functionName = firstStatement.id?.name;
     if (functionName !== componentName) {
       violations.push(
-        createViolation(
+        CreateViolation(
           'single-function-only',
           'critical',
           firstStatement,
@@ -135,7 +135,7 @@ export class SingleFunctionOnlyRule extends BaseLintRule {
           // Check if there are any directives or other non-obvious code
           if (path.node.directives && path.node.directives.length > 0) {
             violations.push(
-              createViolation(
+              CreateViolation(
                 'single-function-only',
                 'high',
                 null,

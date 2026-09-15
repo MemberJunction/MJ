@@ -54,7 +54,7 @@ export type DatabaseSettingsInfo = z.infer<typeof databaseSettingsInfoSchema>;
 export type ComponentRegistrySettings = z.infer<typeof componentRegistrySettingsSchema>;
 export type ConfigInfo = z.infer<typeof configInfoSchema>;
 
-export const configInfo: ConfigInfo = loadConfig();
+export const configInfo: ConfigInfo = LoadConfig();
 
 export const {
   dbUsername,
@@ -71,7 +71,7 @@ export const {
 export const dbReadOnlyUsername = configInfo.dbReadOnlyUsername || configInfo.databaseSettings?.dbReadOnlyUsername;
 export const dbReadOnlyPassword = configInfo.dbReadOnlyPassword || configInfo.databaseSettings?.dbReadOnlyPassword;
 
-export function loadConfig(): ConfigInfo {
+export function LoadConfig(): ConfigInfo {
   const configSearchResult = explorer.search(process.cwd());
   if (!configSearchResult) {
     throw new Error('Config file not found.');
@@ -86,4 +86,9 @@ export function loadConfig(): ConfigInfo {
     LogError('Error parsing config file', null, JSON.stringify(configParsing.error.issues, null, 2));
   }
   return <ConfigInfo>configParsing.data;
+}
+
+/** @deprecated Use {@link LoadConfig}. */
+export function loadConfig(): ConfigInfo {
+  return LoadConfig();
 }

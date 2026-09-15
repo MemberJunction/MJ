@@ -9,22 +9,37 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 /** Lower-case schema-qualified name used for sort keys and sets. */
-export function qname(schema: string, name: string): string {
+export function Qname(schema: string, name: string): string {
   return `${schema}.${name}`.toLowerCase();
 }
 
+/** @deprecated Use {@link Qname}. */
+export function qname(schema: string, name: string): string {
+  return Qname(schema, name);
+}
+
 /** Quote a T-SQL identifier with brackets, escaping any embedded `]`. */
-export function quoteIdent(name: string): string {
+export function QuoteIdent(name: string): string {
   return `[${name.replace(/]/g, ']]')}]`;
 }
 
+/** @deprecated Use {@link QuoteIdent}. */
+export function quoteIdent(name: string): string {
+  return QuoteIdent(name);
+}
+
 /** Quote a T-SQL string literal, escaping single quotes. */
-export function quoteString(value: string): string {
+export function QuoteString(value: string): string {
   return `N'${value.replace(/'/g, "''")}'`;
 }
 
+/** @deprecated Use {@link QuoteString}. */
+export function quoteString(value: string): string {
+  return QuoteString(value);
+}
+
 /** Stable sort by a key extractor; preserves input order for ties. */
-export function stableSortBy<T>(items: readonly T[], key: (item: T) => string): T[] {
+export function StableSortBy<T>(items: readonly T[], key: (item: T) => string): T[] {
   return items
     .map((item, index) => ({ item, index, key: key(item) }))
     .sort((a, b) => {
@@ -33,6 +48,11 @@ export function stableSortBy<T>(items: readonly T[], key: (item: T) => string): 
       return a.index - b.index;
     })
     .map((wrapped) => wrapped.item);
+}
+
+/** @deprecated Use {@link StableSortBy}. */
+export function stableSortBy<T>(items: readonly T[], key: (item: T) => string): T[] {
+  return StableSortBy(items, key);
 }
 
 /** Cross-platform line endings: emit LF only. Caller normalizes if needed. */
@@ -47,17 +67,27 @@ export const NL = '\n';
 export const EXCLUDED_TABLE_NAMES: ReadonlySet<string> = new Set(['flyway_schema_history']);
 
 /** Returns true if a table (by bare name) is one we never emit in a baseline. */
-export function isExcludedTable(name: string): boolean {
+export function IsExcludedTable(name: string): boolean {
   return EXCLUDED_TABLE_NAMES.has(name.toLowerCase());
 }
 
+/** @deprecated Use {@link IsExcludedTable}. */
+export function isExcludedTable(name: string): boolean {
+  return IsExcludedTable(name);
+}
+
 /** Canonical ISO-8601 UTC stamp without milliseconds: 2026-05-02T19:47:00Z. */
-export function isoUtcSeconds(date: Date): string {
+export function IsoUtcSeconds(date: Date): string {
   return date.toISOString().replace(/\.\d{3}Z$/, 'Z');
 }
 
+/** @deprecated Use {@link IsoUtcSeconds}. */
+export function isoUtcSeconds(date: Date): string {
+  return IsoUtcSeconds(date);
+}
+
 /** Filename timestamp: YYYYMMDDHHMM in UTC. */
-export function fileStamp(date: Date): string {
+export function FileStamp(date: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   return (
     date.getUTCFullYear().toString() +
@@ -68,13 +98,23 @@ export function fileStamp(date: Date): string {
   );
 }
 
+/** @deprecated Use {@link FileStamp}. */
+export function fileStamp(date: Date): string {
+  return FileStamp(date);
+}
+
 /** Build the canonical filename for a baseline migration. */
+export function BaselineFilename(opts: { generatedAtUtc: Date; baselineVersion: string }): string {
+  return `B${FileStamp(opts.generatedAtUtc)}__v${opts.baselineVersion}.x__Baseline.sql`;
+}
+
+/** @deprecated Use {@link BaselineFilename}. */
 export function baselineFilename(opts: { generatedAtUtc: Date; baselineVersion: string }): string {
-  return `B${fileStamp(opts.generatedAtUtc)}__v${opts.baselineVersion}.x__Baseline.sql`;
+  return BaselineFilename(opts);
 }
 
 /** Inverse of {@link fileStamp}: parses a YYYYMMDDHHMM string into a UTC Date. */
-export function parseFileStamp(stamp: string): Date {
+export function ParseFileStamp(stamp: string): Date {
   if (!/^\d{12}$/.test(stamp)) {
     throw new Error(`Invalid YYYYMMDDHHMM stamp: ${stamp}`);
   }
@@ -86,9 +126,19 @@ export function parseFileStamp(stamp: string): Date {
   return new Date(Date.UTC(y, mo, d, h, mi));
 }
 
+/** @deprecated Use {@link ParseFileStamp}. */
+export function parseFileStamp(stamp: string): Date {
+  return ParseFileStamp(stamp);
+}
+
 /** Return a new Date offset by N minutes (negative for past). */
-export function addMinutes(date: Date, minutes: number): Date {
+export function AddMinutes(date: Date, minutes: number): Date {
   return new Date(date.getTime() + minutes * 60_000);
+}
+
+/** @deprecated Use {@link AddMinutes}. */
+export function addMinutes(date: Date, minutes: number): Date {
+  return AddMinutes(date, minutes);
 }
 
 /**
@@ -108,7 +158,7 @@ export interface ParsedMigrationFilename {
   majorMinor: string;    // e.g. "5.32"
   filename: string;
 }
-export function parseMigrationFilename(filename: string): ParsedMigrationFilename | null {
+export function ParseMigrationFilename(filename: string): ParsedMigrationFilename | null {
   const match = /^([VB])(\d{12})__v(\d+)\.(\d+)/.exec(filename);
   if (!match) return null;
   return {
@@ -121,6 +171,11 @@ export function parseMigrationFilename(filename: string): ParsedMigrationFilenam
   };
 }
 
+/** @deprecated Use {@link ParseMigrationFilename}. */
+export function parseMigrationFilename(filename: string): ParsedMigrationFilename | null {
+  return ParseMigrationFilename(filename);
+}
+
 /**
  * Scan a migrations source directory and return the latest V-file by timestamp.
  * Files that don't match the expected shape are silently ignored.
@@ -128,7 +183,7 @@ export function parseMigrationFilename(filename: string): ParsedMigrationFilenam
  * Used by within-major rebaseline to derive the new baseline's version + timestamp
  * from the head of the existing V-stack.
  */
-export function findLatestVersionedMigration(sourceDir: string): ParsedMigrationFilename | null {
+export function FindLatestVersionedMigration(sourceDir: string): ParsedMigrationFilename | null {
   if (!fs.existsSync(sourceDir) || !fs.statSync(sourceDir).isDirectory()) {
     return null;
   }
@@ -136,15 +191,20 @@ export function findLatestVersionedMigration(sourceDir: string): ParsedMigration
   let best: ParsedMigrationFilename | null = null;
   for (const name of entries) {
     if (!name.toLowerCase().endsWith('.sql')) continue;
-    const parsed = parseMigrationFilename(name);
+    const parsed = ParseMigrationFilename(name);
     if (!parsed || parsed.kind !== 'V') continue;
     if (!best || parsed.timestamp > best.timestamp) best = parsed;
   }
   return best;
 }
 
+/** @deprecated Use {@link FindLatestVersionedMigration}. */
+export function findLatestVersionedMigration(sourceDir: string): ParsedMigrationFilename | null {
+  return FindLatestVersionedMigration(sourceDir);
+}
+
 /** Same as {@link findLatestVersionedMigration} but for `B`-prefixed baseline files. */
-export function findLatestBaselineMigration(sourceDir: string): ParsedMigrationFilename | null {
+export function FindLatestBaselineMigration(sourceDir: string): ParsedMigrationFilename | null {
   if (!fs.existsSync(sourceDir) || !fs.statSync(sourceDir).isDirectory()) {
     return null;
   }
@@ -152,11 +212,16 @@ export function findLatestBaselineMigration(sourceDir: string): ParsedMigrationF
   let best: ParsedMigrationFilename | null = null;
   for (const name of entries) {
     if (!name.toLowerCase().endsWith('.sql')) continue;
-    const parsed = parseMigrationFilename(name);
+    const parsed = ParseMigrationFilename(name);
     if (!parsed || parsed.kind !== 'B') continue;
     if (!best || parsed.timestamp > best.timestamp) best = parsed;
   }
   return best;
+}
+
+/** @deprecated Use {@link FindLatestBaselineMigration}. */
+export function findLatestBaselineMigration(sourceDir: string): ParsedMigrationFilename | null {
+  return FindLatestBaselineMigration(sourceDir);
 }
 
 /**
@@ -167,7 +232,7 @@ export function findLatestBaselineMigration(sourceDir: string): ParsedMigrationF
  * Stops walking at the filesystem root. Used so the CLI can auto-locate the
  * source dir for within-major rebaseline without forcing the caller to pass `--source-dir`.
  */
-export function discoverMigrationsSourceDir(cwd: string): string | null {
+export function DiscoverMigrationsSourceDir(cwd: string): string | null {
   let dir = path.resolve(cwd);
   for (let i = 0; i < 16; i++) {
     const candidate = path.join(dir, 'migrations');
@@ -188,26 +253,39 @@ export function discoverMigrationsSourceDir(cwd: string): string | null {
   return null;
 }
 
+/** @deprecated Use {@link DiscoverMigrationsSourceDir}. */
+export function discoverMigrationsSourceDir(cwd: string): string | null {
+  return DiscoverMigrationsSourceDir(cwd);
+}
+
 /**
  * Compute the canonical generated-at timestamp for a within-major rebaseline.
  * The new baseline's filename timestamp is exactly 1 minute after the latest
  * V-file's timestamp — guaranteeing the new B-file sorts after the V-stack it
  * succeeds, while remaining deterministic across re-runs against the same input.
  */
+export function ComputeAutoBaselineStamp(latestVTimestamp: string): {
+  generatedAtUtc: Date;
+  fileStamp: string;
+} {
+  const parsed = ParseFileStamp(latestVTimestamp);
+  const next = AddMinutes(parsed, 1);
+  return { generatedAtUtc: next, fileStamp: FileStamp(next) };
+}
+
+/** @deprecated Use {@link ComputeAutoBaselineStamp}. */
 export function computeAutoBaselineStamp(latestVTimestamp: string): {
   generatedAtUtc: Date;
   fileStamp: string;
 } {
-  const parsed = parseFileStamp(latestVTimestamp);
-  const next = addMinutes(parsed, 1);
-  return { generatedAtUtc: next, fileStamp: fileStamp(next) };
+  return ComputeAutoBaselineStamp(latestVTimestamp);
 }
 
 /**
  * Format a JS value as a T-SQL literal. Used by the data dumper.
  * Returns `NULL` for null/undefined, otherwise a typed literal.
  */
-export function formatTsqlValue(value: unknown): string {
+export function FormatTsqlValue(value: unknown): string {
   if (value === null || value === undefined) return 'NULL';
   if (typeof value === 'boolean') return value ? '1' : '0';
   if (typeof value === 'number') {
@@ -229,16 +307,21 @@ export function formatTsqlValue(value: unknown): string {
   if (value instanceof Uint8Array) {
     return '0x' + Buffer.from(value).toString('hex').toUpperCase();
   }
-  if (typeof value === 'string') return quoteString(value);
+  if (typeof value === 'string') return QuoteString(value);
   if (typeof value === 'object') {
     // Fallback: JSON-serialize objects (rare; mssql driver returns primitives)
-    return quoteString(JSON.stringify(value));
+    return QuoteString(JSON.stringify(value));
   }
   throw new Error(`Unsupported value type for T-SQL literal: ${typeof value}`);
 }
 
+/** @deprecated Use {@link FormatTsqlValue}. */
+export function formatTsqlValue(value: unknown): string {
+  return FormatTsqlValue(value);
+}
+
 /** Strict equality used by the comparator for column values. */
-export function deepValueEqual(a: unknown, b: unknown): boolean {
+export function DeepValueEqual(a: unknown, b: unknown): boolean {
   if (a === b) return true;
   if (a === null || a === undefined) return b === null || b === undefined;
   if (b === null || b === undefined) return false;
@@ -264,9 +347,19 @@ export function deepValueEqual(a: unknown, b: unknown): boolean {
   return false;
 }
 
+/** @deprecated Use {@link DeepValueEqual}. */
+export function deepValueEqual(a: unknown, b: unknown): boolean {
+  return DeepValueEqual(a, b);
+}
+
 /** Truncate a string with an ellipsis for diff output. */
-export function ellipsize(value: string, max = 80): string {
+export function Ellipsize(value: string, max = 80): string {
   return value.length <= max ? value : value.slice(0, max - 1) + '…';
+}
+
+/** @deprecated Use {@link Ellipsize}. */
+export function ellipsize(value: string, max = 80): string {
+  return Ellipsize(value, max);
 }
 
 /**
@@ -281,13 +374,13 @@ export function ellipsize(value: string, max = 80): string {
  * MSSQL `CREATE VIEW`/`CREATE FUNCTION` reject forward references at create
  * time, so without this sort we hit `Invalid object name` errors on apply.
  */
-export function topoSortRoutinesByDefinition<
+export function TopoSortRoutinesByDefinition<
   T extends { name: string; schema: string; definition: string },
 >(items: readonly T[]): T[] {
   if (items.length <= 1) return items.slice();
 
   const byKey = new Map<string, T>();
-  for (const r of items) byKey.set(qname(r.schema, r.name), r);
+  for (const r of items) byKey.set(Qname(r.schema, r.name), r);
 
   // Precompute lowercased bodies, with bracket-quoted identifiers normalized
   // so that `[__mj].[vwEntities]` matches the qname `__mj.vwentities`. Without
@@ -336,6 +429,13 @@ export function topoSortRoutinesByDefinition<
     }
   }
   return result;
+}
+
+/** @deprecated Use {@link TopoSortRoutinesByDefinition}. */
+export function topoSortRoutinesByDefinition<
+  T extends { name: string; schema: string; definition: string },
+>(items: readonly T[]): T[] {
+  return TopoSortRoutinesByDefinition(items);
 }
 
 /** Word-boundary substring search (lowercased input only). */

@@ -30,9 +30,9 @@ import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext, AgentLiveFixture } from '@memberjunction/testing-integration';
 import {
-    AGENT_LIVE_FIXTURE_TAG, AGENT_LIVE_SETTLE_MS, newMarker, sleep,
-    makeAIClient, userTurn, runAgentOverWire, resolveRunId, firstPromptMessages,
-    deleteById, purgeAgentRun,
+    AGENT_LIVE_FIXTURE_TAG, AGENT_LIVE_SETTLE_MS, NewMarker, Sleep,
+    MakeAIClient, UserTurn, RunAgentOverWire, ResolveRunId, FirstPromptMessages,
+    DeleteById, PurgeAgentRun,
 } from './agent-live-shared';
 
 /**
@@ -118,12 +118,12 @@ function eligibleOutputData(dataMarker: string): string {
 
 /** Run IT: Echo Agent one live turn linked to the conversation; return that run's first prompt Messages. */
 async function observeTurn(ctx: IntegrationCheckContext, observer: MJAIAgentEntityExtended, detailId: string, conversationId: string): Promise<{ role: string; content: string }[]> {
-    const result = await runAgentOverWire(makeAIClient(ctx.Provider, ctx.User), observer, userTurn('Acknowledge and finish.'), { conversationDetailId: detailId, conversationId });
-    await sleep(AGENT_LIVE_SETTLE_MS);
-    const runId = await resolveRunId(result, ctx.User, `ConversationID='${conversationId}' AND AgentID='${observer.ID}'`, ctx.Provider);
+    const result = await RunAgentOverWire(MakeAIClient(ctx.Provider, ctx.User), observer, UserTurn('Acknowledge and finish.'), { conversationDetailId: detailId, conversationId });
+    await Sleep(AGENT_LIVE_SETTLE_MS);
+    const runId = await ResolveRunId(result, ctx.User, `ConversationID='${conversationId}' AND AgentID='${observer.ID}'`, ctx.Provider);
     Assert(!!runId, 'CF: the observing turn landed an AI Agent Run');
     fixture(ctx).LiveRunIds.push(runId!);
-    return firstPromptMessages(runId!, ctx.User, ctx.Provider);
+    return FirstPromptMessages(runId!, ctx.User, ctx.Provider);
 }
 
 /** Messages whose content carries the carry-forward header (the injected transient message(s)). */
@@ -270,13 +270,13 @@ async function teardownCarryForward(fx: AgentLiveFixture | undefined, provider: 
         return;
     }
     for (const runId of fx.LiveRunIds) {
-        try { await purgeAgentRun(runId, provider, user); } catch (e) { console.error('CF live run purge failed:', e); }
+        try { await PurgeAgentRun(runId, provider, user); } catch (e) { console.error('CF live run purge failed:', e); }
     }
     for (const stepId of fx.FabricatedStepIds) {
-        await deleteById('MJ: AI Agent Run Steps', stepId, provider, user);
+        await DeleteById('MJ: AI Agent Run Steps', stepId, provider, user);
     }
     for (const runId of fx.FabricatedRunIds) {
-        await deleteById('MJ: AI Agent Runs', runId, provider, user);
+        await DeleteById('MJ: AI Agent Runs', runId, provider, user);
     }
     for (const convId of fx.ConversationIds) {
         try {
@@ -284,9 +284,9 @@ async function teardownCarryForward(fx: AgentLiveFixture | undefined, provider: 
                 EntityName: 'MJ: Conversation Details', ExtraFilter: `ConversationID='${convId}'`, Fields: ['ID'], ResultType: 'simple', BypassCache: true,
             }, user);
             for (const d of (details.Success ? details.Results : [])) {
-                await deleteById('MJ: Conversation Details', d.ID, provider, user);
+                await DeleteById('MJ: Conversation Details', d.ID, provider, user);
             }
-            await deleteById('MJ: Conversations', convId, provider, user);
+            await DeleteById('MJ: Conversations', convId, provider, user);
         } catch (e) { console.error('CF conversation cleanup failed:', e); }
     }
 }
@@ -294,7 +294,7 @@ async function teardownCarryForward(fx: AgentLiveFixture | undefined, provider: 
 IntegrationCheckRegistry.Instance.RegisterLifecycle('agent-carry-forward', {
     Setup: async ctx => {
         ctx.AgentCarryForwardFixture = {
-            Marker: newMarker('CF'),
+            Marker: NewMarker('CF'),
             ConversationIds: [], ConversationDetailIds: [], LiveRunIds: [], FabricatedRunIds: [], FabricatedStepIds: [],
         };
     },

@@ -2,8 +2,8 @@ import { RunView, type UserInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import type { MJCompanyIntegrationEntity, MJIntegrationObjectEntity, MJIntegrationObjectFieldEntity } from '@memberjunction/core-entities';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
-import { computeContentHash } from './ContentHash.js';
-import { serializeKeyValue } from './KeySerialization.js';
+import { ComputeContentHash } from './ContentHash.js';
+import { SerializeKeyValue } from './KeySerialization.js';
 import { PK_STAT_MIN_ROWS_FOR_SIGNIFICANCE } from './StreamingDiscovery.js';
 import {
     BaseIntegrationConnector,
@@ -1580,9 +1580,9 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         // so an object-valued PK (a connector that surfaces a nested {id,...} blob as its key) yields
         // a stable, distinct ExternalID instead of every record collapsing to "[object Object]".
         const allPkPresent = pkFieldNames.length > 0
-            && pkFieldNames.every(name => raw[name] != null && serializeKeyValue(raw[name]).length > 0);
-        const externalID = pkFieldNames.map(name => serializeKeyValue(raw[name])).join('|');
-        const resolvedID = allPkPresent ? externalID : computeContentHash(raw);
+            && pkFieldNames.every(name => raw[name] != null && SerializeKeyValue(raw[name]).length > 0);
+        const externalID = pkFieldNames.map(name => SerializeKeyValue(raw[name])).join('|');
+        const resolvedID = allPkPresent ? externalID : ComputeContentHash(raw);
 
         // §4 cont'd — write the synthetic identity INTO the PK column. When the source never populates the
         // declared PK (nested/derived records: contact phones, event sponsors, scheduled billing, …) the row
@@ -1593,7 +1593,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         // are idempotent (same content → same hash → upsert match). Single-PK only; the full source record is
         // otherwise preserved (full-record pass-through), so this never drops a source key.
         let fields = raw;
-        if (!allPkPresent && pkFieldNames.length === 1 && (raw[pkFieldNames[0]] == null || serializeKeyValue(raw[pkFieldNames[0]]).length === 0)) {
+        if (!allPkPresent && pkFieldNames.length === 1 && (raw[pkFieldNames[0]] == null || SerializeKeyValue(raw[pkFieldNames[0]]).length === 0)) {
             fields = { ...raw, [pkFieldNames[0]]: resolvedID };
         }
         return {

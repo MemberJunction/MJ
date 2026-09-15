@@ -56,11 +56,20 @@ export interface ClustererOptions {
 }
 
 export class ColumnClusterer {
-    public lastResolvedThreshold = 0;
+    public LastResolvedThreshold = 0;
+
+    /** @deprecated Use {@link LastResolvedThreshold}. */
+    public get lastResolvedThreshold() {
+        return this.LastResolvedThreshold;
+    }
+    /** @deprecated Use {@link LastResolvedThreshold}. */
+    public set lastResolvedThreshold(value) {
+        this.LastResolvedThreshold = value;
+    }
 
     constructor(private readonly opts: ClustererOptions) {}
 
-    public cluster(columns: ClustererInputColumn[]): RawCluster[] {
+    public Cluster(columns: ClustererInputColumn[]): RawCluster[] {
         const n = columns.length;
         if (n < this.opts.minClusterSize) return [];
 
@@ -69,7 +78,7 @@ export class ColumnClusterer {
         const resolvedThreshold = this.opts.mergeThreshold !== undefined
             ? this.opts.mergeThreshold
             : computeThresholdFromDistribution(distance, this.opts.mergeThresholdPercentile ?? 5);
-        this.lastResolvedThreshold = resolvedThreshold;
+        this.LastResolvedThreshold = resolvedThreshold;
 
         // Step 2 — agglomerative merge with average-linkage.
         const clusters = new Map<number, number[]>();
@@ -143,6 +152,11 @@ export class ColumnClusterer {
         }
         out.sort((a, b) => b.members.length - a.members.length);
         return out;
+    }
+
+    /** @deprecated Use {@link Cluster}. */
+    public cluster(columns: ClustererInputColumn[]): RawCluster[] {
+        return this.Cluster(columns);
     }
 }
 

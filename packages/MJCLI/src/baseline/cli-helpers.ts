@@ -6,12 +6,12 @@
  * - Detect TTY for spinner vs. plain log output.
  */
 
-import { getValidatedConfig } from '../config';
+import { GetValidatedConfig } from '../config';
 import type { DbConnectionParams, DbConnectionOverrides } from './connection';
 import type { Dialect } from './types';
 
-export function resolveConnection(overrides: DbConnectionOverrides = {}, dialectFlag?: Dialect): DbConnectionParams {
-  const config = getValidatedConfig();
+export function ResolveConnection(overrides: DbConnectionOverrides = {}, dialectFlag?: Dialect): DbConnectionParams {
+  const config = GetValidatedConfig();
   const dialect: Dialect = dialectFlag
     ?? (config.dbPlatform === 'postgresql' ? 'postgres' : 'mssql');
 
@@ -36,6 +36,16 @@ export function resolveConnection(overrides: DbConnectionOverrides = {}, dialect
   };
 }
 
-export function isTty(): boolean {
+/** @deprecated Use {@link ResolveConnection}. */
+export function resolveConnection(overrides: DbConnectionOverrides = {}, dialectFlag?: Dialect): DbConnectionParams {
+  return ResolveConnection(overrides, dialectFlag);
+}
+
+export function IsTty(): boolean {
   return Boolean(process.stdout.isTTY) && process.env.CI !== 'true';
+}
+
+/** @deprecated Use {@link IsTty}. */
+export function isTty(): boolean {
+  return IsTty();
 }

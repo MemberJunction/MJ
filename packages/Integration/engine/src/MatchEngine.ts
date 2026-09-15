@@ -1,8 +1,8 @@
 import { DatabaseProviderBase, IMetadataProvider, Metadata, RunView, type RunViewParams, type RunViewResult, type UserInfo } from '@memberjunction/core';
 import type { ICompanyIntegrationFieldMap, ICompanyIntegrationEntityMap } from './entity-types.js';
 import type { MappedRecord, ConflictResolution } from './types.js';
-import { serializeKeyValue } from './KeySerialization.js';
-import { quoteTextLiteral } from './prefetchFilter.js';
+import { SerializeKeyValue } from './KeySerialization.js';
+import { QuoteTextLiteral } from './prefetchFilter.js';
 
 /**
  * The field/value pairs a record is matched on — parallel arrays, so the same criteria can be
@@ -490,7 +490,7 @@ export class MatchEngine {
             const value = record.MappedFields[pkField.Name];
             if (value == null) continue;
             pk.Fields.push(pkField.Name);
-            pk.Values.push(serializeKeyValue(value));
+            pk.Values.push(SerializeKeyValue(value));
         }
 
         // Complete PK → identity match, on the PK alone. Configured key fields are deliberately
@@ -510,7 +510,7 @@ export class MatchEngine {
         for (const kf of keyFields) {
             const value = record.MappedFields[kf.DestinationFieldName];
             if (value == null) continue;
-            add(kf.DestinationFieldName, serializeKeyValue(value));
+            add(kf.DestinationFieldName, SerializeKeyValue(value));
         }
         for (let i = 0; i < pk.Fields.length; i++) add(pk.Fields[i], pk.Values[i]);
 
@@ -534,7 +534,7 @@ export class MatchEngine {
     private quoteLiteral(value: string): string {
         const provider = this.ProviderToUse;
         return provider instanceof DatabaseProviderBase
-            ? quoteTextLiteral(value, provider.Dialect)
+            ? QuoteTextLiteral(value, provider.Dialect)
             : `'${value.replace(/'/g, "''")}'`;
     }
 
@@ -655,7 +655,7 @@ export class MatchEngine {
             for (const row of rows) {
                 const rowKey = this.CriteriaKey(
                     group.LookupFields,
-                    group.LookupFields.map(f => serializeKeyValue(row[f]))
+                    group.LookupFields.map(f => SerializeKeyValue(row[f]))
                 );
                 if (index.Matched.has(rowKey)) continue; // first row wins, as MaxRows:1 did
                 index.Matched.set(

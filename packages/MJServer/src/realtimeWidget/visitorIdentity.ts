@@ -47,7 +47,7 @@ export interface IdentityResolutionTarget {
  * target (default: the `Users` entity keyed by `Email`). Returns undefined when no record matches — the
  * visitor simply stays anonymous. Never throws; email is escaped for the filter literal.
  */
-export async function resolveIdentityByEmail(
+export async function ResolveIdentityByEmail(
   email: string,
   contextUser: UserInfo,
   provider: IMetadataProvider,
@@ -103,6 +103,16 @@ export async function resolveIdentityByEmail(
   }
 }
 
+/** @deprecated Use {@link ResolveIdentityByEmail}. */
+export async function resolveIdentityByEmail(
+  email: string,
+  contextUser: UserInfo,
+  provider: IMetadataProvider,
+  target?: IdentityResolutionTarget,
+): Promise<ResolvedVisitorIdentity | undefined> {
+  return ResolveIdentityByEmail(email, contextUser, provider, target);
+}
+
 /** Loads every conversation sharing a VisitorKey within one application (entity objects, for mutation). */
 async function loadVisitorConversations(
   visitorKey: string,
@@ -134,7 +144,7 @@ async function loadVisitorConversations(
  *
  * @returns the number of conversations stamped (0 when nothing matched the key).
  */
-export async function mergeVisitorIdentity(args: {
+export async function MergeVisitorIdentity(args: {
   visitorKey: string;
   applicationId: string;
   identity: ResolvedVisitorIdentity;
@@ -172,6 +182,17 @@ export async function mergeVisitorIdentity(args: {
     LogError(`[VisitorIdentity] mergeVisitorIdentity failed: ${e instanceof Error ? e.message : String(e)}`);
     return 0;
   }
+}
+
+/** @deprecated Use {@link MergeVisitorIdentity}. */
+export async function mergeVisitorIdentity(args: {
+  visitorKey: string;
+  applicationId: string;
+  identity: ResolvedVisitorIdentity;
+  contextUser: UserInfo;
+  provider: IMetadataProvider;
+}): Promise<number> {
+  return MergeVisitorIdentity(args);
 }
 
 /** Re-keys notes scoped to `(Conversations entity, conversationId)` onto the resolved pair. */
@@ -217,7 +238,7 @@ async function rekeyAnonymousNotes(
  *
  * @returns a summary of what was archived/cleared.
  */
-export async function forgetVisitor(args: {
+export async function ForgetVisitor(args: {
   visitorKey: string;
   applicationId: string;
   contextUser: UserInfo;
@@ -270,4 +291,14 @@ export async function forgetVisitor(args: {
     LogError(`[VisitorIdentity] forgetVisitor failed: ${e instanceof Error ? e.message : String(e)}`);
   }
   return { notesArchived, conversationsCleared };
+}
+
+/** @deprecated Use {@link ForgetVisitor}. */
+export async function forgetVisitor(args: {
+  visitorKey: string;
+  applicationId: string;
+  contextUser: UserInfo;
+  provider: IMetadataProvider;
+}): Promise<{ notesArchived: number; conversationsCleared: number }> {
+  return ForgetVisitor(args);
 }

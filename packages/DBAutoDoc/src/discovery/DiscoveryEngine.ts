@@ -79,14 +79,19 @@ export class DiscoveryEngine {
   /**
    * Get the column statistics cache
    */
-  public getStatsCache(): ColumnStatsCache {
+  public GetStatsCache(): ColumnStatsCache {
     return this.statsCache;
+  }
+
+  /** @deprecated Use {@link GetStatsCache}. */
+  public getStatsCache(): ColumnStatsCache {
+    return this.GetStatsCache();
   }
 
   /**
    * Analyze if discovery should be triggered based on schema state
    */
-  public analyzeTrigger(): DiscoveryTriggerAnalysis {
+  public AnalyzeTrigger(): DiscoveryTriggerAnalysis {
     let totalTables = 0;
     let tablesWithPK = 0;
     let totalFKs = 0;
@@ -147,10 +152,15 @@ export class DiscoveryEngine {
     };
   }
 
+  /** @deprecated Use {@link AnalyzeTrigger}. */
+  public analyzeTrigger(): DiscoveryTriggerAnalysis {
+    return this.AnalyzeTrigger();
+  }
+
   /**
    * Execute the discovery process
    */
-  public async discover(
+  public async Discover(
     maxTokens: number,
     triggerAnalysis: DiscoveryTriggerAnalysis,
     existingPhase?: RelationshipDiscoveryPhase
@@ -237,6 +247,15 @@ export class DiscoveryEngine {
       guardrailReason,
       statsCache: this.statsCache
     };
+  }
+
+  /** @deprecated Use {@link Discover}. */
+  public async discover(
+    maxTokens: number,
+    triggerAnalysis: DiscoveryTriggerAnalysis,
+    existingPhase?: RelationshipDiscoveryPhase
+  ): Promise<DiscoveryResult> {
+    return this.Discover(maxTokens, triggerAnalysis, existingPhase);
   }
 
   /**
@@ -1087,7 +1106,7 @@ export class DiscoveryEngine {
   /**
    * Apply discovered relationships to state
    */
-  public applyDiscoveriesToState(
+  public ApplyDiscoveriesToState(
     state: DatabaseDocumentation,
     phase: RelationshipDiscoveryPhase
   ): void {
@@ -1140,6 +1159,14 @@ export class DiscoveryEngine {
 
     // Store discovery phase in state (new phases structure)
     state.phases.keyDetection = phase;
+  }
+
+  /** @deprecated Use {@link ApplyDiscoveriesToState}. */
+  public applyDiscoveriesToState(
+    state: DatabaseDocumentation,
+    phase: RelationshipDiscoveryPhase
+  ): void {
+    return this.ApplyDiscoveriesToState(state, phase);
   }
 
   /**

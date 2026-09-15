@@ -1,11 +1,11 @@
 import { CodeNameFromString, EntityFieldValueListType, EntityInfo, Metadata, SeverityType, TypeScriptTypeFromSQLType } from '@memberjunction/core';
 import fs from 'fs';
 import path from 'path';
-import { makeDir } from '../Misc/util';
+import { MakeDir } from '../Misc/util';
 import { RegisterClass, UUIDsEqual, ordinalCompare } from '@memberjunction/global';
 import { MJActionEntity, MJActionLibraryEntity } from '@memberjunction/core-entities';
 import { MJActionEntityServer } from '@memberjunction/core-entities-server';
-import { logError, logMessage, logStatus } from './status_logging';
+import { logError, LogMessage, logStatus } from './status_logging';
 import { mkdirSync } from 'fs';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { MJActionEntityExtended } from '@memberjunction/actions-base';
@@ -63,7 +63,7 @@ export class ActionSubClassGeneratorBase {
         });
         return allActionLibraries;
     }
-    public async generateActions(actions: MJActionEntityExtended[], directory: string): Promise<boolean> {
+    public async GenerateActions(actions: MJActionEntityExtended[], directory: string): Promise<boolean> {
         try {
             const actionFilePath = path.join(directory, 'action_subclasses.ts');
 
@@ -90,7 +90,7 @@ ${allActionLibraries.map(lib => `import { ${lib.ItemsUsedArray.map(item => item)
 `;
             let sCode: string = "";
             for (const action of sortedActions) {
-                sCode += await this.generateSingleAction(action, directory);
+                sCode += await this.GenerateSingleAction(action, directory);
             }
             let actionCode = actionHeader + sCode;
 
@@ -108,6 +108,11 @@ ${allActionLibraries.map(lib => `import { ${lib.ItemsUsedArray.map(item => item)
         }
     }
 
+    /** @deprecated Use {@link GenerateActions}. */
+    public async generateActions(actions: MJActionEntityExtended[], directory: string): Promise<boolean> {
+        return this.GenerateActions(actions, directory);
+    }
+
     /**
      * 
      * description: Generate a single Action
@@ -116,7 +121,7 @@ ${allActionLibraries.map(lib => `import { ${lib.ItemsUsedArray.map(item => item)
      * @param directory 
      * @returns 
      */
-    public async generateSingleAction(action: MJActionEntity, directory: string): Promise<string> {
+    public async GenerateSingleAction(action: MJActionEntity, directory: string): Promise<string> {
         if (action.Status !== 'Active' || action.CodeApprovalStatus !=='Approved' || action.Type !== 'Generated') {
             // either the action is not active, not approved, or is NOT a Generated action, so skip it
             return "";
@@ -150,5 +155,10 @@ export class ${actionClassName} extends BaseAction {
             logError(`Error generating action ${action.Name}`, e);
             throw e
         }
+    }
+
+    /** @deprecated Use {@link GenerateSingleAction}. */
+    public async generateSingleAction(action: MJActionEntity, directory: string): Promise<string> {
+        return this.GenerateSingleAction(action, directory);
     }
 }

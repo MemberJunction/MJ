@@ -15,7 +15,7 @@ import { LogError, LogStatusEx, IsVerboseLoggingEnabled, LogStatus, Metadata, Ru
 import { MJGlobal, UUIDsEqual, IsValidUUID, EscapeSQLString } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ExecuteAgentResult, ExecuteAgentParams, MediaOutput, FileOutputRef, InputArtifact, ArtifactDirective } from '@memberjunction/ai-core-plus';
-import { planArtifactTarget, IsKnownArtifactBehavior, ArtifactTargetPlan } from './artifact-target-plan';
+import { PlanArtifactTarget, IsKnownArtifactBehavior, ArtifactTargetPlan } from './artifact-target-plan';
 import { BaseAgent } from './base-agent';
 import { MJConversationEntity, MJConversationDetailEntity, MJArtifactEntity, MJArtifactVersionEntity, MJConversationDetailArtifactEntity, MJAIAgentRunMediaEntity, MJEnvironmentEntityExtended, ArtifactMetadataEngine, ExtractBase64FromDataUrl, DecideInlineStorage } from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
@@ -56,11 +56,19 @@ export interface CreatedArtifactInfo {
  * Callers surface this as a single "open the artifact" affordance, so a document-generating run
  * used to point at raw JSON. With several files, the first is the primary one.
  */
-export function selectPrimaryArtifact(
+export function SelectPrimaryArtifact(
     fileArtifacts: readonly CreatedArtifactInfo[] | undefined,
     payloadArtifact: CreatedArtifactInfo | undefined
 ): CreatedArtifactInfo | undefined {
     return fileArtifacts?.[0] ?? payloadArtifact;
+}
+
+/** @deprecated Use {@link SelectPrimaryArtifact}. */
+export function selectPrimaryArtifact(
+    fileArtifacts: readonly CreatedArtifactInfo[] | undefined,
+    payloadArtifact: CreatedArtifactInfo | undefined
+): CreatedArtifactInfo | undefined {
+    return SelectPrimaryArtifact(fileArtifacts, payloadArtifact);
 }
 
 /**
@@ -651,7 +659,7 @@ export class AgentRunner {
             // snapshot of the agent's internal state, useful when the payload IS the deliverable
             // (a report agent) and misleading when it is not — a document run reported the
             // payload, so "open the artifact" opened raw JSON instead of the document.
-            const artifactInfo = selectPrimaryArtifact(fileArtifacts, payloadArtifact);
+            const artifactInfo = SelectPrimaryArtifact(fileArtifacts, payloadArtifact);
 
             return {
                 agentResult,
@@ -974,7 +982,7 @@ export class AgentRunner {
                     );
                 }
             }
-            let plan = planArtifactTarget(directive, sourceArtifactId);
+            let plan = PlanArtifactTarget(directive, sourceArtifactId);
             if (plan.kind === 'suppress') {
                 LogStatus(`Skipping artifact creation - agent "${agent?.Name}" suppressed artifacts for this step`);
                 return undefined;
@@ -994,7 +1002,7 @@ export class AgentRunner {
                     break;
                 }
                 plan = plan.source === 'directive'
-                    ? planArtifactTarget(undefined, sourceArtifactId) // drop the directive, keep the caller's id
+                    ? PlanArtifactTarget(undefined, sourceArtifactId) // drop the directive, keep the caller's id
                     : { kind: 'legacy' };                             // the caller's own id failed; nothing left to try
             }
 

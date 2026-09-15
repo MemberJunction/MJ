@@ -44,8 +44,13 @@ export class RunBudget {
     public constructor(private readonly limits: RunBudgetLimits) {}
 
     /** Reset per-item counter; called at the top of each ContentItem. */
-    public startItem(): void {
+    public StartItem(): void {
         this.tagsCreatedThisItem = 0;
+    }
+
+    /** @deprecated Use {@link StartItem}. */
+    public startItem(): void {
+        return this.StartItem();
     }
 
     /**
@@ -54,28 +59,53 @@ export class RunBudget {
      * THIS budget (i.e., the subset of the batch belonging to the source
      * this budget tracks).
      */
-    public recordItemsProcessed(n: number): void {
+    public RecordItemsProcessed(n: number): void {
         if (Number.isFinite(n) && n > 0) this.itemsProcessedThisRun += n;
     }
 
+    /** @deprecated Use {@link RecordItemsProcessed}. */
+    public recordItemsProcessed(n: number): void {
+        return this.RecordItemsProcessed(n);
+    }
+
     /** Record one auto-created tag. Increments both run and item counters. */
-    public recordTagCreated(): void {
+    public RecordTagCreated(): void {
         this.tagsCreatedThisRun++;
         this.tagsCreatedThisItem++;
     }
 
-    public recordTokens(n: number): void {
+    /** @deprecated Use {@link RecordTagCreated}. */
+    public recordTagCreated(): void {
+        return this.RecordTagCreated();
+    }
+
+    public RecordTokens(n: number): void {
         if (Number.isFinite(n) && n > 0) this.tokensUsedThisRun += n;
     }
 
-    public recordCost(c: number): void {
+    /** @deprecated Use {@link RecordTokens}. */
+    public recordTokens(n: number): void {
+        return this.RecordTokens(n);
+    }
+
+    public RecordCost(c: number): void {
         if (Number.isFinite(c) && c > 0) this.costThisRun += c;
     }
 
+    /** @deprecated Use {@link RecordCost}. */
+    public recordCost(c: number): void {
+        return this.RecordCost(c);
+    }
+
     /** True if creating one more tag for the current item would exceed `MaxNewTagsPerItem`. */
-    public itemTagBudgetExhausted(): boolean {
+    public ItemTagBudgetExhausted(): boolean {
         if (this.limits.MaxNewTagsPerItem == null) return false;
         return this.tagsCreatedThisItem >= this.limits.MaxNewTagsPerItem;
+    }
+
+    /** @deprecated Use {@link ItemTagBudgetExhausted}. */
+    public itemTagBudgetExhausted(): boolean {
+        return this.ItemTagBudgetExhausted();
     }
 
     /**
@@ -85,7 +115,7 @@ export class RunBudget {
      * most 100 today" should win over the cost calculations that depend on
      * a specific model's pricing.
      */
-    public checkBudgets(): RunBudgetCheckResult {
+    public CheckBudgets(): RunBudgetCheckResult {
         if (this.limits.MaxItemsPerRun != null && this.itemsProcessedThisRun >= this.limits.MaxItemsPerRun) {
             return {
                 ok: false,
@@ -117,7 +147,12 @@ export class RunBudget {
         return { ok: true };
     }
 
-    public snapshot(): { items: number; tagsRun: number; tagsItem: number; tokens: number; cost: number } {
+    /** @deprecated Use {@link CheckBudgets}. */
+    public checkBudgets(): RunBudgetCheckResult {
+        return this.CheckBudgets();
+    }
+
+    public Snapshot(): { items: number; tagsRun: number; tagsItem: number; tokens: number; cost: number } {
         return {
             items: this.itemsProcessedThisRun,
             tagsRun: this.tagsCreatedThisRun,
@@ -125,5 +160,10 @@ export class RunBudget {
             tokens: this.tokensUsedThisRun,
             cost: this.costThisRun,
         };
+    }
+
+    /** @deprecated Use {@link Snapshot}. */
+    public snapshot(): { items: number; tagsRun: number; tagsItem: number; tokens: number; cost: number } {
+        return this.Snapshot();
     }
 }

@@ -45,14 +45,14 @@ import { FieldMappingEngine } from './FieldMappingEngine.js';
 import { MatchEngine } from './MatchEngine.js';
 import { WatermarkService } from './WatermarkService.js';
 import { SyncLogger } from './SyncLogger.js';
-import { CONTENT_HASH_COLUMN, computeContentHash } from './ContentHash.js';
+import { CONTENT_HASH_COLUMN, ComputeContentHash } from './ContentHash.js';
 import { RecordMapBatch } from './RecordMapBatch.js';
-import { buildContentHashPrefetchFilter, quoteTextLiteral } from './prefetchFilter.js';
-import { serializeKeyValue } from './KeySerialization.js';
-import { CUSTOM_OVERFLOW_COLUMN, reconcileOverflowValue, foldCustomKeyStats, type CustomKeyAccumulator } from './CustomOverflow.js';
+import { BuildContentHashPrefetchFilter, QuoteTextLiteral } from './prefetchFilter.js';
+import { SerializeKeyValue } from './KeySerialization.js';
+import { CUSTOM_OVERFLOW_COLUMN, ReconcileOverflowValue, FoldCustomKeyStats, type CustomKeyAccumulator } from './CustomOverflow.js';
 import { ComputeExcludedSourceNames } from './SyncDirectives.js';
 import { DescribeUnbindableFieldMaps, FindUnbindableFieldMaps } from './FieldMapValidation.js';
-import { partitionRecords, partitionRollupHash, diffPartitions, partitionKeyForIdentity } from './HashDiff.js';
+import { PartitionRecords, PartitionRollupHash, DiffPartitions, PartitionKeyForIdentity } from './HashDiff.js';
 import { RateLimiter } from './RateLimiter.js';
 import { AdaptiveConcurrencyController, RunAdaptive } from './AdaptiveConcurrency.js';
 import { mostRecentWinner, type RecencyWinner } from './ConflictRecency.js';
@@ -3038,7 +3038,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             // Custom-key stats: aggregate unmapped keys for EVERY mapped record here —
             // before any skip decision — so candidates + sizing stats exist even when the
             // content-hash fast path skips the row (the hash basis deliberately excludes them).
-            foldCustomKeyStats(mapped.map(r => r.UnmappedFields), customKeyAgg);
+            FoldCustomKeyStats(mapped.map(r => r.UnmappedFields), customKeyAgg);
             customKeyTotalRecords += mapped.length;
             // Partition (Merkle) reconcile defers match + apply: accumulate mapped records now; the
             // partition-diff + selective apply runs once after the full fetch (applyViaPartitionReconcile).
@@ -4247,15 +4247,15 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     ): Promise<void> {
         const entityMapID = entityMap.ID;
         const idOf = (r: MappedRecord) => r.ExternalRecord.ExternalID;
-        const partitionOf = (r: MappedRecord) => partitionKeyForIdentity(idOf(r), partitionCount);
+        const partitionOf = (r: MappedRecord) => PartitionKeyForIdentity(idOf(r), partitionCount);
 
         // Bucket + rollup the just-fetched full set.
-        const buckets = partitionRecords(mappedRecords, idOf, partitionOf);
+        const buckets = PartitionRecords(mappedRecords, idOf, partitionOf);
         const newRollups = new Map<string, string>();
         for (const [partition, recs] of buckets) {
             // Content-hash basis: MAPPED fields only — an unmapped/custom key must never move a
             // partition rollup (its capture + promotion is handled out-of-band via CustomKeyStats).
-            newRollups.set(partition, partitionRollupHash(recs, r => r.MappedFields));
+            newRollups.set(partition, PartitionRollupHash(recs, r => r.MappedFields));
         }
 
         // Diff against last sync's snapshot; only changed/added partitions need a deep apply. On a FORCED
@@ -4266,7 +4266,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const stored = config.fullSync
             ? new Map<string, string>()
             : await this.watermarkService.LoadPartitionRollups(entityMapID, contextUser);
-        const diff = diffPartitions(newRollups, stored);
+        const diff = DiffPartitions(newRollups, stored);
         const toApply = new Set<string>([...diff.changed, ...diff.added]);
 
         let appliedRecords = 0;
@@ -5014,7 +5014,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const keyless = DecideKeylessRefusal(
             mappedPK,
             pkFields as ReadonlyArray<KeyFieldLike>,
-            MissingKeyFieldNames(record.MappedFields, pkFields as ReadonlyArray<KeyFieldLike>, serializeKeyValue),
+            MissingKeyFieldNames(record.MappedFields, pkFields as ReadonlyArray<KeyFieldLike>, SerializeKeyValue),
         );
         if (keyless.Refuse) {
             const detail = DescribeKeylessRefusal(record.MJEntityName, keyless.KeyNames);
@@ -5057,7 +5057,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             if (hasHashColumn) {
                 const storedHash = entity.Get(CONTENT_HASH_COLUMN);
                 if (typeof storedHash === 'string' && storedHash.length > 0
-                    && storedHash === computeContentHash(record.MappedFields ?? {})) {
+                    && storedHash === ComputeContentHash(record.MappedFields ?? {})) {
                     await this.QueueRecordMap(
                         recordMaps, companyIntegration.ID, record.ExternalRecord.ExternalID, entityMap.EntityID,
                         entity.PrimaryKey.KeyValuePairs.map(kv => String(kv.Value)).join('|'), contextUser,
@@ -5137,7 +5137,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             const v = (pk.Name in fields) ? fields[pk.Name] : lower.get(pk.Name.toLowerCase());
             // serializeKeyValue mirrors the write-side coercion (objects → JSON, not "[object Object]")
             // so the load key equals the value stored in the column for object-valued PKs.
-            const s = serializeKeyValue(v);
+            const s = SerializeKeyValue(v);
             if (s === '') return null;
             values.push(s);
         }
@@ -5198,7 +5198,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // below is the fallback for entities without the hash column.
         if (precheckHashes) {
             const stored = precheckHashes.Hashes.get(record.MatchedMJRecordID);
-            if (stored && stored === computeContentHash(record.MappedFields ?? {})) {
+            if (stored && stored === ComputeContentHash(record.MappedFields ?? {})) {
                 result.RecordsSkipped++;
                 // Re-establish the external↔MJ record map even on the content-hash skip. A record can
                 // reach UpdateRecord matched by KEY FIELDS / PK (MatchEngine.FindByKeyFields queries the
@@ -5357,7 +5357,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             // skip, re-writing every unchanged record each sync. Dialect-aware (SS `[key]`, PG `"key"`)
             // so it stays valid on both targets (does NOT reintroduce the SS-brackets-break-PG problem).
             const dialect = (this.ProviderToUse as DatabaseProviderBase).Dialect;
-            const extraFilter = buildContentHashPrefetchFilter(pkNames, ids, dialect);
+            const extraFilter = BuildContentHashPrefetchFilter(pkNames, ids, dialect);
             const res = await rv.RunView<Record<string, string>>({
                 EntityName: entityName,
                 Fields: [...pkNames, CONTENT_HASH_COLUMN],
@@ -5502,7 +5502,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      * and a normalized RecordChange.RecordID carry. A single-column key is just its value.
      */
     private ComposeEntityRecordID(row: Record<string, unknown>, pkFields: Array<{ Name: string }>): string {
-        return pkFields.map(pk => serializeKeyValue(row[pk.Name])).join('|');
+        return pkFields.map(pk => SerializeKeyValue(row[pk.Name])).join('|');
     }
 
     /**
@@ -5731,7 +5731,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         if (record && has(CONTENT_HASH_COLUMN)) {
             const storedHash = entity.Get(CONTENT_HASH_COLUMN);
             if (typeof storedHash === 'string' && storedHash.length > 0
-                && storedHash !== computeContentHash(record.MappedFields ?? {})) {
+                && storedHash !== ComputeContentHash(record.MappedFields ?? {})) {
                 return true;
             }
         }
@@ -5776,7 +5776,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // stored hash predates this basis (overflow folded in) mismatch ONCE, rewrite, and
         // converge on the new basis.
         if (hasField(CONTENT_HASH_COLUMN)) {
-            entity.Set(CONTENT_HASH_COLUMN, computeContentHash(record.MappedFields ?? {}));
+            entity.Set(CONTENT_HASH_COLUMN, ComputeContentHash(record.MappedFields ?? {}));
         }
         // Custom-overflow capture (gaps.md §2): park any source keys with no field map as JSON,
         // in THIS same row write (no extra round-trip → a customs-free sync stays byte-identical).
@@ -5789,7 +5789,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // null when there are no extras, clearing a prior overflow; it stays byte-identical for a
         // customs-free row (Set(null) on an already-null column is a no-op under dirty tracking).
         if (hasField(CUSTOM_OVERFLOW_COLUMN)) {
-            entity.Set(CUSTOM_OVERFLOW_COLUMN, reconcileOverflowValue(record.UnmappedFields));
+            entity.Set(CUSTOM_OVERFLOW_COLUMN, ReconcileOverflowValue(record.UnmappedFields));
         }
 
         // ── Per-record sync ledger (plan §2.5) ───────────────────────────────────────
@@ -5954,7 +5954,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // so a value the batch would have found here must be found here too, or the fallback
         // re-creates the very duplicate the upsert exists to prevent.
         const quotedExternalID = md instanceof DatabaseProviderBase
-            ? quoteTextLiteral(externalID, md.Dialect)
+            ? QuoteTextLiteral(externalID, md.Dialect)
             : `'${externalID.replace(/'/g, "''")}'`;
         const rv = new RunView();
         const existing = await rv.RunView<{ ID: string; EntityRecordID: string }>({

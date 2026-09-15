@@ -43,19 +43,55 @@ interface FlowAgentNextStep<P = any> extends BaseAgentNextStep<P> {
  */
 export class FlowExecutionState {
     /** The agent ID for this flow execution */
-    agentId: string;
+    AgentId: string;
+
+    /** @deprecated Use {@link AgentId}. */
+    get agentId(): string {
+        return this.AgentId;
+    }
+    /** @deprecated Use {@link AgentId}. */
+    set agentId(value: string) {
+        this.AgentId = value;
+    }
 
     /** The current step being executed */
     currentStepId?: string;
 
     /** Set of completed step IDs */
-    completedStepIds: Set<string> = new Set();
+    CompletedStepIds: Set<string> = new Set();
+
+    /** @deprecated Use {@link CompletedStepIds}. */
+    get completedStepIds(): Set<string> {
+        return this.CompletedStepIds;
+    }
+    /** @deprecated Use {@link CompletedStepIds}. */
+    set completedStepIds(value: Set<string>) {
+        this.CompletedStepIds = value;
+    }
 
     /** Map of step results by step ID */
-    stepResults: Map<string, unknown> = new Map();
+    StepResults: Map<string, unknown> = new Map();
+
+    /** @deprecated Use {@link StepResults}. */
+    get stepResults(): Map<string, unknown> {
+        return this.StepResults;
+    }
+    /** @deprecated Use {@link StepResults}. */
+    set stepResults(value: Map<string, unknown>) {
+        this.StepResults = value;
+    }
 
     /** Ordered list of step IDs in execution order */
-    executionPath: string[] = [];
+    ExecutionPath: string[] = [];
+
+    /** @deprecated Use {@link ExecutionPath}. */
+    get executionPath(): string[] {
+        return this.ExecutionPath;
+    }
+    /** @deprecated Use {@link ExecutionPath}. */
+    set executionPath(value: string[]) {
+        this.ExecutionPath = value;
+    }
 
     /** Special fields from action output mappings (message, reasoning, confidence) */
     specialFields?: {
@@ -65,7 +101,7 @@ export class FlowExecutionState {
     };
 
     constructor(agentId: string) {
-        this.agentId = agentId;
+        this.AgentId = agentId;
     }
 }
 
@@ -863,7 +899,7 @@ export class FlowAgentType extends BaseAgentType {
      * 
      * @public
      */
-    public processActionResult<P>(
+    public ProcessActionResult<P>(
         actionResult: Record<string, unknown>,
         _stepId: string,
         outputMapping?: string,
@@ -877,6 +913,16 @@ export class FlowAgentType extends BaseAgentType {
         // Note: Special fields are ignored in this legacy method
         // Use PostProcessActionStep for full special field support
         return result.payloadChange;
+    }
+
+    /** @deprecated Use {@link ProcessActionResult}. */
+    public processActionResult<P>(
+        actionResult: Record<string, unknown>,
+        _stepId: string,
+        outputMapping?: string,
+        currentPayload?: P
+    ): AgentPayloadChangeRequest<P> | null {
+        return this.ProcessActionResult(actionResult, _stepId, outputMapping, currentPayload);
     }
     
     /**

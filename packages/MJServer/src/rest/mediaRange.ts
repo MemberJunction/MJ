@@ -34,7 +34,7 @@ export interface ParsedOpenRange {
  * suffix-only (those we leave to the driver as a full read). `end` is left undefined when
  * open-ended (`bytes=start-`) so the driver streams to EOF.
  */
-export function parseRangeHeaderLoose(rangeHeader: string): ParsedOpenRange | undefined {
+export function ParseRangeHeaderLoose(rangeHeader: string): ParsedOpenRange | undefined {
   const match = /^bytes=(\d+)-(\d*)$/.exec(rangeHeader.trim());
   if (!match) {
     return undefined;
@@ -53,12 +53,17 @@ export function parseRangeHeaderLoose(rangeHeader: string): ParsedOpenRange | un
   return { start, end };
 }
 
+/** @deprecated Use {@link ParseRangeHeaderLoose}. */
+export function parseRangeHeaderLoose(rangeHeader: string): ParsedOpenRange | undefined {
+  return ParseRangeHeaderLoose(rangeHeader);
+}
+
 /**
  * Parses a single-range `bytes=start-end` header against a known total (buffer path),
  * clamping `end` to the last byte. Returns undefined when unsatisfiable (→ 416) or
  * malformed/multi-range.
  */
-export function parseRange(rangeHeader: string, total: number): ParsedRange | undefined {
+export function ParseRange(rangeHeader: string, total: number): ParsedRange | undefined {
   const match = /^bytes=(\d+)-(\d*)$/.exec(rangeHeader.trim());
   if (!match) {
     return undefined;
@@ -73,4 +78,9 @@ export function parseRange(rangeHeader: string, total: number): ParsedRange | un
     return undefined;
   }
   return { start, end };
+}
+
+/** @deprecated Use {@link ParseRange}. */
+export function parseRange(rangeHeader: string, total: number): ParsedRange | undefined {
+  return ParseRange(rangeHeader, total);
 }

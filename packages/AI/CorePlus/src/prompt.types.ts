@@ -327,7 +327,7 @@ export class AIModelSelectionInfo {
   /** The configuration entity that was used, if any */
   aiConfiguration?: MJAIConfigurationEntity;
   /** All models that were considered for selection */
-  modelsConsidered: Array<{
+  ModelsConsidered: Array<{
     /** The model entity */
     model: MJAIModelEntityExtended;
     /** The vendor entity, if a specific vendor was considered */
@@ -339,14 +339,72 @@ export class AIModelSelectionInfo {
     /** Reason why this model/vendor wasn't available */
     unavailableReason?: string;
   }>;
+
+  /** @deprecated Use {@link ModelsConsidered}. */
+  get modelsConsidered(): Array<{
+    /** The model entity */
+    model: MJAIModelEntityExtended;
+    /** The vendor entity, if a specific vendor was considered */
+    vendor?: MJAIVendorEntity;
+    /** Priority of this model/vendor combination */
+    priority: number;
+    /** Whether this model/vendor had an available API key */
+    available: boolean;
+    /** Reason why this model/vendor wasn't available */
+    unavailableReason?: string;
+  }> {
+    return this.ModelsConsidered;
+  }
+  /** @deprecated Use {@link ModelsConsidered}. */
+  set modelsConsidered(value: Array<{
+    /** The model entity */
+    model: MJAIModelEntityExtended;
+    /** The vendor entity, if a specific vendor was considered */
+    vendor?: MJAIVendorEntity;
+    /** Priority of this model/vendor combination */
+    priority: number;
+    /** Whether this model/vendor had an available API key */
+    available: boolean;
+    /** Reason why this model/vendor wasn't available */
+    unavailableReason?: string;
+  }>) {
+    this.ModelsConsidered = value;
+  }
   /** The model entity that was selected */
-  modelSelected: MJAIModelEntityExtended;
+  ModelSelected: MJAIModelEntityExtended;
+
+  /** @deprecated Use {@link ModelSelected}. */
+  get modelSelected(): MJAIModelEntityExtended {
+    return this.ModelSelected;
+  }
+  /** @deprecated Use {@link ModelSelected}. */
+  set modelSelected(value: MJAIModelEntityExtended) {
+    this.ModelSelected = value;
+  }
   /** The vendor entity that was selected, if applicable */
   vendorSelected?: MJAIVendorEntity;
   /** Reason for the selection */
-  selectionReason: string;
+  SelectionReason: string;
+
+  /** @deprecated Use {@link SelectionReason}. */
+  get selectionReason(): string {
+    return this.SelectionReason;
+  }
+  /** @deprecated Use {@link SelectionReason}. */
+  set selectionReason(value: string) {
+    this.SelectionReason = value;
+  }
   /** Whether a fallback model was used */
-  fallbackUsed: boolean;
+  FallbackUsed: boolean;
+
+  /** @deprecated Use {@link FallbackUsed}. */
+  get fallbackUsed(): boolean {
+    return this.FallbackUsed;
+  }
+  /** @deprecated Use {@link FallbackUsed}. */
+  set fallbackUsed(value: boolean) {
+    this.FallbackUsed = value;
+  }
   /** The selection strategy that was used */
   selectionStrategy?: 'Default' | 'Specific' | 'ByPower';
 
@@ -355,8 +413,13 @@ export class AIModelSelectionInfo {
    * These are the valid candidates that can be used for execution or retry.
    * @returns Array of models considered that are available (have API keys)
    */
+  ExtractValidCandidates() {
+    return this.ModelsConsidered.filter(m => m.available);
+  }
+
+  /** @deprecated Use {@link ExtractValidCandidates}. */
   extractValidCandidates() {
-    return this.modelsConsidered.filter(m => m.available);
+    return this.ExtractValidCandidates();
   }
 }  
 
@@ -864,16 +927,34 @@ export class ChildPromptParam {
   /**
    * The child prompt to execute - a full AIPromptParams that can contain its own child prompts
    */
-  childPrompt: AIPromptParams;
+  ChildPrompt: AIPromptParams;
+
+  /** @deprecated Use {@link ChildPrompt}. */
+  get childPrompt(): AIPromptParams {
+    return this.ChildPrompt;
+  }
+  /** @deprecated Use {@link ChildPrompt}. */
+  set childPrompt(value: AIPromptParams) {
+    this.ChildPrompt = value;
+  }
 
   /**
    * The placeholder name in the parent template where this child's result will be inserted
    */
-  parentPlaceholder: string;
+  ParentPlaceholder: string;
+
+  /** @deprecated Use {@link ParentPlaceholder}. */
+  get parentPlaceholder(): string {
+    return this.ParentPlaceholder;
+  }
+  /** @deprecated Use {@link ParentPlaceholder}. */
+  set parentPlaceholder(value: string) {
+    this.ParentPlaceholder = value;
+  }
 
   constructor(childPrompt: AIPromptParams, parentPlaceholder: string) {
-    this.childPrompt = childPrompt;
-    this.parentPlaceholder = parentPlaceholder;
+    this.ChildPrompt = childPrompt;
+    this.ParentPlaceholder = parentPlaceholder;
   }
 }
  

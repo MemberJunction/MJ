@@ -2,7 +2,7 @@ import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
 import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
-import { traverse, NodePath, createViolation } from '../lint-utils';
+import { traverse, NodePath, CreateViolation } from '../lint-utils';
 
 /**
  * Rule: react-component-naming
@@ -34,7 +34,7 @@ export class ReactComponentNamingRule extends BaseLintRule {
 
           if (hasComponentProps && funcName[0] !== funcName[0].toUpperCase()) {
             violations.push(
-              createViolation(
+              CreateViolation(
                 'react-component-naming',
                 'critical',
                 path.node.id,
@@ -75,7 +75,7 @@ export class ReactComponentNamingRule extends BaseLintRule {
 
             if (hasComponentLikeProps && funcName[0] !== funcName[0].toUpperCase()) {
               violations.push(
-                createViolation(
+                CreateViolation(
                   'react-component-naming',
                   'critical',
                   path.node.id,

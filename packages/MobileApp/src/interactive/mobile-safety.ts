@@ -35,7 +35,7 @@ function hasRenderableCode(spec: ComponentSpec): boolean {
  * @param spec The parsed interactive component spec.
  * @returns A {@link SpecAssessment} describing the decision and, if negative, why.
  */
-export function assessSpec(spec: ComponentSpec | null | undefined): SpecAssessment {
+export function AssessSpec(spec: ComponentSpec | null | undefined): SpecAssessment {
     if (!spec || !hasRenderableCode(spec)) {
         return { renderable: false, reason: 'This artifact does not contain a renderable component.' };
     }
@@ -46,4 +46,9 @@ export function assessSpec(spec: ComponentSpec | null | undefined): SpecAssessme
         return { renderable: false, reason: 'This component depends on other components not available on mobile.' };
     }
     return { renderable: true };
+}
+
+/** @deprecated Use {@link AssessSpec}. */
+export function assessSpec(spec: ComponentSpec | null | undefined): SpecAssessment {
+    return AssessSpec(spec);
 }

@@ -1,4 +1,4 @@
-import { traverse, NodePath, isNullOrUndefined, isStringLike, isNumberLike, isArrayLike } from '../lint-utils';
+import { traverse, NodePath, IsNullOrUndefined, IsStringLike, IsNumberLike, IsArrayLike } from '../lint-utils';
 import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
 import { BaseLintRule } from '../lint-rule';
@@ -118,7 +118,7 @@ function validatePropertyType(
 ): void {
   if (propName === 'ExtraFilter' || propName === 'OrderBy' || propName === 'EntityName') {
     const allowNullUndefined = propName === 'ExtraFilter' || propName === 'OrderBy';
-    if (!isStringLike(value) && !(allowNullUndefined && isNullOrUndefined(value))) {
+    if (!IsStringLike(value) && !(allowNullUndefined && IsNullOrUndefined(value))) {
       const exampleMap: Record<string, string> = {
         ExtraFilter: `"Status = 'Active' AND Type = 'Customer'"`,
         OrderBy: `"CreatedAt DESC"`,
@@ -135,7 +135,7 @@ function validatePropertyType(
       });
     }
   } else if (propName === 'Fields') {
-    if (!isArrayLike(value) && !isStringLike(value)) {
+    if (!IsArrayLike(value) && !IsStringLike(value)) {
       violations.push({
         rule: 'runview-call-validation',
         severity: 'critical',
@@ -147,7 +147,7 @@ function validatePropertyType(
       });
     }
   } else if (propName === 'MaxRows' || propName === 'StartRow') {
-    if (!isNumberLike(value)) {
+    if (!IsNumberLike(value)) {
       violations.push({
         rule: 'runview-call-validation',
         severity: 'critical',

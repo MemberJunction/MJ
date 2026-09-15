@@ -21,7 +21,7 @@
  */
 import { RunView, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { AgentRunner } from '@memberjunction/ai-agents';
-import { resolveContextUserOrThrow, ResolvePromptRunIdsForAgentRuns, RequireRows } from './agent-live-shared';
+import { ResolveContextUserOrThrow, ResolvePromptRunIdsForAgentRuns, RequireRows } from './agent-live-shared';
 import type { MJAIAgentEntity } from '@memberjunction/core-entities';
 import type { ExecuteAgentParams, ExecuteAgentResult } from '@memberjunction/ai-core-plus';
 
@@ -101,12 +101,12 @@ export interface AgentInvoker {
  * pre-#3251 code relied on it and failed every server-in-process run). Always returns an invoker
  * (never undefined — the run always executes in-process).
  */
-export function resolveClient(provider: IMetadataProvider, user: UserInfo): AgentInvoker {
+export function ResolveClient(provider: IMetadataProvider, user: UserInfo): AgentInvoker {
     return {
         // async so a missing user surfaces as a REJECTION, never a sync throw — RunAIAgent
         // returns a Promise, and a sync throw would escape a `.catch(...)`-style caller.
         RunAIAgent: async (params: ExecuteAgentParams) => {
-            const contextUser = resolveContextUserOrThrow(params.contextUser, user, 'resolveClient');
+            const contextUser = ResolveContextUserOrThrow(params.contextUser, user, 'resolveClient');
             return new AgentRunner(provider).RunAgent({
                 ...params,
                 contextUser,
@@ -116,13 +116,23 @@ export function resolveClient(provider: IMetadataProvider, user: UserInfo): Agen
     };
 }
 
+/** @deprecated Use {@link ResolveClient}. */
+export function resolveClient(provider: IMetadataProvider, user: UserInfo): AgentInvoker {
+    return ResolveClient(provider, user);
+}
+
 /** A short, collision-resistant marker string embedded in each scenario's payload/messages. */
-export function newMarker(prefix: string): string {
+export function NewMarker(prefix: string): string {
     return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
+/** @deprecated Use {@link NewMarker}. */
+export function newMarker(prefix: string): string {
+    return NewMarker(prefix);
+}
+
 /** Load an agent entity by exact Name (entity_object so it can be handed to ExecuteAgentParams). */
-export async function loadAgentByName(
+export async function LoadAgentByName(
     provider: IMetadataProvider,
     user: UserInfo,
     name: string
@@ -135,8 +145,17 @@ export async function loadAgentByName(
     return r.Success && r.Results.length > 0 ? r.Results[0] : undefined;
 }
 
+/** @deprecated Use {@link LoadAgentByName}. */
+export async function loadAgentByName(
+    provider: IMetadataProvider,
+    user: UserInfo,
+    name: string
+): Promise<MJAIAgentEntity | undefined> {
+    return LoadAgentByName(provider, user, name);
+}
+
 /** Run an agent server-in-process (via the resolveClient invoker) and return the completed result. */
-export async function runAgentClient(
+export async function RunAgentClient(
     client: AgentInvoker,
     agent: MJAIAgentEntity,
     userMessage: string,
@@ -150,19 +169,39 @@ export async function runAgentClient(
     return client.RunAIAgent(params);
 }
 
+/** @deprecated Use {@link RunAgentClient}. */
+export async function runAgentClient(
+    client: AgentInvoker,
+    agent: MJAIAgentEntity,
+    userMessage: string,
+    payload?: Record<string, unknown>
+): Promise<ExecuteAgentResult> {
+    return RunAgentClient(client, agent, userMessage, payload);
+}
+
 /** Extract the persisted root run ID from a completed client result (undefined if none persisted). */
-export function runIdOf(result: ExecuteAgentResult): string | undefined {
+export function RunIdOf(result: ExecuteAgentResult): string | undefined {
     const run = (result as unknown as { agentRun?: { ID?: string } }).agentRun;
     return run?.ID;
 }
 
+/** @deprecated Use {@link RunIdOf}. */
+export function runIdOf(result: ExecuteAgentResult): string | undefined {
+    return RunIdOf(result);
+}
+
 /** Let the fire-and-forget step/prompt-run saves flush before reading back. */
-export function settle(ms = 1500): Promise<void> {
+export function Settle(ms = 1500): Promise<void> {
     return new Promise((r) => setTimeout(r, ms));
 }
 
+/** @deprecated Use {@link Settle}. */
+export function settle(ms = 1500): Promise<void> {
+    return Settle(ms);
+}
+
 /** Read a single run row fresh. */
-export async function readRun(provider: IMetadataProvider, user: UserInfo, runId: string): Promise<AgentRunRow | undefined> {
+export async function ReadRun(provider: IMetadataProvider, user: UserInfo, runId: string): Promise<AgentRunRow | undefined> {
     const r = await RunView.FromMetadataProvider(provider).RunView<AgentRunRow>({
         EntityName: 'MJ: AI Agent Runs',
         ExtraFilter: `ID='${runId}'`,
@@ -175,8 +214,13 @@ export async function readRun(provider: IMetadataProvider, user: UserInfo, runId
     return RequireRows(r, `run read for ${runId}`)[0];
 }
 
+/** @deprecated Use {@link ReadRun}. */
+export async function readRun(provider: IMetadataProvider, user: UserInfo, runId: string): Promise<AgentRunRow | undefined> {
+    return ReadRun(provider, user, runId);
+}
+
 /** Read every step of a run fresh, oldest first. */
-export async function readSteps(provider: IMetadataProvider, user: UserInfo, runId: string): Promise<AgentStepRow[]> {
+export async function ReadSteps(provider: IMetadataProvider, user: UserInfo, runId: string): Promise<AgentStepRow[]> {
     const r = await RunView.FromMetadataProvider(provider).RunView<AgentStepRow>({
         EntityName: 'MJ: AI Agent Run Steps',
         ExtraFilter: `AgentRunID='${runId}'`,
@@ -188,8 +232,13 @@ export async function readSteps(provider: IMetadataProvider, user: UserInfo, run
     return RequireRows(r, `step read for run ${runId}`);
 }
 
+/** @deprecated Use {@link ReadSteps}. */
+export async function readSteps(provider: IMetadataProvider, user: UserInfo, runId: string): Promise<AgentStepRow[]> {
+    return ReadSteps(provider, user, runId);
+}
+
 /** Read the prompt runs a given agent produced within a run tree (its raw model responses live here). */
-export async function readPromptRunsForAgent(
+export async function ReadPromptRunsForAgent(
     provider: IMetadataProvider,
     user: UserInfo,
     agentRunIds: string[],
@@ -231,8 +280,18 @@ export async function readPromptRunsForAgent(
     return rows;
 }
 
+/** @deprecated Use {@link ReadPromptRunsForAgent}. */
+export async function readPromptRunsForAgent(
+    provider: IMetadataProvider,
+    user: UserInfo,
+    agentRunIds: string[],
+    agentId: string
+): Promise<PromptRunRow[]> {
+    return ReadPromptRunsForAgent(provider, user, agentRunIds, agentId);
+}
+
 /** BFS the ParentRunID tree from a root, returning every run ID (root first). Bounded to avoid cycles. */
-export async function collectRunTree(provider: IMetadataProvider, user: UserInfo, rootRunId: string): Promise<string[]> {
+export async function CollectRunTree(provider: IMetadataProvider, user: UserInfo, rootRunId: string): Promise<string[]> {
     const all: string[] = [rootRunId];
     let frontier = [rootRunId];
     let guard = 0;
@@ -252,8 +311,13 @@ export async function collectRunTree(provider: IMetadataProvider, user: UserInfo
     return all;
 }
 
+/** @deprecated Use {@link CollectRunTree}. */
+export async function collectRunTree(provider: IMetadataProvider, user: UserInfo, rootRunId: string): Promise<string[]> {
+    return CollectRunTree(provider, user, rootRunId);
+}
+
 /** Parse the `payloadChangeResult` blob out of a step's OutputData JSON, if present. */
-export function parseStepPayloadChange(step: AgentStepRow): PayloadChangeResultBlob | undefined {
+export function ParseStepPayloadChange(step: AgentStepRow): PayloadChangeResultBlob | undefined {
     if (!step.OutputData) return undefined;
     try {
         const parsed = JSON.parse(step.OutputData) as { payloadChangeResult?: PayloadChangeResultBlob };
@@ -263,8 +327,13 @@ export function parseStepPayloadChange(step: AgentStepRow): PayloadChangeResultB
     }
 }
 
+/** @deprecated Use {@link ParseStepPayloadChange}. */
+export function parseStepPayloadChange(step: AgentStepRow): PayloadChangeResultBlob | undefined {
+    return ParseStepPayloadChange(step);
+}
+
 /** Safe JSON.parse to a record; returns {} on failure. */
-export function parseJsonObject(raw: string | null | undefined): Record<string, unknown> {
+export function ParseJsonObject(raw: string | null | undefined): Record<string, unknown> {
     if (!raw) return {};
     try {
         const v = JSON.parse(raw);
@@ -274,17 +343,22 @@ export function parseJsonObject(raw: string | null | undefined): Record<string, 
     }
 }
 
+/** @deprecated Use {@link ParseJsonObject}. */
+export function parseJsonObject(raw: string | null | undefined): Record<string, unknown> {
+    return ParseJsonObject(raw);
+}
+
 /**
  * FK-ordered deep teardown of every run tree a check spawned: for each run in the tree we delete
  * its steps, then its prompt runs, then the runs child-first. Best-effort — never throws — so a
  * failed check still cleans up. Deletes are done via entity_object loads so BaseEntity.Delete()
  * (and its cascade/validation) runs, matching the memory rig's self-clean discipline.
  */
-export async function deepDeleteRunTrees(provider: IMetadataProvider, user: UserInfo, rootRunIds: string[]): Promise<void> {
+export async function DeepDeleteRunTrees(provider: IMetadataProvider, user: UserInfo, rootRunIds: string[]): Promise<void> {
     const runIds = new Set<string>();
     for (const root of rootRunIds) {
         try {
-            for (const id of await collectRunTree(provider, user, root)) runIds.add(id);
+            for (const id of await CollectRunTree(provider, user, root)) runIds.add(id);
         } catch { /* best-effort */ }
     }
     const ids = [...runIds];
@@ -303,19 +377,24 @@ export async function deepDeleteRunTrees(provider: IMetadataProvider, user: User
         console.error(`deepDeleteRunTrees: prompt-run resolution failed, prompt runs may leak: ${e instanceof Error ? e.message : String(e)}`);
     }
     // 2. Steps of every run in the trees.
-    await deleteMatching(provider, user, 'MJ: AI Agent Run Steps', `AgentRunID IN (${inList})`);
+    await DeleteMatching(provider, user, 'MJ: AI Agent Run Steps', `AgentRunID IN (${inList})`);
     // 3. The prompt runs resolved in step 1, addressed by their own primary key.
     if (promptRunIds.length > 0) {
-        await deleteMatching(provider, user, 'MJ: AI Prompt Runs', `ID IN (${promptRunIds.map((id) => `'${id}'`).join(',')})`);
+        await DeleteMatching(provider, user, 'MJ: AI Prompt Runs', `ID IN (${promptRunIds.map((id) => `'${id}'`).join(',')})`);
     }
     // 4. The runs themselves, child-first (reverse collection order puts descendants before roots).
     for (const id of [...ids].reverse()) {
-        await deleteMatching(provider, user, 'MJ: AI Agent Runs', `ID='${id}'`);
+        await DeleteMatching(provider, user, 'MJ: AI Agent Runs', `ID='${id}'`);
     }
 }
 
+/** @deprecated Use {@link DeepDeleteRunTrees}. */
+export async function deepDeleteRunTrees(provider: IMetadataProvider, user: UserInfo, rootRunIds: string[]): Promise<void> {
+    return DeepDeleteRunTrees(provider, user, rootRunIds);
+}
+
 /** Load matching rows as entity objects and Delete() each; failures are logged, never thrown. */
-export async function deleteMatching(
+export async function DeleteMatching(
     provider: IMetadataProvider,
     user: UserInfo,
     entityName: string,
@@ -338,6 +417,16 @@ export async function deleteMatching(
     }
 }
 
+/** @deprecated Use {@link DeleteMatching}. */
+export async function deleteMatching(
+    provider: IMetadataProvider,
+    user: UserInfo,
+    entityName: string,
+    filter: string
+): Promise<void> {
+    return DeleteMatching(provider, user, entityName, filter);
+}
+
 /**
  * Two-phase compliance runner (§3.3). Runs `scenario` (which returns the persisted root run ID or
  * undefined), then evaluates `isCompliant` from persisted artifacts (Phase P). On non-compliance
@@ -345,7 +434,7 @@ export async function deleteMatching(
  * The FIRST compliant attempt's run ID is returned so Phase A (framework assertions, never retried)
  * runs against a run that provably attempted the guarded behavior — the anti-vacuity guarantee.
  */
-export async function runWithCompliance(
+export async function RunWithCompliance(
     scenario: () => Promise<string | undefined>,
     isCompliant: (rootRunId: string) => Promise<boolean>,
     label: string,
@@ -395,4 +484,25 @@ export async function runWithCompliance(
     throw new Error(
         `model-noncompliance: ${label} — the model never took the instructed action after ${maxAttempts} attempts. ` +
         `Fix the prompt, not the check.${evidence}`);
+}
+
+/** @deprecated Use {@link RunWithCompliance}. */
+export async function runWithCompliance(
+    scenario: () => Promise<string | undefined>,
+    isCompliant: (rootRunId: string) => Promise<boolean>,
+    label: string,
+    maxAttempts = 3,
+    /**
+     * Optional evidence dump for the FINAL failed attempt, appended to the thrown message.
+     *
+     * A bare `model-noncompliance:` says only "the model didn't do it" — and the fixtures are
+     * purged at teardown, so nothing can be re-queried afterwards to find out WHY. Without this,
+     * "the model declined" is indistinguishable from "the tool was never advertised" or "the
+     * response came back empty", which is precisely how three real product defects hid behind this
+     * prefix during the 6.1 release. Must never throw: a failing diagnostic must not replace the
+     * failure it is describing.
+     */
+    diagnose?: (rootRunId: string) => Promise<string>
+): Promise<string> {
+    return RunWithCompliance(scenario, isCompliant, label, maxAttempts, diagnose);
 }

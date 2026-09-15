@@ -8,10 +8,10 @@ import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, ExecuteAgentResult
 import { AIEngine } from '@memberjunction/aiengine';
 import { ChatMessage, ChatMessageContent } from '@memberjunction/ai';
 import { ResolverBase } from '../generic/ResolverBase.js';
-import { startLivenessPulse } from '../generic/FireAndForgetHeartbeat.js';
+import { StartLivenessPulse } from '../generic/FireAndForgetHeartbeat.js';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GetReadWriteProvider } from '../util.js';
-import { resolveWidgetGuestRunContext, elevateUserPayload } from '../realtimeWidget/widgetGuestElevation.js';
+import { ResolveWidgetGuestRunContext, ElevateUserPayload } from '../realtimeWidget/widgetGuestElevation.js';
 import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { GetAttachmentService } from '@memberjunction/aiengine';
 import { NotificationEngine } from '@memberjunction/notifications';
@@ -1040,9 +1040,9 @@ export class RunAIAgentResolver extends ResolverBase {
         // Conversation OWNERSHIP is still enforced under the guest principal below: the guest loads its
         // own ConversationDetail through the Widget Guest RLS filters, so a detail id from another
         // session resolves to "not found" before any elevated work happens.
-        const widgetElevation = await resolveWidgetGuestRunContext(userPayload, p);
+        const widgetElevation = await ResolveWidgetGuestRunContext(userPayload, p);
         const effectiveAgentId = widgetElevation ? widgetElevation.pinnedAgentId : agentId;
-        const effectiveUserPayload = widgetElevation ? elevateUserPayload(userPayload, widgetElevation.elevatedUser) : userPayload;
+        const effectiveUserPayload = widgetElevation ? ElevateUserPayload(userPayload, widgetElevation.elevatedUser) : userPayload;
 
         try {
             // LATENCY OPTIMIZATION (Opt #2 + #3): Load ConversationDetail once here to extract
@@ -1338,7 +1338,7 @@ export class RunAIAgentResolver extends ResolverBase {
     ): void {
         // Ref the liveness pulse reads to enrich heartbeats once the run is created.
         const runRef: { current: MJAIAgentRunEntityExtended | null } = { current: null };
-        const pulse = startLivenessPulse({
+        const pulse = StartLivenessPulse({
             pubSub,
             sessionId,
             ownerUserId: userPayload.userRecord.ID,

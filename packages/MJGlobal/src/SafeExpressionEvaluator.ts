@@ -213,7 +213,7 @@ export class SafeExpressionEvaluator {
      *
      * @returns {ExpressionEvaluationResult} The evaluation result
      */
-    public evaluate(
+    public Evaluate(
         expression: string,
         context: Record<string, any>,
         enableDiagnostics: boolean = false
@@ -287,6 +287,15 @@ export class SafeExpressionEvaluator {
                 } : undefined
             };
         }
+    }
+
+    /** @deprecated Use {@link Evaluate}. */
+    public evaluate(
+        expression: string,
+        context: Record<string, any>,
+        enableDiagnostics: boolean = false
+    ): ExpressionEvaluationResult {
+        return this.Evaluate(expression, context, enableDiagnostics);
     }
 
     /**
@@ -679,7 +688,7 @@ export class SafeExpressionEvaluator {
      * @returns `Valid: true` when it parses; `Valid: false` with `Error` when it definitely does
      *          not; `Valid: true` with `Undecidable: true` when this environment cannot compile
      */
-    public validateSyntax(expression: string): { Valid: boolean; Error?: string; Undecidable?: boolean } {
+    public ValidateSyntax(expression: string): { Valid: boolean; Error?: string; Undecidable?: boolean } {
         const policyError = this.validateExpression(expression);
         if (policyError) {
             return { Valid: false, Error: policyError };
@@ -700,6 +709,11 @@ export class SafeExpressionEvaluator {
         }
     }
 
+    /** @deprecated Use {@link ValidateSyntax}. */
+    public validateSyntax(expression: string): { Valid: boolean; Error?: string; Undecidable?: boolean } {
+        return this.ValidateSyntax(expression);
+    }
+
     /**
      * Evaluates multiple expressions and returns all results
      *
@@ -708,7 +722,7 @@ export class SafeExpressionEvaluator {
      *
      * @returns {Record<string, ExpressionEvaluationResult>} Map of results by name or index
      */
-    public evaluateMultiple(
+    public EvaluateMultiple(
         expressions: Array<{expression: string, name?: string}>,
         context: Record<string, any>
     ): Record<string, ExpressionEvaluationResult> {
@@ -716,10 +730,18 @@ export class SafeExpressionEvaluator {
 
         expressions.forEach((expr, index) => {
             const key = expr.name || `expression_${index}`;
-            results[key] = this.evaluate(expr.expression, context);
+            results[key] = this.Evaluate(expr.expression, context);
         });
 
         return results;
+    }
+
+    /** @deprecated Use {@link EvaluateMultiple}. */
+    public evaluateMultiple(
+        expressions: Array<{expression: string, name?: string}>,
+        context: Record<string, any>
+    ): Record<string, ExpressionEvaluationResult> {
+        return this.EvaluateMultiple(expressions, context);
     }
 }
 

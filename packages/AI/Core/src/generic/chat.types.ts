@@ -586,11 +586,16 @@ export const CONTENT_BLOCKS_PREFIX = '$$CONTENT_BLOCKS$$';
  * @param content The content to serialize
  * @returns A string suitable for database storage
  */
-export function serializeMessageContent(content: ChatMessageContent): string {
+export function SerializeMessageContent(content: ChatMessageContent): string {
     if (typeof content === 'string') {
         return content;
     }
     return CONTENT_BLOCKS_PREFIX + JSON.stringify(content);
+}
+
+/** @deprecated Use {@link SerializeMessageContent}. */
+export function serializeMessageContent(content: ChatMessageContent): string {
+    return SerializeMessageContent(content);
 }
 
 /**
@@ -601,7 +606,7 @@ export function serializeMessageContent(content: ChatMessageContent): string {
  * @param message The stored message string
  * @returns The deserialized ChatMessageContent
  */
-export function deserializeMessageContent(message: string): ChatMessageContent {
+export function DeserializeMessageContent(message: string): ChatMessageContent {
     if (!message) {
         return '';
     }
@@ -616,17 +621,27 @@ export function deserializeMessageContent(message: string): ChatMessageContent {
     return message;
 }
 
+/** @deprecated Use {@link DeserializeMessageContent}. */
+export function deserializeMessageContent(message: string): ChatMessageContent {
+    return DeserializeMessageContent(message);
+}
+
 /**
  * Checks if the content contains any image blocks.
  *
  * @param content The message content to check
  * @returns True if the content contains at least one image_url block
  */
-export function hasImageContent(content: ChatMessageContent): boolean {
+export function HasImageContent(content: ChatMessageContent): boolean {
     if (typeof content === 'string') {
         return false;
     }
     return content.some(block => block.type === 'image_url');
+}
+
+/** @deprecated Use {@link HasImageContent}. */
+export function hasImageContent(content: ChatMessageContent): boolean {
+    return HasImageContent(content);
 }
 
 /**
@@ -636,7 +651,7 @@ export function hasImageContent(content: ChatMessageContent): boolean {
  * @param content The message content
  * @returns A plain text string with all text blocks joined
  */
-export function getTextFromContent(content: ChatMessageContent): string {
+export function GetTextFromContent(content: ChatMessageContent): string {
     if (typeof content === 'string') {
         return content;
     }
@@ -644,6 +659,11 @@ export function getTextFromContent(content: ChatMessageContent): string {
         .filter(block => block.type === 'text')
         .map(block => block.content)
         .join('\n');
+}
+
+/** @deprecated Use {@link GetTextFromContent}. */
+export function getTextFromContent(content: ChatMessageContent): string {
+    return GetTextFromContent(content);
 }
 
 /**
@@ -661,7 +681,7 @@ export function getTextFromContent(content: ChatMessageContent): string {
  * @param messages The conversation to check
  * @throws Error naming the unmatched tool-call ids and how to fix the history
  */
-export function validateToolConversation(messages: ChatMessage[]): void {
+export function ValidateToolConversation(messages: ChatMessage[]): void {
     const declaredCallIds = new Set<string>();
     const orphaned: string[] = [];
 
@@ -675,7 +695,7 @@ export function validateToolConversation(messages: ChatMessage[]): void {
             continue;
         }
 
-        for (const block of getToolResultBlocks(message.content)) {
+        for (const block of GetToolResultBlocks(message.content)) {
             if (!block.toolCallId || !declaredCallIds.has(block.toolCallId)) {
                 orphaned.push(block.toolCallId ?? '(missing toolCallId)');
             }
@@ -692,6 +712,11 @@ export function validateToolConversation(messages: ChatMessage[]): void {
     }
 }
 
+/** @deprecated Use {@link ValidateToolConversation}. */
+export function validateToolConversation(messages: ChatMessage[]): void {
+    return ValidateToolConversation(messages);
+}
+
 /**
  * Collapses an MJ role onto the three roles every chat API understands.
  *
@@ -702,8 +727,13 @@ export function validateToolConversation(messages: ChatMessage[]): void {
  * @param role The MJ message role
  * @returns The equivalent classic role
  */
-export function toClassicChatMessageRole(role: ChatMessageRole): 'system' | 'user' | 'assistant' {
+export function ToClassicChatMessageRole(role: ChatMessageRole): 'system' | 'user' | 'assistant' {
     return role === ChatMessageRole.tool ? ChatMessageRole.user : role;
+}
+
+/** @deprecated Use {@link ToClassicChatMessageRole}. */
+export function toClassicChatMessageRole(role: ChatMessageRole): 'system' | 'user' | 'assistant' {
+    return ToClassicChatMessageRole(role);
 }
 
 /**
@@ -713,11 +743,16 @@ export function toClassicChatMessageRole(role: ChatMessageRole): 'system' | 'use
  * @param content The message content to inspect
  * @returns The tool-result blocks, in order
  */
-export function getToolResultBlocks(content: ChatMessageContent): ChatMessageContentBlock[] {
+export function GetToolResultBlocks(content: ChatMessageContent): ChatMessageContentBlock[] {
     if (typeof content === 'string') {
         return [];
     }
     return content.filter(block => block.type === 'tool_result');
+}
+
+/** @deprecated Use {@link GetToolResultBlocks}. */
+export function getToolResultBlocks(content: ChatMessageContent): ChatMessageContentBlock[] {
+    return GetToolResultBlocks(content);
 }
 
 /**
@@ -730,7 +765,7 @@ export function getToolResultBlocks(content: ChatMessageContent): ChatMessageCon
  * @param results One entry per tool call being answered
  * @returns A `tool`-role message whose content is the corresponding `tool_result` blocks
  */
-export function createToolResultMessage(
+export function CreateToolResultMessage(
     results: Array<{ toolCallId: string; toolName?: string; content: string; isError?: boolean }>
 ): ChatMessage {
     return {
@@ -745,13 +780,20 @@ export function createToolResultMessage(
     };
 }
 
+/** @deprecated Use {@link CreateToolResultMessage}. */
+export function createToolResultMessage(
+    results: Array<{ toolCallId: string; toolName?: string; content: string; isError?: boolean }>
+): ChatMessage {
+    return CreateToolResultMessage(results);
+}
+
 /**
  * Parses a base64 data URL into its components.
  *
  * @param dataUrl A data URL (e.g., "data:image/png;base64,iVBORw...")
  * @returns An object with mediaType and data, or null if not a valid data URL
  */
-export function parseBase64DataUrl(dataUrl: string): { mediaType: string; data: string } | null {
+export function ParseBase64DataUrl(dataUrl: string): { mediaType: string; data: string } | null {
     if (!dataUrl.startsWith('data:')) {
         return null;
     }
@@ -762,6 +804,11 @@ export function parseBase64DataUrl(dataUrl: string): { mediaType: string; data: 
     return null;
 }
 
+/** @deprecated Use {@link ParseBase64DataUrl}. */
+export function parseBase64DataUrl(dataUrl: string): { mediaType: string; data: string } | null {
+    return ParseBase64DataUrl(dataUrl);
+}
+
 /**
  * Creates a data URL from raw base64 data and a MIME type.
  *
@@ -769,7 +816,12 @@ export function parseBase64DataUrl(dataUrl: string): { mediaType: string; data: 
  * @param mimeType The MIME type (e.g., 'image/png')
  * @returns A complete data URL
  */
-export function createBase64DataUrl(base64Data: string, mimeType: string): string {
+export function CreateBase64DataUrl(base64Data: string, mimeType: string): string {
     return `data:${mimeType};base64,${base64Data}`;
+}
+
+/** @deprecated Use {@link CreateBase64DataUrl}. */
+export function createBase64DataUrl(base64Data: string, mimeType: string): string {
+    return CreateBase64DataUrl(base64Data, mimeType);
 }
  

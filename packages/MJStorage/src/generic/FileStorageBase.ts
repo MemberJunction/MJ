@@ -994,12 +994,17 @@ export abstract class FileStorageBase {
    *                 - Provide for multi-tenant (overrides with database credentials)
    * @returns A Promise that resolves when initialization is complete
    */
-  public async initialize(config?: StorageProviderConfig): Promise<void> {
+  public async Initialize(config?: StorageProviderConfig): Promise<void> {
     // Extract and store account information from the config if provided
     if (config) {
       this._accountId = config.accountId;
       this._accountName = config.accountName;
     }
+  }
+
+  /** @deprecated Use {@link Initialize}. */
+  public async initialize(config?: StorageProviderConfig): Promise<void> {
+    return this.Initialize(config);
   }
 
   /**

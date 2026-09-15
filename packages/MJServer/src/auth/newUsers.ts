@@ -5,7 +5,7 @@ import { configInfo } from "../config.js";
 import { MJUserEntity, MJUserRoleEntity, MJUserApplicationEntity, MJUserApplicationEntityEntity, MJApplicationEntityType, MJApplicationEntityEntityType, UserInfoEngine } from "@memberjunction/core-entities";
 
 export class NewUserBase {
-    public async createNewUser(firstName: string, lastName: string, email: string, linkedRecordType: string = 'None', linkedEntityId?: string, linkedEntityRecordId?: string): Promise<MJUserEntity | null> {
+    public async CreateNewUser(firstName: string, lastName: string, email: string, linkedRecordType: string = 'None', linkedEntityId?: string, linkedEntityRecordId?: string): Promise<MJUserEntity | null> {
         try {
             const contextUser: UserInfo | null = ResolveConfiguredPrincipal(
                 configInfo?.userHandling?.contextUserForNewUserCreation,
@@ -152,5 +152,10 @@ export class NewUserBase {
             LogError(e);
             return undefined;
         }
+    }
+
+    /** @deprecated Use {@link CreateNewUser}. */
+    public async createNewUser(firstName: string, lastName: string, email: string, linkedRecordType: string = 'None', linkedEntityId?: string, linkedEntityRecordId?: string): Promise<MJUserEntity | null> {
+        return this.CreateNewUser(firstName, lastName, email, linkedRecordType, linkedEntityId, linkedEntityRecordId);
     }
 }

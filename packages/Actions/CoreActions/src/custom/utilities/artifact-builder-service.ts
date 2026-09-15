@@ -10,9 +10,9 @@
  * with a TTL safety net for abandoned runs.
  */
 import { marked } from 'marked';
-import { PDFOptions, PDFNodeType, DEFAULT_PDF_OPTIONS, renderPDFFromNodes, parseHTML } from './pdf-renderer';
-import { WordOptions, DocxSection, DocxContentItem, DEFAULT_WORD_OPTIONS, renderDocxFromSections } from './docx-renderer';
-import { SheetInputDefinition, ExcelOptions, renderExcelFromSheets } from './xlsx-renderer';
+import { PDFOptions, PDFNodeType, DEFAULT_PDF_OPTIONS, RenderPDFFromNodes, ParseHTML } from './pdf-renderer';
+import { WordOptions, DocxSection, DocxContentItem, DEFAULT_WORD_OPTIONS, RenderDocxFromSections } from './docx-renderer';
+import { SheetInputDefinition, ExcelOptions, RenderExcelFromSheets } from './xlsx-renderer';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -241,13 +241,13 @@ export class ArtifactBuilderService {
     private async finalizePDF(operations: DocumentOperation[], pdfOpts?: Partial<PDFOptions>): Promise<Buffer> {
         const options: PDFOptions = { ...DEFAULT_PDF_OPTIONS, ...pdfOpts };
         const nodes = this.operationsToPDFNodes(operations);
-        return renderPDFFromNodes(nodes, options);
+        return RenderPDFFromNodes(nodes, options);
     }
 
     private async finalizeDocx(operations: DocumentOperation[], wordOpts?: Partial<WordOptions>): Promise<Buffer> {
         const options: WordOptions = { ...DEFAULT_WORD_OPTIONS, ...wordOpts };
         const sections = this.operationsToDocxSections(operations);
-        return renderDocxFromSections(sections, options);
+        return RenderDocxFromSections(sections, options);
     }
 
     private async finalizeXlsx(operations: DocumentOperation[], excelOpts?: Partial<ExcelOptions>): Promise<Buffer> {
@@ -255,7 +255,7 @@ export class ArtifactBuilderService {
         if (sheets.length === 0) {
             throw new Error('No sheet operations found. Excel documents require at least one "sheet" operation.');
         }
-        const result = await renderExcelFromSheets(sheets, excelOpts || {});
+        const result = await RenderExcelFromSheets(sheets, excelOpts || {});
         return result.buffer;
     }
 

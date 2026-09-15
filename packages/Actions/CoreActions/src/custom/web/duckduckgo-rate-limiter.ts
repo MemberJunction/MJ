@@ -221,7 +221,7 @@ export class DuckDuckGoRateLimiter {
     /**
      * Execute a search request through the rate limiter
      */
-    async search(request: SearchRequest): Promise<SearchResponse> {
+    async Search(request: SearchRequest): Promise<SearchResponse> {
         const requestId = `REQ-${++this.requestCounter}`;
         
         return new Promise((resolve, reject) => {
@@ -268,11 +268,16 @@ export class DuckDuckGoRateLimiter {
             }
         });
     }
+
+    /** @deprecated Use {@link Search}. */
+    async search(request: SearchRequest): Promise<SearchResponse> {
+        return this.Search(request);
+    }
     
     /**
      * Get current queue status
      */
-    getStatus(): { 
+    GetStatus(): { 
         isQueueActive: boolean; 
         activeRequests: number;
         queuedRequests: number;
@@ -287,23 +292,44 @@ export class DuckDuckGoRateLimiter {
             lastRateLimitTime: this.lastRateLimitTime
         };
     }
+
+    /** @deprecated Use {@link GetStatus}. */
+    getStatus(): { 
+        isQueueActive: boolean; 
+        activeRequests: number;
+        queuedRequests: number;
+        totalProcessed: number;
+        lastRateLimitTime: number;
+    } {
+        return this.GetStatus();
+    }
     
     /**
      * Force queue activation (for testing)
      */
-    forceActivateQueue(): void {
+    ForceActivateQueue(): void {
         this.activateQueue();
+    }
+
+    /** @deprecated Use {@link ForceActivateQueue}. */
+    forceActivateQueue(): void {
+        return this.ForceActivateQueue();
     }
     
     /**
      * Force queue deactivation (for testing)
      */
-    forceDeactivateQueue(): void {
+    ForceDeactivateQueue(): void {
         this.isQueueActive = false;
         if (this.resetQueueTimer) {
             clearTimeout(this.resetQueueTimer);
             this.resetQueueTimer = undefined;
         }
+    }
+
+    /** @deprecated Use {@link ForceDeactivateQueue}. */
+    forceDeactivateQueue(): void {
+        return this.ForceDeactivateQueue();
     }
 }
 
@@ -313,9 +339,14 @@ let rateLimiterInstance: DuckDuckGoRateLimiter | null = null;
 /**
  * Get the singleton rate limiter instance
  */
-export function getDuckDuckGoRateLimiter(config?: Partial<RateLimitConfig>): DuckDuckGoRateLimiter {
+export function GetDuckDuckGoRateLimiter(config?: Partial<RateLimitConfig>): DuckDuckGoRateLimiter {
     if (!rateLimiterInstance) {
         rateLimiterInstance = new DuckDuckGoRateLimiter(config);
     }
     return rateLimiterInstance;
+}
+
+/** @deprecated Use {@link GetDuckDuckGoRateLimiter}. */
+export function getDuckDuckGoRateLimiter(config?: Partial<RateLimitConfig>): DuckDuckGoRateLimiter {
+    return GetDuckDuckGoRateLimiter(config);
 }

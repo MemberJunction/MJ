@@ -41,31 +41,56 @@ export const APPEARANCE_LABEL: Record<AppearanceMode, string> = {
 };
 
 /** Read the current appearance mode (defaults to 'system'). */
-export function getAppearance(): AppearanceMode {
+export function GetAppearance(): AppearanceMode {
   const raw = prefsStorage.getString(PrefKeys.appearance);
   return raw === 'light' || raw === 'dark' || raw === 'system' ? raw : 'system';
 }
 
+/** @deprecated Use {@link GetAppearance}. */
+export function getAppearance(): AppearanceMode {
+  return GetAppearance();
+}
+
 /** Advance appearance System → Light → Dark → System and persist it. */
-export function cycleAppearance(): AppearanceMode {
-  const current = getAppearance();
+export function CycleAppearance(): AppearanceMode {
+  const current = GetAppearance();
   const next = APPEARANCE_CYCLE[(APPEARANCE_CYCLE.indexOf(current) + 1) % APPEARANCE_CYCLE.length];
   prefsStorage.set(PrefKeys.appearance, next);
   return next;
 }
 
+/** @deprecated Use {@link CycleAppearance}. */
+export function cycleAppearance(): AppearanceMode {
+  return CycleAppearance();
+}
+
 /** Persist the chosen default agent (the one that answers without an @mention). */
-export function setDefaultAgent(id: string, name: string): void {
+export function SetDefaultAgent(id: string, name: string): void {
   prefsStorage.set(PrefKeys.defaultAgentId, id);
   prefsStorage.set(PrefKeys.defaultAgentName, name);
 }
 
+/** @deprecated Use {@link SetDefaultAgent}. */
+export function setDefaultAgent(id: string, name: string): void {
+  return SetDefaultAgent(id, name);
+}
+
 /** Read the persisted default-agent display name, or `undefined` if unset. */
-export function getDefaultAgentName(): string | undefined {
+export function GetDefaultAgentName(): string | undefined {
   return prefsStorage.getString(PrefKeys.defaultAgentName);
 }
 
+/** @deprecated Use {@link GetDefaultAgentName}. */
+export function getDefaultAgentName(): string | undefined {
+  return GetDefaultAgentName();
+}
+
 /** Read the persisted default-agent id, or `undefined` if unset. */
-export function getDefaultAgentId(): string | undefined {
+export function GetDefaultAgentId(): string | undefined {
   return prefsStorage.getString(PrefKeys.defaultAgentId);
+}
+
+/** @deprecated Use {@link GetDefaultAgentId}. */
+export function getDefaultAgentId(): string | undefined {
+  return GetDefaultAgentId();
 }

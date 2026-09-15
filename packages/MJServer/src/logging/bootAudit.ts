@@ -1,6 +1,6 @@
 import { getMetadataStorage } from 'type-graphql';
 import { configInfo } from '../config.js';
-import { hasNoLogParameter } from './NoLog.js';
+import { HasNoLogParameter } from './NoLog.js';
 
 // Delete is included alongside Create/Update so codegen DeleteMJ*Input resolvers count as
 // metadata-bound and don't flood the audit with false positives (their args are PK + Options
@@ -42,7 +42,7 @@ export type AuditResolver = {
  *
  * Never throws. Boot does not fail on a missed `@NoLog`.
  */
-export function auditResolversForUndecoratedArgs(): void {
+export function AuditResolversForUndecoratedArgs(): void {
   if (!configInfo.loggingSettings.graphql.logVariables) {
     return;
   }
@@ -52,11 +52,16 @@ export function auditResolversForUndecoratedArgs(): void {
     mutations: AuditResolver[];
     subscriptions: AuditResolver[];
   };
-  auditResolverList([
+  AuditResolverList([
     ...storage.queries,
     ...storage.mutations,
     ...storage.subscriptions,
   ]);
+}
+
+/** @deprecated Use {@link AuditResolversForUndecoratedArgs}. */
+export function auditResolversForUndecoratedArgs(): void {
+  return AuditResolversForUndecoratedArgs();
 }
 
 /**
@@ -64,10 +69,15 @@ export function auditResolversForUndecoratedArgs(): void {
  * skipping the global `getMetadataStorage()` lookup. The boot-time scan uses this after
  * pulling from the global storage; tests pass in a synthetic fixture.
  */
-export function auditResolverList(resolvers: ReadonlyArray<AuditResolver>): void {
+export function AuditResolverList(resolvers: ReadonlyArray<AuditResolver>): void {
   for (const resolver of resolvers) {
     auditResolver(resolver);
   }
+}
+
+/** @deprecated Use {@link AuditResolverList}. */
+export function auditResolverList(resolvers: ReadonlyArray<AuditResolver>): void {
+  return AuditResolverList(resolvers);
 }
 
 function auditResolver(resolver: AuditResolver): void {
@@ -84,7 +94,7 @@ function auditArg(resolver: AuditResolver, argParam: AuditArgParam): void {
   if (typeName && INPUT_TYPE_REGEX.test(typeName)) {
     return;
   }
-  if (hasNoLogParameter(resolver.target, resolver.methodName, argParam.index)) {
+  if (HasNoLogParameter(resolver.target, resolver.methodName, argParam.index)) {
     return;
   }
   const resolverName = `${resolver.target.name}.${resolver.methodName}`;

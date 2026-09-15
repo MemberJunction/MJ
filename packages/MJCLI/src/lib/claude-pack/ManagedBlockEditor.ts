@@ -44,7 +44,7 @@ export class ManagedBlockError extends Error {
  * Throws `ManagedBlockError` when markers are malformed (e.g. END before
  * START, only one marker present, multiple START markers).
  */
-export function parseManagedBlock(content: string): ManagedBlock | null {
+export function ParseManagedBlock(content: string): ManagedBlock | null {
     const startMatch = START_RE.exec(content);
     const endMatch = END_RE.exec(content);
 
@@ -79,6 +79,11 @@ export function parseManagedBlock(content: string): ManagedBlock | null {
     return { before, body, after, attrs };
 }
 
+/** @deprecated Use {@link ParseManagedBlock}. */
+export function parseManagedBlock(content: string): ManagedBlock | null {
+    return ParseManagedBlock(content);
+}
+
 /**
  * Parse `key=value key2=value2` attribute strings from a START marker.
  *
@@ -110,16 +115,25 @@ function parseAttrs(raw: string): Record<string, string> {
  * Throws `ManagedBlockError` if no managed block is present — callers should
  * use `wrapWithManagedBlock` for the first-install case.
  */
+export function RewriteManagedBlock(
+    content: string,
+    newBody: string,
+    newAttrs: Record<string, string>
+): string {
+    const block = ParseManagedBlock(content);
+    if (!block) {
+        throw new ManagedBlockError('Cannot rewrite — no managed block found in content.');
+    }
+    return block.before + formatStartMarker(newAttrs) + newBody + formatEndMarker() + block.after;
+}
+
+/** @deprecated Use {@link RewriteManagedBlock}. */
 export function rewriteManagedBlock(
     content: string,
     newBody: string,
     newAttrs: Record<string, string>
 ): string {
-    const block = parseManagedBlock(content);
-    if (!block) {
-        throw new ManagedBlockError('Cannot rewrite — no managed block found in content.');
-    }
-    return block.before + formatStartMarker(newAttrs) + newBody + formatEndMarker() + block.after;
+    return RewriteManagedBlock(content, newBody, newAttrs);
 }
 
 /**
@@ -128,7 +142,7 @@ export function rewriteManagedBlock(
  *
  * If `content` is empty, the result is just the rendered managed block.
  */
-export function wrapWithManagedBlock(
+export function WrapWithManagedBlock(
     content: string,
     body: string,
     attrs: Record<string, string>
@@ -137,6 +151,15 @@ export function wrapWithManagedBlock(
     const endMarker = formatEndMarker();
     const trailing = content.length > 0 ? '\n\n' + content : '\n';
     return startMarker + body + endMarker + trailing;
+}
+
+/** @deprecated Use {@link WrapWithManagedBlock}. */
+export function wrapWithManagedBlock(
+    content: string,
+    body: string,
+    attrs: Record<string, string>
+): string {
+    return WrapWithManagedBlock(content, body, attrs);
 }
 
 function formatStartMarker(attrs: Record<string, string>): string {

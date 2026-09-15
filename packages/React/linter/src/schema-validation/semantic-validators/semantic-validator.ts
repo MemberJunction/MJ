@@ -86,8 +86,13 @@ export abstract class SemanticValidator {
    *
    * @returns Validator name
    */
-  getName(): string {
+  GetName(): string {
     return this.constructor.name;
+  }
+
+  /** @deprecated Use {@link GetName}. */
+  getName(): string {
+    return this.GetName();
   }
 
   /**

@@ -38,7 +38,7 @@ export type { NodePath };
 /**
  * Creates a violation object with consistent structure.
  */
-export function createViolation(
+export function CreateViolation(
   rule: string,
   severity: 'critical' | 'high' | 'medium' | 'low',
   node: t.Node | null | undefined,
@@ -57,12 +57,29 @@ export function createViolation(
   };
 }
 
+/** @deprecated Use {@link CreateViolation}. */
+export function createViolation(
+  rule: string,
+  severity: 'critical' | 'high' | 'medium' | 'low',
+  node: t.Node | null | undefined,
+  message: string,
+  code?: string,
+  suggestion?: { text: string; example?: string }
+): Violation {
+  return CreateViolation(rule, severity, node, message, code, suggestion);
+}
+
 /**
  * Truncates code to a maximum length for display in violations.
  */
-export function truncateCode(code: string, maxLength: number = 100): string {
+export function TruncateCode(code: string, maxLength: number = 100): string {
   if (code.length <= maxLength) return code;
   return code.substring(0, maxLength) + '...';
+}
+
+/** @deprecated Use {@link TruncateCode}. */
+export function truncateCode(code: string, maxLength: number = 100): string {
+  return TruncateCode(code, maxLength);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -72,7 +89,7 @@ export function truncateCode(code: string, maxLength: number = 100): string {
 /**
  * Levenshtein distance between two strings (case-insensitive).
  */
-export function levenshteinDistance(a: string, b: string): number {
+export function LevenshteinDistance(a: string, b: string): number {
   const al = a.toLowerCase();
   const bl = b.toLowerCase();
   const m = al.length;
@@ -89,17 +106,22 @@ export function levenshteinDistance(a: string, b: string): number {
   return dp[m][n];
 }
 
+/** @deprecated Use {@link LevenshteinDistance}. */
+export function levenshteinDistance(a: string, b: string): number {
+  return LevenshteinDistance(a, b);
+}
+
 /**
  * Find the closest matching string from a list of candidates using Levenshtein distance.
  * Returns null if no match is within the maximum allowed distance.
  */
-export function findClosestMatch(target: string, candidates: string[] | Set<string>, maxDistance?: number): string | null {
+export function FindClosestMatch(target: string, candidates: string[] | Set<string>, maxDistance?: number): string | null {
   let bestMatch: string | null = null;
   let bestDistance = Infinity;
   const max = maxDistance ?? Math.max(3, Math.floor(target.length * 0.5));
 
   for (const candidate of candidates) {
-    const dist = levenshteinDistance(target, candidate);
+    const dist = LevenshteinDistance(target, candidate);
     if (dist < bestDistance && dist > 0 && dist <= max) {
       bestDistance = dist;
       bestMatch = candidate;
@@ -109,10 +131,15 @@ export function findClosestMatch(target: string, candidates: string[] | Set<stri
   return bestMatch;
 }
 
+/** @deprecated Use {@link FindClosestMatch}. */
+export function findClosestMatch(target: string, candidates: string[] | Set<string>, maxDistance?: number): string | null {
+  return FindClosestMatch(target, candidates, maxDistance);
+}
+
 /**
  * Find a case-insensitive match that differs only in casing.
  */
-export function findCaseMismatch(target: string, candidates: string[] | Set<string>): string | null {
+export function FindCaseMismatch(target: string, candidates: string[] | Set<string>): string | null {
   for (const candidate of candidates) {
     if (candidate.toLowerCase() === target.toLowerCase() && candidate !== target) {
       return candidate;
@@ -121,21 +148,31 @@ export function findCaseMismatch(target: string, candidates: string[] | Set<stri
   return null;
 }
 
+/** @deprecated Use {@link FindCaseMismatch}. */
+export function findCaseMismatch(target: string, candidates: string[] | Set<string>): string | null {
+  return FindCaseMismatch(target, candidates);
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // AST Type Checking Helpers
 // ═══════════════════════════════════════════════════════════════════════════
 
 /** Checks if a node is null or undefined literal */
-export function isNullOrUndefined(node: t.Node): boolean {
+export function IsNullOrUndefined(node: t.Node): boolean {
   return t.isNullLiteral(node) || (t.isIdentifier(node) && node.name === 'undefined');
 }
 
+/** @deprecated Use {@link IsNullOrUndefined}. */
+export function isNullOrUndefined(node: t.Node): boolean {
+  return IsNullOrUndefined(node);
+}
+
 /** Checks if a node is likely a string value (literal, template, identifier, call, etc.) */
-export function isStringLike(node: t.Node, depth: number = 0): boolean {
+export function IsStringLike(node: t.Node, depth: number = 0): boolean {
   if (depth > 3) return false;
   if (t.isConditionalExpression(node)) {
-    const consequentOk = isStringLike(node.consequent, depth + 1) || isNullOrUndefined(node.consequent);
-    const alternateOk = isStringLike(node.alternate, depth + 1) || isNullOrUndefined(node.alternate);
+    const consequentOk = IsStringLike(node.consequent, depth + 1) || IsNullOrUndefined(node.consequent);
+    const alternateOk = IsStringLike(node.alternate, depth + 1) || IsNullOrUndefined(node.alternate);
     return consequentOk && alternateOk;
   }
   if (t.isObjectExpression(node) || t.isArrayExpression(node)) return false;
@@ -149,8 +186,13 @@ export function isStringLike(node: t.Node, depth: number = 0): boolean {
   );
 }
 
+/** @deprecated Use {@link IsStringLike}. */
+export function isStringLike(node: t.Node, depth: number = 0): boolean {
+  return IsStringLike(node, depth);
+}
+
 /** Checks if a node is likely a number value */
-export function isNumberLike(node: t.Node): boolean {
+export function IsNumberLike(node: t.Node): boolean {
   return (
     t.isNumericLiteral(node) ||
     t.isBinaryExpression(node) ||
@@ -162,8 +204,13 @@ export function isNumberLike(node: t.Node): boolean {
   );
 }
 
+/** @deprecated Use {@link IsNumberLike}. */
+export function isNumberLike(node: t.Node): boolean {
+  return IsNumberLike(node);
+}
+
 /** Checks if a node is likely an array value */
-export function isArrayLike(node: t.Node): boolean {
+export function IsArrayLike(node: t.Node): boolean {
   return (
     t.isArrayExpression(node) ||
     t.isIdentifier(node) ||
@@ -173,8 +220,13 @@ export function isArrayLike(node: t.Node): boolean {
   );
 }
 
+/** @deprecated Use {@link IsArrayLike}. */
+export function isArrayLike(node: t.Node): boolean {
+  return IsArrayLike(node);
+}
+
 /** Checks if a node is likely an object value (not array) */
-export function isObjectLike(node: t.Node): boolean {
+export function IsObjectLike(node: t.Node): boolean {
   if (t.isArrayExpression(node)) return false;
   return (
     t.isObjectExpression(node) ||
@@ -184,6 +236,11 @@ export function isObjectLike(node: t.Node): boolean {
     t.isConditionalExpression(node) ||
     t.isSpreadElement(node)
   );
+}
+
+/** @deprecated Use {@link IsObjectLike}. */
+export function isObjectLike(node: t.Node): boolean {
+  return IsObjectLike(node);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -201,7 +258,7 @@ export function isObjectLike(node: t.Node): boolean {
  * getStringProperty(objectExpr, 'MaxRows')   // → null (not a string)
  * ```
  */
-export function getStringProperty(objectExpr: t.ObjectExpression, propName: string): string | null {
+export function GetStringProperty(objectExpr: t.ObjectExpression, propName: string): string | null {
   for (const prop of objectExpr.properties) {
     if (t.isObjectProperty(prop) && t.isIdentifier(prop.key) &&
         prop.key.name === propName && t.isStringLiteral(prop.value)) {
@@ -211,11 +268,16 @@ export function getStringProperty(objectExpr: t.ObjectExpression, propName: stri
   return null;
 }
 
+/** @deprecated Use {@link GetStringProperty}. */
+export function getStringProperty(objectExpr: t.ObjectExpression, propName: string): string | null {
+  return GetStringProperty(objectExpr, propName);
+}
+
 /**
  * Get the AST node for a specific property value in an ObjectExpression.
  * Returns the ObjectProperty if found, null otherwise.
  */
-export function getObjectProperty(objectExpr: t.ObjectExpression, propName: string): t.ObjectProperty | null {
+export function GetObjectProperty(objectExpr: t.ObjectExpression, propName: string): t.ObjectProperty | null {
   for (const prop of objectExpr.properties) {
     if (t.isObjectProperty(prop) && t.isIdentifier(prop.key) && prop.key.name === propName) {
       return prop;
@@ -224,13 +286,23 @@ export function getObjectProperty(objectExpr: t.ObjectExpression, propName: stri
   return null;
 }
 
+/** @deprecated Use {@link GetObjectProperty}. */
+export function getObjectProperty(objectExpr: t.ObjectExpression, propName: string): t.ObjectProperty | null {
+  return GetObjectProperty(objectExpr, propName);
+}
+
 /**
  * Get all property names from an ObjectExpression.
  */
-export function getPropertyNames(objectExpr: t.ObjectExpression): string[] {
+export function GetPropertyNames(objectExpr: t.ObjectExpression): string[] {
   return objectExpr.properties
     .filter((prop): prop is t.ObjectProperty => t.isObjectProperty(prop) && t.isIdentifier(prop.key))
     .map((prop) => (prop.key as t.Identifier).name);
+}
+
+/** @deprecated Use {@link GetPropertyNames}. */
+export function getPropertyNames(objectExpr: t.ObjectExpression): string[] {
+  return GetPropertyNames(objectExpr);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -253,7 +325,7 @@ export function getPropertyNames(objectExpr: t.ObjectExpression): string[] {
  * getUtilitiesCallInfo(callee) // → { service: 'search', method: 'Search' }
  * ```
  */
-export function getUtilitiesCallInfo(callee: t.Node): { service: string; method: string } | null {
+export function GetUtilitiesCallInfo(callee: t.Node): { service: string; method: string } | null {
   // Standard: utilities.rv.RunView(...)
   if (t.isMemberExpression(callee) &&
       t.isMemberExpression(callee.object) &&
@@ -280,22 +352,42 @@ export function getUtilitiesCallInfo(callee: t.Node): { service: string; method:
   return null;
 }
 
+/** @deprecated Use {@link GetUtilitiesCallInfo}. */
+export function getUtilitiesCallInfo(callee: t.Node): { service: string; method: string } | null {
+  return GetUtilitiesCallInfo(callee);
+}
+
 /** Check if a CallExpression callee is `utilities.rv.RunView` or `utilities.rv.RunViews` */
-export function isRunViewCall(callee: t.Node): boolean {
-  const info = getUtilitiesCallInfo(callee);
+export function IsRunViewCall(callee: t.Node): boolean {
+  const info = GetUtilitiesCallInfo(callee);
   return info !== null && info.service === 'rv' && (info.method === 'RunView' || info.method === 'RunViews');
 }
 
+/** @deprecated Use {@link IsRunViewCall}. */
+export function isRunViewCall(callee: t.Node): boolean {
+  return IsRunViewCall(callee);
+}
+
 /** Check if a CallExpression callee is `utilities.rq.RunQuery` */
-export function isRunQueryCall(callee: t.Node): boolean {
-  const info = getUtilitiesCallInfo(callee);
+export function IsRunQueryCall(callee: t.Node): boolean {
+  const info = GetUtilitiesCallInfo(callee);
   return info !== null && info.service === 'rq' && info.method === 'RunQuery';
 }
 
+/** @deprecated Use {@link IsRunQueryCall}. */
+export function isRunQueryCall(callee: t.Node): boolean {
+  return IsRunQueryCall(callee);
+}
+
 /** Check if a CallExpression callee is `utilities.search.Search` or `PreviewSearch` */
-export function isSearchCall(callee: t.Node): boolean {
-  const info = getUtilitiesCallInfo(callee);
+export function IsSearchCall(callee: t.Node): boolean {
+  const info = GetUtilitiesCallInfo(callee);
   return info !== null && info.service === 'search' && (info.method === 'Search' || info.method === 'PreviewSearch');
+}
+
+/** @deprecated Use {@link IsSearchCall}. */
+export function isSearchCall(callee: t.Node): boolean {
+  return IsSearchCall(callee);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -306,7 +398,7 @@ export function isSearchCall(callee: t.Node): boolean {
  * Parse component code and extract QueryName values from RunQuery calls.
  * Uses full AST analysis to avoid false positives from comments or string literals.
  */
-export function extractRunQueryNamesFromCode(code: string): Set<string> {
+export function ExtractRunQueryNamesFromCode(code: string): Set<string> {
   const queryNames = new Set<string>();
   try {
     const ast = parser.parse(code, {
@@ -316,10 +408,10 @@ export function extractRunQueryNamesFromCode(code: string): Set<string> {
     });
     traverse(ast, {
       CallExpression(path: NodePath<t.CallExpression>) {
-        if (isRunQueryCall(path.node.callee)) {
+        if (IsRunQueryCall(path.node.callee)) {
           const arg = path.node.arguments[0];
           if (t.isObjectExpression(arg)) {
-            const queryName = getStringProperty(arg, 'QueryName');
+            const queryName = GetStringProperty(arg, 'QueryName');
             if (queryName) queryNames.add(queryName);
           }
         }
@@ -329,6 +421,11 @@ export function extractRunQueryNamesFromCode(code: string): Set<string> {
     // If parsing fails, return empty set
   }
   return queryNames;
+}
+
+/** @deprecated Use {@link ExtractRunQueryNamesFromCode}. */
+export function extractRunQueryNamesFromCode(code: string): Set<string> {
+  return ExtractRunQueryNamesFromCode(code);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -376,7 +473,7 @@ export const NON_ENTITY_PROPERTIES = new Set([
 // ═══════════════════════════════════════════════════════════════════════════
 
 /** Extracts the name of a JSX element (handles member expressions like Antd.Button) */
-export function getJSXElementName(node: t.JSXOpeningElement): string | null {
+export function GetJSXElementName(node: t.JSXOpeningElement): string | null {
   if (t.isJSXIdentifier(node.name)) {
     return node.name.name;
   } else if (t.isJSXMemberExpression(node.name)) {
@@ -392,35 +489,65 @@ export function getJSXElementName(node: t.JSXOpeningElement): string | null {
   return null;
 }
 
+/** @deprecated Use {@link GetJSXElementName}. */
+export function getJSXElementName(node: t.JSXOpeningElement): string | null {
+  return GetJSXElementName(node);
+}
+
 /** Checks if a JSX element has a specific attribute */
-export function hasJSXAttribute(element: t.JSXOpeningElement, attributeName: string): boolean {
+export function HasJSXAttribute(element: t.JSXOpeningElement, attributeName: string): boolean {
   return element.attributes.some(
     (attr) => t.isJSXAttribute(attr) && t.isJSXIdentifier(attr.name) && attr.name.name === attributeName
   );
 }
 
+/** @deprecated Use {@link HasJSXAttribute}. */
+export function hasJSXAttribute(element: t.JSXOpeningElement, attributeName: string): boolean {
+  return HasJSXAttribute(element, attributeName);
+}
+
 /** Gets a JSX attribute by name */
-export function getJSXAttribute(element: t.JSXOpeningElement, attributeName: string): t.JSXAttribute | null {
+export function GetJSXAttribute(element: t.JSXOpeningElement, attributeName: string): t.JSXAttribute | null {
   const attr = element.attributes.find(
     (a) => t.isJSXAttribute(a) && t.isJSXIdentifier(a.name) && a.name.name === attributeName
   );
   return t.isJSXAttribute(attr) ? attr : null;
 }
 
+/** @deprecated Use {@link GetJSXAttribute}. */
+export function getJSXAttribute(element: t.JSXOpeningElement, attributeName: string): t.JSXAttribute | null {
+  return GetJSXAttribute(element, attributeName);
+}
+
 /** Checks if a function parameter is destructuring props */
-export function isPropsDestructuring(param: t.LVal): boolean {
+export function IsPropsDestructuring(param: t.LVal): boolean {
   return t.isObjectPattern(param);
 }
 
+/** @deprecated Use {@link IsPropsDestructuring}. */
+export function isPropsDestructuring(param: t.LVal): boolean {
+  return IsPropsDestructuring(param);
+}
+
 /** Extracts property names from an object pattern (destructuring) */
-export function extractDestructuredProps(pattern: t.ObjectPattern): string[] {
+export function ExtractDestructuredProps(pattern: t.ObjectPattern): string[] {
   return pattern.properties
     .filter((prop): prop is t.ObjectProperty => t.isObjectProperty(prop))
     .filter((prop) => t.isIdentifier(prop.key))
     .map((prop) => (prop.key as t.Identifier).name);
 }
 
+/** @deprecated Use {@link ExtractDestructuredProps}. */
+export function extractDestructuredProps(pattern: t.ObjectPattern): string[] {
+  return ExtractDestructuredProps(pattern);
+}
+
 /** Checks if a node is at the top level of the program */
-export function isTopLevel(path: { getFunctionParent: () => unknown; scope: { path: { type: string } } }): boolean {
+export function IsTopLevel(path: { getFunctionParent: () => unknown; scope: { path: { type: string } } }): boolean {
   return path.getFunctionParent() === null || path.scope.path.type === 'Program';
+}
+
+/** @deprecated Use {@link IsTopLevel}. */
+export function isTopLevel(path: { getFunctionParent: () => unknown; scope: { path: { type: string } } }): boolean {
+  return IsTopLevel(path);
 }

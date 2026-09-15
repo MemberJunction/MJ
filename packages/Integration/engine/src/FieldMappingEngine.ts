@@ -1,7 +1,7 @@
 import { FieldTransformEngine } from '@memberjunction/global';
-import { computeUnmappedFields } from './CustomOverflow.js';
+import { ComputeUnmappedFields } from './CustomOverflow.js';
 import { StripExcludedFields } from './SyncDirectives.js';
-import { flattenRecord, hasNestedObject } from './RecordFlatten.js';
+import { FlattenRecord, HasNestedObject } from './RecordFlatten.js';
 import type { ICompanyIntegrationFieldMap } from './entity-types.js';
 import type { ExternalRecord, MappedRecord } from './types.js';
 import type { TransformStep } from './transforms.js';
@@ -71,8 +71,8 @@ export class FieldMappingEngine {
         // per-occurrence / per-version key → duplicate rows. Discovery flattens identically, so
         // the field maps reference the flattened scalar names. A record with no nested objects
         // passes through unchanged — every flat-record connector is a no-op here.
-        const ext: ExternalRecord = hasNestedObject(record.Fields)
-            ? { ...record, Fields: flattenRecord(record.Fields) }
+        const ext: ExternalRecord = HasNestedObject(record.Fields)
+            ? { ...record, Fields: FlattenRecord(record.Fields) }
             : record;
 
         const mappedFields: Record<string, unknown> = {};
@@ -90,7 +90,7 @@ export class FieldMappingEngine {
         // the result is empty (and discarded by the writer) in the common all-mapped case,
         // so this adds no measurable cost to a customs-free sync. The engine parks any extras
         // in the __mj_integration_CustomOverflow system column — see {@link CustomOverflow}.
-        const unmappedFields = computeUnmappedFields(ext.Fields, mappedSourceNames);
+        const unmappedFields = ComputeUnmappedFields(ext.Fields, mappedSourceNames);
 
         return {
             ExternalRecord: ext,

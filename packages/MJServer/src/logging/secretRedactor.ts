@@ -1,5 +1,5 @@
 import type { IMetadataProvider } from '@memberjunction/core';
-import { shortenForLog } from './shortenForLog.js';
+import { ShortenForLog } from './shortenForLog.js';
 
 /**
  * Input to the redactor. Built per `@Arg` per resolver call by the variables-logging middleware.
@@ -33,7 +33,7 @@ const INPUT_TYPE_REGEX = /^(Create|Update|Delete)(?<name>.+)Input$/;
 // type-graphql allows @Field({ name: 'overrideName' }) to rename fields at the
 // GraphQL layer; MJ codegen does not use this. A future maintainer renaming an
 // encrypted field at the GraphQL layer would silently miss redaction.
-export function redactArg(ctx: RedactionContext): unknown {
+export function RedactArg(ctx: RedactionContext): unknown {
   if (ctx.noLogParameter) {
     return '<redacted>';
   }
@@ -79,7 +79,7 @@ export function redactArg(ctx: RedactionContext): unknown {
     !Array.isArray(ctx.rawValue);
 
   if (!canWalk) {
-    return shortenForLog(ctx.rawValue);
+    return ShortenForLog(ctx.rawValue);
   }
 
   const result: Record<string, unknown> = {};
@@ -87,10 +87,15 @@ export function redactArg(ctx: RedactionContext): unknown {
     if (encryptedFieldNames.has(key) || ctx.noLogFields.has(key)) {
       result[key] = '<redacted>';
     } else {
-      result[key] = shortenForLog(value);
+      result[key] = ShortenForLog(value);
     }
   }
   return result;
+}
+
+/** @deprecated Use {@link RedactArg}. */
+export function redactArg(ctx: RedactionContext): unknown {
+  return RedactArg(ctx);
 }
 
 const EMPTY_SET: ReadonlySet<string> = new Set<string>();

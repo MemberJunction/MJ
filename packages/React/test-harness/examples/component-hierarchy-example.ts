@@ -142,7 +142,7 @@ async function registerComponentHierarchyExample() {
 }
 
 // Usage from Angular component (simplified)
-export async function registerFromAngular(
+export async function RegisterFromAngular(
   rootSpec: any, // SkipComponentRootSpec
   compiler: ComponentCompiler,
   registry: ComponentRegistry,
@@ -168,6 +168,17 @@ export async function registerFromAngular(
       continueOnError: true
     }
   );
+}
+
+/** @deprecated Use {@link RegisterFromAngular}. */
+export async function registerFromAngular(
+  rootSpec: any, // SkipComponentRootSpec
+  compiler: ComponentCompiler,
+  registry: ComponentRegistry,
+  runtimeContext: any,
+  styles?: any
+): Promise<HierarchyRegistrationResult> {
+  return RegisterFromAngular(rootSpec, compiler, registry, runtimeContext, styles);
 }
 
 export { registerComponentHierarchyExample };

@@ -15,8 +15,8 @@
 import { DatabaseDocumentation } from '../types/state.js';
 import { OrganicKeyCluster } from '../types/organic-keys.js';
 import {
-    detectTransitiveBridges,
-    collectFKEdgesFromState,
+    DetectTransitiveBridges,
+    CollectFKEdgesFromState,
     TransitiveBridgeFinding,
 } from './TransitiveBridgeDetector.js';
 
@@ -25,14 +25,22 @@ export interface StructuralPhaseResult {
     summary: { transitiveBridgesFound: number };
 }
 
-export function runStructuralPhase(
+export function RunStructuralPhase(
     state: DatabaseDocumentation,
     clusters: OrganicKeyCluster[],
 ): StructuralPhaseResult {
     if (clusters.length === 0) {
         return { bridges: [], summary: { transitiveBridgesFound: 0 } };
     }
-    const edges = collectFKEdgesFromState(state);
-    const bridges = detectTransitiveBridges(clusters, edges, state);
+    const edges = CollectFKEdgesFromState(state);
+    const bridges = DetectTransitiveBridges(clusters, edges, state);
     return { bridges, summary: { transitiveBridgesFound: bridges.length } };
+}
+
+/** @deprecated Use {@link RunStructuralPhase}. */
+export function runStructuralPhase(
+    state: DatabaseDocumentation,
+    clusters: OrganicKeyCluster[],
+): StructuralPhaseResult {
+    return RunStructuralPhase(state, clusters);
 }

@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
 import { HttpPost, IsHttpError } from "@memberjunction/network-utils";
-import { getApiIntegrationsConfig } from "../../config";
+import { GetApiIntegrationsConfig } from "../../config";
 
 /** The slice of Perplexity's `/chat/completions` response this action reads. */
 interface PerplexityChatResponse {
@@ -93,7 +93,7 @@ export class PerplexitySearchAction extends BaseAction {
             }
 
             // Get API key from config (which checks mj.config.cjs then falls back to environment variable)
-            const apiConfig = getApiIntegrationsConfig();
+            const apiConfig = GetApiIntegrationsConfig();
             const apiKey = apiConfig.perplexityApiKey;
             if (!apiKey) {
                 return this.createErrorResult(

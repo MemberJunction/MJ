@@ -95,7 +95,7 @@ vi.mock('@memberjunction/api-keys', () => ({
   GetAPIKeyEngine: vi.fn(),
 }));
 
-import { createUnifiedAuthMiddleware } from '../context.js';
+import { CreateUnifiedAuthMiddleware } from '../context.js';
 import type { Request, Response, NextFunction } from 'express';
 import type { DataSourceInfo } from '../types.js';
 
@@ -178,11 +178,11 @@ function setupSuccessfulAuth() {
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
 describe('createUnifiedAuthMiddleware', () => {
-  let middleware: ReturnType<typeof createUnifiedAuthMiddleware>;
+  let middleware: ReturnType<typeof CreateUnifiedAuthMiddleware>;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    middleware = createUnifiedAuthMiddleware(mockDataSources);
+    middleware = CreateUnifiedAuthMiddleware(mockDataSources);
   });
 
   describe('OPTIONS passthrough', () => {

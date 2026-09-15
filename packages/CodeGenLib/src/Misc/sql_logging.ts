@@ -1,5 +1,5 @@
 import { CodeGenConnection } from '../Database/codeGenDatabaseProvider';
-import { configInfo, mj_core_schema, SQLOutputConfig, dbPlatform, currentWorkingDirectory } from "../Config/config";
+import { configInfo, MjCoreSchema, SQLOutputConfig, DbPlatform, currentWorkingDirectory } from "../Config/config";
 import { logError, logStatus } from "./status_logging";
 import * as fs from 'fs';
 import path from 'path';
@@ -10,9 +10,14 @@ const MJ_DEFAULT_SQL_OUTPUT_RE = /(^|\/|\\)migrations[/\\]v\d+[/\\]?$/i;
  * True when `folderPath` is the CodeGenLib / MJ-host default (`./migrations/v5` etc.),
  * not an Open App `migrations/codegen` tree.
  */
-export function isMjDefaultSqlOutputPath(folderPath: string): boolean {
+export function IsMjDefaultSqlOutputPath(folderPath: string): boolean {
     const n = folderPath.replace(/\\/g, '/').replace(/\/+$/, '');
     return MJ_DEFAULT_SQL_OUTPUT_RE.test(n) || n === './migrations/v5' || n === '../../migrations/v5';
+}
+
+/** @deprecated Use {@link IsMjDefaultSqlOutputPath}. */
+export function isMjDefaultSqlOutputPath(folderPath: string): boolean {
+    return IsMjDefaultSqlOutputPath(folderPath);
 }
 
 export type ResolveSQLOutputFolderArgs = {
@@ -37,7 +42,7 @@ export type ResolveSQLOutputFolderArgs = {
  * MJ monorepo cwd + `includeSchemas` listing a non-core schema: throw. Run
  * CodeGen from the app directory.
  */
-export function resolveSQLOutputFolder(args: ResolveSQLOutputFolderArgs): string {
+export function ResolveSQLOutputFolder(args: ResolveSQLOutputFolderArgs): string {
     const cwd = path.resolve(args.cwd);
     const core = (args.coreSchema || '__mj').toLowerCase();
     const include = (args.includeSchemas ?? []).map(s => s.toLowerCase());
@@ -45,7 +50,7 @@ export function resolveSQLOutputFolder(args: ResolveSQLOutputFolderArgs): string
 
     if (args.sqlOutputDirFlag) {
         const resolved = path.resolve(cwd, args.sqlOutputDirFlag);
-        if (args.hasMjAppJson && isMjDefaultSqlOutputPath(resolved)) {
+        if (args.hasMjAppJson && IsMjDefaultSqlOutputPath(resolved)) {
             throw new Error(
                 `CodeGen --sql-output-dir resolves to an MJ host migrations tree (${resolved}). ` +
                 `Open App metadata SQL must go to the app's migrations/codegen. ` +
@@ -57,7 +62,7 @@ export function resolveSQLOutputFolder(args: ResolveSQLOutputFolderArgs): string
 
     if (args.hasMjAppJson) {
         const configured = args.configuredFolderPath;
-        if (configured && !isMjDefaultSqlOutputPath(configured)) {
+        if (configured && !IsMjDefaultSqlOutputPath(configured)) {
             return path.resolve(cwd, configured);
         }
         return path.join(cwd, 'migrations', 'codegen');
@@ -75,6 +80,11 @@ export function resolveSQLOutputFolder(args: ResolveSQLOutputFolderArgs): string
     return path.resolve(cwd, folder);
 }
 
+/** @deprecated Use {@link ResolveSQLOutputFolder}. */
+export function resolveSQLOutputFolder(args: ResolveSQLOutputFolderArgs): string {
+    return ResolveSQLOutputFolder(args);
+}
+
 /**
  * Utility class for logging SQL to a run file that can be fresh for each run or appended to depending on the settings in the configuration
  */
@@ -82,7 +92,16 @@ export class SQLLogging {
     private static _SQLLoggingFilePath: string = '';
     private static _OmitRecurringScriptsFromLog: boolean = true;
     /** CLI `--sql-output-dir`. Set before {@link initSQLLogging}. */
-    public static sqlOutputDirFlag: string | undefined;
+    public static SqlOutputDirFlag: string | undefined;
+
+    /** @deprecated Use {@link SqlOutputDirFlag}. */
+    public static get sqlOutputDirFlag(): string | undefined {
+        return this.SqlOutputDirFlag;
+    }
+    /** @deprecated Use {@link SqlOutputDirFlag}. */
+    public static set sqlOutputDirFlag(value: string | undefined) {
+        this.SqlOutputDirFlag = value;
+    }
 
     public static get SQLLoggingFilePath(): string {
         return SQLLogging._SQLLoggingFilePath;
@@ -115,7 +134,7 @@ export class SQLLogging {
      *
      * Public so the routing can be unit-tested without a CodeGen run.
      */
-    public static redirectToPGMigrations(folderPath: string): string {
+    public static RedirectToPGMigrations(folderPath: string): string {
         // Split on either separator so a Windows-style path is handled without normalizing the
         // whole string (which would rewrite the caller's separators as a side effect).
         const segments = folderPath.split(/([\\/])/);
@@ -139,7 +158,12 @@ export class SQLLogging {
         }
         return folderPath;
     }
-    public static initSQLLogging() {
+
+    /** @deprecated Use {@link RedirectToPGMigrations}. */
+    public static redirectToPGMigrations(folderPath: string): string {
+        return this.RedirectToPGMigrations(folderPath);
+    }
+    public static InitSQLLogging() {
         const config = configInfo.SQLOutput;
         if (!config) {
             throw new Error("SQLOutput config is required to enable metadata logging");
@@ -151,8 +175,8 @@ export class SQLLogging {
                 return;
 
             const cwd = currentWorkingDirectory || process.cwd();
-            const coreSchema = mj_core_schema();
-            let folderPath = resolveSQLOutputFolder({
+            const coreSchema = MjCoreSchema();
+            let folderPath = ResolveSQLOutputFolder({
                 cwd,
                 configuredFolderPath: config.folderPath,
                 includeSchemas: configInfo.includeSchemas,
@@ -164,7 +188,7 @@ export class SQLLogging {
                     fs.existsSync(path.join(cwd, 'packages', 'MJCLI')),
             });
 
-            if (dbPlatform() === 'postgresql') {
+            if (DbPlatform() === 'postgresql') {
                 folderPath = SQLLogging.redirectToPGMigrations(folderPath);
             }
 
@@ -183,24 +207,44 @@ export class SQLLogging {
         }
      }
 
+    /** @deprecated Use {@link InitSQLLogging}. */
+    public static initSQLLogging() {
+        return this.InitSQLLogging();
+    }
+
     /**
      * The batch separator for the active platform: `GO` on SQL Server, none on PostgreSQL. Used as the
      * default for callers that do not pass the provider's separator, so a PostgreSQL capture can never
      * pick up a literal `GO` from a forgotten argument.
      */
+    public static DefaultBatchSeparator(): string {
+        return DbPlatform() === 'postgresql' ? '' : 'GO';
+    }
+
+    /** @deprecated Use {@link DefaultBatchSeparator}. */
     public static defaultBatchSeparator(): string {
-        return dbPlatform() === 'postgresql' ? '' : 'GO';
+        return this.DefaultBatchSeparator();
     }
 
     /** Test hook — SQLLogging is a process-wide singleton. */
-    public static resetForTests(): void {
+    public static ResetForTests(): void {
         SQLLogging._SQLLoggingFilePath = '';
         SQLLogging.sqlOutputDirFlag = undefined;
     }
 
+    /** @deprecated Use {@link ResetForTests}. */
+    public static resetForTests(): void {
+        return this.ResetForTests();
+    }
+
     /** Test hook — sets the active capture file path for testing. */
-    public static setFilePathForTesting(filePath: string): void {
+    public static SetFilePathForTesting(filePath: string): void {
         SQLLogging._SQLLoggingFilePath = filePath;
+    }
+
+    /** @deprecated Use {@link SetFilePathForTesting}. */
+    public static setFilePathForTesting(filePath: string): void {
+        return this.SetFilePathForTesting(filePath);
     }
 
     /**
@@ -209,7 +253,7 @@ export class SQLLogging {
      * file open, and closes any capture file already open so nothing is written meanwhile. Returns a
      * function that restores both; call it from `afterAll`.
      */
-    public static suppressOutputForTests(): () => void {
+    public static SuppressOutputForTests(): () => void {
         const output = configInfo.SQLOutput;
         const previousEnabled = output?.enabled;
         const previousPath = SQLLogging._SQLLoggingFilePath;
@@ -225,7 +269,12 @@ export class SQLLogging {
         };
     }
 
-     public static finishSQLLogging() {
+    /** @deprecated Use {@link SuppressOutputForTests}. */
+    public static suppressOutputForTests(): () => void {
+        return this.SuppressOutputForTests();
+    }
+
+     public static FinishSQLLogging() {
         if (SQLLogging.SQLLoggingFilePath) {
             if (SQLLogging.getFileLength(SQLLogging.SQLLoggingFilePath) === 0) {
                 // no content in the file, so delete it
@@ -236,6 +285,11 @@ export class SQLLogging {
                 SQLLogging.convertSQLLogToFlywaySchema();
             }
         }
+     }
+
+     /** @deprecated Use {@link FinishSQLLogging}. */
+     public static finishSQLLogging() {
+         return this.FinishSQLLogging();
      }
 
      protected static createFileName(): string {
@@ -270,7 +324,7 @@ export class SQLLogging {
      * @param batchSeparator - the batch separator string to use (e.g., 'GO' for SQL Server). Only used when includeBatchSeparator is true.
      * @returns
      */
-    public static async appendToSQLLogFile(contents: string, description?: string, isRecurringScript: boolean = false, includeBatchSeparator: boolean = false, batchSeparator: string = SQLLogging.defaultBatchSeparator()): Promise<void> {
+    public static async AppendToSQLLogFile(contents: string, description?: string, isRecurringScript: boolean = false, includeBatchSeparator: boolean = false, batchSeparator: string = SQLLogging.defaultBatchSeparator()): Promise<void> {
         try{
             if (isRecurringScript && SQLLogging.OmitRecurringScriptsFromLog) {
                 return; // is a recurring script and the flag to omit recurring scripts is set
@@ -324,6 +378,11 @@ export class SQLLogging {
         }
     }
 
+    /** @deprecated Use {@link AppendToSQLLogFile}. */
+    public static async appendToSQLLogFile(contents: string, description?: string, isRecurringScript: boolean = false, includeBatchSeparator: boolean = false, batchSeparator: string = SQLLogging.defaultBatchSeparator()): Promise<void> {
+        return this.AppendToSQLLogFile(contents, description, isRecurringScript, includeBatchSeparator, batchSeparator);
+    }
+
     /**
     * Executes the given SQL query using the given DataSource object.
     * If the appendToLogFile parameter is true, the query will also be appended to the log file.
@@ -353,7 +412,7 @@ export class SQLLogging {
      * inside `IF ... BEGIN ... END` — so the match is not limited to the first statement. A declaration
      * inside a routine body is routine-scoped and cannot collide across units, so it does not count.
      */
-    public static declaresBatchScopedVariable(sql: string): boolean {
+    public static DeclaresBatchScopedVariable(sql: string): boolean {
         if (!sql) {
             return false;
         }
@@ -375,6 +434,11 @@ export class SQLLogging {
         return false;
     }
 
+    /** @deprecated Use {@link DeclaresBatchScopedVariable}. */
+    public static declaresBatchScopedVariable(sql: string): boolean {
+        return this.DeclaresBatchScopedVariable(sql);
+    }
+
     protected static getFileLength(filePath: string): number {
         try {
             const stats = fs.statSync(filePath);
@@ -394,7 +458,7 @@ export class SQLLogging {
 
         // Get schema placeholder mappings, defaulting to legacy behavior if not specified
         const schemaPlaceholders = configInfo.SQLOutput.schemaPlaceholders || [
-            { schema: mj_core_schema(), placeholder: '${flyway:defaultSchema}' }
+            { schema: MjCoreSchema(), placeholder: '${flyway:defaultSchema}' }
         ];
 
         // Apply each schema-to-placeholder mapping in order

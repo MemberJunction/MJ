@@ -13,32 +13,47 @@ export class AuditAnalyzer {
    * Estimate token count from string (rough approximation)
    * Uses the common rule of ~4 characters per token
    */
-  estimateTokenCount(text: string): number {
+  EstimateTokenCount(text: string): number {
     if (!text) return 0;
     return Math.ceil(text.length / 4);
+  }
+
+  /** @deprecated Use {@link EstimateTokenCount}. */
+  estimateTokenCount(text: string): number {
+    return this.EstimateTokenCount(text);
   }
 
   /**
    * Estimate cost from token count (using average pricing)
    * Note: This uses an average rate and may not reflect actual costs
    */
-  estimateCost(tokens: number): number {
+  EstimateCost(tokens: number): number {
     // Average: $0.01 per 1000 tokens (adjust based on actual model)
     return (tokens / 1000) * 0.01;
+  }
+
+  /** @deprecated Use {@link EstimateCost}. */
+  estimateCost(tokens: number): number {
+    return this.EstimateCost(tokens);
   }
 
   /**
    * Calculate step duration from entity timestamps
    */
-  calculateStepDuration(step: MJAIAgentRunStepEntity): number {
+  CalculateStepDuration(step: MJAIAgentRunStepEntity): number {
     if (!step.StartedAt || !step.CompletedAt) return 0;
     return new Date(step.CompletedAt).getTime() - new Date(step.StartedAt).getTime();
+  }
+
+  /** @deprecated Use {@link CalculateStepDuration}. */
+  calculateStepDuration(step: MJAIAgentRunStepEntity): number {
+    return this.CalculateStepDuration(step);
   }
 
   /**
    * Get truncation rules based on detail level and max tokens
    */
-  getTruncationRules(detailLevel: string, maxTokens: number): TruncationRules {
+  GetTruncationRules(detailLevel: string, maxTokens: number): TruncationRules {
     const maxChars = maxTokens * 4; // Convert tokens to chars
 
     switch (detailLevel) {
@@ -59,11 +74,16 @@ export class AuditAnalyzer {
     }
   }
 
+  /** @deprecated Use {@link GetTruncationRules}. */
+  getTruncationRules(detailLevel: string, maxTokens: number): TruncationRules {
+    return this.GetTruncationRules(detailLevel, maxTokens);
+  }
+
   /**
    * Truncate field with smart preview (first + last chars)
    * Shows beginning and end of content with truncation indicator
    */
-  truncateField(text: string, maxChars: number): string {
+  TruncateField(text: string, maxChars: number): string {
     if (!text || text.length <= maxChars || maxChars === Infinity) {
       return text || '';
     }
@@ -79,11 +99,16 @@ export class AuditAnalyzer {
     );
   }
 
+  /** @deprecated Use {@link TruncateField}. */
+  truncateField(text: string, maxChars: number): string {
+    return this.TruncateField(text, maxChars);
+  }
+
   /**
    * Detect common error patterns across multiple error messages
    * Finds the longest common substring that appears in all errors
    */
-  detectErrorPattern(errorMessages: string[]): string | undefined {
+  DetectErrorPattern(errorMessages: string[]): string | undefined {
     if (errorMessages.length === 0) return undefined;
     if (errorMessages.length === 1) return errorMessages[0];
 
@@ -104,11 +129,16 @@ export class AuditAnalyzer {
     return errorMessages[0];
   }
 
+  /** @deprecated Use {@link DetectErrorPattern}. */
+  detectErrorPattern(errorMessages: string[]): string | undefined {
+    return this.DetectErrorPattern(errorMessages);
+  }
+
   /**
    * Suggest fixes based on error pattern and failed step context
    * Analyzes error messages and provides actionable debugging suggestions
    */
-  suggestFixes(errorPattern: string | undefined, failedSteps: Array<{ errorMessage: string; stepType: string }>): string[] {
+  SuggestFixes(errorPattern: string | undefined, failedSteps: Array<{ errorMessage: string; stepType: string }>): string[] {
     const suggestions: string[] = [];
 
     if (!errorPattern) return suggestions;
@@ -182,10 +212,15 @@ export class AuditAnalyzer {
     return suggestions;
   }
 
+  /** @deprecated Use {@link SuggestFixes}. */
+  suggestFixes(errorPattern: string | undefined, failedSteps: Array<{ errorMessage: string; stepType: string }>): string[] {
+    return this.SuggestFixes(errorPattern, failedSteps);
+  }
+
   /**
    * Format duration in human-readable format
    */
-  formatDuration(milliseconds: number): string {
+  FormatDuration(milliseconds: number): string {
     if (milliseconds < 1000) {
       return `${milliseconds}ms`;
     } else if (milliseconds < 60000) {
@@ -201,10 +236,15 @@ export class AuditAnalyzer {
     }
   }
 
+  /** @deprecated Use {@link FormatDuration}. */
+  formatDuration(milliseconds: number): string {
+    return this.FormatDuration(milliseconds);
+  }
+
   /**
    * Calculate aggregate statistics for a collection of runs
    */
-  calculateAggregateStats(runs: Array<{ duration: number; tokenCount: number; success: boolean }>): {
+  CalculateAggregateStats(runs: Array<{ duration: number; tokenCount: number; success: boolean }>): {
     totalRuns: number;
     successRate: number;
     avgDuration: number;
@@ -228,5 +268,16 @@ export class AuditAnalyzer {
       totalTokens,
       avgTokens,
     };
+  }
+
+  /** @deprecated Use {@link CalculateAggregateStats}. */
+  calculateAggregateStats(runs: Array<{ duration: number; tokenCount: number; success: boolean }>): {
+    totalRuns: number;
+    successRate: number;
+    avgDuration: number;
+    totalTokens: number;
+    avgTokens: number;
+  } {
+    return this.CalculateAggregateStats(runs);
   }
 }

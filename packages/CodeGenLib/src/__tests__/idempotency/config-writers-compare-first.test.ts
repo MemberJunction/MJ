@@ -7,7 +7,7 @@ import { ManageMetadataBase } from '../../Database/manage-metadata';
 import { configInfo } from '../../Config/config';
 import { SQLLogging } from '../../Misc/sql_logging';
 import { CodeGenConnection, CodeGenQueryResult } from '../../Database/codeGenDatabaseProvider';
-import { canonicalJSONStringify } from '../../Misc/util';
+import { CanonicalJSONStringify } from '../../Misc/util';
 
 // Subclass exposing protected methods for testing
 class TestableManageMetadataForConfigWriters extends ManageMetadataBase {
@@ -329,7 +329,7 @@ describe('T20 — Every-Run Config Writers Compare-First & Captured (C9)', () =>
                   recordset: [
                      {
                         ID: 'SETTING-1',
-                        Value: canonicalJSONStringify(catInfo, 2),
+                        Value: CanonicalJSONStringify(catInfo, 2),
                      },
                   ],
                };
@@ -339,7 +339,7 @@ describe('T20 — Every-Run Config Writers Compare-First & Captured (C9)', () =>
                   recordset: [
                      {
                         ID: 'SETTING-2',
-                        Value: canonicalJSONStringify({ General: 'fa-info' }, 2),
+                        Value: CanonicalJSONStringify({ General: 'fa-info' }, 2),
                      },
                   ],
                };

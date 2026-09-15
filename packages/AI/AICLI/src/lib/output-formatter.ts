@@ -39,7 +39,7 @@ export interface ExecutionResult {
 export class OutputFormatter {
   constructor(private format: OutputFormat) {}
 
-  public formatAgentList(agents: AgentInfo[]): string {
+  public FormatAgentList(agents: AgentInfo[]): string {
     // The empty case is still a RESULT, not a message. Answering it above the switch
     // meant `--format=json` returned the prose "No agents found." — unparseable, and
     // indistinguishable to a caller from the command having failed. An empty list is
@@ -57,6 +57,11 @@ export class OutputFormatter {
     }
   }
 
+  /** @deprecated Use {@link FormatAgentList}. */
+  public formatAgentList(agents: AgentInfo[]): string {
+    return this.FormatAgentList(agents);
+  }
+
   /**
    * Renders what `mj ai actions run --dry-run` *would* execute.
    *
@@ -65,7 +70,7 @@ export class OutputFormatter {
    * other output path. Printing coloured prose here regardless of `--format=json` put a
    * banner and ANSI codes into what an agent was parsing.
    */
-  public formatActionDryRun(actionName: string, parameters: Record<string, string>): string {
+  public FormatActionDryRun(actionName: string, parameters: Record<string, string>): string {
     if (this.format === 'json') {
       return JSON.stringify({ dryRun: true, action: actionName, parameters }, null, 2);
     }
@@ -88,7 +93,12 @@ export class OutputFormatter {
     return lines.join('\n');
   }
 
-  public formatActionList(actions: ActionInfo[]): string {
+  /** @deprecated Use {@link FormatActionDryRun}. */
+  public formatActionDryRun(actionName: string, parameters: Record<string, string>): string {
+    return this.FormatActionDryRun(actionName, parameters);
+  }
+
+  public FormatActionList(actions: ActionInfo[]): string {
     // See formatAgentList: an empty result must stay machine-readable in json mode.
     switch (this.format) {
       case 'json':
@@ -103,7 +113,12 @@ export class OutputFormatter {
     }
   }
 
-  public formatAgentResult(result: ExecutionResult): string {
+  /** @deprecated Use {@link FormatActionList}. */
+  public formatActionList(actions: ActionInfo[]): string {
+    return this.FormatActionList(actions);
+  }
+
+  public FormatAgentResult(result: ExecutionResult): string {
     switch (this.format) {
       case 'json':
         return JSON.stringify(result, null, 2);
@@ -117,7 +132,12 @@ export class OutputFormatter {
     }
   }
 
-  public formatActionResult(result: ExecutionResult): string {
+  /** @deprecated Use {@link FormatAgentResult}. */
+  public formatAgentResult(result: ExecutionResult): string {
+    return this.FormatAgentResult(result);
+  }
+
+  public FormatActionResult(result: ExecutionResult): string {
     switch (this.format) {
       case 'json':
         return JSON.stringify(result, null, 2);
@@ -131,7 +151,12 @@ export class OutputFormatter {
     }
   }
 
-  public formatPromptResult(result: ExecutionResult): string {
+  /** @deprecated Use {@link FormatActionResult}. */
+  public formatActionResult(result: ExecutionResult): string {
+    return this.FormatActionResult(result);
+  }
+
+  public FormatPromptResult(result: ExecutionResult): string {
     switch (this.format) {
       case 'json':
         return JSON.stringify(result, null, 2);
@@ -143,6 +168,11 @@ export class OutputFormatter {
       default:
         return this.formatPromptResultCompact(result);
     }
+  }
+
+  /** @deprecated Use {@link FormatPromptResult}. */
+  public formatPromptResult(result: ExecutionResult): string {
+    return this.FormatPromptResult(result);
   }
 
   private formatAgentTable(agents: AgentInfo[]): string {

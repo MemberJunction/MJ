@@ -1,49 +1,49 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
-    shouldEmitCascadeForRelatedEntity,
-    entityInCustomBaseViewRefreshScope,
+    ShouldEmitCascadeForRelatedEntity,
+    EntityInCustomBaseViewRefreshScope,
 } from '../Database/schema-filters';
 import {
-    buildHealSchemaRoutineParams,
-    snapshotAuthoredExcludeSchemas,
-    getAuthoredExcludeSchemas,
-    resetAuthoredExcludeSnapshot,
+    BuildHealSchemaRoutineParams,
+    SnapshotAuthoredExcludeSchemas,
+    GetAuthoredExcludeSchemas,
+    ResetAuthoredExcludeSnapshot,
 } from '../Database/heal-schema-params';
-import { applyIncludeSchemaScope } from '../Database/schema-scope';
+import { ApplyIncludeSchemaScope } from '../Database/schema-scope';
 import { SQLServerCodeGenProvider } from '../Database/providers/sqlserver/SQLServerCodeGenProvider';
 import { PostgreSQLCodeGenProvider } from '../Database/providers/postgresql/PostgreSQLCodeGenProvider';
 
 describe('shouldEmitCascadeForRelatedEntity', () => {
     it('emits intra-schema cascade when the flag is off', () => {
-        expect(shouldEmitCascadeForRelatedEntity('__mj_BizAppsCommon', '__mj_BizAppsCommon', false)).toBe(true);
+        expect(ShouldEmitCascadeForRelatedEntity('__mj_BizAppsCommon', '__mj_BizAppsCommon', false)).toBe(true);
     });
 
     it('does not emit inter-schema cascade when the flag is off', () => {
-        expect(shouldEmitCascadeForRelatedEntity('__mj_BizAppsCommon', '__mj_BizAppsOrders', false)).toBe(false);
+        expect(ShouldEmitCascadeForRelatedEntity('__mj_BizAppsCommon', '__mj_BizAppsOrders', false)).toBe(false);
     });
 
     it('matches schema names case-insensitively', () => {
-        expect(shouldEmitCascadeForRelatedEntity('__mj_BizAppsCommon', '__MJ_BIZAPPSCOMMON', false)).toBe(true);
+        expect(ShouldEmitCascadeForRelatedEntity('__mj_BizAppsCommon', '__MJ_BIZAPPSCOMMON', false)).toBe(true);
     });
 
     it('emits inter-schema cascade only when the flag is on', () => {
-        expect(shouldEmitCascadeForRelatedEntity('__mj_BizAppsCommon', '__mj_BizAppsOrders', true)).toBe(true);
+        expect(ShouldEmitCascadeForRelatedEntity('__mj_BizAppsCommon', '__mj_BizAppsOrders', true)).toBe(true);
     });
 });
 
 describe('entityInCustomBaseViewRefreshScope', () => {
     it('drops schemas in excludeSchemas even with no include list', () => {
-        expect(entityInCustomBaseViewRefreshScope('sys', ['sys', 'staging'])).toBe(false);
-        expect(entityInCustomBaseViewRefreshScope('__mj', ['sys', 'staging'])).toBe(true);
+        expect(EntityInCustomBaseViewRefreshScope('sys', ['sys', 'staging'])).toBe(false);
+        expect(EntityInCustomBaseViewRefreshScope('__mj', ['sys', 'staging'])).toBe(true);
     });
 
     it('with includeSchemas set, keeps only that list (minus excludes)', () => {
-        expect(entityInCustomBaseViewRefreshScope(
+        expect(EntityInCustomBaseViewRefreshScope(
             '__mj_BizAppsCommon',
             ['sys', 'staging'],
             ['__mj_BizAppsCommon'],
         )).toBe(true);
-        expect(entityInCustomBaseViewRefreshScope(
+        expect(EntityInCustomBaseViewRefreshScope(
             '__mj_BizAppsOrders',
             ['sys', 'staging'],
             ['__mj_BizAppsCommon'],
@@ -51,7 +51,7 @@ describe('entityInCustomBaseViewRefreshScope', () => {
     });
 
     it('still drops an included schema that is also excluded', () => {
-        expect(entityInCustomBaseViewRefreshScope(
+        expect(EntityInCustomBaseViewRefreshScope(
             '__mj_BizAppsCommon',
             ['__mj_BizAppsCommon'],
             ['__mj_BizAppsCommon'],
@@ -61,7 +61,7 @@ describe('entityInCustomBaseViewRefreshScope', () => {
 
 describe('buildHealSchemaRoutineParams', () => {
     it('omits IncludedSchemaNames when includeSchemas is empty (classic MJ)', () => {
-        const p = buildHealSchemaRoutineParams({
+        const p = BuildHealSchemaRoutineParams({
             authoredExclude: ['sys', 'staging'],
         });
         expect(p.names).toEqual(['ExcludedSchemaNames']);
@@ -69,7 +69,7 @@ describe('buildHealSchemaRoutineParams', () => {
     });
 
     it('adds IncludedSchemaNames from includeSchemas and never a sibling snapshot', () => {
-        const p = buildHealSchemaRoutineParams({
+        const p = BuildHealSchemaRoutineParams({
             authoredExclude: ['sys', 'staging'],
             includeSchemas: ['__mj_BizAppsCommon'],
         });
@@ -80,7 +80,7 @@ describe('buildHealSchemaRoutineParams', () => {
     });
 
     it('places EntityIDs before IncludedSchemaNames', () => {
-        const p = buildHealSchemaRoutineParams({
+        const p = BuildHealSchemaRoutineParams({
             authoredExclude: ['sys'],
             includeSchemas: ['__mj_BizAppsCommon'],
             entityIDs: ['aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'],
@@ -89,7 +89,7 @@ describe('buildHealSchemaRoutineParams', () => {
     });
 
     it('SQL Server named EXEC with include does not list sibling Open Apps', () => {
-        const p = buildHealSchemaRoutineParams({
+        const p = BuildHealSchemaRoutineParams({
             authoredExclude: ['sys', 'staging'],
             includeSchemas: ['__mj_BizAppsCommon'],
         });
@@ -108,7 +108,7 @@ describe('buildHealSchemaRoutineParams', () => {
 
 describe('authored exclude snapshot vs include compile', () => {
     beforeEach(() => {
-        resetAuthoredExcludeSnapshot();
+        ResetAuthoredExcludeSnapshot();
     });
 
     it('heal params keep sys,staging after includeSchemas compiles siblings into excludeSchemas', () => {
@@ -116,16 +116,16 @@ describe('authored exclude snapshot vs include compile', () => {
             includeSchemas: ['__mj_BizAppsCommon'],
             excludeSchemas: ['sys', 'staging'],
         };
-        snapshotAuthoredExcludeSchemas(config.excludeSchemas);
-        applyIncludeSchemaScope(
+        SnapshotAuthoredExcludeSchemas(config.excludeSchemas);
+        ApplyIncludeSchemaScope(
             ['__mj_BizAppsCommon', '__mj_BizAppsOrders', '__mj_BizAppsAccounting', 'sys', 'staging'],
             config,
         );
         expect(config.excludeSchemas).toContain('__mj_BizAppsOrders');
-        expect(getAuthoredExcludeSchemas()).toEqual(['sys', 'staging']);
+        expect(GetAuthoredExcludeSchemas()).toEqual(['sys', 'staging']);
 
-        const p = buildHealSchemaRoutineParams({
-            authoredExclude: getAuthoredExcludeSchemas(),
+        const p = BuildHealSchemaRoutineParams({
+            authoredExclude: GetAuthoredExcludeSchemas(),
             includeSchemas: config.includeSchemas,
         });
         expect(p.values[0]).toBe(`'sys,staging'`);

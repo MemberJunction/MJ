@@ -2,7 +2,7 @@ import { AggregateExpression, CompositeKey, DatabaseProviderBase, UserInfo } fro
 import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { GraphQLSchema } from 'graphql';
 import sql from 'mssql';
-import { getSystemUser } from './auth/index.js';
+import { GetSystemUser } from './auth/index.js';
 import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
 
 /**
@@ -62,21 +62,75 @@ export class ProviderInfo {
 }
 
 export class DataSourceInfo  {
-  dataSource: sql.ConnectionPool;
-  host: string;
-  port: number;
+  DataSource: sql.ConnectionPool;
+
+  /** @deprecated Use {@link DataSource}. */
+  get dataSource(): sql.ConnectionPool {
+    return this.DataSource;
+  }
+  /** @deprecated Use {@link DataSource}. */
+  set dataSource(value: sql.ConnectionPool) {
+    this.DataSource = value;
+  }
+  Host: string;
+
+  /** @deprecated Use {@link Host}. */
+  get host(): string {
+    return this.Host;
+  }
+  /** @deprecated Use {@link Host}. */
+  set host(value: string) {
+    this.Host = value;
+  }
+  Port: number;
+
+  /** @deprecated Use {@link Port}. */
+  get port(): number {
+    return this.Port;
+  }
+  /** @deprecated Use {@link Port}. */
+  set port(value: number) {
+    this.Port = value;
+  }
   instance?: string;
-  database: string;
-  userName: string;
-  type: "Admin" | "Read-Write" | "Read-Only" | "Other";
+  Database: string;
+
+  /** @deprecated Use {@link Database}. */
+  get database(): string {
+    return this.Database;
+  }
+  /** @deprecated Use {@link Database}. */
+  set database(value: string) {
+    this.Database = value;
+  }
+  UserName: string;
+
+  /** @deprecated Use {@link UserName}. */
+  get userName(): string {
+    return this.UserName;
+  }
+  /** @deprecated Use {@link UserName}. */
+  set userName(value: string) {
+    this.UserName = value;
+  }
+  Type: "Admin" | "Read-Write" | "Read-Only" | "Other";
+
+  /** @deprecated Use {@link Type}. */
+  get type(): "Admin" | "Read-Write" | "Read-Only" | "Other" {
+    return this.Type;
+  }
+  /** @deprecated Use {@link Type}. */
+  set type(value: "Admin" | "Read-Write" | "Read-Only" | "Other") {
+    this.Type = value;
+  }
 
   constructor(init: {dataSource: sql.ConnectionPool, type: "Admin" | "Read-Write" | "Read-Only" | "Other", host: string, port: number, database: string, userName: string} ) {
-    this.dataSource = init.dataSource;
-    this.host = init.host;
-    this.port = init.port;
-    this.database = init.database;
-    this.userName = init.userName;
-    this.type = init.type;
+    this.DataSource = init.dataSource;
+    this.Host = init.host;
+    this.Port = init.port;
+    this.Database = init.database;
+    this.UserName = init.userName;
+    this.Type = init.type;
   }
 };
 
@@ -133,12 +187,12 @@ export class MJServerEvent {
 
 export const MJ_SERVER_EVENT_CODE = 'MJ_SERVER_EVENT';
 
-export async function raiseEvent(type: MJServerEvent['type'], dataSources: DataSourceInfo[], userPayload: UserPayload, component?: any) {
+export async function RaiseEvent(type: MJServerEvent['type'], dataSources: DataSourceInfo[], userPayload: UserPayload, component?: any) {
   const event = new MJServerEvent();
   event.type = type;
   event.dataSources = dataSources;
   event.userPayload = userPayload;
-  event.systemUser = await getSystemUser();
+  event.systemUser = await GetSystemUser();
 
   const mje = new MJEvent();
   mje.args = event;
@@ -146,4 +200,9 @@ export async function raiseEvent(type: MJServerEvent['type'], dataSources: DataS
   mje.event = MJEventType.ComponentEvent;
   mje.eventCode = MJ_SERVER_EVENT_CODE;
   MJGlobal.Instance.RaiseEvent(mje);
+}
+
+/** @deprecated Use {@link RaiseEvent}. */
+export async function raiseEvent(type: MJServerEvent['type'], dataSources: DataSourceInfo[], userPayload: UserPayload, component?: any) {
+  return RaiseEvent(type, dataSources, userPayload, component);
 }

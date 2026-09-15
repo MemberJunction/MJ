@@ -14,7 +14,7 @@ import {
   type DynamicPackagesLogger,
   type DynamicPackagesReport,
 } from '@memberjunction/dynamic-packages';
-import { getRawConfig } from '../config.js';
+import { GetRawConfig } from '../config.js';
 
 export interface LoadDynamicPackagesForCommandOptions {
   /** Print per-package progress (stderr). Failures print regardless. */
@@ -48,13 +48,13 @@ function stderrLogger(verbose: boolean, write: (line: string) => void): DynamicP
  * a broken app package is reported on stderr and the command proceeds (it may then fall back to
  * BaseEntity for that app's entities — `mj sync push` warns per entity when that happens).
  */
-export async function loadDynamicPackagesForCommand(
+export async function LoadDynamicPackagesForCommand(
   commandId: string,
   options: LoadDynamicPackagesForCommandOptions = {}
 ): Promise<DynamicPackagesReport> {
   const verbose = options.verbose ?? false;
   const write = options.stderr ?? ((line: string) => process.stderr.write(`${line}\n`));
-  const raw = options.raw ?? getRawConfig();
+  const raw = options.raw ?? GetRawConfig();
   const processId = CliProcessId(commandId);
   // Publish this command's identity for hosts the command imports in-process (`mj ai …` drives
   // @memberjunction/ai-cli, `mj test …` drives @memberjunction/testing-cli). Their own provider
@@ -75,4 +75,12 @@ export async function loadDynamicPackagesForCommand(
     );
   }
   return report;
+}
+
+/** @deprecated Use {@link LoadDynamicPackagesForCommand}. */
+export async function loadDynamicPackagesForCommand(
+  commandId: string,
+  options: LoadDynamicPackagesForCommandOptions = {}
+): Promise<DynamicPackagesReport> {
+  return LoadDynamicPackagesForCommand(commandId, options);
 }

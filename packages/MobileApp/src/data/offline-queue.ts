@@ -107,7 +107,7 @@ function notify(count: number): void {
  * @param input The mutation to queue (entity, key, changed fields, op).
  * @returns The stored {@link OfflineMutation}, including its generated `id`.
  */
-export function enqueue(input: OfflineMutationInput): OfflineMutation {
+export function Enqueue(input: OfflineMutationInput): OfflineMutation {
     const entry: OfflineMutation = { ...input, id: nextId(), queuedAt: Date.now() };
     const entries = readQueue();
     entries.push(entry);
@@ -115,22 +115,37 @@ export function enqueue(input: OfflineMutationInput): OfflineMutation {
     return entry;
 }
 
+/** @deprecated Use {@link Enqueue}. */
+export function enqueue(input: OfflineMutationInput): OfflineMutation {
+    return Enqueue(input);
+}
+
 /**
  * List the pending mutations in FIFO order (oldest first).
  * @returns A snapshot array of the current queue (safe to iterate/mutate locally).
  */
-export function list(): OfflineMutation[] {
+export function List(): OfflineMutation[] {
     return readQueue();
+}
+
+/** @deprecated Use {@link List}. */
+export function list(): OfflineMutation[] {
+    return List();
 }
 
 /**
  * Remove a single mutation by id (a no-op if it is not present).
  * @param id The {@link OfflineMutation.id} to remove.
  */
-export function remove(id: string): void {
+export function Remove(id: string): void {
     const entries = readQueue();
     const next = entries.filter((e) => e.id !== id);
     if (next.length !== entries.length) writeQueue(next);
+}
+
+/** @deprecated Use {@link Remove}. */
+export function remove(id: string): void {
+    return Remove(id);
 }
 
 /**
@@ -140,7 +155,7 @@ export function remove(id: string): void {
  * @param id      The mutation id to annotate.
  * @param message The error message to store on {@link OfflineMutation.lastError}.
  */
-export function recordError(id: string, message: string): void {
+export function RecordError(id: string, message: string): void {
     const entries = readQueue();
     let changed = false;
     for (const entry of entries) {
@@ -153,18 +168,33 @@ export function recordError(id: string, message: string): void {
     if (changed) writeQueue(entries);
 }
 
+/** @deprecated Use {@link RecordError}. */
+export function recordError(id: string, message: string): void {
+    return RecordError(id, message);
+}
+
 /**
  * Count the pending mutations.
  * @returns The number of queued mutations.
  */
-export function count(): number {
+export function Count(): number {
     return readQueue().length;
 }
 
+/** @deprecated Use {@link Count}. */
+export function count(): number {
+    return Count();
+}
+
 /** Remove every queued mutation. */
-export function clear(): void {
+export function Clear(): void {
     if (readQueue().length === 0) return;
     writeQueue([]);
+}
+
+/** @deprecated Use {@link Clear}. */
+export function clear(): void {
+    return Clear();
 }
 
 /**
@@ -174,9 +204,14 @@ export function clear(): void {
  * @param listener Called with the new pending count on each change.
  * @returns An unsubscribe function.
  */
-export function subscribe(listener: QueueListener): () => void {
+export function Subscribe(listener: QueueListener): () => void {
     listeners.add(listener);
     return () => {
         listeners.delete(listener);
     };
+}
+
+/** @deprecated Use {@link Subscribe}. */
+export function subscribe(listener: QueueListener): () => void {
+    return Subscribe(listener);
 }

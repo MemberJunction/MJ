@@ -70,13 +70,13 @@ export class EnumCandidateGate {
   /**
    * Evaluate all columns of a table and return candidates that pass every gate.
    */
-  public evaluateTable(
+  public EvaluateTable(
     columns: ColumnDefinition[],
     tableRowCount: number
   ): EnumCandidateContext[] {
     const candidates: EnumCandidateContext[] = [];
     for (const col of columns) {
-      const candidate = this.evaluateColumn(col, tableRowCount);
+      const candidate = this.EvaluateColumn(col, tableRowCount);
       if (candidate) {
         candidates.push(candidate);
       }
@@ -84,11 +84,19 @@ export class EnumCandidateGate {
     return candidates;
   }
 
+  /** @deprecated Use {@link EvaluateTable}. */
+  public evaluateTable(
+    columns: ColumnDefinition[],
+    tableRowCount: number
+  ): EnumCandidateContext[] {
+    return this.EvaluateTable(columns, tableRowCount);
+  }
+
   /**
    * Evaluate a single column against all deterministic gates.
    * Returns an EnumCandidateContext if the column passes, or null if it doesn't.
    */
-  public evaluateColumn(
+  public EvaluateColumn(
     column: ColumnDefinition,
     tableRowCount: number
   ): EnumCandidateContext | null {
@@ -116,6 +124,14 @@ export class EnumCandidateGate {
       dataType: column.dataType,
       maxLength: this.parseDeclaredLength(column.dataType) ?? undefined,
     };
+  }
+
+  /** @deprecated Use {@link EvaluateColumn}. */
+  public evaluateColumn(
+    column: ColumnDefinition,
+    tableRowCount: number
+  ): EnumCandidateContext | null {
+    return this.EvaluateColumn(column, tableRowCount);
   }
 
   // ─── Individual Gates ─────────────────────────────────────────────

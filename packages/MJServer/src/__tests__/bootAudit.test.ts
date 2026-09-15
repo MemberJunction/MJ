@@ -18,7 +18,7 @@ vi.mock('../config.js', () => ({
   },
 }));
 
-import { auditResolverList } from '../logging/bootAudit.js';
+import { AuditResolverList } from '../logging/bootAudit.js';
 import type { AuditArgParam, AuditResolver } from '../logging/bootAudit.js';
 import { NoLog } from '../logging/NoLog.js';
 
@@ -93,7 +93,7 @@ describe('auditResolverList', () => {
       ],
     });
 
-    auditResolverList([resolver]);
+    AuditResolverList([resolver]);
     expect(warnSpy).not.toHaveBeenCalled();
   });
 
@@ -117,7 +117,7 @@ describe('auditResolverList', () => {
       ],
     });
 
-    auditResolverList([resolver]);
+    AuditResolverList([resolver]);
     expect(warnSpy).toHaveBeenCalledTimes(1);
     const message = warnSpy.mock.calls[0][0];
     expect(typeof message).toBe('string');
@@ -148,7 +148,7 @@ describe('auditResolverList', () => {
       ],
     });
 
-    auditResolverList([resolver]);
+    AuditResolverList([resolver]);
     expect(warnSpy).not.toHaveBeenCalled();
   });
 
@@ -179,7 +179,7 @@ describe('auditResolverList', () => {
       ],
     });
 
-    auditResolverList([resolver]);
+    AuditResolverList([resolver]);
     expect(warnSpy).toHaveBeenCalledTimes(1);
     const message = warnSpy.mock.calls[0][0];
     expect(message).toContain("'custom'");

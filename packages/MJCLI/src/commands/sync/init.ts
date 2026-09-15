@@ -5,9 +5,9 @@ import { input, select } from '@inquirer/prompts';
 import ora from 'ora-classic';
 import {
   NonInteractiveError,
-  isInteractiveRun,
+  IsInteractiveRun,
   resolveOrPrompt,
-  withNonInteractiveHandling,
+  WithNonInteractiveHandling,
 } from '../../lib/interactive-guard.js';
 
 export default class Init extends Command {
@@ -45,7 +45,7 @@ pass --setup-entity (and --entity/--dir when setting up "other").`;
   async run(): Promise<void> {
     const { flags } = await this.parse(Init);
 
-    await withNonInteractiveHandling(this, async () => {
+    await WithNonInteractiveHandling(this, async () => {
       const { InitService } = await import('@memberjunction/metadata-sync');
 
       const spinner = ora();
@@ -114,7 +114,7 @@ pass --setup-entity (and --entity/--dir when setting up "other").`;
           options.dirName = await resolveOrPrompt<string>({
             // A directory name always has a sane default derived from the entity, so
             // headless runs fall back to it rather than failing.
-            flagValue: flags.dir ?? (isInteractiveRun() ? undefined : defaultDir),
+            flagValue: flags.dir ?? (IsInteractiveRun() ? undefined : defaultDir),
             what: 'A directory name',
             suggestion: `Pass --dir ${defaultDir}.`,
             prompt: () => input({ message: 'Enter the directory name:', default: defaultDir }),

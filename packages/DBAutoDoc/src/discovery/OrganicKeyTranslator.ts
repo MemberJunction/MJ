@@ -18,8 +18,8 @@ import {
     OrganicKeyCluster,
     OrganicKeyClusterMember,
     OrganicKeyNormalizationStrategy,
-    memberColumns,
-    isCompoundMember,
+    MemberColumns,
+    IsCompoundMember,
 } from '../types/organic-keys.js';
 
 // ─── PR #2193 output shape ───────────────────────────────────────────────────
@@ -90,7 +90,7 @@ export interface TransitiveSpokeInput {
  * The caller (Composer) is responsible for filtering. Anything passed in
  * gets emitted.
  */
-export function translateClusters(
+export function TranslateClusters(
     clusters: OrganicKeyCluster[],
     transitiveSpokes: TransitiveSpokeInput[] = [],
 ): DetectedOrganicKeysOutput {
@@ -112,7 +112,7 @@ export function translateClusters(
         const memberMap = new Map<string, OrganicKeyClusterMember>();
         for (const c of group) {
             for (const m of c.members) {
-                const k = `${m.schema}.${m.table}.${memberColumns(m).join(',')}`;
+                const k = `${m.schema}.${m.table}.${MemberColumns(m).join(',')}`;
                 if (!memberMap.has(k)) memberMap.set(k, m);
             }
         }
@@ -137,7 +137,7 @@ export function translateClusters(
             // Direct spokes — every other cluster member.
             for (const target of allMembers) {
                 if (target === owner) continue;
-                const targetColumns = memberColumns(target);
+                const targetColumns = MemberColumns(target);
                 const k = `${target.schema}.${target.table}.${targetColumns.join(',')}`;
                 if (seenSpokes.has(k)) continue;
                 seenSpokes.add(k);
@@ -150,7 +150,7 @@ export function translateClusters(
             }
 
             // Transitive spokes — bridge views attached to matching hubs.
-            const ownerColumns = memberColumns(owner);
+            const ownerColumns = MemberColumns(owner);
             const matchingTransitive = transitiveSpokes.filter(
                 (t) =>
                     t.hubSchema === owner.schema &&
@@ -170,7 +170,7 @@ export function translateClusters(
                 });
             }
 
-            const compoundSuffix = isCompoundMember(owner) ? ` (compound: ${ownerColumns.join('+')})` : '';
+            const compoundSuffix = IsCompoundMember(owner) ? ` (compound: ${ownerColumns.join('+')})` : '';
             // Per-column normalization: each emitted EntityOrganicKey row carries the
             // transformation for ITS owner column. The runtime looks up each side's
             // own expression at match time (see EntityInfo.BuildOrganicKeyViewParams),
@@ -192,6 +192,14 @@ export function translateClusters(
     }
 
     return out;
+}
+
+/** @deprecated Use {@link TranslateClusters}. */
+export function translateClusters(
+    clusters: OrganicKeyCluster[],
+    transitiveSpokes: TransitiveSpokeInput[] = [],
+): DetectedOrganicKeysOutput {
+    return TranslateClusters(clusters, transitiveSpokes);
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -233,7 +241,7 @@ function upsertTable(
 }
 
 /** Tally the emit payload: number of schemas, tables, organic keys, and spokes it contains. */
-export function countOutputEntries(out: DetectedOrganicKeysOutput): {
+export function CountOutputEntries(out: DetectedOrganicKeysOutput): {
     schemas: number;
     tables: number;
     keys: number;
@@ -251,4 +259,14 @@ export function countOutputEntries(out: DetectedOrganicKeysOutput): {
         }
     }
     return { schemas, tables, keys, spokes };
+}
+
+/** @deprecated Use {@link CountOutputEntries}. */
+export function countOutputEntries(out: DetectedOrganicKeysOutput): {
+    schemas: number;
+    tables: number;
+    keys: number;
+    spokes: number;
+} {
+    return CountOutputEntries(out);
 }

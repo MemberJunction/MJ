@@ -832,8 +832,13 @@ export class AuthorizationRoleInfo extends BaseInfo {
         return this.Type.trim().toLowerCase() === 'allow' ? AuthorizationRoleType.Allow : AuthorizationRoleType.Deny
     }
 
-    _setRole(role: RoleInfo) {
+    SetRole(role: RoleInfo) {
         this._RoleInfo = role
+    }
+
+    /** @deprecated Use {@link SetRole}. */
+    _setRole(role: RoleInfo) {
+        return this.SetRole(role);
     }
 
     constructor (initData: any) {

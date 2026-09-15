@@ -22,13 +22,18 @@ interface LinearRGB {
 const clamp01 = (x: number): number => (x < 0 ? 0 : x > 1 ? 1 : x);
 
 /** Parse `#rgb` / `#rrggbb` into 0..255 channels. Throws on anything else. */
-export function parseHex(hex: string): { r: number; g: number; b: number } {
+export function ParseHex(hex: string): { r: number; g: number; b: number } {
   const m = /^#?([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.exec(hex.trim());
   if (!m) throw new Error(`Not a hex color: "${hex}"`);
   let h = m[1];
   if (h.length === 3) h = h.split('').map((c) => c + c).join('');
   const n = parseInt(h, 16);
   return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+}
+
+/** @deprecated Use {@link ParseHex}. */
+export function parseHex(hex: string): { r: number; g: number; b: number } {
+  return ParseHex(hex);
 }
 
 const toHex2 = (n: number): string => Math.round(clamp01(n) * 255).toString(16).padStart(2, '0');
@@ -42,7 +47,7 @@ const linearToSrgb = (c: number): number =>
   c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055;
 
 function hexToLinear(hex: string): LinearRGB {
-  const { r, g, b } = parseHex(hex);
+  const { r, g, b } = ParseHex(hex);
   return { r: srgbToLinear(r / 255), g: srgbToLinear(g / 255), b: srgbToLinear(b / 255) };
 }
 
@@ -75,12 +80,17 @@ function okLabToLinear(L: number, a: number, b: number): LinearRGB {
 }
 
 /** Convert a hex color to OKLCH. */
-export function hexToOKLCH(hex: string): OKLCH {
+export function HexToOKLCH(hex: string): OKLCH {
   const { L, a, b } = linearToOKLab(hexToLinear(hex));
   const c = Math.sqrt(a * a + b * b);
   let h = (Math.atan2(b, a) * 180) / Math.PI;
   if (h < 0) h += 360;
   return { l: L, c, h };
+}
+
+/** @deprecated Use {@link HexToOKLCH}. */
+export function hexToOKLCH(hex: string): OKLCH {
+  return HexToOKLCH(hex);
 }
 
 /**
@@ -89,7 +99,7 @@ export function hexToOKLCH(hex: string): OKLCH {
  * then hard-clamp any residual channel error. This keeps hues perceptually
  * stable instead of the hue-shifting that naive per-channel clamping causes.
  */
-export function oklchToHex(color: OKLCH): string {
+export function OklchToHex(color: OKLCH): string {
   // Public surface: non-finite components (NaN/±Infinity from upstream math on
   // degenerate inputs) would otherwise propagate into a "#NaNNaNNaN" string.
   const l = Number.isFinite(color.l) ? color.l : 0;
@@ -124,35 +134,60 @@ export function oklchToHex(color: OKLCH): string {
   return `#${toHex2(linearToSrgb(rgb.r))}${toHex2(linearToSrgb(rgb.g))}${toHex2(linearToSrgb(rgb.b))}`;
 }
 
+/** @deprecated Use {@link OklchToHex}. */
+export function oklchToHex(color: OKLCH): string {
+  return OklchToHex(color);
+}
+
 /** WCAG 2.x relative luminance (0..1) of a hex color. */
-export function relativeLuminance(hex: string): number {
-  const { r, g, b } = parseHex(hex);
+export function RelativeLuminance(hex: string): number {
+  const { r, g, b } = ParseHex(hex);
   const lin = (v: number) => srgbToLinear(v / 255);
   return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
 }
 
+/** @deprecated Use {@link RelativeLuminance}. */
+export function relativeLuminance(hex: string): number {
+  return RelativeLuminance(hex);
+}
+
 /** WCAG 2.x contrast ratio (1..21) between two hex colors. */
-export function contrastRatio(a: string, b: string): number {
-  const la = relativeLuminance(a);
-  const lb = relativeLuminance(b);
+export function ContrastRatio(a: string, b: string): number {
+  const la = RelativeLuminance(a);
+  const lb = RelativeLuminance(b);
   const [hi, lo] = la >= lb ? [la, lb] : [lb, la];
   return (hi + 0.05) / (lo + 0.05);
 }
 
+/** @deprecated Use {@link ContrastRatio}. */
+export function contrastRatio(a: string, b: string): number {
+  return ContrastRatio(a, b);
+}
+
 /** Perceptual distance (Euclidean in OKLab) between two hex colors. */
-export function deltaEOK(a: string, b: string): number {
+export function DeltaEOK(a: string, b: string): number {
   const A = linearToOKLab(hexToLinear(a));
   const B = linearToOKLab(hexToLinear(b));
   return Math.sqrt((A.L - B.L) ** 2 + (A.a - B.a) ** 2 + (A.b - B.b) ** 2);
 }
 
+/** @deprecated Use {@link DeltaEOK}. */
+export function deltaEOK(a: string, b: string): number {
+  return DeltaEOK(a, b);
+}
+
 /** Mix two hex colors in linear-light space; `t` 0..1 is the weight of `b`.
  *  A non-finite `t` is treated as 0 (returns `a`) rather than emitting "#NaN…". */
-export function mixHex(a: string, b: string, t: number): string {
+export function MixHex(a: string, b: string, t: number): string {
   const A = hexToLinear(a);
   const B = hexToLinear(b);
   const k = clamp01(Number.isFinite(t) ? t : 0);
   return `#${toHex2(linearToSrgb(A.r + (B.r - A.r) * k))}${toHex2(
     linearToSrgb(A.g + (B.g - A.g) * k),
   )}${toHex2(linearToSrgb(A.b + (B.b - A.b) * k))}`;
+}
+
+/** @deprecated Use {@link MixHex}. */
+export function mixHex(a: string, b: string, t: number): string {
+  return MixHex(a, b, t);
 }

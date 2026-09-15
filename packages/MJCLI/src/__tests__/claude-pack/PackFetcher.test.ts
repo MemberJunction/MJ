@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import {
-    fetchPack,
+    FetchPack,
     PackFetchError,
     PackChecksumError,
     type HttpGetter,
@@ -66,7 +66,7 @@ describe('fetchPack', () => {
             [base + 'CLAUDE.md']: ok(bodies['CLAUDE.md']),
         });
 
-        const result = await fetchPack({ Major: '5', HttpGet: http });
+        const result = await FetchPack({ Major: '5', HttpGet: http });
 
         expect(result.RefUsed).toBe('main');
         expect(result.BaseUrl).toBe(base);
@@ -85,7 +85,7 @@ describe('fetchPack', () => {
             [mainBase + 'CLAUDE.md']: ok(bodies['CLAUDE.md']),
         });
 
-        const result = await fetchPack({ Major: '5', Ref: 'v5.33.0', HttpGet: http });
+        const result = await FetchPack({ Major: '5', Ref: 'v5.33.0', HttpGet: http });
         expect(result.RefUsed).toBe('main');
         expect(result.BaseUrl).toBe(mainBase);
     });
@@ -96,7 +96,7 @@ describe('fetchPack', () => {
             [mainBase + '.claude/mj/MANIFEST.json']: notFound(),
         });
 
-        await expect(fetchPack({ Major: '5', Ref: 'main', HttpGet: http })).rejects.toBeInstanceOf(
+        await expect(FetchPack({ Major: '5', Ref: 'main', HttpGet: http })).rejects.toBeInstanceOf(
             PackFetchError
         );
     });
@@ -107,7 +107,7 @@ describe('fetchPack', () => {
             [tagBase + '.claude/mj/MANIFEST.json']: serverError(),
         });
 
-        await expect(fetchPack({ Major: '5', Ref: 'v5.33.0', HttpGet: http })).rejects.toMatchObject(
+        await expect(FetchPack({ Major: '5', Ref: 'v5.33.0', HttpGet: http })).rejects.toMatchObject(
             { statusCode: 500 }
         );
     });
@@ -120,7 +120,7 @@ describe('fetchPack', () => {
             [mainBase + '.claude/mj/MANIFEST.json']: notFound(),
         });
 
-        await expect(fetchPack({ Major: '5', Ref: 'v5.33.0', HttpGet: http })).rejects.toMatchObject(
+        await expect(FetchPack({ Major: '5', Ref: 'v5.33.0', HttpGet: http })).rejects.toMatchObject(
             { name: 'PackFetchError' }
         );
     });
@@ -133,7 +133,7 @@ describe('fetchPack', () => {
             // CLAUDE.md is missing — defaults to 404 via mockHttp
         });
 
-        await expect(fetchPack({ Major: '5', HttpGet: http })).rejects.toMatchObject({
+        await expect(FetchPack({ Major: '5', HttpGet: http })).rejects.toMatchObject({
             name: 'PackFetchError',
             statusCode: 404,
         });
@@ -148,7 +148,7 @@ describe('fetchPack', () => {
             [base + 'CLAUDE.md']: ok(tamperedBody),
         });
 
-        await expect(fetchPack({ Major: '5', HttpGet: http })).rejects.toBeInstanceOf(
+        await expect(FetchPack({ Major: '5', HttpGet: http })).rejects.toBeInstanceOf(
             PackChecksumError
         );
         // The original body is still referenced from the fixture to assert determinism
@@ -161,7 +161,7 @@ describe('fetchPack', () => {
             [base + '.claude/mj/MANIFEST.json']: ok('{not valid json'),
         });
 
-        await expect(fetchPack({ Major: '5', HttpGet: http })).rejects.toMatchObject({
+        await expect(FetchPack({ Major: '5', HttpGet: http })).rejects.toMatchObject({
             name: 'PackFetchError',
         });
     });
@@ -172,7 +172,7 @@ describe('fetchPack', () => {
             [base + '.claude/mj/MANIFEST.json']: ok(JSON.stringify({ packVersion: 5.1 })),
         });
 
-        await expect(fetchPack({ Major: '5', HttpGet: http })).rejects.toMatchObject({
+        await expect(FetchPack({ Major: '5', HttpGet: http })).rejects.toMatchObject({
             name: 'PackFetchError',
         });
     });
@@ -190,7 +190,7 @@ describe('fetchPack', () => {
         });
 
         const messages: string[] = [];
-        await fetchPack({ Major: '5', HttpGet: http, OnProgress: (m) => messages.push(m) });
+        await FetchPack({ Major: '5', HttpGet: http, OnProgress: (m) => messages.push(m) });
         expect(messages.some((m) => m.includes('manifest'))).toBe(true);
         expect(messages.some((m) => m.includes('CLAUDE.md'))).toBe(true);
         expect(messages.some((m) => m.includes('core.md'))).toBe(true);

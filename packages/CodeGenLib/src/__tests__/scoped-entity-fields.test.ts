@@ -12,7 +12,7 @@
 import { describe, it, expect } from 'vitest';
 import { SQLServerCodeGenProvider } from '../Database/providers/sqlserver/SQLServerCodeGenProvider';
 import { PostgreSQLCodeGenProvider } from '../Database/providers/postgresql/PostgreSQLCodeGenProvider';
-import { buildHealSchemaRoutineParams } from '../Database/heal-schema-params';
+import { BuildHealSchemaRoutineParams } from '../Database/heal-schema-params';
 
 describe('Phase A — scoped entity field plumbing', () => {
     describe('SQLServerCodeGenProvider.getPendingEntityFieldsSQL', () => {
@@ -185,7 +185,7 @@ describe('T19 — PostgreSQL callRoutineSQL named notation and unscoped heal par
     });
 
     it('buildHealSchemaRoutineParams with includeSchemas and undefined entityIDs never lands include list in p_EntityIDs', () => {
-        const heal = buildHealSchemaRoutineParams({
+        const heal = BuildHealSchemaRoutineParams({
             authoredExclude: ['sys', 'staging'],
             includeSchemas: ['tenant_schema'],
             entityIDs: undefined

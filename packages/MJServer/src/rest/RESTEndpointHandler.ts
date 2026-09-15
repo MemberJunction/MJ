@@ -804,7 +804,12 @@ export class RESTEndpointHandler {
     /**
      * Get the Express router with all configured routes
      */
-    public getRouter(): express.Router {
+    public GetRouter(): express.Router {
         return this.router;
+    }
+
+    /** @deprecated Use {@link GetRouter}. */
+    public getRouter(): express.Router {
+        return this.GetRouter();
     }
 }

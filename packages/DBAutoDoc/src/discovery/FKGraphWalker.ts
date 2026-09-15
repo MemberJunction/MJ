@@ -108,7 +108,7 @@ const DEFAULTS: Required<FKGraphWalkerOptions> = {
  * @param spokes - tables to attempt to reach from each hub. Typically every
  *                 table in the database except the hub itself.
  */
-export function findBridgePaths(
+export function FindBridgePaths(
     edges: FKEdge[],
     hubs: Array<{ schema: string; table: string; keyField: string }>,
     spokes: Array<{ schema: string; table: string }>,
@@ -140,6 +140,16 @@ export function findBridgePaths(
         return b.pathConfidence - a.pathConfidence;
     });
     return out;
+}
+
+/** @deprecated Use {@link FindBridgePaths}. */
+export function findBridgePaths(
+    edges: FKEdge[],
+    hubs: Array<{ schema: string; table: string; keyField: string }>,
+    spokes: Array<{ schema: string; table: string }>,
+    opts: FKGraphWalkerOptions = {},
+): BridgePath[] {
+    return FindBridgePaths(edges, hubs, spokes, opts);
 }
 
 // ─── Adjacency construction ─────────────────────────────────────────────────

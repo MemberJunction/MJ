@@ -64,7 +64,16 @@ export interface DataTableMetadata {
  */
 export class DataTable {
     /** Unique name for this table within a collection */
-    name!: string;
+    Name!: string;
+
+    /** @deprecated Use {@link Name}. */
+    get name(): string {
+        return this.Name;
+    }
+    /** @deprecated Use {@link Name}. */
+    set name(value: string) {
+        this.Name = value;
+    }
 
     /** Human-readable description of what this table contains */
     description?: string;
@@ -73,10 +82,28 @@ export class DataTable {
     source?: 'query' | 'view' | 'computed' | 'static' | 'other';
 
     /** Column definitions with type information and entity lineage */
-    columns: MJColumnDescriptor[] = [];
+    Columns: MJColumnDescriptor[] = [];
+
+    /** @deprecated Use {@link Columns}. */
+    get columns(): MJColumnDescriptor[] {
+        return this.Columns;
+    }
+    /** @deprecated Use {@link Columns}. */
+    set columns(value: MJColumnDescriptor[]) {
+        this.Columns = value;
+    }
 
     /** The actual row data */
-    rows: Record<string, unknown>[] = [];
+    Rows: Record<string, unknown>[] = [];
+
+    /** @deprecated Use {@link Rows}. */
+    get rows(): Record<string, unknown>[] {
+        return this.Rows;
+    }
+    /** @deprecated Use {@link Rows}. */
+    set rows(value: Record<string, unknown>[]) {
+        this.Rows = value;
+    }
 
     /** How the data was produced, how much there is, how long it took */
     metadata?: DataTableMetadata;

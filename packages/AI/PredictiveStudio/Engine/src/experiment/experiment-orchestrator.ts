@@ -62,8 +62,8 @@ import {
   type WaveStrategistContext,
   DEFAULT_WAVE_CONCURRENCY,
 } from './types';
-import { rankLeaderboard, bestEntry, selectPrunedIterationIds } from './leaderboard';
-import { runBounded } from './concurrency';
+import { RankLeaderboard, BestEntry, SelectPrunedIterationIds } from './leaderboard';
+import { RunBounded } from './concurrency';
 import { PlanOrderWaveStrategist } from './wave-strategist';
 
 /**
@@ -95,7 +95,7 @@ export class ExperimentOrchestrator {
    * @param options optional run tunables (concurrency, prune rules, budget override)
    * @returns the experiment, session, iterations, final leaderboard, best model, and stop reason
    */
-  public async runSession(
+  public async RunSession(
     plan: ModelingPlanSpec,
     deps: ExperimentDeps,
     options: ExperimentRunOptions = {},
@@ -163,10 +163,19 @@ export class ExperimentOrchestrator {
       experiment,
       session,
       iterations,
-      leaderboard: rankLeaderboard(leaderboard),
+      leaderboard: RankLeaderboard(leaderboard),
       bestModel: finalized,
       stopReason,
     };
+  }
+
+  /** @deprecated Use {@link RunSession}. */
+  public async runSession(
+    plan: ModelingPlanSpec,
+    deps: ExperimentDeps,
+    options: ExperimentRunOptions = {},
+  ): Promise<ExperimentSessionResult> {
+    return this.RunSession(plan, deps, options);
   }
 
   // region: approval + setup ----------------------------------------------------
@@ -310,7 +319,7 @@ export class ExperimentOrchestrator {
 
     // Stop pulling new iterations the moment a budget bound has tripped — workers
     // consult this before claiming their next task, so no extra train is dispatched.
-    await runBounded(tasks, concurrency, { shouldStop: () => stopReason !== 'completed' });
+    await RunBounded(tasks, concurrency, { shouldStop: () => stopReason !== 'completed' });
     return { stopReason };
   }
 
@@ -402,14 +411,14 @@ export class ExperimentOrchestrator {
     options: ExperimentRunOptions,
     deps: ExperimentDeps,
   ): Promise<void> {
-    const prunedIds = selectPrunedIterationIds(leaderboard, {
+    const prunedIds = SelectPrunedIterationIds(leaderboard, {
       keepTopK: options.keepTopK,
       relativePruneThreshold: options.relativePruneThreshold,
     });
     if (prunedIds.size === 0) {
       return;
     }
-    const best = bestEntry(leaderboard);
+    const best = BestEntry(leaderboard);
     // Only entries whose `Pruned` status PERSISTED are dropped from the in-memory
     // leaderboard. If a save fails, the entry stays so the iteration isn't silently
     // lost (it remains a candidate winner with its DB Status still `Completed`).
@@ -503,7 +512,7 @@ export class ExperimentOrchestrator {
     leaderboard: LeaderboardEntry[],
     _deps: ExperimentDeps,
   ): Promise<void> {
-    session.Leaderboard = JSON.stringify(rankLeaderboard(leaderboard));
+    session.Leaderboard = JSON.stringify(RankLeaderboard(leaderboard));
     const ok = await session.Save();
     if (!ok) {
       LogError(`ExperimentOrchestrator: failed to snapshot leaderboard for session ${session.ID}: ${session.LatestResult?.CompleteMessage ?? 'unknown error'}`);
@@ -522,10 +531,10 @@ export class ExperimentOrchestrator {
     stopReason: SessionStopReason,
     deps: ExperimentDeps,
   ): Promise<MJMLModelEntity | null> {
-    const best = bestEntry(leaderboard);
+    const best = BestEntry(leaderboard);
     const bestModel = best ? modelsByIteration.get(best.IterationID) ?? null : null;
 
-    session.Leaderboard = JSON.stringify(rankLeaderboard(leaderboard));
+    session.Leaderboard = JSON.stringify(RankLeaderboard(leaderboard));
     session.Status = stopReason === 'completed' ? 'Completed' : 'Paused';
     await this.saveOrThrow(session, `finalize session (${stopReason})`);
     return bestModel;

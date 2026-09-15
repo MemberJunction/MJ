@@ -4,7 +4,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
-import { TypeContext, mapSQLTypeToJSType } from '../type-context';
+import { TypeContext, MapSQLTypeToJSType } from '../type-context';
 
 /**
  * Rule: chart-field-validation
@@ -108,7 +108,7 @@ function collectAvailableFields(
 function isNumericSqlType(sqlType: string): boolean {
   const normalized = sqlType.toLowerCase().replace(/\(.*\)/, '').trim();
   if (NUMERIC_SQL_TYPES.has(normalized)) return true;
-  return mapSQLTypeToJSType(normalized) === 'number';
+  return MapSQLTypeToJSType(normalized) === 'number';
 }
 
 /**

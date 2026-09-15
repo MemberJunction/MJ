@@ -21,9 +21,9 @@
  *     are skipped (composite-PK bridge join is future work).
  */
 
-import { findBridgePaths, FKEdge } from './FKGraphWalker.js';
-import { generateBridgeView, GeneratedBridgeView } from './BridgeViewSQLGenerator.js';
-import { OrganicKeyCluster, memberColumns } from '../types/organic-keys.js';
+import { FindBridgePaths, FKEdge } from './FKGraphWalker.js';
+import { GenerateBridgeView, GeneratedBridgeView } from './BridgeViewSQLGenerator.js';
+import { OrganicKeyCluster, MemberColumns } from '../types/organic-keys.js';
 import { DatabaseDocumentation, ForeignKeyReference } from '../types/state.js';
 
 /** One transitive bridge finding ready for spoke emission. */
@@ -66,7 +66,7 @@ const DEFAULTS: Required<TransitiveBridgeDetectorOptions> = {
  * @param edges              - FK edges (hard + soft) to walk.
  * @param state              - DatabaseDocumentation, used to look up spoke PKs.
  */
-export function detectTransitiveBridges(
+export function DetectTransitiveBridges(
     organicKeyClusters: OrganicKeyCluster[],
     edges: FKEdge[],
     state: DatabaseDocumentation,
@@ -89,7 +89,7 @@ export function detectTransitiveBridges(
     const hubsByKey = new Map<string, HubEntry>();
     for (const cluster of organicKeyClusters) {
         for (const member of cluster.members) {
-            const cols = memberColumns(member);
+            const cols = MemberColumns(member);
             const k = `${member.schema}.${member.table}.${cols.join(',')}`;
             if (hubsByKey.has(k)) continue;
             hubsByKey.set(k, {
@@ -117,7 +117,7 @@ export function detectTransitiveBridges(
     for (const h of hubsByKey.values()) {
         hubsForWalker.push({ schema: h.schema, table: h.table, keyField: h.keyFields[0] });
     }
-    const allPaths = findBridgePaths(edges, hubsForWalker, allTables, {
+    const allPaths = FindBridgePaths(edges, hubsForWalker, allTables, {
         maxHops: o.maxHops,
         minSoftFKConfidence: o.minSoftFKConfidence,
         pruneCycles: true,
@@ -137,7 +137,7 @@ export function detectTransitiveBridges(
         );
         if (!hubMatch) continue;
 
-        const view = generateBridgeView(path, spokePK);
+        const view = GenerateBridgeView(path, spokePK);
         findings.push({
             hubSchema: hubMatch.schema,
             hubTable: hubMatch.table,
@@ -172,6 +172,16 @@ export function detectTransitiveBridges(
     return findings;
 }
 
+/** @deprecated Use {@link DetectTransitiveBridges}. */
+export function detectTransitiveBridges(
+    organicKeyClusters: OrganicKeyCluster[],
+    edges: FKEdge[],
+    state: DatabaseDocumentation,
+    opts: TransitiveBridgeDetectorOptions = {},
+): TransitiveBridgeFinding[] {
+    return DetectTransitiveBridges(organicKeyClusters, edges, state, opts);
+}
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 /**
@@ -190,7 +200,7 @@ function pickSinglePK(columns: Array<{ name: string; isPrimaryKey?: boolean }>):
  * AND from any schema-declared hard FKs in the dependencies array. Returns the
  * combined set ready for the walker.
  */
-export function collectFKEdgesFromState(state: DatabaseDocumentation): FKEdge[] {
+export function CollectFKEdgesFromState(state: DatabaseDocumentation): FKEdge[] {
     const out: FKEdge[] = [];
 
     // Hard FKs from the FK-SOURCE side via `dependsOn`. Each entry on table
@@ -275,6 +285,11 @@ export function collectFKEdgesFromState(state: DatabaseDocumentation): FKEdge[] 
     return deduped.filter(
         (e) => exists(e.sourceSchema, e.sourceTable, e.sourceColumn) && exists(e.targetSchema, e.targetTable, e.targetColumn),
     );
+}
+
+/** @deprecated Use {@link CollectFKEdgesFromState}. */
+export function collectFKEdgesFromState(state: DatabaseDocumentation): FKEdge[] {
+    return CollectFKEdgesFromState(state);
 }
 
 /**

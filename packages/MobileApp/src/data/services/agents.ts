@@ -25,7 +25,7 @@ export type AgentOption = {
  * Load active, top-level agents the user can talk to. Top-level = no ParentID
  * (sub-agents are orchestrated internally and shouldn't be addressed directly).
  */
-export async function loadAgents(contextUser?: UserInfo): Promise<AgentOption[]> {
+export async function LoadAgents(contextUser?: UserInfo): Promise<AgentOption[]> {
     const rv = new RunView();
     const result = await rv.RunView<MJAIAgentEntity>(
         {
@@ -47,17 +47,22 @@ export async function loadAgents(contextUser?: UserInfo): Promise<AgentOption[]>
     }));
 }
 
+/** @deprecated Use {@link LoadAgents}. */
+export async function loadAgents(contextUser?: UserInfo): Promise<AgentOption[]> {
+    return LoadAgents(contextUser);
+}
+
 /**
  * Resolve the agent to address for a message:
  *   1. If the message contains `@name`, match it against the agent list.
  *   2. Else prefer an agent named like "Skip".
  *   3. Else the first active agent.
  */
-export async function resolveTargetAgent(
+export async function ResolveTargetAgent(
     messageText: string,
     contextUser?: UserInfo,
 ): Promise<AgentOption | null> {
-    const agents = await loadAgents(contextUser);
+    const agents = await LoadAgents(contextUser);
     if (agents.length === 0) return null;
 
     const mentionMatch = messageText.match(/@([\w-]+)/);
@@ -68,6 +73,14 @@ export async function resolveTargetAgent(
     }
     const skip = agents.find((a) => a.name.toLowerCase().includes('skip'));
     return skip ?? agents[0];
+}
+
+/** @deprecated Use {@link ResolveTargetAgent}. */
+export async function resolveTargetAgent(
+    messageText: string,
+    contextUser?: UserInfo,
+): Promise<AgentOption | null> {
+    return ResolveTargetAgent(messageText, contextUser);
 }
 
 /** Progress update emitted while an agent run is in flight (via the push channel). */
@@ -99,7 +112,7 @@ export type SendResult = {
  *      subscribes to push updates internally and resolves on completion.
  *   4. Caller reloads the conversation to render the new AI message.
  */
-export async function sendMessage(args: {
+export async function SendMessage(args: {
     conversationId: string;
     text: string;
     agentId?: string;
@@ -133,13 +146,13 @@ export async function sendMessage(args: {
     //    @memberjunction/ng-conversations (conversation-agent.service): the ambient
     //    "Sage" orchestrator runs by default and routes to the other top-level agents,
     //    which are passed to it via the Data payload's ALL_AVAILABLE_AGENTS list.
-    const agents = await loadAgents(currentUser);
+    const agents = await LoadAgents(currentUser);
     const sage = agents.find((a) => a.name === 'Sage');
     const availableAgents = agents.filter((a) => a.name !== 'Sage');
 
     let targetAgentId = agentId;
     if (!targetAgentId) {
-        const resolved = sage ?? (await resolveTargetAgent(text, currentUser));
+        const resolved = sage ?? (await ResolveTargetAgent(text, currentUser));
         if (!resolved) {
             return { success: false, errorMessage: 'No active agents available to respond.', userMessageId: detail.ID };
         }
@@ -208,11 +221,22 @@ export async function sendMessage(args: {
     }
 }
 
+/** @deprecated Use {@link SendMessage}. */
+export async function sendMessage(args: {
+    conversationId: string;
+    text: string;
+    agentId?: string;
+    onProgress?: (p: SendProgress) => void;
+    contextUser?: UserInfo;
+}): Promise<SendResult> {
+    return SendMessage(args);
+}
+
 /**
  * Lightweight status check for a conversation detail — used to poll for an
  * agent reply finalizing when the push WebSocket isn't delivering completion.
  */
-export async function getConversationDetailStatus(detailId: string, contextUser?: UserInfo): Promise<string | null> {
+export async function GetConversationDetailStatus(detailId: string, contextUser?: UserInfo): Promise<string | null> {
     const rv = new RunView();
     const result = await rv.RunView<{ ID: string; Status: string }>(
         {
@@ -228,11 +252,16 @@ export async function getConversationDetailStatus(detailId: string, contextUser?
     return result.Results[0].Status ?? null;
 }
 
+/** @deprecated Use {@link GetConversationDetailStatus}. */
+export async function getConversationDetailStatus(detailId: string, contextUser?: UserInfo): Promise<string | null> {
+    return GetConversationDetailStatus(detailId, contextUser);
+}
+
 /**
  * Create a new conversation and return its entity. Used by the
  * "new conversation" flow before sending the first message.
  */
-export async function createConversation(
+export async function CreateConversation(
     name: string,
     contextUser?: UserInfo,
 ): Promise<{ id: string } | null> {
@@ -250,4 +279,12 @@ export async function createConversation(
     const saved = await conv.Save();
     if (!saved) return null;
     return { id: conv.ID };
+}
+
+/** @deprecated Use {@link CreateConversation}. */
+export async function createConversation(
+    name: string,
+    contextUser?: UserInfo,
+): Promise<{ id: string } | null> {
+    return CreateConversation(name, contextUser);
 }

@@ -40,9 +40,14 @@ export interface QueryRunner {
   readonly database: string;
 }
 
-export async function openConnection(params: DbConnectionParams): Promise<QueryRunner> {
+export async function OpenConnection(params: DbConnectionParams): Promise<QueryRunner> {
   if (params.dialect === 'mssql') return openMssql(params);
   return openPostgres(params);
+}
+
+/** @deprecated Use {@link OpenConnection}. */
+export async function openConnection(params: DbConnectionParams): Promise<QueryRunner> {
+  return OpenConnection(params);
 }
 
 async function openMssql(params: DbConnectionParams): Promise<QueryRunner> {

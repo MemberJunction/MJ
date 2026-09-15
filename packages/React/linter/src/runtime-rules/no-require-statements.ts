@@ -2,7 +2,7 @@ import * as t from '@babel/types';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
-import { traverse, NodePath, createViolation, truncateCode } from '../lint-utils';
+import { traverse, NodePath, CreateViolation, TruncateCode } from '../lint-utils';
 
 /**
  * Rule: no-require-statements
@@ -28,12 +28,12 @@ export class NoRequireStatementsRule extends BaseLintRule {
         // Check for require() calls
         if (t.isIdentifier(callee) && callee.name === 'require') {
           violations.push(
-            createViolation(
+            CreateViolation(
               'no-require-statements',
               'critical',
               path.node,
               `Component "${componentName}" contains a require() statement. Interactive components cannot use require - all dependencies must be passed as props.`,
-              truncateCode(path.toString()),
+              TruncateCode(path.toString()),
               {
                 text: 'Remove all require() and dynamic import() statements. Use props instead.',
                 example: `// ❌ WRONG - Using require or dynamic import:
@@ -74,12 +74,12 @@ function MyComponent({ utilities, styles, components }) {
         // Also check for dynamic import() calls
         if (t.isImport(callee)) {
           violations.push(
-            createViolation(
+            CreateViolation(
               'no-require-statements',
               'critical',
               path.node,
               `Component "${componentName}" contains a dynamic import() statement. Interactive components cannot use dynamic imports - all dependencies must be passed as props.`,
-              truncateCode(path.toString()),
+              TruncateCode(path.toString()),
               {
                 text: 'Remove all require() and dynamic import() statements. Use props instead.',
                 example: `// ❌ WRONG - Using require or dynamic import:

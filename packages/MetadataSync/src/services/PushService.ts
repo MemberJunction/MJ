@@ -8,21 +8,21 @@ import { IsStringSQLType } from '@memberjunction/sql-dialect';
 import { SyncEngine, RecordData, DeferrableLookupError, SyncResolutionCollector, BatchContext } from '../lib/sync-engine';
 import { SyncMetadataEngine } from '../lib/sync-metadata-engine';
 import { BatchContextIndex, BatchContextStub } from '../lib/batch-context-index';
-import { loadEntityConfig, loadSyncConfig, EntityConfig, SyncConfig } from '../config';
+import { LoadEntityConfig, LoadSyncConfig, EntityConfig, SyncConfig } from '../config';
 import { FileBackupManager } from '../lib/file-backup-manager';
 import { configManager } from '../lib/config-manager';
 import { SQLLogger } from '../lib/sql-logger';
 import { TransactionManager } from '../lib/transaction-manager';
 import { JsonWriteHelper } from '../lib/json-write-helper';
-import { RecordDependencyAnalyzer, FlattenedRecord, groupRecordsByGraphId } from '../lib/record-dependency-analyzer';
+import { RecordDependencyAnalyzer, FlattenedRecord, GroupRecordsByGraphId } from '../lib/record-dependency-analyzer';
 import { GraphProviderPool } from '../lib/graph-provider-pool';
 import { JsonPreprocessor } from '../lib/json-preprocessor';
-import { findEntityDirectories } from '../lib/provider-utils';
+import { FindEntityDirectories } from '../lib/provider-utils';
 import { DeletionAuditor, DeletionAudit } from '../lib/deletion-auditor';
-import { describeMissingEntitySubclass } from '../lib/entity-subclass-guard';
+import { DescribeMissingEntitySubclass } from '../lib/entity-subclass-guard';
 import { DeletionReportGenerator } from '../lib/deletion-report-generator';
 import { SyncStateManager } from '../lib/sync-state-manager';
-import { resolveCollectionRelationship } from '../lib/collection-resolver';
+import { ResolveCollectionRelationship } from '../lib/collection-resolver';
 import type { GenericDatabaseProvider, SqlLoggingSession } from '@memberjunction/generic-database-provider';
 
 // Parallelism is across JSON-root graphs (independent Actions), not flattened rows.
@@ -180,8 +180,13 @@ export class PushService {
   }
 
   /** Set or replace the state manager after construction. */
-  setStateManager(stateManager: SyncStateManager): void {
+  SetStateManager(stateManager: SyncStateManager): void {
     this.stateManager = stateManager;
+  }
+
+  /** @deprecated Use {@link SetStateManager}. */
+  setStateManager(stateManager: SyncStateManager): void {
+    return this.SetStateManager(stateManager);
   }
 
   /**
@@ -256,7 +261,7 @@ export class PushService {
     };
   }
 
-  async push(options: PushOptions, callbacks?: PushCallbacks): Promise<PushResult> {
+  async Push(options: PushOptions, callbacks?: PushCallbacks): Promise<PushResult> {
     this.warnings = [];
     this.changeDetails = [];
     // Warnings the engine raises while resolving lookups belong in this push's result envelope,
@@ -285,7 +290,7 @@ export class PushService {
     // Load sync config for SQL logging settings and autoCreateMissingRecords flag
     // If dir option is specified, load from that directory, otherwise use original CWD
     const configDir = options.dir ? path.resolve(configManager.getOriginalCwd(), options.dir) : configManager.getOriginalCwd();
-    this.syncConfig = await loadSyncConfig(configDir);
+    this.syncConfig = await LoadSyncConfig(configDir);
     
     // Display warnings for special flags that are enabled
     if (this.syncConfig?.push?.alwaysPush && !options.dryRun) {
@@ -364,7 +369,7 @@ export class PushService {
       // Find entity directories to process
       // Note: If options.dir is specified, configDir already points to that directory
       // So we don't need to pass it as specificDir
-      const entityDirs = findEntityDirectories(
+      const entityDirs = FindEntityDirectories(
         configDir,
         undefined,
         this.syncConfig?.directoryOrder,
@@ -489,7 +494,7 @@ export class PushService {
           // single-directory push stays uncluttered.
           const progressPrefix = entityDirs.length > 1 ? `[${dirIdx + 1}/${entityDirs.length}] ` : '';
 
-          const entityConfig = await loadEntityConfig(entityDir);
+          const entityConfig = await LoadEntityConfig(entityDir);
           if (!entityConfig) {
             const warning = `Skipping ${entityDir} - no valid entity configuration`;
             this.warnings.push(warning);
@@ -670,6 +675,11 @@ export class PushService {
       throw error;
     }
   }
+
+  /** @deprecated Use {@link Push}. */
+  async push(options: PushOptions, callbacks?: PushCallbacks): Promise<PushResult> {
+    return this.Push(options, callbacks);
+  }
   
   private async processEntityDirectory(
     entityDir: string,
@@ -689,7 +699,7 @@ export class PushService {
     
     // Issue #4199: a push against an entity whose subclass is not loaded in this process
     // "succeeds" with a generic BaseEntity and silently skips the entity's custom logic. Say so.
-    const subclassWarning = describeMissingEntitySubclass(String(entityConfig.entity ?? ''), { dryRun: options.dryRun });
+    const subclassWarning = DescribeMissingEntitySubclass(String(entityConfig.entity ?? ''), { dryRun: options.dryRun });
     if (subclassWarning) {
       this.warnings.push(subclassWarning);
       callbacks?.onWarn?.(`⚠️  ${subclassWarning}`);
@@ -837,7 +847,7 @@ export class PushService {
 
           for (let levelIndex = 0; levelIndex < levels.length; levelIndex++) {
             const level = levels[levelIndex];
-            const byGraph = groupRecordsByGraphId(level);
+            const byGraph = GroupRecordsByGraphId(level);
             const graphIds = Array.from(byGraph.keys());
             const batchSize = options.parallelBatchSize || PARALLEL_BATCH_SIZE;
 
@@ -1921,7 +1931,7 @@ export class PushService {
     for (const entityDir of entityDirs) {
       if (hasAnyDeletions) break; // Early exit once we find any deletion
 
-      const entityConfig = await loadEntityConfig(entityDir);
+      const entityConfig = await LoadEntityConfig(entityDir);
       if (!entityConfig) {
         continue;
       }
@@ -1989,7 +1999,7 @@ export class PushService {
     const allFlattenedRecords: FlattenedRecord[] = [];
 
     for (const entityDir of entityDirs) {
-      const entityConfig = await loadEntityConfig(entityDir);
+      const entityConfig = await LoadEntityConfig(entityDir);
       if (!entityConfig) {
         continue;
       }
@@ -2574,7 +2584,7 @@ export class PushService {
         // Dynamically register collection companion if entity supports DeclareRelatedRecords
         if (!collectionCompanion && typeof (entity as unknown as { DeclareRelatedRecords?: unknown }).DeclareRelatedRecords === 'function') {
           const entityInfo = entity.EntityInfo ?? new Metadata().EntityByName(entityName);
-          const resolved = resolveCollectionRelationship(entityInfo, colName);
+          const resolved = ResolveCollectionRelationship(entityInfo, colName);
           if (resolved) {
             const colOpts: {
               Name: string;

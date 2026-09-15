@@ -1,4 +1,4 @@
-import { traverse, NodePath, findClosestMatch } from '../lint-utils';
+import { traverse, NodePath, FindClosestMatch } from '../lint-utils';
 import * as t from '@babel/types';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseLintRule } from '../lint-rule';
@@ -384,7 +384,7 @@ function analyzeDestructuredParam(
     if (!keyName) continue;
     if (validProperties.has(keyName)) continue;
 
-    const suggestion = findClosestMatch(keyName, validProperties);
+    const suggestion = FindClosestMatch(keyName, validProperties);
     const validList = Array.from(validProperties).join(', ');
 
     violations.push({
@@ -432,7 +432,7 @@ function analyzeParameterAccess(
       if (seen.has(key)) return;
       seen.add(key);
 
-      const suggestion = findClosestMatch(accessedProp, validProperties);
+      const suggestion = FindClosestMatch(accessedProp, validProperties);
       const validList = Array.from(validProperties).join(', ');
 
       violations.push({

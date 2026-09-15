@@ -29,7 +29,7 @@ vi.mock('@memberjunction/core-entities-server', () => ({
     ReconcileFieldPermissions: reconcileSpy,
 }));
 
-import { reconcileFieldLevelSecurity } from '../Database/reconcileFieldLevelSecurity';
+import { ReconcileFieldLevelSecurity } from '../Database/reconcileFieldLevelSecurity';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 
 /** Minimal stand-in for the metadata provider — only Entities is read. */
@@ -54,7 +54,7 @@ describe('reconcileFieldLevelSecurity', () => {
             { Name: 'Donors', EnableFieldLevelSecurity: true },
         ]);
 
-        await reconcileFieldLevelSecurity(provider, USER);
+        await ReconcileFieldLevelSecurity(provider, USER);
 
         expect(reconcileSpy).toHaveBeenCalledTimes(2);
         const names = reconcileSpy.mock.calls.map((c) => (c[0] as { Name: string }).Name);
@@ -64,7 +64,7 @@ describe('reconcileFieldLevelSecurity', () => {
     it('does nothing at all when no entity has field security on', async () => {
         const provider = providerWith([{ Name: 'Orders', EnableFieldLevelSecurity: false }]);
 
-        await expect(reconcileFieldLevelSecurity(provider, USER)).resolves.toBe(true);
+        await expect(ReconcileFieldLevelSecurity(provider, USER)).resolves.toBe(true);
         expect(reconcileSpy).not.toHaveBeenCalled();
         expect(logStatusSpy).not.toHaveBeenCalled();
     });
@@ -72,7 +72,7 @@ describe('reconcileFieldLevelSecurity', () => {
     it('passes the provider and user straight through', async () => {
         const provider = providerWith([{ Name: 'Employees', EnableFieldLevelSecurity: true }]);
 
-        await reconcileFieldLevelSecurity(provider, USER);
+        await ReconcileFieldLevelSecurity(provider, USER);
 
         expect(reconcileSpy).toHaveBeenCalledWith(expect.objectContaining({ Name: 'Employees' }), provider, USER);
     });
@@ -80,11 +80,11 @@ describe('reconcileFieldLevelSecurity', () => {
     it('reports totals only when something actually changed', async () => {
         const provider = providerWith([{ Name: 'Employees', EnableFieldLevelSecurity: true }]);
 
-        await reconcileFieldLevelSecurity(provider, USER);
+        await ReconcileFieldLevelSecurity(provider, USER);
         expect(logStatusSpy).not.toHaveBeenCalled(); // 0 inserted, 0 deleted — stay quiet
 
         reconcileSpy.mockResolvedValue({ Inserted: 3, Deleted: 1 });
-        await reconcileFieldLevelSecurity(provider, USER);
+        await ReconcileFieldLevelSecurity(provider, USER);
 
         expect(logStatusSpy).toHaveBeenCalledTimes(1);
         expect(logStatusSpy.mock.calls[0][0]).toMatch(/3 permission row\(s\) added, 1 removed/);
@@ -102,7 +102,7 @@ describe('reconcileFieldLevelSecurity', () => {
             .mockRejectedValueOnce(new Error('constraint violation'))
             .mockResolvedValueOnce({ Inserted: 2, Deleted: 0 });
 
-        const ok = await reconcileFieldLevelSecurity(provider, USER);
+        const ok = await ReconcileFieldLevelSecurity(provider, USER);
 
         expect(ok).toBe(false); // the run is reported as imperfect...
         expect(reconcileSpy).toHaveBeenCalledTimes(2); // ...but the second entity still ran
@@ -114,11 +114,11 @@ describe('reconcileFieldLevelSecurity', () => {
         const provider = providerWith([{ Name: 'Employees', EnableFieldLevelSecurity: true }]);
         reconcileSpy.mockResolvedValue({ Inserted: 1, Deleted: 0 });
 
-        await expect(reconcileFieldLevelSecurity(provider, USER)).resolves.toBe(true);
+        await expect(ReconcileFieldLevelSecurity(provider, USER)).resolves.toBe(true);
     });
 
     it('tolerates a provider with no entities', async () => {
-        await expect(reconcileFieldLevelSecurity({} as IMetadataProvider, USER)).resolves.toBe(true);
+        await expect(ReconcileFieldLevelSecurity({} as IMetadataProvider, USER)).resolves.toBe(true);
         expect(reconcileSpy).not.toHaveBeenCalled();
     });
 });

@@ -34,13 +34,18 @@ function mapRole(role: TeamsParticipantRole, isSelf: boolean | undefined): Bridg
 }
 
 /** Maps one Teams participant onto the channel's {@link BridgeMeetingParticipant} shape. */
-export function toMeetingParticipant(p: TeamsParticipant): BridgeMeetingParticipant {
+export function ToMeetingParticipant(p: TeamsParticipant): BridgeMeetingParticipant {
     return {
         ParticipantId: p.ParticipantId,
         DisplayName: p.DisplayName,
         Role: mapRole(p.Role, p.IsSelf),
         IsAgent: p.IsSelf === true,
     };
+}
+
+/** @deprecated Use {@link ToMeetingParticipant}. */
+export function toMeetingParticipant(p: TeamsParticipant): BridgeMeetingParticipant {
+    return ToMeetingParticipant(p);
 }
 
 /**
@@ -84,7 +89,7 @@ export class TeamsMeetingControlsEventSource implements IBridgeMeetingControlsEv
     public IngestRoster(participants: TeamsParticipant[]): void {
         this.roster.clear();
         for (const p of participants) {
-            this.roster.set(this.key(p.ParticipantId), toMeetingParticipant(p));
+            this.roster.set(this.key(p.ParticipantId), ToMeetingParticipant(p));
         }
         this.emitRoster();
     }

@@ -30,7 +30,7 @@ export class ColumnStatsCache {
   /**
    * Store column statistics
    */
-  public setColumnStats(stats: CachedColumnStats): void {
+  public SetColumnStats(stats: CachedColumnStats): void {
     const tableKey = this.getTableKey(stats.schemaName, stats.tableName);
     let tableStats = this.tableCache.get(tableKey);
 
@@ -48,10 +48,15 @@ export class ColumnStatsCache {
     tableStats.columns.set(stats.columnName, stats);
   }
 
+  /** @deprecated Use {@link SetColumnStats}. */
+  public setColumnStats(stats: CachedColumnStats): void {
+    return this.SetColumnStats(stats);
+  }
+
   /**
    * Get column statistics
    */
-  public getColumnStats(
+  public GetColumnStats(
     schemaName: string,
     tableName: string,
     columnName: string
@@ -61,10 +66,19 @@ export class ColumnStatsCache {
     return tableStats?.columns.get(columnName);
   }
 
+  /** @deprecated Use {@link GetColumnStats}. */
+  public getColumnStats(
+    schemaName: string,
+    tableName: string,
+    columnName: string
+  ): CachedColumnStats | undefined {
+    return this.GetColumnStats(schemaName, tableName, columnName);
+  }
+
   /**
    * Get all column statistics for a table
    */
-  public getTableStats(
+  public GetTableStats(
     schemaName: string,
     tableName: string
   ): TableStatsCache | undefined {
@@ -72,47 +86,82 @@ export class ColumnStatsCache {
     return this.tableCache.get(tableKey);
   }
 
+  /** @deprecated Use {@link GetTableStats}. */
+  public getTableStats(
+    schemaName: string,
+    tableName: string
+  ): TableStatsCache | undefined {
+    return this.GetTableStats(schemaName, tableName);
+  }
+
   /**
    * Get all columns in a table
    */
+  public GetTableColumns(
+    schemaName: string,
+    tableName: string
+  ): CachedColumnStats[] {
+    const tableStats = this.GetTableStats(schemaName, tableName);
+    return tableStats ? Array.from(tableStats.columns.values()) : [];
+  }
+
+  /** @deprecated Use {@link GetTableColumns}. */
   public getTableColumns(
     schemaName: string,
     tableName: string
   ): CachedColumnStats[] {
-    const tableStats = this.getTableStats(schemaName, tableName);
-    return tableStats ? Array.from(tableStats.columns.values()) : [];
+    return this.GetTableColumns(schemaName, tableName);
   }
 
   /**
    * Check if column stats exist
    */
+  public HasColumnStats(
+    schemaName: string,
+    tableName: string,
+    columnName: string
+  ): boolean {
+    return this.GetColumnStats(schemaName, tableName, columnName) !== undefined;
+  }
+
+  /** @deprecated Use {@link HasColumnStats}. */
   public hasColumnStats(
     schemaName: string,
     tableName: string,
     columnName: string
   ): boolean {
-    return this.getColumnStats(schemaName, tableName, columnName) !== undefined;
+    return this.HasColumnStats(schemaName, tableName, columnName);
   }
 
   /**
    * Check if table stats exist
    */
+  public HasTableStats(schemaName: string, tableName: string): boolean {
+    return this.GetTableStats(schemaName, tableName) !== undefined;
+  }
+
+  /** @deprecated Use {@link HasTableStats}. */
   public hasTableStats(schemaName: string, tableName: string): boolean {
-    return this.getTableStats(schemaName, tableName) !== undefined;
+    return this.HasTableStats(schemaName, tableName);
   }
 
   /**
    * Get all tables with cached stats
    */
-  public getAllTables(): TableStatsCache[] {
+  public GetAllTables(): TableStatsCache[] {
     return Array.from(this.tableCache.values());
+  }
+
+  /** @deprecated Use {@link GetAllTables}. */
+  public getAllTables(): TableStatsCache[] {
+    return this.GetAllTables();
   }
 
   /**
    * Find columns matching a pattern across all tables
    * Useful for finding potential FK relationships
    */
-  public findColumnsMatching(
+  public FindColumnsMatching(
     predicate: (stats: CachedColumnStats) => boolean
   ): CachedColumnStats[] {
     const results: CachedColumnStats[] = [];
@@ -128,28 +177,45 @@ export class ColumnStatsCache {
     return results;
   }
 
+  /** @deprecated Use {@link FindColumnsMatching}. */
+  public findColumnsMatching(
+    predicate: (stats: CachedColumnStats) => boolean
+  ): CachedColumnStats[] {
+    return this.FindColumnsMatching(predicate);
+  }
+
   /**
    * Find columns with similar names across tables
    * Example: Find all columns named "*_id" or "*ID"
    */
+  public FindColumnsByNamePattern(pattern: RegExp): CachedColumnStats[] {
+    return this.FindColumnsMatching(stats => pattern.test(stats.columnName));
+  }
+
+  /** @deprecated Use {@link FindColumnsByNamePattern}. */
   public findColumnsByNamePattern(pattern: RegExp): CachedColumnStats[] {
-    return this.findColumnsMatching(stats => pattern.test(stats.columnName));
+    return this.FindColumnsByNamePattern(pattern);
   }
 
   /**
    * Find highly unique columns (potential PKs)
    */
-  public findUniqueColumns(minUniqueness: number = 0.95): CachedColumnStats[] {
-    return this.findColumnsMatching(
+  public FindUniqueColumns(minUniqueness: number = 0.95): CachedColumnStats[] {
+    return this.FindColumnsMatching(
       stats => stats.uniqueness >= minUniqueness && stats.nullCount === 0
     );
+  }
+
+  /** @deprecated Use {@link FindUniqueColumns}. */
+  public findUniqueColumns(minUniqueness: number = 0.95): CachedColumnStats[] {
+    return this.FindUniqueColumns(minUniqueness);
   }
 
   /**
    * Find columns with same name across multiple tables
    * Returns Map of columnName -> array of CachedColumnStats
    */
-  public findDuplicateColumnNames(): Map<string, CachedColumnStats[]> {
+  public FindDuplicateColumnNames(): Map<string, CachedColumnStats[]> {
     const columnMap = new Map<string, CachedColumnStats[]>();
 
     for (const tableStats of this.tableCache.values()) {
@@ -166,10 +232,15 @@ export class ColumnStatsCache {
     );
   }
 
+  /** @deprecated Use {@link FindDuplicateColumnNames}. */
+  public findDuplicateColumnNames(): Map<string, CachedColumnStats[]> {
+    return this.FindDuplicateColumnNames();
+  }
+
   /**
    * Get cache statistics
    */
-  public getCacheStats(): {
+  public GetCacheStats(): {
     totalTables: number;
     totalColumns: number;
     totalStatsBytes: number;
@@ -193,17 +264,32 @@ export class ColumnStatsCache {
     };
   }
 
+  /** @deprecated Use {@link GetCacheStats}. */
+  public getCacheStats(): {
+    totalTables: number;
+    totalColumns: number;
+    totalStatsBytes: number;
+    avgColumnsPerTable: number;
+  } {
+    return this.GetCacheStats();
+  }
+
   /**
    * Clear all cached stats
    */
-  public clear(): void {
+  public Clear(): void {
     this.tableCache.clear();
+  }
+
+  /** @deprecated Use {@link Clear}. */
+  public clear(): void {
+    return this.Clear();
   }
 
   /**
    * Export cache to JSON for persistence in state file
    */
-  public toStateJSON(): import('../types/state.js').ColumnStatisticsCache {
+  public ToStateJSON(): import('../types/state.js').ColumnStatisticsCache {
     let totalColumns = 0;
     const tables: Record<string, import('../types/state.js').TableStatisticsEntry> = {};
 
@@ -230,11 +316,16 @@ export class ColumnStatsCache {
     };
   }
 
+  /** @deprecated Use {@link ToStateJSON}. */
+  public toStateJSON(): import('../types/state.js').ColumnStatisticsCache {
+    return this.ToStateJSON();
+  }
+
   /**
    * Import cache from state JSON
    */
-  public fromStateJSON(data: import('../types/state.js').ColumnStatisticsCache): void {
-    this.clear();
+  public FromStateJSON(data: import('../types/state.js').ColumnStatisticsCache): void {
+    this.Clear();
 
     for (const [key, tableEntry] of Object.entries(data.tables)) {
       const columnMap = new Map<string, CachedColumnStats>();
@@ -252,11 +343,16 @@ export class ColumnStatsCache {
     }
   }
 
+  /** @deprecated Use {@link FromStateJSON}. */
+  public fromStateJSON(data: import('../types/state.js').ColumnStatisticsCache): void {
+    return this.FromStateJSON(data);
+  }
+
   /**
    * Merge cached stats into schema column definitions
    * Replaces separate columnStatistics cache with embedded stats
    */
-  public mergeIntoSchemas(schemas: import('../types/state.js').SchemaDefinition[]): void {
+  public MergeIntoSchemas(schemas: import('../types/state.js').SchemaDefinition[]): void {
     for (const schema of schemas) {
       for (const table of schema.tables) {
         const cacheKey = `${schema.name}.${table.name}`;
@@ -287,5 +383,10 @@ export class ColumnStatsCache {
         }
       }
     }
+  }
+
+  /** @deprecated Use {@link MergeIntoSchemas}. */
+  public mergeIntoSchemas(schemas: import('../types/state.js').SchemaDefinition[]): void {
+    return this.MergeIntoSchemas(schemas);
   }
 }

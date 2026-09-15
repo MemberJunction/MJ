@@ -27,13 +27,13 @@ vi.mock('@memberjunction/generic-database-provider', () => ({
     resolveDbPlatformFromEnv: vi.fn().mockReturnValue(undefined),
 }));
 
-import { RunCommandsBase, formatCommandFailureDetail } from '../Misc/runCommand';
+import { RunCommandsBase, FormatCommandFailureDetail } from '../Misc/runCommand';
 import type { CommandExecutionResult } from '../Misc/runCommand';
 
 describe('formatCommandFailureDetail', () => {
     it('keeps the last lines of a long diagnostic', () => {
         const lines = Array.from({ length: 80 }, (_, i) => `line ${i + 1}`);
-        const detail = formatCommandFailureDetail({
+        const detail = FormatCommandFailureDetail({
             output: lines.join('\n'),
             error: 'Process exited with code 2',
             success: false,
@@ -141,7 +141,7 @@ describe('RunCommandsBase', () => {
             expect(result.success).toBe(false);
             expect(result.error).toMatch(/exited with code 2/i);
             expect(result.output).toMatch(/error TS2307/i);
-            expect(formatCommandFailureDetail(result)).toMatch(/error TS2307/i);
+            expect(FormatCommandFailureDetail(result)).toMatch(/error TS2307/i);
         });
 
         it('keeps running later commands after a non-zero exit', async () => {

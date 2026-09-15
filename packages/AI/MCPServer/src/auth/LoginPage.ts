@@ -53,7 +53,7 @@ export interface SuccessPageOptions {
  * This page is shown when a user arrives at the authorization endpoint
  * to provide context about what they're authorizing.
  */
-export function renderLoginPage(options: LoginPageOptions): string {
+export function RenderLoginPage(options: LoginPageOptions): string {
   const {
     clientName = 'An application',
     providerName = 'your identity provider',
@@ -241,10 +241,15 @@ export function renderLoginPage(options: LoginPageOptions): string {
 </html>`;
 }
 
+/** @deprecated Use {@link RenderLoginPage}. */
+export function renderLoginPage(options: LoginPageOptions): string {
+  return RenderLoginPage(options);
+}
+
 /**
  * Renders an error page.
  */
-export function renderErrorPage(options: ErrorPageOptions): string {
+export function RenderErrorPage(options: ErrorPageOptions): string {
   const { title, message, showRetry = false, retryUrl } = options;
 
   const retryButton = showRetry && retryUrl
@@ -341,10 +346,15 @@ export function renderErrorPage(options: ErrorPageOptions): string {
 </html>`;
 }
 
+/** @deprecated Use {@link RenderErrorPage}. */
+export function renderErrorPage(options: ErrorPageOptions): string {
+  return RenderErrorPage(options);
+}
+
 /**
  * Renders a success page.
  */
-export function renderSuccessPage(options: SuccessPageOptions): string {
+export function RenderSuccessPage(options: SuccessPageOptions): string {
   const {
     clientName = 'The application',
     message = 'You can now close this window and return to your application.',
@@ -425,6 +435,11 @@ export function renderSuccessPage(options: SuccessPageOptions): string {
   </div>
 </body>
 </html>`;
+}
+
+/** @deprecated Use {@link RenderSuccessPage}. */
+export function renderSuccessPage(options: SuccessPageOptions): string {
+  return RenderSuccessPage(options);
 }
 
 /**

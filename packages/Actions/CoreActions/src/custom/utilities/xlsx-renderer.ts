@@ -87,7 +87,7 @@ export interface ExcelRenderResult {
 /**
  * Render sheet input definitions to an Excel buffer via ExportEngine.
  */
-export async function renderExcelFromSheets(
+export async function RenderExcelFromSheets(
     sheets: SheetInputDefinition[],
     options: ExcelOptions = {}
 ): Promise<ExcelRenderResult> {
@@ -95,14 +95,14 @@ export async function renderExcelFromSheets(
     for (const sheetInput of sheets) {
         // Normalize: LLMs sometimes send columns+rows instead of data
         if (!sheetInput.data && sheetInput.rows) {
-            sheetInput.data = normalizeRowsToData(sheetInput.rows, sheetInput.columns);
+            sheetInput.data = NormalizeRowsToData(sheetInput.rows, sheetInput.columns);
         }
 
         if (!sheetInput.name || !sheetInput.data) {
             throw new Error("Each sheet must have a name and data");
         }
 
-        sheetDefinitions.push(convertToSheetDefinition(sheetInput));
+        sheetDefinitions.push(ConvertToSheetDefinition(sheetInput));
     }
 
     const fileName = (options.fileName || 'workbook.xlsx').replace(/\.xlsx$/i, '');
@@ -127,12 +127,20 @@ export async function renderExcelFromSheets(
     };
 }
 
+/** @deprecated Use {@link RenderExcelFromSheets}. */
+export async function renderExcelFromSheets(
+    sheets: SheetInputDefinition[],
+    options: ExcelOptions = {}
+): Promise<ExcelRenderResult> {
+    return RenderExcelFromSheets(sheets, options);
+}
+
 // ── Input normalization ───────────────────────────────────────────────────────
 
 /**
  * Convert columns+rows format to the data array format expected by export-engine.
  */
-export function normalizeRowsToData(rows: unknown[][], columns?: string[]): Record<string, unknown>[] {
+export function NormalizeRowsToData(rows: unknown[][], columns?: string[]): Record<string, unknown>[] {
     if (columns && columns.length > 0) {
         return rows.map(row => {
             const obj: Record<string, unknown> = {};
@@ -143,10 +151,15 @@ export function normalizeRowsToData(rows: unknown[][], columns?: string[]): Reco
     return rows as unknown as Record<string, unknown>[];
 }
 
+/** @deprecated Use {@link NormalizeRowsToData}. */
+export function normalizeRowsToData(rows: unknown[][], columns?: string[]): Record<string, unknown>[] {
+    return NormalizeRowsToData(rows, columns);
+}
+
 /**
  * Convert the input sheet definition to the export-engine SheetDefinition format
  */
-export function convertToSheetDefinition(input: SheetInputDefinition): SheetDefinition {
+export function ConvertToSheetDefinition(input: SheetInputDefinition): SheetDefinition {
     const sheetDef: SheetDefinition = {
         name: input.name,
         data: input.data!,
@@ -164,15 +177,15 @@ export function convertToSheetDefinition(input: SheetInputDefinition): SheetDefi
     }
 
     if (input.styles?.headerStyle) {
-        sheetDef.headerStyle = convertLegacyStyle(input.styles.headerStyle);
+        sheetDef.headerStyle = ConvertLegacyStyle(input.styles.headerStyle);
     } else if (input.headerStyle) {
-        sheetDef.headerStyle = convertLegacyStyle(input.headerStyle);
+        sheetDef.headerStyle = ConvertLegacyStyle(input.headerStyle);
     }
 
     if (input.styles?.dataStyle) {
-        sheetDef.dataStyle = convertLegacyStyle(input.styles.dataStyle);
+        sheetDef.dataStyle = ConvertLegacyStyle(input.styles.dataStyle);
     } else if (input.dataStyle) {
-        sheetDef.dataStyle = convertLegacyStyle(input.dataStyle);
+        sheetDef.dataStyle = ConvertLegacyStyle(input.dataStyle);
     }
 
     if (input.formulas) {
@@ -194,12 +207,17 @@ export function convertToSheetDefinition(input: SheetInputDefinition): SheetDefi
     return sheetDef;
 }
 
+/** @deprecated Use {@link ConvertToSheetDefinition}. */
+export function convertToSheetDefinition(input: SheetInputDefinition): SheetDefinition {
+    return ConvertToSheetDefinition(input);
+}
+
 // ── Style conversion ──────────────────────────────────────────────────────────
 
 /**
  * Convert legacy ExcelJS-style objects to export-engine CellStyle format
  */
-export function convertLegacyStyle(style: LegacyStyle): CellStyle {
+export function ConvertLegacyStyle(style: LegacyStyle): CellStyle {
     const result: CellStyle = {};
 
     if (style.font) {
@@ -244,6 +262,11 @@ export function convertLegacyStyle(style: LegacyStyle): CellStyle {
     }
 
     return result;
+}
+
+/** @deprecated Use {@link ConvertLegacyStyle}. */
+export function convertLegacyStyle(style: LegacyStyle): CellStyle {
+    return ConvertLegacyStyle(style);
 }
 
 function extractColorValue(color: { argb?: string } | string | undefined): string | undefined {

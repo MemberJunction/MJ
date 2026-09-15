@@ -8,7 +8,7 @@ import type { UserInfo } from '@memberjunction/core';
 import { MJAIAgentRunEntity, MJAIAgentRunStepEntity } from '@memberjunction/core-entities';
 import { IOracle } from './IOracle';
 import { OracleInput, OracleConfig, OracleResult } from '../types';
-import { evaluateSubAgentTrace, type SubAgentTraceConfig, type SubAgentTraceFacts } from '../eval/subAgentTrace';
+import { EvaluateSubAgentTrace, type SubAgentTraceConfig, type SubAgentTraceFacts } from '../eval/subAgentTrace';
 
 /**
  * Validates which sub-agents an agent run dispatched, and how many iterations it took.
@@ -51,7 +51,7 @@ export class TraceSubAgentValidatorOracle implements IOracle {
             }
 
             const facts = await this.collectFacts(agentRun.ID, input.contextUser);
-            const result = evaluateSubAgentTrace(facts, config as SubAgentTraceConfig);
+            const result = EvaluateSubAgentTrace(facts, config as SubAgentTraceConfig);
             return { oracleType: this.type, passed: result.passed, score: result.score, message: result.message, details: result.details };
         } catch (error) {
             return {

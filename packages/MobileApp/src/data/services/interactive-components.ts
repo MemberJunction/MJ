@@ -40,7 +40,7 @@ function typeNameSignalsComponent(typeName: string): boolean {
  * @param typeName The artifact's type/display name (a soft component signal).
  * @returns The typed component spec, or `null` when it isn't one.
  */
-export function toInteractiveSpec(parsed: unknown, typeName: string): ComponentSpec | null {
+export function ToInteractiveSpec(parsed: unknown, typeName: string): ComponentSpec | null {
     if (!isRecord(parsed)) {
         return null;
     }
@@ -55,6 +55,11 @@ export function toInteractiveSpec(parsed: unknown, typeName: string): ComponentS
         return null;
     }
     return buildSpec(parsed, name, code);
+}
+
+/** @deprecated Use {@link ToInteractiveSpec}. */
+export function toInteractiveSpec(parsed: unknown, typeName: string): ComponentSpec | null {
+    return ToInteractiveSpec(parsed, typeName);
 }
 
 /**
@@ -97,7 +102,7 @@ function buildSpec(parsed: Record<string, unknown>, name: string, code: string):
  * @param typeName The artifact's type/display name (a soft component signal).
  * @returns The typed component spec, or `null`.
  */
-export function parseInteractiveSpec(content: string, typeName: string): ComponentSpec | null {
+export function ParseInteractiveSpec(content: string, typeName: string): ComponentSpec | null {
     const trimmed = content.trim();
     if (!trimmed.startsWith('{')) {
         return null;
@@ -108,5 +113,10 @@ export function parseInteractiveSpec(content: string, typeName: string): Compone
     } catch {
         return null;
     }
-    return toInteractiveSpec(parsed, typeName);
+    return ToInteractiveSpec(parsed, typeName);
+}
+
+/** @deprecated Use {@link ParseInteractiveSpec}. */
+export function parseInteractiveSpec(content: string, typeName: string): ComponentSpec | null {
+    return ParseInteractiveSpec(content, typeName);
 }

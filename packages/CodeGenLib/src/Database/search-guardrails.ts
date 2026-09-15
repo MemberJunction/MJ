@@ -47,7 +47,7 @@ export const MAX_SEARCHABLE_FIELDS_PER_ENTITY = 3;
  * unfairly, an operator can set `AutoUpdateIncludeInUserSearchAPI=0`
  * on that field to opt out of LLM-driven flips.
  */
-export function isNarrativeFieldName(fieldName: string): boolean {
+export function IsNarrativeFieldName(fieldName: string): boolean {
     if (!fieldName) return false;
     const exact = /^(Comments?|Notes?|Description|Bio|Body|Memo|Summary|Content|Remarks?|Details)$/i;
     if (exact.test(fieldName)) return true;
@@ -55,23 +55,38 @@ export function isNarrativeFieldName(fieldName: string): boolean {
     return suffix.test(fieldName);
 }
 
+/** @deprecated Use {@link IsNarrativeFieldName}. */
+export function isNarrativeFieldName(fieldName: string): boolean {
+    return IsNarrativeFieldName(fieldName);
+}
+
 /**
  * Identifier-shaped field names — values users type in full, where `Exact`
  * is the right predicate by default.
  */
-export function isIdentifierFieldName(fieldName: string): boolean {
+export function IsIdentifierFieldName(fieldName: string): boolean {
     if (!fieldName) return false;
     return /^(Email|SKU|SSN|ISBN|ZipCode|PostalCode|Phone(Number)?|.+(Number|Code|ID))$/i.test(fieldName)
         && !/^ID$/i.test(fieldName); // bare "ID" is the PK, not an identifier
+}
+
+/** @deprecated Use {@link IsIdentifierFieldName}. */
+export function isIdentifierFieldName(fieldName: string): boolean {
+    return IsIdentifierFieldName(fieldName);
 }
 
 /**
  * Name-like field names — human-readable prefixes where `BeginsWith` is the
  * right predicate by default.
  */
-export function isNameLikeFieldName(fieldName: string): boolean {
+export function IsNameLikeFieldName(fieldName: string): boolean {
     if (!fieldName) return false;
     return /^(Name|Title|FirstName|LastName|MiddleName|DisplayName|FullName|Label)$/i.test(fieldName);
+}
+
+/** @deprecated Use {@link IsNameLikeFieldName}. */
+export function isNameLikeFieldName(fieldName: string): boolean {
+    return IsNameLikeFieldName(fieldName);
 }
 
 /**
@@ -83,20 +98,30 @@ export function isNameLikeFieldName(fieldName: string): boolean {
  * want to false-positive on entities like `Stepford Cities` (silly example,
  * but the principle holds).
  */
-export function isDetailOrLineItemEntity(entityName: string | undefined): boolean {
+export function IsDetailOrLineItemEntity(entityName: string | undefined): boolean {
     if (!entityName) return false;
     const n = entityName.trim();
     return /(\b|\s)(Details?|Lines?|Items?|Steps?|Params?|Mappings?)$/i.test(n);
+}
+
+/** @deprecated Use {@link IsDetailOrLineItemEntity}. */
+export function isDetailOrLineItemEntity(entityName: string | undefined): boolean {
+    return IsDetailOrLineItemEntity(entityName);
 }
 
 /**
  * Default predicate for a searchable field when the LLM didn't supply one
  * (or supplied an inappropriate `Contains` we had to reject).
  */
-export function defaultPredicateFor(fieldName: string): SearchPredicate {
-    if (isIdentifierFieldName(fieldName)) return 'Exact';
-    if (isNameLikeFieldName(fieldName)) return 'BeginsWith';
+export function DefaultPredicateFor(fieldName: string): SearchPredicate {
+    if (IsIdentifierFieldName(fieldName)) return 'Exact';
+    if (IsNameLikeFieldName(fieldName)) return 'BeginsWith';
     return 'BeginsWith';
+}
+
+/** @deprecated Use {@link DefaultPredicateFor}. */
+export function defaultPredicateFor(fieldName: string): SearchPredicate {
+    return DefaultPredicateFor(fieldName);
 }
 
 /**
@@ -111,7 +136,7 @@ export function defaultPredicateFor(fieldName: string): SearchPredicate {
  *   - If the LLM didn't propose a predicate at all (or proposed one we
  *     rejected), fall back to `defaultPredicateFor()`.
  */
-export function normalizePredicate(opts: {
+export function NormalizePredicate(opts: {
     fieldName: string;
     proposed?: SearchPredicate;
     isInFullTextSearchFields: boolean;
@@ -123,12 +148,22 @@ export function normalizePredicate(opts: {
         if (ftsEligible) {
             return { predicate: 'Contains', rewritten: false };
         }
-        return { predicate: defaultPredicateFor(fieldName), rewritten: true };
+        return { predicate: DefaultPredicateFor(fieldName), rewritten: true };
     }
     if (proposed === 'Exact' || proposed === 'EndsWith' || proposed === 'BeginsWith') {
         return { predicate: proposed, rewritten: false };
     }
-    return { predicate: defaultPredicateFor(fieldName), rewritten: false };
+    return { predicate: DefaultPredicateFor(fieldName), rewritten: false };
+}
+
+/** @deprecated Use {@link NormalizePredicate}. */
+export function normalizePredicate(opts: {
+    fieldName: string;
+    proposed?: SearchPredicate;
+    isInFullTextSearchFields: boolean;
+    entityFullTextSearchEnabled: boolean;
+}): { predicate: SearchPredicate; rewritten: boolean } {
+    return NormalizePredicate(opts);
 }
 
 /**
@@ -136,7 +171,7 @@ export function normalizePredicate(opts: {
  * narrative guardrails have already run), trim to the configured cap,
  * preferring name-like and identifier-shaped fields over ambiguous matches.
  */
-export function applySearchableFieldsCap(eligibleFieldNames: string[]): {
+export function ApplySearchableFieldsCap(eligibleFieldNames: string[]): {
     accepted: string[];
     dropped: string[];
 } {
@@ -148,13 +183,21 @@ export function applySearchableFieldsCap(eligibleFieldNames: string[]): {
     const ranked = eligibleFieldNames.map((name, idx) => ({
         name,
         idx,
-        rank: isNameLikeFieldName(name) ? 0 : isIdentifierFieldName(name) ? 1 : 2,
+        rank: IsNameLikeFieldName(name) ? 0 : IsIdentifierFieldName(name) ? 1 : 2,
     }));
     ranked.sort((a, b) => a.rank - b.rank || a.idx - b.idx);
     const accepted = ranked.slice(0, MAX_SEARCHABLE_FIELDS_PER_ENTITY).map(r => r.name);
     const acceptedSet = new Set(accepted);
     const dropped = eligibleFieldNames.filter(n => !acceptedSet.has(n));
     return { accepted, dropped };
+}
+
+/** @deprecated Use {@link ApplySearchableFieldsCap}. */
+export function applySearchableFieldsCap(eligibleFieldNames: string[]): {
+    accepted: string[];
+    dropped: string[];
+} {
+    return ApplySearchableFieldsCap(eligibleFieldNames);
 }
 
 /**
@@ -169,7 +212,7 @@ export function applySearchableFieldsCap(eligibleFieldNames: string[]): {
  *
  * Returns a NEW object (does not mutate the input).
  */
-export function normalizeSmartFieldResultShape<T extends {
+export function NormalizeSmartFieldResultShape<T extends {
     searchableFields?: string[];
     searchPredicates?: Array<{ field: string; predicate: SearchPredicate }>;
     allowUserSearch?: boolean;
@@ -197,13 +240,22 @@ export function normalizeSmartFieldResultShape<T extends {
     return out;
 }
 
+/** @deprecated Use {@link NormalizeSmartFieldResultShape}. */
+export function normalizeSmartFieldResultShape<T extends {
+    searchableFields?: string[];
+    searchPredicates?: Array<{ field: string; predicate: SearchPredicate }>;
+    allowUserSearch?: boolean;
+}>(result: T): T {
+    return NormalizeSmartFieldResultShape(result);
+}
+
 /**
  * Heuristic: does the entity name match an audit / log / run-history /
  * change-tracking shape? Mirrors the existing `isLikelyLogOrAuditEntity`
  * heuristic on `ManageMetadataBase` so callers outside the class (e.g.
  * tests) can ask the same question without having to subclass.
  */
-export function isLikelyLogOrAuditEntityName(name: string | undefined): boolean {
+export function IsLikelyLogOrAuditEntityName(name: string | undefined): boolean {
     if (!name) return false;
     const n = name.trim();
     if (/\bLogs?$/i.test(n)) return true;
@@ -213,6 +265,11 @@ export function isLikelyLogOrAuditEntityName(name: string | undefined): boolean 
     if (/\bRun (History|Steps|Messages)$/i.test(n)) return true;
     if (/\bExecution Logs?$/i.test(n)) return true;
     return false;
+}
+
+/** @deprecated Use {@link IsLikelyLogOrAuditEntityName}. */
+export function isLikelyLogOrAuditEntityName(name: string | undefined): boolean {
+    return IsLikelyLogOrAuditEntityName(name);
 }
 
 /**
@@ -226,7 +283,7 @@ export function isLikelyLogOrAuditEntityName(name: string | undefined): boolean 
  *   - entity is NOT log/audit-shaped
  *   - entity is NOT detail/line-item-shaped
  */
-export function entityLevelEnableBlockedReason(opts: {
+export function EntityLevelEnableBlockedReason(opts: {
     entityName: string | undefined;
     confidence: 'high' | 'medium' | 'low' | undefined;
     acceptedSearchableFieldsCount: number;
@@ -237,11 +294,20 @@ export function entityLevelEnableBlockedReason(opts: {
     if (opts.acceptedSearchableFieldsCount < 1) {
         return 'no searchable fields survived guardrails';
     }
-    if (isLikelyLogOrAuditEntityName(opts.entityName)) {
+    if (IsLikelyLogOrAuditEntityName(opts.entityName)) {
         return 'entity name matches log/audit/run-history shape';
     }
-    if (isDetailOrLineItemEntity(opts.entityName)) {
+    if (IsDetailOrLineItemEntity(opts.entityName)) {
         return 'entity name matches detail/line-item/step/param/mapping shape';
     }
     return null;
+}
+
+/** @deprecated Use {@link EntityLevelEnableBlockedReason}. */
+export function entityLevelEnableBlockedReason(opts: {
+    entityName: string | undefined;
+    confidence: 'high' | 'medium' | 'low' | undefined;
+    acceptedSearchableFieldsCount: number;
+}): string | null {
+    return EntityLevelEnableBlockedReason(opts);
 }

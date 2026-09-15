@@ -38,15 +38,20 @@ export class GuardrailsManager {
   /**
    * Begin tracking a new phase
    */
-  public startPhase(phase: PhaseType): void {
+  public StartPhase(phase: PhaseType): void {
     this.currentPhase = phase;
     this.phaseStartTimes.set(phase, Date.now());
+  }
+
+  /** @deprecated Use {@link StartPhase}. */
+  public startPhase(phase: PhaseType): void {
+    return this.StartPhase(phase);
   }
 
   /**
    * End tracking current phase and record metrics
    */
-  public endPhase(run: AnalysisRun, phase: PhaseType): void {
+  public EndPhase(run: AnalysisRun, phase: PhaseType): void {
     if (!run.phaseMetrics) {
       run.phaseMetrics = {};
     }
@@ -74,18 +79,28 @@ export class GuardrailsManager {
     this.currentPhase = undefined;
   }
 
+  /** @deprecated Use {@link EndPhase}. */
+  public endPhase(run: AnalysisRun, phase: PhaseType): void {
+    return this.EndPhase(run, phase);
+  }
+
   /**
    * Start tracking a new iteration
    */
-  public startIteration(iteration: number): void {
+  public StartIteration(iteration: number): void {
     this.currentIteration = iteration;
     this.iterationStartTime = Date.now();
+  }
+
+  /** @deprecated Use {@link StartIteration}. */
+  public startIteration(iteration: number): void {
+    return this.StartIteration(iteration);
   }
 
   /**
    * End tracking current iteration and record metrics
    */
-  public endIteration(run: AnalysisRun, iteration: number): void {
+  public EndIteration(run: AnalysisRun, iteration: number): void {
     if (!run.iterationMetrics) {
       run.iterationMetrics = [];
     }
@@ -108,10 +123,15 @@ export class GuardrailsManager {
     this.iterationStartTime = undefined;
   }
 
+  /** @deprecated Use {@link EndIteration}. */
+  public endIteration(run: AnalysisRun, iteration: number): void {
+    return this.EndIteration(run, iteration);
+  }
+
   /**
    * Check all guardrails and return enforcement status
    */
-  public checkGuardrails(run: AnalysisRun): GuardrailCheckResult {
+  public CheckGuardrails(run: AnalysisRun): GuardrailCheckResult {
     // If guardrails disabled, allow continuation
     if (this.config.enabled === false) {
       return { canContinue: true };
@@ -334,10 +354,15 @@ export class GuardrailsManager {
     };
   }
 
+  /** @deprecated Use {@link CheckGuardrails}. */
+  public checkGuardrails(run: AnalysisRun): GuardrailCheckResult {
+    return this.CheckGuardrails(run);
+  }
+
   /**
    * Record guardrail enforcement in the run
    */
-  public recordEnforcement(run: AnalysisRun, result: GuardrailCheckResult): void {
+  public RecordEnforcement(run: AnalysisRun, result: GuardrailCheckResult): void {
     if (!result.warnings && !result.exceedances && result.canContinue) {
       return; // Nothing to record
     }
@@ -358,6 +383,11 @@ export class GuardrailsManager {
     if (result.warnings) {
       run.guardrailsEnforced.warnings.push(...result.warnings);
     }
+  }
+
+  /** @deprecated Use {@link RecordEnforcement}. */
+  public recordEnforcement(run: AnalysisRun, result: GuardrailCheckResult): void {
+    return this.RecordEnforcement(run, result);
   }
 
   /**
@@ -426,14 +456,19 @@ export class GuardrailsManager {
   /**
    * Get current elapsed time in seconds
    */
-  public getElapsedSeconds(): number {
+  public GetElapsedSeconds(): number {
     return (Date.now() - this.startTime) / 1000;
+  }
+
+  /** @deprecated Use {@link GetElapsedSeconds}. */
+  public getElapsedSeconds(): number {
+    return this.GetElapsedSeconds();
   }
 
   /**
    * Get current phase token budget (remaining tokens)
    */
-  public getPhaseTokenBudgetRemaining(phase: PhaseType): number | undefined {
+  public GetPhaseTokenBudgetRemaining(phase: PhaseType): number | undefined {
     if (!this.config.maxTokensPerPhase) return undefined;
 
     const limit = this.config.maxTokensPerPhase[phase];
@@ -442,5 +477,10 @@ export class GuardrailsManager {
     // This would need access to the current run to calculate remaining
     // For now, just return the limit
     return limit;
+  }
+
+  /** @deprecated Use {@link GetPhaseTokenBudgetRemaining}. */
+  public getPhaseTokenBudgetRemaining(phase: PhaseType): number | undefined {
+    return this.GetPhaseTokenBudgetRemaining(phase);
   }
 }

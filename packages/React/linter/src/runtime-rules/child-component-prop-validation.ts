@@ -1,4 +1,4 @@
-import { traverse, NodePath, levenshteinDistance } from '../lint-utils';
+import { traverse, NodePath, LevenshteinDistance } from '../lint-utils';
 import * as t from '@babel/types';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseLintRule } from '../lint-rule';
@@ -133,7 +133,7 @@ function findClosestPropName(
 ): { name: string; distance: number } | null {
   let bestMatch: { name: string; distance: number } | null = null;
   for (const name of validNames) {
-    const dist = levenshteinDistance(attrName, name);
+    const dist = LevenshteinDistance(attrName, name);
     if (dist <= 2 && (!bestMatch || dist < bestMatch.distance)) {
       bestMatch = { name, distance: dist };
     }

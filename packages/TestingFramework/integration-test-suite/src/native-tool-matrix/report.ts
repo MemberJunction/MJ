@@ -130,7 +130,7 @@ function summarizeOne(records: ProbeRecord[]): CellSummary {
 }
 
 /** Groups records by cell and summarizes each. Input order is irrelevant. */
-export function summarizeCells(records: ProbeRecord[]): CellSummary[] {
+export function SummarizeCells(records: ProbeRecord[]): CellSummary[] {
     const byCell = new Map<string, ProbeRecord[]>();
     for (const record of records) {
         const bucket = byCell.get(record.cellId);
@@ -141,6 +141,11 @@ export function summarizeCells(records: ProbeRecord[]): CellSummary[] {
         }
     }
     return [...byCell.values()].map(summarizeOne);
+}
+
+/** @deprecated Use {@link SummarizeCells}. */
+export function summarizeCells(records: ProbeRecord[]): CellSummary[] {
+    return SummarizeCells(records);
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -362,7 +367,7 @@ export interface ScorecardMeta {
 }
 
 /** Renders the whole scorecard. Sections are ordered by the question each answers. */
-export function renderScorecard(summaries: CellSummary[], meta: ScorecardMeta): string {
+export function RenderScorecard(summaries: CellSummary[], meta: ScorecardMeta): string {
     return [
         `# BaseLLM tool-calling matrix (\`${meta.label}\`)`,
         '',
@@ -378,4 +383,9 @@ export function renderScorecard(summaries: CellSummary[], meta: ScorecardMeta): 
         renderCostSection(summaries), '',
         renderErrorSection(summaries), ''
     ].join('\n');
+}
+
+/** @deprecated Use {@link RenderScorecard}. */
+export function renderScorecard(summaries: CellSummary[], meta: ScorecardMeta): string {
+    return RenderScorecard(summaries, meta);
 }

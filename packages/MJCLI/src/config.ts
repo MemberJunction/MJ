@@ -206,16 +206,19 @@ export const config = result?.config as MJConfig | undefined;
  * needs the raw object (a parsed config keeps only the keys its schema names) and the file path
  * (the resolution anchor for packages the host, not the CLI, declares).
  */
-export const getRawConfig = (): { config: Record<string, unknown> | undefined; configFilePath?: string } => ({
+export const GetRawConfig = (): { config: Record<string, unknown> | undefined; configFilePath?: string } => ({
   config: result?.config as Record<string, unknown> | undefined,
   configFilePath: result?.filepath || undefined,
 });
+
+/** @deprecated Use {@link GetRawConfig}. */
+export const getRawConfig = GetRawConfig;
 
 /**
  * Get validated config for commands that require database connection.
  * Throws error if config is invalid.
  */
-export const getValidatedConfig = (): MJConfig => {
+export const GetValidatedConfig = (): MJConfig => {
   const parsedConfig = mjConfigSchema.safeParse(result?.config);
   if (!parsedConfig.success) {
     const fieldEnvMap: Record<string, string> = {
@@ -242,21 +245,27 @@ export const getValidatedConfig = (): MJConfig => {
   return parsedConfig.data;
 };
 
+/** @deprecated Use {@link GetValidatedConfig}. */
+export const getValidatedConfig = GetValidatedConfig;
+
 /**
  * Get optional config for commands that don't require database connection.
  * Returns undefined if no config exists, or partial config if it exists.
  */
-export const getOptionalConfig = (): Partial<MJConfig> | undefined => {
+export const GetOptionalConfig = (): Partial<MJConfig> | undefined => {
   const parsedConfig = mjConfigSchemaOptional.safeParse(result?.config);
   return parsedConfig.success ? parsedConfig.data : undefined;
 };
+
+/** @deprecated Use {@link GetOptionalConfig}. */
+export const getOptionalConfig = GetOptionalConfig;
 
 /**
  * Legacy function for backward compatibility with codegen.
  * Validates and returns updated config.
  * Returns undefined silently if config is invalid (command will handle the error).
  */
-export const updatedConfig = (): MJConfig | undefined => {
+export const UpdatedConfig = (): MJConfig | undefined => {
   const freshSearchResult = explorer.search(process.cwd());
   // Merge fresh config with DEFAULT_CLI_CONFIG
   const freshMergedConfig: any = freshSearchResult?.config
@@ -268,6 +277,9 @@ export const updatedConfig = (): MJConfig | undefined => {
   return maybeConfig.success ? maybeConfig.data : undefined;
 };
 
+/** @deprecated Use {@link UpdatedConfig}. */
+export const updatedConfig = UpdatedConfig;
+
 /**
  * Builds a SkywayConfig from the MJ CLI config and optional overrides.
  *
@@ -277,7 +289,7 @@ export const updatedConfig = (): MJConfig | undefined => {
  * - Placeholder mapping (schemaPlaceholders, legacy mjSchema, flyway:defaultSchema)
  * - Baseline configuration
  */
-export const getSkywayConfig = async (
+export const GetSkywayConfig = async (
   mjConfig: MJConfig,
   tag?: string,
   schema?: string,
@@ -376,6 +388,9 @@ export const getSkywayConfig = async (
     Placeholders: Object.keys(placeholders).length > 0 ? placeholders : undefined,
   };
 };
+
+/** @deprecated Use {@link GetSkywayConfig}. */
+export const getSkywayConfig = GetSkywayConfig;
 
 /**
  * Creates the appropriate Skyway database provider based on the dialect.

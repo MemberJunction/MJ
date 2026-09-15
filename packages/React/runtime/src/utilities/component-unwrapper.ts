@@ -262,7 +262,7 @@ function coreUnwrapLogic(library: any, exportName: string, debug: boolean = fals
  * @param debug - Whether to log debug information
  * @returns The unwrapped export or undefined if not found
  */
-export function unwrapLibraryComponent(library: any, exportName: string, debug: boolean = false): any {
+export function UnwrapLibraryComponent(library: any, exportName: string, debug: boolean = false): any {
   try {
     return coreUnwrapLogic(library, exportName, debug);
   } catch (error: any) {
@@ -273,6 +273,11 @@ export function unwrapLibraryComponent(library: any, exportName: string, debug: 
   }
 }
 
+/** @deprecated Use {@link UnwrapLibraryComponent}. */
+export function unwrapLibraryComponent(library: any, exportName: string, debug: boolean = false): any {
+  return UnwrapLibraryComponent(library, exportName, debug);
+}
+
 /**
  * Unwraps multiple exports from a UMD library using varargs
  * Works with any type of export: components, utilities, objects, functions, etc.
@@ -280,7 +285,7 @@ export function unwrapLibraryComponent(library: any, exportName: string, debug: 
  * @param exportNames - Export names to unwrap (e.g., 'Button', 'utils', 'writeFile')
  * @returns Object with export names as keys and unwrapped values as values
  */
-export function unwrapLibraryComponents(
+export function UnwrapLibraryComponents(
   library: any,
   ...exportNames: string[]
 ): Record<string, any> {
@@ -370,6 +375,14 @@ export function unwrapLibraryComponents(
   return components;
 }
 
+/** @deprecated Use {@link UnwrapLibraryComponents}. */
+export function unwrapLibraryComponents(
+  library: any,
+  ...exportNames: string[]
+): Record<string, any> {
+  return UnwrapLibraryComponents(library, ...exportNames);
+}
+
 /**
  * Auto-detects and unwraps all components from a library
  * Uses PascalCase detection to identify likely component exports
@@ -377,7 +390,7 @@ export function unwrapLibraryComponents(
  * @param debug - Whether to log debug information
  * @returns Object with all detected components
  */
-export function unwrapAllLibraryComponents(library: any, debug: boolean = false): Record<string, any> {
+export function UnwrapAllLibraryComponents(library: any, debug: boolean = false): Record<string, any> {
   const components: Record<string, any> = {};
   
   // Handle simple function/class case
@@ -473,9 +486,17 @@ export function unwrapAllLibraryComponents(library: any, debug: boolean = false)
   return components;
 }
 
+/** @deprecated Use {@link UnwrapAllLibraryComponents}. */
+export function unwrapAllLibraryComponents(library: any, debug: boolean = false): Record<string, any> {
+  return UnwrapAllLibraryComponents(library, debug);
+}
+
 // Legacy exports for backward compatibility
-export const unwrapComponent = unwrapLibraryComponent;
-export const unwrapComponents = (library: any, exportNames: string[], debug: boolean = false) => {
-  return unwrapLibraryComponents(library, ...exportNames, debug as any);
+export const unwrapComponent = UnwrapLibraryComponent;
+export const UnwrapComponents = (library: any, exportNames: string[], debug: boolean = false) => {
+  return UnwrapLibraryComponents(library, ...exportNames, debug as any);
 };
-export const unwrapAllComponents = unwrapAllLibraryComponents;
+
+/** @deprecated Use {@link UnwrapComponents}. */
+export const unwrapComponents = UnwrapComponents;
+export const unwrapAllComponents = UnwrapAllLibraryComponents;

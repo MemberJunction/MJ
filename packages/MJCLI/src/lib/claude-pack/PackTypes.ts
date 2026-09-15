@@ -96,8 +96,13 @@ export interface InstallResult {
 }
 
 /** Empty action log helper — exported to avoid `{} as ActionLog` casts. */
-export function emptyActionLog(): ActionLog {
+export function EmptyActionLog(): ActionLog {
   return { added: [], updated: [], skipped: [], errors: [] };
+}
+
+/** @deprecated Use {@link EmptyActionLog}. */
+export function emptyActionLog(): ActionLog {
+  return EmptyActionLog();
 }
 
 /**
@@ -114,9 +119,14 @@ const OUTCOME_TO_BUCKET: Record<FileOutcome, keyof ActionLog> = {
 };
 
 /** Apply a single file's outcome to the rolling action log. */
-export function recordOutcome(log: ActionLog, result: FileMergeResult): void {
+export function RecordOutcome(log: ActionLog, result: FileMergeResult): void {
   const bucket = OUTCOME_TO_BUCKET[result.outcome];
   log[bucket].push(result.reason ? `${result.path} (${result.reason})` : result.path);
+}
+
+/** @deprecated Use {@link RecordOutcome}. */
+export function recordOutcome(log: ActionLog, result: FileMergeResult): void {
+  return RecordOutcome(log, result);
 }
 
 // ---------------------------------------------------------------------------

@@ -32,7 +32,7 @@ export interface RemoteOperationEntityDescriptor {
  * 3. An OpenApp schema matching the OperationKey's namespace (anchored heuristic).
  * 4. Fallback to mjCoreSchema ('__mj').
  */
-export function resolveRemoteOperationSchema(
+export function ResolveRemoteOperationSchema(
     op: MJRemoteOperationEntity & { SchemaName?: string },
     entities: ReadonlyArray<RemoteOperationEntityDescriptor>,
     allSchemas: string[],
@@ -86,6 +86,16 @@ export function resolveRemoteOperationSchema(
     return mjCoreSchema;
 }
 
+/** @deprecated Use {@link ResolveRemoteOperationSchema}. */
+export function resolveRemoteOperationSchema(
+    op: MJRemoteOperationEntity & { SchemaName?: string },
+    entities: ReadonlyArray<RemoteOperationEntityDescriptor>,
+    allSchemas: string[],
+    mjCoreSchema: string = '__mj',
+): string {
+    return ResolveRemoteOperationSchema(op, entities, allSchemas, mjCoreSchema);
+}
+
 /**
  * Generates the strongly-typed base class for each `MJ: Remote Operations` row — the CodeGen half of the
  * Remote Operations primitive (the typed peer of generated entity subclasses). Each row becomes a subclass
@@ -106,13 +116,23 @@ export class RemoteOperationGeneratorBase {
     /**
      * Resolves the logical schema that an operation belongs to.
      */
+    public ResolveOperationSchema(
+        op: MJRemoteOperationEntity & { SchemaName?: string },
+        entities: ReadonlyArray<RemoteOperationEntityDescriptor>,
+        allSchemas: string[],
+        mjCoreSchema: string = '__mj',
+    ): string {
+        return ResolveRemoteOperationSchema(op, entities, allSchemas, mjCoreSchema);
+    }
+
+    /** @deprecated Use {@link ResolveOperationSchema}. */
     public resolveOperationSchema(
         op: MJRemoteOperationEntity & { SchemaName?: string },
         entities: ReadonlyArray<RemoteOperationEntityDescriptor>,
         allSchemas: string[],
         mjCoreSchema: string = '__mj',
     ): string {
-        return resolveRemoteOperationSchema(op, entities, allSchemas, mjCoreSchema);
+        return this.ResolveOperationSchema(op, entities, allSchemas, mjCoreSchema);
     }
 
     /**
@@ -120,7 +140,7 @@ export class RemoteOperationGeneratorBase {
      * @param remoteOps All `MJ: Remote Operations` rows (any status; non-Active rows are skipped).
      * @param directory The target output directory (resolved from the `RemoteOperations` output config).
      */
-    public async generateRemoteOperations(remoteOps: MJRemoteOperationEntity[], directory: string): Promise<boolean> {
+    public async GenerateRemoteOperations(remoteOps: MJRemoteOperationEntity[], directory: string): Promise<boolean> {
         try {
             const filePath = path.join(directory, 'remote_operations.ts');
 
@@ -132,7 +152,7 @@ export class RemoteOperationGeneratorBase {
             const anyBody = active.some((o) => this.hasGeneratedBody(o));
             const header = this.buildFileHeader(active, anyBody);
             const typeDefs = this.collectTypeDefinitions(active);
-            const operations = active.map((o) => this.generateSingleOperation(o)).join('\n');
+            const operations = active.map((o) => this.GenerateSingleOperation(o)).join('\n');
 
             mkdirSync(directory, { recursive: true });
             fs.writeFileSync(filePath, header + typeDefs + operations + '\n');
@@ -141,6 +161,11 @@ export class RemoteOperationGeneratorBase {
             logError('Error generating remote operations', e);
             return false;
         }
+    }
+
+    /** @deprecated Use {@link GenerateRemoteOperations}. */
+    public async generateRemoteOperations(remoteOps: MJRemoteOperationEntity[], directory: string): Promise<boolean> {
+        return this.GenerateRemoteOperations(remoteOps, directory);
     }
 
     /** True when the row carries an approved, generated body (so the emitted class is complete + registered). */
@@ -337,7 +362,7 @@ ${importLines}
     }
 
     /** Emits one operation: its TInput/TOutput type definitions (verbatim) followed by the class. */
-    public generateSingleOperation(op: MJRemoteOperationEntity): string {
+    public GenerateSingleOperation(op: MJRemoteOperationEntity): string {
         const className = this.operationClassName(op.OperationKey);
         const inputName = op.InputTypeName || 'unknown';
         const outputName = op.OutputTypeName || 'unknown';
@@ -377,6 +402,11 @@ export class ${className} extends BaseRemotableOperation<${inputName}, ${outputN
 ${members}
 }
 `;
+    }
+
+    /** @deprecated Use {@link GenerateSingleOperation}. */
+    public generateSingleOperation(op: MJRemoteOperationEntity): string {
+        return this.GenerateSingleOperation(op);
     }
 
     /** The readonly members common to every operation class, derived from the metadata columns. */

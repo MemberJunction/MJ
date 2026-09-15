@@ -9,7 +9,7 @@
  * (§3.3).
  */
 import type { ExpandedMatrix, MatrixCell, MatrixModel, MatrixSpec, ProbeScenario, ProbeToolMode, SkippedCell } from './types';
-import { getScenario, PROBE_SCENARIOS } from './scenarios';
+import { GetScenario, PROBE_SCENARIOS } from './scenarios';
 
 /**
  * The default model set: one model per generation per developer, chosen so each row answers a
@@ -79,8 +79,13 @@ const THINKING_AXIS_FORMAT = 'Any';
 const THINKING_AXIS_SCENARIOS = new Set(['single-call', 'envelope']);
 
 /** Builds the stable cell id used as the scorecard key and the JSONL join key. */
-export function cellId(model: MatrixModel, scenarioId: string, mode: ProbeToolMode, format: string, effortLevel: string | null): string {
+export function CellId(model: MatrixModel, scenarioId: string, mode: ProbeToolMode, format: string, effortLevel: string | null): string {
     return [model.apiName, scenarioId, mode, format, effortLevel ?? 'default'].join(' × ');
+}
+
+/** @deprecated Use {@link CellId}. */
+export function cellId(model: MatrixModel, scenarioId: string, mode: ProbeToolMode, format: string, effortLevel: string | null): string {
+    return CellId(model, scenarioId, mode, format, effortLevel);
 }
 
 /**
@@ -112,18 +117,18 @@ function skipReason(scenario: ProbeScenario, mode: ProbeToolMode, effortLevel: s
 }
 
 /** Expands the spec into the cells to run plus the combinations the rules dropped. */
-export function expandMatrix(spec: MatrixSpec): ExpandedMatrix {
+export function ExpandMatrix(spec: MatrixSpec): ExpandedMatrix {
     const cells: MatrixCell[] = [];
     const skipped: SkippedCell[] = [];
 
     for (const model of spec.models) {
         const effortLevels = model.effortLevels ?? [null];
         for (const scenarioId of spec.scenarioIds) {
-            const scenario = getScenario(scenarioId);
+            const scenario = GetScenario(scenarioId);
             for (const toolMode of spec.toolModes) {
                 for (const responseFormat of spec.responseFormats) {
                     for (const effortLevel of effortLevels) {
-                        const id = cellId(model, scenarioId, toolMode, responseFormat, effortLevel);
+                        const id = CellId(model, scenarioId, toolMode, responseFormat, effortLevel);
                         const reason = skipReason(scenario, toolMode, effortLevel, responseFormat);
                         if (reason) {
                             skipped.push({ id, reason });
@@ -136,6 +141,11 @@ export function expandMatrix(spec: MatrixSpec): ExpandedMatrix {
         }
     }
     return { cells, skipped };
+}
+
+/** @deprecated Use {@link ExpandMatrix}. */
+export function expandMatrix(spec: MatrixSpec): ExpandedMatrix {
+    return ExpandMatrix(spec);
 }
 
 /** A crude characters-to-tokens ratio. Only ever used for the pre-flight estimate, never for billing. */
@@ -160,12 +170,12 @@ export interface MatrixManifest {
 }
 
 /** Builds the manifest. Sized off the real scenario text and tool schemas, not a guessed average. */
-export function buildManifest(expanded: ExpandedMatrix, reps: number): MatrixManifest {
+export function BuildManifest(expanded: ExpandedMatrix, reps: number): MatrixManifest {
     const perModel = new Map<string, { label: string; apiName: string; calls: number; estimatedTokens: number }>();
     let estimatedPromptTokens = 0;
 
     for (const cell of expanded.cells) {
-        const scenario = getScenario(cell.scenarioId);
+        const scenario = GetScenario(cell.scenarioId);
         const prompt = estimatePromptTokens(scenario, cell.toolMode !== 'no-tools');
         estimatedPromptTokens += prompt * reps;
 
@@ -185,4 +195,9 @@ export function buildManifest(expanded: ExpandedMatrix, reps: number): MatrixMan
         estimatedCompletionTokens: callCount * ESTIMATED_COMPLETION_TOKENS,
         perModel: [...perModel.values()]
     };
+}
+
+/** @deprecated Use {@link BuildManifest}. */
+export function buildManifest(expanded: ExpandedMatrix, reps: number): MatrixManifest {
+    return BuildManifest(expanded, reps);
 }

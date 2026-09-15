@@ -19,9 +19,9 @@
 import { AIConfig, OrganicKeyDetectionConfig } from '../types/config.js';
 import { DatabaseDocumentation } from '../types/state.js';
 import { OrganicKeyCluster, OrganicKeyDetectionPhase } from '../types/organic-keys.js';
-import { runSemanticPhase, ProgressCallback } from './SemanticPhase.js';
-import { runStructuralPhase } from './StructuralPhase.js';
-import { compose } from './Composer.js';
+import { RunSemanticPhase, ProgressCallback } from './SemanticPhase.js';
+import { RunStructuralPhase } from './StructuralPhase.js';
+import { Compose } from './Composer.js';
 import { DetectedOrganicKeysOutput } from './OrganicKeyTranslator.js';
 
 export interface OrganicKeyDetectionResult {
@@ -53,17 +53,17 @@ export class OrganicKeyDetector {
         private readonly aiConfig: AIConfig,
     ) {}
 
-    public async detect(
+    public async Detect(
         state: DatabaseDocumentation,
         opts: DetectorRunOptions = {},
     ): Promise<OrganicKeyDetectionResult> {
         const progress = opts.onProgress ?? (() => {});
         const startedAt = new Date().toISOString();
 
-        const a = await runSemanticPhase(state, this.config, this.aiConfig, progress);
-        const b = runStructuralPhase(state, a.clusters);
+        const a = await RunSemanticPhase(state, this.config, this.aiConfig, progress);
+        const b = RunStructuralPhase(state, a.clusters);
         progress(`structural: ${b.summary.transitiveBridgesFound} bridges`);
-        const c = compose(a.clusters, b.bridges);
+        const c = Compose(a.clusters, b.bridges);
         progress(`compose: emitted ${c.emitted}/${a.clusters.length} clusters (${c.summary.outputKeys} keys, ${c.summary.outputSpokes} spokes)`);
 
         // Net additional clusters produced by the concept-name split (sub-clusters created
@@ -105,6 +105,14 @@ export class OrganicKeyDetector {
                 transitiveBridges: b.summary.transitiveBridgesFound,
             },
         };
+    }
+
+    /** @deprecated Use {@link Detect}. */
+    public async detect(
+        state: DatabaseDocumentation,
+        opts: DetectorRunOptions = {},
+    ): Promise<OrganicKeyDetectionResult> {
+        return this.Detect(state, opts);
     }
 
     private estimateCost(inputTokens: number, outputTokens: number): number {

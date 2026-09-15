@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { SQLServerDialect, PostgreSQLDialect } from '@memberjunction/sql-dialect';
 import { SQLParser } from '@memberjunction/sql-parser';
-import { buildBroadRowFilterSQL } from '../Database/materializationBroadRender';
+import { BuildBroadRowFilterSQL } from '../Database/materializationBroadRender';
 
 /**
  * Phase 2d — broad-render (plan §6.4). Strips the row-filter WHERE predicate(s) so the
@@ -21,13 +21,13 @@ describe('buildBroadRowFilterSQL', () => {
     };
 
     it('removes the sole equality predicate → no WHERE remains', () => {
-        const r = buildBroadRowFilterSQL("SELECT ID, Status FROM Orders WHERE Status = 'Active'", ['Status'], tsql);
+        const r = BuildBroadRowFilterSQL("SELECT ID, Status FROM Orders WHERE Status = 'Active'", ['Status'], tsql);
         expect(r.removedCount).toBe(1);
         expect(whereJson(r.sql)).toBe('null');
     });
 
     it('removes only the row-filter conjunct, keeps the others', () => {
-        const r = buildBroadRowFilterSQL(
+        const r = BuildBroadRowFilterSQL(
             "SELECT ID, Status FROM Orders WHERE Status = 'Active' AND ChapterID = 42",
             ['Status'],
             tsql,
@@ -39,13 +39,13 @@ describe('buildBroadRowFilterSQL', () => {
     });
 
     it('removes an IN-list row-filter predicate', () => {
-        const r = buildBroadRowFilterSQL("SELECT ID, Status FROM Orders WHERE Status IN ('A','B','C')", ['Status'], tsql);
+        const r = BuildBroadRowFilterSQL("SELECT ID, Status FROM Orders WHERE Status IN ('A','B','C')", ['Status'], tsql);
         expect(r.removedCount).toBe(1);
         expect(whereJson(r.sql)).toBe('null');
     });
 
     it('removes multiple row-filter columns', () => {
-        const r = buildBroadRowFilterSQL(
+        const r = BuildBroadRowFilterSQL(
             "SELECT ID, Status, Region FROM Orders WHERE Status = 'Active' AND Region = 'East'",
             ['Status', 'Region'],
             tsql,
@@ -55,7 +55,7 @@ describe('buildBroadRowFilterSQL', () => {
     });
 
     it('keeps a non-row-filter conjunct while removing the row-filter one (order-independent)', () => {
-        const r = buildBroadRowFilterSQL(
+        const r = BuildBroadRowFilterSQL(
             "SELECT ID, Status, Region FROM Orders WHERE Region = 'East' AND Status = 'Active'",
             ['Status'],
             tsql,
@@ -67,47 +67,47 @@ describe('buildBroadRowFilterSQL', () => {
     });
 
     it('removes a range (>) row-filter predicate', () => {
-        const r = buildBroadRowFilterSQL('SELECT ID, Score FROM Members WHERE Score > 100', ['Score'], tsql);
+        const r = BuildBroadRowFilterSQL('SELECT ID, Score FROM Members WHERE Score > 100', ['Score'], tsql);
         expect(r.removedCount).toBe(1);
         expect(whereJson(r.sql)).toBe('null');
     });
 
     it('PostgreSQL dialect: strips correctly via the {expr:{value}} column shape', () => {
-        const r = buildBroadRowFilterSQL("SELECT ID, Status FROM Orders WHERE Status = 'Active'", ['Status'], pg);
+        const r = BuildBroadRowFilterSQL("SELECT ID, Status FROM Orders WHERE Status = 'Active'", ['Status'], pg);
         expect(r.removedCount).toBe(1);
         expect(whereJson(r.sql, pg)).toBe('null');
     });
 
     it('no matching column → unchanged, removedCount 0', () => {
         const sql = "SELECT ID, Status FROM Orders WHERE ChapterID = 42";
-        const r = buildBroadRowFilterSQL(sql, ['Status'], tsql);
+        const r = BuildBroadRowFilterSQL(sql, ['Status'], tsql);
         expect(r.removedCount).toBe(0);
         expect(r.sql).toBe(sql);
     });
 
     it('empty column list → unchanged no-op', () => {
         const sql = "SELECT ID FROM Orders WHERE Status = 'Active'";
-        const r = buildBroadRowFilterSQL(sql, [], tsql);
+        const r = BuildBroadRowFilterSQL(sql, [], tsql);
         expect(r.removedCount).toBe(0);
         expect(r.sql).toBe(sql);
     });
 
     it('does NOT remove a column=column predicate (value side is not a literal)', () => {
         const sql = 'SELECT o.ID FROM Orders o WHERE o.Status = o.PrevStatus';
-        const r = buildBroadRowFilterSQL(sql, ['Status'], tsql);
+        const r = BuildBroadRowFilterSQL(sql, ['Status'], tsql);
         expect(r.removedCount).toBe(0);
     });
 
     it('a query with no WHERE is returned unchanged', () => {
         const sql = 'SELECT ID, Status FROM Orders';
-        const r = buildBroadRowFilterSQL(sql, ['Status'], tsql);
+        const r = BuildBroadRowFilterSQL(sql, ['Status'], tsql);
         expect(r.removedCount).toBe(0);
         expect(r.sql).toBe(sql);
     });
 
     describe('exact-count guard (expectedRemovals)', () => {
         it('ambiguous is false without expectedRemovals (legacy strip-all behavior)', () => {
-            const r = buildBroadRowFilterSQL(
+            const r = BuildBroadRowFilterSQL(
                 "SELECT ID, Region FROM Orders WHERE Region = 'East' AND Region <> 'Internal'",
                 ['Region'],
                 tsql,
@@ -118,7 +118,7 @@ describe('buildBroadRowFilterSQL', () => {
 
         it('refuses (ambiguous) when a STATIC predicate on the filter column inflates the count', () => {
             const sql = "SELECT ID, Region FROM Orders WHERE Region = 'East' AND Region <> 'Internal'";
-            const r = buildBroadRowFilterSQL(sql, ['Region'], tsql, 1);
+            const r = BuildBroadRowFilterSQL(sql, ['Region'], tsql, 1);
             expect(r.removedCount).toBe(2); // one parameter predicate + one static predicate matched
             expect(r.ambiguous).toBe(true);
             expect(r.sql).toBe(sql); // fail-safe: original SQL returned unmodified when ambiguous
@@ -126,14 +126,14 @@ describe('buildBroadRowFilterSQL', () => {
 
         it('refuses (ambiguous) when a same-named column on another table inflates the count (qualifier-blind)', () => {
             const sql = "SELECT o.ID FROM Orders o JOIN Chapters c ON c.ID = o.ChapterID WHERE o.Region = 'East' AND c.Region = 'X'";
-            const r = buildBroadRowFilterSQL(sql, ['Region'], tsql, 1);
+            const r = BuildBroadRowFilterSQL(sql, ['Region'], tsql, 1);
             expect(r.removedCount).toBe(2);
             expect(r.ambiguous).toBe(true);
             expect(r.sql).toBe(sql);
         });
 
         it('accepts (not ambiguous) when the match count equals expectedRemovals', () => {
-            const r = buildBroadRowFilterSQL(
+            const r = BuildBroadRowFilterSQL(
                 "SELECT ID, Status, Region FROM Orders WHERE Status = 'Active' AND Region = 'East'",
                 ['Status', 'Region'],
                 tsql,
@@ -146,7 +146,7 @@ describe('buildBroadRowFilterSQL', () => {
 
         it('flags ambiguous when expected but zero matched (parameter predicate not found)', () => {
             const sql = 'SELECT ID, Status FROM Orders WHERE ChapterID = 42';
-            const r = buildBroadRowFilterSQL(sql, ['Status'], tsql, 1);
+            const r = BuildBroadRowFilterSQL(sql, ['Status'], tsql, 1);
             expect(r.removedCount).toBe(0);
             expect(r.ambiguous).toBe(true);
             expect(r.sql).toBe(sql);

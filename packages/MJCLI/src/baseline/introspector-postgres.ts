@@ -6,7 +6,7 @@
  */
 
 import type { QueryRunner } from './connection';
-import { stableSortBy } from './util';
+import { StableSortBy } from './util';
 import type {
   CheckConstraintDef,
   ColumnDef,
@@ -26,7 +26,7 @@ interface Progress {
   onPhase?(phase: string, count?: number): void;
 }
 
-export async function introspectPostgres(db: QueryRunner, progress: Progress = {}): Promise<SchemaSnapshot> {
+export async function IntrospectPostgres(db: QueryRunner, progress: Progress = {}): Promise<SchemaSnapshot> {
   progress.onPhase?.('schemas');
   const schemas = await db.query<{ schema_name: string }>(`
     SELECT nspname AS schema_name
@@ -53,13 +53,13 @@ export async function introspectPostgres(db: QueryRunner, progress: Progress = {
 
   return {
     dialect: 'postgres',
-    schemas: stableSortBy(schemas.map((s) => ({ name: s.schema_name })), (s) => s.name.toLowerCase()),
-    tables: stableSortBy(tables, (t) => `${t.schema}.${t.name}`.toLowerCase()),
-    views: stableSortBy(views, (v) => `${v.schema}.${v.name}`.toLowerCase()),
-    procedures: stableSortBy(procedures, (r) => `${r.schema}.${r.name}`.toLowerCase()),
-    functions: stableSortBy(functions, (r) => `${r.schema}.${r.name}`.toLowerCase()),
-    triggers: stableSortBy(triggers, (t) => `${t.schema}.${t.name}`.toLowerCase()),
-    sequences: stableSortBy(sequences, (s) => `${s.schema}.${s.name}`.toLowerCase()),
+    schemas: StableSortBy(schemas.map((s) => ({ name: s.schema_name })), (s) => s.name.toLowerCase()),
+    tables: StableSortBy(tables, (t) => `${t.schema}.${t.name}`.toLowerCase()),
+    views: StableSortBy(views, (v) => `${v.schema}.${v.name}`.toLowerCase()),
+    procedures: StableSortBy(procedures, (r) => `${r.schema}.${r.name}`.toLowerCase()),
+    functions: StableSortBy(functions, (r) => `${r.schema}.${r.name}`.toLowerCase()),
+    triggers: StableSortBy(triggers, (t) => `${t.schema}.${t.name}`.toLowerCase()),
+    sequences: StableSortBy(sequences, (s) => `${s.schema}.${s.name}`.toLowerCase()),
     // PG introspection of UDTs / extended-property analogs is future work — the
     // MSSQL → PG converter currently doesn't translate `sp_addextendedproperty`
     // or `CREATE TYPE AS TABLE`, so returning empty here keeps the snapshot
@@ -72,6 +72,11 @@ export async function introspectPostgres(db: QueryRunner, progress: Progress = {
     roleMemberships: [],
     permissions: [],
   };
+}
+
+/** @deprecated Use {@link IntrospectPostgres}. */
+export async function introspectPostgres(db: QueryRunner, progress: Progress = {}): Promise<SchemaSnapshot> {
+ return IntrospectPostgres(db, progress);
 }
 
 async function readTables(db: QueryRunner): Promise<TableDef[]> {
@@ -180,7 +185,7 @@ async function readTables(db: QueryRunner): Promise<TableDef[]> {
 
   const tables: TableDef[] = [];
   for (const t of tableRows) {
-    const columns: ColumnDef[] = stableSortBy(
+    const columns: ColumnDef[] = StableSortBy(
       columnRows.filter((c) => c.schema_name === t.schema_name && c.table_name === t.table_name),
       (c) => String(c.ordinal).padStart(6, '0'),
     ).map((c) => ({
@@ -204,21 +209,21 @@ async function readTables(db: QueryRunner): Promise<TableDef[]> {
       ? { name: pkRow.constraint_name, columns: pkRow.column_names, clustered: false }
       : undefined;
 
-    const uniqueConstraints: UniqueConstraintDef[] = stableSortBy(
+    const uniqueConstraints: UniqueConstraintDef[] = StableSortBy(
       myConstraints
         .filter((r) => r.contype === 'u' && r.column_names)
         .map((r) => ({ name: r.constraint_name, columns: r.column_names!, clustered: false })),
       (u) => u.name.toLowerCase(),
     );
 
-    const checks: CheckConstraintDef[] = stableSortBy(
+    const checks: CheckConstraintDef[] = StableSortBy(
       myConstraints
         .filter((r) => r.contype === 'c')
         .map((r) => ({ name: r.constraint_name, expression: r.condef })),
       (c) => c.name.toLowerCase(),
     );
 
-    const indexes: IndexDef[] = stableSortBy(
+    const indexes: IndexDef[] = StableSortBy(
       indexRows
         .filter((r) => r.schema_name === t.schema_name && r.table_name === t.table_name)
         // Skip indexes that back unique/PK constraints (they appear as constraints already)
@@ -234,7 +239,7 @@ async function readTables(db: QueryRunner): Promise<TableDef[]> {
       (i) => i.name.toLowerCase(),
     );
 
-    const foreignKeys: ForeignKeyDef[] = stableSortBy(
+    const foreignKeys: ForeignKeyDef[] = StableSortBy(
       fkRows
         .filter((r) => r.schema_name === t.schema_name && r.table_name === t.table_name)
         .map((r) => ({

@@ -50,7 +50,7 @@ export interface LoadedCheckModulesSummary {
  * produce an actionable report line, and the driver's own "Unknown integration check
  * bundle" oracle stays the backstop for anything that truly never registered.
  */
-export async function loadCheckModules(specifiers: string[], cwd: string = process.cwd()): Promise<LoadedCheckModulesSummary> {
+export async function LoadCheckModules(specifiers: string[], cwd: string = process.cwd()): Promise<LoadedCheckModulesSummary> {
     const before = new Set(IntegrationCheckRegistry.Instance.GetBundleNames());
     const summary: LoadedCheckModulesSummary = { loaded: [], failed: [], newBundles: [] };
 
@@ -76,4 +76,9 @@ export async function loadCheckModules(specifiers: string[], cwd: string = proce
 
     summary.newBundles = IntegrationCheckRegistry.Instance.GetBundleNames().filter(b => !before.has(b));
     return summary;
+}
+
+/** @deprecated Use {@link LoadCheckModules}. */
+export async function loadCheckModules(specifiers: string[], cwd: string = process.cwd()): Promise<LoadedCheckModulesSummary> {
+    return LoadCheckModules(specifiers, cwd);
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { canonicalJSONStringify, deepEqualJSON } from '../Misc/util';
+import { CanonicalJSONStringify, DeepEqualJSON } from '../Misc/util';
 import { ManageMetadataBase } from '../Database/manage-metadata';
 import type { CodeGenConnection, CodeGenQueryResult } from '../Database/codeGenDatabaseProvider';
 import { SQLServerDialect } from '@memberjunction/sql-dialect';
@@ -47,8 +47,8 @@ describe('category-info-canonical (T7)', () => {
             const obj1 = { z: 1, a: { y: 2, b: 3 }, m: [ { beta: 2, alpha: 1 } ] };
             const obj2 = { a: { b: 3, y: 2 }, m: [ { alpha: 1, beta: 2 } ], z: 1 };
 
-            const str1 = canonicalJSONStringify(obj1, 2);
-            const str2 = canonicalJSONStringify(obj2, 2);
+            const str1 = CanonicalJSONStringify(obj1, 2);
+            const str2 = CanonicalJSONStringify(obj2, 2);
 
             expect(str1).toBe(str2);
             // Verify keys are alphabetically sorted in JSON
@@ -62,10 +62,10 @@ describe('category-info-canonical (T7)', () => {
             const obj2 = { nested: { y: false, x: true }, baz: 123, foo: 'bar' };
             const obj3 = { nested: { y: true, x: true }, baz: 123, foo: 'bar' };
 
-            expect(deepEqualJSON(obj1, obj2)).toBe(true);
-            expect(deepEqualJSON(obj1, obj3)).toBe(false);
-            expect(deepEqualJSON(null, null)).toBe(true);
-            expect(deepEqualJSON(null, {})).toBe(false);
+            expect(DeepEqualJSON(obj1, obj2)).toBe(true);
+            expect(DeepEqualJSON(obj1, obj3)).toBe(false);
+            expect(DeepEqualJSON(null, null)).toBe(true);
+            expect(DeepEqualJSON(null, {})).toBe(false);
         });
     });
 

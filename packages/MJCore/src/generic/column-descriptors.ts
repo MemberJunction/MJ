@@ -98,11 +98,56 @@ export class MJColumnDescriptor extends ColumnDescriptor {
  * Most consumers don't need this — it's specific to the grid renderer.
  */
 export class GridColumnDescriptor extends MJColumnDescriptor {
-    visible: boolean = true;
-    sortable: boolean = true;
-    resizable: boolean = true;
-    reorderable: boolean = true;
-    order: number = 0;
+    Visible: boolean = true;
+
+    /** @deprecated Use {@link Visible}. */
+    get visible(): boolean {
+        return this.Visible;
+    }
+    /** @deprecated Use {@link Visible}. */
+    set visible(value: boolean) {
+        this.Visible = value;
+    }
+    Sortable: boolean = true;
+
+    /** @deprecated Use {@link Sortable}. */
+    get sortable(): boolean {
+        return this.Sortable;
+    }
+    /** @deprecated Use {@link Sortable}. */
+    set sortable(value: boolean) {
+        this.Sortable = value;
+    }
+    Resizable: boolean = true;
+
+    /** @deprecated Use {@link Resizable}. */
+    get resizable(): boolean {
+        return this.Resizable;
+    }
+    /** @deprecated Use {@link Resizable}. */
+    set resizable(value: boolean) {
+        this.Resizable = value;
+    }
+    Reorderable: boolean = true;
+
+    /** @deprecated Use {@link Reorderable}. */
+    get reorderable(): boolean {
+        return this.Reorderable;
+    }
+    /** @deprecated Use {@link Reorderable}. */
+    set reorderable(value: boolean) {
+        this.Reorderable = value;
+    }
+    Order: number = 0;
+
+    /** @deprecated Use {@link Order}. */
+    get order(): number {
+        return this.Order;
+    }
+    /** @deprecated Use {@link Order}. */
+    set order(value: number) {
+        this.Order = value;
+    }
     align?: 'left' | 'center' | 'right';
     pinned?: 'left' | 'right' | null;
     minWidth?: number;

@@ -1,4 +1,4 @@
-import { traverse, NodePath, createViolation, truncateCode } from '../lint-utils';
+import { traverse, NodePath, CreateViolation, TruncateCode } from '../lint-utils';
 import * as t from '@babel/types';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseLintRule } from '../lint-rule';
@@ -58,7 +58,7 @@ export class OverflowHiddenOnLayoutContainerRule extends BaseLintRule {
           return;
         }
 
-        violations.push(createViolation(
+        violations.push(CreateViolation(
           'overflow-hidden-on-layout-container',
           'medium',
           path.node,
@@ -66,7 +66,7 @@ export class OverflowHiddenOnLayoutContainerRule extends BaseLintRule {
           `(with ${describeLayoutIndicator(props)}). This creates an invisible clipping ` +
           `boundary that blocks scrolling for child content like DataGrid, tables, and ` +
           `lists. The Angular host already manages scrolling via overflow: auto.`,
-          truncateCode(formatStyleSnippet(props), 100),
+          TruncateCode(formatStyleSnippet(props), 100),
           {
             text: `Use overflow: 'auto' to allow child scrolling, or remove the overflow property entirely.`,
             example:

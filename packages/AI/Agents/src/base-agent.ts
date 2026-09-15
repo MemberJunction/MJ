@@ -12,10 +12,10 @@
  */
 
 import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, FileStorageEngineBase, MJAISkillEntity, MJEnvironmentEntityExtended, MJConversationSkillEntity } from '@memberjunction/core-entities';
-import { buildActionToolSet, filterDeclarableActions, sanitizeToolName } from './native-tools/action-tool-builder';
-import { buildNativeToolSet, SUB_AGENT_TOOL_PREFIX, type NativeToolBinding } from './native-tools/control-tools';
-import { buildAssistantToolCallTurn, buildToolResultTurn, compactToolResultContent, type NativeToolResult } from './native-tools/tool-result-turns';
-import { looksLikeLoopEnvelope } from './native-tools/dual-channel';
+import { BuildActionToolSet, FilterDeclarableActions, SanitizeToolName } from './native-tools/action-tool-builder';
+import { BuildNativeToolSet, SUB_AGENT_TOOL_PREFIX, type NativeToolBinding } from './native-tools/control-tools';
+import { BuildAssistantToolCallTurn, BuildToolResultTurn, CompactToolResultContent, type NativeToolResult } from './native-tools/tool-result-turns';
+import { LooksLikeLoopEnvelope } from './native-tools/dual-channel';
 import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase } from '@memberjunction/core';
 import { AgentRunWatchdog } from './agent-run-watchdog';
@@ -51,7 +51,7 @@ import { SelectRealtimeVendorForModel } from './realtime/realtime-vendor-resolut
 import { RealtimeClientSessionService, PrepareClientSessionInput, WarnOnUnmatchedProviderVoice } from './realtime/realtime-client-session-service';
 import { BuildRealtimeAgentFraming } from './realtime/realtime-tool-broker';
 import { RealtimeRecordingController, RealtimeRecordingMedia } from './realtime/realtime-recording-capture';
-import { resolveRecordingStorageAccountID, storeRealtimeRecording } from './realtime/realtime-recording-store';
+import { ResolveRecordingStorageAccountID, StoreRealtimeRecording } from './realtime/realtime-recording-store';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
@@ -599,11 +599,16 @@ export class BaseAgent {
      * }]);
      * ```
      */
-    public promoteMediaOutputs(mediaOutputs: MediaOutput[]): void {
+    public PromoteMediaOutputs(mediaOutputs: MediaOutput[]): void {
         if (mediaOutputs && mediaOutputs.length > 0) {
             this._mediaOutputs.push(...mediaOutputs);
             this.logStatus(`📎 Promoted ${mediaOutputs.length} media output(s) to agent results`, true);
         }
+    }
+
+    /** @deprecated Use {@link PromoteMediaOutputs}. */
+    public promoteMediaOutputs(mediaOutputs: MediaOutput[]): void {
+        return this.PromoteMediaOutputs(mediaOutputs);
     }
 
     /**
@@ -2792,7 +2797,7 @@ export class BaseAgent {
 
             // Storage: recording provider, else attachment provider; then that provider's first account.
             const storageAccountId = params.contextUser
-                ? await resolveRecordingStorageAccountID(agent, params.contextUser, params.provider || this._activeProvider)
+                ? await ResolveRecordingStorageAccountID(agent, params.contextUser, params.provider || this._activeProvider)
                 : null;
             if (!storageAccountId) {
                 this.logStatus('🔴 Realtime recording on but no resolvable storage account (RecordingStorageProviderID/AttachmentStorageProviderID) — recording disabled.', false, params);
@@ -2846,7 +2851,7 @@ export class BaseAgent {
             // same mixed PCM as the WAV — persisted as a peaks.json sidecar so the player renders the
             // real waveform without re-decoding the audio. Best-effort: an empty array writes no sidecar.
             const peaks = controller.GetPeaks();
-            const stored = await storeRealtimeRecording({
+            const stored = await StoreRealtimeRecording({
                 Audio: encoded.Buffer,
                 MimeType: 'audio/wav',
                 Media: controller.Media,
@@ -3003,7 +3008,7 @@ export class BaseAgent {
 
             // Promote any media outputs from this step to the agent's outputs
             if (nextStep.promoteMediaOutputs && nextStep.promoteMediaOutputs.length > 0) {
-                this.promoteMediaOutputs(nextStep.promoteMediaOutputs);
+                this.PromoteMediaOutputs(nextStep.promoteMediaOutputs);
             }
 
             // Track consecutive failed steps to prevent infinite retry loops.
@@ -3658,7 +3663,7 @@ export class BaseAgent {
                 stepEntity.NativeToolCallCount = callCount;
                 // A tool call wins, but a turn that ALSO carried a valid
                 // envelope gave two answers, and the one we discard has to be counted somewhere.
-                stepEntity.NativeDualChannel = callCount > 0 ? looksLikeLoopEnvelope(message?.content) : null;
+                stepEntity.NativeDualChannel = callCount > 0 ? LooksLikeLoopEnvelope(message?.content) : null;
                 // whether this step's results went back as native tool-result turns.
                 stepEntity.NativeToolResultsSent = GetToolCallingDecision(promptResult?.chatResult)?.toolResults === true;
                 if (stepEntity.NativeDualChannel) {
@@ -3688,7 +3693,7 @@ export class BaseAgent {
         if (!turn?.sendResultsNatively || this._lastNativeTurnAppended === turn) {
             return;
         }
-        params.conversationMessages.push(buildAssistantToolCallTurn(turn) as AgentChatMessage);
+        params.conversationMessages.push(BuildAssistantToolCallTurn(turn) as AgentChatMessage);
         this._lastNativeTurnAppended = turn;
     }
 
@@ -3741,13 +3746,13 @@ export class BaseAgent {
             }
             results.push({
                 toolCallId: action.toolCallId,
-                toolName: sanitizeToolName(summary.actionName),
+                toolName: SanitizeToolName(summary.actionName),
                 content: this.formatActionResultsAsMarkdown([summary]),
                 isError: !summary.success
             });
         }
         if (results.length > 0) {
-            params.conversationMessages.push(buildToolResultTurn(results, metadata) as AgentChatMessage);
+            params.conversationMessages.push(BuildToolResultTurn(results, metadata) as AgentChatMessage);
         }
         if (orphans.length > 0) {
             params.conversationMessages.push({ role: 'user', content: `Action results:\n${this.formatActionResultsAsMarkdown(orphans)}`, metadata } as AgentChatMessage);
@@ -3808,7 +3813,7 @@ export class BaseAgent {
         if (unanswered.length === 0) {
             return;
         }
-        params.conversationMessages.push(buildToolResultTurn(
+        params.conversationMessages.push(BuildToolResultTurn(
             unanswered.map((call) => ({
                 toolCallId: call.id,
                 toolName: call.name,
@@ -3824,7 +3829,7 @@ export class BaseAgent {
      * answers, which every provider rejects. Expiry and recovery stub its blocks instead.
      */
     private stubToolTurn(message: AgentChatMessage, note: string): AgentChatMessage {
-        return compactToolResultContent(message, () => note);
+        return CompactToolResultContent(message, () => note);
     }
 
     protected applyNativeTools(promptParams: AIPromptParams, params: ExecuteAgentParams): void {
@@ -3843,7 +3848,7 @@ export class BaseAgent {
             return;
         }
         // ...and a per-agent-ACTION gate: rows that opt out are removed before the tool set is built.
-        const actions = filterDeclarableActions(
+        const actions = FilterDeclarableActions(
             this.getEffectiveActionsForValidation(params.agent.ID),
             AIEngine.Instance.AgentActions.filter((aa) => UUIDsEqual(aa.AgentID, params.agent.ID))
         );
@@ -3852,12 +3857,12 @@ export class BaseAgent {
             return;
         }
         try {
-            const actionSet = buildActionToolSet(actions, new Map(actions.map((a) => [a.ID, a.Params.Items])));
+            const actionSet = BuildActionToolSet(actions, new Map(actions.map((a) => [a.ID, a.Params.Items])));
             // Under implicit control flow the agent cannot know which model will answer, so it declares the full
             // set — Actions plus the control-flow tools (one per sub-agent, payload_change_request,
             // ask_user) — and NAMES the control ones. The runner keeps them only when the selected
             // model's LLM.NativeControlFlow resolves to 'implicit'; a hybrid model never sees them.
-            const toolSet = buildNativeToolSet(actionSet, subAgents);
+            const toolSet = BuildNativeToolSet(actionSet, subAgents);
             promptParams.tools = toolSet.tools;
             promptParams.controlFlowToolNames = toolSet.controlToolNames;
             promptParams.toolChoice = this.resolveToolChoiceForTurn(params);
@@ -5727,7 +5732,7 @@ export class BaseAgent {
 
             if (originalMessage.role === 'tool') {
                 // compact each tool_result block's text; the block structure is what the provider needs.
-                const compacted = compactToolResultContent(originalMessage, (t) => (t.length > 500 ? `${t.slice(0, 500)}… [compacted from ${t.length} chars]` : t));
+                const compacted = CompactToolResultContent(originalMessage, (t) => (t.length > 500 ? `${t.slice(0, 500)}… [compacted from ${t.length} chars]` : t));
                 const saved = originalTokens - this.estimateTokens(compacted.content);
                 if (saved > 0) {
                     params.conversationMessages[candidate.index] = {
@@ -6079,7 +6084,7 @@ The context is now within limits. Please retry your request with the recovered c
         // if we need to retry make sure we add the retry message to the conversation messages
         if (guardrailCheckedStep.step === 'Retry' && guardrailCheckedStep.payloadToolCallId && guardrailCheckedStep.nativeTurn?.sendResultsNatively) {
             // the payload-only turn is answered as a tool result for the payload_change_request call.
-            params.conversationMessages.push(buildToolResultTurn([{
+            params.conversationMessages.push(BuildToolResultTurn([{
                 toolCallId: guardrailCheckedStep.payloadToolCallId,
                 toolName: 'payload_change_request',
                 content: guardrailCheckedStep.retryInstructions || 'Payload change applied.',
@@ -10306,9 +10311,9 @@ The context is now within limits. Please retry your request with the recovered c
 
             if (previousDecision?.nativeTurn?.sendResultsNatively && subAgentRequest.toolCallId) {
                 // the delegate_to_* call is answered as a tool result.
-                params.conversationMessages.push(buildToolResultTurn([...this.payloadToolResult(previousDecision), {
+                params.conversationMessages.push(BuildToolResultTurn([...this.payloadToolResult(previousDecision), {
                     toolCallId: subAgentRequest.toolCallId,
-                    toolName: `${SUB_AGENT_TOOL_PREFIX}${sanitizeToolName(subAgentRequest.name)}`,
+                    toolName: `${SUB_AGENT_TOOL_PREFIX}${SanitizeToolName(subAgentRequest.name)}`,
                     content: resultMessage,
                     isError: !subAgentResult.success
                 }], subAgentMetadata) as AgentChatMessage);
@@ -10961,11 +10966,11 @@ The context is now within limits. Please retry your request with the recovered c
         const pairable = nativeResults ? allExecutions.filter((e) => !!e.request.toolCallId) : [];
         const unpairable = allExecutions.filter((e) => !pairable.includes(e));
         if (pairable.length > 0) {
-            params.conversationMessages.push(buildToolResultTurn([
+            params.conversationMessages.push(BuildToolResultTurn([
                 ...this.payloadToolResult(previousDecision),
                 ...pairable.map((e) => ({
                     toolCallId: e.request.toolCallId as string,
-                    toolName: `${SUB_AGENT_TOOL_PREFIX}${sanitizeToolName(e.request.name)}`,
+                    toolName: `${SUB_AGENT_TOOL_PREFIX}${SanitizeToolName(e.request.name)}`,
                     content: this.buildParallelSubAgentSummary([e]),
                     isError: !e.result.success
                 }))
@@ -11257,9 +11262,9 @@ The context is now within limits. Please retry your request with the recovered c
 
             if (previousDecision.nativeTurn?.sendResultsNatively && subAgentRequest.toolCallId) {
                 // the delegate_to_* call is answered as a tool result (same as the child path).
-                params.conversationMessages.push(buildToolResultTurn([...this.payloadToolResult(previousDecision), {
+                params.conversationMessages.push(BuildToolResultTurn([...this.payloadToolResult(previousDecision), {
                     toolCallId: subAgentRequest.toolCallId,
-                    toolName: `${SUB_AGENT_TOOL_PREFIX}${sanitizeToolName(subAgentRequest.name)}`,
+                    toolName: `${SUB_AGENT_TOOL_PREFIX}${SanitizeToolName(subAgentRequest.name)}`,
                     content: relatedResultMessage,
                     isError: !subAgentResult.success
                 }], relatedMetadata) as AgentChatMessage);
@@ -14378,7 +14383,7 @@ The context is now within limits. Please retry your request with the recovered c
 
         // Also promote any media from the final step's promoteMediaOutputs
         if (finalStep.promoteMediaOutputs && finalStep.promoteMediaOutputs.length > 0) {
-            this.promoteMediaOutputs(finalStep.promoteMediaOutputs);
+            this.PromoteMediaOutputs(finalStep.promoteMediaOutputs);
         }
 
         // Return unified media outputs — all items are persisted by AgentRunner.
@@ -14665,7 +14670,7 @@ The context is now within limits. Please retry your request with the recovered c
             if (item.message.role === 'tool') {
                 // compact per block so the tool turn keeps answering its call.
                 const limit = item.metadata.compactLength || 500;
-                const compactedTurn = compactToolResultContent(item.message, (t) => (t.length > limit ? `${t.slice(0, limit)}… [compacted from ${t.length} chars]` : t));
+                const compactedTurn = CompactToolResultContent(item.message, (t) => (t.length > limit ? `${t.slice(0, limit)}… [compacted from ${t.length} chars]` : t));
                 const saved = this.estimateTokens(originalContent) - this.estimateTokens(compactedTurn.content);
                 params.conversationMessages[item.index] = {
                     ...compactedTurn,

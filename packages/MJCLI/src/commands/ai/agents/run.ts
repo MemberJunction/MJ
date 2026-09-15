@@ -1,8 +1,8 @@
 import { Command, Flags } from '@oclif/core';
 import ora from 'ora-classic';
 import chalk from 'chalk';
-import { AI_FORMAT_MAP, CANONICAL_FORMAT_FLAG, resolveLegacyFormat } from '../../../lib/format-compat.js';
-import { failOnNonInteractive, requireInteractive } from '../../../lib/interactive-guard.js';
+import { AI_FORMAT_MAP, CANONICAL_FORMAT_FLAG, ResolveLegacyFormat } from '../../../lib/format-compat.js';
+import { FailOnNonInteractive, requireInteractive } from '../../../lib/interactive-guard.js';
 
 export default class AgentsRun extends Command {
   static description = 'Execute an AI agent with a prompt or start interactive chat';
@@ -67,14 +67,14 @@ export default class AgentsRun extends Command {
           'Use --prompt "<your prompt>" for a single non-interactive execution, or re-run --chat at an interactive terminal.'
         );
       } catch (error) {
-        failOnNonInteractive(this, error);
+        FailOnNonInteractive(this, error);
       }
     }
 
     const { AgentService, OutputFormatter, ConversationService } = await import('@memberjunction/ai-cli');
 
     const service = new AgentService();
-    const formatter = new OutputFormatter(resolveLegacyFormat({
+    const formatter = new OutputFormatter(ResolveLegacyFormat({
         format: flags.format,
         legacy: flags.output as 'compact' | 'json' | 'table',
         legacyDefault: 'compact' as const,

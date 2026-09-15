@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { loadOraclesModule } from '../utils/oracle-module-loader';
+import { LoadOraclesModule } from '../utils/oracle-module-loader';
 
 /**
  * Tests the duck-typing + registration logic without needing a real
@@ -19,7 +19,7 @@ function makeStubEngine() {
     };
     // The loader's signature accepts a TestEngine, but it only calls
     // RegisterOracle on it. The runtime shape is what matters.
-    return { engine: engine as unknown as Parameters<typeof loadOraclesModule>[1], registered };
+    return { engine: engine as unknown as Parameters<typeof LoadOraclesModule>[1], registered };
 }
 
 describe('loadOraclesModule', () => {
@@ -52,7 +52,7 @@ describe('loadOraclesModule', () => {
             `,
         );
         const { engine, registered } = makeStubEngine();
-        const summary = await loadOraclesModule(modulePath, engine);
+        const summary = await LoadOraclesModule(modulePath, engine);
 
         expect(summary.registered).toEqual(['my-class']);
         expect(summary.skipped).toEqual([]);
@@ -73,7 +73,7 @@ describe('loadOraclesModule', () => {
             `,
         );
         const { engine, registered } = makeStubEngine();
-        const summary = await loadOraclesModule(modulePath, engine);
+        const summary = await LoadOraclesModule(modulePath, engine);
 
         expect(summary.registered).toEqual(['my-instance']);
         expect(registered).toHaveLength(1);
@@ -92,7 +92,7 @@ describe('loadOraclesModule', () => {
             `,
         );
         const { engine, registered } = makeStubEngine();
-        const summary = await loadOraclesModule(modulePath, engine);
+        const summary = await LoadOraclesModule(modulePath, engine);
 
         expect(summary.registered.sort()).toEqual(['oracle-a', 'oracle-b']);
         expect(registered).toHaveLength(2);
@@ -112,7 +112,7 @@ describe('loadOraclesModule', () => {
             `,
         );
         const { engine, registered } = makeStubEngine();
-        const summary = await loadOraclesModule(modulePath, engine);
+        const summary = await LoadOraclesModule(modulePath, engine);
 
         expect(summary.registered).toEqual(['oracle-a']);
         expect(summary.skipped.sort()).toEqual(['constant', 'helper']);
@@ -122,7 +122,7 @@ describe('loadOraclesModule', () => {
     it('throws when the module path does not exist', async () => {
         const { engine } = makeStubEngine();
         await expect(
-            loadOraclesModule(path.join(tmpDir, 'missing.cjs'), engine),
+            LoadOraclesModule(path.join(tmpDir, 'missing.cjs'), engine),
         ).rejects.toThrow(/Oracle module not found/);
     });
 
@@ -142,7 +142,7 @@ describe('loadOraclesModule', () => {
             `,
         );
         const { engine, registered } = makeStubEngine();
-        const summary = await loadOraclesModule(modulePath, engine);
+        const summary = await LoadOraclesModule(modulePath, engine);
 
         expect(summary.registered).toEqual(['good']);
         expect(summary.skipped.some((s) => s.startsWith('Bad'))).toBe(true);
@@ -163,7 +163,7 @@ describe('loadOraclesModule', () => {
             `,
         );
         const { engine, registered } = makeStubEngine();
-        const summary = await loadOraclesModule(modulePath, engine);
+        const summary = await LoadOraclesModule(modulePath, engine);
 
         expect(summary.registered).toContain('flat-oracle');
         expect(registered).toHaveLength(1);

@@ -57,7 +57,7 @@ import {
     TableNormalizationInput,
 } from './ColumnNormalizer.js';
 import { ColumnClusterer, ClustererInputColumn } from './ColumnClusterer.js';
-import { createEmbeddingProvider, EmbeddingProviderName } from './EmbeddingProvider.js';
+import { CreateEmbeddingProvider, EmbeddingProviderName } from './EmbeddingProvider.js';
 
 const AUDIT_COLUMN_PATTERN = /^(modified|created|updated|inserted|changed)(date|at|time|by|on)?$|^rowguid$|^timestamp$|^row_?version$|^__mj_.*$/i;
 const NON_VALUEMATCHABLE_TYPES = /(binary|blob|image|varbinary|xml|geography|geometry|hierarchyid|sql_variant)/i;
@@ -120,7 +120,7 @@ export interface SemanticPhaseResult {
 /** Receives human-readable progress messages as the semantic phase advances. */
 export type ProgressCallback = (message: string) => void;
 
-export async function runSemanticPhase(
+export async function RunSemanticPhase(
     state: DatabaseDocumentation,
     config: OrganicKeyDetectionConfig,
     aiConfig: AIConfig,
@@ -216,6 +216,16 @@ export async function runSemanticPhase(
             clustersDropped: dropped,
         },
     };
+}
+
+/** @deprecated Use {@link RunSemanticPhase}. */
+export async function runSemanticPhase(
+    state: DatabaseDocumentation,
+    config: OrganicKeyDetectionConfig,
+    aiConfig: AIConfig,
+    progress: ProgressCallback = () => {},
+): Promise<SemanticPhaseResult> {
+    return RunSemanticPhase(state, config, aiConfig, progress);
 }
 
 /**
@@ -479,7 +489,7 @@ function resolveEmbeddingProvider(
     const cfg = config.embedding ?? {};
     const provider = (cfg.provider ?? 'openai') as EmbeddingProviderName;
     const apiKey = aiConfig.apiKey;
-    const impl = createEmbeddingProvider({
+    const impl = CreateEmbeddingProvider({
         provider,
         apiKey,
         model: cfg.model,

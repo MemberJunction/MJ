@@ -42,12 +42,22 @@ export class UserInfo {
 // Mock RunView results storage - tests can configure this
 let mockRunViewResults: Map<string, { Success: boolean; Results: unknown[]; ErrorMessage?: string }> = new Map();
 
-export function setMockRunViewResult(entityName: string, result: { Success: boolean; Results: unknown[]; ErrorMessage?: string }) {
+export function SetMockRunViewResult(entityName: string, result: { Success: boolean; Results: unknown[]; ErrorMessage?: string }) {
     mockRunViewResults.set(entityName, result);
 }
 
-export function clearMockRunViewResults() {
+/** @deprecated Use {@link SetMockRunViewResult}. */
+export function setMockRunViewResult(entityName: string, result: { Success: boolean; Results: unknown[]; ErrorMessage?: string }) {
+    return SetMockRunViewResult(entityName, result);
+}
+
+export function ClearMockRunViewResults() {
     mockRunViewResults.clear();
+}
+
+/** @deprecated Use {@link ClearMockRunViewResults}. */
+export function clearMockRunViewResults() {
+    return ClearMockRunViewResults();
 }
 
 export class RunView {
@@ -82,12 +92,22 @@ export class RunView {
 // Mock entity storage - tests can configure created entities
 let mockEntities: Map<string, unknown> = new Map();
 
-export function setMockEntity(entityName: string, entity: unknown) {
+export function SetMockEntity(entityName: string, entity: unknown) {
     mockEntities.set(entityName, entity);
 }
 
-export function clearMockEntities() {
+/** @deprecated Use {@link SetMockEntity}. */
+export function setMockEntity(entityName: string, entity: unknown) {
+    return SetMockEntity(entityName, entity);
+}
+
+export function ClearMockEntities() {
     mockEntities.clear();
+}
+
+/** @deprecated Use {@link ClearMockEntities}. */
+export function clearMockEntities() {
+    return ClearMockEntities();
 }
 
 // ---- Row-filter support: acting context, bindings, entity metadata, RLS filters ----
@@ -131,17 +151,32 @@ export class EntityInfo {
 let mockMetadataEntities: EntityInfo[] = [];
 let mockRLSFilters: RowLevelSecurityFilterInfo[] = [];
 
-export function setMockMetadataEntities(entities: EntityInfo[]): void {
+export function SetMockMetadataEntities(entities: EntityInfo[]): void {
     mockMetadataEntities = entities;
 }
 
-export function setMockRowLevelSecurityFilters(filters: RowLevelSecurityFilterInfo[]): void {
+/** @deprecated Use {@link SetMockMetadataEntities}. */
+export function setMockMetadataEntities(entities: EntityInfo[]): void {
+    return SetMockMetadataEntities(entities);
+}
+
+export function SetMockRowLevelSecurityFilters(filters: RowLevelSecurityFilterInfo[]): void {
     mockRLSFilters = filters;
 }
 
-export function clearMockMetadataState(): void {
+/** @deprecated Use {@link SetMockRowLevelSecurityFilters}. */
+export function setMockRowLevelSecurityFilters(filters: RowLevelSecurityFilterInfo[]): void {
+    return SetMockRowLevelSecurityFilters(filters);
+}
+
+export function ClearMockMetadataState(): void {
     mockMetadataEntities = [];
     mockRLSFilters = [];
+}
+
+/** @deprecated Use {@link ClearMockMetadataState}. */
+export function clearMockMetadataState(): void {
+    return ClearMockMetadataState();
 }
 
 export function LogError(..._args: unknown[]): void {

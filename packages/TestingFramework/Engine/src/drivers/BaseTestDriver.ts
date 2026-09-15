@@ -378,8 +378,13 @@ export abstract class BaseTestDriver {
      *
      * @returns true if driver supports cancellation, false otherwise
      */
-    public supportsCancellation(): boolean {
+    public SupportsCancellation(): boolean {
         return false;
+    }
+
+    /** @deprecated Use {@link SupportsCancellation}. */
+    public supportsCancellation(): boolean {
+        return this.SupportsCancellation();
     }
 
     /**

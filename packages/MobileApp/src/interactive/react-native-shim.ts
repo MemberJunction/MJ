@@ -19,7 +19,7 @@
 import * as React from 'react';
 import { Image, Pressable, Text, View } from 'react-native';
 import { Colors, Radius, Spacing } from '@/theme/tokens';
-import { normalizeWebStyle } from './rn-style-normalizer';
+import { NormalizeWebStyle } from './rn-style-normalizer';
 
 /** A React element type: a host component reference or a component function/class. */
 type HostComponent = React.ElementType;
@@ -89,10 +89,10 @@ function isDroppedProp(key: string): boolean {
 /** Normalize a `style` prop value that may be a single object or an array of them. */
 function normalizeStyleProp(value: unknown): unknown {
     if (Array.isArray(value)) {
-        return value.map((entry) => (isPlainStyleObject(entry) ? normalizeWebStyle(entry) : entry));
+        return value.map((entry) => (isPlainStyleObject(entry) ? NormalizeWebStyle(entry) : entry));
     }
     if (isPlainStyleObject(value)) {
-        return normalizeWebStyle(value);
+        return NormalizeWebStyle(value);
     }
     return value;
 }

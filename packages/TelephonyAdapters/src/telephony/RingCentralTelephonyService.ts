@@ -95,7 +95,7 @@ export class RingCentralTelephonyService {
     /**
      * Creates + registers the shared SIP softphone and wires inbound INVITE handling.
      */
-    public async start(): Promise<void> {
+    public async Start(): Promise<void> {
         try {
             this.carrierSampleRate = CODEC_CARRIER_RATE[this.config.codec ?? 'OPUS/16000'];
             this.handle = await this.createHandle(this.toSoftphoneConfig());
@@ -106,6 +106,11 @@ export class RingCentralTelephonyService {
             this.handle = null;
             LogError(`[Telephony][RingCentral] softphone start failed: ${e instanceof Error ? e.message : String(e)}`);
         }
+    }
+
+    /** @deprecated Use {@link Start}. */
+    public async start(): Promise<void> {
+        return this.Start();
     }
 
     /** Best-effort teardown of the SIP registration (server shutdown). */
@@ -208,7 +213,7 @@ export class RingCentralTelephonyService {
             Address: args.address,
             Direction: args.direction,
             Configuration: this.buildSessionConfiguration(args.direction, args.fromNumber, args.inboundCallId),
-            BindSdk: this.buildBindSdk(),
+            BindSdk: this.BuildBindSdk(),
             ContextUser: args.contextUser,
             MetadataProvider: args.provider,
         });
@@ -223,11 +228,16 @@ export class RingCentralTelephonyService {
         return provider;
     }
 
-    public buildBindSdk(): BridgeNativeSdkBinding {
+    public BuildBindSdk(): BridgeNativeSdkBinding {
         return (driver) => {
             const telephony = driver as BaseTelephonyBridge;
             telephony.SetSdkFactory(() => new RingCentralSoftphoneCallSdk(this.requireHandle()));
         };
+    }
+
+    /** @deprecated Use {@link BuildBindSdk}. */
+    public buildBindSdk(): BridgeNativeSdkBinding {
+        return this.BuildBindSdk();
     }
 
     private requireHandle(): RingCentralSoftphoneHandle {

@@ -18,7 +18,7 @@ import { configureNotificationHandler, registerForPushNotifications } from '@/da
  * Effect-only hook that performs one-time push registration when the provider
  * is ready and the preference is enabled. Rendered via {@link PushNotificationsBoot}.
  */
-export function usePushRegistration(): void {
+export function UsePushRegistration(): void {
     const { status } = useMJ();
     const [pushOn] = useMMKVBoolean(PrefKeys.pushNotifications, prefsStorage);
     const registeredRef = useRef(false);
@@ -43,11 +43,16 @@ export function usePushRegistration(): void {
     }, [status, pushOn]);
 }
 
+/** @deprecated Use {@link UsePushRegistration}. */
+export function usePushRegistration(): void {
+    return UsePushRegistration();
+}
+
 /**
  * Zero-render component that runs {@link usePushRegistration}. Mount it inside
  * the MJ provider (so `useMJ()` is available) alongside the router stack.
  */
 export function PushNotificationsBoot(): null {
-    usePushRegistration();
+    UsePushRegistration();
     return null;
 }

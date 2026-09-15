@@ -128,7 +128,7 @@ function flattenTokens(stream: Prism.TokenStream, inherited: string, out: Highli
  * @param language A language hint (e.g. `ts`, `python`, `json`); may be empty.
  * @returns        Ordered colored runs whose concatenated text equals `code`.
  */
-export function highlightCode(code: string, language: string | undefined): HighlightRun[] {
+export function HighlightCode(code: string, language: string | undefined): HighlightRun[] {
     const grammarId = resolveLanguageId(language);
     const grammar = grammarId ? Prism.languages[grammarId] : undefined;
     if (!grammar) return [{ text: code, color: PLAIN_COLOR }];
@@ -140,4 +140,9 @@ export function highlightCode(code: string, language: string | undefined): Highl
     } catch {
         return [{ text: code, color: PLAIN_COLOR }];
     }
+}
+
+/** @deprecated Use {@link HighlightCode}. */
+export function highlightCode(code: string, language: string | undefined): HighlightRun[] {
+    return HighlightCode(code, language);
 }

@@ -117,12 +117,17 @@ export class StartupLogger {
    * operator knob governs both telemetry and server logging. Defaults to
    * `standard` when unset or unrecognized.
    */
-  public static resolveLevelFromConfig(): ServerLogLevel {
+  public static ResolveLevelFromConfig(): ServerLogLevel {
     const raw = configInfo.telemetry?.level;
     if (raw === 'minimal' || raw === 'standard' || raw === 'verbose' || raw === 'debug') {
       return raw;
     }
     return 'standard';
+  }
+
+  /** @deprecated Use {@link ResolveLevelFromConfig}. */
+  public static resolveLevelFromConfig(): ServerLogLevel {
+    return this.ResolveLevelFromConfig();
   }
 
   /**

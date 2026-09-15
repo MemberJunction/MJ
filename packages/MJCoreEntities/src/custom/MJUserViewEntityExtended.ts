@@ -858,7 +858,16 @@ export class ViewColumnInfo extends BaseInfo {
     /** User-defined display name override for column header */
     userDisplayName?: string = null
     /** Whether column is hidden */
-    hidden: boolean = null
+    Hidden: boolean = null
+
+    /** @deprecated Use {@link Hidden}. */
+    get hidden(): boolean {
+        return this.Hidden;
+    }
+    /** @deprecated Use {@link Hidden}. */
+    set hidden(value: boolean) {
+        this.Hidden = value;
+    }
     /** Column width in pixels */
     width?: number = null
     /** Column order index */
@@ -895,22 +904,58 @@ export type ViewFilterLogicInfo = typeof ViewFilterLogicInfo[keyof typeof ViewFi
 
 
 export class ViewFilterInfo extends BaseInfo {
-    logicOperator: ViewFilterLogicInfo = null
+    LogicOperator: ViewFilterLogicInfo = null
+
+    /** @deprecated Use {@link LogicOperator}. */
+    get logicOperator(): ViewFilterLogicInfo {
+        return this.LogicOperator;
+    }
+    /** @deprecated Use {@link LogicOperator}. */
+    set logicOperator(value: ViewFilterLogicInfo) {
+        this.LogicOperator = value;
+    }
 
     field: string = null
-    operator: string = null
-    value: string = null
+    Operator: string = null
 
-    filters: ViewFilterInfo[] = []
+    /** @deprecated Use {@link Operator}. */
+    get operator(): string {
+        return this.Operator;
+    }
+    /** @deprecated Use {@link Operator}. */
+    set operator(value: string) {
+        this.Operator = value;
+    }
+    Value: string = null
+
+    /** @deprecated Use {@link Value}. */
+    get value(): string {
+        return this.Value;
+    }
+    /** @deprecated Use {@link Value}. */
+    set value(value: string) {
+        this.Value = value;
+    }
+
+    Filters: ViewFilterInfo[] = []
+
+    /** @deprecated Use {@link Filters}. */
+    get filters(): ViewFilterInfo[] {
+        return this.Filters;
+    }
+    /** @deprecated Use {@link Filters}. */
+    set filters(value: ViewFilterInfo[]) {
+        this.Filters = value;
+    }
 
     constructor (initData: any = null) {
         super()
         this.copyInitData(initData)
         if (initData && initData.logic) {
-            this.logicOperator = initData.logic.trim().toLowerCase() == 'and' ? ViewFilterLogicInfo.And : ViewFilterLogicInfo.Or
+            this.LogicOperator = initData.logic.trim().toLowerCase() == 'and' ? ViewFilterLogicInfo.And : ViewFilterLogicInfo.Or
         }
         if (initData && initData.filters) {
-            this.filters = initData.filters.map(f => new ViewFilterInfo(f))
+            this.Filters = initData.filters.map(f => new ViewFilterInfo(f))
         }
     }
 }

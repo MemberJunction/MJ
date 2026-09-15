@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import '../../Database/providers/sqlserver/SQLServerCodeGenProvider';
 import { ManageMetadataBase } from '../../Database/manage-metadata';
 import {
-   computeFieldMetadataUpdate,
+   ComputeFieldMetadataUpdate,
    FieldLockContext,
    FieldMetadataProposal,
    FieldMetadataState,
@@ -412,7 +412,7 @@ describe('T13 — Fixpoint Property Tests (C2–C4, §6 T13)', () => {
          };
 
          // Pass 1
-         const update1 = computeFieldMetadataUpdate(
+         const update1 = ComputeFieldMetadataUpdate(
             field,
             proposal,
             lockCtx,
@@ -428,7 +428,7 @@ describe('T13 — Fixpoint Property Tests (C2–C4, §6 T13)', () => {
          if ('CodeType' in update1) field.CodeType = update1.CodeType ?? null;
 
          // Pass 2: Re-apply exact same proposal to updated state
-         const update2 = computeFieldMetadataUpdate(
+         const update2 = ComputeFieldMetadataUpdate(
             field,
             proposal,
             lockCtx,

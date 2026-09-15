@@ -1,4 +1,4 @@
-import { traverse, NodePath, createViolation, truncateCode, findClosestMatch, findCaseMismatch, NUMERIC_COERCION_FUNCTIONS, NON_ENTITY_PROPERTIES } from '../lint-utils';
+import { traverse, NodePath, CreateViolation, TruncateCode, FindClosestMatch, FindCaseMismatch, NUMERIC_COERCION_FUNCTIONS, NON_ENTITY_PROPERTIES } from '../lint-utils';
 import * as t from '@babel/types';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseLintRule } from '../lint-rule';
@@ -203,7 +203,7 @@ export class EntityFieldAccessValidationRule extends BaseLintRule {
     // Emit skip-with-warning for entities discovered in RunView calls but lacking metadata
     for (const entityName of discoveredEntityNames) {
       if (!entityFieldSets.has(entityName) && !specHasFieldMetadata(entityName)) {
-        violations.push(createViolation(
+        violations.push(CreateViolation(
           'entity-field-access-validation', 'low', null,
           `Unable to validate field access on entity '${entityName}' — entity metadata not available. Ensure database connection or add fieldMetadata to dataRequirements for accurate validation.`,
           entityName
@@ -231,9 +231,9 @@ export class EntityFieldAccessValidationRule extends BaseLintRule {
       // and would indicate a scope mismatch (variable shadowed by a different context)
       if (NON_ENTITY_PROPERTIES.has(propertyName)) return;
 
-      const caseFix = findCaseMismatch(propertyName, validFields);
+      const caseFix = FindCaseMismatch(propertyName, validFields);
       if (caseFix) {
-        violations.push(createViolation(
+        violations.push(CreateViolation(
           'entity-field-access-validation', 'medium', node,
           `Field "${propertyName}" on entity "${entityName}" has incorrect casing. Did you mean "${caseFix}"?`,
           `${objectName}.${propertyName}`,
@@ -243,11 +243,11 @@ export class EntityFieldAccessValidationRule extends BaseLintRule {
         return;
       }
 
-      const closest = findClosestMatch(propertyName, validFields);
+      const closest = FindClosestMatch(propertyName, validFields);
       const preview = validFields.slice(0, 10).join(', ');
       const more = validFields.length > 10 ? ` and ${validFields.length - 10} more` : '';
 
-      violations.push(createViolation(
+      violations.push(CreateViolation(
         'entity-field-access-validation', 'high', node,
         closest
           ? `Field "${propertyName}" does not exist on entity "${entityName}". Did you mean "${closest}"? Available fields: ${preview}${more}`
@@ -337,10 +337,10 @@ export class EntityFieldAccessValidationRule extends BaseLintRule {
 
         const fieldInfo = resolved.fields.get(arg.property.name);
         if (fieldInfo?.sqlType?.toLowerCase() === 'uniqueidentifier') {
-          violations.push(createViolation(
+          violations.push(CreateViolation(
             'entity-field-access-validation', 'medium', path.node,
             `${path.node.callee.name}(${arg.object.name}.${arg.property.name}) coerces a uniqueidentifier (GUID) to a number. GUIDs are strings, not numeric values.`,
-            truncateCode(`${path.node.callee.name}(${arg.object.name}.${arg.property.name})`),
+            TruncateCode(`${path.node.callee.name}(${arg.object.name}.${arg.property.name})`),
             { text: `"${arg.property.name}" is a uniqueidentifier field. Use it as a string directly.`,
               example: `${arg.object.name}.${arg.property.name}  // Already a string` }
           ));

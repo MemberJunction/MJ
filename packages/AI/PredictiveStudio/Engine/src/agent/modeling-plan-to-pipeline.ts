@@ -116,7 +116,7 @@ function deriveName(goal: string): string {
  * @param spec the approved modeling plan the agent accumulated.
  * @returns the resolved {@link PipelineConfig}.
  */
-export function modelingPlanToPipelineConfig(spec: ModelingPlanSpec): PipelineConfig {
+export function ModelingPlanToPipelineConfig(spec: ModelingPlanSpec): PipelineConfig {
   const target = spec.TargetDefinition;
   if (!target?.EntityName?.trim()) {
     throw new Error('ModelingPlanSpec.TargetDefinition.EntityName is required to build a pipeline.');
@@ -142,4 +142,9 @@ export function modelingPlanToPipelineConfig(spec: ModelingPlanSpec): PipelineCo
     leakageGuard: buildLeakageGuard(spec),
     validation: buildValidation(spec),
   };
+}
+
+/** @deprecated Use {@link ModelingPlanToPipelineConfig}. */
+export function modelingPlanToPipelineConfig(spec: ModelingPlanSpec): PipelineConfig {
+  return ModelingPlanToPipelineConfig(spec);
 }

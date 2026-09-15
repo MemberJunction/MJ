@@ -31,7 +31,7 @@ export type AgentChip = AgentOption & { color: string; initial: string };
  *  - `error`: the last fetch error, or `null`.
  *  - `refresh`: manually re-run the load (no-op unless MJ is `ready`).
  */
-export function useAgents() {
+export function UseAgents() {
     const { status } = useMJ();
     const [agents, setAgents] = useState<AgentChip[] | null>(null);
     const [loading, setLoading] = useState(false);
@@ -58,4 +58,9 @@ export function useAgents() {
     useEffect(() => { void refresh(); }, [refresh]);
 
     return { agents, loading, error, refresh };
+}
+
+/** @deprecated Use {@link UseAgents}. */
+export function useAgents() {
+    return UseAgents();
 }

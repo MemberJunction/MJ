@@ -37,7 +37,7 @@ export class GraphProviderPool {
    * Record, per graphId, the highest dependency-level index it occupies so we
    * can drain (commit/rollback + release) as soon as that level finishes.
    */
-  noteLevels(levels: Array<Array<{ graphId: string }>>): void {
+  NoteLevels(levels: Array<Array<{ graphId: string }>>): void {
     this.lastLevelByGraph.clear();
     for (let i = 0; i < levels.length; i++) {
       for (const rec of levels[i]) {
@@ -46,13 +46,28 @@ export class GraphProviderPool {
     }
   }
 
+  /** @deprecated Use {@link NoteLevels}. */
+  noteLevels(levels: Array<Array<{ graphId: string }>>): void {
+    return this.NoteLevels(levels);
+  }
+
   /** One record error anywhere in the file rolls back every graph in that file. */
-  markFailed(): void {
+  MarkFailed(): void {
     this.anyFailed = true;
   }
 
-  get hasFailed(): boolean {
+  /** @deprecated Use {@link MarkFailed}. */
+  markFailed(): void {
+    return this.MarkFailed();
+  }
+
+  get HasFailed(): boolean {
     return this.anyFailed;
+  }
+
+  /** @deprecated Use {@link HasFailed}. */
+  get hasFailed(): boolean {
+    return this.HasFailed;
   }
 
   /**
@@ -67,7 +82,7 @@ export class GraphProviderPool {
    * The host itself is never stored in the map, so release cannot
    * RollbackTransaction the global push TX.
    */
-  async obtain(graphId: string): Promise<GraphProviderLike> {
+  async Obtain(graphId: string): Promise<GraphProviderLike> {
     const existing = this.providers.get(graphId);
     if (existing) return existing;
     if (this.independentUnavailable) return this.host;
@@ -97,6 +112,11 @@ export class GraphProviderPool {
     }
   }
 
+  /** @deprecated Use {@link Obtain}. */
+  async obtain(graphId: string): Promise<GraphProviderLike> {
+    return this.Obtain(graphId);
+  }
+
   /**
    * Commit-or-rollback + release graphs in this batch that are done:
    * their last level is `levelIndex`, or TransactionDepth is already 0
@@ -105,7 +125,7 @@ export class GraphProviderPool {
    * Returns the first settle error so the caller cannot report success
    * with uncommitted rows.
    */
-  async drainBatch(graphIds: string[], levelIndex: number): Promise<Error | undefined> {
+  async DrainBatch(graphIds: string[], levelIndex: number): Promise<Error | undefined> {
     const ending = graphIds.filter((id) => {
       const last = this.lastLevelByGraph.get(id) ?? levelIndex;
       if (last === levelIndex) return true;
@@ -115,9 +135,19 @@ export class GraphProviderPool {
     return this.releaseGraphs(ending);
   }
 
+  /** @deprecated Use {@link DrainBatch}. */
+  async drainBatch(graphIds: string[], levelIndex: number): Promise<Error | undefined> {
+    return this.DrainBatch(graphIds, levelIndex);
+  }
+
   /** Release every remaining independent instance. Safe to call from `finally`. */
-  async releaseAll(): Promise<Error | undefined> {
+  async ReleaseAll(): Promise<Error | undefined> {
     return this.releaseGraphs([...this.providers.keys()]);
+  }
+
+  /** @deprecated Use {@link ReleaseAll}. */
+  async releaseAll(): Promise<Error | undefined> {
+    return this.ReleaseAll();
   }
 
   private async releaseGraphs(ids: string[]): Promise<Error | undefined> {

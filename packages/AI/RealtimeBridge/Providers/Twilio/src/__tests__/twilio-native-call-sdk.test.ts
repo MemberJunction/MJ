@@ -10,10 +10,10 @@ import { describe, it, expect, vi } from 'vitest';
 import {
     TwilioNativeCallSdk,
     BindTwilioNativeCall,
-    readNativeConfig,
-    mapNativeAudioFrame,
-    toArrayBuffer,
-    defaultNativeLoader,
+    ReadNativeConfig,
+    MapNativeAudioFrame,
+    ToArrayBuffer,
+    DefaultNativeLoader,
     NativeCallModule,
     NativeCallClient,
     NativeCallAudioFrame,
@@ -85,21 +85,21 @@ describe('TwilioNativeCallSdk — pure mappings', () => {
     it('toArrayBuffer copies a Uint8Array view (not aliasing the underlying buffer window)', () => {
         const backing = new Uint8Array([9, 8, 7, 6]).buffer;
         const view = new Uint8Array(backing, 1, 2); // [8,7]
-        const out = toArrayBuffer(view);
+        const out = ToArrayBuffer(view);
         expect(out.byteLength).toBe(2);
         expect(new Uint8Array(out)).toEqual(new Uint8Array([8, 7]));
     });
 
     it('toArrayBuffer copies a standalone ArrayBuffer (distinct instance, equal bytes)', () => {
         const ab = new Uint8Array([1, 2, 3]).buffer;
-        const out = toArrayBuffer(ab);
+        const out = ToArrayBuffer(ab);
         expect(out).not.toBe(ab);
         expect(new Uint8Array(out)).toEqual(new Uint8Array([1, 2, 3]));
     });
 
     it('mapNativeAudioFrame copies the inbound PCM bytes', () => {
         const view = new Uint8Array([4, 5, 6]);
-        const out = mapNativeAudioFrame({ data: view, timestampMs: 99 });
+        const out = MapNativeAudioFrame({ data: view, timestampMs: 99 });
         expect(new Uint8Array(out)).toEqual(view);
     });
 });
@@ -107,7 +107,7 @@ describe('TwilioNativeCallSdk — pure mappings', () => {
 describe('TwilioNativeCallSdk — dial/answer + two-way audio', () => {
     it('dial() loads the adapter, places the outbound call with from/to, and returns the Call SID', async () => {
         const client = new FakeNativeCallClient();
-        const sdk = new TwilioNativeCallSdk(readNativeConfig(cfg), async () => fakeModule(client));
+        const sdk = new TwilioNativeCallSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
         const sid = await sdk.dial('+15551112222', '+15553334444', { recording: true });
         expect(sid).toBe('CA-fake-sid');
         expect(client.dialed?.toNumber).toBe('+15551112222');
@@ -117,7 +117,7 @@ describe('TwilioNativeCallSdk — dial/answer + two-way audio', () => {
 
     it('answer() accepts the inbound Call SID', async () => {
         const client = new FakeNativeCallClient();
-        const sdk = new TwilioNativeCallSdk(readNativeConfig(cfg), async () => fakeModule(client));
+        const sdk = new TwilioNativeCallSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
         await sdk.answer('CA-inbound-1');
         expect(client.answered).toBe('CA-inbound-1');
     });
@@ -131,7 +131,7 @@ describe('TwilioNativeCallSdk — dial/answer + two-way audio', () => {
                 return client;
             },
         };
-        const sdk = new TwilioNativeCallSdk(readNativeConfig(cfg), async () => mod);
+        const sdk = new TwilioNativeCallSdk(ReadNativeConfig(cfg), async () => mod);
         await sdk.dial('+1', '+2');
         expect(seen[0]).toEqual({
             AccountSid: 'AC123',
@@ -144,7 +144,7 @@ describe('TwilioNativeCallSdk — dial/answer + two-way audio', () => {
 
     it('sendAudioFrame forwards the agent voice to the native Media-Streams send path', async () => {
         const client = new FakeNativeCallClient();
-        const sdk = new TwilioNativeCallSdk(readNativeConfig(cfg), async () => fakeModule(client));
+        const sdk = new TwilioNativeCallSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
         await sdk.dial('+1', '+2');
         const pcm = new Uint8Array([5, 5, 5]).buffer;
         sdk.sendAudioFrame(pcm);
@@ -153,13 +153,13 @@ describe('TwilioNativeCallSdk — dial/answer + two-way audio', () => {
     });
 
     it('sendAudioFrame before a call is a safe no-op (no throw)', () => {
-        const sdk = new TwilioNativeCallSdk(readNativeConfig(cfg), async () => fakeModule(new FakeNativeCallClient()));
+        const sdk = new TwilioNativeCallSdk(ReadNativeConfig(cfg), async () => fakeModule(new FakeNativeCallClient()));
         expect(() => sdk.sendAudioFrame(new ArrayBuffer(2))).not.toThrow();
     });
 
     it('inbound native audio is mapped to a PCM ArrayBuffer and delivered to the handler (handler set pre-dial)', async () => {
         const client = new FakeNativeCallClient();
-        const sdk = new TwilioNativeCallSdk(readNativeConfig(cfg), async () => fakeModule(client));
+        const sdk = new TwilioNativeCallSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
         const heard: ArrayBuffer[] = [];
         sdk.onAudioFrame((pcm) => heard.push(pcm)); // registered BEFORE the call exists
         await sdk.dial('+1', '+2');
@@ -172,7 +172,7 @@ describe('TwilioNativeCallSdk — dial/answer + two-way audio', () => {
 describe('TwilioNativeCallSdk — DTMF, transfer, hangup, teardown', () => {
     it('sendDtmf reaches the native client', async () => {
         const client = new FakeNativeCallClient();
-        const sdk = new TwilioNativeCallSdk(readNativeConfig(cfg), async () => fakeModule(client));
+        const sdk = new TwilioNativeCallSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
         await sdk.dial('+1', '+2');
         await sdk.sendDtmf('123#');
         expect(client.sentDtmf).toEqual(['123#']);
@@ -180,7 +180,7 @@ describe('TwilioNativeCallSdk — DTMF, transfer, hangup, teardown', () => {
 
     it('inbound DTMF events reach the handler (handler set pre-dial)', async () => {
         const client = new FakeNativeCallClient();
-        const sdk = new TwilioNativeCallSdk(readNativeConfig(cfg), async () => fakeModule(client));
+        const sdk = new TwilioNativeCallSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
         const digits: string[] = [];
         sdk.onDtmf((d) => digits.push(d));
         await sdk.dial('+1', '+2');
@@ -190,7 +190,7 @@ describe('TwilioNativeCallSdk — DTMF, transfer, hangup, teardown', () => {
 
     it('transfer redirects the live call via the native client', async () => {
         const client = new FakeNativeCallClient();
-        const sdk = new TwilioNativeCallSdk(readNativeConfig(cfg), async () => fakeModule(client));
+        const sdk = new TwilioNativeCallSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
         await sdk.dial('+1', '+2');
         await sdk.transfer('CA-fake-sid', '+15559998888');
         expect(client.transfers).toEqual([['CA-fake-sid', '+15559998888']]);
@@ -198,7 +198,7 @@ describe('TwilioNativeCallSdk — DTMF, transfer, hangup, teardown', () => {
 
     it('call-ended fires the handler; hangup() releases the call via the native client', async () => {
         const client = new FakeNativeCallClient();
-        const sdk = new TwilioNativeCallSdk(readNativeConfig(cfg), async () => fakeModule(client));
+        const sdk = new TwilioNativeCallSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
         const ended = vi.fn();
         sdk.onCallEnded(ended);
         await sdk.dial('+1', '+2');
@@ -213,7 +213,7 @@ describe('TwilioNativeCallSdk — DTMF, transfer, hangup, teardown', () => {
         client.hangup = async () => {
             throw new Error('boom');
         };
-        const sdk = new TwilioNativeCallSdk(readNativeConfig(cfg), async () => fakeModule(client));
+        const sdk = new TwilioNativeCallSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
         await sdk.dial('+1', '+2');
         await expect(sdk.hangup('CA-fake-sid')).resolves.toBeUndefined();
     });
@@ -221,7 +221,7 @@ describe('TwilioNativeCallSdk — DTMF, transfer, hangup, teardown', () => {
 
 describe('TwilioNativeCallSdk — config + errors + factory', () => {
     it('readNativeConfig extracts typed fields and ignores wrong/extra types', () => {
-        const out = readNativeConfig({
+        const out = ReadNativeConfig({
             AccountSid: 'AC1',
             AuthToken: 'tok',
             ApiKeySid: 'SK1',
@@ -241,24 +241,24 @@ describe('TwilioNativeCallSdk — config + errors + factory', () => {
     });
 
     it('readNativeConfig drops non-string values', () => {
-        const out = readNativeConfig({ AccountSid: 42, AuthToken: '', StreamUrl: null });
+        const out = ReadNativeConfig({ AccountSid: 42, AuthToken: '', StreamUrl: null });
         expect(out.AccountSid).toBeUndefined();
         expect(out.AuthToken).toBeUndefined();
         expect(out.StreamUrl).toBeUndefined();
     });
 
     it('dial() throws an actionable error when no NativeModuleSpecifier is configured', async () => {
-        const sdk = new TwilioNativeCallSdk(readNativeConfig({}), async () => fakeModule(new FakeNativeCallClient()));
+        const sdk = new TwilioNativeCallSdk(ReadNativeConfig({}), async () => fakeModule(new FakeNativeCallClient()));
         await expect(sdk.dial('+1', '+2')).rejects.toThrow(/NativeModuleSpecifier/);
     });
 
     it('answer() throws an actionable error when no NativeModuleSpecifier is configured', async () => {
-        const sdk = new TwilioNativeCallSdk(readNativeConfig({}), async () => fakeModule(new FakeNativeCallClient()));
+        const sdk = new TwilioNativeCallSdk(ReadNativeConfig({}), async () => fakeModule(new FakeNativeCallClient()));
         await expect(sdk.answer('CA-x')).rejects.toThrow(/NativeModuleSpecifier/);
     });
 
     it('defaultNativeLoader throws an actionable error when the adapter specifier cannot be resolved', async () => {
-        await expect(defaultNativeLoader('@nonexistent/twilio-native-adapter-xyz')).rejects.toThrow(
+        await expect(DefaultNativeLoader('@nonexistent/twilio-native-adapter-xyz')).rejects.toThrow(
             /could not load the native Twilio adapter/,
         );
     });

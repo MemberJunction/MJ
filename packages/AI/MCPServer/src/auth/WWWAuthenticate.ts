@@ -12,7 +12,7 @@
  */
 
 import type { Response } from 'express';
-import { getResourceIdentifier } from './OAuthConfig.js';
+import { GetResourceIdentifier } from './OAuthConfig.js';
 
 /**
  * Options for building a WWW-Authenticate header.
@@ -46,8 +46,8 @@ export interface WWWAuthenticateOptions {
  * @param options - Optional parameters for the header
  * @returns The formatted WWW-Authenticate header value
  */
-export function buildWWWAuthenticateHeader(options: WWWAuthenticateOptions = {}): string {
-  const resourceIdentifier = options.resourceMetadataUrl ?? getResourceIdentifier();
+export function BuildWWWAuthenticateHeader(options: WWWAuthenticateOptions = {}): string {
+  const resourceIdentifier = options.resourceMetadataUrl ?? GetResourceIdentifier();
   const metadataUrl = `${resourceIdentifier}/.well-known/oauth-protected-resource`;
 
   const parts: string[] = ['Bearer'];
@@ -77,6 +77,11 @@ export function buildWWWAuthenticateHeader(options: WWWAuthenticateOptions = {})
   return `${parts[0]} ${parts.slice(1).join(', ')}`;
 }
 
+/** @deprecated Use {@link BuildWWWAuthenticateHeader}. */
+export function buildWWWAuthenticateHeader(options: WWWAuthenticateOptions = {}): string {
+  return BuildWWWAuthenticateHeader(options);
+}
+
 /**
  * Sends a 401 Unauthorized response with WWW-Authenticate header.
  *
@@ -90,12 +95,12 @@ export function buildWWWAuthenticateHeader(options: WWWAuthenticateOptions = {})
  * @param message - Error message for the response body
  * @param options - Optional WWW-Authenticate header options
  */
-export function send401Response(
+export function Send401Response(
   res: Response,
   message: string,
   options: Omit<WWWAuthenticateOptions, 'error'> = {}
 ): void {
-  const wwwAuthenticate = buildWWWAuthenticateHeader(options);
+  const wwwAuthenticate = BuildWWWAuthenticateHeader(options);
 
   res.status(401)
     .set('WWW-Authenticate', wwwAuthenticate)
@@ -103,6 +108,15 @@ export function send401Response(
       error: 'unauthorized',
       message,
     });
+}
+
+/** @deprecated Use {@link Send401Response}. */
+export function send401Response(
+  res: Response,
+  message: string,
+  options: Omit<WWWAuthenticateOptions, 'error'> = {}
+): void {
+  return Send401Response(res, message, options);
 }
 
 /**
@@ -117,12 +131,12 @@ export function send401Response(
  * @param message - Error message for the response body
  * @param errorDescription - Description for WWW-Authenticate header
  */
-export function send403Response(
+export function Send403Response(
   res: Response,
   message: string,
   errorDescription: string
 ): void {
-  const wwwAuthenticate = buildWWWAuthenticateHeader({
+  const wwwAuthenticate = BuildWWWAuthenticateHeader({
     error: 'insufficient_scope',
     errorDescription,
   });
@@ -133,6 +147,15 @@ export function send403Response(
       error: 'forbidden',
       message,
     });
+}
+
+/** @deprecated Use {@link Send403Response}. */
+export function send403Response(
+  res: Response,
+  message: string,
+  errorDescription: string
+): void {
+  return Send403Response(res, message, errorDescription);
 }
 
 /**
@@ -147,7 +170,7 @@ export function send403Response(
  * @param message - Error message for the response body
  * @param retryAfterSeconds - Suggested retry delay in seconds (default: 30)
  */
-export function send503Response(
+export function Send503Response(
   res: Response,
   message: string,
   retryAfterSeconds: number = 30
@@ -158,4 +181,13 @@ export function send503Response(
       error: 'service_unavailable',
       message,
     });
+}
+
+/** @deprecated Use {@link Send503Response}. */
+export function send503Response(
+  res: Response,
+  message: string,
+  retryAfterSeconds: number = 30
+): void {
+  return Send503Response(res, message, retryAfterSeconds);
 }

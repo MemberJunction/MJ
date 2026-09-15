@@ -431,7 +431,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             processRunParams.startTime = new Date();
             processRunParams.endTime = new Date();
             processRunParams.numItemsProcessed = totalProcessed - resumeOffset;
-            await this.saveProcessRun(processRunParams, contextUser);
+            await this.SaveProcessRun(processRunParams, contextUser);
         }
     }
 
@@ -464,8 +464,8 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         await this.updateContentItemTaggingStatus(params.contentItemID, 'Processing', contextUser);
 
         try {
-            const LLMResults: JsonObject = await this.promptAndRetrieveResultsFromLLM(params, contextUser);
-            await this.saveLLMResults(LLMResults, contextUser);
+            const LLMResults: JsonObject = await this.PromptAndRetrieveResultsFromLLM(params, contextUser);
+            await this.SaveLLMResults(LLMResults, contextUser);
             // A8: Update tagging status to Complete
             await this.updateContentItemTaggingStatus(params.contentItemID, 'Complete', contextUser);
         } catch (e) {
@@ -887,7 +887,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         return (source.ConfigurationObject as IContentSourceClassificationConfiguration | null) ?? null;
     }
 
-    public async promptAndRetrieveResultsFromLLM(params: ContentItemProcessParams, contextUser: UserInfo): Promise<JsonObject> {
+    public async PromptAndRetrieveResultsFromLLM(params: ContentItemProcessParams, contextUser: UserInfo): Promise<JsonObject> {
         await AIEngine.Instance.Config(false, contextUser);
 
         // Resolve the effective classification context once per item (async lookup);
@@ -896,7 +896,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
 
         const prompt = this.getAutotagPrompt();
         const tokenLimit = this.resolveTokenLimit(params.modelID);
-        const chunks = await this.chunkExtractedText(params.text, tokenLimit);
+        const chunks = await this.ChunkExtractedText(params.text, tokenLimit);
 
         if (chunks.length === 0 || (chunks.length === 1 && (!chunks[0] || chunks[0].trim().length === 0))) {
             LogError(`[Autotag] No text to process for item ${params.contentItemID}`);
@@ -908,7 +908,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
 
         for (let ci = 0; ci < chunks.length; ci++) {
             try {
-                LLMResults = await this.processChunkWithPromptRunner(prompt, params, chunks[ci], LLMResults, contextUser);
+                LLMResults = await this.ProcessChunkWithPromptRunner(prompt, params, chunks[ci], LLMResults, contextUser);
             } catch (chunkError) {
                 LogError(`[Autotag] Chunk ${ci + 1}/${chunks.length} failed for item ${params.contentItemID}: ${chunkError instanceof Error ? chunkError.message : String(chunkError)}`);
             }
@@ -918,6 +918,11 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         LLMResults.processEndTime = new Date();
         LLMResults.contentItemID = params.contentItemID;
         return LLMResults;
+    }
+
+    /** @deprecated Use {@link PromptAndRetrieveResultsFromLLM}. */
+    public async promptAndRetrieveResultsFromLLM(params: ContentItemProcessParams, contextUser: UserInfo): Promise<JsonObject> {
+        return this.PromptAndRetrieveResultsFromLLM(params, contextUser);
     }
 
     /**
@@ -940,7 +945,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * Uses the prompt's configured model by default. If ContentType.AIModelID is set,
      * it is passed as a runtime model override via AIPromptParams.override.
      */
-    public async processChunkWithPromptRunner(
+    public async ProcessChunkWithPromptRunner(
         prompt: MJAIPromptEntityExtended,
         params: ContentItemProcessParams,
         chunk: string,
@@ -1004,23 +1009,44 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         return LLMResults;
     }
 
-    public async saveLLMResults(LLMResults: JsonObject, contextUser: UserInfo): Promise<void> {
+    /** @deprecated Use {@link ProcessChunkWithPromptRunner}. */
+    public async processChunkWithPromptRunner(
+        prompt: MJAIPromptEntityExtended,
+        params: ContentItemProcessParams,
+        chunk: string,
+        LLMResults: JsonObject,
+        contextUser: UserInfo
+    ): Promise<JsonObject> {
+        return this.ProcessChunkWithPromptRunner(prompt, params, chunk, LLMResults, contextUser);
+    }
+
+    public async SaveLLMResults(LLMResults: JsonObject, contextUser: UserInfo): Promise<void> {
         if (LLMResults.isValidContent === true) {
-            await this.saveResultsToContentItemAttribute(LLMResults, contextUser);
-            await this.saveContentItemTags(LLMResults.contentItemID as string, LLMResults, contextUser);
+            await this.SaveResultsToContentItemAttribute(LLMResults, contextUser);
+            await this.SaveContentItemTags(LLMResults.contentItemID as string, LLMResults, contextUser);
         } else if (LLMResults.isValidContent === false) {
             LogStatus(`[Autotag] LLM judged content item ${LLMResults.contentItemID} INVALID — deleting it. Title: ${String(LLMResults.title ?? '')} | Reason/description: ${String(LLMResults.description ?? LLMResults.reason ?? '')}`.slice(0, 600));
-            await this.deleteInvalidContentItem(LLMResults.contentItemID as string, contextUser);
+            await this.DeleteInvalidContentItem(LLMResults.contentItemID as string, contextUser);
         } else {
             LogError(`[Autotag] Unexpected LLM format for item ${LLMResults.contentItemID} — isValidContent missing. Keys: ${Object.keys(LLMResults).join(', ')}`);
         }
     }
 
-    public async deleteInvalidContentItem(contentItemID: string, contextUser: UserInfo): Promise<void> {
+    /** @deprecated Use {@link SaveLLMResults}. */
+    public async saveLLMResults(LLMResults: JsonObject, contextUser: UserInfo): Promise<void> {
+        return this.SaveLLMResults(LLMResults, contextUser);
+    }
+
+    public async DeleteInvalidContentItem(contentItemID: string, contextUser: UserInfo): Promise<void> {
         const md = this.ProviderToUse;
         const contentItem: MJContentItemEntity = await md.GetEntityObject<MJContentItemEntity>('MJ: Content Items', contextUser);
         await contentItem.Load(contentItemID);
         await contentItem.Delete();
+    }
+
+    /** @deprecated Use {@link DeleteInvalidContentItem}. */
+    public async deleteInvalidContentItem(contentItemID: string, contextUser: UserInfo): Promise<void> {
+        return this.DeleteInvalidContentItem(contentItemID, contextUser);
     }
 
     /**
@@ -1066,7 +1092,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * ({@link MAX_EMBEDDING_TOKENS}) — these two chunk sites feed different consumers and
      * must not be collapsed into one call. Tagging chunks are transient and never persisted.
      */
-    public async chunkExtractedText(text: string, tokenLimit: number): Promise<string[]> {
+    public async ChunkExtractedText(text: string, tokenLimit: number): Promise<string[]> {
         try {
             const maxChunkTokens = Math.ceil(tokenLimit / 1.5);
 
@@ -1086,6 +1112,11 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             LogError('Could not chunk the text');
             return [text];
         }
+    }
+
+    /** @deprecated Use {@link ChunkExtractedText}. */
+    public async chunkExtractedText(text: string, tokenLimit: number): Promise<string[]> {
+        return this.ChunkExtractedText(text, tokenLimit);
     }
 
     /**
@@ -1126,7 +1157,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * After each tag is saved, invokes the OnContentItemTagSaved callback (if set)
      * for taxonomy bridge processing.
      */
-    public async saveContentItemTags(contentItemID: string, LLMResults: JsonObject, contextUser: UserInfo): Promise<void> {
+    public async SaveContentItemTags(contentItemID: string, LLMResults: JsonObject, contextUser: UserInfo): Promise<void> {
         const md = this.ProviderToUse;
         const keywords = LLMResults.keywords;
         if (!keywords || !Array.isArray(keywords)) return;
@@ -1188,11 +1219,16 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         }
     }
 
+    /** @deprecated Use {@link SaveContentItemTags}. */
+    public async saveContentItemTags(contentItemID: string, LLMResults: JsonObject, contextUser: UserInfo): Promise<void> {
+        return this.SaveContentItemTags(contentItemID, LLMResults, contextUser);
+    }
+
     /**
      * Saves LLM-extracted attributes to the database.
      * Updates content item name/description, then creates attribute records for other fields.
      */
-    public async saveResultsToContentItemAttribute(LLMResults: JsonObject, contextUser: UserInfo): Promise<void> {
+    public async SaveResultsToContentItemAttribute(LLMResults: JsonObject, contextUser: UserInfo): Promise<void> {
         const md = this.ProviderToUse;
         const contentItemID = LLMResults.contentItemID as string;
         const skipKeys = new Set(['keywords', 'processStartTime', 'processEndTime', 'contentItemID', 'isValidContent', AutotagBaseEngine.AI_PROMPT_RUN_ID_KEY]);
@@ -1229,16 +1265,26 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         }
     }
 
+    /** @deprecated Use {@link SaveResultsToContentItemAttribute}. */
+    public async saveResultsToContentItemAttribute(LLMResults: JsonObject, contextUser: UserInfo): Promise<void> {
+        return this.SaveResultsToContentItemAttribute(LLMResults, contextUser);
+    }
+
     /**
      * Retrieves all content sources for a given content source type.
      * Throws if no sources are found.
      */
-    public async getAllContentSources(contextUser: UserInfo, contentSourceTypeID: string): Promise<MJContentSourceEntity[]> {
+    public async GetAllContentSources(contextUser: UserInfo, contentSourceTypeID: string): Promise<MJContentSourceEntity[]> {
         const sources = await this.GetAllContentSourcesSafe(contextUser, contentSourceTypeID);
         if (sources.length === 0) {
             throw new Error(`No content sources found for content source type with ID '${contentSourceTypeID}'`);
         }
         return sources;
+    }
+
+    /** @deprecated Use {@link GetAllContentSources}. */
+    public async getAllContentSources(contextUser: UserInfo, contentSourceTypeID: string): Promise<MJContentSourceEntity[]> {
+        return this.GetAllContentSources(contextUser, contentSourceTypeID);
     }
 
     /**
@@ -1257,7 +1303,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         return sourceType.ID;
     }
 
-    public async getContentSourceParams(contentSource: MJContentSourceEntity, contextUser: UserInfo): Promise<Map<string, ContentSourceTypeParamValue>> {
+    public async GetContentSourceParams(contentSource: MJContentSourceEntity, contextUser: UserInfo): Promise<Map<string, ContentSourceTypeParamValue>> {
         const contentSourceParams = new Map<string, ContentSourceTypeParamValue>();
 
         const rv = new RunView();
@@ -1273,7 +1319,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
                 params.contentSourceID = contentSource.ID;
 
                 if (contentSourceParam.Value) {
-                    params.value = this.castValueAsCorrectType(contentSourceParam.Value, params.type);
+                    params.value = this.CastValueAsCorrectType(contentSourceParam.Value, params.type);
                 }
                 contentSourceParams.set(params.name, params.value);
             }
@@ -1282,6 +1328,11 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         }
 
         return contentSourceParams;
+    }
+
+    /** @deprecated Use {@link GetContentSourceParams}. */
+    public async getContentSourceParams(contentSource: MJContentSourceEntity, contextUser: UserInfo): Promise<Map<string, ContentSourceTypeParamValue>> {
+        return this.GetContentSourceParams(contentSource, contextUser);
     }
 
     public GetDefaultContentSourceTypeParams(contentSourceTypeParamID: string): ContentSourceTypeParams {
@@ -1293,20 +1344,20 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         const params = new ContentSourceTypeParams();
         params.name = result.Name;
         params.type = result.Type.toLowerCase();
-        params.value = this.castValueAsCorrectType(result.DefaultValue ?? '', params.type);
+        params.value = this.CastValueAsCorrectType(result.DefaultValue ?? '', params.type);
         return params;
     }
 
-    public castValueAsCorrectType(value: string, type: string): ContentSourceTypeParamValue {
+    public CastValueAsCorrectType(value: string, type: string): ContentSourceTypeParamValue {
         switch (type) {
             case 'number':
                 return parseInt(value, 10);
             case 'boolean':
-                return this.stringToBoolean(value);
+                return this.StringToBoolean(value);
             case 'string':
                 return value;
             case 'string[]':
-                return this.parseStringArray(value);
+                return this.ParseStringArray(value);
             case 'regexp':
                 return new RegExp(value.replace(/\\\\/g, '\\'));
             default:
@@ -1314,26 +1365,46 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         }
     }
 
-    public stringToBoolean(str: string): boolean {
+    /** @deprecated Use {@link CastValueAsCorrectType}. */
+    public castValueAsCorrectType(value: string, type: string): ContentSourceTypeParamValue {
+        return this.CastValueAsCorrectType(value, type);
+    }
+
+    public StringToBoolean(str: string): boolean {
         return str === 'true';
     }
 
-    public parseStringArray(value: string): string[] {
+    /** @deprecated Use {@link StringToBoolean}. */
+    public stringToBoolean(str: string): boolean {
+        return this.StringToBoolean(str);
+    }
+
+    public ParseStringArray(value: string): string[] {
         return JSON.parse(value) as string[];
+    }
+
+    /** @deprecated Use {@link ParseStringArray}. */
+    public parseStringArray(value: string): string[] {
+        return this.ParseStringArray(value);
     }
 
     /**
      * Converts a run date to the user's local timezone.
      */
-    public async convertLastRunDateToTimezone(lastRunDate: Date): Promise<Date> {
+    public async ConvertLastRunDateToTimezone(lastRunDate: Date): Promise<Date> {
         const userTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
         return toZonedTime(lastRunDate, userTimeZone);
+    }
+
+    /** @deprecated Use {@link ConvertLastRunDateToTimezone}. */
+    public async convertLastRunDateToTimezone(lastRunDate: Date): Promise<Date> {
+        return this.ConvertLastRunDateToTimezone(lastRunDate);
     }
 
     /**
      * Retrieves the last run date for a content source. Returns epoch date if no runs exist.
      */
-    public async getContentSourceLastRunDate(contentSourceID: string, contextUser: UserInfo): Promise<Date> {
+    public async GetContentSourceLastRunDate(contentSourceID: string, contextUser: UserInfo): Promise<Date> {
         const rv = new RunView();
         // Exclude 'Running' status to avoid using the current in-progress run's
         // start time as the cutoff — that would cause the provider to skip all records.
@@ -1346,7 +1417,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
 
         if (results.Success && results.Results.length) {
             const lastRunDate = results.Results[0].__mj_CreatedAt;
-            return this.convertLastRunDateToTimezone(lastRunDate);
+            return this.ConvertLastRunDateToTimezone(lastRunDate);
         }
 
         if (results.Success) {
@@ -1354,6 +1425,11 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         }
 
         throw new Error(`Failed to retrieve last run date for content source with ID ${contentSourceID}`);
+    }
+
+    /** @deprecated Use {@link GetContentSourceLastRunDate}. */
+    public async getContentSourceLastRunDate(contentSourceID: string, contextUser: UserInfo): Promise<Date> {
+        return this.GetContentSourceLastRunDate(contentSourceID, contextUser);
     }
 
     public GetContentItemParams(contentTypeID: string): { modelID: string; minTags: number; maxTags: number } {
@@ -1408,17 +1484,27 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         return `${contentTypeName} in ${fileTypeName} format obtained from a ${sourceTypeName} source`;
     }
 
-    public async getChecksumFromURL(url: string): Promise<string> {
+    public async GetChecksumFromURL(url: string): Promise<string> {
         const response = await HttpGet<string>(url, { ResponseType: 'text' });
         const content = String(response.Data);
         return crypto.createHash('sha256').update(content).digest('hex');
     }
 
-    public async getChecksumFromText(text: string): Promise<string> {
+    /** @deprecated Use {@link GetChecksumFromURL}. */
+    public async getChecksumFromURL(url: string): Promise<string> {
+        return this.GetChecksumFromURL(url);
+    }
+
+    public async GetChecksumFromText(text: string): Promise<string> {
         return crypto.createHash('sha256').update(text).digest('hex');
     }
 
-    public async getContentItemIDFromURL(contentSourceParams: ContentSourceParams, contextUser: UserInfo): Promise<string> {
+    /** @deprecated Use {@link GetChecksumFromText}. */
+    public async getChecksumFromText(text: string): Promise<string> {
+        return this.GetChecksumFromText(text);
+    }
+
+    public async GetContentItemIDFromURL(contentSourceParams: ContentSourceParams, contextUser: UserInfo): Promise<string> {
         const url = contentSourceParams.URL;
         const rv = new RunView();
         const results = await rv.RunView<MJContentItemEntity>({
@@ -1434,10 +1520,15 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         throw new Error(`Content item with URL ${url} not found`);
     }
 
+    /** @deprecated Use {@link GetContentItemIDFromURL}. */
+    public async getContentItemIDFromURL(contentSourceParams: ContentSourceParams, contextUser: UserInfo): Promise<string> {
+        return this.GetContentItemIDFromURL(contentSourceParams, contextUser);
+    }
+
     /**
      * Saves process run metadata to the database (backward-compatible simple version).
      */
-    public async saveProcessRun(processRunParams: ProcessRunParams, contextUser: UserInfo): Promise<void> {
+    public async SaveProcessRun(processRunParams: ProcessRunParams, contextUser: UserInfo): Promise<void> {
         const md = this.ProviderToUse;
         const processRun = await md.GetEntityObject<MJContentProcessRunEntity>('MJ: Content Process Runs', contextUser);
         processRun.NewRecord();
@@ -1448,6 +1539,11 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         processRun.ProcessedItems = processRunParams.numItemsProcessed;
         processRun.StartedByUserID = contextUser.ID;
         await processRun.Save();
+    }
+
+    /** @deprecated Use {@link SaveProcessRun}. */
+    public async saveProcessRun(processRunParams: ProcessRunParams, contextUser: UserInfo): Promise<void> {
+        return this.SaveProcessRun(processRunParams, contextUser);
     }
 
     /**
@@ -1555,17 +1651,27 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         };
     }
 
-    public async parsePDF(dataBuffer: Buffer): Promise<string> {
+    public async ParsePDF(dataBuffer: Buffer): Promise<string> {
         const dataPDF = await pdfParse(dataBuffer);
         return dataPDF.text;
     }
 
-    public async parseDOCX(dataBuffer: Buffer): Promise<string> {
+    /** @deprecated Use {@link ParsePDF}. */
+    public async parsePDF(dataBuffer: Buffer): Promise<string> {
+        return this.ParsePDF(dataBuffer);
+    }
+
+    public async ParseDOCX(dataBuffer: Buffer): Promise<string> {
         const dataDOCX = await officeparser.parseOffice(dataBuffer);
         return dataDOCX.toText();
     }
 
-    public async parseHTML(data: string): Promise<string> {
+    /** @deprecated Use {@link ParseDOCX}. */
+    public async parseDOCX(dataBuffer: Buffer): Promise<string> {
+        return this.ParseDOCX(dataBuffer);
+    }
+
+    public async ParseHTML(data: string): Promise<string> {
         try {
             const $ = cheerio.load(data);
             $('script, style, nav, footer, header, .hidden').remove();
@@ -1576,17 +1682,27 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         }
     }
 
-    public async parseFileFromPath(filePath: string): Promise<string> {
+    /** @deprecated Use {@link ParseHTML}. */
+    public async parseHTML(data: string): Promise<string> {
+        return this.ParseHTML(data);
+    }
+
+    public async ParseFileFromPath(filePath: string): Promise<string> {
         const dataBuffer = await fs.promises.readFile(filePath);
         const fileExtension = filePath.split('.').pop()?.toLowerCase();
         switch (fileExtension) {
             case 'pdf':
-                return this.parsePDF(dataBuffer);
+                return this.ParsePDF(dataBuffer);
             case 'docx':
-                return this.parseDOCX(dataBuffer);
+                return this.ParseDOCX(dataBuffer);
             default:
                 throw new Error(`File type '${fileExtension}' not supported`);
         }
+    }
+
+    /** @deprecated Use {@link ParseFileFromPath}. */
+    public async parseFileFromPath(filePath: string): Promise<string> {
+        return this.ParseFileFromPath(filePath);
     }
 
     // ---- Direct Vectorization ----

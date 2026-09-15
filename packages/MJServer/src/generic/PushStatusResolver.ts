@@ -55,13 +55,18 @@ export interface StatusUpdateParams {
  * payload shape and the required-identity guarantee live in exactly one place. Adding a field to
  * the push is a one-line change here; a new publisher physically cannot omit `ownerUserId`.
  */
-export function publishStatusUpdate(pubSub: PubSubEngine, params: StatusUpdateParams): void {
+export function PublishStatusUpdate(pubSub: PubSubEngine, params: StatusUpdateParams): void {
   const payload: PushStatusNotificationPayload = {
     sessionId: params.sessionId,
     ownerUserId: params.ownerUserId,
     message: params.message,
   };
   pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, payload);
+}
+
+/** @deprecated Use {@link PublishStatusUpdate}. */
+export function publishStatusUpdate(pubSub: PubSubEngine, params: StatusUpdateParams): void {
+  return PublishStatusUpdate(pubSub, params);
 }
 
 /** Minimal shape of the subscription's connection context needed by the filter. */
@@ -82,7 +87,7 @@ export interface StatusUpdatesFilterContext {
  * `sessionId` is no longer sufficient. Fails CLOSED — a missing owner or connection identity never
  * matches.
  */
-export function statusUpdatesFilter(data: {
+export function StatusUpdatesFilter(data: {
   payload: PushStatusNotificationPayload;
   args: PushStatusNotificationArgs;
   context: StatusUpdatesFilterContext | undefined;
@@ -98,12 +103,21 @@ export function statusUpdatesFilter(data: {
   return UUIDsEqual(payload.ownerUserId, connectionUserId);
 }
 
+/** @deprecated Use {@link StatusUpdatesFilter}. */
+export function statusUpdatesFilter(data: {
+  payload: PushStatusNotificationPayload;
+  args: PushStatusNotificationArgs;
+  context: StatusUpdatesFilterContext | undefined;
+}): boolean {
+  return StatusUpdatesFilter(data);
+}
+
 @Resolver()
 export class PushStatusResolver {
   @Subscription(() => PushStatusNotification, {
     topics: PUSH_STATUS_UPDATES_TOPIC,
     filter: (data: ResolverFilterData<PushStatusNotificationPayload, PushStatusNotificationArgs, StatusUpdatesFilterContext>) =>
-      statusUpdatesFilter(data),
+      StatusUpdatesFilter(data),
   })
   statusUpdates(
     @Root() { message }: PushStatusNotificationPayload,

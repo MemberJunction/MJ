@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { SQLServerDialect } from '@memberjunction/sql-dialect';
 import {
-    classifyQueryParameters,
-    probeValues,
+    ClassifyQueryParameters,
+    ProbeValues,
     type QueryParamDef,
     type VariantRenderer,
 } from '../Database/materializationParamClassifier';
@@ -27,7 +27,7 @@ describe('classifyQueryParameters', () => {
     };
 
     it('no parameters → qualifies with mode None', () => {
-        const r = classifyQueryParameters({
+        const r = ClassifyQueryParameters({
             queryName: 'Q',
             params: [],
             outputColumns: ['ID'],
@@ -42,7 +42,7 @@ describe('classifyQueryParameters', () => {
     it('single string row-filter on a projected column → RowFilterBroad', () => {
         const params: QueryParamDef[] = [{ Name: 'status', Type: 'string' }];
         const render: VariantRenderer = (v) => `SELECT ID, Status FROM Orders WHERE Status = ${lit(v['status'])}`;
-        const r = classifyQueryParameters({ queryName: 'Q', params, outputColumns: ['ID', 'Status'], dialect: tsql, render, allowRowFilterBroad: true });
+        const r = ClassifyQueryParameters({ queryName: 'Q', params, outputColumns: ['ID', 'Status'], dialect: tsql, render, allowRowFilterBroad: true });
         expect(r.perParam[0].verdict.role).toBe('RowFilter');
         expect(r.qualification.qualifies).toBe(true);
         expect(r.qualification.paramMode).toBe('RowFilterBroad');
@@ -55,7 +55,7 @@ describe('classifyQueryParameters', () => {
         // row-filter query must be refused (deferred to Phase 2), never silently minted.
         const params: QueryParamDef[] = [{ Name: 'status', Type: 'string' }];
         const render: VariantRenderer = (v) => `SELECT ID, Status FROM Orders WHERE Status = ${lit(v['status'])}`;
-        const r = classifyQueryParameters({ queryName: 'Q', params, outputColumns: ['ID', 'Status'], dialect: tsql, render });
+        const r = ClassifyQueryParameters({ queryName: 'Q', params, outputColumns: ['ID', 'Status'], dialect: tsql, render });
         expect(r.perParam[0].verdict.role).toBe('RowFilter'); // classification is unchanged...
         expect(r.qualification.qualifies).toBe(false);         // ...but the gate refuses to qualify it
         expect(r.qualification.paramMode).not.toBe('RowFilterBroad');
@@ -68,7 +68,7 @@ describe('classifyQueryParameters', () => {
         // clean top-level WHERE row filter.
         const params: QueryParamDef[] = [{ Name: 'status', Type: 'string' }];
         const render: VariantRenderer = (v) => `SELECT ID, Status FROM Orders WHERE Status = '${String(v['status']).toUpperCase()}'`;
-        const r = classifyQueryParameters({ queryName: 'Q', params, outputColumns: ['ID', 'Status'], dialect: tsql, render, allowRowFilterBroad: true });
+        const r = ClassifyQueryParameters({ queryName: 'Q', params, outputColumns: ['ID', 'Status'], dialect: tsql, render, allowRowFilterBroad: true });
         expect(r.perParam[0].verdict.role).toBe('Unbounded');                 // guard overrides RowFilter → Unbounded
         expect(r.perParam[0].verdict.reason).toMatch(/does not survive|transforms its value/i);
         expect(r.qualification.qualifies).toBe(false);
@@ -80,7 +80,7 @@ describe('classifyQueryParameters', () => {
         // The sentinel carries leading/trailing whitespace so trim changes it → guard refuses.
         const params: QueryParamDef[] = [{ Name: 'status', Type: 'string' }];
         const render: VariantRenderer = (v) => `SELECT ID, Status FROM Orders WHERE Status = '${String(v['status']).trim()}'`;
-        const r = classifyQueryParameters({ queryName: 'Q', params, outputColumns: ['ID', 'Status'], dialect: tsql, render, allowRowFilterBroad: true });
+        const r = ClassifyQueryParameters({ queryName: 'Q', params, outputColumns: ['ID', 'Status'], dialect: tsql, render, allowRowFilterBroad: true });
         expect(r.perParam[0].verdict.role).toBe('Unbounded');
         expect(r.qualification.paramMode).not.toBe('RowFilterBroad');
     });
@@ -91,7 +91,7 @@ describe('classifyQueryParameters', () => {
         // integer sentinel would be identity under round/int and pass falsely.
         const params: QueryParamDef[] = [{ Name: 'minScore', Type: 'number' }];
         const render: VariantRenderer = (v) => `SELECT ID, Score FROM Members WHERE Score >= ${Math.round(Number(v['minScore']))}`;
-        const r = classifyQueryParameters({ queryName: 'Q', params, outputColumns: ['ID', 'Score'], dialect: tsql, render, allowRowFilterBroad: true });
+        const r = ClassifyQueryParameters({ queryName: 'Q', params, outputColumns: ['ID', 'Score'], dialect: tsql, render, allowRowFilterBroad: true });
         expect(r.perParam[0].verdict.role).toBe('Unbounded');
         expect(r.qualification.paramMode).not.toBe('RowFilterBroad');
     });
@@ -101,7 +101,7 @@ describe('classifyQueryParameters', () => {
         // path binds the raw dashed value. The enriched sentinel contains a dash → replace alters it → refuse.
         const params: QueryParamDef[] = [{ Name: 'code', Type: 'string' }];
         const render: VariantRenderer = (v) => `SELECT ID, Code FROM Items WHERE Code = '${String(v['code']).replace(/-/g, '')}'`;
-        const r = classifyQueryParameters({ queryName: 'Q', params, outputColumns: ['ID', 'Code'], dialect: tsql, render, allowRowFilterBroad: true });
+        const r = ClassifyQueryParameters({ queryName: 'Q', params, outputColumns: ['ID', 'Code'], dialect: tsql, render, allowRowFilterBroad: true });
         expect(r.perParam[0].verdict.role).toBe('Unbounded');
         expect(r.qualification.paramMode).not.toBe('RowFilterBroad');
     });
@@ -112,7 +112,7 @@ describe('classifyQueryParameters', () => {
         // under toISOString → guard refuses (dates are conservatively refused — never wrong).
         const params: QueryParamDef[] = [{ Name: 'asOf', Type: 'date' }];
         const render: VariantRenderer = (v) => `SELECT ID, D FROM Snap WHERE D = '${new Date(String(v['asOf'])).toISOString()}'`;
-        const r = classifyQueryParameters({ queryName: 'Q', params, outputColumns: ['ID', 'D'], dialect: tsql, render, allowRowFilterBroad: true });
+        const r = ClassifyQueryParameters({ queryName: 'Q', params, outputColumns: ['ID', 'D'], dialect: tsql, render, allowRowFilterBroad: true });
         expect(r.perParam[0].verdict.role).toBe('Unbounded');
         expect(r.qualification.paramMode).not.toBe('RowFilterBroad');
     });
@@ -120,12 +120,12 @@ describe('classifyQueryParameters', () => {
     it('a value-PRESERVING filter still qualifies — the passthrough guard does not over-refuse the common case', () => {
         // Both string (quote-only) and numeric (identity) row filters render the value verbatim, so the
         // sentinel survives → still RowFilterBroad. Confirms the guard is targeted, not blanket.
-        const strR = classifyQueryParameters({
+        const strR = ClassifyQueryParameters({
             queryName: 'Q', params: [{ Name: 's', Type: 'string' }], outputColumns: ['ID', 'Status'], dialect: tsql,
             render: (v) => `SELECT ID, Status FROM Orders WHERE Status = ${lit(v['s'])}`, allowRowFilterBroad: true,
         });
         expect(strR.qualification.paramMode).toBe('RowFilterBroad');
-        const numR = classifyQueryParameters({
+        const numR = ClassifyQueryParameters({
             queryName: 'Q', params: [{ Name: 'c', Type: 'number' }], outputColumns: ['ID', 'ChapterID'], dialect: tsql,
             render: (v) => `SELECT ID, ChapterID FROM Orders WHERE ChapterID = ${lit(v['c'])}`, allowRowFilterBroad: true,
         });
@@ -135,7 +135,7 @@ describe('classifyQueryParameters', () => {
     it('numeric row-filter → RowFilterBroad on that column', () => {
         const params: QueryParamDef[] = [{ Name: 'chapterId', Type: 'number' }];
         const render: VariantRenderer = (v) => `SELECT ID, ChapterID FROM Orders WHERE ChapterID = ${lit(v['chapterId'])}`;
-        const r = classifyQueryParameters({ queryName: 'Q', params, outputColumns: ['ID', 'ChapterID'], dialect: tsql, render, allowRowFilterBroad: true });
+        const r = ClassifyQueryParameters({ queryName: 'Q', params, outputColumns: ['ID', 'ChapterID'], dialect: tsql, render, allowRowFilterBroad: true });
         expect(r.qualification.paramMode).toBe('RowFilterBroad');
         expect(r.qualification.rowFilterColumns).toEqual(['ChapterID']);
     });
@@ -143,7 +143,7 @@ describe('classifyQueryParameters', () => {
     it('array param in an IN list (varying length) → RowFilterBroad', () => {
         const params: QueryParamDef[] = [{ Name: 'statuses', Type: 'array' }];
         const render: VariantRenderer = (v) => `SELECT ID, Status FROM Orders WHERE Status IN (${lit(v['statuses'])})`;
-        const r = classifyQueryParameters({ queryName: 'Q', params, outputColumns: ['ID', 'Status'], dialect: tsql, render, allowRowFilterBroad: true });
+        const r = ClassifyQueryParameters({ queryName: 'Q', params, outputColumns: ['ID', 'Status'], dialect: tsql, render, allowRowFilterBroad: true });
         expect(r.qualification.paramMode).toBe('RowFilterBroad');
         expect(r.qualification.rowFilterColumns).toEqual(['Status']);
     });
@@ -159,7 +159,7 @@ describe('classifyQueryParameters', () => {
             const region = v['region'];
             return `SELECT ID, Region FROM Orders${region ? ` WHERE Region = ${lit(region)}` : ''}`;
         };
-        const r = classifyQueryParameters({ queryName: 'Q', params, outputColumns: ['ID', 'Region'], dialect: tsql, render, allowRowFilterBroad: true });
+        const r = ClassifyQueryParameters({ queryName: 'Q', params, outputColumns: ['ID', 'Region'], dialect: tsql, render, allowRowFilterBroad: true });
         expect(r.perParam[0].verdict.role).toBe('Structural');
         expect(r.qualification.qualifies).toBe(false);
         expect(r.qualification.paramMode).not.toBe('RowFilterBroad');
@@ -172,7 +172,7 @@ describe('classifyQueryParameters', () => {
         ];
         const render: VariantRenderer = (v) =>
             `SELECT ID, Status, Score FROM Members WHERE Status = ${lit(v['status'])} AND Score >= ${lit(v['minScore'])}`;
-        const r = classifyQueryParameters({ queryName: 'Q', params, outputColumns: ['ID', 'Status', 'Score'], dialect: tsql, render, allowRowFilterBroad: true });
+        const r = ClassifyQueryParameters({ queryName: 'Q', params, outputColumns: ['ID', 'Status', 'Score'], dialect: tsql, render, allowRowFilterBroad: true });
         expect(r.perParam.every((p) => p.verdict.role === 'RowFilter')).toBe(true);
         expect(r.qualification.paramMode).toBe('RowFilterBroad');
         expect(r.qualification.rowFilterColumns).toEqual(['Status', 'Score']);
@@ -181,7 +181,7 @@ describe('classifyQueryParameters', () => {
     it('row-filter on a column NOT in the output → refused by the qualifier', () => {
         const params: QueryParamDef[] = [{ Name: 'region', Type: 'string' }];
         const render: VariantRenderer = (v) => `SELECT ID, Status FROM Orders WHERE Region = ${lit(v['region'])}`;
-        const r = classifyQueryParameters({ queryName: 'Q', params, outputColumns: ['ID', 'Status'], dialect: tsql, render, allowRowFilterBroad: true });
+        const r = ClassifyQueryParameters({ queryName: 'Q', params, outputColumns: ['ID', 'Status'], dialect: tsql, render, allowRowFilterBroad: true });
         expect(r.perParam[0].verdict.role).toBe('RowFilter');
         expect(r.qualification.qualifies).toBe(false);
         expect(r.qualification.reason).toMatch(/not in the materialized output/i);
@@ -193,7 +193,7 @@ describe('classifyQueryParameters', () => {
             v['mode'] === '__mj_probe_alpha'
                 ? 'SELECT ID FROM Orders'
                 : 'SELECT ID, Region FROM Orders';
-        const r = classifyQueryParameters({ queryName: 'Q', params, outputColumns: ['ID', 'Region'], dialect: tsql, render });
+        const r = ClassifyQueryParameters({ queryName: 'Q', params, outputColumns: ['ID', 'Region'], dialect: tsql, render });
         expect(r.perParam[0].verdict.role).toBe('Structural');
         expect(r.qualification.qualifies).toBe(false);
     });
@@ -206,7 +206,7 @@ describe('classifyQueryParameters', () => {
             }
             return `SELECT ID FROM Orders WHERE Status = ${lit(v['x'])}`;
         };
-        const r = classifyQueryParameters({ queryName: 'Q', params, outputColumns: ['ID', 'Status'], dialect: tsql, render, allowRowFilterBroad: true });
+        const r = ClassifyQueryParameters({ queryName: 'Q', params, outputColumns: ['ID', 'Status'], dialect: tsql, render, allowRowFilterBroad: true });
         expect(r.perParam[0].verdict.role).toBe('Unbounded');
         expect(r.perParam[0].verdict.reason).toMatch(/template error/i);
         expect(r.qualification.qualifies).toBe(false);
@@ -221,7 +221,7 @@ describe('classifyQueryParameters', () => {
             const tail = v['mode'] === '__mj_probe_alpha' ? '' : ' ORDER BY Name';
             return `SELECT ID, Status FROM Orders WHERE Status = ${lit(v['status'])}${tail}`;
         };
-        const r = classifyQueryParameters({ queryName: 'Q', params, outputColumns: ['ID', 'Status'], dialect: tsql, render, allowRowFilterBroad: true });
+        const r = ClassifyQueryParameters({ queryName: 'Q', params, outputColumns: ['ID', 'Status'], dialect: tsql, render, allowRowFilterBroad: true });
         expect(r.qualification.qualifies).toBe(false);
     });
 
@@ -236,7 +236,7 @@ describe('classifyQueryParameters', () => {
             const params: QueryParamDef[] = [{ Name: 'status', Type: 'string' }];
             const render: VariantRenderer = (v) =>
                 `SELECT o.ID, c.Status FROM Orders o INNER JOIN Customers c ON c.ID = o.CustomerID WHERE o.Status = ${lit(v['status'])}`;
-            const r = classifyQueryParameters({ queryName: 'Q', params, outputColumns: ['ID', 'Status'], dialect: tsql, render, allowRowFilterBroad: true });
+            const r = ClassifyQueryParameters({ queryName: 'Q', params, outputColumns: ['ID', 'Status'], dialect: tsql, render, allowRowFilterBroad: true });
             expect(r.perParam[0].verdict.role).toBe('RowFilter'); // the verifier still sees a clean row filter…
             expect(r.qualification.qualifies).toBe(false);        // …but the binding proof refuses it
             expect(r.qualification.paramMode).not.toBe('RowFilterBroad');
@@ -247,7 +247,7 @@ describe('classifyQueryParameters', () => {
             const params: QueryParamDef[] = [{ Name: 'region', Type: 'string' }];
             const render: VariantRenderer = (v) =>
                 `SELECT ID, ShipRegion AS BillRegion FROM Orders WHERE BillRegion = ${lit(v['region'])}`;
-            const r = classifyQueryParameters({ queryName: 'Q', params, outputColumns: ['ID', 'BillRegion'], dialect: tsql, render, allowRowFilterBroad: true });
+            const r = ClassifyQueryParameters({ queryName: 'Q', params, outputColumns: ['ID', 'BillRegion'], dialect: tsql, render, allowRowFilterBroad: true });
             expect(r.perParam[0].verdict.role).toBe('RowFilter');
             expect(r.qualification.qualifies).toBe(false);
             expect(r.qualification.reason).toMatch(/ALIAS over source column "ShipRegion"/i);
@@ -258,7 +258,7 @@ describe('classifyQueryParameters', () => {
             // must still reach RowFilterBroad with the same columns and read-filter spec as before.
             const params: QueryParamDef[] = [{ Name: 'status', Type: 'string' }];
             const render: VariantRenderer = (v) => `SELECT ID, Status FROM Orders WHERE Status = ${lit(v['status'])}`;
-            const r = classifyQueryParameters({ queryName: 'Q', params, outputColumns: ['ID', 'Status'], dialect: tsql, render, allowRowFilterBroad: true });
+            const r = ClassifyQueryParameters({ queryName: 'Q', params, outputColumns: ['ID', 'Status'], dialect: tsql, render, allowRowFilterBroad: true });
             expect(r.qualification.qualifies).toBe(true);
             expect(r.qualification.paramMode).toBe('RowFilterBroad');
             expect(r.qualification.rowFilterColumns).toEqual(['Status']);
@@ -269,7 +269,7 @@ describe('classifyQueryParameters', () => {
             const params: QueryParamDef[] = [{ Name: 'status', Type: 'string' }];
             const render: VariantRenderer = (v) =>
                 `SELECT o.ID, o.Status FROM Orders o INNER JOIN Customers c ON c.ID = o.CustomerID WHERE o.Status = ${lit(v['status'])}`;
-            const r = classifyQueryParameters({ queryName: 'Q', params, outputColumns: ['ID', 'Status'], dialect: tsql, render, allowRowFilterBroad: true });
+            const r = ClassifyQueryParameters({ queryName: 'Q', params, outputColumns: ['ID', 'Status'], dialect: tsql, render, allowRowFilterBroad: true });
             expect(r.qualification.qualifies).toBe(true);
             expect(r.qualification.paramMode).toBe('RowFilterBroad');
         });
@@ -278,13 +278,13 @@ describe('classifyQueryParameters', () => {
     describe('probeValues', () => {
         it('produces distinct values per type', () => {
             for (const t of ['string', 'number', 'date', 'array'] as const) {
-                const vals = probeValues(t);
+                const vals = ProbeValues(t);
                 expect(vals.length).toBeGreaterThanOrEqual(3);
                 expect(new Set(vals.map((v) => JSON.stringify(v))).size).toBe(vals.length);
             }
         });
         it('boolean has exactly the two distinct values', () => {
-            expect(probeValues('boolean')).toEqual([true, false]);
+            expect(ProbeValues('boolean')).toEqual([true, false]);
         });
     });
 });

@@ -35,7 +35,7 @@ import {
   type SummarizeResult,
 } from '@memberjunction/ai';
 import { MJGlobal } from '@memberjunction/global';
-import { makeDriverFailureChatResult, makeModelUsage, makeSuccessChatResult } from './chat-result-factories';
+import { MakeDriverFailureChatResult, MakeModelUsage, MakeSuccessChatResult } from './chat-result-factories';
 
 /**
  * One scripted per-call outcome for {@link TestLLM.Script}.
@@ -244,8 +244,8 @@ export class TestLLM extends BaseLLM {
     _lastChunk: string | null | undefined,
     _usage: ModelUsage | null | undefined,
   ): ChatResult {
-    return makeSuccessChatResult(accumulatedContent ?? '', {
-      usage: this.streamFinalUsage ?? makeModelUsage(),
+    return MakeSuccessChatResult(accumulatedContent ?? '', {
+      usage: this.streamFinalUsage ?? MakeModelUsage(),
       model: this.streamFinalModel,
     });
   }
@@ -265,14 +265,14 @@ export class TestLLM extends BaseLLM {
     switch (outcome.kind) {
       case 'succeed':
         await this.wait(outcome.delayMS);
-        return makeSuccessChatResult(outcome.content, {
+        return MakeSuccessChatResult(outcome.content, {
           usage: outcome.usage,
           model: outcome.model,
           thinking: outcome.thinking,
         });
       case 'fail':
         await this.wait(outcome.delayMS);
-        return makeDriverFailureChatResult(outcome.error, this.constructor.name);
+        return MakeDriverFailureChatResult(outcome.error, this.constructor.name);
       case 'failResult':
         return outcome.result;
       case 'throw':
@@ -284,7 +284,7 @@ export class TestLLM extends BaseLLM {
         });
       case 'stream':
         // Non-streaming call against a stream outcome: resolve the joined chunks.
-        return makeSuccessChatResult(outcome.chunks.join(''), { usage: outcome.usage, model: outcome.model });
+        return MakeSuccessChatResult(outcome.chunks.join(''), { usage: outcome.usage, model: outcome.model });
     }
   }
 
@@ -321,7 +321,7 @@ export class TestLLM extends BaseLLM {
  * same DriverClass name without a reset logs a duplicate-registration warning,
  * though the newest registration still wins).
  */
-export function registerTestLLM(llm: TestLLM, driverClass: string | string[], priority = 100): void {
+export function RegisterTestLLM(llm: TestLLM, driverClass: string | string[], priority = 100): void {
   const driverClasses = Array.isArray(driverClass) ? driverClass : [driverClass];
   for (const name of driverClasses) {
     // The constructor's object-return makes the ClassFactory hand back the
@@ -335,4 +335,9 @@ export function registerTestLLM(llm: TestLLM, driverClass: string | string[], pr
     }
     MJGlobal.Instance.ClassFactory.Register(BaseLLM, TestLLMRegistrationHandle, name, priority);
   }
+}
+
+/** @deprecated Use {@link RegisterTestLLM}. */
+export function registerTestLLM(llm: TestLLM, driverClass: string | string[], priority = 100): void {
+  return RegisterTestLLM(llm, driverClass, priority);
 }

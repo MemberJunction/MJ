@@ -3,7 +3,7 @@ import { Command, Flags, Args } from '@oclif/core';
 import ora from 'ora-classic';
 import chalk from 'chalk';
 import * as fs from 'fs/promises';
-import { CANONICAL_FORMAT_FLAG, resolveLegacyFormat } from '../../../lib/format-compat.js';
+import { CANONICAL_FORMAT_FLAG, ResolveLegacyFormat } from '../../../lib/format-compat.js';
 
 export default class AgentRun extends Command {
   static description = 'Audit and analyze AI agent execution runs for debugging and performance analysis';
@@ -136,7 +136,7 @@ export default class AgentRun extends Command {
 
     // One typed resolution for all four render sites below — replaces the `as any`
     // casts and applies the same --format/pipe rules as the rest of the CLI.
-    const outputFormat: AuditOutputFormat = resolveLegacyFormat({
+    const outputFormat: AuditOutputFormat = ResolveLegacyFormat({
       format: flags.format,
       legacy: flags.output as AuditOutputFormat,
       legacyDefault: 'compact' as const,

@@ -19,7 +19,7 @@
  * first, so a migrated command always keeps its richer, curated metadata.
  */
 import { CLIPluginRegistry, type PluginUsage, type PluginUsageFlag } from '@memberjunction/cli-core';
-import { getDomainProfile } from './domain-profiles.js';
+import { GetDomainProfile } from './domain-profiles.js';
 
 /**
  * The slice of oclif's `Command.Loadable` this module reads.
@@ -59,8 +59,13 @@ function normalizeCommandKey(id: string): string {
 }
 
 /** The domain is the first segment: `sync:push` → `sync`, `codegen` → `codegen`. */
-export function domainOf(commandId: string): string {
+export function DomainOf(commandId: string): string {
   return normalizeCommandKey(commandId).split(':')[0] ?? commandId;
+}
+
+/** @deprecated Use {@link DomainOf}. */
+export function domainOf(commandId: string): string {
+  return DomainOf(commandId);
 }
 
 /**
@@ -104,10 +109,10 @@ function normalizeFlags(flags: OclifCommandShape['flags']): PluginUsageFlag[] | 
  *
  * Exported for testing — the registration path below is what production calls.
  */
-export function deriveUsage(command: OclifCommandShape): PluginUsage {
+export function DeriveUsage(command: OclifCommandShape): PluginUsage {
   const key = normalizeCommandKey(command.id);
-  const domain = domainOf(key);
-  const profile = getDomainProfile(domain);
+  const domain = DomainOf(key);
+  const profile = GetDomainProfile(domain);
   const description = command.description ?? command.summary;
 
   return {
@@ -121,6 +126,11 @@ export function deriveUsage(command: OclifCommandShape): PluginUsage {
   };
 }
 
+/** @deprecated Use {@link DeriveUsage}. */
+export function deriveUsage(command: OclifCommandShape): PluginUsage {
+  return DeriveUsage(command);
+}
+
 /**
  * Registers derived usage for every visible oclif command.
  *
@@ -132,14 +142,19 @@ export function deriveUsage(command: OclifCommandShape): PluginUsage {
  *
  * Returns the keys it registered, so a caller or test can assert coverage.
  */
-export function registerDerivedUsage(commands: readonly OclifCommandShape[]): string[] {
+export function RegisterDerivedUsage(commands: readonly OclifCommandShape[]): string[] {
   const registered: string[] = [];
   for (const command of commands) {
     if (!command?.id || command.hidden) continue;
     if (BUILT_IN_COMMANDS.has(normalizeCommandKey(command.id))) continue;
-    const usage = deriveUsage(command);
+    const usage = DeriveUsage(command);
     CLIPluginRegistry.RegisterUsage(usage);
     registered.push(usage.command);
   }
   return registered;
+}
+
+/** @deprecated Use {@link RegisterDerivedUsage}. */
+export function registerDerivedUsage(commands: readonly OclifCommandShape[]): string[] {
+  return RegisterDerivedUsage(commands);
 }

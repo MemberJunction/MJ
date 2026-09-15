@@ -10,9 +10,9 @@ import {
     PhasedExecutionResult,
     DataSourceResult,
 } from '../../codeGenDatabaseProvider';
-import { configInfo, mj_core_schema } from '../../../Config/config';
-import { logError, logStatus, logWarning, startSpinner, succeedSpinner } from '../../../Misc/status_logging';
-import { buildMetadataSupportObjectsSQL } from './metadataSupportObjects';
+import { configInfo, MjCoreSchema } from '../../../Config/config';
+import { logError, logStatus, LogWarning, StartSpinner, SucceedSpinner } from '../../../Misc/status_logging';
+import { BuildMetadataSupportObjectsSQL } from './metadataSupportObjects';
 import { PostgreSQLDialect, DatabasePlatform, SQLDialect, AutoQuotePostgreSQLIdentifiers, restarLayeredOuterView, buildCreateOrReplaceLayeredOuterViewSQL, LayeredOuterRestarError } from '@memberjunction/sql-dialect';
 import {
     shouldIncludeFieldInParams,
@@ -24,11 +24,11 @@ import {
     PostgreSQLDataProvider,
     PostgreSQLProviderConfigData,
 } from '@memberjunction/postgresql-dataprovider';
-import { PGConnection, getPgConfig } from '../../../Config/pg-connection';
+import { PGConnection, GetPgConfig } from '../../../Config/pg-connection';
 import { PostgreSQLCodeGenConnection } from './PostgreSQLCodeGenConnection';
 import * as fs from 'fs';
 import path from 'path';
-import { executeWithFallback } from './viewFallback';
+import { ExecuteWithFallback } from './viewFallback';
 import type { PGQueryable } from './viewDependencyCapture';
 
 const pgDialect = new PostgreSQLDialect();
@@ -68,10 +68,10 @@ export class PostgreSQLCodeGenProvider extends CodeGenDatabaseProvider {
      * reads `configInfo`.
      */
     async SetupDataSource(): Promise<DataSourceResult> {
-        startSpinner('Initializing database connection...');
+        StartSpinner('Initializing database connection...');
         const pool = await PGConnection();
-        const pgConfig = getPgConfig()!;
-        const coreSchema = mj_core_schema();
+        const pgConfig = GetPgConfig()!;
+        const coreSchema = MjCoreSchema();
 
         const dpConfig = new PostgreSQLProviderConfigData(
             {
@@ -105,7 +105,7 @@ export class PostgreSQLCodeGenProvider extends CodeGenDatabaseProvider {
         await StartupManager.Instance.Startup(false, currentUser, provider, { mode: startupMode.mode });
 
         const connectionInfo = `${pgConfig.Host}:${pgConfig.Port ?? 5432}/${pgConfig.Database}`;
-        succeedSpinner('PostgreSQL connection initialized: ' + connectionInfo);
+        SucceedSpinner('PostgreSQL connection initialized: ' + connectionInfo);
         return { provider, connection: conn, currentUser, connectionInfo };
     }
 
@@ -1982,7 +1982,7 @@ ORDER BY ordinal_position`;
         }
         let core = '__mj';
         try {
-            core = (mj_core_schema() || '__mj').replace(/"/g, '""');
+            core = (MjCoreSchema() || '__mj').replace(/"/g, '""');
         } catch {
             core = '__mj';
         }
@@ -2041,7 +2041,7 @@ ORDER BY ordinal_position`;
             innerColumns,
         });
         const createSQL = buildCreateOrReplaceLayeredOuterViewSQL(entity.SchemaName, entity.BaseView, restarred);
-        await executeWithFallback({
+        await ExecuteWithFallback({
             client,
             schema: entity.SchemaName,
             viewName: entity.BaseView,
@@ -2152,7 +2152,7 @@ $if_view_exists$;
 
     /** @inheritdoc */
     getMetadataSupportObjectsSQL(mjCoreSchema: string): string | null {
-        return buildMetadataSupportObjectsSQL(mjCoreSchema);
+        return BuildMetadataSupportObjectsSQL(mjCoreSchema);
     }
 
     // ─── METADATA MANAGEMENT: SQL FILE EXECUTION ─────────────────────
@@ -2284,7 +2284,7 @@ WHERE p.prokind IN ('f', 'p')
                 }
             }
 
-            await executeWithFallback({
+            await ExecuteWithFallback({
                 client,
                 schema: entity.SchemaName,
                 viewName: entity.GeneratedViewName,
@@ -2351,7 +2351,7 @@ WHERE p.prokind IN ('f', 'p')
             // ── Phase 1: base view (fallback-aware for 42P16) ────────────
             if (opts.viewSQL && opts.viewSQL.trim()) {
                 try {
-                    await executeWithFallback({
+                    await ExecuteWithFallback({
                         client,
                         schema: opts.entity.SchemaName,
                         viewName: opts.entity.GeneratedViewName,
@@ -2669,7 +2669,7 @@ WHERE p.prokind IN ('f', 'p')
         const parentKey = this.resolveCascadeParentKeyField(parentEntity, fkField);
         if (!parentKey) {
             const warning = this.unresolvedCascadeKeyComment(parentEntity, relatedEntity, fkField);
-            logWarning(`WARNING in ${this.getCRUDRoutineName(parentEntity, CRUDType.Delete)} generation: ${warning.trim()}`);
+            LogWarning(`WARNING in ${this.getCRUDRoutineName(parentEntity, CRUDType.Delete)} generation: ${warning.trim()}`);
             return warning;
         }
         const whereClause = `${pgDialect.QuoteIdentifier(fkField.Name)} = ${pgDialect.ParameterRef(parentKey.CodeName)}`;
@@ -2698,7 +2698,7 @@ WHERE p.prokind IN ('f', 'p')
         const parentKey = this.resolveCascadeParentKeyField(parentEntity, fkField);
         if (!parentKey) {
             const warning = this.unresolvedCascadeKeyComment(parentEntity, relatedEntity, fkField);
-            logWarning(`WARNING in ${this.getCRUDRoutineName(parentEntity, CRUDType.Delete)} generation: ${warning.trim()}`);
+            LogWarning(`WARNING in ${this.getCRUDRoutineName(parentEntity, CRUDType.Delete)} generation: ${warning.trim()}`);
             return warning;
         }
         const whereClause = `${pgDialect.QuoteIdentifier(fkField.Name)} = ${pgDialect.ParameterRef(parentKey.CodeName)}`;

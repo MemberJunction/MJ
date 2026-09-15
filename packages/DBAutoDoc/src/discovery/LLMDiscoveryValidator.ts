@@ -47,7 +47,7 @@ export class LLMDiscoveryValidator {
   /**
    * Validate PK/FK candidates for a single table using LLM reasoning
    */
-  public async validateTableRelationships(
+  public async ValidateTableRelationships(
     schemaName: string,
     tableName: string,
     pkCandidates: PKCandidate[],
@@ -136,6 +136,16 @@ export class LLMDiscoveryValidator {
         outputTokens: usage?.completionTokens || 0
       };
     }
+  }
+
+  /** @deprecated Use {@link ValidateTableRelationships}. */
+  public async validateTableRelationships(
+    schemaName: string,
+    tableName: string,
+    pkCandidates: PKCandidate[],
+    fkCandidates: FKCandidate[]
+  ): Promise<LLMValidationResult> {
+    return this.ValidateTableRelationships(schemaName, tableName, pkCandidates, fkCandidates);
   }
 
   /**

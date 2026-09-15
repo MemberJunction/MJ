@@ -358,8 +358,13 @@ export interface FolderConfig {
  * }
  * ```
  */
-export function loadMJConfig(): MJConfig | null {
+export function LoadMJConfig(): MJConfig | null {
   return configManager.loadMJConfig();
+}
+
+/** @deprecated Use {@link LoadMJConfig}. */
+export function loadMJConfig(): MJConfig | null {
+  return LoadMJConfig();
 }
 
 /**
@@ -380,7 +385,7 @@ export function loadMJConfig(): MJConfig | null {
  * }
  * ```
  */
-export async function loadSyncConfig(dir: string): Promise<SyncConfig | null> {
+export async function LoadSyncConfig(dir: string): Promise<SyncConfig | null> {
   const configPath = path.join(dir, '.mj-sync.json');
   
   if (await fs.pathExists(configPath)) {
@@ -393,6 +398,11 @@ export async function loadSyncConfig(dir: string): Promise<SyncConfig | null> {
   }
   
   return null;
+}
+
+/** @deprecated Use {@link LoadSyncConfig}. */
+export async function loadSyncConfig(dir: string): Promise<SyncConfig | null> {
+  return LoadSyncConfig(dir);
 }
 
 /**
@@ -413,7 +423,7 @@ export async function loadSyncConfig(dir: string): Promise<SyncConfig | null> {
  * }
  * ```
  */
-export async function loadEntityConfig(dir: string): Promise<EntityConfig | null> {
+export async function LoadEntityConfig(dir: string): Promise<EntityConfig | null> {
   const configPath = path.join(dir, '.mj-sync.json');
   
   if (await fs.pathExists(configPath)) {
@@ -428,6 +438,11 @@ export async function loadEntityConfig(dir: string): Promise<EntityConfig | null
   }
   
   return null;
+}
+
+/** @deprecated Use {@link LoadEntityConfig}. */
+export async function loadEntityConfig(dir: string): Promise<EntityConfig | null> {
+  return LoadEntityConfig(dir);
 }
 
 /**
@@ -448,7 +463,7 @@ export async function loadEntityConfig(dir: string): Promise<EntityConfig | null
  * }
  * ```
  */
-export async function loadFolderConfig(dir: string): Promise<FolderConfig | null> {
+export async function LoadFolderConfig(dir: string): Promise<FolderConfig | null> {
   const configPath = path.join(dir, '.mj-folder.json');
   
   if (await fs.pathExists(configPath)) {
@@ -461,4 +476,9 @@ export async function loadFolderConfig(dir: string): Promise<FolderConfig | null
   }
   
   return null;
+}
+
+/** @deprecated Use {@link LoadFolderConfig}. */
+export async function loadFolderConfig(dir: string): Promise<FolderConfig | null> {
+  return LoadFolderConfig(dir);
 }

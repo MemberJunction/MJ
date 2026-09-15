@@ -50,9 +50,14 @@ import path from 'node:path';
  * Exported for unit testing; consumed by `DependencyPhase.ensureCliDependency`
  * and `DependencyPhase.ensureHoistedDependencies`.
  */
-export function tagToNpmVersion(tag: string): string {
+export function TagToNpmVersion(tag: string): string {
   const stripped = tag.startsWith('v') ? tag.slice(1) : tag;
   return /^\d+\.\d+\.\d+(-[\w.-]+)?(\+[\w.-]+)?$/.test(stripped) ? stripped : 'latest';
+}
+
+/** @deprecated Use {@link TagToNpmVersion}. */
+export function tagToNpmVersion(tag: string): string {
+  return TagToNpmVersion(tag);
 }
 
 /**
@@ -545,7 +550,7 @@ export class DependencyPhase {
       return;
     }
 
-    const npmVersion = tagToNpmVersion(tag);
+    const npmVersion = TagToNpmVersion(tag);
 
     if (!pkg['devDependencies']) {
       pkg['devDependencies'] = {};
@@ -599,7 +604,7 @@ export class DependencyPhase {
 
     const pkgPath = path.join(dir, 'package.json');
     const pkg = await this.fileSystem.ReadJSON<Record<string, Record<string, string>>>(pkgPath);
-    const npmVersion = tagToNpmVersion(tag);
+    const npmVersion = TagToNpmVersion(tag);
 
     let modified = false;
 

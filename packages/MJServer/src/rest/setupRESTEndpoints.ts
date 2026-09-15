@@ -56,7 +56,7 @@ export const DEFAULT_REST_API_OPTIONS: RESTApiOptions = {
  * @param options Configuration options for REST API
  * @param authMiddleware Optional authentication middleware to use
  */
-export function setupRESTEndpoints(
+export function SetupRESTEndpoints(
     app: express.Application,
     options?: Partial<RESTApiOptions>,
     authMiddleware?: express.RequestHandler
@@ -90,4 +90,13 @@ export function setupRESTEndpoints(
     }
 
     LogStatusEx({ message: `REST API endpoints have been set up at ${basePath}`, verboseOnly: true });
+}
+
+/** @deprecated Use {@link SetupRESTEndpoints}. */
+export function setupRESTEndpoints(
+    app: express.Application,
+    options?: Partial<RESTApiOptions>,
+    authMiddleware?: express.RequestHandler
+): void {
+    return SetupRESTEndpoints(app, options, authMiddleware);
 }

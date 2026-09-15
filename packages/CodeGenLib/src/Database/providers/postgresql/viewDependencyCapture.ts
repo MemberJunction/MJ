@@ -71,7 +71,7 @@ export interface ViewMetadata {
  * Resolves `(schema, name)` to a `pg_class.oid`. Returns null if the target
  * doesn't exist — callers can treat that as "nothing to capture".
  */
-export async function resolveViewOid(
+export async function ResolveViewOid(
     db: PGQueryable,
     schema: string,
     name: string
@@ -90,6 +90,15 @@ export async function resolveViewOid(
     return res.rows[0].oid as number;
 }
 
+/** @deprecated Use {@link ResolveViewOid}. */
+export async function resolveViewOid(
+    db: PGQueryable,
+    schema: string,
+    name: string
+): Promise<number | null> {
+    return ResolveViewOid(db, schema, name);
+}
+
 // ─── Dependent views ─────────────────────────────────────────────────────
 
 /**
@@ -101,7 +110,7 @@ export async function resolveViewOid(
  * Ordered shallowest-first so a caller restoring dependents can replay the
  * array in order without needing a separate topological sort.
  */
-export async function captureDependentViews(
+export async function CaptureDependentViews(
     db: PGQueryable,
     targetOid: number
 ): Promise<DependentView[]> {
@@ -144,6 +153,14 @@ export async function captureDependentViews(
     }));
 }
 
+/** @deprecated Use {@link CaptureDependentViews}. */
+export async function captureDependentViews(
+    db: PGQueryable,
+    targetOid: number
+): Promise<DependentView[]> {
+    return CaptureDependentViews(db, targetOid);
+}
+
 // ─── Dependent functions ─────────────────────────────────────────────────
 
 /**
@@ -156,7 +173,7 @@ export async function captureDependentViews(
  * (pg_class.reltype), rather than to the view itself — function -> type is the
  * actual dependency PG records.
  */
-export async function captureDependentFunctions(
+export async function CaptureDependentFunctions(
     db: PGQueryable,
     targetOid: number
 ): Promise<DependentFunction[]> {
@@ -183,6 +200,14 @@ export async function captureDependentFunctions(
     }));
 }
 
+/** @deprecated Use {@link CaptureDependentFunctions}. */
+export async function captureDependentFunctions(
+    db: PGQueryable,
+    targetOid: number
+): Promise<DependentFunction[]> {
+    return CaptureDependentFunctions(db, targetOid);
+}
+
 // ─── Permissions ─────────────────────────────────────────────────────────
 
 /**
@@ -190,7 +215,7 @@ export async function captureDependentFunctions(
  * privileges implicitly and those show up in `relacl` too — we filter them out
  * since `ALTER VIEW ... OWNER TO` already conveys them after the recreate.
  */
-export async function captureGrants(
+export async function CaptureGrants(
     db: PGQueryable,
     schema: string,
     name: string
@@ -228,6 +253,15 @@ export async function captureGrants(
         }));
 }
 
+/** @deprecated Use {@link CaptureGrants}. */
+export async function captureGrants(
+    db: PGQueryable,
+    schema: string,
+    name: string
+): Promise<ViewGrant[]> {
+    return CaptureGrants(db, schema, name);
+}
+
 // ─── Comment + owner ─────────────────────────────────────────────────────
 
 /**
@@ -235,7 +269,7 @@ export async function captureGrants(
  * need replay after a DROP + CREATE, since CREATE VIEW sets the owner to
  * the connected role and doesn't inherit comments.
  */
-export async function captureMetadata(
+export async function CaptureMetadata(
     db: PGQueryable,
     targetOid: number
 ): Promise<ViewMetadata> {
@@ -258,4 +292,12 @@ export async function captureMetadata(
         owner: res.rows[0].owner as string,
         comment: (res.rows[0].comment as string | null) ?? null,
     };
+}
+
+/** @deprecated Use {@link CaptureMetadata}. */
+export async function captureMetadata(
+    db: PGQueryable,
+    targetOid: number
+): Promise<ViewMetadata> {
+    return CaptureMetadata(db, targetOid);
 }

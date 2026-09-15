@@ -22,7 +22,7 @@ export class LinterTestTool {
   /**
    * Test a single component spec file
    */
-  public async testComponentSpec(specPath: string, contextUser?: any): Promise<LinterTestResult> {
+  public async TestComponentSpec(specPath: string, contextUser?: any): Promise<LinterTestResult> {
     try {
       // Read the spec file
       const specContent = fs.readFileSync(specPath, 'utf-8');
@@ -87,6 +87,11 @@ export class LinterTestTool {
     }
   }
 
+  /** @deprecated Use {@link TestComponentSpec}. */
+  public async testComponentSpec(specPath: string, contextUser?: any): Promise<LinterTestResult> {
+    return this.TestComponentSpec(specPath, contextUser);
+  }
+
   /**
    * Test a sub-component spec file
    */
@@ -138,7 +143,7 @@ export class LinterTestTool {
   /**
    * Test all component specs in a directory
    */
-  public async testDirectory(dirPath: string, contextUser?: any): Promise<LinterTestResult[]> {
+  public async TestDirectory(dirPath: string, contextUser?: any): Promise<LinterTestResult[]> {
     const pattern = path.join(dirPath, '**/spec/*.spec.json');
     const files = await glob(pattern);
     
@@ -148,7 +153,7 @@ export class LinterTestTool {
       // Skip sub-component specs (they'll be tested as part of their parent)
       const fileName = path.basename(file);
       if (!fileName.includes('-')) {
-        const result = await this.testComponentSpec(file, contextUser);
+        const result = await this.TestComponentSpec(file, contextUser);
         results.push(result);
       }
     }
@@ -156,10 +161,15 @@ export class LinterTestTool {
     return results;
   }
 
+  /** @deprecated Use {@link TestDirectory}. */
+  public async testDirectory(dirPath: string, contextUser?: any): Promise<LinterTestResult[]> {
+    return this.TestDirectory(dirPath, contextUser);
+  }
+
   /**
    * Test specific component by name
    */
-  public async testComponentByName(componentName: string, baseDir: string, contextUser?: any): Promise<LinterTestResult | null> {
+  public async TestComponentByName(componentName: string, baseDir: string, contextUser?: any): Promise<LinterTestResult | null> {
     // Convert component name to file name format (kebab-case)
     const fileName = componentName
       .replace(/([A-Z])/g, '-$1')
@@ -174,7 +184,12 @@ export class LinterTestTool {
       return null;
     }
     
-    return this.testComponentSpec(files[0], contextUser);
+    return this.TestComponentSpec(files[0], contextUser);
+  }
+
+  /** @deprecated Use {@link TestComponentByName}. */
+  public async testComponentByName(componentName: string, baseDir: string, contextUser?: any): Promise<LinterTestResult | null> {
+    return this.TestComponentByName(componentName, baseDir, contextUser);
   }
 
   /**
@@ -195,7 +210,7 @@ export class LinterTestTool {
   /**
    * Format test results for display
    */
-  public formatResults(results: LinterTestResult | LinterTestResult[]): string {
+  public FormatResults(results: LinterTestResult | LinterTestResult[]): string {
     const resultArray = Array.isArray(results) ? results : [results];
     let output = '';
     
@@ -216,6 +231,11 @@ export class LinterTestTool {
     output += '\n';
     
     return output;
+  }
+
+  /** @deprecated Use {@link FormatResults}. */
+  public formatResults(results: LinterTestResult | LinterTestResult[]): string {
+    return this.FormatResults(results);
   }
 
   private formatSingleResult(result: LinterTestResult, indent: number = 0): string {
@@ -255,13 +275,18 @@ export class LinterTestTool {
   /**
    * Save test results to file
    */
-  public saveResults(results: LinterTestResult | LinterTestResult[], outputPath: string): void {
+  public SaveResults(results: LinterTestResult | LinterTestResult[], outputPath: string): void {
     const data = {
       timestamp: new Date().toISOString(),
       results: Array.isArray(results) ? results : [results]
     };
     
     fs.writeFileSync(outputPath, JSON.stringify(data, null, 2));
+  }
+
+  /** @deprecated Use {@link SaveResults}. */
+  public saveResults(results: LinterTestResult | LinterTestResult[], outputPath: string): void {
+    return this.SaveResults(results, outputPath);
   }
 }
 
