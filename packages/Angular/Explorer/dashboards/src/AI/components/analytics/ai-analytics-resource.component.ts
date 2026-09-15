@@ -152,6 +152,12 @@ interface NavItem {
                             [TimeRange]="CurrentTimeRange"
                         ></app-analytics-usage-patterns>
                     }
+                    @case ('usage-explorer') {
+                        <app-analytics-usage-explorer
+                            [TimeRange]="CurrentTimeRange"
+                            [Filters]="CurrentFilters"
+                        ></app-analytics-usage-explorer>
+                    }
                     @case ('realtime-overview') {
                         <app-analytics-realtime-overview
                             [TimeRange]="CurrentTimeRange"
@@ -340,6 +346,8 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
                 return { ShowModelFilter: true,  ShowAgentFilter: false, ShowPromptFilter: true,  ShowStatusFilter: false, ShowSortBy: false, ShowVendor: false, ShowCompareToggle: false, ShowExportButton: false, TimeRangeOptions: ['1h', '6h', '24h', '7d', '30d'] };
             case 'usage-patterns':
                 return { ShowModelFilter: false, ShowAgentFilter: false, ShowPromptFilter: false, ShowStatusFilter: false, ShowSortBy: false, ShowVendor: false, ShowCompareToggle: false, ShowExportButton: false, TimeRangeOptions: ['1h', '6h', '24h', '7d', '30d'] };
+            case 'usage-explorer':
+                return { ShowModelFilter: false, ShowAgentFilter: false, ShowPromptFilter: false, ShowStatusFilter: false, ShowSortBy: false, ShowVendor: false, ShowCompareToggle: false, ShowExportButton: false, TimeRangeOptions: ['1h', '6h', '24h', '7d', '30d', '90d'] };
             // Realtime Voice sections own their filters internally (search/status/
             // target/user/host live with the grid); only the time-range chips come
             // from the shared chrome. Session data is bucketed daily, so the
@@ -570,6 +578,8 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
           Description: 'Failure patterns and root causes' },
         { Label: 'Usage Patterns', Icon: 'fa-solid fa-clock', Key: 'usage-patterns',
           Description: 'Volume, frequency, and concurrency over time' },
+        { Label: 'Usage Explorer', Icon: 'fa-solid fa-table-pivot', Key: 'usage-explorer',
+          Description: 'Multidimensional usage pivot across agents, models, users, and tokens' },
         { Key: 'divider2' },
         { Label: 'Realtime Voice', Icon: 'fa-solid fa-tower-broadcast', Key: 'realtime-overview',
           Description: 'Operational analytics for voice-agent sessions — sessions, channels, and delegated runs' },
@@ -752,6 +762,14 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
                 CostBudget: {
                     TimeRange: this.CurrentTimeRange,
                     Filters: this.CurrentFilters
+                },
+                UsageExplorer: {
+                    TimeRange: this.CurrentTimeRange,
+                    Measure: 'cost',
+                    GroupBy: 'AgentID',
+                    SecondarySplit: '',
+                    Grain: 'day',
+                    ComparisonEnabled: false
                 }
             };
             await UserInfoEngine.Instance.SetSetting(

@@ -420,6 +420,23 @@ export class AIInstrumentationService {
   }
 
   /**
+   * Fetch hourly aggregate usage for a date range via stored query AIUsageHourly (Materialized).
+   */
+  async getUsageHourly(start: Date, end: Date): Promise<AIUsageHourlyRow[]> {
+    const rq = new RunQuery(this.RunQueryToUse);
+    const res = await rq.RunQuery({
+      QueryName: 'AIUsageHourly',
+      CategoryPath: '/MJ/AI/',
+      Parameters: {
+        start: start.toISOString(),
+        end: end.toISOString()
+      },
+      DataSource: 'Materialized'
+    });
+    return (res && res.Success && Array.isArray(res.Results) ? res.Results : []) as AIUsageHourlyRow[];
+  }
+
+  /**
    * Fetch daily aggregate usage for a date range via stored query AIUsageDaily (Materialized).
    */
   async getUsageDaily(start: Date, end: Date): Promise<AIUsageDailyRow[]> {

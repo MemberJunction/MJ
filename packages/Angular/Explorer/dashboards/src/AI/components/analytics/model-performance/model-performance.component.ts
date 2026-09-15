@@ -377,7 +377,7 @@ export class AnalyticsModelPerformanceComponent extends BaseAngularComponent imp
     public IsLoading = false;
     public Rows: ModelLeaderboardRow[] = [];
 
-    private allRuns: PromptRunRecord[] = [];
+    public allRuns: PromptRunRecord[] = [];
 
     async ngOnInit(): Promise<void> {
         // AIEngineBase is deferred at startup — make sure it's loaded before

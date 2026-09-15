@@ -1,0 +1,78 @@
+<div class="usage-explorer-container">
+    <div class="explorer-toolbar">
+        <div class="control-group">
+            <span class="control-label">Measure</span>
+            <mj-dropdown
+                [Data]="MeasureOptions"
+                TextField="text"
+                ValueField="value"
+                [ValuePrimitive]="true"
+                [ngModel]="SelectedMeasure"
+                (ngModelChange)="OnMeasureChange($event)">
+            </mj-dropdown>
+        </div>
+
+        <div class="control-group">
+            <span class="control-label">Group By</span>
+            <mj-dropdown
+                [Data]="DimensionOptions"
+                TextField="text"
+                ValueField="value"
+                [ValuePrimitive]="true"
+                [ngModel]="SelectedGroupBy"
+                (ngModelChange)="OnGroupByChange($event)">
+            </mj-dropdown>
+        </div>
+
+        <div class="control-group">
+            <span class="control-label">Secondary Split</span>
+            <mj-dropdown
+                [Data]="SecondarySplitOptions"
+                TextField="text"
+                ValueField="value"
+                [ValuePrimitive]="true"
+                [ngModel]="SelectedSecondarySplit"
+                (ngModelChange)="OnSecondarySplitChange($event)">
+            </mj-dropdown>
+        </div>
+
+        <div class="control-group">
+            <span class="control-label">Grain</span>
+            <mj-dropdown
+                [Data]="GrainOptions"
+                TextField="text"
+                ValueField="value"
+                [ValuePrimitive]="true"
+                [ngModel]="SelectedGrain"
+                (ngModelChange)="OnGrainChange($event)">
+            </mj-dropdown>
+        </div>
+
+        <div class="control-group control-group-toggle">
+            <button
+                mjButton
+                variant="secondary"
+                size="sm"
+                [toggleable]="true"
+                [(selected)]="ComparisonEnabled"
+                (selectedChange)="OnComparisonChange($event)">
+                <i class="fa-solid fa-code-compare"></i>
+                <span>Compare Previous</span>
+            </button>
+        </div>
+    </div>
+
+    <div class="pivot-wrapper">
+        <mj-query-pivot
+            [Data]="PivotRows"
+            [DimensionColumns]="DimensionColumns"
+            [MeasureColumns]="MeasureColumns"
+            [TimeColumn]="TimeColumn"
+            [Grain]="SelectedGrain"
+            [ComparisonWindow]="ComparisonEnabled"
+            [ComparisonPeriodColumn]="'_period'"
+            [IsLoading]="IsLoading"
+            (rowActivated)="OnRowActivated($event)">
+        </mj-query-pivot>
+    </div>
+</div>

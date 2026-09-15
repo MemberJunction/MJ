@@ -806,7 +806,7 @@ export class AnalyticsPromptRunsComponent extends BaseAngularComponent implement
     public SortDirection: SortDirection = 'desc';
     public CurrentPage = 1;
 
-    private allRuns: PromptRunRecord[] = [];
+    public allRuns: PromptRunRecord[] = [];
 
     readonly ChartMetricOptions: { key: ChartMetric; label: string }[] = [
         { key: 'volume', label: 'By Volume' },

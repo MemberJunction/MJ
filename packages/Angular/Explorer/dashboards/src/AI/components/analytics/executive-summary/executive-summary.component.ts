@@ -690,12 +690,16 @@ export class AnalyticsExecutiveSummaryComponent extends BaseAngularComponent imp
       return;
     }
 
-    const coveragePct = kpis.Coverage && kpis.Coverage.RunsTotal > 0
-      ? (kpis.Coverage.RunsPriced / kpis.Coverage.RunsTotal) * 100
-      : (kpis.Coverage?.RunsTotal === 0 ? 100 : 0);
-    const prevCoveragePct = this.previousKpis?.Coverage && this.previousKpis.Coverage.RunsTotal > 0
-      ? (this.previousKpis.Coverage.RunsPriced / this.previousKpis.Coverage.RunsTotal) * 100
-      : (this.previousKpis?.Coverage?.RunsTotal === 0 ? 100 : null);
+    const cov = kpis.Coverage;
+    const covTotal = cov ? (cov.PricedRuns + cov.UnpricedRuns + cov.UnmeasuredRuns) : 0;
+    const coveragePct = cov && covTotal > 0
+      ? (cov.PricedRuns / covTotal) * 100
+      : (covTotal === 0 ? 100 : 0);
+    const prevCov = this.previousKpis?.Coverage;
+    const prevCovTotal = prevCov ? (prevCov.PricedRuns + prevCov.UnpricedRuns + prevCov.UnmeasuredRuns) : 0;
+    const prevCoveragePct = prevCov && prevCovTotal > 0
+      ? (prevCov.PricedRuns / prevCovTotal) * 100
+      : (prevCovTotal === 0 ? 100 : null);
 
     const trends = this.TrendsData;
     this.KpiCards = [

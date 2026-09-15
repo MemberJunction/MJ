@@ -420,7 +420,7 @@ export class AnalyticsErrorAnalysisComponent extends BaseAngularComponent implem
     public ErrorGroups: ErrorGroup[] = [];
 
     private failedRuns: FailedRunRecord[] = [];
-    private totalRunCount = 0;
+    public totalRunCount = 0;
 
     ngOnInit(): void {
         this.initialized = true;
