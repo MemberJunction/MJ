@@ -224,8 +224,17 @@ async function ProbeRepoVisibility(
  * fixed this branch to also name the per-repo `openApps.github.tokens` map and left the other
  * message naming only the two older options.
  *
- * Ordered to match `ResolveToken`'s own resolution order: the per-repo map is checked FIRST, so it
- * is named first here too, rather than as a parenthetical afterthought to the global token.
+ * Ordered by how fast a reader can act, NOT by precedence: `GITHUB_TOKEN` leads because exporting an
+ * env var is the fastest way to get unblocked. Within `mj.config.cjs`, `openApps.github.tokens` is
+ * named before `openApps.github.token` because `ResolveToken` (below) checks the per-repo map first.
+ *
+ * The EFFECTIVE precedence is the reverse of this list. `buildGitHubOptions`
+ * (packages/MJCLI/src/utils/open-app-context.ts) resolves `Token` as
+ * `config.openApps?.github?.token ?? process.env.GITHUB_TOKEN`, so a configured `token` already beats
+ * `GITHUB_TOKEN` before this module ever sees either one; `ResolveToken` then checks `TokenMap`
+ * before `Token`. Highest wins first: `openApps.github.tokens` → `openApps.github.token` →
+ * `GITHUB_TOKEN`. Don't "fix" the string above to match — its order is the right one for a remedy,
+ * not a precedence table.
  */
 const CONFIGURE_CREDENTIAL_REMEDY =
     'set GITHUB_TOKEN in the environment, or add the repo to openApps.github.tokens (or set openApps.github.token) in mj.config.cjs';

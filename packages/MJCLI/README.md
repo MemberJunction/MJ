@@ -541,6 +541,9 @@ GITHUB_TOKEN=$(gh auth token) mj app install https://github.com/MemberJunction/b
 #    openApps: { github: { token: process.env.GITHUB_TOKEN } }
 ```
 
+If more than one is set, the per-repo `tokens` entry wins, then `token`, then `GITHUB_TOKEN` — so a
+stale `token` left in `mj.config.cjs` silently shadows a freshly exported `GITHUB_TOKEN`.
+
 The token needs `repo` scope for the repositories you install from.
 
 #### Internal / dangerous flags

@@ -244,6 +244,10 @@ describe('ValidateGitHubTag', () => {
         // `${describeMissingTarget()} (Could not confirm ...)` form, so neither would catch a
         // revert. The doubt must be the FIRST thing in the message, not a parenthetical at the end.
         expect(result.ErrorMessage).toMatch(/^Could not confirm/);
+        // Both assertions above also survive deleting the trailing "If it is readable, then:
+        // ${describeMissingTarget()}" clause outright — this pins that the original diagnostic is
+        // still reachable, not just that the doubt leads.
+        expect(result.ErrorMessage).toContain("Tag 'v1.0.0' not found");
     });
 
     it('does not probe at all when the tag lookup succeeded', async () => {
