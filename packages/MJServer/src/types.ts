@@ -62,75 +62,21 @@ export class ProviderInfo {
 }
 
 export class DataSourceInfo  {
-  DataSource: sql.ConnectionPool;
-
-  /** @deprecated Use {@link DataSource}. */
-  get dataSource(): sql.ConnectionPool {
-    return this.DataSource;
-  }
-  /** @deprecated Use {@link DataSource}. */
-  set dataSource(value: sql.ConnectionPool) {
-    this.DataSource = value;
-  }
-  Host: string;
-
-  /** @deprecated Use {@link Host}. */
-  get host(): string {
-    return this.Host;
-  }
-  /** @deprecated Use {@link Host}. */
-  set host(value: string) {
-    this.Host = value;
-  }
-  Port: number;
-
-  /** @deprecated Use {@link Port}. */
-  get port(): number {
-    return this.Port;
-  }
-  /** @deprecated Use {@link Port}. */
-  set port(value: number) {
-    this.Port = value;
-  }
+  dataSource: sql.ConnectionPool;
+  host: string;
+  port: number;
   instance?: string;
-  Database: string;
-
-  /** @deprecated Use {@link Database}. */
-  get database(): string {
-    return this.Database;
-  }
-  /** @deprecated Use {@link Database}. */
-  set database(value: string) {
-    this.Database = value;
-  }
-  UserName: string;
-
-  /** @deprecated Use {@link UserName}. */
-  get userName(): string {
-    return this.UserName;
-  }
-  /** @deprecated Use {@link UserName}. */
-  set userName(value: string) {
-    this.UserName = value;
-  }
-  Type: "Admin" | "Read-Write" | "Read-Only" | "Other";
-
-  /** @deprecated Use {@link Type}. */
-  get type(): "Admin" | "Read-Write" | "Read-Only" | "Other" {
-    return this.Type;
-  }
-  /** @deprecated Use {@link Type}. */
-  set type(value: "Admin" | "Read-Write" | "Read-Only" | "Other") {
-    this.Type = value;
-  }
+  database: string;
+  userName: string;
+  type: "Admin" | "Read-Write" | "Read-Only" | "Other";
 
   constructor(init: {dataSource: sql.ConnectionPool, type: "Admin" | "Read-Write" | "Read-Only" | "Other", host: string, port: number, database: string, userName: string} ) {
-    this.DataSource = init.dataSource;
-    this.Host = init.host;
-    this.Port = init.port;
-    this.Database = init.database;
-    this.UserName = init.userName;
-    this.Type = init.type;
+    this.dataSource = init.dataSource;
+    this.host = init.host;
+    this.port = init.port;
+    this.database = init.database;
+    this.userName = init.userName;
+    this.type = init.type;
   }
 };
 

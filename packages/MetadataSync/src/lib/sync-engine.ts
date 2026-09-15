@@ -40,19 +40,9 @@ export class DeferrableLookupError extends Error {
   /** The entity name being looked up */
   public readonly entityName: string;
   /** The lookup fields and values that failed */
-  public readonly LookupFields: Array<{fieldName: string, fieldValue: string}>;
-
-  /** @deprecated Use {@link LookupFields}. */
-  public get lookupFields(): Array<{fieldName: string, fieldValue: string}> {
-    return this.LookupFields;
-  }
+  public readonly lookupFields: Array<{fieldName: string, fieldValue: string}>;
   /** The original lookup string value */
-  public readonly OriginalValue: string;
-
-  /** @deprecated Use {@link OriginalValue}. */
-  public get originalValue(): string {
-    return this.OriginalValue;
-  }
+  public readonly originalValue: string;
   /** The field name where this lookup was used */
   public readonly targetFieldName?: string;
 
@@ -66,8 +56,8 @@ export class DeferrableLookupError extends Error {
     super(message);
     this.name = 'DeferrableLookupError';
     this.entityName = entityName;
-    this.LookupFields = lookupFields;
-    this.OriginalValue = originalValue;
+    this.lookupFields = lookupFields;
+    this.originalValue = originalValue;
     this.targetFieldName = targetFieldName;
 
     // Maintains proper prototype chain for instanceof checks

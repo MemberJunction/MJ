@@ -927,34 +927,16 @@ export class ChildPromptParam {
   /**
    * The child prompt to execute - a full AIPromptParams that can contain its own child prompts
    */
-  ChildPrompt: AIPromptParams;
-
-  /** @deprecated Use {@link ChildPrompt}. */
-  get childPrompt(): AIPromptParams {
-    return this.ChildPrompt;
-  }
-  /** @deprecated Use {@link ChildPrompt}. */
-  set childPrompt(value: AIPromptParams) {
-    this.ChildPrompt = value;
-  }
+  childPrompt: AIPromptParams;
 
   /**
    * The placeholder name in the parent template where this child's result will be inserted
    */
-  ParentPlaceholder: string;
-
-  /** @deprecated Use {@link ParentPlaceholder}. */
-  get parentPlaceholder(): string {
-    return this.ParentPlaceholder;
-  }
-  /** @deprecated Use {@link ParentPlaceholder}. */
-  set parentPlaceholder(value: string) {
-    this.ParentPlaceholder = value;
-  }
+  parentPlaceholder: string;
 
   constructor(childPrompt: AIPromptParams, parentPlaceholder: string) {
-    this.ChildPrompt = childPrompt;
-    this.ParentPlaceholder = parentPlaceholder;
+    this.childPrompt = childPrompt;
+    this.parentPlaceholder = parentPlaceholder;
   }
 }
  

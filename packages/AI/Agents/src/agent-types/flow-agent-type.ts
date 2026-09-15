@@ -43,55 +43,19 @@ interface FlowAgentNextStep<P = any> extends BaseAgentNextStep<P> {
  */
 export class FlowExecutionState {
     /** The agent ID for this flow execution */
-    AgentId: string;
-
-    /** @deprecated Use {@link AgentId}. */
-    get agentId(): string {
-        return this.AgentId;
-    }
-    /** @deprecated Use {@link AgentId}. */
-    set agentId(value: string) {
-        this.AgentId = value;
-    }
+    agentId: string;
 
     /** The current step being executed */
     currentStepId?: string;
 
     /** Set of completed step IDs */
-    CompletedStepIds: Set<string> = new Set();
-
-    /** @deprecated Use {@link CompletedStepIds}. */
-    get completedStepIds(): Set<string> {
-        return this.CompletedStepIds;
-    }
-    /** @deprecated Use {@link CompletedStepIds}. */
-    set completedStepIds(value: Set<string>) {
-        this.CompletedStepIds = value;
-    }
+    completedStepIds: Set<string> = new Set();
 
     /** Map of step results by step ID */
-    StepResults: Map<string, unknown> = new Map();
-
-    /** @deprecated Use {@link StepResults}. */
-    get stepResults(): Map<string, unknown> {
-        return this.StepResults;
-    }
-    /** @deprecated Use {@link StepResults}. */
-    set stepResults(value: Map<string, unknown>) {
-        this.StepResults = value;
-    }
+    stepResults: Map<string, unknown> = new Map();
 
     /** Ordered list of step IDs in execution order */
-    ExecutionPath: string[] = [];
-
-    /** @deprecated Use {@link ExecutionPath}. */
-    get executionPath(): string[] {
-        return this.ExecutionPath;
-    }
-    /** @deprecated Use {@link ExecutionPath}. */
-    set executionPath(value: string[]) {
-        this.ExecutionPath = value;
-    }
+    executionPath: string[] = [];
 
     /** Special fields from action output mappings (message, reasoning, confidence) */
     specialFields?: {
@@ -101,7 +65,7 @@ export class FlowExecutionState {
     };
 
     constructor(agentId: string) {
-        this.AgentId = agentId;
+        this.agentId = agentId;
     }
 }
 

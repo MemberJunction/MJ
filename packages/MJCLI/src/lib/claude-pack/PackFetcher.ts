@@ -79,27 +79,9 @@ function concatBytes(chunks: readonly Uint8Array[]): Uint8Array {
 // ---------------------------------------------------------------------------
 
 export class PackFetchError extends Error {
-    constructor(message: string, public Url?: string, public StatusCode?: number) {
+    constructor(message: string, public url?: string, public statusCode?: number) {
         super(message);
         this.name = 'PackFetchError';
-    }
-
-    /** @deprecated Use {@link Url}. */
-    public get url(): string {
-        return this.Url;
-    }
-    /** @deprecated Use {@link Url}. */
-    public set url(value: string) {
-        this.Url = value;
-    }
-
-    /** @deprecated Use {@link StatusCode}. */
-    public get statusCode(): number {
-        return this.StatusCode;
-    }
-    /** @deprecated Use {@link StatusCode}. */
-    public set statusCode(value: number) {
-        this.StatusCode = value;
     }
 }
 

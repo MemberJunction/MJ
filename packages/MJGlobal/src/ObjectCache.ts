@@ -2,30 +2,12 @@
  * ObjectCacheEntry is used for the array within the ObjectCache class
  */
 export class ObjectCacheEntry<T = any> {
-    Key: string
-
-    /** @deprecated Use {@link Key}. */
-    get key(): string {
-        return this.Key;
-    }
-    /** @deprecated Use {@link Key}. */
-    set key(value: string) {
-        this.Key = value;
-    }
-    Object: T
-
-    /** @deprecated Use {@link Object}. */
-    get object(): T {
-        return this.Object;
-    }
-    /** @deprecated Use {@link Object}. */
-    set object(value: T) {
-        this.Object = value;
-    }
+    key: string
+    object: T
 
     constructor (key: string, object: T) {
-        this.Key = key
-        this.Object = object
+        this.key = key
+        this.object = object
     }
 }
 
