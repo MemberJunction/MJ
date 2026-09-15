@@ -10,7 +10,7 @@
  * @since 2.50.0
  */
 
-import { MJAIAgentTypeEntity, MJUsageBudgetEntity } from '@memberjunction/core-entities';
+import { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
 import { ChatMessage, ChatToolCall, AIAPIKey } from '@memberjunction/ai';
 import { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { AgentPayloadChangeRequest } from './agent-payload-change-request';
@@ -1714,13 +1714,6 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * legitimate long iteration; tighten per-run for anything interactive.
      */
     maxExecutionTimeMs?: number;
-
-    /**
-     * Optional usage budget to enforce for this agent run.
-     * When provided and configured with Action: 'Block', the agent execution guardrail
-     * will block the run before it starts if LastObservedAmount >= AmountLimit.
-     */
-    usageBudget?: MJUsageBudgetEntity;
 }
 
 /**
@@ -1728,7 +1721,7 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
  */
 export interface AgentRunGuardrailVerdict {
     exceeded: boolean;
-    type?: 'cost' | 'tokens' | 'iterations' | 'time' | 'budget';
+    type?: 'cost' | 'tokens' | 'iterations' | 'time';
     limit?: number;
     current?: number;
     reason?: string;

@@ -5159,22 +5159,6 @@ export class BaseAgent {
             };
         }
 
-        // Check usage budget block enforcement (O(1) comparison against pre-evaluated LastObservedAmount — no scan).
-        // Throttle is Notify plus a documented hook; not a hard execution blocker.
-        const budget = params.usageBudget;
-
-        if (budget && budget.Status === 'Active' && budget.Action === 'Block' && budget.AmountLimit != null && budget.LastObservedAmount != null) {
-            if (budget.LastObservedAmount >= budget.AmountLimit) {
-                return {
-                    exceeded: true,
-                    type: 'budget',
-                    limit: budget.AmountLimit,
-                    current: budget.LastObservedAmount,
-                    reason: `Usage budget "${budget.Name || budget.ID}" limit of ${budget.AmountLimit} ${budget.Unit || ''} exceeded (current observed: ${budget.LastObservedAmount} ${budget.Unit || ''}). Execution blocked.`
-                };
-            }
-        }
-
         // Check cost limit
         if (agent.MaxCostPerRun != null && agentRun.TotalCost != null) {
             if (agentRun.TotalCost >= agent.MaxCostPerRun) {
