@@ -39,7 +39,20 @@ pseudo-element (the property is not inherited, and `inherit` takes from the orig
 rather than the positioned card), so it drew square around a rounded tile; the login screen gains
 the repo's first `@media (forced-colors: active)` block, since Windows High Contrast substitutes
 the card fill, border token and hover tint away and this is the one surface a user meets before
-any other; and a `@media (max-height: 480px)` branch handles landscape phones, where the
-width-only breakpoints left the centered layout's sign-in button off the bottom of the screen.
+any other; and landscape phones are handled, where the width-only breakpoints left the sign-in
+controls off the bottom of the screen.
 
-No behaviour or visual change for an app that binds nothing, projects nothing and themes nothing.
+The stacked layout's banner is now sized by its height rule rather than by a flex grow ratio. It
+carried `flex: var(--mj-login-banner-flex, 1.05)`, whose shorthand sets flex-basis to `0%`, so
+every `height` in the stacked breakpoints was dead — invisible until the sign-in column gained
+`overflow-y: auto`, which dropped its automatic minimum size to zero and handed the layout to the
+ratio. So THIS DOES CHANGE the stacked banner for an app that binds nothing: 183px to 92px at
+844x390 and 277px to 196px at 820x560, in both cases returning the sign-in options to the screen.
+Portrait is deliberately unchanged at 422px.
+
+Two tokens are added alongside `--mj-login-panel-text` — `--mj-login-panel-text-secondary` and
+`--mj-login-panel-text-muted` — so a themed panel carries the picker's whole text ramp instead of
+only its body colour. Both default to the semantic tokens.
+
+Apart from the stacked banner above, no behaviour or visual change for an app that binds nothing,
+projects nothing and themes nothing.
