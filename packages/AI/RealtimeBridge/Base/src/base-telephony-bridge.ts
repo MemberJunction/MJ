@@ -344,8 +344,10 @@ export abstract class BaseTelephonyBridge extends BaseRealtimeBridge {
      */
     public async Connect(ctx: RealtimeBridgeContext): Promise<BridgeConnectResult> {
         this.applyContext(ctx);
-        this.RequireFeature('AudioIn'); // a phone call requires bidirectional audio at minimum
-        this.RequireFeature('AudioOut');
+        if (!ctx.Features.DetachedMediaPlane) {
+            this.RequireFeature('AudioIn'); // a phone call requires bidirectional audio at minimum
+            this.RequireFeature('AudioOut');
+        }
 
         const config = ctx.Configuration ?? {};
         this.direction = this.readDirection(config);

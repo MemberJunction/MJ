@@ -1,0 +1,21 @@
+{
+  "id": "codesmith-payload-results-write-01",
+  "agent": "Codesmith Agent",
+  "tags": ["payload-change", "n2"],
+  "description": "Execution succeeded; the payload contract says to store results and working code. Any of the write sections may carry them; taskComplete alone (without writing) is not enough.",
+  "input": {
+    "payload": { "task": "count by category", "inputData": { "rows": [{ "c": "a" }, { "c": "b" }, { "c": "a" }] }, "iterations": 1 },
+    "conversationMessages": [
+      { "role": "user", "content": "Count the rows by category." },
+      { "role": "user", "content": "[Action Result] Execute Code succeeded. code = `output = Object.entries(input.rows.reduce((m,r)=>(m[r.c]=(m[r.c]||0)+1,m),{}))`; output = { a: 2, b: 1 }" }
+    ]
+  },
+  "expect": {
+    "kind": "anyOf",
+    "anyOf": [
+      { "kind": "payloadChange", "payload": { "newElements.results": { "matcher": "nonEmpty" } } },
+      { "kind": "payloadChange", "payload": { "updateElements.results": { "matcher": "nonEmpty" } } },
+      { "kind": "payloadChange", "payload": { "replaceElements.results": { "matcher": "nonEmpty" } } }
+    ]
+  }
+}

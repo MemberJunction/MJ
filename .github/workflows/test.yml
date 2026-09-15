@@ -29,6 +29,10 @@ on:
       - '.github/scripts/backstop-alarm.mjs'
       - '.github/scripts/vitest.config.mts'
       - '.github/scripts/__tests__/**'
+      # The release-notes shape gate runs inside generate-release-notes.yml, not here, but
+      # its vitest suite lives in __tests__ — so an edit to the gate script alone must still
+      # run it. Without this entry the one change that most needs the suite skips it.
+      - '.github/scripts/check-release-notes-shape.mjs'
       # Same reasoning for the dynamic-replace guard (see that step). Without this
       # entry a PR editing only the gate script runs neither the gate nor its own
       # vitest suite — the one change that most needs both.
@@ -61,6 +65,11 @@ on:
       # root-bin removal from silently breaking manifest regeneration, so a PR weakening the
       # guard must run it.
       - '.github/scripts/check-mj-cli-resolution.mjs'
+      # And again for the App-token-never-merges guard (guards job). It encodes an agreement
+      # the platform cannot enforce — the release bot is a `next-protect` bypass actor, so a
+      # workflow that both mints its token and merges a PR writes to next unreviewed — which
+      # means a PR that weakens the guard is exactly the PR that must run its suite.
+      - '.github/scripts/check-app-token-no-merge.mjs'
       # The remote-cache preflight runs as a step in this workflow (see "Verify turbo
       # remote-cache configuration"), and its own suite lives in __tests__ above.
       - '.github/scripts/check-turbo-cache-env.mjs'
@@ -187,6 +196,25 @@ jobs:
       - name: MJ CLI resolution guard
         if: ${{ !cancelled() }}
         run: node .github/scripts/check-mj-cli-resolution.mjs packages
+
+      # App-token-never-merges guard. `blue-cypress-ci-bot` is a BYPASS ACTOR on
+      # `next-protect`: the one identity that can land a commit in next with no approving
+      # review. It holds that power so publish.yml can push `next` directly after a release,
+      # and it must never merge a PR — but permissions cannot draw that line, because merging
+      # needs the same `contents: write` it must already hold to push. So the boundary is this
+      # check or it is folklore. See the script header for what it deliberately does not
+      # prove, for the opt-out that makes a legitimate exception reviewable, and for why the
+      # rule matters most if release-notes authorship ever moves onto the App.
+      #
+      # `!cancelled()` like its neighbours: each guard reports its own verdict and must not
+      # be suppressed by another's failure.
+      #
+      # Note on coverage: this workflow's PR trigger is path-filtered, so a PR that edits ONLY
+      # some OTHER workflow does not run this step — the push-to-next and nightly runs (which
+      # carry no paths filter) are the backstop for that case.
+      - name: App-token-never-merges guard
+        if: ${{ !cancelled() }}
+        run: node .github/scripts/check-app-token-no-merge.mjs
 
       # Repo-wide compliance scanners. They live in packages/MJGlobal/src/__tests__ for historical
       # reasons but scan `packages/**` off disk and assert about every package, so they belong here
@@ -723,8 +751,12 @@ jobs:
             pnpm run build
           fi
 
-      # The guard-script unit suites (371 tests, ~4s) — they gate the gates, including the
-      # shard planner whose failure mode is a silently empty test tier.
+      # Every guard-script unit suite under .github/scripts/__tests__ — they gate the gates,
+      # including the shard planner whose failure mode is a silently empty test tier. Kept
+      # unconditional because the whole tier runs in a few seconds; no test COUNT is quoted
+      # here on purpose, because the one that used to be (371) was stale by 250 within a
+      # month and a number nobody re-measures is worse than no number. The cost claim is the
+      # part a reader acts on, and `vitest` prints both on every run.
       - name: Guard-script unit tests
         run: npx vitest run --config .github/scripts/vitest.config.mts
 
@@ -748,7 +780,7 @@ jobs:
   # ---------------------------------------------------------------------------------------
   unit-tests:
     name: Run unit tests
-    if: always()
+    if: ${{ always() && !cancelled() }}
     needs: [guards, build, test, esm-guard]
     timeout-minutes: 10
     runs-on: ubuntu-latest

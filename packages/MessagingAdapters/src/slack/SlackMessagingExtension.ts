@@ -48,6 +48,7 @@ import { SocketModeClient } from '@slack/socket-mode';
 import {
     BaseServerExtension,
     ServerExtensionConfig,
+    ServerExtensionPhase,
     ExtensionInitResult,
     ExtensionHealthResult
 } from '@memberjunction/server-extensions-core';
@@ -73,6 +74,11 @@ import { handleSlackInteraction } from './slack-interactivity.js';
  */
 @RegisterClass(BaseServerExtension, 'SlackMessagingExtension')
 export class SlackMessagingExtension extends BaseServerExtension {
+    /** Slack webhooks arrive unsigned from Slack servers; run in pre-auth phase. */
+    public override get DefaultPhase(): ServerExtensionPhase {
+        return 'pre-auth';
+    }
+
     /** The Slack adapter handling message processing. */
     private adapter: SlackAdapter | null = null;
 
@@ -240,7 +246,8 @@ export class SlackMessagingExtension extends BaseServerExtension {
         return {
             Success: true,
             Message: `Slack extension loaded (HTTP mode) for agent ${settings.DefaultAgentName}`,
-            RegisteredRoutes: registeredRoutes
+            RegisteredRoutes: registeredRoutes,
+            Service: this.adapter ?? undefined
         };
     }
 
@@ -343,7 +350,8 @@ export class SlackMessagingExtension extends BaseServerExtension {
         return {
             Success: true,
             Message: `Slack extension loaded (Socket Mode) for agent ${settings.DefaultAgentName}`,
-            RegisteredRoutes: ['WebSocket (Socket Mode)']
+            RegisteredRoutes: ['WebSocket (Socket Mode)'],
+            Service: this.adapter ?? undefined
         };
     }
 
