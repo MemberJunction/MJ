@@ -10,7 +10,7 @@
  * with debounced writes.
  */
 
-import { Component, ChangeDetectorRef, OnInit, OnDestroy, ViewChild, inject } from '@angular/core';
+import { Component, ChangeDetectionStrategy, ChangeDetectorRef, OnInit, OnDestroy, AfterViewInit, ViewChild, inject } from '@angular/core';
 import { AnalyticsExecutiveSummaryComponent } from './executive-summary/executive-summary.component';
 import { AnalyticsPromptRunsComponent } from './prompt-runs/prompt-run-analysis.component';
 import { Subject } from 'rxjs';
@@ -37,6 +37,7 @@ interface NavItem {
 @RegisterClass(BaseResourceComponent, 'AIAnalyticsResource')
 @Component({
     standalone: false,
+    changeDetection: ChangeDetectionStrategy.OnPush,
     selector: 'app-ai-analytics-resource',
     template: `
       <mj-page-layout>
@@ -264,7 +265,7 @@ interface NavItem {
         }
     `]
 })
-export class AIAnalyticsResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
+export class AIAnalyticsResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy, AfterViewInit {
     private readonly USER_SETTINGS_KEY = 'AI.Analytics.UserPreferences';
     private settingsPersistSubject = new Subject<void>();
     protected override destroy$ = new Subject<void>();
@@ -649,6 +650,11 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
         this.NotifyLoadComplete();
     }
 
+    public ngAfterViewInit(): void {
+        this.publishAgentContext();
+        this.registerAgentTools();
+    }
+
     ngOnDestroy(): void {
         super.ngOnDestroy();
         this.destroy$.next();
@@ -670,6 +676,7 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
         }
         this.ActiveSection = key;
         this.saveUserSettings();
+        this.publishAgentContext();
         this.cdr.detectChanges();
     }
 
@@ -677,12 +684,69 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
     public OnTimeRangeChange(range: string): void {
         this.CurrentTimeRange = range;
         this.saveUserSettings();
+        this.publishAgentContext();
+        this.cdr.detectChanges();
     }
 
     /** Handle filter changes from the filter bar */
     public OnFiltersChange(filters: GlobalFilterState): void {
         this.CurrentFilters = filters;
         this.saveUserSettings();
+        this.publishAgentContext();
+        this.cdr.detectChanges();
+    }
+
+    protected publishAgentContext(): void {
+        this.navigationService.SetAgentContext(this, {
+            ActiveSection: this.ActiveSection,
+            CurrentTimeRange: this.CurrentTimeRange,
+            CurrentFilters: this.CurrentFilters,
+            CurrentSortBy: this.CurrentSortBy,
+            CurrentVendor: this.CurrentVendor,
+            AvailableSections: this.NavItems.filter(i => !i.Key.startsWith('divider')).map(i => i.Key),
+        });
+    }
+
+    protected registerAgentTools(): void {
+        this.navigationService.SetAgentClientTools(this, [
+            {
+                name: 'SwitchAnalyticsSection',
+                description: 'Switch the active section of the AI Analytics dashboard (e.g., executive-summary, prompt-runs, agent-runs, model-performance, cost-budget, error-analysis, usage-patterns, realtime-overview, realtime-sessions, realtime-management, realtime-transcripts).',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        section: {
+                            type: 'string',
+                            description: 'The section key to navigate to.',
+                            enum: this.NavItems.filter(i => !i.Key.startsWith('divider')).map(i => i.Key),
+                        },
+                    },
+                    required: ['section'],
+                },
+                handler: async (args: { section: string }) => {
+                    this.OnSectionChange(args.section);
+                    return { success: true, activeSection: this.ActiveSection };
+                },
+            },
+            {
+                name: 'SetAnalyticsTimeRange',
+                description: 'Change the time range filter for the current AI Analytics view (e.g., 1h, 6h, 24h, 7d, 30d, Today, MTD).',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        timeRange: {
+                            type: 'string',
+                            description: 'The time range to select.',
+                        },
+                    },
+                    required: ['timeRange'],
+                },
+                handler: async (args: { timeRange: string }) => {
+                    this.OnTimeRangeChange(args.timeRange);
+                    return { success: true, currentTimeRange: this.CurrentTimeRange };
+                },
+            },
+        ]);
     }
 
     /** Compare-toggle button — only visible on Executive Summary; forwards to that section. */

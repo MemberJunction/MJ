@@ -11,7 +11,7 @@
  */
 
 import {
-    Component, Input, OnInit, ChangeDetectorRef, inject
+    Component, ChangeDetectionStrategy, Input, OnInit, ChangeDetectorRef, inject
 } from '@angular/core';
 import { CompositeKey } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
@@ -59,6 +59,7 @@ const PAGE_SIZE = 25;
 
 @Component({
     standalone: false,
+    changeDetection: ChangeDetectionStrategy.OnPush,
     selector: 'app-analytics-realtime-sessions',
     template: `
         @if (IsLoading) {

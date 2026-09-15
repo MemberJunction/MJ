@@ -6,7 +6,7 @@
  */
 
 import {
-    Component, Input,
+    Component, ChangeDetectionStrategy, Input,
     OnInit, OnDestroy,
     ChangeDetectorRef, inject
 } from '@angular/core';
@@ -39,19 +39,27 @@ interface PromptRunRecord {
 
 interface ModelLeaderboardRow {
     Rank: number;
-    RankClass: string;
+    ModelID: string;
     ModelName: string;
-    ApiId: string;
     Vendor: string;
-    VendorID: string;
     Runs: number;
+    CostFormatted: string;
+    AvgLatencyFormatted: string;
+    SuccessRateFormatted: string;
+    ThroughputFormatted: string;
+    CacheHitRateFormatted: string;
+    ScoreFormatted: string;
+    TotalTokens: number;
     AvgLatencyMs: number;
-    AvgLatencyColor: string;
     P95LatencyMs: number;
     SuccessRate: number;
     CostPer1KTokens: number;
     CacheHitRate: number;
     TotalCost: number;
+    RankClass: string;
+    ApiId: string;
+    VendorID: string;
+    AvgLatencyColor: string;
 }
 
 type SortByOption = 'cost-efficiency' | 'speed' | 'reliability' | 'usage-volume';
@@ -64,6 +72,7 @@ const FIELDS = [
 
 @Component({
     standalone: false,
+    changeDetection: ChangeDetectionStrategy.OnPush,
     selector: 'app-analytics-model-performance',
     template: `
         @if (IsLoading) {
@@ -377,7 +386,9 @@ export class AnalyticsModelPerformanceComponent extends BaseAngularComponent imp
     public IsLoading = false;
     public Rows: ModelLeaderboardRow[] = [];
 
-    public allRuns: PromptRunRecord[] = [];
+    public AllRuns: PromptRunRecord[] = [];
+    public get allRuns(): PromptRunRecord[] { return this.AllRuns; }
+    public set allRuns(v: PromptRunRecord[]) { this.AllRuns = v; }
 
     async ngOnInit(): Promise<void> {
         // AIEngineBase is deferred at startup — make sure it's loaded before

@@ -22,7 +22,7 @@
  * under `mj.realtimeDashboard.subTab`.
  */
 
-import { Component, Input, OnInit, ChangeDetectorRef, inject } from '@angular/core';
+import { Component, ChangeDetectionStrategy, Input, OnInit, ChangeDetectorRef, inject } from '@angular/core';
 import { CompositeKey } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { SharedService } from '@memberjunction/ng-shared';
@@ -58,6 +58,7 @@ const SUB_TAB_PREF_KEY = 'mj.realtimeDashboard.subTab';
 
 @Component({
     standalone: false,
+    changeDetection: ChangeDetectionStrategy.OnPush,
     selector: 'app-realtime-management',
     templateUrl: './realtime-management.component.html',
     styleUrls: ['./realtime-management.component.css']

@@ -7,7 +7,7 @@
  */
 
 import {
-    Component, Input, Output, EventEmitter,
+    Component, ChangeDetectionStrategy, Input, Output, EventEmitter,
     OnInit, OnDestroy, ChangeDetectorRef, inject
 } from '@angular/core';
 import { Subject } from 'rxjs';
@@ -39,13 +39,13 @@ interface ErrorGroup {
     PromptName: string;
     ModelName: string;
     Count: number;
-    LastErrorMessage: string;
     LastErrorTime: string;
+    LastErrorMessage: string;
     IsExpanded: boolean;
-    Errors: ErrorDetail[];
+    Errors: FailedRunDetail[];
 }
 
-interface ErrorDetail {
+interface FailedRunDetail {
     ID: string;
     Time: string;
     ErrorMessage: string;
@@ -59,6 +59,7 @@ const FIELDS = [
 
 @Component({
     standalone: false,
+    changeDetection: ChangeDetectionStrategy.OnPush,
     selector: 'app-analytics-error-analysis',
     template: `
 
@@ -76,7 +77,7 @@ const FIELDS = [
                     <div class="summary-content">
                         <div class="summary-label">Total Errors</div>
                         <div class="summary-value">{{ Summary.TotalErrors | number }}</div>
-                        <div class="summary-subtitle">sampled from {{ totalRunCount | number }} recent runs</div>
+                        <div class="summary-subtitle">sampled from {{ TotalRunCount | number }} recent runs</div>
                     </div>
                 </div>
                 <div class="summary-card">
@@ -111,7 +112,7 @@ const FIELDS = [
             @for (group of ErrorGroups; track group.Source) {
                 <mj-accordion-panel Size="sm" [FlushBody]="true"
                     [Expanded]="group.IsExpanded"
-                    (ExpandedChange)="onGroupExpandedChange(group, $event)">
+                    (ExpandedChange)="OnGroupExpandedChange(group, $event)">
                     <ng-template mjAccordionTitle>
                         <div class="error-group__title-row">
                             <div class="error-group__source">
@@ -420,7 +421,9 @@ export class AnalyticsErrorAnalysisComponent extends BaseAngularComponent implem
     public ErrorGroups: ErrorGroup[] = [];
 
     private failedRuns: FailedRunRecord[] = [];
-    public totalRunCount = 0;
+    public TotalRunCount = 0;
+    public get totalRunCount(): number { return this.TotalRunCount; }
+    public set totalRunCount(v: number) { this.TotalRunCount = v; }
 
     ngOnInit(): void {
         this.initialized = true;
@@ -447,9 +450,13 @@ export class AnalyticsErrorAnalysisComponent extends BaseAngularComponent implem
     /** Accordion-driven handler — SETS the emitted expanded value (vs. a flip),
      *  preserving the detectChanges() side-effect and keeping IsExpanded in sync
      *  so the collapsed-only "last error" preview shows/hides correctly. */
-    public onGroupExpandedChange(group: ErrorGroup, expanded: boolean): void {
+    public OnGroupExpandedChange(group: ErrorGroup, expanded: boolean): void {
         group.IsExpanded = expanded;
         this.cdr.detectChanges();
+    }
+
+    public onGroupExpandedChange(group: ErrorGroup, expanded: boolean): void {
+        this.OnGroupExpandedChange(group, expanded);
     }
 
     // ── Data Loading ──

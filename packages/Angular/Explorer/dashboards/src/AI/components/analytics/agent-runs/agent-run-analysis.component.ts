@@ -7,7 +7,7 @@
  */
 
 import {
-    Component, Input, Output, EventEmitter,
+    Component, ChangeDetectionStrategy, Input, Output, EventEmitter,
     OnInit, OnDestroy, ChangeDetectorRef, inject
 } from '@angular/core';
 import { Subject } from 'rxjs';
@@ -104,6 +104,7 @@ const COST_COLORS = [
 
 @Component({
     standalone: false,
+    changeDetection: ChangeDetectionStrategy.OnPush,
     selector: 'app-analytics-agent-runs',
     template: `
 
