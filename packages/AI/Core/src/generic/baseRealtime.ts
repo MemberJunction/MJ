@@ -359,6 +359,30 @@ export interface RealtimeSessionCapabilities {
     ProvidesOutputTranscription?: boolean;
 
     /**
+     * Whether this driver surfaces model-authored summaries of the model's own reasoning
+     * (Gemini `thinkingConfig.includeThoughts`).
+     *
+     * Sibling of {@link ProvidesInputTranscription} / {@link ProvidesOutputTranscription}: it
+     * declares a transcript STREAM the driver can produce. Thought summaries are narration, not
+     * spoken response — a host rendering them as assistant speech would attribute the model's
+     * scratch reasoning to it as an answer.
+     */
+    ProvidesThoughtSummaries?: boolean;
+
+    /**
+     * Whether this driver correctly handles a session whose reasoning outlives its turn — i.e.
+     * where a turn-terminal frame does NOT mean the server is idle, and further tool calls or
+     * audio may still arrive.
+     *
+     * This is a statement about the DRIVER, not the model: a driver that keys "work finished" off
+     * the turn-terminal frame must declare `false`, because on such a model it would flush deferred
+     * work early and report itself not-busy while the server is still going. Which signal a given
+     * model actually uses is model metadata
+     * (`ModelConfiguration.Realtime.IdleSignal`), not a driver capability.
+     */
+    SupportsAsynchronousReasoning?: boolean;
+
+    /**
      * Whether the provider supports receiving multiple parallel tool calls and batched results (gpt-live-1.md §4.2).
      */
     SupportsParallelToolCalls?: boolean;
