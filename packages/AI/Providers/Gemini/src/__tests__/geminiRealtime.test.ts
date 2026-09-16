@@ -978,6 +978,88 @@ describe('per-model Live legality', () => {
         });
     });
 
+    describe('C5 — refuse BLOCKING locally for Extended Thinking', () => {
+        const testTools = [
+            {
+                Name: 'search_docs',
+                Description: 'Search documentation',
+                ParametersSchema: { type: 'object', properties: { query: { type: 'string' } } },
+            },
+        ];
+
+        it('defaults tool declarations to behavior: NON_BLOCKING', () => {
+            const decls = GeminiRealtime.MapToolsToFunctionDeclarations(testTools);
+            expect(decls).toHaveLength(1);
+            expect(decls[0].behavior).toBe('NON_BLOCKING');
+        });
+
+        it('permits BLOCKING on gemini-3.8-live where blocking is supported', () => {
+            const decls = GeminiRealtime.MapToolsToFunctionDeclarations(testTools, 'gemini-3.8-live', 'BLOCKING');
+            expect(decls).toHaveLength(1);
+            expect(decls[0].behavior).toBe('BLOCKING');
+        });
+
+        it('permits BLOCKING on legacy 3.1 preview where blocking is supported', () => {
+            const decls = GeminiRealtime.MapToolsToFunctionDeclarations(
+                testTools,
+                'gemini-3.1-flash-live-preview',
+                'BLOCKING'
+            );
+            expect(decls).toHaveLength(1);
+            expect(decls[0].behavior).toBe('BLOCKING');
+        });
+
+        it('forces NON_BLOCKING and warns when BLOCKING is requested on gemini-3.8-live-extended-thinking', () => {
+            const decls = GeminiRealtime.MapToolsToFunctionDeclarations(
+                testTools,
+                'gemini-3.8-live-extended-thinking',
+                'BLOCKING'
+            );
+            expect(decls).toHaveLength(1);
+            expect(decls[0].behavior).toBe('NON_BLOCKING');
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining('blocking tool execution is not supported'));
+        });
+
+        it('refuses BLOCKING in StartSession for Extended Thinking when passed via Config bag', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(
+                makeParams({
+                    Model: 'gemini-3.8-live-extended-thinking',
+                    Tools: testTools,
+                    Config: { tooling: { Behavior: 'BLOCKING' } },
+                })
+            );
+            const tools =
+                (connectConfig(d).tools as Array<{
+                    functionDeclarations?: Array<{ name: string; behavior?: string }>;
+                }>) ?? [];
+            expect(tools[0].functionDeclarations![0].behavior).toBe('NON_BLOCKING');
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining('blocking tool execution is not supported'));
+        });
+
+        it('cleanses any BLOCKING functionDeclaration in applyModelLegality for Extended Thinking', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(
+                makeParams({
+                    Model: 'gemini-3.8-live-extended-thinking',
+                    Config: {
+                        tools: [
+                            {
+                                functionDeclarations: [{ name: 'injected_tool', behavior: 'BLOCKING' }],
+                            },
+                        ],
+                    },
+                })
+            );
+            const tools =
+                (connectConfig(d).tools as Array<{
+                    functionDeclarations?: Array<{ name: string; behavior?: string }>;
+                }>) ?? [];
+            expect(tools[0].functionDeclarations![0].behavior).toBe('NON_BLOCKING');
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining('blocking tool execution is not supported'));
+        });
+    });
+
     it('an unknown Live model still mints a working session rather than failing', async () => {
         const d = new TestGeminiRealtime('k');
         await d.StartSession(makeParams({ Model: 'gemini-9.9-live-future' }));
