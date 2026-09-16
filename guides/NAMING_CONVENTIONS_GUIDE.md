@@ -249,6 +249,23 @@ The alias **must be declared after** the canonical one — class fields initiali
 order, so reversed it captures `undefined` and Angular throws on subscribe. The pattern is held down
 by [`deprecated-output-alias.dom.test.ts`](../packages/Angular/Generic/base-forms/src/lib/deprecated-output-alias.dom.test.ts).
 
+**A class built by name-based deserialization** — the stub keeps *reads* working, but it does not
+automatically keep *writes* working, and that asymmetry is easy to miss.
+
+Renaming a field turns the old name from an **own data property** into a **prototype accessor**. Any
+loader that decides what to copy with `hasOwnProperty` therefore stops seeing it, and the incoming
+value is dropped in silence: no error, no warning, just a field that is suddenly `null`.
+
+MJ hit this for real. The `Entities` table's column is spelled `spCreate`, so every metadata row
+arrives under that key; once `EntityInfo.spCreate` became an alias for `SpCreate`, `copyInitData`
+skipped it and every entity loaded without its custom routine name. `BaseInfo.copyInitData` now also
+accepts a key that resolves to a **settable** accessor on the prototype chain — a read-only getter
+has nothing to assign to, and requiring a setter keeps inherited methods out of the copy.
+
+So when you rename a field on a class that is constructed from stored data — a metadata row, a
+cached JSON document, an API payload — check that whatever populates it looks past own properties.
+The compiler cannot see this one, and neither can the gate.
+
 ### Reading the output
 
 Both lists are capped at 50 in the terminal; the summary names the heaviest packages so there is
