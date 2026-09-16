@@ -14,7 +14,7 @@ import { BaseEmbeddings } from '@memberjunction/ai';
 import { MJGlobal } from '@memberjunction/global';
 
 /** Provider names that map to a registered `BaseEmbeddings` driver class. */
-export type EmbeddingProviderName = 'openai' | 'mistral' | 'azure' | 'bedrock' | 'ollama' | 'local';
+export type EmbeddingProviderName = 'openai' | 'gemini' | 'mistral' | 'azure' | 'bedrock' | 'ollama' | 'local';
 
 export interface EmbeddingProviderConfig {
     provider: EmbeddingProviderName;
@@ -33,6 +33,7 @@ export interface EmbeddingProvider {
 /** Provider name → registered MJ embedding driver class (see `@RegisterClass(BaseEmbeddings, ...)`). */
 const PROVIDER_TO_DRIVER_CLASS: Record<EmbeddingProviderName, string> = {
     openai: 'OpenAIEmbedding',
+    gemini: 'GeminiEmbedding',
     mistral: 'MistralEmbedding',
     azure: 'AzureEmbedding',
     bedrock: 'BedrockEmbedding',
@@ -45,6 +46,10 @@ const PROVIDER_TO_DRIVER_CLASS: Record<EmbeddingProviderName, string> = {
  * `local` uses a small HuggingFace sentence-transformer (downloaded on first use) so
  * organic-key clustering can run with no API key. `azure`/`bedrock` are intentionally
  * absent — their models are deployment-specific and must be set explicitly.
+ *
+ * `gemini` is absent for a different reason: `GeminiEmbedding` already defaults its own model, and
+ * that default moves with the model generation. Naming it here would pin a second copy that has to
+ * be remembered on every bump.
  */
 const PROVIDER_DEFAULT_MODEL: Partial<Record<EmbeddingProviderName, string>> = {
     openai: 'text-embedding-3-small',
