@@ -31,8 +31,8 @@ export interface RealtimeSessionStreams {
  * references and in-place updates reliably re-render.
  */
 export interface RealtimeDelegationCardVM {
-  /** What this card represents: a delegated agent run, or a direct action invoked by the co-agent. */
-  Kind: 'agent' | 'action';
+  /** What this card represents: a delegated agent run, a direct action, or model-authored narration. */
+  Kind: 'agent' | 'action' | 'narration';
   /** The `invoke-target-agent` or direct-action call this card represents. */
   CallID: string;
   /** Display name of the delegated agent (e.g. "Sage") or formatted direct action title (e.g. "Get Weather"). */

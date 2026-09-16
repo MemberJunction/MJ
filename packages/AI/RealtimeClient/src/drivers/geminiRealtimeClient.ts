@@ -188,6 +188,8 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     private pendingAssistantText = '';
     /** Accumulates the in-flight user transcription across delta frames. */
     private pendingUserText = '';
+    /** Accumulates in-flight thought text deltas until finalized on turn completion. */
+    private pendingThoughtText = '';
     /** True while a model turn is in flight; gates (queues) client-triggered sends. */
     private responseActive = false;
     /** The kind of the turn currently in flight; stamped at send time, reset on turnComplete. */
@@ -600,6 +602,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         }
         if (content.modelTurn) {
             this.handleModelAudio(content.modelTurn);
+            this.handleModelThoughts(content.modelTurn);
         }
         if (content.inputTranscription) {
             this.handleUserTranscription(content.inputTranscription);
@@ -636,6 +639,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      */
     private handleInterruption(): void {
         this.playback?.Flush();
+        this.finalizeThoughtTranscript();
         this.emitInterruption();
         this.setState('listening');
     }
@@ -646,10 +650,35 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
             return;
         }
         for (const part of modelTurn.parts) {
+            if (part.thought) {
+                continue; // Thoughts are reasoning summaries, never spoken audio
+            }
             const data = part.inlineData?.data;
             if (data) {
                 this.markGenerationStarted();
                 this.playback?.Enqueue(base64ToArrayBuffer(data));
+            }
+        }
+    }
+
+    /**
+     * Extracts thought parts (`part.thought === true`) from model turns and emits them
+     * as narration transcript deltas (`Kind: 'narration'`). Thought summaries are reasoning
+     * notes, never synthesized as assistant speech.
+     */
+    private handleModelThoughts(modelTurn: Content): void {
+        if (!modelTurn.parts) {
+            return;
+        }
+        for (const part of modelTurn.parts) {
+            if (part.thought && part.text) {
+                this.pendingThoughtText += part.text;
+                this.emitTranscript({
+                    Role: 'Assistant',
+                    Text: part.text,
+                    IsFinal: false,
+                    Kind: 'narration',
+                });
             }
         }
     }
@@ -735,6 +764,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      */
     private handleTurnComplete(): void {
         this.finalizeAssistantTranscript();
+        this.finalizeThoughtTranscript();
         if (this.idleSignal === 'turnComplete') {
             this.responseActive = false;
             this.activeResponseKind = 'normal';
@@ -759,6 +789,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.interactionInProgress = false;
         this.responseActive = false;
         this.activeResponseKind = 'normal';
+        this.finalizeThoughtTranscript();
         if (this.openClientTurn) {
             this.session?.sendClientContent({ turnComplete: true });
             this.openClientTurn = false;
@@ -801,6 +832,15 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.pendingAssistantText = '';
         if (text.trim().length > 0) {
             this.emitTranscript({ Role: 'Assistant', Text: text, IsFinal: true, Kind: this.activeResponseKind });
+        }
+    }
+
+    /** Emits the accumulated thought turn as final (if non-empty) with Kind: 'narration'. */
+    private finalizeThoughtTranscript(): void {
+        const text = this.pendingThoughtText;
+        this.pendingThoughtText = '';
+        if (text.trim().length > 0) {
+            this.emitTranscript({ Role: 'Assistant', Text: text, IsFinal: true, Kind: 'narration' });
         }
     }
 
@@ -963,6 +1003,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     private resetResponseState(): void {
         this.pendingAssistantText = '';
         this.pendingUserText = '';
+        this.pendingThoughtText = '';
         this.responseActive = false;
         this.interactionInProgress = false;
         this.activeResponseKind = 'normal';

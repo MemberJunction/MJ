@@ -793,6 +793,12 @@ export interface RealtimeTranscript {
      * instead of a stack of growing duplicates. Absent/false: a normal, append-worthy final.
      */
     ReplacesPrevious?: boolean;
+
+    /**
+     * `'normal'` for a regular conversation turn; `'narration'` for an ephemeral
+     * spoken-progress update or model-authored reasoning thought. Absent/undefined defaults to `'normal'`.
+     */
+    Kind?: 'normal' | 'narration';
 }
 
 /**

@@ -565,7 +565,10 @@ export class GeminiRealtime extends BaseRealtimeModel {
             GeminiRealtime.readString(GeminiRealtime.readObject(reasoning?.['Remote'])?.['Effort']) ??
             GeminiRealtime.readString(bag['effortLevel']) ??
             GeminiRealtime.readString(bag['reasoningEffort']);
-        const includeThoughts = reasoning?.['IncludeThoughtSummaries'] === true;
+        const includeThoughts =
+            reasoning?.['IncludeThoughtSummaries'] === true ||
+            bag['includeThoughts'] === true ||
+            bag['includeThoughtSummaries'] === true;
         const coverageSetting = GeminiRealtime.readString(turnDetection?.['Coverage']);
 
         // C1 — affective dialogue is REMOVED from the API on the 3.8 family; sending it errors. The
@@ -758,6 +761,9 @@ class GeminiRealtimeSession implements IRealtimeSession {
      * once the result is sent.
      */
     private pendingToolCallNames = new Map<string, string>();
+
+    /** Accumulates in-flight thought text deltas until finalized on turn completion. */
+    private pendingThoughtText = '';
 
     /**
      * Fingerprint of the tool set bound at connect time (set via {@link SetConnectTimeTools});
@@ -1121,6 +1127,16 @@ class GeminiRealtimeSession implements IRealtimeSession {
             clearTimeout(this.meetingResponseWatchdog);
             this.meetingResponseWatchdog = undefined;
         }
+        if (this.pendingThoughtText.trim().length > 0) {
+            const text = this.pendingThoughtText;
+            this.pendingThoughtText = '';
+            this.transcriptHandler?.({
+                Role: 'assistant',
+                Text: text,
+                IsFinal: true,
+                Kind: 'narration',
+            });
+        }
         RealtimeDiagLog(`[GeminiRealtime][diag] turn boundary — clearing responseActive (was ${this.responseActive}), draining ${this.queuedSends.length} queued send(s)`);
         this.responseActive = false;
         while (!this.responseActive && this.queuedSends.length > 0) {
@@ -1170,26 +1186,32 @@ class GeminiRealtimeSession implements IRealtimeSession {
             }
             this.responseActive = true;
             this.emitAudioOutput(content.modelTurn);
+            this.emitThoughtOutput(content.modelTurn);
         }
         if (content.turnComplete) {
             this.completeTurn();
         }
         if (content.inputTranscription) {
-            this.emitTranscript('user', content.inputTranscription.text, content.inputTranscription.finished);
+            this.emitTranscript('user', content.inputTranscription.text, content.inputTranscription.finished, 'normal');
         }
         if (content.outputTranscription) {
-            this.emitTranscript('assistant', content.outputTranscription.text, content.outputTranscription.finished);
+            this.emitTranscript('assistant', content.outputTranscription.text, content.outputTranscription.finished, 'normal');
         }
     }
 
     /**
      * Extracts inline audio parts from the model turn and forwards each as a raw `ArrayBuffer`.
+     * Thought parts (`part.thought === true`) are skipped — thoughts are reasoning summaries,
+     * not synthesized audio.
      */
     private emitAudioOutput(modelTurn: Content): void {
         if (!this.outputHandler || !modelTurn.parts) {
             return;
         }
         for (const part of modelTurn.parts) {
+            if (part.thought) {
+                continue;
+            }
             const data = part.inlineData?.data;
             if (data) {
                 this.outputHandler(GeminiRealtimeSession.Base64ToArrayBuffer(data));
@@ -1198,13 +1220,43 @@ class GeminiRealtimeSession implements IRealtimeSession {
     }
 
     /**
+     * Extracts thought parts (`part.thought === true`) from the model turn and emits each
+     * as an interim narration transcript (`Kind: 'narration'`).
+     */
+    private emitThoughtOutput(modelTurn: Content): void {
+        if (!this.transcriptHandler || !modelTurn.parts) {
+            return;
+        }
+        for (const part of modelTurn.parts) {
+            if (part.thought && part.text) {
+                this.pendingThoughtText += part.text;
+                this.transcriptHandler({
+                    Role: 'assistant',
+                    Text: part.text,
+                    IsFinal: false,
+                    Kind: 'narration',
+                });
+            }
+        }
+    }
+
+    /**
      * Emits a transcript event, defaulting missing text to empty and `finished` to a partial update.
      */
-    private emitTranscript(role: 'user' | 'assistant', text: string | undefined, finished: boolean | undefined): void {
+    private emitTranscript(
+        role: 'user' | 'assistant',
+        text: string | undefined,
+        finished: boolean | undefined,
+        kind?: 'normal' | 'narration',
+    ): void {
         if (!this.transcriptHandler) {
             return;
         }
-        this.transcriptHandler({ Role: role, Text: text ?? '', IsFinal: finished ?? false });
+        const t: RealtimeTranscript = { Role: role, Text: text ?? '', IsFinal: finished ?? false };
+        if (kind === 'narration') {
+            t.Kind = 'narration';
+        }
+        this.transcriptHandler(t);
     }
 
     /**
@@ -1252,6 +1304,7 @@ class GeminiRealtimeSession implements IRealtimeSession {
         this.pendingToolCallNames.clear();
         this.queuedSends = [];
         this.responseActive = false;
+        this.pendingThoughtText = '';
     }
 
     /** Returns the bound live session or throws if it was never attached / already closed. */
