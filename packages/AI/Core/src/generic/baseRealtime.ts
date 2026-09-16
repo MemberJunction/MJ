@@ -901,13 +901,24 @@ export interface RealtimeUsageModalityDetail {
     TextTokens?: number;
     /** Audio-modality tokens. */
     AudioTokens?: number;
-    /** Image-modality tokens (input only on current providers). */
+    /**
+     * Image-modality tokens (input only on current providers).
+     * Authoritative financial billing basis reported by inference providers (e.g. Gemini Live reports
+     * inbound video frames under promptTokensDetails.IMAGE).
+     */
     ImageTokens?: number;
     /** Tokens served from the provider's prompt cache (billed at the cached rate). */
     CachedTokens?: number;
-    /** Inbound video frames processed on video tracks (usage basis 'frames'). */
+    /**
+     * Cumulative inbound video frames processed on video tracks (usage basis 'frames').
+     * Client-side telemetry signal providing fine-grained frame counting and rate attribution.
+     * Comparing VideoFrames against ImageTokens enables operational drift detection for dropped frames.
+     */
     VideoFrames?: number;
-    /** Inbound or outbound video duration in seconds (usage basis 'seconds'). */
+    /**
+     * Cumulative inbound or outbound video duration in seconds (usage basis 'seconds').
+     * Matches the minute/second billing unit ($0.002/min) for stream-level telemetry.
+     */
     VideoSeconds?: number;
 }
 
@@ -937,4 +948,65 @@ export interface RealtimeToolDefinition {
      * provider's native function-parameter schema.
      */
     ParametersSchema: JSONObject;
+}
+
+/**
+ * Normalized representation of a realtime tool execution scheduling hint.
+ *
+ * Directs how the model should schedule its generation following a tool result:
+ * - `'silent'`: Execute without model speaking response.
+ * - `'whenIdle'`: Deliver tool output to model when conversational turn goes idle.
+ * - `'interrupt'`: Immediately interrupt active generation to deliver tool output.
+ */
+export type RealtimeToolSchedulingHint = 'silent' | 'whenIdle' | 'interrupt';
+
+/**
+ * Extracts and normalizes scheduling hints (`__mj_scheduling` or legacy `scheduling`)
+ * from a tool's parsed return dictionary.
+ *
+ * Strips both keys from `parsed` in-place so neither key leaks into the model's response payload.
+ * Validates the value case-insensitively, accepting:
+ * - 'SILENT' -> 'silent'
+ * - 'WHEN_IDLE' -> 'whenIdle'
+ * - 'INTERRUPT' | 'INTERRUPTED' -> 'interrupt'
+ *
+ * Warns on unrecognized values with `loggerTag` and returns `undefined`.
+ *
+ * @param parsed The tool output dictionary (mutated in-place to strip scheduling keys).
+ * @param toolName The name of the tool being executed, for logging context.
+ * @param loggerTag Optional logging tag prefix (defaults to 'Realtime').
+ * @returns The normalized scheduling hint, or `undefined` if absent or unrecognized.
+ */
+export function ExtractToolSchedulingHint(
+    parsed: Record<string, unknown>,
+    toolName: string,
+    loggerTag: string = 'Realtime'
+): RealtimeToolSchedulingHint | undefined {
+    const raw = parsed['__mj_scheduling'] ?? parsed['scheduling'];
+    if ('__mj_scheduling' in parsed) {
+        delete parsed['__mj_scheduling'];
+    }
+    if ('scheduling' in parsed) {
+        delete parsed['scheduling'];
+    }
+
+    if (typeof raw !== 'string') {
+        return undefined;
+    }
+
+    const schedStr = raw.trim().toUpperCase();
+    if (schedStr.length === 0) {
+        return undefined;
+    }
+
+    if (schedStr === 'SILENT') {
+        return 'silent';
+    } else if (schedStr === 'WHEN_IDLE') {
+        return 'whenIdle';
+    } else if (schedStr === 'INTERRUPT' || schedStr === 'INTERRUPTED') {
+        return 'interrupt';
+    } else {
+        console.warn(`[${loggerTag}] Unrecognized function scheduling value "${raw}" for tool "${toolName}".`);
+        return undefined;
+    }
 }

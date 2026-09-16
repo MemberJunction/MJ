@@ -40,6 +40,7 @@ import {
     type RealtimeTrackDescriptor,
     type RealtimeUsageModalityDetail,
     REALTIME_SHARED_CONFIG_KEYS,
+    ExtractToolSchedulingHint,
 } from '@memberjunction/ai';
 import {
     ResolveGeminiLiveProfile,
@@ -759,42 +760,19 @@ export class GeminiRealtime extends BaseRealtimeModel {
      * Extracts scheduling hints (`__mj_scheduling` or legacy `scheduling`) from the tool output,
      * strips both keys so they do not leak into the model's response payload, resolves the scheduling
      * directive accepting both 'INTERRUPT' and 'INTERRUPTED', and warns on unrecognized values or
-     * unsupported models.
+     * unsupported models (delegates normalization to Core `ExtractToolSchedulingHint`).
      */
     public static ExtractAndResolveScheduling(
         parsed: Record<string, unknown>,
         supportsScheduling: boolean,
         toolName: string
     ): FunctionResponseScheduling | undefined {
-        const raw = parsed['__mj_scheduling'] ?? parsed['scheduling'];
-        if ('__mj_scheduling' in parsed) {
-            delete parsed['__mj_scheduling'];
-        }
-        if ('scheduling' in parsed) {
-            delete parsed['scheduling'];
-        }
-
-        if (typeof raw !== 'string') {
+        const hint = ExtractToolSchedulingHint(parsed, toolName, 'GeminiRealtime');
+        if (!hint) {
             return undefined;
         }
 
-        const schedStr = raw.trim().toUpperCase();
-        if (schedStr.length === 0) {
-            return undefined;
-        }
-
-        let resolved: FunctionResponseScheduling | undefined;
-        if (schedStr === 'SILENT') {
-            resolved = FunctionResponseScheduling.SILENT;
-        } else if (schedStr === 'WHEN_IDLE') {
-            resolved = FunctionResponseScheduling.WHEN_IDLE;
-        } else if (schedStr === 'INTERRUPT' || schedStr === 'INTERRUPTED') {
-            resolved = FunctionResponseScheduling.INTERRUPT;
-        } else {
-            console.warn(`[GeminiRealtime] Unrecognized function scheduling value "${raw}" for tool "${toolName}".`);
-            return undefined;
-        }
-
+        const schedStr = hint === 'silent' ? 'SILENT' : hint === 'whenIdle' ? 'WHEN_IDLE' : 'INTERRUPT';
         if (!supportsScheduling) {
             console.warn(
                 `[GeminiRealtime] Dropping scheduling hint "${schedStr}" for tool "${toolName}": ` +
@@ -803,7 +781,14 @@ export class GeminiRealtime extends BaseRealtimeModel {
             return undefined;
         }
 
-        return resolved;
+        switch (hint) {
+            case 'silent':
+                return FunctionResponseScheduling.SILENT;
+            case 'whenIdle':
+                return FunctionResponseScheduling.WHEN_IDLE;
+            case 'interrupt':
+                return FunctionResponseScheduling.INTERRUPT;
+        }
     }
 }
 

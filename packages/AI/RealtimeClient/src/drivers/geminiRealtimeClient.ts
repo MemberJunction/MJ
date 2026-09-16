@@ -7,6 +7,7 @@ import {
     RealtimeIdleSignal,
     RealtimeToolBatchBarrier,
     RealtimeTrackDescriptor,
+    ExtractToolSchedulingHint,
 } from '@memberjunction/ai';
 import {
     GoogleGenAI,
@@ -395,8 +396,14 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
 
     /**
      * Streams one base64 image frame over the established inbound video track.
-     * Enforces the 1 fps ceiling (max 1 frame per 1000ms nominal).
-     * If inbound video is not established, returns without error or frame sends (fallback).
+     *
+     * Enforces a 750ms minimum inter-frame spacing to serve as a backstop with deliberate jitter
+     * headroom for upstream 1 fps (1000ms) pacers (such as `ChannelInboundVideoBridge`'s `setInterval`,
+     * `frameCapture`, and screencast pumps). The upstream cadence generators are the primary enforcers
+     * of the nominal 1 fps ceiling, while this 750ms gate absorbs event loop and async dispatch jitter
+     * without dropping intended 1Hz frames, while preventing unpaced callers from bursting above 1.33 fps.
+     *
+     * If inbound video is not established, returns `false` without error or frame sends (fallback).
      *
      * @returns `true` if the frame was dispatched to the session; `false` if dropped (throttled
      *   or track unestablished).
@@ -407,7 +414,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         }
         const now = Date.now();
         if (this.lastVideoSendTimestamp > 0 && now - this.lastVideoSendTimestamp < 750) {
-            return false; // Throttled: authoritative 1 fps cadence ceiling with async jitter headroom (Reviewer Items 25, 30)
+            return false; // Throttled: 750ms jitter headroom backstop for upstream 1 fps pacers (Reviewer Items 25, 30, 33)
         }
         this.lastVideoSendTimestamp = now;
         if (this.firstVideoSendTimestamp === 0) {
@@ -1144,41 +1151,18 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * Extracts scheduling hints (`__mj_scheduling` or legacy `scheduling`) from the tool output,
      * strips both keys so they do not leak into the model's response payload, resolves the scheduling
      * directive accepting both 'INTERRUPT' and 'INTERRUPTED', and warns on unrecognized values or
-     * unsupported models (Reviewer Items 16, 17, 18).
+     * unsupported models (delegates normalization to Core `ExtractToolSchedulingHint`).
      */
     private resolveFunctionScheduling(
         parsed: Record<string, unknown>,
         toolName: string
     ): FunctionResponseScheduling | undefined {
-        const raw = parsed['__mj_scheduling'] ?? parsed['scheduling'];
-        if ('__mj_scheduling' in parsed) {
-            delete parsed['__mj_scheduling'];
-        }
-        if ('scheduling' in parsed) {
-            delete parsed['scheduling'];
-        }
-
-        if (typeof raw !== 'string') {
+        const hint = ExtractToolSchedulingHint(parsed, toolName, 'GeminiRealtimeClient');
+        if (!hint) {
             return undefined;
         }
 
-        const schedStr = raw.trim().toUpperCase();
-        if (schedStr.length === 0) {
-            return undefined;
-        }
-
-        let resolved: FunctionResponseScheduling | undefined;
-        if (schedStr === 'SILENT') {
-            resolved = FunctionResponseScheduling.SILENT;
-        } else if (schedStr === 'WHEN_IDLE') {
-            resolved = FunctionResponseScheduling.WHEN_IDLE;
-        } else if (schedStr === 'INTERRUPT' || schedStr === 'INTERRUPTED') {
-            resolved = FunctionResponseScheduling.INTERRUPT;
-        } else {
-            console.warn(`[GeminiRealtimeClient] Unrecognized function scheduling value "${raw}" for tool "${toolName}".`);
-            return undefined;
-        }
-
+        const schedStr = hint === 'silent' ? 'SILENT' : hint === 'whenIdle' ? 'WHEN_IDLE' : 'INTERRUPT';
         if (!this.supportsScheduling) {
             console.warn(
                 `[GeminiRealtimeClient] Dropping scheduling hint "${schedStr}" for tool "${toolName}": ` +
@@ -1187,7 +1171,14 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
             return undefined;
         }
 
-        return resolved;
+        switch (hint) {
+            case 'silent':
+                return FunctionResponseScheduling.SILENT;
+            case 'whenIdle':
+                return FunctionResponseScheduling.WHEN_IDLE;
+            case 'interrupt':
+                return FunctionResponseScheduling.INTERRUPT;
+        }
     }
 
     private sendToolResponseTurn(callID: string, name: string, outputJson: string): void {
