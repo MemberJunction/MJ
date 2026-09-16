@@ -336,8 +336,13 @@ export function ParseModelConfiguration(json: string | null | undefined): AIMode
     }
     try {
         const parsed: unknown = JSON.parse(json);
-        return IsPlainObject(parsed) ? (parsed as AIModelConfiguration) : null;
-    } catch {
+        if (IsPlainObject(parsed)) {
+            return parsed as AIModelConfiguration;
+        }
+        console.warn('[ParseModelConfiguration] Model configuration JSON is not a plain object; skipping layer.');
+        return null;
+    } catch (err) {
+        console.warn('[ParseModelConfiguration] Failed to parse ModelConfiguration JSON; skipping malformed layer:', err);
         return null;
     }
 }

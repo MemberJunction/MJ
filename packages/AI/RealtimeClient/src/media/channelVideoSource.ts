@@ -43,6 +43,7 @@ export interface ChannelInboundVideoBridgeOptions {
 export class ChannelInboundVideoBridge {
     private timer: ReturnType<typeof setInterval> | null = null;
     private active = false;
+    private frameErrorLogged = false;
 
     constructor(
         private readonly clientOrGetter: BaseRealtimeClient | (() => BaseRealtimeClient | null | undefined) | null | undefined,
@@ -115,11 +116,15 @@ export class ChannelInboundVideoBridge {
         }
         try {
             const frame = await this.provider.GetLatestFrame();
+            this.frameErrorLogged = false;
             if (frame && frame.length > 0 && this.active) {
                 this.sendFrameDirect(frame);
             }
         } catch (err) {
-            console.error('[ChannelInboundVideoBridge] Error fetching frame from provider:', err);
+            if (!this.frameErrorLogged) {
+                this.frameErrorLogged = true;
+                console.error('[ChannelInboundVideoBridge] Error fetching frame from provider (suppressing repeats until next success):', err);
+            }
         }
     }
 
@@ -128,6 +133,7 @@ export class ChannelInboundVideoBridge {
      */
     public Stop(): void {
         this.active = false;
+        this.frameErrorLogged = false;
         if (this.timer) {
             clearInterval(this.timer);
             this.timer = null;
