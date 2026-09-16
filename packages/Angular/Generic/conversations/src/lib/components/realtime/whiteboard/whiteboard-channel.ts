@@ -1,7 +1,7 @@
 import type { Type } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { RegisterClass } from '@memberjunction/global';
-import { CHANNEL_INBOUND_VIDEO_TRACK, RealtimeToolDefinition, RealtimeTrackDescriptor } from '@memberjunction/ai';
+import { CHANNEL_INBOUND_VIDEO_TRACK, RealtimeToolDefinition, RealtimeTrack, RealtimeTrackDescriptor } from '@memberjunction/ai';
 import { ChannelInboundVideoBridge, IChannelFrameProvider } from '@memberjunction/ai-realtime-client';
 import { BaseRealtimeChannelClient, ChannelOnboardingDetails } from '../channels/base-realtime-channel-client';
 import {
@@ -147,22 +147,122 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
     return rasterizeSvgToJpegBase64(svg);
   }
 
+  private static readonly WHITEBOARD_DEFAULT_CADENCE_MS = 1000;
+  private static readonly WHITEBOARD_MIN_CADENCE_MS = 250;
+  private static readonly WHITEBOARD_HEARTBEAT_MS = 15_000;
+
+  /** Trailing timer to deliver the settled resting frame after rapid user drawing/edits. */
+  private whiteboardTrailingTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Last base64 JPEG frame pushed to the bridge, used for deduplication. */
+  private lastPushedWhiteboardFrame: string | null = null;
+
+  /** Cancels any active trailing-edge settle timer and clears the handle. */
+  private clearWhiteboardTrailingTimer(): void {
+    if (this.whiteboardTrailingTimer != null) {
+      clearTimeout(this.whiteboardTrailingTimer);
+      this.whiteboardTrailingTimer = null;
+    }
+  }
+
   /**
-   * Pushes the latest board visual scene when mutations occur, paced to at most 1 fps.
+   * Resolves the effective push cadence in milliseconds based on the negotiated inbound video track.
+   * Defaults to 1000ms (1 fps ceiling for Gemini Live), but clamps down to a minimum of 250ms (4 fps)
+   * if the negotiated track specifies a higher `Rate`.
    */
-  private async pushVisualScene(): Promise<void> {
+  private getNegotiatedVideoCadenceMs(): number {
+    const client = this.Context?.Client;
+    if (!client) {
+      return RealtimeWhiteboardChannel.WHITEBOARD_DEFAULT_CADENCE_MS;
+    }
+    const tracks: readonly RealtimeTrack[] = client.EstablishedTracks;
+    const videoTrack = tracks?.find(
+      (t: RealtimeTrack) =>
+        t.Descriptor.Modality === 'video' &&
+        t.Descriptor.Direction === 'inbound'
+    );
+    const rate = videoTrack?.Descriptor.Rate;
+    if (typeof rate === 'number' && rate > 0) {
+      return Math.max(
+        RealtimeWhiteboardChannel.WHITEBOARD_MIN_CADENCE_MS,
+        Math.floor(1000 / rate)
+      );
+    }
+    return RealtimeWhiteboardChannel.WHITEBOARD_DEFAULT_CADENCE_MS;
+  }
+
+  /**
+   * Pushes a frame to the video bridge, updating timestamp and deduplication cache.
+   */
+  private pushWhiteboardFrame(frame: string): void {
+    this.lastPushTimestamp = Date.now();
+    this.lastPushedWhiteboardFrame = frame;
+    this.ensureVideoBridge()?.PushFrame(frame);
+  }
+
+  /**
+   * Pushes the latest board visual scene when user mutations occur, with dynamic pacing,
+   * deduplication, and a trailing-edge settle timer so the model sees the final resting state.
+   */
+  private async onUserMutation(): Promise<void> {
     const bridge = this.ensureVideoBridge();
     if (!bridge || !this.Context?.Client?.IsTrackEstablished('video', 'inbound')) {
       return;
     }
+
     const now = Date.now();
-    if (now - this.lastPushTimestamp < 1000) {
-      return; // Paced to at most 1 fps
+    const cadenceMs = this.getNegotiatedVideoCadenceMs();
+    const elapsed = now - this.lastPushTimestamp;
+
+    if (elapsed >= cadenceMs) {
+      this.clearWhiteboardTrailingTimer();
+      const frame = await this.GetLatestFrame();
+      if (!frame) {
+        return;
+      }
+      const frameChanged = frame !== this.lastPushedWhiteboardFrame;
+      const heartbeatElapsed = elapsed >= RealtimeWhiteboardChannel.WHITEBOARD_HEARTBEAT_MS;
+      if (frameChanged || heartbeatElapsed) {
+        this.pushWhiteboardFrame(frame);
+      }
+    } else {
+      // Within cooldown window: schedule trailing settle timer if not already armed.
+      if (!this.whiteboardTrailingTimer) {
+        const delay = Math.max(0, cadenceMs - elapsed);
+        this.whiteboardTrailingTimer = setTimeout(async () => {
+          this.whiteboardTrailingTimer = null;
+          if (!this.Context?.Client?.IsTrackEstablished('video', 'inbound')) {
+            return;
+          }
+          const frame = await this.GetLatestFrame();
+          if (!frame) {
+            return;
+          }
+          const frameChanged = frame !== this.lastPushedWhiteboardFrame;
+          const heartbeat = (Date.now() - this.lastPushTimestamp) >= RealtimeWhiteboardChannel.WHITEBOARD_HEARTBEAT_MS;
+          if (frameChanged || heartbeat) {
+            this.pushWhiteboardFrame(frame);
+          }
+        }, delay);
+      }
     }
-    this.lastPushTimestamp = now;
+  }
+
+  /**
+   * Pushes exactly ONE confirmation frame after an agent tool mutates the board, and
+   * informs the model context so it does not loop narrating its own change.
+   */
+  private async pushAgentConfirmationFrame(): Promise<void> {
+    const bridge = this.ensureVideoBridge();
+    if (!bridge || !this.Context?.Client?.IsTrackEstablished('video', 'inbound')) {
+      return;
+    }
+    this.clearWhiteboardTrailingTimer();
     const frame = await this.GetLatestFrame();
     if (frame) {
-      bridge.PushFrame(frame);
+      this.pushWhiteboardFrame(frame);
+      this.Context?.SendContextNote(
+        '[whiteboard] visual confirmation of your action (background — do NOT narrate or announce your own change; continue naturally)'
+      );
     }
   }
 
@@ -204,9 +304,15 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
 
   /** Persist the board (host-debounced) on EVERY board mutation — user edits AND agent tools. */
   protected override OnInitialize(): void {
-    this.stateChangedSub = this.State.Changed$.subscribe(() => {
+    this.stateChangedSub?.unsubscribe();
+    this.clearWhiteboardTrailingTimer();
+    this.stateChangedSub = this.State.Changed$.subscribe((change) => {
       this.Context?.RequestSave(this.State.ToJSON());
-      void this.pushVisualScene();
+      // Only user edits (and scene replacements like undo) drive the user settle-debounce pipeline.
+      // Agent edits are confirmed with a single frame in ApplyAgentTool.
+      if (change.Author === 'user' || change.Op === 'replace') {
+        void this.onUserMutation();
+      }
     });
     this.ensureVideoBridge();
   }
@@ -360,10 +466,16 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
    * bound so the channel keeps working with the pane collapsed.
    */
   public ApplyAgentTool(toolName: string, argsJson: string): string {
+    let result: string;
     if (this.host) {
-      return this.host.ApplyAgentTool(toolName, argsJson);
+      result = this.host.ApplyAgentTool(toolName, argsJson);
+    } else {
+      result = ApplyWhiteboardAgentTool(this.State, toolName, argsJson);
     }
-    return ApplyWhiteboardAgentTool(this.State, toolName, argsJson);
+    // Agent tool execution triggers exactly ONE immediate visual confirmation frame
+    // and informs the model context to prevent repetition loops.
+    void this.pushAgentConfirmationFrame();
+    return result;
   }
 
   /** The board's serialized state of record (persisted under {@link ChannelName}). */
@@ -393,10 +505,12 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
   }
 
   public override Dispose(): void {
+    this.clearWhiteboardTrailingTimer();
     this.videoBridge?.Stop();
     this.videoBridge = null;
     this.stateChangedSub?.unsubscribe();
     this.stateChangedSub = null;
+    this.lastPushedWhiteboardFrame = null;
     super.Dispose(); // releases the surface binding + context
   }
 

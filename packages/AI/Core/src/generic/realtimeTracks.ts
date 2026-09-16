@@ -300,14 +300,28 @@ export function ResolveRequestedTracks(
     }
     const supportedList = supported ?? [];
     return requested.map((descriptor, index) => {
-        const isSupported = supportedList.some(
+        const supportedTrack = supportedList.find(
             (s) =>
                 String(s.Modality).trim().toLowerCase() === String(descriptor.Modality).trim().toLowerCase() &&
                 s.Direction === descriptor.Direction
         );
+        const isSupported = Boolean(supportedTrack);
+        let refinedDescriptor = descriptor;
+        if (supportedTrack) {
+            let effectiveRate = descriptor.Rate;
+            if (typeof supportedTrack.Rate === 'number' && supportedTrack.Rate > 0) {
+                effectiveRate = typeof descriptor.Rate === 'number' && descriptor.Rate > 0
+                    ? Math.min(descriptor.Rate, supportedTrack.Rate)
+                    : supportedTrack.Rate;
+            }
+            refinedDescriptor = {
+                ...descriptor,
+                Rate: effectiveRate,
+            };
+        }
         return {
-            TrackID: makeTrackID(descriptor, index),
-            Descriptor: descriptor,
+            TrackID: makeTrackID(refinedDescriptor, index),
+            Descriptor: refinedDescriptor,
             State: isSupported ? 'requested' : 'unsupported',
             Reason: isSupported
                 ? undefined

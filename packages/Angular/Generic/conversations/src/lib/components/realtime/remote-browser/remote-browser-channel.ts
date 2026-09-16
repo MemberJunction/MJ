@@ -543,7 +543,7 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
     if (!client) {
       return RemoteBrowserChannel.SCREENCAST_DEFAULT_CADENCE_MS;
     }
-    const tracks: readonly RealtimeTrack[] = client.EstablishedTracks ?? client.AllTracks ?? [];
+    const tracks: readonly RealtimeTrack[] = client.EstablishedTracks;
     const videoTrack = tracks.find(
       (t: RealtimeTrack) =>
         t.Descriptor.Modality === 'video' &&
@@ -589,7 +589,6 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
     }
 
     this.surface?.RenderFrame(dataBase64);
-    this.notePageChange(currentUrl, 'observed');
 
     const now = Date.now();
     const cadenceMs = this.getNegotiatedVideoCadenceMs();
@@ -630,6 +629,9 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
         }, delay);
       }
     }
+
+    // #3496: URL perception note runs AFTER the push so the visual image lands before/with the note.
+    this.notePageChange(currentUrl, 'observed');
   }
 
   /**

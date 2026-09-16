@@ -133,8 +133,24 @@ describe('ResolveRequestedTracks', () => {
         expect(t.Descriptor).toEqual(req);
     });
 
+    it('refines Rate to the ceiling declared by the supported track', () => {
+        const supportedWithRate: RealtimeTrackDescriptor = {
+            Modality: 'video',
+            Direction: 'inbound',
+            Rate: 1,
+        };
+        const requestedHigherRate: RealtimeTrackDescriptor = {
+            Modality: 'video',
+            Direction: 'inbound',
+            Rate: 4,
+        };
+        const [t] = ResolveRequestedTracks([requestedHigherRate], [supportedWithRate], ids);
+        expect(t.Descriptor.Rate).toBe(1);
+    });
+
     it('resolves a full duplex audio + inbound video set independently', () => {
         const resolved = ResolveRequestedTracks([inAudio, outAudio, inVideo], [inAudio, outAudio], ids);
         expect(resolved.map((t) => t.State)).toEqual(['requested', 'requested', 'unsupported']);
     });
 });
+
