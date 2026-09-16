@@ -235,7 +235,14 @@ rare edge case into a guaranteed one. Tracked as **F7**.
 - [x] **F2.** Gemini driver sends frames as inbound video when the track is established.
 - [x] **F3.** **Whiteboard channel sources inbound video** when the model supports it — the agent
   sees what it draws. Falls back to today's tool-only behaviour otherwise.
-  **⚠️ REOPENED 2026-09-16 (review item 37): the frame producer is a stub.**
+  **RESOLVED 2026-09-16 in `a9fc013126`** — `GetLatestFrame()` now renders
+  `BuildWhiteboardExportSvg(State)` to JPEG via an offscreen canvas (DOM-absence guard, object URL
+  revoked on all three exits, white fill before draw because JPEG has no alpha), and
+  `pushVisualScene()` pushes on `State.Changed$` paced at 1 fps. Residual: the rasterizer's two bare
+  catches and its `onerror` all resolve `null` unlogged, and `null` is also the legitimate
+  "no frame" answer — so a persistently broken rasterizer looks exactly like an idle board
+  (review item 41). The original finding, kept for the reasoning:
+  **the frame producer was a stub.**
   `whiteboard-channel.ts:90` `GetLatestFrame()` returns `null` unconditionally, under a doc comment
   describing a capability the body does not have, and the channel has no `PushFrame` call site. The
   bridge is constructed and `Start()`ed regardless, so a 1 Hz timer polls `null` for the session's
@@ -245,7 +252,13 @@ rare edge case into a guaranteed one. Tracked as **F7**.
 - [x] **F4.** **Remote browser channel sources inbound video** when supported — the model watches
   the page continuously while the agent still acts through tools. Falls back to
   screenshot-as-tool-result.
-  **⚠️ REOPENED 2026-09-16 (review item 38): two frame sources, one gate.** The channel both
+  **RESOLVED 2026-09-16 in `a9fc013126`** — `GetLatestFrame()` returns `null` while `streaming`
+  (killing the redundant per-second snapshot round-trip) and `OnScreencastFrame` gates `PushFrame`
+  at ≥1000 ms, so one paced source at a time. `notePageChange` correctly stays outside that gate.
+  This also all but closes item 33: the screencast push now *is* paced, so the 750 ms backstop's
+  premise holds — the comment just needs to name `OnScreencastFrame`'s own gate rather than
+  something upstream of the client. The original finding, kept for the reasoning:
+  **two frame sources, one gate.** The channel both
   `Start()`s the bridge (`:418`) and `PushFrame`s from `OnScreencastFrame` (`:490`). The bridge's
   poll calls `GetLatestFrame()` → `fetchSnapshot()` → a **server round-trip per second** that is
   redundant during streaming (the surface's own poll is stopped precisely because pushed frames are
@@ -260,7 +273,21 @@ rare edge case into a guaranteed one. Tracked as **F7**.
   `sessionResumptionUpdate` on the client and resume across the cap. Gates whether F3/F4 are
   shippable features or just demos. Not optional the moment a video track is established.
 - [ ] **F8.** 🚨 **Wire the REQUEST side of track negotiation — without it F1–F7 cannot execute.**
-  Found 2026-09-16 (review item 36). The negotiation has a consumer and no producer:
+  **Wiring landed 2026-09-16 in `a9fc013126`** — `RealtimeSessionService.buildClientConfig` aggregates
+  `_activeChannels$` → `GetSourcedTracks()` into `requestedTracks`, deduped by `Direction:Modality`,
+  and its test drives the real `StartRealtimeSessionFromResult` → `Connect` path rather than injecting
+  a fixture. Video is reachable end to end for the first time.
+  **Still open (review item 40): that fix drops AUDIO out of the negotiated table.** Both channels
+  source video only, so `requestedTracks` becomes `[{video,inbound}]`; `negotiateTracks` treats the
+  audio pair as a fallback-when-empty rather than a floor, and `ResolveRequestedTracks` adds nothing —
+  so `EstablishedTracks.length === 1` and `IsTrackEstablished('audio', …)` is `false` while audio
+  streams. Audio does not actually break (mic capture is unconditional and nothing gates audio on the
+  table), so this is the table lying, not an outage — but the table is new here and its first honest
+  consumer would break. **Fix it as a floor in `negotiateTracks`, not as another union at one call
+  site**, and export the audio descriptors from Core: they exist today as three hand-written copies
+  (twice inside `negotiateTracks`, once as a test-local `DEFAULT_AUDIO_TRACKS`) and no shared
+  constant, which is precisely why `buildClientConfig` had nothing to union in.
+  Original finding (review item 36), kept because the reasoning is the reasoning: The negotiation has a consumer and no producer:
   `RequestedTracks` is declared (`modelConfiguration.ts:165`), documented, intersected
   (`ResolveRequestedTracks`) and read (`baseRealtimeClient.ts:288`,
   `geminiRealtimeClient.ts:624`) — and **written nowhere outside the test fixtures**. The mint
