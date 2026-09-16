@@ -402,10 +402,11 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * Streams one base64 image frame over the established inbound video track.
      *
      * Enforces a 750ms minimum inter-frame spacing to serve as a backstop with deliberate jitter
-     * headroom for upstream 1 fps (1000ms) pacers (such as `ChannelInboundVideoBridge`'s `setInterval`,
-     * `frameCapture`, and screencast pumps). The upstream cadence generators are the primary enforcers
-     * of the nominal 1 fps ceiling, while this 750ms gate absorbs event loop and async dispatch jitter
-     * without dropping intended 1Hz frames, while preventing unpaced callers from bursting above 1.33 fps.
+     * headroom for 1 fps (1000ms) pacers (such as `ChannelInboundVideoBridge`'s `setInterval`,
+     * `frameCapture`, and channel-level gates like `OnScreencastFrame`'s 1000ms pacer). Upstream
+     * cadence generators and channel gates are the primary enforcers of the nominal 1 fps ceiling,
+     * while this 750ms gate absorbs event loop and async dispatch jitter without dropping intended
+     * 1Hz frames, while preventing any unpaced callers from bursting above 1.33 fps.
      *
      * If inbound video is not established, returns `false` without error or frame sends (fallback).
      *

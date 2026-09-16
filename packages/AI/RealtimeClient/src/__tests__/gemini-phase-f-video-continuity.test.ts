@@ -2,14 +2,12 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import {
     CHANNEL_INBOUND_VIDEO_TRACK,
     ClientRealtimeSessionConfig,
+    DEFAULT_REALTIME_AUDIO_TRACKS,
     RealtimeTrackDescriptor,
 } from '@memberjunction/ai';
 import type { LiveServerMessage } from '@google/genai';
 
-const DEFAULT_AUDIO_TRACKS: readonly RealtimeTrackDescriptor[] = [
-    { Modality: 'audio', Direction: 'inbound' },
-    { Modality: 'audio', Direction: 'outbound' },
-];
+const DEFAULT_AUDIO_TRACKS = DEFAULT_REALTIME_AUDIO_TRACKS;
 import {
     FakeMediaStream,
     FakeTrack,
@@ -113,6 +111,29 @@ describe('Phase F — Realtime Video Tracks, Bridge, and Continuity', () => {
 
             expect(client.IsTrackEstablished('video', 'inbound')).toBe(true);
             expect(client.EstablishedTracks.some((t) => t.Descriptor.Modality === 'video' && t.Descriptor.Direction === 'inbound')).toBe(true);
+        });
+
+        it('preserves audio tracks as a baseline floor when only video is requested', async () => {
+            const track = new FakeTrack();
+            const config: ClientRealtimeSessionConfig = {
+                Provider: 'gemini',
+                Model: 'gemini-3.8-live',
+                EphemeralToken: 'auth_tokens/ephemeral-video',
+                ExpiresAt: new Date(Date.now() + 60000).toISOString(),
+                SessionConfig: {
+                    model: 'gemini-3.8-live',
+                    requestedTracks: [
+                        CHANNEL_INBOUND_VIDEO_TRACK,
+                    ],
+                },
+            };
+
+            await client.Connect(config, new FakeMediaStream([track]));
+
+            expect(client.IsTrackEstablished('audio', 'inbound')).toBe(true);
+            expect(client.IsTrackEstablished('audio', 'outbound')).toBe(true);
+            expect(client.IsTrackEstablished('video', 'inbound')).toBe(true);
+            expect(client.EstablishedTracks).toHaveLength(3);
         });
 
         it('Test #7: video requested on non-video model falls back cleanly with no error', async () => {

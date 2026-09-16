@@ -476,6 +476,9 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
     super.Dispose();
   }
 
+  /** Timestamp of the last screencast frame pushed to the video bridge (paces pushes to ≤ 1 fps). */
+  private lastScreencastPushTime = 0;
+
   /**
    * Forwards one PUSHED screencast frame to the bound surface's canvas. Called by the session service
    * when a `RemoteBrowserScreencastFrame` arrives on the push-status stream for THIS session. No-op when
@@ -489,9 +492,6 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
    * @param dataBase64 The frame image as raw base64 JPEG (no `data:` prefix).
    * @param currentUrl The browser's URL when the frame was captured; absent from older servers.
    */
-  /** Timestamp of the last screencast frame pushed to the video bridge (paces pushes to ≤ 1 fps). */
-  private lastScreencastPushTime = 0;
-
   public OnScreencastFrame(dataBase64: string, currentUrl?: string | null): void {
     if (this.streaming) {
       this.surface?.RenderFrame(dataBase64);
