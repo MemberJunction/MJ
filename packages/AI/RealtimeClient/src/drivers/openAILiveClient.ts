@@ -204,9 +204,11 @@ export class OpenAILiveClient extends BaseRealtimeClient {
             content: text,
             delegation_id: null,
         });
-        this.sendDataChannelFrame({
-            type: 'response.create',
-        });
+        if (this.toolBatchBarrier.IsEmpty) {
+            this.sendDataChannelFrame({
+                type: 'response.create',
+            });
+        }
     }
 
     /**
@@ -293,6 +295,7 @@ export class OpenAILiveClient extends BaseRealtimeClient {
 
         const isBatchComplete = this.toolBatchBarrier.RecordResult(callID);
         if (isBatchComplete) {
+            this.emittedToolCallIds.clear();
             this.sendDataChannelFrame({
                 type: 'response.create',
             });
@@ -585,6 +588,7 @@ export class OpenAILiveClient extends BaseRealtimeClient {
         this.responseActive = false;
         this.audioPlaying = false;
         this.toolBatchBarrier.TrackPendingCall(callId, () => {
+            this.emittedToolCallIds.clear();
             this.sendDataChannelFrame({
                 type: 'response.create',
             });
@@ -607,7 +611,9 @@ export class OpenAILiveClient extends BaseRealtimeClient {
     }
 
     private handleResponseCompleted(respOrUsage: Record<string, unknown> | undefined): void {
-        this.emittedToolCallIds.clear();
+        if (this.toolBatchBarrier.IsEmpty) {
+            this.emittedToolCallIds.clear();
+        }
         this.finalizeAssistantTranscript();
         const usage = (respOrUsage?.usage as Record<string, unknown> | undefined) ?? respOrUsage;
         const seconds = typeof usage?.seconds === 'number' ? usage.seconds : undefined;
