@@ -9,6 +9,26 @@ import type { OracleResult } from '@memberjunction/testing-engine';
 import type { ComputerUseStatus, ComputerUseFailureReason, BrowserDiagnosticEvent } from '@memberjunction/computer-use';
 import { ComputerUseTestConfig } from './types';
 
+// ─── Replay-script policy ──────────────────────────────────
+
+/**
+ * Whether the run perceives by element grounding. On unless a test opts out: a
+ * coordinate click records a target with no selector and no role/name to heal
+ * from, so grounding is the precondition for the replay tier existing at all.
+ */
+export function usesElementGrounding(config: ComputerUseTestConfig): boolean {
+    return config.elementGrounding ?? true;
+}
+
+/**
+ * Whether a green, recordable LLM run may store its replay script. On unless a
+ * test opts out — the opt-out is for a test still being authored, or one whose
+ * trajectory should not become the baseline later runs replay.
+ */
+export function recordsReplayScript(config: ComputerUseTestConfig): boolean {
+    return config.recordReplayScript ?? true;
+}
+
 // ─── Oracle gating ─────────────────────────────────────────
 
 /**

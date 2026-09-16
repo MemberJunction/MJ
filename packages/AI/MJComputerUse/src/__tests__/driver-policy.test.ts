@@ -9,12 +9,14 @@ import {
     isSevereBrowserFault,
     mergeComputerUseConfig,
     partitionGatingOracles,
+    recordsReplayScript,
     readSuiteComputerUseConfig,
     resolveConsoleLogLevel,
     shouldCaptureArtifact,
     shouldLogToConsole,
     shouldRetainArtifact,
     testTag,
+    usesElementGrounding,
 } from '../test-driver/driver-policy.js';
 import type { ComputerUseTestConfig } from '../test-driver/types.js';
 import type { BrowserDiagnosticEvent } from '@memberjunction/computer-use';
@@ -439,5 +441,38 @@ describe('mergeComputerUseConfig (/ D7 precedence)', () => {
         const merged = mergeComputerUseConfig({ headless: true }, { maxSteps: 30 });
         expect('generation' in merged).toBe(false);
         expect('appProfile' in merged).toBe(false);
+    });
+});
+
+describe('usesElementGrounding', () => {
+    it('is ON when the test says nothing — a coordinate click can neither be recorded nor replayed', () => {
+        expect(usesElementGrounding({})).toBe(true);
+    });
+
+    it('honours an explicit opt-out', () => {
+        expect(usesElementGrounding({ elementGrounding: false })).toBe(false);
+    });
+
+    it('honours an explicit opt-in', () => {
+        expect(usesElementGrounding({ elementGrounding: true })).toBe(true);
+    });
+});
+
+describe('recordsReplayScript', () => {
+    it('is ON when the test says nothing, so a green run seeds its own script', () => {
+        expect(recordsReplayScript({})).toBe(true);
+    });
+
+    it('honours an explicit opt-out', () => {
+        expect(recordsReplayScript({ recordReplayScript: false })).toBe(false);
+    });
+
+    it('honours an explicit opt-in', () => {
+        expect(recordsReplayScript({ recordReplayScript: true })).toBe(true);
+    });
+
+    it('is independent of elementGrounding — a grounded run can still refuse to store', () => {
+        expect(recordsReplayScript({ elementGrounding: true, recordReplayScript: false })).toBe(false);
+        expect(usesElementGrounding({ elementGrounding: true, recordReplayScript: false })).toBe(true);
     });
 });

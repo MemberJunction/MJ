@@ -111,6 +111,8 @@ import {
     shouldCaptureArtifact,
     shouldRetainArtifact,
     computeDivergence,
+    usesElementGrounding,
+    recordsReplayScript,
     type ConsoleLogLevel,
     type FailureSignals,
     type ArtifactRetentionPolicy,
@@ -437,7 +439,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             await this.appendTraceArtifact(outputs, result, tracePolicy, status === 'Passed', context);
 
             // 7b. record the replay script from a green, recordable LLM leg.
-            await this.maybeRecordScript({ result, status, gating, tier, fellBackToLlm, runParams, input, variableValues, context });
+            await this.maybeRecordScript({ result, status, gating, tier, fellBackToLlm, runParams, input, variableValues, context, config });
 
             // 8. Build result
             const driverResult: DriverExecutionResult = {
@@ -647,7 +649,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         }
         // Element-grounded perception: opt-in per test/suite; default off
         // (coordinate mode) until baked in across the suite.
-        params.ElementGrounding = config.elementGrounding ?? false;
+        params.ElementGrounding = usesElementGrounding(config);
         // Per-test controller generation overrides: determinism knobs.
         if (config.generation) {
             params.ControllerGeneration = config.generation;
@@ -904,10 +906,11 @@ export class ComputerUseTestDriver extends BaseTestDriver {
     /**
      * Overwrite the test row's replay script when a green LLM leg is recordable.
      *
-     * All four gates required: the leg was LLM (re-recording a replay would launder
-     * healed selectors in without re-deriving them), status Passed, every gating
-     * oracle green, and the engine's own `isRecordableRun`. A save failure is
-     * logged and swallowed — it costs the next run a re-record.
+     * Skipped outright when the test sets `recordReplayScript: false`. Otherwise
+     * all four gates are required: the leg was LLM (re-recording a replay would
+     * launder healed selectors in without re-deriving them), status Passed, every
+     * gating oracle green, and the engine's own `isRecordableRun`. A save failure
+     * is logged and swallowed — it costs the next run a re-record.
      */
     private async maybeRecordScript(args: {
         result: ComputerUseResult;
@@ -919,9 +922,13 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         input: ComputerUseTestInput;
         variableValues: Record<string, unknown>;
         context: DriverExecutionContext;
+        config: ComputerUseTestConfig;
     }): Promise<void> {
-        const { result, status, gating, tier, fellBackToLlm, runParams, input, variableValues, context } = args;
+        const { result, status, gating, tier, fellBackToLlm, runParams, input, variableValues, context, config } = args;
 
+        if (!recordsReplayScript(config)) {
+            return;
+        }
         const ranLlmLeg = tier === 'llm' || fellBackToLlm;
         if (!ranLlmLeg || status !== 'Passed') {
             return;

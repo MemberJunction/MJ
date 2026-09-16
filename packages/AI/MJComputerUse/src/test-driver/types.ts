@@ -237,10 +237,22 @@ export interface ComputerUseTestConfig {
      * extracts the page's interactive elements into an indexed list, renders it
      * into the controller prompt, and lets the controller act by index
      * (ClickElement/TypeIntoElement) with locator actionability auto-wait instead
-     * of estimating coordinates. Default false (coordinate/vision mode) until
-     * baked in across the suite.
+     * of estimating coordinates. Default true: a coordinate click cannot be
+     * recorded or replayed, so grounding is the precondition for the replay tier.
+     * Set false to fall back to coordinate/vision mode.
      */
     elementGrounding?: boolean;
+
+    /**
+     * Whether a green, recordable LLM run writes its replay script back to the
+     * test row. Default true. Set false to run the agent tier without ever
+     * storing a script — useful while a test is still being authored, and for a
+     * run whose trajectory should not become the baseline others replay.
+     *
+     * Independent of {@link elementGrounding}: a grounded run still produces the
+     * indexed element list the DOM oracles assert over, it simply is not stored.
+     */
+    recordReplayScript?: boolean;
 
     /**
      * Failure-artifact trace policy. When enabled, the run records a
