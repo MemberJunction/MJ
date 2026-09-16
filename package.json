@@ -109,6 +109,7 @@
     "check:release-notes:test": "vitest run --config .github/scripts/vitest.config.mts __tests__/check-release-notes-shape",
     "check:app-token-no-merge": "node .github/scripts/check-app-token-no-merge.mjs",
     "check:app-token-no-merge:test": "vitest run --config .github/scripts/vitest.config.mts __tests__/check-app-token-no-merge",
+    "check:seed-attestation:test": "vitest run --config .github/scripts/vitest.config.mts __tests__/verify-seed-attestation",
     "check:codegen-tail:test": "vitest run --config .github/scripts/vitest.config.mts __tests__/check-codegen-tail",
     "check:browser-manifest": "node .github/scripts/check-browser-manifest-leakage.mjs",
     "check:browser-manifest:test": "vitest run --config .github/scripts/vitest.config.mts __tests__/check-browser-manifest-leakage",
