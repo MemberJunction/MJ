@@ -1,7 +1,7 @@
 ---
-"@memberjunction/ai": minor
-"@memberjunction/aiengine": minor
-"@memberjunction/core-entities": minor
+"@memberjunction/ai": patch
+"@memberjunction/aiengine": patch
+"@memberjunction/core-entities": patch
 ---
 
 AI model & vendor metadata refresh (weekly research run, 2026-09-14).
