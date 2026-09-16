@@ -61,6 +61,13 @@ export interface RealtimeClientTranscript {
      * duplicate. Absent/`false` on ordinary turns and on interim deltas.
      */
     ReplacesPrevious?: boolean;
+    /**
+     * `true` when this transcript represents model-authored reasoning / thought summaries
+     * (e.g. Gemini Extended Thinking `part.thought === true`), rather than a spoken progress update.
+     * Thought transcripts render into a narration delegation card and are never synthesized
+     * as audio or chained into spoken narration history.
+     */
+    IsThought?: boolean;
 }
 
 /**

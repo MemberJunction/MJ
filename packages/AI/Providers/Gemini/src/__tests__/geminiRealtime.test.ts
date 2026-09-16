@@ -367,7 +367,7 @@ describe('GeminiRealtime', () => {
             } as LiveServerMessage);
 
             expect(transcripts).toEqual([
-                { Role: 'assistant', Text: 'Let me think about this step by step.', IsFinal: false, Kind: 'narration' },
+                { Role: 'assistant', Text: 'Let me think about this step by step.', IsFinal: false, Kind: 'narration', IsThought: true },
             ]);
             expect(outputs).toHaveLength(1);
 
@@ -375,8 +375,8 @@ describe('GeminiRealtime', () => {
             driver.Fake.Emit({ serverContent: { turnComplete: true } } as LiveServerMessage);
 
             expect(transcripts).toEqual([
-                { Role: 'assistant', Text: 'Let me think about this step by step.', IsFinal: false, Kind: 'narration' },
-                { Role: 'assistant', Text: 'Let me think about this step by step.', IsFinal: true, Kind: 'narration' },
+                { Role: 'assistant', Text: 'Let me think about this step by step.', IsFinal: false, Kind: 'narration', IsThought: true },
+                { Role: 'assistant', Text: 'Let me think about this step by step.', IsFinal: true, Kind: 'narration', IsThought: true },
             ]);
         });
 
@@ -1145,6 +1145,89 @@ describe('per-model Live legality', () => {
             } finally {
                 warn.mockRestore();
             }
+        });
+
+        it('supports __mj_scheduling, accepts INTERRUPTED, and strips scheduling keys from payload', async () => {
+            const d = new TestGeminiRealtime('k');
+            const session = await d.StartSession(makeParams({ Model: 'gemini-3.8-live' }));
+            d.Fake.Emit({
+                toolCall: { functionCalls: [{ id: 'call-2', name: 'lookup', args: {} }] },
+            } as LiveServerMessage);
+
+            await session.SendToolResult('call-2', JSON.stringify({ result: 'ok', __mj_scheduling: 'INTERRUPTED' }));
+            expect(d.Fake.ToolResponses).toHaveLength(1);
+            const resp = d.Fake.ToolResponses[0].functionResponses;
+            const item = Array.isArray(resp) ? resp[0] : resp;
+            expect(item.scheduling).toBe('INTERRUPT');
+            const payload = item.response as Record<string, unknown>;
+            expect(payload['result']).toBe('ok');
+            expect(payload['__mj_scheduling']).toBeUndefined();
+            expect(payload['scheduling']).toBeUndefined();
+        });
+
+        it('warns on unrecognized scheduling value', async () => {
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+            try {
+                const parsed: Record<string, unknown> = { key: 'val', scheduling: 'INVALID_SCHED' };
+                const res = GeminiRealtime.ExtractAndResolveScheduling(parsed, true, 'testTool');
+                expect(res).toBeUndefined();
+                expect(parsed['key']).toBe('val');
+                expect(parsed['scheduling']).toBeUndefined();
+                expect(warn).toHaveBeenCalledWith(expect.stringContaining('Unrecognized function scheduling value "INVALID_SCHED"'));
+            } finally {
+                warn.mockRestore();
+            }
+        });
+
+        it('states behavior on bag tools without behavior (C5a) and warns on unrecognized behavior (C5b)', async () => {
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+            try {
+                const d = new TestGeminiRealtime('k');
+                await d.StartSession(
+                    makeParams({
+                        Model: 'gemini-3.8-live',
+                        Config: {
+                            tools: [
+                                {
+                                    functionDeclarations: [
+                                        { name: 'bare_tool' },
+                                        { name: 'typo_tool', behavior: 'BLOKING' as Behavior },
+                                    ],
+                                },
+                            ],
+                        },
+                    })
+                );
+                const tools = (connectConfig(d).tools as Array<{
+                    functionDeclarations?: Array<{ name: string; behavior?: string }>;
+                }>) ?? [];
+                const decls = tools[0].functionDeclarations!;
+                expect(decls[0].name).toBe('bare_tool');
+                expect(decls[0].behavior).toBe('NON_BLOCKING');
+                expect(decls[1].name).toBe('typo_tool');
+                expect(decls[1].behavior).toBe('NON_BLOCKING');
+                expect(warn).toHaveBeenCalledWith(expect.stringContaining('Unrecognized behavior value "BLOKING"'));
+            } finally {
+                warn.mockRestore();
+            }
+        });
+
+        it('scrubs tooling, toolBehavior, and functionCallingBehavior from vendor config bag (C5c)', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(
+                makeParams({
+                    Model: 'gemini-3.8-live',
+                    Config: {
+                        tooling: { Behavior: 'NON_BLOCKING' },
+                        toolBehavior: 'BLOCKING',
+                        functionCallingBehavior: 'BLOCKING',
+                    },
+                })
+            );
+            const cfg = connectConfig(d) as Record<string, unknown>;
+            expect(cfg['tooling']).toBeUndefined();
+            expect(cfg['toolBehavior']).toBeUndefined();
+            expect(cfg['functionCallingBehavior']).toBeUndefined();
         });
     });
 

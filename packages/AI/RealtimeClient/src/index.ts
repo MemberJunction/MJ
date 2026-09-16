@@ -4,7 +4,7 @@ export * from './audio/pcmUtils';
 export * from './audio/audioMeter';
 export * from './audio/pcmPlayback';
 export * from './audio/micCapture';
-export * from './audio/frameCapture';
+export * from './media/frameCapture';
 export * from './media/channelVideoSource';
 export * from './drivers/openAIRealtimeClient';
 export * from './drivers/geminiRealtimeClient';

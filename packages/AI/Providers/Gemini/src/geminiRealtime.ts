@@ -465,6 +465,9 @@ export class GeminiRealtime extends BaseRealtimeModel {
             const cfg = { ...(params.Config as Record<string, unknown>) };
             const disableAutoResponse = cfg.disableAutoResponse === true;
             delete cfg.disableAutoResponse;
+            delete cfg.tooling;
+            delete cfg.toolBehavior;
+            delete cfg.functionCallingBehavior;
             // Consume the driver-NEUTRAL `voice` key the same way: it is not a Gemini config field
             // (LiveConnectConfig has no `voice`), so spreading it raw sends nothing — the SDK's
             // config converter is a path allowlist and drops unknown keys silently. Gemini takes an
@@ -625,18 +628,41 @@ export class GeminiRealtime extends BaseRealtimeModel {
                     : TurnCoverage.TURN_INCLUDES_ONLY_ACTIVITY,
         };
 
-        // C5 — refuse BLOCKING locally for Extended Thinking rather than emitting a frame the
-        // server hard-errors.
-        if (!profile.Tooling.SupportsBlockingExecution && config.tools) {
+        // C5 / C5a / C5b — state behavior on every declaration, whatever its origin.
+        // Drops the !SupportsBlockingExecution gate so 3.8-live bag tools are stated too.
+        if (config.tools) {
             for (const toolGroup of config.tools) {
                 if ('functionDeclarations' in toolGroup && toolGroup.functionDeclarations) {
                     for (const fn of toolGroup.functionDeclarations) {
-                        if (fn.behavior === Behavior.BLOCKING) {
-                            console.warn(
-                                `[GeminiRealtime] Forcing \`behavior: NON_BLOCKING\` for tool "${fn.name}" on ${params.Model}: ` +
-                                `blocking tool execution is not supported on this model and returns a hard error.`
-                            );
-                            fn.behavior = Behavior.NON_BLOCKING;
+                        const rawBehavior = fn.behavior ? String(fn.behavior).trim().toUpperCase() : undefined;
+                        if (!profile.Tooling.SupportsBlockingExecution) {
+                            if (rawBehavior === Behavior.BLOCKING || rawBehavior === 'BLOCKING') {
+                                console.warn(
+                                    `[GeminiRealtime] Forcing \`behavior: NON_BLOCKING\` for tool "${fn.name}" on ${params.Model}: ` +
+                                    `blocking tool execution is not supported on this model and returns a hard error.`
+                                );
+                                fn.behavior = Behavior.NON_BLOCKING;
+                            } else if (!rawBehavior || rawBehavior === Behavior.NON_BLOCKING || rawBehavior === 'NON_BLOCKING') {
+                                fn.behavior = Behavior.NON_BLOCKING;
+                            } else {
+                                console.warn(
+                                    `[GeminiRealtime] Unrecognized behavior value "${fn.behavior}" for tool "${fn.name}". Forcing NON_BLOCKING.`
+                                );
+                                fn.behavior = Behavior.NON_BLOCKING;
+                            }
+                        } else {
+                            if (!rawBehavior) {
+                                fn.behavior = Behavior.NON_BLOCKING;
+                            } else if (rawBehavior === Behavior.BLOCKING || rawBehavior === 'BLOCKING') {
+                                fn.behavior = Behavior.BLOCKING;
+                            } else if (rawBehavior === Behavior.NON_BLOCKING || rawBehavior === 'NON_BLOCKING') {
+                                fn.behavior = Behavior.NON_BLOCKING;
+                            } else {
+                                console.warn(
+                                    `[GeminiRealtime] Unrecognized behavior value "${fn.behavior}" for tool "${fn.name}". Defaulting to NON_BLOCKING.`
+                                );
+                                fn.behavior = Behavior.NON_BLOCKING;
+                            }
                         }
                     }
                 }
@@ -698,7 +724,7 @@ export class GeminiRealtime extends BaseRealtimeModel {
     ): FunctionDeclaration[] {
         const profile = ResolveGeminiLiveProfile(model);
         const normalized = typeof requestedBehavior === 'string' ? requestedBehavior.trim().toUpperCase() : requestedBehavior;
-        let behavior: Behavior = Behavior.NON_BLOCKING;
+        let behavior: Behavior;
 
         if (normalized === Behavior.BLOCKING || normalized === 'BLOCKING') {
             if (!profile.Tooling.SupportsBlockingExecution) {
@@ -710,6 +736,13 @@ export class GeminiRealtime extends BaseRealtimeModel {
             } else {
                 behavior = Behavior.BLOCKING;
             }
+        } else if (normalized === Behavior.NON_BLOCKING || normalized === 'NON_BLOCKING') {
+            behavior = Behavior.NON_BLOCKING;
+        } else if (normalized) {
+            console.warn(
+                `[GeminiRealtime] Unrecognized behavior value "${requestedBehavior}". Defaulting to NON_BLOCKING.`
+            );
+            behavior = Behavior.NON_BLOCKING;
         } else {
             behavior = Behavior.NON_BLOCKING;
         }
@@ -720,6 +753,57 @@ export class GeminiRealtime extends BaseRealtimeModel {
             parametersJsonSchema: tool.ParametersSchema,
             behavior,
         }));
+    }
+
+    /**
+     * Extracts scheduling hints (`__mj_scheduling` or legacy `scheduling`) from the tool output,
+     * strips both keys so they do not leak into the model's response payload, resolves the scheduling
+     * directive accepting both 'INTERRUPT' and 'INTERRUPTED', and warns on unrecognized values or
+     * unsupported models.
+     */
+    public static ExtractAndResolveScheduling(
+        parsed: Record<string, unknown>,
+        supportsScheduling: boolean,
+        toolName: string
+    ): FunctionResponseScheduling | undefined {
+        const raw = parsed['__mj_scheduling'] ?? parsed['scheduling'];
+        if ('__mj_scheduling' in parsed) {
+            delete parsed['__mj_scheduling'];
+        }
+        if ('scheduling' in parsed) {
+            delete parsed['scheduling'];
+        }
+
+        if (typeof raw !== 'string') {
+            return undefined;
+        }
+
+        const schedStr = raw.trim().toUpperCase();
+        if (schedStr.length === 0) {
+            return undefined;
+        }
+
+        let resolved: FunctionResponseScheduling | undefined;
+        if (schedStr === 'SILENT') {
+            resolved = FunctionResponseScheduling.SILENT;
+        } else if (schedStr === 'WHEN_IDLE') {
+            resolved = FunctionResponseScheduling.WHEN_IDLE;
+        } else if (schedStr === 'INTERRUPT' || schedStr === 'INTERRUPTED') {
+            resolved = FunctionResponseScheduling.INTERRUPT;
+        } else {
+            console.warn(`[GeminiRealtime] Unrecognized function scheduling value "${raw}" for tool "${toolName}".`);
+            return undefined;
+        }
+
+        if (!supportsScheduling) {
+            console.warn(
+                `[GeminiRealtime] Dropping scheduling hint "${schedStr}" for tool "${toolName}": ` +
+                `function scheduling is only supported on gemini-3.8-live.`
+            );
+            return undefined;
+        }
+
+        return resolved;
     }
 }
 
@@ -978,29 +1062,17 @@ class GeminiRealtimeSession implements IRealtimeSession {
     public async SendToolResult(callID: string, output: string): Promise<void> {
         const name = this.pendingToolCallNames.get(callID) ?? '';
         const parsed = this.parseToolOutput(output);
+        const sched = GeminiRealtime.ExtractAndResolveScheduling(
+            parsed,
+            this.profile.Tooling.SupportsScheduling ?? false,
+            name
+        );
         const functionResponse: FunctionResponse = {
             id: callID,
             name,
             response: parsed,
+            ...(sched ? { scheduling: sched } : {}),
         };
-
-        if (typeof parsed['scheduling'] === 'string') {
-            if (this.profile.Tooling.SupportsScheduling) {
-                const schedStr = parsed['scheduling'].trim().toUpperCase();
-                if (schedStr === 'SILENT') {
-                    functionResponse.scheduling = FunctionResponseScheduling.SILENT;
-                } else if (schedStr === 'WHEN_IDLE') {
-                    functionResponse.scheduling = FunctionResponseScheduling.WHEN_IDLE;
-                } else if (schedStr === 'INTERRUPT') {
-                    functionResponse.scheduling = FunctionResponseScheduling.INTERRUPT;
-                }
-            } else {
-                console.warn(
-                    `[GeminiRealtime] Dropping scheduling hint for tool "${name}": ` +
-                    `function scheduling is only supported on gemini-3.8-live.`
-                );
-            }
-        }
 
         this.requireLive().sendToolResponse({ functionResponses: [functionResponse] });
         this.pendingToolCallNames.delete(callID);
@@ -1155,6 +1227,7 @@ class GeminiRealtimeSession implements IRealtimeSession {
                 Text: text,
                 IsFinal: true,
                 Kind: 'narration',
+                IsThought: true,
             });
         }
         RealtimeDiagLog(`[GeminiRealtime][diag] turn boundary — clearing responseActive (was ${this.responseActive}), draining ${this.queuedSends.length} queued send(s)`);
@@ -1255,6 +1328,7 @@ class GeminiRealtimeSession implements IRealtimeSession {
                     Text: part.text,
                     IsFinal: false,
                     Kind: 'narration',
+                    IsThought: true,
                 });
             }
         }

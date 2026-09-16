@@ -184,7 +184,7 @@ rare edge case into a guaranteed one. Tracked as **F7**.
 - [x] **C4.** Set turn coverage explicitly from `TurnCoverage`; **audio-only when absent.**
 - [x] **C5.** Refuse `BLOCKING` locally for Extended Thinking rather than emitting a frame the
   server hard-errors.
-- [ ] **C5a.** **State a behavior on every declaration, whatever its origin.** `applyModelLegality`
+- [x] **C5a.** **State a behavior on every declaration, whatever its origin.** `applyModelLegality`
   today only rewrites `fn.behavior === BLOCKING`, so a bag-supplied declaration with *no* behavior
   reaches the wire unstated — and absent means *inherited*, not non-blocking (*"If not specified, the
   system keeps the current function call behavior"*). Observed: bag `[{ name: 'no_behavior_tool' }]`
@@ -192,10 +192,10 @@ rare edge case into a guaranteed one. Tracked as **F7**.
   `!SupportsBlockingExecution` gate so 3.8-live bag tools are stated too — an explicit `BLOCKING`
   there is legal and must survive. This makes the mapper's job *choose* and the loop's job
   *guarantee*, which is why both exist.
-- [ ] **C5b.** **Warn on an unrecognized behavior value.** `'BLOKING'` on a blocking-capable model
+- [x] **C5b.** **Warn on an unrecognized behavior value.** `'BLOKING'` on a blocking-capable model
   currently resolves to `NON_BLOCKING` with zero warnings — a silent fallback that cannot distinguish
   "asked for non-blocking" from "asked for something I did not understand".
-- [ ] **C5c.** **One bag key, in the shared list.** `tooling.Behavior` / `toolBehavior` /
+- [x] **C5c.** **One bag key, in the shared list.** `tooling.Behavior` / `toolBehavior` /
   `functionCallingBehavior` are three aliases for one concept, none in `REALTIME_SHARED_CONFIG_KEYS`,
   so they ride `Object.assign` into the vendor config and are silently dropped by the SDK's path
   allowlist — the `#3721` class the scrub comment documents, and what `'reasoning'` needed in C3.
@@ -241,13 +241,13 @@ rare edge case into a guaranteed one. Tracked as **F7**.
 
 ### Phase G — metadata and close-out
 
-- [ ] **G1.** `AIModel` + `AIModelVendor` rows for both models (`APIName` = `gemini-3.8-live`,
+- [x] **G1.** `AIModel` + `AIModelVendor` rows for both models (`APIName` = `gemini-3.8-live`,
   `gemini-3.8-live-extended-thinking`), modality rows, `AIModelCost` rows from §3's price sheet.
   Declarative JSON, `uuidgen` primary keys, **no `sync` block, no `*__Metadata_Sync.sql`** — that
   is release work.
-- [ ] **G2.** Changeset `minor` (ships metadata).
-- [ ] **G3.** Full repo unit tier + deterministic integration tier.
-- [ ] **G4.** Every **VERIFY** resolved or the PR does not merge.
+- [x] **G2.** Changeset `minor` (ships metadata).
+- [x] **G3.** Full repo unit tier + deterministic integration tier.
+- [x] **G4.** Every **VERIFY** resolved or the PR does not merge.
 
 ## 7. Verification tasks (must precede the code that depends on them)
 

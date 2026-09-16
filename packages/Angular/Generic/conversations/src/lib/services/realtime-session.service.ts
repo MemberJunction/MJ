@@ -163,6 +163,20 @@ export interface RealtimeDelegationNarration {
 }
 
 /**
+ * One thought/reasoning narration emitted on {@link RealtimeSessionService.ThoughtNarration$}.
+ * Distinct from spoken progress narrations: thought summaries are authored by reasoning models
+ * (e.g. Gemini 3.8 Live Extended Thinking) and are NOT spoken aloud.
+ */
+export interface RealtimeThoughtNarration {
+  /** Correlating call ID if associated with a delegation/turn; otherwise generated or empty. */
+  CallID?: string;
+  /** The model's thought / reasoning text. */
+  Text: string;
+  /** Whether this emission represents the complete finalized thought turn. */
+  IsFinal?: boolean;
+}
+
+/**
  * Raw shape of the JSON `message` the server publishes on the push-status topic during a delegated run.
  * We filter on `resolver` + `type` before correlating by `agentSessionID`; normal agent runs publish
  * other shapes on the same topic and are ignored.
@@ -318,6 +332,7 @@ export class RealtimeSessionService {
   private _delegationProgress$ = new Subject<RealtimeDelegationProgress>();
   private _delegationResult$ = new Subject<RealtimeDelegationResult>();
   private _delegationNarration$ = new Subject<RealtimeDelegationNarration>();
+  private _thoughtNarration$ = new Subject<RealtimeThoughtNarration>();
   private _agentName$ = new BehaviorSubject<string>('Sage');
   private _modelName$ = new BehaviorSubject<string | null>(null);
   private _minimized$ = new BehaviorSubject<boolean>(false);
@@ -352,6 +367,11 @@ export class RealtimeSessionService {
    * renders them as a transient "live note" near the active working card.
    */
   public readonly DelegationNarration$: Observable<RealtimeDelegationNarration> = this._delegationNarration$.asObservable();
+  /**
+   * Model-authored thought / reasoning narrations (see {@link RealtimeThoughtNarration}). These are
+   * reasoning summaries author-emitted during extended thinking, separate from spoken progress updates.
+   */
+  public readonly ThoughtNarration$: Observable<RealtimeThoughtNarration> = this._thoughtNarration$.asObservable();
   /** Display name of the agent the active session fronts (set at session start). */
   public readonly AgentName$: Observable<string> = this._agentName$.asObservable();
   /**
@@ -1798,11 +1818,19 @@ export class RealtimeSessionService {
       this.hasActiveInterimUserCaption = false;
       this.pendingUserCaption = '';
       if (transcript.Kind === 'narration') {
-        this._delegationNarration$.next({ Text: transcript.Text });
-        // Remember what was actually SAID so later updates build on it instead of repeating.
-        this.spokenNarrations.push(transcript.Text);
-        if (this.spokenNarrations.length > RealtimeSessionService.MaxPriorNarrations) {
-          this.spokenNarrations.shift();
+        if (transcript.IsThought) {
+          this._thoughtNarration$.next({
+            CallID: 'thought-session',
+            Text: transcript.Text,
+            IsFinal: transcript.IsFinal ?? true,
+          });
+        } else {
+          this._delegationNarration$.next({ Text: transcript.Text });
+          // Remember what was actually SAID so later updates build on it instead of repeating.
+          this.spokenNarrations.push(transcript.Text);
+          if (this.spokenNarrations.length > RealtimeSessionService.MaxPriorNarrations) {
+            this.spokenNarrations.shift();
+          }
         }
       } else if (transcript.ReplacesPrevious) {
         // CORRECTION (e.g. ElevenLabs post-barge-in re-finalization): this final

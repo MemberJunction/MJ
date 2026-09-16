@@ -25,7 +25,7 @@ import { base64ToArrayBuffer } from '../audio/pcmUtils';
 import { IRealtimePcmPlayback, RealtimePcmPlayback } from '../audio/pcmPlayback';
 import { RealtimeAudioMeter } from '../audio/audioMeter';
 import { createPcmMicCapture, IPcmMicCapture } from '../audio/micCapture';
-import { createStreamFrameCapture, IFrameCapture } from '../audio/frameCapture';
+import { createStreamFrameCapture, IFrameCapture } from '../media/frameCapture';
 import type { RealtimeUsageModalityDetail } from '@memberjunction/ai';
 
 // ── Audio constants (Gemini Live wire formats) ─────────────────────────────────
@@ -200,6 +200,14 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     private interactionInProgress = false;
     private toolBatchBarrier = new RealtimeToolBatchBarrier();
     private assistantSafetyBackstopTimer: ReturnType<typeof setTimeout> | null = null;
+
+    /**
+     * Whether the active model session enforces asynchronous non-blocking tool execution.
+     * Derived from model tooling capability (!supportsBlocking), separated from the idle signal (Reviewer Item 19).
+     */
+    private get isNonBlocking(): boolean {
+        return !this.supportsBlocking;
+    }
 
     // ── Response state machine ─────────────────────────────────────────────────
     /** Accumulates the in-flight assistant transcript across delta frames. */
@@ -382,8 +390,8 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
             return;
         }
         const now = Date.now();
-        if (now - this.lastVideoSendTimestamp < 1000) {
-            return; // Throttled to 1 fps max
+        if (now - this.lastVideoSendTimestamp < 750) {
+            return; // Throttled: enforces 1 fps cadence ceiling while tolerating async tick latency jitter (Reviewer Item 25)
         }
         this.lastVideoSendTimestamp = now;
         this.videoFramesSent++;
@@ -477,8 +485,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
             return;
         }
         const name = this.pendingToolCallNames.get(callID) ?? '';
-        const isNonBlocking = !this.supportsBlocking || this.idleSignal === 'interactionStatus';
-        if (isNonBlocking) {
+        if (this.isNonBlocking) {
             this.sendToolResponseTurn(callID, name, outputJson);
         } else {
             this.enqueueOrRun(() => this.sendToolResponseTurn(callID, name, outputJson));
@@ -500,8 +507,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
 
     /** @inheritdoc */
     public get IsBusy(): boolean {
-        const isNonBlocking = !this.supportsBlocking || this.idleSignal === 'interactionStatus';
-        if (isNonBlocking) {
+        if (this.isNonBlocking) {
             return (
                 this.responseActive ||
                 this.interactionInProgress ||
@@ -800,11 +806,13 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     /**
      * generationComplete: indicates the model has finished generating all tokens for the turn.
      * Playout may still be active (the delay between generationComplete and turnComplete).
+     *
+     * Per Reviewer Item 20: Draining the queue happens on turnComplete or true IDLE, not prematurely
+     * on generationComplete. We set responseActive = false so busy state reflects token completion.
      */
     private handleGenerationComplete(): void {
         if (this.idleSignal === 'turnComplete') {
             this.responseActive = false;
-            this.flushQueuedSends();
         }
     }
 
@@ -857,6 +865,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
                     Text: part.text,
                     IsFinal: false,
                     Kind: 'narration',
+                    IsThought: true,
                 });
             }
         }
@@ -915,8 +924,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         if (!functionCalls || functionCalls.length === 0) {
             return;
         }
-        const isNonBlocking = !this.supportsBlocking || this.idleSignal === 'interactionStatus';
-        if (!isNonBlocking) {
+        if (!this.isNonBlocking) {
             if (this.currentState === 'speaking') {
                 this.currentState = 'connected';
             }
@@ -1014,12 +1022,12 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         }
     }
 
-    /** Emits the accumulated thought turn as final (if non-empty) with Kind: 'narration'. */
+    /** Emits the accumulated thought turn as final (if non-empty) with Kind: 'narration' and IsThought: true. */
     private finalizeThoughtTranscript(): void {
         const text = this.pendingThoughtText;
         this.pendingThoughtText = '';
         if (text.trim().length > 0) {
-            this.emitTranscript({ Role: 'Assistant', Text: text, IsFinal: true, Kind: 'narration' });
+            this.emitTranscript({ Role: 'Assistant', Text: text, IsFinal: true, Kind: 'narration', IsThought: true });
         }
     }
 
@@ -1092,6 +1100,56 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * unconditionally interrupts active model generation mid-sentence. We must NOT commit
      * openClientTurn here; it is deferred until true IDLE (or a subsequent user turn commit).
      */
+    /**
+     * Extracts scheduling hints (`__mj_scheduling` or legacy `scheduling`) from the tool output,
+     * strips both keys so they do not leak into the model's response payload, resolves the scheduling
+     * directive accepting both 'INTERRUPT' and 'INTERRUPTED', and warns on unrecognized values or
+     * unsupported models (Reviewer Items 16, 17, 18).
+     */
+    private resolveFunctionScheduling(
+        parsed: Record<string, unknown>,
+        toolName: string
+    ): FunctionResponseScheduling | undefined {
+        const raw = parsed['__mj_scheduling'] ?? parsed['scheduling'];
+        if ('__mj_scheduling' in parsed) {
+            delete parsed['__mj_scheduling'];
+        }
+        if ('scheduling' in parsed) {
+            delete parsed['scheduling'];
+        }
+
+        if (typeof raw !== 'string') {
+            return undefined;
+        }
+
+        const schedStr = raw.trim().toUpperCase();
+        if (schedStr.length === 0) {
+            return undefined;
+        }
+
+        let resolved: FunctionResponseScheduling | undefined;
+        if (schedStr === 'SILENT') {
+            resolved = FunctionResponseScheduling.SILENT;
+        } else if (schedStr === 'WHEN_IDLE') {
+            resolved = FunctionResponseScheduling.WHEN_IDLE;
+        } else if (schedStr === 'INTERRUPT' || schedStr === 'INTERRUPTED') {
+            resolved = FunctionResponseScheduling.INTERRUPT;
+        } else {
+            console.warn(`[GeminiRealtimeClient] Unrecognized function scheduling value "${raw}" for tool "${toolName}".`);
+            return undefined;
+        }
+
+        if (!this.supportsScheduling) {
+            console.warn(
+                `[GeminiRealtimeClient] Dropping scheduling hint "${schedStr}" for tool "${toolName}": ` +
+                `function scheduling is only supported on gemini-3.8-live.`
+            );
+            return undefined;
+        }
+
+        return resolved;
+    }
+
     private sendToolResponseTurn(callID: string, name: string, outputJson: string): void {
         const session = this.session;
         if (!session) {
@@ -1099,29 +1157,19 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         }
         this.toolBatchBarrier.RecordResult(callID);
         const parsed = this.parseToolOutput(outputJson);
+        const sched = this.resolveFunctionScheduling(parsed as Record<string, unknown>, name);
         const functionResponse: FunctionResponse = {
             id: callID,
             name,
             response: parsed,
+            ...(sched ? { scheduling: sched } : {}),
         };
-
-        if (this.supportsScheduling && typeof parsed['scheduling'] === 'string') {
-            const schedStr = parsed['scheduling'].trim().toUpperCase();
-            if (schedStr === 'SILENT') {
-                functionResponse.scheduling = FunctionResponseScheduling.SILENT;
-            } else if (schedStr === 'WHEN_IDLE') {
-                functionResponse.scheduling = FunctionResponseScheduling.WHEN_IDLE;
-            } else if (schedStr === 'INTERRUPT') {
-                functionResponse.scheduling = FunctionResponseScheduling.INTERRUPT;
-            }
-        }
 
         session.sendToolResponse({
             functionResponses: [functionResponse],
         });
 
-        const isNonBlocking = !this.supportsBlocking || this.idleSignal === 'interactionStatus';
-        if (!isNonBlocking) {
+        if (!this.isNonBlocking) {
             if (this.openClientTurn) {
                 session.sendClientContent({ turnComplete: true });
                 this.openClientTurn = false;

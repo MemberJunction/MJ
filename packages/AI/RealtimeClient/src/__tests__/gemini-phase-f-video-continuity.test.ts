@@ -20,7 +20,7 @@ import {
     createCameraCapture,
     createScreenCapture,
     createStreamFrameCapture,
-} from '../audio/frameCapture';
+} from '../media/frameCapture';
 import {
     ChannelInboundVideoBridge,
     IChannelFrameProvider,
@@ -279,6 +279,119 @@ describe('Phase F — Realtime Video Tracks, Bridge, and Continuity', () => {
             // Bridge stop clears timers
             bridge.Stop();
             expect(bridge.IsActive).toBe(false);
+        });
+
+        it('Item 25: async provider with variable latency does not drop frames to throttle fight', async () => {
+            const track = new FakeTrack();
+            const config: ClientRealtimeSessionConfig = {
+                Provider: 'gemini',
+                Model: 'gemini-3.8-live',
+                EphemeralToken: 'auth_tokens/test',
+                ExpiresAt: new Date(Date.now() + 60000).toISOString(),
+                SessionConfig: {
+                    model: 'gemini-3.8-live',
+                    requestedTracks: [
+                        ...DEFAULT_AUDIO_TRACKS,
+                        CHANNEL_INBOUND_VIDEO_TRACK,
+                    ],
+                },
+            };
+            await client.Connect(config, new FakeMediaStream([track]));
+
+            let callCount = 0;
+            const provider: IChannelFrameProvider = {
+                GetLatestFrame: async () => {
+                    callCount++;
+                    // Variable latency: 200ms on first tick, 50ms on second tick, 150ms on third
+                    const latency = (callCount % 3) * 75 + 50;
+                    await new Promise((r) => setTimeout(r, latency));
+                    return `frame_${callCount}`;
+                },
+            };
+
+            const bridge = new ChannelInboundVideoBridge(client, provider, { Rate: 1 });
+            bridge.Start();
+
+            // Run 3 full 1-second cycles
+            for (let i = 0; i < 3; i++) {
+                await vi.advanceTimersByTimeAsync(1000);
+            }
+            // Allow the last in-flight async provider fetch (50ms) to resolve
+            await vi.advanceTimersByTimeAsync(100);
+
+            expect(client.Fake.RealtimeInputs.length).toBe(3);
+            bridge.Stop();
+        });
+
+        it('Item 26: logs error when GetLatestFrame throws and does not crash the bridge', async () => {
+            const errSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            try {
+                const track = new FakeTrack();
+                const config: ClientRealtimeSessionConfig = {
+                    Provider: 'gemini',
+                    Model: 'gemini-3.8-live',
+                    EphemeralToken: 'auth_tokens/test',
+                    ExpiresAt: new Date(Date.now() + 60000).toISOString(),
+                    SessionConfig: {
+                        model: 'gemini-3.8-live',
+                        requestedTracks: [
+                            ...DEFAULT_AUDIO_TRACKS,
+                            CHANNEL_INBOUND_VIDEO_TRACK,
+                        ],
+                    },
+                };
+                await client.Connect(config, new FakeMediaStream([track]));
+
+                const provider: IChannelFrameProvider = {
+                    GetLatestFrame: async () => {
+                        throw new Error('snapshot endpoint down');
+                    },
+                };
+
+                const bridge = new ChannelInboundVideoBridge(client, provider, { Rate: 1 });
+                bridge.Start();
+                await vi.advanceTimersByTimeAsync(1050);
+
+                expect(errSpy).toHaveBeenCalledWith(
+                    expect.stringContaining('[ChannelInboundVideoBridge] Error fetching frame from provider:'),
+                    expect.any(Error)
+                );
+                expect(bridge.IsActive).toBe(true);
+                bridge.Stop();
+            } finally {
+                errSpy.mockRestore();
+            }
+        });
+
+        it('Item 27: PushFrame returns false when client lacks SendVideoFrame implementation', async () => {
+            const track = new FakeTrack();
+            const config: ClientRealtimeSessionConfig = {
+                Provider: 'gemini',
+                Model: 'gemini-3.8-live',
+                EphemeralToken: 'auth_tokens/test',
+                ExpiresAt: new Date(Date.now() + 60000).toISOString(),
+                SessionConfig: {
+                    model: 'gemini-3.8-live',
+                    requestedTracks: [
+                        ...DEFAULT_AUDIO_TRACKS,
+                        CHANNEL_INBOUND_VIDEO_TRACK,
+                    ],
+                },
+            };
+            await client.Connect(config, new FakeMediaStream([track]));
+
+            // Temporarily delete SendVideoFrame to emulate a client without video send capability
+            const originalSend = client.SendVideoFrame;
+            (client as { SendVideoFrame?: unknown }).SendVideoFrame = undefined;
+
+            const provider: IChannelFrameProvider = {
+                GetLatestFrame: () => 'frame',
+            };
+            const bridge = new ChannelInboundVideoBridge(client, provider);
+            const pushed = bridge.PushFrame('testFrame');
+            expect(pushed).toBe(false);
+
+            client.SendVideoFrame = originalSend;
         });
     });
 
