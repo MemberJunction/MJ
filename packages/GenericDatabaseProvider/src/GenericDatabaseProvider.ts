@@ -1241,7 +1241,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     protected RenderReplaySaveSQL(
         _binding: SaveCallBinding,
         _entity: BaseEntity,
-        _createSpName: string,
         _fieldValues: Map<EntityFieldInfo, unknown>,
     ): string | undefined {
         return undefined;
@@ -1323,7 +1322,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         // A CREATE's logged form is guarded on the primary key so a migration replay of
         // the recording converges on a database that already holds the row (#4503).
         // Updates and dialects without a replay form log the plain save SQL.
-        const replaySQL = isNew ? this.RenderReplaySaveSQL(binding, entity, spName, fieldValueMap) : undefined;
+        const replaySQL = isNew ? this.RenderReplaySaveSQL(binding, entity, fieldValueMap) : undefined;
         const simpleSQL = replaySQL ?? baseSaveSQL.sql;
 
         // 5. Optionally wrap with record-change emission.

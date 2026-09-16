@@ -1724,7 +1724,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 entity.RaiseReadyForTransaction();
 
                 const extraData = this.GetTransactionExtraData(entity);
-                if (sqlDetails.simpleSQL) {
+                if (entity.EntityInfo.TrackRecordChanges && sqlDetails.simpleSQL) {
                     extraData.simpleSQLFallback = sqlDetails.simpleSQL;
                 }
                 extraData.entityName = entity.EntityInfo.Name;

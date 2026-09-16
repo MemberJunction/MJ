@@ -294,6 +294,21 @@ describe('SQLServerDataProvider replay form of a create (Metadata_Sync recording
     expect(updateArgs).toBe(createArgs);
   });
 
+  it('CREATE on an entity with no generated update proc: guarded create, no ELSE branch', async () => {
+    const provider = makeProvider();
+    const entity = makeNewWidgetEntity(makeWidgetEntityInfo({ updateProc: false }), TEST_USER);
+    entity.Set('ID', 'A0000000-0000-0000-0000-00000000000A');
+    entity.Set('Name', 'No update proc');
+    entity.Set('IsActive', true);
+
+    const { simpleSQL } = await provider.SaveSQLForTest(entity, true, TEST_USER);
+
+    expect(simpleSQL).toContain('IF NOT EXISTS (SELECT 1 FROM [dbo].[Widget]');
+    expect(simpleSQL).toContain('EXEC [dbo].spCreateWidget');
+    expect(simpleSQL).not.toContain('ELSE');
+    expect(simpleSQL).not.toContain('spUpdateWidget');
+  });
+
   it('UPDATE: the logged simpleSQL is the plain spUpdate call, no guard', async () => {
     const provider = makeProvider();
     const entity = makeSavedWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
