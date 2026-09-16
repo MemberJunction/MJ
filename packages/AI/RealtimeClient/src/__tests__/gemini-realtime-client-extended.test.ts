@@ -15,6 +15,7 @@ import {
     GeminiTestClient,
     makeGeminiConfig,
 } from './helpers/realtime-fakes';
+import { GeminiRealtimeClient } from '../drivers/geminiRealtimeClient';
 
 /** Connects the harness client with one fake mic track; returns the track for assertions. */
 async function connect(client: GeminiTestClient, config?: ClientRealtimeSessionConfig): Promise<FakeTrack> {
@@ -426,6 +427,225 @@ describe('GeminiRealtimeClient (extended)', () => {
             // the queued send must NOT leak out on any later (stale) turnComplete
             completeTurn(client);
             expect(client.Fake.ClientContents).toHaveLength(0);
+        });
+    });
+
+    // ── Phase D: idle signal, async tools, and non-blocking execution ──────────
+
+    describe('Phase D: idle signal, async tools, and non-blocking execution', () => {
+        it('idle regression: turnComplete while IN_PROGRESS neither drains queuedSends nor clears busy; subsequent IDLE does both', async () => {
+            await connect(
+                client,
+                makeGeminiConfig({
+                    model: 'gemini-3.8-live-extended-thinking',
+                    config: {},
+                    idleSignal: 'interactionStatus',
+                    supportsScheduling: false,
+                    supportsBlocking: false,
+                })
+            );
+
+            // Start an interaction
+            client.Emit({
+                interaction_status: 'IN_PROGRESS',
+            } as unknown as LiveServerMessage);
+            expect(client.IsBusy).toBe(true);
+
+            // Queue a send while interaction is in progress
+            client.SendContextNote('note during reasoning');
+            expect(client.Fake.ClientContents).toHaveLength(0);
+
+            // turnComplete arrives mid-interaction (e.g. intermediate reasoning turn fragment)
+            completeTurn(client);
+
+            // Regression guard: must NOT clear busy or drain queued sends
+            expect(client.IsBusy).toBe(true);
+            expect(client.Fake.ClientContents).toHaveLength(0);
+
+            // Later, IDLE arrives (accepting snake_case or camelCase)
+            client.Emit({
+                interaction_status: 'IDLE',
+            } as unknown as LiveServerMessage);
+
+            // IDLE must clear busy and drain the queued send
+            expect(client.IsBusy).toBe(false);
+            expect(client.Fake.ClientContents).toHaveLength(1);
+            expect(client.Fake.ClientContents[0]).toEqual({
+                turns: [{ role: 'user', parts: [{ text: 'note during reasoning' }] }],
+                turnComplete: false,
+            });
+        });
+
+        it('non-blocking tool call with openClientTurn does NOT send bare turnComplete: true mid-generation', async () => {
+            await connect(
+                client,
+                makeGeminiConfig({
+                    model: 'gemini-3.8-live-extended-thinking',
+                    config: {},
+                    idleSignal: 'interactionStatus',
+                    supportsScheduling: false,
+                    supportsBlocking: false,
+                })
+            );
+
+            // Seed a context note before the turn, opening a client turn
+            client.SendContextNote('background fact');
+            expect(client.Fake.ClientContents).toEqual([
+                { turns: [{ role: 'user', parts: [{ text: 'background fact' }] }], turnComplete: false },
+            ]);
+
+            // Model begins generating
+            beginModelTurn(client, 'analyzing context');
+            expect(client.IsBusy).toBe(true);
+
+            // Tool call arrives during generation
+            client.Emit({
+                toolCall: { functionCalls: [{ id: 'call-1', name: 'search', args: { q: 'data' } }] },
+            } as LiveServerMessage);
+
+            // Model remains busy in non-blocking mode
+            expect(client.IsBusy).toBe(true);
+
+            // Send tool result
+            client.SendToolResult('call-1', '{"found":true}');
+            expect(client.Fake.ToolResponses).toHaveLength(1);
+
+            // Critical invariant (Punch List item 9 / Hazard 4.1):
+            // No bare turnComplete: true was sent to interrupt active generation!
+            expect(client.Fake.ClientContents).toHaveLength(1);
+
+            // When IDLE eventually arrives, the deferred openClientTurn is safely committed
+            client.Emit({
+                interactionStatus: 'IDLE',
+            } as unknown as LiveServerMessage);
+
+            expect(client.Fake.ClientContents).toHaveLength(2);
+            expect(client.Fake.ClientContents[1]).toEqual({ turnComplete: true });
+            expect(client.IsBusy).toBe(false);
+        });
+
+        it('coordinates async tool batch with parallel calls, duplicates, and out-of-order results', async () => {
+            await connect(
+                client,
+                makeGeminiConfig({
+                    model: 'gemini-3.8-live-extended-thinking',
+                    config: {},
+                    idleSignal: 'interactionStatus',
+                    supportsScheduling: false,
+                    supportsBlocking: false,
+                })
+            );
+
+            // Parallel tool calls arrive
+            client.Emit({
+                toolCall: {
+                    functionCalls: [
+                        { id: 'call-a', name: 'toolA', args: {} },
+                        { id: 'call-b', name: 'toolB', args: {} },
+                    ],
+                },
+            } as LiveServerMessage);
+
+            expect(client.IsBusy).toBe(true);
+
+            // First result arrives
+            client.SendToolResult('call-a', '{"a":1}');
+            expect(client.Fake.ToolResponses).toHaveLength(1);
+            expect(client.IsBusy).toBe(true); // call-b still pending
+
+            // Duplicate result does not break barrier
+            client.SendToolResult('call-a', '{"a":1}');
+            expect(client.Fake.ToolResponses).toHaveLength(2);
+            expect(client.IsBusy).toBe(true);
+
+            // Unknown result does not break barrier
+            client.SendToolResult('unknown-call', '{"x":0}');
+            expect(client.Fake.ToolResponses).toHaveLength(3);
+            expect(client.IsBusy).toBe(true);
+
+            // Second result arrives (out-of-order completion)
+            client.SendToolResult('call-b', '{"b":2}');
+            expect(client.Fake.ToolResponses).toHaveLength(4);
+
+            // Once server signals IDLE, session is idle
+            client.Emit({ interaction_status: 'IDLE' } as unknown as LiveServerMessage);
+            expect(client.IsBusy).toBe(false);
+        });
+
+        it('safety backstop timer recovers and unwedges session if IDLE frame is lost', async () => {
+            const timers = vi.useFakeTimers();
+            try {
+                const c = new GeminiTestClient();
+                await c.Connect(
+                    makeGeminiConfig({
+                        model: 'gemini-3.8-live-extended-thinking',
+                        config: {},
+                        idleSignal: 'interactionStatus',
+                        supportsScheduling: false,
+                        supportsBlocking: false,
+                    }),
+                    new FakeMediaStream([new FakeTrack()])
+                );
+
+                c.Emit({ interaction_status: 'IN_PROGRESS' } as unknown as LiveServerMessage);
+                expect(c.IsBusy).toBe(true);
+
+                c.SendContextNote('deferred note');
+                expect(c.Fake.ClientContents).toHaveLength(0);
+
+                // Simulate turnComplete without IDLE (lost IDLE frame)
+                c.Emit({ serverContent: { turnComplete: true } } as LiveServerMessage);
+                expect(c.IsBusy).toBe(true);
+
+                // Advance by backstop duration (15s)
+                timers.advanceTimersByTime(GeminiRealtimeClient.ASSISTANT_SAFETY_BACKSTOP_MS);
+
+                // Safety backstop unwedged the session
+                expect(c.IsBusy).toBe(false);
+                expect(c.Fake.ClientContents).toHaveLength(1);
+            } finally {
+                timers.useRealTimers();
+            }
+        });
+
+        it('forwards scheduling hints only when supportsScheduling is true', async () => {
+            // Client with scheduling supported
+            const schedClient = new GeminiTestClient();
+            await schedClient.Connect(
+                makeGeminiConfig({
+                    model: 'gemini-3.8-live',
+                    config: {},
+                    idleSignal: 'turnComplete',
+                    supportsScheduling: true,
+                    supportsBlocking: true,
+                }),
+                new FakeMediaStream([new FakeTrack()])
+            );
+
+            schedClient.Emit({
+                toolCall: { functionCalls: [{ id: 'c1', name: 'calc', args: {} }] },
+            } as LiveServerMessage);
+            schedClient.SendToolResult('c1', JSON.stringify({ ans: 42, scheduling: 'SILENT' }));
+            expect(schedClient.Fake.ToolResponses[0].functionResponses[0].scheduling).toBe('SILENT');
+
+            // Client without scheduling supported
+            const noSchedClient = new GeminiTestClient();
+            await noSchedClient.Connect(
+                makeGeminiConfig({
+                    model: 'gemini-3.8-live-extended-thinking',
+                    config: {},
+                    idleSignal: 'interactionStatus',
+                    supportsScheduling: false,
+                    supportsBlocking: false,
+                }),
+                new FakeMediaStream([new FakeTrack()])
+            );
+
+            noSchedClient.Emit({
+                toolCall: { functionCalls: [{ id: 'c2', name: 'calc', args: {} }] },
+            } as LiveServerMessage);
+            noSchedClient.SendToolResult('c2', JSON.stringify({ ans: 42, scheduling: 'SILENT' }));
+            expect(noSchedClient.Fake.ToolResponses[0].functionResponses[0].scheduling).toBeUndefined();
         });
     });
 });

@@ -3,6 +3,7 @@ import {
     GoogleGenAI,
     Modality,
     Behavior,
+    FunctionResponseScheduling,
     type AuthToken,
     type CreateAuthTokenParameters,
     type LiveServerMessage,
@@ -41,7 +42,9 @@ import {
 import {
     ResolveGeminiLiveProfile,
     ResolveGeminiThinkingLevel,
+    GEMINI_LIVE_FALLBACK_PROFILE,
     type GeminiThinkingLevel,
+    type GeminiLiveModelProfile,
 } from './geminiLiveProfiles';
 import { RegisterClass } from '@memberjunction/global';
 
@@ -184,7 +187,8 @@ export class GeminiRealtime extends BaseRealtimeModel {
      * provider's frames and the MemberJunction realtime contract.
      */
     public async StartSession(params: RealtimeSessionParams): Promise<IRealtimeSession> {
-        const session = new GeminiRealtimeSession();
+        const profile = ResolveGeminiLiveProfile(params.Model);
+        const session = new GeminiRealtimeSession(profile);
         session.SetConnectTimeTools(params.Tools ?? []);
         const config = this.buildConnectConfig(params);
         // Meeting mode (auto activity detection disabled) → the session must drive turns manually.
@@ -259,6 +263,7 @@ export class GeminiRealtime extends BaseRealtimeModel {
         if (!token.name) {
             throw new Error('Gemini auth-token mint returned no token name');
         }
+        const profile = ResolveGeminiLiveProfile(params.Model);
         return {
             Provider: 'gemini',
             Model: params.Model,
@@ -266,7 +271,15 @@ export class GeminiRealtime extends BaseRealtimeModel {
             ExpiresAt: expireTime,
             // Plain-JSON copy of what the browser passes to live.connect (model + config). The
             // token lock above makes these values authoritative even if a client tampers.
-            SessionConfig: JSON.parse(JSON.stringify({ model: params.Model, config })) as JSONObject,
+            SessionConfig: JSON.parse(
+                JSON.stringify({
+                    model: params.Model,
+                    config,
+                    idleSignal: profile.IdleSignal,
+                    supportsScheduling: profile.Tooling.SupportsScheduling,
+                    supportsBlocking: profile.Tooling.SupportsBlockingExecution,
+                })
+            ) as JSONObject,
         };
     }
 
@@ -723,6 +736,11 @@ class GeminiRealtimeSession implements IRealtimeSession {
     public readonly OutputSampleRate = 24000;
 
     private live: GeminiLiveSession | null = null;
+    private profile: GeminiLiveModelProfile;
+
+    constructor(profile?: GeminiLiveModelProfile) {
+        this.profile = profile ?? GEMINI_LIVE_FALLBACK_PROFILE;
+    }
 
     private outputHandler: ((chunk: ArrayBuffer) => void) | null = null;
     private transcriptHandler: ((t: RealtimeTranscript) => void) | null = null;
@@ -933,11 +951,31 @@ class GeminiRealtimeSession implements IRealtimeSession {
      */
     public async SendToolResult(callID: string, output: string): Promise<void> {
         const name = this.pendingToolCallNames.get(callID) ?? '';
+        const parsed = this.parseToolOutput(output);
         const functionResponse: FunctionResponse = {
             id: callID,
             name,
-            response: this.parseToolOutput(output),
+            response: parsed,
         };
+
+        if (typeof parsed['scheduling'] === 'string') {
+            if (this.profile.Tooling.SupportsScheduling) {
+                const schedStr = parsed['scheduling'].trim().toUpperCase();
+                if (schedStr === 'SILENT') {
+                    functionResponse.scheduling = FunctionResponseScheduling.SILENT;
+                } else if (schedStr === 'WHEN_IDLE') {
+                    functionResponse.scheduling = FunctionResponseScheduling.WHEN_IDLE;
+                } else if (schedStr === 'INTERRUPT') {
+                    functionResponse.scheduling = FunctionResponseScheduling.INTERRUPT;
+                }
+            } else {
+                console.warn(
+                    `[GeminiRealtime] Dropping scheduling hint for tool "${name}": ` +
+                    `function scheduling is only supported on gemini-3.8-live.`
+                );
+            }
+        }
+
         this.requireLive().sendToolResponse({ functionResponses: [functionResponse] });
         this.pendingToolCallNames.delete(callID);
     }

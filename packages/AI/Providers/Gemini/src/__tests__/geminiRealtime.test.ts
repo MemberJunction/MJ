@@ -1060,6 +1060,61 @@ describe('per-model Live legality', () => {
         });
     });
 
+    describe('Phase D — D6 function scheduling gating and SessionConfig profile fields', () => {
+        it('stamps idleSignal, supportsScheduling, supportsBlocking in SessionConfig for Extended Thinking', async () => {
+            const driver = new ClientDirectTestable('k');
+            const cfg = await driver.CreateClientSession(makeParams({ Model: 'gemini-3.8-live-extended-thinking' }));
+            const sc = cfg.SessionConfig as Record<string, unknown>;
+            expect(sc['idleSignal']).toBe('interactionStatus');
+            expect(sc['supportsScheduling']).toBe(false);
+            expect(sc['supportsBlocking']).toBe(false);
+        });
+
+        it('stamps idleSignal, supportsScheduling, supportsBlocking in SessionConfig for plain 3.8 Live', async () => {
+            const driver = new ClientDirectTestable('k');
+            const cfg = await driver.CreateClientSession(makeParams({ Model: 'gemini-3.8-live' }));
+            const sc = cfg.SessionConfig as Record<string, unknown>;
+            expect(sc['idleSignal']).toBe('turnComplete');
+            expect(sc['supportsScheduling']).toBe(true);
+            expect(sc['supportsBlocking']).toBe(true);
+        });
+
+        it('attaches scheduling on SendToolResult when model supports scheduling (gemini-3.8-live)', async () => {
+            const d = new TestGeminiRealtime('k');
+            const session = await d.StartSession(makeParams({ Model: 'gemini-3.8-live' }));
+            // Simulate incoming tool call to cache the name
+            d.Fake.Emit({
+                toolCall: { functionCalls: [{ id: 'call-1', name: 'lookup', args: {} }] },
+            } as LiveServerMessage);
+
+            await session.SendToolResult('call-1', JSON.stringify({ result: 'data', scheduling: 'WHEN_IDLE' }));
+            expect(d.Fake.ToolResponses).toHaveLength(1);
+            const resp = d.Fake.ToolResponses[0].functionResponses;
+            const item = Array.isArray(resp) ? resp[0] : resp;
+            expect(item.scheduling).toBe('WHEN_IDLE');
+        });
+
+        it('drops scheduling with a warning when model does NOT support scheduling (Extended Thinking)', async () => {
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+            try {
+                const d = new TestGeminiRealtime('k');
+                const session = await d.StartSession(makeParams({ Model: 'gemini-3.8-live-extended-thinking' }));
+                d.Fake.Emit({
+                    toolCall: { functionCalls: [{ id: 'call-1', name: 'lookup', args: {} }] },
+                } as LiveServerMessage);
+
+                await session.SendToolResult('call-1', JSON.stringify({ result: 'data', scheduling: 'SILENT' }));
+                expect(d.Fake.ToolResponses).toHaveLength(1);
+                const resp = d.Fake.ToolResponses[0].functionResponses;
+                const item = Array.isArray(resp) ? resp[0] : resp;
+                expect(item.scheduling).toBeUndefined();
+                expect(warn).toHaveBeenCalledWith(expect.stringContaining('scheduling is only supported on gemini-3.8-live'));
+            } finally {
+                warn.mockRestore();
+            }
+        });
+    });
+
     it('an unknown Live model still mints a working session rather than failing', async () => {
         const d = new TestGeminiRealtime('k');
         await d.StartSession(makeParams({ Model: 'gemini-9.9-live-future' }));
