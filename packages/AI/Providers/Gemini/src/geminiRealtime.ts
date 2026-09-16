@@ -286,6 +286,12 @@ export class GeminiRealtime extends BaseRealtimeModel {
                     idleSignal: profile.IdleSignal,
                     supportsScheduling: profile.Tooling.SupportsScheduling,
                     supportsBlocking: profile.Tooling.SupportsBlockingExecution,
+                    // Per-model video legality travels with the mint so the browser driver never
+                    // has to infer it from the model id. The client cannot import this profile
+                    // table (@memberjunction/ai-realtime-client does not depend on the provider
+                    // package, by design), so the mint is the seam that carries it.
+                    supportsInboundVideo: profile.SupportsInboundVideo,
+                    maxInboundVideoRate: profile.MaxInboundVideoRate,
                 })
             ) as JSONObject,
         };
