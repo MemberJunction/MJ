@@ -37,17 +37,17 @@ export interface CodeGenTransaction {
      * @param sql The SQL statement to execute.
      * @returns The query result.
      */
-    query(sql: string): Promise<CodeGenQueryResult>;
+    query(sql: string): Promise<CodeGenQueryResult>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Commits the transaction. After commit, this transaction handle must not be reused.
      */
-    commit(): Promise<void>;
+    commit(): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Rolls back the transaction. After rollback, this transaction handle must not be reused.
      */
-    rollback(): Promise<void>;
+    rollback(): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -112,7 +112,7 @@ export interface CodeGenConnection {
      * @param sql The SQL statement to execute.
      * @returns The query result with a `recordset` array.
      */
-    query(sql: string): Promise<CodeGenQueryResult>;
+    query(sql: string): Promise<CodeGenQueryResult>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Executes a SQL query with named parameters.
@@ -127,7 +127,7 @@ export interface CodeGenConnection {
      * @param params Named parameters as key-value pairs.
      * @returns The query result with a `recordset` array.
      */
-    queryWithParams(sql: string, params: Record<string, unknown>): Promise<CodeGenQueryResult>;
+    queryWithParams(sql: string, params: Record<string, unknown>): Promise<CodeGenQueryResult>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Executes a stored procedure (SQL Server) or function call (PostgreSQL).
@@ -135,13 +135,13 @@ export interface CodeGenConnection {
      * @param params Named parameters for the routine.
      * @returns The query result with a `recordset` array.
      */
-    executeStoredProcedure(name: string, params: Record<string, unknown>): Promise<CodeGenQueryResult>;
+    executeStoredProcedure(name: string, params: Record<string, unknown>): Promise<CodeGenQueryResult>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Begins a new database transaction.
      * @returns A CodeGenTransaction handle for executing queries within the transaction.
      */
-    beginTransaction(): Promise<CodeGenTransaction>;
+    beginTransaction(): Promise<CodeGenTransaction>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -385,7 +385,7 @@ export abstract class CodeGenDatabaseProvider {
      * `IsVirtual = 1` would let the join target the base table instead,
      * removing the need for this capability flag entirely.
      */
-    canSelfJoinViewForVirtualNameField(): boolean {
+    canSelfJoinViewForVirtualNameField(): boolean {  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
         return false;
     }
 
@@ -396,7 +396,7 @@ export abstract class CodeGenDatabaseProvider {
      * For SQL Server: `IF OBJECT_ID(...) IS NOT NULL DROP ...`
      * For PostgreSQL: `DROP ... IF EXISTS ...` or `CREATE OR REPLACE ...`
      */
-    abstract generateDropGuard(objectType: 'VIEW' | 'PROCEDURE' | 'FUNCTION' | 'TRIGGER', schema: string, name: string): string;
+    abstract generateDropGuard(objectType: 'VIEW' | 'PROCEDURE' | 'FUNCTION' | 'TRIGGER', schema: string, name: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     // ─── BASE VIEWS ──────────────────────────────────────────────────────
 
@@ -405,7 +405,7 @@ export abstract class CodeGenDatabaseProvider {
      * The orchestrator provides pre-computed context (related fields, joins, parent joins, etc.)
      * so the provider only needs to assemble the platform-specific SQL.
      */
-    abstract generateBaseView(context: BaseViewGenerationContext): string;
+    abstract generateBaseView(context: BaseViewGenerationContext): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     // ─── MATERIALIZATION ─────────────────────────────────────────────────
 
@@ -423,7 +423,7 @@ export abstract class CodeGenDatabaseProvider {
      * @param tableName Physical table name (convention: `materialized_<Name>`).
      * @param columns   Resolved column specs (name, engine-native SQL type, nullability, PK flag).
      */
-    generateMaterializedTableSQL(schema: string, tableName: string, columns: MaterializedColumnSpec[]): string {
+    generateMaterializedTableSQL(schema: string, tableName: string, columns: MaterializedColumnSpec[]): string {  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
         throw new Error(`generateMaterializedTableSQL is not implemented for platform '${this.PlatformKey}'`);
     }
 
@@ -440,7 +440,7 @@ export abstract class CodeGenDatabaseProvider {
      * @param viewName  Wrapper view name (convention: `materialized_vw<Name>`).
      * @param tableName Physical table the view selects from.
      */
-    generateMaterializedWrapperViewSQL(schema: string, viewName: string, tableName: string): string {
+    generateMaterializedWrapperViewSQL(schema: string, viewName: string, tableName: string): string {  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
         throw new Error(`generateMaterializedWrapperViewSQL is not implemented for platform '${this.PlatformKey}'`);
     }
 
@@ -463,7 +463,7 @@ export abstract class CodeGenDatabaseProvider {
      * @param viewName  Unqualified view name.
      * @param selectSQL The view body (a SELECT statement). A trailing `;` is tolerated.
      */
-    generateCreateOrReplaceViewSQL(schema: string, viewName: string, selectSQL: string): string {
+    generateCreateOrReplaceViewSQL(schema: string, viewName: string, selectSQL: string): string {  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
         throw new Error(`generateCreateOrReplaceViewSQL is not implemented for platform '${this.PlatformKey}'`);
     }
 
@@ -482,7 +482,7 @@ export abstract class CodeGenDatabaseProvider {
      * (the deterministic combined-key-set hashing in §5 is Phase 3 and replaces this for incremental).
      * Default throws — each engine overrides (SQL Server: `int IDENTITY(1,1)`).
      */
-    getMaterializedSurrogateColumnType(): string {
+    getMaterializedSurrogateColumnType(): string {  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
         throw new Error(`getMaterializedSurrogateColumnType is not implemented for platform '${this.PlatformKey}'`);
     }
 
@@ -493,7 +493,7 @@ export abstract class CodeGenDatabaseProvider {
      * the minted entity's PK metadata doesn't diverge from the rebuilt table. Default throws — each engine
      * overrides (SQL Server: `varchar(64)`; PostgreSQL: `text`).
      */
-    getMaterializedHashSurrogateColumnType(): string {
+    getMaterializedHashSurrogateColumnType(): string {  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
         throw new Error(`getMaterializedHashSurrogateColumnType is not implemented for platform '${this.PlatformKey}'`);
     }
 
@@ -504,19 +504,19 @@ export abstract class CodeGenDatabaseProvider {
      * SQL Server: `CREATE PROCEDURE [schema].[spCreate...]`
      * PostgreSQL: `CREATE OR REPLACE FUNCTION schema.fn_create_...()`
      */
-    abstract generateCRUDCreate(entity: EntityInfo): string;
+    abstract generateCRUDCreate(entity: EntityInfo): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Generates the UPDATE stored procedure or function for an entity.
      * Includes the updated-at trigger generation.
      */
-    abstract generateCRUDUpdate(entity: EntityInfo): string;
+    abstract generateCRUDUpdate(entity: EntityInfo): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Generates the DELETE stored procedure or function for an entity.
      * Handles both hard and soft delete types, and includes cascade delete logic.
      */
-    abstract generateCRUDDelete(entity: EntityInfo, cascadeSQL: string): string;
+    abstract generateCRUDDelete(entity: EntityInfo, cascadeSQL: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     // ─── TRIGGERS ────────────────────────────────────────────────────────
 
@@ -525,7 +525,7 @@ export abstract class CodeGenDatabaseProvider {
      * SQL Server: single AFTER UPDATE trigger.
      * PostgreSQL: companion function + BEFORE UPDATE trigger.
      */
-    abstract generateTimestampTrigger(entity: EntityInfo): string;
+    abstract generateTimestampTrigger(entity: EntityInfo): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     // ─── INDEXES ─────────────────────────────────────────────────────────
 
@@ -740,7 +740,7 @@ export abstract class CodeGenDatabaseProvider {
      * SQL Server: FULLTEXT CATALOG + INDEX + inline TVF
      * PostgreSQL: tsvector column + GIN index + trigger + search function
      */
-    abstract generateFullTextSearch(entity: EntityInfo, searchFields: EntityFieldInfo[], primaryKeyIndexName: string): FullTextSearchResult;
+    abstract generateFullTextSearch(entity: EntityInfo, searchFields: EntityFieldInfo[], primaryKeyIndexName: string): FullTextSearchResult;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     // ─── RECURSIVE FUNCTIONS (HIERARCHY & ROOT ID) ──────────────────────
 
@@ -750,56 +750,56 @@ export abstract class CodeGenDatabaseProvider {
      * SQL Server: inline TVF with recursive CTE + OUTER APPLY in view.
      * PostgreSQL: table-valued function with recursive CTE + LEFT JOIN LATERAL in view.
      */
-    abstract generateHierarchyMetaFunction(entity: EntityInfo, field: EntityFieldInfo): string;
+    abstract generateHierarchyMetaFunction(entity: EntityInfo, field: EntityFieldInfo): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Generates a TVF for querying all descendants of an arbitrary root node with optional max depth limit.
      * `fn<Table><FieldName>_GetDescendants(@RootID, @MaxDepth)`
      */
-    abstract generateDescendantsFunction(entity: EntityInfo, field: EntityFieldInfo): string;
+    abstract generateDescendantsFunction(entity: EntityInfo, field: EntityFieldInfo): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Generates a TVF for querying all ancestors of an arbitrary node walking upward to the top-level root.
      * `fn<Table><FieldName>_GetAncestors(@RecordID)`
      */
-    abstract generateAncestorsFunction(entity: EntityInfo, field: EntityFieldInfo): string;
+    abstract generateAncestorsFunction(entity: EntityInfo, field: EntityFieldInfo): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Generates the SELECT expressions for hierarchy fields in a base view.
      * Projects: Root<Field>, <Field>Depth, <Field>Path, <Field>IsLeaf, <Field>ChildCount.
      */
-    abstract generateHierarchyFieldSelect(entity: EntityInfo, field: EntityFieldInfo, alias: string): string;
+    abstract generateHierarchyFieldSelect(entity: EntityInfo, field: EntityFieldInfo, alias: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Generates the JOIN clause for the hierarchy metadata function in a base view.
      */
-    abstract generateHierarchyFieldJoin(entity: EntityInfo, field: EntityFieldInfo, alias: string): string;
+    abstract generateHierarchyFieldJoin(entity: EntityInfo, field: EntityFieldInfo, alias: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Produces the canonical database function name for the hierarchy metadata helper function.
      */
-    getHierarchyMetaFunctionName(entity: EntityInfo, field: EntityFieldInfo): string {
+    getHierarchyMetaFunctionName(entity: EntityInfo, field: EntityFieldInfo): string {  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
         return `fn${entity.BaseTable}${field.Name}_GetHierarchyMeta`;
     }
 
     /**
      * Produces the canonical database function name for the descendants traversal helper function.
      */
-    getDescendantsFunctionName(entity: EntityInfo, field: EntityFieldInfo): string {
+    getDescendantsFunctionName(entity: EntityInfo, field: EntityFieldInfo): string {  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
         return `fn${entity.BaseTable}${field.Name}_GetDescendants`;
     }
 
     /**
      * Produces the canonical database function name for the ancestors traversal helper function.
      */
-    getAncestorsFunctionName(entity: EntityInfo, field: EntityFieldInfo): string {
+    getAncestorsFunctionName(entity: EntityInfo, field: EntityFieldInfo): string {  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
         return `fn${entity.BaseTable}${field.Name}_GetAncestors`;
     }
 
     /**
      * Produces the canonical database function name for the root ID helper function.
      */
-    getRootIDFunctionName(entity: EntityInfo, field: EntityFieldInfo): string {
+    getRootIDFunctionName(entity: EntityInfo, field: EntityFieldInfo): string {  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
         return `fn${entity.BaseTable}${field.Name}_GetRootID`;
     }
 
@@ -808,38 +808,38 @@ export abstract class CodeGenDatabaseProvider {
      * SQL Server: inline TVF with recursive CTE + OUTER APPLY in view.
      * PostgreSQL: scalar function with recursive CTE + LEFT JOIN LATERAL in view.
      */
-    abstract generateRootIDFunction(entity: EntityInfo, field: EntityFieldInfo): string;
+    abstract generateRootIDFunction(entity: EntityInfo, field: EntityFieldInfo): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Generates the SELECT expression for a root ID field in a base view.
      * SQL Server: `rootFn.RootID AS [FieldRoot...]`
      * PostgreSQL: `root_fn.root_id AS "FieldRoot..."`
      */
-    abstract generateRootFieldSelect(entity: EntityInfo, field: EntityFieldInfo, alias: string): string;
+    abstract generateRootFieldSelect(entity: EntityInfo, field: EntityFieldInfo, alias: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Generates the JOIN clause for a root ID function in a base view.
      * SQL Server: `OUTER APPLY [schema].[fnTable_GetRootID](t.ID) AS rootFn`
      * PostgreSQL: `LEFT JOIN LATERAL schema.fn_table_get_root_id(t."ID") AS root_fn ON true`
      */
-    abstract generateRootFieldJoin(entity: EntityInfo, field: EntityFieldInfo, alias: string): string;
+    abstract generateRootFieldJoin(entity: EntityInfo, field: EntityFieldInfo, alias: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     // ─── PERMISSIONS ─────────────────────────────────────────────────────
 
     /**
      * Generates GRANT SELECT permission for a base view.
      */
-    abstract generateViewPermissions(entity: EntityInfo): string;
+    abstract generateViewPermissions(entity: EntityInfo): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Generates GRANT EXECUTE permission for a CRUD routine.
      */
-    abstract generateCRUDPermissions(entity: EntityInfo, routineName: string, type: CRUDType): string;
+    abstract generateCRUDPermissions(entity: EntityInfo, routineName: string, type: CRUDType): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Generates GRANT EXECUTE permission for a full-text search function.
      */
-    abstract generateFullTextSearchPermissions(entity: EntityInfo, functionName: string): string;
+    abstract generateFullTextSearchPermissions(entity: EntityInfo, functionName: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     // ─── CASCADE DELETES ─────────────────────────────────────────────────
 
@@ -847,7 +847,7 @@ export abstract class CodeGenDatabaseProvider {
      * Generates the cascade delete/update SQL for a single related entity.
      * Called by the orchestrator for each FK relationship when CascadeDeletes is true.
      */
-    abstract generateSingleCascadeOperation(context: CascadeDeleteContext): string;
+    abstract generateSingleCascadeOperation(context: CascadeDeleteContext): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Resolves which of the parent's primary-key columns a cascading FK references, so the
@@ -889,7 +889,7 @@ export abstract class CodeGenDatabaseProvider {
     /**
      * Generates ALTER TABLE statements to add __mj_CreatedAt and __mj_UpdatedAt columns.
      */
-    abstract generateTimestampColumns(schema: string, tableName: string): string;
+    abstract generateTimestampColumns(schema: string, tableName: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     // ─── PARAMETER / FIELD HELPERS ───────────────────────────────────────
 
@@ -1025,7 +1025,7 @@ export abstract class CodeGenDatabaseProvider {
      * (e.g. PostgreSQL's "all params after the first DEFAULT must also have
      * DEFAULTs" rule, which the PostgreSQL provider handles via override).
      */
-    generateCRUDParamString(entityFields: EntityFieldInfo[], isUpdate: boolean): string {
+    generateCRUDParamString(entityFields: EntityFieldInfo[], isUpdate: boolean): string {  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
         const dialect = this.Dialect;
         const nullDefault = dialect.ParameterDefault(dialect.NullLiteral);
         const parts: string[] = [];
@@ -1206,19 +1206,19 @@ export abstract class CodeGenDatabaseProvider {
      * SQL Server: `spCreateEntityName`
      * PostgreSQL: `fn_create_entity_name`
      */
-    abstract getCRUDRoutineName(entity: EntityInfo, type: CRUDType): string;
+    abstract getCRUDRoutineName(entity: EntityInfo, type: CRUDType): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     // ─── SQL HEADERS ─────────────────────────────────────────────────────
 
     /**
      * Generates a comment header for a generated SQL file.
      */
-    abstract generateSQLFileHeader(entity: EntityInfo, itemName: string): string;
+    abstract generateSQLFileHeader(entity: EntityInfo, itemName: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Generates a comment header for the combined all-entities SQL file.
      */
-    abstract generateAllEntitiesSQLFileHeader(): string;
+    abstract generateAllEntitiesSQLFileHeader(): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     // ─── UTILITY ─────────────────────────────────────────────────────────
 
@@ -1226,13 +1226,13 @@ export abstract class CodeGenDatabaseProvider {
      * Formats a default value for use in generated SQL.
      * Handles SQL functions (GETUTCDATE, gen_random_uuid, etc.) and literal values.
      */
-    abstract formatDefaultValue(defaultValue: string, needsQuotes: boolean): string;
+    abstract formatDefaultValue(defaultValue: string, needsQuotes: boolean): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Builds primary key variable declarations, select fields, fetch-into, and SP param strings
      * for use in cursor-based cascade operations.
      */
-    abstract buildPrimaryKeyComponents(entity: EntityInfo, prefix?: string): {
+    abstract buildPrimaryKeyComponents(entity: EntityInfo, prefix?: string): {  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
         varDeclarations: string;
         selectFields: string;
         fetchInto: string;
@@ -1248,7 +1248,7 @@ export abstract class CodeGenDatabaseProvider {
      *
      * The result set must include a column named `ViewDefinition`.
      */
-    abstract getViewDefinitionSQL(schema: string, viewName: string): string;
+    abstract getViewDefinitionSQL(schema: string, viewName: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Returns a SQL query string to retrieve the primary key index name for a table.
@@ -1257,7 +1257,7 @@ export abstract class CodeGenDatabaseProvider {
      *
      * The result set must include a column named `IndexName`.
      */
-    abstract getPrimaryKeyIndexNameSQL(schema: string, tableName: string): string;
+    abstract getPrimaryKeyIndexNameSQL(schema: string, tableName: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Returns a SQL query string to check if a given column is part of a composite unique constraint.
@@ -1269,7 +1269,7 @@ export abstract class CodeGenDatabaseProvider {
      * Note: Implementations should return the SQL query string. The orchestrator is responsible
      * for executing the query with proper parameterization for the target database platform.
      */
-    abstract getCompositeUniqueConstraintCheckSQL(schema: string, tableName: string, columnName: string): string;
+    abstract getCompositeUniqueConstraintCheckSQL(schema: string, tableName: string, columnName: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Returns a SQL query string to check if a foreign key index already exists.
@@ -1279,7 +1279,7 @@ export abstract class CodeGenDatabaseProvider {
      *
      * The result set should return rows if the index exists (length > 0 means exists).
      */
-    abstract getForeignKeyIndexExistsSQL(schema: string, tableName: string, indexName: string): string;
+    abstract getForeignKeyIndexExistsSQL(schema: string, tableName: string, indexName: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Returns the batch separator for the database platform.
@@ -1310,7 +1310,7 @@ export abstract class CodeGenDatabaseProvider {
      *                   for functions returning record"), and a routine that only performs work has
      *                   no column list to give. SQL Server's `EXEC` is unaffected and ignores this.
      */
-    abstract callRoutineSQL(schema: string, routineName: string, params: string[], paramNames?: string[], discardResult?: boolean): string;
+    abstract callRoutineSQL(schema: string, routineName: string, params: string[], paramNames?: string[], discardResult?: boolean): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     // ─── METADATA MANAGEMENT: CONDITIONAL INSERT ─────────────────────
 
@@ -1329,7 +1329,7 @@ export abstract class CodeGenDatabaseProvider {
      * @param checkQuery The SELECT query to check for existence. Identifiers must be pre-quoted.
      * @param insertSQL The INSERT statement to execute if the check returns no rows. Identifiers must be pre-quoted.
      */
-    abstract conditionalInsertSQL(checkQuery: string, insertSQL: string): string;
+    abstract conditionalInsertSQL(checkQuery: string, insertSQL: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Wraps an INSERT statement with a conditional existence check at the statement level.
@@ -1339,7 +1339,7 @@ export abstract class CodeGenDatabaseProvider {
      * @param conflictCheckSQL The SQL Server existence check query. Ignored on PostgreSQL.
      * @returns An object with `prefix` and `suffix` strings to wrap around the INSERT.
      */
-    abstract wrapInsertWithConflictGuard(conflictCheckSQL: string): { prefix: string; suffix: string };
+    abstract wrapInsertWithConflictGuard(conflictCheckSQL: string): { prefix: string; suffix: string };  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     // ─── METADATA MANAGEMENT: DDL OPERATIONS ─────────────────────────
 
@@ -1348,28 +1348,28 @@ export abstract class CodeGenDatabaseProvider {
      * SQL Server: `ALTER TABLE [schema].[table] ADD colName TYPE [NOT] NULL [DEFAULT expr]`
      * PostgreSQL: `ALTER TABLE schema."table" ADD COLUMN "colName" TYPE [NOT] NULL [DEFAULT expr]`
      */
-    abstract addColumnSQL(schema: string, tableName: string, columnName: string, dataType: string, nullable: boolean, defaultExpression?: string): string;
+    abstract addColumnSQL(schema: string, tableName: string, columnName: string, dataType: string, nullable: boolean, defaultExpression?: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Generates ALTER TABLE ... ALTER COLUMN to change type and nullability.
      * SQL Server: `ALTER TABLE ... ALTER COLUMN col TYPE NULL|NOT NULL`
      * PostgreSQL: `ALTER TABLE ... ALTER COLUMN "col" TYPE type, ALTER COLUMN "col" SET|DROP NOT NULL`
      */
-    abstract alterColumnTypeAndNullabilitySQL(schema: string, tableName: string, columnName: string, dataType: string, nullable: boolean): string;
+    abstract alterColumnTypeAndNullabilitySQL(schema: string, tableName: string, columnName: string, dataType: string, nullable: boolean): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Generates SQL to add a default constraint/value to a column.
      * SQL Server: `ALTER TABLE ... ADD CONSTRAINT DF_name DEFAULT expr FOR [col]`
      * PostgreSQL: `ALTER TABLE ... ALTER COLUMN "col" SET DEFAULT expr`
      */
-    abstract addDefaultConstraintSQL(schema: string, tableName: string, columnName: string, defaultExpression: string): string;
+    abstract addDefaultConstraintSQL(schema: string, tableName: string, columnName: string, defaultExpression: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Generates SQL to drop an existing default constraint from a column.
      * SQL Server: Dynamic lookup of constraint name from sys catalog + DROP.
      * PostgreSQL: Dynamic lookup from pg_catalog + ALTER COLUMN DROP DEFAULT.
      */
-    abstract dropDefaultConstraintSQL(schema: string, tableName: string, columnName: string): string;
+    abstract dropDefaultConstraintSQL(schema: string, tableName: string, columnName: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Generates a DROP statement for a database object (view/procedure/function).
@@ -1379,7 +1379,7 @@ export abstract class CodeGenDatabaseProvider {
      * Note: This differs from `generateDropGuard()` which is used for CREATE OR REPLACE
      * patterns. This method is used for cleanup operations.
      */
-    abstract dropObjectSQL(objectType: 'VIEW' | 'PROCEDURE' | 'FUNCTION', schema: string, name: string): string;
+    abstract dropObjectSQL(objectType: 'VIEW' | 'PROCEDURE' | 'FUNCTION', schema: string, name: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     // ─── METADATA MANAGEMENT: VIEW INTROSPECTION ─────────────────────
 
@@ -1388,13 +1388,13 @@ export abstract class CodeGenDatabaseProvider {
      * The query uses `@ViewName` and `@SchemaName` as named parameters.
      * Returns 1 row if the view exists.
      */
-    abstract getViewExistsSQL(): string;
+    abstract getViewExistsSQL(): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Returns SQL to get column metadata for a view or table.
      * Result columns: FieldName, Type, Length, Precision, Scale, AllowsNull.
      */
-    abstract getViewColumnsSQL(schema: string, viewName: string): string;
+    abstract getViewColumnsSQL(schema: string, viewName: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     // ─── METADATA MANAGEMENT: TYPE SYSTEM ────────────────────────────
 
@@ -1414,7 +1414,7 @@ export abstract class CodeGenDatabaseProvider {
      * @param expected The expected type name (from DDL or configuration).
      * @returns True if the types are equivalent.
      */
-    abstract compareDataTypes(reported: string, expected: string): boolean;
+    abstract compareDataTypes(reported: string, expected: string): boolean;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     // ─── METADATA MANAGEMENT: PLATFORM CONFIGURATION ─────────────────
 
@@ -1425,7 +1425,7 @@ export abstract class CodeGenDatabaseProvider {
      * SQL Server: `[]` (no system schemas need excluding)
      * PostgreSQL: `['information_schema', 'pg_catalog', 'pg_toast', ...]`
      */
-    abstract getSystemSchemasToExclude(): string[];
+    abstract getSystemSchemasToExclude(): string[];  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Whether this platform needs explicit view refresh after schema changes.
@@ -1439,7 +1439,7 @@ export abstract class CodeGenDatabaseProvider {
      * SQL Server: `EXEC sp_refreshview 'schema.viewName';`
      * PostgreSQL: returns empty string (no-op).
      */
-    abstract generateViewRefreshSQL(schema: string, viewName: string): string;
+    abstract generateViewRefreshSQL(schema: string, viewName: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * SQL that rebinds a layered entity's application-owned outer view after the
@@ -1452,7 +1452,7 @@ export abstract class CodeGenDatabaseProvider {
      * it alone. Must be a complete statement. The caller guards it on the outer
      * view existing (bootstrap pass).
      */
-    generateLayeredOuterRebindSQL(_entity: EntityInfo): string {
+    generateLayeredOuterRebindSQL(_entity: EntityInfo): string {  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
         return '';
     }
 
@@ -1470,14 +1470,14 @@ export abstract class CodeGenDatabaseProvider {
      * @param viewName View whose existence gates `innerSQL`
      * @param innerSQL Statements to run when the view exists. Must be a complete statement batch.
      */
-    abstract generateIfViewExistsSQL(schema: string, viewName: string, innerSQL: string): string;
+    abstract generateIfViewExistsSQL(schema: string, viewName: string, innerSQL: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Generates a simple test query to validate a view is functional.
      * SQL Server: `SELECT TOP 1 * FROM [schema].[viewName]`
      * PostgreSQL: `SELECT * FROM "schema"."viewName" LIMIT 1`
      */
-    abstract generateViewTestQuerySQL(schema: string, viewName: string): string;
+    abstract generateViewTestQuerySQL(schema: string, viewName: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Whether this platform needs a post-sync fix for virtual field nullability.
@@ -1493,7 +1493,7 @@ export abstract class CodeGenDatabaseProvider {
      * SQL Server: returns the SQL unchanged (case-insensitive identifiers).
      * PostgreSQL: double-quotes PascalCase identifiers to preserve case.
      */
-    abstract quoteSQLForExecution(sql: string): string;
+    abstract quoteSQLForExecution(sql: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     // ─── METADATA MANAGEMENT: DEFAULT VALUE PARSING ──────────────────
 
@@ -1504,7 +1504,7 @@ export abstract class CodeGenDatabaseProvider {
      *
      * @returns The cleaned default value, or `null` if the column has no meaningful default.
      */
-    abstract parseColumnDefaultValue(sqlDefaultValue: string): string | null;
+    abstract parseColumnDefaultValue(sqlDefaultValue: string): string | null;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     // ─── METADATA MANAGEMENT: COMPLEX SQL GENERATION ─────────────────
 
@@ -1518,21 +1518,21 @@ export abstract class CodeGenDatabaseProvider {
      *   avoid re-scanning the entire schema for entities that haven't changed. `undefined`
      *   or empty preserves the prior unscoped behavior.
      */
-    abstract getPendingEntityFieldsSQL(mjCoreSchema: string, entityIDs?: string[], excludeSchemas?: string[]): string;
+    abstract getPendingEntityFieldsSQL(mjCoreSchema: string, entityIDs?: string[], excludeSchemas?: string[]): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Returns an additional WHERE clause fragment for the check-constraints query.
      * SQL Server: ` WHERE SchemaName NOT IN (...)` when excludeSchemas is provided.
      * PostgreSQL: empty string (the PG view already handles schema filtering).
      */
-    abstract getCheckConstraintsSchemaFilter(excludeSchemas: string[]): string;
+    abstract getCheckConstraintsSchemaFilter(excludeSchemas: string[]): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Returns an additional WHERE clause fragment for the missing-base-tables query.
      * SQL Server: ` WHERE VirtualEntity=0`
      * PostgreSQL: empty string (PG query doesn't need this filter).
      */
-    abstract getEntitiesWithMissingBaseTablesFilter(): string;
+    abstract getEntitiesWithMissingBaseTablesFilter(): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Generates SQL to fix virtual field nullability after metadata sync.
@@ -1541,7 +1541,7 @@ export abstract class CodeGenDatabaseProvider {
      *
      * @param mjCoreSchema The MJ core schema name.
      */
-    abstract getFixVirtualFieldNullabilitySQL(mjCoreSchema: string): string;
+    abstract getFixVirtualFieldNullabilitySQL(mjCoreSchema: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Returns DDL that creates/replaces the platform's metadata-management
@@ -1558,7 +1558,7 @@ export abstract class CodeGenDatabaseProvider {
      * SQL Server: returns `null` (objects ship in the baseline migrations).
      * PostgreSQL: returns the full support-object DDL.
      */
-    getMetadataSupportObjectsSQL(_mjCoreSchema: string): string | null {
+    getMetadataSupportObjectsSQL(_mjCoreSchema: string): string | null {  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
         return null;
     }
 
@@ -1572,7 +1572,7 @@ export abstract class CodeGenDatabaseProvider {
      * @param filePath Path to the SQL file to execute.
      * @returns True if execution succeeded, false otherwise.
      */
-    abstract executeSQLFileViaShell(filePath: string): Promise<boolean>;
+    abstract executeSQLFileViaShell(filePath: string): Promise<boolean>;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Optional — dialect-specific fast path for regenerating a single entity's
@@ -1595,7 +1595,7 @@ export abstract class CodeGenDatabaseProvider {
      *               other per-entity regeneration failure (collected into the
      *               batch summary, halts the install in strict mode).
      */
-    regenerateBaseView?(
+    regenerateBaseView?(  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
         entity: EntityInfo,
         viewSQL: string,
         willRegenerate?: Set<string>
@@ -1627,7 +1627,7 @@ export abstract class CodeGenDatabaseProvider {
      * The `success`/`phase` pair in the result identifies exactly where things
      * fell over so the caller doesn't have to bisect.
      */
-    executeEntityPhased?(opts: {
+    executeEntityPhased?(opts: {  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
         entity: EntityInfo;
         /** Root-ID TVF DDL emitted ahead of the view. Empty when the entity
          *  has no recursive ParentID FKs. */
@@ -1661,7 +1661,7 @@ export abstract class CodeGenDatabaseProvider {
      *
      * @param schemas List of schemas to scan. Empty array returns no rows.
      */
-    getRoutineNamesBySchemaSQL(_schemas: string[]): string {
+    getRoutineNamesBySchemaSQL(_schemas: string[]): string {  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
         return '';
     }
 

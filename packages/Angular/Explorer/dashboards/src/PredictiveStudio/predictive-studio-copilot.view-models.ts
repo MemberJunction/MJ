@@ -15,11 +15,11 @@
 /** One capability shown on the empty catalog so a first-time user learns what PS is for. */
 export interface PSCapabilityCard {
   /** Font Awesome icon class. */
-  icon: string;
+  icon: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Short capability title. */
-  title: string;
+  title: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** One-line plain-language description. */
-  blurb: string;
+  blurb: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /** The four things PS lets you do — shown as cards on the empty catalog to introduce the product. */

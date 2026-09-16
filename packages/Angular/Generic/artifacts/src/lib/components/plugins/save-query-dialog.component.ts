@@ -10,8 +10,8 @@ import { TreeDropdownComponent } from '@memberjunction/ng-trees';
  * Result emitted when a query is successfully saved
  */
 export interface SaveQueryResult {
-  queryId: string;
-  queryName: string;
+  queryId: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  queryName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**

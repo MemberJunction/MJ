@@ -191,7 +191,7 @@ export class FeatureAssemblyExecutor {
    * @param params the assembly parameters
    * @returns the matrix, feature schema, and preprocessing ops
    */
-  public async assemble(params: FeatureAssemblyParams): Promise<FeatureAssemblyResult> {
+  public async assemble(params: FeatureAssemblyParams): Promise<FeatureAssemblyResult> {  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
     const dataAccess = params.dataAccess ?? new RunViewDataAccess(params.contextUser, params.provider);
     const guard = new LeakageGuardEnforcer(params.leakageGuard);
     const pkField = params.primaryKeyField ?? 'ID';

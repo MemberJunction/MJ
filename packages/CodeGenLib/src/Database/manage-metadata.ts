@@ -62,22 +62,22 @@ export {
 
 
 export class ValidatorResult {
-   public entityName: string = "";
-   public fieldName?: string;
-   public sourceCheckConstraint: string = "";
-   public functionText: string = "";
-   public functionName: string = "";
-   public functionDescription: string = "";
+   public entityName: string = "";  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+   public fieldName?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+   public sourceCheckConstraint: string = "";  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+   public functionText: string = "";  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+   public functionName: string = "";  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+   public functionDescription: string = "";  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
    /**
     * The ID value in the Generated Codes entity that was created for this validator.
     */
-   public generatedCodeId: string = "";
+   public generatedCodeId: string = "";  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
    /**
     * The ID for the AI Model that was used to generate the code
     */
-   public aiModelID: string = "";
-   public wasGenerated: boolean = true;
-   public success: boolean = false;
+   public aiModelID: string = "";  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+   public wasGenerated: boolean = true;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+   public success: boolean = false;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 }
 
 /**

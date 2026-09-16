@@ -43,19 +43,19 @@ const CODEC_CARRIER_RATE: Record<NonNullable<RingCentralSoftphoneConfig['codec']
 /** A resolved inbound call's identifying fields (mapped from a RingCentral SIP INVITE). */
 export interface InboundCallInput {
     /** The SIP `Call-ID` (the per-call id the handle parked the INVITE under + the bridge's inbound id). */
-    sessionId: string;
+    sessionId: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** The caller's number (the INVITE's `From`). */
-    from: string;
+    from: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** The dialed DID (the INVITE's `To`) — resolved to an agent identity. */
-    to: string;
+    to: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /** Result of starting an inbound bridge session. */
 export interface InboundCallResult {
     /** Whether a pinned agent was resolved + a bridge session started. */
-    accepted: boolean;
+    accepted: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Why it was rejected (no agent identity for the DID, provider missing, etc.). */
-    reason?: string;
+    reason?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /** Injectable collaborators (production defaults wired in the constructor; fakes in tests). */

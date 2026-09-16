@@ -42,7 +42,7 @@ export abstract class TemplateExtensionBase {
      * @param nodes 
      * @param lexer 
      */
-    public abstract parse(parser: Parser, nodes: Nodes, lexer: Lexer): any
+    public abstract parse(parser: Parser, nodes: Nodes, lexer: Lexer): any  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
     /**
      * Required, must implement this method to run the extension.
      * 
@@ -61,5 +61,5 @@ export abstract class TemplateExtensionBase {
      * 
      * @see README.md in this directory for detailed documentation on parameter mapping
      */
-    public abstract run(context: Context, ...args: any[]);
+    public abstract run(context: Context, ...args: any[]);  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 }

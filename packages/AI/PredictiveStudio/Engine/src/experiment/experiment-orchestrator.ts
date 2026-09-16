@@ -95,7 +95,7 @@ export class ExperimentOrchestrator {
    * @param options optional run tunables (concurrency, prune rules, budget override)
    * @returns the experiment, session, iterations, final leaderboard, best model, and stop reason
    */
-  public async runSession(
+  public async runSession(  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
     plan: ModelingPlanSpec,
     deps: ExperimentDeps,
     options: ExperimentRunOptions = {},

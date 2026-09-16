@@ -98,7 +98,7 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
     this.runTree = value;
     this.cdr.markForCheck();
   }
-  public runTree: AgentRunTreeNode | null = null;
+  public runTree: AgentRunTreeNode | null = null;  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
 
   /**
    * What the dispatched work cost, from the tree — the part the step-based figures cannot see.

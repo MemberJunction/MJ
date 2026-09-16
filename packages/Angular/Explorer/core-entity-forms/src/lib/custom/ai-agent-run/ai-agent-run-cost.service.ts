@@ -2,12 +2,12 @@ import { Injectable } from '@angular/core';
 import { Metadata, RunQuery } from '@memberjunction/core';
 
 export interface AgentRunCostMetrics {
-  totalCost: number;
-  totalPrompts: number;
-  totalTokensInput: number;
-  totalTokensOutput: number;
-  isLoading: boolean;
-  error?: string;
+  totalCost: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  totalPrompts: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  totalTokensInput: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  totalTokensOutput: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  isLoading: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  error?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 interface QueryResult {

@@ -11,36 +11,36 @@
 
 /** A scored record in the at-risk list. */
 export interface AtRiskRow {
-  recordId: string;
+  recordId: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /**
    * Human-readable label for the record (e.g. the member's name/email), resolved from the model's
    * target entity. Null until resolved; the UI falls back to {@link recordId} so the row is never blank.
    */
-  label: string | null;
+  label: string | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** 0–1 prediction score (probability / risk). */
-  score: number;
+  score: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Risk as a 0–100 integer, for display. */
-  riskPct: number;
+  riskPct: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Predicted class label, when present (classification). */
-  class: string | null;
+  class: string | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Risk band, for color. */
-  band: 'high' | 'medium' | 'low';
+  band: 'high' | 'medium' | 'low';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /**
    * Top signed per-record drivers behind THIS row's prediction (P1-5), humanized + one-hot-collapsed for
    * display. `up: true` pushed the risk up, `false` down. Null when the model doesn't produce per-record
    * attribution (tree/ensemble/multiclass) — the UI then shows the model's global drivers instead.
    */
-  drivers: RowDriver[] | null;
+  drivers: RowDriver[] | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /** A humanized, signed per-record driver for the at-risk row's inline "why". */
 export interface RowDriver {
   /** Display label (humanized, one-hot base collapsed). */
-  label: string;
+  label: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Signed contribution magnitude for this row. */
-  value: number;
+  value: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Whether this pushed the risk UP (value > 0) or down. */
-  up: boolean;
+  up: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /** Parse + humanize the raw per-record `drivers` (post-preprocessing `feature`/`value`) into {@link RowDriver}s. */

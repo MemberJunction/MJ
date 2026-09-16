@@ -8,9 +8,9 @@ export class ViewColumnInfo extends BaseInfo {
     ID: number = null
     Name: string = null
     DisplayName: string = null
-    hidden: boolean = null
+    hidden: boolean = null  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
     width?: number = null
-    orderIndex?: number = null
+    orderIndex?: number = null  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     EntityField: EntityFieldInfo = null
 
@@ -30,13 +30,13 @@ export type ViewFilterLogicInfo = typeof ViewFilterLogicInfo[keyof typeof ViewFi
 
 
 export class ViewFilterInfo extends BaseInfo {
-    logicOperator: ViewFilterLogicInfo = null
+    logicOperator: ViewFilterLogicInfo = null  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     field: string = null
-    operator: string = null
-    value: string = null
+    operator: string = null  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    value: string = null  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
-    filters: ViewFilterInfo[] = []
+    filters: ViewFilterInfo[] = []  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     constructor (initData: any = null) {
         super()
@@ -51,9 +51,9 @@ export class ViewFilterInfo extends BaseInfo {
 }
 
 export class ViewGridState {
-    sortSettings?: any;
-    columnSettings?: any;
-    filter?: any;
+    sortSettings?: any;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+    columnSettings?: any;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+    filter?: any;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 }
 
 /**

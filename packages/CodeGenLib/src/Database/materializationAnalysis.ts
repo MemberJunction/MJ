@@ -143,13 +143,13 @@ export const SAFE_READ_FILTER_OPERATORS: ReadonlySet<string> = new Set<string>([
  */
 export interface ReadFilterSpecEntry {
     /** The materialized output column to filter (proven present in the output at qualify time). */
-    column: string;
+    column: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** The normalized `column <op> value` operator — always one of {@link SAFE_READ_FILTER_OPERATORS}. */
-    operator: string;
+    operator: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** The `MJ: Query Parameter` name whose incoming value binds into this predicate. */
-    paramName: string;
+    paramName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** `scalar` → single bound value; `list` → `IN (@p0,@p1,…)` bound element-wise. */
-    kind: 'scalar' | 'list';
+    kind: 'scalar' | 'list';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /** One parameter's verified classification (input to {@link qualifyParameterizedQuery}). */

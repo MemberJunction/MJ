@@ -28,7 +28,7 @@ let nextCardId = 0;
     standalone: true,
 })
 export class MJCardTitleDirective {
-    constructor(public templateRef: TemplateRef<unknown>) {}
+    constructor(public templateRef: TemplateRef<unknown>) {}  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 }
 
 /**
@@ -39,7 +39,7 @@ export class MJCardTitleDirective {
     standalone: true,
 })
 export class MJCardActionsDirective {
-    constructor(public templateRef: TemplateRef<unknown>) {}
+    constructor(public templateRef: TemplateRef<unknown>) {}  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 }
 
 /**
@@ -50,7 +50,7 @@ export class MJCardActionsDirective {
     standalone: true,
 })
 export class MJCardToolsDirective {
-    constructor(public templateRef: TemplateRef<unknown>) {}
+    constructor(public templateRef: TemplateRef<unknown>) {}  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 }
 
 /**
@@ -61,7 +61,7 @@ export class MJCardToolsDirective {
     standalone: true,
 })
 export class MJCardFooterDirective {
-    constructor(public templateRef: TemplateRef<unknown>) {}
+    constructor(public templateRef: TemplateRef<unknown>) {}  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 }
 
 const CARD_GRID_CSS = `

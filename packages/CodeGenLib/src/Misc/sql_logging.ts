@@ -93,7 +93,7 @@ export class SQLLogging {
     private static _sQLLoggingFilePath: string = '';
     private static _omitRecurringScriptsFromLog: boolean = true;
     /** CLI `--sql-output-dir`. Set before {@link initSQLLogging}. */
-    public static sqlOutputDirFlag: string | undefined;
+    public static sqlOutputDirFlag: string | undefined;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     public static get SQLLoggingFilePath(): string {
         return SQLLogging._sQLLoggingFilePath;

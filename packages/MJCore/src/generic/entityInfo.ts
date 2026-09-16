@@ -1298,8 +1298,8 @@ export class EntityFieldInfo extends BaseInfo {
     private _loggedUnsupportedValueListType: boolean = false;
     /** Memoized yyyy-mm-dd keys for a `date` field's value list; null when it cannot be compared. */
     private _valueListDateKeys: Set<string> | null | undefined = undefined;
-    _EntityFieldValues: EntityFieldValueInfo[];
-    _RelatedEntityNameFieldMap: string
+    _EntityFieldValues: EntityFieldValueInfo[];  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
+    _RelatedEntityNameFieldMap: string  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
     /**
      * Collection of all joined field mappings from the related entity.
      */

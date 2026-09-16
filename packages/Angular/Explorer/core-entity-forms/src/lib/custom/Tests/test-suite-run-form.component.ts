@@ -99,7 +99,7 @@ export class MJTestSuiteRunFormComponentExtended extends MJTestSuiteRunFormCompo
   set feedbacksLoaded(value) {
     this.FeedbacksLoaded = value;
   }
-  isRefreshing = false;
+  isRefreshing = false;  // case-violation-ok-legacy-back-compat: an ancestor class already declares the PascalCase name
   AutoRefreshEnabled = false;
 
   /** @deprecated Use {@link AutoRefreshEnabled}. */

@@ -351,7 +351,7 @@ const ALGO_STYLES: { match: RegExp; style: AlgoStyle }[] = [
 const ALGO_FALLBACK: AlgoStyle = { icon: 'fa-solid fa-cube', color: '#6b7280' };
 
 /** Resolve an algorithm display name to its icon + categorical color. */
-export function algoStyle(name: string | null | undefined): AlgoStyle {
+export function algoStyle(name: string | null | undefined): AlgoStyle {  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
   const normalized = (name ?? '').toLowerCase();
   return ALGO_STYLES.find((s) => s.match.test(normalized))?.style ?? ALGO_FALLBACK;
 }

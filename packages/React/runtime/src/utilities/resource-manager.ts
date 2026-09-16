@@ -475,4 +475,4 @@ export class ResourceManager {
 }
 
 // Singleton instance
-export const resourceManager = new ResourceManager();
+export const resourceManager = new ResourceManager();  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope

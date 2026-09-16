@@ -10,7 +10,7 @@ import { PromptExecutionResult } from '../types/prompts.js';
 import { CreateLLMInstance } from '../utils/llm-factory.js';
 import { CleanAndParseJSON } from '@memberjunction/global';
 
-export type GuardrailCheckFn = () => { canContinue: boolean; reason?: string };
+export type GuardrailCheckFn = () => { canContinue: boolean; reason?: string };  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
 export class PromptEngine {
   private nunjucksEnv: nunjucks.Environment;

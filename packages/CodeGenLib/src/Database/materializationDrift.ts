@@ -14,9 +14,9 @@
 
 /** Resolved drift-relevant facts for one materialization (gathered against current metadata). */
 export interface MaterializationDriftFacts {
-    sourceType: 'Query' | 'EntityBaseView';
+    sourceType: 'Query' | 'EntityBaseView';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** EntityBaseView case (1:1 copy of a source entity). */
-    baseView?: {
+    baseView?: {  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
         /** The source entity (SourceEntityID) still resolves in current metadata. */
         sourceEntityExists: boolean;
         /** Current field names on the source entity. */
@@ -25,7 +25,7 @@ export interface MaterializationDriftFacts {
         materializedColumns: string[];
     };
     /** Query case (provenance via QueryEntity / QueryField / QueryDependency). */
-    query?: {
+    query?: {  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
         /** Names/IDs of QueryEntity source entities that no longer exist. */
         missingSourceEntities: string[];
         /** `Entity.Field` provenance refs (QueryField.SourceEntityID+SourceFieldName) that no longer resolve. */

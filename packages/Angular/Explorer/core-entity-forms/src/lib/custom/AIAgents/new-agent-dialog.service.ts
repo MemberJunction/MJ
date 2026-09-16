@@ -5,8 +5,8 @@ import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { Observable, Subject } from 'rxjs';
 
 export interface NewAgentDialogResult {
-  agent?: MJAIAgentEntityExtended;
-  action: 'created' | 'cancelled';
+  agent?: MJAIAgentEntityExtended;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  action: 'created' | 'cancelled';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 @Injectable({

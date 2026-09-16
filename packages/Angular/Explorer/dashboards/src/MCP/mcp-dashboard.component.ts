@@ -142,9 +142,9 @@ export interface MCPToolData {
  * Interface for server group (tools grouped by server)
  */
 export interface MCPServerGroup {
-    server: MCPServerData;
-    tools: MCPToolData[];
-    expanded: boolean;
+    server: MCPServerData;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    tools: MCPToolData[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    expanded: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -1842,7 +1842,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     }
 
     /** Count of non-default filter dimensions, used for "Filters (N)" badge */
-    public activeFilterCount(): number {
+    public activeFilterCount(): number {  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
         const f = this.Filters$.value;
         let n = 0;
         if (f.searchTerm) n++;

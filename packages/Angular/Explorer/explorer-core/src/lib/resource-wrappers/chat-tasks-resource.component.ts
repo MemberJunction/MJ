@@ -72,7 +72,7 @@ export class ChatTasksResource extends BaseResourceComponent implements OnDestro
   public set currentUser(value: any) {
     this.CurrentUser = value;
   }
-  public activeTaskId?: string;
+  public activeTaskId?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
   ngOnInit() {
     super.ngOnInit();

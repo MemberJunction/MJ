@@ -79,7 +79,7 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
    *
    * Don't support change dynamically!
    */
-  @Input({ transform: booleanAttribute }) autoFocus = false;
+  @Input({ transform: booleanAttribute }) autoFocus = false;  // case-violation-ok-legacy-back-compat: the explicit binding alias is the contract, so renaming the property changes nothing
 
   // Private backing fields
   private _value = '';
@@ -116,8 +116,8 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
 
   /** Whether the editor is disabled. */
   @Input({ transform: booleanAttribute })
-  get disabled(): boolean { return this._disabled; }
-  set disabled(val: boolean) {
+  get disabled(): boolean { return this._disabled; }  // case-violation-ok-legacy-back-compat: the explicit binding alias is the contract, so renaming the property changes nothing
+  set disabled(val: boolean) {  // case-violation-ok-legacy-back-compat: the explicit binding alias is the contract, so renaming the property changes nothing
     this._disabled = val;
     if (this.view) {
       this.SetEditable(!val && !this._readonly);
@@ -159,8 +159,8 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
 
   /** Whether indent with Tab key. */
   @Input({ transform: booleanAttribute })
-  get indentWithTab(): boolean { return this._indentWithTab; }
-  set indentWithTab(val: boolean) {
+  get indentWithTab(): boolean { return this._indentWithTab; }  // case-violation-ok-legacy-back-compat: the explicit binding alias is the contract, so renaming the property changes nothing
+  set indentWithTab(val: boolean) {  // case-violation-ok-legacy-back-compat: the explicit binding alias is the contract, so renaming the property changes nothing
     this._indentWithTab = val;
     if (this.view) {
       this.SetIndentWithTab(val);
@@ -188,8 +188,8 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
 
   /** Whether the editor wraps lines. */
   @Input({ transform: booleanAttribute })
-  get lineWrapping(): boolean { return this._lineWrapping; }
-  set lineWrapping(val: boolean) {
+  get lineWrapping(): boolean { return this._lineWrapping; }  // case-violation-ok-legacy-back-compat: the explicit binding alias is the contract, so renaming the property changes nothing
+  set lineWrapping(val: boolean) {  // case-violation-ok-legacy-back-compat: the explicit binding alias is the contract, so renaming the property changes nothing
     this._lineWrapping = val;
     if (this.view) {
       this.SetLineWrapping(val);
@@ -198,8 +198,8 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
 
   /** Whether highlight the whitespace. */
   @Input({ transform: booleanAttribute })
-  get highlightWhitespace(): boolean { return this._highlightWhitespace; }
-  set highlightWhitespace(val: boolean) {
+  get highlightWhitespace(): boolean { return this._highlightWhitespace; }  // case-violation-ok-legacy-back-compat: the explicit binding alias is the contract, so renaming the property changes nothing
+  set highlightWhitespace(val: boolean) {  // case-violation-ok-legacy-back-compat: the explicit binding alias is the contract, so renaming the property changes nothing
     this._highlightWhitespace = val;
     if (this.view) {
       this.SetHighlightWhitespace(val);
@@ -395,7 +395,7 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
   /**
    * The instance of [EditorView](https://codemirror.net/docs/ref/#view.EditorView).
    */
-  view?: EditorView;
+  view?: EditorView;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
   private _updateListener = EditorView.updateListener.of((vu) => {
     if (vu.docChanged && !vu.transactions.some((tr) => tr.annotation(External))) {

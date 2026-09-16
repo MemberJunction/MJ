@@ -7,17 +7,17 @@ import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
 import { BaseAngularComponent, BaseFormComponentEvent, BaseFormComponentEventCodes, FormEditingCompleteEvent } from '@memberjunction/ng-base-types';
 
 export class JoinGridCell {
-  index!: number;
+  index!: number;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
   RowForeignKeyValue: any;
   ColumnForeignKeyValue?: any;
   /**
    * Used when the ColumnsMode is set to Entity. This is the BaseEntity object that represents the data in the JoinEntity that links the Row and Column entities together.
    */
-  data?: BaseEntity | undefined;
+  data?: BaseEntity | undefined;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
   /**
    * Used when the ColumnsMode is set to Fields. This is an array of values from the JoinEntity that are displayed as columns in the grid.
    */
-  value?: any
+  value?: any  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 }
 export class JoinGridRow {
   FirstColValue: any;

@@ -210,7 +210,7 @@ export interface IGraphCalendarLike {
      * @param userId The mailbox/identity address whose calendar to read.
      * @param cursor The Graph delta/next link to resume from (opaque), or `undefined` to start fresh.
      */
-    listEvents(userId: string, cursor?: string): Promise<GraphEventPage>;
+    listEvents(userId: string, cursor?: string): Promise<GraphEventPage>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -501,7 +501,7 @@ export interface GoogleListEventsArgs {
  */
 export interface IGoogleCalendarLike {
     /** Lists one page of events for a calendar, paging via `pageToken` and syncing via `syncToken`. */
-    listEvents(args: GoogleListEventsArgs): Promise<GoogleEventPage>;
+    listEvents(args: GoogleListEventsArgs): Promise<GoogleEventPage>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**

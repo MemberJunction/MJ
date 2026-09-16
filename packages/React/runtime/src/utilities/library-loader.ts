@@ -63,7 +63,7 @@ export class LibraryLoader {
   /**
    * Enable progressive delay for library initialization (useful for test harness)
    */
-  public static enableProgressiveDelay: boolean = false;
+  public static enableProgressiveDelay: boolean = false;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
   /**
    * Inject `<link rel="preload" as="script">` tags for core runtime libraries

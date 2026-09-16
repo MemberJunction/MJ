@@ -7,37 +7,37 @@ import { ResourceData } from '@memberjunction/core-entities';
  */
 export interface CachedComponentInfo {
   // The Angular component reference
-  componentRef: ComponentRef<BaseResourceComponent>;
+  componentRef: ComponentRef<BaseResourceComponent>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   // The wrapper DOM element (for detaching/reattaching)
-  wrapperElement: HTMLElement;
+  wrapperElement: HTMLElement;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   // Resource identity (the ONLY key used for cache operations)
-  resourceType: string;
-  resourceRecordId: string;
-  applicationId: string;
+  resourceType: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  resourceRecordId: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  applicationId: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   // Optional tiebreaker used when recordId is empty (e.g., "new record" tabs for
   // different entities all have recordId='' but must NOT share a cache entry).
   // For entity-record resources this is the entity name; null/undefined for
   // resource types that don't need disambiguation.
-  keyDiscriminator?: string;
+  keyDiscriminator?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   // Usage tracking
-  isAttached: boolean;        // Currently attached to a tab/container?
-  attachedToTabId: string | null;  // Which tab is it attached to? (metadata only, NOT used for lookup)
+  isAttached: boolean;        // Currently attached to a tab/container? — case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  attachedToTabId: string | null;  // Which tab is it attached to? (metadata only, NOT used for lookup) — case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   // Lifecycle tracking
-  lastUsed: Date;
-  createdAt: Date;
+  lastUsed: Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  createdAt: Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   // Resource data snapshot (for comparison)
-  resourceData: ResourceData;
+  resourceData: ResourceData;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   // Saved query params from the tab config at detach time.
   // Restored to the tab config when the component is reattached,
   // so the URL reflects the component's preserved state.
-  savedQueryParams?: Record<string, string>;
+  savedQueryParams?: Record<string, string>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   // Agent context reported by this component via NavigationService.SetAgentContext()
   // Cached so it can be restored when the component becomes active again.

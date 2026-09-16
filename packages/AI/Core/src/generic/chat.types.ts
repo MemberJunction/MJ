@@ -551,21 +551,21 @@ export interface CacheMetadata {
 }
 
 export class ChatResult extends BaseResult {
-    data: ChatResultData;
+    data: ChatResultData;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
     success: boolean;
-    statusText: string;
+    statusText: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /**
      * Cache-related metadata if available from the provider
      */
-    cacheInfo?: CacheMetadata;
+    cacheInfo?: CacheMetadata;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Optional provider-specific response metadata and details not captured in standard fields.
      * This is a flexible field that can contain any additional information the AI provider returns.
      * Structure varies by AI provider.
      */
-    modelSpecificResponseDetails?: Record<string, any>;
+    modelSpecificResponseDetails?: Record<string, any>;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 }
 
 // =============================================================================

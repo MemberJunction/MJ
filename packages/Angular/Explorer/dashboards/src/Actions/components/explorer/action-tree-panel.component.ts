@@ -16,11 +16,11 @@ import { ActionExplorerStateService } from '../../services/action-explorer-state
 import { MJActionEntityExtended } from '@memberjunction/actions-base';
 
 export interface CategoryTreeNode {
-  category: MJActionCategoryEntity;
-  children: CategoryTreeNode[];
-  level: number;
-  actionCount: number;
-  totalActionCount: number; // Including descendants
+  category: MJActionCategoryEntity;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  children: CategoryTreeNode[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  level: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  actionCount: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  totalActionCount: number; // Including descendants — case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 @Component({

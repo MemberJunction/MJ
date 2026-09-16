@@ -856,23 +856,23 @@ export class ViewColumnInfo extends BaseInfo {
     /** Display name for column header (from entity metadata) */
     DisplayName: string = null
     /** User-defined display name override for column header */
-    userDisplayName?: string = null
+    userDisplayName?: string = null  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
     /** Whether column is hidden */
-    hidden: boolean = null
+    hidden: boolean = null  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
     /** Column width in pixels */
     width?: number = null
     /** Column order index */
-    orderIndex?: number = null
+    orderIndex?: number = null  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     // AG Grid-specific properties
     /** Column pinning position ('left', 'right', or null for not pinned) */
-    pinned?: 'left' | 'right' | null = null
+    pinned?: 'left' | 'right' | null = null  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
     /** Flex grow factor (for auto-sizing columns) */
-    flex?: number = null
+    flex?: number = null  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
     /** Minimum column width */
-    minWidth?: number = null
+    minWidth?: number = null  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
     /** Maximum column width */
-    maxWidth?: number = null
+    maxWidth?: number = null  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /** Column formatting configuration */
     format?: ColumnFormat = null
@@ -895,13 +895,13 @@ export type ViewFilterLogicInfo = typeof ViewFilterLogicInfo[keyof typeof ViewFi
 
 
 export class ViewFilterInfo extends BaseInfo {
-    logicOperator: ViewFilterLogicInfo = null
+    logicOperator: ViewFilterLogicInfo = null  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     field: string = null
-    operator: string = null
-    value: string = null
+    operator: string = null  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    value: string = null  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
-    filters: ViewFilterInfo[] = []
+    filters: ViewFilterInfo[] = []  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     constructor (initData: any = null) {
         super()
@@ -941,13 +941,13 @@ export class ViewSortInfo extends BaseInfo {
  */
 export class ViewGridState {
     /** Sort settings - array of field/direction pairs */
-    sortSettings?: ViewGridSortSetting[];
+    sortSettings?: ViewGridSortSetting[];  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
     /** Column settings - visibility, width, order, pinning, etc. */
-    columnSettings?: ViewGridColumnSetting[];
+    columnSettings?: ViewGridColumnSetting[];  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
     /** Filter state (Kendo-compatible format) */
-    filter?: ViewFilterInfo;
+    filter?: ViewFilterInfo;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
     /** Aggregate calculations and display configuration */
-    aggregates?: ViewGridAggregatesConfig;
+    aggregates?: ViewGridAggregatesConfig;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 }
 
 /**

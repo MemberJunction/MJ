@@ -1,17 +1,17 @@
 import { Component, Input, OnInit } from '@angular/core';
 
 export interface KPICardData {
-  title: string;
-  value: string | number;
-  subtitle?: string;
-  icon: string;
-  color: 'primary' | 'success' | 'warning' | 'danger' | 'info';
-  trend?: {
+  title: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  value: string | number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  subtitle?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  icon: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  color: 'primary' | 'success' | 'warning' | 'danger' | 'info';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  trend?: {  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     direction: 'up' | 'down' | 'stable';
     percentage: number;
     period: string;
   };
-  loading?: boolean;
+  loading?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 @Component({

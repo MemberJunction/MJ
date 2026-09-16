@@ -7,16 +7,16 @@ import { UUIDsEqual } from '@memberjunction/global';
  * Represents a breadcrumb item in the path
  */
 export interface BreadcrumbItem {
-  label: string;
-  path: string;
+  label: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  path: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
  * Represents a folder in the tree
  */
 export interface FolderItem {
-  name: string;
-  fullPath: string;
+  name: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  fullPath: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**

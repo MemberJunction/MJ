@@ -52,7 +52,7 @@ export interface IMLModelLoader {
    * @param contextUser request user — required server-side for isolation/audit
    * @param provider optional provider for multi-provider correctness
    */
-  loadModel(modelId: string, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<MJMLModelEntity | null>;
+  loadModel(modelId: string, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<MJMLModelEntity | null>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -68,7 +68,7 @@ export interface IArtifactLoader {
    * @param contextUser request user — required server-side for isolation/audit
    * @returns the artifact bytes, or `null` when not found
    */
-  load(fileId: string, contextUser?: UserInfo): Promise<Uint8Array | null>;
+  load(fileId: string, contextUser?: UserInfo): Promise<Uint8Array | null>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -84,7 +84,7 @@ export interface ISidecarPredictor {
    *
    * @param req the predict request (artifact + frozen preprocessing + schema + rows)
    */
-  predict(req: PredictRequest): Promise<PredictResponse>;
+  predict(req: PredictRequest): Promise<PredictResponse>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**

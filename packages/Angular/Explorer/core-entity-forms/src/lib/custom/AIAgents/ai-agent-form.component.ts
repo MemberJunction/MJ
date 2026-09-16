@@ -32,9 +32,9 @@ export type SubAgentFilterType = 'all' | 'child' | 'related';
  * Interface for unified sub-agent display
  */
 export interface UnifiedSubAgent {
-    agent: MJAIAgentEntityExtended;
-    type: 'child' | 'related';
-    relationship?: MJAIAgentRelationshipEntity;  // Only for related sub-agents
+    agent: MJAIAgentEntityExtended;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    type: 'child' | 'related';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    relationship?: MJAIAgentRelationshipEntity;  // Only for related sub-agents — case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -63,17 +63,17 @@ interface AgentSessionListRow {
  * decorated with its role relative to the open agent and display metrics.
  */
 export interface AgentSessionHistoryItem {
-    row: AgentSessionListRow;
+    row: AgentSessionListRow;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Config.targetAgentID parsed from the session's Config JSON, when present */
-    targetAgentID: string | null;
+    targetAgentID: string | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Resolved target agent name (via AIEngineBase agent cache) */
-    targetAgentName: string | null;
+    targetAgentName: string | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** True when the open agent IS the session's co-agent (AIAgentSession.AgentID) */
-    isCoAgent: boolean;
+    isCoAgent: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** True when the open agent is the session's delegation target (Config.targetAgentID) */
-    isTarget: boolean;
+    isTarget: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Number of channel instances attached to the session */
-    channelCount: number;
+    channelCount: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**

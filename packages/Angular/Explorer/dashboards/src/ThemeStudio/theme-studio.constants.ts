@@ -143,10 +143,10 @@ export const TOKEN_PREVIEW_TARGETS: Record<string, string[]> = {
  * `Overrides` JSON as hand-edited tokens.
  */
 export interface ThemeRecipe {
-  id: string;
-  name: string;
-  description: string;
-  tokens: (derived: DerivedTheme, seeds: ThemeSeeds) => Record<string, string>;
+  id: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  name: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  description: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  tokens: (derived: DerivedTheme, seeds: ThemeSeeds) => Record<string, string>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /** Reduce a hex color's OKLCH chroma by `factor` (0..1 = fully muted..unchanged). */

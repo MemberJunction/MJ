@@ -70,7 +70,7 @@ export class EditDashboardComponent {
   public get items(): DashboardItem[] {
     return this.Items;
   }
-  public _items: DashboardItem[] = [];
+  public _items: DashboardItem[] = [];  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
   public ItemsChanged: boolean = false;
 
   /** @deprecated Use {@link ItemsChanged}. */

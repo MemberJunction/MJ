@@ -21,8 +21,8 @@ import {
 export class VariableResolutionError extends Error {
   constructor(
     message: string,
-    public readonly variableName?: string,
-    public readonly reason?: 'missing_required' | 'invalid_type' | 'invalid_value' | 'parse_error'
+    public readonly variableName?: string,  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+    public readonly reason?: 'missing_required' | 'invalid_type' | 'invalid_value' | 'parse_error'  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
   ) {
     super(message);
     this.name = 'VariableResolutionError';

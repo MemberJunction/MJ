@@ -184,4 +184,4 @@ export class ConfigManager extends BaseSingleton<ConfigManager> {
 }
 
 // Export singleton instance for convenience
-export const configManager = ConfigManager.Instance;
+export const configManager = ConfigManager.Instance;  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope

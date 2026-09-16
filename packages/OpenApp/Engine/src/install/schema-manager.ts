@@ -40,7 +40,7 @@ export interface ValidateSchemaNameOptions {
    * Allow schema names starting with `__`. Exact-match reserved names (e.g. `__mj`, `dbo`)
    * remain blocked regardless of this flag. Dangerous; MJ-internal apps only.
    */
-  allowDoubleUnderscore?: boolean;
+  allowDoubleUnderscore?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**

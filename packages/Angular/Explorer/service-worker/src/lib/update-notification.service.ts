@@ -98,7 +98,7 @@ export class UpdateNotificationService implements OnDestroy {
      * Polling is automatically suspended while the tab is hidden and resumed
      * (with an immediate check) when the tab becomes visible again.
      */
-    public startAutoCheck(intervalMs: number): void {
+    public startAutoCheck(intervalMs: number): void {  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
         this.StopAutoCheck();
         this._pollIntervalMs = intervalMs;
         if (!this._swUpdate.isEnabled || intervalMs <= 0) return;

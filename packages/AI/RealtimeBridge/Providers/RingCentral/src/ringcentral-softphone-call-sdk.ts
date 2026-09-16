@@ -52,11 +52,11 @@ export function bufferToArrayBuffer(buf: Buffer): ArrayBuffer {
  */
 export interface SoftphoneCallSource {
     /** Places an OUTBOUND call (the caller-id is fixed by the registration; `toNumber` is the destination). */
-    placeCall(toNumber: string): Promise<SoftphoneCallSession>;
+    placeCall(toNumber: string): Promise<SoftphoneCallSession>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Answers the inbound INVITE the handle parked under `callId` (the SIP `Call-ID`). */
-    answerCall(callId: string): Promise<SoftphoneCallSession>;
+    answerCall(callId: string): Promise<SoftphoneCallSession>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** The `werift-rtp` constructors the outbound RTP sender needs (loaded with the softphone). */
-    readonly rtp: RtpConstructors;
+    readonly rtp: RtpConstructors;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**

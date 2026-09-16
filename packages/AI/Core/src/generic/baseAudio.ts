@@ -108,17 +108,17 @@ export class SpeechResult {
     /**
      * True if the request was successful, false otherwise
      */
-    success: boolean;
+    success: boolean;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
     /**
      * If the request failed, this will contain the error message
      */
-    errorMessage?: string;
+    errorMessage?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
     /**
      * If the request was successful, this will contain the results. For CreateSpeech requests, an audio file in a base 64 encoded string and for
      * SpeechToText requests, the text that was transcribed.
      */
-    content: string;
-    data?: Buffer;
+    content: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    data?: Buffer;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Usage for the request, when the provider reported enough to build it.
@@ -128,7 +128,7 @@ export class SpeechResult {
      * price unit type prices. Left undefined when the provider did not report a duration, so that
      * cost calculation declines rather than billing the request as free.
      */
-    usage?: ModelUsage;
+    usage?: ModelUsage;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 }
 
 export class SpeechToTextParams extends BaseParams {
@@ -138,7 +138,7 @@ export class SpeechToTextParams extends BaseParams {
      * Optional only in the sense that `audioData` may be supplied instead; exactly one of
      * the two is required.
      */
-    audioFile: string;
+    audioFile: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /**
      * The raw audio bytes, as an alternative to the base 64 `audioFile`.
@@ -147,25 +147,25 @@ export class SpeechToTextParams extends BaseParams {
      * audio costs a third more memory than the bytes themselves, for a string the
      * implementation immediately decodes again.
      */
-    audioData?: Buffer;
+    audioData?: Buffer;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Original file name, e.g. `episode-104.mp3`. Some providers infer the container
      * format from the extension, so supplying it when known improves reliability.
      */
-    fileName?: string;
+    fileName?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * ISO 639-1 language code of the spoken audio. Supplying it typically improves both
      * accuracy and latency versus letting the model detect the language.
      */
-    language?: string;
+    language?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Optional text to steer style, spelling or vocabulary — e.g. proper nouns the model
      * would otherwise mis-transcribe. Should be in the same language as the audio.
      */
-    prompt?: string;
+    prompt?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 }
 
 /**
@@ -246,111 +246,111 @@ export class VoiceInfo {
     /**
      * The ID of the voice
      */
-    id: string
+    id: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /**
      * The name of the voice
      */
-    name: string
+    name: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /**
      * Detailed text description of the voice
      */
-    description?: string;
+    description?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Optional, array of labels for the voice
      */
-    labels?: object[];
+    labels?: object[];  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * User defined category for managing voices
      */
-    category?: string
+    category?: string  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
-    stability?: number
-    similarityBoost?: number;
-    style?: number;
-    useSpeakerBoost?: number;
+    stability?: number  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+    similarityBoost?: number;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+    style?: number;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+    useSpeakerBoost?: number;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * An optional array of samples audio for the voice
      */
-    samples?: VoiceSample[];
+    samples?: VoiceSample[];  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * The URL to a preview of the voice
      */
-    previewUrl?: string;
+    previewUrl?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 }
 
 /**
  * Information about an individual voice sample associated with a voice
  */
 export class VoiceSample {
-    id: string;
-    fileName: string;
-    mimeType: string;
-    sizeInBytes: number;
-    hash: string;
+    id: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    fileName: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    mimeType: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    sizeInBytes: number;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    hash: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 }
 
 export class AudioModel {
     /**
      * The ID of the model
      */
-    id: string
+    id: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /**
      * The name of the model
      */
-    name: string
+    name: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /**
      * Determines if the model supports text-to-speech
      */
-    supportsTextToSpeech: boolean
+    supportsTextToSpeech: boolean  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
     /**
      * Determines if the model supports voice conversion
      */
-    supportsVoiceConversion: boolean
+    supportsVoiceConversion: boolean  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
     /**
      * Determines if the model supports style adjustment
      */
-    supportsStyle: boolean
+    supportsStyle: boolean  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
     /**
      * Determines if the model supports speaker boost
      */
-    supportsSpeakerBoost: boolean
+    supportsSpeakerBoost: boolean  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
     /**
      * Determines if the model supports fine tuning
      */
-    supportsFineTuning: boolean
+    supportsFineTuning: boolean  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
     /**
      * Optional, array of supported languages for the model
      */
-    languages?: AudioLanguage[]
+    languages?: AudioLanguage[]  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 }
 
 export class AudioLanguage {
     /**
      * The ID of the language
      */
-    id: string
+    id: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
     /**
      * The name of the language
      */
-    name: string
+    name: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 }
 
 /**
  * Some models support using pronounciation dictionaries to provide audio generation cues for specific words and phrases
  */
 export class PronounciationDictionary {
-    id: string
-    name: string;
-    description?: string;
-    latestVersionId: string;
-    createdBy: string;
-    creationTimeStamp: number;
+    id: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    name: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    description?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+    latestVersionId: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    createdBy: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    creationTimeStamp: number;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 }

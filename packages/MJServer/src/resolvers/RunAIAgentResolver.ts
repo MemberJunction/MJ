@@ -28,55 +28,55 @@ const INLINE_SIZE_CAP = 100 * 1024;
 @ObjectType()
 export class AIAgentRunResult {
     @Field()
-    success: boolean;
+    success: boolean;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    errorMessage?: string;
+    errorMessage?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    executionTimeMs?: number;
+    executionTimeMs?: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field()
-    result: string; // JSON serialized ExecuteAgentResult with scalars only
+    result: string; // JSON serialized ExecuteAgentResult with scalars only — case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 @ObjectType()
 export class AgentExecutionProgress {
     @Field()
-    currentStep: string;
+    currentStep: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    percentage?: number;
+    percentage?: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field()
-    message: string;
+    message: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    agentName?: string;
+    agentName?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    agentType?: string;
+    agentType?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    stepCount?: number;
+    stepCount?: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    hierarchicalStep?: string;
+    hierarchicalStep?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 @ObjectType()
 export class AgentStreamingContent {
     @Field()
-    content: string;
+    content: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field()
-    isPartial: boolean;
+    isPartial: boolean;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    stepName?: string;
+    stepName?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    agentName?: string;
+    agentName?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     /**
      * Content discriminator passed through from the agent's streaming chunk (see
@@ -87,73 +87,73 @@ export class AgentStreamingContent {
      * rendered by the conversation client.
      */
     @Field({ nullable: true })
-    kind?: string;
+    kind?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 @ObjectType()
 export class AgentExecutionStepSummary {
     @Field()
-    stepId: string;
+    stepId: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field()
-    stepName: string;
+    stepName: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    agentName?: string;
+    agentName?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    agentType?: string;
+    agentType?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field()
-    startTime: Date;
+    startTime: Date;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    endTime?: Date;
+    endTime?: Date;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field()
-    status: string;
+    status: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    result?: string;
+    result?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 @ObjectType()
 export class AgentPartialResult {
     @Field()
-    currentStep: string;
+    currentStep: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    partialOutput?: string;
+    partialOutput?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 @ObjectType()
 export class AgentExecutionStreamMessage {
     @Field(() => ID)
-    sessionId: string;
+    sessionId: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => ID)
-    agentRunId: string;
+    agentRunId: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field()
-    type: 'progress' | 'streaming' | 'partial_result' | 'complete';
+    type: 'progress' | 'streaming' | 'partial_result' | 'complete';  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    progress?: AgentExecutionProgress;
+    progress?: AgentExecutionProgress;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    streaming?: AgentStreamingContent;
+    streaming?: AgentStreamingContent;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    partialResult?: AgentPartialResult;
+    partialResult?: AgentPartialResult;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field()
-    timestamp: Date;
+    timestamp: Date;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     // Not a GraphQL field - used internally for streaming
-    agentRun?: any;
+    agentRun?: any;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     // Not a GraphQL field - used for completion routing to correct conversation detail
-    conversationDetailId?: string;
+    conversationDetailId?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 }
 
 

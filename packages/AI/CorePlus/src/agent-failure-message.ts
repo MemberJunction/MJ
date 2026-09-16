@@ -82,7 +82,7 @@ export type AgentFailureDisposition =
  * Decide whether a failed `ExecuteAgentResult` should keep the conversation
  * detail In-Progress (server may still complete) or paint Error.
  */
-export function agentFailureDisposition(
+export function agentFailureDisposition(  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
     result: AgentFailureSource,
     fallback?: string
 ): AgentFailureDisposition {

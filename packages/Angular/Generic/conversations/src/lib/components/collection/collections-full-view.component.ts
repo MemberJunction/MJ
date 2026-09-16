@@ -1860,7 +1860,7 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
   public set isFormModalOpen(value: boolean) {
     this.IsFormModalOpen = value;
   }
-  public editingCollection?: MJCollectionEntity;
+  public editingCollection?: MJCollectionEntity;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
   public IsArtifactModalOpen: boolean = false;
 
   /** @deprecated Use {@link IsArtifactModalOpen}. */

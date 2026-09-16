@@ -22,7 +22,7 @@ export class DataContextComponent implements OnInit {
   }
   @Input() Provider: IMetadataProvider | null = null;
  
-  public dataContextRecord?: MJDataContextEntity;
+  public dataContextRecord?: MJDataContextEntity;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
   public DataContextItems: MJDataContextItemEntity[] = [];
 
   /** @deprecated Use {@link DataContextItems}. */

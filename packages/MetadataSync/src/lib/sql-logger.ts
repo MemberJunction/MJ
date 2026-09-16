@@ -11,9 +11,9 @@ import path from 'path';
 import { SyncConfig } from '../config';
 
 export interface SQLLoggerOptions {
-  enabled: boolean;
-  outputDirectory: string;
-  formatAsMigration: boolean;
+  enabled: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  outputDirectory: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  formatAsMigration: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export class SQLLogger {

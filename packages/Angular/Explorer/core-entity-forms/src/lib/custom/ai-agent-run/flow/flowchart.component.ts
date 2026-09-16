@@ -233,8 +233,8 @@ export class FlowchartComponent implements OnDestroy {
     this.applyView();
   }
 
-  public zoomIn(): void { const svg = this.SvgRef.nativeElement; this.zoomAt(svg.clientWidth / 2, svg.clientHeight / 2, 1.2); }
-  public zoomOut(): void { const svg = this.SvgRef.nativeElement; this.zoomAt(svg.clientWidth / 2, svg.clientHeight / 2, 1 / 1.2); }
+  public zoomIn(): void { const svg = this.SvgRef.nativeElement; this.zoomAt(svg.clientWidth / 2, svg.clientHeight / 2, 1.2); }  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
+  public zoomOut(): void { const svg = this.SvgRef.nativeElement; this.zoomAt(svg.clientWidth / 2, svg.clientHeight / 2, 1 / 1.2); }  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
   public ResetView(): void { this.fitToView(); }
 
   /** @deprecated Use {@link ResetView}. */

@@ -7,13 +7,13 @@ export const PUSH_STATUS_UPDATES_TOPIC = 'PUSH_STATUS_UPDATES';
 @ObjectType()
 export class PushStatusNotification {
   @Field(() => String, { nullable: true })
-  message?: string;
+  message?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field((_type) => Date)
-  date!: Date;
+  date!: Date;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field((_type) => ID)
-  sessionId!: string;
+  sessionId!: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 /**
@@ -119,7 +119,7 @@ export class PushStatusResolver {
     filter: (data: ResolverFilterData<PushStatusNotificationPayload, PushStatusNotificationArgs, StatusUpdatesFilterContext>) =>
       StatusUpdatesFilter(data),
   })
-  statusUpdates(
+  statusUpdates(  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
     @Root() { message }: PushStatusNotificationPayload,
     @Arg('sessionId', () => String) sessionId: string
   ): PushStatusNotification {

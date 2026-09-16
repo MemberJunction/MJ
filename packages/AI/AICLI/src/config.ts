@@ -6,15 +6,15 @@ dotenv.config({ quiet: true });
 
 export interface AICliConfig {
   // Database settings from mj.config.cjs
-  dbHost?: string;
-  dbDatabase?: string;
-  dbPort?: number;
-  dbUsername?: string;
-  dbPassword?: string;
-  coreSchema?: string;
+  dbHost?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  dbDatabase?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  dbPort?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  dbUsername?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  dbPassword?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  coreSchema?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   
   // AI CLI specific settings
-  aiSettings?: {
+  aiSettings?: {  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     defaultTimeout?: number;
     outputFormat?: 'compact' | 'json' | 'table';
     logLevel?: 'info' | 'debug' | 'verbose';

@@ -11,10 +11,10 @@ import { PSPanelKey } from './predictive-studio.types';
 
 /** A section in a workbench door's internal left-nav. `group` is the optional left-nav group heading (''=ungrouped, rendered first). */
 export interface PSSection {
-  readonly key: PSPanelKey;
-  readonly label: string;
-  readonly icon: string;
-  readonly group: string;
+  readonly key: PSPanelKey;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  readonly label: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  readonly icon: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  readonly group: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /** Studio door — the build/run workbench: Overview, then Build (pipelines, algorithms) and Run (experiments, compare). */

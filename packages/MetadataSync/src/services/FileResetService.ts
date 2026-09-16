@@ -30,8 +30,8 @@ export interface FileResetResult {
 }
 
 export interface FileStats {
-  primaryKeyCount: number;
-  syncCount: number;
+  primaryKeyCount: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  syncCount: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export class FileResetService {

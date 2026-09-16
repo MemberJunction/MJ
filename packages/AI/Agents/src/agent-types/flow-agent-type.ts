@@ -43,22 +43,22 @@ interface FlowAgentNextStep<P = any> extends BaseAgentNextStep<P> {
  */
 export class FlowExecutionState {
     /** The agent ID for this flow execution */
-    agentId: string;
+    agentId: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /** The current step being executed */
-    currentStepId?: string;
+    currentStepId?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /** Set of completed step IDs */
-    completedStepIds: Set<string> = new Set();
+    completedStepIds: Set<string> = new Set();  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /** Map of step results by step ID */
-    stepResults: Map<string, unknown> = new Map();
+    stepResults: Map<string, unknown> = new Map();  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /** Ordered list of step IDs in execution order */
-    executionPath: string[] = [];
+    executionPath: string[] = [];  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /** Special fields from action output mappings (message, reasoning, confidence) */
-    specialFields?: {
+    specialFields?: {  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
         message?: string;
         reasoning?: string;
         confidence?: number;

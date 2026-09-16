@@ -589,7 +589,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
      *   }
      * }
      */
-    public async *streamSearch(
+    public async *streamSearch(  // case-violation-ok-legacy-back-compat: generator — a delegating stub would return the generator, not yield from it
         params: SearchParams,
         contextUser: UserInfo,
     ): AsyncIterable<SearchStreamEvent> {

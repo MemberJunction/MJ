@@ -34,11 +34,11 @@ export interface ValidationWarning {
 }
 
 export interface ValidationSummary {
-    totalFiles: number;
-    totalEntities: number;
-    totalErrors: number;
-    totalWarnings: number;
-    fileResults: Map<string, FileValidationResult>;
+    totalFiles: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    totalEntities: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    totalErrors: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    totalWarnings: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    fileResults: Map<string, FileValidationResult>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -56,7 +56,7 @@ export class ValidationErrorClass extends Error {
     public readonly entity?: string;
     public readonly field?: string;
     public readonly suggestion?: string;
-    public readonly line?: number;
+    public readonly line?: number;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
     public readonly column?: number;
     
     constructor(error: ValidationError) {
@@ -115,7 +115,7 @@ export class ValidationWarningClass extends Error {
     public readonly entity?: string;
     public readonly field?: string;
     public readonly suggestion?: string;
-    public readonly line?: number;
+    public readonly line?: number;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
     public readonly column?: number;
     
     constructor(warning: ValidationWarning) {

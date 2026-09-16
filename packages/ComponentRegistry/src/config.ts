@@ -54,7 +54,7 @@ export type DatabaseSettingsInfo = z.infer<typeof databaseSettingsInfoSchema>;
 export type ComponentRegistrySettings = z.infer<typeof componentRegistrySettingsSchema>;
 export type ConfigInfo = z.infer<typeof configInfoSchema>;
 
-export const configInfo: ConfigInfo = LoadConfig();
+export const configInfo: ConfigInfo = LoadConfig();  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
 
 export const {
   dbUsername,

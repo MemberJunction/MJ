@@ -1144,7 +1144,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     return this.FilteredAttributes;
   }
 
-  setActiveTab(tab: 'display' | 'json' | 'details' | 'links'): void {
+  setActiveTab(tab: 'display' | 'json' | 'details' | 'links'): void {  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
     this.ActiveTab = tab;
   }
 

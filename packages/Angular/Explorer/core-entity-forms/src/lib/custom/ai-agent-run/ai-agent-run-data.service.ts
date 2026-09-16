@@ -4,10 +4,10 @@ import { MJAIAgentRunEntity, MJAIAgentRunStepEntity, MJActionExecutionLogEntity,
 import { SortAgentRunStepsByExecutionOrder } from './agent-run-step-order';
 
 export interface AgentRunData {
-  steps: MJAIAgentRunStepEntity[];
-  subRuns: MJAIAgentRunEntity[];
-  actionLogs: MJActionExecutionLogEntity[];
-  promptRuns: MJAIPromptRunEntity[];
+  steps: MJAIAgentRunStepEntity[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  subRuns: MJAIAgentRunEntity[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  actionLogs: MJActionExecutionLogEntity[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  promptRuns: MJAIPromptRunEntity[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**

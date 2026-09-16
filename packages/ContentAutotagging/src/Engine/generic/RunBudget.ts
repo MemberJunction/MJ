@@ -29,9 +29,9 @@ export type RunBudgetReason =
     | 'MaxCostPerRunExceeded';
 
 export interface RunBudgetCheckResult {
-    ok: boolean;
-    reason?: RunBudgetReason;
-    details?: string;
+    ok: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    reason?: RunBudgetReason;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    details?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export class RunBudget {

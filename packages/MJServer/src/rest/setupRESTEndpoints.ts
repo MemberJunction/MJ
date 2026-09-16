@@ -15,14 +15,14 @@ export interface RESTApiOptions {
     /**
      * Whether to enable REST API endpoints (default: false)
      */
-    enabled: boolean;
+    enabled: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Array of entity names to include in the API (case-insensitive)
      * If provided, only these entities will be accessible through the REST API
      * Supports wildcards using '*' (e.g., 'User*' matches 'User', 'UserRole', etc.)
      */
-    includeEntities?: string[];
+    includeEntities?: string[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Array of entity names to exclude from the API (case-insensitive)
@@ -30,20 +30,20 @@ export interface RESTApiOptions {
      * Supports wildcards using '*' (e.g., 'Secret*' matches 'Secret', 'SecretKey', etc.)
      * Note: Exclude patterns always override include patterns
      */
-    excludeEntities?: string[];
+    excludeEntities?: string[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Array of schema names to include in the API (case-insensitive)
      * If provided, only entities in these schemas will be accessible through the REST API
      */
-    includeSchemas?: string[];
+    includeSchemas?: string[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Array of schema names to exclude from the API (case-insensitive)
      * Entities in these schemas will not be accessible through the REST API
      * Note: Exclude patterns always override include patterns
      */
-    excludeSchemas?: string[];
+    excludeSchemas?: string[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**

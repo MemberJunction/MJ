@@ -62,35 +62,35 @@ const FORM_BUILDER_PREFS_KEY = 'mj.formBuilder.cockpitPrefs.v1';
  */
 export interface FormBuilderPrefs {
     /** Percent (0-100) widths of the three top-level shell panes. */
-    leftPanePct?: number;
-    centerPanePct?: number;
-    chatPanePct?: number;
+    leftPanePct?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    centerPanePct?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    chatPanePct?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Collapse flags persist across reloads. */
-    leftCollapsed?: boolean;
-    chatCollapsed?: boolean;
+    leftCollapsed?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    chatCollapsed?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Last center-pane tab used (Preview / Code / Layout). */
-    lastCenterPaneMode?: 'preview' | 'code' | 'layout';
+    lastCenterPaneMode?: 'preview' | 'code' | 'layout';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     // — Left-rail inner layout (forms list vs versions panel) —
     /** Height percent (0-100) for the forms-list section inside the left rail.
      *  The versions panel takes the remainder. Drag the splitter to change. */
-    formsListHeightPct?: number;
+    formsListHeightPct?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Inner-panel collapse flags (VS-Code-style). When true, that section
      *  shrinks to a header bar and the sibling takes full height. */
-    formsListCollapsed?: boolean;
-    versionsCollapsed?: boolean;
+    formsListCollapsed?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    versionsCollapsed?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     // — Forms list display preferences —
     /** 'list' (flat) | 'tree' (Schema → Entity → Forms). */
-    formsViewMode?: 'list' | 'tree';
+    formsViewMode?: 'list' | 'tree';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Entity filter selection ('All' or specific entity name). */
-    formsEntityFilter?: string;
+    formsEntityFilter?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Status filter chips. Forms whose OverrideStatus is in this set show. */
-    formsStatusFilter?: ReadonlyArray<'Active' | 'Pending' | 'Inactive'>;
+    formsStatusFilter?: ReadonlyArray<'Active' | 'Pending' | 'Inactive'>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Sort mode. */
-    formsSortMode?: 'updated-desc' | 'updated-asc' | 'name-asc' | 'name-desc';
+    formsSortMode?: 'updated-desc' | 'updated-asc' | 'name-asc' | 'name-desc';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Component IDs the user has pinned to the top of the list. */
-    pinnedFormIds?: ReadonlyArray<string>;
+    pinnedFormIds?: ReadonlyArray<string>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**

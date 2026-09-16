@@ -5,9 +5,9 @@ import { MJTabBodyComponent } from '../tab-body/tab-body.component';
 
  
 export class TabEvent {
-  public index!: number;
-  public tab: MJTabComponent | null = null;
-  public body: MJTabBodyComponent | null = null;
+  public index!: number;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+  public tab: MJTabComponent | null = null;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+  public body: MJTabBodyComponent | null = null;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 }
 export class TabCancelableEvent extends TabEvent {
   public cancel: boolean = false;
@@ -16,14 +16,14 @@ export class TabClosedEvent extends TabEvent {
   /**
    * This property provides the default calculation for what the new tab index will be and can be overriden by the container component to set a different value.
    */
-  public newTabIndex!: number
+  public newTabIndex!: number  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
   /**
    * Whenever the container is done processing, it MUST call this done method to signal that it is done.  
    */
-  public done!: (error?: any) => {};
+  public done!: (error?: any) => {};  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 }
 export class TabContextMenuEvent extends TabEvent {
-  public mouseEvent!: MouseEvent;
+  public mouseEvent!: MouseEvent;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 }
 
 /** Source of per-instance DOM id bases — see {@link MJTabStripComponent.IdBase}. */
@@ -172,8 +172,8 @@ export class MJTabStripComponent implements AfterContentInit, AfterContentChecke
   @Output() TabScrolled = new EventEmitter();
 
 
-  @ContentChildren(MJTabComponent) tabs!: QueryList<MJTabComponent>;
-  @ContentChildren(MJTabBodyComponent) tabBodies!: QueryList<MJTabBodyComponent>;
+  @ContentChildren(MJTabComponent) tabs!: QueryList<MJTabComponent>;  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
+  @ContentChildren(MJTabBodyComponent) tabBodies!: QueryList<MJTabBodyComponent>;  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
    
 
   private _viewInitialized: boolean = false;

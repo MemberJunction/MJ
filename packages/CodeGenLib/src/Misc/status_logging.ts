@@ -307,7 +307,7 @@ const _logger: LoggerBase = MJGlobal.Instance.ClassFactory.CreateInstance<Logger
 /**
  * Wrapper for the LoggerBase.logError method
  */
-export function logError(message: string, ...args: any[]) {
+export function logError(message: string, ...args: any[]) {  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
    return _logger.logError(message, SeverityType.Critical, ...args);
 }
 
@@ -323,7 +323,7 @@ export function logWarning(message: string, ...args: any[]) {
 /**
  * Wrapper for the LoggerBase.logStatus method
  */
-export function logStatus(message: string, ...args: any[]) {
+export function logStatus(message: string, ...args: any[]) {  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
    return _logger.logStatus(message, SeverityType.Info, ...args);
 }
 

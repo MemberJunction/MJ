@@ -7,11 +7,11 @@ import { QueryEngine } from '@memberjunction/core-entities';
  */
 export interface PermissionEvaluationResult {
     /** Whether the user can run all data operations the component requires */
-    canRun: boolean;
+    canRun: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Entity names the user lacks read permission for */
-    missingEntities: string[];
+    missingEntities: string[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Query names the user lacks permission to execute */
-    missingQueries: string[];
+    missingQueries: string[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**

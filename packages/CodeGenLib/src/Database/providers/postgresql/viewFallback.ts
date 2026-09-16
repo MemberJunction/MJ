@@ -49,8 +49,8 @@ const SQLSTATE_INVALID_TABLE_DEFINITION = '42P16';
  */
 export class ViewFallbackRestoreError extends Error {
     constructor(
-        public readonly phase: 'restore-view' | 'restore-function' | 'restore-grant' | 'restore-comment' | 'restore-owner',
-        public readonly target: { schema?: string; name?: string; sql?: string },
+        public readonly phase: 'restore-view' | 'restore-function' | 'restore-grant' | 'restore-comment' | 'restore-owner',  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+        public readonly target: { schema?: string; name?: string; sql?: string },  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
         cause: unknown
     ) {
         const causeMsg = cause instanceof Error ? cause.message : String(cause);

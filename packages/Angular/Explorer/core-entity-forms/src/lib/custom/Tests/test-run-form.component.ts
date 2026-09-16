@@ -96,7 +96,7 @@ export class MJTestRunFormComponentExtended extends MJTestRunFormComponent imple
   set feedbackLoaded(value) {
     this.FeedbackLoaded = value;
   }
-  isRefreshing = false;
+  isRefreshing = false;  // case-violation-ok-legacy-back-compat: an ancestor class already declares the PascalCase name
   AutoRefreshEnabled = false;
 
   /** @deprecated Use {@link AutoRefreshEnabled}. */

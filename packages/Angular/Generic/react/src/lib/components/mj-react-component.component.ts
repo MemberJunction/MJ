@@ -1612,7 +1612,7 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
    * Tries the component's explicit implementation first, then falls back
    * to a DataSnapshot built from intercepted RunView/RunQuery results.
    */
-  getCurrentDataState(): DataSnapshot | undefined {
+  getCurrentDataState(): DataSnapshot | undefined {  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
     const explicit = this.compiledComponent?.getCurrentDataState?.();
     if (explicit && typeof explicit === 'object') return explicit;
     return this.buildCapturedDataSnapshot() ?? undefined;

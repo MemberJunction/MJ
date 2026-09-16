@@ -21,7 +21,7 @@ import { ActionEngineBase } from '@memberjunction/actions-base';
  */
 const LOOP_KINDS: ReadonlySet<string> = new Set(['ForEach', 'While']);
 export interface TimelineItem {
-  id: string;
+  id: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /**
    * What the row represents.
    *
@@ -29,7 +29,7 @@ export interface TimelineItem {
    * and the steps inside it. They are rendered as ordinary rows rather than as an embedded diagram,
    * and colour-coded so their provenance is visible without opening anything.
    */
-  type: 'step' | 'subrun' | 'action' | 'prompt' | 'taskgraph' | 'task';
+  type: 'step' | 'subrun' | 'action' | 'prompt' | 'taskgraph' | 'task';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /**
    * Where this row's work ran, when that is not obvious from its type.
    *
@@ -37,10 +37,10 @@ export interface TimelineItem {
    * submitted it. Kept separate from `type` on purpose: a workflow step that runs an action IS an
    * action and should render as one — provenance styles it, it does not redefine it.
    */
-  provenance?: 'workflow';
-  title: string;
-  subtitle: string;
-  status: string;
+  provenance?: 'workflow';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  title: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  subtitle: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  status: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /**
    * When this row started, or NULL when it has not.
    *
@@ -49,19 +49,19 @@ export interface TimelineItem {
    * every row and indistinguishable from data. Ordering belongs to whatever produced the rows; a row
    * that has not run has no start time, and says so by having none.
    */
-  startTime: Date | null;
-  endTime?: Date;
-  duration?: string;
-  icon: string;
-  logoUrl?: string;
-  color: string;
-  data: any;
-  children?: TimelineItem[];
-  level: number;
-  parentId?: string;
-  isExpanded?: boolean;
-  childrenLoaded?: boolean;
-  hasNoChildren?: boolean;
+  startTime: Date | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  endTime?: Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  duration?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  icon: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  logoUrl?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  color: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  data: any;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  children?: TimelineItem[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  level: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  parentId?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  isExpanded?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  childrenLoaded?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  hasNoChildren?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 @Component({

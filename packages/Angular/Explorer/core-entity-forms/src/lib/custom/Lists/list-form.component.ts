@@ -12,16 +12,16 @@ import { MJConfirmService } from '@memberjunction/ng-ui-components';
 export type ListSection = 'overview' | 'items' | 'sharing' | 'activity' | 'settings';
 
 export interface ListItemViewModel {
-    detail: MJListDetailEntity;
-    recordName: string;
-    isLoading: boolean;
+    detail: MJListDetailEntity;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    recordName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    isLoading: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export interface ListStats {
-    itemCount: number;
-    shareCount: number;
-    invitationCount: number;
-    lastUpdated: Date | null;
+    itemCount: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    shareCount: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    invitationCount: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    lastUpdated: Date | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -30,8 +30,8 @@ export interface ListStats {
 export interface AddableRecord {
     ID: string;
     Name: string;
-    isInList: boolean;
-    isSelected: boolean;
+    isInList: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    isSelected: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -108,7 +108,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
     public set categories(value: MJListCategoryEntity[]) {
       this.Categories = value;
     }
-    public entityInfo: EntityInfo | null = null;
+    public entityInfo: EntityInfo | null = null;  // case-violation-ok-legacy-back-compat: an ancestor class already declares the PascalCase name
     public Stats: ListStats = {
         itemCount: 0,
         shareCount: 0,

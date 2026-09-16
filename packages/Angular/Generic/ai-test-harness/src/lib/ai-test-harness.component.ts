@@ -4012,7 +4012,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
      * Navigates to the AI Agent Run form to view detailed execution information
      * @param agentRunId - The ID of the agent run to view
      */
-    public navigateToAgentRun({runId, runType}: {runId: string, runType: 'agent' | 'prompt'}) {
+    public navigateToAgentRun({runId, runType}: {runId: string, runType: 'agent' | 'prompt'}) {  // case-violation-ok-legacy-back-compat: destructured parameter — a stub cannot forward it by name
         if (runId && runType==='agent') {
             RecordNavigationAdapter.OpenEntityRecord('MJ: AI Agent Runs', CompositeKey.FromID(runId));
             // Request minimization from our container

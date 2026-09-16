@@ -3558,7 +3558,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     }
   }
 
-  showNotifications(): void {
+  showNotifications(): void {  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
     MJGlobal.Instance.RaiseEvent({
       event: MJEventType.ComponentEvent,
       component: this,

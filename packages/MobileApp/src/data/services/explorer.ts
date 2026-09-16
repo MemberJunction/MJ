@@ -283,7 +283,7 @@ export type QueryRunResult = {
  * @param maxRows     Row cap (default 200).
  * @returns A {@link QueryRunResult} with columns, rows, count, and status.
  */
-export async function runQuery(
+export async function runQuery(  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
     queryId: string,
     parameters?: Record<string, unknown>,
     contextUser?: UserInfo,

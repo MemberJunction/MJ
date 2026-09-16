@@ -28,8 +28,8 @@ import type { TSQLToPGTranspiler, ConversionStatus, UnhandledStatement } from '.
  */
 export class BakeApplyError extends Error {
   constructor(
-    public readonly fileName: string,
-    public readonly transpiledBody: string,
+    public readonly fileName: string,  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    public readonly transpiledBody: string,  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
     message: string,
   ) {
     super(message);

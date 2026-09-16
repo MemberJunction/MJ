@@ -98,9 +98,9 @@ const LARGE_ENTITY_WARN_THRESHOLD = 100_000;
 /** Cached file contents produced by the preload scan. */
 export interface CachedFile {
   /** The on-disk JSON, exactly as parsed (preserves `@file:` / `@include` directives). */
-  rawData: unknown;
+  rawData: unknown;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** The fully-resolved JSON after `@include` preprocessing. Same reference as `rawData` when the file has no `@include`s. */
-  fileData: unknown;
+  fileData: unknown;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -121,8 +121,8 @@ interface DelegatedSlot {
 
 /** One delegated entity → donor engine pairing, for logging/diagnostics. */
 export interface DelegationSummaryEntry {
-  entityName: string;
-  engineClassName: string;
+  entityName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  engineClassName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**

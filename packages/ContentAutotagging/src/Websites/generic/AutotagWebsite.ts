@@ -270,7 +270,7 @@ export class AutotagWebsite extends AutotagBase {
      * The canonical implementation lives here; the array-returning
      * `SetContentItemsToProcess` is a thin collector wrapper around this.
      */
-    public async *streamContentItemsToProcess(contentSources: MJContentSourceEntity[]): AsyncIterable<MJContentItemEntity> {
+    public async *streamContentItemsToProcess(contentSources: MJContentSourceEntity[]): AsyncIterable<MJContentItemEntity> {  // case-violation-ok-legacy-back-compat: generator — a delegating stub would return the generator, not yield from it
         for (const contentSource of contentSources) {
             // Reset instance state to defaults before applying per-source overrides.
             // Without this, knobs set on the previous source would leak into the next.

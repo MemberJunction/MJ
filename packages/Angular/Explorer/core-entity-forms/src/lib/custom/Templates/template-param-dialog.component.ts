@@ -50,10 +50,10 @@ export class TemplateParamDialogComponent extends BaseAngularComponent implement
       this.IsVisible = value;
     }
     @Input() 
-    get isVisible(): boolean {
+    get isVisible(): boolean {  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
         return this.IsVisible;
     }
-    set isVisible(value: boolean) {
+    set isVisible(value: boolean) {  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
         const wasVisible = this.IsVisible;
         this.IsVisible = value;
         

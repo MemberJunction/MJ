@@ -813,7 +813,7 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
  */
 export let configFilePath: string | undefined;
 
-export const configInfo: ConfigInfo = LoadConfig();
+export const configInfo: ConfigInfo = LoadConfig();  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
 
 export const {
   dbUsername,

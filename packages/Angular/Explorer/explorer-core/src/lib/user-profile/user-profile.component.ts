@@ -36,7 +36,7 @@ export class UserProfileComponent extends BaseAngularComponent implements OnInit
   private destroy$ = new Subject<void>();
 
   constructor(
-    public authBase: MJAuthBase,
+    public authBase: MJAuthBase,  // case-violation-ok-legacy-back-compat: the constructor uses this parameter by bare name, so the rename is scope-sensitive
     private sharedService: SharedService,
     private cdr: ChangeDetectorRef
   ) {

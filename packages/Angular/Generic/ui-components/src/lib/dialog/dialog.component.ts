@@ -121,7 +121,7 @@ export class MJDialogComponent implements OnDestroy {
 
   DialogId = MJDialogComponent.nextId++;
 
-  get dialogId(): number {
+  get dialogId(): number {  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
     return this.DialogId;
   }
 

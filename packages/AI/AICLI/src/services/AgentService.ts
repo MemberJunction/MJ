@@ -8,9 +8,9 @@ import { ConsoleManager } from '../lib/console-manager';
 import chalk from 'chalk';
 
 export interface AgentExecutionOptions {
-  verbose?: boolean;
-  timeout?: number;
-  conversationMessages?: Array<{ role: 'user' | 'assistant'; content: string }>;
+  verbose?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  timeout?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  conversationMessages?: Array<{ role: 'user' | 'assistant'; content: string }>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export class AgentService {

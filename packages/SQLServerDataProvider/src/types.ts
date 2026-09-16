@@ -35,11 +35,11 @@ export interface ExecuteSQLOptions {
  */
 export interface SQLExecutionContext {
   /** The connection pool to use for queries */
-  pool: sql.ConnectionPool;
+  pool: sql.ConnectionPool;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Optional transaction if one is active */
-  transaction?: sql.Transaction | null;
+  transaction?: sql.Transaction | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Function to log SQL statements */
-  logSqlStatement?: (
+  logSqlStatement?: (  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     query: string,
     parameters?: any,
     description?: string,
@@ -49,7 +49,7 @@ export interface SQLExecutionContext {
     contextUser?: UserInfo
   ) => Promise<void>;
   /** Function to clear transaction reference on EREQINPROG */
-  clearTransaction?: () => void;
+  clearTransaction?: () => void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -57,15 +57,15 @@ export interface SQLExecutionContext {
  */
 export interface InternalSQLOptions {
   /** Optional description for this SQL operation */
-  description?: string;
+  description?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** If true, this statement will not be logged */
-  ignoreLogging?: boolean;
+  ignoreLogging?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Whether this is a data mutation operation */
-  isMutation?: boolean;
+  isMutation?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Simple SQL fallback for loggers */
-  simpleSQLFallback?: string;
+  simpleSQLFallback?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** User context for logging */
-  contextUser?: UserInfo;
+  contextUser?: UserInfo;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**

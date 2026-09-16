@@ -1085,7 +1085,7 @@ if (configParsing.data) {
 /**
  * Parsed configuration object with fallback to empty object if parsing fails
  */
-export const configInfo = configParsing.data ?? ({} as ConfigInfo);
+export const configInfo = configParsing.data ?? ({} as ConfigInfo);  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
 /**
  * Destructured commonly used configuration values
  */

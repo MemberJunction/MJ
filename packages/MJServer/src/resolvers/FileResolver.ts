@@ -126,40 +126,40 @@ export class FileExt extends MJFile_ {
 @ObjectType()
 export class StorageObjectMetadata {
   @Field(() => String)
-  name: string;
+  name: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => String)
-  path: string;
+  path: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => String)
-  fullPath: string;
+  fullPath: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => Int)
-  size: number;
+  size: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => String)
-  contentType: string;
+  contentType: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => String)
-  lastModified: string;
+  lastModified: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => Boolean)
-  isDirectory: boolean;
+  isDirectory: boolean;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => String, { nullable: true })
-  etag?: string;
+  etag?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => String, { nullable: true })
-  cacheControl?: string;
+  cacheControl?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 @ObjectType()
 export class StorageListResult {
   @Field(() => [StorageObjectMetadata])
-  objects: StorageObjectMetadata[];
+  objects: StorageObjectMetadata[];  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => [String])
-  prefixes: string[];
+  prefixes: string[];  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 @InputType()
@@ -264,25 +264,25 @@ export class CopyObjectBetweenAccountsInput {
 @ObjectType()
 export class CopyObjectBetweenAccountsPayload {
   @Field(() => Boolean)
-  success: boolean;
+  success: boolean;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => String)
-  message: string;
+  message: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => Int, { nullable: true })
-  bytesTransferred?: number;
+  bytesTransferred?: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => String)
-  sourceAccount: string;
+  sourceAccount: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => String)
-  destinationAccount: string;
+  destinationAccount: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => String)
-  sourcePath: string;
+  sourcePath: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => String)
-  destinationPath: string;
+  destinationPath: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 @InputType()
@@ -306,73 +306,73 @@ export class SearchAcrossAccountsInput {
 @ObjectType()
 export class FileSearchResultPayload {
   @Field(() => String)
-  path: string;
+  path: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => String)
-  name: string;
+  name: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => Int)
-  size: number;
+  size: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => String)
-  contentType: string;
+  contentType: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => String)
-  lastModified: string;
+  lastModified: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => Number, { nullable: true })
-  relevance?: number;
+  relevance?: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => String, { nullable: true })
-  excerpt?: string;
+  excerpt?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => Boolean, { nullable: true })
-  matchInFilename?: boolean;
+  matchInFilename?: boolean;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => String, { nullable: true })
-  objectId?: string;
+  objectId?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 @ObjectType()
 export class AccountSearchResultPayload {
   @Field(() => String)
-  accountID: string;
+  accountID: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => String)
-  accountName: string;
+  accountName: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => Boolean)
-  success: boolean;
+  success: boolean;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => String, { nullable: true })
-  errorMessage?: string;
+  errorMessage?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => [FileSearchResultPayload])
-  results: FileSearchResultPayload[];
+  results: FileSearchResultPayload[];  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => Int, { nullable: true })
-  totalMatches?: number;
+  totalMatches?: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => Boolean)
-  hasMore: boolean;
+  hasMore: boolean;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => String, { nullable: true })
-  nextPageToken?: string;
+  nextPageToken?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 @ObjectType()
 export class SearchAcrossAccountsPayload {
   @Field(() => [AccountSearchResultPayload])
-  accountResults: AccountSearchResultPayload[];
+  accountResults: AccountSearchResultPayload[];  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => Int)
-  totalResultsReturned: number;
+  totalResultsReturned: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => Int)
-  successfulAccounts: number;
+  successfulAccounts: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => Int)
-  failedAccounts: number;
+  failedAccounts: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 /**

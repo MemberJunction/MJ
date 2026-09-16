@@ -86,9 +86,9 @@ export class TransactionResult {
  * Used internally within the transaction group to manage the preprocessing of entities before a transaction is submitted
  */
 export class TransactionPreprocessingItem {
-    entity: BaseEntity;
-    complete: boolean = false;
-    completionPromise: Promise<void>;
+    entity: BaseEntity;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    complete: boolean = false;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    completionPromise: Promise<void>;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     constructor(entity: BaseEntity, completionPromise: Promise<void>) {
         this.entity = entity;

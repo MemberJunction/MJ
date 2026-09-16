@@ -128,8 +128,8 @@ export class AITestHarnessWindowComponent extends BaseAngularComponent implement
     }
     error = '';
     
-    agent?: MJAIAgentEntityExtended;
-    prompt?: MJAIPromptEntityExtended;
+    agent?: MJAIAgentEntityExtended;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+    prompt?: MJAIPromptEntityExtended;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
     Mode: 'agent' | 'prompt' = 'agent';
 
     /** @deprecated Use {@link Mode}. */

@@ -267,14 +267,14 @@ export class MJNotificationService {
   /**
    * Instance method to access Notifications$ observable
    */
-  public get notifications$(): Observable<MJUserNotificationEntity[]> {
+  public get notifications$(): Observable<MJUserNotificationEntity[]> {  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
     return MJNotificationService.Notifications$;
   }
 
   /**
    * Instance method to access UnreadCount$ observable
    */
-  public get unreadCount$(): Observable<number> {
+  public get unreadCount$(): Observable<number> {  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
     return MJNotificationService.UnreadCount$;
   }
 

@@ -79,7 +79,7 @@ export interface IPipelineResolver {
    * @param input the experiment + plan + iteration/session context
    * @returns the pipeline id to hand to `TrainingEngine.trainModel`
    */
-  resolvePipelineId(input: TrainExperimentInput): Promise<string>;
+  resolvePipelineId(input: TrainExperimentInput): Promise<string>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**

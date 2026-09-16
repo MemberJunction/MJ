@@ -22,16 +22,16 @@ export interface BusinessPredictionInput extends TrustModelInput {
 
 /** One card in the business Predictions catalog. */
 export interface BusinessPredictionCard {
-  modelId: string;
+  modelId: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Plain-language title shown on the card. */
-  title: string;
+  title: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** The full trust verdict (grade, plain one-liner, the canAct gate). */
-  trust: TrustVerdict;
+  trust: TrustVerdict;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Whether a business user can open/operate this prediction (= trust.canAct). */
-  canOpen: boolean;
+  canOpen: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** When not openable, the plain reason ("Needs an analyst — not reliable yet"); else null. */
-  blockedReason: string | null;
-  updatedAt: Date | null;
+  blockedReason: string | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  updatedAt: Date | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /** Map a published model into a business catalog card, applying the trust gate. */

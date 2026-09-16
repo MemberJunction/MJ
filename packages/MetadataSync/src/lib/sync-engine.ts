@@ -40,11 +40,11 @@ export class DeferrableLookupError extends Error {
   /** The entity name being looked up */
   public readonly entityName: string;
   /** The lookup fields and values that failed */
-  public readonly lookupFields: Array<{fieldName: string, fieldValue: string}>;
+  public readonly lookupFields: Array<{fieldName: string, fieldValue: string}>;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
   /** The original lookup string value */
-  public readonly originalValue: string;
+  public readonly originalValue: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
   /** The field name where this lookup was used */
-  public readonly targetFieldName?: string;
+  public readonly targetFieldName?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
   constructor(
     message: string,
@@ -70,9 +70,9 @@ export class DeferrableLookupError extends Error {
  */
 export interface NestedSyncResolution {
   /** The original @lookup expression */
-  expression: string;
+  expression: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** The resolved value (typically a GUID) */
-  resolved: string;
+  resolved: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -80,15 +80,15 @@ export interface NestedSyncResolution {
  */
 export interface SyncNote {
   /** Type of resolution: 'lookup' for @lookup references, 'parent' for @parent references */
-  type: 'lookup' | 'parent';
+  type: 'lookup' | 'parent';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** The field path where this resolution occurred (e.g., "primaryKey.ID" or "fields.CategoryID") */
-  field: string;
+  field: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** The original expression before resolution (e.g., "@lookup:Entities.Name=Test") */
-  expression: string;
+  expression: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** The resolved value (e.g., a GUID) */
-  resolved: string;
+  resolved: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** For lookup resolutions with nested @lookup expressions, tracks each nested resolution */
-  nested?: NestedSyncResolution[];
+  nested?: NestedSyncResolution[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -96,9 +96,9 @@ export interface SyncNote {
  */
 export interface SyncResolutionCollector {
   /** Array of collected sync notes */
-  notes: SyncNote[];
+  notes: SyncNote[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Current field path prefix (e.g., "fields" or "primaryKey") */
-  fieldPrefix: string;
+  fieldPrefix: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**

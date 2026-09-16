@@ -9,16 +9,16 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
  * Event emitted when a record should be opened in a full tab
  */
 export interface OpenRecordEvent {
-  entityName: string;
-  compositeKey: CompositeKey;
+  entityName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  compositeKey: CompositeKey;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
  * Event emitted when a record should be selected within Data Explorer (not full tab)
  */
 export interface SelectRecordEvent {
-  entityName: string;
-  recordId: string;
+  entityName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  recordId: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 @Component({

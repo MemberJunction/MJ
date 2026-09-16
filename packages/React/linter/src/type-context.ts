@@ -14,23 +14,23 @@ import { ComponentSpec, ComponentQueryDataRequirement } from '@memberjunction/in
  */
 export interface TypeInfo {
   /** Base type: string, number, boolean, array, object, entity-row, query-row, function, unknown */
-  type: string;
+  type: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** For entity-row types, the entity name */
-  entityName?: string;
+  entityName?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** For query-row types, the query name */
-  queryName?: string;
+  queryName?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Known fields/properties and their types */
-  fields?: Map<string, FieldTypeInfo>;
+  fields?: Map<string, FieldTypeInfo>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** For array types, the element type */
-  arrayElementType?: TypeInfo;
+  arrayElementType?: TypeInfo;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** For object/dictionary types, the value type (e.g., Object.values() returns array of this) */
-  objectValueType?: TypeInfo;
+  objectValueType?: TypeInfo;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Whether the value can be null/undefined */
-  nullable?: boolean;
+  nullable?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Whether this type came from metadata (vs inferred) */
-  fromMetadata?: boolean;
+  fromMetadata?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** For constant literals, the actual value (e.g., '' for empty string, '2024-01-01' for date literal) */
-  literalValue?: string | number | boolean | null;
+  literalValue?: string | number | boolean | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -38,23 +38,23 @@ export interface TypeInfo {
  */
 export interface FieldTypeInfo {
   /** The JavaScript type */
-  type: string;
+  type: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Whether this came from entity/query metadata */
-  fromMetadata: boolean;
+  fromMetadata: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Original SQL type if from database */
-  sqlType?: string;
+  sqlType?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Whether the field is nullable */
-  nullable?: boolean;
+  nullable?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
  * Information about a query parameter
  */
 export interface ParameterTypeInfo {
-  name: string;
-  type: string;
-  isRequired: boolean;
-  sqlType?: string;
+  name: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  type: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  isRequired: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  sqlType?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**

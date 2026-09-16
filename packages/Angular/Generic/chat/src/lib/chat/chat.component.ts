@@ -4,21 +4,21 @@ import { LogError } from '@memberjunction/core'
 
 
 export class ChatWelcomeQuestion {
-  public topLine: string="";
-  public bottomLine: string="";
-  public prompt: string="";
+  public topLine: string="";  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+  public bottomLine: string="";  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+  public prompt: string="";  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 }
 export class ChatMessage {
-  public message!: string;
-  public senderName!: string;
-  public senderType: 'user' | 'ai' = 'user';
-  public id?: string | number | null;
+  public message!: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+  public senderName!: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+  public senderType: 'user' | 'ai' = 'user';  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+  public id?: string | number | null;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
   /** Optional: indicates a tool execution is in progress */
-  public toolName?: string;
+  public toolName?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
   /** Optional: indicates a thinking/processing state */
-  public isThinking?: boolean;
+  public isThinking?: boolean;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
   /** Timestamp when the message was created */
-  public timestamp: Date = new Date();
+  public timestamp: Date = new Date();  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
   constructor(message: string, senderName: string, senderType: 'user' | 'ai', id: string | number | null = null) {
     this.message = message;

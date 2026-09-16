@@ -36,7 +36,7 @@ export interface LintResult {
 }
 
 export interface LintOptions {
-  debugMode?: boolean;
+  debugMode?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export interface Violation {

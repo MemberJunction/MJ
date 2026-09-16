@@ -21,22 +21,22 @@ export type SQLBaseType =
  */
 export class ColumnDescriptor {
     /** Field name in the row data — the key used to access the value: row[field] */
-    field: string;
+    field: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /** Human-readable display name for headers, labels, and tooltips */
-    displayName?: string;
+    displayName?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /** SQL base type — source of truth for formatting in MJ */
-    sqlBaseType?: SQLBaseType;
+    sqlBaseType?: SQLBaseType;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /** Full SQL type with precision/scale: 'decimal(18,2)', 'nvarchar(255)' */
-    sqlFullType?: string;
+    sqlFullType?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /** Column width in pixels (hint for renderers) */
-    width?: number;
+    width?: number;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /** Human-readable description of what this column represents */
-    description?: string;
+    description?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     constructor(field: string) {
         this.field = field;
@@ -148,11 +148,11 @@ export class GridColumnDescriptor extends MJColumnDescriptor {
     set order(value: number) {
         this.Order = value;
     }
-    align?: 'left' | 'center' | 'right';
-    pinned?: 'left' | 'right' | null;
-    minWidth?: number;
-    maxWidth?: number;
-    flex?: number;
+    align?: 'left' | 'center' | 'right';  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+    pinned?: 'left' | 'right' | null;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+    minWidth?: number;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+    maxWidth?: number;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+    flex?: number;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /** Create from an MJColumnDescriptor with sensible display defaults */
     static FromMJColumn(col: MJColumnDescriptor, order: number): GridColumnDescriptor {

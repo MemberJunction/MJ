@@ -6,9 +6,9 @@ import { InitializeMJProvider } from '../lib/mj-provider';
 import { ActionInfo, ExecutionResult } from '../lib/output-formatter';
 
 export interface ActionExecutionOptions {
-  verbose?: boolean;
-  timeout?: number;
-  parameters?: Record<string, any>;
+  verbose?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  timeout?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  parameters?: Record<string, any>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export class ActionService {

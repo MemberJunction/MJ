@@ -259,11 +259,11 @@ export class SimpleEntityFieldInfo {
     /**
      * Possible values for the field, if applicable
      */
-    possibleValues?: string[];
+    possibleValues?: string[];  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
     /**
      * Description of the field
      */
-    description?: string;
+    description?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     constructor(init?: Partial<SimpleEntityFieldInfo>) {
         if (init) {
@@ -338,7 +338,7 @@ export class SimpleQueryFieldInfo extends SimpleEntityFieldInfo {
      * Description of the summary calculation (e.g., "Count of orders per customer").
      * Provides context for how the aggregate value is computed.
      */
-    summaryDescription?: string;
+    summaryDescription?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     constructor(init?: Partial<SimpleQueryFieldInfo>) {
         super(init);
@@ -376,7 +376,7 @@ export class SimpleEntityInfo {
     /**
      * Optional description of the entity
      */
-    description?: string;
+    description?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Complete list of ALL fields in this entity.

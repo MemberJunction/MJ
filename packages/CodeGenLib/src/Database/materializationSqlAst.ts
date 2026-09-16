@@ -138,7 +138,7 @@ export interface QualifiedColumn {
  * reference. Prefer this over {@link columnName} whenever the resolved column is compared to ANOTHER
  * column reference — the qualifier is what distinguishes `o.Status` from `c.Status`.
  */
-export function qualifiedColumn(v: AstNode): QualifiedColumn | null {
+export function qualifiedColumn(v: AstNode): QualifiedColumn | null {  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
     const column = ColumnName(v);
     if (column == null) {
         return null;

@@ -39,10 +39,10 @@ export function isInteractiveRun(overrides: InteractivityInput = {}): boolean {
  * Thin re-export of cli-core's `ResolveOrPrompt` so unmigrated commands import from
  * one place and pick up the env-based interactivity default automatically.
  */
-export const resolveOrPrompt = ResolveOrPrompt;
+export const resolveOrPrompt = ResolveOrPrompt;  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
 
 /** Guards a command that is interactive by nature and has no flag equivalent. */
-export const requireInteractive = RequireInteractive;
+export const requireInteractive = RequireInteractive;  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
 
 /**
  * Renders a {@link NonInteractiveError} through oclif's error path for commands that

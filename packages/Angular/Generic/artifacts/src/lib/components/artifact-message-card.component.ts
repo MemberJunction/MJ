@@ -289,7 +289,7 @@ export class ArtifactMessageCardComponent extends BaseAngularComponent implement
    */
   @Output() actionPerformed = this.ActionPerformed;
 
-  public _artifact: MJArtifactEntity | null = null;
+  public _artifact: MJArtifactEntity | null = null;  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
   public CurrentVersion: MJArtifactVersionEntity | null = null;
 
   /** @deprecated Use {@link CurrentVersion}. */
@@ -390,7 +390,7 @@ export class ArtifactMessageCardComponent extends BaseAngularComponent implement
     return this.ArtifactEntity;
   }
 
-  public get currentVersion(): MJArtifactVersionEntity | null {
+  public get currentVersion(): MJArtifactVersionEntity | null {  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
     return this.CurrentVersion;
   }
 

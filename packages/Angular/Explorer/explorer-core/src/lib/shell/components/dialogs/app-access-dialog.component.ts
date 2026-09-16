@@ -16,17 +16,17 @@ export type AppAccessDialogType =
  * Configuration for the app access dialog
  */
 export interface AppAccessDialogConfig {
-  type: AppAccessDialogType;
-  appName?: string;
-  appId?: string;
+  type: AppAccessDialogType;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  appName?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  appId?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
  * Result from the dialog
  */
 export interface AppAccessDialogResult {
-  action: 'install' | 'enable' | 'redirect' | 'dismissed';
-  appId?: string;
+  action: 'install' | 'enable' | 'redirect' | 'dismissed';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  appId?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**

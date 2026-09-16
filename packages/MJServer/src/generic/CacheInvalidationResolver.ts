@@ -50,7 +50,7 @@ export class CacheInvalidationResolver {
     @Subscription(() => CacheInvalidationNotification, {
         topics: CACHE_INVALIDATION_TOPIC,
     })
-    cacheInvalidation(
+    cacheInvalidation(  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
         @Root() payload: CacheInvalidationPayload
     ): CacheInvalidationNotification {
         return {

@@ -51,12 +51,12 @@ export interface PushOptions {
  * --format=json | jq '.errors[]'` — instead of parsing the human log.
  */
 export interface PushRecordError {
-  entityName: string;
+  entityName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Source file path of the offending record, when known. */
-  path?: string;
+  path?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Display form of the primary key, e.g. "ID=85B8…". */
-  primaryKey?: string;
-  message: string;
+  primaryKey?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  message: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export interface PushCallbacks {
@@ -83,12 +83,12 @@ export interface PushCallbacks {
  * "Changes" recap so actual mutations stand out from a sea of unchanged records.
  */
 export interface RecordChangeDetail {
-  entityName: string;
+  entityName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Display form of the primary key, e.g. "ID: 85B8…14C7". */
-  primaryKey: string;
-  operation: 'created' | 'updated' | 'deleted';
+  primaryKey: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  operation: 'created' | 'updated' | 'deleted';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Field-level diffs (updates only); empty for creates/deletes. */
-  fields: Array<{ field: string; oldValue: string; newValue: string }>;
+  fields: Array<{ field: string; oldValue: string; newValue: string }>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export interface PushResult {
@@ -106,13 +106,13 @@ export interface PushResult {
 }
 
 export interface EntityPushResult {
-  created: number;
-  updated: number;
-  unchanged: number;
-  deleted: number;
-  skipped: number;
-  deferred: number;
-  errors: number;
+  created: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  updated: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  unchanged: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  deleted: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  skipped: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  deferred: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  errors: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**

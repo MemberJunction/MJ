@@ -483,11 +483,11 @@ export interface TelemetryAnalyzerContext {
  */
 export interface TelemetryAnalyzer {
     /** Unique name for this analyzer */
-    name: string;
+    name: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Category for grouping warnings in UI */
-    category: string;
+    category: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Analyze an event and optionally return an insight */
-    analyze(event: TelemetryEvent, context: TelemetryAnalyzerContext): TelemetryInsight | null;
+    analyze(event: TelemetryEvent, context: TelemetryAnalyzerContext): TelemetryInsight | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 // ============================================================================

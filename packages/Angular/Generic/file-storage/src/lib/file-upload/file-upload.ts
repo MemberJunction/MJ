@@ -9,12 +9,12 @@ import { z } from 'zod';
  * Minimal file info interface replacing Kendo's FileInfo.
  */
 export interface FileSelectInfo {
-  name: string;
-  size: number;
-  rawFile: File;
+  name: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  size: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  rawFile: File;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
-export type FileUploadEvent = { success: true; file: MJFileEntity } | { success: false; file: FileSelectInfo };
+export type FileUploadEvent = { success: true; file: MJFileEntity } | { success: false; file: FileSelectInfo };  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
 const FileFieldsFragment = gql`
   fragment FileFields on MJFile_ {

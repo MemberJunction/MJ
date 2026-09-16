@@ -191,7 +191,7 @@ export class ArtifactPartComponent extends BaseDashboardPart implements AfterVie
     }
 
     // Expose for template
-    public get currentUser(): UserInfo {
+    public get currentUser(): UserInfo {  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
         // Use provided CurrentUser, or fall back to Metadata.CurrentUser
         // In client-side Angular context, Metadata.CurrentUser should always be available
         const user = this.CurrentUser || this.ProviderToUse.CurrentUser;
@@ -201,7 +201,7 @@ export class ArtifactPartComponent extends BaseDashboardPart implements AfterVie
         return user;
     }
 
-    public get environmentId(): string {
+    public get environmentId(): string {  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
         return this.EnvironmentId || '';
     }
 

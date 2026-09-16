@@ -8,7 +8,7 @@ import { ACCOUNTING_ERP_INTEGRATION_NAMES, ErpPluginKey } from '../constants';
 import { ResolvedAccountingIntegration } from '../types';
 
 class AccountingIntegrationError extends Error {
-    constructor(message: string, readonly resultCode: 'NO_ACCOUNTING_INTEGRATION' | 'AMBIGUOUS_ACCOUNTING_INTEGRATION') {
+    constructor(message: string, readonly resultCode: 'NO_ACCOUNTING_INTEGRATION' | 'AMBIGUOUS_ACCOUNTING_INTEGRATION') {  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
         super(message);
         this.name = 'AccountingIntegrationError';
     }

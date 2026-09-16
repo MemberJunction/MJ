@@ -168,14 +168,14 @@ export class PillComponent {
   /**
    * Get the display value
    */
-  get displayValue(): string {
+  get displayValue(): string {  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
     return this.Value || '';
   }
 
   /**
    * Get the effective color type (forced or auto-detected)
    */
-  get effectiveColorType(): PillColorType {
+  get effectiveColorType(): PillColorType {  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
     if (this.Color) {
       return this.Color;
     }

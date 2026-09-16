@@ -400,13 +400,13 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
    * Whether time segments can be collapsed.
    * @default true
    */
-  @Input() segmentsCollapsible = true;
+  @Input() segmentsCollapsible = true;  // case-violation-ok-legacy-back-compat: untyped member on a generic class — the alias cannot name its type
 
   /**
    * Whether segments start expanded.
    * @default true
    */
-  @Input() segmentsDefaultExpanded = true;
+  @Input() segmentsDefaultExpanded = true;  // case-violation-ok-legacy-back-compat: untyped member on a generic class — the alias cannot name its type
 
   // ============================================================================
   // INPUTS - EMPTY & LOADING STATES
@@ -416,19 +416,19 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
    * Message shown when no events exist.
    * @default 'No events to display'
    */
-  @Input() emptyMessage = 'No events to display';
+  @Input() emptyMessage = 'No events to display';  // case-violation-ok-legacy-back-compat: untyped member on a generic class — the alias cannot name its type
 
   /**
    * Icon shown with empty message.
    * @default 'fa-regular fa-calendar-xmark'
    */
-  @Input() emptyIcon = 'fa-regular fa-calendar-xmark';
+  @Input() emptyIcon = 'fa-regular fa-calendar-xmark';  // case-violation-ok-legacy-back-compat: untyped member on a generic class — the alias cannot name its type
 
   /**
    * Message shown while loading.
    * @default 'Loading timeline...'
    */
-  @Input() loadingMessage = 'Loading timeline...';
+  @Input() loadingMessage = 'Loading timeline...';  // case-violation-ok-legacy-back-compat: untyped member on a generic class — the alias cannot name its type
 
   // ============================================================================
   // INPUTS - ACCESSIBILITY
@@ -438,13 +438,13 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
    * ARIA label for the timeline container.
    * @default 'Timeline'
    */
-  @Input() ariaLabel = 'Timeline';
+  @Input() ariaLabel = 'Timeline';  // case-violation-ok-legacy-back-compat: untyped member on a generic class — the alias cannot name its type
 
   /**
    * Enable keyboard navigation.
    * @default true
    */
-  @Input() enableKeyboardNavigation = true;
+  @Input() enableKeyboardNavigation = true;  // case-violation-ok-legacy-back-compat: untyped member on a generic class — the alias cannot name its type
 
   /**
    * ID of the currently selected event.

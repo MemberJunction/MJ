@@ -11,9 +11,9 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface NewAgentConfig {
-  parentAgentId?: string;
-  parentAgentName?: string;
-  redirectToForm?: boolean;
+  parentAgentId?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  parentAgentName?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  redirectToForm?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 @Component({

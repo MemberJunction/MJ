@@ -79,7 +79,7 @@ function concatBytes(chunks: readonly Uint8Array[]): Uint8Array {
 // ---------------------------------------------------------------------------
 
 export class PackFetchError extends Error {
-    constructor(message: string, public url?: string, public statusCode?: number) {
+    constructor(message: string, public url?: string, public statusCode?: number) {  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
         super(message);
         this.name = 'PackFetchError';
     }
@@ -89,8 +89,8 @@ export class PackChecksumError extends Error {
     constructor(
         message: string,
         public path: string,
-        public expected: string,
-        public actual: string
+        public expected: string,  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+        public actual: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
     ) {
         super(message);
         this.name = 'PackChecksumError';

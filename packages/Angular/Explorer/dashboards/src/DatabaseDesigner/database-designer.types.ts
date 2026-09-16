@@ -100,17 +100,17 @@ export interface SchemaOption {
  * Loaded by `DatabaseDesignerEngine.loadAccessibleEntities()`.
  */
 export interface AccessibleEntity {
-    entityId: string;
-    entityName: string;
-    tableName: string;
-    schemaName: string;
+    entityId: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    entityName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    tableName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    schemaName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Number of user-defined columns (excludes auto-managed ID / __mj_CreatedAt / __mj_UpdatedAt). */
-    fieldCount: number;
-    createdAt: Date;
+    fieldCount: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    createdAt: Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** True when the current user is the recorded MJ:UDT:Owner for this entity. */
-    isOwner: boolean;
+    isOwner: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Display name of the owner (loaded lazily — may be absent initially). */
-    ownerDisplayName?: string;
+    ownerDisplayName?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /** Full entity detail loaded when the user opens a slide panel or enters the modify wizard. */

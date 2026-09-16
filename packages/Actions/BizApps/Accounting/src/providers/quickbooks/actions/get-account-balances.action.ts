@@ -12,11 +12,11 @@ export type { AccountBalance } from '../../../types';
  * Trial balance summary
  */
 export interface TrialBalanceSummary {
-    totalDebits: number;
-    totalCredits: number;
-    isBalanced: boolean;
-    difference: number;
-    asOfDate: Date;
+    totalDebits: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    totalCredits: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    isBalanced: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    difference: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    asOfDate: Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**

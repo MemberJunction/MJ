@@ -35,7 +35,7 @@ export abstract class BaseSignatureProvider {
     protected abstract readonly providerKey: string;
 
     /** One-time per-instance initialization with the merged + decrypted config from the engine. */
-    public abstract initialize(config: SignatureProviderConfig): Promise<void>;
+    public abstract initialize(config: SignatureProviderConfig): Promise<void>;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /** True once {@link initialize} has supplied all credentials this provider requires. */
     public abstract get IsConfigured(): boolean;
@@ -74,7 +74,7 @@ export abstract class BaseSignatureProvider {
     // ---- Capability discovery --------------------------------------------------------------------
 
     /** The operations this driver actually supports. */
-    public abstract getSupportedOperations(): SignatureOperation[];
+    public abstract getSupportedOperations(): SignatureOperation[];  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /** Convenience predicate over {@link getSupportedOperations}. */
     public SupportsOperation(op: SignatureOperation): boolean {

@@ -101,19 +101,19 @@ export interface KeptTSQL {
  */
 export interface ConversionReconciliation {
   /** Content (non-noise) source statements in the whole file, GO-batch granularity. */
-  sourceStatements: number;
+  sourceStatements: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Content statements in the emitted PG body (coarse chunk count; 0 for a marker). */
-  emittedStatements: number;
+  emittedStatements: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Statements surfaced as gaps for a human: `unhandled.length + handProcedural.length`. */
-  gaps: number;
+  gaps: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** The dialect's own per-call self-check reported an ACCOUNTING-LEAK (a missed drop site). */
-  accountingLeak: boolean;
+  accountingLeak: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /**
    * The classifier fed SUBSTANTIVE T-SQL to the dialect, yet the dialect emitted nothing AND
    * reported no gap — content vanished without a trace. Belt-and-suspenders beyond the dialect's
    * own EMPTY-EMISSION guard; when true the caller appends a `RECONCILIATION-EMPTY-OUTPUT` gap.
    */
-  suspiciousEmptyOutput: boolean;
+  suspiciousEmptyOutput: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export interface MigrationConversionResult {

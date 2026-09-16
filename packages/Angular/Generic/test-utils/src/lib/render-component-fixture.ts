@@ -13,7 +13,7 @@ export interface RenderComponentFixtureOptions<T> {
    * ExpressionChangedAfterItHasBeenCheckedError that bites when state is mutated
    * after the first change-detection pass). See `guides/ANGULAR_TESTING_GUIDE.md` §5.
    */
-  inputs?: Record<string, unknown>;
+  inputs?: Record<string, unknown>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   /**
    * Imperative setup run AFTER inputs are applied but BEFORE the first
@@ -21,13 +21,13 @@ export interface RenderComponentFixtureOptions<T> {
    * to `@Output`s. Receives the live component instance and its `ComponentRef`.
    * Running before the single render is what keeps the test `NG0100`-safe.
    */
-  setup?: (instance: T, ref: ComponentRef<T>) => void;
+  setup?: (instance: T, ref: ComponentRef<T>) => void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   /**
    * Modules to import (e.g. `CommonModule`, `FormsModule`). Provide when the component
    * (or a `declarations` entry) needs them.
    */
-  imports?: Array<Type<unknown> | ModuleWithProviders<object>>;
+  imports?: Array<Type<unknown> | ModuleWithProviders<object>>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   /**
    * Components/directives to declare. Pass these for a **module-declared**
@@ -35,7 +35,7 @@ export interface RenderComponentFixtureOptions<T> {
    * children) — include the component itself plus any child components it renders.
    * Standalone components need neither `imports` nor `declarations`.
    */
-  declarations?: Type<unknown>[];
+  declarations?: Type<unknown>[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   /**
    * Providers to register in the testing module — supply stub/fake versions of any
@@ -45,14 +45,14 @@ export interface RenderComponentFixtureOptions<T> {
    * event handlers (not during render). Prefer minimal `{ provide: X, useValue: ... }`
    * stubs over the real service. See `guides/ANGULAR_TESTING_GUIDE.md`.
    */
-  providers?: Provider[];
+  providers?: Provider[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   /**
    * Use `autoDetectChanges()` instead of a single `detectChanges()`. Set this for
    * components that mutate their own state during init/CD (recompute a bound value in
    * `ngOnInit`/`ngOnChanges`), which would otherwise trip the dev-mode `NG0100` check.
    */
-  autoDetect?: boolean;
+  autoDetect?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**

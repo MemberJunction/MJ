@@ -1300,7 +1300,7 @@ export abstract class BaseCommunicationProvider {
      * Override in subclasses to accurately reflect capabilities.
      * Default implementation returns only the core abstract methods.
      */
-    public getSupportedOperations(): ProviderOperation[] {
+    public getSupportedOperations(): ProviderOperation[] {  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
         return ['SendSingleMessage', 'GetMessages', 'ForwardMessage', 'ReplyToMessage', 'CreateDraft'];
     }
 

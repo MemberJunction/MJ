@@ -38,8 +38,8 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
    * initialise in order, and the other way round this captures undefined.
    */
   @Output() public dashboardSaved = this.DashboardSaved;
-  @Output() public loadComplete: EventEmitter<any> = new EventEmitter<any>();
-  @Output() public loadStarted: EventEmitter<any> = new EventEmitter<any>();
+  @Output() public loadComplete: EventEmitter<any> = new EventEmitter<any>();  // case-violation-ok-legacy-back-compat: an ancestor class already declares the PascalCase name
+  @Output() public loadStarted: EventEmitter<any> = new EventEmitter<any>();  // case-violation-ok-legacy-back-compat: an ancestor class already declares the PascalCase name
 
   public Items: DashboardItem[] = [];
 
@@ -602,10 +602,10 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
 }
 
 export class DashboardConfigDetails {
-  columns: number = 4;
-  rowHeight: number = 150;
-  resizable: boolean = true;
-  reorderable: boolean = true;
+  columns: number = 4;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+  rowHeight: number = 150;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+  resizable: boolean = true;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+  reorderable: boolean = true;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 }
 
 export class DashboardItem {

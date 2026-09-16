@@ -57,14 +57,14 @@ export type GetEmbeddingResponse = {
 };
 
 export type RecommendationResponse = {
-    engine: string, 
-    version: string, 
-    id: string,
-    model: string,
-    score: number,
-    source: string,
-    type: string, 
-    vector_id: string
+    engine: string,  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    version: string,  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    id: string,  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    model: string,  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    score: number,  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    source: string,  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    type: string,  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    vector_id: string  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 };
 
 export type GetRecommendationParams = {
@@ -83,6 +83,6 @@ export type GetRecommendationResults = {
 export type RecommendContextData = {
     EntityDocumentID: string,
     TypeMap: Record<string, string>
-    type: string,
-    filters: { type: string, max_results: number } []
+    type: string,  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    filters: { type: string, max_results: number } []  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 };

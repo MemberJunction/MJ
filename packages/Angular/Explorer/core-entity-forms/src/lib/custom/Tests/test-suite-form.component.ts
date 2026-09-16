@@ -126,7 +126,7 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
   set analyticsLoaded(value) {
     this.AnalyticsLoaded = value;
   }
-  isRefreshing = false;
+  isRefreshing = false;  // case-violation-ok-legacy-back-compat: an ancestor class already declares the PascalCase name
   error: string | null = null;
 
   // Related data

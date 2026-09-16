@@ -116,56 +116,56 @@ export const REALTIME_CONSOLE_BREAKPOINT_DEFAULT = 560;
  */
 export interface RealtimeUiInputs {
   /** Which chrome to render. Default `'auto'`. */
-  chrome?: RealtimeChromeMode;
+  chrome?: RealtimeChromeMode;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /**
    * In `'auto'` chrome, the container width (px) at/above which the widget may
    * graduate to a console (still gated on text being revealed). Default
    * {@link REALTIME_CONSOLE_BREAKPOINT_DEFAULT}.
    */
-  consoleBreakpointPx?: number;
+  consoleBreakpointPx?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /**
    * Force compact spacing/typography regardless of size — useful for dense
    * mobile sheets. Default `false` (the widget infers compactness from width).
    */
-  compact?: boolean;
+  compact?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /**
    * Fade non-essential controls when the session is idle (orb chrome only), for
    * a cinematic feel. Default `true`.
    */
-  autoHideControls?: boolean;
+  autoHideControls?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /**
    * May the user reveal the transcript at all? When `false`, the widget is a
    * pure voice orb with no path to text (and therefore never graduates to a
    * console in `'auto'` mode). Default `true`.
    */
-  allowTextReveal?: boolean;
+  allowTextReveal?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   /** Show the captions toggle. Default `true`. */
-  showCaptionsControl?: boolean;
+  showCaptionsControl?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Show the density picker inside the gear menu. Default `true`. */
-  showDensityPicker?: boolean;
+  showDensityPicker?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Show the minimize control (collapse the call without ending it). Default `true`. */
-  showMinimize?: boolean;
+  showMinimize?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Show the end-call control. Default `true`. (Hosts that own their own end button may hide it.) */
-  showEnd?: boolean;
+  showEnd?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /**
    * Show the right-hand surface panel (whiteboard / browser / interactive
    * channels). Default `true`. Only renders in console chrome and once a panel
    * is actually earned.
    */
-  showSurfacePanel?: boolean;
+  showSurfacePanel?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Show the channel strip (active interactive channels). Default `true`. */
-  showChannels?: boolean;
+  showChannels?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Show the Activity rail/tab (delegations, artifacts timeline). Default `true`. */
-  showActivityRail?: boolean;
+  showActivityRail?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /**
    * Show developer affordances ("open session / open run" links, dev-only
    * panels). Default `true`, but still additionally gated by the per-session
    * dev-mode toggle, so this is a hard *ceiling*, not a force-on.
    */
-  showDevLinks?: boolean;
+  showDevLinks?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Allow drag-to-resize of the surface panel. Default `true`. */
-  allowResize?: boolean;
+  allowResize?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -235,44 +235,44 @@ export interface RealtimeUiSignals {
  */
 export interface ResolvedRealtimeUi {
   /** The effective chrome after resolving `'auto'`. */
-  chrome: 'orb' | 'console';
+  chrome: 'orb' | 'console';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Whether compact spacing/typography applies. */
-  compact: boolean;
+  compact: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** True while connecting — hosts can show a single, size-independent loader. */
-  connecting: boolean;
+  connecting: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   /** The big ambient hero orb is the primary surface. */
-  showHero: boolean;
+  showHero: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** The transcript/thread is visible. */
-  showThread: boolean;
+  showThread: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** The text composer dock is visible. */
-  showComposer: boolean;
+  showComposer: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** The right-hand surface panel is visible. */
-  showSurfacePanel: boolean;
+  showSurfacePanel: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** The Activity tab/rail is available. */
-  showActivityTab: boolean;
+  showActivityTab: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** The channel strip is visible. */
-  showChannelStrip: boolean;
+  showChannelStrip: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   /** The captions toggle is available. */
-  showCaptionsControl: boolean;
+  showCaptionsControl: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** The density picker is available (inside the gear). */
-  showDensityPicker: boolean;
+  showDensityPicker: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** The gear/settings affordance is available. */
-  showGear: boolean;
+  showGear: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Developer links/panels are available. */
-  showDevLinks: boolean;
+  showDevLinks: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** The minimize control is available. */
-  showMinimize: boolean;
+  showMinimize: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** The end-call control is available. */
-  showEnd: boolean;
+  showEnd: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   /** The surface panel may be drag-resized. */
-  allowResize: boolean;
+  allowResize: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** The user has a path to reveal text. */
-  allowTextReveal: boolean;
+  allowTextReveal: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Non-essential controls should auto-fade when idle. */
-  autoHideControls: boolean;
+  autoHideControls: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**

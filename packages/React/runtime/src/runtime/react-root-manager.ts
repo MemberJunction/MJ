@@ -318,4 +318,4 @@ export class ReactRootManager {
 }
 
 // Singleton instance
-export const reactRootManager = new ReactRootManager();
+export const reactRootManager = new ReactRootManager();  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope

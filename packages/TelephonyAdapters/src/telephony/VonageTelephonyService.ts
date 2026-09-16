@@ -28,19 +28,19 @@ const PHONE_IDENTITY_TYPE = 'PhoneNumber';
 /** A resolved inbound call's identifying fields (parsed from the Vonage answer/event webhook). */
 export interface InboundCallInput {
     /** The Vonage call UUID (`uuid` / `conversation_uuid`). */
-    callId: string;
+    callId: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** The caller's number (Vonage `from`). */
-    from: string;
+    from: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** The dialed DID (Vonage `to`) — resolved to an agent identity. */
-    to: string;
+    to: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /** Result of starting an inbound bridge session. */
 export interface InboundCallResult {
     /** Whether a pinned agent was resolved + a bridge session started. */
-    accepted: boolean;
+    accepted: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Why it was rejected (no agent identity for the DID, provider missing, etc.). */
-    reason?: string;
+    reason?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /** Injectable collaborators (production defaults wired in the constructor; fakes in tests). */

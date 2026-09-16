@@ -127,7 +127,7 @@ export class MJTestFormComponentExtended extends MJTestFormComponent implements 
   set suiteTestsLoaded(value) {
     this.SuiteTestsLoaded = value;
   }
-  isRefreshing = false;
+  isRefreshing = false;  // case-violation-ok-legacy-back-compat: an ancestor class already declares the PascalCase name
 
   // Related data
   TestRuns: MJTestRunEntity[] = [];

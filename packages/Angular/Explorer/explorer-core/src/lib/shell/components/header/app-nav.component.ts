@@ -7,8 +7,8 @@ import { Subject, takeUntil } from 'rxjs';
  * Event emitted when a nav item is clicked
  */
 export interface NavItemClickEvent {
-  item: NavItem;
-  shiftKey: boolean;
+  item: NavItem;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  shiftKey: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**

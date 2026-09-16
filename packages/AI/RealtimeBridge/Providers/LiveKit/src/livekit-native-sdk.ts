@@ -100,29 +100,29 @@ export interface NativeConnectResult {
  */
 export interface NativeRoomClient {
     /** Connects to the room (async — the native connect handshake is network-bound). */
-    connect(args: NativeConnectArgs): Promise<NativeConnectResult>;
+    connect(args: NativeConnectArgs): Promise<NativeConnectResult>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Disconnects from the room and releases native resources. */
-    disconnect(): Promise<void>;
+    disconnect(): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Publishes one raw PCM frame on the bot's audio track (the agent's voice). */
-    publishAudio(pcm: ArrayBuffer): void;
+    publishAudio(pcm: ArrayBuffer): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Drops all pending/queued outbound audio — flushes the agent's voice on barge-in. */
-    flushOutbound(): void;
+    flushOutbound(): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Publishes one raw frame on the bot's camera/video track. */
-    publishVideo(frame: ArrayBuffer): void;
+    publishVideo(frame: ArrayBuffer): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Publishes one raw frame on the bot's screen-share track. */
-    publishScreen(frame: ArrayBuffer): void;
+    publishScreen(frame: ArrayBuffer): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Registers the inbound per-participant subscribed-audio callback. "Latest handler wins." */
-    onAudioFrame(cb: (frame: NativeRoomAudioFrame) => void): void;
+    onAudioFrame(cb: (frame: NativeRoomAudioFrame) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Registers the participant-connected callback. */
-    onParticipantConnected(cb: (participant: NativeRoomParticipant) => void): void;
+    onParticipantConnected(cb: (participant: NativeRoomParticipant) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Registers the participant-disconnected callback (identity of the participant that left). */
-    onParticipantDisconnected(cb: (participantIdentity: string) => void): void;
+    onParticipantDisconnected(cb: (participantIdentity: string) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Returns the current participant roster (including the bot). */
-    getParticipants(): Promise<NativeRoomParticipant[]>;
+    getParticipants(): Promise<NativeRoomParticipant[]>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Publishes a reliable message on the room data channel (the room-native "chat"). */
-    publishData(text: string): Promise<void>;
+    publishData(text: string): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Registers the room-disconnected callback (SFU closed / the bot was removed). */
-    onDisconnected(cb: () => void): void;
+    onDisconnected(cb: () => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /** The native room module surface — a factory that constructs a {@link NativeRoomClient}. */

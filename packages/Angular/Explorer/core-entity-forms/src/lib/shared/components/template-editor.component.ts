@@ -12,9 +12,9 @@ import { DEFAULT_SYSTEM_PLACEHOLDERS, SystemPlaceholder, SYSTEM_PLACEHOLDER_CATE
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface TemplateEditorConfig {
-    allowEdit?: boolean;
-    showRunButton?: boolean;
-    compactMode?: boolean;
+    allowEdit?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    showRunButton?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    compactMode?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 @Component({

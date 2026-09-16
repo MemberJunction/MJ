@@ -493,13 +493,13 @@ export class MCPToolSummary {
 @ObjectType()
 export class MCPToolPageResult {
     @Field(() => [MCPToolSummary])
-    items: MCPToolSummary[];
+    items: MCPToolSummary[];  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => Int)
-    totalCount: number;
+    totalCount: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field()
-    hasMore: boolean;
+    hasMore: boolean;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 /**
@@ -508,13 +508,13 @@ export class MCPToolPageResult {
 @ObjectType()
 export class MCPToolServerCount {
     @Field()
-    serverID: string;
+    serverID: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field()
-    serverName: string;
+    serverName: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => Int)
-    count: number;
+    count: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 /**
@@ -524,10 +524,10 @@ export class MCPToolServerCount {
 @ObjectType()
 export class MCPToolCategoryCount {
     @Field()
-    category: string;
+    category: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => Int)
-    count: number;
+    count: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 /**
@@ -536,13 +536,13 @@ export class MCPToolCategoryCount {
 @ObjectType()
 export class MCPToolCountsResult {
     @Field(() => Int)
-    totalCount: number;
+    totalCount: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => [MCPToolServerCount])
-    countByServer: MCPToolServerCount[];
+    countByServer: MCPToolServerCount[];  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => [MCPToolCategoryCount])
-    countByCategory: MCPToolCategoryCount[];
+    countByCategory: MCPToolCategoryCount[];  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 /**
@@ -1247,7 +1247,7 @@ export class MCPResolver extends ResolverBase {
      * @returns OAuth event notification
      */
     @Subscription(() => MCPOAuthEventNotification, { topics: MCP_OAUTH_EVENTS_TOPIC })
-    onMCPOAuthEvent(
+    onMCPOAuthEvent(  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
         @Root() payload: MCPOAuthEventPayload
     ): MCPOAuthEventNotification {
         return {

@@ -706,18 +706,18 @@ export interface RecordChangePayload {
 }
 
 export class DataObjectRelatedEntityParam {
-    relatedEntityName: string
-    filter?: string
-    maxRecords?: number
+    relatedEntityName: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    filter?: string  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+    maxRecords?: number  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 }
 
 export class DataObjectParams {
-    oldValues: boolean;
-    omitNullValues: boolean;
-    omitEmptyStrings: boolean;
-    excludeFields: string[];
-    includeRelatedEntityData: boolean;
-    relatedEntityList: DataObjectRelatedEntityParam[];
+    oldValues: boolean;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    omitNullValues: boolean;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    omitEmptyStrings: boolean;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    excludeFields: string[];  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    includeRelatedEntityData: boolean;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    relatedEntityList: DataObjectRelatedEntityParam[];  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     constructor(
         oldValues: boolean = false,
@@ -737,12 +737,12 @@ export class DataObjectParams {
 }
 
 export class BaseEntityAIActionParams {
-    name: string
-    actionId: string
-    modelId: string
-    systemPrompt: string
-    userMessage: string
-    result: any
+    name: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    actionId: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    modelId: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    systemPrompt: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    userMessage: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    result: any  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 }
 
 /**
@@ -927,29 +927,29 @@ export class BaseEntityEvent {
      *   Payload: `{ Success, NodeCount, Error? }` on `graph_save`; `{ NodeCount }` on
      *   `graph_save_started`.
      */
-    type: 'new_record' | 'save' | 'delete' | 'load_complete' | 'transaction_ready' | 'save_started' | 'delete_started' | 'load_started' | 'remote-invalidate' | 'graph_save_started' | 'graph_save' | 'other';
+    type: 'new_record' | 'save' | 'delete' | 'load_complete' | 'transaction_ready' | 'save_started' | 'delete_started' | 'load_started' | 'remote-invalidate' | 'graph_save_started' | 'graph_save' | 'other';  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /**
      * If type === 'save' this property can either be 'create' or 'update' to indicate the type of save operation that was performed.
      */
-    saveSubType?: 'create' | 'update';
+    saveSubType?: 'create' | 'update';  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Any payload that is associated with the event. This can be any type of object and is used to pass additional information about the event.
      */
-    payload: unknown;
+    payload: unknown;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /**
      * The BaseEntity object that is raising the event.
      * Null for remote-invalidate events where no local BaseEntity instance is available.
      */
-    baseEntity: BaseEntity | null;
+    baseEntity: BaseEntity | null;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /**
      * The entity name for the event. Used primarily for remote-invalidate events
      * where baseEntity is null but the entity name is known from the remote notification.
      */
-    entityName?: string;
+    entityName?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * The metadata provider associated with the entity that raised this event. Required for
@@ -959,7 +959,7 @@ export class BaseEntityEvent {
      * field can be omitted; listeners should fall back to `baseEntity?.ProviderToUse` and finally
      * to `Metadata.Provider` when no provider is available.
      */
-    provider?: IMetadataProvider;
+    provider?: IMetadataProvider;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 }
 
 /**

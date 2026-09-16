@@ -1701,7 +1701,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     const friendly = 'The server may be busy or briefly unreachable — retrying usually fixes this.';
     return this._errorMessage ? `${friendly} (Detail: ${this._errorMessage})` : friendly;
   }
-  totalRowCount: number = 0;
+  totalRowCount: number = 0;  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
   private _loadDataPromise: Promise<void> | null = null;
 
   // Cleanup
