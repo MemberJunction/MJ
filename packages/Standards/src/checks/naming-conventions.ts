@@ -718,10 +718,19 @@ export function CheckSourceFile(context: FileContext): Finding[] {
         .sort((a, b) => a.Line - b.Line);
 }
 
-/** Does a `rename to "X"` message suggest the name it is already complaining about? */
+/**
+ * Does a `rename to "X"` message suggest the name it is already complaining about?
+ *
+ * Read as two anchored halves rather than one pattern spanning the middle. A single
+ * `"([^"]+)" is .*rename to "([^"]+)"$` puts an unbounded `.*` between two character classes and an
+ * end anchor, which backtracks polynomially — the message is assembled from source identifiers, so
+ * its length is not something this check controls.
+ */
 function isNoOpSuggestion(message: string): boolean {
-    const found = /"([^"]+)" is .*rename to "([^"]+)"$/.exec(message);
-    return !!found && found[1] === found[2];
+    const declared = /^[^"]*"([^"]+)" is /.exec(message);
+    if (!declared) return false;
+    const suggested = /rename to "([^"]+)"$/.exec(message);
+    return !!suggested && declared[1] === suggested[1];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
