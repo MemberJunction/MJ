@@ -1095,7 +1095,7 @@ export class OpenAILiveRealtime extends BaseRealtimeModel {
         // instructions ("operated by YOU directly... NEVER route an interactive-surface request through invoke-target-agent")
         // and re-introduces the holding phrase stall. When tool framing is already present in SystemPrompt,
         // we omit appending a redundant and conflicting delegation policy altogether.
-        const alreadyHasToolFraming = params.HasToolFraming ?? (
+        const alreadyHasToolFraming = params.HasToolFraming ?? (config?.['hasToolFraming'] === true ? true : undefined) ?? (
             !!params.SystemPrompt && (
                 params.SystemPrompt.includes('invoke-target-agent') ||
                 params.SystemPrompt.includes('Delegation policy') ||
