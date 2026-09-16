@@ -2436,4 +2436,11 @@ export interface ExecuteSQLOptions {
    * bypasses the ambient transaction — required for teardown/probes after a doomed TX.
    */
   connectionSource?: object;
+  /**
+   * Run on the pool even while an ambient transaction is open, without naming a handle. For
+   * reads that are not part of any caller's unit of work — the metadata dataset a background
+   * refresh loads — so they never land on the transaction's connection beside its COMMIT. A
+   * pool read sees committed data only (#4514).
+   */
+  ignoreAmbientTransaction?: boolean;
 }
