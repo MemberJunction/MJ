@@ -410,11 +410,20 @@ export function GetSessionTuningSettings(config: RealtimeCoAgentConfig | null | 
  * @returns The flat bag layer, or `null` when the catalog contributes nothing.
  */
 export function GetModelCatalogSessionSettings(config: AIModelConfiguration | null | undefined): JSONObjectLike | null {
+    const bag: JSONObjectLike = {};
     const turnDetection = config?.Realtime?.TurnDetection;
-    if (!isPlainObject(turnDetection)) {
-        return null;
+    if (isPlainObject(turnDetection)) {
+        bag['turnDetection'] = { ...turnDetection } as JSONObjectLike;
     }
-    return { turnDetection: { ...turnDetection } as JSONObjectLike };
+    const reasoning = config?.Realtime?.Reasoning;
+    if (isPlainObject(reasoning)) {
+        bag['reasoning'] = { ...reasoning } as JSONObjectLike;
+    }
+    const tooling = config?.Realtime?.Tooling;
+    if (isPlainObject(tooling)) {
+        bag['tooling'] = { ...tooling } as JSONObjectLike;
+    }
+    return Object.keys(bag).length > 0 ? bag : null;
 }
 
 /** The fully-normalized effective configuration for a Realtime co-agent. */
@@ -524,8 +533,13 @@ export function ParseRealtimeTypeConfiguration(json: string | null | undefined):
     }
     try {
         const parsed: unknown = JSON.parse(json);
-        return isPlainObject(parsed) ? parsed : null;
-    } catch {
+        if (isPlainObject(parsed)) {
+            return parsed;
+        }
+        console.warn('[ParseRealtimeTypeConfiguration] Realtime configuration JSON is not a plain object; skipping layer.');
+        return null;
+    } catch (err) {
+        console.warn('[ParseRealtimeTypeConfiguration] Failed to parse realtime configuration JSON; skipping malformed layer:', err);
         return null;
     }
 }
