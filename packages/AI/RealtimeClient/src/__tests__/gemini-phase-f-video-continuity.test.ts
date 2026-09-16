@@ -167,32 +167,37 @@ describe('Phase F — Realtime Video Tracks, Bridge, and Continuity', () => {
         it('sends video frame payload via session.sendRealtimeInput', async () => {
             await connectWithVideo(client);
 
-            client.SendVideoFrame('base64JpegData', 'image/jpeg');
+            const sent = client.SendVideoFrame('base64JpegData', 'image/jpeg');
+            expect(sent).toBe(true);
 
             expect(client.Fake.RealtimeInputs).toHaveLength(1);
             const input = client.Fake.RealtimeInputs[0];
-            expect(input.media).toEqual({ data: 'base64JpegData', mimeType: 'image/jpeg' });
+            // Reviewer Item 31: video alone, media removed to avoid duplicate bytes
+            expect(input.media).toBeUndefined();
             expect(input.video).toEqual({ data: 'base64JpegData', mimeType: 'image/jpeg' });
         });
 
         it('throttles rapid video frame sends to 1 fps ceiling', async () => {
             await connectWithVideo(client);
 
-            client.SendVideoFrame('frame1', 'image/jpeg');
+            const first = client.SendVideoFrame('frame1', 'image/jpeg');
+            expect(first).toBe(true);
             expect(client.Fake.RealtimeInputs).toHaveLength(1);
 
             // Attempting to send another frame 200ms later — should be throttled/dropped
             vi.advanceTimersByTime(200);
-            client.SendVideoFrame('frame2', 'image/jpeg');
+            const throttled = client.SendVideoFrame('frame2', 'image/jpeg');
+            expect(throttled).toBe(false);
             expect(client.Fake.RealtimeInputs).toHaveLength(1);
 
             // After 1000ms has elapsed, send is permitted
             vi.advanceTimersByTime(801);
-            client.SendVideoFrame('frame3', 'image/jpeg');
+            const allowed = client.SendVideoFrame('frame3', 'image/jpeg');
+            expect(allowed).toBe(true);
             expect(client.Fake.RealtimeInputs).toHaveLength(2);
         });
 
-        it('tracks VideoFrames and emits in RealtimeClientUsage', async () => {
+        it('tracks VideoFrames and VideoSeconds and emits in RealtimeClientUsage', async () => {
             await connectWithVideo(client);
 
             let lastUsage: unknown = null;
@@ -219,9 +224,16 @@ describe('Phase F — Realtime Video Tracks, Bridge, and Continuity', () => {
             } as LiveServerMessage);
 
             expect(lastUsage).toBeDefined();
-            const usage = lastUsage as { VideoFrames?: number; InputTokenDetails?: { ImageTokens?: number } };
+            const usage = lastUsage as {
+                VideoFrames?: number;
+                VideoSeconds?: number;
+                InputTokenDetails?: { ImageTokens?: number; VideoFrames?: number; VideoSeconds?: number };
+            };
             expect(usage.VideoFrames).toBe(2);
+            expect(usage.VideoSeconds).toBeGreaterThanOrEqual(1);
             expect(usage.InputTokenDetails?.ImageTokens).toBe(30);
+            expect(usage.InputTokenDetails?.VideoFrames).toBe(2);
+            expect(usage.InputTokenDetails?.VideoSeconds).toBeGreaterThanOrEqual(1);
         });
     });
 

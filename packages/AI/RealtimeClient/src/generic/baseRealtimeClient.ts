@@ -115,6 +115,8 @@ export interface RealtimeClientUsage {
     OutputTokenDetails?: RealtimeUsageModalityDetail;
     /** Cumulative video frames processed or sent across inbound video tracks. */
     VideoFrames?: number;
+    /** Cumulative duration in seconds across inbound video tracks. */
+    VideoSeconds?: number;
     /** The raw provider usage payload, for hosts that want provider-specific detail. */
     Raw?: unknown;
 }
@@ -574,8 +576,9 @@ export abstract class BaseRealtimeClient {
      *
      * @param base64Image Base64-encoded image data.
      * @param mimeType Image MIME type (defaults to 'image/jpeg').
+     * @returns `true` if accepted and sent; `false` if dropped (throttled, unestablished, etc.).
      */
-    public SendVideoFrame?(base64Image: string, mimeType?: string): void;
+    public SendVideoFrame?(base64Image: string, mimeType?: string): boolean;
 
     // ── Protected emit helpers for concrete drivers ───────────────────────────
 

@@ -178,6 +178,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     private micCapture: IGeminiMicCapture | null = null;
     private cameraCapture: IFrameCapture | null = null;
     private playback: IGeminiAudioPlayback | null = null;
+    private firstVideoSendTimestamp = 0;
     private lastVideoSendTimestamp = 0;
     protected videoFramesSent = 0;
     protected resumptionHandle: string | null = null;
@@ -191,6 +192,14 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     /** Returns the count of video frames successfully sent over the established video track. */
     public get VideoFramesSent(): number {
         return this.videoFramesSent;
+    }
+
+    /** Returns the cumulative active video duration in seconds across sent video frames. */
+    public get VideoSeconds(): number {
+        if (this.firstVideoSendTimestamp === 0 || this.lastVideoSendTimestamp === 0) {
+            return 0;
+        }
+        return Math.max(1, Math.round((this.lastVideoSendTimestamp - this.firstVideoSendTimestamp) / 1000) + 1);
     }
 
     // ── Model capability & profile state ───────────────────────────────────────
@@ -265,6 +274,8 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.cameraStream = cameraStream ?? null;
         this.clearSafetyBackstop();
         this.toolBatchBarrier.Clear();
+        this.firstVideoSendTimestamp = 0;
+        this.lastVideoSendTimestamp = 0;
         this.videoFramesSent = 0;
         this.setState('connecting');
         const { model, liveConfig, idleSignal, supportsScheduling, supportsBlocking, requestedTracks } =
@@ -341,6 +352,8 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.playback?.Close();
         this.playback = null;
         this.resumptionHandle = null;
+        this.firstVideoSendTimestamp = 0;
+        this.lastVideoSendTimestamp = 0;
         this.videoFramesSent = 0;
         if (this.session) {
             try {
@@ -382,23 +395,30 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
 
     /**
      * Streams one base64 image frame over the established inbound video track.
-     * Enforces the 1 fps ceiling (max 1 frame per 1000ms).
+     * Enforces the 1 fps ceiling (max 1 frame per 1000ms nominal).
      * If inbound video is not established, returns without error or frame sends (fallback).
+     *
+     * @returns `true` if the frame was dispatched to the session; `false` if dropped (throttled
+     *   or track unestablished).
      */
-    public override SendVideoFrame(base64Image: string, mimeType: string = 'image/jpeg'): void {
+    public override SendVideoFrame(base64Image: string, mimeType: string = 'image/jpeg'): boolean {
         if (!this.IsTrackEstablished('video', 'inbound')) {
-            return;
+            return false;
         }
         const now = Date.now();
-        if (now - this.lastVideoSendTimestamp < 750) {
-            return; // Throttled: enforces 1 fps cadence ceiling while tolerating async tick latency jitter (Reviewer Item 25)
+        if (this.lastVideoSendTimestamp > 0 && now - this.lastVideoSendTimestamp < 750) {
+            return false; // Throttled: authoritative 1 fps cadence ceiling with async jitter headroom (Reviewer Items 25, 30)
         }
         this.lastVideoSendTimestamp = now;
+        if (this.firstVideoSendTimestamp === 0) {
+            this.firstVideoSendTimestamp = now;
+        }
         this.videoFramesSent++;
+        // Reviewer Item 31: Send `video` alone — do not populate sibling `media` slot to avoid duplicate bytes & billing
         this.session?.sendRealtimeInput({
-            media: { data: base64Image, mimeType },
             video: { data: base64Image, mimeType },
         });
+        return true;
     }
 
     /**
@@ -767,15 +787,35 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
                 }
             }
         }
+        /**
+         * Cost Attribution Note (F6 & Reviewer Item 29):
+         * Inbound video frames are sent as individual JPEG images (V5) and billed on the video pricing tier
+         * ($0.002 / min, or $1.00 / 1M tokens). The Gemini Live API reports token consumption via
+         * usageMetadata.promptTokensDetails partitioned into AUDIO, TEXT, and IMAGE (where video frame tokens
+         * are accounted under IMAGE).
+         *
+         * We expose two candidate cost and telemetry signals:
+         * 1. Authoritative Vendor Signal: InputTokenDetails.ImageTokens from promptTokensDetails represents
+         *    the actual token consumption billed by the Google inference provider.
+         * 2. Track-Level Video Telemetry: VideoFrames (cumulative frames sent) and VideoSeconds (cumulative
+         *    active video duration) client-side counters provide fine-grained telemetry and rate attribution.
+         *
+         * Logging both signals enables operational drift detection: divergence between client-sent VideoFrames
+         * and provider-received ImageTokens immediately surfaces frame drops or network throttling in production.
+         */
         if (this.videoFramesSent > 0) {
             inputDetails = inputDetails ?? {};
             inputDetails.VideoFrames = this.videoFramesSent;
+            inputDetails.VideoSeconds = this.VideoSeconds;
         }
         this.emitUsage({
             InputTokens: typeof usageMetadata.promptTokenCount === 'number' ? usageMetadata.promptTokenCount : undefined,
             OutputTokens: typeof usageMetadata.responseTokenCount === 'number' ? usageMetadata.responseTokenCount : undefined,
             ...(inputDetails ? { InputTokenDetails: inputDetails } : {}),
-            ...(this.videoFramesSent > 0 ? { VideoFrames: this.videoFramesSent } : {}),
+            ...(this.videoFramesSent > 0 ? {
+                VideoFrames: this.videoFramesSent,
+                VideoSeconds: this.VideoSeconds,
+            } : {}),
             Raw: usageMetadata,
         });
     }
