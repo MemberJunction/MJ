@@ -38,6 +38,20 @@ const GEMINI_INPUT_AUDIO_MIME_TYPE = 'audio/pcm;rate=16000';
 /** Gemini Live emits model audio as 16-bit signed PCM, 24 kHz, mono. */
 const GEMINI_OUTPUT_SAMPLE_RATE = 24000;
 
+// ── Legacy video-capability fallback ───────────────────────────────────────────
+//
+// Video capability and its rate ceiling are per-model data, minted from the provider's profile
+// table into the session config. A mint from a server that predates those fields sends neither,
+// and this client must still negotiate video for the models that had it — so these two values
+// reproduce the behaviour that shipped before the fields existed, and NOTHING ELSE should read
+// them. They are reachable only against an older server; delete both once no supported server
+// mints a session config without `supportsInboundVideo`.
+
+/** Model-id prefix that identified a video-capable Live model before the profile carried the flag. */
+const LEGACY_VIDEO_MODEL_PREFIX = 'gemini-3.8-live';
+/** The frame-rate ceiling this client hardcoded before `MaxInboundVideoRate` was minted. */
+const LEGACY_VIDEO_MODEL_RATE = 1;
+
 // ── Structural transport seams (typed subsets — fakes in tests, SDK in prod) ──
 
 /**
@@ -283,14 +297,19 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.lastVideoSendTimestamp = 0;
         this.videoFramesSent = 0;
         this.setState('connecting');
-        const { model, liveConfig, idleSignal, supportsScheduling, supportsBlocking, requestedTracks } =
+        const { model, liveConfig, idleSignal, supportsScheduling, supportsBlocking, supportsInboundVideo, maxInboundVideoRate, requestedTracks } =
             this.parseSessionConfig(config);
         this.idleSignal = idleSignal;
         this.supportsScheduling = supportsScheduling;
         this.supportsBlocking = supportsBlocking;
 
-        // Negotiate tracks:
-        const isVideoModel = model.toLowerCase().startsWith('gemini-3.8-live');
+        // Negotiate tracks. Video capability and its frame-rate ceiling are PER-MODEL DATA, minted
+        // from the provider's profile table (GeminiLiveModelProfile.SupportsInboundVideo /
+        // .MaxInboundVideoRate) and carried in the session config. Deriving either from the model
+        // id would put a second answer to the same question in a second place: the two agreed only
+        // because the model names happened to line up, and the next model to break that pattern
+        // would diverge silently.
+        const isVideoModel = supportsInboundVideo ?? model.toLowerCase().startsWith(LEGACY_VIDEO_MODEL_PREFIX);
         const supportedTracks: RealtimeTrackDescriptor[] = [
             { Modality: 'audio', Direction: 'inbound' },
             { Modality: 'audio', Direction: 'outbound' },
@@ -300,7 +319,9 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
                 Modality: 'video',
                 Direction: 'inbound',
                 Encoding: 'image/jpeg',
-                Rate: 1,
+                // The model's own ceiling. ResolveRequestedTracks takes the more restrictive of
+                // this and what the session requested, so this is what bounds the live track.
+                Rate: maxInboundVideoRate ?? LEGACY_VIDEO_MODEL_RATE,
                 UsageBasis: ['tokens', 'frames'] as const,
                 RequiresConsent: true,
             });
@@ -614,6 +635,8 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         idleSignal: RealtimeIdleSignal;
         supportsScheduling: boolean;
         supportsBlocking: boolean;
+        supportsInboundVideo?: boolean;
+        maxInboundVideoRate?: number;
         requestedTracks?: readonly RealtimeTrackDescriptor[];
     } {
         const sessionConfig: JSONObject = config.SessionConfig ?? {};
@@ -626,6 +649,13 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
             rawIdle === 'interactionStatus' ? 'interactionStatus' : 'turnComplete';
         const supportsScheduling = sessionConfig['supportsScheduling'] !== false;
         const supportsBlocking = sessionConfig['supportsBlocking'] !== false;
+        // Per-model video legality, minted from the provider's profile table. Left undefined by a
+        // mint that predates these fields — see LEGACY_VIDEO_MODEL_PREFIX at the call site.
+        const supportsInboundVideo =
+            typeof sessionConfig['supportsInboundVideo'] === 'boolean' ? sessionConfig['supportsInboundVideo'] : undefined;
+        const rawMaxVideoRate = sessionConfig['maxInboundVideoRate'];
+        const maxInboundVideoRate =
+            typeof rawMaxVideoRate === 'number' && rawMaxVideoRate > 0 ? rawMaxVideoRate : undefined;
         const rawRequestedTracks = sessionConfig['requestedTracks'];
         let requestedTracks: readonly RealtimeTrackDescriptor[] | undefined = undefined;
         if (Array.isArray(rawRequestedTracks)) {
@@ -648,7 +678,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
             }
             requestedTracks = list;
         }
-        return { model, liveConfig, idleSignal, supportsScheduling, supportsBlocking, requestedTracks };
+        return { model, liveConfig, idleSignal, supportsScheduling, supportsBlocking, supportsInboundVideo, maxInboundVideoRate, requestedTracks };
     }
 
     /** Streams one base64 PCM16 mic chunk to the model (no-op once the session is gone, closed, or in error). */

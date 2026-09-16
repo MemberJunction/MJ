@@ -523,5 +523,48 @@ describe('RealtimeWhiteboardChannel — plugin contract', () => {
     expect(log.Notes).toContainEqual(expect.stringContaining('[whiteboard] visual confirmation of your action'));
     expect(log.Notes).toContainEqual(expect.stringContaining('do NOT narrate or announce your own change'));
   });
+
+  /**
+   * A FAILED tool must confirm nothing. Confirming one would assert to the model that its edit
+   * landed AND tell it not to narrate the change — so the failure would disappear from the user's
+   * view while the model carried on. It would also push a frame identical to the last one, since a
+   * failed tool mutates nothing.
+   */
+  it.each([
+    ['unknown tool', 'Whiteboard_NoSuchTool', JSON.stringify({ text: 'x' })],
+    ['invalid JSON arguments', 'Whiteboard_AddNote', '{not json'],
+    ['non-object arguments', 'Whiteboard_AddNote', JSON.stringify(['not', 'an', 'object'])],
+  ])('ApplyAgentTool pushes NO confirmation frame and NO note when the tool fails (%s)', async (_label, toolName, argsJson) => {
+    const pushedFrames: string[] = [];
+    const mockBridge = {
+      PushFrame: (frame: string) => {
+        pushedFrames.push(frame);
+        return true;
+      }
+    };
+    const c = channel as unknown as { videoBridge: typeof mockBridge };
+
+    vi.spyOn(channel, 'GetLatestFrame').mockResolvedValue('should-never-be-pushed');
+
+    const contextWithClient: RealtimeChannelContext = {
+      ...makeContext(log),
+      Client: {
+        IsTrackEstablished: (modality: string, direction: string) => modality === 'video' && direction === 'inbound',
+      } as unknown as RealtimeChannelContext['Client'],
+    };
+    channel.Initialize(contextWithClient);
+    c.videoBridge = mockBridge;
+
+    const resultJson = channel.ApplyAgentTool(toolName, argsJson);
+
+    // The tool itself reported failure...
+    expect(JSON.parse(resultJson).success).toBe(false);
+
+    // ...so nothing was confirmed. Settle any microtasks the success path would have queued.
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(pushedFrames).toEqual([]);
+    expect(log.Notes.filter((n) => n.includes('visual confirmation of your action'))).toEqual([]);
+  });
 });
 

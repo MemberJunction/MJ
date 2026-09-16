@@ -142,7 +142,15 @@ export interface RealtimeTrack {
     /** Stable id for this track within the session, so state changes can be correlated. */
     TrackID: string;
 
-    /** What was requested, refined with what was actually negotiated once `'live'`. */
+    /**
+     * What was requested, refined with what was actually negotiated once `'live'`.
+     *
+     * **Refinement currently covers `Rate` only** — `ResolveRequestedTracks` carries the more
+     * restrictive of the requested and supported rates. Every other field (`Encoding`,
+     * `UsageBasis`, `RequiresConsent`, …) is the REQUESTED value passed through untouched, so do
+     * not read one of those off a live track expecting the model's answer. Widen the refinement
+     * in `ResolveRequestedTracks` before relying on another field here.
+     */
     Descriptor: RealtimeTrackDescriptor;
 
     /** Current lifecycle state. */

@@ -85,6 +85,22 @@ export interface GeminiLiveModelProfile {
 
     /** Whether the model supports inbound video input stream. */
     SupportsInboundVideo: boolean;
+
+    /**
+     * Maximum inbound video frame rate (frames per second) this model accepts, when
+     * {@link SupportsInboundVideo} is true.
+     *
+     * This is the model's own ceiling and the authority for any consumer pacing a video feed —
+     * it is carried into the session config, negotiated into the live track descriptor by
+     * `ResolveRequestedTracks` (which takes the more restrictive of requested and supported),
+     * and read from there. Consumers must NOT hardcode a rate of their own: a future model that
+     * accepts a faster feed says so HERE and every consumer follows, which is the whole point of
+     * keeping per-model legality in this table rather than in code.
+     *
+     * Undefined means "no declared ceiling" — the requested rate passes through unclamped, so
+     * declare it for every video-capable model.
+     */
+    MaxInboundVideoRate?: number;
 }
 
 /**
@@ -105,6 +121,7 @@ export const GEMINI_LIVE_MODEL_PROFILES: readonly GeminiLiveModelProfile[] = [
         ProactiveAudioAlwaysOn: true,
         ProviderDefaultTurnCoverage: 'audioActivityAndAllVideo',
         SupportsInboundVideo: true,
+        MaxInboundVideoRate: 1,
     },
     {
         MatchPrefix: 'gemini-3.8-live',
@@ -119,6 +136,7 @@ export const GEMINI_LIVE_MODEL_PROFILES: readonly GeminiLiveModelProfile[] = [
         ProactiveAudioAlwaysOn: true,
         ProviderDefaultTurnCoverage: 'audioActivityAndAllVideo',
         SupportsInboundVideo: true,
+        MaxInboundVideoRate: 1,
     },
     {
         // The legacy preview model. Retained deliberately: the capability table is what makes
