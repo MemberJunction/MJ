@@ -1,0 +1,7 @@
+{
+  "entity": "MJ: Test Suite Tests",
+  "filePattern": "**/.*.json",
+  "pull": {
+    "filter": "1 = 0"
+  }
+}

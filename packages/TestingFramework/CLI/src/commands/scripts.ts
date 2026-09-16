@@ -5,6 +5,7 @@
 
 import { TestEngine } from '@memberjunction/testing-engine';
 import { UserInfo } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { MJTestEntity, MJTestEntity_IReplayScript, MJTestEntity_ITestConfiguration } from '@memberjunction/core-entities';
 import { ScriptsFlags } from '../types';
 import { OutputFormatter } from '../utils/output-formatter';
@@ -71,7 +72,7 @@ export class ScriptsCommand {
     private collectPending(engine: TestEngine, testFilter?: string): PendingEntry[] {
         const entries: PendingEntry[] = [];
         for (const test of engine.Tests) {
-            if (testFilter && test.Name !== testFilter && test.ID !== testFilter) {
+            if (testFilter && test.Name !== testFilter && !UUIDsEqual(test.ID, testFilter)) {
                 continue;
             }
             let config: MJTestEntity_ITestConfiguration | null;

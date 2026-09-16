@@ -452,7 +452,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
      */
     public static parseHealResponse(raw: string): { index?: number; confidence: number } {
         try {
-            const jsonText = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
+            const jsonText = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/(?<!\s)\s*```$/i, '');
             const parsed = JSON.parse(jsonText) as { index?: unknown; confidence?: unknown };
             const index = typeof parsed.index === 'number' && Number.isInteger(parsed.index) && parsed.index >= 0
                 ? parsed.index

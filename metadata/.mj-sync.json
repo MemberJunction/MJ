@@ -71,6 +71,7 @@
     "dashboard-part-types",
     "dashboards",
     "test-types",
+    "test-suite-tests",
     "tests",
     "test-suites",
     "entities",

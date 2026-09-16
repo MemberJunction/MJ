@@ -58,19 +58,19 @@ export function normalizeTraceUrl(url: string, volatileParams: string[] = []): s
     } catch {
         // Not an absolute URL — normalize UUIDs in the raw string at least, so a
         // path-only pattern (e.g. '/app/record/<uuid>') still keys stably.
-        return raw.replace(UUID_RE, UUID_TOKEN);
+        return raw.replace(UUID_RE, () => UUID_TOKEN);
     }
 
     const volatile = new Set(volatileParams.map(p => p.toLowerCase()));
     const params: [string, string][] = [];
     parsed.searchParams.forEach((value, name) => {
         if (!volatile.has(name.toLowerCase())) {
-            params.push([name, value.replace(UUID_RE, UUID_TOKEN)]);
+            params.push([name, value.replace(UUID_RE, () => UUID_TOKEN)]);
         }
     });
     params.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
 
-    const path = parsed.pathname.replace(UUID_RE, UUID_TOKEN).replace(ENCODED_UUID_TOKEN_RE, UUID_TOKEN);
+    const path = parsed.pathname.replace(UUID_RE, () => UUID_TOKEN).replace(ENCODED_UUID_TOKEN_RE, () => UUID_TOKEN);
     const query = params.length > 0
         ? '?' + params.map(([n, v]) => `${n}=${v}`).join('&')
         : '';

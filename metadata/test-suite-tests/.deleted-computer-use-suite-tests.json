@@ -1,0 +1,352 @@
+[
+  {
+    "_comments": "Suite membership for T01 - Login Smoke, pruned with the test itself.",
+    "fields": {
+      "SuiteID": "71428DF0-78F4-4775-95E5-A52D2B4602D1",
+      "TestID": "2F4CAED9-0916-433E-8A63-70C4B71B337B",
+      "Sequence": 1
+    },
+    "primaryKey": {
+      "ID": "ABFDAC0A-2209-4B94-A6BE-1F4B01F3DEE1"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "_comments": "Suite membership for T02 - Home Application Load, pruned with the test itself.",
+    "fields": {
+      "SuiteID": "71428DF0-78F4-4775-95E5-A52D2B4602D1",
+      "TestID": "5FF83062-9015-4E5E-8BD7-3C38F22A5356",
+      "Sequence": 2
+    },
+    "primaryKey": {
+      "ID": "8CD3E2CD-0D14-4834-8FA8-F1F260CEF90C"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "_comments": "Suite membership for T03 - Application Switcher, pruned with the test itself.",
+    "fields": {
+      "SuiteID": "71428DF0-78F4-4775-95E5-A52D2B4602D1",
+      "TestID": "010D3E19-FFE9-4D91-A68B-5300F0CABE92",
+      "Sequence": 3
+    },
+    "primaryKey": {
+      "ID": "99C9DE9E-0130-4530-ADCE-69B682093F80"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "_comments": "Suite membership for T04 - Data Explorer Browse Entities, pruned with the test itself.",
+    "fields": {
+      "SuiteID": "71428DF0-78F4-4775-95E5-A52D2B4602D1",
+      "TestID": "F83547E5-E480-424E-BF85-999324FB8DB4",
+      "Sequence": 4
+    },
+    "primaryKey": {
+      "ID": "E955BF43-36B1-4732-89E8-56AB655C7D13"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "_comments": "Suite membership for T05 - Data Explorer Open Entity Record, pruned with the test itself.",
+    "fields": {
+      "SuiteID": "71428DF0-78F4-4775-95E5-A52D2B4602D1",
+      "TestID": "2BB830E5-AAB2-4537-BC35-366E5F7D9D31",
+      "Sequence": 5
+    },
+    "primaryKey": {
+      "ID": "369AE569-A016-4FD5-A972-AC5839FE695E"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "_comments": "Suite membership for T06 - Data Explorer Search, pruned with the test itself.",
+    "fields": {
+      "SuiteID": "71428DF0-78F4-4775-95E5-A52D2B4602D1",
+      "TestID": "8D4FF31A-B6D0-4E02-9528-4F0D0E240851",
+      "Sequence": 6
+    },
+    "primaryKey": {
+      "ID": "86AC1B2F-A73E-4690-8BF4-0B60D657A90E"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "_comments": "Suite membership for T07 - Entity Form View Record Details, pruned with the test itself.",
+    "fields": {
+      "SuiteID": "71428DF0-78F4-4775-95E5-A52D2B4602D1",
+      "TestID": "BBC02CFF-554C-4587-915B-FE55FF351AC5",
+      "Sequence": 7
+    },
+    "primaryKey": {
+      "ID": "5C5E9C2C-0308-4078-AF9D-64C110769A5A"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "_comments": "Suite membership for T08 - Navigation and Tab Management, pruned with the test itself.",
+    "fields": {
+      "SuiteID": "71428DF0-78F4-4775-95E5-A52D2B4602D1",
+      "TestID": "8F37873C-FD30-4C2C-A875-716DCE7C9E77",
+      "Sequence": 8
+    },
+    "primaryKey": {
+      "ID": "8BCC471A-408D-4DC6-A0E2-3C50CEB77778"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "_comments": "Suite membership for T09 - Entity Form Create New Record, pruned with the test itself.",
+    "fields": {
+      "SuiteID": "71428DF0-78F4-4775-95E5-A52D2B4602D1",
+      "TestID": "5F97BC52-9D41-4152-B8DA-1E3A6C07E66E",
+      "Sequence": 9
+    },
+    "primaryKey": {
+      "ID": "777FC6DB-0307-4DD4-AA6F-23847196FA18"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "_comments": "Suite membership for T10 - Entity Form Edit and Save Record, pruned with the test itself.",
+    "fields": {
+      "SuiteID": "71428DF0-78F4-4775-95E5-A52D2B4602D1",
+      "TestID": "E3EDE599-BBCB-4AB0-947E-76E933261185",
+      "Sequence": 10
+    },
+    "primaryKey": {
+      "ID": "433194D4-E840-47DD-9807-33816522C19D"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "_comments": "Suite membership for T11 - Run a Saved Query, pruned with the test itself.",
+    "fields": {
+      "SuiteID": "71428DF0-78F4-4775-95E5-A52D2B4602D1",
+      "TestID": "A5174558-E08A-4A33-982C-2ADCACC01100",
+      "Sequence": 11
+    },
+    "primaryKey": {
+      "ID": "40C1B848-922F-446C-B00D-57210C2D03D1"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "_comments": "Suite membership for T12 - Admin Dashboard ERD Viewer, pruned with the test itself.",
+    "fields": {
+      "SuiteID": "71428DF0-78F4-4775-95E5-A52D2B4602D1",
+      "TestID": "9E9BED5F-AEF5-42FE-A892-2CF09EF44952",
+      "Sequence": 12
+    },
+    "primaryKey": {
+      "ID": "853B1CC3-E2C7-4287-A7FB-288E61C59B19"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "_comments": "Suite membership for T13 - Admin Dashboard User Management, pruned with the test itself.",
+    "fields": {
+      "SuiteID": "71428DF0-78F4-4775-95E5-A52D2B4602D1",
+      "TestID": "3881D46F-D7C9-46DE-B3E3-D54FB8DA4566",
+      "Sequence": 13
+    },
+    "primaryKey": {
+      "ID": "16DDABBA-E0E3-4055-9C31-312239F45A08"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "_comments": "Suite membership for T14 - AI Application Agent List View, pruned with the test itself.",
+    "fields": {
+      "SuiteID": "71428DF0-78F4-4775-95E5-A52D2B4602D1",
+      "TestID": "566E4865-BB38-49D0-921F-D32E7CE451AA",
+      "Sequence": 14
+    },
+    "primaryKey": {
+      "ID": "20B63720-4CC0-4C50-826A-1E070D7B9653"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "_comments": "Suite membership for T15 - AI Application Prompt Management, pruned with the test itself.",
+    "fields": {
+      "SuiteID": "71428DF0-78F4-4775-95E5-A52D2B4602D1",
+      "TestID": "92255EB2-CC3D-4FF2-8652-EE2CFB5D8A6D",
+      "Sequence": 15
+    },
+    "primaryKey": {
+      "ID": "E9A2A466-6A36-488E-8646-71D404E051BF"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "_comments": "Suite membership for T16 - Lists Create and Populate, pruned with the test itself.",
+    "fields": {
+      "SuiteID": "71428DF0-78F4-4775-95E5-A52D2B4602D1",
+      "TestID": "5BE50BF7-D0C4-4A02-A441-41C8ECF08CF6",
+      "Sequence": 16
+    },
+    "primaryKey": {
+      "ID": "7AB967B0-0B8A-447E-9251-32827EAC03F4"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "_comments": "Suite membership for T17 - Settings Page Navigation, pruned with the test itself.",
+    "fields": {
+      "SuiteID": "71428DF0-78F4-4775-95E5-A52D2B4602D1",
+      "TestID": "D94781D3-F117-4832-B497-3CDB9CE2296E",
+      "Sequence": 17
+    },
+    "primaryKey": {
+      "ID": "D9F0E5C2-47F7-41DC-BC50-A63D4D0FA5B5"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "_comments": "Suite membership for T18 - Communication Templates View, pruned with the test itself.",
+    "fields": {
+      "SuiteID": "71428DF0-78F4-4775-95E5-A52D2B4602D1",
+      "TestID": "3CEF8310-6CDD-493F-824D-C13EB9BB9217",
+      "Sequence": 18
+    },
+    "primaryKey": {
+      "ID": "04F0C370-00D8-4036-B368-23E4E953E663"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "_comments": "Suite membership for T19 - Query Browser Execute Query, pruned with the test itself.",
+    "fields": {
+      "SuiteID": "71428DF0-78F4-4775-95E5-A52D2B4602D1",
+      "TestID": "F89CF3DF-CDC1-4460-9BD1-C98E750C163F",
+      "Sequence": 19
+    },
+    "primaryKey": {
+      "ID": "234F521C-0511-4546-A579-19675128B92C"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "_comments": "Suite membership for T20 - Dashboard Browser, pruned with the test itself.",
+    "fields": {
+      "SuiteID": "71428DF0-78F4-4775-95E5-A52D2B4602D1",
+      "TestID": "4069DC55-B2BB-452C-8AD2-599802D90E6B",
+      "Sequence": 20
+    },
+    "primaryKey": {
+      "ID": "A1A9B0AF-1526-4D83-9BC7-955C76B49866"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "_comments": "Suite membership for T21 - AI Monitor Dashboard, pruned with the test itself.",
+    "fields": {
+      "SuiteID": "71428DF0-78F4-4775-95E5-A52D2B4602D1",
+      "TestID": "7F861EDC-EDEF-4333-8EFE-C9B6F2209404",
+      "Sequence": 21
+    },
+    "primaryKey": {
+      "ID": "7AD289E9-A855-4F6C-A5CB-EF6B03FE7DCA"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "_comments": "Suite membership for T22 - Integrations Overview, pruned with the test itself.",
+    "fields": {
+      "SuiteID": "71428DF0-78F4-4775-95E5-A52D2B4602D1",
+      "TestID": "5266CE50-884B-4AAD-B450-07098B547C8D",
+      "Sequence": 22
+    },
+    "primaryKey": {
+      "ID": "DECEA4A6-3BAB-4C9F-83B0-5AEDB98113C7"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "_comments": "Suite membership for T23 - Handle Invalid Navigation Gracefully, pruned with the test itself.",
+    "fields": {
+      "SuiteID": "71428DF0-78F4-4775-95E5-A52D2B4602D1",
+      "TestID": "36A5AAA2-25B8-42FC-A06A-DF19BFEA56F0",
+      "Sequence": 23
+    },
+    "primaryKey": {
+      "ID": "1D20D08B-5E1B-4E90-B879-54A8A1ADC98D"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "_comments": "Suite membership for T24 - Session Persistence Reload Page, pruned with the test itself.",
+    "fields": {
+      "SuiteID": "71428DF0-78F4-4775-95E5-A52D2B4602D1",
+      "TestID": "C2496941-0035-4B09-9E5C-C4D53822F940",
+      "Sequence": 24
+    },
+    "primaryKey": {
+      "ID": "B76F740D-10E5-45E6-83A1-08103D19566B"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "_comments": "Suite membership for T25 - Multiple Tab Workflow, pruned with the test itself.",
+    "fields": {
+      "SuiteID": "71428DF0-78F4-4775-95E5-A52D2B4602D1",
+      "TestID": "98B5BFE9-41F3-465E-9C68-25CBD4B7E48A",
+      "Sequence": 25
+    },
+    "primaryKey": {
+      "ID": "F5F1CA0C-8237-47B0-9C84-D812F183C808"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  }
+]

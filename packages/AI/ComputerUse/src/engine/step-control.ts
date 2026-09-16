@@ -458,10 +458,10 @@ export function evaluateBatchStop(params: {
  *   - <div class="y"></div> from <div class="z">…</div> subtree intercepts pointer events
  * The first tag is the actual blocker in both, so a single capture serves both.
  */
-const INTERCEPTION_PATTERN = /-\s*(<[^>]+>)[^\n]*intercepts pointer events/g;
+const INTERCEPTION_PATTERN = /-\s*(<[^>]+>)[^\n]{0,1000}?intercepts pointer events/g;
 
 /** Angular's per-component attributes carry no meaning for the controller. */
-const ANGULAR_SCOPE_ATTRIBUTE = /\s*_ng(content|host)-[a-z0-9-]+=(""|"[^"]*")/g;
+const ANGULAR_SCOPE_ATTRIBUTE = /(?<!\s)\s*_ng(content|host)-[a-z0-9-]+="[^"]*"/g;
 
 const MAX_BLOCKER_LENGTH = 90;
 
