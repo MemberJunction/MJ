@@ -751,7 +751,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
             try {
                 oldSession?.close();
             } catch {
-                /* safe */
+                // The old socket has already been replaced by newSession, so a close failure on it cannot affect the new session
             }
         } catch (err) {
             RealtimeDiagLog(

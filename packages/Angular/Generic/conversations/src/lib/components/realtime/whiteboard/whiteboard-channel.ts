@@ -18,10 +18,32 @@ export async function rasterizeSvgToJpegBase64(svg: string, width = 1280, height
     return null;
   }
   return new Promise<string | null>((resolve) => {
+    let url: string | null = null;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const cleanup = () => {
+      if (timer != null) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      if (url) {
+        URL.revokeObjectURL(url);
+        url = null;
+      }
+    };
+
     try {
       const img = new Image();
       const svgBlob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
-      const url = URL.createObjectURL(svgBlob);
+      url = URL.createObjectURL(svgBlob);
+
+      // Capped wait: resolve null and revoke URL if the Image never fires onload or onerror (item 61)
+      timer = setTimeout(() => {
+        console.error('[RealtimeWhiteboardChannel] SVG rasterization timed out after 5000ms');
+        cleanup();
+        resolve(null);
+      }, 5000);
+
       img.onload = () => {
         try {
           const canvas = document.createElement('canvas');
@@ -29,31 +51,32 @@ export async function rasterizeSvgToJpegBase64(svg: string, width = 1280, height
           canvas.height = height;
           const ctx = canvas.getContext('2d');
           if (!ctx) {
-            URL.revokeObjectURL(url);
+            cleanup();
             resolve(null);
             return;
           }
           ctx.fillStyle = '#ffffff';
           ctx.fillRect(0, 0, width, height);
           ctx.drawImage(img, 0, 0, width, height);
-          URL.revokeObjectURL(url);
+          cleanup();
           const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
           const comma = dataUrl.indexOf(',');
           resolve(comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl);
         } catch (err) {
           console.error('[RealtimeWhiteboardChannel] Failed to rasterize SVG canvas to JPEG:', err);
-          URL.revokeObjectURL(url);
+          cleanup();
           resolve(null);
         }
       };
       img.onerror = (err) => {
         console.error('[RealtimeWhiteboardChannel] Failed to load SVG image for rasterization:', err);
-        URL.revokeObjectURL(url);
+        cleanup();
         resolve(null);
       };
       img.src = url;
     } catch (err) {
       console.error('[RealtimeWhiteboardChannel] Failed to initialize SVG rasterization:', err);
+      cleanup();
       resolve(null);
     }
   });
@@ -143,8 +166,13 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
     if (!this.State) {
       return null;
     }
-    const svg = BuildWhiteboardExportSvg(this.State);
-    return rasterizeSvgToJpegBase64(svg);
+    try {
+      const svg = BuildWhiteboardExportSvg(this.State);
+      return await rasterizeSvgToJpegBase64(svg);
+    } catch (err) {
+      console.error('[RealtimeWhiteboardChannel] Failed to export whiteboard frame:', err);
+      return null;
+    }
   }
 
   private static readonly WHITEBOARD_DEFAULT_CADENCE_MS = 1000;
@@ -204,46 +232,54 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
    * deduplication, and a trailing-edge settle timer so the model sees the final resting state.
    */
   private async onUserMutation(): Promise<void> {
-    const bridge = this.ensureVideoBridge();
-    if (!bridge || !this.Context?.Client?.IsTrackEstablished('video', 'inbound')) {
-      return;
-    }
-
-    const now = Date.now();
-    const cadenceMs = this.getNegotiatedVideoCadenceMs();
-    const elapsed = now - this.lastPushTimestamp;
-
-    if (elapsed >= cadenceMs) {
-      this.clearWhiteboardTrailingTimer();
-      const frame = await this.GetLatestFrame();
-      if (!frame) {
+    try {
+      const bridge = this.ensureVideoBridge();
+      if (!bridge || !this.Context?.Client?.IsTrackEstablished('video', 'inbound')) {
         return;
       }
-      const frameChanged = frame !== this.lastPushedWhiteboardFrame;
-      const heartbeatElapsed = elapsed >= RealtimeWhiteboardChannel.WHITEBOARD_HEARTBEAT_MS;
-      if (frameChanged || heartbeatElapsed) {
-        this.pushWhiteboardFrame(frame);
+
+      const now = Date.now();
+      const cadenceMs = this.getNegotiatedVideoCadenceMs();
+      const elapsed = now - this.lastPushTimestamp;
+
+      if (elapsed >= cadenceMs) {
+        this.clearWhiteboardTrailingTimer();
+        const frame = await this.GetLatestFrame();
+        if (!frame) {
+          return;
+        }
+        const frameChanged = frame !== this.lastPushedWhiteboardFrame;
+        const heartbeatElapsed = elapsed >= RealtimeWhiteboardChannel.WHITEBOARD_HEARTBEAT_MS;
+        if (frameChanged || heartbeatElapsed) {
+          this.pushWhiteboardFrame(frame);
+        }
+      } else {
+        // Within cooldown window: schedule trailing settle timer if not already armed.
+        if (!this.whiteboardTrailingTimer) {
+          const delay = Math.max(0, cadenceMs - elapsed);
+          this.whiteboardTrailingTimer = setTimeout(async () => {
+            this.whiteboardTrailingTimer = null;
+            try {
+              if (!this.Context?.Client?.IsTrackEstablished('video', 'inbound')) {
+                return;
+              }
+              const frame = await this.GetLatestFrame();
+              if (!frame) {
+                return;
+              }
+              const frameChanged = frame !== this.lastPushedWhiteboardFrame;
+              const heartbeat = (Date.now() - this.lastPushTimestamp) >= RealtimeWhiteboardChannel.WHITEBOARD_HEARTBEAT_MS;
+              if (frameChanged || heartbeat) {
+                this.pushWhiteboardFrame(frame);
+              }
+            } catch (err) {
+              console.error('[RealtimeWhiteboardChannel] Error in whiteboard trailing settle timer:', err);
+            }
+          }, delay);
+        }
       }
-    } else {
-      // Within cooldown window: schedule trailing settle timer if not already armed.
-      if (!this.whiteboardTrailingTimer) {
-        const delay = Math.max(0, cadenceMs - elapsed);
-        this.whiteboardTrailingTimer = setTimeout(async () => {
-          this.whiteboardTrailingTimer = null;
-          if (!this.Context?.Client?.IsTrackEstablished('video', 'inbound')) {
-            return;
-          }
-          const frame = await this.GetLatestFrame();
-          if (!frame) {
-            return;
-          }
-          const frameChanged = frame !== this.lastPushedWhiteboardFrame;
-          const heartbeat = (Date.now() - this.lastPushTimestamp) >= RealtimeWhiteboardChannel.WHITEBOARD_HEARTBEAT_MS;
-          if (frameChanged || heartbeat) {
-            this.pushWhiteboardFrame(frame);
-          }
-        }, delay);
-      }
+    } catch (err) {
+      console.error('[RealtimeWhiteboardChannel] Error in onUserMutation:', err);
     }
   }
 
@@ -252,17 +288,21 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
    * informs the model context so it does not loop narrating its own change.
    */
   private async pushAgentConfirmationFrame(): Promise<void> {
-    const bridge = this.ensureVideoBridge();
-    if (!bridge || !this.Context?.Client?.IsTrackEstablished('video', 'inbound')) {
-      return;
-    }
-    this.clearWhiteboardTrailingTimer();
-    const frame = await this.GetLatestFrame();
-    if (frame) {
-      this.pushWhiteboardFrame(frame);
-      this.Context?.SendContextNote(
-        '[whiteboard] visual confirmation of your action (background — do NOT narrate or announce your own change; continue naturally)'
-      );
+    try {
+      const bridge = this.ensureVideoBridge();
+      if (!bridge || !this.Context?.Client?.IsTrackEstablished('video', 'inbound')) {
+        return;
+      }
+      this.clearWhiteboardTrailingTimer();
+      const frame = await this.GetLatestFrame();
+      if (frame) {
+        this.pushWhiteboardFrame(frame);
+        this.Context?.SendContextNote(
+          '[whiteboard] visual confirmation of your action (background — do NOT narrate or announce your own change; continue naturally)'
+        );
+      }
+    } catch (err) {
+      console.error('[RealtimeWhiteboardChannel] Error in pushAgentConfirmationFrame:', err);
     }
   }
 
