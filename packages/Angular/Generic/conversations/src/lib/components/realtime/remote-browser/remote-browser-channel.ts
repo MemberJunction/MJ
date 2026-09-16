@@ -311,6 +311,7 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
    * and duplicate frame sourcing into the video bridge.
    */
   public async GetLatestFrame(): Promise<string | null> {
+    this.ensureVideoBridge();
     if (this.streaming) {
       return null;
     }
@@ -418,10 +419,21 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
 
   /** Starts the video bridge streaming browser frames to the model when inbound video is supported. */
   protected override OnInitialize(): void {
-    if (this.Context?.Client) {
-      this.videoBridge = new ChannelInboundVideoBridge(this.Context.Client, this);
-      this.videoBridge.Start();
+    this.ensureVideoBridge();
+  }
+
+  public override OnSessionStarted(): void {
+    this.ensureVideoBridge();
+  }
+
+  private ensureVideoBridge(): ChannelInboundVideoBridge | null {
+    if (!this.videoBridge && this.Context) {
+      this.videoBridge = new ChannelInboundVideoBridge(() => this.Context?.Client, this);
     }
+    if (this.videoBridge && !this.videoBridge.IsActive && this.Context?.Client?.IsTrackEstablished('video', 'inbound')) {
+      this.videoBridge.Start?.();
+    }
+    return this.videoBridge;
   }
 
   /**
@@ -448,6 +460,7 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
     // Copy-out: the surface reads the remote selection through this on a local `copy` and writes it locally.
     instance.FetchSelection = () => this.fetchSelection();
     instance.Interactive = true;
+    this.ensureVideoBridge();
     this.humanInputSub = instance.HumanInput.subscribe((input) => this.relayHumanInput(input));
     this.audioMutedSub = instance.AudioMutedChange.subscribe((muted) => this.audioPlayer?.SetMuted(muted));
     void this.startScreencast(instance);
@@ -498,7 +511,7 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
       const now = Date.now();
       if (now - this.lastScreencastPushTime >= 1000) {
         this.lastScreencastPushTime = now;
-        this.videoBridge?.PushFrame(dataBase64);
+        this.ensureVideoBridge()?.PushFrame(dataBase64);
       }
       this.notePageChange(currentUrl, 'observed');
     }

@@ -314,7 +314,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
             EphemeralToken: config.EphemeralToken,
             OnMessage: (message) => this.handleServerMessage(message),
             OnError: (event) => this.handleTransportError(event),
-            OnClose: () => this.handleTransportClose(),
+            OnClose: (event) => this.handleTransportClose(event),
         };
         this.lastConnectArgs = connectArgs;
         this.session = await this.connectLiveSession(connectArgs);
@@ -651,21 +651,43 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         return { model, liveConfig, idleSignal, supportsScheduling, supportsBlocking, requestedTracks };
     }
 
-    /** Streams one base64 PCM16 mic chunk to the model (no-op once the session is gone). */
+    /** Streams one base64 PCM16 mic chunk to the model (no-op once the session is gone, closed, or in error). */
     private sendMicChunk(base64Pcm16: string): void {
-        this.session?.sendRealtimeInput({
-            audio: { data: base64Pcm16, mimeType: GEMINI_INPUT_AUDIO_MIME_TYPE },
-        });
+        if (!this.session || this.currentState === 'closed' || this.currentState === 'error') {
+            return;
+        }
+        try {
+            this.session.sendRealtimeInput({
+                audio: { data: base64Pcm16, mimeType: GEMINI_INPUT_AUDIO_MIME_TYPE },
+            });
+        } catch (err) {
+            RealtimeDiagLog(`[GeminiRealtimeClient] sendMicChunk failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
     }
 
     /** Surfaces a fatal websocket error and marks the session unusable. */
     private handleTransportError(event: ErrorEvent): void {
-        this.emitError({ Message: `Gemini Live transport error: ${event.message || 'unknown'}`, Fatal: true });
+        const detail = event.message || (event.error instanceof Error ? event.error.message : String(event.error ?? 'unknown'));
+        RealtimeDiagLog(`[GeminiRealtimeClient] Transport error: ${detail}`);
+        this.emitError({ Message: `Gemini Live transport error: ${detail}`, Fatal: true });
         this.setState('error');
     }
 
     /** Reflects a provider-side close (unless the session already ended in error). */
-    private handleTransportClose(): void {
+    private handleTransportClose(event?: CloseEvent): void {
+        const code = event?.code;
+        const reason = event?.reason;
+        const wasClean = event?.wasClean;
+        RealtimeDiagLog(`[GeminiRealtimeClient] Transport closed: code=${code} reason=${reason} wasClean=${wasClean}`);
+        const isAbnormal = (code !== undefined && code !== 0 && code !== 1000 && code !== 1005) || (wasClean === false && code !== 1000 && code !== 0 && code !== 1005 && code !== undefined);
+        if (isAbnormal && this.currentState !== 'error') {
+            this.emitError({
+                Message: `Gemini Live connection closed (${code}): ${reason || 'unexpected disconnect'}`,
+                Fatal: true,
+            });
+            this.setState('error');
+            return;
+        }
         if (this.currentState !== 'error' && this.currentState !== 'closed') {
             this.setState('closed');
         }
