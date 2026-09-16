@@ -3,17 +3,24 @@ import { GraphQLDataProvider } from "./graphQLDataProvider";
 import { Subscription } from "rxjs";
 
 /**
- * Idle timeout for fire-and-forget operations (12 minutes).
+ * Idle timeout for fire-and-forget operations (3 minutes).
  *
  * This is an *inactivity* window, not an absolute cap: it resets every time a
  * message (progress, streaming, liveness pulse, completion) arrives for the
- * operation. The server emits a liveness pulse every ~5 minutes while the
+ * operation. The server emits a liveness pulse every 60 seconds while the
  * operation runs, so as long as the work is alive the timer never fires. It
  * only expires when the server has gone genuinely silent — at which point the
  * optional reconciliation hook decides whether the operation is dead or still
  * running.
+ *
+ * WAS 12 MINUTES (MJ #4222). Paired with a 5-minute server pulse, that was ~2.4 missed
+ * pulses before anyone grew suspicious — defensible for a 40-minute agent run, absurd for
+ * the 20-second one that actually broke: a 36x horizon on a UI the user is watching. The
+ * window and the pulse are a matched pair and must be changed together; this value must
+ * stay at roughly 3x {@link DEFAULT_PULSE_INTERVAL_MS} in MJServer's FireAndForgetHeartbeat,
+ * or a healthy long-running agent will trip reconciliation on every quiet stretch.
  */
-const DEFAULT_IDLE_TIMEOUT_MS = 12 * 60 * 1000;
+export const DEFAULT_IDLE_TIMEOUT_MS = 3 * 60 * 1000;
 
 /**
  * Maximum number of consecutive idle-timeout reconciliations that may return
@@ -102,6 +109,22 @@ export interface FireAndForgetConfig<TResult> {
      * Use this to forward progress updates to UI callbacks.
      */
     onMessage?: (parsed: Record<string, unknown>) => void;
+
+    /**
+     * Optional predicate deciding whether a PubSub message belongs to THIS operation.
+     *
+     * The push-status subscription is per-SESSION, not per-operation, so without this every
+     * message for every concurrent run resets every pending operation's idle timer. With
+     * several agents in flight, one chatty run holds a dead run's timer open indefinitely —
+     * the "idle" window silently means "the whole session went quiet", which is not what any
+     * caller intends (MJ #4222).
+     *
+     * MUST FAIL OPEN: return `true` for anything not positively identifiable as another
+     * operation's. Wrongly ignoring a message that IS ours shortens the window and causes a
+     * spurious reconcile; wrongly accepting one that is not merely preserves the old
+     * behaviour. When omitted, every message counts as activity, exactly as before.
+     */
+    isRelevantMessage?: (parsed: Record<string, unknown>) => boolean;
 
     /**
      * Optional reconciliation hook invoked when the idle timer expires (no message
@@ -351,11 +374,24 @@ export class FireAndForgetHelper {
         return config.dataProvider.PushStatusUpdates(sessionId)
             .subscribe({
                 next: (message: string) => {
-                    // Any inbound message means the server is alive — reset the idle timer.
-                    handlers.onActivity();
+                    let parsed: Record<string, unknown> | undefined;
                     try {
-                        const parsed = JSON.parse(message) as Record<string, unknown>;
+                        parsed = JSON.parse(message) as Record<string, unknown>;
+                    } catch (e) {
+                        // Unparseable, so it cannot be attributed to another operation. Treat it
+                        // as liveness (fail open) and stop — there is nothing further to route.
+                        console.error(`[FireAndForget:${label}] Failed to parse PubSub message:`, e);
+                        handlers.onActivity();
+                        return;
+                    }
 
+                    // Only traffic for THIS operation counts as proof that THIS operation is
+                    // alive. Absent a predicate, any message does — the historical behaviour.
+                    if (!config.isRelevantMessage || config.isRelevantMessage(parsed)) {
+                        handlers.onActivity();
+                    }
+
+                    try {
                         if (config.onMessage) {
                             config.onMessage(parsed);
                         }
@@ -365,7 +401,7 @@ export class FireAndForgetHelper {
                             handlers.onCompletion(config.extractResult(parsed));
                         }
                     } catch (e) {
-                        console.error(`[FireAndForget:${label}] Failed to parse PubSub message:`, e);
+                        console.error(`[FireAndForget:${label}] Failed to route PubSub message:`, e);
                     }
                 },
                 // Stream dropping mid-operation is itself a "we've gone silent" signal —

@@ -701,6 +701,136 @@ describe('RedisLocalStorageProvider', () => {
     });
 
     // ────────────────────────────────────────────────────────────────────────
+    // Generic named-channel pub/sub — the transport for cross-instance push-status
+    // fan-out (MJ #4222). Distinct from the cache channel above: the payload is opaque
+    // here, so this layer does no echo suppression and the publisher supplies its own.
+    // ────────────────────────────────────────────────────────────────────────
+    describe('Pub/Sub - named channels', () => {
+        it('publishes on a channel namespaced by the key prefix', async () => {
+            const p = new RedisLocalStorageProvider({
+                enablePubSub: true,
+                enableLogging: false,
+                keyPrefix: 'app1',
+            });
+
+            p.PublishMessage('push-status-updates', 'hello');
+
+            expect(p.Client.publish).toHaveBeenCalledWith('app1:push-status-updates', 'hello');
+            await p.Disconnect();
+        });
+
+        it('is a no-op when pub/sub is disabled', async () => {
+            const p = new RedisLocalStorageProvider({
+                enablePubSub: false,
+                enableLogging: false,
+            });
+
+            p.PublishMessage('push-status-updates', 'hello');
+
+            expect(p.Client.publish).not.toHaveBeenCalled();
+            await p.Disconnect();
+        });
+
+        it('delivers a message to the handler registered for its channel', async () => {
+            const p = new RedisLocalStorageProvider({
+                enablePubSub: true,
+                enableLogging: false,
+                keyPrefix: 'mj',
+            });
+            const handler = vi.fn();
+            await p.SubscribeToChannel('push-status-updates', handler);
+
+            (p as unknown as { dispatchChannelMessage: (c: string, m: string) => void })
+                .dispatchChannelMessage('mj:push-status-updates', 'payload');
+
+            expect(handler).toHaveBeenCalledWith('payload');
+            await p.Disconnect();
+        });
+
+        it('does not deliver a message meant for a different channel', async () => {
+            const p = new RedisLocalStorageProvider({
+                enablePubSub: true,
+                enableLogging: false,
+                keyPrefix: 'mj',
+            });
+            const handler = vi.fn();
+            await p.SubscribeToChannel('push-status-updates', handler);
+
+            (p as unknown as { dispatchChannelMessage: (c: string, m: string) => void })
+                .dispatchChannelMessage('mj:something-else', 'payload');
+
+            expect(handler).not.toHaveBeenCalled();
+            await p.Disconnect();
+        });
+
+        it('stops delivering after the returned unsubscribe is called', async () => {
+            const p = new RedisLocalStorageProvider({
+                enablePubSub: true,
+                enableLogging: false,
+                keyPrefix: 'mj',
+            });
+            const handler = vi.fn();
+            const unsubscribe = await p.SubscribeToChannel('push-status-updates', handler);
+
+            unsubscribe();
+            (p as unknown as { dispatchChannelMessage: (c: string, m: string) => void })
+                .dispatchChannelMessage('mj:push-status-updates', 'payload');
+
+            expect(handler).not.toHaveBeenCalled();
+            await p.Disconnect();
+        });
+
+        it('keeps delivering to the other handlers when one throws', async () => {
+            const p = new RedisLocalStorageProvider({
+                enablePubSub: true,
+                enableLogging: false,
+                keyPrefix: 'mj',
+            });
+            const good = vi.fn();
+            await p.SubscribeToChannel('push-status-updates', () => {
+                throw new Error('handler blew up');
+            });
+            await p.SubscribeToChannel('push-status-updates', good);
+
+            expect(() =>
+                (p as unknown as { dispatchChannelMessage: (c: string, m: string) => void })
+                    .dispatchChannelMessage('mj:push-status-updates', 'payload')
+            ).not.toThrow();
+            expect(good).toHaveBeenCalledWith('payload');
+            await p.Disconnect();
+        });
+
+        it('subscribes to the underlying channel only once for repeated handlers', async () => {
+            const p = new RedisLocalStorageProvider({
+                enablePubSub: true,
+                enableLogging: false,
+                keyPrefix: 'mj',
+            });
+            await p.SubscribeToChannel('push-status-updates', vi.fn());
+            await p.SubscribeToChannel('push-status-updates', vi.fn());
+
+            const subscriber = (p as unknown as { _subscriber: { subscribe: ReturnType<typeof vi.fn> } })._subscriber;
+            const namedCalls = subscriber.subscribe.mock.calls.filter(
+                (c: unknown[]) => c[0] === 'mj:push-status-updates'
+            );
+            expect(namedCalls).toHaveLength(1);
+            await p.Disconnect();
+        });
+
+        it('returns an inert unsubscribe when pub/sub is disabled', async () => {
+            const p = new RedisLocalStorageProvider({
+                enablePubSub: false,
+                enableLogging: false,
+            });
+
+            const unsubscribe = await p.SubscribeToChannel('push-status-updates', vi.fn());
+
+            expect(() => unsubscribe()).not.toThrow();
+            await p.Disconnect();
+        });
+    });
+
+    // ────────────────────────────────────────────────────────────────────────
     // Generic typing — internal JSON serialization for non-string values
     // ────────────────────────────────────────────────────────────────────────
     describe('generic typing — internal JSON conversion', () => {

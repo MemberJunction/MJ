@@ -1,5 +1,5 @@
 import { Arg, Field, ID, ObjectType, PubSubEngine, Resolver, ResolverFilterData, Root, Subscription } from 'type-graphql';
-import { UUIDsEqual } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { UserPayload } from '../types.js';
 
 export const PUSH_STATUS_UPDATES_TOPIC = 'PUSH_STATUS_UPDATES';
@@ -32,6 +32,51 @@ export interface PushStatusNotificationPayload {
   sessionId: string;
   /** Authenticated user the update belongs to. Server-side filter key; never sent to the client. */
   ownerUserId: string;
+  /**
+   * `MJGlobal.ProcessUUID` of the instance that first published this update. Used only for
+   * cross-instance echo suppression: an instance that receives its own message back from the
+   * message bus must drop it, or every push is delivered twice.
+   */
+  SourceServerId?: string;
+}
+
+/** Receives every locally-published status update, for fan-out to other server instances. */
+export type PushStatusPublishHook = (payload: PushStatusNotificationPayload) => void;
+
+let _publishHook: PushStatusPublishHook | undefined;
+
+/**
+ * Register (or clear, with no arg) the cross-instance fan-out hook.
+ *
+ * Inversion of control, deliberately: this module must not know that Redis exists. The server
+ * registers the hook at startup only when a message bus is configured, so a single-instance
+ * deployment behaves exactly as before.
+ */
+export function SetPushStatusPublishHook(hook?: PushStatusPublishHook): void {
+  _publishHook = hook;
+}
+
+/**
+ * Whether an update is worth sending to other server instances.
+ *
+ * Streaming content is excluded. It arrives at hundreds of messages per second and each one carries
+ * a full serialized agent run, so replicating it would cost far more bandwidth than the delivery it
+ * buys — and a token delta is worthless to a client that has already missed the ones before it.
+ * Progress and completion are low-rate and each is individually meaningful, which is exactly the
+ * kind of message that must survive landing on the wrong replica.
+ */
+export function shouldReplicateStatusUpdate(message?: string): boolean {
+  if (!message) {
+    return false;
+  }
+  try {
+    const parsed: unknown = JSON.parse(message);
+    const type = (parsed as { type?: unknown })?.type;
+    return type !== 'StreamingContent';
+  } catch {
+    // A plain-string message (not the resolvers' JSON envelope) is rare and low-rate. Replicate it.
+    return true;
+  }
 }
 
 interface PushStatusNotificationArgs {
@@ -60,8 +105,21 @@ export function publishStatusUpdate(pubSub: PubSubEngine, params: StatusUpdatePa
     sessionId: params.sessionId,
     ownerUserId: params.ownerUserId,
     message: params.message,
+    SourceServerId: MJGlobal.Instance.ProcessUUID,
   };
   pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, payload);
+
+  // Fan out to other instances. Only reached by updates originating HERE: a message arriving from
+  // the bus is republished straight onto the local topic and never comes back through this
+  // function, so there is no loop to break beyond the SourceServerId check on the receiving side.
+  if (_publishHook && shouldReplicateStatusUpdate(params.message)) {
+    try {
+      _publishHook(payload);
+    } catch {
+      // Fan-out is an optimization over the durable tail query. A message bus that is down must
+      // never break local delivery, which is the path that works for the common case.
+    }
+  }
 }
 
 /** Minimal shape of the subscription's connection context needed by the filter. */

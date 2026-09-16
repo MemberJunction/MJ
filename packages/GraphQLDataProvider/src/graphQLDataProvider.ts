@@ -222,6 +222,37 @@ export class GraphQLProviderConfigData extends ProviderConfigDataBase {
 
 
 
+/**
+ * How often the client sends a keepalive ping, in ms.
+ *
+ * Matched to MJAPI's own cadence: graphql-ws's `useServer(options, ws, keepAlive)` defaults its
+ * third positional argument to 12s, so the server already pings and terminates on an unanswered
+ * pong. Pinging at a comparable rate makes the two ends detect a dead link at roughly the same
+ * time instead of leaving the client blind for half a minute after the server has given up.
+ */
+export const WS_KEEPALIVE_MS = 10_000;
+
+/**
+ * How long to wait for a pong before declaring the socket dead, in ms.
+ *
+ * REQUIRED, not optional. graphql-ws re-arms its keepalive ping ONLY on pong receipt, so a
+ * half-open socket receives exactly one ping and then goes silent forever — its own JSDoc says
+ * "NOTHING will happen automatically with the client if the server never responds to a
+ * PingMessage with a PongMessage." Without this watchdog the socket never closes, `retryAttempts`
+ * never engages (it fires only on abnormal CLOSURE), and every recovery path that keys off
+ * `on('closed')` stays asleep indefinitely. See MJ #4222.
+ */
+export const WS_PONG_TIMEOUT_MS = 10_000;
+
+/**
+ * How long to wait for `ConnectionAck` after opening the socket, in ms.
+ *
+ * graphql-ws defaults this to 0, i.e. disabled — a reconnect that completes the TCP handshake but
+ * never acks would hang forever, which is the same blindness as an unanswered pong, just on the
+ * reconnect path. On expiry graphql-ws closes with `4418`, which is retriable.
+ */
+export const WS_CONNECTION_ACK_TIMEOUT_MS = 10_000;
+
 // The GraphQLDataProvider implements both the IEntityDataProvider and IMetadataProvider interfaces.
 /**
  * The GraphQLDataProvider class is a data provider for MemberJunction that implements the IEntityDataProvider, IMetadataProvider, IRunViewProvider, IRunQueryProvider interfaces and connects to the
@@ -3168,7 +3199,22 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     private _wsClient: Client = null;
     private _wsClientCreatedAt: number = null;
     private _socketStateSubject = new BehaviorSubject<SocketConnectionState>('unknown');
+    private _socketReconnectedSubject = new Subject<void>();
     private _isDisposingSocketIntentionally = false;
+    /**
+     * Pending pong watchdog for the current socket, or null when no ping is outstanding.
+     * Armed when we send a keepalive ping, cleared when the pong arrives or the socket closes.
+     */
+    private _pongTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    /**
+     * Fires each time the socket comes back up after having dropped — never on the first
+     * connect. Subscribers should treat it as "you may have missed events while you were
+     * away; re-read authoritative state", because the push topic has no replay buffer.
+     */
+    public get SocketReconnected$(): Observable<void> {
+        return this._socketReconnectedSubject.asObservable();
+    }
 
     /**
      * Observable of the WebSocket (graphql-ws) connection state. Used by
@@ -3230,7 +3276,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         // Create new client if needed
         if (!this._wsClient) {
             this._isDisposingSocketIntentionally = false;
-            this._wsClient = createClient({
+            // Bind handlers to this LOCAL client, not to `this._wsClient`. A pong watchdog armed
+            // on one socket must never be able to terminate a *replacement* socket created while
+            // that timer was still pending.
+            const client = createClient({
                 url: this.ConfigData.WSURL,
                 // Function form: re-evaluated on every connection attempt (including
                 // retries after 4403 "Token expired"). This lets the client pick up a
@@ -3242,17 +3291,64 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     ...(this.ConfigData.MJAPIKey ? { 'x-mj-api-key': this.ConfigData.MJAPIKey } : {}),
                     ...(this.ConfigData.UserAPIKey ? { 'x-mj-user-api-key': this.ConfigData.UserAPIKey } : {}),
                 }),
-                keepAlive: 30000, // Send keepalive ping every 30 seconds
+                keepAlive: WS_KEEPALIVE_MS,
+                connectionAckWaitTimeout: WS_CONNECTION_ACK_TIMEOUT_MS,
                 retryAttempts: 3,
                 shouldRetry: () => true,
             });
+            this._wsClient = client;
             this._wsClientCreatedAt = now;
 
-            // Emit connectivity events — consumed by ServerConnectivityService
-            this._wsClient.on('connected', () => {
-                this._socketStateSubject.next('connected');
+            // ── Pong watchdog (MJ #4222) ──
+            // graphql-ws sends the keepalive ping but deliberately does nothing when no pong
+            // comes back, and re-arms the ping ONLY on pong receipt. So on a half-open socket
+            // the library emits exactly one 'ping' and then falls permanently silent: no close,
+            // no error, no retry. This watchdog is what converts that silence into a real close
+            // event, which is the single signal the retry logic, `_socketStateSubject`,
+            // ServerConnectivityService, ConversationStreaming and FireAndForgetHelper all wait on.
+            client.on('ping', (received: boolean) => {
+                // `received === true` is a server-initiated ping, which graphql-ws answers on our
+                // behalf — it tells us nothing about whether OUR traffic is getting through. Only
+                // a ping we sent starts the countdown.
+                if (received) {
+                    return;
+                }
+                this.clearPongTimeout();
+                this._pongTimeout = setTimeout(() => {
+                    this._pongTimeout = null;
+                    try {
+                        // Issues a synthetic `4499 Terminated` close. graphql-ws treats terminate
+                        // as non-fatal, so `retryAttempts`/`shouldRetry` reconnect as normal.
+                        client.terminate();
+                    } catch {
+                        // Socket already gone — the close we wanted has effectively happened.
+                    }
+                }, WS_PONG_TIMEOUT_MS);
             });
-            this._wsClient.on('closed', (event: unknown) => {
+            client.on('pong', (received: boolean) => {
+                // The link is proven alive in both directions; stand the watchdog down.
+                if (received) {
+                    this.clearPongTimeout();
+                }
+            });
+
+            // Emit connectivity events — consumed by ServerConnectivityService
+            client.on('connected', (_socket: unknown, _payload: unknown, wasRetry: boolean) => {
+                this._socketStateSubject.next('connected');
+                if (wasRetry) {
+                    // A RECONNECT, not a first connect. This is the only trustworthy reconnect
+                    // signal available: graphql-ws re-establishes subscriptions transparently, so
+                    // the RxJS stream may never error or complete, and `_socketStateSubject` can
+                    // re-emit 'connected' without an intervening 'disconnected' when the close was
+                    // suppressed. Anything published while the socket was down was dropped with no
+                    // replay, so a listener must reconcile against durable state (MJ #4222).
+                    this._socketReconnectedSubject.next();
+                }
+            });
+            client.on('closed', (event: unknown) => {
+                // Whatever closed the socket, no pong can arrive on it now. Disarm first so a
+                // pending watchdog cannot fire against an already-dead client.
+                this.clearPongTimeout();
                 // Ignore closes we initiated via disposeWSClient() — those already
                 // emit 'unknown' themselves. Only treat unexpected closes (retries
                 // exhausted) as 'disconnected'.
@@ -3284,12 +3380,25 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     /**
+     * Disarms the pong watchdog. Idempotent, and safe to call when none is pending.
+     */
+    private clearPongTimeout(): void {
+        if (this._pongTimeout !== null) {
+            clearTimeout(this._pongTimeout);
+            this._pongTimeout = null;
+        }
+    }
+
+    /**
      * Disposes of the WebSocket client
      * Does NOT complete subjects - caller should handle that separately to avoid double-cleanup
      */
     private disposeWSClient(): void {
         if (this._wsClient) {
             this._isDisposingSocketIntentionally = true;
+            // Disarm before disposing: a deliberate teardown must not leave a watchdog running
+            // that would later terminate whatever client has taken this one's place.
+            this.clearPongTimeout();
             try {
                 this._wsClient.dispose();
             } catch (e) {

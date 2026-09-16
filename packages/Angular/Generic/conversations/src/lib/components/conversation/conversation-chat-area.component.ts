@@ -7,6 +7,7 @@ import { ActionableCommandRequest, UICommandHandlerService } from '../../service
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { AgentStateService } from '../../services/agent-state.service';
+import { ConversationLivenessDomService } from '../../services/conversation-liveness-dom.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
 import {
   ConversationDetailWindowStore,
@@ -1170,6 +1171,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   constructor(
     private agentStateService: AgentStateService,
+    private livenessDom: ConversationLivenessDomService,
     private conversationAgentService: ConversationAgentService,
     private activeTasks: ActiveTasksService,
     private cdr: ChangeDetectorRef,
@@ -1408,7 +1410,28 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         const message = this.messages.find(m => UUIDsEqual(m.ID, event.conversationDetailId));
         if (message && conversationId) {
           await this.handleMessageCompletion(message, event.agentRunId, conversationId);
+        } else if (conversationId) {
+          // The completion is for a message we do not currently hold — it belongs to another
+          // conversation, or to one scrolled out of the loaded window. Previously this event was
+          // simply dropped, and for the scrolled-out case nothing else ever picked it up: the
+          // `recentCompletions` replay only fires on conversation OPEN. Reconciling reads durable
+          // state for every in-progress message we do hold, which repairs it if it is ours and
+          // costs one narrow query if it is not.
+          await this.ReconcileNow('completion-for-unloaded-message');
         }
+      });
+
+    // Reconciliation triggers that do NOT depend on a clean socket close. This is the
+    // independent second layer: `retryAttempts`, `_socketStateSubject`,
+    // `ServerConnectivityService`, `scheduleReconnection()` and `FireAndForgetHelper.onStreamEnd`
+    // are all downstream of `on('closed')`, so on a half-open socket they fail together. The
+    // supervisor coalesces socket-reconnect, stream-reconnect, tab-visible and browser-online
+    // into one pass (MJ #4222).
+    this.livenessDom.Start();
+    ConversationsRuntime.Instance.Liveness.reconciliationRequired$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((reason) => {
+        void this.ReconcileNow(reason);
       });
 
     // Subscribe to polling-based agent state as a secondary fallback for completion detection.
@@ -4029,6 +4052,19 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    *
    * Usage: Hold Shift and click any AI message bubble. Open DevTools Console to see the dump.
    */
+  /**
+   * A message reports that its run has gone quiet (MJ #4222).
+   *
+   * The reconciliation triggers all fire on transport events — a socket retry, a tab regaining
+   * focus. This one fires on the symptom itself: a run that simply stopped reporting, with no event
+   * anywhere to notice it. The message throttles its own requests, so this costs one narrow query
+   * per quiet message per window.
+   */
+  onLivenessCheckRequested(messageId: string): void {
+    LogStatusEx({ message: `🫀 Message ${messageId} reports no recent progress — reconciling`, verboseOnly: true });
+    void this.ReconcileNow('message-liveness');
+  }
+
   onDiagnosticRequested(messageId: string): void {
     const streaming = this.streamingService.getDiagnosticSnapshot(messageId);
     const agentRun = this.agentRunsByDetailId.get(messageId);
@@ -4732,6 +4768,140 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    *    completed successfully, we detect the mismatch and correct it. This prevents
    *    the race condition where the client overwrites a server-completed record.
    */
+  /**
+   * Re-read the agent-run rows backing this conversation's in-progress messages, refreshing
+   * {@link agentRunsByDetailId} in place.
+   *
+   * REQUIRED BEFORE ANY ON-DEMAND RECONCILE. {@link reconnectInProgressRuns} compares against
+   * the in-memory map and never reloads it; on the conversation-load path that is safe only
+   * because `loadPeripheralData` ran moments earlier off a fresh fetch. Invoked from a socket
+   * reconnect or a tab regaining focus there has been no such fetch, so the map still holds the
+   * stale `Running` status the outage froze it at — and the reconcile silently finds nothing to
+   * do, which is indistinguishable from working (MJ #4222).
+   *
+   * Deliberately narrow: only the in-progress details, only the three fields the comparison
+   * needs, `BypassCache` because the server wrote these rows through a different provider.
+   * Cheaper than `windowStore.RefreshLatest()`, and cheap enough to run on every trigger.
+   */
+  private async refreshAgentRunsForInProgress(conversationId: string, loadToken: number): Promise<void> {
+    const inProgressIds = this.messages
+      .filter(m => m.Status === 'In-Progress' && m.Role === 'AI' && m.ID)
+      .map(m => m.ID);
+
+    if (inProgressIds.length === 0) {
+      return;
+    }
+
+    const quoted = inProgressIds.map(id => `'${id}'`).join(',');
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+    const result = await rv.RunView<MJAIAgentRunEntityExtended>({
+      EntityName: 'MJ: AI Agent Runs',
+      ExtraFilter: `ConversationDetailID IN (${quoted})`,
+      OrderBy: '__mj_CreatedAt DESC',
+      ResultType: 'entity_object',
+      BypassCache: true
+    }, this.currentUser);
+
+    if (!result.Success || !this.isActiveConversationLoad(conversationId, loadToken)) {
+      return;
+    }
+
+    for (const run of result.Results || []) {
+      const detailId = run.ConversationDetailID;
+      // `OrderBy __mj_CreatedAt DESC` puts the newest run first, so the first row seen for a
+      // detail wins — a retried message must reconcile against its latest run, not its first.
+      if (detailId && !this.agentRunsByDetailId.has(detailId)) {
+        this.agentRunsByDetailId.set(detailId, run);
+      } else if (detailId) {
+        const existing = this.agentRunsByDetailId.get(detailId);
+        if (existing && UUIDsEqual(existing.ID, run.ID)) {
+          this.agentRunsByDetailId.set(detailId, run);
+        }
+      }
+    }
+    // New map reference so OnPush children re-read it.
+    this.agentRunsByDetailId = new Map(this.agentRunsByDetailId);
+  }
+
+  /**
+   * Reconcile in-progress messages against durable server state, on demand.
+   *
+   * This is the recovery path for the case the five close-event-driven mechanisms all miss: a
+   * completion published while the client's transport was silently dead. Tier 0 makes the socket
+   * close; this is what recovers the event that was dropped while it was down.
+   *
+   * @param reason What prompted it — carried only for logging.
+   */
+  public async ReconcileNow(reason: string): Promise<void> {
+    const conversationId = this.conversationId;
+    if (!conversationId || !this.currentUser) {
+      return;
+    }
+
+    // READ the token, never `++` it. `conversationLoadToken` is a CANCELLATION token: every
+    // in-flight conversation load checks it and bails when it changes, so incrementing here
+    // would abort a load already running rather than merely tagging this work.
+    const loadToken = this.conversationLoadToken;
+
+    LogStatusEx({ message: `🔁 Reconciling in-progress runs (${reason})`, verboseOnly: true });
+    try {
+      await this.refreshAgentRunsForInProgress(conversationId, loadToken);
+      if (!this.isActiveConversationLoad(conversationId, loadToken)) {
+        return;
+      }
+      await this.detectAndReconcileAgentRuns(conversationId, loadToken);
+    } catch (error) {
+      // Recovery is best-effort: a failed reconcile must never surface as a user-facing error,
+      // and the next trigger will try again.
+      console.error('[ConversationChatArea] Reconciliation failed:', error);
+    }
+  }
+
+  /**
+   * Ask the durable read model whether a message we still show as in-progress has in fact finished.
+   *
+   * The last gap in the recovery chain. Everything else here reads `MJ: AI Agent Runs` through the
+   * client's own provider; when that returns nothing the message simply waits. The tail query reads
+   * the same truth server-side from a cursor, reports the conversation detail's own status, and runs
+   * over HTTP — so it answers while the WebSocket is still down, which is the whole point.
+   *
+   * Completion is routed through the existing {@link handleMessageCompletion}, never written here:
+   * four writers already move a message out of In-Progress and a fifth would race them.
+   *
+   * @returns true when the message was completed from durable state.
+   */
+  private async tryRecoverFromTail(
+    message: MJConversationDetailEntity,
+    conversationId: string,
+    loadToken: number
+  ): Promise<boolean> {
+    const tail = ConversationsRuntime.Instance.Tail;
+    const result = await tail.Tail(message.ID);
+
+    if (!result.Success || !this.isActiveConversationLoad(conversationId, loadToken)) {
+      return false;
+    }
+
+    // `IsInFlight` false means the server considers the run finished. A terminal `DetailStatus`
+    // with no run at all covers the case where the detail was completed by something other than an
+    // agent run. Either way the message must stop spinning.
+    const detailIsTerminal = result.DetailStatus === 'Complete' || result.DetailStatus === 'Error';
+    const runIsTerminal = result.RunID != null && !result.IsInFlight;
+
+    if (!runIsTerminal && !detailIsTerminal) {
+      return false;
+    }
+
+    LogStatusEx({
+      message: `📼 Tail reports message ${message.ID} finished (run ${result.RunID ?? 'none'}, status ${result.RunStatus ?? result.DetailStatus}) — completing`,
+      verboseOnly: true
+    });
+    await this.handleMessageCompletion(message, result.RunID ?? '', conversationId, loadToken);
+    // The message is terminal, so its cursor will never advance again.
+    tail.Forget(message.ID);
+    return true;
+  }
+
   private async detectAndReconcileAgentRuns(conversationId: string, loadToken: number): Promise<void> {
     if (!this.isActiveConversationLoad(conversationId, loadToken)) {
       return;
@@ -4763,9 +4933,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       const agentRun = this.agentRunsByDetailId.get(message.ID);
 
       if (!agentRun) {
-        // No agent run yet — fire-and-forget may not have created it.
-        // Polling will pick this up once the server creates the run.
-        LogStatusEx({message: `⏳ No agent run found for in-progress message ${message.ID}, waiting for server...`, verboseOnly: true});
+        // No agent run in the map. The run row may genuinely not exist yet (fire-and-forget
+        // acknowledges before the INSERT), or it may exist but be invisible to the narrow refresh
+        // above. Ask the durable tail, which answers over plain HTTP and therefore works while the
+        // socket is still dead. Only if that is inconclusive do we leave it to polling.
+        const recovered = await this.tryRecoverFromTail(message, conversationId, loadToken);
+        if (!recovered) {
+          LogStatusEx({message: `⏳ No agent run found for in-progress message ${message.ID}, waiting for server...`, verboseOnly: true});
+        }
         continue;
       }
 

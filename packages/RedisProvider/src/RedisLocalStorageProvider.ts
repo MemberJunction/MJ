@@ -186,6 +186,8 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
     private _pubSubChannel: string;
     private _eventEmitter: EventEmitter = new EventEmitter();
     private _subscriberConnected: boolean = false;
+    /** Fully-qualified channel name -> handlers registered via {@link SubscribeToChannel}. */
+    private _channelHandlers: Map<string, Set<(message: string) => void>> = new Map();
     private _config: RedisProviderConfig;
 
     /**
@@ -679,6 +681,7 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
 
         // Remove all event listeners
         this._eventEmitter.removeAllListeners();
+        this._channelHandlers.clear();
 
         try {
             await this._client.quit();
@@ -827,10 +830,11 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
         }
 
         this._subscriber.on('message', (channel: string, message: string) => {
-            if (channel !== this._pubSubChannel) {
+            if (channel === this._pubSubChannel) {
+                this.handlePubSubMessage(message);
                 return;
             }
-            this.handlePubSubMessage(message);
+            this.dispatchChannelMessage(channel, message);
         });
     }
 
@@ -952,6 +956,83 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
                 LogError(`Redis pub/sub publish failed: ${(err as Error).message}`);
             }
         });
+    }
+
+    /**
+     * Publishes an arbitrary message on a named channel. Fire-and-forget: the promise is not
+     * awaited and a failure is logged rather than raised, so a caller on a hot path is never
+     * blocked or broken by the message bus.
+     *
+     * The channel is namespaced with the provider's key prefix, so several applications can share
+     * one Redis without hearing each other.
+     *
+     * @param channel Logical channel name (unprefixed).
+     * @param payload Message body. Serialize before calling — this layer is shape-agnostic.
+     */
+    public PublishMessage(channel: string, payload: string): void {
+        if (!this._enablePubSub) {
+            return;
+        }
+        const fullChannel = this.qualifyChannel(channel);
+        this._client.publish(fullChannel, payload).catch((err) => {
+            if (this._enableLogging) {
+                LogError(`Redis pub/sub publish failed on "${fullChannel}": ${(err as Error).message}`);
+            }
+        });
+    }
+
+    /**
+     * Registers a handler for messages on a named channel, starting the subscriber if needed.
+     *
+     * No echo suppression happens here — this layer does not know the payload shape. A publisher
+     * that needs it must stamp its own origin on the message and check it in the handler.
+     *
+     * @returns A function that removes this handler.
+     */
+    public async SubscribeToChannel(channel: string, handler: (message: string) => void): Promise<() => void> {
+        if (!this._enablePubSub) {
+            return () => undefined;
+        }
+
+        await this.StartListening();
+        const fullChannel = this.qualifyChannel(channel);
+
+        let handlers = this._channelHandlers.get(fullChannel);
+        if (!handlers) {
+            handlers = new Set();
+            this._channelHandlers.set(fullChannel, handlers);
+            await this._subscriber?.subscribe(fullChannel);
+            if (this._enableLogging) {
+                LogStatus(`Redis pub/sub: subscribed to channel "${fullChannel}"`);
+            }
+        }
+        handlers.add(handler);
+
+        return () => {
+            handlers?.delete(handler);
+        };
+    }
+
+    /** Routes an inbound message to the handlers registered for its channel. @internal */
+    private dispatchChannelMessage(channel: string, message: string): void {
+        const handlers = this._channelHandlers.get(channel);
+        if (!handlers) {
+            return;
+        }
+        for (const handler of handlers) {
+            try {
+                handler(message);
+            } catch (err) {
+                if (this._enableLogging) {
+                    LogError(`Redis pub/sub handler for "${channel}" threw: ${(err as Error).message}`);
+                }
+            }
+        }
+    }
+
+    /** Namespaces a channel with the provider's key prefix. @internal */
+    private qualifyChannel(channel: string): string {
+        return `${this._keyPrefix}:${channel}`;
     }
 
     /**

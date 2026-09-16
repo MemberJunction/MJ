@@ -34,6 +34,31 @@ import { BadgeTextForAttachment } from '../../util/attachment-badge';
 /**
  * Represents an attachment on a message for display
  */
+/**
+ * How much the displayed progress can still be trusted for an in-flight run.
+ *
+ * - `live` — the server is heart-beating; the timer means what it says.
+ * - `checking` — nothing has been heard for a while and the client is re-reading durable state.
+ * - `stalled` — silent long enough that the server's own watchdog will force-fail the run.
+ */
+export type MessageLivenessState = 'live' | 'checking' | 'stalled';
+
+/**
+ * Silence after which an in-flight run is no longer presented as healthy. Three missed heartbeats
+ * (`AgentRunWatchdogConfig.heartbeatIntervalMs` is 30s), so ordinary jitter never trips it.
+ */
+export const LIVENESS_CHECKING_MS = 90_000;
+
+/**
+ * Silence after which the run is presented as stalled. Matches the watchdog's
+ * `staleThresholdMinutes`, which is the point the server force-fails the run — so the UI stops
+ * claiming progress exactly when the server stops believing in it.
+ */
+export const LIVENESS_STALLED_MS = 5 * 60_000;
+
+/** Minimum gap between re-check requests from one message. The pill re-evaluates every second. */
+export const LIVENESS_RECHECK_THROTTLE_MS = 30_000;
+
 export interface MessageAttachment {
   id: string;
   type: 'Image' | 'Video' | 'Audio' | 'Document';
@@ -191,6 +216,13 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   @Output() public suggestedResponseSelected = new EventEmitter<{text: string; customInput?: string}>();
   @Output() public attachmentClicked = new EventEmitter<MessageAttachment>();
   @Output() public diagnosticRequested = new EventEmitter<string>(); // emits messageId on Shift+Click
+
+  /**
+   * Raised when this message's run has gone quiet long enough that the displayed state may be
+   * fiction (MJ #4222). The parent answers by re-reading durable state; if the run really is alive
+   * its heartbeat advances and the pill returns to 'live' on the next tick.
+   */
+  @Output() public livenessCheckRequested = new EventEmitter<string>(); // emits messageId
   @Output() public messagePinToggled = new EventEmitter<MJConversationDetailEntity>();
 
   /**
@@ -231,6 +263,11 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   private _messageClasses: string = 'message-item';
   private _stableDisplayMessage: string = '';
   private _stableIsInProgressAIMessage: boolean = false;
+  private _stableLivenessState: MessageLivenessState = 'live';
+  /** When this component started watching the current run. Bounds the server-clock comparison. */
+  private _livenessWatchStart: number = Date.now();
+  /** Last time a re-check was requested, so a quiet run asks once per window, not once per second. */
+  private _lastLivenessRequestAt: number = 0;
 
   // Agent run details
   public isAgentDetailsExpanded: boolean = false;
@@ -312,6 +349,115 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     this._messageClasses = this.buildMessageClasses();
     this._stableIsInProgressAIMessage = this.isAIMessage && currentStatus === 'In-Progress';
     this._stableDisplayMessage = this.computeDisplayMessage();
+
+    // Nothing in flight means nothing to watch — restart the clock so a run that begins later is
+    // measured from when it began, not from when this component was created.
+    const inFlight = this.isLivenessInFlight();
+    this.refreshLivenessState();
+
+    // Re-arm the elapsed timer here, not only in ngAfterViewInit. A message that becomes
+    // in-progress AFTER the view initialised — the common case, since the row is rendered before
+    // the agent starts — otherwise never got an interval, so its pill never ticked and its liveness
+    // state was never recomputed on a schedule.
+    if (inFlight && this._elapsedTimeInterval === null) {
+      this.startElapsedTimeUpdater();
+    }
+  }
+
+  /** Whether something is still running for this message, read live rather than from a cache. */
+  private isLivenessInFlight(): boolean {
+    return (this.isAIMessage && this.message?.Status === 'In-Progress') || this.isAgentRunActive;
+  }
+
+  /**
+   * Recompute the liveness state, and ask the host to re-read durable state when it has degraded.
+   *
+   * Called from ngDoCheck AND from the one-second timer, and the timer path is the load-bearing
+   * one. `ChangeDetectorRef.detectChanges()` re-renders this view but does NOT re-invoke this
+   * component's own `ngDoCheck` — that runs only when an ancestor's change detection reaches this
+   * node. During the outage this exists to report, nothing triggers an ancestor pass, so a state
+   * computed only in `ngDoCheck` freezes at 'live' and the pill keeps counting as though healthy.
+   */
+  private refreshLivenessState(): void {
+    if (!this.isLivenessInFlight()) {
+      // Nothing in flight means nothing to watch — restart the clock so a run that begins later is
+      // measured from when it began, not from when this component was created.
+      this._livenessWatchStart = Date.now();
+      this._stableLivenessState = 'live';
+      return;
+    }
+
+    this._stableLivenessState = this.computeLivenessState();
+    if (this._stableLivenessState !== 'live') {
+      this.requestLivenessCheck();
+    }
+  }
+
+  /**
+   * Classify how much the displayed progress can still be trusted.
+   *
+   * Only meaningful while something is in flight; a finished message is always reported `live`.
+   */
+  private computeLivenessState(): MessageLivenessState {
+    if (!this.isLivenessInFlight()) {
+      return 'live';
+    }
+
+    const silence = this.runSilenceMs();
+    if (silence >= LIVENESS_STALLED_MS) {
+      return 'stalled';
+    }
+    if (silence >= LIVENESS_CHECKING_MS) {
+      return 'checking';
+    }
+    return 'live';
+  }
+
+  /**
+   * How long the server has been silent about this run, in milliseconds.
+   *
+   * `LastHeartbeatAt` is stamped on the DATABASE clock and compared here against the browser's, so
+   * the raw difference carries whatever skew exists between them. It is therefore bounded by how
+   * long this component has actually been watching: we can never claim more silence than we have
+   * observed. A browser clock running fast can no longer invent a stall, and the bound lifts on its
+   * own within the first check window.
+   */
+  private runSilenceMs(): number {
+    const now = Date.now();
+    const watching = Math.max(0, now - this._livenessWatchStart);
+
+    const stamps = [this.agentRun?.LastHeartbeatAt, this.agentRun?.__mj_UpdatedAt]
+      .filter((d): d is Date => d != null)
+      .map(d => new Date(d).getTime())
+      .filter(t => !Number.isNaN(t));
+
+    if (stamps.length === 0) {
+      // No run row yet, or one carrying no timestamps. Our own watch time is all we have.
+      return watching;
+    }
+
+    const serverSilence = now - Math.max(...stamps);
+    return Math.max(0, Math.min(serverSilence, watching));
+  }
+
+  /**
+   * Ask the parent to re-read durable state for this message, at most once per window.
+   *
+   * This closes the loop with the reconciliation triggers: those fire on transport events, and this
+   * one fires on the symptom itself — a run that has simply gone quiet, with no event to notice.
+   */
+  private requestLivenessCheck(): void {
+    const now = Date.now();
+    if (now - this._lastLivenessRequestAt < LIVENESS_RECHECK_THROTTLE_MS) {
+      return;
+    }
+    this._lastLivenessRequestAt = now;
+    this.livenessCheckRequested.emit(this.message.ID);
+  }
+
+  /** How much the displayed progress can still be trusted. See {@link MessageLivenessState}. */
+  public get livenessState(): MessageLivenessState {
+    return this._stableLivenessState;
   }
 
   ngAfterViewInit() {
@@ -422,6 +568,10 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       const diffMs = now.getTime() - createdAt.getTime();
       this._agentRunDurationFormatted = this.formatDurationFromMs(diffMs);
     }
+
+    // Silence only grows with time, so it has to be re-evaluated on the clock rather than on
+    // change detection. This is the only path that runs while the transport is dead.
+    this.refreshLivenessState();
   }
 
   private formatElapsedTime(elapsedTime: number): string {
