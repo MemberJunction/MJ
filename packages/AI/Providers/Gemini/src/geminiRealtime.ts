@@ -2,6 +2,7 @@
 import {
     GoogleGenAI,
     Modality,
+    Behavior,
     type AuthToken,
     type CreateAuthTokenParameters,
     type LiveServerMessage,
@@ -428,7 +429,13 @@ export class GeminiRealtime extends BaseRealtimeModel {
             systemInstruction: params.SystemPrompt,
         };
         if (params.Tools && params.Tools.length > 0) {
-            config.tools = [{ functionDeclarations: GeminiRealtime.MapToolsToFunctionDeclarations(params.Tools) }];
+            const bag: Record<string, unknown> = (params.Config as Record<string, unknown> | undefined) ?? {};
+            const tooling = GeminiRealtime.readObject(bag['tooling']);
+            const requestedBehavior =
+                GeminiRealtime.readString(tooling?.['Behavior']) ??
+                GeminiRealtime.readString(bag['toolBehavior']) ??
+                GeminiRealtime.readString(bag['functionCallingBehavior']);
+            config.tools = [{ functionDeclarations: GeminiRealtime.MapToolsToFunctionDeclarations(params.Tools, params.Model, requestedBehavior) }];
         }
         // The open config bag is merged last so per-conversation overrides (generation parameters,
         // language, turn-taking) win over the defaults above. Cast through the shared JSON object
@@ -599,6 +606,24 @@ export class GeminiRealtime extends BaseRealtimeModel {
                     ? TurnCoverage.TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO
                     : TurnCoverage.TURN_INCLUDES_ONLY_ACTIVITY,
         };
+
+        // C5 — refuse BLOCKING locally for Extended Thinking rather than emitting a frame the
+        // server hard-errors.
+        if (!profile.Tooling.SupportsBlockingExecution && config.tools) {
+            for (const toolGroup of config.tools) {
+                if ('functionDeclarations' in toolGroup && toolGroup.functionDeclarations) {
+                    for (const fn of toolGroup.functionDeclarations) {
+                        if (fn.behavior === Behavior.BLOCKING) {
+                            console.warn(
+                                `[GeminiRealtime] Forcing \`behavior: NON_BLOCKING\` for tool "${fn.name}" on ${params.Model}: ` +
+                                `blocking tool execution is not supported on this model and returns a hard error.`
+                            );
+                            fn.behavior = Behavior.NON_BLOCKING;
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /**
@@ -642,12 +667,40 @@ export class GeminiRealtime extends BaseRealtimeModel {
      *
      * The Core `ParametersSchema` is a JSON-schema object, so it rides in `parametersJsonSchema`
      * (the SDK's JSON-schema slot) rather than the OpenAPI-style `parameters` slot.
+     *
+     * In Gemini Live, function calling defaults to asynchronous execution (`Behavior.NON_BLOCKING`).
+     * On models that forbid synchronous blocking execution (e.g. `gemini-3.8-live-extended-thinking`),
+     * `Behavior.BLOCKING` is refused locally and forced to `Behavior.NON_BLOCKING` with a warning,
+     * preventing a hard error from the Live API server.
      */
-    public static MapToolsToFunctionDeclarations(tools: RealtimeToolDefinition[]): FunctionDeclaration[] {
+    public static MapToolsToFunctionDeclarations(
+        tools: RealtimeToolDefinition[],
+        model?: string,
+        requestedBehavior?: Behavior | string
+    ): FunctionDeclaration[] {
+        const profile = ResolveGeminiLiveProfile(model);
+        const normalized = typeof requestedBehavior === 'string' ? requestedBehavior.trim().toUpperCase() : requestedBehavior;
+        let behavior: Behavior = Behavior.NON_BLOCKING;
+
+        if (normalized === Behavior.BLOCKING || normalized === 'BLOCKING') {
+            if (!profile.Tooling.SupportsBlockingExecution) {
+                console.warn(
+                    `[GeminiRealtime] Forcing \`behavior: NON_BLOCKING\` for tools on ${model ?? 'model'}: ` +
+                    `blocking tool execution is not supported on this model and returns a hard error.`
+                );
+                behavior = Behavior.NON_BLOCKING;
+            } else {
+                behavior = Behavior.BLOCKING;
+            }
+        } else {
+            behavior = Behavior.NON_BLOCKING;
+        }
+
         return tools.map((tool) => ({
             name: tool.Name,
             description: tool.Description,
             parametersJsonSchema: tool.ParametersSchema,
+            behavior,
         }));
     }
 }

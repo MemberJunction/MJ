@@ -161,7 +161,7 @@ rare edge case into a guaranteed one. Tracked as **F7**.
 - [x] **C3.** Omit `thinkingLevel`/`thinkingConfig` for `gemini-3.8-live`; send low/medium/high for
   Extended Thinking; reject `minimal` locally with a clear message.
 - [x] **C4.** Set turn coverage explicitly from `TurnCoverage`; **audio-only when absent.**
-- [ ] **C5.** Refuse `BLOCKING` locally for Extended Thinking rather than emitting a frame the
+- [x] **C5.** Refuse `BLOCKING` locally for Extended Thinking rather than emitting a frame the
   server hard-errors.
 
 ### Phase D — idle and async tools
