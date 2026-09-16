@@ -347,6 +347,39 @@ describe('GeminiRealtime', () => {
             expect(transcripts).toEqual([{ Role: 'assistant', Text: 'It is sunny.', IsFinal: true }]);
         });
 
+        it('extracts thought parts as narration transcripts without emitting audio output', () => {
+            const transcripts: RealtimeTranscript[] = [];
+            const outputs: ArrayBuffer[] = [];
+            session.OnTranscript((t) => transcripts.push(t));
+            session.OnOutput((chunk) => outputs.push(chunk));
+
+            // Emit a thought part and an audio part
+            driver.Fake.Emit({
+                serverContent: {
+                    modelTurn: {
+                        role: 'model',
+                        parts: [
+                            { text: 'Let me think about this step by step.', thought: true },
+                            { inlineData: { data: Buffer.from('spoken audio').toString('base64'), mimeType: 'audio/pcm;rate=24000' } },
+                        ],
+                    },
+                },
+            } as LiveServerMessage);
+
+            expect(transcripts).toEqual([
+                { Role: 'assistant', Text: 'Let me think about this step by step.', IsFinal: false, Kind: 'narration' },
+            ]);
+            expect(outputs).toHaveLength(1);
+
+            // Complete turn finalizes the narration transcript
+            driver.Fake.Emit({ serverContent: { turnComplete: true } } as LiveServerMessage);
+
+            expect(transcripts).toEqual([
+                { Role: 'assistant', Text: 'Let me think about this step by step.', IsFinal: false, Kind: 'narration' },
+                { Role: 'assistant', Text: 'Let me think about this step by step.', IsFinal: true, Kind: 'narration' },
+            ]);
+        });
+
         it('translates toolCall.functionCalls to RealtimeToolCalls with JSON-string args', () => {
             const calls: RealtimeToolCall[] = [];
             session.OnToolCall((c) => calls.push(c));

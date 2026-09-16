@@ -215,13 +215,13 @@ rare edge case into a guaranteed one. Tracked as **F7**.
 
 ### Phase E — thinking and narration
 
-- [ ] **E1.** `thinkingConfig` from `ModelConfiguration.Realtime.Reasoning` — the plane's first
+- [x] **E1.** `thinkingConfig` from `ModelConfiguration.Realtime.Reasoning` — the plane's first
   consumer.
-- [ ] **E2.** `includeThoughts` behind `IncludeThoughtSummaries`.
-- [ ] **E3.** Thought parts → narration transcript, **not** assistant speech. **VERIFY** the wire
+- [x] **E2.** `includeThoughts` behind `IncludeThoughtSummaries`.
+- [x] **E3.** Thought parts → narration transcript, **not** assistant speech. **VERIFY** the wire
   marking first (task 7).
-- [ ] **E4.** Narration promoted to the shared transcript contract.
-- [ ] **E5.** Third delegation-card `Kind` for model-authored narration; design tokens only.
+- [x] **E4.** Narration promoted to the shared transcript contract.
+- [x] **E5.** Third delegation-card `Kind` for model-authored narration; design tokens only.
 
 ### Phase F — video tracks, the proof point
 

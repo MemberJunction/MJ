@@ -648,4 +648,134 @@ describe('GeminiRealtimeClient (extended)', () => {
             expect(noSchedClient.Fake.ToolResponses[0].functionResponses[0].scheduling).toBeUndefined();
         });
     });
+
+    // ── Phase E: Thinking and Narration ────────────────────────────────────────
+
+    describe('Phase E: thinking and narration', () => {
+        it('extracts thought parts as narration transcripts (Kind: narration, Role: Assistant) and does not enqueue audio', async () => {
+            const client = new GeminiTestClient();
+            await connect(client);
+            const { transcripts } = collect(client);
+
+            // Emit a model turn containing a thought part and an audio part
+            client.Emit({
+                serverContent: {
+                    modelTurn: {
+                        role: 'model',
+                        parts: [
+                            { text: 'Analyzing database records...', thought: true },
+                            { inlineData: { data: Buffer.from('spoken pcm audio').toString('base64'), mimeType: 'audio/pcm;rate=24000' } },
+                        ],
+                    },
+                },
+            } as LiveServerMessage);
+
+            // Transcripts contains the interim narration delta
+            expect(transcripts).toEqual([
+                { Role: 'Assistant', Text: 'Analyzing database records...', IsFinal: false, Kind: 'narration' },
+            ]);
+            // Playback enqueued only the 1 audio chunk
+            expect(client.Playback.Enqueued).toHaveLength(1);
+
+            // Completing the turn finalizes the narration transcript
+            completeTurn(client);
+
+            expect(transcripts).toEqual([
+                { Role: 'Assistant', Text: 'Analyzing database records...', IsFinal: false, Kind: 'narration' },
+                { Role: 'Assistant', Text: 'Analyzing database records...', IsFinal: true, Kind: 'narration' },
+            ]);
+        });
+
+        it('accumulates multiple thought deltas across frames and finalizes on turnComplete', async () => {
+            const client = new GeminiTestClient();
+            await connect(client);
+            const { transcripts } = collect(client);
+
+            client.Emit({
+                serverContent: {
+                    modelTurn: {
+                        role: 'model',
+                        parts: [{ text: 'Step 1: check parameters. ', thought: true }],
+                    },
+                },
+            } as LiveServerMessage);
+
+            client.Emit({
+                serverContent: {
+                    modelTurn: {
+                        role: 'model',
+                        parts: [{ text: 'Step 2: execute query.', thought: true }],
+                    },
+                },
+            } as LiveServerMessage);
+
+            expect(transcripts).toEqual([
+                { Role: 'Assistant', Text: 'Step 1: check parameters. ', IsFinal: false, Kind: 'narration' },
+                { Role: 'Assistant', Text: 'Step 2: execute query.', IsFinal: false, Kind: 'narration' },
+            ]);
+
+            completeTurn(client);
+
+            expect(transcripts).toEqual([
+                { Role: 'Assistant', Text: 'Step 1: check parameters. ', IsFinal: false, Kind: 'narration' },
+                { Role: 'Assistant', Text: 'Step 2: execute query.', IsFinal: false, Kind: 'narration' },
+                { Role: 'Assistant', Text: 'Step 1: check parameters. Step 2: execute query.', IsFinal: true, Kind: 'narration' },
+            ]);
+        });
+
+        it('finalizes thought transcripts on barge-in interruption', async () => {
+            const client = new GeminiTestClient();
+            await connect(client);
+            const { transcripts } = collect(client);
+
+            client.Emit({
+                serverContent: {
+                    modelTurn: {
+                        role: 'model',
+                        parts: [{ text: 'Deep thinking before interruption', thought: true }],
+                    },
+                },
+            } as LiveServerMessage);
+
+            // User interrupts
+            client.Emit({ serverContent: { interrupted: true } } as LiveServerMessage);
+
+            expect(transcripts).toEqual([
+                { Role: 'Assistant', Text: 'Deep thinking before interruption', IsFinal: false, Kind: 'narration' },
+                { Role: 'Assistant', Text: 'Deep thinking before interruption', IsFinal: true, Kind: 'narration' },
+            ]);
+        });
+
+        it('finalizes thought transcripts on handleIdleTerminal under interactionStatus', async () => {
+            const client = new GeminiTestClient();
+            await client.Connect(
+                makeGeminiConfig({
+                    model: 'gemini-3.8-live-extended-thinking',
+                    config: {},
+                    idleSignal: 'interactionStatus',
+                    supportsScheduling: false,
+                    supportsBlocking: false,
+                }),
+                new FakeMediaStream([new FakeTrack()])
+            );
+            const { transcripts } = collect(client);
+
+            client.Emit({
+                serverContent: {
+                    modelTurn: {
+                        role: 'model',
+                        parts: [{ text: 'Extended thinking stream...', thought: true }],
+                    },
+                },
+            } as LiveServerMessage);
+
+            // Model finishes interaction and signals IDLE
+            client.Emit({ interaction_status: 'IDLE' } as LiveServerMessage);
+
+            expect(transcripts).toEqual([
+                { Role: 'Assistant', Text: 'Extended thinking stream...', IsFinal: false, Kind: 'narration' },
+                { Role: 'Assistant', Text: 'Extended thinking stream...', IsFinal: true, Kind: 'narration' },
+            ]);
+        });
+    });
 });
