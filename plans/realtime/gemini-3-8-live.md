@@ -235,14 +235,59 @@ rare edge case into a guaranteed one. Tracked as **F7**.
 - [x] **F2.** Gemini driver sends frames as inbound video when the track is established.
 - [x] **F3.** **Whiteboard channel sources inbound video** when the model supports it — the agent
   sees what it draws. Falls back to today's tool-only behaviour otherwise.
+  **⚠️ REOPENED 2026-09-16 (review item 37): the frame producer is a stub.**
+  `whiteboard-channel.ts:90` `GetLatestFrame()` returns `null` unconditionally, under a doc comment
+  describing a capability the body does not have, and the channel has no `PushFrame` call site. The
+  bridge is constructed and `Start()`ed regardless, so a 1 Hz timer polls `null` for the session's
+  lifetime. `frameCapture` does not serve this — it exposes stream/camera/screen capture, not
+  canvas, so F3 needs a real `toDataURL` path. Worst case for §4.3: requests a video track,
+  collapses the cap to 2 minutes, sends nothing.
 - [x] **F4.** **Remote browser channel sources inbound video** when supported — the model watches
   the page continuously while the agent still acts through tools. Falls back to
   screenshot-as-tool-result.
+  **⚠️ REOPENED 2026-09-16 (review item 38): two frame sources, one gate.** The channel both
+  `Start()`s the bridge (`:418`) and `PushFrame`s from `OnScreencastFrame` (`:490`). The bridge's
+  poll calls `GetLatestFrame()` → `fetchSnapshot()` → a **server round-trip per second** that is
+  redundant during streaming (the surface's own poll is stopped precisely because pushed frames are
+  the only thing seeing the page) and carries a `notePageChange` side effect. Two 1 Hz sources
+  phase-offset by ~800 ms both clear the 750 ms gate, so the effective rate exceeds the vendor's
+  1 fps maximum. The screencast push is the **one unpaced path** in the system — the 750 ms gate's
+  stated justification ("upstream pacers are the primary enforcers") holds for the bridge's
+  `setInterval` and for `frameCapture`, both clamped to ≤1 fps, and not for this one.
 - [x] **F5.** One shared "channel → inbound video" path; F3/F4 must not be two implementations.
 - [x] **F6.** Per-track cost accounting so video's $0.002/min is attributable.
 - [x] **F7.** **Session continuity, or video is a 2-minute demo** (§4.3). Handle `goAway` and
   `sessionResumptionUpdate` on the client and resume across the cap. Gates whether F3/F4 are
   shippable features or just demos. Not optional the moment a video track is established.
+- [ ] **F8.** 🚨 **Wire the REQUEST side of track negotiation — without it F1–F7 cannot execute.**
+  Found 2026-09-16 (review item 36). The negotiation has a consumer and no producer:
+  `RequestedTracks` is declared (`modelConfiguration.ts:165`), documented, intersected
+  (`ResolveRequestedTracks`) and read (`baseRealtimeClient.ts:288`,
+  `geminiRealtimeClient.ts:624`) — and **written nowhere outside the test fixtures**. The mint
+  publishes `SupportedInboundTracks`/`SupportedOutboundTracks` (capability), never the request, and
+  `metadata/` sets no `RequestedTracks`, including G1's two new rows. The other half of the same
+  gap: **`GetSourcedTracks()` has zero consumers** — declared on both channel bases, overridden by
+  all four channels, read by nobody.
+
+  Consequence chain, every step silent by design: `RequestedTracks` undefined → `negotiateTracks`
+  takes its audio-only default → `IsTrackEstablished('video','inbound')` is always `false` →
+  `ChannelInboundVideoBridge.Start()` returns `false` ("graceful fallback with no error") →
+  `SendVideoFrame()` returns `false` at its first guard. **Zero video frames, on any model, in the
+  shipped configuration.** Phase F reports success end to end and transmits nothing.
+
+  The design is not at fault — §"a video track exists only because something asked for it" is
+  deliberately structural. Nothing asks. `GetSourcedTracks()` is evidently the intended asker:
+  aggregate the active channels' sourced tracks into `requestedTracks` at connect/mint, letting
+  `ResolveRequestedTracks` intersect against model support. Do **not** fix this by putting
+  `RequestedTracks` in the model catalog — that requests video for every session on the model and
+  pays §4.3's 2-minute cap even with no visual channel open.
+
+  **Why no test caught it:** `gemini-phase-f-video-continuity.test.ts:86` asserts
+  *"absent requestedTracks config defaults to audio-only established"* — that is production, and it
+  passes. The other six video tests inject `CHANNEL_INBOUND_VIDEO_TRACK` into `SessionConfig` by
+  fixture and also pass. Two mutually exclusive worlds, both green, and only #6 ever runs. An
+  end-to-end assertion that a visual channel being open *causes* a video track to be requested is
+  the guard this needs — a fixture that hand-establishes the track can never fail this way.
 
 ### Phase G — metadata and close-out
 
@@ -319,7 +364,14 @@ rare edge case into a guaranteed one. Tracked as **F7**.
 5. Lost `IDLE` still unwedges the session.
 6. **Track negotiation:** absent config ⇒ audio-only established, video **not** established.
 7. Video-capable channel + non-video model ⇒ falls back with no error and no frames sent.
-8. Existing Gemini tests stay green or change with a stated reason.
+8. 🚨 **Track negotiation, POSITIVE direction (F8, added 2026-09-16 after review item 36):** an open
+   visual channel on a video-capable model ⇒ a video track **is requested and established**, and a
+   frame reaches the session. Items 6 and 7 are both assertions about the *fallback*, and the
+   fallback is what production always did — which is exactly how the missing request side stayed
+   invisible while seven video tests passed. The test must drive the real request path; a fixture
+   that hand-injects `requestedTracks` into `SessionConfig` cannot fail this way, so it proves
+   nothing about whether anything asks.
+9. Existing Gemini tests stay green or change with a stated reason.
 
 > **Known local-environment failure, not ours:** 3 Gemini socket-close tests fail with
 > `ReferenceError: CloseEvent is not defined` on Node v22 (`CloseEvent` is a Node 23 global).
