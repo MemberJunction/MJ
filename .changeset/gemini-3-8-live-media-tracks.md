@@ -1,11 +1,11 @@
 ---
-"@memberjunction/ai": minor
-"@memberjunction/ai-gemini": minor
-"@memberjunction/ai-realtime-client": minor
-"@memberjunction/ai-agents": minor
-"@memberjunction/remote-browser-server": minor
-"@memberjunction/ng-conversations": minor
-"@memberjunction/server-bootstrap-lite": minor
+"@memberjunction/ai": patch
+"@memberjunction/ai-gemini": patch
+"@memberjunction/ai-realtime-client": patch
+"@memberjunction/ai-agents": patch
+"@memberjunction/remote-browser-server": patch
+"@memberjunction/ng-conversations": patch
+"@memberjunction/server-bootstrap-lite": patch
 "@memberjunction/server": patch
 ---
 
