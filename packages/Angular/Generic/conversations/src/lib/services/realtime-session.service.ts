@@ -5,7 +5,7 @@ import { UserInfoEngine } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJGlobal } from '@memberjunction/global';
-import { ClientRealtimeSessionConfig, JSONObject, JSONValue, RealtimeToolDefinition, RealtimeTrackDirection } from '@memberjunction/ai';
+import { ClientRealtimeSessionConfig, JSONObject, JSONValue, RealtimeToolDefinition, RealtimeTrackDescriptor, RealtimeTrackDirection } from '@memberjunction/ai';
 import { AppContextSnapshot } from '@memberjunction/ai-core-plus';
 import {
   BaseRealtimeClient,
@@ -1688,14 +1688,30 @@ export class RealtimeSessionService {
     return client;
   }
 
-  /** Builds the client-direct session config the realtime client connects with. */
-  private buildClientConfig(session: StartRealtimeClientSessionResult): ClientRealtimeSessionConfig {
+  /**
+   * Builds the client-direct session config the realtime client connects with.
+   * Aggregates tracks sourced by active channels into `requestedTracks` so the driver
+   * can negotiate them (e.g., establishing inbound video streaming for Whiteboard / RemoteBrowser).
+   */
+  public buildClientConfig(session: StartRealtimeClientSessionResult): ClientRealtimeSessionConfig {
+    const sessionConfig = this.parseSessionConfig(session.SessionConfigJson);
+    const channelTracks = this._activeChannels$.value.flatMap((c) => c.GetSourcedTracks());
+    if (channelTracks.length > 0) {
+      const existing = Array.isArray(sessionConfig['requestedTracks'])
+        ? (sessionConfig['requestedTracks'] as RealtimeTrackDescriptor[])
+        : [];
+      const trackMap = new Map<string, RealtimeTrackDescriptor>();
+      for (const t of [...existing, ...channelTracks]) {
+        trackMap.set(`${t.Direction}:${t.Modality}`, t);
+      }
+      sessionConfig['requestedTracks'] = Array.from(trackMap.values());
+    }
     return {
       Provider: session.Provider,
       Model: session.Model,
       EphemeralToken: session.EphemeralToken,
       ExpiresAt: session.ExpiresAt,
-      SessionConfig: this.parseSessionConfig(session.SessionConfigJson)
+      SessionConfig: sessionConfig
     };
   }
 

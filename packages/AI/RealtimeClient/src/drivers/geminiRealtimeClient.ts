@@ -195,7 +195,11 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         return this.videoFramesSent;
     }
 
-    /** Returns the cumulative active video duration in seconds across sent video frames. */
+    /**
+     * Returns the cumulative active video duration in seconds across sent video frames.
+     * Represents the wall-clock span between first and last sent frames (span-not-sum) for stream telemetry.
+     * Provider-reported ImageTokens remains the authoritative financial billing basis.
+     */
     public get VideoSeconds(): number {
         if (this.firstVideoSendTimestamp === 0 || this.lastVideoSendTimestamp === 0) {
             return 0;

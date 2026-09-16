@@ -177,21 +177,21 @@ describe('Phase F — Realtime Video Tracks, Bridge, and Continuity', () => {
             expect(input.video).toEqual({ data: 'base64JpegData', mimeType: 'image/jpeg' });
         });
 
-        it('throttles rapid video frame sends to 1 fps ceiling', async () => {
+        it('enforces 750ms minimum spacing backstop to provide jitter headroom for upstream 1 fps pacers', async () => {
             await connectWithVideo(client);
 
             const first = client.SendVideoFrame('frame1', 'image/jpeg');
             expect(first).toBe(true);
             expect(client.Fake.RealtimeInputs).toHaveLength(1);
 
-            // Attempting to send another frame 200ms later — should be throttled/dropped
+            // Attempting to send another frame 200ms later (< 750ms gate) — should be throttled/dropped
             vi.advanceTimersByTime(200);
             const throttled = client.SendVideoFrame('frame2', 'image/jpeg');
             expect(throttled).toBe(false);
             expect(client.Fake.RealtimeInputs).toHaveLength(1);
 
-            // After 1000ms has elapsed, send is permitted
-            vi.advanceTimersByTime(801);
+            // After 800ms total elapsed (200ms + 600ms = 800ms >= 750ms gate), send is permitted even before 1000ms
+            vi.advanceTimersByTime(600);
             const allowed = client.SendVideoFrame('frame3', 'image/jpeg');
             expect(allowed).toBe(true);
             expect(client.Fake.RealtimeInputs).toHaveLength(2);

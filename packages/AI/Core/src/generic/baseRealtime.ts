@@ -917,7 +917,8 @@ export interface RealtimeUsageModalityDetail {
     VideoFrames?: number;
     /**
      * Cumulative inbound or outbound video duration in seconds (usage basis 'seconds').
-     * Matches the minute/second billing unit ($0.002/min) for stream-level telemetry.
+     * Represents the wall-clock span between first and last sent frames (span-not-sum) for stream telemetry.
+     * Provider-reported ImageTokens remains the authoritative financial billing basis.
      */
     VideoSeconds?: number;
 }

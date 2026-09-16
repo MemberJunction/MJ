@@ -6,7 +6,7 @@ import { EventEmitter } from '@angular/core';
 import { MJGlobal } from '@memberjunction/global';
 import { BaseRealtimeChannelClient, RealtimeChannelContext } from '../lib/components/realtime/channels/base-realtime-channel-client';
 import {
-  RealtimeWhiteboardChannel, WHITEBOARD_INTERACTION_NOTE_THROTTLE_MS
+  RealtimeWhiteboardChannel, WHITEBOARD_INTERACTION_NOTE_THROTTLE_MS, rasterizeSvgToJpegBase64
 } from '../lib/components/realtime/whiteboard/whiteboard-channel';
 import {
   RealtimeWhiteboardHostComponent, WHITEBOARD_TOOL_DEFINITIONS, WHITEBOARD_TOOL_PREFIX,
@@ -324,5 +324,93 @@ describe('RealtimeWhiteboardChannel — plugin contract', () => {
     const spy = vi.spyOn(fake, 'ApplyAgentTool');
     channel.ApplyAgentTool('Whiteboard_AddNote', JSON.stringify({ text: 'still works' }));
     expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('rasterizeSvgToJpegBase64 returns null in non-DOM environment', async () => {
+    const result = await rasterizeSvgToJpegBase64('<svg></svg>');
+    expect(result).toBeNull();
+  });
+
+  it('rasterizeSvgToJpegBase64 rasterizes SVG when DOM Image and canvas are available', async () => {
+    class FakeImage {
+      public onload: (() => void) | null = null;
+      public onerror: (() => void) | null = null;
+      private _src = '';
+      public get src(): string {
+        return this._src;
+      }
+      public set src(val: string) {
+        this._src = val;
+        setTimeout(() => this.onload?.(), 0);
+      }
+    }
+
+    const fakeCanvas = {
+      width: 0,
+      height: 0,
+      getContext: (_type: string) => ({
+        fillStyle: '',
+        fillRect: () => undefined,
+        drawImage: () => undefined,
+      }),
+      toDataURL: (_type: string, _quality: number) => 'data:image/jpeg;base64,mockedJpegBase64',
+    };
+
+    vi.stubGlobal('Image', FakeImage);
+    vi.stubGlobal('Blob', class FakeBlob {
+      constructor(public parts: string[], public opts: { type: string }) {}
+    });
+    vi.stubGlobal('URL', {
+      createObjectURL: () => 'blob:mock',
+      revokeObjectURL: () => undefined,
+    });
+    vi.stubGlobal('document', {
+      createElement: (tag: string) => (tag === 'canvas' ? fakeCanvas : {}),
+    });
+
+    try {
+      const result = await rasterizeSvgToJpegBase64('<svg><rect width="100" height="100"/></svg>');
+      expect(result).toBe('mockedJpegBase64');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('GetLatestFrame returns null in non-DOM environment or rasterized frame when available', async () => {
+    channel.State.AddItem({ Kind: 'text', X: 10, Y: 10, Text: 'hello board' }, 'user');
+    const frame = await channel.GetLatestFrame();
+    expect(frame).toBeNull(); // non-DOM in node test
+  });
+
+  it('pushVisualScene paces frame pushes via videoBridge to at most 1 fps', async () => {
+    const pushedFrames: string[] = [];
+    const mockBridge = {
+      PushFrame: (frame: string) => {
+        pushedFrames.push(frame);
+        return true;
+      }
+    };
+    const c = channel as unknown as { videoBridge: typeof mockBridge };
+    c.videoBridge = mockBridge;
+
+    vi.spyOn(channel, 'GetLatestFrame').mockResolvedValue('frame-base64');
+
+    const contextWithClient: RealtimeChannelContext = {
+      ...makeContext(log),
+      Client: {
+        IsTrackEstablished: (modality: string, direction: string) => modality === 'video' && direction === 'inbound',
+      } as unknown as RealtimeChannelContext['Client'],
+    };
+    channel.Initialize(contextWithClient);
+    c.videoBridge = mockBridge;
+
+    // Mutate state - triggers pushVisualScene
+    channel.State.AddItem({ Kind: 'text', X: 0, Y: 0, Text: 'first' }, 'user');
+    await vi.waitFor(() => expect(pushedFrames).toHaveLength(1));
+    expect(pushedFrames[0]).toBe('frame-base64');
+
+    // Rapid second mutation within 1000ms window - should be paced/throttled
+    channel.State.AddItem({ Kind: 'text', X: 10, Y: 10, Text: 'second' }, 'user');
+    expect(pushedFrames).toHaveLength(1);
   });
 });

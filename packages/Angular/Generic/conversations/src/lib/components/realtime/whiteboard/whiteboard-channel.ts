@@ -5,9 +5,56 @@ import { CHANNEL_INBOUND_VIDEO_TRACK, RealtimeToolDefinition, RealtimeTrackDescr
 import { ChannelInboundVideoBridge, IChannelFrameProvider } from '@memberjunction/ai-realtime-client';
 import { BaseRealtimeChannelClient, ChannelOnboardingDetails } from '../channels/base-realtime-channel-client';
 import {
-  ApplyWhiteboardAgentTool, RealtimeWhiteboardHostComponent, WHITEBOARD_TOOL_DEFINITIONS,
+  ApplyWhiteboardAgentTool, BuildWhiteboardExportSvg, RealtimeWhiteboardHostComponent, WHITEBOARD_TOOL_DEFINITIONS,
   WHITEBOARD_TOOL_PREFIX, WhiteboardState, WhiteboardWidgetInteractionEvent, WhiteboardWidgetSubmitEvent
 } from '@memberjunction/ng-whiteboard';
+
+/**
+ * Asynchronously rasterizes an SVG string to a JPEG base64 string (without the `data:image/jpeg;base64,` prefix)
+ * using an offscreen canvas. Returns null in non-DOM environments or when rendering fails.
+ */
+export async function rasterizeSvgToJpegBase64(svg: string, width = 1280, height = 720): Promise<string | null> {
+  if (typeof document === 'undefined' || typeof Image === 'undefined') {
+    return null;
+  }
+  return new Promise<string | null>((resolve) => {
+    try {
+      const img = new Image();
+      const svgBlob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(svgBlob);
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            URL.revokeObjectURL(url);
+            resolve(null);
+            return;
+          }
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, width, height);
+          ctx.drawImage(img, 0, 0, width, height);
+          URL.revokeObjectURL(url);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          const comma = dataUrl.indexOf(',');
+          resolve(comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl);
+        } catch {
+          URL.revokeObjectURL(url);
+          resolve(null);
+        }
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve(null);
+      };
+      img.src = url;
+    } catch {
+      resolve(null);
+    }
+  });
+}
 
 /**
  * Per-widget throttle window for AMBIENT interaction context notes: at most one note per
@@ -71,6 +118,8 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
   private interactionThrottles = new Map<string, InteractionThrottleEntry>();
   /** Shared video bridge streaming board frames to the model when the model supports inbound video. */
   private videoBridge: ChannelInboundVideoBridge | null = null;
+  /** Pacing timestamp for event-driven visual scene pushes (enforces max 1 fps). */
+  private lastPushTimestamp = 0;
 
   public get ChannelName(): string {
     return 'Whiteboard';
@@ -85,10 +134,32 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
 
   /**
    * Produces the latest visual scene as a base64-encoded frame for the video bridge.
-   * Returns null when no frame is available.
+   * Renders the whiteboard SVG into an offscreen canvas and returns base64 JPEG.
    */
-  public GetLatestFrame(): string | null {
-    return null;
+  public async GetLatestFrame(): Promise<string | null> {
+    if (!this.State) {
+      return null;
+    }
+    const svg = BuildWhiteboardExportSvg(this.State);
+    return rasterizeSvgToJpegBase64(svg);
+  }
+
+  /**
+   * Pushes the latest board visual scene when mutations occur, paced to at most 1 fps.
+   */
+  private async pushVisualScene(): Promise<void> {
+    if (!this.videoBridge || !this.Context?.Client?.IsTrackEstablished('video', 'inbound')) {
+      return;
+    }
+    const now = Date.now();
+    if (now - this.lastPushTimestamp < 1000) {
+      return; // Paced to at most 1 fps
+    }
+    this.lastPushTimestamp = now;
+    const frame = await this.GetLatestFrame();
+    if (frame) {
+      this.videoBridge.PushFrame(frame);
+    }
   }
 
   public get ToolNamePrefix(): string {
@@ -131,6 +202,7 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
   protected override OnInitialize(): void {
     this.stateChangedSub = this.State.Changed$.subscribe(() => {
       this.Context?.RequestSave(this.State.ToJSON());
+      void this.pushVisualScene();
     });
     if (this.Context?.Client) {
       this.videoBridge = new ChannelInboundVideoBridge(this.Context.Client, this);
