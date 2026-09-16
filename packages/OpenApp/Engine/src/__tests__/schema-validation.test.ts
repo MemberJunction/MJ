@@ -153,6 +153,70 @@ describe('ValidateSchemaName', () => {
     });
 });
 
+describe('ValidateSchemaName — Rule classification (#4506)', () => {
+    // Task 2 picks operator-facing remediation text off `Rule`/`OverriddenBy` instead of
+    // pattern-matching `ErrorMessage`, so each rejection branch must classify itself correctly.
+    it('classifies an empty or whitespace-only name as Malformed, with no OverriddenBy', () => {
+        for (const name of ['', '   ']) {
+            const result = ValidateSchemaName(name);
+            expect(result.Rule, name).toBe('Malformed');
+            expect(result.OverriddenBy, name).toBeUndefined();
+        }
+    });
+
+    it('classifies leading/trailing whitespace as Malformed, with no OverriddenBy', () => {
+        for (const name of [' spaced ', 'trailing ']) {
+            const result = ValidateSchemaName(name);
+            expect(result.Rule, name).toBe('Malformed');
+            expect(result.OverriddenBy, name).toBeUndefined();
+        }
+    });
+
+    it('classifies platform-owned names as ReservedByPlatform on both paths, with no OverriddenBy', () => {
+        for (const name of ['dbo', 'public', 'db_owner', 'pg_temp_1', 'information_schema']) {
+            const defaultResult = ValidateSchemaName(name);
+            expect(defaultResult.Rule, name).toBe('ReservedByPlatform');
+            expect(defaultResult.OverriddenBy, name).toBeUndefined();
+
+            const overrideResult = ValidateSchemaName(name, { allowDoubleUnderscore: true });
+            expect(overrideResult.Rule, name).toBe('ReservedByPlatform');
+            expect(overrideResult.OverriddenBy, name).toBeUndefined();
+        }
+    });
+
+    it('classifies MJ-owned names as ReservedByMJ on both paths, with no OverriddenBy', () => {
+        for (const name of ['__mj', '__mj_udt', '__MJ_UDT']) {
+            const defaultResult = ValidateSchemaName(name);
+            expect(defaultResult.Rule, name).toBe('ReservedByMJ');
+            expect(defaultResult.OverriddenBy, name).toBeUndefined();
+
+            const overrideResult = ValidateSchemaName(name, { allowDoubleUnderscore: true });
+            expect(overrideResult.Rule, name).toBe('ReservedByMJ');
+            expect(overrideResult.OverriddenBy, name).toBeUndefined();
+        }
+    });
+
+    it('classifies non-namespace __-prefixed names as MJNamespace, overridable by AllowDoubleUnderscoreSchema', () => {
+        // This pair is the whole point: the only class the override unblocks.
+        for (const name of ['__bcsaas', '__acme_internal']) {
+            const defaultResult = ValidateSchemaName(name);
+            expect(defaultResult.Rule, name).toBe('MJNamespace');
+            expect(defaultResult.OverriddenBy, name).toBe('AllowDoubleUnderscoreSchema');
+
+            const overrideResult = ValidateSchemaName(name, { allowDoubleUnderscore: true });
+            expect(overrideResult.Success, name).toBe(true);
+        }
+    });
+
+    it('leaves Rule undefined on success', () => {
+        for (const name of ['mj_connector_acme', '__mj_BizAppsCommon']) {
+            const result = ValidateSchemaName(name);
+            expect(result.Success, name).toBe(true);
+            expect(result.Rule, name).toBeUndefined();
+        }
+    });
+});
+
 /**
  * Fake provider whose `ExecuteSQL` returns the first array in a scripted
  * queue, then empty. Lets us simulate "schema does not yet exist" for the

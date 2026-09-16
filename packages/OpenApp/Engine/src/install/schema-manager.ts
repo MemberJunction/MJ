@@ -102,7 +102,7 @@ function ReservedOwnerOf(normalized: string): 'the database platform' | 'MemberJ
  * schema already permits it (see `schemaNameRegex` in manifest-schema.ts, "May start with up
  * to two underscores"). Everything else under `__` stays reserved for MJ internals.
  */
-const MJ_APP_SCHEMA_PREFIX = '__mj_';
+export const MJ_APP_SCHEMA_PREFIX = '__mj_';
 
 /**
  * Result of a schema operation.
@@ -127,6 +127,31 @@ export interface ValidateSchemaNameOptions {
 }
 
 /**
+ * Which of {@link ValidateSchemaName}'s rules refused a name. `Malformed` covers both the
+ * empty/whitespace-only and the leading/trailing-whitespace branches — neither is a naming
+ * *policy* decision, so MJ claims no ownership of the name: a caller must not describe it as
+ * one MJ is protecting, only as one nothing can be addressed by.
+ */
+export type SchemaNameRule = 'Malformed' | 'ReservedByPlatform' | 'ReservedByMJ' | 'MJNamespace';
+
+/**
+ * Result of {@link ValidateSchemaName}. Carries which rule refused the name, and whether a
+ * caller option would have permitted it, so a caller can name a remedy instead of just quoting
+ * `ErrorMessage` back at the operator.
+ */
+export interface SchemaNameValidation extends SchemaOperationResult {
+  /** Which rule refused the name. Absent when Success. */
+  Rule?: SchemaNameRule;
+  /**
+   * The caller option that would have permitted this name, when one exists — it is offered by the
+   * install, upgrade AND remove options alike. Absent means nothing unblocks it. Callers branch on
+   * `OverriddenBy` first, then on `Rule` for the classes `OverriddenBy` cannot distinguish (see
+   * `BuildSchemaDropRefusalMessage` in install-orchestrator.ts).
+   */
+  OverriddenBy?: 'AllowDoubleUnderscoreSchema';
+}
+
+/**
  * Validates that a schema name is one an Open App is allowed to claim.
  *
  * The rule, in one place: MemberJunction owns the `__` namespace. Names MJ itself uses are
@@ -136,16 +161,17 @@ export interface ValidateSchemaNameOptions {
  *
  * @param schemaName - The schema name to validate
  * @param options - Optional overrides; see {@link ValidateSchemaNameOptions}
- * @returns Validation result
+ * @returns Validation result, classified by {@link SchemaNameRule} on rejection
  */
 export function ValidateSchemaName(
   schemaName: string,
   options: ValidateSchemaNameOptions = {}
-): SchemaOperationResult {
+): SchemaNameValidation {
   if (!schemaName || schemaName.trim().length === 0) {
     return {
       Success: false,
-      ErrorMessage: 'Schema name is required and cannot be empty'
+      ErrorMessage: 'Schema name is required and cannot be empty',
+      Rule: 'Malformed'
     };
   }
 
@@ -155,7 +181,8 @@ export function ValidateSchemaName(
   if (schemaName !== schemaName.trim()) {
     return {
       Success: false,
-      ErrorMessage: `Schema name '${schemaName}' has leading or trailing whitespace`
+      ErrorMessage: `Schema name '${schemaName}' has leading or trailing whitespace`,
+      Rule: 'Malformed'
     };
   }
 
@@ -165,7 +192,8 @@ export function ValidateSchemaName(
   if (owner) {
     return {
       Success: false,
-      ErrorMessage: `Schema name '${schemaName}' is reserved by ${owner} and cannot be used by an Open App`
+      ErrorMessage: `Schema name '${schemaName}' is reserved by ${owner} and cannot be used by an Open App`,
+      Rule: owner === 'the database platform' ? 'ReservedByPlatform' : 'ReservedByMJ'
     };
   }
 
@@ -177,7 +205,9 @@ export function ValidateSchemaName(
       Success: false,
       ErrorMessage:
         `Schema name '${schemaName}' is not available: names starting with '__' are reserved for MemberJunction. ` +
-        `MJ Open Apps use the '${MJ_APP_SCHEMA_PREFIX}<AppName>' convention; any other app should choose a name that does not start with '__'.`
+        `MJ Open Apps use the '${MJ_APP_SCHEMA_PREFIX}<AppName>' convention; any other app should choose a name that does not start with '__'.`,
+      Rule: 'MJNamespace',
+      OverriddenBy: 'AllowDoubleUnderscoreSchema'
     };
   }
 
