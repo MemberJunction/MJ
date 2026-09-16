@@ -142,13 +142,15 @@ fails until they are gone.
 **Members of an exported data shape cannot.** An interface is erased at compile time, so there is no
 carrier and no stub: renaming the member just breaks anyone who names it. Keeping both members does
 not rescue it either — making them optional to stay compatible is precisely what destroys the type
-safety the interface existed for. Those are **`warn`** — 11,352 of them, visible and counted, but
+safety the interface existed for. Those are **`warn`** — 11,421 of them, visible and counted, but
 not something the build can demand.
 
 Two kinds of data-shape member *are* errors, because they have a fix after all:
 
-- the owning type is **not published** from its package's entry point, so no consumer can name it —
-  the gate resolves each package's entry from `package.json` and follows its `export *` graph;
+- the owning type is **not published** from any of its package's entry points, so no consumer can
+  name it — the gate resolves every entry `package.json` declares (`types`/`main` **and each
+  subpath in `exports`**, since `@scope/pkg/forms` is as public as `@scope/pkg`) and follows the
+  `export *` graph from each;
 - the owning interface is **implemented by a class**, which carries both names like any other class.
 
 **The rest cannot be fixed at all, and that is the end of it.** Renaming a member of a published

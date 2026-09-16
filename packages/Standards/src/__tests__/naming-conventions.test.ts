@@ -344,6 +344,38 @@ describe('severity comes from whether a compatible fix exists', () => {
         }, { main: 'dist/entry.js' });
         expect(await severities()).toEqual({ maxTokens: 'warn' });
     });
+
+    it('treats a type published only through an exports SUBPATH as published', async () => {
+        // `@scope/pkg/forms` is as public as `@scope/pkg`. Reading only `types`/`main` declares the
+        // subpath's types unpublished and therefore free to rename, which is backwards.
+        writePackage('a', {
+            'index.ts': 'export const PLACEHOLDER = 1;',
+            'forms/index.ts': "export * from './shape.js';",
+            'forms/shape.ts': 'export interface ChatParams {\n    maxTokens: number;\n}',
+        }, {
+            types: 'dist/index.d.ts',
+            exports: {
+                '.': { types: './dist/index.d.ts' },
+                './forms': { types: './dist/forms/index.d.ts' },
+            },
+        });
+        expect(await severities()).toEqual({ maxTokens: 'warn' });
+    });
+
+    it('still errors on a type no subpath reaches', async () => {
+        writePackage('a', {
+            'index.ts': 'export const PLACEHOLDER = 1;',
+            'forms/index.ts': 'export const OTHER = 2;',
+            'shape.ts': 'export interface ChatParams {\n    maxTokens: number;\n}',
+        }, {
+            types: 'dist/index.d.ts',
+            exports: {
+                '.': { types: './dist/index.d.ts' },
+                './forms': { types: './dist/forms/index.d.ts' },
+            },
+        });
+        expect(await severities()).toEqual({ maxTokens: 'error' });
+    });
 });
 
 describe('@deprecated — the back-compat stub exclusion', () => {

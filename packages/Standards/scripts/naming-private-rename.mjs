@@ -75,6 +75,7 @@ function parseArgs(argv) {
         else if (a === '--findings') args.findings = argv[++i];
         else if (a === '--package') args.package = argv[++i];
         else if (a === '--limit') args.limit = Number(argv[++i]);
+        else if (a === '--skips') args.skips = argv[++i];
         else throw new Error(`unknown argument: ${a}`);
     }
     if (!args.findings) throw new Error('--findings <file> is required');
@@ -556,6 +557,19 @@ for (const [relFile, findings] of byFile) {
 }
 
 if (!args.apply) console.log('DRY RUN (nothing written)');
+if (args.skips) {
+    // The reason a private member could not move is the only durable record of why the gate still
+    // reports it, so it has to travel to whatever marks it.
+    writeFileSync(
+        args.skips,
+        JSON.stringify(
+            skipped.map((s2) => ({ File: s2.Finding.File, Line: s2.Finding.Line, Reason: s2.Reason })),
+            null,
+            2,
+        ),
+    );
+}
+
 console.log(`  selected findings : ${selected.length}`);
 console.log(`  renamed           : ${renamedMembers}   across ${changedFiles.length} file(s)`);
 console.log(`  references moved  : ${rewrittenRefs}`);

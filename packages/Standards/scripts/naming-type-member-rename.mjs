@@ -49,7 +49,11 @@ const SKIP_REASONS = {
     VendorShape:
         'the member name is snake_case, which means it mirrors an external payload rather than MJ code — the remote spelling IS the contract',
     Optional:
-        'the member is optional, so a use the checker does not reach stays ASSIGNABLE after the rename and the value silently becomes undefined. A required member missing from a literal is a compile error; an optional one is a bug that ships',
+        'the member is optional AND the old name still occurs somewhere the checker could not type, so the rename would leave that use assignable and silently undefined. A required member missing from a literal is a compile error; an optional one is a bug that ships',
+    VerifyDropped:
+        'compiling the plan proved the checker had missed a use — the rename broke something it could not see from the declaration, so it was withdrawn',
+    UnclaimedUse:
+        'the old name still occurs on a value the checker types as `any` or cannot resolve, so the rename would not reach it and the read would silently return undefined',
     StructurallyMirrored:
         'an inline type literal or generic constraint in this package describes the same shape — `T extends { name: string; schema: string; definition: string }` mirrors RoutineDef. Nothing links the two symbolically, so a rename moves one and not the other and the type stops satisfying the constraint',
 };
@@ -67,6 +71,7 @@ function parseArgs(argv) {
         else if (a === '--package') args.package = argv[++i];
         else if (a === '--limit') args.limit = Number(argv[++i]);
         else if (a === '--report') args.report = argv[++i];
+        else if (a === '--skips') args.skips = argv[++i];
         else throw new Error(`unknown argument: ${a}`);
     }
     if (!args.findings) throw new Error('--findings <file> is required');
@@ -150,8 +155,44 @@ function isSerializationSink(node) {
         if (object === 'JSON' && method === 'stringify') return node.arguments[0] ?? null;
         // res.json(payload) / res.send(payload) — an HTTP response body.
         if (method === 'json' || method === 'send') return node.arguments[0] ?? null;
+        // jwt.sign(claims, secret) — the first argument becomes the token payload verbatim.
+        if (method === 'sign' || method === 'encode') return node.arguments[0] ?? null;
+        // storage.setItem(key, value) where the value was not stringified is still a persisted blob.
+        if (method === 'setItem') return node.arguments[1] ?? null;
+    }
+    if (ts.isIdentifier(callee) && (callee.text === 'sign' || callee.text === 'SignJWT')) {
+        return node.arguments[0] ?? null;
     }
     return null;
+}
+
+/** Callees whose RESULT is a document somebody else wrote — the other end of a sink. */
+const PARSE_CALLEE = /^(parse|safeParse|json|decode|verify|load|loadAll|readJson|readJSON|parseJSON|fromJSON)$/i;
+
+/**
+ * The type a parse lands on, for `node` being any expression.
+ *
+ * Three spellings all mean "this shape is whatever the document already contains":
+ * `JSON.parse(t) as T`, `const c: T = JSON.parse(t)`, and `readJson<T>(path)`. Only the first was
+ * recognised originally, which let JWT claim sets and on-disk `package.json` mirrors through.
+ */
+function isParseCall(node) {
+    if (!ts.isCallExpression(node)) return false;
+    const callee = node.expression;
+    if (ts.isPropertyAccessExpression(callee)) return PARSE_CALLEE.test(callee.name.text);
+    if (ts.isIdentifier(callee)) return PARSE_CALLEE.test(callee.text);
+    return false;
+}
+
+/** Unwrap `await x`, `(x)` and `x as unknown` so the call underneath is visible. */
+function unwrap(node) {
+    let current = node;
+    for (let i = 0; i < 8 && current; i++) {
+        if (ts.isAwaitExpression(current) || ts.isParenthesizedExpression(current)) current = current.expression;
+        else if (ts.isAsExpression(current) && current.type.kind === ts.SyntaxKind.UnknownKeyword) current = current.expression;
+        else break;
+    }
+    return current;
 }
 
 /**
@@ -188,11 +229,20 @@ function serializedTypes(program, files, packageDir) {
             }
             // `JSON.parse(text) as T` and `const x: T = JSON.parse(text)` both declare that T is
             // whatever the document on disk or the wire already contains.
-            if (ts.isAsExpression(node) && ts.isCallExpression(node.expression)) {
-                const callee = node.expression.expression;
-                if (ts.isPropertyAccessExpression(callee) && ts.isIdentifier(callee.expression) &&
-                    callee.expression.text === 'JSON' && callee.name.text === 'parse') {
-                    try { seed(checker.getTypeAtLocation(node.type)); } catch { /* ignore */ }
+            if (ts.isAsExpression(node) && isParseCall(unwrap(node.expression))) {
+                try { seed(checker.getTypeAtLocation(node.type)); } catch { /* ignore */ }
+            }
+            // `const claims: MagicLinkJWTClaims = jwt.verify(token, secret)` — the annotation is the
+            // only place the shape is named, so the parse lands there with no cast to spot.
+            if (ts.isVariableDeclaration(node) && node.type && node.initializer &&
+                isParseCall(unwrap(node.initializer))) {
+                try { seed(checker.getTypeAtLocation(node.type)); } catch { /* ignore */ }
+            }
+            // `readJson<MemberPackageJson>(path)` — the shape is a type ARGUMENT, never written as a
+            // cast and never annotated.
+            if (ts.isCallExpression(node) && node.typeArguments?.length && isParseCall(node)) {
+                for (const argument of node.typeArguments) {
+                    try { seed(checker.getTypeAtLocation(argument)); } catch { /* ignore */ }
                 }
             }
             ts.forEachChild(node, visit);
@@ -275,6 +325,99 @@ function structurallyMirrored(program, files, packageDir) {
 // Main
 // ---------------------------------------------------------------------------------------------
 
+/**
+ * Every place a property NAME appears in this package, by name.
+ *
+ * `findRenameLocations` returns the uses the checker can connect to the declaration. What matters
+ * for safety is the complement: a use it did NOT claim. Some of those are unrelated types that
+ * happen to share a member name, which is fine. The rest sit on `any` — an implicit `any` binding,
+ * a `JSON.parse` result, a `vi.fn()` whose return type was inferred — and those are exactly the
+ * reads that keep compiling after the rename and return undefined at runtime.
+ *
+ * Built once for the package rather than per member; a rename wave asks this question hundreds of
+ * times and the file walk is the expensive half.
+ */
+function occurrenceIndex(program, files, packageDir) {
+    const index = new Map();
+    const add = (name, entry) => {
+        if (!index.has(name)) index.set(name, []);
+        index.get(name).push(entry);
+    };
+    for (const file of files) {
+        if (!file.startsWith(packageDir)) continue;
+        const source = program.getSourceFile(file);
+        if (!source || source.isDeclarationFile) continue;
+        const visit = (node) => {
+            if (ts.isPropertyAccessExpression(node)) {
+                add(node.name.text, { File: file, Pos: node.name.getStart(source), Subject: node.expression, Kind: 'access' });
+            } else if ((ts.isPropertyAssignment(node) || ts.isShorthandPropertyAssignment(node)) &&
+                       node.name && ts.isIdentifier(node.name)) {
+                add(node.name.text, { File: file, Pos: node.name.getStart(source), Subject: node.parent, Kind: 'literal' });
+            } else if (ts.isBindingElement(node) && node.propertyName && ts.isIdentifier(node.propertyName)) {
+                add(node.propertyName.text, { File: file, Pos: node.propertyName.getStart(source), Subject: node.parent.parent, Kind: 'destructure' });
+            } else if (ts.isElementAccessExpression(node) && node.argumentExpression &&
+                       ts.isStringLiteral(node.argumentExpression)) {
+                add(node.argumentExpression.text, { File: file, Pos: node.argumentExpression.getStart(source), Subject: node.expression, Kind: 'bracket' });
+            }
+            ts.forEachChild(node, visit);
+        };
+        ts.forEachChild(source, visit);
+    }
+    return index;
+}
+
+/**
+ * Uses of `name` this rename plan would leave behind on a value the rename cannot reach.
+ *
+ * A site whose subject resolves to a real, unrelated type is not a hazard — half the types in any
+ * codebase have a `name`. Three shapes are:
+ *
+ *   - `any`, where nothing will ever complain;
+ *   - `unknown`, which is how a fixture SEVERS the link on purpose — `{…} as unknown as Context`
+ *     is a double cast, and the literal inside it is checked against nothing;
+ *   - a bare literal with no contextual type at all whose keys are this very type's members. That
+ *     is a hand-built fixture, assigned to an inferred `const` and passed somewhere untyped.
+ *
+ * The last test is the same shape-matching heuristic that proved unsafe when used to REWRITE such
+ * literals. Used to decline a rename it is safe in the way the other direction was not: the cost of
+ * a false positive is one member that keeps its old spelling, not a silently corrupted fixture.
+ */
+function unclaimedHazards(checker, index, name, claimedKeys, ownerMembers) {
+    const hazards = [];
+    for (const use of index.get(name) ?? []) {
+        if (claimedKeys.has(`${use.File}:${use.Pos}`)) continue;
+        let contextual = null;
+        let type = null;
+        try {
+            if (use.Kind === 'literal') {
+                contextual = checker.getContextualType(use.Subject) ?? null;
+                type = contextual ?? checker.getTypeAtLocation(use.Subject);
+            } else {
+                type = checker.getTypeAtLocation(use.Subject);
+            }
+        } catch { /* unresolved — treated as a hazard below */ }
+
+        const flags = type ? type.flags : 0;
+        const untyped = !type || (flags & ts.TypeFlags.Any) !== 0 || (flags & ts.TypeFlags.Unknown) !== 0;
+        let text = '?';
+        try { text = type ? checker.typeToString(type) : '(unresolved)'; } catch { /* keep ? */ }
+
+        let detached = false;
+        if (!untyped && use.Kind === 'literal' && !contextual && ownerMembers && ts.isObjectLiteralExpression(use.Subject)) {
+            const keys = use.Subject.properties
+                .filter((property) => property.name && ts.isIdentifier(property.name))
+                .map((property) => property.name.text);
+            const overlap = keys.filter((key) => ownerMembers.has(key)).length;
+            detached = overlap >= 2 && keys.every((key) => ownerMembers.has(key));
+        }
+
+        if (untyped || detached) {
+            hazards.push({ File: use.File, Pos: use.Pos, Kind: use.Kind, Type: detached ? `detached fixture (${text})` : text });
+        }
+    }
+    return hazards;
+}
+
 const args = parseArgs(process.argv.slice(2));
 const repoRoot = resolve(process.cwd());
 const packageRel = args.package.replace(/\/$/, '');
@@ -292,7 +435,9 @@ if (selected.length === 0) {
 }
 
 const { Service: service, Program: program, Files: files } = loadProgram(packageDir);
+const checker = program.getTypeChecker();
 const tainted = serializedTypes(program, files, packageDir);
+const occurrences = occurrenceIndex(program, files, packageDir);
 
 /** The type declaration that owns the member at this line, and the member's name node. */
 function memberAt(source, line, oldName) {
@@ -334,15 +479,6 @@ for (const finding of selected) {
     // A snake_case member is mirroring somebody else's JSON. PascalCasing it is not a style fix.
     if (oldName.includes('_')) { skipped.push({ finding, reason: SKIP_REASONS.VendorShape }); continue; }
 
-    // `findRenameLocations` does not reach an object literal that is only STRUCTURALLY matched to
-    // the type later. When the member is required that miss is a compile error and the verify pass
-    // below catches it. When it is optional the literal stays assignable, the property is simply
-    // absent, and nothing complains — so those are never attempted.
-    if (hit.Name.parent && hit.Name.parent.questionToken) {
-        skipped.push({ finding, reason: SKIP_REASONS.Optional });
-        continue;
-    }
-
     const ownerName = hit.Owner?.name?.text;
     if (ownerName && tainted.has(ownerName)) { skipped.push({ finding, reason: SKIP_REASONS.Serialized }); continue; }
 
@@ -372,6 +508,25 @@ for (const finding of selected) {
     const escapes = locations.find((l) => !l.fileName.startsWith(packageDir));
     if (escapes) { skipped.push({ finding, reason: `${SKIP_REASONS.EscapesPackage} (${relative(repoRoot, escapes.fileName)})` }); continue; }
     if (locations.some((l) => /\.d\.[mc]?ts$/.test(l.fileName))) { skipped.push({ finding, reason: SKIP_REASONS.DeclarationFile }); continue; }
+
+    // What the checker did NOT claim is the whole question. A leftover use on a real, unrelated
+    // type is fine; one on `any` is a read that keeps compiling and starts returning undefined.
+    // For a REQUIRED member a missed literal is a compile error the verify pass below catches, so
+    // only the untyped sites matter. For an OPTIONAL one nothing ever complains, which is why the
+    // same evidence is fatal there rather than merely reported.
+    const optional = Boolean(hit.Name.parent && hit.Name.parent.questionToken);
+    const claimedKeys = new Set(locations.map((l) => `${l.fileName}:${l.textSpan.start}`));
+    const ownerMembers = new Set(
+        (hit.Owner && ts.isInterfaceDeclaration(hit.Owner) ? hit.Owner.members : [])
+            .filter((m) => m.name && ts.isIdentifier(m.name))
+            .map((m) => m.name.text),
+    );
+    const hazards = unclaimedHazards(checker, occurrences, oldName, claimedKeys, ownerMembers);
+    if (hazards.length > 0) {
+        const where = hazards.slice(0, 3).map((h) => `${relative(repoRoot, h.File)} (${h.Kind}, ${h.Type})`).join('; ');
+        skipped.push({ finding, reason: `${optional ? SKIP_REASONS.Optional : SKIP_REASONS.UnclaimedUse} [${where}]` });
+        continue;
+    }
 
     claimed.add(claimKey);
     plans.push({
@@ -446,6 +601,15 @@ for (let round = 1; round <= 14; round++) {
     let kept = active.filter((p) => !blamed.has(p.Owner));
 
     if (kept.length === before) {
+        // A structural mismatch prints the literal's SHAPE rather than any type name — "Type '{ schema:
+        // string; sqlQuery: string; … }' is not assignable" — so the owner never appears. The member
+        // names do, under one spelling or the other.
+        kept = active.filter((p) => {
+            const [, , Old, New] = TYPE_MEMBER.exec(p.Finding.Message);
+            return !blamed.has(Old) && !blamed.has(New);
+        });
+    }
+    if (kept.length === before) {
         // Sometimes the named type is the TARGET rather than the thing renamed — a function value
         // that stopped matching `SpawnWorkspaceProcess`. Fall back to blaming every rename that
         // edited a file the new diagnostic appears in. Coarser, but it always makes progress.
@@ -467,6 +631,29 @@ if (args.apply) for (const [file, text] of finalOverlay) writeFileSync(file, tex
 
 // The applied map, for the follow-up sweep over test fixtures. Those build these objects by hand
 // with no contextual type, so the checker never saw them and this pass could not move them.
+if (args.skips) {
+    // The skipped findings carry the only durable record of WHY a member could not move. The gate
+    // still reports them, so the reason has to travel to whatever marks them.
+    const droppedRecords = dropped.map((plan) => ({
+        finding: plan.Finding,
+        reason: SKIP_REASONS.VerifyDropped,
+    }));
+    writeFileSync(
+        args.skips,
+        JSON.stringify(
+            [...skipped, ...droppedRecords].map((s2) => ({
+                File: s2.finding.File,
+                Line: s2.finding.Line,
+                Message: s2.finding.Message,
+                Reason: s2.reason,
+                Category: s2.reason.replace(/ \[[^\]]*\]$/, '').replace(/ \([^)]*\)$/, ''),
+            })),
+            null,
+            2,
+        ),
+    );
+}
+
 if (args.report) {
     writeFileSync(
         args.report,
@@ -491,7 +678,7 @@ console.log(`  skipped           : ${skipped.length}`);
 if (skipped.length > 0) {
     const byReason = new Map();
     for (const s2 of skipped) {
-        const key = s2.reason.replace(/ \([^)]*\)$/, '');
+        const key = s2.reason.replace(/ \[[^\]]*\]$/, '').replace(/ \([^)]*\)$/, '');
         byReason.set(key, (byReason.get(key) ?? 0) + 1);
     }
     console.log('\n  skipped, by reason:');

@@ -728,32 +728,64 @@ function isNoOpSuggestion(message: string): boolean {
 // What a package actually publishes
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** Every string that looks like a module path inside an `exports` subtree. */
+function collectExportTargets(node: unknown, out: string[]): void {
+    if (typeof node === 'string') {
+        out.push(node);
+        return;
+    }
+    if (Array.isArray(node)) {
+        for (const item of node) collectExportTargets(item, out);
+        return;
+    }
+    if (node && typeof node === 'object') {
+        for (const value of Object.values(node as Record<string, unknown>)) collectExportTargets(value, out);
+    }
+}
+
 /**
- * The source file a package's entry point is built from.
+ * The source files a package's published entry points are built from.
  *
- * `main`/`types` point into `dist`, which this check never reads — it works on source — so the
- * published path is mapped back to its `src` counterpart. The fallbacks cover packages that declare
- * neither.
+ * `main`/`types` point into `dist`, which this check never reads — it works on source — so each
+ * published path is mapped back to its `src` counterpart.
+ *
+ * **Every** entry counts, not just the root one. A package with an `exports` map publishes one
+ * module per subpath, and a type reachable only from `"./forms"` is every bit as public as one
+ * reachable from `"."` — consumers import it as `@scope/pkg/forms`. Reading only `types`/`main`
+ * declares those types unpublished and therefore free to rename, which is exactly backwards.
  */
-function resolveEntrySource(packageDir: string): { Entry: string | null; Private: boolean } {
-    let manifest: { main?: string; types?: string; typings?: string; private?: boolean };
+function resolveEntrySources(packageDir: string): { Entries: string[]; Private: boolean } {
+    let manifest: { main?: string; types?: string; typings?: string; private?: boolean; exports?: unknown };
     try {
         manifest = JSON.parse(readFileSync(join(packageDir, 'package.json'), 'utf8')) as typeof manifest;
     } catch {
-        return { Entry: null, Private: false };
+        return { Entries: [], Private: false };
     }
     const isPrivate = manifest.private === true;
-    const candidates: string[] = [];
+    const raw: string[] = [];
     for (const field of [manifest.types, manifest.typings, manifest.main]) {
-        if (typeof field !== 'string') continue;
-        candidates.push(field.replace(/^\.\//, '').replace(/^dist\//, 'src/').replace(/\.d\.ts$|\.js$/, '.ts'));
+        if (typeof field === 'string') raw.push(field);
     }
-    candidates.push('src/index.ts', 'src/public-api.ts', 'src/public_api.ts', 'index.ts');
-    for (const candidate of candidates) {
+    collectExportTargets(manifest.exports, raw);
+
+    const candidates = raw.map((field) =>
+        field.replace(/^\.\//, '').replace(/^dist\//, 'src/').replace(/\.d\.ts$|\.js$/, '.ts'),
+    );
+    const entries: string[] = [];
+    const seen = new Set<string>();
+    const take = (candidate: string): void => {
         const full = join(packageDir, candidate);
-        if (existsSync(full) && statSync(full).isFile()) return { Entry: full, Private: isPrivate };
+        if (seen.has(full)) return;
+        if (existsSync(full) && statSync(full).isFile()) {
+            seen.add(full);
+            entries.push(full);
+        }
+    };
+    for (const candidate of candidates) take(candidate);
+    if (entries.length === 0) {
+        for (const fallback of ['src/index.ts', 'src/public-api.ts', 'src/public_api.ts', 'index.ts']) take(fallback);
     }
-    return { Entry: null, Private: isPrivate };
+    return { Entries: entries, Private: isPrivate };
 }
 
 /** Resolve a relative module specifier to a source file on disk. */
@@ -767,7 +799,7 @@ function resolveRelativeImport(fromFile: string, specifier: string): string | nu
 }
 
 /**
- * Every symbol name a package publishes, reached transitively from its entry point.
+ * Every symbol name a package publishes, reached transitively from its entry points.
  *
  * This is what separates "exported from its file" from "exported from the package" — and the two
  * are very different for this rule. A type no consumer can name can be renamed outright; one the
@@ -780,12 +812,12 @@ function resolveRelativeImport(fromFile: string, specifier: string): string | nu
  */
 function collectPublicSymbols(
     ts: TypeScriptApi,
-    entryFile: string,
+    entryFiles: readonly string[],
     sourceOf: (file: string) => TSApi.SourceFile | null,
 ): Set<string> {
     const names = new Set<string>();
     const seen = new Set<string>();
-    const queue = [entryFile];
+    const queue = [...entryFiles];
     while (queue.length > 0) {
         const file = queue.shift() as string;
         if (seen.has(file)) continue;
@@ -965,13 +997,13 @@ export const NamingConventionsCheck: StandardCheck = {
 
         let packagesWithoutEntry = 0;
         for (const pkg of packages) {
-            const { Entry, Private } = resolveEntrySource(pkg.Dir);
+            const { Entries, Private } = resolveEntrySources(pkg.Dir);
             pkg.Private = Private;
-            if (!Entry) {
+            if (Entries.length === 0) {
                 if (!Private) packagesWithoutEntry++;
                 continue;
             }
-            pkg.Public = collectPublicSymbols(ts, Entry, sourceOf);
+            pkg.Public = collectPublicSymbols(ts, Entries, sourceOf);
         }
         const packageByRel = new Map(packages.map((p) => [p.Rel, p]));
 
