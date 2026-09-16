@@ -624,3 +624,109 @@ describe('executeModelWithFailover — the configured attempt budget', () => {
     expect(testLLM.CalledModels).toHaveLength(2);
   });
 });
+
+// ===========================================================================
+// (f) The budget bounds SPEND, not DIVERSITY — one last-resort call.
+//
+// The budget above is right about how much a prompt may spend and silent about where it goes,
+// and by default it all goes to one place: a priority-ordered candidate list is usually the same
+// driver class repeated across vendors and models, so three attempts are three requests to one
+// upstream having one bad minute, and the prompt fails without anyone else being asked.
+//
+// That is the ordinary shape on a tenant running on platform credits — a single metered provider
+// in front of everything, whose failure reads "101 candidates" and looks like a broken chain.
+//
+// So when the whole budget went to ONE driver class, the walk continues WITHOUT spending until it
+// finds a credentialed candidate on a different class, and allows exactly one call there. The
+// ceiling is maxAttempts + 1 and never more.
+// ===========================================================================
+describe('executeModelWithFailover — one last-resort call on a different provider', () => {
+  const NET = () => ({ kind: 'fail' as const, error: new Error('fetch failed: network socket disconnected') });
+
+  /** OpenRouter is not in the default fixture set; give it a key so it is not skipped. */
+  function credentialOpenRouter(): void {
+    loadCatalog(buildRealisticCatalog(), [...DEFAULT_CONFIGURED_DRIVERS, ...DIRECT_DRIVE_DRIVERS, 'OpenRouterLLM']);
+  }
+
+  /** Four OpenRouter rows (the shape of a platform-credit tenant) then one on another provider. */
+  function oneClassThenAnother(): TestCandidate[] {
+    return [
+      candidate('m-or-1', 'OpenRouterLLM', 'v-or', 'OpenRouter', 'api-or-1', 100),
+      candidate('m-or-2', 'OpenRouterLLM', 'v-or', 'OpenRouter', 'api-or-2', 95),
+      candidate('m-or-3', 'OpenRouterLLM', 'v-or', 'OpenRouter', 'api-or-3', 90),
+      candidate('m-or-4', 'OpenRouterLLM', 'v-or', 'OpenRouter', 'api-or-4', 85),
+      candidate('m-claude', 'AnthropicLLM', 'v-anthropic', 'Anthropic', 'api-claude', 10),
+    ];
+  }
+
+  it('spends the budget on one provider, then reaches a different one and succeeds', async () => {
+    // THE CASE THIS EXISTS FOR. Without the escape the walk stops at the 4th OpenRouter row and
+    // the Anthropic candidate — which has a working key and would have answered — is never
+    // called. Note the skip: candidate 4 is same-class, so it costs no request.
+    credentialOpenRouter();
+    testLLM.Script(NET(), NET(), NET(), { kind: 'succeed', content: 'answered by the other provider' });
+
+    const result = await runFailover(runner, oneClassThenAnother(), {}); // default budget of 3
+
+    expect(result.success).toBe(true);
+    expect(result.data?.choices[0].message.content).toBe('answered by the other provider');
+    expect(testLLM.CalledModels).toEqual(['api-or-1', 'api-or-2', 'api-or-3', 'api-claude']);
+  });
+
+  it('allows exactly ONE extra call — never two, however many other providers follow', async () => {
+    // The bound that makes this safe to ship. If the last-resort call also fails, the walk ends:
+    // a second different-class candidate must not get a turn, or the budget means nothing.
+    credentialOpenRouter();
+    const candidates = [
+      ...oneClassThenAnother(),
+      candidate('m-gpt', 'OpenAILLM', 'v-openai', 'OpenAI', 'api-gpt', 5),
+      candidate('m-groq', 'GroqLLM', 'v-groq', 'Groq', 'api-groq', 1),
+    ];
+    testLLM.Script(NET(), NET(), NET(), NET(), NET(), NET());
+
+    const result = await runFailover(runner, candidates, {});
+
+    expect(result.success).toBe(false);
+    expect(testLLM.CalledModels).toEqual(['api-or-1', 'api-or-2', 'api-or-3', 'api-claude']);
+    expect(testLLM.CalledModels).toHaveLength(4); // 3 budgeted + 1 last resort, and no more
+  });
+
+  it('does NOT fire when the budget was already spread across more than one provider', async () => {
+    // The escape answers "everything went to one place", not "the budget ran out". A walk that
+    // already asked three different providers has had its diversity; extending it would just be
+    // a budget of four. This is the assertion that keeps the existing cap meaningful.
+    const candidates = [
+      candidate('m-claude', 'AnthropicLLM', 'v-anthropic', 'Anthropic', 'api-claude', 100),
+      candidate('m-gpt', 'OpenAILLM', 'v-openai', 'OpenAI', 'api-gpt', 90),
+      candidate('m-groq', 'GroqLLM', 'v-groq', 'Groq', 'api-groq', 80),
+      candidate('m-deepseek', 'DeepSeekLLM', 'v-deepseek', 'DeepSeek', 'api-deepseek', 70),
+    ];
+    testLLM.Script(NET(), NET(), NET(), { kind: 'succeed', content: 'must never be reached' });
+
+    const result = await runFailover(runner, candidates, {});
+
+    expect(result.success).toBe(false);
+    expect(testLLM.CalledModels).toEqual(['api-claude', 'api-gpt', 'api-groq']);
+  });
+
+  it('never calls a keyless candidate to satisfy the diversity rule', async () => {
+    // The escape must obey the credential skip like every other step of the walk. A different
+    // driver class with no key in this environment returns a 401 that failover treats as fatal —
+    // so reaching for one "because it is different" would end the walk on a misleading error.
+    // MistralLLM and CohereLLM are deliberately absent from the configured set.
+    credentialOpenRouter();
+    const candidates = [
+      candidate('m-or-1', 'OpenRouterLLM', 'v-or', 'OpenRouter', 'api-or-1', 100),
+      candidate('m-or-2', 'OpenRouterLLM', 'v-or', 'OpenRouter', 'api-or-2', 95),
+      candidate('m-or-3', 'OpenRouterLLM', 'v-or', 'OpenRouter', 'api-or-3', 90),
+      candidate('m-mistral', 'MistralLLM', 'v-mistral', 'Mistral', 'api-mistral', 50),
+      candidate('m-cohere', 'CohereLLM', 'v-cohere', 'Cohere', 'api-cohere', 40),
+    ];
+    testLLM.Script(NET(), NET(), NET(), { kind: 'succeed', content: 'must never be reached' });
+
+    const result = await runFailover(runner, candidates, {});
+
+    expect(result.success).toBe(false);
+    expect(testLLM.CalledModels).toEqual(['api-or-1', 'api-or-2', 'api-or-3']);
+  });
+});
