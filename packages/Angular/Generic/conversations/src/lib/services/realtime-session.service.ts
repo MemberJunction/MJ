@@ -324,6 +324,47 @@ export interface RealtimeSessionRunOptions {
  * {@link StartRealtimeSessionFromResult}; there is one implementation of the run half either way.
  */
 @Injectable({ providedIn: 'root' })
+/**
+ * Converts a {@link RealtimeTrackDescriptor} to its JSON form for the session-config bag.
+ *
+ * Every field's VALUE is already JSON-safe; the interface simply is not assignable to `JSONValue`
+ * because it declares no index signature and `UsageBasis` is `readonly`. Written out field by field
+ * rather than asserted, so adding a descriptor field is a compile error here instead of a field that
+ * silently stops reaching the driver.
+ */
+function trackDescriptorToJSON(track: RealtimeTrackDescriptor): JSONObject {
+  const json: JSONObject = { Modality: track.Modality, Direction: track.Direction };
+  if (track.Encoding !== undefined) {
+    json['Encoding'] = track.Encoding;
+  }
+  if (track.Rate !== undefined) {
+    json['Rate'] = track.Rate;
+  }
+  if (track.UsageBasis !== undefined) {
+    json['UsageBasis'] = [...track.UsageBasis];
+  }
+  if (track.RequiresConsent !== undefined) {
+    json['RequiresConsent'] = track.RequiresConsent;
+  }
+  return json;
+}
+
+/**
+ * Reads the `Direction:Modality` dedupe key off an already-JSON track entry, or `null` when the
+ * entry is not a track-shaped object. Used for tracks the mint supplied, which arrive as raw JSON.
+ */
+function trackKeyFromJSON(raw: JSONValue): string | null {
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
+    return null;
+  }
+  const direction = raw['Direction'];
+  const modality = raw['Modality'];
+  if (typeof direction !== 'string' || typeof modality !== 'string') {
+    return null;
+  }
+  return `${direction}:${modality}`;
+}
+
 export class RealtimeSessionService {
   // ── Reactive UI state ──────────────────────────────────────────────────────
   private _connectionState$ = new BehaviorSubject<RealtimeConnectionState>('closed');
@@ -1697,12 +1738,26 @@ export class RealtimeSessionService {
     const sessionConfig = this.parseSessionConfig(session.SessionConfigJson);
     const channelTracks = this._activeChannels$.value.flatMap((c) => c.GetSourcedTracks());
     if (channelTracks.length > 0) {
-      const existing = Array.isArray(sessionConfig['requestedTracks'])
-        ? (sessionConfig['requestedTracks'] as RealtimeTrackDescriptor[])
+      // `requestedTracks` crosses a JSON boundary — the driver reads it back out of the session
+      // config bag (`GeminiRealtimeClient.parseSessionConfig`). A `RealtimeTrackDescriptor` is NOT
+      // structurally a `JSONValue`: it has no index signature and `UsageBasis` is readonly, so the
+      // conversion is written out rather than asserted. Dedupe key and precedence are unchanged —
+      // audio floor first, then anything the mint supplied, then the channels' own tracks.
+      const existing: readonly JSONValue[] = Array.isArray(sessionConfig['requestedTracks'])
+        ? sessionConfig['requestedTracks']
         : [];
-      const trackMap = new Map<string, RealtimeTrackDescriptor>();
-      for (const t of [...DEFAULT_REALTIME_AUDIO_TRACKS, ...existing, ...channelTracks]) {
-        trackMap.set(`${t.Direction}:${t.Modality}`, t);
+      const trackMap = new Map<string, JSONValue>();
+      for (const t of DEFAULT_REALTIME_AUDIO_TRACKS) {
+        trackMap.set(`${t.Direction}:${t.Modality}`, trackDescriptorToJSON(t));
+      }
+      for (const raw of existing) {
+        const key = trackKeyFromJSON(raw);
+        if (key) {
+          trackMap.set(key, raw);
+        }
+      }
+      for (const t of channelTracks) {
+        trackMap.set(`${t.Direction}:${t.Modality}`, trackDescriptorToJSON(t));
       }
       sessionConfig['requestedTracks'] = Array.from(trackMap.values());
     }
