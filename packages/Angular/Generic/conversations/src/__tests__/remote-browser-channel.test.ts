@@ -1067,4 +1067,41 @@ describe('RemoteBrowserChannel — page changes the agent did not cause (#3496)'
     channel.OnScreencastFrame('frame-3');
     expect(pushed).toEqual(['frame-1', 'frame-3']);
   });
+
+  it('OnScreencastFrame deduplicates identical frames and pushes on visual changes or URL changes', () => {
+    const log: CtxLog = { Notes: [], Calls: [] };
+    const channel = new RemoteBrowserChannel();
+    channel.Initialize(makeContext(log, null));
+
+    const pushed: string[] = [];
+    const mockBridge = {
+      PushFrame: (frame: string) => {
+        pushed.push(frame);
+        return true;
+      }
+    };
+    const c = channel as unknown as { streaming: boolean; videoBridge: typeof mockBridge };
+    c.streaming = true;
+    c.videoBridge = mockBridge;
+
+    // First frame arrives
+    channel.OnScreencastFrame('frame-A', 'https://example.com/page1');
+    expect(pushed).toEqual(['frame-A']);
+
+    // Advance time past 1000ms but send identical frame on same URL -> deduplicated
+    const cTime = channel as unknown as { lastScreencastPushTime: number };
+    cTime.lastScreencastPushTime -= 1001;
+    channel.OnScreencastFrame('frame-A', 'https://example.com/page1');
+    expect(pushed).toEqual(['frame-A']);
+
+    // Advance time past 1000ms and send different frame -> pushed
+    cTime.lastScreencastPushTime -= 1001;
+    channel.OnScreencastFrame('frame-B', 'https://example.com/page1');
+    expect(pushed).toEqual(['frame-A', 'frame-B']);
+
+    // Advance time past 1000ms and change URL even with same frame -> pushed
+    cTime.lastScreencastPushTime -= 1001;
+    channel.OnScreencastFrame('frame-B', 'https://example.com/page2');
+    expect(pushed).toEqual(['frame-A', 'frame-B', 'frame-B']);
+  });
 });

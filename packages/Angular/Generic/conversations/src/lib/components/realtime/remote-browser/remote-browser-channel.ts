@@ -492,6 +492,15 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
   /** Timestamp of the last screencast frame pushed to the video bridge (paces pushes to ≤ 1 fps). */
   private lastScreencastPushTime = 0;
 
+  /** Base64 content of the last frame pushed to the video bridge (for change-driven deduplication). */
+  private lastPushedScreencastFrame: string | null = null;
+
+  /** URL associated with the last frame pushed to the video bridge. */
+  private lastPushedUrl: string | null = null;
+
+  /** Maximum interval (ms) between visual frame pushes on a static page (heartbeat to maintain track liveness). */
+  private static readonly SCREENCAST_HEARTBEAT_MS = 15_000;
+
   /**
    * Forwards one PUSHED screencast frame to the bound surface's canvas. Called by the session service
    * when a `RemoteBrowserScreencastFrame` arrives on the push-status stream for THIS session. No-op when
@@ -502,6 +511,11 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
    * it, a user navigating during a screencast changed the picture and nothing else: the agent kept
    * describing the page it last opened, and the pixels proving otherwise were right there on screen.
    *
+   * Pushes to the video bridge are CHANGE-DRIVEN: when the page is static (same image and URL), pushes
+   * are deduplicated to avoid burning ~15k tokens/min of identical visual context. A frame is pushed
+   * only when visual content changes, the URL changes, or a 15-second heartbeat expires, all paced to
+   * ≤ 1 fps.
+   *
    * @param dataBase64 The frame image as raw base64 JPEG (no `data:` prefix).
    * @param currentUrl The browser's URL when the frame was captured; absent from older servers.
    */
@@ -509,9 +523,18 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
     if (this.streaming) {
       this.surface?.RenderFrame(dataBase64);
       const now = Date.now();
-      if (now - this.lastScreencastPushTime >= 1000) {
-        this.lastScreencastPushTime = now;
-        this.ensureVideoBridge()?.PushFrame(dataBase64);
+      const hasCadence = now - this.lastScreencastPushTime >= 1000;
+      if (hasCadence) {
+        const frameChanged = dataBase64 !== this.lastPushedScreencastFrame;
+        const urlChanged = currentUrl != null && currentUrl !== this.lastPushedUrl;
+        const heartbeatElapsed = now - this.lastScreencastPushTime >= RemoteBrowserChannel.SCREENCAST_HEARTBEAT_MS;
+
+        if (frameChanged || urlChanged || heartbeatElapsed) {
+          this.lastScreencastPushTime = now;
+          this.lastPushedScreencastFrame = dataBase64;
+          this.lastPushedUrl = currentUrl ?? null;
+          this.ensureVideoBridge()?.PushFrame(dataBase64);
+        }
       }
       this.notePageChange(currentUrl, 'observed');
     }
@@ -630,6 +653,9 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
   private async stopScreencast(): Promise<void> {
     const wasStreaming = this.streaming;
     this.streaming = false;
+    this.lastPushedScreencastFrame = null;
+    this.lastPushedUrl = null;
+    this.lastScreencastPushTime = 0;
     const sessionId = this.Context?.AgentSessionID;
     if (!wasStreaming || !sessionId) {
       return;

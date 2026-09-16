@@ -223,6 +223,11 @@ export class GeminiRealtime extends BaseRealtimeModel {
     }
 
     /**
+     * Gemini Live sessions accept dynamically-defined tools at connect/mint time.
+     */
+    public static override readonly SupportsDynamicToolSet = true;
+
+    /**
      * Mints an ephemeral, server-scoped Live credential for a **client-direct** session.
      *
      * The connect config is built EXACTLY as {@link StartSession} builds it (same
@@ -917,6 +922,7 @@ class GeminiRealtimeSession implements IRealtimeSession {
         }
         return {
             CanReconfigureTurnMode: false,
+            SupportsDynamicToolSet: GeminiRealtime.SupportsDynamicToolSet,
             SupportedInboundTracks: inbound,
             SupportedOutboundTracks: [{ Modality: 'audio', Direction: 'outbound' }],
             ProvidesThoughtSummaries: this.profile.SupportsThoughtSummaries,

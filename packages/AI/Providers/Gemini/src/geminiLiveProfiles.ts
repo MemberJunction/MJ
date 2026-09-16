@@ -211,7 +211,7 @@ export function ResolveGeminiThinkingLevel(
         return {
             Warning:
                 `Ignored reasoning effort "${want}": ${profile.MatchPrefix || 'this model'} accepts only ` +
-                `${profile.AllowedThinkingLevels.join(', ')}. No thinkingLevel was sent, so the model's own default applies.`,
+                `${profile.AllowedThinkingLevels.join(', ')}. Falling back to the configured default (${profile.DefaultThinkingLevel ?? 'model default'}).`,
         };
     }
     return { Level: want as GeminiThinkingLevel };
