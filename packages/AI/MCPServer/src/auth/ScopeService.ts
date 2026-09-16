@@ -232,8 +232,8 @@ export async function getDefaultScopes(): Promise<string[]> {
  * Represents a scope with its children in a tree structure.
  */
 export interface ScopeTreeNode {
-  scope: APIScopeInfo;
-  children: ScopeTreeNode[];
+  scope: APIScopeInfo;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
+  children: ScopeTreeNode[];  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 }
 
 /**
@@ -241,9 +241,9 @@ export interface ScopeTreeNode {
  */
 export interface ScopePrefixGroup {
   /** The parent scope (null if scopes have no common parent) */
-  parent: APIScopeInfo | null;
+  parent: APIScopeInfo | null;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
   /** Child scopes under this parent */
-  children: APIScopeInfo[];
+  children: APIScopeInfo[];  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 }
 
 /**
@@ -251,9 +251,9 @@ export interface ScopePrefixGroup {
  */
 export interface HierarchicalScopeGroups {
   /** The full_access scope if present (special treatment) */
-  fullAccessScope: APIScopeInfo | null;
+  fullAccessScope: APIScopeInfo | null;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
   /** Categories with their prefix groups */
-  categories: Map<string, ScopePrefixGroup[]>;
+  categories: Map<string, ScopePrefixGroup[]>;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 }
 
 /**

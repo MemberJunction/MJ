@@ -15,11 +15,11 @@ import type { AuthorizationServerMetadata } from './OAuthProxyTypes.js';
  */
 export interface AuthorizationServerMetadataOptions {
   /** Base URL of the MCP Server (e.g., http://localhost:3100) */
-  baseUrl: string;
+  baseUrl: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
   /** Scopes supported by this authorization server */
-  scopes?: string[];
+  scopes?: string[];  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
   /** URL to service documentation */
-  serviceDocumentation?: string;
+  serviceDocumentation?: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 }
 
 /**

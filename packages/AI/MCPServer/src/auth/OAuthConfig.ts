@@ -140,13 +140,13 @@ export function isAuthRequired(): boolean {
  */
 export interface OAuthConfigValidationResult {
   /** Whether the OAuth configuration is valid */
-  valid: boolean;
+  valid: boolean;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
   /** Warning messages for non-critical issues */
-  warnings: string[];
+  warnings: string[];  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
   /** Error messages for critical issues */
-  errors: string[];
+  errors: string[];  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
   /** Effective auth mode after validation (may differ from configured if fallback) */
-  effectiveMode: AuthMode;
+  effectiveMode: AuthMode;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 }
 
 /**

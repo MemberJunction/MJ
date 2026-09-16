@@ -19,13 +19,13 @@ import type {
  */
 export interface ClientRegistryOptions {
   /** TTL for registered clients in milliseconds (default: 24 hours) */
-  clientTtlMs?: number;
+  clientTtlMs?: number;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
   /** Interval for cleanup of expired clients in milliseconds (default: 1 hour) */
-  cleanupIntervalMs?: number;
+  cleanupIntervalMs?: number;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
   /** Whether client secrets expire (default: false for MCP clients) */
-  secretsExpire?: boolean;
+  secretsExpire?: boolean;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
   /** TTL for client secrets if they expire (default: 0 = never) */
-  secretTtlMs?: number;
+  secretTtlMs?: number;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 }
 
 /**

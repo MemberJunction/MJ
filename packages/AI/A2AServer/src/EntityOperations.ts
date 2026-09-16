@@ -3,9 +3,9 @@ import { UserCache } from "@memberjunction/generic-database-provider";
 import { a2aServerSettings } from './config.js';
 
 export interface OperationResult {
-    success: boolean;
-    result?: any;
-    errorMessage?: string;
+    success: boolean;  // case-violation-ok-legacy-back-compat: the A2A protocol wire shape — these field names ARE the protocol, serialized to every A2A client
+    result?: any;  // case-violation-ok-legacy-back-compat: the A2A protocol wire shape — these field names ARE the protocol, serialized to every A2A client
+    errorMessage?: string;  // case-violation-ok-legacy-back-compat: the A2A protocol wire shape — these field names ARE the protocol, serialized to every A2A client
 }
 
 export interface OperationParameters {

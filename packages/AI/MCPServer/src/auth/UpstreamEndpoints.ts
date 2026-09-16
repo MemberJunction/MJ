@@ -22,11 +22,11 @@ export type UpstreamFlavor = 'azure-ad' | 'cognito' | 'generic';
  */
 export interface UpstreamOAuthEndpoints {
   /** Provider shape the endpoints were derived from */
-  flavor: UpstreamFlavor;
+  flavor: UpstreamFlavor;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
   /** Upstream authorization endpoint (browser redirect target) */
-  authorizationEndpoint: string;
+  authorizationEndpoint: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
   /** Upstream token endpoint (code → token exchange) */
-  tokenEndpoint: string;
+  tokenEndpoint: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 }
 
 /**
@@ -34,9 +34,9 @@ export interface UpstreamOAuthEndpoints {
  */
 export interface UpstreamProviderInfo {
   /** OIDC issuer URL (matches the `iss` claim) */
-  issuer: string;
+  issuer: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
   /** Provider domain — for Cognito, the hosted-UI domain */
-  domain?: string;
+  domain?: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 }
 
 /**

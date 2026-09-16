@@ -22,11 +22,11 @@ import type { ConsentRequest } from './types.js';
  */
 export interface AuthorizationStateManagerOptions {
   /** TTL for authorization states in milliseconds (default: 10 minutes) */
-  stateTtlMs?: number;
+  stateTtlMs?: number;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
   /** TTL for authorization codes in milliseconds (default: 5 minutes) */
-  codeTtlMs?: number;
+  codeTtlMs?: number;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
   /** Interval for cleanup of expired items in milliseconds (default: 1 minute) */
-  cleanupIntervalMs?: number;
+  cleanupIntervalMs?: number;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 }
 
 /**

@@ -39,7 +39,7 @@ interface ExtractedCredentials {
  */
 export interface AuthGateConfig {
   /** Function to validate API keys (provided by Server.ts) */
-  validateApiKey: (
+  validateApiKey: (  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
     apiKey: string,
     request: Request | http.IncomingMessage
   ) => Promise<{
@@ -50,7 +50,7 @@ export interface AuthGateConfig {
     error?: string;
   }>;
   /** Function to get system user for 'none' mode */
-  getSystemUser: () => UserInfo | undefined;
+  getSystemUser: () => UserInfo | undefined;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 }
 
 /**

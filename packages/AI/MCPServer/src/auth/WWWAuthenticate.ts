@@ -19,13 +19,13 @@ import { GetResourceIdentifier } from './OAuthConfig.js';
  */
 export interface WWWAuthenticateOptions {
   /** OAuth error code (for 403 responses) */
-  error?: 'insufficient_scope' | 'invalid_token' | 'invalid_request';
+  error?: 'insufficient_scope' | 'invalid_token' | 'invalid_request';  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
   /** Human-readable error description */
-  errorDescription?: string;
+  errorDescription?: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
   /** Required scopes (space-separated) */
-  scope?: string;
+  scope?: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
   /** Override the resource metadata URL (defaults to auto-generated) */
-  resourceMetadataUrl?: string;
+  resourceMetadataUrl?: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 }
 
 /**

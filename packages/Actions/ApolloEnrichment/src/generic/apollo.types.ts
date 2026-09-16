@@ -33,12 +33,12 @@ export type ApolloBulkPeopleRequest = {
     /**
      * The API key for the Apollo.io request (required)
      */
-    api_key: string;
+    api_key: string;  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
 
     /**
      * The list of people to enrich (required)
      */
-    details: ApolloBulkPeopleRequestDetail[];
+    details: ApolloBulkPeopleRequestDetail[];  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
 
     /**
      * Flag to reveal personal emails (optional) 
@@ -47,7 +47,7 @@ export type ApolloBulkPeopleRequest = {
      * 
      * Note: Personal emails will not be revealed for GDPR compliant regions
      */
-    reveal_personal_emails?: boolean;
+    reveal_personal_emails?: boolean;  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
 
     /**
      * Flag to reveal phone number (optional)
@@ -56,72 +56,72 @@ export type ApolloBulkPeopleRequest = {
      * 
      * If you set to this true, Apollo will asynchronously verify direct dials for you, and you must specify a Webhook callback URL.
      */
-    reveal_phone_numbers?: boolean;
+    reveal_phone_numbers?: boolean;  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
     
     /**
      * Webhook callback URL for sending 'reveal_phone_number' response (optional) 
      * 
      * This parameter is required if you request direct dials via "reveal_phone_number"
      */
-    webhook_url?: string;
+    webhook_url?: string;  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
 };
 
 export type ApolloBulkPeopleRequestDetail = {
     /**
     * The person's first name (optional)
     */
-    first_name?: string;
+    first_name?: string;  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
 
     /**
      * The person's last name (optional)
      */
-    last_name?: string;
+    last_name?: string;  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
 
     /**
      * The person's full name (optional)
      */
-    name?: string;
+    name?: string;  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
 
     /**
      * The person's email (optional)
      */
-    email?: string;
+    email?: string;  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
 
     /**
      * The person's md5 or sha256 hashed email (optional)
      */
-    hased_email?: string;
+    hased_email?: string;  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
 
     /**
      * The person's company name (optional)
      */
-    organization_name?: string;
+    organization_name?: string;  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
 
     /**
      * The person's company domain (optional)
      */
-    domain?: string;
+    domain?: string;  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
 
     /**
      * The person's ID obtained from the search endpoint (optional)
      */
-    id?: string;
+    id?: string;  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
 
     /**
      * The person's linkedin URL (optional)
      */
-    linkedin_url?: string;
+    linkedin_url?: string;  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
 };
 
 export type ApolloBulkPeopleResponse = {
-    status: string;
-    error_code: number,
-    error_message: string,
-    total_requested_enrichments: number,
-    unique_enriched_records: number,
-    missing_records: number,
-    credits_consumed: number,
-    matches: Array<SearchPeopleResponsePerson | null>;
+    status: string;  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
+    error_code: number,  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
+    error_message: string,  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
+    total_requested_enrichments: number,  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
+    unique_enriched_records: number,  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
+    missing_records: number,  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
+    credits_consumed: number,  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
+    matches: Array<SearchPeopleResponsePerson | null>;  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
 };
 
 export type ContactEntityFields = {
@@ -199,7 +199,7 @@ export type OrganizationEnrichmentRequest = {
      * The company domain
      * @example "apollo.io"
      */
-    domain: string;
+    domain: string;  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
 };
 
 export type OrganizationEnrichmentResponse = {
@@ -207,7 +207,7 @@ export type OrganizationEnrichmentResponse = {
      * The company domain
      * @example "apollo.io"
      */
-    organization: OrganizationEnrichmentOrganization
+    organization: OrganizationEnrichmentOrganization  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
 };
 
 export type OrganizationEnrichmentOrganization = {
@@ -295,18 +295,18 @@ export type TechnologyMap = {
 };
 
 export type SearchPeopleResponse = {
-    breadcrumbs: Record<string, any>[];
-    partial_results_only: boolean;
-    disable_eu_prospecting: boolean;
-    partial_results_limit: number;
-    pagination: {
-        page: number;
-        per_page: number;
-        total_entries: number;
-        total_pages: number;
+    breadcrumbs: Record<string, any>[];  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
+    partial_results_only: boolean;  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
+    disable_eu_prospecting: boolean;  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
+    partial_results_limit: number;  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
+    pagination: {  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
+        page: number;  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
+        per_page: number;  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
+        total_entries: number;  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
+        total_pages: number;  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
     };
-    contacts: Record<string, any>[];
-    people: SearchPeopleResponsePerson[];
+    contacts: Record<string, any>[];  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
+    people: SearchPeopleResponsePerson[];  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
 };
 
 export type SearchPeopleResponsePerson = {

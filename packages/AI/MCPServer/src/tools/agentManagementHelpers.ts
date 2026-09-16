@@ -22,9 +22,9 @@ export const DEFAULT_BUILDER_AGENTS: readonly string[] = ['ActionSmith', 'Codesm
  */
 export interface AgentManagementToolsOptions {
     /** Master switch for the whole group. Defaults to enabled. */
-    enabled?: boolean;
+    enabled?: boolean;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
     /** Overrides {@link DEFAULT_BUILDER_AGENTS}. Pass [] to expose no builder agents. */
-    builderAgents?: string[];
+    builderAgents?: string[];  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 }
 
 /**

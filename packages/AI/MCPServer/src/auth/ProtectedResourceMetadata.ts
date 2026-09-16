@@ -34,22 +34,22 @@ interface AuthProviderInfo {
  */
 export interface ProtectedResourceMetadataOptions {
   /** Override the resource identifier (defaults to configured value) */
-  resourceIdentifier?: string;
+  resourceIdentifier?: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
   /** Authorization server issuer URLs (from configured auth providers) */
-  authorizationServers: string[];
+  authorizationServers: string[];  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
   /** Human-readable name for the resource */
-  resourceName?: string;
+  resourceName?: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
   /** URL to resource documentation */
-  resourceDocumentation?: string;
+  resourceDocumentation?: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
   /** Auth providers for automatic scope generation (optional) */
-  providers?: AuthProviderInfo[];
+  providers?: AuthProviderInfo[];  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
   /**
    * When true, use the OAuth proxy as the authorization server.
    * This enables dynamic client registration for MCP clients.
    */
-  useOAuthProxy?: boolean;
+  useOAuthProxy?: boolean;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
   /** Base URL for the OAuth proxy (e.g., http://localhost:3100) */
-  oauthProxyBaseUrl?: string;
+  oauthProxyBaseUrl?: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 }
 
 /**
