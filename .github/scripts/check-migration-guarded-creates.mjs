@@ -22,20 +22,40 @@ const GUID = /^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$/i;
 /** A create call, located within its batch. */
 const EXEC_RE =
   /EXEC\s+\[?\$\{flyway:defaultSchema\}\]?\.\[?spCreate(\w+)\]?\s+([\s\S]*?);/g;
-/** `SET\n  @local = 'literal'` — the emitter splits the assignment across lines. */
-const SET_RE = /SET\s*\r?\n?\s*@(\w+)\s*=\s*N?'([0-9A-Fa-f-]{36})'/g;
 /**
- * `DECLARE @local UNIQUEIDENTIFIER = 'literal'` — the inline-initialiser form, which a
- * hand-written migration uses far more naturally than the emitter's DECLARE-then-SET pair
- * (and which the comma-continued `DECLARE @a UNIQUEIDENTIFIER = '…', @b … = '…'` list also
- * produces). Missing it was not merely a gap: the call fell through to the computed-@ID
- * branch and was reported as "cannot collide deterministically", which is the opposite of
- * the truth — the GUID is right there in the DECLARE and collides every time.
+ * A literal GUID assigned to a local, in ANY T-SQL syntax.
  *
- * Anchored on the UNIQUEIDENTIFIER type keyword so an NVARCHAR initialiser that happens to
- * hold 36 GUID-shaped characters cannot be mistaken for an identity.
+ * Deliberately keyed on the assignment itself rather than on the keyword that introduces it.
+ * `SET @x = '…'`, `SELECT @x = '…'`, `DECLARE @x UNIQUEIDENTIFIER = '…'` and the
+ * comma-continued `DECLARE @a … = '…', @b … = '…'` list all end in `@name = '<36 chars>'`, so
+ * one pattern covers every shape including ones nobody has written yet.
+ *
+ * This replaced an ENUMERATION of two syntaxes, which is worth recording because the
+ * enumeration had already failed once. The inline-DECLARE form was originally missing, and a
+ * create using it fell through to the computed-@ID branch and was reported as "cannot collide
+ * deterministically" — the opposite of the truth, since the GUID is right there and collides
+ * every time. That was fixed by adding a second entry to the list; `SELECT @x = '…'`, equally
+ * ordinary T-SQL, then re-opened the identical hole one keyword over. An unrecognised syntax
+ * does not read as "unknown" here, it reads as "computed, therefore harmless", which resolves
+ * to a PASS on exactly the migration this gate exists to reject. Enumerations of syntax are
+ * the wrong shape for that decision; a test of the value is not re-openable.
+ *
+ * The optional identifier between the name and the `=` is the DECLARE form's type, so
+ * `DECLARE @x UNIQUEIDENTIFIER = '…'` and `DECLARE @x NVARCHAR(50) = '…'` both match while a
+ * comparison like `[ID] = @x AND Foo = '…'` does not (two identifiers intervene, not one).
+ *
+ * CONVERT/CAST wrappers are admitted because they are still a literal identity. A subquery is
+ * not: `= (SELECT …'guid'…)` does not match, and is genuinely computed.
+ *
+ * The UNIQUEIDENTIFIER anchor the DECLARE form used to carry is gone on purpose. Its stated
+ * job was to stop an NVARCHAR initialiser holding 36 GUID-shaped characters being mistaken for
+ * an identity — but this map is only ever consulted for the local a create passes as its @ID,
+ * and a value passed as @ID IS the identity whatever the local was declared as. (The one
+ * `SELECT @x = '<guid>'` in this repo's own history, migrations/v2/V202506251213, declares the
+ * local NVARCHAR(50) and uses it as an id — precisely the case the anchor would have missed.)
  */
-const DECLARE_INIT_RE = /@(\w+)\s+UNIQUEIDENTIFIER\s*=\s*N?'([0-9A-Fa-f-]{36})'/gi;
+const ASSIGN_GUID_RE =
+  /@(\w+)(?:\s+[A-Za-z_]\w*(?:\s*\([^)]*\))?)?\s*=\s*(?:CONVERT\s*\([^,()]+,\s*|CAST\s*\(\s*)?N?'([0-9A-Fa-f-]{36})'/gi;
 
 function sqlFilesUnder(dir, out = []) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
@@ -108,15 +128,14 @@ function buildProcTableMap(rootDir) {
 }
 
 /**
- * Every literal-GUID assignment to a local in this batch, in source order. Both emitted
- * shapes count (`SET @x = '…'` and `DECLARE @x UNIQUEIDENTIFIER = '…'`), and order matters
- * because a batch may assign the same local twice — the value a call sees is the LAST
- * assignment that precedes it, which `localGuidAt` below resolves.
+ * Every literal-GUID assignment to a local in this batch, in source order, whatever syntax
+ * introduced it. Order matters because a batch may assign the same local twice — the value a
+ * call sees is the LAST assignment that precedes it, which `localGuidAt` below resolves.
  */
 function literalGuidAssignments(batch) {
   const found = [];
-  for (const re of [SET_RE, DECLARE_INIT_RE])
-    for (const m of batch.matchAll(re)) found.push({ at: m.index, name: m[1], guid: m[2].toUpperCase() });
+  for (const m of batch.matchAll(ASSIGN_GUID_RE))
+    found.push({ at: m.index, name: m[1], guid: m[2].toUpperCase() });
   return found.sort((a, b) => a.at - b.at);
 }
 
@@ -171,16 +190,32 @@ function escapeForRegExp(s) {
  *     sitting after one passed the gate silently, not even counted as skipped.
  *   - the table name alone still admits a guard on row A followed by a create of row B in
  *     the same table, which is exactly the shape that collides.
+ *
+ * BOTH halves are required, because a row's identity is (table, ID) and checking either one
+ * alone leaves the other open. The id alone admits a predicate that tests the right id
+ * against the WRONG table — which is not a weaker guard but no guard at all: that predicate
+ * can never be true of the row about to be inserted, so `IF NOT EXISTS` always passes, the
+ * create always runs, and it collides exactly as MJ#4503 describes. Worse than an unguarded
+ * create, because the gate then reports it as guarded and --fix declines to repair it.
+ * `buildProcTableMap` already refuses to GUESS a table for the same reason; this is the same
+ * refusal on the reading side.
+ *
  * Fail-closed: a guard this cannot tie to the create is treated as absent. The cost of a
  * false alarm is an author restating the guard in the canonical emitted shape; the cost of
  * a false pass is MJ#4503 shipping again.
  */
-function isGuardedFor(head, idRef) {
+function isGuardedFor(head, idRef, table) {
   const ref = idRef.startsWith('@') ? `${escapeForRegExp(idRef)}\\b` : `N?${escapeForRegExp(idRef)}`;
   const idTest = new RegExp(`\\[?ID\\]?\\s*=\\s*${ref}`, 'i');
+  // An optional schema qualifier, bracketed or bare, so a hand-written `FROM __mj.Foo` and
+  // the emitted `FROM [${flyway:defaultSchema}].[Foo]` are both recognised.
+  const tableTest = new RegExp(
+    `\\bFROM\\s+(?:(?:\\[[^\\]]+\\]|[^\\s.\\[\\]]+)\\s*\\.\\s*)?\\[?${escapeForRegExp(table)}\\]?(?!\\w)`,
+    'i',
+  );
   for (const m of head.matchAll(/IF\s+NOT\s+EXISTS\s*(?=\()/gi)) {
     const predicate = readParenGroup(head, m.index + m[0].length);
-    if (predicate !== null && idTest.test(predicate)) return true;
+    if (predicate !== null && idTest.test(predicate) && tableTest.test(predicate)) return true;
   }
   return false;
 }
@@ -226,7 +261,18 @@ function guardFile(sql, procTable, label) {
 
       const idArg = /@ID\s*=\s*(?:(@\w+)|N?'([0-9A-Fa-f-]{36})')/.exec(args);
       if (!idArg) {
-        // no @ID at all — the SP defaults it; nothing to collide with
+        // A POSITIONAL invocation carries @ID as its first argument, so no `@ID =` exists to
+        // match and the named-parameter branch below can never see it. Refuse rather than pass:
+        // "no named @ID" is evidence about this tool's reach, not about the call's identity, and
+        // reading it as "the SP defaults it" is the same unrecognised-input-reads-as-safe
+        // mistake that let SELECT-assigned literals through.
+        if (args.trim() !== '' && !/@\w+\s*=/.test(args))
+          throw new Error(
+            `${label}: spCreate${entity} is called with positional arguments, so its @ID cannot be ` +
+              `located. Refusing to certify a create whose identity this tool cannot read — ` +
+              `rewrite the call with named parameters (@ID = …).`,
+          );
+        // Genuinely no @ID among the named arguments: the SP defaults it, nothing to collide with.
         out += batch.slice(cursor, m.index + m[0].length);
         cursor = m.index + m[0].length;
         continue;
@@ -244,18 +290,21 @@ function guardFile(sql, procTable, label) {
         continue;
       }
 
-      if (isGuardedFor(batch.slice(cursor, m.index), idRef)) {
-        out += batch.slice(cursor, m.index + m[0].length); // already guarded, and guarded on THIS id
-        cursor = m.index + m[0].length;
-        continue;
-      }
-
+      // Resolved BEFORE the guard check, not after: recognising an existing guard needs the
+      // table just as much as emitting a new one does, and without it the check can only
+      // verify half of the row's identity.
       const table = procTable.get(`spCreate${entity}`);
       if (!table)
         throw new Error(
           `${label}: cannot resolve a table for spCreate${entity}. ` +
             `Refusing to guess — a guard naming the wrong table breaks the migration for every database.`,
         );
+
+      if (isGuardedFor(batch.slice(cursor, m.index), idRef, table)) {
+        out += batch.slice(cursor, m.index + m[0].length); // already guarded, on THIS id AND this table
+        cursor = m.index + m[0].length;
+        continue;
+      }
 
       const head = batch.slice(cursor, m.index).trimEnd();
       // Shape matches SQLServerDataProvider.RenderReplaySaveSQL in PR #4519 (Layer 1), so a
@@ -396,7 +445,59 @@ function runSelfTest() {
     failures++;
   }
 
-  console.log(failures === 0 ? 'self-test: PASS (8 cases)' : `self-test: FAIL (${failures})`);
+  // Case 9 — a guard that tests the right ID against the WRONG table. A row's identity is
+  // (table, ID); checking the ID alone accepts a predicate that can never be true of the row
+  // about to be inserted, so the create always runs and collides exactly as MJ#4503 describes.
+  // That is strictly worse than an unguarded create, because the gate reports it as guarded
+  // and --fix then declines to repair it.
+  const crossInput = readFileSync(join(dir, 'cross-table-guard-input.sql'), 'utf8');
+  const crossExpected = readFileSync(join(dir, 'cross-table-guard-expected.sql'), 'utf8');
+  const crossGot = guardFile(crossInput, procTable, 'cross-table-guard-input.sql');
+  if (crossGot.text !== crossExpected || crossGot.guarded !== 1 || crossGot.skipped !== 0) {
+    console.error(
+      `FAIL: a guard on a DIFFERENT table was accepted as this create's guard (guarded=${crossGot.guarded}, skipped=${crossGot.skipped})`,
+    );
+    console.error('--- got ---\n' + crossGot.text + '\n--- expected ---\n' + crossExpected);
+    failures++;
+  }
+  // …and the real guard, once added, must still be recognised despite the cross-table probe
+  // above it — otherwise --fix would double-wrap on its next run.
+  const crossAgain = guardFile(crossExpected, procTable, 'cross-table-guard-expected.sql');
+  if (crossAgain.text !== crossExpected || crossAgain.guarded !== 0) {
+    console.error('FAIL: the emitted guard was not recognised when a cross-table IF NOT EXISTS precedes it');
+    failures++;
+  }
+
+  // Case 10 — `SELECT @x = '<guid>'`. Same literal, third T-SQL syntax. Before the detector was
+  // made syntax-agnostic this reported "computed @ID — cannot collide deterministically", exited
+  // 0, and --fix declined to repair it: the identical false negative Case 8 records for the
+  // inline-DECLARE form, one keyword over. guarded must be 1 and skipped must be 0.
+  const selInput = readFileSync(join(dir, 'select-assigned-input.sql'), 'utf8');
+  const selGot = guardFile(selInput, procTable, 'select-assigned-input.sql');
+  if (selGot.guarded !== 1 || selGot.skipped !== 0) {
+    console.error(
+      `FAIL: SELECT-assigned literal GUID not recognised (guarded=${selGot.guarded}, skipped=${selGot.skipped})`,
+    );
+    failures++;
+  }
+
+  // Case 11 — a positional call carries its id as argument one, so no `@ID =` exists to match.
+  // "No named @ID" must not be read as "the SP defaults it"; the tool cannot see the id, so it
+  // must refuse rather than pass silently. A throw is the refusal — the same shape as an
+  // unresolvable table.
+  const posInput = readFileSync(join(dir, 'positional-call-input.sql'), 'utf8');
+  try {
+    guardFile(posInput, procTable, 'positional-call-input.sql');
+    console.error('FAIL: a positional spCreate call passed through without the id being examined');
+    failures++;
+  } catch (err) {
+    if (!/positional/i.test(err.message)) {
+      console.error(`FAIL: wrong error for a positional call: ${err.message}`);
+      failures++;
+    }
+  }
+
+  console.log(failures === 0 ? 'self-test: PASS (11 cases)' : `self-test: FAIL (${failures})`);
   return failures === 0 ? 0 : 1;
 }
 
