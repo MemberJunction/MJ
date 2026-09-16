@@ -2,6 +2,7 @@
 "@memberjunction/ai": patch
 "@memberjunction/ai-gemini": patch
 "@memberjunction/ai-realtime-client": patch
+"@memberjunction/ng-conversations": patch
 ---
 
 feat(ai): a first-class realtime media plane, an open modality vocabulary, and per-model Gemini Live legality
@@ -47,3 +48,22 @@ level.
 
 `@google/genai` converges on one major (v1 → ^2.8.0), which the v2 surface requires. Non-breaking for
 the surface the realtime client uses.
+
+`@memberjunction/ai-realtime-client` learns the per-model idle contract instead of assuming one. A
+tool call no longer implies the model stopped: that is true when tools execute synchronously and false
+under `NON_BLOCKING`, where the model keeps generating and keeps issuing calls. Conflating the two had
+a concrete cost — the driver commits a held context note by sending a bare turn-complete, and on a
+non-blocking model that lands on an active generation and cuts the reply off mid-sentence. The commit
+is now deferred to a real idle point, `IsBusy` is computed from outstanding work (reasoning in
+progress, tool batch non-empty, audio still playing) rather than from a single flag, and a backstop
+timer unwedges a session whose idle frame never arrives. Parallel, duplicate and out-of-order tool
+results go through the provider-agnostic `RealtimeToolBatchBarrier` rather than a second
+implementation.
+
+Model-authored reasoning summaries are surfaced as **narration**, never as assistant speech. Attributing
+a model's scratch reasoning to it as an answer is worse than not showing it at all, so thought parts
+(`Part.thought`) are excluded from audio synthesis entirely and emitted on the transcript stream with
+`Kind: 'narration'`, which `@memberjunction/ai` now carries on `RealtimeTranscript`.
+`@memberjunction/ng-conversations` renders them as their own card kind — a brain icon and "is
+thinking…", with cancel, artifacts and run links suppressed, because a thought is not a delegated run
+you can cancel or open.
