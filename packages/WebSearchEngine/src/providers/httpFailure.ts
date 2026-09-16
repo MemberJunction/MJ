@@ -76,7 +76,7 @@ function serializeBody(data: unknown): string {
  * Google Custom Search answers an invalid key with HTTP 400 (`reason: keyInvalid`), not 401 — so
  * classifying by status alone made a dead Google key stop the whole run, on precisely the vendor
  * whose keys are expected to stop working when the API is discontinued on 2027-01-01. Perplexity
- * and Exa answer the same condition with 401 and failed over correctly, which is what made the
+ * answers the same condition with 401 and failed over correctly, which is what made the
  * inconsistency easy to miss.
  */
 export function classifyHttpFailure(error: unknown, vendor: string): WebSearchProviderResponse {

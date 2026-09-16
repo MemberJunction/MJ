@@ -6,8 +6,8 @@
  * — including a rejected credential — is `transient`, so the engine moves on.
  *
  * Status alone cannot make that call. Google Custom Search answers an invalid key with **HTTP 400**
- * (`reason: keyInvalid`) while Perplexity and Exa answer with 401, so a status-only rule sent a
- * dead Google key down the "stop everything" path and a dead Perplexity key down the correct one.
+ * (`reason: keyInvalid`) while Perplexity answers with 401, so a status-only rule sent a dead
+ * Google key down the "stop everything" path and a dead Perplexity key down the correct one.
  */
 import { describe, expect, it } from 'vitest';
 import { HttpError } from '@memberjunction/network-utils';
@@ -108,7 +108,7 @@ describe('classifyHttpFailure', () => {
         });
 
         it('403 is transient', () => {
-            expect(classifyHttpFailure(httpError(403, {}), 'Exa').FailureKind).toBe('transient');
+            expect(classifyHttpFailure(httpError(403, {}), 'Tavily').FailureKind).toBe('transient');
         });
 
         it('429 is transient and names the quota', () => {

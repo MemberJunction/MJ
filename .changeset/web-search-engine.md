@@ -18,7 +18,7 @@ one. This makes the vendor a row in a table.
   rejected credential) moves to the next provider; a permanent one — the query itself rejected —
   stops, because every other vendor will reject it too. That distinction is drawn from the
   response body rather than the status code alone, since Google answers an invalid API key with
-  HTTP 400 while Perplexity and Exa use 401. An explicitly named `Provider` never falls back, and
+  HTTP 400 while Perplexity uses 401. An explicitly named `Provider` never falls back, and
   fails with a code that distinguishes never-configured, parked, uncredentialed and incapable.
 - **Five drivers** — Brave (own index, default primary), Tavily, Perplexity (`/search`, not the
   chat models), Google Custom Search (retiring), DuckDuckGo (keyless last resort).
