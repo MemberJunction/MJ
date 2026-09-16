@@ -10,13 +10,16 @@
     "conversationMessages": [
       {
         "role": "user",
-        "content": "Search both Google and Perplexity for 2025 solid-state battery commercialization news."
+        "content": "Find 2025 solid-state battery commercialization news, and separately the current status of sodium-ion battery production."
       }
     ]
   },
   "expect": {
     "kind": "action",
     "actions": [
+      {
+        "name": "Web Search"
+      },
       {
         "name": "Web Search"
       }
