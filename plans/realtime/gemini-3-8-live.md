@@ -255,9 +255,12 @@ rare edge case into a guaranteed one. Tracked as **F7**.
   **RESOLVED 2026-09-16 in `a9fc013126`** — `GetLatestFrame()` returns `null` while `streaming`
   (killing the redundant per-second snapshot round-trip) and `OnScreencastFrame` gates `PushFrame`
   at ≥1000 ms, so one paced source at a time. `notePageChange` correctly stays outside that gate.
-  This also all but closes item 33: the screencast push now *is* paced, so the 750 ms backstop's
-  premise holds — the comment just needs to name `OnScreencastFrame`'s own gate rather than
-  something upstream of the client. The original finding, kept for the reasoning:
+  **This fully closes item 33** (corrected 2026-09-16 — I first called it half-closed, wrongly).
+  The 750 ms JSDoc names three upstream pacers and after this commit all three hold: the bridge's
+  `setInterval` (rate clamped to ≤1), `frameCapture` (`Math.min(Math.max(rawRate, 0.1), 1)`), and
+  screencast pumps (`OnScreencastFrame`'s new 1000 ms gate). `pushVisualScene()` adds a compliant
+  fourth. The fix made the comment true rather than requiring it to be reworded — the lesson being
+  that a stale-looking comment can be repaired by fixing the code it describes. The original finding, kept for the reasoning:
   **two frame sources, one gate.** The channel both
   `Start()`s the bridge (`:418`) and `PushFrame`s from `OnScreencastFrame` (`:490`). The bridge's
   poll calls `GetLatestFrame()` → `fetchSnapshot()` → a **server round-trip per second** that is
