@@ -256,9 +256,9 @@ export interface RemoveOptions {
      * needs no override. Reserved schemas remain blocked: whatever the database owns
      * (`dbo`/`sys`/`guest`, `public`, every `pg_*` name, SQL Server's nine `db_*` fixed-role
      * schemas, `information_schema`) and whatever MJ owns (`__mj`, `__mj_UDT`). See
-     * `ReservedOwnerOf` in schema-manager.ts for the rule itself. An app installed before a
-     * name became reserved cannot have its schema dropped at all — remove it with
-     * `--keep-data`. Dangerous; MJ-internal apps only.
+     * `ReservedOwnerOf` in schema-manager.ts for the rule itself. A name the database platform
+     * or MJ owns cannot be dropped at all, with or without this flag — remove it with
+     * `--keep-data`, the only exit for that case. Dangerous; MJ-internal apps only.
      */
     AllowDoubleUnderscoreSchema?: boolean;
 }

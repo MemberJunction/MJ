@@ -539,9 +539,11 @@ installs on the default path with no flag at all.
   these already exists in a stock database, so naming one would not create it, it would
   *adopt* it — and `mj app remove` would then drop it.
 
-  If an app was installed under a name *before* that name became reserved, its schema can no
-  longer be dropped. Remove it with `mj app remove <app> --keep-data`, which unregisters the
-  app and leaves the schema in place.
+  Removing an app installed under one of those `__`-outside-namespace names (e.g. `__bcsaas`)
+  needs the same flag again: `mj app remove <app> --dangerously-ignore-dbl-underscore-schema-rule`
+  drops the schema. `--keep-data` is the exit for the platform- and MJ-reserved names above, which MJ
+  must never drop: `mj app remove <app> --keep-data` unregisters the app and leaves the
+  schema in place.
 
 ```bash
 mj app install https://github.com/BlueCypress/SaaS \
