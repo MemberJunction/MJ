@@ -1,5 +1,6 @@
 import {
     ClientRealtimeSessionConfig,
+    DEFAULT_REALTIME_AUDIO_TRACKS,
     RealtimeTrack,
     RealtimeTrackDescriptor,
     RealtimeTrackDirection,
@@ -268,23 +269,24 @@ export abstract class BaseRealtimeClient {
 
     /**
      * Negotiates requested tracks against model capability.
-     * When requested tracks are omitted/empty, defaults to audio-only (inbound + outbound).
+     * Audio (inbound + outbound) is the baseline floor of every realtime session;
+     * any additional requested tracks (such as channel video) are unioned onto this baseline floor.
      */
     protected negotiateTracks(
         requested: readonly RealtimeTrackDescriptor[] | undefined,
         supported: readonly RealtimeTrackDescriptor[] | undefined
     ): RealtimeTrack[] {
-        const effectiveRequested: readonly RealtimeTrackDescriptor[] =
-            requested && requested.length > 0
-                ? requested
-                : [
-                      { Modality: 'audio', Direction: 'inbound' },
-                      { Modality: 'audio', Direction: 'outbound' },
-                  ];
-        const effectiveSupported = supported ?? [
-            { Modality: 'audio', Direction: 'inbound' },
-            { Modality: 'audio', Direction: 'outbound' },
-        ];
+        const trackMap = new Map<string, RealtimeTrackDescriptor>();
+        for (const t of DEFAULT_REALTIME_AUDIO_TRACKS) {
+            trackMap.set(`${t.Direction}:${t.Modality}`, t);
+        }
+        if (requested) {
+            for (const t of requested) {
+                trackMap.set(`${t.Direction}:${t.Modality}`, t);
+            }
+        }
+        const effectiveRequested: readonly RealtimeTrackDescriptor[] = Array.from(trackMap.values());
+        const effectiveSupported = supported ?? DEFAULT_REALTIME_AUDIO_TRACKS;
         const resolved = ResolveRequestedTracks(
             effectiveRequested,
             effectiveSupported,

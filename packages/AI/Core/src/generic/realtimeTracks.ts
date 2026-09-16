@@ -113,6 +113,15 @@ export const CHANNEL_INBOUND_VIDEO_TRACK: RealtimeTrackDescriptor = Object.freez
 });
 
 /**
+ * Baseline audio tracks for realtime voice sessions: inbound user audio and outbound model speech.
+ * Represents the fundamental floor of every realtime voice session.
+ */
+export const DEFAULT_REALTIME_AUDIO_TRACKS: readonly RealtimeTrackDescriptor[] = Object.freeze([
+    Object.freeze({ Modality: 'audio' as const, Direction: 'inbound' as const }),
+    Object.freeze({ Modality: 'audio' as const, Direction: 'outbound' as const }),
+]);
+
+/**
  * Where a track is in its lifecycle.
  *
  * `'denied'` and `'unsupported'` are distinct on purpose: the first is a human refusing consent

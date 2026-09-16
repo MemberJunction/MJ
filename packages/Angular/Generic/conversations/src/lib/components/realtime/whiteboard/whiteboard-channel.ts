@@ -40,17 +40,20 @@ export async function rasterizeSvgToJpegBase64(svg: string, width = 1280, height
           const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
           const comma = dataUrl.indexOf(',');
           resolve(comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl);
-        } catch {
+        } catch (err) {
+          console.error('[RealtimeWhiteboardChannel] Failed to rasterize SVG canvas to JPEG:', err);
           URL.revokeObjectURL(url);
           resolve(null);
         }
       };
-      img.onerror = () => {
+      img.onerror = (err) => {
+        console.error('[RealtimeWhiteboardChannel] Failed to load SVG image for rasterization:', err);
         URL.revokeObjectURL(url);
         resolve(null);
       };
       img.src = url;
-    } catch {
+    } catch (err) {
+      console.error('[RealtimeWhiteboardChannel] Failed to initialize SVG rasterization:', err);
       resolve(null);
     }
   });

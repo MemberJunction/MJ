@@ -5,7 +5,7 @@ import { UserInfoEngine } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJGlobal } from '@memberjunction/global';
-import { ClientRealtimeSessionConfig, JSONObject, JSONValue, RealtimeToolDefinition, RealtimeTrackDescriptor, RealtimeTrackDirection } from '@memberjunction/ai';
+import { ClientRealtimeSessionConfig, DEFAULT_REALTIME_AUDIO_TRACKS, JSONObject, JSONValue, RealtimeToolDefinition, RealtimeTrackDescriptor, RealtimeTrackDirection } from '@memberjunction/ai';
 import { AppContextSnapshot } from '@memberjunction/ai-core-plus';
 import {
   BaseRealtimeClient,
@@ -1701,7 +1701,7 @@ export class RealtimeSessionService {
         ? (sessionConfig['requestedTracks'] as RealtimeTrackDescriptor[])
         : [];
       const trackMap = new Map<string, RealtimeTrackDescriptor>();
-      for (const t of [...existing, ...channelTracks]) {
+      for (const t of [...DEFAULT_REALTIME_AUDIO_TRACKS, ...existing, ...channelTracks]) {
         trackMap.set(`${t.Direction}:${t.Modality}`, t);
       }
       sessionConfig['requestedTracks'] = Array.from(trackMap.values());

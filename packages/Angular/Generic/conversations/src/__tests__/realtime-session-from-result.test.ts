@@ -375,8 +375,14 @@ describe('RealtimeSessionService — StartRealtimeSession after the mint/run spl
 
     expect(FakeRealtimeDriver.Connects).toHaveLength(1);
     const config = FakeRealtimeDriver.Connects[0];
-    expect(config.SessionConfig['requestedTracks']).toEqual([
-      { Modality: 'video', Direction: 'inbound', Required: false }
-    ]);
+    const tracks = config.SessionConfig['requestedTracks'] as unknown[];
+    expect(tracks).toHaveLength(3);
+    expect(tracks).toEqual(
+      expect.arrayContaining([
+        { Modality: 'audio', Direction: 'inbound' },
+        { Modality: 'audio', Direction: 'outbound' },
+        { Modality: 'video', Direction: 'inbound', Required: false }
+      ])
+    );
   });
 });
