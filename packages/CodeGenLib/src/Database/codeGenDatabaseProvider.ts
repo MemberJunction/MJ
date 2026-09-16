@@ -1,6 +1,7 @@
 import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
+import { trimTrailingStatementTerminators } from '../Misc/sql_text';
 
 // ─── CONNECTION ABSTRACTION ──────────────────────────────────────────────────
 
@@ -441,6 +442,38 @@ export abstract class CodeGenDatabaseProvider {
      */
     generateMaterializedWrapperViewSQL(schema: string, viewName: string, tableName: string): string {
         throw new Error(`generateMaterializedWrapperViewSQL is not implemented for platform '${this.PlatformKey}'`);
+    }
+
+    // ─── CONFIG-DECLARED VIEWS ───────────────────────────────────────────
+
+    /**
+     * Generates idempotent create-or-replace DDL for a view whose body is supplied verbatim
+     * by configuration — e.g. an organic key's `TransitiveView` bridge view. Re-running the
+     * statement against an existing view must replace it in place, including when the body's
+     * column list has changed.
+     *
+     * The body is emitted as-is, so it must already be written in this platform's dialect.
+     * Returns a single statement with no trailing batch separator; callers executing it through
+     * `LogSQLAndExecute` pass `includeBatchSeparator` with the provider's `BatchSeparator` so the
+     * migration file still gets one.
+     *
+     * Default throws — each engine provider overrides.
+     *
+     * @param schema    Schema to create the view in.
+     * @param viewName  Unqualified view name.
+     * @param selectSQL The view body (a SELECT statement). A trailing `;` is tolerated.
+     */
+    generateCreateOrReplaceViewSQL(schema: string, viewName: string, selectSQL: string): string {
+        throw new Error(`generateCreateOrReplaceViewSQL is not implemented for platform '${this.PlatformKey}'`);
+    }
+
+    /**
+     * Strips trailing whitespace and statement terminators from a caller-supplied SQL body so
+     * it can be embedded in a larger statement (a view definition, a dynamic `EXECUTE` string).
+     * Linear time — the body comes from configuration (see Misc/sql_text).
+     */
+    protected trimStatementTerminator(sql: string): string {
+        return trimTrailingStatementTerminators(sql);
     }
 
     /**
