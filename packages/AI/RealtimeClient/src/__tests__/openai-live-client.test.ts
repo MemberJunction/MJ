@@ -1398,4 +1398,86 @@ describe('OpenAILiveClient (Browser WebRTC Driver)', () => {
         // Consumer must see EXACTLY ONE tool call — dedupe guard must have survived cancel
         expect(toolCalls.length).toBe(1);
     });
+
+    it('SendText defers response.create when toolBatchBarrier is not empty, sending it after tool result arrives', async () => {
+        await client.Connect(makeConfig(), micStream);
+        client.Channel.Open();
+
+        // 1. Tool call is emitted into the barrier
+        client.Channel.EmitServer({
+            type: 'response.event',
+            event: {
+                type: 'response.output_item.done',
+                item: { type: 'function_call', call_id: 'call_defer_test', name: 'search', arguments: '{}' },
+            },
+        });
+
+        const initialFrameCount = client.Channel.SentEvents().length;
+
+        // 2. User sends text while tool is executing
+        client.SendText('Please also check the status');
+
+        const framesAfterText = client.Channel.SentEvents();
+        const commentaryFrame = framesAfterText.find(
+            (f) => f['type'] === 'session.commentary.append' && f['content'] === 'Please also check the status'
+        );
+        expect(commentaryFrame).toBeDefined();
+
+        // 3. Crucial: NO response.create should have been sent yet because the barrier is not empty!
+        const createFramesAfterText = framesAfterText.slice(initialFrameCount).filter((f) => f['type'] === 'response.create');
+        expect(createFramesAfterText.length).toBe(0);
+
+        // 4. Send the tool result to complete the batch
+        client.SendToolResult('call_defer_test', '{"found": 1}');
+
+        // 5. Now response.create should be emitted
+        const createFramesFinal = client.Channel.SentEvents().filter((f) => f['type'] === 'response.create');
+        expect(createFramesFinal.length).toBe(1);
+    });
+
+    it('preserves emittedToolCallIds across response.completed when toolBatchBarrier is active', async () => {
+        await client.Connect(makeConfig(), micStream);
+        client.Channel.Open();
+
+        const toolCalls: { ToolName: string; CallID: string }[] = [];
+        client.OnToolCall((call) => {
+            toolCalls.push({ ToolName: call.ToolName, CallID: call.CallID });
+        });
+
+        // 1. Tool call arrives
+        client.Channel.EmitServer({
+            type: 'response.event',
+            event: {
+                type: 'response.output_item.done',
+                item: { type: 'function_call', call_id: 'call_lifetime_test', name: 'fetch', arguments: '{}' },
+            },
+        });
+        expect(toolCalls.length).toBe(1);
+
+        // 2. Server completes the turn (response.completed) while tool result has NOT arrived
+        client.Channel.EmitServer({
+            type: 'response.event',
+            event: {
+                type: 'response.completed',
+                response: { id: 'resp_1' },
+            },
+        });
+
+        // 3. Duplicate event arrives (e.g. late function_call_arguments.done or redelivered item.done)
+        client.Channel.EmitServer({
+            type: 'response.event',
+            event: {
+                type: 'response.output_item.done',
+                item: { type: 'function_call', call_id: 'call_lifetime_test', name: 'fetch', arguments: '{}' },
+            },
+        });
+
+        // Dedupe must remain in effect: still exactly 1 call
+        expect(toolCalls.length).toBe(1);
+
+        // 4. Complete the batch
+        client.SendToolResult('call_lifetime_test', '{"status":"ok"}');
+
+        // Now barrier is complete and emittedToolCallIds is cleared.
+    });
 });
