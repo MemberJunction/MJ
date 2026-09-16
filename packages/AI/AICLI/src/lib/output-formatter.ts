@@ -354,9 +354,9 @@ export class OutputFormatter {
         output += chalk.bold('Result:') + '\n';
         if (typeof result.result === 'string') {
           const formatted = TextFormatter.formatText(result.result, {
-            maxWidth: 80,
-            indent: 2,
-            preserveParagraphs: true
+            MaxWidth: 80,
+            Indent: 2,
+            PreserveParagraphs: true
           });
           output += formatted + '\n';
         } else {

@@ -642,9 +642,9 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
         this.Layout = this.ActiveLayout === 'dagre'
             ? ComputeDagreLayout(filtered, {
                 ...commonOpts,
-                rankDir: this.config.dagreConfig?.rankDir ?? 'LR',
-                nodeSep: this.config.dagreConfig?.nodeSep,
-                rankSep: this.config.dagreConfig?.rankSep,
+                RankDir: this.config.dagreConfig?.rankDir ?? 'LR',
+                NodeSep: this.config.dagreConfig?.nodeSep,
+                RankSep: this.config.dagreConfig?.rankSep,
             })
             : ComputeErdLayout(filtered, commonOpts);
 

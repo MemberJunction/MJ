@@ -31,11 +31,11 @@ export class AIPromptManagementService {
     const dialogComponent = dialogRef.Content!.instance as unknown as TemplateSelectorDialogComponent;
     dialogComponent.config = {
       Title: config.Title,
-      showCreateNew: config.showCreateNew ?? true,
-      extraFilter: config.extraFilter,
-      multiSelect: config.multiSelect ?? false,
-      selectedTemplateIds: config.selectedTemplateIds,
-      showActiveOnly: config.showActiveOnly ?? true
+      ShowCreateNew: config.ShowCreateNew ?? true,
+      ExtraFilter: config.ExtraFilter,
+      MultiSelect: config.MultiSelect ?? false,
+      SelectedTemplateIds: config.SelectedTemplateIds,
+      ShowActiveOnly: config.ShowActiveOnly ?? true
     };
 
     // Create a subject to handle the result

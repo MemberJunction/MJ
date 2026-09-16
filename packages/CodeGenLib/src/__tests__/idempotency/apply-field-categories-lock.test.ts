@@ -100,11 +100,11 @@ describe('T2 — Field Metadata Lock Table (C2, FM1, FM5, §3.4)', () => {
    };
 
    const defaultBaseContext: FieldLockContext = {
-      isNewEntity: false,
-      isNewField: false,
-      descriptionReopened: false,
-      typeReopened: false,
-      existingCategories: new Set(['General', 'Details', 'Audit']),
+      IsNewEntity: false,
+      IsNewField: false,
+      DescriptionReopened: false,
+      TypeReopened: false,
+      ExistingCategories: new Set(['General', 'Details', 'Audit']),
    };
 
    beforeEach(() => {
@@ -123,7 +123,7 @@ describe('T2 — Field Metadata Lock Table (C2, FM1, FM5, §3.4)', () => {
          };
          const res = ComputeFieldMetadataUpdate(field, proposal, defaultBaseContext, validateExtType, sanitizeCode);
          expect(res.Category).toBeUndefined();
-         expect(res.skipped).toContainEqual({ column: 'Category', reason: 'locked' });
+         expect(res.Skipped).toContainEqual({ column: 'Category', reason: 'locked' });
       });
 
       it('allows Category update when current Category is blank on existing entity', () => {
@@ -151,7 +151,7 @@ describe('T2 — Field Metadata Lock Table (C2, FM1, FM5, §3.4)', () => {
          };
          const ctx: FieldLockContext = {
             ...defaultBaseContext,
-            isNewEntity: true,
+            IsNewEntity: true,
          };
          const res = ComputeFieldMetadataUpdate(field, proposal, ctx, validateExtType, sanitizeCode);
          expect(res.Category).toBe('Custom Category');
@@ -169,11 +169,11 @@ describe('T2 — Field Metadata Lock Table (C2, FM1, FM5, §3.4)', () => {
          };
          const ctx: FieldLockContext = {
             ...defaultBaseContext,
-            isNewEntity: true,
+            IsNewEntity: true,
          };
          const res = ComputeFieldMetadataUpdate(field, proposal, ctx, validateExtType, sanitizeCode);
          expect(res.Category).toBeUndefined();
-         expect(res.skipped).toContainEqual({ column: 'Category', reason: 'flag' });
+         expect(res.Skipped).toContainEqual({ column: 'Category', reason: 'flag' });
       });
 
       it('forces __mj_ fields to Category System Metadata', () => {
@@ -220,15 +220,15 @@ describe('T2 — Field Metadata Lock Table (C2, FM1, FM5, §3.4)', () => {
          };
          const ctx: FieldLockContext = {
             ...defaultBaseContext,
-            descriptionReopened: true,
-            typeReopened: false,
+            DescriptionReopened: true,
+            TypeReopened: false,
          };
          const res = ComputeFieldMetadataUpdate(field, proposal, ctx, validateExtType, sanitizeCode);
          expect(res.DisplayName).toBe('New Display');
          expect(res.Category).toBeUndefined();
          expect(res.ExtendedType).toBeUndefined();
-         expect(res.skipped).toContainEqual({ column: 'Category', reason: 'locked' });
-         expect(res.skipped).toContainEqual({ column: 'ExtendedType', reason: 'locked' });
+         expect(res.Skipped).toContainEqual({ column: 'Category', reason: 'locked' });
+         expect(res.Skipped).toContainEqual({ column: 'ExtendedType', reason: 'locked' });
       });
 
       it('typeReopened alone re-opens ExtendedType/CodeType and leaves DisplayName/Category locked', () => {
@@ -247,16 +247,16 @@ describe('T2 — Field Metadata Lock Table (C2, FM1, FM5, §3.4)', () => {
          };
          const ctx: FieldLockContext = {
             ...defaultBaseContext,
-            descriptionReopened: false,
-            typeReopened: true,
+            DescriptionReopened: false,
+            TypeReopened: true,
          };
          const res = ComputeFieldMetadataUpdate(field, proposal, ctx, validateExtType, sanitizeCode);
          expect(res.ExtendedType).toBe('Code');
          expect(res.CodeType).toBe('TypeScript');
          expect(res.DisplayName).toBeUndefined();
          expect(res.Category).toBeUndefined();
-         expect(res.skipped).toContainEqual({ column: 'Category', reason: 'locked' });
-         expect(res.skipped).toContainEqual({ column: 'DisplayName', reason: 'locked' });
+         expect(res.Skipped).toContainEqual({ column: 'Category', reason: 'locked' });
+         expect(res.Skipped).toContainEqual({ column: 'DisplayName', reason: 'locked' });
       });
 
       it('forces CodeType to null when effective ExtendedType is not Code', () => {
@@ -271,7 +271,7 @@ describe('T2 — Field Metadata Lock Table (C2, FM1, FM5, §3.4)', () => {
          };
          const ctx: FieldLockContext = {
             ...defaultBaseContext,
-            typeReopened: true,
+            TypeReopened: true,
          };
          const res = ComputeFieldMetadataUpdate(field, proposal, ctx, validateExtType, sanitizeCode);
          expect(res.ExtendedType).toBe('URL');
@@ -288,11 +288,11 @@ describe('T2 — Field Metadata Lock Table (C2, FM1, FM5, §3.4)', () => {
          };
          const ctx: FieldLockContext = {
             ...defaultBaseContext,
-            isNewField: true,
+            IsNewField: true,
          };
          const res = ComputeFieldMetadataUpdate(field, proposal, ctx, validateExtType, sanitizeCode);
          expect(res.ExtendedType).toBeUndefined();
-         expect(res.skipped).toContainEqual({ column: 'ExtendedType', reason: 'invalid' });
+         expect(res.Skipped).toContainEqual({ column: 'ExtendedType', reason: 'invalid' });
       });
 
       it('refuses ExtendedType=Code on a field whose ValueListType is not None (dropdown column guard)', () => {
@@ -308,11 +308,11 @@ describe('T2 — Field Metadata Lock Table (C2, FM1, FM5, §3.4)', () => {
          };
          const ctx: FieldLockContext = {
             ...defaultBaseContext,
-            isNewField: true,
+            IsNewField: true,
          };
          const res = ComputeFieldMetadataUpdate(field, proposal, ctx, validateExtType, sanitizeCode);
          expect(res.ExtendedType).toBeUndefined();
-         expect(res.skipped).toContainEqual({ column: 'ExtendedType', reason: 'invalid' });
+         expect(res.Skipped).toContainEqual({ column: 'ExtendedType', reason: 'invalid' });
          // Effective ExtendedType is not Code, so CodeType is not set
          expect(res.CodeType).toBeUndefined();
       });
@@ -330,12 +330,12 @@ describe('T2 — Field Metadata Lock Table (C2, FM1, FM5, §3.4)', () => {
          };
          const ctx: FieldLockContext = {
             ...defaultBaseContext,
-            isNewField: true,
+            IsNewField: true,
          };
          const res = ComputeFieldMetadataUpdate(field, proposal, ctx, validateExtType, sanitizeCode);
          expect(res.ExtendedType).toBe('Code');
          expect(res.CodeType).toBe('TypeScript');
-         expect(res.skipped.filter(s => s.column === 'ExtendedType')).toHaveLength(0);
+         expect(res.Skipped.filter(s => s.column === 'ExtendedType')).toHaveLength(0);
       });
 
       it('accepts ExtendedType=Code on a field whose ValueListType is undefined', () => {
@@ -351,18 +351,18 @@ describe('T2 — Field Metadata Lock Table (C2, FM1, FM5, §3.4)', () => {
          };
          const ctx: FieldLockContext = {
             ...defaultBaseContext,
-            isNewField: true,
+            IsNewField: true,
          };
          const res = ComputeFieldMetadataUpdate(field, proposal, ctx, validateExtType, sanitizeCode);
          expect(res.ExtendedType).toBe('Code');
          expect(res.CodeType).toBe('TypeScript');
-         expect(res.skipped.filter(s => s.column === 'ExtendedType')).toHaveLength(0);
+         expect(res.Skipped.filter(s => s.column === 'ExtendedType')).toHaveLength(0);
       });
 
       it('accepts every member of EntityFieldInfo.ExtendedTypes', () => {
          const ctx: FieldLockContext = {
             ...defaultBaseContext,
-            isNewField: true,
+            IsNewField: true,
          };
 
          for (const extType of EntityFieldInfo.ExtendedTypes) {
@@ -375,7 +375,7 @@ describe('T2 — Field Metadata Lock Table (C2, FM1, FM5, §3.4)', () => {
             };
             const res = ComputeFieldMetadataUpdate(field, proposal, ctx, validateExtType, sanitizeCode);
             expect(res.ExtendedType).toBe(extType);
-            expect(res.skipped.filter(s => s.column === 'ExtendedType')).toHaveLength(0);
+            expect(res.Skipped.filter(s => s.column === 'ExtendedType')).toHaveLength(0);
          }
       });
 
@@ -393,12 +393,12 @@ describe('T2 — Field Metadata Lock Table (C2, FM1, FM5, §3.4)', () => {
          };
          const ctx: FieldLockContext = {
             ...defaultBaseContext,
-            isNewField: true,
+            IsNewField: true,
          };
          const res = ComputeFieldMetadataUpdate(field, proposal, ctx, validateExtType, sanitizeCode);
-         expect(res.skipped).toContainEqual({ column: 'Category', reason: 'blank-proposal' });
-         expect(res.skipped).toContainEqual({ column: 'DisplayName', reason: 'unchanged' });
-         expect(res.skipped).toContainEqual({ column: 'ExtendedType', reason: 'unchanged' });
+         expect(res.Skipped).toContainEqual({ column: 'Category', reason: 'blank-proposal' });
+         expect(res.Skipped).toContainEqual({ column: 'DisplayName', reason: 'unchanged' });
+         expect(res.Skipped).toContainEqual({ column: 'ExtendedType', reason: 'unchanged' });
       });
    });
 

@@ -56,8 +56,8 @@ export interface AutotagRecordCandidate {
 
 /** Outcome of {@link resolveAutotagRecord}: the matched record, or a tolerant error. */
 export type AutotagResolveResult<T> =
-    | { ok: true; value: T }
-    | { ok: false; error: string };
+    | { ok: true; value: T }  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    | { ok: false; error: string };  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 
 /**
  * Resolve an agent-supplied reference to one of the candidate records. Tries, in order

@@ -55,19 +55,19 @@ export interface Violation {
 }
 
 export interface LintContext {
-  componentName: string;
-  componentSpec?: ComponentSpec;
-  typeContext: any; // TypeContext - avoiding import for now
-  typeEngine: any; // TypeInferenceEngine
-  controlFlowAnalyzer: any; // ControlFlowAnalyzer
+  componentName: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  componentSpec?: ComponentSpec;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  typeContext: any; // TypeContext - avoiding import for now — case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  typeEngine: any; // TypeInferenceEngine — case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  controlFlowAnalyzer: any; // ControlFlowAnalyzer — case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
   /** SQL dialect for WHERE clause parsing in semantic validators */
-  sqlDialect?: import('@memberjunction/sql-dialect').SQLParserDialect;
+  sqlDialect?: import('@memberjunction/sql-dialect').SQLParserDialect;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
   /**
    * Resolver for registry-located dependency components. Caller-supplied
    * (see LinterOptions.componentResolver). Optional — rules degrade
    * gracefully when absent.
    */
-  componentResolver?: (name: string, namespace?: string, registry?: string) => ComponentSpec | undefined;
+  componentResolver?: (name: string, namespace?: string, registry?: string) => ComponentSpec | undefined;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 }
 
 /**
@@ -741,17 +741,17 @@ export class ComponentPropRule {
 
         // Build ValidationContext
         const validationCtx: ValidationContext = {
-          node: propAttr,
-          path: path as any,
-          componentName: elementName,
-          componentSpec: depSpec,
+          Node: propAttr,
+          Path: path as any,
+          ComponentName: elementName,
+          ComponentSpec: depSpec,
           propertyName: property.name,
           propertyValue: propValue,
           siblingProps,
-          entities: new Map(),
-          queries: new Map(),
-          typeEngine: null as never,
-          dialect: this._sqlDialect,
+          Entities: new Map(),
+          Queries: new Map(),
+          TypeEngine: null as never,
+          Dialect: this._sqlDialect,
 
           getEntityFields: validationHelpers.getEntityFields,
           getEntityFieldType: validationHelpers.getEntityFieldType,

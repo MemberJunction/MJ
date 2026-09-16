@@ -24,9 +24,9 @@ const CONFIG: EntitySelectorConfig = {
   EntityName: 'AI Prompts',
   Title: 'Pick a Prompt',
   DisplayField: 'Name',
-  descriptionField: 'Description',
-  statusField: 'Status',
-  icon: 'fa-solid fa-comment',
+  DescriptionField: 'Description',
+  StatusField: 'Status',
+  Icon: 'fa-solid fa-comment',
 };
 
 const ROWS = [

@@ -17,7 +17,7 @@ export type PieChartProps = {
     /** Available container width in px (donut + legend share this). */
     Width: number;
     /** Optional heading rendered above the chart. */
-    title?: string;
+    title?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 };
 
 /** Outer diameter (px) of the donut SVG. */

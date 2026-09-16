@@ -69,7 +69,7 @@ export default class TestRun extends Command {
         name: flags.name,
         environment: flags.environment,
         format: ResolveLegacyFormat({
-          format: flags.format,
+          Format: flags.format,
           Legacy: 'console' as const,
           LegacyDefault: 'console' as const,
           Map: TEST_FORMAT_MAP,

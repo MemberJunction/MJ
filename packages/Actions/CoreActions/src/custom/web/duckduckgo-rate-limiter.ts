@@ -10,14 +10,14 @@ export interface RateLimitConfig {
 }
 
 export interface SearchRequest {
-    url: string;
-    options: RequestInit;
-    disableQueueing?: boolean;
+    url: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    options: RequestInit;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    DisableQueueing?: boolean;
 }
 
 export interface SearchResponse {
-    response: Response;
-    text: string;
+    response: Response;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    text: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 /**
@@ -226,7 +226,7 @@ export class DuckDuckGoRateLimiter {
         
         return new Promise((resolve, reject) => {
             // If queueing is disabled and queue is active, fail immediately
-            if (request.disableQueueing && this.isQueueActive) {
+            if (request.DisableQueueing && this.isQueueActive) {
                 console.log(`        🚫 Request ${requestId} rejected - rate limiting active and queueing disabled`);
                 reject(new Error('Rate limiting active and queueing is disabled'));
                 return;

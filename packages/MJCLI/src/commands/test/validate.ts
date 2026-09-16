@@ -59,7 +59,7 @@ export default class TestValidate extends Command {
         type: flags.type,
         saveReport: flags['save-report'],
         format: ResolveLegacyFormat({
-          format: flags.format,
+          Format: flags.format,
           Legacy: 'console' as const,
           LegacyDefault: 'console' as const,
           Map: TEST_FORMAT_MAP,

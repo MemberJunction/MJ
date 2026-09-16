@@ -149,19 +149,19 @@ describe('observeChatResult', () => {
 
     it('records text and calls arriving together without treating either as an error', () => {
         const observation = ObserveChatResult(chatResult({ content: 'Let me check.', toolCalls: [weatherCall] }), singleCall, 'auto', true);
-        expect(observation.textAndCallsTogether).toBe(true);
+        expect(observation.TextAndCallsTogether).toBe(true);
         expect(observation.decisionCorrect).toBe(true);
     });
 
     it('captures the arguments the model sent, so a fidelity failure can be diagnosed', () => {
         const observation = ObserveChatResult(chatResult({ toolCalls: [weatherCall] }), singleCall, 'auto', true);
-        expect(observation.observedArguments).toEqual([{ location: 'Paris' }]);
+        expect(observation.ObservedArguments).toEqual([{ location: 'Paris' }]);
     });
 
     it('truncates a runaway argument value rather than storing it whole', () => {
         const huge: ChatToolCall = { id: 'x', name: 'get_weather', arguments: { location: 'x'.repeat(1000) } };
         const observation = ObserveChatResult(chatResult({ toolCalls: [huge] }), singleCall, 'auto', true);
-        const stored = String(observation.observedArguments[0].location);
+        const stored = String(observation.ObservedArguments[0].location);
         expect(stored.length).toBeLessThan(1000);
         expect(stored.endsWith('…[truncated]')).toBe(true);
     });
@@ -170,7 +170,7 @@ describe('observeChatResult', () => {
         const rogue: ChatToolCall = { id: 'x', name: 'delete_everything', arguments: {} };
         const observation = ObserveChatResult(chatResult({ toolCalls: [rogue] }), singleCall, 'auto', true);
         expect(observation.nativeCallsWellFormed).toBe(false);
-        expect(observation.undeclaredToolNames).toEqual(['delete_everything']);
+        expect(observation.UndeclaredToolNames).toEqual(['delete_everything']);
         expect(observation.decisionCorrect).toBe(false);
     });
 
@@ -191,7 +191,7 @@ describe('observeChatResult', () => {
         const body = JSON.stringify({ taskComplete: false, nextStep: { type: 'Actions', actions: [{ name: 'run_query', params: { sql: 'SELECT 1' } }] } });
         const observation = ObserveChatResult(chatResult({ content: body, toolCalls: [weatherCall] }), envelope, 'auto', true);
         expect(observation.channel).toBe('tool-call');
-        expect(observation.observedCallNames).toEqual(['get_weather']);
+        expect(observation.ObservedCallNames).toEqual(['get_weather']);
     });
 
     it('leaves envelope fields null on scenarios that never asked for one', () => {
@@ -209,26 +209,26 @@ describe('observeChatResult', () => {
     it('does not flag envelope actions as undeclared in a no-tools cell', () => {
         const body = JSON.stringify({ taskComplete: false, nextStep: { type: 'Actions', actions: [{ name: 'get_weather', params: { location: 'Paris' } }] } });
         const observation = ObserveChatResult(chatResult({ content: body }), envelope, 'no-tools', false);
-        expect(observation.undeclaredToolNames).toEqual([]);
+        expect(observation.UndeclaredToolNames).toEqual([]);
     });
 });
 
 describe('scenarios', () => {
     it('offers a distractor tool that is never the right answer, so name accuracy is separable', () => {
-        const expectedNames = new Set(PROBE_SCENARIOS.flatMap((s) => s.expectation.calls.map((c) => c.toolName)));
+        const expectedNames = new Set(PROBE_SCENARIOS.flatMap((s) => s.Expectation.calls.map((c) => c.toolName)));
         expect(expectedNames.has('run_query')).toBe(false);
-        expect(PROBE_SCENARIOS.every((s) => s.tools.some((t) => t.name === 'run_query'))).toBe(true);
+        expect(PROBE_SCENARIOS.every((s) => s.Tools.some((t) => t.name === 'run_query'))).toBe(true);
     });
 
     it("appends the JSON-mode suffix only in JSON cells — OpenAI's json_object rejects a prompt without it", () => {
         const scenario = GetScenario('single-call');
-        expect(BuildUserPrompt(scenario, 'Any')).toBe(scenario.userPrompt);
-        expect(BuildUserPrompt(scenario, 'JSON')).toBe(scenario.userPrompt + JSON_MODE_PROMPT_SUFFIX);
+        expect(BuildUserPrompt(scenario, 'Any')).toBe(scenario.UserPrompt);
+        expect(BuildUserPrompt(scenario, 'JSON')).toBe(scenario.UserPrompt + JSON_MODE_PROMPT_SUFFIX);
     });
 
     it('keeps every tool schema inside the cross-provider common subset Gemini accepts', () => {
         const allowed = new Set(['type', 'description', 'enum', 'items', 'properties', 'required']);
-        for (const tool of PROBE_SCENARIOS.flatMap((s) => s.tools)) {
+        for (const tool of PROBE_SCENARIOS.flatMap((s) => s.Tools)) {
             expect(Object.keys(tool.inputSchema).every((k) => allowed.has(k))).toBe(true);
             const properties = tool.inputSchema.properties as Record<string, Record<string, unknown>>;
             for (const property of Object.values(properties)) {
@@ -245,63 +245,63 @@ describe('scenarios', () => {
 describe('expandMatrix', () => {
     it('drops only vacuous combinations, and says why for each', () => {
         const expanded = ExpandMatrix(DEFAULT_MATRIX_SPEC);
-        expect(expanded.cells.length).toBeGreaterThan(0);
-        expect(expanded.skipped.length).toBeGreaterThan(0);
-        expect(expanded.skipped.every((s) => s.reason.length > 0)).toBe(true);
+        expect(expanded.Cells.length).toBeGreaterThan(0);
+        expect(expanded.Skipped.length).toBeGreaterThan(0);
+        expect(expanded.Skipped.every((s) => s.Reason.length > 0)).toBe(true);
     });
 
     it("never runs a call-warranting scenario with no tools declared and no envelope to read", () => {
         const expanded = ExpandMatrix(DEFAULT_MATRIX_SPEC);
-        const bad = expanded.cells.filter((c) => c.toolMode === 'no-tools' && c.scenarioId === 'single-call');
+        const bad = expanded.Cells.filter((c) => c.ToolMode === 'no-tools' && c.ScenarioId === 'single-call');
         expect(bad).toEqual([]);
     });
 
     it('never forces a named tool on the parallel-call scenario', () => {
         const expanded = ExpandMatrix(DEFAULT_MATRIX_SPEC);
-        expect(expanded.cells.filter((c) => c.toolMode === 'named' && c.scenarioId === 'parallel-call')).toEqual([]);
+        expect(expanded.Cells.filter((c) => c.ToolMode === 'named' && c.ScenarioId === 'parallel-call')).toEqual([]);
     });
 
     it('sweeps the thinking axis only on the models that declare effort levels', () => {
         const expanded = ExpandMatrix(DEFAULT_MATRIX_SPEC);
-        const thinking = expanded.cells.filter((c) => c.effortLevel !== null);
+        const thinking = expanded.Cells.filter((c) => c.EffortLevel !== null);
         expect(thinking.length).toBeGreaterThan(0);
-        expect(thinking.every((c) => c.toolMode === 'auto' && c.responseFormat === 'Any')).toBe(true);
-        expect(thinking.every((c) => (c.model.effortLevels ?? []).includes(c.effortLevel))).toBe(true);
+        expect(thinking.every((c) => c.ToolMode === 'auto' && c.ResponseFormat === 'Any')).toBe(true);
+        expect(thinking.every((c) => (c.Model.EffortLevels ?? []).includes(c.EffortLevel))).toBe(true);
     });
 
     it('gives every cell a unique id', () => {
         const expanded = ExpandMatrix(DEFAULT_MATRIX_SPEC);
-        expect(new Set(expanded.cells.map((c) => c.id)).size).toBe(expanded.cells.length);
+        expect(new Set(expanded.Cells.map((c) => c.Id)).size).toBe(expanded.Cells.length);
     });
 
     it('sizes the manifest off the real prompts, and scales with reps', () => {
         const expanded = ExpandMatrix(DEFAULT_MATRIX_SPEC);
         const one = BuildManifest(expanded, 1);
         const three = BuildManifest(expanded, 3);
-        expect(one.callCount).toBe(expanded.cells.length);
-        expect(three.callCount).toBe(one.callCount * 3);
-        expect(three.estimatedPromptTokens).toBe(one.estimatedPromptTokens * 3);
-        expect(one.perModel.length).toBe(DEFAULT_MATRIX_SPEC.models.length);
+        expect(one.CallCount).toBe(expanded.Cells.length);
+        expect(three.CallCount).toBe(one.CallCount * 3);
+        expect(three.EstimatedPromptTokens).toBe(one.EstimatedPromptTokens * 3);
+        expect(one.PerModel.length).toBe(DEFAULT_MATRIX_SPEC.Models.length);
     });
 });
 
 describe('summarizeCells and renderScorecard', () => {
-    const model = DEFAULT_MATRIX_SPEC.models[0];
+    const model = DEFAULT_MATRIX_SPEC.Models[0];
     const id = CellId(model, 'single-call', 'auto', 'Any', null);
 
     function record(rep: number, decisionCorrect: boolean, calls: number): ProbeRecord {
         return {
-            label: 'unit', timestamp: new Date(0).toISOString(), cellId: id,
-            modelLabel: model.label, apiName: model.apiName, developer: model.developer,
-            generation: model.generation, driverClass: model.driverClass,
-            scenarioId: 'single-call', toolMode: 'auto', responseFormat: 'Any', effortLevel: null,
-            rep, latencyMs: 1000,
-            observation: {
-                driverSucceeded: true, errorMessage: null, finishReason: 'tool_calls', streamingSuppressedForTools: false,
-                textPresent: false, textLength: 0, nativeToolCallCount: calls, textAndCallsTogether: false,
-                nativeCallsWellFormed: true, undeclaredToolNames: [], envelopeParsed: null, envelopeValid: null,
-                channel: 'tool-call', observedCallNames: ['get_weather'], observedArguments: [{ location: 'Paris' }], decisionCorrect, argumentMatchRate: 1,
-                toolChoiceHonored: null, promptTokens: 120, completionTokens: 20
+            Label: 'unit', Timestamp: new Date(0).toISOString(), CellId: id,
+            ModelLabel: model.Label, ApiName: model.ApiName, Developer: model.Developer,
+            Generation: model.Generation, DriverClass: model.DriverClass,
+            ScenarioId: 'single-call', ToolMode: 'auto', ResponseFormat: 'Any', EffortLevel: null,
+            Rep: rep, LatencyMs: 1000,
+            Observation: {
+                driverSucceeded: true, errorMessage: null, FinishReason: 'tool_calls', StreamingSuppressedForTools: false,
+                textPresent: false, TextLength: 0, nativeToolCallCount: calls, TextAndCallsTogether: false,
+                nativeCallsWellFormed: true, UndeclaredToolNames: [], envelopeParsed: null, envelopeValid: null,
+                channel: 'tool-call', ObservedCallNames: ['get_weather'], ObservedArguments: [{ location: 'Paris' }], decisionCorrect, argumentMatchRate: 1,
+                ToolChoiceHonored: null, PromptTokens: 120, CompletionTokens: 20
             }
         };
     }
@@ -310,41 +310,41 @@ describe('summarizeCells and renderScorecard', () => {
         const summaries = SummarizeCells([record(1, true, 1), record(2, false, 1), record(3, true, 2)]);
         expect(summaries).toHaveLength(1);
         expect(summaries[0]).toMatchObject({ reps: 3, errorCount: 0, nativeCallRate: 1, parallelRate: 1 / 3 });
-        expect(summaries[0].decisionCorrectRate).toBeCloseTo(2 / 3);
-        expect(summaries[0].finishReasons).toEqual({ tool_calls: 3 });
+        expect(summaries[0].DecisionCorrectRate).toBeCloseTo(2 / 3);
+        expect(summaries[0].FinishReasons).toEqual({ tool_calls: 3 });
     });
 
     it('reports success-conditioned metrics as null, not zero, when every repetition errored', () => {
         const errored = { ...record(1, false, 0) };
-        errored.observation = { ...errored.observation, driverSucceeded: false, errorMessage: '400 unsupported', channel: 'error', finishReason: null };
-        const [summary] = SummarizeCells([errored, { ...errored, rep: 2 }]);
+        errored.Observation = { ...errored.Observation, driverSucceeded: false, errorMessage: '400 unsupported', channel: 'error', FinishReason: null };
+        const [summary] = SummarizeCells([errored, { ...errored, Rep: 2 }]);
         // A cell where every call was rejected must not read as "the model chose not to call a tool".
         expect(summary.nativeCallRate).toBeNull();
-        expect(summary.meanNativeCalls).toBeNull();
+        expect(summary.MeanNativeCalls).toBeNull();
         expect(summary.parallelRate).toBeNull();
         // Decision accuracy still counts the error — a rejected request is a wrong answer to the caller.
-        expect(summary.decisionCorrectRate).toBe(0);
+        expect(summary.DecisionCorrectRate).toBe(0);
         expect(summary.errorCount).toBe(2);
     });
 
     it('orders model rows deterministically, since models run in parallel and record order does not', () => {
-        const second = DEFAULT_MATRIX_SPEC.models.find((m) => m.developer !== model.developer);
+        const second = DEFAULT_MATRIX_SPEC.Models.find((m) => m.Developer !== model.Developer);
         expect(second).toBeDefined();
-        const other: ProbeRecord = { ...record(1, true, 1), modelLabel: second!.label, apiName: second!.apiName, developer: second!.developer, cellId: 'other' };
-        const forward = RenderScorecard(SummarizeCells([record(1, true, 1), other]), { label: 'u', startedAt: 'a', finishedAt: 'b', reps: 1, cellCount: 2, skippedCount: null, callCount: 2 });
-        const reversed = RenderScorecard(SummarizeCells([other, record(1, true, 1)]), { label: 'u', startedAt: 'a', finishedAt: 'b', reps: 1, cellCount: 2, skippedCount: null, callCount: 2 });
+        const other: ProbeRecord = { ...record(1, true, 1), ModelLabel: second!.Label, ApiName: second!.ApiName, Developer: second!.Developer, CellId: 'other' };
+        const forward = RenderScorecard(SummarizeCells([record(1, true, 1), other]), { Label: 'u', StartedAt: 'a', FinishedAt: 'b', reps: 1, CellCount: 2, SkippedCount: null, CallCount: 2 });
+        const reversed = RenderScorecard(SummarizeCells([other, record(1, true, 1)]), { Label: 'u', StartedAt: 'a', FinishedAt: 'b', reps: 1, CellCount: 2, SkippedCount: null, CallCount: 2 });
         expect(forward).toBe(reversed);
     });
 
     it('renders every question section, and says so plainly when nothing failed', () => {
         const markdown = RenderScorecard(SummarizeCells([record(1, true, 1)]), {
-            label: 'unit', startedAt: 'a', finishedAt: 'b', reps: 1, cellCount: 1, skippedCount: 0, callCount: 1
+            Label: 'unit', StartedAt: 'a', FinishedAt: 'b', reps: 1, CellCount: 1, SkippedCount: 0, CallCount: 1
         });
         for (const heading of ['Forcing semantics', 'responseFormat: JSON', 'Parallel calls', 'Coherence', 'envelope under declared tools', 'Call shape', 'Finish-reason', 'Cost profile']) {
             expect(markdown).toContain(heading);
         }
         expect(markdown).toContain('None — every cell returned a successful result');
-        expect(markdown).toContain(model.label);
+        expect(markdown).toContain(model.Label);
     });
 });
 

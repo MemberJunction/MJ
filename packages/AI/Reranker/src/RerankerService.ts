@@ -14,10 +14,15 @@ import { AIEngine, NoteMatchResult } from '@memberjunction/aiengine';
 import { MJAIAgentNoteEntity, MJAIAgentRunStepEntity } from '@memberjunction/core-entities';
 import { BaseReranker, RerankDocument, GetAIAPIKey } from '@memberjunction/ai';
 import { MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
-import { RerankerConfiguration, parseRerankerConfiguration } from './config.types';
+import { RerankerConfiguration, ParseRerankerConfiguration, parseRerankerConfiguration } from './config.types';
 
 // Re-export config types for convenience
-export { RerankerConfiguration, parseRerankerConfiguration };
+export {
+    RerankerConfiguration,
+    ParseRerankerConfiguration,
+    /** @deprecated Use {@link ParseRerankerConfiguration} instead. */
+    parseRerankerConfiguration,
+};
 
 /**
  * Result from reranking operation including metrics.

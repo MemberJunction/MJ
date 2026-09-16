@@ -8,11 +8,11 @@ export interface EntitySelectorConfig {
     EntityName: string;
     Title: string;
     DisplayField: string;
-    descriptionField?: string;
-    statusField?: string;
-    filters?: string;
-    orderBy?: string;
-    icon?: string;
+    DescriptionField?: string;
+    StatusField?: string;
+    Filters?: string;
+    OrderBy?: string;
+    Icon?: string;
 }
 
 @Component({
@@ -21,8 +21,8 @@ export interface EntitySelectorConfig {
     template: `
         <div class="dialog-wrapper">
           <div class="dialog-header">
-            <h3>@if (config.icon) {
-              <i [class]="config.icon"></i>
+            <h3>@if (config.Icon) {
+              <i [class]="config.Icon"></i>
             } {{ config.Title }}</h3>
           </div>
           <div class="dialog-content">
@@ -56,17 +56,17 @@ export interface EntitySelectorConfig {
                         [class.selected]="IsEntitySelected(entity)"
                         (click)="selectEntity(entity)">
                         <div class="item-icon">
-                          <i [class]="config.icon || 'fa-solid fa-file'"></i>
+                          <i [class]="config.Icon || 'fa-solid fa-file'"></i>
                         </div>
                         <div class="item-content">
                           <div class="item-title">{{ entity[config.DisplayField] || 'Untitled' }}</div>
-                          @if (config.descriptionField && entity[config.descriptionField]) {
-                            <div class="item-description">{{ entity[config.descriptionField] }}</div>
+                          @if (config.DescriptionField && entity[config.DescriptionField]) {
+                            <div class="item-description">{{ entity[config.DescriptionField] }}</div>
                           }
-                          @if (config.statusField && entity[config.statusField]) {
+                          @if (config.StatusField && entity[config.StatusField]) {
                             <div class="item-status">
-                              <span class="status-badge" [class.active]="entity[config.statusField] === 'Active'">
-                                {{ entity[config.statusField] }}
+                              <span class="status-badge" [class.active]="entity[config.StatusField] === 'Active'">
+                                {{ entity[config.StatusField] }}
                               </span>
                             </div>
                           }
@@ -327,8 +327,8 @@ export class EntitySelectorDialogComponent extends BaseAngularComponent implemen
             const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView({
                 EntityName: this.config.EntityName,
-                ExtraFilter: this.config.filters,
-                OrderBy: this.config.orderBy 
+                ExtraFilter: this.config.Filters,
+                OrderBy: this.config.OrderBy 
             });
 
             this.Entities = result.Results;
@@ -354,7 +354,7 @@ export class EntitySelectorDialogComponent extends BaseAngularComponent implemen
             const searchLower = this.SearchText.toLowerCase();
             this.FilteredEntities = this.Entities.filter(entity => {
                 const displayValue = entity[this.config.DisplayField] || '';
-                const descriptionValue = this.config.descriptionField ? (entity[this.config.descriptionField] || '') : '';
+                const descriptionValue = this.config.DescriptionField ? (entity[this.config.DescriptionField] || '') : '';
                 return displayValue.toLowerCase().includes(searchLower) || 
                        descriptionValue.toLowerCase().includes(searchLower);
             });

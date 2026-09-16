@@ -109,7 +109,7 @@ export default class BaselineCompare extends Command {
         Options: {
           RowCompareMode: rowMode,
           RowHashAlgo: flags['row-hash-algo'] as RowHashAlgo,
-          ignorePattern: flags.ignore ? new RegExp(flags.ignore, 'i') : undefined,
+          IgnorePattern: flags.ignore ? new RegExp(flags.ignore, 'i') : undefined,
           RowDiffSampleLimit: flags['sample-limit'],
         },
       });

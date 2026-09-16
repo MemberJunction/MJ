@@ -22,15 +22,15 @@ import { randomBytes } from 'node:crypto';
  * An ephemeral in-memory staged upload record.
  */
 export interface StagedUploadEntry {
-  token: string;
-  buffer: Buffer;
-  fileName: string;
-  mimeType: string;
-  contentLength: number;
-  userId: string;
-  createdAt: number;
-  expiresAt: number;
-  timer: NodeJS.Timeout;
+  token: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  Buffer: Buffer;
+  fileName: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  mimeType: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  ContentLength: number;
+  userId: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  CreatedAt: number;
+  expiresAt: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  Timer: NodeJS.Timeout;
 }
 
 /**
@@ -104,7 +104,7 @@ export class UploadTokenManager extends BaseSingleton<UploadTokenManager> {
     let total = 0;
     for (const entry of this._staged.values()) {
       if (UUIDsEqual(entry.userId, userId)) {
-        total += entry.contentLength;
+        total += entry.ContentLength;
       }
     }
     return total;
@@ -159,14 +159,14 @@ export class UploadTokenManager extends BaseSingleton<UploadTokenManager> {
 
     const entry: StagedUploadEntry = {
       token,
-      buffer: params.buffer,
+      Buffer: params.buffer,
       fileName: params.fileName,
       mimeType: params.mimeType,
-      contentLength: size,
+      ContentLength: size,
       userId: params.userId,
-      createdAt: now,
+      CreatedAt: now,
       expiresAt,
-      timer,
+      Timer: timer,
     };
 
     this._staged.set(token, entry);
@@ -204,10 +204,10 @@ export class UploadTokenManager extends BaseSingleton<UploadTokenManager> {
     this.Evict(token);
 
     return {
-      buffer: entry.buffer,
+      buffer: entry.Buffer,
       fileName: entry.fileName,
       mimeType: entry.mimeType,
-      contentLength: entry.contentLength,
+      contentLength: entry.ContentLength,
     };
   }
 
@@ -220,9 +220,9 @@ export class UploadTokenManager extends BaseSingleton<UploadTokenManager> {
       return false;
     }
 
-    clearTimeout(entry.timer);
+    clearTimeout(entry.Timer);
     this._staged.delete(token);
-    this._totalMemoryBytes = Math.max(0, this._totalMemoryBytes - entry.contentLength);
+    this._totalMemoryBytes = Math.max(0, this._totalMemoryBytes - entry.ContentLength);
     return true;
   }
 
@@ -239,7 +239,7 @@ export class UploadTokenManager extends BaseSingleton<UploadTokenManager> {
   /** Clears all active staged uploads. */
   public Clear(): void {
     for (const [, entry] of this._staged) {
-      clearTimeout(entry.timer);
+      clearTimeout(entry.Timer);
     }
     this._staged.clear();
     this._totalMemoryBytes = 0;

@@ -8,52 +8,52 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
  * Represents a file or folder item in the grid
  */
 export interface FileGridItem {
-  key: string;
-  name: string;
-  type: 'file' | 'folder';
-  size: number;
-  lastModified: Date;
-  contentType?: string;
-  etag?: string;
+  Key: string;
+  name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  Type: 'file' | 'folder';
+  Size: number;
+  LastModified: Date;
+  ContentType?: string;
+  Etag?: string;
 }
 
 /**
  * Result from a single provider's search
  */
 export interface FileSearchResultItem {
-  path: string;
-  name: string;
-  size: number;
-  contentType: string;
-  lastModified: string;
-  relevance?: number;
-  excerpt?: string;
-  matchInFilename?: boolean;
-  objectId?: string;
+  path: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  size: number;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  contentType: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  lastModified: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  relevance?: number;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  excerpt?: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  matchInFilename?: boolean;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  objectId?: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 }
 
 /**
  * Search results from a single account
  */
 export interface AccountSearchResult {
-  accountID: string;
-  accountName: string;
-  success: boolean;
-  errorMessage?: string;
-  results: FileSearchResultItem[];
-  totalMatches?: number;
-  hasMore: boolean;
-  nextPageToken?: string;
+  accountID: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  accountName: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  success: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  errorMessage?: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  results: FileSearchResultItem[];  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  totalMatches?: number;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  hasMore: boolean;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  nextPageToken?: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 }
 
 /**
  * Aggregated search results from multiple accounts
  */
 export interface MultiProviderSearchResult {
-  accountResults: AccountSearchResult[];
-  totalResultsReturned: number;
-  successfulAccounts: number;
-  failedAccounts: number;
+  AccountResults: AccountSearchResult[];
+  TotalResultsReturned: number;
+  SuccessfulAccounts: number;
+  FailedAccounts: number;
 }
 
 /**
@@ -724,12 +724,12 @@ export class FileGridComponent implements OnInit, OnChanges {
 
           if (folderName) {
             this.Items.push({
-              key: prefix,
+              Key: prefix,
               name: folderName,
-              type: 'folder',
-              size: 0,
-              lastModified: new Date(),
-              contentType: 'application/x-directory'
+              Type: 'folder',
+              Size: 0,
+              LastModified: new Date(),
+              ContentType: 'application/x-directory'
             });
           }
         }
@@ -744,13 +744,13 @@ export class FileGridComponent implements OnInit, OnChanges {
           }
 
           this.Items.push({
-            key: obj.fullPath,
+            Key: obj.fullPath,
             name: obj.name,
-            type: 'file',
-            size: obj.size,
-            lastModified: obj.lastModified,
-            contentType: obj.contentType,
-            etag: obj.etag
+            Type: 'file',
+            Size: obj.size,
+            LastModified: obj.lastModified,
+            ContentType: obj.contentType,
+            Etag: obj.etag
           });
         }
       }
@@ -775,9 +775,9 @@ export class FileGridComponent implements OnInit, OnChanges {
 
     // Apply file type filter
     if (this.FileTypeFilter === 'files') {
-      filtered = filtered.filter(item => item.type === 'file');
+      filtered = filtered.filter(item => item.Type === 'file');
     } else if (this.FileTypeFilter === 'folders') {
-      filtered = filtered.filter(item => item.type === 'folder');
+      filtered = filtered.filter(item => item.Type === 'folder');
     }
 
     // Apply search query
@@ -863,7 +863,7 @@ export class FileGridComponent implements OnInit, OnChanges {
       return 'fa-solid fa-file';
     }
 
-    if (item.type === 'folder') {
+    if (item.Type === 'folder') {
       return 'fa-solid fa-folder';
     }
 
@@ -918,26 +918,26 @@ export class FileGridComponent implements OnInit, OnChanges {
   public OnTileClick(item: FileGridItem, event: MouseEvent): void {
     if (event.ctrlKey || event.metaKey) {
       // Multi-select: toggle item key
-      const index = this.SelectedItems.indexOf(item.key);
+      const index = this.SelectedItems.indexOf(item.Key);
       if (index >= 0) {
         this.SelectedItems.splice(index, 1);
       } else {
-        this.SelectedItems.push(item.key);
+        this.SelectedItems.push(item.Key);
       }
     } else if (event.shiftKey && this.SelectedItems.length > 0) {
       // Range select: select from last selected to current
       const lastSelectedKey = this.SelectedItems[this.SelectedItems.length - 1];
-      const lastSelected = this.Items.find(i => i.key === lastSelectedKey);
+      const lastSelected = this.Items.find(i => i.Key === lastSelectedKey);
       if (lastSelected) {
         const lastIndex = this.Items.indexOf(lastSelected);
         const currentIndex = this.Items.indexOf(item);
         const start = Math.min(lastIndex, currentIndex);
         const end = Math.max(lastIndex, currentIndex);
-        this.SelectedItems = this.Items.slice(start, end + 1).map(i => i.key);
+        this.SelectedItems = this.Items.slice(start, end + 1).map(i => i.Key);
       }
     } else {
       // Single select: replace selection
-      this.SelectedItems = [item.key];
+      this.SelectedItems = [item.Key];
     }
   }
 
@@ -951,10 +951,10 @@ export class FileGridComponent implements OnInit, OnChanges {
    * For folders, navigate into them. For files, open in-browser preview.
    */
   public OnItemDoubleClick(item: FileGridItem): void {
-    if (item.type === 'folder') {
+    if (item.Type === 'folder') {
       // Navigate into folder by emitting the folder path
-      console.log('[FileGrid] Navigating to folder:', item.key);
-      this.FolderNavigate.emit(item.key);
+      console.log('[FileGrid] Navigating to folder:', item.Key);
+      this.FolderNavigate.emit(item.Key);
     } else {
       // Open in-browser preview
       this.OpenPreview(item);
@@ -975,11 +975,11 @@ export class FileGridComponent implements OnInit, OnChanges {
     }
 
     try {
-      console.log('[FileGrid] Downloading file:', item.key);
+      console.log('[FileGrid] Downloading file:', item.Key);
 
       const downloadUrl = await this.storageClient.CreatePreAuthDownloadUrl(
         this.Account.account.ID,
-        item.key
+        item.Key
       );
 
       console.log('[FileGrid] Download URL created:', downloadUrl ? 'success' : 'failed');
@@ -1084,7 +1084,7 @@ export class FileGridComponent implements OnInit, OnChanges {
    * Gets a human-readable file type based on extension
    */
   public GetFileType(item: FileGridItem): string {
-    if (item.type === 'folder') {
+    if (item.Type === 'folder') {
       return 'Folder';
     }
 
@@ -1467,7 +1467,7 @@ export class FileGridComponent implements OnInit, OnChanges {
     // selectedItems contains keys (strings), not full objects
     // Find the actual item object from the items array
     const selectedKey = this.SelectedItems[0];
-    const item = this.Items.find(i => i.key === selectedKey);
+    const item = this.Items.find(i => i.Key === selectedKey);
 
     if (!item) {
       console.error('[FileGrid] Could not find selected item with key:', selectedKey);
@@ -1523,7 +1523,7 @@ export class FileGridComponent implements OnInit, OnChanges {
         console.log('[FileGrid] Item deleted successfully:', itemPath);
 
         // Check if we deleted a folder (before clearing itemToDelete)
-        const wasFolder = this.ItemToDelete.type === 'folder';
+        const wasFolder = this.ItemToDelete.Type === 'folder';
         const deletedName = this.ItemToDelete.name;
 
         // Close dialog
@@ -1546,7 +1546,7 @@ export class FileGridComponent implements OnInit, OnChanges {
         this.loadItems();
       } else {
         console.error('[FileGrid] Delete operation returned false');
-        this.notifications.CreateSimpleNotification(`Failed to delete ${this.ItemToDelete.type}`, 'error');
+        this.notifications.CreateSimpleNotification(`Failed to delete ${this.ItemToDelete.Type}`, 'error');
       }
     } catch (error) {
       console.error('[FileGrid] Error deleting item:', error);
@@ -1573,7 +1573,7 @@ export class FileGridComponent implements OnInit, OnChanges {
     // selectedItems contains keys (strings), not full objects
     // Find the actual item object from the items array
     const selectedKey = this.SelectedItems[0];
-    const item = this.Items.find(i => i.key === selectedKey);
+    const item = this.Items.find(i => i.Key === selectedKey);
 
     if (!item) {
       console.error('[FileGrid] Could not find selected item with key:', selectedKey);
@@ -1643,7 +1643,7 @@ export class FileGridComponent implements OnInit, OnChanges {
         console.log('[FileGrid] Item renamed successfully:', { oldPath, newPath });
 
         // Check if we renamed a folder (before clearing itemToRename)
-        const wasFolder = this.ItemToRename.type === 'folder';
+        const wasFolder = this.ItemToRename.Type === 'folder';
         const oldName = this.ItemToRename.name;
         const newName = this.NewItemName.trim();
 
@@ -1668,7 +1668,7 @@ export class FileGridComponent implements OnInit, OnChanges {
         this.loadItems();
       } else {
         console.error('[FileGrid] Rename operation returned false');
-        this.notifications.CreateSimpleNotification(`Failed to rename ${this.ItemToRename.type}`, 'error');
+        this.notifications.CreateSimpleNotification(`Failed to rename ${this.ItemToRename.Type}`, 'error');
       }
     } catch (error) {
       console.error('[FileGrid] Error renaming item:', error);
@@ -1694,7 +1694,7 @@ export class FileGridComponent implements OnInit, OnChanges {
 
     // Find the selected item
     const selectedKey = this.SelectedItems[0];
-    const item = this.Items.find(i => i.key === selectedKey);
+    const item = this.Items.find(i => i.Key === selectedKey);
 
     if (!item) {
       console.error('[FileGrid] Could not find selected item with key:', selectedKey);
@@ -1702,7 +1702,7 @@ export class FileGridComponent implements OnInit, OnChanges {
     }
 
     // Can only download files, not folders
-    if (item.type === 'folder') {
+    if (item.Type === 'folder') {
       this.notifications.CreateSimpleNotification('Cannot download folders. Please select a file.', 'warning');
       return;
     }
@@ -1749,7 +1749,7 @@ export class FileGridComponent implements OnInit, OnChanges {
     }
 
     const selectedKey = this.SelectedItems[0];
-    const item = this.Items.find(i => i.key === selectedKey);
+    const item = this.Items.find(i => i.Key === selectedKey);
 
     if (!item) {
       console.error('[FileGrid] Could not find selected item with key:', selectedKey);
@@ -1838,7 +1838,7 @@ export class FileGridComponent implements OnInit, OnChanges {
     }
 
     const selectedKey = this.SelectedItems[0];
-    const item = this.Items.find(i => i.key === selectedKey);
+    const item = this.Items.find(i => i.Key === selectedKey);
 
     if (!item) {
       console.error('[FileGrid] Could not find selected item with key:', selectedKey);
@@ -1893,7 +1893,7 @@ export class FileGridComponent implements OnInit, OnChanges {
       );
 
       if (success) {
-        const wasFolder = this.ItemToMove.type === 'folder';
+        const wasFolder = this.ItemToMove.Type === 'folder';
 
         // Close dialog
         this.ShowMoveDialog = false;
@@ -1934,19 +1934,19 @@ export class FileGridComponent implements OnInit, OnChanges {
    */
   private constructItemPath(item: FileGridItem): string {
     // Validate that we have either key or name
-    if (!item.key && !item.name) {
+    if (!item.Key && !item.name) {
       console.error('[FileGrid] Cannot construct path - item has no key or name:', item);
       throw new Error('Cannot construct path for item without key or name');
     }
 
     // If item.key exists and is at root level, use it directly
     if (!this.FolderPath || this.FolderPath === '/') {
-      return item.key || item.name;
+      return item.Key || item.name;
     }
 
     // If the item key already includes the folder path, use it as is
-    if (item.key && item.key.startsWith(this.FolderPath)) {
-      return item.key;
+    if (item.Key && item.Key.startsWith(this.FolderPath)) {
+      return item.Key;
     }
 
     // Otherwise, combine folder path with item name
@@ -1955,7 +1955,7 @@ export class FileGridComponent implements OnInit, OnChanges {
       : this.FolderPath;
 
     // Make sure we have a name to use
-    const itemName = item.name || item.key;
+    const itemName = item.name || item.Key;
     if (!itemName) {
       console.error('[FileGrid] Cannot construct path - item has no usable name:', item);
       throw new Error('Cannot construct path for item without name');
@@ -1971,7 +1971,7 @@ export class FileGridComponent implements OnInit, OnChanges {
     if (this.SelectedItems.length !== 1) {
       return null;
     }
-    return this.Items.find(item => item.key === this.SelectedItems[0]) || null;
+    return this.Items.find(item => item.Key === this.SelectedItems[0]) || null;
   }
 
   /** @deprecated Use {@link GetSelectedItem}. */
@@ -1984,7 +1984,7 @@ export class FileGridComponent implements OnInit, OnChanges {
    */
   public async OnCopyToAccountClick(): Promise<void> {
     const item = this.GetSelectedItem();
-    if (!item || item.type === 'folder') {
+    if (!item || item.Type === 'folder') {
       return;
     }
 
@@ -2258,7 +2258,7 @@ export class FileGridComponent implements OnInit, OnChanges {
 
       // Map the client result to the component's expected format
       this.MultiProviderSearchResults = {
-        accountResults: searchResult.accountResults.map((ar: { accountId: string; accountName: string; success: boolean; errorMessage?: string; results: Array<{ path: string; name: string; size: number; contentType: string; lastModified: Date; relevance?: number; excerpt?: string; matchInFilename?: boolean; objectId?: string }>; totalMatches?: number; hasMore: boolean; nextPageToken?: string }) => ({
+        AccountResults: searchResult.accountResults.map((ar: { accountId: string; accountName: string; success: boolean; errorMessage?: string; results: Array<{ path: string; name: string; size: number; contentType: string; lastModified: Date; relevance?: number; excerpt?: string; matchInFilename?: boolean; objectId?: string }>; totalMatches?: number; hasMore: boolean; nextPageToken?: string }) => ({
           accountID: ar.accountId,
           accountName: ar.accountName,
           success: ar.success,
@@ -2278,9 +2278,9 @@ export class FileGridComponent implements OnInit, OnChanges {
           hasMore: ar.hasMore,
           nextPageToken: ar.nextPageToken
         })),
-        totalResultsReturned: searchResult.totalResultsReturned,
-        successfulAccounts: searchResult.successfulAccounts,
-        failedAccounts: searchResult.failedAccounts
+        TotalResultsReturned: searchResult.totalResultsReturned,
+        SuccessfulAccounts: searchResult.successfulAccounts,
+        FailedAccounts: searchResult.failedAccounts
       };
 
     } catch (error) {
@@ -2375,7 +2375,7 @@ export class FileGridComponent implements OnInit, OnChanges {
    */
   public GetMediaType(item: FileGridItem): string {
     const ext = item.name.split('.').pop()?.toLowerCase() || '';
-    const mime = item.contentType?.toLowerCase() || '';
+    const mime = item.ContentType?.toLowerCase() || '';
 
     if (mime.startsWith('image/') || ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico'].includes(ext)) {
       return 'image';
@@ -2410,7 +2410,7 @@ export class FileGridComponent implements OnInit, OnChanges {
    * Gets specific badge class for media type
    */
   public GetItemColorClass(item: FileGridItem): string {
-    if (item.type === 'folder') {
+    if (item.Type === 'folder') {
       return 'mj-file-thumb--folder';
     }
     const mediaType = this.GetMediaType(item);
@@ -2467,11 +2467,11 @@ export class FileGridComponent implements OnInit, OnChanges {
     if (event) {
       event.stopPropagation();
     }
-    const idx = this.SelectedItems.indexOf(item.key);
+    const idx = this.SelectedItems.indexOf(item.Key);
     if (idx >= 0) {
-      this.SelectedItems = this.SelectedItems.filter((k) => k !== item.key);
+      this.SelectedItems = this.SelectedItems.filter((k) => k !== item.Key);
     } else {
-      this.SelectedItems = [...this.SelectedItems, item.key];
+      this.SelectedItems = [...this.SelectedItems, item.Key];
     }
     this.cdr.markForCheck();
   }
@@ -2485,7 +2485,7 @@ export class FileGridComponent implements OnInit, OnChanges {
    * Selects all current filtered items
    */
   public SelectAll(): void {
-    this.SelectedItems = this.FilteredItems.map((i) => i.key);
+    this.SelectedItems = this.FilteredItems.map((i) => i.Key);
     this.cdr.markForCheck();
   }
 
@@ -2526,7 +2526,7 @@ export class FileGridComponent implements OnInit, OnChanges {
    * Opens in-browser preview modal
    */
   public async OpenPreview(item: FileGridItem): Promise<void> {
-    if (item.type === 'folder' || !this.Account) {
+    if (item.Type === 'folder' || !this.Account) {
       return;
     }
 

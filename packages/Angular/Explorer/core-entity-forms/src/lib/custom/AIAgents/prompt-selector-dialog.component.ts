@@ -10,22 +10,22 @@ export interface PromptSelectorConfig {
   /** Title for the dialog */
   Title: string;
   /** Whether to show the "Create New" option */
-  showCreateNew?: boolean;
+  ShowCreateNew?: boolean;
   /** Filter criteria for prompts */
-  extraFilter?: string;
+  ExtraFilter?: string;
   /** Allow multiple selection */
-  multiSelect?: boolean;
+  MultiSelect?: boolean;
   /** Pre-selected prompt IDs */
-  selectedPromptIds?: string[];
+  SelectedPromptIds?: string[];
   /** Already linked prompt IDs (will be grayed out and not selectable) */
-  linkedPromptIds?: string[];
+  LinkedPromptIds?: string[];
 }
 
 export interface PromptSelectorResult {
   /** Selected prompts */
   SelectedPrompts: MJAIPromptEntityExtended[];
   /** Whether user chose to create new */
-  createNew?: boolean;
+  createNew?: boolean;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
 /**
@@ -146,13 +146,13 @@ export class PromptSelectorDialogComponent extends BaseAngularComponent implemen
     this.loadPrompts();
     
     // Initialize selected prompts if provided
-    if (this.config.selectedPromptIds) {
-      this.SelectedPrompts = new Set(this.config.selectedPromptIds);
+    if (this.config.SelectedPromptIds) {
+      this.SelectedPrompts = new Set(this.config.SelectedPromptIds);
     }
     
     // Initialize linked prompts if provided
-    if (this.config.linkedPromptIds) {
-      this.LinkedPrompts = new Set(this.config.linkedPromptIds);
+    if (this.config.LinkedPromptIds) {
+      this.LinkedPrompts = new Set(this.config.LinkedPromptIds);
     }
   }
 
@@ -181,8 +181,8 @@ export class PromptSelectorDialogComponent extends BaseAngularComponent implemen
       
       // Build filter - default to active prompts
       let filter = "Status = 'Active'";
-      if (this.config.extraFilter) {
-        filter += ` AND ${this.config.extraFilter}`;
+      if (this.config.ExtraFilter) {
+        filter += ` AND ${this.config.ExtraFilter}`;
       }
       
       const result = await rv.RunView<MJAIPromptEntityExtended>({
@@ -243,7 +243,7 @@ export class PromptSelectorDialogComponent extends BaseAngularComponent implemen
       return;
     }
     
-    if (this.config.multiSelect) {
+    if (this.config.MultiSelect) {
       if (this.SelectedPrompts.has(prompt.ID)) {
         this.SelectedPrompts.delete(prompt.ID);
       } else {

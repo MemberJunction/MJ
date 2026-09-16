@@ -12,13 +12,13 @@ import { QuoteIdent, StableSortBy } from './util';
 import type { ColumnDef, TableDataDump, TableDef } from './types';
 
 export interface DumpProgress {
-  onTable?(table: TableDef, rowsSoFar: number, rowsTotal?: number): void;
+  OnTable?(table: TableDef, rowsSoFar: number, rowsTotal?: number): void;
 }
 
 export interface DumpOptions {
   ExcludedTables: Set<string>;       // 'schema.table' lowercased
   /** Hard cap per table (defensive — baselines should not have huge tables). */
-  maxRowsPerTable?: number;
+  MaxRowsPerTable?: number;
 }
 
 /** Dump every non-excluded table. Computed columns are skipped. */
@@ -44,16 +44,16 @@ export async function DumpTables(
     let truncated = false;
 
     await db.stream(select, (row) => {
-      if (options.maxRowsPerTable && count >= options.maxRowsPerTable) {
+      if (options.MaxRowsPerTable && count >= options.MaxRowsPerTable) {
         truncated = true;
         return;
       }
       const ordered = includedColumns.map((c) => row[c.name]);
       rows.push(ordered);
       count++;
-      if (count % 5000 === 0) progress.onTable?.(table, count);
+      if (count % 5000 === 0) progress.OnTable?.(table, count);
     });
-    progress.onTable?.(table, count);
+    progress.OnTable?.(table, count);
 
     dumps.push({
       Schema: table.Schema,
@@ -61,7 +61,7 @@ export async function DumpTables(
       Columns: includedColumns.map((c) => c.name),
       Rows: rows,
       RowCount: rows.length,
-      truncated,
+      Truncated: truncated,
     });
   }
   return dumps;
@@ -80,7 +80,7 @@ export async function dumpTables(
 /** Construct an ORDER BY clause for deterministic streaming. */
 export function BuildOrderBy(table: TableDef): string {
   const orderColumns = (() => {
-    if (table.primaryKey && table.primaryKey.Columns.length) return table.primaryKey.Columns;
+    if (table.PrimaryKey && table.PrimaryKey.Columns.length) return table.PrimaryKey.Columns;
     if (table.UniqueConstraints[0]?.columns.length) return table.UniqueConstraints[0].columns;
     // Fall back to ALL non-LOB columns sorted by ordinal so we still get a
     // deterministic order. LOB types can't appear in ORDER BY in MSSQL.

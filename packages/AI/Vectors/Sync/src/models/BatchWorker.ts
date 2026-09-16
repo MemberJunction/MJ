@@ -4,35 +4,35 @@ import { Worker } from 'node:worker_threads';
 
 export type TransformCallback = Parameters<Transform['_flush']>[0];
 export type WorkerData<TContext = Record<string, unknown>, TRecord = Record<string, unknown>> = {
-  batch?: Array<TRecord>;
-  context?: TContext;
+  batch?: Array<TRecord>;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+  context?: TContext;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 };
 
 export type BatchWorkerOptions<TContext = Record<string, unknown>> = {
   /**
    * The number of records to process in a batch
    */
-  batchSize?: number;
+  BatchSize?: number;
   /**
    * The path to the worker file used to launch a worker thread
    */
-  workerFile?: string;
+  WorkerFile?: string;
   /**
    * An abitrary context to pass to the worker thread
    */
-  workerContext?: TContext;
+  WorkerContext?: TContext;
   /**
    * The maximum number of worker threads to run concurrently
    */
-  concurrencyLimit?: number;
+  ConcurrencyLimit?: number;
   /**
    * The user context to pass to the worker thread
    */
-  contextUser?: UserInfo;
+  ContextUser?: UserInfo;
   /**
    * The time to delay between api calls
    **/
-  delayTimeMS?: number;
+  DelayTimeMS?: number;
 };
 
 /**
@@ -112,11 +112,11 @@ export class BatchWorker<TRecord = Record<string, unknown>, TContext = Record<st
    */
   constructor(options: BatchWorkerOptions<TContext> = {}) {
     super({ objectMode: true });
-    this.BatchSize = options.batchSize ?? this.BatchSize;
-    this.WorkerFile = options.workerFile ?? this.WorkerFile;
-    this.WorkerContext = options.workerContext ?? this.WorkerContext;
-    this.ConcurrencyLimit = options.concurrencyLimit ?? this.ConcurrencyLimit;
-    this._contextUser = options.contextUser ?? this._contextUser;
+    this.BatchSize = options.BatchSize ?? this.BatchSize;
+    this.WorkerFile = options.WorkerFile ?? this.WorkerFile;
+    this.WorkerContext = options.WorkerContext ?? this.WorkerContext;
+    this.ConcurrencyLimit = options.ConcurrencyLimit ?? this.ConcurrencyLimit;
+    this._contextUser = options.ContextUser ?? this._contextUser;
   }
 
   /**

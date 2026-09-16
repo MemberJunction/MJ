@@ -61,10 +61,10 @@ export class SuiteCommand {
             ];
             if (checkModuleSpecifiers.length > 0) {
                 const checkSummary = await LoadCheckModules(checkModuleSpecifiers);
-                if (checkSummary.loaded.length > 0) {
-                    console.log(`Loaded check modules: ${checkSummary.loaded.join(', ')} (bundles added: ${checkSummary.newBundles.length})`);
+                if (checkSummary.Loaded.length > 0) {
+                    console.log(`Loaded check modules: ${checkSummary.Loaded.join(', ')} (bundles added: ${checkSummary.NewBundles.length})`);
                 }
-                for (const f of checkSummary.failed) {
+                for (const f of checkSummary.Failed) {
                     console.warn(`Check module '${f.specifier}' failed to load: ${f.error}`);
                 }
             }
@@ -98,9 +98,9 @@ export class SuiteCommand {
             if (flags.oraclesModule) {
                 const summary = await LoadOraclesModule(flags.oraclesModule, engine);
                 console.log(
-                    `Loaded oracle module ${summary.modulePath} ` +
-                        `(registered: ${summary.registered.join(', ') || 'none'}` +
-                        (summary.skipped.length ? `; skipped: ${summary.skipped.length}` : '') +
+                    `Loaded oracle module ${summary.ModulePath} ` +
+                        `(registered: ${summary.Registered.join(', ') || 'none'}` +
+                        (summary.Skipped.length ? `; skipped: ${summary.Skipped.length}` : '') +
                         ')',
                 );
             }

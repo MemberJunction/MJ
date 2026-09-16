@@ -52,7 +52,7 @@ export class TraceSubAgentValidatorOracle implements IOracle {
 
             const facts = await this.collectFacts(agentRun.ID, input.contextUser);
             const result = EvaluateSubAgentTrace(facts, config as SubAgentTraceConfig);
-            return { oracleType: this.type, passed: result.passed, score: result.score, message: result.message, details: result.details };
+            return { oracleType: this.type, passed: result.passed, score: result.Score, message: result.message, details: result.Details };
         } catch (error) {
             return {
                 oracleType: this.type,

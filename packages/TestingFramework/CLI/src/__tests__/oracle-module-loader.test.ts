@@ -54,8 +54,8 @@ describe('loadOraclesModule', () => {
         const { engine, registered } = makeStubEngine();
         const summary = await LoadOraclesModule(modulePath, engine);
 
-        expect(summary.registered).toEqual(['my-class']);
-        expect(summary.skipped).toEqual([]);
+        expect(summary.Registered).toEqual(['my-class']);
+        expect(summary.Skipped).toEqual([]);
         expect(registered).toHaveLength(1);
         expect(registered[0].type).toBe('my-class');
     });
@@ -75,7 +75,7 @@ describe('loadOraclesModule', () => {
         const { engine, registered } = makeStubEngine();
         const summary = await LoadOraclesModule(modulePath, engine);
 
-        expect(summary.registered).toEqual(['my-instance']);
+        expect(summary.Registered).toEqual(['my-instance']);
         expect(registered).toHaveLength(1);
     });
 
@@ -94,7 +94,7 @@ describe('loadOraclesModule', () => {
         const { engine, registered } = makeStubEngine();
         const summary = await LoadOraclesModule(modulePath, engine);
 
-        expect(summary.registered.sort()).toEqual(['oracle-a', 'oracle-b']);
+        expect(summary.Registered.sort()).toEqual(['oracle-a', 'oracle-b']);
         expect(registered).toHaveLength(2);
     });
 
@@ -114,8 +114,8 @@ describe('loadOraclesModule', () => {
         const { engine, registered } = makeStubEngine();
         const summary = await LoadOraclesModule(modulePath, engine);
 
-        expect(summary.registered).toEqual(['oracle-a']);
-        expect(summary.skipped.sort()).toEqual(['constant', 'helper']);
+        expect(summary.Registered).toEqual(['oracle-a']);
+        expect(summary.Skipped.sort()).toEqual(['constant', 'helper']);
         expect(registered).toHaveLength(1);
     });
 
@@ -144,8 +144,8 @@ describe('loadOraclesModule', () => {
         const { engine, registered } = makeStubEngine();
         const summary = await LoadOraclesModule(modulePath, engine);
 
-        expect(summary.registered).toEqual(['good']);
-        expect(summary.skipped.some((s) => s.startsWith('Bad'))).toBe(true);
+        expect(summary.Registered).toEqual(['good']);
+        expect(summary.Skipped.some((s) => s.startsWith('Bad'))).toBe(true);
         expect(registered).toHaveLength(1);
     });
 
@@ -165,7 +165,7 @@ describe('loadOraclesModule', () => {
         const { engine, registered } = makeStubEngine();
         const summary = await LoadOraclesModule(modulePath, engine);
 
-        expect(summary.registered).toContain('flat-oracle');
+        expect(summary.Registered).toContain('flat-oracle');
         expect(registered).toHaveLength(1);
     });
 });

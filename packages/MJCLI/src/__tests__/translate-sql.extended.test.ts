@@ -390,7 +390,7 @@ describe('GenerateTranslationReport extended', () => {
                 TranslatedSQL: null,
                 Method: 'flagged',
                 Markers: ['TOP-N', 'ISNULL', 'bracket-identifiers'],
-                note: 'Requires LLM translation',
+                Note: 'Requires LLM translation',
             },
         ];
 
@@ -410,7 +410,7 @@ describe('GenerateTranslationReport extended', () => {
                 TranslatedSQL: 'SELECT "Name" FROM "Users" LIMIT 5',
                 Method: 'llm',
                 Markers: ['TOP-N', 'bracket-identifiers'],
-                note: 'Translated by AI model',
+                Note: 'Translated by AI model',
             },
         ];
 
@@ -490,7 +490,7 @@ describe('GenerateTranslationReport extended', () => {
                 TranslatedSQL: null,
                 Method: 'flagged',
                 Markers: [],
-                note: 'Stored procedure call',
+                Note: 'Stored procedure call',
             },
         ];
 

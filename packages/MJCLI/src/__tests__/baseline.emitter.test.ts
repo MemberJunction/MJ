@@ -16,7 +16,7 @@ function snapshotFixture(): SchemaSnapshot {
           { name: 'Name', ordinal: 2, dataType: 'nvarchar(255)', isNullable: false, isIdentity: false, isComputed: false },
           { name: 'CreatedAt', ordinal: 3, dataType: 'datetime2(3)', isNullable: false, isIdentity: false, isComputed: false, defaultExpression: 'GETUTCDATE()' },
         ],
-        primaryKey: { Name: 'PK_Customer', Columns: ['ID'], Clustered: true },
+        PrimaryKey: { Name: 'PK_Customer', Columns: ['ID'], Clustered: true },
         UniqueConstraints: [{ name: 'UX_Customer_Name', columns: ['Name'], clustered: false }],
         Indexes: [{ name: 'IX_Customer_CreatedAt', columns: ['CreatedAt'], includes: [], isUnique: false, isClustered: false }],
         ForeignKeys: [],
@@ -30,7 +30,7 @@ function snapshotFixture(): SchemaSnapshot {
           { name: 'OrderID', ordinal: 1, dataType: 'uniqueidentifier', isNullable: false, isIdentity: false, isComputed: false },
           { name: 'CustomerID', ordinal: 2, dataType: 'int', isNullable: false, isIdentity: false, isComputed: false },
         ],
-        primaryKey: { Name: 'PK_Order', Columns: ['OrderID'], Clustered: true },
+        PrimaryKey: { Name: 'PK_Order', Columns: ['OrderID'], Clustered: true },
         UniqueConstraints: [],
         Indexes: [],
         ForeignKeys: [{
@@ -168,9 +168,9 @@ describe('baseline/emitter', () => {
   it('keeps cross-DB references inside string literals (Azure-safe)', () => {
     const snapshot = snapshotFixture();
     snapshot.Principals = [
-      { Name: 'MJ_Connect', Kind: 'sql_user', defaultSchema: 'dbo' },
-      { Name: 'MJ_CodeGen', Kind: 'sql_user', defaultSchema: 'dbo' },
-      { Name: 'cdp_UI', Kind: 'database_role', owner: 'db_securityadmin' },
+      { Name: 'MJ_Connect', Kind: 'sql_user', DefaultSchema: 'dbo' },
+      { Name: 'MJ_CodeGen', Kind: 'sql_user', DefaultSchema: 'dbo' },
+      { Name: 'cdp_UI', Kind: 'database_role', Owner: 'db_securityadmin' },
     ];
     const sql = EmitBaselineTsql({
       Snapshot: snapshot,
@@ -196,7 +196,7 @@ describe('baseline/emitter', () => {
   it('emits a CREATE ROLE block (AUTHORIZATION preserved when owner is set)', () => {
     const snapshot = snapshotFixture();
     snapshot.Principals = [
-      { Name: 'cdp_UI', Kind: 'database_role', owner: 'db_securityadmin' },
+      { Name: 'cdp_UI', Kind: 'database_role', Owner: 'db_securityadmin' },
     ];
     const sql = EmitBaselineTsql({
       Snapshot: snapshot,

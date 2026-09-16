@@ -76,7 +76,7 @@ export default class TestSuite extends Command {
       await suiteCommand.execute(args.suiteId, {
         name: flags.name,
         format: ResolveLegacyFormat({
-          format: flags.format,
+          Format: flags.format,
           Legacy: 'console' as const,
           LegacyDefault: 'console' as const,
           Map: TEST_FORMAT_MAP,

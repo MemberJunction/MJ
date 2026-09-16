@@ -126,7 +126,7 @@ export class AuthenticatedRegistryServer extends ComponentRegistryAPIServer {
 /**
  * Start the authenticated server
  */
-async function startAuthenticatedServer() {
+async function StartAuthenticatedServer() {
   console.log('Starting Authenticated Component Registry Server...');
   
   const server = new AuthenticatedRegistryServer();
@@ -146,7 +146,11 @@ async function startAuthenticatedServer() {
 
 // Start if run directly
 if (import.meta.url === `file://${process.argv[1]}`) {
-  startAuthenticatedServer();
+  StartAuthenticatedServer();
 }
 
-export { startAuthenticatedServer };
+export {
+  StartAuthenticatedServer,
+  /** @deprecated Use {@link StartAuthenticatedServer} instead. */
+  StartAuthenticatedServer as startAuthenticatedServer,
+};

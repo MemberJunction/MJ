@@ -8,27 +8,27 @@ import { Parser } from 'htmlparser2';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface PDFOptions {
-    margin: { top: number; bottom: number; left: number; right: number };
-    fontSize: number;
-    font: string;
-    orientation: 'portrait' | 'landscape';
-    size: string;
+    Margin: { top: number; bottom: number; left: number; right: number };
+    fontSize: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    font: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    Orientation: 'portrait' | 'landscape';
+    size: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 export type PDFNodeType =
-    | { type: 'heading'; level: 1 | 2 | 3 | 4 | 5 | 6; text: string }
-    | { type: 'paragraph'; text: string; bold?: boolean; italic?: boolean }
-    | { type: 'list'; items: string[]; ordered: boolean }
-    | { type: 'table'; headers: string[]; rows: string[][] }
-    | { type: 'image'; src: string; alt?: string }
-    | { type: 'hr' }
-    | { type: 'br' };
+    | { type: 'heading'; Level: 1 | 2 | 3 | 4 | 5 | 6; text: string }  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    | { type: 'paragraph'; text: string; Bold?: boolean; Italic?: boolean }  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    | { type: 'list'; Items: string[]; Ordered: boolean }  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    | { type: 'table'; headers: string[]; rows: string[][] }  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    | { type: 'image'; src: string; alt?: string }  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    | { type: 'hr' }  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    | { type: 'br' };  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 
 export const DEFAULT_PDF_OPTIONS: PDFOptions = {
-    margin: { top: 72, bottom: 72, left: 72, right: 72 },
+    Margin: { top: 72, bottom: 72, left: 72, right: 72 },
     fontSize: 12,
     font: 'Helvetica',
-    orientation: 'portrait',
+    Orientation: 'portrait',
     size: 'Letter'
 };
 
@@ -42,8 +42,8 @@ export function RenderPDFFromNodes(nodes: PDFNodeType[], options: PDFOptions): P
         try {
             const doc = new PDFDocument({
                 size: options.size,
-                layout: options.orientation,
-                margins: options.margin,
+                layout: options.Orientation,
+                margins: options.Margin,
                 info: { Title: 'Generated Document', Author: 'MemberJunction', Creator: 'PDF Generator Action' }
             });
 
@@ -111,7 +111,7 @@ function renderHeading(
     options: PDFOptions
 ): void {
     const sizemap: Record<number, number> = { 1: 24, 2: 20, 3: 16, 4: 14, 5: 13, 6: 12 };
-    const size = sizemap[node.level] ?? 12;
+    const size = sizemap[node.Level] ?? 12;
     doc.font(`${options.font}-Bold`).fontSize(size).text(node.text, { align: 'left' });
     doc.font(options.font).fontSize(options.fontSize);
     doc.moveDown(0.5);
@@ -122,9 +122,9 @@ function renderParagraph(
     node: Extract<PDFNodeType, { type: 'paragraph' }>,
     options: PDFOptions
 ): void {
-    const font = node.bold
+    const font = node.Bold
         ? `${options.font}-Bold`
-        : node.italic
+        : node.Italic
             ? `${options.font}-Oblique`
             : options.font;
     doc.font(font).fontSize(options.fontSize).text(node.text, { align: 'left' });
@@ -138,7 +138,7 @@ function renderList(
     options: PDFOptions
 ): void {
     doc.font(options.font).fontSize(options.fontSize);
-    doc.list(node.items, { bulletRadius: 2, textIndent: 20, bulletIndent: 10 });
+    doc.list(node.Items, { bulletRadius: 2, textIndent: 20, bulletIndent: 10 });
     doc.moveDown(0.3);
 }
 
@@ -302,12 +302,12 @@ export function ParseHTML(html: string): PDFNodeType[] {
 
             if (/^h[1-6]$/.test(name) && inHeading) {
                 const text = flushText();
-                if (text) nodes.push({ type: 'heading', level: headingLevel, text });
+                if (text) nodes.push({ type: 'heading', Level: headingLevel, text });
                 inHeading = false;
             } else if (name === 'p' && inParagraph) {
                 const text = flushText();
                 if (text) {
-                    nodes.push({ type: 'paragraph', text, bold: boldDepth > 0, italic: italicDepth > 0 });
+                    nodes.push({ type: 'paragraph', text, Bold: boldDepth > 0, Italic: italicDepth > 0 });
                 }
                 inParagraph = false;
             } else if (name === 'strong' || name === 'b') {
@@ -321,7 +321,7 @@ export function ParseHTML(html: string): PDFNodeType[] {
                 listItemText = '';
             } else if ((name === 'ul' || name === 'ol') && inList) {
                 if (listItems.length > 0) {
-                    nodes.push({ type: 'list', items: listItems, ordered: listOrdered });
+                    nodes.push({ type: 'list', Items: listItems, Ordered: listOrdered });
                 }
                 inList = false;
                 listItems = [];

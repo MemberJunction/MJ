@@ -11,11 +11,11 @@ import {
 /** `mj test *`: the family flag IS `--format`, spelled console|json|markdown. */
 function testFamily(format: string | undefined, opts: { stdoutIsTTY?: boolean; env?: NodeJS.ProcessEnv } = {}) {
   return ResolveLegacyFormat({
-    format,
+    Format: format,
     Legacy: 'console' as const,
     LegacyDefault: 'console' as const,
     Map: TEST_FORMAT_MAP,
-    stdoutIsTTY: opts.stdoutIsTTY ?? true,
+    StdoutIsTTY: opts.stdoutIsTTY ?? true,
     env: opts.env ?? {},
   });
 }
@@ -27,12 +27,12 @@ function aiFamily(
   opts: { stdoutIsTTY?: boolean; env?: NodeJS.ProcessEnv; legacyWasExplicit?: boolean } = {}
 ) {
   return ResolveLegacyFormat({
-    format,
+    Format: format,
     Legacy: legacy,
     LegacyDefault: 'compact' as const,
-    legacyWasExplicit: opts.legacyWasExplicit,
+    LegacyWasExplicit: opts.legacyWasExplicit,
     Map: AI_FORMAT_MAP,
-    stdoutIsTTY: opts.stdoutIsTTY ?? true,
+    StdoutIsTTY: opts.stdoutIsTTY ?? true,
     env: opts.env ?? {},
   });
 }

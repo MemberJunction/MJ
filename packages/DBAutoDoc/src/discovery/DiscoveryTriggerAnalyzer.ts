@@ -34,9 +34,9 @@ export class DiscoveryTriggerAnalyzer {
     );
 
     return {
-      shouldRun,
+      ShouldRun: shouldRun,
       reason,
-      details: {
+      Details: {
         totalTables: stats.totalTables,
         tablesWithPK: stats.tablesWithPK,
         tablesWithoutPK: stats.tablesWithoutPK,

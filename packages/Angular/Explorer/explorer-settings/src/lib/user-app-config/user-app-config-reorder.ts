@@ -12,8 +12,8 @@
  */
 
 export interface ReorderableAppItem {
-  sequence: number;
-  isDirty: boolean;
+  sequence: number;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  isDirty: boolean;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 }
 
 /**

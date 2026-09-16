@@ -83,10 +83,10 @@ export interface ColumnStatistics {
  * Maps to what the driver provides
  */
 export interface SimpleColumnStats {
-  totalRows: number;
-  nullCount: number;
-  distinctCount: number;
-  sampleValues: Array<string | number | null>;
+  TotalRows: number;
+  NullCount: number;
+  DistinctCount: number;
+  SampleValues: Array<string | number | null>;
 }
 
 /**
@@ -194,9 +194,9 @@ export interface RelationshipDiscoveryPhase {
  * Discovery trigger analysis
  */
 export interface DiscoveryTriggerAnalysis {
-  shouldRun: boolean;
-  reason: string;
-  details: {
+  ShouldRun: boolean;
+  reason: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  Details: {
     totalTables: number;
     tablesWithPK: number;
     tablesWithoutPK: number;
@@ -250,11 +250,11 @@ export interface CachedColumnStats {
  * Collection of cached stats for a table
  */
 export interface TableStatsCache {
-  schemaName: string;
-  tableName: string;
-  totalRows: number;
-  columns: Map<string, CachedColumnStats>;
-  computedAt: string;
+  schemaName: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  tableName: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  TotalRows: number;
+  columns: Map<string, CachedColumnStats>;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  ComputedAt: string;
 }
 
 /**
@@ -262,7 +262,7 @@ export interface TableStatsCache {
  * Provides selective stats to LLM for intelligent reasoning
  */
 export interface LLMDiscoveryContext {
-  targetTable: {
+  TargetTable: {
     schema: string;
     table: string;
     rowCount: number;
@@ -277,7 +277,7 @@ export interface LLMDiscoveryContext {
     }>;
   };
 
-  relatedTables?: Array<{
+  RelatedTables?: Array<{
     schema: string;
     table: string;
     rowCount: number;
@@ -288,13 +288,13 @@ export interface LLMDiscoveryContext {
     }>;
   }>;
 
-  pkCandidates: Array<{
+  pkCandidates: Array<{  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     columnNames: string[];
     confidence: number;
     reasoning: string;
   }>;
 
-  fkCandidates: Array<{
+  fkCandidates: Array<{  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     sourceColumn: string;
     targetTable: string;
     targetColumn: string;
@@ -307,10 +307,10 @@ export interface LLMDiscoveryContext {
  * LLM validation result
  */
 export interface LLMValidationResult {
-  validated: boolean;
-  reasoning: string;
-  confidenceAdjustment: number;  // -100 to +100
-  recommendations: Array<{
+  validated: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  reasoning: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  ConfidenceAdjustment: number;  // -100 to +100
+  Recommendations: Array<{
     type: 'confirm' | 'reject' | 'modify' | 'add_new';
     target: 'pk' | 'fk';
     schemaName?: string;
@@ -318,7 +318,7 @@ export interface LLMValidationResult {
     columnName?: string;
     details: string;
   }>;
-  tokensUsed: number;
-  inputTokens: number;
-  outputTokens: number;
+  tokensUsed: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  InputTokens: number;
+  OutputTokens: number;
 }

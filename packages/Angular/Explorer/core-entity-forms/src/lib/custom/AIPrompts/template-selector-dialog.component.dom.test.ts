@@ -105,12 +105,12 @@ describe('TemplateSelectorDialogComponent (DOM)', () => {
   });
 
   it('renders Create New when config.showCreateNew is true', async () => {
-    const shown = await render({ config: { Title: 'Pick', showCreateNew: true } });
+    const shown = await render({ config: { Title: 'Pick', ShowCreateNew: true } });
     expect(buttons(shown).some((b) => b.textContent?.includes('Create New'))).toBe(true);
   });
 
   it('hides Create New when config.showCreateNew is false', async () => {
-    const hidden = await render({ config: { Title: 'Pick', showCreateNew: false } });
+    const hidden = await render({ config: { Title: 'Pick', ShowCreateNew: false } });
     expect(buttons(hidden).some((b) => b.textContent?.includes('Create New'))).toBe(false);
   });
 });

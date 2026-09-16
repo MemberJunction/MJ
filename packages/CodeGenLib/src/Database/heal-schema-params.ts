@@ -13,8 +13,8 @@
  */
 
 export interface HealSchemaRoutineParams {
-    values: string[];
-    names: string[];
+    Values: string[];
+    Names: string[];
 }
 
 let authoredExcludeSchemas: string[] | null = null;
@@ -78,7 +78,7 @@ export function BuildHealSchemaRoutineParams(options: {
         names.push('IncludedSchemaNames');
     }
 
-    return { values, names };
+    return { Values: values, Names: names };
 }
 
 /** @deprecated Use {@link BuildHealSchemaRoutineParams}. */

@@ -180,16 +180,16 @@ function ConversationRow({ conv }: { conv: ConversationSummary }) {
                             ? `${conv.Agents.map(a => a.name).join(' · ')} · ${conv.MessageCount} messages`
                             : `${conv.MessageCount} messages`}
                     </Text>
-                    {conv.live ? (
+                    {conv.Live ? (
                         <View style={styles.liveTag}>
                             <View style={styles.liveDot} />
                             <Text style={styles.liveText}>live</Text>
                         </View>
                     ) : null}
-                    {conv.pinned ? <Icons.Pin size={10} color="#c9a76b" /> : null}
-                    {conv.unreadCount ? (
+                    {conv.Pinned ? <Icons.Pin size={10} color="#c9a76b" /> : null}
+                    {conv.UnreadCount ? (
                         <View style={styles.badge}>
-                            <Text style={styles.badgeText}>{conv.unreadCount}</Text>
+                            <Text style={styles.badgeText}>{conv.UnreadCount}</Text>
                         </View>
                     ) : null}
                 </View>

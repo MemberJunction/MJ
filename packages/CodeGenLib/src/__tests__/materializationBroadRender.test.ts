@@ -22,8 +22,8 @@ describe('buildBroadRowFilterSQL', () => {
 
     it('removes the sole equality predicate → no WHERE remains', () => {
         const r = BuildBroadRowFilterSQL("SELECT ID, Status FROM Orders WHERE Status = 'Active'", ['Status'], tsql);
-        expect(r.removedCount).toBe(1);
-        expect(whereJson(r.sql)).toBe('null');
+        expect(r.RemovedCount).toBe(1);
+        expect(whereJson(r.Sql)).toBe('null');
     });
 
     it('removes only the row-filter conjunct, keeps the others', () => {
@@ -32,16 +32,16 @@ describe('buildBroadRowFilterSQL', () => {
             ['Status'],
             tsql,
         );
-        expect(r.removedCount).toBe(1);
-        const w = whereJson(r.sql);
+        expect(r.RemovedCount).toBe(1);
+        const w = whereJson(r.Sql);
         expect(w).toContain('ChapterID');
         expect(w).not.toContain('Status');
     });
 
     it('removes an IN-list row-filter predicate', () => {
         const r = BuildBroadRowFilterSQL("SELECT ID, Status FROM Orders WHERE Status IN ('A','B','C')", ['Status'], tsql);
-        expect(r.removedCount).toBe(1);
-        expect(whereJson(r.sql)).toBe('null');
+        expect(r.RemovedCount).toBe(1);
+        expect(whereJson(r.Sql)).toBe('null');
     });
 
     it('removes multiple row-filter columns', () => {
@@ -50,8 +50,8 @@ describe('buildBroadRowFilterSQL', () => {
             ['Status', 'Region'],
             tsql,
         );
-        expect(r.removedCount).toBe(2);
-        expect(whereJson(r.sql)).toBe('null');
+        expect(r.RemovedCount).toBe(2);
+        expect(whereJson(r.Sql)).toBe('null');
     });
 
     it('keeps a non-row-filter conjunct while removing the row-filter one (order-independent)', () => {
@@ -60,49 +60,49 @@ describe('buildBroadRowFilterSQL', () => {
             ['Status'],
             tsql,
         );
-        expect(r.removedCount).toBe(1);
-        const w = whereJson(r.sql);
+        expect(r.RemovedCount).toBe(1);
+        const w = whereJson(r.Sql);
         expect(w).toContain('Region');
         expect(w).not.toContain('Status');
     });
 
     it('removes a range (>) row-filter predicate', () => {
         const r = BuildBroadRowFilterSQL('SELECT ID, Score FROM Members WHERE Score > 100', ['Score'], tsql);
-        expect(r.removedCount).toBe(1);
-        expect(whereJson(r.sql)).toBe('null');
+        expect(r.RemovedCount).toBe(1);
+        expect(whereJson(r.Sql)).toBe('null');
     });
 
     it('PostgreSQL dialect: strips correctly via the {expr:{value}} column shape', () => {
         const r = BuildBroadRowFilterSQL("SELECT ID, Status FROM Orders WHERE Status = 'Active'", ['Status'], pg);
-        expect(r.removedCount).toBe(1);
-        expect(whereJson(r.sql, pg)).toBe('null');
+        expect(r.RemovedCount).toBe(1);
+        expect(whereJson(r.Sql, pg)).toBe('null');
     });
 
     it('no matching column → unchanged, removedCount 0', () => {
         const sql = "SELECT ID, Status FROM Orders WHERE ChapterID = 42";
         const r = BuildBroadRowFilterSQL(sql, ['Status'], tsql);
-        expect(r.removedCount).toBe(0);
-        expect(r.sql).toBe(sql);
+        expect(r.RemovedCount).toBe(0);
+        expect(r.Sql).toBe(sql);
     });
 
     it('empty column list → unchanged no-op', () => {
         const sql = "SELECT ID FROM Orders WHERE Status = 'Active'";
         const r = BuildBroadRowFilterSQL(sql, [], tsql);
-        expect(r.removedCount).toBe(0);
-        expect(r.sql).toBe(sql);
+        expect(r.RemovedCount).toBe(0);
+        expect(r.Sql).toBe(sql);
     });
 
     it('does NOT remove a column=column predicate (value side is not a literal)', () => {
         const sql = 'SELECT o.ID FROM Orders o WHERE o.Status = o.PrevStatus';
         const r = BuildBroadRowFilterSQL(sql, ['Status'], tsql);
-        expect(r.removedCount).toBe(0);
+        expect(r.RemovedCount).toBe(0);
     });
 
     it('a query with no WHERE is returned unchanged', () => {
         const sql = 'SELECT ID, Status FROM Orders';
         const r = BuildBroadRowFilterSQL(sql, ['Status'], tsql);
-        expect(r.removedCount).toBe(0);
-        expect(r.sql).toBe(sql);
+        expect(r.RemovedCount).toBe(0);
+        expect(r.Sql).toBe(sql);
     });
 
     describe('exact-count guard (expectedRemovals)', () => {
@@ -112,24 +112,24 @@ describe('buildBroadRowFilterSQL', () => {
                 ['Region'],
                 tsql,
             );
-            expect(r.removedCount).toBe(2);
-            expect(r.ambiguous).toBe(false);
+            expect(r.RemovedCount).toBe(2);
+            expect(r.Ambiguous).toBe(false);
         });
 
         it('refuses (ambiguous) when a STATIC predicate on the filter column inflates the count', () => {
             const sql = "SELECT ID, Region FROM Orders WHERE Region = 'East' AND Region <> 'Internal'";
             const r = BuildBroadRowFilterSQL(sql, ['Region'], tsql, 1);
-            expect(r.removedCount).toBe(2); // one parameter predicate + one static predicate matched
-            expect(r.ambiguous).toBe(true);
-            expect(r.sql).toBe(sql); // fail-safe: original SQL returned unmodified when ambiguous
+            expect(r.RemovedCount).toBe(2); // one parameter predicate + one static predicate matched
+            expect(r.Ambiguous).toBe(true);
+            expect(r.Sql).toBe(sql); // fail-safe: original SQL returned unmodified when ambiguous
         });
 
         it('refuses (ambiguous) when a same-named column on another table inflates the count (qualifier-blind)', () => {
             const sql = "SELECT o.ID FROM Orders o JOIN Chapters c ON c.ID = o.ChapterID WHERE o.Region = 'East' AND c.Region = 'X'";
             const r = BuildBroadRowFilterSQL(sql, ['Region'], tsql, 1);
-            expect(r.removedCount).toBe(2);
-            expect(r.ambiguous).toBe(true);
-            expect(r.sql).toBe(sql);
+            expect(r.RemovedCount).toBe(2);
+            expect(r.Ambiguous).toBe(true);
+            expect(r.Sql).toBe(sql);
         });
 
         it('accepts (not ambiguous) when the match count equals expectedRemovals', () => {
@@ -139,17 +139,17 @@ describe('buildBroadRowFilterSQL', () => {
                 tsql,
                 2,
             );
-            expect(r.removedCount).toBe(2);
-            expect(r.ambiguous).toBe(false);
-            expect(whereJson(r.sql)).toBe('null'); // both parameter predicates cleanly stripped
+            expect(r.RemovedCount).toBe(2);
+            expect(r.Ambiguous).toBe(false);
+            expect(whereJson(r.Sql)).toBe('null'); // both parameter predicates cleanly stripped
         });
 
         it('flags ambiguous when expected but zero matched (parameter predicate not found)', () => {
             const sql = 'SELECT ID, Status FROM Orders WHERE ChapterID = 42';
             const r = BuildBroadRowFilterSQL(sql, ['Status'], tsql, 1);
-            expect(r.removedCount).toBe(0);
-            expect(r.ambiguous).toBe(true);
-            expect(r.sql).toBe(sql);
+            expect(r.RemovedCount).toBe(0);
+            expect(r.Ambiguous).toBe(true);
+            expect(r.Sql).toBe(sql);
         });
     });
 });

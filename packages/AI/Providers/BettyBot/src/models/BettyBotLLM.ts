@@ -8,8 +8,8 @@ import { BettyResponse, SettingsResponse } from '../generic/BettyBot.types';
 export class BettyBotLLM extends BaseLLM {
 
     private aPIKey: string;
-    private JWTToken: string;
-    private TokenExpiration: Date;
+    private JWTToken: string;  // case-violation-ok-legacy-back-compat: reached by bracket access outside the declaring class, where a same-named key on an unrelated object is indistinguishable
+    private TokenExpiration: Date;  // case-violation-ok-legacy-back-compat: reached by bracket access outside the declaring class, where a same-named key on an unrelated object is indistinguishable
 
     constructor(apiKey: string) {
         super(apiKey);

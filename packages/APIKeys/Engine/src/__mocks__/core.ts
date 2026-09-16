@@ -40,10 +40,10 @@ export class UserInfo {
 }
 
 // Mock RunView results storage - tests can configure this
-let mockRunViewResults: Map<string, { Success: boolean; Results: unknown[]; ErrorMessage?: string }> = new Map();
+let MockRunViewResults: Map<string, { Success: boolean; Results: unknown[]; ErrorMessage?: string }> = new Map();
 
 export function SetMockRunViewResult(entityName: string, result: { Success: boolean; Results: unknown[]; ErrorMessage?: string }) {
-    mockRunViewResults.set(entityName, result);
+    MockRunViewResults.set(entityName, result);
 }
 
 /** @deprecated Use {@link SetMockRunViewResult}. */
@@ -52,7 +52,7 @@ export function setMockRunViewResult(entityName: string, result: { Success: bool
 }
 
 export function ClearMockRunViewResults() {
-    mockRunViewResults.clear();
+    MockRunViewResults.clear();
 }
 
 /** @deprecated Use {@link ClearMockRunViewResults}. */
@@ -68,7 +68,7 @@ export class RunView {
         ResultType?: string;
         Fields?: string[];
     }, _contextUser?: UserInfo): Promise<{ Success: boolean; Results: T[]; ErrorMessage?: string }> {
-        const result = mockRunViewResults.get(params.EntityName);
+        const result = MockRunViewResults.get(params.EntityName);
         if (result) {
             return result as { Success: boolean; Results: T[]; ErrorMessage?: string };
         }
@@ -83,17 +83,17 @@ export class RunView {
         ResultType?: string;
     }>, _contextUser?: UserInfo): Promise<Array<{ Success: boolean; Results: unknown[] }>> {
         return params.map(p => {
-            const result = mockRunViewResults.get(p.EntityName);
+            const result = MockRunViewResults.get(p.EntityName);
             return result || { Success: true, Results: [] };
         });
     }
 }
 
 // Mock entity storage - tests can configure created entities
-let mockEntities: Map<string, unknown> = new Map();
+let MockEntities: Map<string, unknown> = new Map();
 
 export function SetMockEntity(entityName: string, entity: unknown) {
-    mockEntities.set(entityName, entity);
+    MockEntities.set(entityName, entity);
 }
 
 /** @deprecated Use {@link SetMockEntity}. */
@@ -102,7 +102,7 @@ export function setMockEntity(entityName: string, entity: unknown) {
 }
 
 export function ClearMockEntities() {
-    mockEntities.clear();
+    MockEntities.clear();
 }
 
 /** @deprecated Use {@link ClearMockEntities}. */
@@ -185,7 +185,7 @@ export function LogError(..._args: unknown[]): void {
 
 export class Metadata {
     async GetEntityObject<T>(entityName: string, _contextUser?: UserInfo): Promise<T> {
-        const entity = mockEntities.get(entityName);
+        const entity = MockEntities.get(entityName);
         if (entity) {
             return entity as T;
         }
@@ -216,4 +216,11 @@ export class Metadata {
 }
 
 // Re-export for convenience
-export { mockRunViewResults, mockEntities };
+export {
+    MockRunViewResults,
+    MockEntities,
+    /** @deprecated Use {@link MockRunViewResults} instead. */
+    MockRunViewResults as mockRunViewResults,
+    /** @deprecated Use {@link MockEntities} instead. */
+    MockEntities as mockEntities,
+};

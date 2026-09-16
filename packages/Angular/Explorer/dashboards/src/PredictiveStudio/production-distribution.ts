@@ -12,11 +12,11 @@ export const PRODUCTION_SAMPLE_CAP = 5000;
 /** One bucket in a written-column distribution (a tercile band or a class value). */
 export interface DistributionBucket {
   /** Display label for the bucket (band name or class value). */
-  label: string;
+  label: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
   /** Number of records in this bucket. */
-  count: number;
+  count: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
   /** Share of the sampled population, 0..100 (rounded for display). */
-  pct: number;
+  pct: number;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 }
 
 /** Result of bucketing a written column's current values across the population. */

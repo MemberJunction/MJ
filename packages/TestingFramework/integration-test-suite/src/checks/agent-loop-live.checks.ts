@@ -195,7 +195,7 @@ export const AgentLoopLiveChecks: NamedCheck[] = [
             // asserts the conversation-run linkage the carry-forward + compaction bundles depend on.
             const echo = await agentByName('IT: Echo Agent', ctx.User);
             const turn = await createConversationTurn(ctx, `AL5 conversation plumbing ${fixture(ctx).Marker}`);
-            const result = await RunAgentOverWire(MakeAIClient(ctx.Provider, ctx.User), echo, UserTurn('ping'), { conversationDetailId: turn.detailId, conversationId: turn.conversationId });
+            const result = await RunAgentOverWire(MakeAIClient(ctx.Provider, ctx.User), echo, UserTurn('ping'), { conversationDetailId: turn.detailId, ConversationId: turn.conversationId });
             const runId = await landRun(ctx, result, `ConversationID='${turn.conversationId}' AND AgentID='${echo.ID}'`, 'AL5');
 
             const run = await new RunView().RunView<{ ConversationID: string | null }>({

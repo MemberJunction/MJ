@@ -745,21 +745,21 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     this.initializeAnimationFromTheme();
 
     // Set first message
-    this.CurrentLoadingText = this.activeTheme.messages[0];
+    this.CurrentLoadingText = this.activeTheme.Messages[0];
 
-    if (this.activeTheme.staticColors) {
+    if (this.activeTheme.StaticColors) {
       // Standard theme: keep MJ blue, no gradient
-      this.CurrentLoadingColor = this.activeTheme.colors[0];
+      this.CurrentLoadingColor = this.activeTheme.Colors[0];
       this.CurrentLoadingTextColor = '#757575'; // Default gray text
       this.CurrentLoadingGradient = null;
     } else {
       // Themed period: use theme colors and first gradient from the start
-      this.CurrentLoadingColor = this.activeTheme.colors[0];
-      this.CurrentLoadingTextColor = this.activeTheme.colors[0];
+      this.CurrentLoadingColor = this.activeTheme.Colors[0];
+      this.CurrentLoadingTextColor = this.activeTheme.Colors[0];
 
       // Set initial gradient if theme has gradients
-      if (this.activeTheme.gradients && this.activeTheme.gradients.length > 0) {
-        this.CurrentLoadingGradient = this.activeTheme.gradients[0];
+      if (this.activeTheme.Gradients && this.activeTheme.Gradients.length > 0) {
+        this.CurrentLoadingGradient = this.activeTheme.Gradients[0];
       } else {
         this.CurrentLoadingGradient = null;
       }
@@ -2220,21 +2220,21 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    */
   private initializeLoadingDisplay(): void {
     // Set first message
-    this.CurrentLoadingText = this.activeTheme.messages[0];
+    this.CurrentLoadingText = this.activeTheme.Messages[0];
 
-    if (this.activeTheme.staticColors) {
+    if (this.activeTheme.StaticColors) {
       // Standard theme: keep MJ blue, no gradient
-      this.CurrentLoadingColor = this.activeTheme.colors[0];
+      this.CurrentLoadingColor = this.activeTheme.Colors[0];
       this.CurrentLoadingTextColor = '#757575'; // Default gray text
       this.CurrentLoadingGradient = null;
     } else {
       // Themed period: use theme colors and first gradient from the start
-      this.CurrentLoadingColor = this.activeTheme.colors[0];
-      this.CurrentLoadingTextColor = this.activeTheme.colors[0];
+      this.CurrentLoadingColor = this.activeTheme.Colors[0];
+      this.CurrentLoadingTextColor = this.activeTheme.Colors[0];
 
       // Set initial gradient if theme has gradients
-      if (this.activeTheme.gradients && this.activeTheme.gradients.length > 0) {
-        this.CurrentLoadingGradient = this.activeTheme.gradients[0];
+      if (this.activeTheme.Gradients && this.activeTheme.Gradients.length > 0) {
+        this.CurrentLoadingGradient = this.activeTheme.Gradients[0];
         this.usedGradientIndices = [0];
       } else {
         this.CurrentLoadingGradient = null;
@@ -2248,7 +2248,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    * For standard theme, colors remain static.
    */
   private cycleToNextMessage(): void {
-    const messages = this.activeTheme.messages;
+    const messages = this.activeTheme.Messages;
     this.messageCycleCount++;
 
     // If we've used all messages, reset the used list (but exclude current to avoid immediate repeat)
@@ -2267,11 +2267,11 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       this.loadingMessageIndex = randomIndex;
 
       // Update the message
-      this.CurrentLoadingText = this.activeTheme.messages[randomIndex];
+      this.CurrentLoadingText = this.activeTheme.Messages[randomIndex];
 
       // Check if it's time to change colors (every 2nd message = every 5 seconds)
       // But only for non-static themes
-      if (!this.activeTheme.staticColors && this.messageCycleCount % this.colorChangeEveryNMessages === 0) {
+      if (!this.activeTheme.StaticColors && this.messageCycleCount % this.colorChangeEveryNMessages === 0) {
         this.cycleToNextColor();
       }
     }
@@ -2283,8 +2283,8 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    */
   private cycleToNextColor(): void {
     // Cycle to next gradient if available
-    if (this.activeTheme.gradients && this.activeTheme.gradients.length > 0) {
-      const gradients = this.activeTheme.gradients;
+    if (this.activeTheme.Gradients && this.activeTheme.Gradients.length > 0) {
+      const gradients = this.activeTheme.Gradients;
 
       // If we've used all gradients, reset (but exclude current to avoid immediate repeat)
       if (this.usedGradientIndices.length >= gradients.length) {
@@ -2300,7 +2300,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     }
 
     // Also cycle text color through theme colors
-    const colors = this.activeTheme.colors;
+    const colors = this.activeTheme.Colors;
     if (colors.length > 1) {
       // Get a random color from the theme for text
       const randomIndex = Math.floor(Math.random() * colors.length);
@@ -2316,23 +2316,23 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   private initializeAnimationFromTheme(): void {
     this.currentAnimationIndex = 0;
 
-    const themeAnimations = this.activeTheme.animations;
+    const themeAnimations = this.activeTheme.Animations;
 
     if (!themeAnimations) {
       // No animation config - use random selection for non-standard themes
       if (this.activeTheme.id === 'standard') {
         // Standard theme defaults to pulse only
-        this.animationSequence = [{ type: 'pulse' }];
+        this.animationSequence = [{ Type: 'pulse' }];
       } else {
         // Random selection for themed holidays without explicit config
         const randomType = this.allAnimationTypes[
           Math.floor(Math.random() * this.allAnimationTypes.length)
         ];
-        this.animationSequence = [{ type: randomType }];
+        this.animationSequence = [{ Type: randomType }];
       }
     } else if (typeof themeAnimations === 'string') {
       // Single animation type specified
-      this.animationSequence = [{ type: themeAnimations }];
+      this.animationSequence = [{ Type: themeAnimations }];
     } else {
       // Array of animation steps
       this.animationSequence = themeAnimations;
@@ -2340,7 +2340,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
 
     // Set initial animation
     if (this.animationSequence.length > 0) {
-      this.CurrentLoadingAnimation = this.animationSequence[0].type;
+      this.CurrentLoadingAnimation = this.animationSequence[0].Type;
     }
   }
 
@@ -2368,7 +2368,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     }
 
     const currentStep = this.animationSequence[this.currentAnimationIndex];
-    const durationMs = currentStep.durationMs;
+    const durationMs = currentStep.DurationMs;
 
     // If no duration specified (or 0), this step runs indefinitely
     if (!durationMs || durationMs <= 0) {
@@ -2393,7 +2393,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     }
 
     const nextStep = this.animationSequence[this.currentAnimationIndex];
-    this.CurrentLoadingAnimation = nextStep.type;
+    this.CurrentLoadingAnimation = nextStep.Type;
     this.cdr.detectChanges();
 
     // Schedule the next transition if this step has a duration

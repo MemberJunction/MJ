@@ -98,7 +98,7 @@ describe('buildFlowModelFromTree', () => {
 
         // `raw` is typed to a run STEP and cannot hold a Task — this is why `source` exists.
         expect(draft?.Raw).toBeNull();
-        expect(draft?.source).toEqual({ entity: 'MJ: Tasks', id: 't2' });
+        expect(draft?.Source).toEqual({ entity: 'MJ: Tasks', id: 't2' });
     });
 
     it('preserves the tree depth so renderers indent correctly', () => {
@@ -110,7 +110,7 @@ describe('buildFlowModelFromTree', () => {
 
         // The run and its graph share a name, so the graph is found by its ENTITY rather than by
         // label — which is exactly why every node carries a source reference.
-        const graph = model.Nodes.find((n) => n.source?.entity === 'MJ: Tasks' && n.source.id === 'graph');
+        const graph = model.Nodes.find((n) => n.Source?.entity === 'MJ: Tasks' && n.Source.id === 'graph');
         expect(graph?.Depth).toBe(2);
     });
 

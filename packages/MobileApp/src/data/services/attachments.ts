@@ -55,7 +55,7 @@ export type CapturedAttachment = {
     /** MIME type, e.g. `image/jpeg`, `application/pdf`. */
     MimeType: string;
     /** Size in bytes, when the picker reported it (some sources omit it). */
-    size?: number;
+    size?: number;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
     /** Coarse classification driving preview UI (thumbnail vs. filename chip). */
     Kind: AttachmentKind;
 };

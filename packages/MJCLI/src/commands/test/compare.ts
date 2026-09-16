@@ -82,7 +82,7 @@ export default class TestCompare extends Command {
         latest: flags.latest,
         fromJson: flags['from-json'],
         format: ResolveLegacyFormat({
-          format: flags.format,
+          Format: flags.format,
           Legacy: 'console' as const,
           LegacyDefault: 'console' as const,
           Map: TEST_FORMAT_MAP,

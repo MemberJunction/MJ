@@ -22,38 +22,38 @@ import { GetScenario, PROBE_SCENARIOS } from './scenarios';
  */
 export const DEFAULT_MATRIX_MODELS: MatrixModel[] = [
     {
-        label: 'Claude Haiku 4.5', developer: 'Anthropic', generation: 'prior',
-        driverClass: 'AnthropicLLM', apiName: 'claude-haiku-4-5-20251001'
+        Label: 'Claude Haiku 4.5', Developer: 'Anthropic', Generation: 'prior',
+        DriverClass: 'AnthropicLLM', ApiName: 'claude-haiku-4-5-20251001'
     },
     {
         // Audit: forced tool_choice interacts with extended thinking on this generation, and
         // diverges again on Bedrock. The thinking axis is enabled here for exactly that reason.
-        label: 'Claude Sonnet 5', developer: 'Anthropic', generation: 'current',
-        driverClass: 'AnthropicLLM', apiName: 'claude-sonnet-5', effortLevels: [null, 'high'], reasoningBudgetTokens: 2000
+        Label: 'Claude Sonnet 5', Developer: 'Anthropic', Generation: 'current',
+        DriverClass: 'AnthropicLLM', ApiName: 'claude-sonnet-5', EffortLevels: [null, 'high'], ReasoningBudgetTokens: 2000
     },
     {
-        label: 'GPT 4.1-mini', developer: 'OpenAI', generation: 'pre-reasoning',
-        driverClass: 'OpenAILLM', apiName: 'gpt-4.1-mini'
+        Label: 'GPT 4.1-mini', Developer: 'OpenAI', Generation: 'pre-reasoning',
+        DriverClass: 'OpenAILLM', ApiName: 'gpt-4.1-mini'
     },
     {
-        label: 'GPT 5.4-mini', developer: 'OpenAI', generation: 'current',
-        driverClass: 'OpenAILLM', apiName: 'gpt-5.4-mini', effortLevels: [null, 'high']
+        Label: 'GPT 5.4-mini', Developer: 'OpenAI', Generation: 'current',
+        DriverClass: 'OpenAILLM', ApiName: 'gpt-5.4-mini', EffortLevels: [null, 'high']
     },
     {
         // Audit: Gemini 2.x cannot combine structured output with function calling in one request.
         // That is the single most actionable vendor-level claim in the audit, and it is directly
         // testable by the responseFormat axis — so the deprecated generation earns its row.
-        label: 'Gemini 2.5 Flash', developer: 'Google', generation: 'prior (2.x)',
-        driverClass: 'GeminiLLM', apiName: 'gemini-2.5-flash'
+        Label: 'Gemini 2.5 Flash', Developer: 'Google', Generation: 'prior (2.x)',
+        DriverClass: 'GeminiLLM', ApiName: 'gemini-2.5-flash'
     },
     {
         // Skip's Query Writer model — the configuration whose malformed function calls started this.
-        label: 'Gemini 3 Flash', developer: 'Google', generation: 'originating failure',
-        driverClass: 'GeminiLLM', apiName: 'gemini-3-flash-preview'
+        Label: 'Gemini 3 Flash', Developer: 'Google', Generation: 'originating failure',
+        DriverClass: 'GeminiLLM', ApiName: 'gemini-3-flash-preview'
     },
     {
-        label: 'Gemini 3.7 Flash', developer: 'Google', generation: 'current',
-        driverClass: 'GeminiLLM', apiName: 'gemini-3.7-flash'
+        Label: 'Gemini 3.7 Flash', Developer: 'Google', Generation: 'current',
+        DriverClass: 'GeminiLLM', ApiName: 'gemini-3.7-flash'
     }
 ];
 
@@ -66,10 +66,10 @@ export const DEFAULT_MATRIX_MODELS: MatrixModel[] = [
  * with confidence intervals belongs to the corpus comparison.
  */
 export const DEFAULT_MATRIX_SPEC: MatrixSpec = {
-    models: DEFAULT_MATRIX_MODELS,
-    scenarioIds: PROBE_SCENARIOS.map((s) => s.id),
-    toolModes: ['no-tools', 'auto', 'none', 'required', 'named'],
-    responseFormats: ['Any', 'JSON'],
+    Models: DEFAULT_MATRIX_MODELS,
+    ScenarioIds: PROBE_SCENARIOS.map((s) => s.Id),
+    ToolModes: ['no-tools', 'auto', 'none', 'required', 'named'],
+    ResponseFormats: ['Any', 'JSON'],
     reps: 3
 };
 
@@ -80,7 +80,7 @@ const THINKING_AXIS_SCENARIOS = new Set(['single-call', 'envelope']);
 
 /** Builds the stable cell id used as the scorecard key and the JSONL join key. */
 export function CellId(model: MatrixModel, scenarioId: string, mode: ProbeToolMode, format: string, effortLevel: string | null): string {
-    return [model.apiName, scenarioId, mode, format, effortLevel ?? 'default'].join(' × ');
+    return [model.ApiName, scenarioId, mode, format, effortLevel ?? 'default'].join(' × ');
 }
 
 /** @deprecated Use {@link CellId}. */
@@ -96,7 +96,7 @@ export function cellId(model: MatrixModel, scenarioId: string, mode: ProbeToolMo
  * vacuity is a hole in the question.
  */
 function skipReason(scenario: ProbeScenario, mode: ProbeToolMode, effortLevel: string | null, format: string): string | null {
-    const { toolCallWarranted, envelopeRequested } = scenario.expectation;
+    const { ToolCallWarranted: toolCallWarranted, EnvelopeRequested: envelopeRequested } = scenario.Expectation;
 
     if (mode === 'no-tools' && toolCallWarranted && !envelopeRequested) {
         return 'no tools declared and no envelope to read — there is no decision to observe';
@@ -104,13 +104,13 @@ function skipReason(scenario: ProbeScenario, mode: ProbeToolMode, effortLevel: s
     if (mode === 'none' && !toolCallWarranted) {
         return "toolChoice 'none' suppresses a call that was never warranted — nothing to suppress";
     }
-    if (mode === 'named' && !scenario.forcedToolName) {
+    if (mode === 'named' && !scenario.ForcedToolName) {
         return 'scenario declares no tool to force';
     }
-    if (mode === 'named' && scenario.id === 'parallel-call') {
+    if (mode === 'named' && scenario.Id === 'parallel-call') {
         return 'forcing one named tool makes the parallel-call count unmeasurable';
     }
-    if (effortLevel !== null && (mode !== THINKING_AXIS_MODE || format !== THINKING_AXIS_FORMAT || !THINKING_AXIS_SCENARIOS.has(scenario.id))) {
+    if (effortLevel !== null && (mode !== THINKING_AXIS_MODE || format !== THINKING_AXIS_FORMAT || !THINKING_AXIS_SCENARIOS.has(scenario.Id))) {
         return `thinking axis is swept only on ${THINKING_AXIS_MODE} × ${THINKING_AXIS_FORMAT} × {${[...THINKING_AXIS_SCENARIOS].join(', ')}}`;
     }
     return null;
@@ -121,26 +121,26 @@ export function ExpandMatrix(spec: MatrixSpec): ExpandedMatrix {
     const cells: MatrixCell[] = [];
     const skipped: SkippedCell[] = [];
 
-    for (const model of spec.models) {
-        const effortLevels = model.effortLevels ?? [null];
-        for (const scenarioId of spec.scenarioIds) {
+    for (const model of spec.Models) {
+        const effortLevels = model.EffortLevels ?? [null];
+        for (const scenarioId of spec.ScenarioIds) {
             const scenario = GetScenario(scenarioId);
-            for (const toolMode of spec.toolModes) {
-                for (const responseFormat of spec.responseFormats) {
+            for (const toolMode of spec.ToolModes) {
+                for (const responseFormat of spec.ResponseFormats) {
                     for (const effortLevel of effortLevels) {
                         const id = CellId(model, scenarioId, toolMode, responseFormat, effortLevel);
                         const reason = skipReason(scenario, toolMode, effortLevel, responseFormat);
                         if (reason) {
-                            skipped.push({ id, reason });
+                            skipped.push({ Id: id, Reason: reason });
                         } else {
-                            cells.push({ id, model, scenarioId, toolMode, responseFormat, effortLevel });
+                            cells.push({ Id: id, Model: model, ScenarioId: scenarioId, ToolMode: toolMode, ResponseFormat: responseFormat, EffortLevel: effortLevel });
                         }
                     }
                 }
             }
         }
     }
-    return { cells, skipped };
+    return { Cells: cells, Skipped: skipped };
 }
 
 /** @deprecated Use {@link ExpandMatrix}. */
@@ -154,19 +154,19 @@ const CHARS_PER_TOKEN = 4;
 const ESTIMATED_COMPLETION_TOKENS = 200;
 
 function estimatePromptTokens(scenario: ProbeScenario, toolsDeclared: boolean): number {
-    const promptChars = (scenario.systemPrompt?.length ?? 0) + scenario.userPrompt.length;
-    const toolChars = toolsDeclared ? JSON.stringify(scenario.tools).length : 0;
+    const promptChars = (scenario.SystemPrompt?.length ?? 0) + scenario.UserPrompt.length;
+    const toolChars = toolsDeclared ? JSON.stringify(scenario.Tools).length : 0;
     return Math.ceil((promptChars + toolChars) / CHARS_PER_TOKEN);
 }
 
 /** The pre-flight manifest: what a run will cost in calls and tokens, before a single request goes out. */
 export interface MatrixManifest {
-    cellCount: number;
-    skippedCount: number;
-    callCount: number;
-    estimatedPromptTokens: number;
-    estimatedCompletionTokens: number;
-    perModel: Array<{ label: string; apiName: string; calls: number; estimatedTokens: number }>;
+    CellCount: number;
+    SkippedCount: number;
+    CallCount: number;
+    EstimatedPromptTokens: number;
+    EstimatedCompletionTokens: number;
+    PerModel: Array<{ label: string; apiName: string; calls: number; estimatedTokens: number }>;
 }
 
 /** Builds the manifest. Sized off the real scenario text and tool schemas, not a guessed average. */
@@ -174,26 +174,26 @@ export function BuildManifest(expanded: ExpandedMatrix, reps: number): MatrixMan
     const perModel = new Map<string, { label: string; apiName: string; calls: number; estimatedTokens: number }>();
     let estimatedPromptTokens = 0;
 
-    for (const cell of expanded.cells) {
-        const scenario = GetScenario(cell.scenarioId);
-        const prompt = estimatePromptTokens(scenario, cell.toolMode !== 'no-tools');
+    for (const cell of expanded.Cells) {
+        const scenario = GetScenario(cell.ScenarioId);
+        const prompt = estimatePromptTokens(scenario, cell.ToolMode !== 'no-tools');
         estimatedPromptTokens += prompt * reps;
 
-        const key = cell.model.apiName;
-        const entry = perModel.get(key) ?? { label: cell.model.label, apiName: key, calls: 0, estimatedTokens: 0 };
+        const key = cell.Model.ApiName;
+        const entry = perModel.get(key) ?? { label: cell.Model.Label, apiName: key, calls: 0, estimatedTokens: 0 };
         entry.calls += reps;
         entry.estimatedTokens += (prompt + ESTIMATED_COMPLETION_TOKENS) * reps;
         perModel.set(key, entry);
     }
 
-    const callCount = expanded.cells.length * reps;
+    const callCount = expanded.Cells.length * reps;
     return {
-        cellCount: expanded.cells.length,
-        skippedCount: expanded.skipped.length,
-        callCount,
-        estimatedPromptTokens,
-        estimatedCompletionTokens: callCount * ESTIMATED_COMPLETION_TOKENS,
-        perModel: [...perModel.values()]
+        CellCount: expanded.Cells.length,
+        SkippedCount: expanded.Skipped.length,
+        CallCount: callCount,
+        EstimatedPromptTokens: estimatedPromptTokens,
+        EstimatedCompletionTokens: callCount * ESTIMATED_COMPLETION_TOKENS,
+        PerModel: [...perModel.values()]
     };
 }
 

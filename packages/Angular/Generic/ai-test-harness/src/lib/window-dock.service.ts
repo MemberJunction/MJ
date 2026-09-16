@@ -1,12 +1,12 @@
 import { Injectable, Component, ComponentRef, ApplicationRef, Injector, createComponent } from '@angular/core';
 
 export interface DockItem {
-    windowId: string;
-    title: string;
-    icon?: string;
-    iconUrl?: string;
-    restoreCallback: () => void;
-    progress?: number; // 0-100 for progress indicator
+    WindowId: string;
+    Title: string;
+    Icon?: string;
+    IconUrl?: string;
+    RestoreCallback: () => void;
+    progress?: number; // 0-100 for progress indicator — case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
 @Component({
@@ -15,12 +15,12 @@ export interface DockItem {
     imports: [],
     template: `
         <div class="window-dock">
-            @for (item of dockItems; track item.windowId) {
+            @for (item of dockItems; track item.WindowId) {
                 <div class="dock-item" 
-                     [title]="item.title"
+                     [title]="item.Title"
                      (click)="restoreWindow(item)">
-                    <i [class]="item.icon"></i>
-                    <span class="dock-item-label">{{ getTruncatedTitle(item.title) }}</span>
+                    <i [class]="item.Icon"></i>
+                    <span class="dock-item-label">{{ getTruncatedTitle(item.Title) }}</span>
                 </div>
             }
         </div>
@@ -130,7 +130,7 @@ export class WindowDockComponent {
     }
     
     RemoveItem(windowId: string) {
-        this.DockItems = this.DockItems.filter(item => item.windowId !== windowId);
+        this.DockItems = this.DockItems.filter(item => item.WindowId !== windowId);
     }
 
     /** @deprecated Use {@link RemoveItem}. */
@@ -139,8 +139,8 @@ export class WindowDockComponent {
     }
     
     RestoreWindow(item: DockItem) {
-        item.restoreCallback();
-        this.RemoveItem(item.windowId);
+        item.RestoreCallback();
+        this.RemoveItem(item.WindowId);
     }
 
     /** @deprecated Use {@link RestoreWindow}. */
@@ -190,11 +190,11 @@ export class WindowDockService {
         this.ensureDockExists();
         if (this.dockComponent) {
             this.dockComponent.instance.addItem({
-                windowId,
-                title,
-                icon,
-                iconUrl,
-                restoreCallback: restoreCallback || (() => {}),
+                WindowId: windowId,
+                Title: title,
+                Icon: icon,
+                IconUrl: iconUrl,
+                RestoreCallback: restoreCallback || (() => {}),
                 progress
             });
         }
@@ -225,7 +225,7 @@ export class WindowDockService {
     
     UpdateWindowProgress(windowId: string, progress: number | undefined) {
         if (this.dockComponent) {
-            const item = this.dockComponent.instance.dockItems.find(i => i.windowId === windowId);
+            const item = this.dockComponent.instance.dockItems.find(i => i.WindowId === windowId);
             if (item) {
                 item.progress = progress;
             }

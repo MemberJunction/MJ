@@ -69,8 +69,8 @@ export interface RestoreSnapshot {
 
 /** Outcome of {@link resolveRestore}: a matched restore, or a tolerant error. */
 export type RestoreResolution =
-    | { ok: true; restore: RestoreSnapshot }
-    | { ok: false; error: string };
+    | { ok: true; restore: RestoreSnapshot }  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    | { ok: false; error: string };  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 
 /**
  * Resolve an agent-supplied restore reference (an ID or a name) to one of the

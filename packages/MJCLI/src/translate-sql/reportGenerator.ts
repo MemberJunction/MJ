@@ -18,7 +18,7 @@ export interface TranslationReportItem {
     /** Dialect markers found */
     Markers: string[];
     /** Any error or note */
-    note?: string;
+    Note?: string;
 }
 
 /**
@@ -70,8 +70,8 @@ export function GenerateTranslationReport(
             lines.push('```sql');
             lines.push(item.TranslatedSQL || '-- Translation failed');
             lines.push('```');
-            if (item.note) {
-                lines.push(`> ${item.note}`);
+            if (item.Note) {
+                lines.push(`> ${item.Note}`);
             }
             lines.push('');
         }
@@ -88,8 +88,8 @@ export function GenerateTranslationReport(
             lines.push('```sql');
             lines.push(item.OriginalSQL);
             lines.push('```');
-            if (item.note) {
-                lines.push(`> ${item.note}`);
+            if (item.Note) {
+                lines.push(`> ${item.Note}`);
             }
             lines.push('');
         }

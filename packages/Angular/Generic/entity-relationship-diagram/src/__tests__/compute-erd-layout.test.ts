@@ -73,7 +73,7 @@ describe('computeErdLayout', () => {
                 node('b', 'ai',   'B', [pk('b:id')]),
                 node('c', 'core', 'C', [pk('c:id')]),
             ];
-            const layout = ComputeErdLayout(nodes, { schemaOrder: ['core', 'ai'] });
+            const layout = ComputeErdLayout(nodes, { SchemaOrder: ['core', 'ai'] });
             expect(layout.bands.map(b => b.schemaName)).toEqual(['core', 'ai']);
         });
 
@@ -160,7 +160,7 @@ describe('computeErdLayout', () => {
                 node('u', 'core', 'Users', [pk('u:id'), fk('u:r', 'RoleID', 'r')]),
                 node('r', 'ai',   'Roles', [pk('r:id')]),
             ];
-            const layout = ComputeErdLayout(nodes, { schemaOrder: ['core', 'ai'] });
+            const layout = ComputeErdLayout(nodes, { SchemaOrder: ['core', 'ai'] });
             expect(layout.edges[0].points).toHaveLength(4);
             expect(layout.edges[0].selfReference).toBe(false);
             expect(layout.edges[0].goingRight).toBe(true);
@@ -183,7 +183,7 @@ describe('computeErdLayout', () => {
                 node('z', 'zzz', 'Z', [pk('z:id')]),
                 node('a', 'aaa', 'A', [pk('a:id')]),
             ];
-            const layout = ComputeErdLayout(nodes, { schemaOrder: ['zzz', 'aaa'] });
+            const layout = ComputeErdLayout(nodes, { SchemaOrder: ['zzz', 'aaa'] });
             expect(layout.bands.map(b => b.schemaName)).toEqual(['zzz', 'aaa']);
         });
 
@@ -192,7 +192,7 @@ describe('computeErdLayout', () => {
                 node('x', 'x', 'X', [pk('x:id')]),
                 node('y', 'y', 'Y', [pk('y:id')]),
             ];
-            const layout = ComputeErdLayout(nodes, { schemaOrder: ['y'] });
+            const layout = ComputeErdLayout(nodes, { SchemaOrder: ['y'] });
             expect(layout.bands.map(b => b.schemaName)).toEqual(['y', 'x']);
         });
     });

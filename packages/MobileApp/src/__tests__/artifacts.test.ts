@@ -59,21 +59,21 @@ describe('loadArtifact — classify()', () => {
         const a = await loadArtifact('a1');
         expect(a?.Kind).toBe('chart');
         expect(a?.chart?.Kind).toBe('bar');
-        expect(a?.json).toBeDefined();
+        expect(a?.Json).toBeDefined();
     });
 
     it('detects a json-table for an array of objects', async () => {
         setupSingle({ type: 'Data', content: '[{"a":1},{"a":2}]' });
         const a = await loadArtifact('a1');
         expect(a?.Kind).toBe('json-table');
-        expect(a?.rows).toHaveLength(2);
+        expect(a?.Rows).toHaveLength(2);
     });
 
     it('detects generic json for a non-chart object', async () => {
         setupSingle({ type: 'Config', content: '{"a":1,"b":2}' });
         const a = await loadArtifact('a1');
         expect(a?.Kind).toBe('json');
-        expect(a?.json).toEqual({ a: 1, b: 2 });
+        expect(a?.Json).toEqual({ a: 1, b: 2 });
     });
 
     it('falls through to text when {…} content is not valid JSON', async () => {
@@ -98,7 +98,7 @@ describe('loadArtifact — classify()', () => {
         setupSingle({ type: 'TypeScript Code', content: 'const x = 1;' });
         const a = await loadArtifact('a1');
         expect(a?.Kind).toBe('code');
-        expect(a?.language).toBe('typescript');
+        expect(a?.Language).toBe('typescript');
     });
 
     it('detects markdown from the type name', async () => {

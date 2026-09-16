@@ -7,13 +7,13 @@ export type TransformCallback = Parameters<Transform['_flush']>[0];
  */
 export type AsyncBatchTransformOptions<TRecord, TContext, TResult> = {
   /** Number of records to accumulate before processing a batch. Default: 10 */
-  batchSize?: number;
+  BatchSize?: number;
   /** Max concurrent batch processing tasks. Default: 4 */
-  concurrencyLimit?: number;
+  ConcurrencyLimit?: number;
   /** Arbitrary context passed to the processing function */
-  context?: TContext;
+  context?: TContext;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
   /** The async function that processes a batch of records and returns results */
-  processBatch: (batch: TRecord[], context: TContext) => Promise<TResult[]>;
+  ProcessBatch: (batch: TRecord[], context: TContext) => Promise<TResult[]>;
 };
 
 /**
@@ -43,10 +43,10 @@ export class AsyncBatchTransform<
 
   constructor(options: AsyncBatchTransformOptions<TRecord, TContext, TResult>) {
     super({ objectMode: true });
-    this._batchSize = options.batchSize ?? 10;
-    this._concurrencyLimit = options.concurrencyLimit ?? 4;
+    this._batchSize = options.BatchSize ?? 10;
+    this._concurrencyLimit = options.ConcurrencyLimit ?? 4;
     this._context = options.context as TContext;
-    this._processBatch = options.processBatch;
+    this._processBatch = options.ProcessBatch;
   }
 
   private _next(): void {

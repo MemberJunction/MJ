@@ -16,13 +16,13 @@ import type { EntitySearchResult, IRunViewProvider, SearchEntityParams } from "@
 /** Outcome of a semantic search attempt — ranked results on success, structured failure otherwise. */
 export interface SemanticSearchOutcome {
     /** True when the search ran; false when it could not (e.g., missing provider). */
-    ok: boolean;
+    ok: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Ranked results (empty on failure). */
-    results: EntitySearchResult[];
+    results: EntitySearchResult[];  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Action result code to surface on failure. */
-    resultCode?: string;
+    resultCode?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
     /** Human-readable failure message. */
-    message?: string;
+    message?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
 /**

@@ -116,10 +116,10 @@ function permissionSortKey(p: PermissionDef): string {
 function extPropSortKey(p: ExtendedPropertyDef): string {
   return [
     p.SchemaName.toLowerCase(),
-    (p.level1Type || '').toLowerCase(),
-    (p.level1Name || '').toLowerCase(),
-    (p.level2Type || '').toLowerCase(),
-    (p.level2Name || '').toLowerCase(),
+    (p.Level1Type || '').toLowerCase(),
+    (p.Level1Name || '').toLowerCase(),
+    (p.Level2Type || '').toLowerCase(),
+    (p.Level2Name || '').toLowerCase(),
     p.Name.toLowerCase(),
   ].join('|');
 }
@@ -337,7 +337,7 @@ async function readTables(db: QueryRunner): Promise<TableDef[]> {
       Name: t.table_name,
       HasIdentity: !!t.has_identity,
       Columns: columns,
-      primaryKey,
+      PrimaryKey: primaryKey,
       UniqueConstraints: uniqueConstraints,
       Indexes: indexes,
       ForeignKeys: foreignKeys,
@@ -435,8 +435,8 @@ async function readPrincipals(db: QueryRunner): Promise<DatabasePrincipalDef[]> 
       const kind = PRINCIPAL_TYPE_MAP[r.type];
       if (!kind) return null;
       const def: DatabasePrincipalDef = { Name: r.name, Kind: kind };
-      if (r.owner_name) def.owner = r.owner_name;
-      if (r.default_schema_name) def.defaultSchema = r.default_schema_name;
+      if (r.owner_name) def.Owner = r.owner_name;
+      if (r.default_schema_name) def.DefaultSchema = r.default_schema_name;
       return def;
     })
     .filter((p): p is DatabasePrincipalDef => p !== null);
@@ -643,7 +643,7 @@ async function readUserDefinedTypes(db: QueryRunner): Promise<UserDefinedTypeDef
       Kind: 'table',
       IsMemoryOptimized: !!t.is_memory_optimized,
       Columns: cols,
-      primaryKey,
+      PrimaryKey: primaryKey,
     });
   }
   return out;
@@ -762,10 +762,10 @@ async function readExtendedProperties(db: QueryRunner): Promise<ExtendedProperty
       Name: r.prop_name,
       Value: r.prop_value ?? '',
       SchemaName: r.schema_name,
-      level1Type: r.level1_type ?? undefined,
-      level1Name: r.level1_name ?? undefined,
-      level2Type: r.level2_type ?? undefined,
-      level2Name: r.level2_name ?? undefined,
+      Level1Type: r.level1_type ?? undefined,
+      Level1Name: r.level1_name ?? undefined,
+      Level2Type: r.level2_type ?? undefined,
+      Level2Name: r.level2_name ?? undefined,
     });
   }
   return out;

@@ -31,7 +31,7 @@ describe('analyzeQueryForMaterialization', () => {
             const r = AnalyzeQueryForMaterialization({ queryName: 'By Chapter', isParameterized: true, fields });
             expect(r.qualifies).toBe(false);
             expect(r.reason).toMatch(/parameterized/i);
-            expect(r.columns).toEqual([]);
+            expect(r.Columns).toEqual([]);
         });
 
         it('does NOT qualify a query with no declared output fields', () => {
@@ -51,22 +51,22 @@ describe('analyzeQueryForMaterialization', () => {
     describe('result-shape + key derivation', () => {
         it('prepends a synthetic surrogate PRIMARY KEY column (full-rebuild compatible)', () => {
             const r = AnalyzeQueryForMaterialization({ queryName: 'Q', isParameterized: false, fields });
-            const pk = r.columns[0];
+            const pk = r.Columns[0];
             expect(pk.Name).toBe(MATERIALIZATION_SURROGATE_COLUMN);
             expect(pk.IsPrimaryKey).toBe(true);
             expect(pk.Nullable).toBe(false);
             expect(pk.SQLType).toBe(DEFAULT_SURROGATE_SQL_TYPE);
-            expect(r.surrogateColumnName).toBe(MATERIALIZATION_SURROGATE_COLUMN);
+            expect(r.SurrogateColumnName).toBe(MATERIALIZATION_SURROGATE_COLUMN);
         });
 
         it('maps each query output column to a nullable, non-PK snapshot column preserving its type', () => {
             const r = AnalyzeQueryForMaterialization({ queryName: 'Q', isParameterized: false, fields });
-            const data = r.columns.slice(1);
+            const data = r.Columns.slice(1);
             expect(data.map((c) => c.Name)).toEqual(['customer_id', 'order_count', 'total_amount']);
             expect(data.every((c) => c.Nullable && !c.IsPrimaryKey)).toBe(true);
             expect(data.find((c) => c.Name === 'total_amount')!.SQLType).toBe('decimal(18,2)');
             // exactly one PK overall (the surrogate)
-            expect(r.columns.filter((c) => c.IsPrimaryKey)).toHaveLength(1);
+            expect(r.Columns.filter((c) => c.IsPrimaryKey)).toHaveLength(1);
         });
 
         it('honors an engine-specific surrogate type override (e.g. PostgreSQL)', () => {
@@ -76,7 +76,7 @@ describe('analyzeQueryForMaterialization', () => {
                 fields,
                 surrogateSQLType: 'int GENERATED ALWAYS AS IDENTITY',
             });
-            expect(r.columns[0].SQLType).toBe('int GENERATED ALWAYS AS IDENTITY');
+            expect(r.Columns[0].SQLType).toBe('int GENERATED ALWAYS AS IDENTITY');
         });
     });
 });

@@ -23,21 +23,21 @@ import { OrganicKeyClusterMember } from '../types/organic-keys.js';
 
 /** A column ready to cluster — identity + embedding + structural metadata. */
 export interface ClustererInputColumn {
-    schema: string;
-    table: string;
-    column: string;
-    embedding: Float32Array;
-    participatesInFK: boolean;
-    fkTarget?: { schema: string; table: string; column: string } | null;
-    isPrimaryKey?: boolean;
+    schema: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    table: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    column: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    embedding: Float32Array;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    participatesInFK: boolean;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    fkTarget?: { schema: string; table: string; column: string } | null;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    isPrimaryKey?: boolean;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
 /** A raw cluster from the clusterer — naming/normalization filled in by the caller. */
 export interface RawCluster {
-    memberIndexes: number[];
-    members: OrganicKeyClusterMember[];
+    memberIndexes: number[];  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    members: OrganicKeyClusterMember[];  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** Max pairwise distance among members (cluster "tightness" — lower is tighter). */
-    maxIntraDistance: number;
+    maxIntraDistance: number;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 }
 
 export interface ClustererOptions {
@@ -46,13 +46,13 @@ export interface ClustererOptions {
      * When omitted, the clusterer auto-calibrates from the actual distance
      * distribution (threshold = pN of pairwise distances, default p5).
      */
-    mergeThreshold?: number;
+    MergeThreshold?: number;
     /** Percentile (0–100) of the pairwise distance distribution for auto-calibration. Default 5. */
-    mergeThresholdPercentile?: number;
+    MergeThresholdPercentile?: number;
     /** Minimum cluster size to report. */
-    minClusterSize: number;
+    MinClusterSize: number;
     /** Minimum distinct tables a cluster must span. */
-    minDistinctTables: number;
+    MinDistinctTables: number;
 }
 
 export class ColumnClusterer {
@@ -71,13 +71,13 @@ export class ColumnClusterer {
 
     public Cluster(columns: ClustererInputColumn[]): RawCluster[] {
         const n = columns.length;
-        if (n < this.opts.minClusterSize) return [];
+        if (n < this.opts.MinClusterSize) return [];
 
         // Step 1 — pairwise cosine-distance matrix.
         const distance = computePairwiseDistance(columns);
-        const resolvedThreshold = this.opts.mergeThreshold !== undefined
-            ? this.opts.mergeThreshold
-            : computeThresholdFromDistribution(distance, this.opts.mergeThresholdPercentile ?? 5);
+        const resolvedThreshold = this.opts.MergeThreshold !== undefined
+            ? this.opts.MergeThreshold
+            : computeThresholdFromDistribution(distance, this.opts.MergeThresholdPercentile ?? 5);
         this.LastResolvedThreshold = resolvedThreshold;
 
         // Step 2 — agglomerative merge with average-linkage.
@@ -133,9 +133,9 @@ export class ColumnClusterer {
         // Step 3 — filter + emit.
         const out: RawCluster[] = [];
         for (const memberIdxs of clusters.values()) {
-            if (memberIdxs.length < this.opts.minClusterSize) continue;
+            if (memberIdxs.length < this.opts.MinClusterSize) continue;
             const tableSet = new Set(memberIdxs.map((i) => `${columns[i].schema}.${columns[i].table}`));
-            if (tableSet.size < this.opts.minDistinctTables) continue;
+            if (tableSet.size < this.opts.MinDistinctTables) continue;
             const members: OrganicKeyClusterMember[] = memberIdxs.map((i) => ({
                 schema: columns[i].schema,
                 table: columns[i].table,

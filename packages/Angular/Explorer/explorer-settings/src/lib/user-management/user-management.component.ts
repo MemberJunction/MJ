@@ -7,7 +7,7 @@ import { BaseDashboard } from '@memberjunction/ng-shared';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 import { UserDialogData, UserDialogResult } from './user-dialog/user-dialog.component';
-import { EnrolledRow, serverRefusalReasons } from './transaction-group-refusals';
+import { EnrolledRow, ServerRefusalReasons } from './transaction-group-refusals';
 import {
   BuildUserManagementAgentContext,
   IsValidUserStatusFilter,
@@ -1316,7 +1316,7 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
             // Kept so the SERVER's reason can be read back off it below. Without this the entity
             // goes out of scope at the end of the iteration and the reason #4309 puts on
             // LatestResult has nobody left to read it.
-            enrolled.push({ label: this.describeUser(userId), entity: userRole });
+            enrolled.push({ Label: this.describeUser(userId), Entity: userRole });
           }
         }
         if (refusals.length > 0) {
@@ -1328,7 +1328,7 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
         if (!await tg.Submit()) {
           // Every row enrolled, so this is a SERVER-side refusal (or a rollback). Since #4309 the
           // server says which row and why, and that reason is now on each entity's LatestResult.
-          const reasons = serverRefusalReasons(enrolled);
+          const reasons = ServerRefusalReasons(enrolled);
           throw new Error(reasons.length > 0
             ? `Failed to assign roles — all changes have been rolled back.\n${reasons.join('\n')}`
             : 'Failed to assign roles — all changes have been rolled back');

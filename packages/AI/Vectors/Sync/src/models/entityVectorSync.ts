@@ -159,9 +159,9 @@ export class EntityVectorSyncer extends VectorBase {
     );
 
     const erdUpserter = new AsyncBatchTransform<EmbeddingData, undefined, EmbeddingData>({
-      batchSize: 10,
-      concurrencyLimit: 2,
-      processBatch: async (batch: EmbeddingData[]): Promise<EmbeddingData[]> => {
+      BatchSize: 10,
+      ConcurrencyLimit: 2,
+      ProcessBatch: async (batch: EmbeddingData[]): Promise<EmbeddingData[]> => {
         // Batch the existing-ERD lookup: one RunView per batch instead of one per
         // record (the previous Promise.all(map(...)) issued an N+1 read storm —
         // ~1 RunView per source record — which tripped the sequential/duplicate
@@ -321,9 +321,9 @@ export class EntityVectorSyncer extends VectorBase {
     embeddingDimensions?: number
   ): AsyncBatchTransform<Record<string, unknown>, undefined, EmbeddingData> {
     return new AsyncBatchTransform<Record<string, unknown>, undefined, EmbeddingData>({
-      batchSize: batchSize || 50,
-      concurrencyLimit: concurrencyLimit ?? 2,
-      processBatch: (batch: Record<string, unknown>[]): Promise<EmbeddingData[]> =>
+      BatchSize: batchSize || 50,
+      ConcurrencyLimit: concurrencyLimit ?? 2,
+      ProcessBatch: (batch: Record<string, unknown>[]): Promise<EmbeddingData[]> =>
         this.renderAndEmbedBatch(batch, template, templateContent, embedding, embeddingModelAPIName, delayTimeMS, embeddingDimensions),
     });
   }
@@ -343,9 +343,9 @@ export class EntityVectorSyncer extends VectorBase {
     providerConfig?: Record<string, unknown>
   ): AsyncBatchTransform<EmbeddingData, undefined, EmbeddingData> {
     return new AsyncBatchTransform<EmbeddingData, undefined, EmbeddingData>({
-      batchSize: batchSize || 50,
-      concurrencyLimit: 2,
-      processBatch: (batch: EmbeddingData[]): Promise<EmbeddingData[]> =>
+      BatchSize: batchSize || 50,
+      ConcurrencyLimit: 2,
+      ProcessBatch: (batch: EmbeddingData[]): Promise<EmbeddingData[]> =>
         this.upsertBatchToVectorDB(batch, entityDocument, templateContent, vectorDB, indexName, delayTimeMS, providerConfig),
     });
   }

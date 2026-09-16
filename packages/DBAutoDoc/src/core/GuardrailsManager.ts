@@ -15,11 +15,11 @@ import { AnalysisRun, PhaseMetrics, PhaseMetric, IterationMetrics, GuardrailEnfo
 export type PhaseType = 'discovery' | 'analysis' | 'sanityChecks';
 
 export interface GuardrailCheckResult {
-  canContinue: boolean;
-  warning?: string;
-  reason?: string;
-  warnings?: GuardrailWarning[];
-  exceedances?: GuardrailExceeded[];
+  canContinue: boolean;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  warning?: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  reason?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+  warnings?: GuardrailWarning[];  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  exceedances?: GuardrailExceeded[];  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 }
 
 export class GuardrailsManager {

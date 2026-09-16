@@ -19,7 +19,7 @@ import { QueryEngine } from "@memberjunction/core-entities";
  * The caller uses `usesTemplate` to update the entity's UsesTemplate flag.
  */
 export interface PipelineResult {
-    usesTemplate: boolean;
+    UsesTemplate: boolean;
 }
 
 /**
@@ -42,7 +42,7 @@ export async function RunExtractionPipeline(ctx: QuerySyncContext): Promise<Pipe
     // ── STAGE 3: ENRICH (best-effort, non-fatal) ──
     const llmResult = await RunLLMEnrichment(
         ctx.sql,
-        resolveResult.entityMetadata,
+        resolveResult.EntityMetadata,
         ctx.contextUser,
         ctx.metadataProvider
     );
@@ -54,7 +54,7 @@ export async function RunExtractionPipeline(ctx: QuerySyncContext): Promise<Pipe
     await sync(ctx, finalParams, finalFields, resolveResult);
 
     return {
-        usesTemplate: resolveResult.allDeterministicParams.length > 0,
+        UsesTemplate: resolveResult.AllDeterministicParams.length > 0,
     };
 }
 
@@ -82,21 +82,21 @@ function resolve(ctx: QuerySyncContext, parseResult: ReturnType<typeof ParseQuer
 
     // Passthrough parameters
     const { params: passthroughParams, contextMap: passthroughContext } = BuildPassthroughParams(resolvedCompositionRefs);
-    const allDeterministicParams = MergePassthroughParams(parseResult.deterministicParams, passthroughParams);
+    const allDeterministicParams = MergePassthroughParams(parseResult.DeterministicParams, passthroughParams);
 
     // Entity metadata (for LLM context and entity sync)
-    const entityMetadata = ExtractEntityMetadataFromSQL(ctx.sql, parseResult.tableRefs, md);
+    const entityMetadata = ExtractEntityMetadataFromSQL(ctx.sql, parseResult.TableRefs, md);
 
     // Field resolution: try SELECT * expansion first (uses entity metadata), fall back to explicit SELECT columns
-    const resolvedFields = BuildFieldsForSelectStar(ctx.sql, parseResult.tableRefs, parseResult.selectColumns, md)
-        ?? BuildFieldsFromSelectColumns(parseResult.selectColumns);
+    const resolvedFields = BuildFieldsForSelectStar(ctx.sql, parseResult.TableRefs, parseResult.SelectColumns, md)
+        ?? BuildFieldsFromSelectColumns(parseResult.SelectColumns);
 
     return {
-        resolvedCompositionRefs,
-        allDeterministicParams,
-        passthroughContext,
-        entityMetadata,
-        resolvedFields,
+        ResolvedCompositionRefs: resolvedCompositionRefs,
+        AllDeterministicParams: allDeterministicParams,
+        PassthroughContext: passthroughContext,
+        EntityMetadata: entityMetadata,
+        ResolvedFields: resolvedFields,
     };
 }
 
@@ -109,12 +109,12 @@ function merge(
     const md = ctx.metadataProvider;
 
     // Parameters: merge deterministic + LLM
-    const finalParams = resolveResult.allDeterministicParams.length > 0
-        ? MergeParametersWithLLM(resolveResult.allDeterministicParams, llmResult, resolveResult.passthroughContext, ctx.parameterHints)
+    const finalParams = resolveResult.AllDeterministicParams.length > 0
+        ? MergeParametersWithLLM(resolveResult.AllDeterministicParams, llmResult, resolveResult.PassthroughContext, ctx.parameterHints)
         : null;
 
     // Fields priority: deterministic (SELECT * or explicit columns) → LLM selectClause
-    const resolvedFields = resolveResult.resolvedFields;
+    const resolvedFields = resolveResult.ResolvedFields;
     const llmFields = llmResult?.selectClause && Array.isArray(llmResult.selectClause) && llmResult.selectClause.length > 0
         ? llmResult.selectClause
         : null;
@@ -126,9 +126,9 @@ function merge(
 
     const finalFields = rawFields
         ? EnrichFieldTypesFromEntityMetadata(
-              EnrichFieldTypesFromCompositions(rawFields, resolveResult.resolvedCompositionRefs, parseResult.selectColumns, md),
-              parseResult.selectColumns,
-              parseResult.tableRefs,
+              EnrichFieldTypesFromCompositions(rawFields, resolveResult.ResolvedCompositionRefs, parseResult.SelectColumns, md),
+              parseResult.SelectColumns,
+              parseResult.TableRefs,
               md
           )
         : null;
@@ -159,14 +159,14 @@ async function sync(
     // When finalFields is null, we intentionally do NOT call RemoveAllRecords — existing fields are preserved.
 
     // Entities
-    if (resolveResult.entityMetadata.length > 0) {
-        syncPromises.push(SyncEntities(ctx.queryID, resolveResult.entityMetadata, ctx.contextUser, ctx.metadataProvider, ctx.runViewProvider, ctx.isSaved));
+    if (resolveResult.EntityMetadata.length > 0) {
+        syncPromises.push(SyncEntities(ctx.queryID, resolveResult.EntityMetadata, ctx.contextUser, ctx.metadataProvider, ctx.runViewProvider, ctx.isSaved));
     } else {
         syncPromises.push(RemoveAllRecords(ctx.queryID, 'MJ: Query Entities', ctx.contextUser, ctx.runViewProvider, ctx.isSaved));
     }
 
     // Dependencies
-    syncPromises.push(SyncDependencies(ctx.queryID, resolveResult.resolvedCompositionRefs, ctx.contextUser, ctx.metadataProvider, ctx.runViewProvider, ctx.isSaved));
+    syncPromises.push(SyncDependencies(ctx.queryID, resolveResult.ResolvedCompositionRefs, ctx.contextUser, ctx.metadataProvider, ctx.runViewProvider, ctx.isSaved));
 
     await Promise.all(syncPromises);
 }

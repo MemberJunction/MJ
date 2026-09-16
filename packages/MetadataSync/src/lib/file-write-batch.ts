@@ -2,7 +2,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import { RecordData } from './sync-engine';
 import { JsonWriteHelper } from './json-write-helper';
-import { createPrimaryKeyLookup, hasCompletePrimaryKey } from './record-primary-key';
+import { CreatePrimaryKeyLookup, HasCompletePrimaryKey } from './record-primary-key';
 
 /**
  * Represents a pending change to a file
@@ -58,7 +58,7 @@ export class FileWriteBatch {
     // written to the file as `primaryKey: {}`) matches every other such record, so each queued record
     // would overwrite the last and a batch of N new records would write exactly one (#3415).
     // Refuse rather than lose data.
-    if (!hasCompletePrimaryKey(updatedRecord.primaryKey)) {
+    if (!HasCompletePrimaryKey(updatedRecord.primaryKey)) {
       throw new Error(
         `Refusing to queue an update to ${path.basename(filePath)} for a record with an incomplete primary key ` +
           `(${JSON.stringify(updatedRecord.primaryKey ?? {})}): it would overwrite other records in the file.`
@@ -140,7 +140,7 @@ export class FileWriteBatch {
             if (change.primaryKeyLookup) {
               // Find existing record with matching primary key
               const index = contentArray.findIndex(r =>
-                createPrimaryKeyLookup(r.primaryKey) === change.primaryKeyLookup
+                CreatePrimaryKeyLookup(r.primaryKey) === change.primaryKeyLookup
               );
 
               if (index >= 0) {

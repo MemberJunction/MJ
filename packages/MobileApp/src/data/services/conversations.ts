@@ -154,9 +154,9 @@ export async function loadConversations(contextUser?: UserInfo): Promise<Convers
 
 /** A single `MJ: Conversation Details` row paired with its resolved agent name (for AI rows). */
 export type ConversationMessage = {
-    detail: MJConversationDetailEntity;
+    detail: MJConversationDetailEntity;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** Resolved agent name if Role==='AI', else null. */
-    agentName: string | null;
+    agentName: string | null;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 };
 
 /** A fully-loaded conversation: the `MJ: Conversations` entity, its ordered messages, and its artifacts. */

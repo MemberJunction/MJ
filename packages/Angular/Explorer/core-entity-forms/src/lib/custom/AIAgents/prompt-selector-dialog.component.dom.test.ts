@@ -107,12 +107,12 @@ describe('PromptSelectorDialogComponent (DOM)', () => {
   });
 
   it('only renders Create New when config.showCreateNew is set', async () => {
-    const hidden = await render({ config: { Title: 'Pick', showCreateNew: false } });
+    const hidden = await render({ config: { Title: 'Pick', ShowCreateNew: false } });
     expect(buttons(hidden).some((b) => b.textContent?.includes('Create New'))).toBe(false);
   });
 
   it('emits a createNew result when Create New is clicked', async () => {
-    const fixture = await render({ config: { Title: 'Pick', showCreateNew: true } });
+    const fixture = await render({ config: { Title: 'Pick', ShowCreateNew: true } });
     const closed = capture(fixture.componentInstance.DialogClose);
     const results: Array<unknown> = [];
     fixture.componentInstance.result.subscribe((r) => results.push(r));

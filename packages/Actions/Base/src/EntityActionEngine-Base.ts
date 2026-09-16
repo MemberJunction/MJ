@@ -104,11 +104,11 @@ export class EntityActionEngineBase extends BaseEngine<EntityActionEngineBase> {
 
  
     // internal instance properties used for the singleton pattern
-    private _EntityActions: MJEntityActionEntityExtended[] = [];
-    private _EntityActionParams: MJEntityActionParamEntity[] = [];
-    private _EntityActionInvocationTypes: MJEntityActionInvocationTypeEntity[] = [];
-    private _EntityActionFilters: MJEntityActionFilterEntity[] = [];
-    private _EntityActionInvocations: MJEntityActionInvocationEntity[] = [];
+    private _EntityActions: MJEntityActionEntityExtended[] = [];  // case-violation-ok-legacy-back-compat: the name is also a string literal that resolves this member at runtime, so renaming it breaks the lookup
+    private _EntityActionParams: MJEntityActionParamEntity[] = [];  // case-violation-ok-legacy-back-compat: the name is also a string literal that resolves this member at runtime, so renaming it breaks the lookup
+    private _EntityActionInvocationTypes: MJEntityActionInvocationTypeEntity[] = [];  // case-violation-ok-legacy-back-compat: the name is also a string literal that resolves this member at runtime, so renaming it breaks the lookup
+    private _EntityActionFilters: MJEntityActionFilterEntity[] = [];  // case-violation-ok-legacy-back-compat: the name is also a string literal that resolves this member at runtime, so renaming it breaks the lookup
+    private _EntityActionInvocations: MJEntityActionInvocationEntity[] = [];  // case-violation-ok-legacy-back-compat: the name is also a string literal that resolves this member at runtime, so renaming it breaks the lookup
 
     /**
      * This method is called to configure the ActionEngine. It loads the metadata for the actions, filters, and result codes and caches them in the GlobalObjectStore. You must call this method before running any actions.

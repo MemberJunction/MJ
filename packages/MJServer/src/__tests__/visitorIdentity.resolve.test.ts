@@ -32,7 +32,7 @@ describe('resolveIdentityByEmail — the configured identity entity can have ANY
     it('selects the real key column and returns its bare value for a single non-ID key', async () => {
         runViewMock.mockResolvedValue({ Success: true, Results: [{ individual_id: 4711 }] });
         const provider = makeProvider({ ID: 'ent-persons', PrimaryKeys: [{ Name: 'individual_id' }] });
-        const out = await ResolveIdentityByEmail('ada@example.com', user, provider, { entityName: 'Persons', emailField: 'EmailAddress' });
+        const out = await ResolveIdentityByEmail('ada@example.com', user, provider, { entityName: 'Persons', EmailField: 'EmailAddress' });
         expect(lastParams().Fields).toEqual(['individual_id']);
         expect(lastParams().ExtraFilter).toBe("EmailAddress = 'ada@example.com'");
         expect(out).toEqual({ entityId: 'ent-persons', recordId: '4711' });

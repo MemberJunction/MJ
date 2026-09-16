@@ -144,7 +144,7 @@ async function maybeLoadBootstrap(options: { Command: { id?: string } }, verbose
     // config module's cosmiconfig search runs at import time).
     await import('@memberjunction/server-bootstrap-lite/mj-class-registrations');
     const { LoadDynamicPackagesForCommand } = await import('../lib/dynamic-packages.js');
-    await LoadDynamicPackagesForCommand(commandId, { verbose });
+    await LoadDynamicPackagesForCommand(commandId, { Verbose: verbose });
   }
 }
 

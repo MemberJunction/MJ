@@ -100,7 +100,7 @@ export function BuildFlowModelFromTree(
         Parent: null,
         Children: [],
         Raw: null,
-        source: { entity: root.SourceEntity, id: root.SourceID },
+        Source: { entity: root.SourceEntity, id: root.SourceID },
         IconClass: rootIcon.iconClass || 'fa-robot',
         LogoUrl: rootIcon.logoUrl,
     };
@@ -137,7 +137,7 @@ function attach(parent: FlowNode, node: AgentRunTreeNode): void {
         // Every node keeps a pointer to the row it came from, so a click can open the right record
         // whichever entity it lives in. `raw` stays null for task nodes because it is typed to a
         // run STEP — the reason this generic reference exists.
-        source: { entity: node.SourceEntity, id: node.SourceID },
+        Source: { entity: node.SourceEntity, id: node.SourceID },
         IconClass: ICON_BY_TYPE[type],
         LogoUrl: null,
     };

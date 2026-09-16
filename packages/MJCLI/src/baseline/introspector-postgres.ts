@@ -259,7 +259,7 @@ async function readTables(db: QueryRunner): Promise<TableDef[]> {
       Name: t.table_name,
       HasIdentity: t.has_identity,
       Columns: columns,
-      primaryKey,
+      PrimaryKey: primaryKey,
       UniqueConstraints: uniqueConstraints,
       Indexes: indexes,
       ForeignKeys: foreignKeys,

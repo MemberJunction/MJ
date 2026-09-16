@@ -252,7 +252,7 @@ describe('groupIterationsToKanban', () => {
   it('computes Δ-from-best for non-best completed', () => {
     const k = GroupIterationsToKanban(rows);
     const challenger = k.Completed.find((c) => c.score === 0.84);
-    expect(challenger?.scoreDelta).toBe('Δ −0.020');
+    expect(challenger?.ScoreDelta).toBe('Δ −0.020');
   });
 
   it('handles an empty set', () => {

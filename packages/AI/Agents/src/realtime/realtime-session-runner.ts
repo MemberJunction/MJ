@@ -255,7 +255,7 @@ export class RealtimeSessionRunner {
     /** First spoken update fires no earlier than this long after a delegation burst starts. */
     private static readonly firstNarrationDelayMs = 5000;
     /** Minimum gap between SUBSEQUENT spoken updates (floods aggregate into one digest). */
-    private static readonly NarrationIntervalMs = 8000;
+    private static readonly NarrationIntervalMs = 8000;  // case-violation-ok-legacy-back-compat: the camelCase name is already declared in this class
     /** Max progress messages aggregated into one spoken digest. */
     private static readonly maxDigestMessages = 4;
     /**

@@ -86,7 +86,7 @@ export function renderMarkdown(report: DiffReport): string {
 }
 
 function formatObjectDiffRow(diff: ObjectDiff): string {
-  const details = diff.details ? Ellipsize(diff.details, 120) : '';
+  const details = diff.Details ? Ellipsize(diff.Details, 120) : '';
   return `| ${diff.Kind} | \`${diff.QualifiedName}\` | ${diff.DiffKind} | ${details} |`;
 }
 
@@ -101,10 +101,10 @@ function formatRowDiffsForTable(t: TableRowDiff): string {
 }
 
 function formatRowDiff(r: RowDiff): string {
-  if (r.DiffKind !== 'changed' || !r.columnDiffs?.length) {
+  if (r.DiffKind !== 'changed' || !r.ColumnDiffs?.length) {
     return `- ${r.DiffKind}: \`${Ellipsize(r.Key, 80)}\``;
   }
-  const cols = r.columnDiffs
+  const cols = r.ColumnDiffs
     .map((c) => `\`${c.Column}\`: ${formatVal(c.LeftValue)} → ${formatVal(c.RightValue)}`)
     .join('; ');
   return `- changed \`${Ellipsize(r.Key, 60)}\`: ${cols}`;

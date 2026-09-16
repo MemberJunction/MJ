@@ -55,9 +55,9 @@ export interface ImprovePromptInput {
   /** The prediction's display name. */
   Name: string;
   /** Its trust grade (Poor/Fair/…), when known. */
-  trustGrade?: string | null;
+  TrustGrade?: string | null;
   /** The plain-language reason it's blocked (trust gate / leakage), when known. */
-  reason?: string | null;
+  Reason?: string | null;
 }
 
 const trim = (v: string | null | undefined): string => (typeof v === 'string' ? v.trim() : '');
@@ -74,8 +74,8 @@ function ensureSentence(text: string): string {
  */
 export function BuildImprovePrompt(input: ImprovePromptInput): string {
   const name = trim(input.Name) || 'this prediction';
-  const grade = trim(input.trustGrade);
-  const reason = trim(input.reason);
+  const grade = trim(input.TrustGrade);
+  const reason = trim(input.Reason);
   const why = reason ? ` It's being held back because: ${ensureSentence(reason)}` : '';
   const gradePart = grade ? ` (current trust: ${grade})` : '';
   return (

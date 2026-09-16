@@ -22,8 +22,8 @@ import {
 import { BridgeViewProvider } from './BridgeViewSQLGenerator.js';
 
 export interface StructuralPhaseResult {
-    bridges: TransitiveBridgeFinding[];
-    summary: { transitiveBridgesFound: number };
+    Bridges: TransitiveBridgeFinding[];
+    Summary: { transitiveBridgesFound: number };
 }
 
 /**
@@ -35,11 +35,11 @@ export function RunStructuralPhase(
     provider?: BridgeViewProvider,
 ): StructuralPhaseResult {
     if (clusters.length === 0) {
-        return { bridges: [], summary: { transitiveBridgesFound: 0 } };
+        return { Bridges: [], Summary: { transitiveBridgesFound: 0 } };
     }
     const edges = CollectFKEdgesFromState(state);
     const bridges = DetectTransitiveBridges(clusters, edges, state, { provider });
-    return { bridges, summary: { transitiveBridgesFound: bridges.length } };
+    return { Bridges: bridges, Summary: { transitiveBridgesFound: bridges.length } };
 }
 
 /** @deprecated Use {@link RunStructuralPhase}. */

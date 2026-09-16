@@ -61,11 +61,11 @@ export class ViewFallbackRestoreError extends Error {
 
 export interface ExecuteWithFallbackOptions {
     /** A connected pg Client (not a pool) — we issue BEGIN/COMMIT on this. */
-    client: PGQueryable;
-    schema: string;
-    viewName: string;
+    Client: PGQueryable;
+    schema: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    ViewName: string;
     /** The exact `CREATE OR REPLACE VIEW ...` SQL the generator produced. */
-    createOrReplaceSQL: string;
+    CreateOrReplaceSQL: string;
     /**
      * Optional — set of view names in `schema.name` form that CodeGen will
      * regenerate later in the same run. Dependents in this set are skipped
@@ -76,7 +76,7 @@ export interface ExecuteWithFallbackOptions {
      * Names are compared case-sensitively because PG identifiers are stored
      * as-written when quoted.
      */
-    willRegenerate?: Set<string>;
+    WillRegenerate?: Set<string>;
     /**
      * Optional — the qualified base table this view selects from
      * (e.g. `__mj."RecordChange"`). Used to materialize a stub view first
@@ -90,7 +90,7 @@ export interface ExecuteWithFallbackOptions {
      * CREATE OR REPLACE — which now succeeds because the self-reference
      * can resolve to the stub.
      */
-    baseTableQualified?: string;
+    BaseTableQualified?: string;
 }
 
 /**
@@ -101,8 +101,8 @@ export interface ExecuteWithFallbackOptions {
  * from other code is not allowed — this function manages transaction state.
  */
 export async function ExecuteWithFallback(opts: ExecuteWithFallbackOptions): Promise<void> {
-    const { client, schema, viewName, createOrReplaceSQL, baseTableQualified } = opts;
-    const willRegenerate = opts.willRegenerate ?? new Set<string>();
+    const { Client: client, schema, ViewName: viewName, CreateOrReplaceSQL: createOrReplaceSQL, BaseTableQualified: baseTableQualified } = opts;
+    const willRegenerate = opts.WillRegenerate ?? new Set<string>();
 
     // First attempt: happy-path CREATE OR REPLACE. If this succeeds there's
     // nothing to capture or restore.

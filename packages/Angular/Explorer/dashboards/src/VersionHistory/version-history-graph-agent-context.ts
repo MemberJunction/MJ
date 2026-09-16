@@ -185,8 +185,8 @@ export interface GraphEntityCandidate {
 
 /** Outcome of {@link resolveGraphEntity}: a matched entity, or a tolerant error. */
 export type GraphEntityResolution<T extends GraphEntityCandidate> =
-    | { ok: true; entity: T }
-    | { ok: false; error: string };
+    | { ok: true; entity: T }  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    | { ok: false; error: string };  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 
 /**
  * Resolve an agent-supplied entity reference (an ID or a name) to one of the

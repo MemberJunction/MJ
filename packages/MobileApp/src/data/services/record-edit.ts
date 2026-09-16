@@ -37,7 +37,7 @@ import { enqueue, type QueueScalar } from '@/data/offline-queue';
 export type EditorKind = 'text' | 'number' | 'boolean' | 'date' | 'dropdown' | 'longtext';
 
 /** One selectable option for a {@link EditorKind} of `dropdown` (from the field's value list). */
-export type EditorOption = { value: string; label: string };
+export type EditorOption = { value: string; label: string };  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 
 /**
  * A form-side field value. Booleans back the toggle editor; every other editor
@@ -52,52 +52,52 @@ export type FieldValue = string | boolean | null;
  */
 export type FieldEditorDescriptor = {
     /** The entity field name (used as the value bag key and for `Set`/`Get`). */
-    key: string;
+    key: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Human label (`DisplayName` falling back to `Name`). */
-    label: string;
+    label: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** How to render this field. */
-    kind: EditorKind;
+    kind: EditorKind;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** True when the field disallows null (shown as a required marker). */
-    required: boolean;
+    required: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Max character length for string editors; `0` means unbounded. */
-    maxLength: number;
+    MaxLength: number;
     /** Options for a `dropdown` editor (empty for other kinds). */
-    options: EditorOption[];
+    Options: EditorOption[];
 };
 
 /** Result of {@link loadRecordForEdit}: the live entity plus its form model. */
 export type RecordEditLoad = {
     /** The loaded, strongly-typed entity — retained so edits can be saved to it. */
-    record: BaseEntity;
+    record: BaseEntity;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** The entity metadata (for titles, display names). */
-    entity: EntityInfo;
+    entity: EntityInfo;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** A display title for the record (name field, else the id). */
-    title: string;
+    title: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** The editable field descriptors, in metadata order. */
-    descriptors: FieldEditorDescriptor[];
+    Descriptors: FieldEditorDescriptor[];
     /** The current field values, keyed by field name. */
-    values: Record<string, FieldValue>;
+    values: Record<string, FieldValue>;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** False when the entity/user cannot update — the UI should surface this. */
-    canUpdate: boolean;
+    CanUpdate: boolean;
 };
 
 /** A per-field validation failure surfaced inline in the form. */
-export type FieldValidationError = { key: string; message: string };
+export type FieldValidationError = { key: string; message: string };  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 
 /** Result of {@link saveRecord}: success plus an optional error / field errors. */
 export type RecordSaveResult = {
-    success: boolean;
+    success: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** A single human-readable error message when `success` is false. */
-    error?: string;
+    error?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
     /** Per-field validation errors when validation failed. */
-    validationErrors?: FieldValidationError[];
+    ValidationErrors?: FieldValidationError[];
     /**
      * True when the save could not reach the server (offline) and the edit was
      * instead enqueued for later replay. `success` is still `true` in this case —
      * the UI should say "Saved offline — will sync when you're back online" rather
      * than reporting a failure. See {@link ../offline-queue!enqueue}.
      */
-    queued?: boolean;
+    Queued?: boolean;
 };
 
 /** String fields at or above this character length render as `longtext` (multiline). */
@@ -113,23 +113,23 @@ const LONGTEXT_THRESHOLD = 500;
  * unit-testable without constructing a full `EntityFieldInfo`.
  */
 export type FieldMeta = {
-    name: string;
-    label: string;
-    tsType: EntityFieldTSType;
+    name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    label: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    TsType: EntityFieldTSType;
     /** `EntityFieldInfo.ReadOnly` — folds in `!AllowUpdateAPI`, PK, and special date fields. */
-    readOnly: boolean;
+    ReadOnly: boolean;
     /** View-only / joined-display columns that don't accept writes. */
-    isVirtual: boolean;
+    IsVirtual: boolean;
     /** When false, a value is required. */
-    allowsNull: boolean;
+    AllowsNull: boolean;
     /** Character length; `0` means unbounded (e.g. `nvarchar(max)`). */
-    maxLength: number;
+    MaxLength: number;
     /** Whether the field is backed by a value list. */
-    valueListType: EntityFieldValueListType;
+    ValueListType: EntityFieldValueListType;
     /** The value list options (empty when not a list field). */
-    options: EditorOption[];
+    Options: EditorOption[];
     /** Field lifecycle status; only `Active` fields are editable. */
-    status: string;
+    status: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 };
 
 /**
@@ -143,13 +143,13 @@ export function DescribeField(field: EntityFieldInfo): FieldMeta {
     return {
         name: field.Name,
         label: field.DisplayName || field.Name,
-        tsType: field.TSType,
-        readOnly: field.ReadOnly,
-        isVirtual: field.IsVirtual === true,
-        allowsNull: field.AllowsNull === true,
-        maxLength: field.MaxLength,
-        valueListType: field.ValueListTypeEnum,
-        options: field.EntityFieldValues.map((v) => ({ value: v.Value, label: v.Value })),
+        TsType: field.TSType,
+        ReadOnly: field.ReadOnly,
+        IsVirtual: field.IsVirtual === true,
+        AllowsNull: field.AllowsNull === true,
+        MaxLength: field.MaxLength,
+        ValueListType: field.ValueListTypeEnum,
+        Options: field.EntityFieldValues.map((v) => ({ value: v.Value, label: v.Value })),
         status: field.Status,
     };
 }
@@ -168,7 +168,7 @@ export function describeField(field: EntityFieldInfo): FieldMeta {
  * @returns True when the field should appear in the edit form.
  */
 export function IsEditableField(meta: FieldMeta): boolean {
-    return !meta.readOnly && !meta.isVirtual && meta.status === 'Active';
+    return !meta.ReadOnly && !meta.IsVirtual && meta.status === 'Active';
 }
 
 /** @deprecated Use {@link IsEditableField}. */
@@ -186,8 +186,8 @@ export function isEditableField(meta: FieldMeta): boolean {
  * @returns The editor kind to render.
  */
 export function EditorKindForField(meta: FieldMeta): EditorKind {
-    if (meta.valueListType !== EntityFieldValueListType.None && meta.options.length > 0) return 'dropdown';
-    switch (meta.tsType) {
+    if (meta.ValueListType !== EntityFieldValueListType.None && meta.Options.length > 0) return 'dropdown';
+    switch (meta.TsType) {
         case EntityFieldTSType.Boolean:
             return 'boolean';
         case EntityFieldTSType.Number:
@@ -195,7 +195,7 @@ export function EditorKindForField(meta: FieldMeta): EditorKind {
         case EntityFieldTSType.Date:
             return 'date';
         case EntityFieldTSType.String:
-            return meta.maxLength === 0 || meta.maxLength >= LONGTEXT_THRESHOLD ? 'longtext' : 'text';
+            return meta.MaxLength === 0 || meta.MaxLength >= LONGTEXT_THRESHOLD ? 'longtext' : 'text';
         default:
             return 'text';
     }
@@ -218,9 +218,9 @@ export function BuildDescriptor(meta: FieldMeta): FieldEditorDescriptor {
         key: meta.name,
         label: meta.label,
         kind,
-        required: !meta.allowsNull,
-        maxLength: meta.maxLength,
-        options: kind === 'dropdown' ? meta.options : [],
+        required: !meta.AllowsNull,
+        MaxLength: meta.MaxLength,
+        Options: kind === 'dropdown' ? meta.Options : [],
     };
 }
 
@@ -379,9 +379,9 @@ export async function LoadRecordForEdit(
         record,
         entity,
         title: recordTitle(entity, record, recordId),
-        descriptors,
+        Descriptors: descriptors,
         values,
-        canUpdate: computeCanUpdate(entity, contextUser ?? md.CurrentUser),
+        CanUpdate: computeCanUpdate(entity, contextUser ?? md.CurrentUser),
     };
 }
 
@@ -396,7 +396,7 @@ export async function loadRecordForEdit(
 
 /** Apply the edited form values back onto the live entity via `Set`. */
 function applyEdits(load: RecordEditLoad, values: Record<string, FieldValue>): void {
-    for (const d of load.descriptors) {
+    for (const d of load.Descriptors) {
         // Only write fields the user actually changed (compare against the initial
         // load values, mirroring buildOfflineChanges). Re-setting every editable
         // field marks untouched fields dirty and can round-trip a value into a form
@@ -433,7 +433,7 @@ function buildOfflineChanges(
     values: Record<string, FieldValue>,
 ): { changedFields: Record<string, QueueScalar>; primaryKey: string | null } {
     const changedFields: Record<string, QueueScalar> = {};
-    for (const d of load.descriptors) {
+    for (const d of load.Descriptors) {
         if (values[d.key] === load.values[d.key]) continue;
         changedFields[d.key] = toQueueScalar(EntityValueFromForm(values[d.key], d.kind));
     }
@@ -471,17 +471,17 @@ export async function SaveRecord(
     contextUser?: UserInfo,
 ): Promise<RecordSaveResult> {
     void contextUser; // entity already bound to its context user from load
-    if (!load.canUpdate) {
+    if (!load.CanUpdate) {
         return { success: false, error: 'You do not have permission to update this record.' };
     }
 
-    const requiredErrors = ValidateRequired(load.descriptors, values);
-    if (requiredErrors.length > 0) return { success: false, validationErrors: requiredErrors };
+    const requiredErrors = ValidateRequired(load.Descriptors, values);
+    if (requiredErrors.length > 0) return { success: false, ValidationErrors: requiredErrors };
 
     applyEdits(load, values);
 
     const entityErrors = collectEntityValidation(load);
-    if (entityErrors.length > 0) return { success: false, validationErrors: entityErrors };
+    if (entityErrors.length > 0) return { success: false, ValidationErrors: entityErrors };
 
     // `Save()` returns false for business failures (validation/permission/FK) but
     // THROWS on transport/network errors. We treat the throw as the "offline" signal:
@@ -495,7 +495,7 @@ export async function SaveRecord(
         return { success: true };
     } catch {
         queueOfflineEdit(load, values);
-        return { success: true, queued: true };
+        return { success: true, Queued: true };
     }
 }
 

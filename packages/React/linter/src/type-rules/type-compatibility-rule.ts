@@ -55,19 +55,19 @@ export interface Violation {
 }
 
 export interface LintContext {
-  componentName: string;
-  componentSpec?: ComponentSpec;
-  typeContext: TypeContext;
-  typeEngine: TypeInferenceEngine;
-  controlFlowAnalyzer: ControlFlowAnalyzer;
+  componentName: string;  // case-violation-ok-legacy-back-compat: the PascalCase name is already declared on this type
+  componentSpec?: ComponentSpec;  // case-violation-ok-legacy-back-compat: the PascalCase name is already declared on this type
+  typeContext: TypeContext;  // case-violation-ok-legacy-back-compat: the PascalCase name is already declared on this type
+  typeEngine: TypeInferenceEngine;  // case-violation-ok-legacy-back-compat: the PascalCase name is already declared on this type
+  controlFlowAnalyzer: ControlFlowAnalyzer;  // case-violation-ok-legacy-back-compat: the PascalCase name is already declared on this type
   /** SQL dialect for WHERE clause parsing. Flows to semantic validators via ValidationContext. */
-  sqlDialect?: import('@memberjunction/sql-dialect').SQLParserDialect;
+  sqlDialect?: import('@memberjunction/sql-dialect').SQLParserDialect;  // case-violation-ok-legacy-back-compat: the PascalCase name is already declared on this type
   /**
    * Resolver for registry-located dependency components. Forwarded from
    * the caller-supplied `LinterOptions.componentResolver` so rules don't
    * do their own I/O.
    */
-  componentResolver?: (name: string, namespace?: string, registry?: string) => ComponentSpec | undefined;
+  componentResolver?: (name: string, namespace?: string, registry?: string) => ComponentSpec | undefined;  // case-violation-ok-legacy-back-compat: the PascalCase name is already declared on this type
 }
 
 /**

@@ -47,19 +47,19 @@ export type BridgeViewProvider = NonNullable<DatabaseConfig['provider']>;
 /** Bundle returned for each bridge path. */
 export interface GeneratedBridgeView {
     /** View name suitable for the PR #2193 TransitiveView.Name field. */
-    viewName: string;
+    ViewName: string;
     /** Default schema (caller may override). */
-    schemaName: string;
+    schemaName: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** The bare SELECT body for the bridge view — exactly what TransitiveView.SQL should carry.
      *  CodeGen wraps it in the platform's create-or-replace view DDL, so the header must NOT be
      *  included here. Written in the dialect of the generator's `provider`. */
-    sql: string;
+    Sql: string;
     /** The hub-key field projected by the view (matches TransitiveMatchFieldNames[0]). */
-    hubKeyField: string;
+    HubKeyField: string;
     /** The output column projected for the spoke (matches TransitiveOutputFieldName). */
-    spokeOutputField: string;
+    SpokeOutputField: string;
     /** The spoke PK column the form-panel join joins ON (matches RelatedEntityJoinFieldName). */
-    spokeJoinField: string;
+    SpokeJoinField: string;
 }
 
 export interface BridgeViewSQLGeneratorOptions {
@@ -73,16 +73,16 @@ export interface BridgeViewSQLGeneratorOptions {
      * The generator lowercases the result and replaces non-alphanumeric chars
      * with underscores, since the view must be a valid SQL identifier.
      */
-    viewNamePattern?: string;
+    ViewNamePattern?: string;
     /** Override the view's schema. Defaults to the SPOKE's schema (where it'll be most natural to find). */
-    viewSchema?: string;
+    ViewSchema?: string;
     /** Platform whose identifier quoting the body uses. Default `'sqlserver'`, matching `DatabaseConfig.provider`. */
-    provider?: BridgeViewProvider;
+    provider?: BridgeViewProvider;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
 const DEFAULTS: Required<BridgeViewSQLGeneratorOptions> = {
-    viewNamePattern: 'vw{spoke}_{key}_bridge',
-    viewSchema: '',
+    ViewNamePattern: 'vw{spoke}_{key}_bridge',
+    ViewSchema: '',
     provider: 'sqlserver',
 };
 
@@ -95,9 +95,9 @@ export function GenerateBridgeView(
     // spread of an explicit `undefined` would overwrite the default.
     const o = { ...DEFAULTS, ...opts, provider: opts.provider ?? DEFAULTS.provider };
     const qident = identifierQuoter(o.provider);
-    const viewName = buildViewName(o.viewNamePattern, path);
-    const schemaName = o.viewSchema || path.spokeSchema;
-    const spokeOutputField = `${path.spokeTable}_${spokePKColumn}`;
+    const viewName = buildViewName(o.ViewNamePattern, path);
+    const schemaName = o.ViewSchema || path.SpokeSchema;
+    const spokeOutputField = `${path.SpokeTable}_${spokePKColumn}`;
 
     // ─── Build alias map ────────────────────────────────────────────────────
     // hop[0].fromTable = spoke   (alias "spoke")
@@ -105,16 +105,16 @@ export function GenerateBridgeView(
     // hop[last].toTable = hub    (alias "hub")
     const aliases: string[] = [];
     aliases.push('spoke'); // index 0 = spoke
-    for (let i = 1; i < path.hops.length; i++) {
+    for (let i = 1; i < path.Hops.length; i++) {
         aliases.push(`t${i}`);
     }
     aliases.push('hub'); // final = hub
 
     // ─── JOIN clauses ───────────────────────────────────────────────────────
-    const fromClause = `FROM ${qident(path.spokeSchema)}.${qident(path.spokeTable)} ${aliases[0]}`;
+    const fromClause = `FROM ${qident(path.SpokeSchema)}.${qident(path.SpokeTable)} ${aliases[0]}`;
     const joinClauses: string[] = [];
-    for (let i = 0; i < path.hops.length; i++) {
-        const hop = path.hops[i];
+    for (let i = 0; i < path.Hops.length; i++) {
+        const hop = path.Hops[i];
         const fromAlias = aliases[i];
         const toAlias = aliases[i + 1];
         joinClauses.push(
@@ -124,7 +124,7 @@ export function GenerateBridgeView(
 
     // ─── SELECT list ────────────────────────────────────────────────────────
     const selectList = [
-        `hub.${qident(path.hubKeyField)} AS ${qident(path.hubKeyField)}`,
+        `hub.${qident(path.HubKeyField)} AS ${qident(path.HubKeyField)}`,
         `spoke.${qident(spokePKColumn)} AS ${qident(spokeOutputField)}`,
     ];
 
@@ -141,12 +141,12 @@ export function GenerateBridgeView(
     ].join('\n');
 
     return {
-        viewName,
+        ViewName: viewName,
         schemaName,
-        sql,
-        hubKeyField: path.hubKeyField,
-        spokeOutputField,
-        spokeJoinField: spokePKColumn,
+        Sql: sql,
+        HubKeyField: path.HubKeyField,
+        SpokeOutputField: spokeOutputField,
+        SpokeJoinField: spokePKColumn,
     };
 }
 
@@ -163,9 +163,9 @@ export function generateBridgeView(
 
 function buildViewName(pattern: string, path: BridgePath): string {
     const raw = pattern
-        .replace(/\{hub\}/g, path.hubTable)
-        .replace(/\{spoke\}/g, path.spokeTable)
-        .replace(/\{key\}/g, path.hubKeyField);
+        .replace(/\{hub\}/g, path.HubTable)
+        .replace(/\{spoke\}/g, path.SpokeTable)
+        .replace(/\{key\}/g, path.HubKeyField);
     // Sanitize: SQL identifier — alphanumeric + underscore only, max 128 chars.
     const cleaned = raw.replace(/[^A-Za-z0-9_]/g, '_').slice(0, 128);
     return cleaned;

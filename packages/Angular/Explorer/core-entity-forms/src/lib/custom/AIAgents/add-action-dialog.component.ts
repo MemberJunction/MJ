@@ -17,7 +17,7 @@ export interface CategoryTreeNode {
 
 export interface ActionDisplayItem extends MJActionEntity {
   Selected: boolean;
-  categoryName?: string;
+  CategoryName?: string;
 }
 
 /**
@@ -264,7 +264,7 @@ export class AddActionDialogComponent extends BaseAngularComponent implements On
       const actions = (actionsResult.Results as MJActionEntity[] || []).map(action => ({
         ...action.GetAll(),
         Selected: false,
-        categoryName: action.Category || 'Uncategorized'
+        CategoryName: action.Category || 'Uncategorized'
       } as ActionDisplayItem));
       
       this.AllActions$.next(actions);
@@ -282,7 +282,7 @@ export class AddActionDialogComponent extends BaseAngularComponent implements On
     // Count actions per category
     const categoryCounts = new Map<string, number>();
     actions.forEach(action => {
-      const categoryName = action.categoryName || 'Uncategorized';
+      const categoryName = action.CategoryName || 'Uncategorized';
       categoryCounts.set(categoryName, (categoryCounts.get(categoryName) || 0) + 1);
     });
 
@@ -364,7 +364,7 @@ export class AddActionDialogComponent extends BaseAngularComponent implements On
         filtered = filtered.filter(action => !action.Category);
       } else {
         const categoryName = this.getCategoryNameById(categoryId);
-        filtered = filtered.filter(action => action.categoryName === categoryName);
+        filtered = filtered.filter(action => action.CategoryName === categoryName);
       }
     }
 
@@ -374,7 +374,7 @@ export class AddActionDialogComponent extends BaseAngularComponent implements On
       filtered = filtered.filter(action =>
         action.Name.toLowerCase().includes(term) ||
         (action.Description && action.Description.toLowerCase().includes(term)) ||
-        (action.categoryName && action.categoryName.toLowerCase().includes(term))
+        (action.CategoryName && action.CategoryName.toLowerCase().includes(term))
       );
     }
 

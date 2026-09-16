@@ -28,19 +28,19 @@ export type QueueOp = 'update' | 'create';
  */
 export type OfflineMutation = {
     /** Stable unique id for this queue entry (used by {@link remove}). */
-    id: string;
+    id: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** MJ entity name the mutation targets (e.g. `'Users'`). */
-    entityName: string;
+    entityName: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Serialized primary key for an update; `null` for a create. */
-    primaryKey: string | null;
+    primaryKey: string | null;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** The scalar field values to apply on replay, keyed by field name. */
-    changedFields: Record<string, QueueScalar>;
+    changedFields: Record<string, QueueScalar>;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** Whether this replays as an update to an existing row or a create. */
-    op: QueueOp;
+    op: QueueOp;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** Epoch-ms timestamp of when the mutation was queued (for FIFO / display). */
-    queuedAt: number;
+    queuedAt: number;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** The most recent replay error, when a prior replay attempt failed transiently. */
-    lastError?: string;
+    lastError?: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 };
 
 /** The caller-supplied shape for {@link enqueue}; `id`/`queuedAt` are assigned here. */

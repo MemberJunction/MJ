@@ -18,36 +18,36 @@ export type ObservedChannel = 'tool-call' | 'envelope' | 'text' | 'empty' | 'err
 
 /** A call, normalized across the two encodings so the same assertions run on both. */
 export interface ObservedCall {
-    name: string;
-    arguments: Record<string, unknown>;
+    name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    arguments: Record<string, unknown>;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** How it arrived — a native tool call, or an action inside the JSON envelope. */
-    channel: 'tool-call' | 'envelope';
+    channel: 'tool-call' | 'envelope';  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 /** Everything one request/response pair contributes to the scorecard. */
 export interface CellObservation {
-    driverSucceeded: boolean;
-    errorMessage: string | null;
-    finishReason: string | null;
+    driverSucceeded: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    errorMessage: string | null;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    FinishReason: string | null;
     /** Whether the driver downgraded a streaming request because tools were declared (§5.5). */
-    streamingSuppressedForTools: boolean;
+    StreamingSuppressedForTools: boolean;
 
-    textPresent: boolean;
-    textLength: number;
+    textPresent: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    TextLength: number;
 
-    nativeToolCallCount: number;
+    nativeToolCallCount: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** True when the turn carried BOTH text and native calls — legal everywhere, frequency varies. */
-    textAndCallsTogether: boolean;
+    TextAndCallsTogether: boolean;
     /** Every native call has a non-empty name, a declared name, and a plain object for arguments. */
-    nativeCallsWellFormed: boolean;
+    nativeCallsWellFormed: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Names the model invented that were never declared. Empty is the expected case. */
-    undeclaredToolNames: string[];
+    UndeclaredToolNames: string[];
 
-    envelopeParsed: boolean | null;
-    envelopeValid: boolean | null;
+    envelopeParsed: boolean | null;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    envelopeValid: boolean | null;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 
-    channel: ObservedChannel;
-    observedCallNames: string[];
+    channel: ObservedChannel;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    ObservedCallNames: string[];
     /**
      * The arguments the model actually sent, per call, truncated for storage.
      *
@@ -56,20 +56,20 @@ export interface CellObservation {
      * distinguish "the model sent nothing" from "the model sent an object, because the schema said
      * the param was an object".
      */
-    observedArguments: Array<Record<string, unknown>>;
+    ObservedArguments: Array<Record<string, unknown>>;
     /** The decision matched the expectation — right calls, or correctly no call at all. */
-    decisionCorrect: boolean;
+    decisionCorrect: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Share of argument matchers that passed, or `null` when none applied. */
-    argumentMatchRate: number | null;
+    argumentMatchRate: number | null;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 
     /**
      * Whether the provider honored the forcing semantics of the cell's mode, or `null` for the
      * modes that impose none (`no-tools`, `auto`). This is the §9.3 "forcing semantics" datum.
      */
-    toolChoiceHonored: boolean | null;
+    ToolChoiceHonored: boolean | null;
 
-    promptTokens: number | null;
-    completionTokens: number | null;
+    PromptTokens: number | null;
+    CompletionTokens: number | null;
 }
 
 /** Reads one argument through one matcher. Missing arguments always fail. */
@@ -262,12 +262,12 @@ function truncateArguments(args: Record<string, unknown>): Record<string, unknow
 /** The failed-call observation, so a provider error is a data point rather than a gap in the grid. */
 function failedObservation(errorMessage: string): CellObservation {
     return {
-        driverSucceeded: false, errorMessage, finishReason: null, streamingSuppressedForTools: false,
-        textPresent: false, textLength: 0,
-        nativeToolCallCount: 0, textAndCallsTogether: false, nativeCallsWellFormed: false, undeclaredToolNames: [],
+        driverSucceeded: false, errorMessage, FinishReason: null, StreamingSuppressedForTools: false,
+        textPresent: false, TextLength: 0,
+        nativeToolCallCount: 0, TextAndCallsTogether: false, nativeCallsWellFormed: false, UndeclaredToolNames: [],
         envelopeParsed: null, envelopeValid: null,
-        channel: 'error', observedCallNames: [], observedArguments: [], decisionCorrect: false, argumentMatchRate: null,
-        toolChoiceHonored: null, promptTokens: null, completionTokens: null
+        channel: 'error', ObservedCallNames: [], ObservedArguments: [], decisionCorrect: false, argumentMatchRate: null,
+        ToolChoiceHonored: null, PromptTokens: null, CompletionTokens: null
     };
 }
 
@@ -294,40 +294,40 @@ export function ObserveChatResult(
 
     const text = choice.message?.content ?? '';
     const nativeCalls = choice.message?.toolCalls ?? [];
-    const declaredNames = new Set(toolsDeclared ? scenario.tools.map((t) => t.name) : []);
+    const declaredNames = new Set(toolsDeclared ? scenario.Tools.map((t) => t.name) : []);
 
-    const envelope = scenario.expectation.envelopeRequested ? ReadEnvelope(text) : null;
+    const envelope = scenario.Expectation.EnvelopeRequested ? ReadEnvelope(text) : null;
     const envelopeCalls = envelopeActionsAsCalls(envelope?.envelope ?? null);
     // Native calls win: a model that emitted both has made its decision natively, and the envelope
     // is at most a narration of it.
     const observedCalls = nativeCalls.length > 0 ? nativeCallsAsObserved(nativeCalls) : envelopeCalls;
 
-    const expectation: ProbeExpectation = scenario.expectation;
+    const expectation: ProbeExpectation = scenario.Expectation;
     const { namesMatch, argumentMatchRate } = ScoreCalls(expectation.calls, observedCalls);
-    const decisionCorrect = expectation.toolCallWarranted ? namesMatch : observedCalls.length === 0;
+    const decisionCorrect = expectation.ToolCallWarranted ? namesMatch : observedCalls.length === 0;
 
     const textPresent = text.trim().length > 0;
     return {
         driverSucceeded: true,
         errorMessage: null,
-        finishReason: choice.finish_reason ?? null,
-        streamingSuppressedForTools: result.modelSpecificResponseDetails?.streamingSuppressedForTools === true,
+        FinishReason: choice.finish_reason ?? null,
+        StreamingSuppressedForTools: result.modelSpecificResponseDetails?.streamingSuppressedForTools === true,
         textPresent,
-        textLength: text.length,
+        TextLength: text.length,
         nativeToolCallCount: nativeCalls.length,
-        textAndCallsTogether: textPresent && nativeCalls.length > 0,
+        TextAndCallsTogether: textPresent && nativeCalls.length > 0,
         nativeCallsWellFormed: nativeCalls.every((c) => nativeCallWellFormed(c, declaredNames)),
-        undeclaredToolNames: nativeCalls.map((c) => c.name).filter((n) => !declaredNames.has(n)),
+        UndeclaredToolNames: nativeCalls.map((c) => c.name).filter((n) => !declaredNames.has(n)),
         envelopeParsed: envelope ? envelope.parsed : null,
         envelopeValid: envelope ? envelope.valid : null,
         channel: classifyChannel(nativeCalls.length, envelopeCalls.length, envelope?.parsed ?? false, textPresent),
-        observedCallNames: observedCalls.map((c) => c.name),
-        observedArguments: observedCalls.map((c) => truncateArguments(c.arguments)),
+        ObservedCallNames: observedCalls.map((c) => c.name),
+        ObservedArguments: observedCalls.map((c) => truncateArguments(c.arguments)),
         decisionCorrect,
         argumentMatchRate,
-        toolChoiceHonored: EvaluateToolChoice(mode, scenario.forcedToolName, nativeCalls),
-        promptTokens: result.data?.usage?.promptTokens ?? null,
-        completionTokens: result.data?.usage?.completionTokens ?? null
+        ToolChoiceHonored: EvaluateToolChoice(mode, scenario.ForcedToolName, nativeCalls),
+        PromptTokens: result.data?.usage?.promptTokens ?? null,
+        CompletionTokens: result.data?.usage?.completionTokens ?? null
     };
 }
 

@@ -1057,7 +1057,12 @@ export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
 /**
  * Current working directory for the code generation process
  */
-export let currentWorkingDirectory: string = process.cwd();
+export let CurrentWorkingDirectory: string = process.cwd();
+
+export {
+  /** @deprecated Use {@link CurrentWorkingDirectory} instead. */
+  CurrentWorkingDirectory as currentWorkingDirectory,
+};
 
 /**
  * Merge user config with DEFAULT_CODEGEN_CONFIG.
@@ -1098,9 +1103,9 @@ export const { mjCoreSchema, dbDatabase } = configInfo;
  * @throws Error if no configuration is found
  */
 export function InitializeConfig(cwd: string): ConfigInfo {
-  currentWorkingDirectory = cwd;
+  CurrentWorkingDirectory = cwd;
 
-  const userConfigResult = explorer.search(currentWorkingDirectory);
+  const userConfigResult = explorer.search(CurrentWorkingDirectory);
   const mergedConfig = userConfigResult?.config
     ? mergeConfigs(DEFAULT_CODEGEN_CONFIG, userConfigResult.config)
     : DEFAULT_CODEGEN_CONFIG;
@@ -1159,12 +1164,12 @@ export function OutputDir(type: string, useLocalDirectoryIfMissing: boolean): st
   const outputInfo = configInfo.output.find((o) => o.type.trim().toUpperCase() === type.trim().toUpperCase());
   if (outputInfo) {
     if (outputInfo.appendOutputCode && outputInfo.appendOutputCode === true && configInfo.outputCode)
-      return path.join(currentWorkingDirectory, outputInfo.directory, configInfo.outputCode);
-    else return path.join(currentWorkingDirectory, outputInfo.directory);
+      return path.join(CurrentWorkingDirectory, outputInfo.directory, configInfo.outputCode);
+    else return path.join(CurrentWorkingDirectory, outputInfo.directory);
   } else {
     if (useLocalDirectoryIfMissing) {
       logStatus('>>> No output directory found for type: ' + type + ' within config file, using local directory instead');
-      return path.join(currentWorkingDirectory, 'output', type);
+      return path.join(CurrentWorkingDirectory, 'output', type);
     } else return null;
   }
 }

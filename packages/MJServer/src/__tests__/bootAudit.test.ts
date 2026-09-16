@@ -37,12 +37,12 @@ function makeArgParam(opts: {
   type: Function;
 }): AuditArgParam {
   return {
-    target: opts.target,
-    methodName: opts.methodName,
-    index: opts.index,
+    Target: opts.target,
+    MethodName: opts.methodName,
+    Index: opts.index,
     kind: 'arg',
     name: opts.name,
-    getType: () => opts.type,
+    GetType: () => opts.type,
   };
 }
 
@@ -52,8 +52,8 @@ function makeResolver(opts: {
   params: AuditArgParam[];
 }): AuditResolver {
   return {
-    target: opts.target,
-    methodName: opts.methodName,
+    Target: opts.target,
+    MethodName: opts.methodName,
     params: opts.params,
   };
 }

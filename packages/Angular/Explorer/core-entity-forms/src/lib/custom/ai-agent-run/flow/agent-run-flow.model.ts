@@ -4,7 +4,7 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AIAgentRunDataHelper } from '../ai-agent-run-data.service';
 
 /** Root-agent icon, resolved by the caller from the run's agent metadata. */
-export interface RootIcon { iconClass: string; logoUrl: string | null; }
+export interface RootIcon { iconClass: string; logoUrl: string | null; }  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 
 /**
  * Shared, framework-agnostic flow model for the Agent Run "Flow" visualizations.
@@ -55,7 +55,7 @@ export interface FlowNode {
    * be represented by it. This generic reference is what lets one model hold both, and what lets a
    * click open the right record either way.
    */
-  source?: { entity: string; id: string } | null;
+  Source?: { entity: string; id: string } | null;
   /** Font Awesome class (e.g. 'fa-brain'); sub-agents resolve their agent's icon. */
   IconClass: string;
   /** Agent logo image URL when available (sub-agents / root), else null. */

@@ -261,31 +261,31 @@ describe('evaluateSubAgentTrace (T1)', () => {
     const facts = { dispatchedAgents: ['Web Research Agent', 'Database Research Agent'], iterations: 3 };
 
     it('passes when every required sub-agent ran', () => {
-        const result = EvaluateSubAgentTrace(facts, { requiredAgents: ['Database Research Agent', 'Web Research Agent'], minIterations: 1 });
+        const result = EvaluateSubAgentTrace(facts, { RequiredAgents: ['Database Research Agent', 'Web Research Agent'], MinIterations: 1 });
         expect(result.passed).toBe(true);
-        expect(result.score).toBe(1);
+        expect(result.Score).toBe(1);
     });
 
     it('compares names case-insensitively — casing is never the failure anyone means', () => {
-        expect(EvaluateSubAgentTrace(facts, { requiredAgents: ['web research agent'] }).passed).toBe(true);
+        expect(EvaluateSubAgentTrace(facts, { RequiredAgents: ['web research agent'] }).passed).toBe(true);
     });
 
     it('names what was missing, forbidden, or short', () => {
-        const missing = EvaluateSubAgentTrace(facts, { requiredAgents: ['File Research Agent'] });
+        const missing = EvaluateSubAgentTrace(facts, { RequiredAgents: ['File Research Agent'] });
         expect(missing.message).toContain('never dispatched required sub-agent(s): File Research Agent');
-        const forbidden = EvaluateSubAgentTrace(facts, { forbiddenAgents: ['Web Research Agent'] });
+        const forbidden = EvaluateSubAgentTrace(facts, { ForbiddenAgents: ['Web Research Agent'] });
         expect(forbidden.message).toContain('dispatched forbidden');
-        const short = EvaluateSubAgentTrace(facts, { minIterations: 5 });
+        const short = EvaluateSubAgentTrace(facts, { MinIterations: 5 });
         expect(short.message).toContain('expected at least 5 iteration(s), saw 3');
     });
 
     it('gives partial credit across the configured checks', () => {
         // Two of three checks clean should not score the same as none of three.
         const result = EvaluateSubAgentTrace(facts, {
-            requiredAgents: ['Web Research Agent'], forbiddenAgents: ['Nobody'], minIterations: 99
+            RequiredAgents: ['Web Research Agent'], ForbiddenAgents: ['Nobody'], MinIterations: 99
         });
         expect(result.passed).toBe(false);
-        expect(result.score).toBeCloseTo(2 / 3);
+        expect(result.Score).toBeCloseTo(2 / 3);
     });
 
     it('passes a run with no sub-agents when none were required', () => {

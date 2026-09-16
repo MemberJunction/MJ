@@ -51,19 +51,19 @@ export interface ExportDialogResult {
  */
 export interface ExportServiceOptions {
   /** Data to export */
-  data: Record<string, unknown>[];
+  Data: Record<string, unknown>[];
   /** Export format */
-  format: 'excel' | 'csv' | 'json';
+  Format: 'excel' | 'csv' | 'json';
   /** File name without extension */
-  fileName?: string;
+  FileName?: string;
   /** Include column headers */
-  includeHeaders?: boolean;
+  IncludeHeaders?: boolean;
   /** Row sampling options */
-  sampling?: {
+  Sampling?: {
     mode: 'all' | 'top' | 'bottom' | 'every-nth' | 'random';
     count?: number;
     interval?: number;
   };
   /** Columns to export */
-  columns?: ExportColumnInfo[];
+  Columns?: ExportColumnInfo[];
 }

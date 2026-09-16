@@ -77,7 +77,7 @@ export function ParseTemplateParameters(templateText: string): ParseResult {
 
     // Handle null/empty input
     if (!templateText || templateText.trim().length === 0) {
-        return { parameters: [], warnings: [] };
+        return { parameters: [], Warnings: [] };
     }
 
     // Strip MJ-specific {@include ...} directives before parsing — Nunjucks doesn't understand them
@@ -89,14 +89,14 @@ export function ParseTemplateParameters(templateText: string): ParseResult {
     } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
         warnings.push(`Nunjucks parse error: ${msg}`);
-        return { parameters: [], warnings };
+        return { parameters: [], Warnings: warnings };
     }
 
     const walker = new ASTWalker();
     walker.walk(ast);
 
     const parameters = walker.buildParameters();
-    return { parameters, warnings };
+    return { parameters, Warnings: warnings };
 }
 
 /**
@@ -145,11 +145,11 @@ class ASTWalker {
                 name: acc.name,
                 type,
                 isRequired: acc.usedUnconditionally,
-                defaultValue: acc.defaultValue,
-                isSystemVariable: acc.name.startsWith('_'),
-                appliedFilters: [...acc.filters],
+                DefaultValue: acc.defaultValue,
+                IsSystemVariable: acc.name.startsWith('_'),
+                AppliedFilters: [...acc.filters],
                 properties: buildPropertyTree(acc.properties),
-                usages: acc.usages,
+                Usages: acc.usages,
             });
         }
 
@@ -565,10 +565,10 @@ class ASTWalker {
         }
 
         acc.usages.push({
-            line: node.lineno,
-            col: node.colno,
-            accessPath,
-            isConditional,
+            Line: node.lineno,
+            Col: node.colno,
+            AccessPath: accessPath,
+            IsConditional: isConditional,
         });
     }
 
@@ -771,8 +771,8 @@ function buildPropertyTree(propMap: Map<string, PropAccumulator>): PropertyAcces
         result.push({
             name: acc.name,
             type: resolveType(acc.types),
-            optional: !acc.usedUnconditionally,
-            children: buildPropertyTree(acc.children),
+            Optional: !acc.usedUnconditionally,
+            Children: buildPropertyTree(acc.children),
         });
     }
     result.sort((a, b) => a.name.localeCompare(b.name));

@@ -39,7 +39,7 @@ export default function RecordEditScreen() {
         }
     };
 
-    const hasFields = !!load && load.descriptors.length > 0;
+    const hasFields = !!load && load.Descriptors.length > 0;
     const canSave = hasFields && canUpdate && !saving;
 
     return (
@@ -63,7 +63,7 @@ export default function RecordEditScreen() {
                     hasFields={hasFields}
                     canUpdate={canUpdate}
                     saveError={saveError}
-                    descriptors={load?.descriptors ?? []}
+                    descriptors={load?.Descriptors ?? []}
                     values={values}
                     errors={errors}
                     saving={saving}
@@ -135,7 +135,7 @@ function EditBody(props: EditBodyProps) {
                 Values={props.values}
                 Errors={props.errors}
                 OnChange={props.onChange}
-                disabled={props.saving || !canUpdate}
+                Disabled={props.saving || !canUpdate}
             />
         </ScrollView>
     );

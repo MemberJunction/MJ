@@ -17,7 +17,7 @@ describe('capability cards', () => {
 
 describe('buildImprovePrompt', () => {
   it('names the prediction, its grade, and why it is held, and asks for improvements', () => {
-    const p = BuildImprovePrompt({ Name: 'Renewal Risk', trustGrade: 'Poor', reason: 'not enough training history' });
+    const p = BuildImprovePrompt({ Name: 'Renewal Risk', TrustGrade: 'Poor', Reason: 'not enough training history' });
     expect(p).toContain('"Renewal Risk"');
     expect(p).toContain('current trust: Poor');
     expect(p).toContain('not enough training history.');

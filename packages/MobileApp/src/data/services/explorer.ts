@@ -13,10 +13,10 @@ import type { MJDashboardEntity } from '@memberjunction/core-entities';
 
 /** A browsable entity row (from MJ's `Metadata.Entities`) shown in the explorer's entity list. */
 export type EntityListItem = {
-    name: string;
-    displayName: string;
-    schemaName: string;
-    description: string | null;
+    name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    displayName: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    schemaName: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    description: string | null;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 };
 
 /**
@@ -80,11 +80,11 @@ function displayCellValue(v: unknown): string {
 /** One entity record projected to a card: id, title, subtitle, and the raw field bag. */
 export type EntityRecordRow = {
     /** Composite PK serialized (entity record id). */
-    id: string;
-    title: string;
+    id: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    title: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** A couple of secondary fields for the card subtitle. */
-    subtitle: string;
-    raw: Record<string, unknown>;
+    subtitle: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    raw: Record<string, unknown>;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 };
 
 /** Result of {@link loadEntityRecords}: the entity metadata, the card rows, and how many were returned. */
@@ -162,7 +162,7 @@ export async function loadEntityRecords(
 }
 
 /** A single displayable field of a record: its key, label, and stringified value. */
-export type RecordFieldRow = { key: string; label: string; value: string };
+export type RecordFieldRow = { key: string; label: string; value: string };  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 
 /** Result of {@link loadRecordDetail}: the entity metadata, a title, and the projected field rows. */
 export type RecordDetailLoad = {
@@ -223,10 +223,10 @@ export async function loadRecordDetail(
 
 /** A saved query (from MJ's `Metadata.Queries`) shown in the explorer's query list. */
 export type QueryListItem = {
-    id: string;
-    name: string;
-    description: string | null;
-    category: string | null;
+    id: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    description: string | null;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    category: string | null;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 };
 
 /**
@@ -269,7 +269,7 @@ export type QueryRunResult = {
     Rows: Record<string, unknown>[];
     RowCount: number;
     Success: boolean;
-    errorMessage?: string;
+    ErrorMessage?: string;
 };
 
 /**
@@ -301,7 +301,7 @@ export async function runQuery(  // case-violation-ok-legacy-back-compat: the Pa
         Rows: rows,
         RowCount: result.RowCount ?? rows.length,
         Success: result.Success,
-        errorMessage: result.Success ? undefined : (result.ErrorMessage ?? 'Query failed.'),
+        ErrorMessage: result.Success ? undefined : (result.ErrorMessage ?? 'Query failed.'),
     };
 }
 
@@ -311,9 +311,9 @@ export async function runQuery(  // case-violation-ok-legacy-back-compat: the Pa
 
 /** A dashboard row shown in the explorer's dashboard list. */
 export type DashboardListItem = {
-    id: string;
-    name: string;
-    description: string | null;
+    id: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    description: string | null;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 };
 
 /**
@@ -351,15 +351,15 @@ export type DashboardPartKind = 'view' | 'query' | 'artifact' | 'weburl' | 'unkn
 /** A single parsed dashboard panel. */
 export type DashboardPart = {
     /** Panel id from the layout. */
-    id: string;
+    id: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Panel display title. */
-    title: string;
+    title: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Normalized renderer kind. */
-    kind: DashboardPartKind;
+    kind: DashboardPartKind;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Resolved Dashboard Part Type name. */
-    typeName: string;
+    typeName: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** Raw, type-specific panel config (viewId/queryId/artifactId/url/…). */
-    config: Record<string, unknown>;
+    config: Record<string, unknown>;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 };
 
 /** A dashboard resolved into its renderable parts. */

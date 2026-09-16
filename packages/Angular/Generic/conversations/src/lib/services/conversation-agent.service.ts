@@ -540,12 +540,12 @@ export class ConversationAgentService {
       if (agentArtifacts.length > 0) {
         artifactContext = '\n\n**Prior Artifacts Created by This Agent**:\n';
         agentArtifacts.forEach((artifact, idx) => {
-          artifactContext += `${idx + 1}. ${artifact.artifactName} (${artifact.artifactType})\n`;
-          artifactContext += `   - Versions: ${artifact.versions.length}\n`;
-          if (artifact.versions.length > 0) {
-            artifactContext += `   - Latest: v${artifact.versions[0].versionNumber}`;
-            if (artifact.versions[0].versionName) {
-              artifactContext += ` - ${artifact.versions[0].versionName}`;
+          artifactContext += `${idx + 1}. ${artifact.artifactName} (${artifact.ArtifactType})\n`;
+          artifactContext += `   - Versions: ${artifact.Versions.length}\n`;
+          if (artifact.Versions.length > 0) {
+            artifactContext += `   - Latest: v${artifact.Versions[0].versionNumber}`;
+            if (artifact.Versions[0].versionName) {
+              artifactContext += ` - ${artifact.Versions[0].versionName}`;
             }
             artifactContext += '\n';
           }

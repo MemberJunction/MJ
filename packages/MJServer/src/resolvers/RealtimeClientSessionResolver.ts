@@ -2556,7 +2556,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         providers: AppContext['providers'],
     ): Promise<number | undefined> {
         const elevation = await ResolveWidgetGuestRunContext(userPayload, GetReadWriteProvider(providers));
-        const minutes = elevation?.widget.VoiceMaxSessionMinutes;
+        const minutes = elevation?.Widget.VoiceMaxSessionMinutes;
         return minutes && minutes > 0 ? minutes * 60 : undefined;
     }
 

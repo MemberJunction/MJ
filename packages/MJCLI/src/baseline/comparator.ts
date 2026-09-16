@@ -36,7 +36,7 @@ export interface CompareInput {
 
 export function CompareSnapshots(input: CompareInput): DiffReport {
   const { Left: left, Right: right, Options: options } = input;
-  const ignored = options.ignorePattern;
+  const ignored = options.IgnorePattern;
   const matchesIgnore = (q: string) => {
     if (!ignored) return false;
     if (ignored.test(q)) return true;
@@ -257,7 +257,7 @@ function diffNamedSet<T>(
     else if (l && !r) out.push({ Kind: kind, DiffKind: 'missing-on-right', QualifiedName: key });
     else if (l && r && bodyDiff) {
       const detail = bodyDiff(l, r);
-      if (detail) out.push({ Kind: kind, DiffKind: 'changed', QualifiedName: key, details: detail });
+      if (detail) out.push({ Kind: kind, DiffKind: 'changed', QualifiedName: key, Details: detail });
     }
   }
   return out;
@@ -292,31 +292,31 @@ function diffTable(left: TableDef, right: TableDef): ObjectDiff[] {
         fields.push(`computedPersisted: ${l.isComputedPersisted} vs ${r.isComputedPersisted}`);
       if (normalizeDefault(l.defaultExpression) !== normalizeDefault(r.defaultExpression))
         fields.push(`default: ${l.defaultExpression} vs ${r.defaultExpression}`);
-      if (fields.length) out.push({ Kind: 'column', DiffKind: 'changed', QualifiedName: q, details: fields.join('; ') });
+      if (fields.length) out.push({ Kind: 'column', DiffKind: 'changed', QualifiedName: q, Details: fields.join('; ') });
     }
   }
 
   // Primary key
-  if (!!left.primaryKey !== !!right.primaryKey) {
+  if (!!left.PrimaryKey !== !!right.PrimaryKey) {
     out.push({
       Kind: 'primaryKey',
-      DiffKind: left.primaryKey ? 'missing-on-right' : 'missing-on-left',
+      DiffKind: left.PrimaryKey ? 'missing-on-right' : 'missing-on-left',
       QualifiedName: tableQ,
     });
-  } else if (left.primaryKey && right.primaryKey) {
+  } else if (left.PrimaryKey && right.PrimaryKey) {
     const reasons: string[] = [];
-    if (left.primaryKey.Columns.join(',') !== right.primaryKey.Columns.join(','))
-      reasons.push(`pk columns: ${left.primaryKey.Columns} vs ${right.primaryKey.Columns}`);
-    if (left.primaryKey.Clustered !== right.primaryKey.Clustered)
-      reasons.push(`pk clustered: ${left.primaryKey.Clustered} vs ${right.primaryKey.Clustered}`);
-    if (left.primaryKey.Name !== right.primaryKey.Name)
-      reasons.push(`pk name: ${left.primaryKey.Name} vs ${right.primaryKey.Name}`);
+    if (left.PrimaryKey.Columns.join(',') !== right.PrimaryKey.Columns.join(','))
+      reasons.push(`pk columns: ${left.PrimaryKey.Columns} vs ${right.PrimaryKey.Columns}`);
+    if (left.PrimaryKey.Clustered !== right.PrimaryKey.Clustered)
+      reasons.push(`pk clustered: ${left.PrimaryKey.Clustered} vs ${right.PrimaryKey.Clustered}`);
+    if (left.PrimaryKey.Name !== right.PrimaryKey.Name)
+      reasons.push(`pk name: ${left.PrimaryKey.Name} vs ${right.PrimaryKey.Name}`);
     if (reasons.length) {
       out.push({
         Kind: 'primaryKey',
         DiffKind: 'changed',
         QualifiedName: tableQ,
-        details: reasons.join('; '),
+        Details: reasons.join('; '),
       });
     }
   }
@@ -398,7 +398,7 @@ function diffTableRows(
   };
 
   if (options.RowCompareMode === 'counts') {
-    if (left.RowCount !== right.RowCount) cap({ DiffKind: 'changed', Key: '*', columnDiffs: [] });
+    if (left.RowCount !== right.RowCount) cap({ DiffKind: 'changed', Key: '*', ColumnDiffs: [] });
     return {
       Schema: left.Schema,
       Table: left.Table,
@@ -436,7 +436,7 @@ function diffTableRows(
           colDiffs.push({ Column: colName, LeftValue: lRow[c], RightValue: rRow[rIdx] });
         }
       }
-      if (colDiffs.length > 0) cap({ DiffKind: 'changed', Key: k, columnDiffs: colDiffs });
+      if (colDiffs.length > 0) cap({ DiffKind: 'changed', Key: k, ColumnDiffs: colDiffs });
     }
   }
   for (let i = 0; i < rightKeys.length; i++) {
@@ -528,8 +528,8 @@ function diffUserDefinedTypes(
             reasons.push(`col[${i}] nullable: ${lc.isNullable} vs ${rc.isNullable}`);
         }
       }
-      const lPkCols = l.primaryKey?.Columns.join(',') ?? '';
-      const rPkCols = r.primaryKey?.Columns.join(',') ?? '';
+      const lPkCols = l.PrimaryKey?.Columns.join(',') ?? '';
+      const rPkCols = r.PrimaryKey?.Columns.join(',') ?? '';
       if (lPkCols !== rPkCols) reasons.push(`pk columns: ${lPkCols} vs ${rPkCols}`);
       return reasons.length === 0 ? null : reasons.join('; ');
     },
@@ -547,10 +547,10 @@ function diffExtendedProperties(
   const key = (p: ExtendedPropertyDef) =>
     [
       p.SchemaName,
-      p.level1Type ?? '',
-      p.level1Name ?? '',
-      p.level2Type ?? '',
-      p.level2Name ?? '',
+      p.Level1Type ?? '',
+      p.Level1Name ?? '',
+      p.Level2Type ?? '',
+      p.Level2Name ?? '',
       p.Name,
     ]
       .join('::')
@@ -569,9 +569,9 @@ function diffExtendedProperties(
         Kind: 'extendedProperty',
         DiffKind: 'changed',
         QualifiedName: k,
-        details: `value differs`,
-        leftValue: l.Value,
-        rightValue: r.Value,
+        Details: `value differs`,
+        LeftValue: l.Value,
+        RightValue: r.Value,
       });
     }
   }
@@ -595,11 +595,11 @@ function diffPrincipals(
       // Owner mismatch is informational only — emitted CREATE ROLE matches the
       // source's AUTHORIZATION clause. Skip if either side is missing the owner
       // (older snapshots / future formats may omit it).
-      if (l.owner && r.owner && l.owner.toLowerCase() !== r.owner.toLowerCase()) {
-        reasons.push(`owner: ${l.owner} vs ${r.owner}`);
+      if (l.Owner && r.Owner && l.Owner.toLowerCase() !== r.Owner.toLowerCase()) {
+        reasons.push(`owner: ${l.Owner} vs ${r.Owner}`);
       }
-      if ((l.defaultSchema || '').toLowerCase() !== (r.defaultSchema || '').toLowerCase()) {
-        reasons.push(`defaultSchema: ${l.defaultSchema} vs ${r.defaultSchema}`);
+      if ((l.DefaultSchema || '').toLowerCase() !== (r.DefaultSchema || '').toLowerCase()) {
+        reasons.push(`defaultSchema: ${l.DefaultSchema} vs ${r.DefaultSchema}`);
       }
       return reasons.length === 0 ? null : reasons.join('; ');
     },
@@ -660,7 +660,7 @@ function diffPermissions(
         Kind: 'permission',
         DiffKind: 'changed',
         QualifiedName: k,
-        details: `state: ${l.state} vs ${r.state}`,
+        Details: `state: ${l.state} vs ${r.state}`,
       });
     }
   }

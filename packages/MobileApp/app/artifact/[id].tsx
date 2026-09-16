@@ -95,7 +95,7 @@ function ArtifactContent({ artifact }: { artifact: LoadedArtifact }) {
         case 'json-table':
             return (
                 <View style={styles.cards}>
-                    {(artifact.rows ?? []).slice(0, 100).map((row, idx) => {
+                    {(artifact.Rows ?? []).slice(0, 100).map((row, idx) => {
                         const keys = Object.keys(row).slice(0, 6);
                         return (
                             <View key={idx} style={styles.recordCard}>
@@ -113,17 +113,17 @@ function ArtifactContent({ artifact }: { artifact: LoadedArtifact }) {
                 </View>
             );
         case 'json':
-            return <Text style={styles.code}>{JSON.stringify(artifact.json, null, 2)}</Text>;
+            return <Text style={styles.code}>{JSON.stringify(artifact.Json, null, 2)}</Text>;
         case 'chart':
             return artifact.chart
                 ? <View style={styles.chartCard}><Chart Spec={artifact.chart} Width={contentWidth - 28} /></View>
-                : <Text style={styles.code}>{JSON.stringify(artifact.json, null, 2)}</Text>;
+                : <Text style={styles.code}>{JSON.stringify(artifact.Json, null, 2)}</Text>;
         case 'interactive':
             return <InteractiveArtifact artifact={artifact} />;
         case 'html':
             return <HtmlRenderer html={artifact.Content} />;
         case 'code':
-            return <CodeView code={artifact.Content} language={artifact.language} />;
+            return <CodeView code={artifact.Content} language={artifact.Language} />;
         case 'markdown':
             return <MarkdownView source={artifact.Content} />;
         case 'text':
@@ -138,11 +138,11 @@ function ArtifactContent({ artifact }: { artifact: LoadedArtifact }) {
  * otherwise shows the "view on desktop" fallback with the specific reason.
  */
 function InteractiveArtifact({ artifact }: { artifact: LoadedArtifact }) {
-    const assessment = assessSpec(artifact.spec);
-    if (artifact.spec && assessment.Renderable) {
-        return <InteractiveComponentRenderer spec={artifact.spec} />;
+    const assessment = assessSpec(artifact.Spec);
+    if (artifact.Spec && assessment.Renderable) {
+        return <InteractiveComponentRenderer spec={artifact.Spec} />;
     }
-    return <DesktopFallback reason={assessment.reason} />;
+    return <DesktopFallback reason={assessment.Reason} />;
 }
 
 /**

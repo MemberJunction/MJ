@@ -16,7 +16,7 @@ export interface SpecAssessment {
     /** True when the spec is safe to compile + render in the RN runtime. */
     Renderable: boolean;
     /** Human-readable reason shown in the desktop fallback when not renderable. */
-    reason?: string;
+    Reason?: string;
 }
 
 /** True when the spec has a non-empty name and a real code body. */
@@ -37,13 +37,13 @@ function hasRenderableCode(spec: ComponentSpec): boolean {
  */
 export function AssessSpec(spec: ComponentSpec | null | undefined): SpecAssessment {
     if (!spec || !hasRenderableCode(spec)) {
-        return { Renderable: false, reason: 'This artifact does not contain a renderable component.' };
+        return { Renderable: false, Reason: 'This artifact does not contain a renderable component.' };
     }
     if (spec.libraries && spec.libraries.length > 0) {
-        return { Renderable: false, reason: 'This component uses external libraries that only run on desktop.' };
+        return { Renderable: false, Reason: 'This component uses external libraries that only run on desktop.' };
     }
     if (spec.dependencies && spec.dependencies.length > 0) {
-        return { Renderable: false, reason: 'This component depends on other components not available on mobile.' };
+        return { Renderable: false, Reason: 'This component depends on other components not available on mobile.' };
     }
     return { Renderable: true };
 }

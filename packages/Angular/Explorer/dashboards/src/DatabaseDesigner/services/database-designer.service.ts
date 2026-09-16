@@ -49,8 +49,8 @@ const ACTION_NAMES = {
 // ─── Options ──────────────────────────────────────────────────────────────────
 
 export interface CreateEntityOptions {
-    skipGitCommit?: boolean;
-    skipRestart?: boolean;
+    SkipGitCommit?: boolean;
+    SkipRestart?: boolean;
 }
 
 export interface ModifyEntityOptions extends CreateEntityOptions {
@@ -258,10 +258,10 @@ export class DatabaseDesignerService {
         const params: ActionParam[] = [
             { Name: 'TableDefinition', Type: 'Input', Value: tableSpec },
         ];
-        if (options.skipGitCommit) {
+        if (options.SkipGitCommit) {
             params.push({ Name: 'SkipGitCommit', Type: 'Input', Value: 'true' });
         }
-        if (options.skipRestart) {
+        if (options.SkipRestart) {
             params.push({ Name: 'SkipRestart', Type: 'Input', Value: 'true' });
         }
         return params;

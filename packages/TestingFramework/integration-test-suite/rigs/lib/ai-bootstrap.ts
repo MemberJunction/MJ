@@ -25,10 +25,10 @@ import { AIEngine } from '@memberjunction/aiengine';
 import '@memberjunction/server-bootstrap-lite';
 
 export interface AICtx {
-    pool: sql.ConnectionPool;
-    user: UserInfo;
+    pool: sql.ConnectionPool;  // case-violation-ok-legacy-back-compat: the file is outside the package compiled program, so no type-checked rename is possible
+    user: UserInfo;  // case-violation-ok-legacy-back-compat: the file is outside the package compiled program, so no type-checked rename is possible
     /** The bootstrapped provider — use this for entity access in suites rather than `new Metadata()`. */
-    provider: SQLServerDataProvider;
+    provider: SQLServerDataProvider;  // case-violation-ok-legacy-back-compat: the file is outside the package compiled program, so no type-checked rename is possible
 }
 
 /** Bootstraps the live provider stack + AIEngine. Reuses the DB resolution the cache suites use. */
@@ -125,11 +125,11 @@ export async function verifyActionLog(logID: string, user: UserInfo): Promise<Ro
 }
 
 export interface AgentRunVerification {
-    run: Row;
-    stepCount: number;
-    promptRunsVerified: number;
-    actionLogsVerified: number;
-    subAgentRunsVerified: number;
+    run: Row;  // case-violation-ok-legacy-back-compat: the file is outside the package compiled program, so no type-checked rename is possible
+    stepCount: number;  // case-violation-ok-legacy-back-compat: the file is outside the package compiled program, so no type-checked rename is possible
+    promptRunsVerified: number;  // case-violation-ok-legacy-back-compat: the file is outside the package compiled program, so no type-checked rename is possible
+    actionLogsVerified: number;  // case-violation-ok-legacy-back-compat: the file is outside the package compiled program, so no type-checked rename is possible
+    subAgentRunsVerified: number;  // case-violation-ok-legacy-back-compat: the file is outside the package compiled program, so no type-checked rename is possible
 }
 
 /**

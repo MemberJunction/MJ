@@ -66,9 +66,9 @@ export interface PromptRunRow {
 
 /** The `payloadChangeResult` shape base-agent persists into a step's OutputData JSON. */
 export interface PayloadChangeResultBlob {
-    applied?: { additions?: number; updates?: number; deletions?: number };
-    warnings?: string[];
-    payloadValidation?: {
+    Applied?: { additions?: number; updates?: number; deletions?: number };
+    Warnings?: string[];
+    PayloadValidation?: {
         upstreamMergeViolations?: {
             subAgentName?: string;
             attemptedOperations?: Array<{ path?: string; operation?: string; reason?: string }>;

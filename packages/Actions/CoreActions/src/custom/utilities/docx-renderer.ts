@@ -21,31 +21,31 @@ import { Parser } from 'htmlparser2';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface WordOptions {
-    pageSize: 'Letter' | 'A4';
-    orientation: 'portrait' | 'landscape';
-    margins: { top: number; bottom: number; left: number; right: number }; // inches
-    defaultFontSize: number; // half-points (24 = 12pt)
-    defaultFont: string;
+    PageSize: 'Letter' | 'A4';
+    Orientation: 'portrait' | 'landscape';
+    margins: { top: number; bottom: number; left: number; right: number }; // inches — case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    DefaultFontSize: number; // half-points (24 = 12pt)
+    DefaultFont: string;
 }
 
 export type DocxContentItem =
-    | { type: 'paragraph'; text: string; bold?: boolean; italic?: boolean; align?: string }
-    | { type: 'list'; items: string[]; ordered: boolean }
-    | { type: 'table'; headers: string[]; rows: string[][] }
-    | { type: 'image'; url: string; width?: number; height?: number; caption?: string };
+    | { type: 'paragraph'; text: string; Bold?: boolean; Italic?: boolean; align?: string }  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    | { type: 'list'; Items: string[]; Ordered: boolean }  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    | { type: 'table'; headers: string[]; rows: string[][] }  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    | { type: 'image'; url: string; width?: number; height?: number; Caption?: string };  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 
 export interface DocxSection {
-    heading?: string;
-    level?: number;
-    content?: DocxContentItem[];
+    Heading?: string;
+    Level?: number;
+    content?: DocxContentItem[];  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
 export const DEFAULT_WORD_OPTIONS: WordOptions = {
-    pageSize: 'Letter',
-    orientation: 'portrait',
+    PageSize: 'Letter',
+    Orientation: 'portrait',
     margins: { top: 1, bottom: 1, left: 1, right: 1 },
-    defaultFontSize: 24,
-    defaultFont: 'Calibri',
+    DefaultFontSize: 24,
+    DefaultFont: 'Calibri',
 };
 
 /** A raw item as an agent might send it — either a content item or a section wrapper */
@@ -60,8 +60,8 @@ export async function RenderDocxFromSections(sections: DocxSection[], options: W
     const children: (Paragraph | Table)[] = [];
 
     for (const section of sections) {
-        if (section.heading) {
-            children.push(buildHeading(section.heading, section.level ?? 1, options));
+        if (section.Heading) {
+            children.push(buildHeading(section.Heading, section.Level ?? 1, options));
         }
         for (const item of section.content ?? []) {
             const built = buildContentItem(item, options);
@@ -74,9 +74,9 @@ export async function RenderDocxFromSections(sections: DocxSection[], options: W
             properties: {
                 page: {
                     size: {
-                        width: options.pageSize === 'A4' ? 11906 : 12240,
-                        height: options.pageSize === 'A4' ? 16838 : 15840,
-                        orientation: options.orientation === 'landscape' ? 'landscape' : 'portrait',
+                        width: options.PageSize === 'A4' ? 11906 : 12240,
+                        height: options.PageSize === 'A4' ? 16838 : 15840,
+                        orientation: options.Orientation === 'landscape' ? 'landscape' : 'portrait',
                     },
                     margin: {
                         top: convertInchesToTwip(options.margins.top),
@@ -111,7 +111,7 @@ function buildHeading(text: string, level: number, options: WordOptions): Paragr
     };
     return new Paragraph({
         heading: levelMap[level] ?? HeadingLevel.HEADING_1,
-        children: [new TextRun({ text, font: options.defaultFont })],
+        children: [new TextRun({ text, font: options.DefaultFont })],
     });
 }
 
@@ -133,10 +133,10 @@ function buildParagraph(
         alignment: resolveAlignment(item.align),
         children: [new TextRun({
             text: item.text,
-            bold: item.bold,
-            italics: item.italic,
-            font: options.defaultFont,
-            size: options.defaultFontSize,
+            bold: item.Bold,
+            italics: item.Italic,
+            font: options.DefaultFont,
+            size: options.DefaultFontSize,
         })],
     });
 }
@@ -145,15 +145,15 @@ function buildList(
     item: Extract<DocxContentItem, { type: 'list' }>,
     options: WordOptions
 ): Paragraph[] {
-    return item.items.map(text => new Paragraph({
-        numbering: item.ordered
+    return item.Items.map(text => new Paragraph({
+        numbering: item.Ordered
             ? { reference: 'ordered-list', level: 0 }
             : undefined,
-        bullet: item.ordered ? undefined : { level: 0 },
+        bullet: item.Ordered ? undefined : { level: 0 },
         children: [new TextRun({
             text,
-            font: options.defaultFont,
-            size: options.defaultFontSize,
+            font: options.DefaultFont,
+            size: options.DefaultFontSize,
         })],
     }));
 }
@@ -172,8 +172,8 @@ function buildTable(
                     children: [new TextRun({
                         text: item.headers[c] ?? '',
                         bold: true,
-                        font: options.defaultFont,
-                        size: options.defaultFontSize,
+                        font: options.DefaultFont,
+                        size: options.DefaultFontSize,
                     })],
                 })],
             })
@@ -187,8 +187,8 @@ function buildTable(
                     children: [new Paragraph({
                         children: [new TextRun({
                             text: row[c] ?? '',
-                            font: options.defaultFont,
-                            size: options.defaultFontSize,
+                            font: options.DefaultFont,
+                            size: options.DefaultFontSize,
                         })],
                     })],
                 })
@@ -224,14 +224,14 @@ function buildImage(
                 alignment: AlignmentType.CENTER,
             }),
         ];
-        if (item.caption) {
+        if (item.Caption) {
             results.push(new Paragraph({
                 alignment: AlignmentType.CENTER,
                 children: [new TextRun({
-                    text: item.caption,
+                    text: item.Caption,
                     italics: true,
-                    font: options.defaultFont,
-                    size: options.defaultFontSize - 4,
+                    font: options.DefaultFont,
+                    size: options.DefaultFontSize - 4,
                 })],
             }));
         }
@@ -279,8 +279,8 @@ export function normalizeSections(items: RawSectionItem[]): DocxSection[] {
 
 function normalizeStructuredSection(raw: RawSectionItem): DocxSection {
     const section: DocxSection = {};
-    if (typeof raw['heading'] === 'string') section.heading = raw['heading'];
-    if (typeof raw['level'] === 'number') section.level = raw['level'];
+    if (typeof raw['heading'] === 'string') section.Heading = raw['heading'];
+    if (typeof raw['level'] === 'number') section.Level = raw['level'];
     if (Array.isArray(raw['content'])) {
         section.content = (raw['content'] as RawSectionItem[]).map(normalizeContentItem);
     }
@@ -293,12 +293,12 @@ function normalizeFlatItems(items: RawSectionItem[]): DocxSection[] {
 
     for (const item of items) {
         if (item['type'] === 'heading') {
-            if (current.heading !== undefined || (current.content?.length ?? 0) > 0) {
+            if (current.Heading !== undefined || (current.content?.length ?? 0) > 0) {
                 sections.push(current);
             }
             current = {
-                heading: String(item['text'] ?? item['content'] ?? item['heading'] ?? ''),
-                level: typeof item['level'] === 'number' ? item['level'] : 1,
+                Heading: String(item['text'] ?? item['content'] ?? item['heading'] ?? ''),
+                Level: typeof item['level'] === 'number' ? item['level'] : 1,
                 content: [],
             };
         } else {
@@ -307,7 +307,7 @@ function normalizeFlatItems(items: RawSectionItem[]): DocxSection[] {
         }
     }
 
-    if (current.heading !== undefined || (current.content?.length ?? 0) > 0) {
+    if (current.Heading !== undefined || (current.content?.length ?? 0) > 0) {
         sections.push(current);
     }
 
@@ -322,8 +322,8 @@ function normalizeContentItem(raw: RawSectionItem): DocxContentItem {
     if (type === 'list') {
         return {
             type: 'list',
-            items: Array.isArray(raw['items']) ? (raw['items'] as string[]) : [],
-            ordered: Boolean(raw['ordered']),
+            Items: Array.isArray(raw['items']) ? (raw['items'] as string[]) : [],
+            Ordered: Boolean(raw['ordered']),
         };
     }
 
@@ -333,15 +333,15 @@ function normalizeContentItem(raw: RawSectionItem): DocxContentItem {
             url: String(raw['url'] ?? raw['src'] ?? ''),
             width: typeof raw['width'] === 'number' ? raw['width'] : undefined,
             height: typeof raw['height'] === 'number' ? raw['height'] : undefined,
-            caption: typeof raw['caption'] === 'string' ? raw['caption'] : undefined,
+            Caption: typeof raw['caption'] === 'string' ? raw['caption'] : undefined,
         };
     }
 
     return {
         type: 'paragraph',
         text: String(raw['text'] ?? raw['content'] ?? ''),
-        bold: Boolean(raw['bold']),
-        italic: Boolean(raw['italic']),
+        Bold: Boolean(raw['bold']),
+        Italic: Boolean(raw['italic']),
         align: typeof raw['align'] === 'string' ? raw['align'] : undefined,
     };
 }
@@ -386,7 +386,7 @@ export function HtmlToSections(html: string): DocxSection[] {
     let inTable = false;
 
     const flushSection = () => {
-        if (currentSection.heading || (currentSection.content?.length ?? 0) > 0) {
+        if (currentSection.Heading || (currentSection.content?.length ?? 0) > 0) {
             sections.push(currentSection);
         }
         currentSection = { content: [] };
@@ -397,8 +397,8 @@ export function HtmlToSections(html: string): DocxSection[] {
             tagStack.push(name);
             if (/^h[1-6]$/.test(name)) {
                 flushSection();
-                currentSection.level = parseInt(name[1]);
-                currentSection.heading = '';
+                currentSection.Level = parseInt(name[1]);
+                currentSection.Heading = '';
             } else if (name === 'p') { inParagraph = true; paragraphText = ''; }
             else if (name === 'strong' || name === 'b') { boldDepth++; }
             else if (name === 'em' || name === 'i') { italicDepth++; }
@@ -414,8 +414,8 @@ export function HtmlToSections(html: string): DocxSection[] {
             if (inCell) { cellText += t; }
             else if (inListItem) { listItemText += t; }
             else if (inParagraph) { paragraphText += t; }
-            else if (currentSection.heading !== undefined && tagStack.some(tag => /^h[1-6]$/.test(tag))) {
-                currentSection.heading = (currentSection.heading ?? '') + t;
+            else if (currentSection.Heading !== undefined && tagStack.some(tag => /^h[1-6]$/.test(tag))) {
+                currentSection.Heading = (currentSection.Heading ?? '') + t;
             }
         },
         onclosetag(name) {
@@ -423,12 +423,12 @@ export function HtmlToSections(html: string): DocxSection[] {
             if (/^h[1-6]$/.test(name)) { /* heading text already accumulated */ }
             else if (name === 'p' && inParagraph) {
                 const text = paragraphText.trim();
-                if (text) currentSection.content!.push({ type: 'paragraph', text, bold: boldDepth > 0, italic: italicDepth > 0 });
+                if (text) currentSection.content!.push({ type: 'paragraph', text, Bold: boldDepth > 0, Italic: italicDepth > 0 });
                 inParagraph = false; paragraphText = '';
             } else if (name === 'strong' || name === 'b') { boldDepth = Math.max(0, boldDepth - 1); }
             else if (name === 'em' || name === 'i') { italicDepth = Math.max(0, italicDepth - 1); }
             else if (name === 'li' && inListItem) { if (listItemText.trim()) listItems.push(listItemText.trim()); inListItem = false; listItemText = ''; }
-            else if (name === 'ul' || name === 'ol') { if (listItems.length) currentSection.content!.push({ type: 'list', items: listItems, ordered: listOrdered }); listItems = []; }
+            else if (name === 'ul' || name === 'ol') { if (listItems.length) currentSection.content!.push({ type: 'list', Items: listItems, Ordered: listOrdered }); listItems = []; }
             else if (name === 'th' || name === 'td') { currentRow.push(cellText.trim()); inCell = false; cellText = ''; }
             else if (name === 'tr') { if (inThead) tableHeaders = currentRow; else tableRows.push(currentRow); currentRow = []; }
             else if (name === 'thead') { inThead = false; }

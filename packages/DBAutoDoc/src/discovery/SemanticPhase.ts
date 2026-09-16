@@ -102,9 +102,9 @@ type RawCluster = { memberIndexes: number[]; members: OrganicKeyClusterMember[];
 
 /** Result of the semantic (organic-key clustering) phase. */
 export interface SemanticPhaseResult {
-    clusters: OrganicKeyCluster[];
-    tokens: { input: number; output: number; total: number };
-    summary: {
+    clusters: OrganicKeyCluster[];  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    tokens: { input: number; output: number; total: number };  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    Summary: {
         columnsInScope: number;
         columnsNormalized: number;
         columnsRejectedByNormalizer: number;
@@ -129,7 +129,7 @@ export async function RunSemanticPhase(
     // ─── 1. Prefilter ────────────────────────────────────────────────────────
     const candidates = prefilter(state, config);
     progress(`semantic: ${candidates.length} columns in scope`);
-    if (candidates.length < (config.minClusterSize ?? DEFAULT_DETECTOR_CONFIG.minClusterSize)) {
+    if (candidates.length < (config.minClusterSize ?? DEFAULT_DETECTOR_CONFIG.MinClusterSize)) {
         return emptyResult(candidates.length);
     }
 
@@ -137,19 +137,19 @@ export async function RunSemanticPhase(
     progress('semantic: normalizing column descriptions to business space');
     const tableInputs = groupColumnsByTable(state, candidates);
     const normResult = await new TableNormalizer(aiConfig).normalizeAll(tableInputs, {
-        concurrency: config.refinementConcurrency ?? DEFAULT_DETECTOR_CONFIG.refinementConcurrency,
-        maxRetries: config.maxRefinementRetries ?? 2,
-        onProgress: () => {},
+        Concurrency: config.refinementConcurrency ?? DEFAULT_DETECTOR_CONFIG.RefinementConcurrency,
+        MaxRetries: config.maxRefinementRetries ?? 2,
+        OnProgress: () => {},
     });
-    progress(`semantic: ${normResult.normalized.length} columns kept (${normResult.rejected} rejected by PR-#2193 axes)`);
+    progress(`semantic: ${normResult.Normalized.length} columns kept (${normResult.rejected} rejected by PR-#2193 axes)`);
 
-    if (normResult.normalized.length < (config.minClusterSize ?? DEFAULT_DETECTOR_CONFIG.minClusterSize)) {
+    if (normResult.Normalized.length < (config.minClusterSize ?? DEFAULT_DETECTOR_CONFIG.MinClusterSize)) {
         return {
             clusters: [],
             tokens: normResult.tokens,
-            summary: {
+            Summary: {
                 columnsInScope: candidates.length,
-                columnsNormalized: normResult.normalized.length,
+                columnsNormalized: normResult.Normalized.length,
                 columnsRejectedByNormalizer: normResult.rejected,
                 clustersBeforeSplit: 0,
                 clustersFound: 0,
@@ -160,37 +160,37 @@ export async function RunSemanticPhase(
 
     // ─── 3. Embed the normalized descriptions ────────────────────────────────
     const embedProvider = resolveEmbeddingProvider(config, aiConfig);
-    progress(`semantic: embedding ${normResult.normalized.length} descriptions via ${embedProvider.name}`);
-    const texts = normResult.normalized.map((n) => buildEmbeddingText(n));
+    progress(`semantic: embedding ${normResult.Normalized.length} descriptions via ${embedProvider.name}`);
+    const texts = normResult.Normalized.map((n) => buildEmbeddingText(n));
     const embeddings = await embedProvider.embed(texts);
 
     // ─── 4. Cluster columns by embedding distance ────────────────────────────
     const sensitivity = config.clusteringSensitivity ?? 'balanced';
     const percentile = sensitivityToPercentile(sensitivity);
     const clusterer = new ColumnClusterer({
-        mergeThreshold: config.mergeThreshold,
-        mergeThresholdPercentile: percentile,
-        minClusterSize: config.minClusterSize ?? DEFAULT_DETECTOR_CONFIG.minClusterSize,
-        minDistinctTables: config.minDistinctTables ?? DEFAULT_DETECTOR_CONFIG.minDistinctTables,
+        MergeThreshold: config.mergeThreshold,
+        MergeThresholdPercentile: percentile,
+        MinClusterSize: config.minClusterSize ?? DEFAULT_DETECTOR_CONFIG.MinClusterSize,
+        MinDistinctTables: config.minDistinctTables ?? DEFAULT_DETECTOR_CONFIG.MinDistinctTables,
     });
-    const clustererInputs: ClustererInputColumn[] = normResult.normalized.map((n, i) => ({
+    const clustererInputs: ClustererInputColumn[] = normResult.Normalized.map((n, i) => ({
         schema: n.schema,
         table: n.table,
-        column: n.column,
+        column: n.Column,
         embedding: embeddings[i],
-        participatesInFK: n.participatesInFK,
-        fkTarget: n.fkTarget,
+        participatesInFK: n.ParticipatesInFK,
+        fkTarget: n.FkTarget,
         isPrimaryKey: n.isPrimaryKey,
     }));
     const rawClusters = clusterer.cluster(clustererInputs);
     progress(`semantic: ${rawClusters.length} clusters formed (threshold=${clusterer.lastResolvedThreshold.toFixed(3)})`);
 
     // ─── 5. Split clusters that contain multiple distinct conceptNames ──────
-    const minClusterSize = config.minClusterSize ?? DEFAULT_DETECTOR_CONFIG.minClusterSize;
-    const minDistinctTables = config.minDistinctTables ?? DEFAULT_DETECTOR_CONFIG.minDistinctTables;
+    const minClusterSize = config.minClusterSize ?? DEFAULT_DETECTOR_CONFIG.MinClusterSize;
+    const minDistinctTables = config.minDistinctTables ?? DEFAULT_DETECTOR_CONFIG.MinDistinctTables;
     const { clusters: split, dropped } = splitClustersByConceptName(
         rawClusters,
-        normResult.normalized,
+        normResult.Normalized,
         minClusterSize,
         minDistinctTables,
     );
@@ -200,16 +200,16 @@ export async function RunSemanticPhase(
 
     // ─── 6. Label clusters from member votes ─────────────────────────────────
     const clusters: OrganicKeyCluster[] = split.map((rc, idx) => {
-        const memberNormalized = rc.memberIndexes.map((i) => normResult.normalized[i]);
+        const memberNormalized = rc.memberIndexes.map((i) => normResult.Normalized[i]);
         return labelCluster(memberNormalized, rc.members, rc.maxIntraDistance, idx);
     });
 
     return {
         clusters,
         tokens: normResult.tokens,
-        summary: {
+        Summary: {
             columnsInScope: candidates.length,
-            columnsNormalized: normResult.normalized.length,
+            columnsNormalized: normResult.Normalized.length,
             columnsRejectedByNormalizer: normResult.rejected,
             clustersBeforeSplit: rawClusters.length,
             clustersFound: clusters.length,
@@ -277,7 +277,7 @@ function splitClustersByConceptName(
 function groupMemberIndexesByConcept(memberIndexes: number[], normalized: NormalizedColumn[]): Map<string, number[]> {
     const byConcept = new Map<string, number[]>();
     for (const ci of memberIndexes) {
-        const cn = (normalized[ci].conceptName || '__unnamed__').toLowerCase().replace(/[^a-z0-9]/g, '');
+        const cn = (normalized[ci].ConceptName || '__unnamed__').toLowerCase().replace(/[^a-z0-9]/g, '');
         const bucket = byConcept.get(cn);
         if (bucket) bucket.push(ci);
         else byConcept.set(cn, [ci]);
@@ -290,9 +290,9 @@ function toClusterMember(n: NormalizedColumn): OrganicKeyClusterMember {
     return {
         schema: n.schema,
         table: n.table,
-        column: n.column,
-        participatesInFK: n.participatesInFK,
-        fkTarget: n.fkTarget,
+        column: n.Column,
+        participatesInFK: n.ParticipatesInFK,
+        fkTarget: n.FkTarget,
         isPrimaryKey: n.isPrimaryKey,
     };
 }
@@ -300,7 +300,7 @@ function toClusterMember(n: NormalizedColumn): OrganicKeyClusterMember {
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function prefilter(state: DatabaseDocumentation, config: OrganicKeyDetectionConfig): NormalizerInputColumn[] {
-    const sampleValueCount = config.sampleValueCount ?? DEFAULT_DETECTOR_CONFIG.sampleValueCount;
+    const sampleValueCount = config.sampleValueCount ?? DEFAULT_DETECTOR_CONFIG.SampleValueCount;
     const out: NormalizerInputColumn[] = [];
     for (const schema of state.schemas) {
         for (const table of schema.tables) {
@@ -316,12 +316,12 @@ function prefilter(state: DatabaseDocumentation, config: OrganicKeyDetectionConf
                 out.push({
                     schema: schema.name,
                     table: table.name,
-                    column: col.name,
+                    Column: col.name,
                     dataType: col.dataType,
-                    originalDescription: col.userDescription ?? col.description ?? '',
-                    sampleValues: extractSampleValues(col, sampleValueCount),
-                    participatesInFK: !!col.isForeignKey,
-                    fkTarget: col.foreignKeyReferences
+                    OriginalDescription: col.userDescription ?? col.description ?? '',
+                    SampleValues: extractSampleValues(col, sampleValueCount),
+                    ParticipatesInFK: !!col.isForeignKey,
+                    FkTarget: col.foreignKeyReferences
                         ? {
                               schema: col.foreignKeyReferences.schema,
                               table: col.foreignKeyReferences.table,
@@ -377,12 +377,12 @@ function groupColumnsByTable(state: DatabaseDocumentation, columns: NormalizerIn
  * "identifying a person".
  */
 function buildEmbeddingText(n: NormalizedColumn): string {
-    const concept = (n.conceptName || 'unknown').replace(/_/g, ' ');
+    const concept = (n.ConceptName || 'unknown').replace(/_/g, ' ');
     const parts: string[] = [];
     parts.push(`${concept}. ${concept}. ${concept}.`);
-    parts.push(n.normalizedDescription);
-    if (n.sampleValues && n.sampleValues.length > 0) {
-        const samples = n.sampleValues.slice(0, EMBED_SAMPLE_COUNT).map((v) => String(v).slice(0, EMBED_SAMPLE_MAX_CHARS));
+    parts.push(n.NormalizedDescription);
+    if (n.SampleValues && n.SampleValues.length > 0) {
+        const samples = n.SampleValues.slice(0, EMBED_SAMPLE_COUNT).map((v) => String(v).slice(0, EMBED_SAMPLE_MAX_CHARS));
         parts.push(`Sample values: ${samples.join(' | ')}.`);
     }
     return parts.join(' ');
@@ -397,7 +397,7 @@ function labelCluster(
     // Cluster concept = majority concept name (ties → highest confidence).
     const conceptVotes = new Map<string, { count: number; sumConf: number }>();
     for (const m of members) {
-        const key = m.conceptName || 'unknown';
+        const key = m.ConceptName || 'unknown';
         const cur = conceptVotes.get(key) ?? { count: 0, sumConf: 0 };
         cur.count += 1;
         cur.sumConf += m.confidence;
@@ -413,7 +413,7 @@ function labelCluster(
     // computed by majority vote as a summary / fallback for legacy consumers.
     const stratCounts = new Map<OrganicKeyNormalizationStrategy, number>();
     for (const m of members) {
-        stratCounts.set(m.normalizationStrategy, (stratCounts.get(m.normalizationStrategy) ?? 0) + 1);
+        stratCounts.set(m.NormalizationStrategy, (stratCounts.get(m.NormalizationStrategy) ?? 0) + 1);
     }
     const normalization = Array.from(stratCounts.entries())
         .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0][0];
@@ -423,7 +423,7 @@ function labelCluster(
     const customFallback = members
         .slice()
         .sort((a, b) => b.confidence - a.confidence)
-        .find((m) => m.customNormalizationExpression)?.customNormalizationExpression;
+        .find((m) => m.CustomNormalizationExpression)?.CustomNormalizationExpression;
 
     // Decorate outMembers with per-column normalization. Members are aligned by index
     // with `members` (the NormalizedColumn array) via the caller's memberIndexes mapping.
@@ -431,8 +431,8 @@ function labelCluster(
         const nm = members[i];
         return {
             ...om,
-            normalizationStrategy: nm?.normalizationStrategy,
-            customNormalizationExpression: nm?.customNormalizationExpression,
+            normalizationStrategy: nm?.NormalizationStrategy,
+            customNormalizationExpression: nm?.CustomNormalizationExpression,
         };
     });
 
@@ -493,13 +493,13 @@ function resolveEmbeddingProvider(
         provider,
         apiKey,
         model: cfg.model,
-        dimensions: cfg.dimensions,
-        batchSize: cfg.batchSize,
-        endpoint: cfg.endpoint,
+        Dimensions: cfg.dimensions,
+        BatchSize: cfg.batchSize,
+        Endpoint: cfg.endpoint,
     });
     return {
         name: `${provider}:${cfg.model ?? 'default'}`,
-        embed: (texts: string[]) => impl.embed(texts),
+        embed: (texts: string[]) => impl.Embed(texts),
     };
 }
 
@@ -507,7 +507,7 @@ function emptyResult(columnsInScope: number): SemanticPhaseResult {
     return {
         clusters: [],
         tokens: { input: 0, output: 0, total: 0 },
-        summary: {
+        Summary: {
             columnsInScope,
             columnsNormalized: 0,
             columnsRejectedByNormalizer: 0,

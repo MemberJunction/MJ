@@ -850,8 +850,8 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
   public ImprovePrediction(c: BusinessPredictionCard): void {
     this.PendingPrompt = BuildImprovePrompt({
       Name: c.title,
-      trustGrade: c.trust.grade,
-      reason: c.blockedReason ?? c.trust.gateReason ?? null,
+      TrustGrade: c.trust.grade,
+      Reason: c.blockedReason ?? c.trust.gateReason ?? null,
     });
     this.ChatOpen = true;
     void this.ensureModelDevAgentResolved();

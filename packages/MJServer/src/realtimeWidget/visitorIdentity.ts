@@ -32,14 +32,14 @@ const AGENT_NOTES_ENTITY = 'MJ: AI Agent Notes';
 
 /** A resolved polymorphic identity: the entity the visitor maps to, and that record's id. */
 export interface ResolvedVisitorIdentity {
-  entityId: string;
-  recordId: string;
+  entityId: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  recordId: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
 }
 
 /** The deployment-configurable resolution target (defaults to the core `Users` entity keyed by `Email`). */
 export interface IdentityResolutionTarget {
-  entityName?: string;
-  emailField?: string;
+  entityName?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+  EmailField?: string;
 }
 
 /**
@@ -59,7 +59,7 @@ export async function ResolveIdentityByEmail(
       return undefined;
     }
     const entityName = target?.entityName?.trim() || 'Users';
-    const emailField = target?.emailField?.trim() || 'Email';
+    const emailField = target?.EmailField?.trim() || 'Email';
     const entityInfo = provider.EntityByName(entityName);
     if (!entityInfo) {
       LogError(`[VisitorIdentity] identity-resolution entity '${entityName}' not found in metadata.`);

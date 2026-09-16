@@ -1,14 +1,14 @@
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 
 export interface ArtifactVersionRef {
-  artifactId: string;
-  versionNumber: number;
+  artifactId: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  versionNumber: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
   /**
    * When that version row was created. Used ONLY to order candidates against each other, never
    * compared against the client clock — the values come from one database, so their relative
    * order is meaningful even though the absolute offset from the browser's clock is not.
    */
-  versionCreatedAt?: Date | null;
+  versionCreatedAt?: Date | null;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
 /**
@@ -18,21 +18,21 @@ export interface ArtifactVersionRef {
  */
 export interface ArtifactPanelBaseline {
   /** artifactId → highest version, from {@link snapshotArtifactVersions}. */
-  versions: Map<string, number>;
+  Versions: Map<string, number>;
   /** The conversation on screen when the snapshot was taken. */
-  conversationId: string | null;
+  conversationId: string | null;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
   /** The conversation whose artifacts the map was actually holding, or null if none had loaded. */
-  mapConversationId: string | null;
+  MapConversationId: string | null;
   /** Paging-merge counter at snapshot time. */
-  mapGeneration: number;
+  MapGeneration: number;
   /** User-selection counter at snapshot time. */
-  selectionEpoch: number;
+  SelectionEpoch: number;
 }
 
 export type ArtifactPanelAction =
-  | { kind: 'none' }
-  | { kind: 'open'; artifactId: string; versionNumber: number }
-  | { kind: 'refresh'; artifactId: string; versionNumber: number };
+  | { kind: 'none' }  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  | { kind: 'open'; artifactId: string; versionNumber: number }  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  | { kind: 'refresh'; artifactId: string; versionNumber: number };  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 
 /** The highest version seen for one artifact, and when it landed. */
 interface LatestVersion {

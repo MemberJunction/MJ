@@ -7,31 +7,31 @@
  * Phase 1: Query Planning - lightweight descriptions of what queries to create
  */
 export interface QueryPlan {
-  id: string;
-  name: string;
-  description: string;
-  businessPurpose: string;
-  queryType: QueryType;
-  queryPattern: QueryPattern;
-  complexity: QueryComplexity;
-  primaryEntities: EntityReference[];
-  relatedEntities: EntityReference[];
-  relatedQueryIds: string[];  // For alignment tracking
-  confidence: number;
-  reasoning?: string;
+  id: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  description: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  businessPurpose: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  queryType: QueryType;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  queryPattern: QueryPattern;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  complexity: QueryComplexity;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  primaryEntities: EntityReference[];  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  relatedEntities: EntityReference[];  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  RelatedQueryIds: string[];  // For alignment tracking
+  confidence: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  reasoning?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
 /**
  * Phase 2: SQL Generation - detailed SQL implementation for a single query
  */
 export interface QuerySQL {
-  sqlQuery: string;
-  parameters: QueryParameter[];
-  sampleResultColumns: ResultColumn[];
-  filteringRules: string[];
-  aggregationRules: string[];
-  joinRules: string[];
-  alignmentNotes?: string;
+  sqlQuery: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  parameters: QueryParameter[];  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  sampleResultColumns: ResultColumn[];  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  filteringRules: string[];  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  aggregationRules: string[];  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  joinRules: string[];  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  AlignmentNotes?: string;
 }
 
 /**
@@ -156,10 +156,10 @@ export interface RowCountRange {
 }
 
 export interface SampleQueryGenerationResult {
-  success: boolean;
-  queries: SampleQuery[];
-  summary: SampleQueryGenerationSummary;
-  errorMessage?: string;
+  Success: boolean;
+  Queries: SampleQuery[];
+  Summary: SampleQueryGenerationSummary;
+  ErrorMessage?: string;
 }
 
 export interface SampleQueryGenerationSummary {
@@ -192,30 +192,30 @@ export interface SampleQueryGenerationConfig {
 }
 
 export interface QueryGenerationContext {
-  schema: string;
-  tables: TableContext[];
-  existingQueries: SampleQuery[];
+  schema: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  tables: TableContext[];  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  ExistingQueries: SampleQuery[];
 }
 
 export interface TableContext {
-  name: string;
-  description?: string;
-  rowCount: number;
-  columns: ColumnContext[];
-  primaryKeys: string[];
-  foreignKeys: ForeignKeyContext[];
-  dependents: string[];
+  name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  description?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+  RowCount: number;
+  columns: ColumnContext[];  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  PrimaryKeys: string[];
+  ForeignKeys: ForeignKeyContext[];
+  Dependents: string[];
 }
 
 export interface ColumnContext {
-  name: string;
-  dataType: string;
-  description?: string;
-  isPrimaryKey: boolean;
-  isForeignKey: boolean;
-  isNullable: boolean;
-  possibleValues?: unknown[];
-  statistics?: {
+  name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  dataType: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  description?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+  isPrimaryKey: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  isForeignKey: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  isNullable: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  PossibleValues?: unknown[];
+  Statistics?: {
     distinctCount?: number;
     min?: unknown;
     max?: unknown;
@@ -224,8 +224,8 @@ export interface ColumnContext {
 }
 
 export interface ForeignKeyContext {
-  column: string;
-  referencesSchema: string;
-  referencesTable: string;
-  referencesColumn: string;
+  column: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  referencesSchema: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  referencesTable: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  referencesColumn: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 }

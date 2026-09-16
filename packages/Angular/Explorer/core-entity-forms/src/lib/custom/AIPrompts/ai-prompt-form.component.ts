@@ -581,10 +581,10 @@ export class MJAIPromptFormComponentExtended extends MJAIPromptFormComponent imp
         try {
             this.promptManagementService.openTemplateSelectorDialog({
                 Title: 'Link Existing Template',
-                multiSelect: false,
-                showCreateNew: true,
-                showActiveOnly: true,
-                selectedTemplateIds: this.record.TemplateID ? [this.record.TemplateID] : [],
+                MultiSelect: false,
+                ShowCreateNew: true,
+                ShowActiveOnly: true,
+                SelectedTemplateIds: this.record.TemplateID ? [this.record.TemplateID] : [],
                 viewContainerRef: this.viewContainerRef
             }).subscribe({
                 next: async (result) => {

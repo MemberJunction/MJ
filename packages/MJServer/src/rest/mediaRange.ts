@@ -15,8 +15,8 @@
 
 /** A parsed, validated `Range` request against a known total size. */
 export interface ParsedRange {
-  start: number;
-  end: number;
+  start: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  end: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 /**
@@ -24,8 +24,8 @@ export interface ParsedRange {
  * for an open-ended `bytes=start-` request, matching `ByteRange`'s "omit End = EOF".
  */
 export interface ParsedOpenRange {
-  start: number;
-  end?: number;
+  start: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  end?: number;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
 /**

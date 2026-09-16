@@ -137,10 +137,10 @@ export default class AgentRun extends Command {
     // One typed resolution for all four render sites below — replaces the `as any`
     // casts and applies the same --format/pipe rules as the rest of the CLI.
     const outputFormat: AuditOutputFormat = ResolveLegacyFormat({
-      format: flags.format,
+      Format: flags.format,
       Legacy: flags.output as AuditOutputFormat,
       LegacyDefault: 'compact' as const,
-      legacyWasExplicit: metadata.flags.output?.setFromDefault === false,
+      LegacyWasExplicit: metadata.flags.output?.setFromDefault === false,
       Map: { text: 'compact', json: 'json', md: 'markdown' },
     });
 

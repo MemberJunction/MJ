@@ -33,13 +33,13 @@ export interface QueryFieldShape {
 /** The outcome of analyzing a query for materialization. */
 export interface MaterializationAnalysis {
     /** True only if the query can be materialized in v1. */
-    qualifies: boolean;
+    qualifies: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** When `qualifies` is false, a human-readable reason (logged, never guessed-past). */
-    reason?: string;
+    reason?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
     /** Physical column spec for the materialized table (surrogate PK first, then the query's output columns). */
-    columns: MaterializedColumnSpec[];
+    Columns: MaterializedColumnSpec[];
     /** Name of the synthetic surrogate primary-key column. */
-    surrogateColumnName: string;
+    SurrogateColumnName: string;
 }
 
 /**
@@ -72,7 +72,7 @@ export function AnalyzeQueryForMaterialization(opts: {
 }): MaterializationAnalysis {
     const surrogateColumnName = MATERIALIZATION_SURROGATE_COLUMN;
     const surrogateSQLType = opts.surrogateSQLType ?? DEFAULT_SURROGATE_SQL_TYPE;
-    const fail = (reason: string): MaterializationAnalysis => ({ qualifies: false, reason, columns: [], surrogateColumnName });
+    const fail = (reason: string): MaterializationAnalysis => ({ qualifies: false, reason, Columns: [], SurrogateColumnName: surrogateColumnName });
 
     if (opts.isParameterized) {
         return fail(`query "${opts.queryName}" is parameterized — not materializable in v1 (deferred to Phase 2)`);
@@ -98,7 +98,7 @@ export function AnalyzeQueryForMaterialization(opts: {
         IsPrimaryKey: false,
     }));
 
-    return { qualifies: true, columns: [surrogate, ...dataColumns], surrogateColumnName };
+    return { qualifies: true, Columns: [surrogate, ...dataColumns], SurrogateColumnName: surrogateColumnName };
 }
 
 /** @deprecated Use {@link AnalyzeQueryForMaterialization}. */
@@ -155,34 +155,34 @@ export interface ReadFilterSpecEntry {
 /** One parameter's verified classification (input to {@link qualifyParameterizedQuery}). */
 export interface ParamClassification {
     /** Parameter name (the Nunjucks variable). */
-    name: string;
+    name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Verified role. `RowFilter` requires `filterColumn`; `Structural` may carry a bounded domain. */
-    role: ParamRole;
+    role: ParamRole;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** Bucket 1: the output column the param filters on (must be present in the materialized output). */
-    filterColumn?: string;
+    filterColumn?: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** Bucket 1: the normalized `column <op> value` operator (Phase 2 — required to reconstruct the predicate). */
-    filterOperator?: string;
+    filterOperator?: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** Bucket 1: scalar vs. list (`IN`/`NOT IN`) value shape. */
-    filterKind?: 'scalar' | 'list';
+    filterKind?: 'scalar' | 'list';  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** Bucket 2: the verifier-bounded value domain (advisory — the runtime guard still recomputes on a miss). */
-    boundedDomain?: string[];
+    boundedDomain?: string[];  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 }
 
 /** The parameterization-qualification decision for a query. */
 export interface ParamQualification {
     /** True only if the query's params are all safely materializable. */
-    qualifies: boolean;
+    qualifies: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** When `qualifies` is false, a human-readable reason (logged, never guessed past). */
-    reason?: string;
+    reason?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
     /** Resolved mode. `None` for an unparameterized query. */
-    paramMode: ParamMode;
+    paramMode: ParamMode;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** RowFilterBroad: the columns to apply as read-time predicates against the broad materialized table (§6.4). */
-    rowFilterColumns: string[];
+    rowFilterColumns: string[];  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /**
      * RowFilterBroad: the structured, self-sufficient predicate spec the runtime provider injects at read time
      * (Phase 2). Empty for every other mode. Persisted as JSON on `MJ: Materialized Results . ReadFilterSpec`.
      */
-    readFilterSpec: ReadFilterSpecEntry[];
+    readFilterSpec: ReadFilterSpecEntry[];  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 /**
@@ -401,9 +401,9 @@ function sourceRefsMatch(selectQualifier: string | null, refQualifier: string | 
 /** Verdict of {@link proveFilterColumnBinding}: provable, or refused with the precise reason. */
 export interface FilterColumnBindingProof {
     /** True ONLY when the predicate column is proven to be the same source column the output column carries. */
-    provable: boolean;
+    provable: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** When not provable, the precise reason (logged; never guessed past). */
-    reason?: string;
+    reason?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
 /**
@@ -418,7 +418,7 @@ function collectColumnQualifiers(node: AstNode, column: string, found: (string |
     if (!IsObject(node)) return;
     const qc = qualifiedColumn(node);
     if (qc != null) {
-        if (IdentifiersEqual(qc.column, column)) found.push(qc.qualifier);
+        if (IdentifiersEqual(qc.column, column)) found.push(qc.Qualifier);
         return; // a column_ref has no further column_ref descendants
     }
     for (const [k, v] of Object.entries(node)) {
@@ -601,7 +601,7 @@ export function DetectAggregationKeyColumns(opts: {
         const projected = selectCols.filter(
             (c) => !c.IsExpression
                 && IdentifiersEqual(c.SourceColumn, gb.column)
-                && sourceRefsMatch(c.TableQualifier, gb.qualifier, singleSource),
+                && sourceRefsMatch(c.TableQualifier, gb.Qualifier, singleSource),
         );
         if (projected.length !== 1) return null; // unprojected (0) or ambiguous (>1) → bail
         const f = fieldByOutput.get(projected[0].OutputName.trim().toLowerCase());

@@ -2203,7 +2203,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
   // ─── DB-Backed Mutex (Multi-Instance Safety) ──────────────────
 
   /** Whether the DB-backed lock is enabled via RSU_DB_LOCK_ENABLED=1. */
-  private get IsDBLockEnabled(): boolean {
+  private get IsDBLockEnabled(): boolean {  // case-violation-ok-legacy-back-compat: reached by bracket access outside the declaring class, where a same-named key on an unrelated object is indistinguishable
     return rsuConfig.IsDBLockEnabled;
   }
 

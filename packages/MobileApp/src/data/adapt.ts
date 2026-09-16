@@ -77,8 +77,8 @@ export function AdaptConversationToSummary(item: ConversationListItem): Conversa
         Timestamp: relativeTimeLabel(item.LatestAt),
         Agents: agents,
         MessageCount: item.MessageCount,
-        live: item.Live,
-        pinned: conv.IsPinned ?? false,
+        Live: item.Live,
+        Pinned: conv.IsPinned ?? false,
     };
 }
 
@@ -116,7 +116,7 @@ export function GroupConversations(items: ConversationListItem[]): GroupedConver
 
     for (const item of items) {
         const summary = AdaptConversationToSummary(item);
-        if (summary.pinned) {
+        if (summary.Pinned) {
             out.Pinned.push(summary);
             continue;
         }
@@ -135,10 +135,10 @@ export function groupConversations(items: ConversationListItem[]): GroupedConver
 
 /** UI reference to an agent (id + name + derived avatar color/initial). */
 export type AdaptedAgentRef = {
-    id: string;
-    name: string;
-    color: string;
-    initial: string;
+    id: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    color: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    initial: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 };
 
 /**

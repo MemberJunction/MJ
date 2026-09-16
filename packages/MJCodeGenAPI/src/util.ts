@@ -14,18 +14,25 @@ export async function timeout(ms: number) {
     return Timeout(ms);
 }
 
-export let ___initialized = false;
-export let ___runObject: RunCodeGenBase | null = null;
+export let Initialized = false;
+export let RunObject: RunCodeGenBase | null = null;
+
+export {
+  /** @deprecated Use {@link Initialized} instead. */
+  Initialized as ___initialized,
+  /** @deprecated Use {@link RunObject} instead. */
+  RunObject as ___runObject,
+};
 export async function HandleServerInit() {
-    if (!___initialized) {
+    if (!Initialized) {
         // Initialize configuration
         initializeConfig(process.cwd());
-        ___runObject = MJGlobal.Instance.ClassFactory.CreateInstance<RunCodeGenBase>(RunCodeGenBase);
-        if (!___runObject) {
+        RunObject = MJGlobal.Instance.ClassFactory.CreateInstance<RunCodeGenBase>(RunCodeGenBase);
+        if (!RunObject) {
             throw new Error("Failed to create RunCodeGenBase instance");
         }
-        await ___runObject.setupDataSource();
-        ___initialized = true;
+        await RunObject.setupDataSource();
+        Initialized = true;
     }
 }
 

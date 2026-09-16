@@ -294,11 +294,11 @@ export class ArtifactVersionHistoryComponent extends BaseAngularComponent implem
     try {
       const content = version.Content || '';
       const download = BuildVersionDownload(content, version.FileName, this.Artifact.Name, version.VersionNumber, version.MimeType);
-      const blob = new Blob([download.data], { type: download.mimeType });
+      const blob = new Blob([download.Data], { type: download.MimeType });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = download.fileName;
+      link.download = download.FileName;
       link.click();
       window.URL.revokeObjectURL(url);
     } catch (error) {

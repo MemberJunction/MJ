@@ -88,7 +88,7 @@ export function labelFromRecord(row: Record<string, unknown> | undefined | null)
 
 /** The raw per-record detail the list is built from (a slice of `MJ: Process Run Details`). */
 export interface RunDetailLike {
-  recordId: string;
+  recordId: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
   ResultPayload?: string | null;
 }
 

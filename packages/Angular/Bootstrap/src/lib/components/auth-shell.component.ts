@@ -77,11 +77,16 @@ export class MJAuthShellComponent implements OnInit {
 
   constructor(
     private router: Router,
-    @Inject(DOCUMENT) public document: Document,
+    @Inject(DOCUMENT) public Document: Document,
     public AuthBase: MJAuthBase,
     private initService: MJInitializationService,
     @Inject(MJ_ENVIRONMENT) private environment: MJEnvironmentConfig
   ) {}
+
+  /** @deprecated Use {@link Document} instead. */
+  get document(): Document {
+    return this.Document;
+  }
 
   /** @deprecated Use {@link AuthBase}. */
   public get authBase(): MJAuthBase {
@@ -124,7 +129,7 @@ export class MJAuthShellComponent implements OnInit {
       this.initService.runValidationChecks();
 
       // Navigate to initial route
-      this.initService.navigateToInitialRoute(this.initialPath, this.document);
+      this.initService.navigateToInitialRoute(this.initialPath, this.Document);
 
     } catch (err: any) {
       // Check for no roles error

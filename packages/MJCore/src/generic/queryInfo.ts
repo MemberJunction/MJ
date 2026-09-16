@@ -470,7 +470,7 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
     /**
      * Lazily parses and caches the PlatformVariants JSON.
      */
-    private get ParsedVariants(): PlatformVariantsJSON | null {
+    private get ParsedVariants(): PlatformVariantsJSON | null {  // case-violation-ok-legacy-back-compat: a class in the same hierarchy already declares the camelCase name — TypeScript rejects two declarations of one private property (TS2415)
         if (this._parsedVariants === undefined) {
             this._parsedVariants = ParsePlatformVariants(this.PlatformVariants);
         }

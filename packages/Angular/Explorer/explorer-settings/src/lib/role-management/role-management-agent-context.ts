@@ -48,8 +48,8 @@ export interface RoleNameCandidate {
 
 /** Outcome of a tolerant id→name→contains role resolution. */
 export type RoleLookupResult =
-    | { ok: true; match: RoleNameCandidate }
-    | { ok: false; error: string };
+    | { Ok: true; Match: RoleNameCandidate }
+    | { Ok: false; Error: string };
 
 /**
  * Resolve an agent-supplied role reference against the loaded roles, tolerantly:
@@ -63,22 +63,22 @@ export type RoleLookupResult =
 export function ResolveRoleByIDOrName(input: string, candidates: readonly RoleNameCandidate[]): RoleLookupResult {
     const needle = input.trim().toLowerCase();
     if (!needle) {
-        return { ok: false, error: 'Provide a role ID or name to select.' };
+        return { Ok: false, Error: 'Provide a role ID or name to select.' };
     }
     const byId = candidates.find(c => c.ID.toLowerCase() === needle);
     if (byId) {
-        return { ok: true, match: byId };
+        return { Ok: true, Match: byId };
     }
     const exact = candidates.find(c => c.Name.toLowerCase() === needle);
     if (exact) {
-        return { ok: true, match: exact };
+        return { Ok: true, Match: exact };
     }
     const contains = candidates.find(c => c.Name.toLowerCase().includes(needle));
     if (contains) {
-        return { ok: true, match: contains };
+        return { Ok: true, Match: contains };
     }
     const sample = candidates.slice(0, 8).map(c => c.Name).join(', ');
-    return { ok: false, error: `No role matches "${input}". Available roles: ${sample || '(none loaded)'}.` };
+    return { Ok: false, Error: `No role matches "${input}". Available roles: ${sample || '(none loaded)'}.` };
 }
 
 /** @deprecated Use {@link ResolveRoleByIDOrName}. */

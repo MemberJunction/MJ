@@ -42,11 +42,11 @@ function isOracleClass(value: unknown): value is new () => IOracle {
 
 export interface LoadedOracleSummary {
     /** Module path that was loaded. */
-    modulePath: string;
+    ModulePath: string;
     /** Names of oracles that were successfully registered. */
-    registered: string[];
+    Registered: string[];
     /** Export keys we walked past because they didn't look like oracles. */
-    skipped: string[];
+    Skipped: string[];
 }
 
 /**
@@ -151,7 +151,7 @@ export async function LoadOraclesModule(
         registered.push(oracle.type);
     }
 
-    return { modulePath: absPath, registered, skipped };
+    return { ModulePath: absPath, Registered: registered, Skipped: skipped };
 }
 
 /** @deprecated Use {@link LoadOraclesModule}. */

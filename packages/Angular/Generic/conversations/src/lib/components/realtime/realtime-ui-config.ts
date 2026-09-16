@@ -197,35 +197,35 @@ export const DEFAULT_REALTIME_UI_INPUTS: Required<RealtimeUiInputs> = {
  */
 export interface RealtimeUiSignals {
   /** Current width of the widget's container, in px (from a `ResizeObserver`). */
-  containerWidthPx: number;
+  ContainerWidthPx: number;
   /**
    * Has the user revealed text this session? (i.e. tapped "show the
    * conversation" / engaged the composer — disclosure level ≥ 1.) This is the
    * intent half of the auto orb↔console rule.
    */
-  textRevealed: boolean;
+  TextRevealed: boolean;
   /** Disclosure model says a transcript may be shown. */
-  disclosureShowThread: boolean;
+  DisclosureShowThread: boolean;
   /** Disclosure model says the composer/text dock may be shown. */
-  disclosureShowComposer: boolean;
+  DisclosureShowComposer: boolean;
   /** Disclosure model says a surface panel may be shown. */
-  disclosureShowPanel: boolean;
+  DisclosureShowPanel: boolean;
   /** Disclosure model says the gear/settings menu may be shown. */
-  disclosureShowGear: boolean;
+  DisclosureShowGear: boolean;
   /** A surface/channel actually exists to populate the panel. */
-  surfacePanelEarned: boolean;
+  SurfacePanelEarned: boolean;
   /** ≥ 1 interactive channel is active. */
-  hasChannels: boolean;
+  hasChannels: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
   /** ≥ 1 delegation/activity has occurred (Activity rail has content). */
-  hasActivity: boolean;
+  HasActivity: boolean;
   /** Per-session developer mode is on. */
-  devMode: boolean;
+  DevMode: boolean;
   /** The widget is reviewing a past (recorded) session, not a live call. */
-  isReviewing: boolean;
+  IsReviewing: boolean;
   /** A single channel surface is maximized (focus mode); the main column is hidden. */
-  channelFocus: boolean;
+  channelFocus: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
   /** Current connection lifecycle state. */
-  connectionState: RealtimeUiConnectionState;
+  ConnectionState: RealtimeUiConnectionState;
 }
 
 /**
@@ -284,19 +284,19 @@ export interface ResolvedRealtimeUi {
  * runs with real signals. Never read `this` to build the first value.
  */
 export const DEFAULT_REALTIME_UI_SIGNALS: RealtimeUiSignals = {
-  containerWidthPx: 0,
-  textRevealed: false,
-  disclosureShowThread: false,
-  disclosureShowComposer: false,
-  disclosureShowPanel: false,
-  disclosureShowGear: false,
-  surfacePanelEarned: false,
+  ContainerWidthPx: 0,
+  TextRevealed: false,
+  DisclosureShowThread: false,
+  DisclosureShowComposer: false,
+  DisclosureShowPanel: false,
+  DisclosureShowGear: false,
+  SurfacePanelEarned: false,
   hasChannels: false,
-  hasActivity: false,
-  devMode: false,
-  isReviewing: false,
+  HasActivity: false,
+  DevMode: false,
+  IsReviewing: false,
   channelFocus: false,
-  connectionState: 'connecting',
+  ConnectionState: 'connecting',
 };
 
 /**
@@ -333,23 +333,23 @@ export function ResolveRealtimeUi(
 ): ResolvedRealtimeUi {
   const cfg: Required<RealtimeUiInputs> = { ...DEFAULT_REALTIME_UI_INPUTS, ...(inputs ?? {}) };
 
-  const connecting = signals.connectionState === 'connecting';
+  const connecting = signals.ConnectionState === 'connecting';
   const allowTextReveal = cfg.allowTextReveal;
   const chrome = resolveChrome(cfg, signals, allowTextReveal);
   const isConsole = chrome === 'console';
-  const compact = cfg.compact || signals.containerWidthPx < cfg.consoleBreakpointPx;
+  const compact = cfg.compact || signals.ContainerWidthPx < cfg.consoleBreakpointPx;
 
   // The transcript shows when the user has EXPLICITLY revealed text this session
   // (`textRevealed`), OR we're in a console (consoles always carry the thread), OR we're
   // reviewing a recording. We deliberately do NOT consult the disclosure ratchet here: a
   // power user with a high base level still opens to the calm orb, exactly like the historical
   // `ShowHero = !ShowCaptions` behaviour — "keep the orb until the user asks for text".
-  const showThread = allowTextReveal && (signals.textRevealed || isConsole || signals.isReviewing);
+  const showThread = allowTextReveal && (signals.TextRevealed || isConsole || signals.IsReviewing);
 
   // The hero orb owns the surface in orb chrome (and there's nothing else to show).
   const showHero = chrome === 'orb' && !showThread;
 
-  const showComposer = isConsole && allowTextReveal && signals.disclosureShowComposer && !signals.isReviewing;
+  const showComposer = isConsole && allowTextReveal && signals.DisclosureShowComposer && !signals.IsReviewing;
 
   // The surface/Details panel opens ON DEMAND when earned (the Details peek, the agent's
   // OpenSurfacePanel, content auto-reveal — all set surfacePanelEarned). It is an INDEPENDENT
@@ -366,15 +366,15 @@ export function ResolveRealtimeUi(
   // beside the orb. So we keep only the ROOM half: the panel shows when earned and either the chrome
   // is already a console (incl. review / forced-console at any width) OR the container is at least as
   // wide as the console breakpoint — never in a cramped narrow overlay, and never dependent on text.
-  const roomForSurfacePanel = isConsole || signals.containerWidthPx >= cfg.consoleBreakpointPx;
+  const roomForSurfacePanel = isConsole || signals.ContainerWidthPx >= cfg.consoleBreakpointPx;
   const showSurfacePanel =
-    cfg.showSurfacePanel && signals.surfacePanelEarned && !signals.channelFocus && roomForSurfacePanel;
+    cfg.showSurfacePanel && signals.SurfacePanelEarned && !signals.channelFocus && roomForSurfacePanel;
 
-  const showActivityTab = cfg.showActivityRail && (signals.hasActivity || signals.isReviewing) && isConsole;
+  const showActivityTab = cfg.showActivityRail && (signals.HasActivity || signals.IsReviewing) && isConsole;
 
   const showChannelStrip = cfg.showChannels && signals.hasChannels && isConsole && !signals.channelFocus;
 
-  const showGear = signals.disclosureShowGear || isConsole;
+  const showGear = signals.DisclosureShowGear || isConsole;
 
   return {
     chrome,
@@ -389,8 +389,8 @@ export function ResolveRealtimeUi(
     showCaptionsControl: cfg.showCaptionsControl,
     showDensityPicker: cfg.showDensityPicker && showGear,
     showGear,
-    showDevLinks: cfg.showDevLinks && signals.devMode,
-    showMinimize: cfg.showMinimize && !signals.isReviewing,
+    showDevLinks: cfg.showDevLinks && signals.DevMode,
+    showMinimize: cfg.showMinimize && !signals.IsReviewing,
     showEnd: cfg.showEnd,
     allowResize: cfg.allowResize && showSurfacePanel,
     allowTextReveal,
@@ -425,7 +425,7 @@ function resolveChrome(
     return 'console';
   }
   // auto
-  if (signals.isReviewing) {
+  if (signals.IsReviewing) {
     return 'console';
   }
   if (!allowTextReveal) {
@@ -433,6 +433,6 @@ function resolveChrome(
   }
   // Intent is the USER explicitly revealing text this session — NOT the disclosure ratchet.
   // Wider-alone keeps the orb; a power user who hasn't asked for text keeps the orb too.
-  const hasRoom = signals.containerWidthPx >= cfg.consoleBreakpointPx;
-  return hasRoom && signals.textRevealed ? 'console' : 'orb';
+  const hasRoom = signals.ContainerWidthPx >= cfg.consoleBreakpointPx;
+  return hasRoom && signals.TextRevealed ? 'console' : 'orb';
 }

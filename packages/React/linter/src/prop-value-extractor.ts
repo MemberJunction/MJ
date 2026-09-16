@@ -28,9 +28,9 @@ import * as t from '@babel/types';
  * Represents a value that couldn't be extracted statically
  */
 export interface DynamicValue {
-  _type: 'identifier' | 'expression';
-  name?: string;
-  description?: string;
+  _type: 'identifier' | 'expression';  // case-violation-ok-legacy-back-compat: snake_case mirrors an external payload — the remote spelling is the contract, not MJ convention
+  name?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+  description?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
 /**

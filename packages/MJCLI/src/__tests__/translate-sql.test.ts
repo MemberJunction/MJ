@@ -275,7 +275,7 @@ describe('GenerateTranslationReport', () => {
             TranslatedSQL: '"IsActive" = true',
             Method: 'rule-based',
             Markers: ['bracket-identifiers', 'boolean-literal'],
-            note: 'Rules: bracket-to-doublequote, bit-1-to-true',
+            Note: 'Rules: bracket-to-doublequote, bit-1-to-true',
         },
         {
             Source: 'Query: Complex',
@@ -284,7 +284,7 @@ describe('GenerateTranslationReport', () => {
             TranslatedSQL: null,
             Method: 'flagged',
             Markers: ['bracket-identifiers', 'TOP-N'],
-            note: 'Requires LLM translation',
+            Note: 'Requires LLM translation',
         },
     ];
 

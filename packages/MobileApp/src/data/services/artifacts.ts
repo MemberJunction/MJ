@@ -32,15 +32,15 @@ export type LoadedArtifact = {
     /** How the UI should render `content`. */
     Kind: ArtifactRenderKind;
     /** When kind is json-table, parsed rows. */
-    rows?: Record<string, unknown>[];
+    Rows?: Record<string, unknown>[];
     /** When kind is json (object), parsed object. */
-    json?: unknown;
+    Json?: unknown;
     /** When kind is chart, the normalized chart spec. */
-    chart?: ChartSpec;
+    chart?: ChartSpec;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
     /** When kind is interactive, the parsed react-runtime component spec. */
-    spec?: ComponentSpec;
+    Spec?: ComponentSpec;
     /** When kind is code, a best-effort source language hint for highlighting. */
-    language?: string;
+    Language?: string;
 };
 
 /** Classified content: the render kind plus any parsed payload the UI needs. */
@@ -154,11 +154,11 @@ export async function LoadArtifact(artifactId: string, contextUser?: UserInfo): 
         VersionCount: versions.length,
         Content: content,
         Kind: kind,
-        rows,
-        json,
+        Rows: rows,
+        Json: json,
         chart,
-        spec,
-        language,
+        Spec: spec,
+        Language: language,
     };
 }
 

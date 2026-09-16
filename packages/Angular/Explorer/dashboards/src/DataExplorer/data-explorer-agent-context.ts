@@ -149,8 +149,8 @@ export const AGENT_CONTEXT_APP_GROUP_CAP = 25;
  * display value). Exactly one is honored; `position` takes precedence when both are given.
  */
 export interface RecordSelectionRequest {
-    position?: 'first' | 'last' | number;
-    name?: string;
+    position?: 'first' | 'last' | number;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+    name?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
 /** Outcome of {@link resolveRecordSelection}: a 0-based index into the loaded records, or an error. */

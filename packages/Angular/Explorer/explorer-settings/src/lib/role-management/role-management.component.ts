@@ -301,11 +301,11 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
   private async handleSelectRoleTool(params: Record<string, unknown>): Promise<{ Success: boolean; ErrorMessage?: string }> {
     const raw = String(params?.['role'] ?? '');
     const resolved = ResolveRoleByIDOrName(raw, this.Roles.map(r => ({ ID: r.ID, Name: r.Name ?? '' })));
-    if (!resolved.ok) {
-      return { Success: false, ErrorMessage: resolved.error };
+    if (!resolved.Ok) {
+      return { Success: false, ErrorMessage: resolved.Error };
     }
-    this.ExpandedRoleId = resolved.match.ID;
-    this.selectedRolePermissionSummary = await this.loadPermissionSummary(resolved.match.ID);
+    this.ExpandedRoleId = resolved.Match.ID;
+    this.selectedRolePermissionSummary = await this.loadPermissionSummary(resolved.Match.ID);
     this.cdr.markForCheck();
     this.publishAgentContext();
     return { Success: true };
@@ -314,10 +314,10 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
   private handleNavigateToRoleRecordTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
     const raw = String(params?.['role'] ?? '');
     const resolved = ResolveRoleByIDOrName(raw, this.Roles.map(r => ({ ID: r.ID, Name: r.Name ?? '' })));
-    if (!resolved.ok) {
-      return { Success: false, ErrorMessage: resolved.error };
+    if (!resolved.Ok) {
+      return { Success: false, ErrorMessage: resolved.Error };
     }
-    this.navigationService.OpenEntityRecord('MJ: Roles', CompositeKey.FromID(resolved.match.ID));
+    this.navigationService.OpenEntityRecord('MJ: Roles', CompositeKey.FromID(resolved.Match.ID));
     return { Success: true };
   }
 

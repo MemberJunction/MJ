@@ -33,11 +33,11 @@ const ENTITY_OAUTH_AUTHORIZATION_STATES = 'MJ: O Auth Authorization States';
  */
 export interface OAuthCallbackHandlerOptions {
     /** Base URL for this MJAPI instance (for redirects) */
-    publicUrl: string;
+    publicUrl: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** URL to redirect to after successful authorization */
-    successRedirectUrl?: string;
+    successRedirectUrl?: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** URL to redirect to after failed authorization */
-    errorRedirectUrl?: string;
+    errorRedirectUrl?: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /**
      * Origins a caller-supplied `frontendReturnUrl` is allowed to point at, so the OAuth callback
      * cannot be turned into an open redirect from the trusted MJAPI origin. Normally wired to
@@ -54,7 +54,7 @@ export interface OAuthCallbackHandlerOptions {
      * dependency on configuration loading — importing the config module validates the whole config
      * as a side effect, which makes this handler unimportable in any context without one.
      */
-    allowedFrontendOrigins: string[];
+    allowedFrontendOrigins: string[];  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 }
 
 /**

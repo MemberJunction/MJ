@@ -28,35 +28,35 @@ import { DatabaseDocumentation, ForeignKeyReference } from '../types/state.js';
 
 /** One transitive bridge finding ready for spoke emission. */
 export interface TransitiveBridgeFinding {
-    hubSchema: string;
-    hubTable: string;
-    hubKeyFields: string[];          // = MatchFieldNames on the hub's organic key
-    spokeSchema: string;
-    spokeTable: string;
-    spokeJoinField: string;          // = RelatedEntityJoinFieldName (spoke PK)
-    view: GeneratedBridgeView;       // CREATE VIEW SQL + projected aliases
-    pathLength: number;
-    pathConfidence: number;
+    HubSchema: string;
+    HubTable: string;
+    HubKeyFields: string[];          // = MatchFieldNames on the hub's organic key
+    SpokeSchema: string;
+    SpokeTable: string;
+    SpokeJoinField: string;          // = RelatedEntityJoinFieldName (spoke PK)
+    View: GeneratedBridgeView;       // CREATE VIEW SQL + projected aliases
+    PathLength: number;
+    PathConfidence: number;
     /** Concept name from the underlying organic key (e.g. "email_address"). Used for the spoke's DisplayName. */
-    hubConcept: string;
+    HubConcept: string;
 }
 
 export interface TransitiveBridgeDetectorOptions {
-    maxHops?: number;
-    minSoftFKConfidence?: number;
+    MaxHops?: number;
+    MinSoftFKConfidence?: number;
     /** Drop bridges whose path confidence falls below this. Default 0.7. */
-    minPathConfidence?: number;
+    MinPathConfidence?: number;
     /** Limit bridges per (hub, spoke) pair — keeps only the best path. Default true. */
-    keepShortestOnly?: boolean;
+    KeepShortestOnly?: boolean;
     /** Platform the generated bridge-view SQL is written for. Default `'sqlserver'`. */
-    provider?: BridgeViewProvider;
+    provider?: BridgeViewProvider;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
 const DEFAULTS: Required<TransitiveBridgeDetectorOptions> = {
-    maxHops: 3,
-    minSoftFKConfidence: 0.6,
-    minPathConfidence: 0.7,
-    keepShortestOnly: true,
+    MaxHops: 3,
+    MinSoftFKConfidence: 0.6,
+    MinPathConfidence: 0.7,
+    KeepShortestOnly: true,
     provider: 'sqlserver',
 };
 
@@ -123,52 +123,52 @@ export function DetectTransitiveBridges(
         hubsForWalker.push({ schema: h.schema, table: h.table, keyField: h.keyFields[0] });
     }
     const allPaths = FindBridgePaths(edges, hubsForWalker, allTables, {
-        maxHops: o.maxHops,
-        minSoftFKConfidence: o.minSoftFKConfidence,
-        pruneCycles: true,
+        MaxHops: o.MaxHops,
+        MinSoftFKConfidence: o.MinSoftFKConfidence,
+        PruneCycles: true,
     });
 
     // ─── 4. For each path, materialize the bridge view ─────────────────────
     const findings: TransitiveBridgeFinding[] = [];
     for (const path of allPaths) {
-        if (path.pathConfidence < o.minPathConfidence) continue;
-        const spokeKey = `${path.spokeSchema}.${path.spokeTable}`;
+        if (path.PathConfidence < o.MinPathConfidence) continue;
+        const spokeKey = `${path.SpokeSchema}.${path.SpokeTable}`;
         const spokePK = spokePKByKey.get(spokeKey);
         if (!spokePK) continue; // skip composite-PK spokes for now
 
         // Resolve the originating hub entry to recover the full keyFields tuple + concept.
         const hubMatch = Array.from(hubsByKey.values()).find(
-            (h) => h.schema === path.hubSchema && h.table === path.hubTable && h.keyFields[0] === path.hubKeyField,
+            (h) => h.schema === path.HubSchema && h.table === path.HubTable && h.keyFields[0] === path.HubKeyField,
         );
         if (!hubMatch) continue;
 
         const view = GenerateBridgeView(path, spokePK, { provider: o.provider });
         findings.push({
-            hubSchema: hubMatch.schema,
-            hubTable: hubMatch.table,
-            hubKeyFields: hubMatch.keyFields,
-            spokeSchema: path.spokeSchema,
-            spokeTable: path.spokeTable,
-            spokeJoinField: spokePK,
-            view,
-            pathLength: path.pathLength,
-            pathConfidence: path.pathConfidence,
-            hubConcept: hubMatch.concept,
+            HubSchema: hubMatch.schema,
+            HubTable: hubMatch.table,
+            HubKeyFields: hubMatch.keyFields,
+            SpokeSchema: path.SpokeSchema,
+            SpokeTable: path.SpokeTable,
+            SpokeJoinField: spokePK,
+            View: view,
+            PathLength: path.PathLength,
+            PathConfidence: path.PathConfidence,
+            HubConcept: hubMatch.concept,
         });
     }
 
     // ─── 5. Dedupe per (hub, spoke) — keep shortest, then highest-confidence ─
-    if (o.keepShortestOnly) {
+    if (o.KeepShortestOnly) {
         const byPair = new Map<string, TransitiveBridgeFinding>();
         for (const f of findings) {
-            const k = `${f.hubSchema}.${f.hubTable}::${f.spokeSchema}.${f.spokeTable}::${f.hubKeyFields[0]}`;
+            const k = `${f.HubSchema}.${f.HubTable}::${f.SpokeSchema}.${f.SpokeTable}::${f.HubKeyFields[0]}`;
             const existing = byPair.get(k);
             if (!existing) {
                 byPair.set(k, f);
                 continue;
             }
-            if (f.pathLength < existing.pathLength) byPair.set(k, f);
-            else if (f.pathLength === existing.pathLength && f.pathConfidence > existing.pathConfidence) {
+            if (f.PathLength < existing.PathLength) byPair.set(k, f);
+            else if (f.PathLength === existing.PathLength && f.PathConfidence > existing.PathConfidence) {
                 byPair.set(k, f);
             }
         }
@@ -224,13 +224,13 @@ export function CollectFKEdgesFromState(state: DatabaseDocumentation): FKEdge[] 
             const deps: ForeignKeyReference[] = table.dependsOn ?? [];
             for (const d of deps) {
                 out.push({
-                    sourceSchema: schema.name,
-                    sourceTable: table.name,
-                    sourceColumn: d.column,
-                    targetSchema: d.schema,
-                    targetTable: d.table,
-                    targetColumn: d.referencedColumn,
-                    kind: 'hard',
+                    SourceSchema: schema.name,
+                    SourceTable: table.name,
+                    SourceColumn: d.column,
+                    TargetSchema: d.schema,
+                    TargetTable: d.table,
+                    TargetColumn: d.referencedColumn,
+                    Kind: 'hard',
                     confidence: 1,
                 });
             }
@@ -256,13 +256,13 @@ export function CollectFKEdgesFromState(state: DatabaseDocumentation): FKEdge[] 
             typeof f.confidence === 'number'
         ) {
             out.push({
-                sourceSchema: f.schemaName,
-                sourceTable: f.sourceTable,
-                sourceColumn: f.sourceColumn,
-                targetSchema: f.targetSchema,
-                targetTable: f.targetTable,
-                targetColumn: f.targetColumn,
-                kind: 'soft',
+                SourceSchema: f.schemaName,
+                SourceTable: f.sourceTable,
+                SourceColumn: f.sourceColumn,
+                TargetSchema: f.targetSchema,
+                TargetTable: f.targetTable,
+                TargetColumn: f.targetColumn,
+                Kind: 'soft',
                 confidence: f.confidence / 100, // state stores 0-100
             });
         }
@@ -288,7 +288,7 @@ export function CollectFKEdgesFromState(state: DatabaseDocumentation): FKEdge[] 
     const exists = (s: string, t: string, c: string): boolean =>
         validColumns.has(`${s}.${t}.${c}`.toLowerCase());
     return deduped.filter(
-        (e) => exists(e.sourceSchema, e.sourceTable, e.sourceColumn) && exists(e.targetSchema, e.targetTable, e.targetColumn),
+        (e) => exists(e.SourceSchema, e.SourceTable, e.SourceColumn) && exists(e.TargetSchema, e.TargetTable, e.TargetColumn),
     );
 }
 
@@ -305,14 +305,14 @@ export function collectFKEdgesFromState(state: DatabaseDocumentation): FKEdge[] 
 function dedupEdges(edges: FKEdge[]): FKEdge[] {
     const byKey = new Map<string, FKEdge>();
     for (const e of edges) {
-        const k = `${e.sourceSchema}.${e.sourceTable}.${e.sourceColumn}->${e.targetSchema}.${e.targetTable}.${e.targetColumn}`;
+        const k = `${e.SourceSchema}.${e.SourceTable}.${e.SourceColumn}->${e.TargetSchema}.${e.TargetTable}.${e.TargetColumn}`;
         const existing = byKey.get(k);
         if (!existing) {
             byKey.set(k, e);
             continue;
         }
-        if (existing.kind === 'hard') continue;
-        if (e.kind === 'hard') { byKey.set(k, e); continue; }
+        if (existing.Kind === 'hard') continue;
+        if (e.Kind === 'hard') { byKey.set(k, e); continue; }
         if (e.confidence > existing.confidence) byKey.set(k, e);
     }
     return Array.from(byKey.values());

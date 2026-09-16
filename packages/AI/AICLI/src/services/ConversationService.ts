@@ -195,10 +195,10 @@ Log file: ${logger.getLogFilePath()}`);
         // Display agent response
         const agentMessage = this.extractAgentResponse(result.result);
         const formattedMessage = TextFormatter.formatText(agentMessage, {
-          maxWidth: 80,
-          indent: 3,
-          preserveParagraphs: true,
-          highlightCode: true
+          MaxWidth: 80,
+          Indent: 3,
+          PreserveParagraphs: true,
+          HighlightCode: true
         });
         console.log(chalk.green(`\n🤖 ${agentName}: `));
         console.log(formattedMessage);

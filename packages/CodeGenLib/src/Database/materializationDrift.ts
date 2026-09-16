@@ -43,8 +43,8 @@ export interface MaterializationDriftFacts {
 
 /** The drift verdict for one materialization. */
 export interface MaterializationDriftVerdict {
-    drift: boolean;
-    reason?: string;
+    drift: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    reason?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
 const lc = (s: string) => s.trim().toLowerCase();

@@ -191,14 +191,14 @@ describe('T19 — PostgreSQL callRoutineSQL named notation and unscoped heal par
             entityIDs: undefined
         });
 
-        expect(heal.names).toEqual(['ExcludedSchemaNames', 'IncludedSchemaNames']);
-        expect(heal.values).toEqual([`'sys,staging'`, `'tenant_schema'`]);
+        expect(heal.Names).toEqual(['ExcludedSchemaNames', 'IncludedSchemaNames']);
+        expect(heal.Values).toEqual([`'sys,staging'`, `'tenant_schema'`]);
 
         const sql = provider.callRoutineSQL(
             '__mj',
             'spUpdateExistingEntityFieldsFromSchema',
-            heal.values,
-            heal.names
+            heal.Values,
+            heal.Names
         );
 
         // Named notation maps directly to p_ExcludedSchemaNames and p_IncludedSchemaNames

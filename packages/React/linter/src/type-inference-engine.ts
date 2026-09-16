@@ -30,20 +30,20 @@ import {
  */
 export interface TypeInferenceResult {
   /** The type context with all inferred variable types */
-  typeContext: TypeContext;
+  TypeContext: TypeContext;
   /** Any type errors or warnings found during inference */
-  errors: TypeInferenceError[];
+  Errors: TypeInferenceError[];
 }
 
 /**
  * A type error or warning found during inference
  */
 export interface TypeInferenceError {
-  type: 'error' | 'warning';
-  message: string;
-  line: number;
-  column: number;
-  code?: string;
+  type: 'error' | 'warning';  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  message: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  line: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  column: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  code?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
 /**
@@ -75,8 +75,8 @@ export class TypeInferenceEngine {
 
     // Return the result
     return {
-      typeContext: this.typeContext,
-      errors: this.errors
+      TypeContext: this.typeContext,
+      Errors: this.errors
     };
   }
 

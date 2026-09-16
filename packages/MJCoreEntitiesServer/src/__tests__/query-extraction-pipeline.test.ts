@@ -16,11 +16,11 @@ import type { DatabasePlatform } from '@memberjunction/core';
 function extractFields(sql: string, platform: DatabasePlatform = 'sqlserver') {
     const parseResult = ParseQuerySQL(sql, platform);
     return {
-        fields: BuildFieldsFromSelectColumns(parseResult.selectColumns),
-        params: parseResult.deterministicParams,
-        tables: parseResult.tableRefs,
-        selectColumns: parseResult.selectColumns,
-        analysis: parseResult.analysis,
+        fields: BuildFieldsFromSelectColumns(parseResult.SelectColumns),
+        params: parseResult.DeterministicParams,
+        tables: parseResult.TableRefs,
+        selectColumns: parseResult.SelectColumns,
+        analysis: parseResult.Analysis,
     };
 }
 

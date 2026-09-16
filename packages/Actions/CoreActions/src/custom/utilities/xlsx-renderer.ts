@@ -15,39 +15,39 @@ import {
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface ExcelOptions {
-    fileName?: string;
-    author?: string;
-    title?: string;
-    description?: string;
+    fileName?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+    author?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+    title?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+    description?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
 /**
  * Input sheet definition format (accepts legacy ExcelJS-style objects)
  */
 export interface SheetInputDefinition {
-    name: string;
-    data?: Record<string, unknown>[] | unknown[][];
+    name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    data?: Record<string, unknown>[] | unknown[][];  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
     /** Alternative to data: LLMs sometimes send rows+columns instead */
-    rows?: unknown[][];
-    columns?: string[];
-    headers?: string[];
-    columnWidths?: number[];
-    styles?: {
+    rows?: unknown[][];  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+    columns?: string[];  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+    headers?: string[];  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+    ColumnWidths?: number[];
+    Styles?: {
         headerStyle?: LegacyStyle;
         dataStyle?: LegacyStyle;
     };
-    headerStyle?: LegacyStyle;
-    dataStyle?: LegacyStyle;
-    formulas?: Array<{ cell: string; formula: string; result?: unknown }>;
-    autoFilter?: boolean | string;
-    freeze?: { row?: number; column?: number };
+    HeaderStyle?: LegacyStyle;
+    DataStyle?: LegacyStyle;
+    Formulas?: Array<{ cell: string; formula: string; result?: unknown }>;
+    AutoFilter?: boolean | string;
+    Freeze?: { row?: number; column?: number };
 }
 
 /**
  * Legacy ExcelJS-style style object
  */
 export interface LegacyStyle {
-    font?: {
+    font?: {  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
         bold?: boolean;
         italic?: boolean;
         underline?: boolean;
@@ -56,18 +56,18 @@ export interface LegacyStyle {
         name?: string;
         color?: { argb?: string } | string;
     };
-    fill?: {
+    Fill?: {
         type?: string;
         pattern?: string;
         fgColor?: { argb?: string } | string;
         bgColor?: { argb?: string } | string;
     };
-    alignment?: {
+    Alignment?: {
         horizontal?: 'left' | 'center' | 'right' | 'fill' | 'justify';
         vertical?: 'top' | 'middle' | 'bottom';
         wrapText?: boolean;
     };
-    border?: {
+    Border?: {
         top?: { style?: string; color?: { argb?: string } | string };
         bottom?: { style?: string; color?: { argb?: string } | string };
         left?: { style?: string; color?: { argb?: string } | string };
@@ -76,10 +76,10 @@ export interface LegacyStyle {
 }
 
 export interface ExcelRenderResult {
-    buffer: Buffer;
-    sheetCount?: number;
-    rowCount?: number;
-    sizeBytes?: number;
+    buffer: Buffer;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    SheetCount?: number;
+    rowCount?: number;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+    sizeBytes?: number;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
 // ── Rendering ─────────────────────────────────────────────────────────────────
@@ -121,7 +121,7 @@ export async function RenderExcelFromSheets(
 
     return {
         buffer: Buffer.from(result.data),
-        sheetCount: result.sheetCount,
+        SheetCount: result.sheetCount,
         rowCount: result.rowCount,
         sizeBytes: result.sizeBytes,
     };
@@ -172,36 +172,36 @@ export function ConvertToSheetDefinition(input: SheetInputDefinition): SheetDefi
         sheetDef.headers = input.columns;
     }
 
-    if (input.columnWidths) {
-        sheetDef.columnWidths = input.columnWidths;
+    if (input.ColumnWidths) {
+        sheetDef.columnWidths = input.ColumnWidths;
     }
 
-    if (input.styles?.headerStyle) {
-        sheetDef.headerStyle = ConvertLegacyStyle(input.styles.headerStyle);
-    } else if (input.headerStyle) {
-        sheetDef.headerStyle = ConvertLegacyStyle(input.headerStyle);
+    if (input.Styles?.headerStyle) {
+        sheetDef.headerStyle = ConvertLegacyStyle(input.Styles.headerStyle);
+    } else if (input.HeaderStyle) {
+        sheetDef.headerStyle = ConvertLegacyStyle(input.HeaderStyle);
     }
 
-    if (input.styles?.dataStyle) {
-        sheetDef.dataStyle = ConvertLegacyStyle(input.styles.dataStyle);
-    } else if (input.dataStyle) {
-        sheetDef.dataStyle = ConvertLegacyStyle(input.dataStyle);
+    if (input.Styles?.dataStyle) {
+        sheetDef.dataStyle = ConvertLegacyStyle(input.Styles.dataStyle);
+    } else if (input.DataStyle) {
+        sheetDef.dataStyle = ConvertLegacyStyle(input.DataStyle);
     }
 
-    if (input.formulas) {
-        sheetDef.formulas = input.formulas.map(f => ({
+    if (input.Formulas) {
+        sheetDef.formulas = input.Formulas.map(f => ({
             cell: f.cell,
             formula: f.formula,
             result: f.result
         }));
     }
 
-    if (input.autoFilter !== undefined) {
-        sheetDef.autoFilter = input.autoFilter;
+    if (input.AutoFilter !== undefined) {
+        sheetDef.autoFilter = input.AutoFilter;
     }
 
-    if (input.freeze) {
-        sheetDef.freeze = input.freeze;
+    if (input.Freeze) {
+        sheetDef.freeze = input.Freeze;
     }
 
     return sheetDef;
@@ -235,30 +235,30 @@ export function ConvertLegacyStyle(style: LegacyStyle): CellStyle {
         }
     }
 
-    if (style.fill) {
+    if (style.Fill) {
         result.fill = {
-            pattern: (style.fill.pattern || 'solid') as FillPattern
+            pattern: (style.Fill.pattern || 'solid') as FillPattern
         };
-        const fgColor = extractColorValue(style.fill.fgColor);
+        const fgColor = extractColorValue(style.Fill.fgColor);
         if (fgColor) {
             result.fill.fgColor = fgColor;
         }
     }
 
-    if (style.alignment) {
+    if (style.Alignment) {
         result.alignment = {
-            horizontal: style.alignment.horizontal,
-            vertical: style.alignment.vertical,
-            wrapText: style.alignment.wrapText
+            horizontal: style.Alignment.horizontal,
+            vertical: style.Alignment.vertical,
+            wrapText: style.Alignment.wrapText
         };
     }
 
-    if (style.border) {
+    if (style.Border) {
         result.border = {};
-        if (style.border.top) result.border.top = convertBorderSide(style.border.top);
-        if (style.border.bottom) result.border.bottom = convertBorderSide(style.border.bottom);
-        if (style.border.left) result.border.left = convertBorderSide(style.border.left);
-        if (style.border.right) result.border.right = convertBorderSide(style.border.right);
+        if (style.Border.top) result.border.top = convertBorderSide(style.Border.top);
+        if (style.Border.bottom) result.border.bottom = convertBorderSide(style.Border.bottom);
+        if (style.Border.left) result.border.left = convertBorderSide(style.Border.left);
+        if (style.Border.right) result.border.right = convertBorderSide(style.Border.right);
     }
 
     return result;

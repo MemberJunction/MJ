@@ -264,7 +264,7 @@ export class RunTestResolver extends ResolverBase {
                 LogError(`🔥 Fire-and-forget test execution failed: ${errorMessage}`, undefined, error);
                 this.publishFireAndForgetError(pubSub, userPayload, testId, errorMessage);
             })
-            .finally(() => pulse.stop());
+            .finally(() => pulse.Stop());
     }
 
     /**
@@ -361,7 +361,7 @@ export class RunTestResolver extends ResolverBase {
             const errorMessage = (error instanceof Error) ? error.message : 'Unknown background suite execution error';
             LogError(`🔥 Fire-and-forget suite execution failed: ${errorMessage}`, undefined, error);
             this.publishFireAndForgetSuiteError(pubSub, userPayload, suiteId, errorMessage);
-        }).finally(() => pulse.stop());
+        }).finally(() => pulse.Stop());
     }
 
     // ===== Result Building =====

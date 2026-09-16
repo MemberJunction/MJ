@@ -11,17 +11,17 @@
 /** What the traversal found. */
 export interface SubAgentTraceFacts {
     /** Every sub-agent dispatched anywhere in the run tree, in dispatch order, duplicates kept. */
-    dispatchedAgents: string[];
-    /** Loop iterations on the top-level run. See {@link SubAgentTraceConfig.minIterations}. */
-    iterations: number;
+    dispatchedAgents: string[];  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    /** Loop iterations on the top-level run. See {@link SubAgentTraceConfig.MinIterations}. */
+    iterations: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 /** The oracle's configuration, exactly as the shipped research-agent tests already supply it. */
 export interface SubAgentTraceConfig {
     /** Every one of these must have been dispatched. Compared case-insensitively. */
-    requiredAgents?: string[];
+    RequiredAgents?: string[];
     /** None of these may have been dispatched — the "didn't over-delegate" check. */
-    forbiddenAgents?: string[];
+    ForbiddenAgents?: string[];
     /**
      * Minimum loop iterations.
      *
@@ -29,14 +29,14 @@ export interface SubAgentTraceConfig {
      * prompt per pass, so prompt steps are the only honest proxy the run tree offers. Sub-agent
      * prompt steps are excluded — they are the *child's* iterations, not the parent's.
      */
-    minIterations?: number;
+    MinIterations?: number;
 }
 
 export interface SubAgentTraceResult {
-    passed: boolean;
-    score: number;
-    message: string;
-    details: {
+    passed: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    Score: number;
+    message: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    Details: {
         dispatchedAgents: string[];
         missingAgents: string[];
         forbiddenDispatched: string[];
@@ -57,16 +57,16 @@ const normalize = (name: string): string => name.trim().toLowerCase();
 export function EvaluateSubAgentTrace(facts: SubAgentTraceFacts, config: SubAgentTraceConfig): SubAgentTraceResult {
     const dispatched = new Set(facts.dispatchedAgents.map(normalize));
 
-    const missingAgents = (config.requiredAgents ?? []).filter((name) => !dispatched.has(normalize(name)));
-    const forbiddenDispatched = (config.forbiddenAgents ?? []).filter((name) => dispatched.has(normalize(name)));
-    const iterationsShort = config.minIterations !== undefined && facts.iterations < config.minIterations;
+    const missingAgents = (config.RequiredAgents ?? []).filter((name) => !dispatched.has(normalize(name)));
+    const forbiddenDispatched = (config.ForbiddenAgents ?? []).filter((name) => dispatched.has(normalize(name)));
+    const iterationsShort = config.MinIterations !== undefined && facts.iterations < config.MinIterations;
 
     const details = {
         dispatchedAgents: facts.dispatchedAgents,
         missingAgents,
         forbiddenDispatched,
         iterations: facts.iterations,
-        minIterations: config.minIterations
+        minIterations: config.MinIterations
     };
 
     const problems: string[] = [];
@@ -77,30 +77,30 @@ export function EvaluateSubAgentTrace(facts: SubAgentTraceFacts, config: SubAgen
         problems.push(`dispatched forbidden sub-agent(s): ${forbiddenDispatched.join(', ')}`);
     }
     if (iterationsShort) {
-        problems.push(`expected at least ${config.minIterations} iteration(s), saw ${facts.iterations}`);
+        problems.push(`expected at least ${config.MinIterations} iteration(s), saw ${facts.iterations}`);
     }
 
     if (problems.length > 0) {
         // Partial credit, so a run that got two of three required sub-agents scores above one that
         // got none. The three checks are weighted equally and only the ones configured count.
         const checks: boolean[] = [];
-        if (config.requiredAgents?.length) {
+        if (config.RequiredAgents?.length) {
             checks.push(missingAgents.length === 0);
         }
-        if (config.forbiddenAgents?.length) {
+        if (config.ForbiddenAgents?.length) {
             checks.push(forbiddenDispatched.length === 0);
         }
-        if (config.minIterations !== undefined) {
+        if (config.MinIterations !== undefined) {
             checks.push(!iterationsShort);
         }
         const score = checks.length === 0 ? 0 : checks.filter(Boolean).length / checks.length;
-        return { passed: false, score, message: problems.join('; '), details };
+        return { passed: false, Score: score, message: problems.join('; '), Details: details };
     }
 
     const summary = facts.dispatchedAgents.length > 0
         ? `dispatched ${facts.dispatchedAgents.length} sub-agent step(s): ${[...new Set(facts.dispatchedAgents)].join(', ')}`
         : 'no sub-agents dispatched (none required)';
-    return { passed: true, score: 1, message: `${summary}; ${facts.iterations} iteration(s)`, details };
+    return { passed: true, Score: 1, message: `${summary}; ${facts.iterations} iteration(s)`, Details: details };
 }
 
 /** @deprecated Use {@link EvaluateSubAgentTrace}. */

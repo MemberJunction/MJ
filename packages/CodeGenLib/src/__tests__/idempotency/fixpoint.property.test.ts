@@ -404,11 +404,11 @@ describe('T13 — Fixpoint Property Tests (C2–C4, §6 T13)', () => {
          };
 
          const lockCtx: FieldLockContext = {
-            isNewEntity: rng() > 0.5,
-            isNewField: rng() > 0.5,
-            descriptionReopened: rng() > 0.8,
-            typeReopened: rng() > 0.8,
-            existingCategories: new Set(['General', 'Details', 'Audit']),
+            IsNewEntity: rng() > 0.5,
+            IsNewField: rng() > 0.5,
+            DescriptionReopened: rng() > 0.8,
+            TypeReopened: rng() > 0.8,
+            ExistingCategories: new Set(['General', 'Details', 'Audit']),
          };
 
          // Pass 1

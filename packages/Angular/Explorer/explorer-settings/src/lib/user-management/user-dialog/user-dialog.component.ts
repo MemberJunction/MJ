@@ -6,7 +6,7 @@ import { MJUserEntity, MJRoleEntity, MJUserRoleEntity } from '@memberjunction/co
 
 import { UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { EnrolledRow, serverRefusalReasons } from '../transaction-group-refusals';
+import { EnrolledRow, ServerRefusalReasons } from '../transaction-group-refusals';
 export interface UserDialogData {
   user?: MJUserEntity;
   mode: 'create' | 'edit';
@@ -334,7 +334,7 @@ export class UserDialogComponent extends BaseAngularComponent implements OnInit,
           refusals.push(`Remove ${this.describeRole(userRole.RoleID)}: ${userRole.LatestResult?.CompleteMessage ?? 'unknown error'}`);
         }
         else {
-          enrolled.push({ label: `Remove ${this.describeRole(userRole.RoleID)}`, entity: userRole });
+          enrolled.push({ Label: `Remove ${this.describeRole(userRole.RoleID)}`, Entity: userRole });
         }
       }
 
@@ -348,7 +348,7 @@ export class UserDialogComponent extends BaseAngularComponent implements OnInit,
           refusals.push(`Add ${this.describeRole(roleId)}: ${userRole.LatestResult?.CompleteMessage ?? 'unknown error'}`);
         }
         else {
-          enrolled.push({ label: `Add ${this.describeRole(roleId)}`, entity: userRole });
+          enrolled.push({ Label: `Add ${this.describeRole(roleId)}`, Entity: userRole });
         }
       }
 
@@ -361,7 +361,7 @@ export class UserDialogComponent extends BaseAngularComponent implements OnInit,
       if (!await tg.Submit()) {
         // Every row enrolled, so this is a SERVER-side refusal (or a rollback). Since #4309 the
         // server says which row and why, and that reason is now on each entity's LatestResult.
-        const reasons = serverRefusalReasons(enrolled);
+        const reasons = ServerRefusalReasons(enrolled);
         throw new Error(reasons.length > 0
           ? `Failed to update user roles — all changes have been rolled back.\n${reasons.join('\n')}`
           : 'Failed to update user roles — all changes have been rolled back');

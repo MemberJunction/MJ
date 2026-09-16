@@ -34,7 +34,7 @@ export interface FlattenOptions {
     /** Maximum nesting depth to flatten; objects deeper than this are kept as leaf blobs. Default 4. */
     MaxDepth?: number;
     /** Invoked when a flattened key collides with an existing key (first value wins). For diagnostics. */
-    onCollision?: (key: string) => void;
+    OnCollision?: (key: string) => void;
 }
 
 const DEFAULT_SEPARATOR = '_';
@@ -78,7 +78,7 @@ export function FlattenRecord(
 
     const put = (key: string, value: unknown): void => {
         if (Object.prototype.hasOwnProperty.call(out, key)) {
-            opts.onCollision?.(key);
+            opts.OnCollision?.(key);
             return; // first value wins
         }
         out[key] = value;

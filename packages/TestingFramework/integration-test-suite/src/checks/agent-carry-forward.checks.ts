@@ -118,7 +118,7 @@ function eligibleOutputData(dataMarker: string): string {
 
 /** Run IT: Echo Agent one live turn linked to the conversation; return that run's first prompt Messages. */
 async function observeTurn(ctx: IntegrationCheckContext, observer: MJAIAgentEntityExtended, detailId: string, conversationId: string): Promise<{ role: string; content: string }[]> {
-    const result = await RunAgentOverWire(MakeAIClient(ctx.Provider, ctx.User), observer, UserTurn('Acknowledge and finish.'), { conversationDetailId: detailId, conversationId });
+    const result = await RunAgentOverWire(MakeAIClient(ctx.Provider, ctx.User), observer, UserTurn('Acknowledge and finish.'), { conversationDetailId: detailId, ConversationId: conversationId });
     await Sleep(AGENT_LIVE_SETTLE_MS);
     const runId = await ResolveRunId(result, ctx.User, `ConversationID='${conversationId}' AND AgentID='${observer.ID}'`, ctx.Provider);
     Assert(!!runId, 'CF: the observing turn landed an AI Agent Run');

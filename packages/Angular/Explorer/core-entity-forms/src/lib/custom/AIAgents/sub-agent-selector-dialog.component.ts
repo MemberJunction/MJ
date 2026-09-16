@@ -22,7 +22,7 @@ export interface SubAgentSelectorConfig {
 
 export interface AgentDisplayItem extends MJAIAgentEntityExtended {
   Selected: boolean;
-  typeName?: string;
+  TypeName?: string;
 }
 
 /**
@@ -225,7 +225,7 @@ export class SubAgentSelectorDialogComponent extends BaseAngularComponent implem
       const agents: AgentDisplayItem[] = (results[0].Results || []).map(agent => ({
         ...agent.GetAll(),
         Selected: false,
-        typeName: agent.Type || 'Default'
+        TypeName: agent.Type || 'Default'
       } as AgentDisplayItem));
       
       this.AllAgents$.next(agents);
@@ -267,7 +267,7 @@ export class SubAgentSelectorDialogComponent extends BaseAngularComponent implem
       filtered = filtered.filter(agent =>
         (agent.Name && agent.Name.toLowerCase().includes(term)) ||
         (agent.Description && agent.Description.toLowerCase().includes(term)) ||
-        (agent.typeName && agent.typeName.toLowerCase().includes(term))
+        (agent.TypeName && agent.TypeName.toLowerCase().includes(term))
       );
     }
 

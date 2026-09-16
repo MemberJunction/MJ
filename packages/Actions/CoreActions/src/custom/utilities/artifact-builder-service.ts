@@ -19,9 +19,9 @@ import { SheetInputDefinition, ExcelOptions, RenderExcelFromSheets } from './xls
 export type DocumentType = 'pdf' | 'docx' | 'xlsx';
 
 export interface DocumentOptions {
-    pdf?: Partial<PDFOptions>;
-    word?: Partial<WordOptions>;
-    excel?: Partial<ExcelOptions>;
+    Pdf?: Partial<PDFOptions>;
+    Word?: Partial<WordOptions>;
+    Excel?: Partial<ExcelOptions>;
 }
 
 /**
@@ -30,43 +30,43 @@ export interface DocumentOptions {
  */
 export type DocumentOperation =
     // Common operations (PDF, DOCX)
-    | { type: 'heading'; level: 1 | 2 | 3 | 4 | 5 | 6; text: string }
-    | { type: 'paragraph'; text: string; bold?: boolean; italic?: boolean; align?: string }
-    | { type: 'table'; headers: string[]; rows: string[][] }
-    | { type: 'list'; items: string[]; ordered?: boolean }
-    | { type: 'image'; src: string; width?: number; height?: number; caption?: string }
-    | { type: 'pageBreak' }
-    | { type: 'hr' }
+    | { type: 'heading'; Level: 1 | 2 | 3 | 4 | 5 | 6; text: string }  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    | { type: 'paragraph'; text: string; Bold?: boolean; Italic?: boolean; align?: string }  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    | { type: 'table'; headers: string[]; rows: string[][] }  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    | { type: 'list'; Items: string[]; Ordered?: boolean }  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    | { type: 'image'; src: string; width?: number; height?: number; Caption?: string }  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    | { type: 'pageBreak' }  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    | { type: 'hr' }  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     // Excel-specific
-    | { type: 'sheet'; name: string; data: Record<string, unknown>[]; headers?: string[]; columnWidths?: number[] }
-    | { type: 'formula'; sheet: string; cell: string; formula: string };
+    | { type: 'sheet'; name: string; data: Record<string, unknown>[]; headers?: string[]; ColumnWidths?: number[] }  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    | { type: 'formula'; Sheet: string; Cell: string; Formula: string };  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 
 export interface DocumentSectionInfo {
-    id: string;
-    operations: DocumentOperation[];
+    id: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    Operations: DocumentOperation[];
 }
 
 export interface InProgressDocument {
-    handle: string;
-    documentType: DocumentType;
-    fileName: string;
-    options: DocumentOptions;
-    sections: DocumentSectionInfo[];
-    createdAt: Date;
-    lastModifiedAt: Date;
+    handle: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    documentType: DocumentType;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    fileName: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    options: DocumentOptions;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    sections: DocumentSectionInfo[];  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    CreatedAt: Date;
+    LastModifiedAt: Date;
 }
 
 export interface DocumentPreview {
-    handle: string;
-    documentType: DocumentType;
-    fileName: string;
-    sectionCount: number;
-    sections: Array<{
+    handle: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+    documentType: DocumentType;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+    fileName: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+    sectionCount: number;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+    sections: Array<{  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
         id: string;
         operationCount: number;
         summary: string;
     }>;
-    totalOperations: number;
+    totalOperations: number;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
 }
 
 // ── TTL ───────────────────────────────────────────────────────────────────────
@@ -116,8 +116,8 @@ export class ArtifactBuilderService {
             fileName: fileName || defaultFileName,
             options: options || {},
             sections: [],
-            createdAt: new Date(),
-            lastModifiedAt: new Date(),
+            CreatedAt: new Date(),
+            LastModifiedAt: new Date(),
         };
 
         this.documents.set(handle, doc);
@@ -132,8 +132,8 @@ export class ArtifactBuilderService {
         const doc = this.getDocument(handle);
         const sectionId = crypto.randomUUID();
 
-        doc.sections.push({ id: sectionId, operations });
-        doc.lastModifiedAt = new Date();
+        doc.sections.push({ id: sectionId, Operations: operations });
+        doc.LastModifiedAt = new Date();
 
         return [sectionId];
     }
@@ -151,10 +151,10 @@ export class ArtifactBuilderService {
             sectionCount: doc.sections.length,
             sections: doc.sections.map(s => ({
                 id: s.id,
-                operationCount: s.operations.length,
+                operationCount: s.Operations.length,
                 summary: this.summarizeSection(s),
             })),
-            totalOperations: doc.sections.reduce((sum, s) => sum + s.operations.length, 0),
+            totalOperations: doc.sections.reduce((sum, s) => sum + s.Operations.length, 0),
         };
     }
 
@@ -167,8 +167,8 @@ export class ArtifactBuilderService {
         if (!section) {
             throw new Error(`Section "${sectionId}" not found in document "${handle}"`);
         }
-        section.operations = operations;
-        doc.lastModifiedAt = new Date();
+        section.Operations = operations;
+        doc.LastModifiedAt = new Date();
     }
 
     /**
@@ -181,7 +181,7 @@ export class ArtifactBuilderService {
             throw new Error(`Section "${sectionId}" not found in document "${handle}"`);
         }
         doc.sections.splice(index, 1);
-        doc.lastModifiedAt = new Date();
+        doc.LastModifiedAt = new Date();
     }
 
     /**
@@ -195,21 +195,21 @@ export class ArtifactBuilderService {
             throw new Error(`Cannot finalize an empty document (handle: "${handle}")`);
         }
 
-        const allOperations = doc.sections.flatMap(s => s.operations);
+        const allOperations = doc.sections.flatMap(s => s.Operations);
         let buffer: Buffer;
         let mimeType: string;
 
         switch (doc.documentType) {
             case 'pdf':
-                buffer = await this.finalizePDF(allOperations, doc.options.pdf);
+                buffer = await this.finalizePDF(allOperations, doc.options.Pdf);
                 mimeType = 'application/pdf';
                 break;
             case 'docx':
-                buffer = await this.finalizeDocx(allOperations, doc.options.word);
+                buffer = await this.finalizeDocx(allOperations, doc.options.Word);
                 mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
                 break;
             case 'xlsx':
-                buffer = await this.finalizeXlsx(allOperations, doc.options.excel);
+                buffer = await this.finalizeXlsx(allOperations, doc.options.Excel);
                 mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
                 break;
             default:
@@ -266,19 +266,19 @@ export class ArtifactBuilderService {
         for (const op of operations) {
             switch (op.type) {
                 case 'heading':
-                    nodes.push({ type: 'heading', level: op.level, text: op.text });
+                    nodes.push({ type: 'heading', Level: op.Level, text: op.text });
                     break;
                 case 'paragraph':
-                    nodes.push({ type: 'paragraph', text: op.text, bold: op.bold, italic: op.italic });
+                    nodes.push({ type: 'paragraph', text: op.text, Bold: op.Bold, Italic: op.Italic });
                     break;
                 case 'table':
                     nodes.push({ type: 'table', headers: op.headers, rows: op.rows });
                     break;
                 case 'list':
-                    nodes.push({ type: 'list', items: op.items, ordered: op.ordered ?? false });
+                    nodes.push({ type: 'list', Items: op.Items, Ordered: op.Ordered ?? false });
                     break;
                 case 'image':
-                    nodes.push({ type: 'image', src: op.src, alt: op.caption });
+                    nodes.push({ type: 'image', src: op.src, alt: op.Caption });
                     break;
                 case 'hr':
                     nodes.push({ type: 'hr' });
@@ -304,12 +304,12 @@ export class ArtifactBuilderService {
             switch (op.type) {
                 case 'heading':
                     // Headings start new sections
-                    if (currentSection.heading || (currentSection.content?.length ?? 0) > 0) {
+                    if (currentSection.Heading || (currentSection.content?.length ?? 0) > 0) {
                         sections.push(currentSection);
                     }
                     currentSection = {
-                        heading: op.text,
-                        level: op.level,
+                        Heading: op.text,
+                        Level: op.Level,
                         content: [],
                     };
                     break;
@@ -318,8 +318,8 @@ export class ArtifactBuilderService {
                     currentSection.content.push({
                         type: 'paragraph',
                         text: op.text,
-                        bold: op.bold,
-                        italic: op.italic,
+                        Bold: op.Bold,
+                        Italic: op.Italic,
                         align: op.align,
                     });
                     break;
@@ -335,8 +335,8 @@ export class ArtifactBuilderService {
                     currentSection.content = currentSection.content ?? [];
                     currentSection.content.push({
                         type: 'list',
-                        items: op.items,
-                        ordered: op.ordered ?? false,
+                        Items: op.Items,
+                        Ordered: op.Ordered ?? false,
                     });
                     break;
                 case 'image':
@@ -346,7 +346,7 @@ export class ArtifactBuilderService {
                         url: op.src,
                         width: op.width,
                         height: op.height,
-                        caption: op.caption,
+                        Caption: op.Caption,
                     });
                     break;
                 // Skip page breaks, hr, and Excel-specific ops for DOCX
@@ -359,7 +359,7 @@ export class ArtifactBuilderService {
         }
 
         // Push remaining section
-        if (currentSection.heading || (currentSection.content?.length ?? 0) > 0) {
+        if (currentSection.Heading || (currentSection.content?.length ?? 0) > 0) {
             sections.push(currentSection);
         }
 
@@ -373,9 +373,9 @@ export class ArtifactBuilderService {
         // Collect formulas first
         for (const op of operations) {
             if (op.type === 'formula') {
-                const existing = formulasBySheet.get(op.sheet) || [];
-                existing.push({ cell: op.cell, formula: op.formula });
-                formulasBySheet.set(op.sheet, existing);
+                const existing = formulasBySheet.get(op.Sheet) || [];
+                existing.push({ cell: op.Cell, formula: op.Formula });
+                formulasBySheet.set(op.Sheet, existing);
             }
         }
 
@@ -386,11 +386,11 @@ export class ArtifactBuilderService {
                     name: op.name,
                     data: op.data,
                     headers: op.headers,
-                    columnWidths: op.columnWidths,
+                    ColumnWidths: op.ColumnWidths,
                 };
                 const formulas = formulasBySheet.get(op.name);
                 if (formulas) {
-                    sheet.formulas = formulas;
+                    sheet.Formulas = formulas;
                 }
                 sheets.push(sheet);
             }
@@ -418,7 +418,7 @@ export class ArtifactBuilderService {
     }
 
     private summarizeSection(section: DocumentSectionInfo): string {
-        const ops = section.operations;
+        const ops = section.Operations;
         if (ops.length === 0) return '(empty)';
 
         const typeCounts: Record<string, number> = {};
@@ -445,7 +445,7 @@ export class ArtifactBuilderService {
         this.cleanupTimer = setInterval(() => {
             const now = Date.now();
             for (const [handle, doc] of this.documents) {
-                if (now - doc.lastModifiedAt.getTime() > TTL_MS) {
+                if (now - doc.LastModifiedAt.getTime() > TTL_MS) {
                     this.documents.delete(handle);
                 }
             }

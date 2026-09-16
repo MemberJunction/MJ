@@ -30,20 +30,20 @@ import { GetDomainProfile } from './domain-profiles.js';
  */
 export interface OclifCommandShape {
   Id: string;
-  description?: string;
-  summary?: string;
-  hidden?: boolean;
-  flags?: Record<string, OclifFlagShape | undefined>;
-  examples?: ReadonlyArray<string | { command?: string; description?: string }>;
+  Description?: string;
+  summary?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+  Hidden?: boolean;
+  Flags?: Record<string, OclifFlagShape | undefined>;
+  Examples?: ReadonlyArray<string | { command?: string; description?: string }>;
 }
 
 /** The slice of an oclif flag definition this module reads. */
 export interface OclifFlagShape {
-  type?: string;
-  description?: string;
-  char?: string;
-  options?: readonly string[];
-  required?: boolean;
+  type?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+  Description?: string;
+  Char?: string;
+  options?: readonly string[];  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+  Required?: boolean;
 }
 
 /**
@@ -81,7 +81,7 @@ function firstLine(text: string | undefined): string | undefined {
 }
 
 /** oclif accepts examples as strings or `{command, description}` objects. */
-function normalizeExamples(examples: OclifCommandShape['examples']): string[] | undefined {
+function normalizeExamples(examples: OclifCommandShape['Examples']): string[] | undefined {
   if (!examples?.length) return undefined;
   const out = examples
     .map((e) => (typeof e === 'string' ? e : e.command))
@@ -90,15 +90,15 @@ function normalizeExamples(examples: OclifCommandShape['examples']): string[] | 
 }
 
 /** Converts oclif's flag record to the usage surface's flag list, options included. */
-function normalizeFlags(flags: OclifCommandShape['flags']): PluginUsageFlag[] | undefined {
+function normalizeFlags(flags: OclifCommandShape['Flags']): PluginUsageFlag[] | undefined {
   if (!flags) return undefined;
   const out: PluginUsageFlag[] = [];
   for (const [name, def] of Object.entries(flags)) {
     if (!def) continue;
     const type = def.options?.length ? def.options.join('|') : (def.type ?? 'string');
-    const parts = [def.description ?? ''];
-    if (def.char) parts.push(`(-${def.char})`);
-    if (def.required) parts.push('(required)');
+    const parts = [def.Description ?? ''];
+    if (def.Char) parts.push(`(-${def.Char})`);
+    if (def.Required) parts.push('(required)');
     out.push({ name: `--${name}`, type, description: parts.filter(Boolean).join(' ').trim() });
   }
   return out.length > 0 ? out : undefined;
@@ -113,15 +113,15 @@ export function DeriveUsage(command: OclifCommandShape): PluginUsage {
   const key = normalizeCommandKey(command.Id);
   const domain = DomainOf(key);
   const profile = GetDomainProfile(domain);
-  const description = command.description ?? command.summary;
+  const description = command.Description ?? command.summary;
 
   return {
     domain,
     command: key,
     summary: command.summary ?? firstLine(description) ?? `mj ${key.replace(/:/g, ' ')}`,
     description,
-    flags: normalizeFlags(command.flags),
-    examples: normalizeExamples(command.examples),
+    flags: normalizeFlags(command.Flags),
+    examples: normalizeExamples(command.Examples),
     runtime: profile.Runtime,
   };
 }
@@ -145,7 +145,7 @@ export function deriveUsage(command: OclifCommandShape): PluginUsage {
 export function RegisterDerivedUsage(commands: readonly OclifCommandShape[]): string[] {
   const registered: string[] = [];
   for (const command of commands) {
-    if (!command?.Id || command.hidden) continue;
+    if (!command?.Id || command.Hidden) continue;
     if (BUILT_IN_COMMANDS.has(normalizeCommandKey(command.Id))) continue;
     const usage = DeriveUsage(command);
     CLIPluginRegistry.RegisterUsage(usage);

@@ -12,12 +12,12 @@ import { Colors } from '@/theme/tokens';
 export type ChartKind = 'bar' | 'line' | 'pie';
 
 /** A single labeled data point. */
-export type ChartDatum = { label: string; value: number };
+export type ChartDatum = { label: string; value: number };  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 
 /** Normalized, render-ready chart description. */
 export type ChartSpec = {
     Kind: ChartKind;
-    title?: string;
+    title?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
     Data: ChartDatum[];
 };
 

@@ -108,10 +108,10 @@ describeIfPG('PG 42P16 fallback — integration', () => {
             `);
             // Additive change — PG accepts this natively.
             await ExecuteWithFallback({
-                client,
+                Client: client,
                 schema: SCHEMA,
-                viewName: 'vwWidgets',
-                createOrReplaceSQL: `
+                ViewName: 'vwWidgets',
+                CreateOrReplaceSQL: `
                     CREATE OR REPLACE VIEW ${SCHEMA}."vwWidgets" AS
                     SELECT "ID", "Name", "Color", "Count" FROM ${SCHEMA}."Widget"
                 `,
@@ -140,10 +140,10 @@ describeIfPG('PG 42P16 fallback — integration', () => {
 
         it('rename a column → fallback rebuilds, column renamed', async () => {
             await ExecuteWithFallback({
-                client,
+                Client: client,
                 schema: SCHEMA,
-                viewName: 'vwWidgets',
-                createOrReplaceSQL: `
+                ViewName: 'vwWidgets',
+                CreateOrReplaceSQL: `
                     CREATE OR REPLACE VIEW ${SCHEMA}."vwWidgets" AS
                     SELECT "ID", "Name" AS "DisplayName", "Color" FROM ${SCHEMA}."Widget"
                 `,
@@ -154,10 +154,10 @@ describeIfPG('PG 42P16 fallback — integration', () => {
 
         it('drop a column → fallback rebuilds, column gone', async () => {
             await ExecuteWithFallback({
-                client,
+                Client: client,
                 schema: SCHEMA,
-                viewName: 'vwWidgets',
-                createOrReplaceSQL: `
+                ViewName: 'vwWidgets',
+                CreateOrReplaceSQL: `
                     CREATE OR REPLACE VIEW ${SCHEMA}."vwWidgets" AS
                     SELECT "ID", "Name" FROM ${SCHEMA}."Widget"
                 `,
@@ -168,10 +168,10 @@ describeIfPG('PG 42P16 fallback — integration', () => {
 
         it('reorder columns → fallback rebuilds, new order applied', async () => {
             await ExecuteWithFallback({
-                client,
+                Client: client,
                 schema: SCHEMA,
-                viewName: 'vwWidgets',
-                createOrReplaceSQL: `
+                ViewName: 'vwWidgets',
+                CreateOrReplaceSQL: `
                     CREATE OR REPLACE VIEW ${SCHEMA}."vwWidgets" AS
                     SELECT "ID", "Color", "Name" FROM ${SCHEMA}."Widget"
                 `,
@@ -182,10 +182,10 @@ describeIfPG('PG 42P16 fallback — integration', () => {
 
         it('type change → fallback rebuilds, new type applied', async () => {
             await ExecuteWithFallback({
-                client,
+                Client: client,
                 schema: SCHEMA,
-                viewName: 'vwWidgets',
-                createOrReplaceSQL: `
+                ViewName: 'vwWidgets',
+                CreateOrReplaceSQL: `
                     CREATE OR REPLACE VIEW ${SCHEMA}."vwWidgets" AS
                     SELECT "ID", "Name", "Color"::VARCHAR(3) AS "Color" FROM ${SCHEMA}."Widget"
                 `,
@@ -217,10 +217,10 @@ describeIfPG('PG 42P16 fallback — integration', () => {
             `);
             // 42P16 change to vwWidgets (reorder).
             await ExecuteWithFallback({
-                client,
+                Client: client,
                 schema: SCHEMA,
-                viewName: 'vwWidgets',
-                createOrReplaceSQL: `
+                ViewName: 'vwWidgets',
+                CreateOrReplaceSQL: `
                     CREATE OR REPLACE VIEW ${SCHEMA}."vwWidgets" AS
                     SELECT "ID", "Color", "Name" FROM ${SCHEMA}."Widget"
                 `,
@@ -248,10 +248,10 @@ describeIfPG('PG 42P16 fallback — integration', () => {
                 CREATE VIEW ${SCHEMA}."vwC" AS SELECT "ID" FROM ${SCHEMA}."vwB"
             `);
             await ExecuteWithFallback({
-                client,
+                Client: client,
                 schema: SCHEMA,
-                viewName: 'vwWidgets',
-                createOrReplaceSQL: `
+                ViewName: 'vwWidgets',
+                CreateOrReplaceSQL: `
                     CREATE OR REPLACE VIEW ${SCHEMA}."vwWidgets" AS
                     SELECT "ID", "Color", "Name" FROM ${SCHEMA}."Widget"
                 `,
@@ -273,10 +273,10 @@ describeIfPG('PG 42P16 fallback — integration', () => {
                 SELECT "ID" FROM ${SCHEMA}."vwWidgets"
             `);
             await ExecuteWithFallback({
-                client,
+                Client: client,
                 schema: SCHEMA,
-                viewName: 'vwWidgets',
-                createOrReplaceSQL: `
+                ViewName: 'vwWidgets',
+                CreateOrReplaceSQL: `
                     CREATE OR REPLACE VIEW ${SCHEMA}."vwWidgets" AS
                     SELECT "ID", "Color", "Name" FROM ${SCHEMA}."Widget"
                 `,
@@ -299,10 +299,10 @@ describeIfPG('PG 42P16 fallback — integration', () => {
                 AS $$ SELECT * FROM ${SCHEMA}."vwWidgets" $$ LANGUAGE sql
             `);
             await ExecuteWithFallback({
-                client,
+                Client: client,
                 schema: SCHEMA,
-                viewName: 'vwWidgets',
-                createOrReplaceSQL: `
+                ViewName: 'vwWidgets',
+                CreateOrReplaceSQL: `
                     CREATE OR REPLACE VIEW ${SCHEMA}."vwWidgets" AS
                     SELECT "ID", "Color", "Name" FROM ${SCHEMA}."Widget"
                 `,
@@ -332,10 +332,10 @@ describeIfPG('PG 42P16 fallback — integration', () => {
                 `GRANT SELECT ON ${SCHEMA}."vwWidgets" TO ${TEST_ROLE} WITH GRANT OPTION`
             );
             await ExecuteWithFallback({
-                client,
+                Client: client,
                 schema: SCHEMA,
-                viewName: 'vwWidgets',
-                createOrReplaceSQL: `
+                ViewName: 'vwWidgets',
+                CreateOrReplaceSQL: `
                     CREATE OR REPLACE VIEW ${SCHEMA}."vwWidgets" AS
                     SELECT "ID", "Color", "Name" FROM ${SCHEMA}."Widget"
                 `,
@@ -360,10 +360,10 @@ describeIfPG('PG 42P16 fallback — integration', () => {
                 `COMMENT ON VIEW ${SCHEMA}."vwWidgets" IS 'important notes about widgets'`
             );
             await ExecuteWithFallback({
-                client,
+                Client: client,
                 schema: SCHEMA,
-                viewName: 'vwWidgets',
-                createOrReplaceSQL: `
+                ViewName: 'vwWidgets',
+                CreateOrReplaceSQL: `
                     CREATE OR REPLACE VIEW ${SCHEMA}."vwWidgets" AS
                     SELECT "ID", "Color", "Name" FROM ${SCHEMA}."Widget"
                 `,
@@ -393,10 +393,10 @@ describeIfPG('PG 42P16 fallback — integration', () => {
                 )
             ).rows[0].owner;
             await ExecuteWithFallback({
-                client,
+                Client: client,
                 schema: SCHEMA,
-                viewName: 'vwWidgets',
-                createOrReplaceSQL: `
+                ViewName: 'vwWidgets',
+                CreateOrReplaceSQL: `
                     CREATE OR REPLACE VIEW ${SCHEMA}."vwWidgets" AS
                     SELECT "ID", "Color", "Name" FROM ${SCHEMA}."Widget"
                 `,
@@ -426,14 +426,14 @@ describeIfPG('PG 42P16 fallback — integration', () => {
                 SELECT "ID", UPPER("Name") AS "U" FROM ${SCHEMA}."vwWidgets"
             `);
             await ExecuteWithFallback({
-                client,
+                Client: client,
                 schema: SCHEMA,
-                viewName: 'vwWidgets',
-                createOrReplaceSQL: `
+                ViewName: 'vwWidgets',
+                CreateOrReplaceSQL: `
                     CREATE OR REPLACE VIEW ${SCHEMA}."vwWidgets" AS
                     SELECT "ID", "Color", "Name" FROM ${SCHEMA}."Widget"
                 `,
-                willRegenerate: new Set([`${SCHEMA}.vwWidgetsUpper`]),
+                WillRegenerate: new Set([`${SCHEMA}.vwWidgetsUpper`]),
             });
             const res = await client.query(
                 `SELECT 1 FROM pg_views WHERE schemaname = $1 AND viewname = 'vwWidgetsUpper'`,
@@ -469,10 +469,10 @@ describeIfPG('PG 42P16 fallback — integration', () => {
             // transaction rolls back.
             await expect(
                 ExecuteWithFallback({
-                    client,
+                    Client: client,
                     schema: SCHEMA,
-                    viewName: 'vwWidgets',
-                    createOrReplaceSQL: `
+                    ViewName: 'vwWidgets',
+                    CreateOrReplaceSQL: `
                         CREATE OR REPLACE VIEW ${SCHEMA}."vwWidgets" AS
                         SELECT "ID", "Name" FROM ${SCHEMA}."Widget"
                     `,
@@ -501,10 +501,10 @@ describeIfPG('PG 42P16 fallback — integration', () => {
             `);
             await expect(
                 ExecuteWithFallback({
-                    client,
+                    Client: client,
                     schema: SCHEMA,
-                    viewName: 'vwWidgets',
-                    createOrReplaceSQL: `CREATE OR REPLACE VIEW ${SCHEMA}."vwWidgets" AS SELEKT garbage`,
+                    ViewName: 'vwWidgets',
+                    CreateOrReplaceSQL: `CREATE OR REPLACE VIEW ${SCHEMA}."vwWidgets" AS SELEKT garbage`,
                 })
             ).rejects.toThrow();
             // Original view preserved.
@@ -519,10 +519,10 @@ describeIfPG('PG 42P16 fallback — integration', () => {
             `);
             await expect(
                 ExecuteWithFallback({
-                    client,
+                    Client: client,
                     schema: SCHEMA,
-                    viewName: 'vwWidgets',
-                    createOrReplaceSQL: `
+                    ViewName: 'vwWidgets',
+                    CreateOrReplaceSQL: `
                         CREATE OR REPLACE VIEW ${SCHEMA}."vwWidgets" AS
                         SELECT "ID", "NonExistentColumn" FROM ${SCHEMA}."Widget"
                     `,

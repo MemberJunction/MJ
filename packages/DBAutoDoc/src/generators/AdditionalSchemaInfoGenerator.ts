@@ -23,23 +23,23 @@ import { DetectedOrganicKeysOutput, OrganicKeyConfig } from '../discovery/Organi
 
 export interface AdditionalSchemaInfoOptions {
   /** Only include AI-discovered keys, not keys already present in the database schema */
-  discoveredOnly?: boolean;
+  DiscoveredOnly?: boolean;
   /** Minimum confidence (0-100) for discovered keys to be included */
-  confidenceThreshold?: number;
+  ConfidenceThreshold?: number;
   /** Only include tables/columns with user-approved descriptions */
-  approvedOnly?: boolean;
+  ApprovedOnly?: boolean;
   /** Only include confirmed candidates (status === 'confirmed') from discovery */
-  confirmedOnly?: boolean;
+  ConfirmedOnly?: boolean;
   /** Minimum confidence (0-100) for value-list / enum entries. Default 85. */
-  valueListConfidenceThreshold?: number;
+  ValueListConfidenceThreshold?: number;
   /** If true, skip emitting Fields[] entirely. Default false. */
-  excludeValueLists?: boolean;
+  ExcludeValueLists?: boolean;
   /**
    * Organic-key detection output (per-schema/per-table OrganicKeys). When present,
    * merged into each table's OrganicKeys[] so CodeGen's processOrganicKeyConfig
    * writes EntityOrganicKey / EntityOrganicKeyRelatedEntity metadata.
    */
-  organicKeys?: DetectedOrganicKeysOutput;
+  OrganicKeys?: DetectedOrganicKeysOutput;
 }
 
 interface SoftPKEntry {
@@ -111,17 +111,17 @@ export class AdditionalSchemaInfoGenerator {
     const result: AdditionalSchemaInfoOutput = {
       Schemas: this.generateSchemaNameInfo(state),
     };
-    const threshold = options.confidenceThreshold ?? 0;
+    const threshold = options.ConfidenceThreshold ?? 0;
 
     // Collect discovered candidates from key detection phase
-    const discoveredPKs = this.getDiscoveredPKs(state, threshold, options.confirmedOnly ?? false);
-    const discoveredFKs = this.getDiscoveredFKs(state, threshold, options.confirmedOnly ?? false);
+    const discoveredPKs = this.getDiscoveredPKs(state, threshold, options.ConfirmedOnly ?? false);
+    const discoveredFKs = this.getDiscoveredFKs(state, threshold, options.ConfirmedOnly ?? false);
 
     for (const schema of state.schemas) {
       const tables: TableSchemaInfo[] = [];
 
       for (const table of schema.tables) {
-        if (options.approvedOnly && !table.userApproved) {
+        if (options.ApprovedOnly && !table.userApproved) {
           continue;
         }
 
@@ -130,15 +130,15 @@ export class AdditionalSchemaInfoGenerator {
           table,
           discoveredPKs,
           discoveredFKs,
-          options.discoveredOnly ?? false,
-          options.valueListConfidenceThreshold ?? 85,
-          options.excludeValueLists ?? false,
-          options.confirmedOnly ?? false
+          options.DiscoveredOnly ?? false,
+          options.ValueListConfidenceThreshold ?? 85,
+          options.ExcludeValueLists ?? false,
+          options.ConfirmedOnly ?? false
         );
 
         if (tableInfo) {
           // Attach organic keys for this table when detection output is present.
-          const orgKeys = this.getOrganicKeysForTable(options.organicKeys, schema.name, table.name);
+          const orgKeys = this.getOrganicKeysForTable(options.OrganicKeys, schema.name, table.name);
           if (orgKeys.length > 0) {
             tableInfo.OrganicKeys = orgKeys;
           }
@@ -148,11 +148,11 @@ export class AdditionalSchemaInfoGenerator {
 
       // A table may have organic keys even if buildTableInfo returned null (no
       // soft PK/FK and no value lists). Emit a minimal entry so they aren't lost.
-      if (options.organicKeys) {
+      if (options.OrganicKeys) {
         const emittedTables = new Set(tables.map((t) => t.TableName));
         for (const table of schema.tables) {
           if (emittedTables.has(table.name)) continue;
-          const orgKeys = this.getOrganicKeysForTable(options.organicKeys, schema.name, table.name);
+          const orgKeys = this.getOrganicKeysForTable(options.OrganicKeys, schema.name, table.name);
           if (orgKeys.length > 0) {
             tables.push({ TableName: table.name, OrganicKeys: orgKeys });
           }

@@ -129,7 +129,7 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
         return rvVectorResult.Results;
     }
 
-    private async GetAccessToken(): Promise<string | null> {
+    private async GetAccessToken(): Promise<string | null> {  // case-violation-ok-legacy-back-compat: reached by bracket access outside the declaring class, where a same-named key on an unrelated object is indistinguishable
         try{
             LogStatus("Getting Rex access token");
 

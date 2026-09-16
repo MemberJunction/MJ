@@ -51,10 +51,10 @@ export default class ActionsRun extends Command {
     const { flags, metadata } = await this.parse(ActionsRun);
     const service = new ActionService();
     const formatter = new OutputFormatter(ResolveLegacyFormat({
-        format: flags.format,
+        Format: flags.format,
         Legacy: flags.output as 'compact' | 'json' | 'table',
         LegacyDefault: 'compact' as const,
-        legacyWasExplicit: metadata.flags.output?.setFromDefault === false,
+        LegacyWasExplicit: metadata.flags.output?.setFromDefault === false,
         Map: AI_FORMAT_MAP,
       }));
 

@@ -1,7 +1,7 @@
 import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
-import { trimTrailingStatementTerminators } from '../Misc/sql_text';
+import { TrimTrailingStatementTerminators } from '../Misc/sql_text';
 
 // ─── CONNECTION ABSTRACTION ──────────────────────────────────────────────────
 
@@ -473,7 +473,7 @@ export abstract class CodeGenDatabaseProvider {
      * Linear time — the body comes from configuration (see Misc/sql_text).
      */
     protected trimStatementTerminator(sql: string): string {
-        return trimTrailingStatementTerminators(sql);
+        return TrimTrailingStatementTerminators(sql);
     }
 
     /**

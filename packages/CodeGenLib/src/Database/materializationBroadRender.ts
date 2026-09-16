@@ -37,9 +37,9 @@ import {
 /** Outcome of stripping row-filter predicates from a rendered query. */
 export interface BroadRenderResult {
     /** The broad SQL (row-filter predicates removed). Equals the input when nothing was removed. */
-    sql: string;
+    Sql: string;
     /** How many top-level conjunctive predicates on the row-filter columns were removed. */
-    removedCount: number;
+    RemovedCount: number;
     /**
      * True when `removedCount` does NOT equal the caller-supplied `expectedRemovals` (the number of
      * row-filter *parameter* predicates the classifier identified). This means broad-render either
@@ -50,7 +50,7 @@ export interface BroadRenderResult {
      * never would — the caller MUST refuse to materialize. Always false when `expectedRemovals` is
      * omitted (the matcher makes no exact-count claim).
      */
-    ambiguous: boolean;
+    Ambiguous: boolean;
 }
 
 /** Flattens a top-level AND-chain into its individual conjuncts (non-AND leaves). */
@@ -131,9 +131,9 @@ export function BuildBroadRowFilterSQL(
 ): BroadRenderResult {
     // ambiguous is only ever asserted when the caller told us how many parameter predicates to expect.
     const verdict = (sql: string, removedCount: number): BroadRenderResult => ({
-        sql,
-        removedCount,
-        ambiguous: expectedRemovals != null && removedCount !== expectedRemovals,
+        Sql: sql,
+        RemovedCount: removedCount,
+        Ambiguous: expectedRemovals != null && removedCount !== expectedRemovals,
     });
     if (!rowFilterColumns || rowFilterColumns.length === 0) {
         return verdict(renderedSQL, 0);

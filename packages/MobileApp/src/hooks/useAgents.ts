@@ -14,7 +14,7 @@ import { colorForAgent } from '@/theme/tokens';
  * per-agent avatar `color` (derived from the name) and an uppercase `initial`
  * used as the avatar glyph.
  */
-export type AgentChip = AgentOption & { color: string; initial: string };
+export type AgentChip = AgentOption & { color: string; initial: string };  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 
 /**
  * Loads active top-level agents for the new-conversation agent rail and maps

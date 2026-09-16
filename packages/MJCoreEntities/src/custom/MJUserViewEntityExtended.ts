@@ -23,7 +23,7 @@ import { ResourcePermissionEngine } from "./ResourcePermissions/ResourcePermissi
 
 @RegisterClass(BaseEntity, 'MJ: User Views')
 export class MJUserViewEntityExtended extends MJUserViewEntity  {
-    private _ViewEntityInfo: EntityInfo = null
+    private _ViewEntityInfo: EntityInfo = null  // case-violation-ok-legacy-back-compat: reached by bracket access outside the declaring class, where a same-named key on an unrelated object is indistinguishable
 
     /**
      * This is a read-only property that returns the filters for this view. This information

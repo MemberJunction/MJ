@@ -3,10 +3,10 @@
  *
  * Context
  * -------
- * EntityInfo memoizes eight collections derived from `this._Fields`:
+ * EntityInfo memoizes eight collections derived from `this._fields`:
  *   _fieldByNameMap, _firstPrimaryKeyCache, _primaryKeysCache, _uniqueKeysCache,
  *   _foreignKeysCache, _encryptedFieldsCache, _datetimeFieldsCache, _nameFieldCache.
- * The constructor now explicitly resets all eight at the point `_Fields` is (re)assigned,
+ * The constructor now explicitly resets all eight at the point `_fields` is (re)assigned,
  * removing the previously load-bearing "write-once after construction" invariant.
  *
  * Why this file exists
@@ -15,10 +15,10 @@
  * don't cross-contaminate — which would pass even if the reset block were deleted (each fresh
  * instance starts with null caches regardless). That test does NOT exercise the reset.
  *
- * In the production code there is exactly ONE site that assigns `_Fields` and runs the reset:
- * the constructor (verified: `this._Fields = []` and `this._fieldByNameMap = null` each appear
+ * In the production code there is exactly ONE site that assigns `_fields` and runs the reset:
+ * the constructor (verified: `this._fields = []` and `this._fieldByNameMap = null` each appear
  * once). There is no public/protected re-init entry point (`copyInitData` is protected but does
- * not contain the `_Fields=[]`+reset block), so a *true* second construction-time reset cannot
+ * not contain the `_fields=[]`+reset block), so a *true* second construction-time reset cannot
  * be triggered from a unit test without adding a production seam — which this round forbids.
  *
  * What we therefore do
@@ -27,7 +27,7 @@
  * that reaches the private cache fields (TS `private` is compile-time only; the existing field-
  * index test already uses `as unknown as {...}` to reach privates). Crucially, the file contains
  * a CONTROL test proving that WITHOUT the reset the memoized getters serve STALE data after a
- * `_Fields` swap — i.e. the reset statements are *necessary* — and a paired test proving that
+ * `_fields` swap — i.e. the reset statements are *necessary* — and a paired test proving that
  * WITH the reset every derived getter reflects the NEW field set. This makes the assertions
  * meaningful: they encode the exact staleness bug the production reset guards against.
  */
@@ -61,7 +61,7 @@ const FIELDS_B: FieldInit[] = [
 
 // View into EntityInfo's private cache + field storage. `private` is erased at runtime.
 type EntityInternals = {
-    _Fields: EntityFieldInfo[];
+    _fields: EntityFieldInfo[];
     _fieldByNameMap: Map<string, EntityFieldInfo> | null;
     _firstPrimaryKeyCache: EntityFieldInfo | undefined;
     _primaryKeysCache: EntityFieldInfo[] | null;
@@ -86,9 +86,9 @@ function primeAllDerivedCaches(e: EntityInfo): void {
     void e.NameField;
 }
 
-/** Swap the backing `_Fields` array to a brand-new field set (no cache reset). */
+/** Swap the backing `_fields` array to a brand-new field set (no cache reset). */
 function swapFields(e: EntityInfo, fields: FieldInit[]): void {
-    internals(e)._Fields = fields.map(f => new EntityFieldInfo(f));
+    internals(e)._fields = fields.map(f => new EntityFieldInfo(f));
 }
 
 /**
@@ -112,9 +112,9 @@ function makeEntityA(): EntityInfo {
 }
 
 describe('EntityInfo lazy derived-cache reset (Fix 2)', () => {
-    describe('CONTROL: without the reset, memoized getters serve STALE data after a _Fields swap', () => {
+    describe('CONTROL: without the reset, memoized getters serve STALE data after a _fields swap', () => {
         // This is the bug the production constructor reset prevents. If a future re-init path
-        // reassigned `_Fields` but forgot to null these caches, EVERY one of these getters would
+        // reassigned `_fields` but forgot to null these caches, EVERY one of these getters would
         // keep returning the OLD field set. We assert that here so the "after reset" tests below
         // are demonstrably non-tautological — the reset genuinely changes the observed behavior.
         it('FieldByName / PrimaryKeys / NameField / etc. still reflect the OLD fields', () => {
@@ -173,7 +173,7 @@ describe('EntityInfo lazy derived-cache reset (Fix 2)', () => {
         it('reset to an EMPTY field set yields empty/undefined derived caches (no stale carryover)', () => {
             const e = makeEntityA();
             primeAllDerivedCaches(e);
-            internals(e)._Fields = []; // no fields at all
+            internals(e)._fields = []; // no fields at all
             runProductionCacheReset(e);
 
             expect(e.FieldByName('ID')).toBeUndefined();

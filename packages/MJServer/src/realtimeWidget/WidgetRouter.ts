@@ -126,7 +126,7 @@ async function handleForget(service: WidgetSessionService, req: Request, res: Re
     res.status(400).json({ success: false, errorCode: 'not_found', error: 'widgetKey is required.' });
     return;
   }
-  const result = await service.ForgetVisitor({ widgetKey, visitorKey, origin: req.get('origin') ?? undefined });
+  const result = await service.ForgetVisitor({ WidgetKey: widgetKey, VisitorKey: visitorKey, origin: req.get('origin') ?? undefined });
   res.status(result.success ? 200 : result.errorCode === 'server_error' ? 500 : 403).json(result);
 }
 
@@ -148,9 +148,9 @@ async function handleResolveIdentity(service: WidgetSessionService, req: Request
     return;
   }
   const result = await service.ResolveVisitorIdentity({
-    widgetKey,
-    visitorKey,
-    verifiedEmail: verifiedUser.Email,
+    WidgetKey: widgetKey,
+    VisitorKey: visitorKey,
+    VerifiedEmail: verifiedUser.Email,
     origin: req.get('origin') ?? undefined,
   });
   res.status(result.success ? 200 : result.errorCode === 'server_error' ? 500 : 403).json(result);
@@ -165,7 +165,7 @@ async function handleUpgrade(service: WidgetSessionService, req: Request, res: R
     res.status(400).json({ success: false, errorCode: 'not_found', error: 'widgetKey is required.' });
     return;
   }
-  const result = await service.RequestUpgrade({ widgetKey, email, origin: req.get('origin') ?? undefined });
+  const result = await service.RequestUpgrade({ WidgetKey: widgetKey, email, origin: req.get('origin') ?? undefined });
   // 400 for a bad email (client can fix it); 403 for any policy rejection (uniform, non-enumerable); 500 for faults.
   const status = result.success ? 200 : result.errorCode === 'invalid_email' ? 400 : result.errorCode === 'server_error' ? 500 : 403;
   res.status(status).json(result);

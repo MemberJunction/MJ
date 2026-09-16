@@ -43,16 +43,16 @@ export type VariantRenderer = (paramValues: Record<string, unknown>) => string;
 
 /** A single parameter's classification outcome (for logging / diagnostics). */
 export interface ParamVerdict {
-    name: string;
-    verdict: VerifiedParamRole;
+    name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    verdict: VerifiedParamRole;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 }
 
 /** Result of classifying all of a query's parameters. */
 export interface QueryParamClassification {
     /** The overall qualification (drives whether/how the query materializes). */
-    qualification: ParamQualification;
+    Qualification: ParamQualification;
     /** Per-parameter verdicts, in declaration order (for precise logs). */
-    perParam: ParamVerdict[];
+    PerParam: ParamVerdict[];
 }
 
 /**
@@ -308,7 +308,7 @@ export function ClassifyQueryParameters(opts: {
         dialect,
     });
 
-    return { qualification, perParam };
+    return { Qualification: qualification, PerParam: perParam };
 }
 
 /** @deprecated Use {@link ClassifyQueryParameters}. */

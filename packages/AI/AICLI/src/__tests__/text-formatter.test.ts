@@ -27,20 +27,20 @@ describe('TextFormatter', () => {
         });
 
         it('should format simple text', () => {
-            const result = TextFormatter.formatText('Hello world', { maxWidth: 80 });
+            const result = TextFormatter.formatText('Hello world', { MaxWidth: 80 });
             expect(result).toContain('Hello world');
         });
 
         it('should preserve paragraphs', () => {
             const text = 'First paragraph.\n\nSecond paragraph.';
-            const result = TextFormatter.formatText(text, { preserveParagraphs: true, maxWidth: 80 });
+            const result = TextFormatter.formatText(text, { PreserveParagraphs: true, MaxWidth: 80 });
             expect(result).toContain('First paragraph.');
             expect(result).toContain('Second paragraph.');
         });
 
         it('should trim excessive empty lines', () => {
             const text = 'Line 1\n\n\n\n\nLine 2';
-            const result = TextFormatter.formatText(text, { trimEmptyLines: true, maxWidth: 80 });
+            const result = TextFormatter.formatText(text, { TrimEmptyLines: true, MaxWidth: 80 });
             // Should reduce multiple newlines to double newline
             expect(result).not.toContain('\n\n\n');
         });

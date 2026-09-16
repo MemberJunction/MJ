@@ -38,9 +38,9 @@ export class ColumnStatsCache {
       tableStats = {
         schemaName: stats.schemaName,
         tableName: stats.tableName,
-        totalRows: stats.totalRows,
+        TotalRows: stats.totalRows,
         columns: new Map(),
-        computedAt: stats.computedAt
+        ComputedAt: stats.computedAt
       };
       this.tableCache.set(tableKey, tableStats);
     }
@@ -300,7 +300,7 @@ export class ColumnStatsCache {
       tables[key] = {
         schemaName: tableStats.schemaName,
         tableName: tableStats.tableName,
-        totalRows: tableStats.totalRows,
+        totalRows: tableStats.TotalRows,
         columns
       };
     }
@@ -336,9 +336,9 @@ export class ColumnStatsCache {
       this.tableCache.set(key, {
         schemaName: tableEntry.schemaName,
         tableName: tableEntry.tableName,
-        totalRows: tableEntry.totalRows,
+        TotalRows: tableEntry.totalRows,
         columns: columnMap,
-        computedAt: data.computedAt
+        ComputedAt: data.computedAt
       });
     }
   }

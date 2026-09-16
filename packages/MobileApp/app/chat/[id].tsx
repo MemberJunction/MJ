@@ -79,15 +79,15 @@ export default function ChatThreadScreen() {
             await refresh();
             void refreshList();
             if (!result.Success) {
-                setSendError(result.errorMessage ?? 'Send failed.');
+                setSendError(result.ErrorMessage ?? 'Send failed.');
                 return;
             }
             // The push WebSocket may not deliver completion on this client; poll the
             // AI response detail until it finalizes, refreshing the thread as it does.
-            if (result.aiMessageId) {
+            if (result.AiMessageId) {
                 for (let i = 0; i < 24; i++) {
                     await new Promise((r) => setTimeout(r, 2500));
-                    const status = await getConversationDetailStatus(result.aiMessageId).catch(() => null);
+                    const status = await getConversationDetailStatus(result.AiMessageId).catch(() => null);
                     await refresh();
                     if (status && status !== 'In-Progress') {
                         if (status === 'Error') setSendError('The agent could not complete this request.');
@@ -277,7 +277,7 @@ function RecentsStrip({ activeId, chips }: { activeId: string; chips: RecentChip
                         style={[styles.chip, active && styles.chipActive]}
                         onPress={() => !active && router.replace({ pathname: '/chat/[id]', params: { id: chip.Id } })}
                     >
-                        {active && chip.live ? <View style={styles.chipPulse} /> : null}
+                        {active && chip.Live ? <View style={styles.chipPulse} /> : null}
                         <AgentAvatarStack
                             agents={chip.Agents}
                             size={13}

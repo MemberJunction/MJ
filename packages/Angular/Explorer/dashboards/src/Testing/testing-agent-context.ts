@@ -95,8 +95,8 @@ export function capList(names: readonly string[], cap: number = TESTING_CONTEXT_
 
 /** A minimal id+name pair describing a test run, as the Runs surface holds them. */
 export interface TestRunNameCandidate {
-    id: string;
-    testName: string;
+    id: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    testName: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 /** Outcome of {@link resolveTestRunByReference}: a matched run, or an error. */

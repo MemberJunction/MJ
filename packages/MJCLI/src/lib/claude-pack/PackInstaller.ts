@@ -18,6 +18,7 @@ import path from 'node:path';
 import { FetchPack, type HttpGetter, PackFetchError } from './PackFetcher.js';
 import { MergePack } from './PackMerger.js';
 import {
+    BuildRemoteUrlPrefix,
     buildRemoteUrlPrefix,
     DetectMJMajor,
     DetectMJVersionString,
@@ -304,4 +305,8 @@ function errorResult(installedMJVersion: string | null, message: string): Instal
 const detectMJVersion = DetectMJVersionString;
 
 /** Re-export the default raw URL prefix for tests / verbose logging. */
-export { buildRemoteUrlPrefix };
+export {
+    BuildRemoteUrlPrefix,
+    /** @deprecated Use {@link BuildRemoteUrlPrefix} instead. */
+    buildRemoteUrlPrefix,
+};

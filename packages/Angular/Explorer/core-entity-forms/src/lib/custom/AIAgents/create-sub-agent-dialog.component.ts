@@ -10,30 +10,30 @@ import { UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface CreateSubAgentConfig {
   /** Title for the dialog */
-  title?: string;
+  title?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
   /** Initial name for the sub-agent */
-  initialName?: string;
+  InitialName?: string;
   /** Pre-selected agent type ID */
-  initialTypeID?: string;
+  InitialTypeID?: string;
   /** Parent agent ID for relationship */
   ParentAgentId: string;
   /** Parent agent name for display */
-  parentAgentName?: string;
+  ParentAgentName?: string;
 }
 
 export interface CreateSubAgentResult {
   /** Created sub-agent entity (not saved to database) */
   SubAgent: MJAIAgentEntityExtended;
   /** Agent prompt link entities (not saved to database) */
-  agentPrompts?: MJAIAgentPromptEntity[];
+  AgentPrompts?: MJAIAgentPromptEntity[];
   /** Agent action link entities (not saved to database) */
-  agentActions?: MJAIAgentActionEntity[];
+  AgentActions?: MJAIAgentActionEntity[];
   /** Any new prompts created within the dialog */
-  newPrompts?: MJAIPromptEntityExtended[];
+  NewPrompts?: MJAIPromptEntityExtended[];
   /** Any new prompt templates created within the dialog */
-  newPromptTemplates?: any[];
+  NewPromptTemplates?: any[];
   /** Any new template contents created within the dialog */
-  newTemplateContents?: any[];
+  NewTemplateContents?: any[];
 }
 
 /**
@@ -238,9 +238,9 @@ export class CreateSubAgentDialogComponent extends BaseAngularComponent implemen
 
   private createForm(): FormGroup {
     return new FormGroup({
-      name: new FormControl(this.config.initialName || '', [Validators.required]),
+      name: new FormControl(this.config.InitialName || '', [Validators.required]),
       description: new FormControl(''),
-      typeID: new FormControl(this.config.initialTypeID || '', [Validators.required]),
+      typeID: new FormControl(this.config.InitialTypeID || '', [Validators.required]),
       status: new FormControl('Pending'),
       executionMode: new FormControl('Sequential'),
       purpose: new FormControl(''),
@@ -302,7 +302,7 @@ export class CreateSubAgentDialogComponent extends BaseAngularComponent implemen
         this.AvailableAgentTypes$.next(results[0].Results as MJAIAgentTypeEntity[]);
         
         // Set default type if not specified
-        if (!this.config.initialTypeID && results[0].Results.length > 0) {
+        if (!this.config.InitialTypeID && results[0].Results.length > 0) {
           this.SubAgentForm.patchValue({ typeID: results[0].Results[0].ID });
         }
       }
@@ -461,8 +461,8 @@ export class CreateSubAgentDialogComponent extends BaseAngularComponent implemen
               // Store the newly created entities
               this.NewlyCreatedPrompts.push(result.prompt);
               
-              if (result.template) {
-                this.NewlyCreatedPromptTemplates.push(result.template);
+              if (result.Template) {
+                this.NewlyCreatedPromptTemplates.push(result.Template);
               }
               
               if (result.templateContents && result.templateContents.length > 0) {
@@ -673,11 +673,11 @@ export class CreateSubAgentDialogComponent extends BaseAngularComponent implemen
       // Return the created entities (not saved to database)
       const result: CreateSubAgentResult = {
         SubAgent: this.SubAgentEntity,
-        agentPrompts: this.AgentPromptLinks,
-        agentActions: this.AgentActionLinks,
-        newPrompts: this.NewlyCreatedPrompts.length > 0 ? this.NewlyCreatedPrompts : undefined,
-        newPromptTemplates: this.NewlyCreatedPromptTemplates.length > 0 ? this.NewlyCreatedPromptTemplates : undefined,
-        newTemplateContents: this.NewlyCreatedTemplateContents.length > 0 ? this.NewlyCreatedTemplateContents : undefined
+        AgentPrompts: this.AgentPromptLinks,
+        AgentActions: this.AgentActionLinks,
+        NewPrompts: this.NewlyCreatedPrompts.length > 0 ? this.NewlyCreatedPrompts : undefined,
+        NewPromptTemplates: this.NewlyCreatedPromptTemplates.length > 0 ? this.NewlyCreatedPromptTemplates : undefined,
+        NewTemplateContents: this.NewlyCreatedTemplateContents.length > 0 ? this.NewlyCreatedTemplateContents : undefined
       };
 
       this.Result.next(result);

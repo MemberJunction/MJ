@@ -48,20 +48,20 @@ export type FilterKind = 'scalar' | 'list';
 /** The verifier's verdict for a single parameter. */
 export interface VerifiedParamRole {
     /** Proven role under the §10 asymmetric-risk posture. */
-    role: ParamRole;
+    role: ParamRole;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** For `RowFilter`: the single column the value filters on (as written in the predicate). */
-    filterColumn?: string;
+    filterColumn?: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /**
      * For `RowFilter`: the comparison operator, **normalized to the `column <op> value` reading** — if the
      * predicate was written `value < column`, the operator is flipped (`>`) so read-time injection can emit
      * `column > value` faithfully. This is the Phase-2 metadata that `filterColumn` alone cannot supply
      * (`Score >= x` vs `Score = x` are otherwise indistinguishable). Absent for non-RowFilter verdicts.
      */
-    filterOperator?: FilterOperator;
+    filterOperator?: FilterOperator;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** For `RowFilter`: whether the value is a single scalar or an `IN`/`NOT IN` list bag. */
-    filterKind?: FilterKind;
+    filterKind?: FilterKind;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** Human-readable justification (logged; never guessed past). */
-    reason: string;
+    reason: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 /** Flips a scalar comparison operator so a `value <op> column` predicate reads canonically as `column <flip> value`. */

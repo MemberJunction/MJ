@@ -6,19 +6,19 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface ParameterPair {
-    key: string;
-    value: string;
-    isFromTemplate: boolean;
-    description?: string;
-    isRequired?: boolean;
-    type?: string;
+    key: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    value: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    isFromTemplate: boolean;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    description?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+    isRequired?: boolean;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    type?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
 export interface TemplateRunResult {
     Success: boolean;
-    output?: string;
-    error?: string;
-    executionTimeMs?: number;
+    Output?: string;
+    Error?: string;
+    ExecutionTimeMs?: number;
 }
 
 @Component({
@@ -288,9 +288,9 @@ export class TemplateParamDialogComponent extends BaseAngularComponent implement
             {
                 this.TestResult = {
                     Success: opResult.Success,
-                    output: opResult.Output?.output,
-                    error: opResult.ErrorMessage,
-                    executionTimeMs: opResult.Output?.executionTimeMs,
+                    Output: opResult.Output?.output,
+                    Error: opResult.ErrorMessage,
+                    ExecutionTimeMs: opResult.Output?.executionTimeMs,
                 };
 
                 // Collapse parameters and expand results after execution
@@ -299,13 +299,13 @@ export class TemplateParamDialogComponent extends BaseAngularComponent implement
                 
                 if (this.TestResult?.Success) {
                     MJNotificationService.Instance.CreateSimpleNotification(
-                        `Template executed successfully in ${this.TestResult.executionTimeMs || 0}ms`,
+                        `Template executed successfully in ${this.TestResult.ExecutionTimeMs || 0}ms`,
                         'success',
                         4000
                     );
                 } else {
                     MJNotificationService.Instance.CreateSimpleNotification(
-                        `Template execution failed: ${this.TestResult?.error || 'Unknown error'}`,
+                        `Template execution failed: ${this.TestResult?.Error || 'Unknown error'}`,
                         'error',
                         5000
                     );
@@ -316,7 +316,7 @@ export class TemplateParamDialogComponent extends BaseAngularComponent implement
             console.error('Template test error:', error);
             this.TestResult = {
                 Success: false,
-                error: (error as Error).message || 'Unknown error occurred'
+                Error: (error as Error).message || 'Unknown error occurred'
             };
             
             // Still collapse parameters and expand results on error
@@ -324,7 +324,7 @@ export class TemplateParamDialogComponent extends BaseAngularComponent implement
             this.ResultsExpanded = true;
             
             MJNotificationService.Instance.CreateSimpleNotification(
-                `Template test failed: ${this.TestResult?.error || 'Unknown error'}`,
+                `Template test failed: ${this.TestResult?.Error || 'Unknown error'}`,
                 'error',
                 5000
             );
@@ -415,8 +415,8 @@ export class TemplateParamDialogComponent extends BaseAngularComponent implement
         if (!this.TestResult) return;
 
         const content = this.TestResult.Success 
-            ? this.TestResult.output || 'No output'
-            : this.TestResult.error || 'No error details';
+            ? this.TestResult.Output || 'No output'
+            : this.TestResult.Error || 'No error details';
         
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
         const templateName = this.Template?.Name?.replace(/[^a-zA-Z0-9]/g, '_') || 'template';

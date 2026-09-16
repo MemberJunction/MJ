@@ -12,20 +12,20 @@ import { TemplateSelectorConfig } from '../AIPrompts/template-selector-dialog.co
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface CreatePromptConfig {
   /** Title for the dialog */
-  title?: string;
+  title?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
   /** Initial name for the prompt */
-  initialName?: string;
+  InitialName?: string;
   /** Pre-selected prompt type ID */
-  initialTypeID?: string;
+  InitialTypeID?: string;
 }
 
 export interface CreatePromptResult {
   /** Created prompt entity (not saved to database) */
-  prompt: MJAIPromptEntityExtended;
+  prompt: MJAIPromptEntityExtended;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
   /** Created template entity (not saved to database) */
-  template?: MJTemplateEntity;
+  Template?: MJTemplateEntity;
   /** Template content entities (not saved to database) */
-  templateContents?: MJTemplateContentEntity[];
+  templateContents?: MJTemplateContentEntity[];  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
 /**
@@ -203,9 +203,9 @@ export class CreatePromptDialogComponent extends BaseAngularComponent implements
 
   private createForm(): FormGroup {
     return new FormGroup({
-      name: new FormControl(this.config.initialName || '', [Validators.required]),
+      name: new FormControl(this.config.InitialName || '', [Validators.required]),
       description: new FormControl(''),
-      typeID: new FormControl(this.config.initialTypeID || '', [Validators.required]),
+      typeID: new FormControl(this.config.InitialTypeID || '', [Validators.required]),
       status: new FormControl('Pending'),
       outputType: new FormControl('string'),
       templateMode: new FormControl('new')
@@ -238,7 +238,7 @@ export class CreatePromptDialogComponent extends BaseAngularComponent implements
         this.AvailablePromptTypes$.next(typesResult.Results);
         
         // Set default type if not specified
-        if (!this.config.initialTypeID && typesResult.Results.length > 0) {
+        if (!this.config.InitialTypeID && typesResult.Results.length > 0) {
           this.PromptForm.patchValue({ typeID: typesResult.Results[0].ID });
         }
       }
@@ -362,7 +362,7 @@ export class CreatePromptDialogComponent extends BaseAngularComponent implements
       // Return the created entities (not saved to database)
       const result: CreatePromptResult = {
         prompt: this.PromptEntity,
-        template: this.TemplateEntity || undefined,
+        Template: this.TemplateEntity || undefined,
         templateContents: this.TemplateContents.length > 0 ? this.TemplateContents : undefined
       };
 
@@ -392,9 +392,9 @@ export class CreatePromptDialogComponent extends BaseAngularComponent implements
   private async openTemplateSelector() {
     const config: TemplateSelectorConfig = {
       Title: 'Select Template for AI Prompt',
-      showCreateNew: false,
-      multiSelect: false,
-      showActiveOnly: true
+      ShowCreateNew: false,
+      MultiSelect: false,
+      ShowActiveOnly: true
     };
 
     try {

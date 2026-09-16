@@ -63,8 +63,8 @@ export interface RoleNameCandidate {
 
 /** Outcome of a tolerant id→name→contains resolution. */
 export type NamedLookupResult<T> =
-    | { ok: true; match: T }
-    | { ok: false; error: string };
+    | { ok: true; match: T }  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    | { ok: false; error: string };  // case-violation-ok-legacy-back-compat: the PascalCase name is already declared on this type
 
 /**
  * Resolve an agent-supplied user reference against the loaded users, tolerantly:

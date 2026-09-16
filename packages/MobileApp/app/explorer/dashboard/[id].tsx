@@ -122,7 +122,7 @@ function QueryPart({ part }: { part: DashboardPart }) {
             {loading && !result ? (
                 <View style={styles.partLoading}><ActivityIndicator color={Colors.brand} /></View>
             ) : !result || !result.Success ? (
-                <Text style={styles.partError}>{result?.errorMessage ?? 'Query failed.'}</Text>
+                <Text style={styles.partError}>{result?.ErrorMessage ?? 'Query failed.'}</Text>
             ) : (
                 <QueryResultView result={result} width={chartWidth} />
             )}

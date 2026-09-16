@@ -70,19 +70,19 @@ import type { IntegrationProgressEmitter } from '@memberjunction/integration-pro
 
 export interface SyncLoggerContext {
     /** CompanyIntegration ID — the per-run anchor for filtering. */
-    ciId: string;
+    CiId: string;
     /** Integration name (HubSpot / YourMembership / …). */
-    integration: string | null | undefined;
+    Integration: string | null | undefined;
     /** Sync run ID for cross-correlation with run details rows. */
-    runId?: string | null;
+    RunId?: string | null;
 }
 
 export interface SyncLogEntry {
-    ts: string;
-    event: SyncLogEvent;
-    ciId: string;
-    integration?: string | null;
-    runId?: string | null;
+    ts: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+    event: SyncLogEvent;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+    ciId: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+    integration?: string | null;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+    runId?: string | null;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
     /** Free-form, event-specific structured data. */
     [key: string]: unknown;
 }
@@ -118,7 +118,7 @@ export class SyncLogger {
 
     /** Update the runId once the run record has been created. */
     public AttachRunId(runId: string): void {
-        this.ctx.runId = runId;
+        this.ctx.RunId = runId;
     }
 
     /** @deprecated Use {@link AttachRunId}. */
@@ -128,7 +128,7 @@ export class SyncLogger {
 
     /** Set the integration name once it's resolved from LoadRunConfiguration. */
     public AttachIntegrationName(name: string | null | undefined): void {
-        this.ctx.integration = name;
+        this.ctx.Integration = name;
     }
 
     /** @deprecated Use {@link AttachIntegrationName}. */
@@ -189,9 +189,9 @@ export class SyncLogger {
         const entry: SyncLogEntry = {
             ts: new Date().toISOString(),
             event,
-            ciId: this.ctx.ciId,
-            integration: this.ctx.integration ?? null,
-            runId: this.ctx.runId ?? null,
+            ciId: this.ctx.CiId,
+            integration: this.ctx.Integration ?? null,
+            runId: this.ctx.RunId ?? null,
             ...data,
         };
         const line = JSON.stringify(entry);

@@ -107,7 +107,7 @@ export class ApplicationEntityInfo extends BaseInfo {
      */
     EntityBaseTableCodeName: string = null
 
-    private _EntityInfo: EntityInfo = null
+    private _EntityInfo: EntityInfo = null  // case-violation-ok-legacy-back-compat: a class in the same hierarchy already declares the camelCase name — TypeScript rejects two declarations of one private property (TS2415)
     /**
      * Gets the full entity metadata for the entity linked to this application.
      * @returns {EntityInfo} The entity information object
@@ -238,22 +238,22 @@ export class ApplicationInfo extends BaseInfo {
     AutoUpdatePath: boolean = true;
 
 
-    private _ApplicationEntities: ApplicationEntityInfo[] = []
+    private _applicationEntities: ApplicationEntityInfo[] = []
     /**
      * Gets the list of entities that belong to this application with their display sequence.
      * @returns {ApplicationEntityInfo[]} Array of application entity mappings
      */
     public get ApplicationEntities(): ApplicationEntityInfo[] {
-        return this._ApplicationEntities;
+        return this._applicationEntities;
     } 
 
-    private _ApplicationSettings: ApplicationSettingInfo[] = []
+    private _applicationSettings: ApplicationSettingInfo[] = []
     /**
      * Gets the configuration settings for this application.
      * @returns {ApplicationSettingInfo[]} Array of key-value settings
      */
     public get ApplicationSettings(): ApplicationSettingInfo[] {
-        return this._ApplicationSettings;
+        return this._applicationSettings;
     }
 
     constructor (initData: any = null, md: IMetadataProvider) {
@@ -262,10 +262,10 @@ export class ApplicationInfo extends BaseInfo {
         if (initData) {
             let ae = initData.ApplicationEntities || initData._ApplicationEntities;
             if (ae) {
-                this._ApplicationEntities = [];
+                this._applicationEntities = [];
                 for (let i = 0; i < ae.length; i++) {
                     const aei = new ApplicationEntityInfo(ae[i])
-                    this._ApplicationEntities.push(aei)
+                    this._applicationEntities.push(aei)
 
                     const match = md.EntityByID(ae[i].EntityID);
                     if (match)
@@ -275,7 +275,7 @@ export class ApplicationInfo extends BaseInfo {
 
             let as = initData.ApplicationSettings || initData._ApplicationSettings;
             if (as)
-                this._ApplicationSettings = as.map(s => new ApplicationSettingInfo(s));
+                this._applicationSettings = as.map(s => new ApplicationSettingInfo(s));
         }
     }
 }

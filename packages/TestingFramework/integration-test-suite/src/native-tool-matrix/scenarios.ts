@@ -96,50 +96,50 @@ const ENVELOPE_SYSTEM_PROMPT = [
  */
 export const PROBE_SCENARIOS: ProbeScenario[] = [
     {
-        id: 'single-call',
+        Id: 'single-call',
         purpose: 'One obvious call. Baseline for call well-formedness, name accuracy and whether text accompanies a call.',
-        userPrompt: 'What is the weather in Paris right now?',
-        tools: ALL_TOOLS,
-        forcedToolName: 'get_weather',
-        expectation: {
-            toolCallWarranted: true,
+        UserPrompt: 'What is the weather in Paris right now?',
+        Tools: ALL_TOOLS,
+        ForcedToolName: 'get_weather',
+        Expectation: {
+            ToolCallWarranted: true,
             calls: [{ toolName: 'get_weather', arguments: [{ kind: 'containsIgnoreCase', parameter: 'location', value: 'paris' }] }],
-            envelopeRequested: false
+            EnvelopeRequested: false
         }
     },
     {
-        id: 'parallel-call',
+        Id: 'parallel-call',
         purpose: 'Two independent calls warranted in one turn. Measures parallel-call behavior, which is not uniform even within one vendor (audit §7.4).',
-        userPrompt: 'What is the weather in Paris, and what time is it in Tokyo right now?',
-        tools: ALL_TOOLS,
-        forcedToolName: 'get_weather',
-        expectation: {
-            toolCallWarranted: true,
+        UserPrompt: 'What is the weather in Paris, and what time is it in Tokyo right now?',
+        Tools: ALL_TOOLS,
+        ForcedToolName: 'get_weather',
+        Expectation: {
+            ToolCallWarranted: true,
             calls: [
                 { toolName: 'get_weather', arguments: [{ kind: 'containsIgnoreCase', parameter: 'location', value: 'paris' }] },
                 { toolName: 'get_time', arguments: [{ kind: 'containsIgnoreCase', parameter: 'timezone', value: 'tokyo' }] }
             ],
-            envelopeRequested: false
+            EnvelopeRequested: false
         }
     },
     {
-        id: 'no-call-needed',
+        Id: 'no-call-needed',
         purpose: 'Tools declared, but the question is general knowledge. A call here is a FAILURE — the coherence probe for a hybrid loop.',
-        userPrompt: 'In one short sentence, what is the capital of France?',
-        tools: ALL_TOOLS,
-        expectation: { toolCallWarranted: false, calls: [], envelopeRequested: false }
+        UserPrompt: 'In one short sentence, what is the capital of France?',
+        Tools: ALL_TOOLS,
+        Expectation: { ToolCallWarranted: false, calls: [], EnvelopeRequested: false }
     },
     {
-        id: 'envelope',
+        Id: 'envelope',
         purpose: "MJ's envelope asked for in the system prompt WHILE tools are declared. Measures whether declaring tools breaks the JSON contract the loop depends on (§5.6) and which channel the model picks.",
-        systemPrompt: ENVELOPE_SYSTEM_PROMPT,
-        userPrompt: 'Find out the weather in Paris.',
-        tools: ALL_TOOLS,
-        forcedToolName: 'get_weather',
-        expectation: {
-            toolCallWarranted: true,
+        SystemPrompt: ENVELOPE_SYSTEM_PROMPT,
+        UserPrompt: 'Find out the weather in Paris.',
+        Tools: ALL_TOOLS,
+        ForcedToolName: 'get_weather',
+        Expectation: {
+            ToolCallWarranted: true,
             calls: [{ toolName: 'get_weather', arguments: [{ kind: 'containsIgnoreCase', parameter: 'location', value: 'paris' }] }],
-            envelopeRequested: true
+            EnvelopeRequested: true
         }
     }
 ];
@@ -159,7 +159,7 @@ export const JSON_MODE_PROMPT_SUFFIX = '\n\nReply in JSON.';
 
 /** The user turn for a cell — the scenario's prompt, plus the JSON-mode suffix when it applies. */
 export function BuildUserPrompt(scenario: ProbeScenario, responseFormat: ProbeResponseFormat): string {
-    return responseFormat === 'JSON' ? scenario.userPrompt + JSON_MODE_PROMPT_SUFFIX : scenario.userPrompt;
+    return responseFormat === 'JSON' ? scenario.UserPrompt + JSON_MODE_PROMPT_SUFFIX : scenario.UserPrompt;
 }
 
 /** @deprecated Use {@link BuildUserPrompt}. */
@@ -170,9 +170,9 @@ export function buildUserPrompt(scenario: ProbeScenario, responseFormat: ProbeRe
 /** Looks a scenario up by id, throwing rather than returning undefined — a typo is a config bug. */
 export function GetScenario(id: string): ProbeScenario {
     const all = [...PROBE_SCENARIOS, ...MJ_ACTION_SCENARIOS];
-    const found = all.find((s) => s.id === id);
+    const found = all.find((s) => s.Id === id);
     if (!found) {
-        throw new Error(`Unknown probe scenario '${id}'. Known: ${all.map((s) => s.id).join(', ')}`);
+        throw new Error(`Unknown probe scenario '${id}'. Known: ${all.map((s) => s.Id).join(', ')}`);
     }
     return found;
 }
@@ -214,27 +214,27 @@ function mjActionScenarios(strategy: ScalarStrategy, opaque: OpaqueStrategy = 'o
     const suffix = opaque === 'string' ? 'opaquestr' : (strategy === 'union' ? 'union' : 'string');
     return [
         {
-            id: `mj-action-calc-${suffix}`,
+            Id: `mj-action-calc-${suffix}`,
             purpose: `Real MJ Actions as tools, Scalar mapped per §8.2 '${strategy}'. One required Scalar param; the model must pick Calculate Expression over two plausible siblings.`,
-            userPrompt: 'What is (2*3)+4/15?',
-            tools,
-            forcedToolName: 'calculate_expression',
-            expectation: {
-                toolCallWarranted: true,
+            UserPrompt: 'What is (2*3)+4/15?',
+            Tools: tools,
+            ForcedToolName: 'calculate_expression',
+            Expectation: {
+                ToolCallWarranted: true,
                 calls: [{ toolName: 'calculate_expression', arguments: [{ kind: 'nonEmptyString', parameter: 'Expression' }] }],
-                envelopeRequested: false
+                EnvelopeRequested: false
             }
         },
         {
-            id: `mj-action-query-${suffix}`,
+            Id: `mj-action-query-${suffix}`,
             purpose: `Real MJ Actions as tools, Scalar mapped per §8.2 '${strategy}'. Nine params including two ValueType 'Other' — the case the permissive mapping flattens to an untyped object.`,
-            userPrompt: 'How many rows are in the AI Agents table in the database? Query it.',
-            tools,
-            forcedToolName: 'run_ad_hoc_query',
-            expectation: {
-                toolCallWarranted: true,
+            UserPrompt: 'How many rows are in the AI Agents table in the database? Query it.',
+            Tools: tools,
+            ForcedToolName: 'run_ad_hoc_query',
+            Expectation: {
+                ToolCallWarranted: true,
                 calls: [{ toolName: 'run_ad_hoc_query', arguments: [{ kind: 'nonEmptyString', parameter: 'Query' }] }],
-                envelopeRequested: false
+                EnvelopeRequested: false
             }
         }
     ];

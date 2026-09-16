@@ -51,7 +51,7 @@ describe.skipIf(!hasToken())('integration: queries', () => {
             }
         } else {
             // A failure must carry an error message (e.g. required parameters).
-            expect(result.errorMessage).toBeTruthy();
+            expect(result.ErrorMessage).toBeTruthy();
         }
     });
 });

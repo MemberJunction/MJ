@@ -223,7 +223,7 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
         try {
             const ctx = this.buildSyncContext();
             const pipelineResult = await RunExtractionPipeline(ctx);
-            this.UsesTemplate = pipelineResult.usesTemplate;
+            this.UsesTemplate = pipelineResult.UsesTemplate;
 
             // Save the query again to persist UsesTemplate and any changes from AI processing
             const updateResult = await super.Save();

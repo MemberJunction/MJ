@@ -51,7 +51,7 @@ describe('PackTypes', () => {
             const result: FileMergeResult = {
                 Path: '.claude/commands/commit.md',
                 Outcome: 'skipped',
-                reason: 'user-modified',
+                Reason: 'user-modified',
             };
             RecordOutcome(log, result);
             expect(log.skipped).toEqual(['.claude/commands/commit.md (user-modified)']);
@@ -68,7 +68,7 @@ describe('PackTypes', () => {
             RecordOutcome(log, { Path: 'a', Outcome: 'added' });
             RecordOutcome(log, { Path: 'b', Outcome: 'updated' });
             RecordOutcome(log, { Path: 'c', Outcome: 'added' });
-            RecordOutcome(log, { Path: 'd', Outcome: 'skipped', reason: 'identical' });
+            RecordOutcome(log, { Path: 'd', Outcome: 'skipped', Reason: 'identical' });
             expect(log).toEqual({
                 added: ['a', 'c'],
                 updated: ['b'],

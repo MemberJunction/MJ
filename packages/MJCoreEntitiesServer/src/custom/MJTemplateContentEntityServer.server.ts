@@ -74,8 +74,8 @@ export class MJTemplateContentEntityServer extends MJTemplateContentEntity {
                 this.ContextCurrentUser,
             );
 
-            if (result.warnings.length > 0) {
-                console.warn('Template parameter extraction warnings:', result.warnings);
+            if (result.Warnings.length > 0) {
+                console.warn('Template parameter extraction warnings:', result.Warnings);
             }
 
             if (result.parameters.length > 0) {

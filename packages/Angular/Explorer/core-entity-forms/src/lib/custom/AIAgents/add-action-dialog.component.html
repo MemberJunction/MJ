@@ -108,10 +108,10 @@
               <div class="card-body">
                 <p class="action-description">{{ action.Description || 'No description available' }}</p>
                 
-                @if (action.categoryName) {
+                @if (action.CategoryName) {
                   <div class="category-badge">
                     <i class="fa-solid fa-folder"></i>
-                    {{ action.categoryName }}
+                    {{ action.CategoryName }}
                   </div>
                 }
                 
@@ -167,7 +167,7 @@
                 {{ action.Name }}
               </span>
               
-              <span class="col-category">{{ action.categoryName || '-' }}</span>
+              <span class="col-category">{{ action.CategoryName || '-' }}</span>
               <span class="col-type">{{ action.Type || '-' }}</span>
               <span class="col-description">{{ action.Description || '-' }}</span>
               

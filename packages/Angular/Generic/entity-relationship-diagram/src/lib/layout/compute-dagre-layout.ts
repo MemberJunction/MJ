@@ -45,11 +45,11 @@ function fieldsForNode(
 
 export interface DagreLayoutOptions extends ErdLayoutOptions {
     /** Direction of the hierarchy. Default 'LR' (left-to-right). */
-    rankDir?: 'TB' | 'BT' | 'LR' | 'RL';
+    RankDir?: 'TB' | 'BT' | 'LR' | 'RL';
     /** Horizontal separation between nodes in the same rank. Default 80. */
-    nodeSep?: number;
+    NodeSep?: number;
     /** Separation between ranks. Default 120. */
-    rankSep?: number;
+    RankSep?: number;
 }
 
 export function ComputeDagreLayout(nodes: ERDNode[], options: DagreLayoutOptions = {}): ErdLayout {
@@ -58,13 +58,13 @@ export function ComputeDagreLayout(nodes: ERDNode[], options: DagreLayoutOptions
     }
 
     const nodeW = options.nodeWidth ?? 220;
-    const headerH = options.headerHeight ?? 36;
+    const headerH = options.HeaderHeight ?? 36;
     const fieldH = options.fieldHeight ?? 22;
-    const moreH = options.moreToggleHeight ?? 22;
-    const canvasPad = options.canvasPad ?? 40;
-    const rankDir = options.rankDir ?? 'LR';
-    const nodeSep = options.nodeSep ?? 80;
-    const rankSep = options.rankSep ?? 120;
+    const moreH = options.MoreToggleHeight ?? 22;
+    const canvasPad = options.CanvasPad ?? 40;
+    const rankDir = options.RankDir ?? 'LR';
+    const nodeSep = options.NodeSep ?? 80;
+    const rankSep = options.RankSep ?? 120;
     const expandedIds = options.expandedNodeIds ?? new Set<string>();
     const showAll = options.showAllFields ?? false;
 

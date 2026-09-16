@@ -58,8 +58,8 @@ export interface TaxNodeCandidate {
 
 /** Outcome of {@link resolveTaxNode}: the matched node, or a tolerant error. */
 export type TagsResolveResult<T> =
-    | { ok: true; value: T }
-    | { ok: false; error: string };
+    | { ok: true; value: T }  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    | { ok: false; error: string };  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 
 /**
  * Resolve an agent-supplied taxonomy reference to one of the tree nodes. Tries, in order

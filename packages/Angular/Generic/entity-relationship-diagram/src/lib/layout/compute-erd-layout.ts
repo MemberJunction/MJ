@@ -68,36 +68,36 @@ export interface ErdLayout {
 
 export interface ErdLayoutOptions {
     /** Width of every node card. Default 220. */
-    nodeWidth?: number;
+    nodeWidth?: number;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
     /** Header row height. Default 36. */
-    headerHeight?: number;
+    HeaderHeight?: number;
     /** Per-field row height. Default 22. */
-    fieldHeight?: number;
+    fieldHeight?: number;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
     /** Reserved footer height for the "+N more" toggle. Default 22. */
-    moreToggleHeight?: number;
+    MoreToggleHeight?: number;
     /** Horizontal gap between nodes in the same schema. Default 48. */
-    nodeGapX?: number;
+    NodeGapX?: number;
     /** Vertical gap between nodes in the same schema column. Default 30. */
-    nodeGapY?: number;
+    NodeGapY?: number;
     /** Gap between schema bands. Default 80. */
-    schemaGapX?: number;
+    SchemaGapX?: number;
     /** Inner horizontal padding inside a band. Default 28. */
-    bandPadX?: number;
+    BandPadX?: number;
     /** Height reserved for the band title row. Default 56. */
-    bandTitleHeight?: number;
+    BandTitleHeight?: number;
     /** Bottom padding inside a band. Default 28. */
-    bandPadBottom?: number;
+    BandPadBottom?: number;
     /** Outer canvas padding. Default 40. */
-    canvasPad?: number;
+    CanvasPad?: number;
     /** Set of node IDs currently expanded to show all fields. */
-    expandedNodeIds?: ReadonlySet<string>;
+    expandedNodeIds?: ReadonlySet<string>;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
     /**
      * When true, all fields are shown on each node regardless of PK/FK status —
      * "+N more" toggle is not drawn.  Default: false.
      */
-    showAllFields?: boolean;
+    showAllFields?: boolean;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
     /** Order of schemas from left to right.  Inferred from nodes if not provided. */
-    schemaOrder?: ReadonlyArray<string>;
+    SchemaOrder?: ReadonlyArray<string>;
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -111,16 +111,16 @@ const DEFAULT_SCHEMA = '_';
  */
 export function ComputeErdLayout(nodes: ERDNode[], options: ErdLayoutOptions = {}): ErdLayout {
     const nodeW = options.nodeWidth ?? 220;
-    const headerH = options.headerHeight ?? 36;
+    const headerH = options.HeaderHeight ?? 36;
     const fieldH = options.fieldHeight ?? 22;
-    const moreH = options.moreToggleHeight ?? 22;
-    const gapX = options.nodeGapX ?? 48;
-    const gapY = options.nodeGapY ?? 30;
-    const schemaGap = options.schemaGapX ?? 80;
-    const bandPadX = options.bandPadX ?? 28;
-    const bandTitleH = options.bandTitleHeight ?? 56;
-    const bandPadBottom = options.bandPadBottom ?? 28;
-    const canvasPad = options.canvasPad ?? 40;
+    const moreH = options.MoreToggleHeight ?? 22;
+    const gapX = options.NodeGapX ?? 48;
+    const gapY = options.NodeGapY ?? 30;
+    const schemaGap = options.SchemaGapX ?? 80;
+    const bandPadX = options.BandPadX ?? 28;
+    const bandTitleH = options.BandTitleHeight ?? 56;
+    const bandPadBottom = options.BandPadBottom ?? 28;
+    const canvasPad = options.CanvasPad ?? 40;
     const expandedIds = options.expandedNodeIds ?? new Set<string>();
     const showAll = options.showAllFields ?? false;
 
@@ -134,7 +134,7 @@ export function ComputeErdLayout(nodes: ERDNode[], options: ErdLayoutOptions = {
     }
 
     // 2. Determine schema order.
-    const schemas = options.schemaOrder?.slice() ?? [...bySchema.keys()].sort();
+    const schemas = options.SchemaOrder?.slice() ?? [...bySchema.keys()].sort();
     for (const [s] of bySchema) {
         if (!schemas.includes(s)) schemas.push(s);
     }

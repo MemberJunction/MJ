@@ -11,13 +11,13 @@ import { DOMAIN_PROFILES, DEFAULT_DOMAIN_PROFILE, GetDomainProfile } from '../li
 
 const testRun: OclifCommandShape = {
   Id: 'test:run',
-  description: 'Execute a single test by ID or name.\n\nSecond paragraph that the summary should not swallow.',
-  flags: {
-    name: { type: 'option', description: 'Test name to execute', char: 'n' },
-    format: { type: 'option', description: 'Output format', options: ['text', 'json', 'md'] },
-    'dry-run': { type: 'boolean', description: 'Validate without executing' },
+  Description: 'Execute a single test by ID or name.\n\nSecond paragraph that the summary should not swallow.',
+  Flags: {
+    name: { type: 'option', Description: 'Test name to execute', Char: 'n' },
+    format: { type: 'option', Description: 'Output format', options: ['text', 'json', 'md'] },
+    'dry-run': { type: 'boolean', Description: 'Validate without executing' },
   },
-  examples: ['<%= config.bin %> test run <id>', { command: 'mj test run --name=x', description: 'By name' }],
+  Examples: ['<%= config.bin %> test run <id>', { command: 'mj test run --name=x', description: 'By name' }],
 };
 
 describe('domainOf', () => {
@@ -40,7 +40,7 @@ describe('deriveUsage', () => {
   });
 
   it('prefers an explicit oclif summary when the command declares one', () => {
-    expect(DeriveUsage({ Id: 'x:y', summary: 'Short one.', description: 'Long one.' }).summary).toBe('Short one.');
+    expect(DeriveUsage({ Id: 'x:y', summary: 'Short one.', Description: 'Long one.' }).summary).toBe('Short one.');
   });
 
   it('falls back to the invocation itself when a command documents nothing', () => {
@@ -66,7 +66,7 @@ describe('deriveUsage', () => {
   it('surfaces a flag’s short char and required-ness in its description', () => {
     const flags = DeriveUsage({
       Id: 'x:y',
-      flags: { name: { type: 'option', description: 'A name', char: 'n', required: true } },
+      Flags: { name: { type: 'option', Description: 'A name', Char: 'n', Required: true } },
     }).flags ?? [];
     expect(flags[0].description).toContain('(-n)');
     expect(flags[0].description).toContain('(required)');
@@ -77,7 +77,7 @@ describe('deriveUsage', () => {
   });
 
   it('omits empty flag and example collections instead of emitting empty arrays', () => {
-    const usage = DeriveUsage({ Id: 'x:y', flags: {}, examples: [] });
+    const usage = DeriveUsage({ Id: 'x:y', Flags: {}, Examples: [] });
     expect(usage.flags).toBeUndefined();
     expect(usage.examples).toBeUndefined();
   });
@@ -103,13 +103,13 @@ describe('registerDerivedUsage', () => {
   });
 
   it('skips hidden commands — hidden from humans should mean hidden from agents', () => {
-    RegisterDerivedUsage([{ Id: 'beta:shown' }, { Id: 'beta:secret', hidden: true }]);
+    RegisterDerivedUsage([{ Id: 'beta:shown' }, { Id: 'beta:secret', Hidden: true }]);
     const commands = CLIPluginRegistry.BuildDomainDetail('beta').commands.map((c) => c.command);
     expect(commands).toEqual(['beta:shown']);
   });
 
   it('never overwrites a curated entry a plugin already declared', () => {
-    RegisterDerivedUsage([{ Id: 'seeded:already', description: 'Derived summary that must lose.' }]);
+    RegisterDerivedUsage([{ Id: 'seeded:already', Description: 'Derived summary that must lose.' }]);
     const [command] = CLIPluginRegistry.BuildDomainDetail('seeded').commands;
     expect(command.summary).toBe('Curated summary that must survive derivation.');
   });

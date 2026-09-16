@@ -110,24 +110,24 @@ export interface OrganicKeyCluster {
  */
 export interface OrganicKeyDetectorConfig {
     /** Cosine-distance threshold for the agglomerative merge step. Lower = tighter clusters. */
-    mergeThreshold: number;
+    MergeThreshold: number;
     /** Minimum cluster size to report. */
-    minClusterSize: number;
+    MinClusterSize: number;
     /** Minimum number of distinct tables a cluster must span. */
-    minDistinctTables: number;
+    MinDistinctTables: number;
     /** Sample values per column to include in the embedding input (and refiner prompt). */
-    sampleValueCount: number;
+    SampleValueCount: number;
     /** Concurrency for per-cluster LLM refinement. */
-    refinementConcurrency: number;
+    RefinementConcurrency: number;
 }
 
 /** Fallback values used when DBAutoDoc's config doesn't override them. Not authoritative. */
 export const DEFAULT_DETECTOR_CONFIG: OrganicKeyDetectorConfig = {
-    mergeThreshold: 0.35,
-    minClusterSize: 2,
-    minDistinctTables: 2,
-    sampleValueCount: 5,
-    refinementConcurrency: 4,
+    MergeThreshold: 0.35,
+    MinClusterSize: 2,
+    MinDistinctTables: 2,
+    SampleValueCount: 5,
+    RefinementConcurrency: 4,
 };
 
 /** Per-run phase tracking persisted in state.json. */
@@ -152,16 +152,16 @@ export interface OrganicKeyDetectionPhase {
 
 /** Outcome of refining a single cluster. */
 export interface ClusterRefinementOutcome {
-    outcome: 'keep' | 'split' | 'reject' | 'error';
+    Outcome: 'keep' | 'split' | 'reject' | 'error';
     /** For 'keep' — refined cluster with concept + normalization + outliers ejected. */
-    refinedCluster?: OrganicKeyCluster;
+    RefinedCluster?: OrganicKeyCluster;
     /** For 'split' — coherent sub-clusters the LLM partitioned the input into. */
-    subClusters?: OrganicKeyCluster[];
+    SubClusters?: OrganicKeyCluster[];
     /** For 'reject' — LLM-provided reason. */
-    rejectReason?: string;
+    RejectReason?: string;
     /** For 'error' — failure detail. */
-    errorMessage?: string;
-    tokensUsed: number;
-    inputTokens: number;
-    outputTokens: number;
+    ErrorMessage?: string;
+    tokensUsed: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    InputTokens: number;
+    OutputTokens: number;
 }

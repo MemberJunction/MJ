@@ -1041,8 +1041,8 @@ export class RunAIAgentResolver extends ResolverBase {
         // own ConversationDetail through the Widget Guest RLS filters, so a detail id from another
         // session resolves to "not found" before any elevated work happens.
         const widgetElevation = await ResolveWidgetGuestRunContext(userPayload, p);
-        const effectiveAgentId = widgetElevation ? widgetElevation.pinnedAgentId : agentId;
-        const effectiveUserPayload = widgetElevation ? ElevateUserPayload(userPayload, widgetElevation.elevatedUser) : userPayload;
+        const effectiveAgentId = widgetElevation ? widgetElevation.PinnedAgentId : agentId;
+        const effectiveUserPayload = widgetElevation ? ElevateUserPayload(userPayload, widgetElevation.ElevatedUser) : userPayload;
 
         try {
             // LATENCY OPTIMIZATION (Opt #2 + #3): Load ConversationDetail once here to extract
@@ -1372,7 +1372,7 @@ export class RunAIAgentResolver extends ResolverBase {
                 result: JSON.stringify({ success: false, errorMessage })
             };
             this.publishStreamingUpdate(pubSub, errorCompletionData, userPayload);
-        }).finally(() => pulse.stop());
+        }).finally(() => pulse.Stop());
     }
 
     /**
@@ -1477,20 +1477,20 @@ export class RunAIAgentResolver extends ResolverBase {
                 const artifactType = ArtifactMetadataEngine.Instance.GetArtifactTypeByMimeType(artifactMime, ext);
 
                 const decision = RouteArtifact({
-                    typeDefault: artifactType?.DefaultDeliveryMode ?? 'ToolsOnly',
-                    forceToolsOnly: artifactVersion.ForceToolsOnly,
+                    TypeDefault: artifactType?.DefaultDeliveryMode ?? 'ToolsOnly',
+                    ForceToolsOnly: artifactVersion.ForceToolsOnly,
                     mimeType: artifactMime,
-                    sizeBytes: artifactVersion.ContentSizeBytes ?? 0,
-                    inlineSizeCap: INLINE_SIZE_CAP,
-                    modelSupportsModality: () => true,
-                    modelName: '<resolver>',
-                    artifactTypeName: artifactType?.Name ?? artifactMime,
+                    SizeBytes: artifactVersion.ContentSizeBytes ?? 0,
+                    InlineSizeCap: INLINE_SIZE_CAP,
+                    ModelSupportsModality: () => true,
+                    ModelName: '<resolver>',
+                    ArtifactTypeName: artifactType?.Name ?? artifactMime,
                 });
 
                 if (artifactVersion.ContentMode === 'File' && artifactVersion.FileID) {
                     if (decision.delivery !== 'inline') {
-                        if (decision.delivery === 'tools' && decision.annotation) {
-                            LogStatus(`[RunAIAgentResolver] ${decision.annotation}`);
+                        if (decision.delivery === 'tools' && decision.Annotation) {
+                            LogStatus(`[RunAIAgentResolver] ${decision.Annotation}`);
                         }
                         continue;
                     }
@@ -1508,8 +1508,8 @@ export class RunAIAgentResolver extends ResolverBase {
                     // Text-mode artifact (ContentMode = 'Text'). Honor the
                     // routing decision the same way as for file-mode.
                     if (decision.delivery !== 'inline') {
-                        if (decision.delivery === 'tools' && decision.annotation) {
-                            LogStatus(`[RunAIAgentResolver] ${decision.annotation}`);
+                        if (decision.delivery === 'tools' && decision.Annotation) {
+                            LogStatus(`[RunAIAgentResolver] ${decision.Annotation}`);
                         }
                         continue;
                     }

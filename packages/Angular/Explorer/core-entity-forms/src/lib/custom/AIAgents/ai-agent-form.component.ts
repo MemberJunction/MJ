@@ -157,15 +157,24 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
     /** ViewChild for dynamic custom section container */
     private _customSectionContainer!: ViewContainerRef;
     @ViewChild('customSectionContainer', { read: ViewContainerRef }) 
-    set customSectionContainer(container: ViewContainerRef) {
+    set CustomSectionContainer(container: ViewContainerRef) {
         this._customSectionContainer = container;
         // When the container becomes available, load the custom section if needed
         if (container && this.AgentType?.UIFormSectionKey && !this.customSectionLoaded) {
             this.setTrackedTimeout(() => this.loadCustomFormSection(), 0);
         }
     }
-    get customSectionContainer(): ViewContainerRef {
+    get CustomSectionContainer(): ViewContainerRef {
         return this._customSectionContainer;
+    }
+
+    /** @deprecated Use {@link CustomSectionContainer} instead. */
+    set customSectionContainer(container: ViewContainerRef) {
+        this.CustomSectionContainer = container;
+    }
+    /** @deprecated Use {@link CustomSectionContainer} instead. */
+    get customSectionContainer(): ViewContainerRef {
+        return this.CustomSectionContainer;
     }
     
     /** The agent type entity for this agent */
@@ -854,9 +863,9 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
             // Configure the prompt selector for single selection
             promptSelector.config = {
                 Title: 'Select Context Compression Prompt',
-                multiSelect: false,
-                selectedPromptIds: this.record.ContextCompressionPromptID ? [this.record.ContextCompressionPromptID] : [],
-                showCreateNew: false
+                MultiSelect: false,
+                SelectedPromptIds: this.record.ContextCompressionPromptID ? [this.record.ContextCompressionPromptID] : [],
+                ShowCreateNew: false
             };
 
             // Subscribe to the result
@@ -2960,11 +2969,11 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                             });
 
                             // Add template to PendingRecords if created
-                            if (result.template) {
+                            if (result.Template) {
                                 // Set UserID on template (required field)
-                                result.template.UserID = currentUserId;
+                                result.Template.UserID = currentUserId;
                                 this.PendingRecords.push({
-                                    entityObject: result.template,
+                                    entityObject: result.Template,
                                     action: 'save'
                                 });
                             }

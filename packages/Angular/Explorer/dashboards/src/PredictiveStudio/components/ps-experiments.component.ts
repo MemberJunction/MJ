@@ -162,13 +162,13 @@ interface BudgetGaugeVM {
             </div>
             @if (c.status === 'Running') {
               <div class="ic-prog">
-                <div class="ps-bar run"><span [style.width.%]="c.progress"></span></div>
-                <div class="meta"><span class="ps-muted ps-small">{{ c.progressDetail }}</span></div>
+                <div class="ps-bar run"><span [style.width.%]="c.Progress"></span></div>
+                <div class="meta"><span class="ps-muted ps-small">{{ c.ProgressDetail }}</span></div>
               </div>
             } @else {
               <div class="ic-score">
                 <span class="v" [class.green]="c.status === 'Best'">{{ c.score | number: '1.3-3' }}</span>
-                <span class="lbl ps-muted ps-small">score · {{ c.scoreDelta }}</span>
+                <span class="lbl ps-muted ps-small">score · {{ c.ScoreDelta }}</span>
               </div>
             }
             <div class="rationale"><i class="fa-solid fa-robot"></i><span class="ps-small">{{ c.rationale }}</span></div>

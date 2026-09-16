@@ -22,54 +22,54 @@ describe('resolveSQLOutputFolder', () => {
 
     it('Open App cwd uses migrations/codegen and ignores MJ v5 default', () => {
         expect(ResolveSQLOutputFolder({
-            cwd: appCwd,
-            configuredFolderPath: './migrations/v5/',
-            includeSchemas: ['__mj_BizAppsCommon'],
-            coreSchema: '__mj',
-            hasMjAppJson: true,
-            isMjMonorepo: false,
+            Cwd: appCwd,
+            ConfiguredFolderPath: './migrations/v5/',
+            IncludeSchemas: ['__mj_BizAppsCommon'],
+            CoreSchema: '__mj',
+            HasMjAppJson: true,
+            IsMjMonorepo: false,
         })).toBe(path.join(appCwd, 'migrations', 'codegen'));
     });
 
     it('Open App honors an explicit non-MJ folderPath', () => {
         expect(ResolveSQLOutputFolder({
-            cwd: appCwd,
-            configuredFolderPath: './audit-sql',
-            hasMjAppJson: true,
-            isMjMonorepo: false,
-            coreSchema: '__mj',
+            Cwd: appCwd,
+            ConfiguredFolderPath: './audit-sql',
+            HasMjAppJson: true,
+            IsMjMonorepo: false,
+            CoreSchema: '__mj',
         })).toBe(path.resolve(appCwd, './audit-sql'));
     });
 
     it('throws when MJ monorepo cwd generates an Open App schema', () => {
         expect(() => ResolveSQLOutputFolder({
-            cwd: mjCwd,
-            configuredFolderPath: './migrations/v5/',
-            includeSchemas: ['__mj_BizAppsCommon'],
-            coreSchema: '__mj',
-            hasMjAppJson: false,
-            isMjMonorepo: true,
+            Cwd: mjCwd,
+            ConfiguredFolderPath: './migrations/v5/',
+            IncludeSchemas: ['__mj_BizAppsCommon'],
+            CoreSchema: '__mj',
+            HasMjAppJson: false,
+            IsMjMonorepo: true,
         })).toThrow(/Open App metadata SQL into the MJ repo/);
     });
 
     it('MJ monorepo cwd with only core includeSchemas keeps host folder', () => {
         expect(ResolveSQLOutputFolder({
-            cwd: mjCwd,
-            configuredFolderPath: './migrations/v6/',
-            includeSchemas: ['__mj'],
-            coreSchema: '__mj',
-            hasMjAppJson: false,
-            isMjMonorepo: true,
+            Cwd: mjCwd,
+            ConfiguredFolderPath: './migrations/v6/',
+            IncludeSchemas: ['__mj'],
+            CoreSchema: '__mj',
+            HasMjAppJson: false,
+            IsMjMonorepo: true,
         })).toBe(path.resolve(mjCwd, './migrations/v6/'));
     });
 
     it('--sql-output-dir wins on an Open App', () => {
         expect(ResolveSQLOutputFolder({
-            cwd: appCwd,
-            hasMjAppJson: true,
-            isMjMonorepo: false,
-            coreSchema: '__mj',
-            sqlOutputDirFlag: './migrations/codegen',
+            Cwd: appCwd,
+            HasMjAppJson: true,
+            IsMjMonorepo: false,
+            CoreSchema: '__mj',
+            SqlOutputDirFlag: './migrations/codegen',
         })).toBe(path.resolve(appCwd, './migrations/codegen'));
     });
 });

@@ -15,11 +15,11 @@ import { ShortenForLog } from './shortenForLog.js';
  *   this set (decorator-driven) when walking top-level keys.
  */
 export type RedactionContext = {
-  inputTypeName: string;
-  rawValue: unknown;
-  provider: IMetadataProvider;
-  noLogParameter: boolean;
-  noLogFields: ReadonlySet<string>;
+  inputTypeName: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  rawValue: unknown;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  provider: IMetadataProvider;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  noLogParameter: boolean;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  noLogFields: ReadonlySet<string>;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 };
 
 // Delete is included so DeleteMJ*Input resolvers resolve to their entity (yielding an empty

@@ -10,34 +10,34 @@
 import type { Dialect } from './types';
 
 export interface DbConnectionOverrides {
-  database?: string;
-  host?: string;
-  port?: number;
-  user?: string;
-  password?: string;
-  encrypt?: boolean;
-  trustServerCertificate?: boolean;
+  database?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+  Host?: string;
+  port?: number;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+  user?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+  password?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+  encrypt?: boolean;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+  trustServerCertificate?: boolean;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
 export interface DbConnectionParams {
   Dialect: Dialect;
   Host: string;
-  port?: number;
+  port?: number;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
   User: string;
   Password: string;
   Database: string;
-  encrypt?: boolean;
-  trustServerCertificate?: boolean;
+  encrypt?: boolean;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+  trustServerCertificate?: boolean;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
 export interface QueryRunner {
   /** Run a query and return all rows as plain JS objects. */
-  query<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]>;
+  query<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]>;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
   /** Stream rows one at a time. Used for large table dumps + full row compare. */
-  stream(sql: string, onRow: (row: Record<string, unknown>) => void | Promise<void>): Promise<void>;
-  close(): Promise<void>;
-  readonly dialect: Dialect;
-  readonly database: string;
+  stream(sql: string, onRow: (row: Record<string, unknown>) => void | Promise<void>): Promise<void>;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  close(): Promise<void>;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  readonly dialect: Dialect;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  readonly database: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 export async function OpenConnection(params: DbConnectionParams): Promise<QueryRunner> {

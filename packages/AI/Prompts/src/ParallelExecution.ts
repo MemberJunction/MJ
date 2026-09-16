@@ -138,13 +138,13 @@ export interface ExecutionTaskResult {
  */
 export interface ExecutionGroup {
   /** Group number (0-based, executed in ascending order) */
-  groupNumber: number;
+  GroupNumber: number;
 
   /** All tasks assigned to this execution group */
-  tasks: ExecutionTask[];
+  Tasks: ExecutionTask[];
 
   /** Maximum parallel executions for this group */
-  maxParallelExecutions?: number;
+  MaxParallelExecutions?: number;
 }
 
 /**

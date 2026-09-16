@@ -24,14 +24,14 @@ import { TransitiveBridgeFinding } from './TransitiveBridgeDetector.js';
 
 /** Output of the compose step: the PR #2193 JSON, the FK-redundancy-annotated clusters, and emit counts. */
 export interface ComposerResult {
-    output: DetectedOrganicKeysOutput;
+    output: DetectedOrganicKeysOutput;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Clusters with isFKRedundant filled in — callers that persist the cluster list
      *  (e.g. detector → state.json → dashboard) should use THIS, not the pre-compose
      *  input, otherwise the flag is silently lost. */
-    annotatedClusters: OrganicKeyCluster[];
-    emitted: number;
-    flaggedFKRedundant: number;
-    summary: { outputSchemas: number; outputTables: number; outputKeys: number; outputSpokes: number };
+    AnnotatedClusters: OrganicKeyCluster[];
+    Emitted: number;
+    FlaggedFKRedundant: number;
+    Summary: { outputSchemas: number; outputTables: number; outputKeys: number; outputSpokes: number };
 }
 
 /**
@@ -57,18 +57,18 @@ export function Compose(
         for (const m of c.members) hubKeys.add(`${m.schema}.${m.table}.${m.column}`);
     }
     const spokes: TransitiveSpokeInput[] = bridges
-        .filter((b) => hubKeys.has(`${b.hubSchema}.${b.hubTable}.${b.hubKeyFields[0]}`))
+        .filter((b) => hubKeys.has(`${b.HubSchema}.${b.HubTable}.${b.HubKeyFields[0]}`))
         .map((b) => ({
-            hubSchema: b.hubSchema,
-            hubTable: b.hubTable,
-            hubKeyFields: b.hubKeyFields,
-            spokeSchema: b.spokeSchema,
-            spokeTable: b.spokeTable,
-            transitiveView: { Name: b.view.viewName, SchemaName: b.view.schemaName, SQL: b.view.sql },
-            transitiveMatchFieldNames: [b.view.hubKeyField],
-            transitiveOutputFieldName: b.view.spokeOutputField,
-            relatedEntityJoinFieldName: b.view.spokeJoinField,
-            hubConcept: b.hubConcept,
+            hubSchema: b.HubSchema,
+            hubTable: b.HubTable,
+            hubKeyFields: b.HubKeyFields,
+            spokeSchema: b.SpokeSchema,
+            spokeTable: b.SpokeTable,
+            transitiveView: { Name: b.View.ViewName, SchemaName: b.View.schemaName, SQL: b.View.Sql },
+            transitiveMatchFieldNames: [b.View.HubKeyField],
+            transitiveOutputFieldName: b.View.SpokeOutputField,
+            relatedEntityJoinFieldName: b.View.SpokeJoinField,
+            hubConcept: b.HubConcept,
         }));
 
     const output = TranslateClusters(annotated, spokes);
@@ -76,10 +76,10 @@ export function Compose(
 
     return {
         output,
-        annotatedClusters: annotated,
-        emitted: annotated.length,
-        flaggedFKRedundant: flaggedCount,
-        summary: {
+        AnnotatedClusters: annotated,
+        Emitted: annotated.length,
+        FlaggedFKRedundant: flaggedCount,
+        Summary: {
             outputSchemas: counts.schemas,
             outputTables: counts.tables,
             outputKeys: counts.keys,
@@ -127,8 +127,11 @@ function isFKRedundant(cluster: OrganicKeyCluster): boolean {
 }
 
 /** Re-export for tests / observability. */
-export const Test__ = { isFKRedundant };
+export const TestHooks = { isFKRedundant };
 
-/** @deprecated Use {@link Test__}. */
-export const __test__ = Test__;
+/** @deprecated Use {@link TestHooks}. */
+export const Test__ = TestHooks;
+
+/** @deprecated Use {@link TestHooks}. */
+export const __test__ = TestHooks;
 export type { OrganicKeyClusterMember };

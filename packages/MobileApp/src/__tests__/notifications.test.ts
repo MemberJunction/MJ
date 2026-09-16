@@ -141,7 +141,7 @@ describe('registerForPushNotifications', () => {
         state.tokenThrows = true;
         const result = await registerForPushNotifications();
         expect(result).toMatchObject({ Granted: true, Token: null, Persisted: false });
-        expect(result.reason).toMatch(/simulator|APNs/i);
+        expect(result.Reason).toMatch(/simulator|APNs/i);
     });
 
     it('persists the token on the happy path', async () => {

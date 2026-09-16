@@ -359,15 +359,15 @@ const verifyAsync = async (issuer: string, token: string): Promise<jwt.JwtPayloa
  */
 export interface RequestContext {
   /** The API endpoint path (e.g., '/graphql', '/mcp') */
-  endpoint: string;
+  endpoint: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
   /** HTTP method (e.g., 'POST', 'GET') */
-  method: string;
+  method: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
   /** GraphQL operation name if available */
-  operationName?: string;
+  operationName?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
   /** Client IP address */
-  ipAddress?: string;
+  ipAddress?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
   /** User-Agent header */
-  userAgent?: string;
+  userAgent?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
 export const GetUserPayload = async (

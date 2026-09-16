@@ -181,11 +181,11 @@ function emitCreateTable(t: TableDef): string {
   for (const c of t.Columns) {
     columnLines.push('    ' + columnDefinition(c));
   }
-  if (t.primaryKey) {
-    const cluster = t.primaryKey.Clustered ? 'CLUSTERED' : 'NONCLUSTERED';
+  if (t.PrimaryKey) {
+    const cluster = t.PrimaryKey.Clustered ? 'CLUSTERED' : 'NONCLUSTERED';
     columnLines.push(
-      `    CONSTRAINT ${QuoteIdent(t.primaryKey.Name)} PRIMARY KEY ${cluster} ` +
-      `(${t.primaryKey.Columns.map((n) => QuoteIdent(n)).join(', ')})`,
+      `    CONSTRAINT ${QuoteIdent(t.PrimaryKey.Name)} PRIMARY KEY ${cluster} ` +
+      `(${t.PrimaryKey.Columns.map((n) => QuoteIdent(n)).join(', ')})`,
     );
   }
   for (const u of t.UniqueConstraints) {
@@ -421,12 +421,12 @@ function emitUserDefinedTypes(types: readonly UserDefinedTypeDef[]): string {
       parts.push(c.isNullable ? 'NULL' : 'NOT NULL');
       colLines.push('    ' + parts.join(' '));
     }
-    if (t.primaryKey) {
+    if (t.PrimaryKey) {
       // Table types can't have a named PK constraint — the name is auto-generated
       // by MSSQL. Use the inline `PRIMARY KEY (...)` clause.
-      const cluster = t.primaryKey.Clustered ? 'CLUSTERED' : 'NONCLUSTERED';
+      const cluster = t.PrimaryKey.Clustered ? 'CLUSTERED' : 'NONCLUSTERED';
       colLines.push(
-        `    PRIMARY KEY ${cluster} (${t.primaryKey.Columns.map((n) => QuoteIdent(n)).join(', ')})`,
+        `    PRIMARY KEY ${cluster} (${t.PrimaryKey.Columns.map((n) => QuoteIdent(n)).join(', ')})`,
       );
     }
     lines.push(`CREATE TYPE ${QuoteIdent(t.Schema)}.${QuoteIdent(t.Name)} AS TABLE (`);
@@ -455,14 +455,14 @@ function emitExtendedProperties(props: readonly ExtendedPropertyDef[]): string {
       `@value = ${QuoteString(p.Value)}`,
       `@level0type = N'SCHEMA', @level0name = ${QuoteString(p.SchemaName)}`,
     ];
-    if (p.level1Type) {
+    if (p.Level1Type) {
       args.push(
-        `@level1type = N'${p.level1Type}', @level1name = ${QuoteString(p.level1Name ?? '')}`,
+        `@level1type = N'${p.Level1Type}', @level1name = ${QuoteString(p.Level1Name ?? '')}`,
       );
     }
-    if (p.level2Type) {
+    if (p.Level2Type) {
       args.push(
-        `@level2type = N'${p.level2Type}', @level2name = ${QuoteString(p.level2Name ?? '')}`,
+        `@level2type = N'${p.Level2Type}', @level2name = ${QuoteString(p.Level2Name ?? '')}`,
       );
     }
     lines.push(`EXEC sp_addextendedproperty ${args.join(', ')};`);
@@ -494,7 +494,7 @@ function emitPrincipals(principals: readonly DatabasePrincipalDef[]): string {
   const users = principals.filter((p) => p.Kind !== 'database_role' && p.Kind !== 'application_role');
 
   for (const r of StableSortBy(roles, (p) => p.Name.toLowerCase())) {
-    const authClause = r.owner ? ` AUTHORIZATION ${QuoteIdent(r.owner)}` : '';
+    const authClause = r.Owner ? ` AUTHORIZATION ${QuoteIdent(r.Owner)}` : '';
     lines.push(`IF DATABASE_PRINCIPAL_ID(${QuoteString(r.Name)}) IS NULL`);
     lines.push(`    EXEC('CREATE ROLE ${QuoteIdent(r.Name)}${authClause}');`);
     lines.push('GO');

@@ -131,7 +131,7 @@ export default class BaselineBuild extends Command {
           snapshot.Tables,
           { ExcludedTables: excludedDataTables },
           {
-            onTable: (table, count) => {
+            OnTable: (table, count) => {
               if (flags.verbose) this.log(`    ${table.Schema}.${table.Name}: ${count} rows`);
               else if (spinner) spinner.text = `Dumping ${table.Schema}.${table.Name} (${count} rows)`;
             },

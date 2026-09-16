@@ -286,7 +286,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
 
   constructor(
     private router: Router,
-    @Inject(DOCUMENT) public document: Document,
+    @Inject(DOCUMENT) public Document: Document,
     @Inject(MJ_ENVIRONMENT) private environment: MJEnvironmentConfig,
     public AuthBase: MJAuthBase,
     private workspaceInit: WorkspaceInitializerService,
@@ -312,6 +312,11 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
   ) {
     super();
     this.registerClientTools();
+  }
+
+  /** @deprecated Use {@link Document} instead. */
+  get document(): Document {
+    return this.Document;
   }
 
   /** @deprecated Use {@link AuthBase}. */
@@ -377,7 +382,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
 
     const { requiresReload } = AuthProviderCatalog.Select(provider, this.authResolution?.active?.name ?? null);
     if (requiresReload) {
-      this.document.defaultView?.location.reload();
+      this.Document.defaultView?.location.reload();
       return;
     }
 
@@ -461,7 +466,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
           // use first nav item url instead
           setTimeout(() => {
             // Find the KendoDrawer element, and simulate a click for the first item
-            const drawerElement = this.document.querySelector('li.k-drawer-item.k-level-0') as HTMLElement;
+            const drawerElement = this.Document.querySelector('li.k-drawer-item.k-level-0') as HTMLElement;
             if (drawerElement) drawerElement.click();
           }, 10); // wait for the drawer to finish rerender and then do this
         } else {
@@ -1258,9 +1263,9 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
    */
   private applyThemeToDOM(): void {
     if (this.IsDarkMode) {
-      this.document.documentElement.setAttribute('data-theme', 'dark');
+      this.Document.documentElement.setAttribute('data-theme', 'dark');
     } else {
-      this.document.documentElement.removeAttribute('data-theme');
+      this.Document.documentElement.removeAttribute('data-theme');
     }
   }
 

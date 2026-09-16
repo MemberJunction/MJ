@@ -51,7 +51,7 @@ describe('OracleBreakdownTableComponent (DOM)', () => {
   });
 
   it('marks a result with an error and renders its error message row', () => {
-    const fixture = render([result({ Status: 'Error', errorMessage: 'boom happened' })]);
+    const fixture = render([result({ Status: 'Error', ErrorMessage: 'boom happened' })]);
     expect(query(fixture, '.table-row.has-error')).not.toBeNull();
     expect(text(fixture, '.error-message')).toContain('boom happened');
   });

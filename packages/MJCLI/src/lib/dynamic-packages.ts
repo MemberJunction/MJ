@@ -18,14 +18,14 @@ import { GetRawConfig } from '../config.js';
 
 export interface LoadDynamicPackagesForCommandOptions {
   /** Print per-package progress (stderr). Failures print regardless. */
-  verbose?: boolean;
+  Verbose?: boolean;
   /**
    * Override the config source — for tests, or for a caller that has already discovered a
    * config elsewhere. Defaults to the CLI's own cosmiconfig result.
    */
-  raw?: { config: Record<string, unknown> | undefined; configFilePath?: string };
+  raw?: { config: Record<string, unknown> | undefined; configFilePath?: string };  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
   /** Test seam for the stderr channel. */
-  stderr?: (line: string) => void;
+  Stderr?: (line: string) => void;
 }
 
 function stderrLogger(verbose: boolean, write: (line: string) => void): DynamicPackagesLogger {
@@ -52,8 +52,8 @@ export async function LoadDynamicPackagesForCommand(
   commandId: string,
   options: LoadDynamicPackagesForCommandOptions = {}
 ): Promise<DynamicPackagesReport> {
-  const verbose = options.verbose ?? false;
-  const write = options.stderr ?? ((line: string) => process.stderr.write(`${line}\n`));
+  const verbose = options.Verbose ?? false;
+  const write = options.Stderr ?? ((line: string) => process.stderr.write(`${line}\n`));
   const raw = options.raw ?? GetRawConfig();
   const processId = CliProcessId(commandId);
   // Publish this command's identity for hosts the command imports in-process (`mj ai …` drives

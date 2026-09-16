@@ -137,17 +137,17 @@ export class ViewInfo extends BaseInfo {
      */
     EntityBaseView: string = null
 
-    private _Filter: ViewFilterInfo[] = []
+    private _filter: ViewFilterInfo[] = []
     public get Filter(): ViewFilterInfo[] {
-        return this._Filter
+        return this._filter
     }
 
-    private _Columns: ViewColumnInfo[] = []
+    private _columns: ViewColumnInfo[] = []
     public get Columns(): ViewColumnInfo[] {
-        return this._Columns
+        return this._columns
     }
 
-    private _EntityInfo: EntityInfo = null
+    private _EntityInfo: EntityInfo = null  // case-violation-ok-legacy-back-compat: a class in the same hierarchy already declares the camelCase name — TypeScript rejects two declarations of one private property (TS2415)
     public get EntityInfo(): EntityInfo {
         return this._EntityInfo
     }
@@ -168,7 +168,7 @@ export class ViewInfo extends BaseInfo {
                 if (initData.GridState) {
                     const gridState = JSON.parse(initData.GridState)
                     if (gridState && gridState.columnSettings) {
-                        this._Columns = gridState.columnSettings.map(c => {
+                        this._columns = gridState.columnSettings.map(c => {
                             // find the entity field and put it in place inside the View Metadata for easy access
                             if (c) {
                                 // check to make sure the current item is non-null to ensure metadata isn't messed up 
@@ -182,7 +182,7 @@ export class ViewInfo extends BaseInfo {
                     }
                 }
                 if (initData.FilterState) {
-                    this._Filter = [new ViewFilterInfo(JSON.parse(initData.FilterState))]
+                    this._filter = [new ViewFilterInfo(JSON.parse(initData.FilterState))]
                 }
             }
         }

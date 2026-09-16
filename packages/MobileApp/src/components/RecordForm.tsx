@@ -30,7 +30,7 @@ export type RecordFormProps = {
     /** Called whenever a field changes; the parent updates its `values` bag. */
     OnChange: (key: string, value: FieldValue) => void;
     /** When true, all editors are non-interactive (e.g. during save). */
-    disabled?: boolean;
+    Disabled?: boolean;
 };
 
 /** Find the first error message for a field key, if any. */
@@ -49,7 +49,7 @@ function asText(value: FieldValue): string {
  * @param props See {@link RecordFormProps}.
  */
 export function RecordForm(props: RecordFormProps) {
-    const { Descriptors: descriptors, Values: values, Errors: errors, OnChange: onChange, disabled } = props;
+    const { Descriptors: descriptors, Values: values, Errors: errors, OnChange: onChange, Disabled: disabled } = props;
     return (
         <View style={styles.form}>
             {descriptors.map((d) => (
@@ -156,7 +156,7 @@ function ToggleEditor({ value, disabled, onChange }: { value: boolean; disabled:
 /** A tap-to-expand value-list picker rendered inline (no modal overlay). */
 function DropdownEditor({ descriptor, value, hasError, disabled, onChange }: FieldRowProps & { value: string; hasError: boolean }) {
     const [open, setOpen] = useState(false);
-    const selected = descriptor.options.find((o) => o.value === value);
+    const selected = descriptor.Options.find((o) => o.value === value);
     return (
         <View>
             <Pressable
@@ -171,7 +171,7 @@ function DropdownEditor({ descriptor, value, hasError, disabled, onChange }: Fie
             </Pressable>
             {open ? (
                 <View style={styles.dropdownList}>
-                    {descriptor.options.map((o) => {
+                    {descriptor.Options.map((o) => {
                         const active = o.value === value;
                         return (
                             <Pressable

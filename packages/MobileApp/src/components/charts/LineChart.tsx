@@ -17,9 +17,9 @@ export type LineChartProps = {
     /** Available container width in px; the chart scales to fill it. */
     Width: number;
     /** Plot height in px (default 150). */
-    height?: number;
+    height?: number;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
     /** Optional heading rendered above the plot. */
-    title?: string;
+    title?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 };
 
 /** Left inset (px) — room for the min/max y-axis value labels. */

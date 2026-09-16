@@ -74,8 +74,8 @@ describe('adapt', () => {
             expect(summary.Title).toBe('(untitled)');
             expect(summary.Snippet).toBe('(no messages yet)');
             expect(summary.MessageCount).toBe(7);
-            expect(summary.live).toBe(true);
-            expect(summary.pinned).toBe(true);
+            expect(summary.Live).toBe(true);
+            expect(summary.Pinned).toBe(true);
         });
 
         it('synthesizes a single fallback agent when none participated', () => {

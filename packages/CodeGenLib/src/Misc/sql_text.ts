@@ -15,7 +15,7 @@ function isWhitespace(ch: string): boolean {
 }
 
 /** Strips trailing whitespace and `;` statement terminators. */
-export function trimTrailingStatementTerminators(sql: string): string {
+export function TrimTrailingStatementTerminators(sql: string): string {
   let end = sql.length;
   while (end > 0 && (sql[end - 1] === ';' || isWhitespace(sql[end - 1]))) {
     end--;
@@ -23,11 +23,16 @@ export function trimTrailingStatementTerminators(sql: string): string {
   return sql.slice(0, end);
 }
 
+/** @deprecated Use {@link TrimTrailingStatementTerminators}. */
+export function trimTrailingStatementTerminators(sql: string): string {
+  return TrimTrailingStatementTerminators(sql);
+}
+
 /**
  * True when the last non-blank line of `text` is exactly `separator` (case-insensitive, surrounding
  * whitespace ignored) — e.g. a unit that already closes its own T-SQL batch with `GO`.
  */
-export function endsWithBatchSeparatorLine(text: string, separator: string): boolean {
+export function EndsWithBatchSeparatorLine(text: string, separator: string): boolean {
   if (!separator) {
     return false;
   }
@@ -37,4 +42,9 @@ export function endsWithBatchSeparatorLine(text: string, separator: string): boo
   }
   const lineStart = text.lastIndexOf('\n', end - 1) + 1;
   return text.slice(lineStart, end).trim().toUpperCase() === separator.trim().toUpperCase();
+}
+
+/** @deprecated Use {@link EndsWithBatchSeparatorLine}. */
+export function endsWithBatchSeparatorLine(text: string, separator: string): boolean {
+  return EndsWithBatchSeparatorLine(text, separator);
 }

@@ -13,12 +13,12 @@ const INPUT_TYPE_REGEX = /^(Create|Update|Delete).+Input$/;
  * Used by the audit walker. Mirrors the subset of `ArgParamMetadata` we need.
  */
 export type AuditArgParam = {
-  kind: 'arg';
-  index: number;
-  name: string;
-  target: Function;
-  methodName: string;
-  getType: () => unknown;
+  kind: 'arg';  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  Index: number;
+  name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  Target: Function;
+  MethodName: string;
+  GetType: () => unknown;
 };
 
 /**
@@ -26,9 +26,9 @@ export type AuditArgParam = {
  * Includes `@Query`, `@Mutation`, `@Subscription` entries.
  */
 export type AuditResolver = {
-  target: Function;
-  methodName: string;
-  params?: ReadonlyArray<{ kind: string; index: number } & Partial<AuditArgParam>>;
+  Target: Function;
+  MethodName: string;
+  params?: ReadonlyArray<{ kind: string; Index: number } & Partial<AuditArgParam>>;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 };
 
 /**
@@ -94,10 +94,10 @@ function auditArg(resolver: AuditResolver, argParam: AuditArgParam): void {
   if (typeName && INPUT_TYPE_REGEX.test(typeName)) {
     return;
   }
-  if (HasNoLogParameter(resolver.target, resolver.methodName, argParam.index)) {
+  if (HasNoLogParameter(resolver.Target, resolver.MethodName, argParam.Index)) {
     return;
   }
-  const resolverName = `${resolver.target.name}.${resolver.methodName}`;
+  const resolverName = `${resolver.Target.name}.${resolver.MethodName}`;
   console.warn(
     `[mj:NoLog audit] Custom resolver ${resolverName} takes argument '${argParam.name}' ` +
     `(type ${typeName ?? 'unknown'}) which is not marked @NoLog. Verify this argument does ` +
@@ -113,7 +113,7 @@ function auditArg(resolver: AuditResolver, argParam: AuditArgParam): void {
  */
 function readArgTypeName(argParam: AuditArgParam): string | undefined {
   try {
-    const type = argParam.getType();
+    const type = argParam.GetType();
     if (typeof type === 'function') {
       return (type as { name?: string }).name;
     }

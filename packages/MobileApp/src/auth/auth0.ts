@@ -31,10 +31,10 @@ const STORE_KEY = 'mj-auth0-tokens';
 
 /** Persisted Auth0 token bundle. `expiresAt` is epoch-ms of the idToken's `exp` (0 if unknown). */
 export type Auth0Tokens = {
-    idToken: string;
-    accessToken: string;
-    refreshToken?: string;
-    expiresAt: number;
+    idToken: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+    accessToken: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+    refreshToken?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+    expiresAt: number;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
 };
 
 /**

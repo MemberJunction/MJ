@@ -33,11 +33,11 @@ const STORE_KEY = 'mj-msal-tokens';
 
 /** Persisted MSAL/Azure AD token bundle. */
 export type MJAuthTokens = {
-    idToken: string;
-    accessToken: string;
-    refreshToken?: string;
+    idToken: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+    accessToken: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+    refreshToken?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
     /** Epoch ms when idToken expires (or 0 if unknown). */
-    expiresAt: number;
+    expiresAt: number;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
 };
 
 /**

@@ -22,19 +22,19 @@ const WIDGET_ENTITY = 'MJ: Conversation Widget Instances';
 
 /**
  * Resolved elevation context for a widget-guest agent run. Returned only when the request is a
- * widget guest; the dispatch resolver runs the agent under {@link WidgetGuestRunContext.elevatedUser}
- * with {@link WidgetGuestRunContext.pinnedAgentId} (authoritative), keeping ownership checks under
+ * widget guest; the dispatch resolver runs the agent under {@link WidgetGuestRunContext.ElevatedUser}
+ * with {@link WidgetGuestRunContext.PinnedAgentId} (authoritative), keeping ownership checks under
  * the guest principal.
  */
 export interface WidgetGuestRunContext {
   /** The trusted server principal under which the agent run (and its run-entity writes) executes. */
-  elevatedUser: UserInfo;
+  ElevatedUser: UserInfo;
   /** The widget instance the guest session is bound to (authoritative config). */
-  widget: MJConversationWidgetInstanceEntity;
+  Widget: MJConversationWidgetInstanceEntity;
   /** The authoritative pinned support agent id — overrides any client-supplied agent id (D5). */
-  pinnedAgentId: string;
+  PinnedAgentId: string;
   /** The guest's per-session scope id (Conversation.ExternalID), used to validate conversation ownership. */
-  sessionScopeId?: string;
+  SessionScopeId?: string;
 }
 
 /**
@@ -70,10 +70,10 @@ export async function ResolveWidgetGuestRunContext(
   }
 
   return {
-    elevatedUser,
-    widget,
-    pinnedAgentId: widget.PinnedAgentID,
-    sessionScopeId: guest.MagicLinkScope?.ResourceID,
+    ElevatedUser: elevatedUser,
+    Widget: widget,
+    PinnedAgentId: widget.PinnedAgentID,
+    SessionScopeId: guest.MagicLinkScope?.ResourceID,
   };
 }
 

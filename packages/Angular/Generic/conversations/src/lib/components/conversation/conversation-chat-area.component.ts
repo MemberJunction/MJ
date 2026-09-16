@@ -4175,11 +4175,11 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    */
   private snapshotArtifactPanelBaseline(): ArtifactPanelBaseline {
     return {
-      versions: SnapshotArtifactVersions(this.allArtifactRefs()),
+      Versions: SnapshotArtifactVersions(this.allArtifactRefs()),
       conversationId: this.ConversationId,
-      mapConversationId: this.lastLoadedConversationId,
-      mapGeneration: this.artifactMapGeneration,
-      selectionEpoch: this.artifactSelectionEpoch,
+      MapConversationId: this.lastLoadedConversationId,
+      MapGeneration: this.artifactMapGeneration,
+      SelectionEpoch: this.artifactSelectionEpoch,
     };
   }
 
@@ -4198,22 +4198,22 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     // The baseline is comparable only if the map was holding THIS conversation's artifacts when it
     // was taken, and nothing merged an older page in since.
     const baselineComparable =
-      baseline.mapConversationId != null &&
-      UUIDsEqual(baseline.mapConversationId, baseline.conversationId) &&
-      this.artifactMapGeneration === baseline.mapGeneration;
+      baseline.MapConversationId != null &&
+      UUIDsEqual(baseline.MapConversationId, baseline.conversationId) &&
+      this.artifactMapGeneration === baseline.MapGeneration;
 
     const action = DecideArtifactPanelAction({
       panelOpen: this.ShowArtifactPanel,
       selectedArtifactId: this.SelectedArtifactId,
-      before: baseline.versions,
+      before: baseline.Versions,
       after: this.allArtifactRefs(),
       baselineComparable,
-      userChangedSelection: this.artifactSelectionEpoch !== baseline.selectionEpoch,
+      userChangedSelection: this.artifactSelectionEpoch !== baseline.SelectionEpoch,
     });
 
     if (!baselineComparable && action.kind === 'none') {
       LogStatusEx({
-        message: `🎨 Skipping artifact panel decision: the before/after snapshots describe different artifact populations (map held ${baseline.mapConversationId ?? 'nothing'}, conversation was ${baseline.conversationId})`,
+        message: `🎨 Skipping artifact panel decision: the before/after snapshots describe different artifact populations (map held ${baseline.MapConversationId ?? 'nothing'}, conversation was ${baseline.conversationId})`,
         verboseOnly: true
       });
     }

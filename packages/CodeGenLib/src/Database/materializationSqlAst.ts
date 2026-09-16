@@ -128,9 +128,9 @@ export function columnQualifier(v: AstNode): string | null {
 /** A `column_ref` split into its optional table qualifier and its bare column name. */
 export interface QualifiedColumn {
     /** Table alias / table name qualifying the reference (`o` in `o.Status`); null when unqualified. */
-    qualifier: string | null;
+    Qualifier: string | null;
     /** Bare column name (`Status` in `o.Status`). */
-    column: string;
+    column: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 /**
@@ -143,7 +143,7 @@ export function qualifiedColumn(v: AstNode): QualifiedColumn | null {  // case-v
     if (column == null) {
         return null;
     }
-    return { qualifier: ColumnQualifier(v), column };
+    return { Qualifier: ColumnQualifier(v), column };
 }
 
 /** Case- and whitespace-insensitive SQL identifier equality. Null/undefined never matches anything. */

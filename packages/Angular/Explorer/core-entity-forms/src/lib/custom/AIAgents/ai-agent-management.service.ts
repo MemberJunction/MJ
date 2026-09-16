@@ -93,11 +93,11 @@ export class AIAgentManagementService {
   }): Observable<PromptSelectorResult | null> {
     const selectorConfig: PromptSelectorConfig = {
       Title: config.title || 'Select Prompts',
-      multiSelect: config.multiSelect ?? true,
-      selectedPromptIds: config.selectedPromptIds || [],
-      showCreateNew: config.showCreateNew ?? true,
-      extraFilter: config.extraFilter,
-      linkedPromptIds: config.linkedPromptIds || []
+      MultiSelect: config.multiSelect ?? true,
+      SelectedPromptIds: config.selectedPromptIds || [],
+      ShowCreateNew: config.showCreateNew ?? true,
+      ExtraFilter: config.extraFilter,
+      LinkedPromptIds: config.linkedPromptIds || []
     };
 
     const dialogRef = this.dialogService.open({
@@ -315,8 +315,8 @@ export class AIAgentManagementService {
   }): Observable<CreatePromptResult | null> {
     const createConfig: CreatePromptConfig = {
       title: config.title || 'Create New Prompt',
-      initialName: config.initialName,
-      initialTypeID: config.initialTypeID
+      InitialName: config.initialName,
+      InitialTypeID: config.initialTypeID
     };
 
     const dialogRef = this.dialogService.open({
@@ -365,10 +365,10 @@ export class AIAgentManagementService {
   }): Observable<CreateSubAgentResult | null> {
     const createConfig: CreateSubAgentConfig = {
       title: config.title || 'Create New Sub-Agent',
-      initialName: config.initialName,
-      initialTypeID: config.initialTypeID,
+      InitialName: config.initialName,
+      InitialTypeID: config.initialTypeID,
       ParentAgentId: config.parentAgentId,
-      parentAgentName: config.parentAgentName
+      ParentAgentName: config.parentAgentName
     };
 
     const dialogRef = this.dialogService.open({

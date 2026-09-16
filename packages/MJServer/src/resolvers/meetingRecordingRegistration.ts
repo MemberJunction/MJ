@@ -81,13 +81,13 @@ export interface MeetingRecordingRegistrationConfig {
    * The `MJ: File Storage Providers` id whose accounts target the egress sink (where LiveKit wrote the
    * MP4). Falls back to `process.env.MJ_MEETING_RECORDING_STORAGE_PROVIDER`.
    */
-  sinkStorageProviderID?: string;
+  SinkStorageProviderID?: string;
   /**
    * OPTIONAL canonical provider id — when set AND different from the sink, the MP4 is copied into it and
    * the Files row points there (the "copy into Box" option). Falls back to
    * `process.env.MJ_MEETING_RECORDING_CANONICAL_STORAGE_PROVIDER`. OFF by default.
    */
-  canonicalStorageProviderID?: string;
+  CanonicalStorageProviderID?: string;
 }
 
 /**
@@ -115,7 +115,7 @@ export async function RegisterMeetingRecordingFile(
       };
     }
 
-    const sinkProviderID = config?.sinkStorageProviderID ?? process.env.MJ_MEETING_RECORDING_STORAGE_PROVIDER;
+    const sinkProviderID = config?.SinkStorageProviderID ?? process.env.MJ_MEETING_RECORDING_STORAGE_PROVIDER;
     if (!sinkProviderID) {
       return {
         Success: false,
@@ -334,7 +334,7 @@ async function resolveFileLocation(
   config?: MeetingRecordingRegistrationConfig,
 ): Promise<FileLocationResult> {
   const outputLocation = egress.OutputLocation!;
-  const canonicalProviderID = config?.canonicalStorageProviderID ?? process.env.MJ_MEETING_RECORDING_CANONICAL_STORAGE_PROVIDER;
+  const canonicalProviderID = config?.CanonicalStorageProviderID ?? process.env.MJ_MEETING_RECORDING_CANONICAL_STORAGE_PROVIDER;
 
   // Default (v1): point directly at the sink output — playback streams straight from it, no byte copy.
   if (!canonicalProviderID || canonicalProviderID === sinkProviderID) {

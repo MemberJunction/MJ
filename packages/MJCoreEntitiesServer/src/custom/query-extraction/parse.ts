@@ -18,7 +18,7 @@ export function ParseQuerySQL(sql: string, platform: DatabasePlatform = 'sqlserv
     const tableRefs = SQLParser.ExtractTableRefs(sql, dialect);
     const selectColumns = SQLParser.ExtractSelectColumns(sql, dialect);
 
-    return { analysis, deterministicParams, tableRefs, selectColumns };
+    return { Analysis: analysis, DeterministicParams: deterministicParams, TableRefs: tableRefs, SelectColumns: selectColumns };
 }
 
 /** @deprecated Use {@link ParseQuerySQL}. */

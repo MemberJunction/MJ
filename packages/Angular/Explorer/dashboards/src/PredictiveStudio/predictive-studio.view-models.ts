@@ -459,8 +459,8 @@ function toRunningCard(it: PSIterationRow): PSIterationCard {
     Iteration: `iteration ${it.Sequence}${it.Status === 'Pending' ? ' · queued' : ' · in progress'}`,
     Features: featureChips(it.Label),
     Status: 'Running',
-    progress: it.Status === 'Pending' ? 8 : 50,
-    progressDetail: it.Status === 'Pending' ? 'waiting for a slot' : 'training…',
+    Progress: it.Status === 'Pending' ? 8 : 50,
+    ProgressDetail: it.Status === 'Pending' ? 'waiting for a slot' : 'training…',
     Rationale: it.Rationale ?? 'No rationale recorded.',
   };
 }
@@ -477,7 +477,7 @@ function toScoredCard(it: PSIterationRow, status: 'Best' | 'Completed' | 'Pruned
     Features: featureChips(it.Label),
     Status: status,
     score: it.Score ?? undefined,
-    scoreDelta: scoreDelta(it.Score, bestScore, status),
+    ScoreDelta: scoreDelta(it.Score, bestScore, status),
     Rationale: it.Rationale ?? 'No rationale recorded.',
   };
 }
@@ -715,15 +715,15 @@ export function relativeTime(when: Date, now: Date): string {
 
 /** A single run column in the Compare panel, derived from a scored iteration. */
 export interface PSCompareColumn {
-  key: string;
-  label: string;
-  algorithm: string;
-  descriptor: string;
-  color: string;
-  holdoutAuc: number | null;
-  computeCost: number | null;
-  status: string;
-  isBest: boolean;
+  key: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  label: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  algorithm: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  descriptor: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  color: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  holdoutAuc: number | null;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  computeCost: number | null;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  status: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  isBest: boolean;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 }
 
 /**

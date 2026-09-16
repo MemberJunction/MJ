@@ -213,14 +213,14 @@ export function UseRecordEditor(entityName: string | undefined, recordId: string
         setErrors([]);
         try {
             const result = await saveRecord(load, values);
-            if (!result.success && result.validationErrors) setErrors(result.validationErrors);
+            if (!result.success && result.ValidationErrors) setErrors(result.ValidationErrors);
             return result;
         } finally {
             setSaving(false);
         }
     }, [load, values]);
 
-    return { load, values, errors, loading, saving, error, canUpdate: load?.canUpdate ?? false, setValue, save };
+    return { load, values, errors, loading, saving, error, canUpdate: load?.CanUpdate ?? false, setValue, save };
 }
 
 /** @deprecated Use {@link UseRecordEditor}. */
@@ -268,7 +268,7 @@ export function UseQueryRun(queryId: string | undefined) {
         if (status !== 'ready' || !queryId) return;
         setLoading(true);
         try { setResult(await runQuery(queryId, parameters)); }
-        catch (e) { setResult({ Columns: [], Rows: [], RowCount: 0, Success: false, errorMessage: e instanceof Error ? e.message : String(e) }); }
+        catch (e) { setResult({ Columns: [], Rows: [], RowCount: 0, Success: false, ErrorMessage: e instanceof Error ? e.message : String(e) }); }
         finally { setLoading(false); }
     }, [status, queryId]);
 

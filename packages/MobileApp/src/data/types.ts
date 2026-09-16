@@ -8,11 +8,11 @@
  * avatar chip needs to render (id, name, a stable color, and an initial).
  */
 export type ConversationParticipantAgent = {
-    id: string;
-    name: string;
-    color: string;
+    id: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    color: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** First letter to render in the avatar disc. */
-    initial: string;
+    initial: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 };
 
 /**
@@ -30,10 +30,10 @@ export type ConversationSummary = {
     Agents: ConversationParticipantAgent[];
     MessageCount: number;
     /** True while an agent task in the conversation is still running. */
-    live?: boolean;
+    Live?: boolean;
     /** True when the conversation is pinned to the top of the list. */
-    pinned?: boolean;
-    unreadCount?: number;
+    Pinned?: boolean;
+    UnreadCount?: number;
 };
 
 /**
@@ -44,5 +44,5 @@ export type RecentConvoChip = {
     Id: string;
     Title: string;
     Participants: ConversationParticipantAgent[];
-    live?: boolean;
+    Live?: boolean;
 };

@@ -1343,7 +1343,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         existingRun?: MJCompanyIntegrationRunEntity
     ): Promise<SyncResult> {
         const startTime = Date.now();
-        const logger = new SyncLogger({ ciId: companyIntegrationID, integration: null });
+        const logger = new SyncLogger({ CiId: companyIntegrationID, Integration: null });
         logger.emit('sync.run.start', {
             triggerType,
             fullSync: options?.FullSync ?? false,

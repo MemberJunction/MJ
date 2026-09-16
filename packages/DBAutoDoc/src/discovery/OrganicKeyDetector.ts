@@ -26,10 +26,10 @@ import { Compose } from './Composer.js';
 import { DetectedOrganicKeysOutput } from './OrganicKeyTranslator.js';
 
 export interface OrganicKeyDetectionResult {
-    clusters: OrganicKeyCluster[];
-    output: DetectedOrganicKeysOutput;
-    phase: OrganicKeyDetectionPhase;
-    summary: {
+    clusters: OrganicKeyCluster[];  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    output: DetectedOrganicKeysOutput;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    Phase: OrganicKeyDetectionPhase;
+    Summary: {
         columnsInScope: number;
         columnsNormalized: number;
         columnsRejectedByNormalizer: number;
@@ -45,7 +45,7 @@ export interface OrganicKeyDetectionResult {
 }
 
 export interface DetectorRunOptions {
-    onProgress?: ProgressCallback;
+    OnProgress?: ProgressCallback;
 }
 
 export class OrganicKeyDetector {
@@ -63,33 +63,33 @@ export class OrganicKeyDetector {
         state: DatabaseDocumentation,
         opts: DetectorRunOptions = {},
     ): Promise<OrganicKeyDetectionResult> {
-        const progress = opts.onProgress ?? (() => {});
+        const progress = opts.OnProgress ?? (() => {});
         const startedAt = new Date().toISOString();
 
         const a = await RunSemanticPhase(state, this.config, this.aiConfig, progress);
         const b = RunStructuralPhase(state, a.clusters, this.databaseProvider);
-        progress(`structural: ${b.summary.transitiveBridgesFound} bridges`);
-        const c = Compose(a.clusters, b.bridges);
-        progress(`compose: emitted ${c.emitted}/${a.clusters.length} clusters (${c.summary.outputKeys} keys, ${c.summary.outputSpokes} spokes)`);
+        progress(`structural: ${b.Summary.transitiveBridgesFound} bridges`);
+        const c = Compose(a.clusters, b.Bridges);
+        progress(`compose: emitted ${c.Emitted}/${a.clusters.length} clusters (${c.Summary.outputKeys} keys, ${c.Summary.outputSpokes} spokes)`);
 
         // Net additional clusters produced by the concept-name split (sub-clusters created
         // beyond the raw clusterer output, counting both kept and dropped sub-clusters).
         const splitClusterCount = Math.max(
             0,
-            a.summary.clustersFound + a.summary.clustersDropped - a.summary.clustersBeforeSplit,
+            a.Summary.clustersFound + a.Summary.clustersDropped - a.Summary.clustersBeforeSplit,
         );
 
         return {
-            clusters: c.annotatedClusters,
+            clusters: c.AnnotatedClusters,
             output: c.output,
-            phase: {
+            Phase: {
                 triggered: true,
                 startedAt,
                 completedAt: new Date().toISOString(),
                 status: 'completed',
                 candidateClusterCount: a.clusters.length,
-                confirmedClusterCount: c.emitted,
-                rejectedClusterCount: a.summary.columnsRejectedByNormalizer,
+                confirmedClusterCount: c.Emitted,
+                rejectedClusterCount: a.Summary.columnsRejectedByNormalizer,
                 splitClusterCount,
                 tokensUsed: a.tokens.total,
                 inputTokens: a.tokens.input,
@@ -97,18 +97,18 @@ export class OrganicKeyDetector {
                 estimatedCost: this.estimateCost(a.tokens.input, a.tokens.output),
                 refinementModelUsed: this.aiConfig.model,
             },
-            summary: {
-                columnsInScope: a.summary.columnsInScope,
-                columnsNormalized: a.summary.columnsNormalized,
-                columnsRejectedByNormalizer: a.summary.columnsRejectedByNormalizer,
+            Summary: {
+                columnsInScope: a.Summary.columnsInScope,
+                columnsNormalized: a.Summary.columnsNormalized,
+                columnsRejectedByNormalizer: a.Summary.columnsRejectedByNormalizer,
                 clustersFound: a.clusters.length,
-                clustersEmitted: c.emitted,
-                clustersDropped: a.summary.clustersDropped,
-                outputSchemas: c.summary.outputSchemas,
-                outputTables: c.summary.outputTables,
-                outputKeys: c.summary.outputKeys,
-                outputSpokes: c.summary.outputSpokes,
-                transitiveBridges: b.summary.transitiveBridgesFound,
+                clustersEmitted: c.Emitted,
+                clustersDropped: a.Summary.clustersDropped,
+                outputSchemas: c.Summary.outputSchemas,
+                outputTables: c.Summary.outputTables,
+                outputKeys: c.Summary.outputKeys,
+                outputSpokes: c.Summary.outputSpokes,
+                transitiveBridges: b.Summary.transitiveBridgesFound,
             },
         };
     }

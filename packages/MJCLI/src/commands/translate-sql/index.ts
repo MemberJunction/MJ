@@ -174,7 +174,7 @@ export default class TranslateSQL extends Command {
                     TranslatedSQL: translated.TranslatedSQL,
                     Method: 'rule-based',
                     Markers: classResult.markers,
-                    note: `Rules: ${translated.AppliedRules.join(', ')}`,
+                    Note: `Rules: ${translated.AppliedRules.join(', ')}`,
                 });
                 continue;
             }
@@ -187,7 +187,7 @@ export default class TranslateSQL extends Command {
                 TranslatedSQL: null,
                 Method: 'flagged',
                 Markers: classResult.markers,
-                note: 'Requires LLM translation — configure AI provider and re-run.',
+                Note: 'Requires LLM translation — configure AI provider and re-run.',
             });
         }
 

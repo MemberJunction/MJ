@@ -365,7 +365,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
 
   /**
    * The latest measured width (px) of the rendered overlay element, fed to the resolver as
-   * {@link RealtimeUiSignals.containerWidthPx}. Maintained by a {@link ResizeObserver}; 0
+   * {@link RealtimeUiSignals.ContainerWidthPx}. Maintained by a {@link ResizeObserver}; 0
    * until the first measurement (the resolver treats 0 as "narrow", i.e. an orb in auto).
    */
   private containerWidthPx = 0;
@@ -679,24 +679,24 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     }
     const reviewing = this.IsReviewing;
     return {
-      containerWidthPx: this.containerWidthPx ?? 0,
+      ContainerWidthPx: this.containerWidthPx ?? 0,
       // Text intent = the user EXPLICITLY asked to see text this session — i.e. captions are on
       // (the captions toggle, the hero's "Show the conversation", RevealText(), and SetCaptions()
       // all route through ShowCaptions). NOT the disclosure ratchet: a power user still opens to
       // the calm orb until they ask for text, matching the historical ShowHero = !ShowCaptions.
-      textRevealed: this.ShowCaptions,
-      disclosureShowThread: disclosure.ShowThread,
-      disclosureShowComposer: disclosure.ShowComposer,
-      disclosureShowPanel: disclosure.ShowPanel,
-      disclosureShowGear: disclosure.ShowGear,
+      TextRevealed: this.ShowCaptions,
+      DisclosureShowThread: disclosure.ShowThread,
+      DisclosureShowComposer: disclosure.ShowComposer,
+      DisclosureShowPanel: disclosure.ShowPanel,
+      DisclosureShowGear: disclosure.ShowGear,
       // A surface to populate: the on-demand Details peek, or review (always has a surface).
-      surfacePanelEarned: this.DetailsPeek || reviewing,
+      SurfacePanelEarned: this.DetailsPeek || reviewing,
       hasChannels: (this.realtime?.ActiveChannels ?? []).some(c => c.HasSurface()),
-      hasActivity: (this.State?.Cards?.length ?? 0) > 0,
-      devMode: this.DevMode,
-      isReviewing: reviewing,
+      HasActivity: (this.State?.Cards?.length ?? 0) > 0,
+      DevMode: this.DevMode,
+      IsReviewing: reviewing,
       channelFocus: this.ChannelFocusMode,
-      connectionState: this.mapConnectionState(this.currentConnectionState)
+      ConnectionState: this.mapConnectionState(this.currentConnectionState)
     };
   }
 

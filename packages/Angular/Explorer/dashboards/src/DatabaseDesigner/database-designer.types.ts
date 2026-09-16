@@ -168,10 +168,10 @@ export type WizardStep = 'basics' | 'fields' | 'relationships' | 'review';
 
 /** Step definition passed to `WizardStepIndicatorComponent`. */
 export interface WizardStepDef {
-    id: WizardStep;
-    label: string;
-    isComplete: boolean;
-    isActive: boolean;
+    id: WizardStep;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    label: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    isComplete: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    isActive: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 // ─── Field type options ───────────────────────────────────────────────────────

@@ -55,8 +55,8 @@ export type OperateMappingError =
 
 /** Discriminated result of {@link mapStateToCreateScoringInput}. */
 export type OperateMappingResult =
-  | { ok: true; input: PredictiveStudioCreateScoringProcessInput }
-  | { ok: false; error: OperateMappingError };
+  | { ok: true; input: PredictiveStudioCreateScoringProcessInput }  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  | { ok: false; error: OperateMappingError };  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 
 /** Build the `scope` object for the create-scoring input from the scope knobs. */
 function buildScope(state: OperateModelState):

@@ -12,22 +12,22 @@ export interface TemplateSelectorConfig {
   /** Title for the dialog */
   Title: string;
   /** Whether to show the "Create New" option */
-  showCreateNew?: boolean;
+  ShowCreateNew?: boolean;
   /** Filter criteria for templates */
-  extraFilter?: string;
+  ExtraFilter?: string;
   /** Allow multiple selection */
-  multiSelect?: boolean;
+  MultiSelect?: boolean;
   /** Pre-selected template IDs */
-  selectedTemplateIds?: string[];
+  SelectedTemplateIds?: string[];
   /** Show only active templates */
-  showActiveOnly?: boolean;
+  ShowActiveOnly?: boolean;
 }
 
 export interface TemplateSelectorResult {
   /** Selected templates */
   SelectedTemplates: MJTemplateEntity[];
   /** Whether user chose to create new */
-  createNew?: boolean;
+  createNew?: boolean;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
 /**
@@ -157,8 +157,8 @@ export class TemplateSelectorDialogComponent extends BaseAngularComponent implem
     this.loadData();
     
     // Initialize selected templates if provided
-    if (this.config.selectedTemplateIds) {
-      this.SelectedTemplates = new Set(this.config.selectedTemplateIds);
+    if (this.config.SelectedTemplateIds) {
+      this.SelectedTemplates = new Set(this.config.SelectedTemplateIds);
     }
   }
 
@@ -206,11 +206,11 @@ export class TemplateSelectorDialogComponent extends BaseAngularComponent implem
       
       // Build filter
       let filter = '';
-      if (this.config.showActiveOnly !== false) {
+      if (this.config.ShowActiveOnly !== false) {
         filter = "IsActive = 1";
       }
-      if (this.config.extraFilter) {
-        filter += filter ? ` AND ${this.config.extraFilter}` : this.config.extraFilter;
+      if (this.config.ExtraFilter) {
+        filter += filter ? ` AND ${this.config.ExtraFilter}` : this.config.ExtraFilter;
       }
       
       const result = await rv.RunView<MJTemplateEntity>({
@@ -306,7 +306,7 @@ export class TemplateSelectorDialogComponent extends BaseAngularComponent implem
   // === Selection Management ===
 
   ToggleTemplateSelection(template: MJTemplateEntity) {
-    if (this.config.multiSelect) {
+    if (this.config.MultiSelect) {
       if (this.SelectedTemplates.has(template.ID)) {
         this.SelectedTemplates.delete(template.ID);
       } else {

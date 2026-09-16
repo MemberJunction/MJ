@@ -237,9 +237,9 @@ export class SampleQueryGenerator {
       await this.stateManager.save(state);
 
       return {
-        success: true,
-        queries: allQueries,
-        summary
+        Success: true,
+        Queries: allQueries,
+        Summary: summary
       };
     } catch (error) {
       LogError(`[SampleQueryGenerator] Failed to generate queries: ${(error as Error).message}`);
@@ -273,10 +273,10 @@ export class SampleQueryGenerator {
         };
 
       return {
-        success: false,
-        queries,
-        summary,
-        errorMessage: (error as Error).message
+        Success: false,
+        Queries: queries,
+        Summary: summary,
+        ErrorMessage: (error as Error).message
       };
     }
   }
@@ -493,7 +493,7 @@ export class SampleQueryGenerator {
 
     // Find related query plans for alignment context
     const relatedQueryPlans = allPlans.filter(p =>
-      queryPlan.relatedQueryIds.includes(p.id) || p.relatedQueryIds.includes(queryPlan.id)
+      queryPlan.RelatedQueryIds.includes(p.id) || p.RelatedQueryIds.includes(queryPlan.id)
     );
 
     const promptContext = {
@@ -538,7 +538,7 @@ export class SampleQueryGenerator {
     return {
       schema: schema.name,
       tables: [focusTable, ...relatedTables].map(t => this.convertToTableContext(t)),
-      existingQueries: []
+      ExistingQueries: []
     };
   }
 
@@ -564,10 +564,10 @@ export class SampleQueryGenerator {
     return {
       name: table.name,
       description: table.description,
-      rowCount: table.rowCount,
+      RowCount: table.rowCount,
       columns: table.columns.map(c => this.convertToColumnContext(c)),
-      primaryKeys: table.columns.filter(c => c.isPrimaryKey).map(c => c.name),
-      foreignKeys: table.columns
+      PrimaryKeys: table.columns.filter(c => c.isPrimaryKey).map(c => c.name),
+      ForeignKeys: table.columns
         .filter(c => c.isForeignKey && c.foreignKeyReferences)
         .map(c => ({
           column: c.name,
@@ -575,7 +575,7 @@ export class SampleQueryGenerator {
           referencesTable: c.foreignKeyReferences!.table,
           referencesColumn: c.foreignKeyReferences!.column
         })),
-      dependents: table.dependents.map(d => d.table)
+      Dependents: table.dependents.map(d => d.table)
     };
   }
 
@@ -602,8 +602,8 @@ export class SampleQueryGenerator {
       isPrimaryKey: column.isPrimaryKey,
       isForeignKey: column.isForeignKey,
       isNullable: column.isNullable,
-      possibleValues: column.possibleValues,
-      statistics: column.statistics
+      PossibleValues: column.possibleValues,
+      Statistics: column.statistics
     };
   }
 
@@ -883,8 +883,8 @@ export class SampleQueryGenerator {
     query.filteringRules = refinedSQL.filteringRules;
     query.aggregationRules = refinedSQL.aggregationRules;
     query.joinRules = refinedSQL.joinRules;
-    if (refinedSQL.alignmentNotes) {
-      query.alignmentNotes = refinedSQL.alignmentNotes;
+    if (refinedSQL.AlignmentNotes) {
+      query.alignmentNotes = refinedSQL.AlignmentNotes;
     }
   }
 

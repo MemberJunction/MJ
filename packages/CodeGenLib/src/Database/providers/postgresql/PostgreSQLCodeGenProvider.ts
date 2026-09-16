@@ -2090,11 +2090,11 @@ ORDER BY ordinal_position`;
         });
         const createSQL = buildCreateOrReplaceLayeredOuterViewSQL(entity.SchemaName, entity.BaseView, restarred);
         await ExecuteWithFallback({
-            client,
+            Client: client,
             schema: entity.SchemaName,
-            viewName: entity.BaseView,
-            createOrReplaceSQL: createSQL,
-            willRegenerate,
+            ViewName: entity.BaseView,
+            CreateOrReplaceSQL: createSQL,
+            WillRegenerate: willRegenerate,
         });
     }
 
@@ -2333,18 +2333,18 @@ WHERE p.prokind IN ('f', 'p')
             }
 
             await ExecuteWithFallback({
-                client,
+                Client: client,
                 schema: entity.SchemaName,
-                viewName: entity.GeneratedViewName,
-                createOrReplaceSQL: viewSQL,
-                willRegenerate,
+                ViewName: entity.GeneratedViewName,
+                CreateOrReplaceSQL: viewSQL,
+                WillRegenerate: willRegenerate,
                 // Pass the base table so viewFallback can materialize a stub
                 // first if the view body has a self-reference and the view
                 // doesn't yet exist (e.g. vwRecordChanges joins to itself for
                 // parent lookup; if it was CASCADE-dropped earlier in the
                 // same codegen run, CREATE OR REPLACE can't resolve the
                 // self-reference until a placeholder exists).
-                baseTableQualified: pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable),
+                BaseTableQualified: pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable),
             });
             await this.rebindLayeredOuterIfPresent(client, entity, willRegenerate);
         } finally {
@@ -2400,12 +2400,12 @@ WHERE p.prokind IN ('f', 'p')
             if (opts.viewSQL && opts.viewSQL.trim()) {
                 try {
                     await ExecuteWithFallback({
-                        client,
+                        Client: client,
                         schema: opts.entity.SchemaName,
-                        viewName: opts.entity.GeneratedViewName,
-                        createOrReplaceSQL: opts.viewSQL,
-                        willRegenerate: opts.willRegenerate,
-                        baseTableQualified: pgDialect.QuoteSchema(opts.entity.SchemaName, opts.entity.BaseTable),
+                        ViewName: opts.entity.GeneratedViewName,
+                        CreateOrReplaceSQL: opts.viewSQL,
+                        WillRegenerate: opts.willRegenerate,
+                        BaseTableQualified: pgDialect.QuoteSchema(opts.entity.SchemaName, opts.entity.BaseTable),
                     });
                     await this.rebindLayeredOuterIfPresent(client, opts.entity, opts.willRegenerate);
                 } catch (e) {

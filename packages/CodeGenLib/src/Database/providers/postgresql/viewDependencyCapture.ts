@@ -26,43 +26,43 @@ export type PGQueryable = Pick<Client | PoolClient, 'query'>;
 /** A dependent view or materialized view found via pg_depend / pg_rewrite. */
 export interface DependentView {
     /** Schema name (preserves case). */
-    schema: string;
+    schema: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** View name (preserves case). */
-    name: string;
+    name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Distance in the dependency graph. 1 = direct dependent, 2 = transitive, ... */
-    depth: number;
+    depth: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** PG relkind: 'v' = regular view, 'm' = materialized view. */
-    relkind: 'v' | 'm';
+    relkind: 'v' | 'm';  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** SELECT clause of the view definition as returned by `pg_get_viewdef`. */
-    definition: string;
+    definition: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 /** A dependent function (e.g. one that RETURNS SETOF the target view). */
 export interface DependentFunction {
-    schema: string;
-    name: string;
+    schema: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Result of `pg_get_function_identity_arguments` — stable signature string. */
-    argTypes: string;
+    argTypes: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** Full `CREATE OR REPLACE FUNCTION ...` text from `pg_get_functiondef`. */
-    definition: string;
+    definition: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 /** A single GRANT on the target view. */
 export interface ViewGrant {
     /** Role receiving the privilege. */
-    grantee: string;
+    grantee: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** SELECT / INSERT / UPDATE / DELETE / etc. */
-    privilege: string;
+    privilege: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** Whether WITH GRANT OPTION is set. */
-    withGrantOption: boolean;
+    withGrantOption: boolean;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 }
 
 /** Ownership + comment metadata on the target view. */
 export interface ViewMetadata {
     /** Role name returned by `pg_get_userbyid`. */
-    owner: string;
+    owner: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Free-form description set via `COMMENT ON VIEW ...` — null if unset. */
-    comment: string | null;
+    comment: string | null;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────

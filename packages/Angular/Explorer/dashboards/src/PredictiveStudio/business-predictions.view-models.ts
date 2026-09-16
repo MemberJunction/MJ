@@ -17,7 +17,7 @@ export interface BusinessPredictionInput extends TrustModelInput {
   /** The plain-language title (the pipeline goal the agent set, or the model display name). */
   name: string;
   /** When the model was last trained/updated, for a "last run" hint. */
-  updatedAt?: Date | null;
+  UpdatedAt?: Date | null;
 }
 
 /** One card in the business Predictions catalog. */
@@ -47,7 +47,7 @@ export function ToBusinessPredictionCard(input: BusinessPredictionInput): Busine
       : trust.unknown
         ? 'Not measured yet — an analyst needs to validate it.'
         : 'Needs an analyst — not reliable enough to use yet.',
-    updatedAt: input.updatedAt ?? null,
+    updatedAt: input.UpdatedAt ?? null,
   };
 }
 

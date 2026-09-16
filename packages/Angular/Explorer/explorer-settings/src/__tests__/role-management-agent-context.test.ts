@@ -60,25 +60,25 @@ describe('capRoleNames', () => {
 describe('resolveRoleByIDOrName', () => {
   it('matches by exact ID (case-insensitive)', () => {
     const r = ResolveRoleByIDOrName('r1', roles);
-    expect(r.ok && r.match.Name).toBe('Administrator');
+    expect(r.Ok && r.Match.Name).toBe('Administrator');
   });
   it('matches by exact name', () => {
     const r = ResolveRoleByIDOrName('Developer', roles);
-    expect(r.ok && r.match.ID).toBe('R2');
+    expect(r.Ok && r.Match.ID).toBe('R2');
   });
   it('falls back to contains', () => {
     const r = ResolveRoleByIDOrName('read', roles);
-    expect(r.ok && r.match.Name).toBe('Read Only');
+    expect(r.Ok && r.Match.Name).toBe('Read Only');
   });
   it('returns a tolerant error listing available roles on a miss', () => {
     const r = ResolveRoleByIDOrName('nope', roles);
-    expect(r.ok).toBe(false);
-    if (!r.ok) {
-      expect(r.error).toContain('Administrator');
+    expect(r.Ok).toBe(false);
+    if (!r.Ok) {
+      expect(r.Error).toContain('Administrator');
     }
   });
   it('errors on empty input', () => {
-    expect(ResolveRoleByIDOrName('  ', roles).ok).toBe(false);
+    expect(ResolveRoleByIDOrName('  ', roles).Ok).toBe(false);
   });
 });
 

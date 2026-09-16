@@ -15,7 +15,7 @@ export function ResolveConnection(overrides: DbConnectionOverrides = {}, dialect
   const dialect: Dialect = dialectFlag
     ?? (config.dbPlatform === 'postgresql' ? 'postgres' : 'mssql');
 
-  const host = overrides.host ?? config.dbHost;
+  const host = overrides.Host ?? config.dbHost;
   const port = overrides.port ?? (config.dbPort ? Number(config.dbPort) : undefined);
   const database = overrides.database ?? config.dbDatabase;
   const user = overrides.user ?? (config as { codeGenLogin?: string }).codeGenLogin;

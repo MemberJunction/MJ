@@ -78,10 +78,10 @@ export function SetupRESTEndpoints(
 
     // Create REST endpoint handler with entity and schema filters
     const restHandler = new RESTEndpointHandler({
-        includeEntities: config.includeEntities ? config.includeEntities.map(e => e.toLowerCase()) : undefined,
-        excludeEntities: config.excludeEntities ? config.excludeEntities.map(e => e.toLowerCase()) : undefined,
-        includeSchemas: config.includeSchemas ? config.includeSchemas.map(s => s.toLowerCase()) : undefined,
-        excludeSchemas: config.excludeSchemas ? config.excludeSchemas.map(s => s.toLowerCase()) : undefined
+        IncludeEntities: config.includeEntities ? config.includeEntities.map(e => e.toLowerCase()) : undefined,
+        ExcludeEntities: config.excludeEntities ? config.excludeEntities.map(e => e.toLowerCase()) : undefined,
+        IncludeSchemas: config.includeSchemas ? config.includeSchemas.map(s => s.toLowerCase()) : undefined,
+        ExcludeSchemas: config.excludeSchemas ? config.excludeSchemas.map(s => s.toLowerCase()) : undefined
     });
 
     // Mount REST API at the specified base path with authentication

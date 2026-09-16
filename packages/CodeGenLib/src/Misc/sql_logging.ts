@@ -1,7 +1,7 @@
 import { CodeGenConnection } from '../Database/codeGenDatabaseProvider';
 import { configInfo, MjCoreSchema, SQLOutputConfig, DbPlatform, currentWorkingDirectory } from "../Config/config";
 import { logError, logStatus } from "./status_logging";
-import { endsWithBatchSeparatorLine, trimTrailingStatementTerminators } from './sql_text';
+import { EndsWithBatchSeparatorLine, TrimTrailingStatementTerminators } from './sql_text';
 import * as fs from 'fs';
 import path from 'path';
 
@@ -22,14 +22,14 @@ export function isMjDefaultSqlOutputPath(folderPath: string): boolean {
 }
 
 export type ResolveSQLOutputFolderArgs = {
-    cwd: string;
-    configuredFolderPath?: string;
-    includeSchemas?: string[];
-    coreSchema: string;
+    Cwd: string;
+    ConfiguredFolderPath?: string;
+    IncludeSchemas?: string[];
+    CoreSchema: string;
     /** CLI `--sql-output-dir`. Wins over config when set. */
-    sqlOutputDirFlag?: string;
-    hasMjAppJson: boolean;
-    isMjMonorepo: boolean;
+    SqlOutputDirFlag?: string;
+    HasMjAppJson: boolean;
+    IsMjMonorepo: boolean;
 };
 
 /**
@@ -44,14 +44,14 @@ export type ResolveSQLOutputFolderArgs = {
  * CodeGen from the app directory.
  */
 export function ResolveSQLOutputFolder(args: ResolveSQLOutputFolderArgs): string {
-    const cwd = path.resolve(args.cwd);
-    const core = (args.coreSchema || '__mj').toLowerCase();
-    const include = (args.includeSchemas ?? []).map(s => s.toLowerCase());
+    const cwd = path.resolve(args.Cwd);
+    const core = (args.CoreSchema || '__mj').toLowerCase();
+    const include = (args.IncludeSchemas ?? []).map(s => s.toLowerCase());
     const generatingAppSchemas = include.some(s => s !== core);
 
-    if (args.sqlOutputDirFlag) {
-        const resolved = path.resolve(cwd, args.sqlOutputDirFlag);
-        if (args.hasMjAppJson && IsMjDefaultSqlOutputPath(resolved)) {
+    if (args.SqlOutputDirFlag) {
+        const resolved = path.resolve(cwd, args.SqlOutputDirFlag);
+        if (args.HasMjAppJson && IsMjDefaultSqlOutputPath(resolved)) {
             throw new Error(
                 `CodeGen --sql-output-dir resolves to an MJ host migrations tree (${resolved}). ` +
                 `Open App metadata SQL must go to the app's migrations/codegen. ` +
@@ -61,23 +61,23 @@ export function ResolveSQLOutputFolder(args: ResolveSQLOutputFolderArgs): string
         return resolved;
     }
 
-    if (args.hasMjAppJson) {
-        const configured = args.configuredFolderPath;
+    if (args.HasMjAppJson) {
+        const configured = args.ConfiguredFolderPath;
         if (configured && !IsMjDefaultSqlOutputPath(configured)) {
             return path.resolve(cwd, configured);
         }
         return path.join(cwd, 'migrations', 'codegen');
     }
 
-    if (args.isMjMonorepo && generatingAppSchemas) {
+    if (args.IsMjMonorepo && generatingAppSchemas) {
         throw new Error(
             `CodeGen SQLOutput would write Open App metadata SQL into the MJ repo (${cwd}). ` +
             `Run \`mj codegen\` from the Open App directory (a cwd that contains mj-app.json), not from MJ. ` +
-            `includeSchemas=${(args.includeSchemas ?? []).join(',') || '(empty)'}`
+            `includeSchemas=${(args.IncludeSchemas ?? []).join(',') || '(empty)'}`
         );
     }
 
-    const folder = args.configuredFolderPath ?? './migrations/v5/';
+    const folder = args.ConfiguredFolderPath ?? './migrations/v5/';
     return path.resolve(cwd, folder);
 }
 
@@ -169,13 +169,13 @@ export class SQLLogging {
             const cwd = currentWorkingDirectory || process.cwd();
             const coreSchema = MjCoreSchema();
             let folderPath = ResolveSQLOutputFolder({
-                cwd,
-                configuredFolderPath: config.folderPath,
-                includeSchemas: configInfo.includeSchemas,
-                coreSchema,
-                sqlOutputDirFlag: SQLLogging.sqlOutputDirFlag,
-                hasMjAppJson: fs.existsSync(path.join(cwd, 'mj-app.json')),
-                isMjMonorepo:
+                Cwd: cwd,
+                ConfiguredFolderPath: config.folderPath,
+                IncludeSchemas: configInfo.includeSchemas,
+                CoreSchema: coreSchema,
+                SqlOutputDirFlag: SQLLogging.sqlOutputDirFlag,
+                HasMjAppJson: fs.existsSync(path.join(cwd, 'mj-app.json')),
+                IsMjMonorepo:
                     fs.existsSync(path.join(cwd, 'packages', 'CodeGenLib')) ||
                     fs.existsSync(path.join(cwd, 'packages', 'MJCLI')),
             });
@@ -351,10 +351,10 @@ export class SQLLogging {
             // Linear scans, not `/[\s;]+$/` or `/(^|\n)\s*GO\s*$/`: a unit can carry caller-supplied SQL
             // (a TransitiveView body), and those patterns backtrack quadratically on a long interior
             // whitespace run (see ./sql_text).
-            const trimmed = trimTrailingStatementTerminators(contents);
+            const trimmed = TrimTrailingStatementTerminators(contents);
             let endsWithBatchSeparator = false;
             if (trimmed.length > 0) {
-                endsWithBatchSeparator = endsWithBatchSeparatorLine(trimmed, 'GO');
+                endsWithBatchSeparator = EndsWithBatchSeparatorLine(trimmed, 'GO');
                 contents = endsWithBatchSeparator ? trimmed : `${trimmed};`;
             }
 
@@ -466,7 +466,7 @@ export class SQLLogging {
             fs.closeSync(fd);
         }
         const tail = buffer.toString('utf8');
-        return tail.trim().length === 0 || endsWithBatchSeparatorLine(tail, separator);
+        return tail.trim().length === 0 || EndsWithBatchSeparatorLine(tail, separator);
     }
 
     protected static getFileLength(filePath: string): number {

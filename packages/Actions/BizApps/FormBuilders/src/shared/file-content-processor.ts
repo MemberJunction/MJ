@@ -8,11 +8,11 @@ import mammoth from 'mammoth';
  */
 export interface FileContentProcessorOptions {
     /** Requested output format: 'auto' (smart detection), 'text', 'base64', 'raw' */
-    format?: 'auto' | 'text' | 'base64' | 'raw';
+    Format?: 'auto' | 'text' | 'base64' | 'raw';
     /** Maximum file size to process (in bytes) */
-    maxFileSize?: number;
+    MaxFileSize?: number;
     /** Whether to include extraction warnings */
-    includeWarnings?: boolean;
+    IncludeWarnings?: boolean;
 }
 
 /**
@@ -20,21 +20,21 @@ export interface FileContentProcessorOptions {
  */
 export interface FileContentProcessorResult {
     /** Processed content */
-    content: string;
+    Content: string;
     /** Detected/processed format */
-    format: string;
+    Format: string;
     /** Original content type */
-    contentType: string;
+    ContentType: string;
     /** File size in bytes */
-    size: number;
+    size: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Extraction method used */
-    extractionMethod: string;
+    ExtractionMethod: string;
     /** Optional warning message */
-    warning?: string;
+    Warning?: string;
     /** Processing success status */
-    success: boolean;
+    Success: boolean;
     /** Error message if processing failed */
-    error?: string;
+    error?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
 /**
@@ -54,21 +54,21 @@ export class FileContentProcessor {
     ): Promise<FileContentProcessorResult> {
         try {
             const {
-                format = 'auto',
-                maxFileSize = this.DEFAULT_MAX_FILE_SIZE,
-                includeWarnings = true
+                Format: format = 'auto',
+                MaxFileSize: maxFileSize = this.DEFAULT_MAX_FILE_SIZE,
+                IncludeWarnings: includeWarnings = true
             } = options;
 
             // Check file size
             if (buffer.length > maxFileSize) {
                 return {
-                    content: '',
-                    format: 'error',
-                    contentType,
+                    Content: '',
+                    Format: 'error',
+                    ContentType: contentType,
                     size: buffer.length,
-                    extractionMethod: 'none',
-                    warning: `File too large (${buffer.length} bytes). Maximum allowed: ${maxFileSize} bytes.`,
-                    success: false,
+                    ExtractionMethod: 'none',
+                    Warning: `File too large (${buffer.length} bytes). Maximum allowed: ${maxFileSize} bytes.`,
+                    Success: false,
                     error: 'File size exceeds limit'
                 };
             }
@@ -76,23 +76,23 @@ export class FileContentProcessor {
             // Process based on requested format
             if (format === 'raw') {
                 return {
-                    content: buffer.toString('base64'),
-                    format: 'raw',
-                    contentType,
+                    Content: buffer.toString('base64'),
+                    Format: 'raw',
+                    ContentType: contentType,
                     size: buffer.length,
-                    extractionMethod: 'none',
-                    success: true
+                    ExtractionMethod: 'none',
+                    Success: true
                 };
             }
 
             if (format === 'base64') {
                 return {
-                    content: buffer.toString('base64'),
-                    format: 'base64',
-                    contentType,
+                    Content: buffer.toString('base64'),
+                    Format: 'base64',
+                    ContentType: contentType,
                     size: buffer.length,
-                    extractionMethod: 'none',
-                    success: true
+                    ExtractionMethod: 'none',
+                    Success: true
                 };
             }
 
@@ -104,13 +104,13 @@ export class FileContentProcessor {
             LogStatus(`File content processing failed: ${errorMessage}`);
             
             return {
-                content: '',
-                format: 'error',
-                contentType,
+                Content: '',
+                Format: 'error',
+                ContentType: contentType,
                 size: buffer.length,
-                extractionMethod: 'none',
+                ExtractionMethod: 'none',
                 error: errorMessage,
-                success: false
+                Success: false
             };
         }
     }
@@ -223,13 +223,13 @@ export class FileContentProcessor {
         }
 
         return {
-            content,
-            format,
-            contentType,
+            Content: content,
+            Format: format,
+            ContentType: contentType,
             size: buffer.length,
-            extractionMethod,
-            warning: includeWarnings ? warning : undefined,
-            success: true
+            ExtractionMethod: extractionMethod,
+            Warning: includeWarnings ? warning : undefined,
+            Success: true
         };
     }
 

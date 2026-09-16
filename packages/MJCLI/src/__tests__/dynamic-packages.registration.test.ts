@@ -50,8 +50,8 @@ describe('dynamic package registration (real ClassFactory, no static imports)', 
     const report = await LoadDynamicPackagesForCommand('sync push', {
       // The anchor only needs a directory; the file itself does not have to exist.
       raw: { config: {}, configFilePath: path.join(fixtureDir, 'mj.config.cjs') },
-      verbose: true,
-      stderr: (l) => lines.push(l),
+      Verbose: true,
+      Stderr: (l) => lines.push(l),
     });
 
     expect(report.Failed).toEqual([]);
@@ -101,7 +101,7 @@ describe('dynamic package registration (real ClassFactory, no static imports)', 
           },
           configFilePath: hostConfigPath,
         },
-        stderr: () => undefined,
+        Stderr: () => undefined,
       });
 
       expect(report.Failed).toEqual([]);
@@ -120,9 +120,9 @@ describe('dynamic package registration (real ClassFactory, no static imports)', 
         config: { dynamicPackages: { server: [{ PackageName: '@fixture-host/app-server', StartupExport: 'LoadFixtureAppServer' }] } },
         configFilePath: hostConfigPath,
       };
-      await LoadDynamicPackagesForCommand('sync:push', { raw, stderr: () => undefined });
+      await LoadDynamicPackagesForCommand('sync:push', { raw, Stderr: () => undefined });
       const runs = g.__mjFixtureStartupRuns;
-      const second = await LoadDynamicPackagesForCommand('ai:agents:run', { raw, stderr: () => undefined });
+      const second = await LoadDynamicPackagesForCommand('ai:agents:run', { raw, Stderr: () => undefined });
       expect(second.Loaded[0].RanStartupExport).toBe(false);
       expect(g.__mjFixtureStartupRuns).toBe(runs);
     });
@@ -132,7 +132,7 @@ describe('dynamic package registration (real ClassFactory, no static imports)', 
       try {
         const report = await LoadDynamicPackagesForCommand('sync:push', {
           raw: { config: { dynamicPackages: { server: [{ PackageName: '@fixture-host/app-server', StartupExport: 'LoadFixtureAppServer' }] } }, configFilePath: hostConfigPath },
-          stderr: () => undefined,
+          Stderr: () => undefined,
         });
         expect(report.Mode).toBe('none');
         expect(report.Loaded).toEqual([]);

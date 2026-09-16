@@ -179,7 +179,7 @@ export default class BaselineRoundtrip extends Command {
         Options: {
           RowCompareMode: flags['row-compare'] as 'full' | 'hash' | 'counts' | 'none',
           RowHashAlgo: 'sha256',
-          ignorePattern: /^flyway_schema_history$/i,
+          IgnorePattern: /^flyway_schema_history$/i,
           RowDiffSampleLimit: 100,
         },
       });

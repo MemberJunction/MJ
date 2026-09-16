@@ -26,7 +26,7 @@ describe('verifyHostAssertion', () => {
         const result = VerifyHostAssertion(token, kp.publicPem, WIDGET_KEY);
         expect(result.ok).toBe(true);
         if (result.ok) {
-            expect(result.identity).toMatchObject({ email: 'jane@acme.com', firstName: 'Jane', lastName: 'Doe', hostUserId: 'host-123' });
+            expect(result.Identity).toMatchObject({ email: 'jane@acme.com', firstName: 'Jane', lastName: 'Doe', hostUserId: 'host-123' });
         }
     });
 

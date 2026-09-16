@@ -18,7 +18,7 @@ export interface FieldBindingScanResult {
     /** True iff AST parsing succeeded. Regex fallback sets this to false. */
     UsedAst: boolean;
     /** Parse error message if AST parsing failed. Useful in dev. */
-    parseError?: string;
+    ParseError?: string;
 }
 
 /**
@@ -42,7 +42,7 @@ export function ScanFieldBindings(code: string | null | undefined): FieldBinding
             // just shows fewer bindings than the AST would have detected.
             const parseError = err instanceof Error ? err.message : String(err);
             const regexResult = scanViaRegex(code);
-            return { ...regexResult, UsedAst: false, parseError };
+            return { ...regexResult, UsedAst: false, ParseError: parseError };
         }
     }
 

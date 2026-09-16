@@ -73,7 +73,7 @@ describe('flattenRecord', () => {
     it('on key collision keeps the first value and reports it', () => {
         const collisions: string[] = [];
         // pre-existing `a_b` collides with the flattened `a.b`
-        const out = FlattenRecord({ a_b: 'first', a: { b: 'second' } }, { onCollision: k => collisions.push(k) });
+        const out = FlattenRecord({ a_b: 'first', a: { b: 'second' } }, { OnCollision: k => collisions.push(k) });
         expect(out.a_b).toBe('first');
         expect(collisions).toContain('a_b');
     });

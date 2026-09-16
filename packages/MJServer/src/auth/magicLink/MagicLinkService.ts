@@ -94,7 +94,7 @@ export class MagicLinkService {
         return { success: false, errorCode: 'forbidden', error: 'Not authorized to issue magic-link invites.' };
       }
 
-      const roleId = params.roleId ?? this.resolveRestrictedRoleId(md);
+      const roleId = params.RoleId ?? this.resolveRestrictedRoleId(md);
       if (!roleId) {
         return { success: false, error: `Restricted role '${this.config.restrictedRoleName}' not found and no roleId supplied.` };
       }
@@ -114,23 +114,23 @@ export class MagicLinkService {
         };
       }
 
-      const app = md.Applications.find((a) => UUIDsEqual(a.ID, params.applicationId));
+      const app = md.Applications.find((a) => UUIDsEqual(a.ID, params.ApplicationId));
       if (!app) {
-        return { success: false, error: `Application '${params.applicationId}' not found.` };
+        return { success: false, error: `Application '${params.ApplicationId}' not found.` };
       }
 
       const rawToken = GenerateRawToken();
-      const expiresInHours = params.expiresInHours ?? this.config.defaultExpiresInHours;
+      const expiresInHours = params.ExpiresInHours ?? this.config.defaultExpiresInHours;
       const expiresAt = new Date(Date.now() + expiresInHours * 3600 * 1000);
 
       const invite = await md.GetEntityObject<MJMagicLinkInviteEntity>(INVITE_ENTITY, creatingUser);
       invite.NewRecord();
       invite.TokenHash = HashToken(rawToken);
       invite.Email = params.email;
-      invite.ApplicationID = params.applicationId;
+      invite.ApplicationID = params.ApplicationId;
       invite.RoleID = roleId;
       invite.ExpiresAt = expiresAt;
-      invite.MaxUses = params.maxUses ?? 1;
+      invite.MaxUses = params.MaxUses ?? 1;
       invite.UseCount = 0;
       invite.CreatedByUserID = creatingUser.ID;
       invite.Status = 'Active';
@@ -143,7 +143,7 @@ export class MagicLinkService {
       // the single ApplicationID/RoleID. Additive — the columns stay authoritative for
       // redemption today; this populates the child tables for the eventual switch to
       // multi-scope reads. Best-effort so a child-row hiccup never fails issuance.
-      await this.writeInviteScopeChildRows(invite.ID, params.applicationId, roleId, creatingUser, md);
+      await this.writeInviteScopeChildRows(invite.ID, params.ApplicationId, roleId, creatingUser, md);
 
       const redemptionUrl = this.buildRedemptionUrl(rawToken);
 

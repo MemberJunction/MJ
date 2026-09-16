@@ -54,7 +54,7 @@ export default class TestHistory extends Command {
         from: flags.from,
         status: flags.status,
         format: ResolveLegacyFormat({
-          format: flags.format,
+          Format: flags.format,
           Legacy: 'console' as const,
           LegacyDefault: 'console' as const,
           Map: TEST_FORMAT_MAP,

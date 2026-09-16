@@ -6,8 +6,8 @@ export interface OracleResult {
   Score: number;
   Cost: number;
   Duration: number; // milliseconds
-  errorMessage?: string;
-  details?: any;
+  ErrorMessage?: string;
+  Details?: any;
 }
 
 @Component({
@@ -40,7 +40,7 @@ export interface OracleResult {
             </div>
     
             @for (oracle of results; track oracle.Name) {
-              <div class="table-row" [class.has-error]="oracle.errorMessage">
+              <div class="table-row" [class.has-error]="oracle.ErrorMessage">
                 <div class="table-cell">
                   <div class="oracle-name">
                     @if (oracle.Status === 'Passed') {
@@ -72,11 +72,11 @@ export interface OracleResult {
                 </div>
               </div>
     
-              @if (oracle.errorMessage) {
+              @if (oracle.ErrorMessage) {
                 <div class="error-row">
                   <div class="error-message">
                     <i class="fa-solid fa-exclamation-circle"></i>
-                    {{ oracle.errorMessage }}
+                    {{ oracle.ErrorMessage }}
                   </div>
                 </div>
               }

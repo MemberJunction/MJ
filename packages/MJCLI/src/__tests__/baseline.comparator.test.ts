@@ -38,7 +38,7 @@ function makeTable(name: string, extras: Partial<{
       isIdentity: false,
       isComputed: false,
     })),
-    primaryKey: extras.pk ? { Name: `PK_${name}`, Columns: extras.pk, Clustered: true } : undefined,
+    PrimaryKey: extras.pk ? { Name: `PK_${name}`, Columns: extras.pk, Clustered: true } : undefined,
     UniqueConstraints: [],
     Indexes: [],
     ForeignKeys: [],
@@ -88,7 +88,7 @@ describe('baseline/comparator', () => {
       Right: { snapshot: right, data: [], label: 'R' },
       Options: compareOpts,
     });
-    expect(report.objectDiffs.some((d) => d.Kind === 'column' && d.details?.includes('dataType'))).toBe(true);
+    expect(report.objectDiffs.some((d) => d.Kind === 'column' && d.Details?.includes('dataType'))).toBe(true);
   });
 
   it('reports view body differences', () => {
@@ -185,7 +185,7 @@ describe('baseline/comparator', () => {
     const report = CompareSnapshots({
       Left: { snapshot: left, data: [], label: 'L' },
       Right: { snapshot: right, data: [], label: 'R' },
-      Options: { ...compareOpts, ignorePattern: /^flyway_schema_history$/i },
+      Options: { ...compareOpts, IgnorePattern: /^flyway_schema_history$/i },
     });
     expect(report.objectDiffs.some((d) => d.QualifiedName.includes('flyway_schema_history'))).toBe(false);
   });
@@ -211,6 +211,6 @@ describe('baseline/comparator', () => {
       Right: { snapshot: right, data: [], label: 'R' },
       Options: compareOpts,
     });
-    expect(report.objectDiffs.some((d) => d.Kind === 'foreignKey' && d.details?.includes('on-delete'))).toBe(true);
+    expect(report.objectDiffs.some((d) => d.Kind === 'foreignKey' && d.Details?.includes('on-delete'))).toBe(true);
   });
 });

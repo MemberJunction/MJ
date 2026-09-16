@@ -63,10 +63,10 @@ export default class PromptsRun extends Command {
     const { flags, metadata } = await this.parse(PromptsRun);
     const service = new PromptService();
     const formatter = new OutputFormatter(ResolveLegacyFormat({
-        format: flags.format,
+        Format: flags.format,
         Legacy: flags.output as 'compact' | 'json' | 'table',
         LegacyDefault: 'compact' as const,
-        legacyWasExplicit: metadata.flags.output?.setFromDefault === false,
+        LegacyWasExplicit: metadata.flags.output?.setFromDefault === false,
         Map: AI_FORMAT_MAP,
       }));
 

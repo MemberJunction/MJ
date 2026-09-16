@@ -1,11 +1,11 @@
 import chalk from 'chalk';
 
 export interface TextFormattingOptions {
-  maxWidth?: number;
-  indent?: number;
-  preserveParagraphs?: boolean;
-  highlightCode?: boolean;
-  trimEmptyLines?: boolean;
+  MaxWidth?: number;
+  Indent?: number;
+  PreserveParagraphs?: boolean;
+  HighlightCode?: boolean;
+  TrimEmptyLines?: boolean;
 }
 
 export class TextFormatter {
@@ -17,11 +17,11 @@ export class TextFormatter {
    */
   static FormatText(text: string, options: TextFormattingOptions = {}): string {
     const {
-      maxWidth = this.getConsoleWidth(),
-      indent = this.DEFAULT_INDENT,
-      preserveParagraphs = true,
-      highlightCode = true,
-      trimEmptyLines = true
+      MaxWidth: maxWidth = this.getConsoleWidth(),
+      Indent: indent = this.DEFAULT_INDENT,
+      PreserveParagraphs: preserveParagraphs = true,
+      HighlightCode: highlightCode = true,
+      TrimEmptyLines: trimEmptyLines = true
     } = options;
 
     if (!text || typeof text !== 'string') {

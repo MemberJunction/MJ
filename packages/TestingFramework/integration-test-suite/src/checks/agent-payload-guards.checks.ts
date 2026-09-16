@@ -200,7 +200,7 @@ export const PayloadGuardsChecks: NamedCheck[] = [
             const steps = await ReadSteps(ctx.Provider, ctx.User, rootRunId);
             const violations = subAgentSteps(steps)
                 .map(ParseStepPayloadChange)
-                .map((p) => p?.payloadValidation?.upstreamMergeViolations)
+                .map((p) => p?.PayloadValidation?.upstreamMergeViolations)
                 .find((v) => !!v);
             Assert(!!violations, 'PG2: the blocked op was not recorded in upstreamMergeViolations (unauditable)');
             Assert(
@@ -260,8 +260,8 @@ export const PayloadGuardsChecks: NamedCheck[] = [
             // THIS assertion flips and the one below becomes the real per-op audit assertion.
             const steps = await ReadSteps(ctx.Provider, ctx.User, rootRunId);
             const blobs = subAgentSteps(steps).map(ParseStepPayloadChange);
-            const attempted = blobs.flatMap((p) => p?.payloadValidation?.upstreamMergeViolations?.attemptedOperations ?? []);
-            const warnings = blobs.flatMap((p) => p?.warnings ?? []);
+            const attempted = blobs.flatMap((p) => p?.PayloadValidation?.upstreamMergeViolations?.attemptedOperations ?? []);
+            const warnings = blobs.flatMap((p) => p?.Warnings ?? []);
             // The child's own emitted text goes in the message: fixtures are purged at teardown, so a
             // red here cannot be re-queried from the database afterwards.
             const emitted = await childResultText(ctx, rootRunId, fx.ChildID);
@@ -396,7 +396,7 @@ export const PayloadGuardsChecks: NamedCheck[] = [
             const steps = await ReadSteps(ctx.Provider, ctx.User, selfRunId);
             const denied = steps
                 .map(ParseStepPayloadChange)
-                .flatMap((p) => p?.payloadValidation?.selfWriteViolations?.deniedOperations ?? []);
+                .flatMap((p) => p?.PayloadValidation?.selfWriteViolations?.deniedOperations ?? []);
             Assert(denied.some((o) => (o.path ?? '').includes('config')),
                 `PG7: the blocked self-write was not recorded in selfWriteViolations: ${JSON.stringify(denied)}`);
         }

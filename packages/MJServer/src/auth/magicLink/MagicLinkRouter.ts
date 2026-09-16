@@ -151,7 +151,7 @@ export function CreateMagicLinkHandler(publicUrl: string, config: MagicLinkConfi
     }
 
     const body = (req.body ?? {}) as Partial<CreateMagicLinkInviteParams>;
-    if (!body.email || !body.applicationId) {
+    if (!body.email || !body.ApplicationId) {
       res.status(400).json({ success: false, error: 'email and applicationId are required.' });
       return;
     }
@@ -159,10 +159,10 @@ export function CreateMagicLinkHandler(publicUrl: string, config: MagicLinkConfi
     const result = await service.CreateInvite(
       {
         email: body.email,
-        applicationId: body.applicationId,
-        roleId: body.roleId,
-        expiresInHours: body.expiresInHours,
-        maxUses: body.maxUses,
+        ApplicationId: body.ApplicationId,
+        RoleId: body.RoleId,
+        ExpiresInHours: body.ExpiresInHours,
+        MaxUses: body.MaxUses,
         firstName: body.firstName,
         lastName: body.lastName,
       },

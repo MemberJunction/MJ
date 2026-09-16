@@ -187,7 +187,7 @@ export class BeforeRowClickEventArgs extends CancelableRowEventArgs {
   readonly mouseEvent: MouseEvent;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
   /** The column that was clicked (if any) */
-  readonly column?: GridColumnConfig;
+  readonly column?: GridColumnConfig;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
   /** The cell value that was clicked (if any) */
   readonly cellValue?: unknown;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
@@ -216,7 +216,7 @@ export class AfterRowClickEventArgs extends RowEventArgs {
   readonly mouseEvent: MouseEvent;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
   /** The column that was clicked (if any) */
-  readonly column?: GridColumnConfig;
+  readonly column?: GridColumnConfig;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
   /** The cell value that was clicked (if any) */
   readonly cellValue?: unknown;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
@@ -245,7 +245,7 @@ export class BeforeRowDoubleClickEventArgs extends CancelableRowEventArgs {
   readonly mouseEvent: MouseEvent;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
   /** The column that was clicked (if any) */
-  readonly column?: GridColumnConfig;
+  readonly column?: GridColumnConfig;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
   /** The cell value that was clicked (if any) */
   readonly cellValue?: unknown;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
@@ -274,7 +274,7 @@ export class AfterRowDoubleClickEventArgs extends RowEventArgs {
   readonly mouseEvent: MouseEvent;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
   /** The column that was clicked (if any) */
-  readonly column?: GridColumnConfig;
+  readonly column?: GridColumnConfig;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
   /** The cell value that was clicked (if any) */
   readonly cellValue?: unknown;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
@@ -304,7 +304,7 @@ export class AfterRowDoubleClickEventArgs extends RowEventArgs {
  */
 export class BeforeCellEditEventArgs extends CancelableRowEventArgs {
   /** The column being edited */
-  readonly column: GridColumnConfig;
+  readonly column: GridColumnConfig;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
   /** Current value in the cell */
   readonly currentValue: unknown;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
@@ -328,7 +328,7 @@ export class BeforeCellEditEventArgs extends CancelableRowEventArgs {
  */
 export class AfterCellEditBeginEventArgs extends RowEventArgs {
   /** The column being edited */
-  readonly column: GridColumnConfig;
+  readonly column: GridColumnConfig;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
   /** Current value in the cell */
   readonly currentValue: unknown;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
@@ -352,7 +352,7 @@ export class AfterCellEditBeginEventArgs extends RowEventArgs {
  */
 export class BeforeCellEditCommitEventArgs extends CancelableRowEventArgs {
   /** The column being edited */
-  readonly column: GridColumnConfig;
+  readonly column: GridColumnConfig;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
   /** Original value before edit */
   readonly oldValue: unknown;
@@ -384,7 +384,7 @@ export class BeforeCellEditCommitEventArgs extends CancelableRowEventArgs {
  */
 export class AfterCellEditCommitEventArgs extends RowEventArgs {
   /** The column that was edited */
-  readonly column: GridColumnConfig;
+  readonly column: GridColumnConfig;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
   /** Original value before edit */
   readonly oldValue: unknown;
@@ -413,7 +413,7 @@ export class AfterCellEditCommitEventArgs extends RowEventArgs {
  */
 export class BeforeCellEditCancelEventArgs extends CancelableRowEventArgs {
   /** The column being edited */
-  readonly column: GridColumnConfig;
+  readonly column: GridColumnConfig;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
   /** Original value */
   readonly originalValue: unknown;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
@@ -442,7 +442,7 @@ export class BeforeCellEditCancelEventArgs extends CancelableRowEventArgs {
  */
 export class AfterCellEditCancelEventArgs extends RowEventArgs {
   /** The column that was being edited */
-  readonly column: GridColumnConfig;
+  readonly column: GridColumnConfig;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
   /** Original value that was restored */
   readonly originalValue: unknown;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
@@ -673,7 +673,7 @@ export class AfterDataRefreshEventArgs extends GridEventArgs {
  */
 export class BeforeSortEventArgs extends CancelableGridEventArgs {
   /** The column being sorted */
-  readonly column: GridColumnConfig;
+  readonly column: GridColumnConfig;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
   /** The new sort direction */
   readonly direction: 'asc' | 'desc' | 'none';
@@ -704,7 +704,7 @@ export class BeforeSortEventArgs extends CancelableGridEventArgs {
  */
 export class AfterSortEventArgs extends GridEventArgs {
   /** The column that was sorted */
-  readonly column: GridColumnConfig;
+  readonly column: GridColumnConfig;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
   /** The new sort direction */
   readonly direction: 'asc' | 'desc' | 'none';
@@ -734,7 +734,7 @@ export class AfterSortEventArgs extends GridEventArgs {
  */
 export class BeforeColumnReorderEventArgs extends CancelableGridEventArgs {
   /** The column being moved */
-  readonly column: GridColumnConfig;
+  readonly column: GridColumnConfig;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
   /** Original index */
   readonly fromIndex: number;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
@@ -760,7 +760,7 @@ export class BeforeColumnReorderEventArgs extends CancelableGridEventArgs {
  */
 export class AfterColumnReorderEventArgs extends GridEventArgs {
   /** The column that was moved */
-  readonly column: GridColumnConfig;
+  readonly column: GridColumnConfig;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
   /** Original index */
   readonly fromIndex: number;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
@@ -786,7 +786,7 @@ export class AfterColumnReorderEventArgs extends GridEventArgs {
  */
 export class BeforeColumnResizeEventArgs extends CancelableGridEventArgs {
   /** The column being resized */
-  readonly column: GridColumnConfig;
+  readonly column: GridColumnConfig;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
   /** Original width */
   readonly oldWidth: number;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
@@ -812,7 +812,7 @@ export class BeforeColumnResizeEventArgs extends CancelableGridEventArgs {
  */
 export class AfterColumnResizeEventArgs extends GridEventArgs {
   /** The column that was resized */
-  readonly column: GridColumnConfig;
+  readonly column: GridColumnConfig;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
   /** Original width */
   readonly oldWidth: number;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
@@ -838,7 +838,7 @@ export class AfterColumnResizeEventArgs extends GridEventArgs {
  */
 export class BeforeColumnVisibilityChangeEventArgs extends CancelableGridEventArgs {
   /** The column being shown/hidden */
-  readonly column: GridColumnConfig;
+  readonly column: GridColumnConfig;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
   /** New visibility state */
   readonly newVisibility: boolean;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
@@ -859,7 +859,7 @@ export class BeforeColumnVisibilityChangeEventArgs extends CancelableGridEventAr
  */
 export class AfterColumnVisibilityChangeEventArgs extends GridEventArgs {
   /** The column that was shown/hidden */
-  readonly column: GridColumnConfig;
+  readonly column: GridColumnConfig;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
   /** New visibility state */
   readonly newVisibility: boolean;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply

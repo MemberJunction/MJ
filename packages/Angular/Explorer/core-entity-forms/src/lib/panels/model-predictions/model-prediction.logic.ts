@@ -20,11 +20,11 @@ export type ModelProblemType = 'classification' | 'regression';
 /** One normalized feature-importance driver for display. */
 export interface PredictionDriver {
     /** Raw feature name as the model stored it. */
-    name: string;
+    name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Importance magnitude (absolute value of the raw contribution). */
-    importance: number;
+    importance: number;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** Importance as a 0–100 share of the strongest driver, for the bar width. */
-    relativePct: number;
+    relativePct: number;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 }
 
 /** How a prediction's primary value should be rendered. */

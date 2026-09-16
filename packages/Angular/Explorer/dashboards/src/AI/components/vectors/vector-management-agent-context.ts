@@ -46,8 +46,8 @@ export interface VectorSyncRowCandidate {
 
 /** Outcome of {@link resolveSyncRow}: the matched row, or a tolerant error. */
 export type VectorResolveResult<T> =
-    | { ok: true; value: T }
-    | { ok: false; error: string };
+    | { ok: true; value: T }  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    | { ok: false; error: string };  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 
 /**
  * Resolve an agent-supplied entity reference to one of the vector sync rows. Tries, in order

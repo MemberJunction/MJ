@@ -64,8 +64,8 @@ describe('buildHealSchemaRoutineParams', () => {
         const p = BuildHealSchemaRoutineParams({
             authoredExclude: ['sys', 'staging'],
         });
-        expect(p.names).toEqual(['ExcludedSchemaNames']);
-        expect(p.values).toEqual([`'sys,staging'`]);
+        expect(p.Names).toEqual(['ExcludedSchemaNames']);
+        expect(p.Values).toEqual([`'sys,staging'`]);
     });
 
     it('adds IncludedSchemaNames from includeSchemas and never a sibling snapshot', () => {
@@ -73,10 +73,10 @@ describe('buildHealSchemaRoutineParams', () => {
             authoredExclude: ['sys', 'staging'],
             includeSchemas: ['__mj_BizAppsCommon'],
         });
-        expect(p.names).toEqual(['ExcludedSchemaNames', 'IncludedSchemaNames']);
-        expect(p.values).toEqual([`'sys,staging'`, `'__mj_BizAppsCommon'`]);
-        expect(p.values.join(',')).not.toContain('Orders');
-        expect(p.values.join(',')).not.toContain('Accounting');
+        expect(p.Names).toEqual(['ExcludedSchemaNames', 'IncludedSchemaNames']);
+        expect(p.Values).toEqual([`'sys,staging'`, `'__mj_BizAppsCommon'`]);
+        expect(p.Values.join(',')).not.toContain('Orders');
+        expect(p.Values.join(',')).not.toContain('Accounting');
     });
 
     it('places EntityIDs before IncludedSchemaNames', () => {
@@ -85,7 +85,7 @@ describe('buildHealSchemaRoutineParams', () => {
             includeSchemas: ['__mj_BizAppsCommon'],
             entityIDs: ['aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'],
         });
-        expect(p.names).toEqual(['ExcludedSchemaNames', 'EntityIDs', 'IncludedSchemaNames']);
+        expect(p.Names).toEqual(['ExcludedSchemaNames', 'EntityIDs', 'IncludedSchemaNames']);
     });
 
     it('SQL Server named EXEC with include does not list sibling Open Apps', () => {
@@ -96,8 +96,8 @@ describe('buildHealSchemaRoutineParams', () => {
         const sql = new SQLServerCodeGenProvider().callRoutineSQL(
             '__mj',
             'spUpdateExistingEntitiesFromSchema',
-            p.values,
-            p.names,
+            p.Values,
+            p.Names,
         );
         expect(sql).toBe(
             `EXEC [__mj].[spUpdateExistingEntitiesFromSchema] @ExcludedSchemaNames='sys,staging', @IncludedSchemaNames='__mj_BizAppsCommon'`,
@@ -128,8 +128,8 @@ describe('authored exclude snapshot vs include compile', () => {
             authoredExclude: GetAuthoredExcludeSchemas(),
             includeSchemas: config.includeSchemas,
         });
-        expect(p.values[0]).toBe(`'sys,staging'`);
-        expect(p.values.join(',')).not.toContain('Orders');
+        expect(p.Values[0]).toBe(`'sys,staging'`);
+        expect(p.Values.join(',')).not.toContain('Orders');
     });
 });
 

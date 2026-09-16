@@ -16,34 +16,34 @@ import { EnumCandidateContext } from '../types/analysis.js';
 /** Configuration knobs for the pre-filter gates */
 export interface EnumGateConfig {
   /** Maximum column declared length to consider (default 50) */
-  maxColumnLength: number;
+  MaxColumnLength: number;
   /** Upper bound on distinct values (default 50) */
-  maxDistinctValues: number;
+  MaxDistinctValues: number;
   /** Minimum total rows before applying cardinality ratio (default 50) */
-  minTotalRows: number;
+  MinTotalRows: number;
   /** Maximum cardinality ratio (distinct / total) to pass (default 0.05) */
-  maxCardinalityRatio: number;
+  MaxCardinalityRatio: number;
   /** Regex patterns for column names to always exclude */
-  excludeColumnNamePatterns: RegExp[];
+  ExcludeColumnNamePatterns: RegExp[];
 }
 
 /** Result returned when a column passes the gate */
 export interface EnumCandidate {
-  columnName: string;
-  values: string[];
-  distinctCount: number;
-  totalRows: number;
-  cardinalityRatio: number;
-  dataType: string;
-  maxLength?: number;
+  ColumnName: string;
+  Values: string[];
+  DistinctCount: number;
+  TotalRows: number;
+  CardinalityRatio: number;
+  dataType: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  MaxLength?: number;
 }
 
 const DEFAULT_CONFIG: EnumGateConfig = {
-  maxColumnLength: 50,
-  maxDistinctValues: 50,
-  minTotalRows: 50,
-  maxCardinalityRatio: 0.05,
-  excludeColumnNamePatterns: [
+  MaxColumnLength: 50,
+  MaxDistinctValues: 50,
+  MinTotalRows: 50,
+  MaxCardinalityRatio: 0.05,
+  ExcludeColumnNamePatterns: [
     /Notes?$/i,
     /Description$/i,
     /Comment$/i,
@@ -158,7 +158,7 @@ export class EnumCandidateGate {
     // varchar(max) / nvarchar(max) — exclude
     if (length === null && (baseType === 'varchar' || baseType === 'nvarchar')) return false;
     // Length known and exceeds limit
-    if (length !== null && length > this.config.maxColumnLength) return false;
+    if (length !== null && length > this.config.MaxColumnLength) return false;
 
     return true;
   }
@@ -167,7 +167,7 @@ export class EnumCandidateGate {
    * Gate: column name must not match any exclusion pattern.
    */
   private passesNameExclusionGate(columnName: string): boolean {
-    return !this.config.excludeColumnNamePatterns.some(pattern => pattern.test(columnName));
+    return !this.config.ExcludeColumnNamePatterns.some(pattern => pattern.test(columnName));
   }
 
   /**
@@ -189,7 +189,7 @@ export class EnumCandidateGate {
    * Gate: distinct count must be ≥ 2 and ≤ maxDistinctValues.
    */
   private passesDistinctCountGate(distinctCount: number): boolean {
-    return distinctCount >= 2 && distinctCount <= this.config.maxDistinctValues;
+    return distinctCount >= 2 && distinctCount <= this.config.MaxDistinctValues;
   }
 
   /**
@@ -202,10 +202,10 @@ export class EnumCandidateGate {
     tableRowCount: number
   ): boolean {
     // Small tables bypass the ratio gate — LLM decides
-    if (tableRowCount < this.config.minTotalRows) return true;
+    if (tableRowCount < this.config.MinTotalRows) return true;
 
     const ratio = tableRowCount > 0 ? stats.distinctCount / tableRowCount : 1;
-    return ratio <= this.config.maxCardinalityRatio;
+    return ratio <= this.config.MaxCardinalityRatio;
   }
 
   // ─── Helpers ──────────────────────────────────────────────────────

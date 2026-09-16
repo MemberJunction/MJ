@@ -109,7 +109,7 @@ function mergeRootClaudeMd(
 ): void {
     const packBytes = opts.PackFiles.get('CLAUDE.md');
     if (!packBytes) {
-        RecordOutcome(actions, { Path: 'CLAUDE.md', Outcome: 'error', reason: 'absent from pack' });
+        RecordOutcome(actions, { Path: 'CLAUDE.md', Outcome: 'error', Reason: 'absent from pack' });
         return;
     }
     const packText = decodeText(packBytes);
@@ -120,7 +120,7 @@ function mergeRootClaudeMd(
         RecordOutcome(actions, {
             Path: 'CLAUDE.md',
             Outcome: 'error',
-            reason: `pack CLAUDE.md malformed: ${(err as Error).message}`,
+            Reason: `pack CLAUDE.md malformed: ${(err as Error).message}`,
         });
         return;
     }
@@ -128,7 +128,7 @@ function mergeRootClaudeMd(
         RecordOutcome(actions, {
             Path: 'CLAUDE.md',
             Outcome: 'error',
-            reason: 'pack CLAUDE.md has no managed block',
+            Reason: 'pack CLAUDE.md has no managed block',
         });
         return;
     }
@@ -153,7 +153,7 @@ function mergeRootClaudeMd(
         RecordOutcome(actions, {
             Path: 'CLAUDE.md',
             Outcome: 'skipped',
-            reason: 'malformed managed markers',
+            Reason: 'malformed managed markers',
         });
         return;
     }
@@ -166,7 +166,7 @@ function mergeRootClaudeMd(
     }
 
     if (newContent === existing) {
-        RecordOutcome(actions, { Path: 'CLAUDE.md', Outcome: 'skipped', reason: 'identical' });
+        RecordOutcome(actions, { Path: 'CLAUDE.md', Outcome: 'skipped', Reason: 'identical' });
         return;
     }
 
@@ -199,7 +199,7 @@ function mergeMjBundle(
                 RecordOutcome(actions, {
                     Path: stale,
                     Outcome: 'updated',
-                    reason: 'removed (no longer shipped)',
+                    Reason: 'removed (no longer shipped)',
                 });
             }
         }
@@ -212,7 +212,7 @@ function mergeMjBundle(
         const existed = existsSync(absPath);
         const identical = existed && bytesEqual(readFileBytes(absPath), bytes);
         if (identical) {
-            RecordOutcome(actions, { Path: relPath, Outcome: 'skipped', reason: 'identical' });
+            RecordOutcome(actions, { Path: relPath, Outcome: 'skipped', Reason: 'identical' });
             continue;
         }
         writeFile(opts, absPath, bytes);
@@ -234,7 +234,7 @@ function mergeSettingsFile(
         RecordOutcome(actions, {
             Path: '.claude/settings.json',
             Outcome: 'error',
-            reason: 'absent from pack',
+            Reason: 'absent from pack',
         });
         return;
     }
@@ -245,7 +245,7 @@ function mergeSettingsFile(
         RecordOutcome(actions, {
             Path: '.claude/settings.json',
             Outcome: 'error',
-            reason: `pack settings.json invalid JSON: ${(err as Error).message}`,
+            Reason: `pack settings.json invalid JSON: ${(err as Error).message}`,
         });
         return;
     }
@@ -263,7 +263,7 @@ function mergeSettingsFile(
             RecordOutcome(actions, {
                 Path: '.claude/settings.json',
                 Outcome: 'skipped',
-                reason: 'malformed JSON',
+                Reason: 'malformed JSON',
             });
             return;
         }
@@ -274,7 +274,7 @@ function mergeSettingsFile(
         RecordOutcome(actions, {
             Path: '.claude/settings.json',
             Outcome: 'skipped',
-            reason: 'identical',
+            Reason: 'identical',
         });
         return;
     }
@@ -320,7 +320,7 @@ function seedOneFile(
 
     const existing = readFileBytes(absPath);
     if (bytesEqual(existing, bytes)) {
-        return { Path: relPath, Outcome: 'skipped', reason: 'identical' };
+        return { Path: relPath, Outcome: 'skipped', Reason: 'identical' };
     }
 
     // Different — user has customized this file. Default behavior is to
@@ -331,11 +331,11 @@ function seedOneFile(
             writeFileSync(absPath + '.bak', existing);
         }
         writeFile(opts, absPath, bytes);
-        return { Path: relPath, Outcome: 'updated', reason: 'overwritten (.bak saved)' };
+        return { Path: relPath, Outcome: 'updated', Reason: 'overwritten (.bak saved)' };
     }
 
     warnings.push(`${relPath} differs from pack — kept user version. Pass --force to overwrite.`);
-    return { Path: relPath, Outcome: 'skipped', reason: 'user-modified' };
+    return { Path: relPath, Outcome: 'skipped', Reason: 'user-modified' };
 }
 
 // ---------------------------------------------------------------------------

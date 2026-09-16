@@ -44,7 +44,7 @@ export default function QueryRunScreen() {
                 <View style={styles.loadingBlock}><ActivityIndicator color={Colors.brand} /><Text style={styles.loadingText}>Running query…</Text></View>
             ) : result && !result.Success ? (
                 <View style={styles.loadingBlock}>
-                    <Text style={styles.errorText}>{result.errorMessage}</Text>
+                    <Text style={styles.errorText}>{result.ErrorMessage}</Text>
                     <Pressable onPress={() => void run()}><Text style={styles.retry}>Try again</Text></Pressable>
                 </View>
             ) : result && result.Rows.length === 0 ? (

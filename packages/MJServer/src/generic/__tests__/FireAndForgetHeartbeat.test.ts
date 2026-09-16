@@ -92,7 +92,7 @@ describe('startLivenessPulse', () => {
         vi.advanceTimersByTime(2000);
         expect(pubSub.publish).toHaveBeenCalledTimes(2);
 
-        handle.stop();
+        handle.Stop();
         vi.advanceTimersByTime(5000);
         expect(pubSub.publish).toHaveBeenCalledTimes(2);
     });

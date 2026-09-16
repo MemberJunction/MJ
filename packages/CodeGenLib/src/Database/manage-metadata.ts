@@ -36,7 +36,7 @@ import { v4 as uuidv4, v5 as uuidv5 } from 'uuid';
 import * as fs from 'fs';
 import path from 'path';
 import { CanonicalJSONStringify, DeepEqualJSON } from "../Misc/util";
-import { trimTrailingStatementTerminators } from "../Misc/sql_text";
+import { TrimTrailingStatementTerminators } from "../Misc/sql_text";
 import { SQLLogging } from "../Misc/sql_logging";
 import { AIEngine } from "@memberjunction/aiengine";
 import { ComputeFieldMetadataUpdate, FieldLockContext } from "./field-metadata-lock";
@@ -1851,12 +1851,12 @@ export class ManageMetadataBase {
       // the read-time predicate from the persisted ReadFilterSpec (bound params), so a RowFilterBroad
       // materialization is safe to mint. `allowRowFilterBroad` remains the build-level kill switch.
       const classification = ClassifyQueryParameters({ queryName, params: paramDefs, outputColumns, dialect, render, allowRowFilterBroad: true });
-      if (!classification.qualification.qualifies) {
-         const detail = classification.perParam.map((pp) => `${pp.name}: ${pp.verdict.reason}`).join('; ');
-         return { qualifies: false, reason: `${classification.qualification.reason ?? 'parameters not materializable'}${detail ? ` — [${detail}]` : ''}` };
+      if (!classification.Qualification.qualifies) {
+         const detail = classification.PerParam.map((pp) => `${pp.name}: ${pp.verdict.reason}`).join('; ');
+         return { qualifies: false, reason: `${classification.Qualification.reason ?? 'parameters not materializable'}${detail ? ` — [${detail}]` : ''}` };
       }
-      if (classification.qualification.paramMode !== 'RowFilterBroad') {
-         return { qualifies: false, reason: `parameterization mode '${classification.qualification.paramMode}' is not supported for materialization in v1 (only RowFilterBroad)` };
+      if (classification.Qualification.paramMode !== 'RowFilterBroad') {
+         return { qualifies: false, reason: `parameterization mode '${classification.Qualification.paramMode}' is not supported for materialization in v1 (only RowFilterBroad)` };
       }
 
       // Build the broad source SQL: render a concrete instance (held values) then strip the row-filter predicates.
@@ -1866,15 +1866,15 @@ export class ManageMetadataBase {
       } catch (e) {
          return { qualifies: false, reason: `could not render the query to build broad SQL: ${e instanceof Error ? e.message : String(e)}` };
       }
-      const expectedRemovals = classification.qualification.rowFilterColumns.length;
-      const broad = BuildBroadRowFilterSQL(renderedHeld, classification.qualification.rowFilterColumns, dialect, expectedRemovals);
-      if (broad.removedCount === 0) {
-         return { qualifies: false, reason: `expected to strip row-filter predicate(s) on [${classification.qualification.rowFilterColumns.join(', ')}] but none were removed from the rendered SQL — refusing to avoid a wrongly-filtered materialization` };
+      const expectedRemovals = classification.Qualification.rowFilterColumns.length;
+      const broad = BuildBroadRowFilterSQL(renderedHeld, classification.Qualification.rowFilterColumns, dialect, expectedRemovals);
+      if (broad.RemovedCount === 0) {
+         return { qualifies: false, reason: `expected to strip row-filter predicate(s) on [${classification.Qualification.rowFilterColumns.join(', ')}] but none were removed from the rendered SQL — refusing to avoid a wrongly-filtered materialization` };
       }
-      if (broad.ambiguous) {
-         return { qualifies: false, reason: `expected to strip exactly ${expectedRemovals} row-filter parameter predicate(s) on [${classification.qualification.rowFilterColumns.join(', ')}] but matched ${broad.removedCount} — the parameter predicate(s) cannot be cleanly isolated from other static or same-named predicates on those columns, so a broad materialization would include or exclude rows the live query never would. Refusing (query stays live-only).` };
+      if (broad.Ambiguous) {
+         return { qualifies: false, reason: `expected to strip exactly ${expectedRemovals} row-filter parameter predicate(s) on [${classification.Qualification.rowFilterColumns.join(', ')}] but matched ${broad.RemovedCount} — the parameter predicate(s) cannot be cleanly isolated from other static or same-named predicates on those columns, so a broad materialization would include or exclude rows the live query never would. Refusing (query stays live-only).` };
       }
-      return { qualifies: true, rowFilterColumns: classification.qualification.rowFilterColumns, broadSQL: broad.sql, readFilterSpec: classification.qualification.readFilterSpec };
+      return { qualifies: true, rowFilterColumns: classification.Qualification.rowFilterColumns, broadSQL: broad.Sql, readFilterSpec: classification.Qualification.readFilterSpec };
    }
 
    /**
@@ -2064,7 +2064,7 @@ export class ManageMetadataBase {
             );
             continue;
          }
-         const tableSQL = this.dbProvider.generateMaterializedTableSQL(coreSchema, tableName, analysis.columns);
+         const tableSQL = this.dbProvider.generateMaterializedTableSQL(coreSchema, tableName, analysis.Columns);
          const viewSQL = this.dbProvider.generateMaterializedWrapperViewSQL(coreSchema, viewName, tableName);
          await this.logSQLAndExecute(pool, tableSQL, `Create materialized table for query "${queryName}"`, false, true, this.dbProvider.BatchSeparator);
          await this.logSQLAndExecute(pool, viewSQL, `Create wrapper view for query "${queryName}"`, false, true, this.dbProvider.BatchSeparator);
@@ -2078,7 +2078,7 @@ export class ManageMetadataBase {
                   Name: queryName,
                   BaseView: viewName,
                   SchemaName: coreSchema,
-                  PrimaryKeyFieldName: analysis.surrogateColumnName,
+                  PrimaryKeyFieldName: analysis.SurrogateColumnName,
                   Description: `Materialized result of query "${queryName}".`,
                });
                generatedEntityId = createRes.recordset?.[0]?.[''] || createRes.recordset?.[0]?.ID || createRes.recordset?.[0]?.Column0;
@@ -5155,7 +5155,7 @@ export class ManageMetadataBase {
             authoredExclude: GetAuthoredExcludeSchemas(excludeSchemas),
             includeSchemas: configInfo.includeSchemas,
          });
-         const sSQL = this.dbProvider.callRoutineSQL(MjCoreSchema(), 'spSetDefaultColumnWidthWhereNeeded', heal.values, heal.names);
+         const sSQL = this.dbProvider.callRoutineSQL(MjCoreSchema(), 'spSetDefaultColumnWidthWhereNeeded', heal.Values, heal.Names);
          await this.logSQLAndExecute(pool, sSQL, `SQL text to set default column width where needed`, true);
          return true;
       }
@@ -5409,7 +5409,7 @@ export class ManageMetadataBase {
             authoredExclude: GetAuthoredExcludeSchemas(excludeSchemas),
             includeSchemas: configInfo.includeSchemas,
          });
-         const sSQL = this.dbProvider.callRoutineSQL(MjCoreSchema(), 'spUpdateExistingEntitiesFromSchema', heal.values, heal.names);
+         const sSQL = this.dbProvider.callRoutineSQL(MjCoreSchema(), 'spUpdateExistingEntitiesFromSchema', heal.Values, heal.Names);
          const result = await this.logSQLAndExecute(pool, sSQL, `SQL text to update existing entities from schema`, true);
          // result contains the updated entities, and there is a property of each row called Name which has the entity name that was modified
          // add these to the modified entity list if they're not already in there
@@ -5450,7 +5450,7 @@ export class ManageMetadataBase {
             includeSchemas: configInfo.includeSchemas,
             entityIDs,
          });
-         const sSQL = this.dbProvider.callRoutineSQL(MjCoreSchema(), 'spUpdateExistingEntityFieldsFromSchema', heal.values, heal.names);
+         const sSQL = this.dbProvider.callRoutineSQL(MjCoreSchema(), 'spUpdateExistingEntityFieldsFromSchema', heal.Values, heal.Names);
          const isScoped = entityIDs !== undefined && entityIDs.length > 0;
          const label = isScoped
             ? `SQL text to update existing entity fields from schema (${entityIDs!.length} scoped entities)`
@@ -5494,7 +5494,7 @@ export class ManageMetadataBase {
             authoredExclude: GetAuthoredExcludeSchemas(excludeSchemas),
             includeSchemas: configInfo.includeSchemas,
          });
-         const sSQL = this.dbProvider.callRoutineSQL(MjCoreSchema(), 'spUpdateSchemaInfoFromDatabase', heal.values, heal.names);
+         const sSQL = this.dbProvider.callRoutineSQL(MjCoreSchema(), 'spUpdateSchemaInfoFromDatabase', heal.Values, heal.Names);
          const result = await this.logSQLAndExecute(pool, sSQL, `SQL text to sync schema info from database schemas`, true);
 
          if (result && result.length > 0) {
@@ -5606,7 +5606,7 @@ export class ManageMetadataBase {
             includeSchemas: configInfo.includeSchemas,
             entityIDs,
          });
-         const sSQL = this.dbProvider.callRoutineSQL(MjCoreSchema(), 'spDeleteUnneededEntityFields', heal.values, heal.names);
+         const sSQL = this.dbProvider.callRoutineSQL(MjCoreSchema(), 'spDeleteUnneededEntityFields', heal.Values, heal.Names);
          const isScoped = entityIDs !== undefined && entityIDs.length > 0;
          const label = isScoped
             ? `SQL text to delete unneeded entity fields (${entityIDs!.length} scoped entities)`
@@ -8336,11 +8336,11 @@ export class ManageMetadataBase {
          }
 
          const lockCtx: FieldLockContext = {
-            isNewEntity: ctx.isNewEntity,
-            isNewField: ManageMetadataBase.isFieldNew(entity.ID, field.Name),
-            descriptionReopened: ManageMetadataBase.isDisplayNameReopened(entity.ID, field.Name),
-            typeReopened: ManageMetadataBase.isTypeReopened(entity.ID, field.Name),
-            existingCategories,
+            IsNewEntity: ctx.isNewEntity,
+            IsNewField: ManageMetadataBase.isFieldNew(entity.ID, field.Name),
+            DescriptionReopened: ManageMetadataBase.isDisplayNameReopened(entity.ID, field.Name),
+            TypeReopened: ManageMetadataBase.isTypeReopened(entity.ID, field.Name),
+            ExistingCategories: existingCategories,
          };
 
          const update = ComputeFieldMetadataUpdate(
@@ -8351,7 +8351,7 @@ export class ManageMetadataBase {
             (val, fn) => this.sanitizeCodeType(val, fn ?? field.Name, entity.Name)
          );
 
-         for (const skip of update.skipped) {
+         for (const skip of update.Skipped) {
             if (skip.reason === 'locked') {
                reporter.counter('ai.fieldsLocked');
             } else if (skip.reason === 'invalid') {
@@ -8606,7 +8606,7 @@ WHERE
    ): Promise<any> {
       const terminated: string[] = [];
       for (const s of statements) {
-         const trimmed = trimTrailingStatementTerminators(s ?? '');
+         const trimmed = TrimTrailingStatementTerminators(s ?? '');
          if (trimmed.length === 0) continue;
          terminated.push(`${trimmed};`);
       }
