@@ -306,7 +306,9 @@ describe('Dataset Caching in GetDatasetByName', () => {
                 ExtraFilter: "SchemaName = '__mj' AND (Status = 'Active')",
             }),
             // InstanceConnectionString is undefined in test context
-            undefined
+            undefined,
+            undefined,
+            'MJ_Metadata/Entities'
         );
     });
 });

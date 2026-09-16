@@ -4068,7 +4068,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             if (cacheAvailable) {
                 const fingerprint = cache.GenerateRunViewFingerprint(
                     { EntityName: entityName, ExtraFilter: effectiveFilter } as RunViewParams,
-                    this.InstanceConnectionString
+                    this.InstanceConnectionString,
+                    undefined,
+                    this.datasetCacheSegment(datasetName, code)
                 );
                 const cached = await cache.GetRunViewResult(fingerprint);
                 if (cached) {
@@ -4110,7 +4112,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const fp = cacheAvailable
                 ? cache.GenerateRunViewFingerprint(
                     { EntityName: entityName, ExtraFilter: effectiveFilter } as RunViewParams,
-                    this.InstanceConnectionString
+                    this.InstanceConnectionString,
+                    undefined,
+                    this.datasetCacheSegment(datasetName, code)
                 )
                 : '';
             uncachedFingerprints.push(fp);
@@ -4436,6 +4440,22 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     /**************************************************************************/
     // Dataset Cache Helpers
     /**************************************************************************/
+
+    /**
+     * Cache namespace for one dataset item's rows.
+     *
+     * `GetDatasetByName` caches each item through the same RunView fingerprint builder as an
+     * ordinary read, supplying only entity + the item's WhereClause — and every shipped item has a
+     * NULL WhereClause, so without this segment the two share one cache slot and the dataset is
+     * served whatever an ordinary read left there, including rows deleted since.
+     *
+     * Keyed by dataset + item code so two items over the same entity also stay distinct. Callers
+     * must use it on both the read and the write-through, or dataset reads stop finding dataset
+     * writes.
+     */
+    protected datasetCacheSegment(datasetName: string, itemCode: string): string {
+        return `${datasetName}/${itemCode}`;
+    }
 
     /**
      * Computes the latest update date for a dataset item from its result rows and dataset metadata.
