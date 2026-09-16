@@ -38,10 +38,13 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 /**
  * Polls the attestation endpoint until it answers 200, then verifies the provenance.
  *
- * A 404 is "not visible yet" and is retried on the seed's own schedule. Anything else —
- * 5xx, network errors, unparseable JSON — is handled inside `fetchRegistryJson`, which
- * retries briefly and then throws, because a registry outage should read as an outage and
- * not as a missing attestation.
+ * A 404 is "not visible yet" and is retried on the seed's own schedule. So is a 200 whose
+ * document carries npm's publish attestation but no SLSA provenance yet: npm uploads both
+ * together, but if the registry ever exposed them at different moments a single read would
+ * fail the seed a moment before it verified — the exact false failure this script replaces.
+ * Anything else — 5xx, network errors, unparseable JSON — is handled inside
+ * `fetchRegistryJson`, which retries briefly and then throws, because a registry outage
+ * should read as an outage and not as a missing attestation.
  *
  * @returns `{ ok, reason, provenance, attempt, url }` — `ok` is the gate's verdict; `attempt`
  * is how many reads it took, so the job log says how long the registry lagged.
@@ -52,21 +55,27 @@ export async function waitForSeedAttestation(
     { fetchImpl = fetch, attempts = SEED_ATTESTATION_ATTEMPTS, delayMs = SEED_ATTESTATION_DELAY_MS, log = console.log } = {},
 ) {
     const url = attestationUrl(name, version);
+    let notYet = 'HTTP 404';
     for (let attempt = 1; attempt <= attempts; attempt++) {
         const { status, body } = await fetchRegistryJson(url, fetchImpl, delayMs);
         if (status === 200) {
             const provenance = extractProvenance(body);
-            const verdict = verifyProvenance(provenance);
-            return { ok: verdict.ok, reason: verdict.reason, provenance, attempt, url };
+            if (provenance) {
+                const verdict = verifyProvenance(provenance);
+                return { ok: verdict.ok, reason: verdict.reason, provenance, attempt, url };
+            }
+            notYet = 'HTTP 200 without a provenance attestation';
+        } else {
+            notYet = 'HTTP 404';
         }
         if (attempt < attempts) {
-            log(`attestation for ${name}@${version} not visible yet (HTTP 404) — attempt ${attempt}/${attempts}, waiting ${delayMs / 1000}s`);
+            log(`attestation for ${name}@${version} not visible yet (${notYet}) — attempt ${attempt}/${attempts}, waiting ${delayMs / 1000}s`);
             await sleep(delayMs);
         }
     }
     return {
         ok: false,
-        reason: `no public attestation after ${attempts} attempts`,
+        reason: `no provenance attestation after ${attempts} attempts (last read: ${notYet})`,
         provenance: null,
         attempt: attempts,
         url,

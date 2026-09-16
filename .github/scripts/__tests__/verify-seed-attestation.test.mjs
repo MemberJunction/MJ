@@ -49,8 +49,20 @@ describe('waitForSeedAttestation', () => {
 
         expect(result.ok).toBe(false);
         expect(result.provenance).toBeNull();
-        expect(result.reason).toBe('no public attestation after 4 attempts');
+        expect(result.reason).toBe('no provenance attestation after 4 attempts (last read: HTTP 404)');
         expect(calls).toHaveLength(4);
+    });
+
+    it('keeps polling a 200 that carries the publish attestation but no provenance yet', async () => {
+        // If the registry ever exposes the two attestations at different moments, a single read
+        // would fail the seed a moment before it verified — the false failure this script replaces.
+        const publishOnly = { attestations: [mjProvenance.attestations[0]] };
+        const { fetchImpl, calls } = fetchSequence([{ status: 404 }, { status: 200, body: publishOnly }, { status: 200, body: mjProvenance }]);
+        const result = await waitForSeedAttestation('@memberjunction/x', '0.0.1-seed.1', { fetchImpl, ...quiet });
+
+        expect(result.ok).toBe(true);
+        expect(result.attempt).toBe(3);
+        expect(calls).toHaveLength(3);
     });
 
     it('rejects an attestation that names another workflow — the same verdict the PR gate would give', async () => {
@@ -62,12 +74,14 @@ describe('waitForSeedAttestation', () => {
         expect(result.attempt).toBe(1);
     });
 
-    it('rejects a document with only the publish attestation, no provenance', async () => {
-        const { fetchImpl } = fetchSequence([{ status: 200, body: { attestations: [mjProvenance.attestations[0]] } }]);
-        const result = await waitForSeedAttestation('@memberjunction/x', '0.0.1-seed.1', { fetchImpl, ...quiet });
+    it('fails a document that never gains a provenance attestation, naming what the last read held', async () => {
+        const { fetchImpl, calls } = fetchSequence([{ status: 200, body: { attestations: [mjProvenance.attestations[0]] } }]);
+        const result = await waitForSeedAttestation('@memberjunction/x', '0.0.1-seed.1', { fetchImpl, attempts: 3, ...quiet });
 
         expect(result.ok).toBe(false);
-        expect(result.reason).toBe('no provenance attestation found');
+        expect(result.provenance).toBeNull();
+        expect(result.reason).toBe('no provenance attestation after 3 attempts (last read: HTTP 200 without a provenance attestation)');
+        expect(calls).toHaveLength(3);
     });
 
     it('treats a registry error as an error, not as a missing attestation', async () => {
