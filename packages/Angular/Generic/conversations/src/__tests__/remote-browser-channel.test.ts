@@ -1010,4 +1010,61 @@ describe('RemoteBrowserChannel — page changes the agent did not cause (#3496)'
 
     expect(log.Notes[1]).toContain('you did not navigate here');
   });
+
+  it('GetLatestFrame returns null when streaming is active to avoid double-sourcing', async () => {
+    const log: CtxLog = { Notes: [], Calls: [] };
+    const channel = new RemoteBrowserChannel();
+    channel.Initialize(makeContext(log, null));
+    const c = channel as unknown as { streaming: boolean };
+    c.streaming = true;
+
+    const frame = await channel.GetLatestFrame();
+    expect(frame).toBeNull();
+  });
+
+  it('GetLatestFrame fetches snapshot when streaming is not active', async () => {
+    const log: CtxLog = { Notes: [], Calls: [] };
+    const channel = new RemoteBrowserChannel();
+    channel.Initialize(makeContext(log, {
+      RemoteBrowserSnapshot: {
+        ScreenshotBase64: 'static-shot-base64',
+        CurrentUrl: 'https://example.com',
+      }
+    }));
+
+    const frame = await channel.GetLatestFrame();
+    expect(frame).toBe('static-shot-base64');
+  });
+
+  it('OnScreencastFrame paces pushes to videoBridge to <= 1 fps', () => {
+    const log: CtxLog = { Notes: [], Calls: [] };
+    const channel = new RemoteBrowserChannel();
+    channel.Initialize(makeContext(log, null));
+
+    const pushed: string[] = [];
+    const mockBridge = {
+      PushFrame: (frame: string) => {
+        pushed.push(frame);
+        return true;
+      }
+    };
+    const c = channel as unknown as { streaming: boolean; videoBridge: typeof mockBridge };
+    c.streaming = true;
+    c.videoBridge = mockBridge;
+
+    // First frame arrives at t=0
+    channel.OnScreencastFrame('frame-1');
+    expect(pushed).toEqual(['frame-1']);
+
+    // Second frame arrives 200ms later (rapid screencast burst) -> dropped by 1000ms pacer
+    channel.OnScreencastFrame('frame-2');
+    expect(pushed).toEqual(['frame-1']);
+
+    // Advance time past 1000ms
+    const cTime = channel as unknown as { lastScreencastPushTime: number };
+    cTime.lastScreencastPushTime -= 1001;
+
+    channel.OnScreencastFrame('frame-3');
+    expect(pushed).toEqual(['frame-1', 'frame-3']);
+  });
 });

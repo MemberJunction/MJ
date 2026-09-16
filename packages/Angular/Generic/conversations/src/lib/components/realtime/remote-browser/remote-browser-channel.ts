@@ -307,8 +307,13 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
 
   /**
    * Produces the latest browser screenshot as a base64-encoded frame for the video bridge.
+   * Under active screencast streaming, returns null to avoid redundant server snapshot round-trips
+   * and duplicate frame sourcing into the video bridge.
    */
   public async GetLatestFrame(): Promise<string | null> {
+    if (this.streaming) {
+      return null;
+    }
     const snapshot = await this.fetchSnapshot();
     return snapshot?.ScreenshotBase64 ?? null;
   }
@@ -484,10 +489,17 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
    * @param dataBase64 The frame image as raw base64 JPEG (no `data:` prefix).
    * @param currentUrl The browser's URL when the frame was captured; absent from older servers.
    */
+  /** Timestamp of the last screencast frame pushed to the video bridge (paces pushes to ≤ 1 fps). */
+  private lastScreencastPushTime = 0;
+
   public OnScreencastFrame(dataBase64: string, currentUrl?: string | null): void {
     if (this.streaming) {
       this.surface?.RenderFrame(dataBase64);
-      this.videoBridge?.PushFrame(dataBase64);
+      const now = Date.now();
+      if (now - this.lastScreencastPushTime >= 1000) {
+        this.lastScreencastPushTime = now;
+        this.videoBridge?.PushFrame(dataBase64);
+      }
       this.notePageChange(currentUrl, 'observed');
     }
   }

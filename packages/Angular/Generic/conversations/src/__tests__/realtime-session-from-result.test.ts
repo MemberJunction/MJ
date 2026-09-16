@@ -361,4 +361,22 @@ describe('RealtimeSessionService — StartRealtimeSession after the mint/run spl
     expect(variables['recordingStartedAt']).toBeNull();
     expect(service.SessionCreatedConversationId).toBeNull(); // joined an existing conversation
   });
+
+  it('aggregates channel-sourced tracks into sessionConfig requestedTracks', async () => {
+    const channel = new RestoringChannel();
+    vi.spyOn(channel, 'GetSourcedTracks').mockReturnValue([
+      { Modality: 'video', Direction: 'inbound', Required: false }
+    ]);
+    internals(service)._activeChannels$.next([channel]);
+
+    await service.StartRealtimeSessionFromResult(
+      mintedResult({ SessionConfigJson: '{"instructions":"be an interviewer"}' })
+    );
+
+    expect(FakeRealtimeDriver.Connects).toHaveLength(1);
+    const config = FakeRealtimeDriver.Connects[0];
+    expect(config.SessionConfig['requestedTracks']).toEqual([
+      { Modality: 'video', Direction: 'inbound', Required: false }
+    ]);
+  });
 });
