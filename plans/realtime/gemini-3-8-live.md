@@ -75,22 +75,43 @@ more once reasoning is counted.
 
 ## 4. Three hazards
 
-**4.1 — `turn_complete=true` unconditionally interrupts generation.** Our driver uses an empty
-`turnComplete: true` turn as a *release* for committed context notes (`openClientTurn`,
-`sendToolResponseTurn`); the docs call it an *interrupt*. Both cannot be right. The comparison table
-states this **identically for all three models including the 3.1 preview we run today**, so it is
-not a 3.8 change — it is either a pre-existing bug or an imprecise sentence. **Verified live before
-any code depends on it (task 7).** It looks like a one-line change and is not.
+**4.1 — `turn_complete=true` interrupts generation. RESOLVED 2026-09-16: the doc is not imprecise,
+there is no bug today, and the bug is the one Phase D would introduce.**
 
-**Escalated 2026-09-15.** The Extended Thinking page now states it in *prose*, not only in the
-comparison table: *"Setting turn_complete=true immediately interrupts active generation."* That
-removes the "imprecise table cell" reading for the new model. V1's remaining unknown is narrower and
-sharper: whether the same is already true on the 3.1 preview we ship today — i.e. whether this is a
-3.8 constraint to design around or a live bug we have been carrying.
+The plain 3.8 Live page carries the half that reconciles everything:
+
+> *"Setting turn_complete=true unconditionally interrupts active model generation. **If you send
+> content without turn_complete, the server waits for subsequent messages before responding.**"*
+
+Two session states, not a contradiction. Our driver already uses both halves correctly:
+`SendContextNote` sends `sendClientContent({ turns: [...], turnComplete: false })` and sets
+`openClientTurn` — the server **holds**. `sendToolResponseTurn` later sends the bare
+`sendClientContent({ turnComplete: true })` — which **releases** the held content. The release lands
+while generation is *held*, not active, so "interrupts active generation" is a no-op and committing
+is its only effect.
+
+What guarantees that is `handleToolCallFrame` setting `responseActive = false`, which encodes the
+assumption **"a tool call means the model stopped and is waiting for me."** That is true for
+`BLOCKING` tools and **false for `NON_BLOCKING`** — the only mode Extended Thinking permits, where
+the model keeps generating and keeps issuing tool calls. On that model the current path:
+
+1. Tool call arrives mid-generation → `responseActive = false` → the driver believes the model
+   stopped, and `enqueueOrRun` stops queueing and starts sending immediately.
+2. `sendToolResponseTurn` sends the result and, with a context note open, sends `turnComplete: true`
+   **while generation is genuinely active** → the model is cut off mid-sentence.
+3. It sets `responseActive = true` and `setState('speaking')`, asserting a new response began when
+   the old one never ended.
+
+Three defects, one root cause — so 4.1 and 4.2 are the same hazard. Every state transition above was
+read in `geminiRealtimeClient.ts`; the *combination* producing an interrupt is derived, not observed,
+and is the one thing worth confirming on a live Extended Thinking session. **Expect no pre-existing
+bug on 3.1**, where blocking tools mean the model really does wait.
 
 **4.2 — turn serialization.** `responseActive` gates sends into `queuedSends`, drained on
 `turnComplete`. Under Extended Thinking, `turnComplete` arrives while the server is still reasoning
-and still issuing tool calls. `IsBusy` must become outstanding-work-based.
+and still issuing tool calls. `IsBusy` must become outstanding-work-based. Per 4.1 this is the same
+hazard seen from the other side: the serialization is not just a tidiness concern, it is what keeps
+the `turnComplete: true` release from landing on an active generation.
 
 **4.3 — video collapses the vendor session cap from 15 minutes to 2.** Live API capabilities guide,
 *Limitations → Session duration*: *"Audio-only sessions are limited to 15 minutes, and audio plus
@@ -163,14 +184,35 @@ rare edge case into a guaranteed one. Tracked as **F7**.
 - [x] **C4.** Set turn coverage explicitly from `TurnCoverage`; **audio-only when absent.**
 - [x] **C5.** Refuse `BLOCKING` locally for Extended Thinking rather than emitting a frame the
   server hard-errors.
+- [ ] **C5a.** **State a behavior on every declaration, whatever its origin.** `applyModelLegality`
+  today only rewrites `fn.behavior === BLOCKING`, so a bag-supplied declaration with *no* behavior
+  reaches the wire unstated — and absent means *inherited*, not non-blocking (*"If not specified, the
+  system keeps the current function call behavior"*). Observed: bag `[{ name: 'no_behavior_tool' }]`
+  on Extended Thinking arrives as `[{"name":"no_behavior_tool"}]`. Set when absent, and drop the
+  `!SupportsBlockingExecution` gate so 3.8-live bag tools are stated too — an explicit `BLOCKING`
+  there is legal and must survive. This makes the mapper's job *choose* and the loop's job
+  *guarantee*, which is why both exist.
+- [ ] **C5b.** **Warn on an unrecognized behavior value.** `'BLOKING'` on a blocking-capable model
+  currently resolves to `NON_BLOCKING` with zero warnings — a silent fallback that cannot distinguish
+  "asked for non-blocking" from "asked for something I did not understand".
+- [ ] **C5c.** **One bag key, in the shared list.** `tooling.Behavior` / `toolBehavior` /
+  `functionCallingBehavior` are three aliases for one concept, none in `REALTIME_SHARED_CONFIG_KEYS`,
+  so they ride `Object.assign` into the vendor config and are silently dropped by the SDK's path
+  allowlist — the `#3721` class the scrub comment documents, and what `'reasoning'` needed in C3.
+  Also `tooling.Behavior` invents a field Core's `RealtimeToolingSettings` does not have. Pick one
+  key, add it to the shared list, and put it on the Core type if it belongs there.
 
 ### Phase D — idle and async tools
 
 - [ ] **D1.** Honour `IdleSignal`: `generationComplete` (typed) for `gemini-3.8-live`, `interaction_status` (untyped, narrow it) for Extended Thinking. See V3.
 - [ ] **D2.** `IsBusy` = reasoning in progress **or** tool batch non-empty **or** audio playing.
+  **Includes `handleToolCallFrame`'s `responseActive = false`** (§4.1) — a tool call no longer means
+  generation stopped. Its comment encodes the blocking assumption; change both together.
 - [ ] **D3.** `queuedSends` drains on **idle**, not `turnComplete`.
 - [ ] **D4.** Backstop timer for a lost `IDLE` frame (guard only, not the primary signal).
-- [ ] **D5.** `behavior: NON_BLOCKING` + `RealtimeToolBatchBarrier` wired for Gemini.
+- [ ] **D5.** `behavior: NON_BLOCKING` + `RealtimeToolBatchBarrier` wired for Gemini. **Must not
+  carry the `openClientTurn` release into the non-blocking path** (§4.1) — deferring the release to a
+  real idle point is the obvious fix; committing the note another way is also legitimate. Record why.
 - [ ] **D6.** Function scheduling gated by `Tooling.SupportsScheduling`.
 
 ### Phase E — thinking and narration
@@ -211,10 +253,13 @@ rare edge case into a guaranteed one. Tracked as **F7**.
 
 ## 7. Verification tasks (must precede the code that depends on them)
 
-- [ ] **V1.** §4.1 — is our empty `turnComplete: true` commit interrupting generation on 3.1 today?
-  Gates D1–D3. Highest risk in the PR. **Narrowed 2026-09-15:** the vendor now states the interrupt
-  behaviour in prose for Extended Thinking, so the only open question is 3.1's *current* behaviour —
-  design-around vs. live bug. Still needs a live session; nothing in the SDK types answers it.
+- [x] **V1.** RESOLVED from the docs plus the code — see the rewritten §4.1. The doc is not
+  imprecise (the interrupt and the hold describe different session states), there is no bug on 3.1
+  today (blocking tools mean the model really does wait), and the defect is the one Phase D would
+  introduce on `NON_BLOCKING`. **No longer gates D1–D3.** A live Extended Thinking session is still
+  worth running to confirm the derived interrupt, and the regression guard is a unit test: feed a
+  synthetic `toolCall` frame while `responseActive` is true with `openClientTurn` set, and assert no
+  bare `turnComplete: true` is sent.
 - [x] **V2.** RESOLVED from `@google/genai@2.8.0` types (`dist/genai.d.ts:9214-9218`): a thought part
   is a normal `Part` carrying `thought?: boolean` — *"Indicates whether the `part` represents the
   model's thought process or reasoning"* — plus an opaque `thoughtSignature?: string` for reuse in
@@ -282,6 +327,15 @@ rare edge case into a guaranteed one. Tracked as **F7**.
 4. The release `Metadata_Sync` migration — build engineer.
 5. PostgreSQL counterparts — toolchain, at release.
 6. Retiring `gemini-3.1-flash-live-preview` — the capability matrix makes keeping it cheap.
+7. **A config bag that sets `tools` silently discards every MJ-registered tool.** `Object.assign`
+   replaces `config.tools` wholesale. Observed: with `Tools: [{ Name: 'mj_tool' }]` and bag
+   `tools: [{ functionDeclarations: [{ name: 'bag_tool' }] }]`, the wire carried only `bag_tool`.
+   **Pre-existing** — the clobber is in the bag merge, not C5 — but C5's guarantee depends on the
+   mapper's output surviving, so it stops being theoretical. Decide deliberately: merge with MJ's
+   declarations, warn-and-ignore, or warn-and-replace. Any of the three beats silence.
+8. **Per-tool `behavior` is not modelled.** Gemini sets it per declaration; Core's
+   `RealtimeToolDefinition` is `Name` / `Description` / `ParametersSchema` only, so one session-wide
+   value is all MJ can express today. Written down so it is not rediscovered as a bug.
 
 ---
 
@@ -331,8 +385,13 @@ Live frame. So:
 
 ### D2 — `IsBusy` from outstanding work
 Client, `IsBusy` (~:384), currently `return this.responseActive`. Make it the OR of: reasoning in
-progress (from `interaction_status`), tool batch non-empty (`RealtimeToolBatchBarrier.IsEmpty` is
+progress (from the resolved idle signal), tool batch non-empty (`RealtimeToolBatchBarrier.IsEmpty` is
 false), audio still playing. `openAILiveClient.ts` `IsBusy` (~:80) is the shape to copy.
+
+**Also in scope here:** `handleToolCallFrame` (~:604) sets `responseActive = false`, encoding "a tool
+call means generation stopped". Under `NON_BLOCKING` that is false and it is what turns the
+`openClientTurn` release into a mid-sentence interrupt (§4.1). Fix the flag and its comment together
+— a stale comment there misleads a reader into thinking the old invariant still holds.
 
 ### D3 — drain on idle, not `turnComplete`
 Client, `flushQueuedSends` (~:687) and its call site inside the `turnComplete` path. Move the
@@ -350,6 +409,13 @@ is in `AI/Core`, already provider-agnostic, already used by `openAILiveClient.ts
 `toolBatchBarrier.TrackPendingCall` / `.RecordResult` / `.Clear` there. Do not write a second
 barrier. `pendingToolCallNames` (~:184) already exists because Gemini's `sendToolResponse` needs the
 function name; keep it.
+
+**The trap, and it is the whole of §4.1:** `sendToolResponseTurn` ends with
+`if (this.openClientTurn) session.sendClientContent({ turnComplete: true })`. On a blocking model
+that releases held content harmlessly. On `NON_BLOCKING` it interrupts an active generation. Defer
+the release to a real idle point, or commit the note another way — and add the unit test from V1
+(synthetic `toolCall` while `responseActive` is true with `openClientTurn` set ⇒ no bare
+`turnComplete: true`).
 
 ### D6 — scheduling gated by capability
 Server, `geminiRealtime.ts`. Gate on `profile.Tooling.SupportsScheduling` — `true` only for plain
