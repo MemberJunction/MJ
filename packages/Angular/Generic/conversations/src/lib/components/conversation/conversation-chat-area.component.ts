@@ -4932,24 +4932,28 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     for (const message of inProgressMessages) {
       const agentRun = this.agentRunsByDetailId.get(message.ID);
 
-      if (!agentRun) {
-        // No agent run in the map. The run row may genuinely not exist yet (fire-and-forget
-        // acknowledges before the INSERT), or it may exist but be invisible to the narrow refresh
-        // above. Ask the durable tail, which answers over plain HTTP and therefore works while the
-        // socket is still dead. Only if that is inconclusive do we leave it to polling.
-        const recovered = await this.tryRecoverFromTail(message, conversationId, loadToken);
-        if (!recovered) {
-          LogStatusEx({message: `⏳ No agent run found for in-progress message ${message.ID}, waiting for server...`, verboseOnly: true});
-        }
+      if (agentRun && completedStatuses.includes(agentRun.Status)) {
+        // Fast path: the run we just refreshed already proves the work is over.
+        LogStatusEx({message: `🔄 Agent run ${agentRun.ID} already completed (${agentRun.Status}) for message ${message.ID}, handling catch-up...`, verboseOnly: true});
+        await this.handleMessageCompletion(message, agentRun.ID, conversationId, loadToken);
+        ConversationsRuntime.Instance.Tail.Forget(message.ID);
         continue;
       }
 
-      if (completedStatuses.includes(agentRun.Status)) {
-        // Agent completed during the WebSocket reconnection gap — handle now
-        LogStatusEx({message: `🔄 Agent run ${agentRun.ID} already completed (${agentRun.Status}) for message ${message.ID}, handling catch-up...`, verboseOnly: true});
-        await this.handleMessageCompletion(message, agentRun.ID, conversationId, loadToken);
-      } else {
-        LogStatusEx({message: `🔌 Agent run ${agentRun.ID} still ${agentRun.Status} for message ${message.ID}, WebSocket will receive updates`, verboseOnly: true});
+      // Otherwise ask durable state. Reached when there is no run row yet — fire-and-forget
+      // acknowledges before the INSERT — and ALSO when the run row still reads non-terminal,
+      // because the run is not the only thing that can finish a message: the tail reports the
+      // conversation detail's own status, which the run map does not carry at all. Consulting it
+      // here rather than only on a missing run is what keeps the cursor meaningful and stops a
+      // detail that was completed by anything other than its run from spinning forever.
+      const recovered = await this.tryRecoverFromTail(message, conversationId, loadToken);
+      if (!recovered) {
+        LogStatusEx({
+          message: agentRun
+            ? `🔌 Agent run ${agentRun.ID} still ${agentRun.Status} for message ${message.ID}; durable state agrees it is running`
+            : `⏳ No agent run found for in-progress message ${message.ID}, waiting for server...`,
+          verboseOnly: true
+        });
       }
     }
   }

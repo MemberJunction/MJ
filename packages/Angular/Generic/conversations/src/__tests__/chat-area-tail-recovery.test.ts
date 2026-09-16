@@ -148,3 +148,71 @@ describe('ConversationChatAreaComponent.tryRecoverFromTail', () => {
     expect(call[3]).toBe(7);
   });
 });
+
+/**
+ * The tail is consulted for EVERY in-progress message, not only ones with no run row.
+ *
+ * Gate 7 of the manual runbook could not be reproduced: with HTTP healthy the run-map lookup always
+ * succeeds, so the old "only when the run is missing" branch was unreachable outside a sub-second
+ * INSERT race — the client tail was effectively dead code. It also meant the one thing the run map
+ * cannot carry, the conversation detail's own status, was never read on the recovery path.
+ */
+describe('ConversationChatAreaComponent.reconnectInProgressRuns tail usage', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  function listHarness(result: ConversationTailResult, runStatus?: string) {
+    const component = Object.create(ConversationChatAreaComponent.prototype) as ConversationChatAreaComponent;
+    const open = component as unknown as Record<string, unknown>;
+    const completions: string[] = [];
+    const tail = vi.fn(async () => result);
+
+    vi.spyOn(ConversationsRuntime.Instance, 'Tail', 'get').mockReturnValue({
+      Tail: tail,
+      Forget: vi.fn(),
+    } as unknown as ConversationsRuntime['Tail']);
+
+    open.messages = [MESSAGE];
+    open.agentRunsByDetailId = new Map(
+      runStatus ? [[MESSAGE.ID, { ID: 'RUN-1', Status: runStatus }]] : []
+    );
+    open.isActiveConversationLoad = vi.fn(() => true);
+    open.handleMessageCompletion = vi.fn(async (m: { ID: string }) => { completions.push(m.ID); });
+
+    return { component, open, tail, completions };
+  }
+
+  const run = (h: { component: ConversationChatAreaComponent; open: Record<string, unknown> }) =>
+    (h.open.reconnectInProgressRuns as (c: string, t: number) => Promise<void>).call(h.component, 'CONV-1', 7);
+
+  it('consults the tail when the run row still reads as running', async () => {
+    const h = listHarness(tailResult({ RunID: 'RUN-1', IsInFlight: true }), 'Running');
+    await run(h);
+    expect(h.tail).toHaveBeenCalledWith(MESSAGE.ID);
+  });
+
+  it('completes from the detail status even while the run row says running', async () => {
+    // The run is not the only thing that can finish a message; the run map cannot see this.
+    const h = listHarness(tailResult({ RunID: 'RUN-1', IsInFlight: false, DetailStatus: 'Complete' }), 'Running');
+    await run(h);
+    expect(h.completions).toEqual([MESSAGE.ID]);
+  });
+
+  it('takes the local fast path without a tail call when the run is already terminal', async () => {
+    const h = listHarness(tailResult(), 'Completed');
+    await run(h);
+    expect(h.completions).toEqual([MESSAGE.ID]);
+    expect(h.tail).not.toHaveBeenCalled();
+  });
+
+  it('still consults the tail when there is no run row at all', async () => {
+    const h = listHarness(tailResult({ IsInFlight: true }));
+    await run(h);
+    expect(h.tail).toHaveBeenCalledWith(MESSAGE.ID);
+  });
+
+  it('leaves the message alone when durable state agrees it is running', async () => {
+    const h = listHarness(tailResult({ RunID: 'RUN-1', IsInFlight: true }), 'Running');
+    await run(h);
+    expect(h.completions).toEqual([]);
+  });
+});

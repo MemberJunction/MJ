@@ -61,6 +61,7 @@ import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 import { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
 import { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
 import { PubSubManager } from './generic/PubSubManager.js';
+import { reconcileOrphanedConversationDetails } from './generic/OrphanedConversationDetailReconciler.js';
 import {
   PUSH_STATUS_UPDATES_TOPIC,
   SetPushStatusPublishHook,
@@ -285,6 +286,9 @@ function resolveServerVersion(): string | undefined {
     return undefined;
   }
 }
+
+/** How often to re-check for conversation details left behind by finished runs. */
+const ORPHAN_DETAIL_SWEEP_INTERVAL_MS = 5 * 60_000;
 
 /** Redis channel carrying replicated push-status updates between server instances. */
 const PUSH_STATUS_FANOUT_CHANNEL = 'push-status-updates';
@@ -1625,8 +1629,25 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   // instance is still heart-beating. The watchdog also self-registers for graceful-shutdown
   // cancellation (via ShutdownRegistry) once it begins tracking this process's first live run.
   if (resumeUser && Metadata.Provider instanceof DatabaseProviderBase) { // global-provider-ok: server startup recovery — one-shot orphaned-run sweep at boot
-    AgentRunWatchdog.SweepOrphanedRuns(Metadata.Provider, resumeUser) // global-provider-ok: server startup recovery — one-shot orphaned-run sweep at boot
+    const sweepUser = resumeUser;
+    const sweepProvider = Metadata.Provider; // global-provider-ok: server startup recovery — one-shot orphaned-run sweep at boot
+    AgentRunWatchdog.SweepOrphanedRuns(sweepProvider, sweepUser)
       .catch(err => console.warn(`[AgentRunWatchdog] Startup sweep failed: ${err}`));
+
+    // The watchdog repairs the RUN; nothing repaired the conversation detail, which is the row the
+    // chat actually renders from (MJ #4222). A process that dies mid-run leaves a terminal run
+    // beside a message that still claims to be generating, and it spins forever for anyone who
+    // opens it. Runs at boot (closes restart orphans) and on a timer (closes mid-life orphans),
+    // mirroring the watchdog's own two-phase shape.
+    const reconcileOrphans = () =>
+      reconcileOrphanedConversationDetails(sweepProvider, sweepUser)
+        .catch(err => console.warn(`[OrphanDetailReconciler] Pass failed: ${err}`));
+    void reconcileOrphans();
+    const orphanDetailTimer = setInterval(() => void reconcileOrphans(), ORPHAN_DETAIL_SWEEP_INTERVAL_MS);
+    ShutdownRegistry.Instance.Register({
+      ShutdownName: 'OrphanDetailReconciler',
+      Shutdown: () => { clearInterval(orphanDetailTimer); },
+    });
   }
 
   // Launch the AI Agent Session janitor: run own-host orphan recovery once at boot, then keep a

@@ -6,10 +6,10 @@ import { GraphQLDataProvider, SocketConnectionState } from '@memberjunction/grap
 /**
  * Monitors MJAPI connectivity.
  *
- * Primary signal is the GraphQLDataProvider's WebSocket state (graphql-ws).
- * When the socket emits 'disconnected' (retries already exhausted by graphql-ws),
- * we fall back to polling /healthcheck until it returns 200, then force a socket
- * reconnect so the next subscription picks up a fresh client.
+ * The WebSocket state (graphql-ws) is the ONLY signal that clears the warning. When the socket
+ * emits 'disconnected' we poll /healthcheck, but a 200 there only triggers a reconnect attempt —
+ * it never reports connectivity as restored on its own. HTTP reachability and socket liveness are
+ * different properties, and trusting the first for the second is the defect behind MJ #4222.
  *
  * 'unknown' (no active socket — either never opened or cleanly disposed) is
  * treated as healthy: absence of signal is not a signal of failure.
@@ -28,6 +28,11 @@ export class ServerConnectivityService implements OnDestroy {
   private pollingTimerId: ReturnType<typeof setTimeout> | null = null;
   private socketSubscription: Subscription | null = null;
   private boundVisibilityHandler: (() => void) | null = null;
+  /**
+   * Sticky once the socket reports a drop, cleared only by a real 'connected'. Without it the
+   * transient 'unknown' emitted by our own ForceSocketReconnect() reads as recovery.
+   */
+  private degraded = false;
 
   /** Synchronous getter for the current connectivity state */
   public get IsConnected(): boolean {
@@ -44,6 +49,7 @@ export class ServerConnectivityService implements OnDestroy {
       this.Stop(); // idempotent restart
     }
     this.healthCheckUrl = healthCheckUrl;
+    this.degraded = false;
     this.isConnected.next(true);
 
     this.attachVisibilityListener();
@@ -89,18 +95,38 @@ export class ServerConnectivityService implements OnDestroy {
 
   private onSocketStateChange(state: SocketConnectionState): void {
     if (state === 'disconnected') {
+      this.degraded = true;
       if (this.isConnected.value) {
         this.isConnected.next(false);
         LogError('Server connectivity lost (WebSocket closed)');
       }
       this.scheduleNextPoll();
-    } else {
-      // 'connected' or 'unknown' — treat as healthy
+      return;
+    }
+
+    if (state === 'connected') {
+      // The only signal that ends a known outage: frames can flow again.
+      this.degraded = false;
       this.clearPollTimer();
       if (!this.isConnected.value) {
         this.isConnected.next(true);
         LogStatus('Server connectivity restored (WebSocket reconnected)');
       }
+      return;
+    }
+
+    // 'unknown' — there is no socket at all. Absence of signal is not a signal of failure at
+    // startup, so it stays healthy there. But it must NOT read as recovery once we already know
+    // we are degraded: the poll calls ForceSocketReconnect(), which disposes the client and emits
+    // exactly this state, so treating it as healthy let the service clear its own warning on a
+    // socket it had just thrown away. Keep the warning and keep polling until a real 'connected'.
+    if (this.degraded) {
+      this.scheduleNextPoll();
+      return;
+    }
+    this.clearPollTimer();
+    if (!this.isConnected.value) {
+      this.isConnected.next(true);
     }
   }
 
@@ -130,13 +156,19 @@ export class ServerConnectivityService implements OnDestroy {
   private async runHealthCheck(): Promise<void> {
     const reachable = await this.ping();
     if (reachable) {
-      this.clearPollTimer();
-      if (!this.isConnected.value) {
-        this.isConnected.next(true);
-        LogStatus('Server connectivity restored (/healthcheck OK)');
-      }
-      // Dispose the stale socket so the next subscription creates a fresh client
+      // Reachable over HTTP is a cue to retry the socket, NOT evidence the socket works.
+      //
+      // An HTTP 200 says the server process answers requests. It says nothing about whether
+      // this browser's WebSocket can carry frames, and the two genuinely diverge: a half-open
+      // socket (MJ #4222) leaves HTTP perfectly healthy while every push is dropped. Declaring
+      // "restored" here cleared the banner while the push channel was still dead, and — because
+      // the forced reconnect then failed — the banner reappeared moments later, flickering
+      // instead of steadily warning.
+      //
+      // So ask for a reconnect and keep polling. The banner clears only when the socket itself
+      // reports 'connected', through onSocketStateChange.
       GraphQLDataProvider.Instance?.ForceSocketReconnect();
+      this.scheduleNextPoll();
     } else {
       // Still unreachable — schedule another poll
       this.scheduleNextPoll();
