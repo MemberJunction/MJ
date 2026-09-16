@@ -75,14 +75,35 @@ export class ChannelInboundVideoBridge {
     }
 
     /**
+     * Directly sends a frame through the client when the inbound video track is established
+     * and the client implements `SendVideoFrame`.
+     *
+     * @returns `true` if dispatched to the client; `false` otherwise.
+     */
+    private sendFrameDirect(base64Jpeg: string): boolean {
+        if (!this.client || !this.client.IsTrackEstablished('video', 'inbound')) {
+            return false;
+        }
+        if (typeof this.client.SendVideoFrame !== 'function') {
+            return false;
+        }
+        this.lastSentTimestamp = Date.now();
+        this.client.SendVideoFrame(base64Jpeg, this.options.MimeType ?? 'image/jpeg');
+        return true;
+    }
+
+    /**
      * Pushes an event-driven frame (e.g. screencast push from RemoteBrowser or stroke completion).
      * Throttled to at most 1 fps.
      *
      * @param base64Jpeg The base64-encoded image frame.
-     * @returns `true` if the frame was sent; `false` if dropped (throttled or track unestablished).
+     * @returns `true` if the frame was sent; `false` if dropped (throttled, track unestablished, or driver lacks video support).
      */
     public PushFrame(base64Jpeg: string): boolean {
         if (!this.client || !this.client.IsTrackEstablished('video', 'inbound')) {
+            return false;
+        }
+        if (typeof this.client.SendVideoFrame !== 'function') {
             return false;
         }
         const now = Date.now();
@@ -90,13 +111,13 @@ export class ChannelInboundVideoBridge {
             // Throttled: at most 1 frame per second
             return false;
         }
-        this.lastSentTimestamp = now;
-        this.client.SendVideoFrame?.(base64Jpeg, this.options.MimeType ?? 'image/jpeg');
-        return true;
+        return this.sendFrameDirect(base64Jpeg);
     }
 
     /**
      * Periodic poll tick that fetches the latest frame from the provider and pushes it.
+     * Uses `sendFrameDirect` so periodic polling paced by `setInterval` does not fight
+     * the `PushFrame` delta guard when provider latency varies between ticks (Reviewer Item 25).
      */
     private async pumpFrame(): Promise<void> {
         if (!this.active) {
@@ -104,11 +125,11 @@ export class ChannelInboundVideoBridge {
         }
         try {
             const frame = await this.provider.GetLatestFrame();
-            if (frame && frame.length > 0) {
-                this.PushFrame(frame);
+            if (frame && frame.length > 0 && this.active) {
+                this.sendFrameDirect(frame);
             }
-        } catch {
-            /* Best-effort, do not throw or crash the session */
+        } catch (err) {
+            console.error('[ChannelInboundVideoBridge] Error fetching frame from provider:', err);
         }
     }
 

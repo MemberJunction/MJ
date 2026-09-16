@@ -206,6 +206,11 @@ export interface RealtimeToolingSettings {
      * `INTERRUPTED`). Absent = not supported; only declare `true` where the model documents it.
      */
     SupportsScheduling?: boolean;
+
+    /**
+     * Preferred function calling behavior ('BLOCKING' | 'NON_BLOCKING').
+     */
+    Behavior?: 'BLOCKING' | 'NON_BLOCKING';
 }
 
 /**

@@ -647,6 +647,89 @@ describe('GeminiRealtimeClient (extended)', () => {
             noSchedClient.SendToolResult('c2', JSON.stringify({ ans: 42, scheduling: 'SILENT' }));
             expect(noSchedClient.Fake.ToolResponses[0].functionResponses[0].scheduling).toBeUndefined();
         });
+
+        it('supports __mj_scheduling, accepts INTERRUPTED, strips scheduling keys from payload, and warns on unrecognized (Items 16, 17, 18)', async () => {
+            const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+            try {
+                const client = new GeminiTestClient();
+                await client.Connect(
+                    makeGeminiConfig({
+                        model: 'gemini-3.8-live',
+                        config: {},
+                        idleSignal: 'turnComplete',
+                        supportsScheduling: true,
+                        supportsBlocking: true,
+                    }),
+                    new FakeMediaStream([new FakeTrack()])
+                );
+
+                // c1: __mj_scheduling with 'INTERRUPTED'
+                client.Emit({
+                    toolCall: { functionCalls: [{ id: 'c1', name: 'search', args: {} }] },
+                } as LiveServerMessage);
+                client.SendToolResult('c1', JSON.stringify({ result: 'found', __mj_scheduling: 'INTERRUPTED' }));
+                const resp1 = client.Fake.ToolResponses[0].functionResponses[0];
+                expect(resp1.scheduling).toBe('INTERRUPT');
+                const payload1 = resp1.response as Record<string, unknown>;
+                expect(payload1['result']).toBe('found');
+                expect(payload1['__mj_scheduling']).toBeUndefined();
+                expect(payload1['scheduling']).toBeUndefined();
+
+                // c2: unrecognized scheduling value warns and omits scheduling
+                client.Emit({
+                    toolCall: { functionCalls: [{ id: 'c2', name: 'calc', args: {} }] },
+                } as LiveServerMessage);
+                client.SendToolResult('c2', JSON.stringify({ ans: 10, scheduling: 'UNKNOWN_SCHED' }));
+                const resp2 = client.Fake.ToolResponses[1].functionResponses[0];
+                expect(resp2.scheduling).toBeUndefined();
+                expect(warnSpy).toHaveBeenCalledWith(
+                    expect.stringContaining('Unrecognized function scheduling value "UNKNOWN_SCHED"')
+                );
+            } finally {
+                warnSpy.mockRestore();
+            }
+        });
+
+        it('Item 20: generationComplete does NOT drain queued sends; turnComplete drains them', async () => {
+            const client = new GeminiTestClient();
+            await client.Connect(
+                makeGeminiConfig({
+                    model: 'gemini-3.8-live',
+                    config: {},
+                    idleSignal: 'turnComplete',
+                    supportsScheduling: true,
+                    supportsBlocking: true,
+                }),
+                new FakeMediaStream([new FakeTrack()])
+            );
+
+            // Trigger active turn via outputTranscription
+            client.Emit({
+                serverContent: {
+                    outputTranscription: { text: 'Hello' },
+                },
+            } as LiveServerMessage);
+
+            // Queue a send while response is active
+            client.SendContextNote('note during generation');
+            // Not sent yet because response is active
+            expect(client.Fake.ClientContents).toHaveLength(0);
+
+            // Emit generationComplete: tokens finished, but playback may still be active
+            client.Emit({
+                serverContent: { generationComplete: true },
+            } as LiveServerMessage);
+
+            // Queued send MUST NOT be flushed yet on generationComplete (Item 20)
+            expect(client.Fake.ClientContents).toHaveLength(0);
+
+            // Emit turnComplete: now queue is flushed
+            client.Emit({
+                serverContent: { turnComplete: true },
+            } as LiveServerMessage);
+
+            expect(client.Fake.ClientContents).toHaveLength(1);
+        });
     });
 
     // ── Phase E: Thinking and Narration ────────────────────────────────────────
@@ -672,7 +755,7 @@ describe('GeminiRealtimeClient (extended)', () => {
 
             // Transcripts contains the interim narration delta
             expect(transcripts).toEqual([
-                { Role: 'Assistant', Text: 'Analyzing database records...', IsFinal: false, Kind: 'narration' },
+                { Role: 'Assistant', Text: 'Analyzing database records...', IsFinal: false, Kind: 'narration', IsThought: true },
             ]);
             // Playback enqueued only the 1 audio chunk
             expect(client.Playback.Enqueued).toHaveLength(1);
@@ -681,8 +764,8 @@ describe('GeminiRealtimeClient (extended)', () => {
             completeTurn(client);
 
             expect(transcripts).toEqual([
-                { Role: 'Assistant', Text: 'Analyzing database records...', IsFinal: false, Kind: 'narration' },
-                { Role: 'Assistant', Text: 'Analyzing database records...', IsFinal: true, Kind: 'narration' },
+                { Role: 'Assistant', Text: 'Analyzing database records...', IsFinal: false, Kind: 'narration', IsThought: true },
+                { Role: 'Assistant', Text: 'Analyzing database records...', IsFinal: true, Kind: 'narration', IsThought: true },
             ]);
         });
 
@@ -710,16 +793,16 @@ describe('GeminiRealtimeClient (extended)', () => {
             } as LiveServerMessage);
 
             expect(transcripts).toEqual([
-                { Role: 'Assistant', Text: 'Step 1: check parameters. ', IsFinal: false, Kind: 'narration' },
-                { Role: 'Assistant', Text: 'Step 2: execute query.', IsFinal: false, Kind: 'narration' },
+                { Role: 'Assistant', Text: 'Step 1: check parameters. ', IsFinal: false, Kind: 'narration', IsThought: true },
+                { Role: 'Assistant', Text: 'Step 2: execute query.', IsFinal: false, Kind: 'narration', IsThought: true },
             ]);
 
             completeTurn(client);
 
             expect(transcripts).toEqual([
-                { Role: 'Assistant', Text: 'Step 1: check parameters. ', IsFinal: false, Kind: 'narration' },
-                { Role: 'Assistant', Text: 'Step 2: execute query.', IsFinal: false, Kind: 'narration' },
-                { Role: 'Assistant', Text: 'Step 1: check parameters. Step 2: execute query.', IsFinal: true, Kind: 'narration' },
+                { Role: 'Assistant', Text: 'Step 1: check parameters. ', IsFinal: false, Kind: 'narration', IsThought: true },
+                { Role: 'Assistant', Text: 'Step 2: execute query.', IsFinal: false, Kind: 'narration', IsThought: true },
+                { Role: 'Assistant', Text: 'Step 1: check parameters. Step 2: execute query.', IsFinal: true, Kind: 'narration', IsThought: true },
             ]);
         });
 
@@ -741,8 +824,8 @@ describe('GeminiRealtimeClient (extended)', () => {
             client.Emit({ serverContent: { interrupted: true } } as LiveServerMessage);
 
             expect(transcripts).toEqual([
-                { Role: 'Assistant', Text: 'Deep thinking before interruption', IsFinal: false, Kind: 'narration' },
-                { Role: 'Assistant', Text: 'Deep thinking before interruption', IsFinal: true, Kind: 'narration' },
+                { Role: 'Assistant', Text: 'Deep thinking before interruption', IsFinal: false, Kind: 'narration', IsThought: true },
+                { Role: 'Assistant', Text: 'Deep thinking before interruption', IsFinal: true, Kind: 'narration', IsThought: true },
             ]);
         });
 
@@ -773,8 +856,8 @@ describe('GeminiRealtimeClient (extended)', () => {
             client.Emit({ interaction_status: 'IDLE' } as LiveServerMessage);
 
             expect(transcripts).toEqual([
-                { Role: 'Assistant', Text: 'Extended thinking stream...', IsFinal: false, Kind: 'narration' },
-                { Role: 'Assistant', Text: 'Extended thinking stream...', IsFinal: true, Kind: 'narration' },
+                { Role: 'Assistant', Text: 'Extended thinking stream...', IsFinal: false, Kind: 'narration', IsThought: true },
+                { Role: 'Assistant', Text: 'Extended thinking stream...', IsFinal: true, Kind: 'narration', IsThought: true },
             ]);
         });
     });

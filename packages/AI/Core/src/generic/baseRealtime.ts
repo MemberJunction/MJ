@@ -242,6 +242,8 @@ export const REALTIME_SHARED_CONFIG_KEYS: readonly string[] = [
     'endpoint',
     'sampleRate',
     'proxyBaseUrl',
+    'tooling',
+    'toolBehavior',
 ] as const;
 
 /** A selectable provider-native voice — `ID` is sent to the provider, `Name` is the human label. */
@@ -799,6 +801,12 @@ export interface RealtimeTranscript {
      * spoken-progress update or model-authored reasoning thought. Absent/undefined defaults to `'normal'`.
      */
     Kind?: 'normal' | 'narration';
+
+    /**
+     * `true` when this transcript represents model-authored reasoning / thoughts rather than
+     * spoken audio.
+     */
+    IsThought?: boolean;
 }
 
 /**
