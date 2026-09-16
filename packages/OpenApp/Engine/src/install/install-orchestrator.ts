@@ -17,7 +17,7 @@ import type { ManifestFetcher, RootApp } from '../dependency/dependency-graph-bu
 import type { InstalledAppMap, DependencyValue } from '../dependency/dependency-resolver.js';
 import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ListGitHubReleases, ListGitHubTags, ValidateGitHubTag, ParseGitHubUrl, type GitHubClientOptions, type MigrationDownloadResult } from '../github/github-client.js';
 import semver from 'semver';
-import { CreateAppSchema, DropAppSchema, SchemaExists, ValidateSchemaName } from './schema-manager.js';
+import { CreateAppSchema, DropAppSchema, SchemaExists, ValidateSchemaName, MJ_APP_SCHEMA_PREFIX, type SchemaNameValidation } from './schema-manager.js';
 import { RunFkGraphTeardown, buildRootDoomedPredicate } from './entity-teardown.js';
 import { extractApplicationIds } from './migration-application-ids.js';
 import { RunAppMigrations, type SkywayDatabaseConfig } from './migration-runner.js';
@@ -1053,6 +1053,53 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
+ * Composes what `RemoveApp` tells an operator when it refuses to drop an app's schema — including
+ * the one remedy that actually applies. `ValidateSchemaName` classifies WHY it refused, and the
+ * classes need different things said:
+ *   - `OverriddenBy` set (the `__`-namespace rule): the SAME override the install used lifts the
+ *     rule again here, so the schema is NOT un-droppable — point back at that flag instead of
+ *     parking the operator on `--keep-data`. The validator's own message is written for install
+ *     and upgrade ("is not available", "choose a name that does not start with `__`"), which
+ *     addresses a reader who is not here: this name is fixed and this app is being deleted. So say
+ *     it in remove's terms rather than quoting the validator.
+ *   - `Malformed`: the stored name is unusable, so there is no schema to claim ownership of —
+ *     asserting MJ "must never drop" it would be false. `--keep-data` is still the way out.
+ *   - `ReservedByPlatform` / `ReservedByMJ`: MJ or the platform owns the name outright and no flag
+ *     unblocks it. This is the one reserved-name rejection an operator can hit WITHOUT having done
+ *     anything wrong, and refusing leaves the app in status `Error`, still installed, with the
+ *     reinstall path failing on the same name. Refusing is right — these are schemas MJ must never
+ *     drop — so name `--keep-data`, the real exit.
+ * None of the branches claims to know the app's install history; the runtime never checks it.
+ */
+function BuildSchemaDropRefusalMessage(check: SchemaNameValidation, appName: string, schemaName: string): string {
+  if (check.OverriddenBy) {
+    return (
+      `Schema '${schemaName}' is outside the '${MJ_APP_SCHEMA_PREFIX}<AppName>' app namespace, so '${appName}' remove ` +
+      `will not drop it by default. Re-run with --dangerously-ignore-dbl-underscore-schema-rule to drop it.`
+    );
+  }
+  // Malformed, ReservedByPlatform and ReservedByMJ are the classes that reach this line, and
+  // their templates quote the validator verbatim as the lead-in with no trailing sentence
+  // terminator today; they're shared with the install and upgrade paths (which emit them as-is),
+  // so normalize the join here rather than editing them. MJNamespace's template DOES end in a
+  // period, but it always carries OverriddenBy and returns via the branch above before reaching
+  // this normalization — so the conditional's already-terminated branch is currently unreachable,
+  // not merely untested.
+  const validatorMessage = check.ErrorMessage ?? '';
+  const leadIn = /[.!?]$/.test(validatorMessage) ? validatorMessage : `${validatorMessage}.`;
+  if (check.Rule === 'Malformed') {
+    return (
+      `${leadIn} '${appName}' has an unusable stored schema name, so no schema can be addressed for it. ` +
+      `Re-run with --keep-data to remove '${appName}' and leave any schema in place.`
+    );
+  }
+  return (
+    `${leadIn} MemberJunction must never drop schema '${schemaName}'. ` +
+    `Re-run with --keep-data to remove '${appName}' and leave the schema in place.`
+  );
+}
+
+/**
  * Executes the remove flow for an installed Open App, inverting whatever the install added.
  *
  * Symmetric teardown by form: a schema-backed app's schema is dropped; package/config/bootstrap
@@ -1197,19 +1244,15 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
 
       let schemaDropError: string | undefined;
       if (!options.KeepData && existingApp.SchemaName && !schemaShared) {
-        // An app installed before its schema name became reserved is now un-droppable: this is
-        // the one reserved-name rejection an operator can hit WITHOUT having done anything wrong,
-        // and refusing leaves the app in status `Error`, still installed, with the reinstall path
-        // failing on the same name. Refusing is right — these are schemas MJ must never drop — so
-        // check here, where `--keep-data` is a real option, and name it. `DropAppSchema` still
-        // validates for itself; this exists to make the dead end an exit rather than a wall.
+        // Check the name here, where the remove-specific remedies are still available, and say
+        // which one applies (see `BuildSchemaDropRefusalMessage`). `DropAppSchema` still validates
+        // for itself; this exists so a refusal names the operator's way out instead of being a
+        // wall — or, for the overridable case, so it is not a dead end at all.
         const nameCheck = ValidateSchemaName(existingApp.SchemaName, {
           allowDoubleUnderscore: options.AllowDoubleUnderscoreSchema === true,
         });
         if (!nameCheck.Success) {
-          schemaDropError =
-            `${nameCheck.ErrorMessage} '${existingApp.Name}' was installed under that name before it became reserved, ` +
-            `so its schema cannot be dropped. Re-run with --keep-data to remove the app and leave the schema in place.`;
+          schemaDropError = BuildSchemaDropRefusalMessage(nameCheck, existingApp.Name, existingApp.SchemaName);
           Callbacks?.OnError?.('Schema', schemaDropError);
         } else {
           Callbacks?.OnProgress?.('Schema', `Dropping schema '${existingApp.SchemaName}'...`);
