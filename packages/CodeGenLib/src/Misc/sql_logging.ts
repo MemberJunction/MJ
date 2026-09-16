@@ -1,6 +1,7 @@
 import { CodeGenConnection } from '../Database/codeGenDatabaseProvider';
 import { configInfo, mj_core_schema, SQLOutputConfig, dbPlatform } from "../Config/config";
 import { logError, logStatus } from "./status_logging";
+import { endsWithBatchSeparatorLine, trimTrailingStatementTerminators } from './sql_text';
 import * as fs from 'fs';
 import path from 'path';
 
@@ -107,9 +108,12 @@ export class SQLLogging {
      * @param isRecurringScript - if set to true tells the logger that the provided SQL represents a recurring script meaning it is something that is executed, generally, for all CodeGen runs. In these cases, the Config settings can result in omitting these recurring scripts from being logged because the configuration environment may have those recurring scripts already set to run after all run-specific migrations get run.
      * @param includeBatchSeparator - if true, appends a batch separator (e.g., GO for SQL Server) after the SQL. Use this when the next statement in the migration needs to reference schema changes made by this statement (e.g., ALTER TABLE ADD column followed by UPDATE referencing that column). Defaults to false.
      * @param batchSeparator - the batch separator string to use (e.g., 'GO' for SQL Server). Only used when includeBatchSeparator is true.
+     * @param requiresOwnBatch - the unit must be the ONLY statement in its batch — e.g. `CREATE OR ALTER VIEW`,
+     *   which T-SQL requires to be first in its batch as well as last. Emits a separator BEFORE the unit
+     *   unless the log already ends at a batch boundary, and one after it. Implies `includeBatchSeparator`.
      * @returns
      */
-    public static async appendToSQLLogFile(contents: string, description?: string, isRecurringScript: boolean = false, includeBatchSeparator: boolean = false, batchSeparator: string = 'GO'): Promise<void> {
+    public static async appendToSQLLogFile(contents: string, description?: string, isRecurringScript: boolean = false, includeBatchSeparator: boolean = false, batchSeparator: string = 'GO', requiresOwnBatch: boolean = false): Promise<void> {
         try{
             if (isRecurringScript && SQLLogging.OmitRecurringScriptsFromLog) {
                 return; // is a recurring script and the flag to omit recurring scripts is set
@@ -138,17 +142,29 @@ export class SQLLogging {
             // generateBaseView / generateCRUDCreate / generateRootIDFunction return strings
             // ending in `GO`. Appending `;` produces `GO;`, which SSMS and sqlcmd reject
             // ("Incorrect syntax near ';'"). Detect and skip the `;` append in that case.
-            const trimmed = contents.replace(/[\s;]+$/g, '');
+            // Linear scans, not `/[\s;]+$/` or `/(^|\n)\s*GO\s*$/`: a unit can carry caller-supplied SQL
+            // (a TransitiveView body), and those patterns backtrack quadratically on a long interior
+            // whitespace run (see ./sql_text).
+            const trimmed = trimTrailingStatementTerminators(contents);
+            let endsWithBatchSeparator = false;
             if (trimmed.length > 0) {
-                const endsWithBatchSeparator = /(^|\n)\s*GO\s*$/i.test(trimmed);
+                endsWithBatchSeparator = endsWithBatchSeparatorLine(trimmed, 'GO');
                 contents = endsWithBatchSeparator ? trimmed : `${trimmed};`;
             }
 
-            contents = includeBatchSeparator
+            // A unit that must be alone in its batch also needs a separator BEFORE it: the log only ever
+            // appends, so whatever was logged last would otherwise share its batch.
+            const leadingSeparator = requiresOwnBatch && !!batchSeparator && !SQLLogging.logEndsAtBatchBoundary(batchSeparator)
+                ? `${batchSeparator}\n\n`
+                : '';
+
+            // Emit a separator after the unit when the caller asked for one or the unit must be alone in
+            // its batch.
+            contents = includeBatchSeparator || requiresOwnBatch
                 ? `${contents}\n${batchSeparator}\n\n`
                 : `${contents}\n\n`;
 
-            fs.appendFileSync(SQLLogging.SQLLoggingFilePath, contents);
+            fs.appendFileSync(SQLLogging.SQLLoggingFilePath, `${leadingSeparator}${contents}`);
         }
         catch(ex){
            logError("Unable to log metadata SQL text to file", ex);
@@ -163,12 +179,38 @@ export class SQLLogging {
     * @param query - The SQL query to execute.
     * @param description - A description of the query to append to the log file.
     * @param isRecurringScript - if set to true tells the logger that the provided SQL represents a recurring script meaning it is something that is executed, generally, for all CodeGen runs. In these cases, the Config settings can result in omitting these recurring scripts from being logged because the configuration environment may have those recurring scripts already set to run after all run-specific migrations get run.
+    * @param requiresOwnBatch - see {@link appendToSQLLogFile}: the unit must be alone in its batch.
     * @returns - The result of the query execution.
     */
-    public static async LogSQLAndExecute(ds: CodeGenConnection, query: string, description?: string, isRecurringScript: boolean = false, includeBatchSeparator: boolean = false, batchSeparator: string = 'GO'): Promise<any> {
-        SQLLogging.appendToSQLLogFile(query, description, isRecurringScript, includeBatchSeparator, batchSeparator);
+    public static async LogSQLAndExecute(ds: CodeGenConnection, query: string, description?: string, isRecurringScript: boolean = false, includeBatchSeparator: boolean = false, batchSeparator: string = 'GO', requiresOwnBatch: boolean = false): Promise<any> {
+        SQLLogging.appendToSQLLogFile(query, description, isRecurringScript, includeBatchSeparator, batchSeparator, requiresOwnBatch);
         const result = await ds.query(query);
         return result.recordset;
+    }
+
+    /** Bytes read from the end of the log to decide whether it ends at a batch boundary. */
+    private static readonly BOUNDARY_TAIL_BYTES = 512;
+
+    /**
+     * True when the log is empty or its last non-blank line is `separator` — i.e. the next unit starts
+     * a new batch. Reads only the tail of the file, so it holds whoever wrote the previous unit.
+     */
+    protected static logEndsAtBatchBoundary(separator: string): boolean {
+        const filePath = SQLLogging.SQLLoggingFilePath;
+        const size = SQLLogging.getFileLength(filePath);
+        if (size === 0) {
+            return true;
+        }
+        const length = Math.min(size, SQLLogging.BOUNDARY_TAIL_BYTES);
+        const bytes = new Uint8Array(length);
+        const fd = fs.openSync(filePath, 'r');
+        try {
+            fs.readSync(fd, bytes, 0, length, size - length);
+        } finally {
+            fs.closeSync(fd);
+        }
+        const tail = new TextDecoder('utf-8').decode(bytes);
+        return tail.trim().length === 0 || endsWithBatchSeparatorLine(tail, separator);
     }
 
     protected static getFileLength(filePath: string): number {

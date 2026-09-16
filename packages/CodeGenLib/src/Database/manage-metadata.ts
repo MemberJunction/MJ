@@ -20,6 +20,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 import * as fs from 'fs';
 import path from 'path';
+import { trimTrailingStatementTerminators } from "../Misc/sql_text";
 import { SQLLogging } from "../Misc/sql_logging";
 import { AIEngine } from "@memberjunction/aiengine";
 
@@ -154,7 +155,12 @@ export interface OrganicKeyTransitiveViewConfig {
    Name: string;
    /** The schema to create the view in (defaults to the related entity's schema if not specified) */
    SchemaName?: string;
-   /** Raw SQL for the view body (the SELECT statement). CodeGen emits CREATE OR ALTER VIEW wrapping this. */
+   /**
+    * Raw SQL for the view body (the SELECT statement), written in the target platform's dialect.
+    * CodeGen wraps it in the platform's create-or-replace DDL (`CREATE OR ALTER VIEW` on SQL Server,
+    * `CREATE OR REPLACE VIEW` on PostgreSQL). On PostgreSQL the body is not auto-quoted, so
+    * mixed-case identifiers must be double-quoted.
+    */
    SQL: string;
 }
 
@@ -767,46 +773,57 @@ export class ManageMetadataBase {
     * All SQL is executed AND logged via LogSQLAndExecute for complete CI/CD traceability.
     * Must run AFTER entities are created.
     */
-   protected async processOrganicKeyConfig(pool: CodeGenConnection): Promise<{ success: boolean; createdCount: number; updatedCount: number }> {
+   protected async processOrganicKeyConfig(pool: CodeGenConnection): Promise<{ success: boolean; createdCount: number; updatedCount: number; failedCount: number }> {
       const config = ManageMetadataBase.getSoftPKFKConfig();
-      if (!config) return { success: true, createdCount: 0, updatedCount: 0 };
+      if (!config) return { success: true, createdCount: 0, updatedCount: 0, failedCount: 0 };
 
       const allOrganicKeys = this.extractOrganicKeysFromConfig(config as Record<string, unknown>);
-      if (allOrganicKeys.length === 0) return { success: true, createdCount: 0, updatedCount: 0 };
+      if (allOrganicKeys.length === 0) return { success: true, createdCount: 0, updatedCount: 0, failedCount: 0 };
 
       const schema = mj_core_schema();
       let createdCount = 0;
       let updatedCount = 0;
+      let failedCount = 0;
 
       for (const tableConfig of allOrganicKeys) {
          // Resolve the owning entity
-         const ownerResult = await this.runQueryWithParams(pool, `
-            ${this.selectTop(1, 'ID, Name',
-               `FROM ${this.qs(schema, 'vwEntities')}
-            WHERE (BaseTable = @TableName AND SchemaName = @SchemaName)
-               OR Name = @TableName`,
-               'CASE WHEN BaseTable = @TableName AND SchemaName = @SchemaName THEN 0 ELSE 1 END')}
-         `, { 'TableName': tableConfig.TableName, 'SchemaName': tableConfig.SchemaName });
-
-         if (ownerResult.recordset.length === 0) {
-            logError(`    > Organic keys config: entity "${tableConfig.SchemaName}.${tableConfig.TableName}" not found — skipping`);
+         const owner = await this.findOrganicKeyEntity(pool, tableConfig.SchemaName, tableConfig.TableName);
+         if (!owner) {
+            // Every key declared on this table goes unapplied, so each one counts as a failure.
+            failedCount += tableConfig.OrganicKeys.length;
+            logError(`    > Organic keys config: entity "${tableConfig.SchemaName}.${tableConfig.TableName}" not found — skipping its ${tableConfig.OrganicKeys.length} organic key(s)`);
             continue;
          }
 
-         const ownerEntityId = ownerResult.recordset[0].ID;
-         const ownerEntityName = ownerResult.recordset[0].Name;
+         const ownerEntityId = owner.ID;
+         const ownerEntityName = owner.Name;
 
          for (const okConfig of tableConfig.OrganicKeys) {
             try {
+               // Resolve every related entity BEFORE writing anything for this key. Step 1 creates
+               // bridge views (in the database and the migration log) and step 2 records the key, so
+               // discovering a missing related entity in step 3 would leave an orphan view and a key
+               // with a mapping missing.
+               const relatedEntities = await this.resolveOrganicKeyRelatedEntities(pool, okConfig);
+               if (!relatedEntities) {
+                  failedCount++;
+                  continue;
+               }
+
                // Step 1: Create transitive views if defined
                for (const re of okConfig.RelatedEntities) {
                   if (re.TransitiveView) {
                      const viewSchema = re.TransitiveView.SchemaName || re.SchemaName;
                      const viewFullName = `${viewSchema}.${re.TransitiveView.Name}`;
 
-                     const viewSQL = `CREATE OR ALTER VIEW ${this.qs(viewSchema, re.TransitiveView.Name)} AS\n${re.TransitiveView.SQL}`;
+                     const viewSQL = this.dbProvider.generateCreateOrReplaceViewSQL(viewSchema, re.TransitiveView.Name, re.TransitiveView.SQL);
+                     // T-SQL requires CREATE [OR ALTER] VIEW to be the ONLY statement in its batch — first as
+                     // well as last — and the metadata DML logged just before it (entity-config UPDATEs, the
+                     // previous key's INSERTs) has no trailing GO. requiresOwnBatch puts the provider's
+                     // separator on both sides in the migration file ('' on PostgreSQL: nothing is added).
                      await this.LogSQLAndExecute(pool, viewSQL,
-                        `Create transitive bridge view ${viewFullName} for organic key "${okConfig.Name}" on ${ownerEntityName}`);
+                        `Create transitive bridge view ${viewFullName} for organic key "${okConfig.Name}" on ${ownerEntityName}`,
+                        false, true, this.dbProvider.BatchSeparator, true);
 
                      // Auto-populate TransitiveObject from the view definition
                      re.TransitiveObject = viewFullName;
@@ -855,22 +872,9 @@ export class ManageMetadataBase {
                }
 
                // Step 3: Upsert EntityOrganicKeyRelatedEntity for each related entity
-               for (const reConfig of okConfig.RelatedEntities) {
-                  const relResult = await this.runQueryWithParams(pool, `
-                     ${this.selectTop(1, 'ID, Name',
-                        `FROM ${this.qs(schema, 'vwEntities')}
-                     WHERE (BaseTable = @TableName AND SchemaName = @SchemaName)
-                        OR Name = @TableName`,
-                        'CASE WHEN BaseTable = @TableName AND SchemaName = @SchemaName THEN 0 ELSE 1 END')}
-                  `, { 'TableName': reConfig.TableName, 'SchemaName': reConfig.SchemaName });
-
-                  if (relResult.recordset.length === 0) {
-                     logError(`    > Organic key "${okConfig.Name}": related entity "${reConfig.SchemaName}.${reConfig.TableName}" not found — skipping`);
-                     continue;
-                  }
-
-                  const relEntityId = relResult.recordset[0].ID;
-                  const relEntityName = relResult.recordset[0].Name;
+               for (const { config: reConfig, entity: relEntity } of relatedEntities) {
+                  const relEntityId = relEntity.ID;
+                  const relEntityName = relEntity.Name;
 
                   // Check if this related entity mapping already exists
                   const existingRel = await this.runQueryWithParams(pool,
@@ -922,13 +926,56 @@ export class ManageMetadataBase {
                   logStatus(`    > Organic key "${okConfig.Name}": ${existingRel.recordset.length > 0 ? 'updated' : 'created'} → ${relEntityName} (${isDirect ? 'direct' : 'transitive'})`);
                }
             } catch (err) {
+               // Keep going so one bad key doesn't block the others — but count it: a key that failed
+               // here (bridge-view DDL the database rejected, a refused view drop, …) is missing from
+               // the database, and the run must not report success for it.
+               failedCount++;
                const errMessage = err instanceof Error ? err.message : String(err);
                logError(`    > Organic key config: Failed to process "${okConfig.Name}" on ${ownerEntityName}: ${errMessage}`);
             }
          }
       }
 
-      return { success: true, createdCount, updatedCount };
+      return { success: failedCount === 0, createdCount, updatedCount, failedCount };
+   }
+
+   /**
+    * Finds the entity an organic-key config names: by base table + schema, else by entity name.
+    * Returns `null` when neither matches.
+    */
+   private async findOrganicKeyEntity(pool: CodeGenConnection, schemaName: string, tableName: string): Promise<{ ID: string; Name: string } | null> {
+      const result = await this.runQueryWithParams(pool, `
+         ${this.selectTop(1, 'ID, Name',
+            `FROM ${this.qs(mj_core_schema(), 'vwEntities')}
+         WHERE (BaseTable = @TableName AND SchemaName = @SchemaName)
+            OR Name = @TableName`,
+            'CASE WHEN BaseTable = @TableName AND SchemaName = @SchemaName THEN 0 ELSE 1 END')}
+      `, { 'TableName': tableName, 'SchemaName': schemaName });
+      const row = result.recordset[0];
+      return row ? { ID: row.ID, Name: row.Name } : null;
+   }
+
+   /**
+    * Resolves every related entity of an organic key, in config order. Logs each one that doesn't
+    * resolve and returns `null` if any is missing, so the caller can skip the key before writing any
+    * of it.
+    */
+   private async resolveOrganicKeyRelatedEntities(
+      pool: CodeGenConnection,
+      okConfig: OrganicKeyConfig
+   ): Promise<{ config: OrganicKeyRelatedEntityConfig; entity: { ID: string; Name: string } }[] | null> {
+      const resolved: { config: OrganicKeyRelatedEntityConfig; entity: { ID: string; Name: string } }[] = [];
+      let missing = 0;
+      for (const reConfig of okConfig.RelatedEntities) {
+         const entity = await this.findOrganicKeyEntity(pool, reConfig.SchemaName, reConfig.TableName);
+         if (entity) {
+            resolved.push({ config: reConfig, entity });
+         } else {
+            missing++;
+            logError(`    > Organic key "${okConfig.Name}": related entity "${reConfig.SchemaName}.${reConfig.TableName}" not found — the key is not applied`);
+         }
+      }
+      return missing === 0 ? resolved : null;
    }
 
    /**
@@ -1495,6 +1542,10 @@ export class ManageMetadataBase {
       const organicKeyResult = await this.processOrganicKeyConfig(pool);
       if (organicKeyResult.createdCount > 0 || organicKeyResult.updatedCount > 0) {
          logStatus(`    > Organic keys: ${organicKeyResult.createdCount} created, ${organicKeyResult.updatedCount} updated from config`);
+      }
+      if (!organicKeyResult.success) {
+         logError(`   Error processing organic keys: ${organicKeyResult.failedCount} key(s) failed and were not applied — see the errors above`);
+         bSuccess = false;
       }
 
       start = new Date();
@@ -6434,8 +6485,8 @@ WHERE
     * @param isRecurringScript - if set to true tells the logger that the provided SQL represents a recurring script meaning it is something that is executed, generally, for all CodeGen runs. In these cases, the Config settings can result in omitting these recurring scripts from being logged because the configuration environment may have those recurring scripts already set to run after all run-specific migrations get run.
     * @returns - The result of the query execution.
     */
-   private async LogSQLAndExecute(pool: CodeGenConnection, query: string, description?: string, isRecurringScript: boolean = false, includeBatchSeparator: boolean = false, batchSeparator: string = 'GO'): Promise<any> {
-      return await SQLLogging.LogSQLAndExecute(pool, this.qsql(query), description, isRecurringScript, includeBatchSeparator, batchSeparator);
+   private async LogSQLAndExecute(pool: CodeGenConnection, query: string, description?: string, isRecurringScript: boolean = false, includeBatchSeparator: boolean = false, batchSeparator: string = 'GO', requiresOwnBatch: boolean = false): Promise<any> {
+      return await SQLLogging.LogSQLAndExecute(pool, this.qsql(query), description, isRecurringScript, includeBatchSeparator, batchSeparator, requiresOwnBatch);
    }
 
    /**
@@ -6464,7 +6515,7 @@ WHERE
    ): Promise<any> {
       const terminated: string[] = [];
       for (const s of statements) {
-         const trimmed = (s ?? '').replace(/[\s;]+$/g, '');
+         const trimmed = trimTrailingStatementTerminators(s ?? '');
          if (trimmed.length === 0) continue;
          terminated.push(`${trimmed};`);
       }

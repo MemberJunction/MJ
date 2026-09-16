@@ -277,4 +277,55 @@ SELECT * FROM save_result`;
                 .toBe('SELECT rc."Type" FROM __mj."vwRecordChanges" rc');
         });
     });
+
+    // Backport of #4436's keyword list into the ALL-CAPS-only tier. Each of these was
+    // quoted as an identifier, which PostgreSQL rejects.
+    describe('PostgreSQL keywords recognized in ALL-CAPS', () => {
+        it.each([
+            'SELECT CURRENT_DATE',
+            "WHERE d > CURRENT_DATE - INTERVAL '7 days'",
+            'SELECT LOCALTIMESTAMP, CURRENT_USER',
+            'ORDER BY x ASC NULLS LAST',
+            'ORDER BY x DESC NULLS FIRST',
+            'SELECT x FROM t WITHIN GROUP (ORDER BY x)',
+            'SELECT CAST(x AS CHARACTER VARYING)',
+            'SELECT x::INT8, y::FLOAT8',
+            'GROUP BY ROLLUP (a, b)',
+            'SELECT * FROM unnest(a) WITH ORDINALITY',
+            'MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN DELETE',
+        ])('leaves %s unchanged', (sql) => {
+            expect(quote(sql)).toBe(sql);
+        });
+
+        it('still quotes the mixed-case column form of a keyword', () => {
+            expect(quote('SELECT Cycle, Current_Date, t.Last FROM x t'))
+                .toBe('SELECT "Cycle", "Current_Date", t."Last" FROM x t');
+        });
+
+        it('still accepts keywords written in Title Case, as before', () => {
+            expect(quote('Select x From t Where y = 1 Order By x'))
+                .toBe('Select x From t Where y = 1 Order By x');
+        });
+    });
+
+    describe('ALL-CAPS function calls', () => {
+        it('leaves an ALL-CAPS function name bare when it is immediately followed by (', () => {
+            expect(quote('SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY x) FROM t'))
+                .toBe('SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY x) FROM t');
+            expect(quote("SELECT DATE_TRUNC('day', d), SPLIT_PART(s, ',', 1) FROM t"))
+                .toBe("SELECT DATE_TRUNC('day', d), SPLIT_PART(s, ',', 1) FROM t");
+        });
+
+        it('still quotes a dot-qualified name followed by (', () => {
+            expect(quote('SELECT __mj.SPCREATEUSER(1)')).toBe('SELECT __mj."SPCREATEUSER"(1)');
+        });
+
+        it('still quotes a mixed-case word followed by (, as before', () => {
+            expect(quote('SELECT MyFunction(1)')).toBe('SELECT "MyFunction"(1)');
+        });
+
+        it('still quotes an ALL-CAPS word that is not followed by (', () => {
+            expect(quote('SELECT ID FROM t')).toBe('SELECT "ID" FROM t');
+        });
+    });
 });
