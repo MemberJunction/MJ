@@ -1398,7 +1398,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      *   pre-RLS format so normal cache sharing is preserved and no existing entries are invalidated.
      * @returns A unique, human-readable fingerprint string
      */
-    public GenerateRunViewFingerprint(params: RunViewParams, connectionPrefix?: string, rlsWhereClause?: string): string {
+    public GenerateRunViewFingerprint(params: RunViewParams, connectionPrefix?: string, rlsWhereClause?: string, datasetSegment?: string): string {
         const entity = params.EntityName?.trim() || 'Unknown';
         const rawFilter = params.ExtraFilter;
         const filter = (typeof rawFilter === 'string' ? rawFilter : rawFilter ? JSON.stringify(rawFilter) : '').trim();
@@ -1484,6 +1484,21 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const viewKey = (params.ViewID || params.ViewName || params.ViewEntity?.PrimaryKey?.ToConcatenatedString() || '').trim();
         if (viewKey.length > 0) {
             parts.push(`vw:${viewKey}`);
+        }
+
+        // Dataset namespace. `GetDatasetByName` caches each dataset ITEM's rows through this same
+        // builder, supplying only entity + the item's WhereClause — and every shipped item has a
+        // NULL WhereClause, so without this segment a dataset item emits the identical fingerprint
+        // as a plain unfiltered read of the same entity and the two silently share one slot. The
+        // dataset is then served whatever an ordinary read left behind, including rows deleted
+        // since. Dataset items may also project columns (`DatasetItem.Columns`) where a RunView
+        // slot always holds the full field set, so the two are not interchangeable in shape either.
+        //
+        // Appended ONLY when supplied, so ordinary reads keep their exact pre-existing key and no
+        // existing cache entry is invalidated by this change.
+        const dataset = (datasetSegment ?? '').trim();
+        if (dataset.length > 0) {
+            parts.push(`ds:${dataset}`);
         }
 
         // Only include connection if provided
