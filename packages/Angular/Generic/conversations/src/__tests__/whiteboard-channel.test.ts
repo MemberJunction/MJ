@@ -382,7 +382,7 @@ describe('RealtimeWhiteboardChannel — plugin contract', () => {
     expect(frame).toBeNull(); // non-DOM in node test
   });
 
-  it('pushVisualScene paces frame pushes via videoBridge to at most 1 fps', async () => {
+  it('paces frame pushes via videoBridge to at most 1 fps and throttles rapid mutations', async () => {
     const pushedFrames: string[] = [];
     const mockBridge = {
       PushFrame: (frame: string) => {
@@ -404,7 +404,7 @@ describe('RealtimeWhiteboardChannel — plugin contract', () => {
     channel.Initialize(contextWithClient);
     c.videoBridge = mockBridge;
 
-    // Mutate state - triggers pushVisualScene
+    // Mutate state - triggers user mutation push
     channel.State.AddItem({ Kind: 'text', X: 0, Y: 0, Text: 'first' }, 'user');
     await vi.waitFor(() => expect(pushedFrames).toHaveLength(1));
     expect(pushedFrames[0]).toBe('frame-base64');
@@ -413,4 +413,115 @@ describe('RealtimeWhiteboardChannel — plugin contract', () => {
     channel.State.AddItem({ Kind: 'text', X: 10, Y: 10, Text: 'second' }, 'user');
     expect(pushedFrames).toHaveLength(1);
   });
+
+  it('delivers a trailing-edge settled frame after rapid mutations when content changed', async () => {
+    vi.useFakeTimers();
+    try {
+      const pushedFrames: string[] = [];
+      const mockBridge = {
+        PushFrame: (frame: string) => {
+          pushedFrames.push(frame);
+          return true;
+        }
+      };
+      const c = channel as unknown as { videoBridge: typeof mockBridge };
+      c.videoBridge = mockBridge;
+
+      let currentFrame = 'frame-initial';
+      vi.spyOn(channel, 'GetLatestFrame').mockImplementation(async () => currentFrame);
+
+      const contextWithClient: RealtimeChannelContext = {
+        ...makeContext(log),
+        Client: {
+          IsTrackEstablished: (modality: string, direction: string) => modality === 'video' && direction === 'inbound',
+        } as unknown as RealtimeChannelContext['Client'],
+      };
+      channel.Initialize(contextWithClient);
+      c.videoBridge = mockBridge;
+
+      // First mutation: leading-edge push
+      channel.State.AddItem({ Kind: 'text', X: 0, Y: 0, Text: 'one' }, 'user');
+      await vi.advanceTimersByTimeAsync(0);
+      expect(pushedFrames).toEqual(['frame-initial']);
+
+      // Rapid intermediate mutation + final change within the 1000ms window
+      currentFrame = 'frame-settled';
+      channel.State.AddItem({ Kind: 'text', X: 10, Y: 10, Text: 'two' }, 'user');
+      await vi.advanceTimersByTimeAsync(100);
+      expect(pushedFrames).toHaveLength(1); // throttled
+
+      // Advance through cooldown window: trailing-edge settle fires
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(pushedFrames).toEqual(['frame-initial', 'frame-settled']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('deduplicates identical frames during trailing-edge settle', async () => {
+    vi.useFakeTimers();
+    try {
+      const pushedFrames: string[] = [];
+      const mockBridge = {
+        PushFrame: (frame: string) => {
+          pushedFrames.push(frame);
+          return true;
+        }
+      };
+      const c = channel as unknown as { videoBridge: typeof mockBridge };
+      c.videoBridge = mockBridge;
+
+      vi.spyOn(channel, 'GetLatestFrame').mockResolvedValue('static-frame');
+
+      const contextWithClient: RealtimeChannelContext = {
+        ...makeContext(log),
+        Client: {
+          IsTrackEstablished: (modality: string, direction: string) => modality === 'video' && direction === 'inbound',
+        } as unknown as RealtimeChannelContext['Client'],
+      };
+      channel.Initialize(contextWithClient);
+      c.videoBridge = mockBridge;
+
+      channel.State.AddItem({ Kind: 'text', X: 0, Y: 0, Text: 'one' }, 'user');
+      await vi.advanceTimersByTimeAsync(0);
+      expect(pushedFrames).toHaveLength(1);
+
+      channel.State.AddItem({ Kind: 'text', X: 10, Y: 10, Text: 'two' }, 'user');
+      await vi.advanceTimersByTimeAsync(1100);
+      // Resting frame is identical to first frame -> deduplicated, no second push
+      expect(pushedFrames).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('ApplyAgentTool pushes exactly ONE confirmation frame with no-repetition etiquette note', async () => {
+    const pushedFrames: string[] = [];
+    const mockBridge = {
+      PushFrame: (frame: string) => {
+        pushedFrames.push(frame);
+        return true;
+      }
+    };
+    const c = channel as unknown as { videoBridge: typeof mockBridge };
+    c.videoBridge = mockBridge;
+
+    vi.spyOn(channel, 'GetLatestFrame').mockResolvedValue('agent-confirmed-frame');
+
+    const contextWithClient: RealtimeChannelContext = {
+      ...makeContext(log),
+      Client: {
+        IsTrackEstablished: (modality: string, direction: string) => modality === 'video' && direction === 'inbound',
+      } as unknown as RealtimeChannelContext['Client'],
+    };
+    channel.Initialize(contextWithClient);
+    c.videoBridge = mockBridge;
+
+    channel.ApplyAgentTool('Whiteboard_AddNote', JSON.stringify({ text: 'agent note' }));
+
+    await vi.waitFor(() => expect(pushedFrames).toEqual(['agent-confirmed-frame']));
+    expect(log.Notes).toContainEqual(expect.stringContaining('[whiteboard] visual confirmation of your action'));
+    expect(log.Notes).toContainEqual(expect.stringContaining('do NOT narrate or announce your own change'));
+  });
 });
+
