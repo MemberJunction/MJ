@@ -232,7 +232,7 @@ export class NewRoutineComponent extends BaseAngularComponent implements OnInit 
     /** Handles agent selection from the category tree (leaf nodes only). */
     /** The selected agent as a CompositeKey for the tree-dropdown's Value binding. */
     public get SelectedAgentKey(): CompositeKey | null {
-        return this.TargetID ? CompositeKey.FromID(this.TargetID) : null;
+        return this.TargetID ? CompositeKey.FromID(this.TargetID) : null; // first-pk-ok: TargetID is an MJ: AI Agents record (agent tree leaf) — core entity keyed by ID
     }
 
     public OnAgentNodeSelected(args: AfterNodeSelectEventArgs): void {

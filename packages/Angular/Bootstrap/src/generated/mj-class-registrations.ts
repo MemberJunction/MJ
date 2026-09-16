@@ -11,12 +11,13 @@
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
-// @memberjunction/ai-realtime-client (6 classes)
+// @memberjunction/ai-realtime-client (7 classes)
 import {
     AssemblyAIRealtimeClient,
     ElevenLabsRealtimeClient,
     GeminiRealtimeClient,
     HuggingFaceRealtimeClient,
+    OpenAILiveClient,
     OpenAIRealtimeClient,
     xAIRealtimeClient,
 } from '@memberjunction/ai-realtime-client';
@@ -32,7 +33,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (410 classes)
+// @memberjunction/core-entities (415 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -62,6 +63,7 @@ import {
     MJAIAgentNoteEntity,
     MJAIAgentNoteTypeEntity,
     MJAIAgentPermissionEntity,
+    MJAIAgentPersonaEntity,
     MJAIAgentPromptEntity,
     MJAIAgentRelationshipEntity,
     MJAIAgentRequestEntity,
@@ -92,10 +94,13 @@ import {
     MJAIModelCostEntity,
     MJAIModelEntity,
     MJAIModelModalityEntity,
+    MJAIModelPersonaEntity,
     MJAIModelPriceTypeEntity,
     MJAIModelPriceUnitTypeEntity,
     MJAIModelTypeEntity,
     MJAIModelVendorEntity,
+    MJAIPersonaEntity,
+    MJAIPersonaVendorEntity,
     MJAIPromptCategoryEntity,
     MJAIPromptEntity,
     MJAIPromptModelEntity,
@@ -249,6 +254,7 @@ import {
     MJEntityEntityExtended,
     MJEntityFieldEntity,
     MJEntityFieldEntityExtended,
+    MJEntityFieldPermissionEntity,
     MJEntityFieldValueEntity,
     MJEntityFormOverrideEntity,
     MJEntityOrganicKeyEntity,
@@ -766,6 +772,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     ElevenLabsRealtimeClient,
     GeminiRealtimeClient,
     HuggingFaceRealtimeClient,
+    OpenAILiveClient,
     OpenAIRealtimeClient,
     xAIRealtimeClient,
     SaveEntityGraphOperation,
@@ -799,6 +806,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAIAgentNoteEntity,
     MJAIAgentNoteTypeEntity,
     MJAIAgentPermissionEntity,
+    MJAIAgentPersonaEntity,
     MJAIAgentPromptEntity,
     MJAIAgentRelationshipEntity,
     MJAIAgentRequestEntity,
@@ -829,10 +837,13 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAIModelCostEntity,
     MJAIModelEntity,
     MJAIModelModalityEntity,
+    MJAIModelPersonaEntity,
     MJAIModelPriceTypeEntity,
     MJAIModelPriceUnitTypeEntity,
     MJAIModelTypeEntity,
     MJAIModelVendorEntity,
+    MJAIPersonaEntity,
+    MJAIPersonaVendorEntity,
     MJAIPromptCategoryEntity,
     MJAIPromptEntity,
     MJAIPromptModelEntity,
@@ -957,15 +968,15 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJDashboardUserPreferenceEntity,
     MJDashboardUserStateEntity,
     MJDataContextEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_1: any[] = [
     MJDataContextItemEntity,
     MJDatasetEntity,
     MJDatasetItemEntity,
     MJDuplicateRunDetailEntity,
     MJDuplicateRunDetailMatchEntity,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_1: any[] = [
     MJDuplicateRunEntity,
     MJEmployeeCompanyIntegrationEntity,
     MJEmployeeEntity,
@@ -990,6 +1001,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJEntityEntityExtended,
     MJEntityFieldEntity,
     MJEntityFieldEntityExtended,
+    MJEntityFieldPermissionEntity,
     MJEntityFieldValueEntity,
     MJEntityFormOverrideEntity,
     MJEntityOrganicKeyEntity,
@@ -1160,16 +1172,16 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJUserApplicationEntityEntity,
     MJUserEntity,
     MJUserFavoriteEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_2: any[] = [
     MJUserNotificationEntity,
     MJUserNotificationPreferenceEntity,
     MJUserNotificationTypeEntity,
     MJUserRecordLogEntity,
     MJUserRoleEntity,
     MJUserRoutineEntity,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_2: any[] = [
     MJUserRoutineRecipientEntity,
     MJUserRoutineRunEntity,
     MJUserSettingEntity,
@@ -1364,16 +1376,16 @@ const CLASS_REGISTRATIONS_2: any[] = [
     ListsCategoriesResource,
     ListsMyListsResource,
     ListsOperationsResource,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     ListsSharedWithMeResource,
     MCPDashboardComponent,
     MCPResourceComponent,
     MappingWorkspaceComponent,
     ModelManagementComponent,
     OverviewComponent,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     PSModelsResourceComponent,
     PSPredictionsResourceComponent,
     PSStudioResourceComponent,
@@ -1442,7 +1454,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 654;
+export const CLASS_REGISTRATIONS_COUNT = 660;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

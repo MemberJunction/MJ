@@ -350,7 +350,10 @@ export class PermissionEngine extends BaseEngine<PermissionEngine> {
             ExtraFilter: clauses.join(' AND '),
             OrderBy: 'ChangedAt DESC',
             MaxRows: maxRows,
-            Fields: ['ID', 'Entity', 'RecordID', 'UserID', 'User', 'Type', 'ChangedAt', 'ChangesDescription'],
+            // 'EntityID' is required, not decorative: field-level security projects a Record Change's
+            // payload against the entity the row is ABOUT, and a row arriving without EntityID cannot
+            // be resolved — so the payload is withheld. See guides/FIELD_LEVEL_SECURITY_GUIDE.md §3.2.
+            Fields: ['ID', 'EntityID', 'Entity', 'RecordID', 'UserID', 'User', 'Type', 'ChangedAt', 'ChangesDescription'],
             ResultType: 'simple',
         });
 

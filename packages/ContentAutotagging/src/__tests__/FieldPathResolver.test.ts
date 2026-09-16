@@ -31,6 +31,8 @@ interface StubRow { [key: string]: unknown }
 function makeProvider(overrides?: {
     childEntities?: StubRow[];
     rootFields?: StubRow[];
+    /** Name the root entity answers to (default 'MJ: Content Items'); its FK field set is unchanged. */
+    rootName?: string;
 }): IMetadataProvider {
     const childEntity = {
         ID: 'ent-src-child',
@@ -44,9 +46,10 @@ function makeProvider(overrides?: {
         FirstPrimaryKey: { Name: 'ID' },
         ChildEntities: overrides?.childEntities ?? [childEntity],
     };
+    const rootName = overrides?.rootName ?? 'MJ: Content Items';
     const rootEntity = {
         ID: 'ent-item',
-        Name: 'MJ: Content Items',
+        Name: rootName,
         FirstPrimaryKey: { Name: 'ID' },
         Fields: overrides?.rootFields ?? [
             { Name: 'ID', RelatedEntityID: null },
@@ -56,7 +59,7 @@ function makeProvider(overrides?: {
         ChildEntities: [],
     };
     return {
-        EntityByName: (name: string) => (name === 'MJ: Content Items' ? rootEntity : undefined),
+        EntityByName: (name: string) => (name === rootName ? rootEntity : undefined),
         Entities: [rootEntity, sourceEntity, childEntity],
         RunView: mockRunView,
     } as unknown as IMetadataProvider;
@@ -65,8 +68,16 @@ function makeProvider(overrides?: {
 function makeItem(id: string, sourceId: string | null, extra?: StubRow): BaseEntity {
     return {
         ID: id,
-        FirstPrimaryKey: { Value: id },
+        PrimaryKey: { ToCompactURLSegment: () => id },
         GetAll: () => ({ ID: id, ContentSourceID: sourceId, ...extra }),
+    } as unknown as BaseEntity;
+}
+
+/** A root record of a composite-keyed entity: no `ID`, the key is (OrderID, LineNo). */
+function makeCompositeItem(orderId: string, lineNo: number, sourceId: string | null, extra?: StubRow): BaseEntity {
+    return {
+        PrimaryKey: { ToCompactURLSegment: () => `OrderID|${orderId}||LineNo|${lineNo}` },
+        GetAll: () => ({ OrderID: orderId, LineNo: lineNo, ContentSourceID: sourceId, ...extra }),
     } as unknown as BaseEntity;
 }
 
@@ -104,6 +115,18 @@ describe('FieldPathResolver', () => {
             const resolver = new FieldPathResolver(makeProvider(), contextUser, 'MJ: Content Items');
             const values = await resolver.ResolveForItems([makeItem('item-1', 'src-1')], 'OrganizationID');
             expect(values.get('item-1')).toBeUndefined();
+        });
+
+        it('keys composite-keyed root records by their whole key, so rows sharing a first column do not collide', async () => {
+            const resolver = new FieldPathResolver(makeProvider(), contextUser, 'Order Lines');
+            const items = [
+                makeCompositeItem('11055', 1, 'src-1', { OrganizationID: 'org-line-1' }),
+                makeCompositeItem('11055', 2, 'src-1', { OrganizationID: 'org-line-2' }),
+            ];
+            const values = await resolver.ResolveForItems(items, 'OrganizationID');
+            expect(values.size).toBe(2);
+            expect(values.get('orderid|11055||lineno|1')).toBe('org-line-1');
+            expect(values.get('orderid|11055||lineno|2')).toBe('org-line-2');
         });
     });
 
@@ -145,6 +168,20 @@ describe('FieldPathResolver', () => {
                 'ContentSourceID.OrganizationID'
             );
             expect(values.get('item-1')).toBe('child-org');
+        });
+
+        it('resolves a hop per composite-keyed root record — the FK target stays single-column, the root key does not', async () => {
+            stubRows({
+                'MJ: Content Sources': [{ ID: 'src-1', OrganizationID: 'org-a' }, { ID: 'src-2', OrganizationID: 'org-b' }],
+                'Client Content Sources': [],
+            });
+            const resolver = new FieldPathResolver(makeProvider({ rootName: 'Order Lines' }), contextUser, 'Order Lines');
+            const values = await resolver.ResolveForItems(
+                [makeCompositeItem('11055', 1, 'src-1'), makeCompositeItem('11055', 2, 'src-2')],
+                'ContentSourceID.OrganizationID'
+            );
+            expect(values.get('orderid|11055||lineno|1')).toBe('org-a');
+            expect(values.get('orderid|11055||lineno|2')).toBe('org-b');
         });
 
         it('resolves per item — different sources map to different namespaces', async () => {

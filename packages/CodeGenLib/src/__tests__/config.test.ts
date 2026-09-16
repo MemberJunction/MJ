@@ -104,7 +104,7 @@ describe('Config Schema Shapes', () => {
 });
 
 // Import the functions under test
-import { resolveEntityPackageName, getExternalEntitySchemas, resolveEntityImportPackage, thisEmitEntityPackageName, ConfigInfo } from '../Config/config';
+import { resolveEntityPackageName, getExternalEntitySchemas, resolveEntityImportPackage, thisEmitEntityPackageName, ConfigInfo, commands } from '../Config/config';
 
 /**
  * Helper to build a minimal ConfigInfo-like object with just the entityPackageName field.
@@ -370,4 +370,25 @@ describe('getExternalEntitySchemas', () => {
         expect(result).toEqual([]);
     });
 });
+
+describe('commands', () => {
+    it('should return empty array when MJ_CODEGEN_SKIP_COMMANDS is set to 1 or true', () => {
+        const originalEnv = process.env.MJ_CODEGEN_SKIP_COMMANDS;
+        try {
+            process.env.MJ_CODEGEN_SKIP_COMMANDS = '1';
+            expect(commands('after')).toEqual([]);
+            expect(commands('before')).toEqual([]);
+
+            process.env.MJ_CODEGEN_SKIP_COMMANDS = 'true';
+            expect(commands('after')).toEqual([]);
+        } finally {
+            if (originalEnv !== undefined) {
+                process.env.MJ_CODEGEN_SKIP_COMMANDS = originalEnv;
+            } else {
+                delete process.env.MJ_CODEGEN_SKIP_COMMANDS;
+            }
+        }
+    });
+});
+
 

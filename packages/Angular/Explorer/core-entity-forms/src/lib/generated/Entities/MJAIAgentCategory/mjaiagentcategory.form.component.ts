@@ -19,6 +19,7 @@ export class MJAIAgentCategoryFormComponent extends BaseFormComponent {
             { sectionKey: 'categoryDefinition', sectionName: 'Category Definition', isExpanded: true },
             { sectionKey: 'hierarchy', sectionName: 'Hierarchy', isExpanded: true },
             { sectionKey: 'storageConfiguration', sectionName: 'Storage Configuration', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJAIAgentCategories', sectionName: 'AI Agent Categories', isExpanded: false },
             { sectionKey: 'mJAIAgents', sectionName: 'AI Agents', isExpanded: false }

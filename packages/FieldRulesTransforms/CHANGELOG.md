@@ -1,5 +1,39 @@
 # @memberjunction/field-rules-transforms
 
+## 6.1.0
+
+### Patch Changes
+
+- Updated dependencies [834f8d7]
+- Updated dependencies [4586215]
+- Updated dependencies [197fdf8]
+- Updated dependencies [1940a4d]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [cefc302]
+- Updated dependencies [080f4cd]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [48ff99f]
+- Updated dependencies [23c2521]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [de343b5]
+- Updated dependencies [1bd9674]
+- Updated dependencies [7fcdc2d]
+  - @memberjunction/global@6.1.0
+
+## 6.1.0-edge.7
+
+### Patch Changes
+
+- Updated dependencies [7fcdc2d]
+  - @memberjunction/global@6.1.0-edge.7
+
+## 6.1.0-edge.6
+
+### Patch Changes
+
+- Updated dependencies [197fdf8]
+  - @memberjunction/global@6.1.0-edge.6
+
 ## 6.1.0-edge.5
 
 ### Patch Changes

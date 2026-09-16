@@ -64,7 +64,7 @@ import { GenericDatabaseProvider, ExecuteSQLBatchOptions, SaveCoercedValue, Save
 import { MJQueryEntityExtended } from '@memberjunction/core-entities';
 
 import sql from 'mssql';
-import { BehaviorSubject, Observable, Subject, concatMap, from, tap, catchError, of } from 'rxjs';
+import { BehaviorSubject, Observable, Subject, concatMap, from, catchError, of } from 'rxjs';
 
 import { SQLServerTransactionGroup } from './SQLServerTransactionGroup';
 import {
@@ -78,7 +78,6 @@ import { DuplicateRecordDetector } from '@memberjunction/ai-vector-dupe';
 import type { IColocatedVectorHost } from '@memberjunction/ai-vectordb';
 import type { DatabasePlatform } from '@memberjunction/sql-dialect';
 
-import { v4 as uuidv4 } from 'uuid';
 import { UUIDsEqual } from '@memberjunction/global';
 import { SQLServerDialect, SQLDialect } from '@memberjunction/sql-dialect';
 
@@ -271,6 +270,35 @@ async function executeSQLCore(
  * await provider.Config();
  * ```
  */
+/**
+ * One item in the instance SQL queue: a query bound to a handle, or an action (commit, rollback,
+ * abandon) on one. Discriminated so the processor never has to guess which fields are present.
+ */
+type SQLQueueQuery = {
+  kind: 'query';
+  query: string;
+  parameters: any;
+  context: SQLExecutionContext;
+  options?: InternalSQLOptions;
+  /** Bound to the ambient handle when enqueued — see the queue's doc on SQLServerDataProvider. */
+  ambient: boolean;
+  resolve: (value: sql.IResult<any>) => void;
+  reject: (error: unknown) => void;
+};
+type SQLQueueAction = {
+  kind: 'action';
+  description: string;
+  handle: sql.Transaction;
+  run: () => Promise<void>;
+  resolve: () => void;
+  reject: (error: unknown) => void;
+};
+type SQLQueueItem = SQLQueueQuery | SQLQueueAction;
+
+interface InternalMSSQLTransaction extends sql.Transaction {
+  _activeRequest?: sql.Request | null;
+}
+
 export class SQLServerDataProvider
   extends GenericDatabaseProvider
   implements IEntityDataProvider, IMetadataProvider, IColocatedVectorHost
@@ -358,15 +386,33 @@ export class SQLServerDataProvider
 
   // Instance SQL execution queue for serializing transaction queries
   // Non-transactional queries bypass this queue for maximum parallelism
-  private _sqlQueue$ = new Subject<{
-    id: string;
-    query: string;
-    parameters: any;
-    context: SQLExecutionContext;
-    options?: InternalSQLOptions;
-    resolve: (value: sql.IResult<any>) => void;
-    reject: (error: any) => void;
-  }>();
+  /**
+   * How long commit/rollback wait for a request that bypassed the instance SQL queue before failing
+   * loudly. Instance-level so a test can shorten it; production leaves the default.
+   */
+  protected _activeRequestWaitMs = 2000;
+
+  /**
+   * The instance SQL queue: a strictly serial `concatMap` over everything that touches the ambient
+   * transaction handle. Queries are one kind of item; commit and rollback are the other (`action`),
+   * routed THROUGH the queue rather than around it (#4454). Because the queue is serial, every query
+   * enqueued before the commit has finished when it runs, and anything enqueued after it runs after —
+   * the ordering is the queue's own, with no drain loop and no polling of mssql internals.
+   *
+   * `ambient` marks a query that was bound to the ambient handle when it was enqueued. If that handle
+   * has ended by the time the query is dequeued (a caller fired it without awaiting and then
+   * committed), it is rejected with a message that names the cause instead of reaching mssql as
+   * ENOTBEGUN on a finished handle. A query on an explicit handle a caller passed in — an IS-A chain
+   * sharing its own transaction — is never subject to that check.
+   */
+  private _sqlQueue$ = new Subject<SQLQueueItem>();
+  /**
+   * Handles whose commit or rollback has run — or whose commit FAILED, which dooms them just the same.
+   * The ambient check in runQueueItem consults this as well as `_transaction`, because a failed
+   * commit keeps `_transaction` set for AbandonPhysicalTransaction while the next queued item is
+   * already being dequeued; without the marker that item would run on the doomed handle.
+   */
+  private readonly _endedHandles = new WeakSet<sql.Transaction>();
   
   // Subscription for the queue processor
   private _queueSubscription: any;
@@ -570,16 +616,9 @@ export class SQLServerDataProvider
     // the sub, taht would cause duplicate rprocessing.
     if (!this._queueSubscription) {
       this._queueSubscription = this._sqlQueue$.pipe(
-        concatMap(item => 
-          from(executeSQLCore(
-            item.query,
-            item.parameters,
-            item.context,
-            item.options
-          )).pipe(
-            // Handle success
-            tap(result => item.resolve(result)),
-            // Handle errors
+        concatMap(item =>
+          from(this.runQueueItem(item)).pipe(
+            // runQueueItem settles the item's own promise on success; only failure is handled here
             catchError(error => {
               item.reject(error);
               return of(null); // Continue processing queue even on errors
@@ -588,6 +627,23 @@ export class SQLServerDataProvider
         )
       ).subscribe();
     }
+  }
+
+  /** Runs one queue item and settles its promise on success (see the queue's doc). */
+  private async runQueueItem(item: SQLQueueItem): Promise<void> {
+    if (item.kind === 'action') {
+      await item.run();
+      item.resolve();
+      return;
+    }
+    const handle = item.context.transaction;
+    if (item.ambient && handle && (this._endedHandles.has(handle) || handle !== this._transaction)) {
+      throw new Error(
+        'The ambient transaction ended before this query ran. A query issued on the transaction must be ' +
+        'awaited before the transaction is committed or rolled back; this one was enqueued behind the commit/rollback.'
+      );
+    }
+    item.resolve(await executeSQLCore(item.query, item.parameters, item.context, item.options));
   }
 
   /**
@@ -811,14 +867,20 @@ export class SQLServerDataProvider
     // entityInfo + effectiveBaseView are passed in (no reverse-lookup by base-view name) so the logged
     // read honors DataSource:'Materialized' — effectiveBaseView is the materialized wrapper view then,
     // and the entity's live base view otherwise.
+    //
+    // UserViewRunDetail.RecordID is a single NVARCHAR(255) holding ONE bare key value per row, and the
+    // read-back below is `<pk> IN (SELECT RecordID ...)` — a one-column predicate. A composite key has
+    // no single column to log or match on, so refuse rather than record (and re-read) a truncated key.
+    this.assertSingleColumnPrimaryKey(entityInfo, 'SaveViewResults (user view run logging)');
+    const pkName = entityInfo.FirstPrimaryKey.Name; // first-pk-ok: guarded above — view-run RecordID holds one bare key value, PrimaryKeys.length === 1 enforced
     const sSQL = `
             DECLARE @ViewIDList TABLE ( ID NVARCHAR(255) );
-            INSERT INTO @ViewIDList (ID) (SELECT ${entityInfo.FirstPrimaryKey.Name} FROM [${entityInfo.SchemaName}].${effectiveBaseView} WHERE (${whereSQL}))
+            INSERT INTO @ViewIDList (ID) (SELECT ${pkName} FROM [${entityInfo.SchemaName}].${effectiveBaseView} WHERE (${whereSQL}))
             EXEC [${this.MJCoreSchemaName}].spCreateUserViewRunWithDetail(${viewId},${user.Email}, @ViewIDLIst)
             `;
     const runIDResult = await this.ExecuteSQL(sSQL, undefined, undefined, user);
     const runID: string = runIDResult[0].UserViewRunID;
-    const sRetSQL: string = `SELECT * FROM [${entityInfo.SchemaName}].${effectiveBaseView} WHERE ${entityInfo.FirstPrimaryKey.Name} IN
+    const sRetSQL: string = `SELECT * FROM [${entityInfo.SchemaName}].${effectiveBaseView} WHERE ${pkName} IN
                                     (SELECT RecordID FROM [${this.MJCoreSchemaName}].vwUserViewRunDetails WHERE UserViewRunID=${runID})
                                  ${orderBySQL && orderBySQL.length > 0 ? ` ORDER BY ${orderBySQL}` : ''}`;
     return { executeViewSQL: sRetSQL, runID };
@@ -845,12 +907,23 @@ export class SQLServerDataProvider
   protected override BuildSoftLinkDependencySQL(entityName: string, compositeKey: CompositeKey): string {
     // we need to go through ALL of the entities in the system and find all of the EntityFields that have a non-null EntityIDFieldName
     // for each of these, we generate a SQL Statement that will return the EntityName, RelatedEntityName, FieldName, and the primary key values of the related entity
+    //
+    // The entity we are finding dependents OF is `entityName` - the target. Every WHERE clause below
+    // filters on THAT entity's ID and THAT record's key; `entity` in the loop is the *holder* of the
+    // link (e.g. `MJ: Task Links`), which is a different thing entirely.
+    const targetEntity = this.EntityByName(entityName);
+    if (!targetEntity) {
+      throw new Error(`Entity ${entityName} not found in metadata`);
+    }
+    // The canonical stored encoding of the target record's key - `ID|<guid>` (see CompositeKey.ToRecordID).
+    // A RecordID column holds this, not the bare primary key value.
+    const targetRecordID = compositeKey.ToRecordID();
+
     let sSQL = '';
     this.Entities.forEach((entity) => {
       // we build a string that will concatenate all of the primary key values into a single string, this is because the primary key could be a composite key
       // we do this in SQL by combining the pirmary key name and value for each row using the default separator defined by the CompositeKey class
       // the output of this should be like the following 'Field1|Value1||Field2|Value2||Field3|Value3' where the || is the CompositeKey.DefaultFieldDelimiter and the | is the CompositeKey.DefaultValueDelimiter
-      const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : '';
       const primaryKeySelectString = `CONCAT(${entity.PrimaryKeys.map((pk) => `'${pk.Name}|', CAST([${pk.Name}] AS NVARCHAR(MAX))`).join(`,'${CompositeKey.DefaultFieldDelimiter}',`)})`;
 
       // for this entity, check to see if it has any fields that are soft links, and for each of those, generate the SQL
@@ -861,26 +934,41 @@ export class SQLServerDataProvider
         // there is a layer of indirection here because each ROW in each of the entity records for this entity/field combination could point to a DIFFERENT
         // entity. We find out which entity it is pointed to via the EntityIDFieldName in the field definition, so we have to filter the rows in the entity
         // based on that.
+        //
+        // Both literals are always quoted regardless of any primary key type: the discriminator column
+        // is a uniqueidentifier FK to __mj.Entity, and the payload column is nvarchar. Deriving quoting
+        // from the holder's primary key type emitted unquoted literals for an integer-keyed holder.
         sSQL += `SELECT
                             '${entityName}' AS EntityName,
                             '${entity.Name}' AS RelatedEntityName,
                             ${primaryKeySelectString} AS PrimaryKeyValue,
-                            '${f.Name}' AS FieldName
+                            '${f.Name}' AS FieldName,
+                            1 AS IsSoftLink,
+                            '${f.EntityIDFieldName}' AS EntityIDFieldName
                         FROM
                             [${entity.SchemaName}].[${entity.BaseView}]
                         WHERE
-                            [${f.EntityIDFieldName}] = ${quotes}${entity.ID}${quotes} AND
-                            [${f.Name}] = ${quotes}${compositeKey.GetValueByIndex(0)}${quotes}`; // we only use the first primary key value, this is because we don't yet support composite primary keys
+                            [${f.EntityIDFieldName}] = '${targetEntity.ID}' AND
+                            [${f.Name}] = '${this.escapeSQLLiteral(targetRecordID)}'`;
       });
     });
     return sSQL;
+  }
+
+  /**
+   * Escapes a value for interpolation into a single-quoted T-SQL string literal. The soft-link and
+   * hard-link dependency queries are assembled as SQL text rather than parameterized, so a value
+   * carrying an apostrophe has to be doubled or it terminates the literal.
+   */
+  protected escapeSQLLiteral(value: string): string {
+    return value.replace(/'/g, "''");
   }
 
   protected override BuildHardLinkDependencySQL(entityDependencies: EntityDependency[], compositeKey: CompositeKey): string {
     let sSQL = '';
     for (const entityDependency of entityDependencies) {
       const entityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === entityDependency.EntityName?.trim().toLowerCase());
-      const quotes = entityInfo.FirstPrimaryKey.NeedsQuotes ? "'" : '';
+      const quotes = entityInfo.FirstPrimaryKey.NeedsQuotes ? "'" : ''; // first-pk-ok: a foreign key targets a single column; quoting follows that FK target's type
       const relatedEntityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === entityDependency.RelatedEntityName?.trim().toLowerCase());
       const primaryKeySelectString = `CONCAT(${entityInfo.PrimaryKeys.map((pk) => `'${pk.Name}|', CAST([${pk.Name}] AS NVARCHAR(MAX))`).join(`,'${CompositeKey.DefaultFieldDelimiter}',`)})`;
 
@@ -889,7 +977,9 @@ export class SQLServerDataProvider
                         '${entityDependency.EntityName}' AS EntityName,
                         '${entityDependency.RelatedEntityName}' AS RelatedEntityName,
                         ${primaryKeySelectString} AS PrimaryKeyValue,
-                        '${entityDependency.FieldName}' AS FieldName
+                        '${entityDependency.FieldName}' AS FieldName,
+                        0 AS IsSoftLink,
+                        NULL AS EntityIDFieldName
                     FROM
                         [${relatedEntityInfo.SchemaName}].[${relatedEntityInfo.BaseView}]
                     WHERE
@@ -900,7 +990,7 @@ export class SQLServerDataProvider
 
   protected GetRecordDependencyLinkSQL(dep: EntityDependency, entity: EntityInfo, relatedEntity: EntityInfo, CompositeKey: CompositeKey): string {
     const f = relatedEntity.Fields.find((f) => f.Name.trim().toLowerCase() === dep.FieldName?.trim().toLowerCase());
-    const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : '';
+    const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : ''; // first-pk-ok: a foreign key targets a single column; quoting follows that FK target's type
     if (!f) {
       throw new Error(`Field ${dep.FieldName} not found in Entity ${relatedEntity.Name}`);
     }
@@ -909,11 +999,28 @@ export class SQLServerDataProvider
       // simple link to first primary key, most common scenario for linkages
       return `${quotes}${CompositeKey.GetValueByIndex(0)}${quotes}`;
     } else {
-      // linking to something else, so we need to use that field in a sub-query
-      // NOTICE - we are only using the FIRST primary key in our current implementation, this is because we don't yet support composite foreign keys
-      // if we do start to support composite foreign keys, we'll need to update this code to handle that
-      return `(SELECT ${f.RelatedEntityFieldName} FROM [${entity.SchemaName}].${entity.BaseView} WHERE ${entity.FirstPrimaryKey.Name}=${quotes}${CompositeKey.GetValueByIndex(0)}${quotes})`;
+      // The FK points at a non-key column of `entity`, so resolve that column for THE record being
+      // checked. The record is identified by its full key — every PK column, not just the first —
+      // otherwise a composite-key entity would match every row sharing the first column's value and
+      // the scalar sub-query would fail (or silently pick the wrong row).
+      return `(SELECT ${f.RelatedEntityFieldName} FROM [${entity.SchemaName}].${entity.BaseView} WHERE ${this.BuildFullPrimaryKeyPredicate(entity, CompositeKey)})`;
     }
+  }
+
+  /**
+   * `pk1=v1 AND pk2=v2 ...` for every primary key column of `entity`, each value taken from the
+   * matching key/value pair (by field name, falling back to position) and quoted per that column's
+   * type. Single-column keys render exactly `ID='v'` — the same shape the pre-composite code emitted.
+   */
+  protected BuildFullPrimaryKeyPredicate(entity: EntityInfo, compositeKey: CompositeKey): string {
+    return entity.PrimaryKeys
+      .map((pk, index) => {
+        const q = pk.NeedsQuotes ? "'" : '';
+        const byName = compositeKey.KeyValuePairs.find((kv) => kv.FieldName?.trim().toLowerCase() === pk.Name.trim().toLowerCase());
+        const value = byName ? byName.Value : compositeKey.GetValueByIndex(index);
+        return `${pk.Name}=${q}${value}${q}`;
+      })
+      .join(' AND ');
   }
 
   /**
@@ -1189,7 +1296,64 @@ export class SQLServerDataProvider
       setSQL: setStatements.join('\n'),
       callArgsSQL: execParams.join(',\n                '),
       simpleParamsSQL: simpleParams,
+      suffix: uniqueSuffix,
     };
+  }
+
+  /**
+   * Replay form of a CREATE for the SQL log (never executed): the same DECLARE/SET
+   * block, then `IF NOT EXISTS (row with this PK) EXEC spCreate ELSE EXEC spUpdate`.
+   *
+   * The consolidated Metadata_Sync migrations are recordings of `mj sync push`, and a
+   * push creates rows with fixed primary keys from `metadata/**`. Replaying an
+   * unguarded create on a database where a push already created the row fails on the
+   * primary key (MemberJunction/MJ#4503).
+   *
+   * Ownership contract: rows that flow through a recording are release-owned metadata,
+   * so an existing row with the same primary key is converged to the recorded content
+   * (overwrite, not skip). CodeGen emits spCreate and spUpdate with name-compatible
+   * parameters (same names, optionality inverted for the PK and required columns), so
+   * the update branch reuses the create's named argument list. One narrow exception to
+   * "converges": a NOT NULL column with a non-NULL default whose value is left unset on
+   * the recording (uniqueidentifier defaults are left to the server, see BaseEntity)
+   * gets no `_Clear` companion, so the update's `ISNULL(@p, [col])` keeps the existing
+   * value while the create would have applied the default. On a full MJ database that is
+   * nine columns (e.g. AIAgent.OwnerUserID), and preserving the existing value there is
+   * the safer reading.
+   *
+   * Entities without a generated update proc (AllowUpdateAPI, spUpdateGenerated,
+   * VirtualEntity, the same test CodeGen applies) get the guard with no ELSE branch, so
+   * the replay never names a proc that does not exist. Returns undefined when any
+   * primary key value is not part of the call (the DB default would generate it, so
+   * there is nothing to look up).
+   */
+  protected override RenderReplaySaveSQL(
+    binding: SaveCallBinding,
+    entity: BaseEntity,
+    fieldValues: Map<EntityFieldInfo, unknown>,
+  ): string | undefined {
+    if (binding.kind !== 'mssql-declare-exec') {
+      throw new Error(`SQLServerDataProvider.RenderReplaySaveSQL: unexpected binding kind '${binding.kind}'`);
+    }
+    const info = entity.EntityInfo;
+    const pks = info.PrimaryKeys;
+    if (pks.length === 0 || !pks.every((pk) => fieldValues.has(pk))) {
+      return undefined;
+    }
+    const schema = info.SchemaName;
+    const where = pks.map((pk) => `[${pk.Name}] = @${pk.CodeName}${binding.suffix}`).join(' AND ');
+    const createSpName = this.GetCreateUpdateSPName(entity, true);
+    const createBranch = `IF NOT EXISTS (SELECT 1 FROM [${schema}].[${info.BaseTable}] WHERE ${where})\nBEGIN\n    EXEC [${schema}].${createSpName} ${binding.callArgsSQL}\nEND`;
+    const hasUpdateProc = info.AllowUpdateAPI && info.spUpdateGenerated && !info.VirtualEntity;
+    const updateBranch = hasUpdateProc
+      ? `\nELSE\nBEGIN\n    EXEC [${schema}].${this.GetCreateUpdateSPName(entity, false)} ${binding.callArgsSQL}\nEND`
+      : '';
+    return `${this.renderDeclareSetHead(binding)}${createBranch}${updateBranch}`;
+  }
+
+  /** `DECLARE ...\n\nSET ...\n\n` when the binding declares variables, else empty. */
+  private renderDeclareSetHead(binding: Extract<SaveCallBinding, { kind: 'mssql-declare-exec' }>): string {
+    return binding.preambleSQL ? `${binding.preambleSQL}\n\n${binding.setSQL}\n\n` : '';
   }
 
   /**
@@ -1207,10 +1371,7 @@ export class SQLServerDataProvider
       throw new Error(`SQLServerDataProvider.WrapSaveCallForResult: unexpected binding kind '${binding.kind}'`);
     }
     const execSQL = `EXEC [${entity.EntityInfo.SchemaName}].${spName} ${binding.callArgsSQL}`;
-    const sql = binding.preambleSQL
-      ? `${binding.preambleSQL}\n\n${binding.setSQL}\n\n${execSQL}`
-      : execSQL;
-    return { sql };
+    return { sql: `${this.renderDeclareSetHead(binding)}${execSQL}` };
   }
 
   /**
@@ -1717,15 +1878,18 @@ export class SQLServerDataProvider
     
     // For transactional queries, use the instance queue to ensure serialization
     // This prevents EREQINPROG errors when multiple queries try to use the same transaction
-    return new Promise((resolve, reject) => {
+    return new Promise<sql.IResult<any>>((resolve, reject) => {
       this._sqlQueue$.next({
-        id: uuidv4(),
+        kind: 'query',
         query,
         parameters,
         context,
         options,
+        // Ours if it is the ambient handle now, or was one that has since ended: a caller holding
+        // the old handle after its commit must be told so, not sent to mssql for ENOTBEGUN.
+        ambient: context.transaction === this._transaction || (!!context.transaction && this._endedHandles.has(context.transaction)),
         resolve,
-        reject
+        reject,
       });
     });
   }
@@ -1780,6 +1944,8 @@ export class SQLServerDataProvider
       isMutation?: boolean;
       simpleSQLFallback?: string;
       contextUser?: UserInfo;
+      /** Run on the pool even while an ambient transaction is open (see ExecuteSQLOptions). */
+      ignoreAmbientTransaction?: boolean;
     }
   ): Promise<sql.IResult<any>> {
     // Handle the connectionSource parameter for backwards compatibility
@@ -1789,7 +1955,7 @@ export class SQLServerDataProvider
     
     if (connectionSource instanceof sql.Transaction) {
       transaction = connectionSource;
-    } else if (!connectionSource) {
+    } else if (!connectionSource && !loggingOptions?.ignoreAmbientTransaction) {
       this.AssertAmbientTransactionUsable();
       transaction = this._transaction;
     }
@@ -1838,7 +2004,8 @@ export class SQLServerDataProvider
         ignoreLogging: options?.ignoreLogging,
         isMutation: options?.isMutation,
         simpleSQLFallback: options?.simpleSQLFallback,
-        contextUser: contextUser
+        contextUser: contextUser,
+        ignoreAmbientTransaction: options?.ignoreAmbientTransaction,
       });
       
       // Return recordset for consistency with TypeORM behavior
@@ -2055,7 +2222,11 @@ export class SQLServerDataProvider
     contextUser?: UserInfo,
   ): Promise<any[][]> {
     try {
-      this.AssertAmbientTransactionUsable();
+      // A read that does not join the ambient transaction cannot autocommit anything on the pool,
+      // which is what the doomed-transaction assert protects; skip it for that case (#4514).
+      if (!options?.ignoreAmbientTransaction) {
+        this.AssertAmbientTransactionUsable();
+      }
       // Build combined batch SQL and parameters (same as static method)
       let batchSQL = '';
       const batchParameters: Record<string, any> = {};
@@ -2109,7 +2280,7 @@ export class SQLServerDataProvider
       // Create execution context
       const context: SQLExecutionContext = {
         pool: this._pool,
-        transaction: this._transaction,
+        transaction: options?.ignoreAmbientTransaction ? null : this._transaction,
         logSqlStatement: this._logSqlStatement.bind(this),
         clearTransaction: () => { 
           this._transaction = null;
@@ -2251,7 +2422,7 @@ export class SQLServerDataProvider
       .map(child => {
         const schema = child.SchemaName || '__mj';
         const sourceRef = dialect.QuoteSchema(schema, child.BaseView);
-        const pkRef = dialect.QuoteIdentifier(child.PrimaryKeys[0].Name);
+        const pkRef = dialect.QuoteIdentifier(child.FirstPrimaryKey.Name); // first-pk-ok: IS-A child shares its parent's single-column key by design
         const nameLit = dialect.QuoteStringLiteral(child.Name);
         return `SELECT ${nameLit} AS ${aliasName} FROM ${sourceRef} WHERE ${pkRef} = ${pkValueLit}`;
       });
@@ -2297,7 +2468,7 @@ export class SQLServerDataProvider
   ): string {
     const schema = entityInfo.SchemaName || '__mj';
     const view = entityInfo.BaseView;
-    const pkName = entityInfo.PrimaryKeys[0]?.Name ?? 'ID';
+    const pkName = entityInfo.FirstPrimaryKey.Name; // first-pk-ok: IS-A sibling shares the parent's single-column key; safePKValue is that one value
     const safeEntityName = entityInfo.Name.replace(/'/g, "''");
 
     const recordID = entityInfo.PrimaryKeys
@@ -2339,16 +2510,70 @@ IF ${varName} IS NOT NULL
     this._transactionState$.next(true);
   }
 
+  /**
+   * Internal mssql transaction interface to safely inspect `_activeRequest` without `any`.
+   */
+  private async waitForActiveRequest(timeoutMs = this._activeRequestWaitMs): Promise<void> {
+    if (!this._transaction) {
+      return;
+    }
+    const tx = this._transaction as InternalMSSQLTransaction;
+    if (!tx._activeRequest) {
+      return;
+    }
+    const start = Date.now();
+    while (tx._activeRequest) {
+      if (Date.now() - start > timeoutMs) {
+        // Do NOT fall through to commit/rollback: with a request still in flight mssql rejects both
+        // ("Can't commit transaction. There is a request in progress."), and the original error then
+        // named a symptom rather than the cause. Commit and rollback run INSIDE the serial queue, so a
+        // request can only still be here if it bypassed the queue; say that (#4447).
+        throw new Error(
+          `A request is still in flight on the transaction after ${timeoutMs}ms; it did not go through ` +
+          `the instance SQL queue. Await every query issued on the transaction before committing or rolling back.`
+        );
+      }
+      await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    }
+  }
+
+  /**
+   * Runs `action` on `handle` from INSIDE the instance SQL queue, so it executes only after every
+   * query enqueued before it has finished, and before anything enqueued after it (#4454). Replaces
+   * the drain-then-act sequence of #4448, which left a microtask window between the drain returning
+   * and the action starting in which a newly enqueued query could still race the handle. `handle` is
+   * passed explicitly because abandon nulls the ambient handle BEFORE enqueuing its rollback, so
+   * that queued ambient queries behind it are rejected rather than run on the doomed handle.
+   */
+  private enqueueTransactionAction(description: string, handle: sql.Transaction, run: () => Promise<void>): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      this._sqlQueue$.next({ kind: 'action', description, handle, run, resolve, reject });
+    });
+  }
+
   protected override async CommitPhysicalTransaction(): Promise<void> {
     if (!this._transaction) {
       throw new Error('No active transaction to commit');
     }
-    try {
-      await this._transaction.commit();
-    } finally {
+    const transaction = this._transaction;
+    await this.enqueueTransactionAction('commit', transaction, async () => {
+      await this.waitForActiveRequest();
+      try {
+        await transaction.commit();
+      } finally {
+        // Ended either way: committed, or doomed by a failed commit. Marked before the handle is
+        // nulled (success) or left for abandon (failure), so the next dequeued ambient query is
+        // rejected rather than run on it.
+        this._endedHandles.add(transaction);
+      }
+      // Clear the handle only on SUCCESS, and inside the queued action: a query enqueued behind this
+      // commit then finds the handle gone and is rejected with the real cause, instead of reaching
+      // mssql as ENOTBEGUN. On failure the handle must survive so the base class's
+      // AbandonPhysicalTransaction can roll the doomed handle back — nulling it first, as the old
+      // `finally` did, made that abandon a no-op and leaked the server-side transaction (#4447).
       this._transaction = null;
       this._transactionState$.next(false);
-    }
+    });
   }
 
   protected override async AfterPhysicalCommit(): Promise<void> {
@@ -2363,7 +2588,10 @@ IF ${varName} IS NOT NULL
     this._deferredTasks = [];
     if (stale) {
       try {
-        await stale.rollback();
+        // Through the queue, like commit and rollback: the handle is already nulled above, so any
+        // ambient query enqueued behind the failed commit is rejected with the real cause instead of
+        // running on the doomed handle beside this rollback (#4454).
+        await this.enqueueTransactionAction('abandon', stale, () => stale.rollback());
       } catch (e) {
         const code = e && typeof e === 'object' && 'code' in e ? String((e as { code: unknown }).code) : '';
         if (code !== 'EABORT') {
@@ -2380,8 +2608,16 @@ IF ${varName} IS NOT NULL
     if (!this._transaction) {
       throw new Error('No active transaction to rollback');
     }
+    const transaction = this._transaction;
     try {
-      await this._transaction.rollback();
+      await this.enqueueTransactionAction('rollback', transaction, async () => {
+        await this.waitForActiveRequest();
+        try {
+          await transaction.rollback();
+        } finally {
+          this._endedHandles.add(transaction);
+        }
+      });
     } finally {
       this._transaction = null;
       this._transactionState$.next(false);

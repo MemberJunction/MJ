@@ -64,6 +64,29 @@ export class WorkspaceStateManager {
   }
 
   /**
+   * Optional predicate identifying members of the records REGION — the second
+   * temp-tab pool. Requests carrying `TempScope: 'records'` consume and cascade
+   * within this set only, which is what gives records preview-tab behavior
+   * without letting a nav click touch a record (TempTabConsumptionFilter keeps
+   * guarding that direction) or a record open touch the nav tab.
+   * Settable predicate for the same layering reason as MainLayoutTabFilter.
+   * NOTE: record tabs DOCKED to the workspace ("Move to Workspace") must FAIL
+   * this filter — docking is an act of investment, and a docked record is a
+   * main-layout tab that nothing in either pool may consume.
+   */
+  public RecordsRegionTabFilter: ((tab: WorkspaceTab) => boolean) | null = null;
+
+  /**
+   * True when the tab belongs to the records region. A null filter means no
+   * records region is active, so the pool is EMPTY — the inverse default from
+   * isMainLayoutTab, and deliberately so: under the classic style a
+   * records-scoped request must consume nothing rather than everything.
+   */
+  private isRecordsRegionTab(tab: WorkspaceTab): boolean {
+    return this.RecordsRegionTabFilter ? this.RecordsRegionTabFilter(tab) : false;
+  }
+
+  /**
    * Optional explicit metadata provider. When set, used instead of falling back
    * to `Metadata.Provider`. The shell calls `setProvider(this.ProviderToUse)`
    * after acquiring this manager from DI.
@@ -357,12 +380,19 @@ export class WorkspaceStateManager {
       configuration: request.Configuration || {}
     };
 
-    // CRITICAL: If creating a temporary tab, pin all existing temporary tabs first
-    // This ensures only ONE temporary tab exists at any time.
-    // PreservePinState opts out (records-style record tabs live in a separate
-    // layout region and must not disturb the nav tab's temp status).
+    // CRITICAL: If creating a temporary tab, pin all existing temporary tabs
+    // first. This ensures only ONE temporary tab exists at any time — per POOL,
+    // now that the records region has its own (see TabRequest.TempScope).
+    //
+    // A records-scoped forced open (shift-click on a record) promotes the
+    // region's previous temp record and leaves the nav temp tab alone; that
+    // scoping is what replaced the blunt PreservePinState opt-out record opens
+    // used to pass. PreservePinState still opts out of the cascade entirely.
+    const inCascadeScope = request.TempScope === 'records'
+      ? (tab: WorkspaceTab) => this.isRecordsRegionTab(tab)
+      : () => true;
     const updatedTabs = !newTab.isPinned && !request.PreservePinState
-      ? config.tabs.map(tab => !tab.isPinned ? { ...tab, isPinned: true } : tab)
+      ? config.tabs.map(tab => !tab.isPinned && inCascadeScope(tab) ? { ...tab, isPinned: true } : tab)
       : config.tabs;
 
     this.UpdateConfiguration({
@@ -456,11 +486,19 @@ export class WorkspaceStateManager {
       return existingTab.id;
     }
 
-    // Find temporary tab (unpinned tab from ANY app) to replace.
-    // NEVER consume a non-main-layout tab (e.g. an open record under the
-    // records style — they're deliberately unpinned, and replacing one here
-    // would silently destroy an open record with zero user feedback).
-    const tempTab = config.tabs.find(tab => !tab.isPinned && this.isMainLayoutTab(tab) && this.isTempTabConsumable(tab));
+    // Find the temporary tab to replace, within THIS request's pool.
+    //
+    // 'main' (the default): an unpinned tab from any app. NEVER consume a
+    // non-main-layout tab (e.g. an open record under the records style —
+    // they're deliberately unpinned, and replacing one here would silently
+    // destroy an open record with zero user feedback).
+    //
+    // 'records': the records region's own temporary tab. Region membership,
+    // not record identity, so a record docked to the workspace is excluded
+    // from this pool as well as from the main one.
+    const tempTab = request.TempScope === 'records'
+      ? config.tabs.find(tab => !tab.isPinned && this.isRecordsRegionTab(tab))
+      : config.tabs.find(tab => !tab.isPinned && this.isMainLayoutTab(tab) && this.isTempTabConsumable(tab));
 
     if (tempTab) {
       // Replace temporary tab

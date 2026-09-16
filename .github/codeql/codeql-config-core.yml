@@ -60,3 +60,9 @@ paths-ignore:
   - '**/coverage/**'
   - '**/docs/**'
   - '**/*.md'
+
+  # --- design documents and mockups ---------------------------------------------------
+  # Kept for parity with the shared baseline; rationale in codeql-config.yml. In this job
+  # the paths: allowlist above already confines analysis to six packages, so this pattern
+  # matches nothing here until that allowlist is widened.
+  - 'plans/**'

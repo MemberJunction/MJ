@@ -11,6 +11,7 @@ import { ExportService } from '@memberjunction/ng-export-service';
 import { GraphQLDataProvider, GraphQLListsClient } from '@memberjunction/graphql-dataprovider';
 import type { ListDelta, ListSource } from '@memberjunction/lists-base';
 import { validateEnumParam, validateStringParam } from '../../shared/agent-tool-validation';
+import { BuildRecordIdFilter } from '../../shared/record-id-filter';
 import { resolveVennRegion } from './lists-operations-region-resolver';
 import { buildListOperationsAgentContext, resolveNamedRecord, buildNotFoundError } from '../lists-agent-context';
 interface ListSelection {
@@ -2551,7 +2552,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
 
     // If still nothing, include primary key
     if (fields.length === 0 && entityInfo.PrimaryKeys.length > 0) {
-      fields.push(entityInfo.PrimaryKeys[0].Name);
+      fields.push(...entityInfo.PrimaryKeys.map(pk => pk.Name));
     }
 
     return fields.slice(0, 3); // Max 3 fields
@@ -2584,11 +2585,8 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
 
     if (this.currentEntityInfo) {
       SharedService.Instance.InvokeManualResize();
-      // Create composite key for navigation
-      const primaryKeyField = this.currentEntityInfo.PrimaryKeys.length > 0
-        ? this.currentEntityInfo.PrimaryKeys[0].Name
-        : 'ID';
-      const compositeKey = new CompositeKey([{ FieldName: primaryKeyField, Value: record.id }]);
+      // record.id is the compact List Detail RecordID (bare value, or "F1|v1||F2|v2" for composite)
+      const compositeKey = CompositeKey.FromURLSegment(this.currentEntityInfo, record.id);
       SharedService.Instance.OpenEntityRecord(this.currentEntityInfo.Name, compositeKey);
     } else {
       this.notificationService.CreateSimpleNotification('Unable to open record', 'error', 3000);
@@ -3104,15 +3102,13 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
     try {
       const md = this.ProviderToUse;
       const entityInfo = md.EntityByName(entityName)!;
-      const pk = entityInfo.PrimaryKeys[0].Name;
-      // Always include the PK in the SELECT — RunView won't filter on
-      // a column it didn't pull, and downstream lookups expect it.
-      const fieldsForQuery = Array.from(new Set([pk, ...selectedFields]));
-      const escaped = recordIds.map((id) => `'${String(id).replace(/'/g, "''")}'`).join(',');
+      // Always include the key column(s) in the SELECT — RunView won't filter on
+      // a column it didn't pull, and downstream lookups expect them.
+      const fieldsForQuery = Array.from(new Set([...entityInfo.PrimaryKeys.map((pk) => pk.Name), ...selectedFields]));
       const rv = RunView.FromMetadataProvider(md);
       const result = await rv.RunView<Record<string, unknown>>({
         EntityName: entityName,
-        ExtraFilter: `${pk} IN (${escaped})`,
+        ExtraFilter: BuildRecordIdFilter(entityInfo, recordIds.map(String)),
         Fields: fieldsForQuery,
         ResultType: 'simple',
       });

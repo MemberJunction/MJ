@@ -252,7 +252,6 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         // NameField when the entity has one; otherwise the fallback field
         // (first non-PK/non-FK/non-system field), shown as "<id> — <value>"
         const displayField = GetRecordDisplayField(this.entityInfo);
-        const pkName = this.entityInfo.FirstPrimaryKey?.Name || 'ID';
         if (!displayField.Field) {
             // Entity has only key fields — the record ID is the best label available
             for (const item of this.listItems) {
@@ -263,6 +262,9 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         }
 
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const entityInfo = this.entityInfo;
+        // Keyed by the compact key segment (raw value for a single-column key, "F1|v1||F2|v2" for a
+        // composite one) — the same form ListDetail.RecordID stores, so the lookups below line up.
         const valueMap = new Map<string, unknown>();
         const ids = this.listItems
             .map(i => i.detail.RecordID)
@@ -271,17 +273,17 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         const CHUNK_SIZE = 250;
         for (let start = 0; start < ids.length; start += CHUNK_SIZE) {
             const chunk = ids.slice(start, start + CHUNK_SIZE);
-            const inList = chunk.map(id => `'${id.replace(/'/g, "''")}'`).join(',');
             try {
                 const result = await rv.RunView({
-                    EntityName: this.entityInfo.Name,
-                    ExtraFilter: `${pkName} IN (${inList})`,
-                    Fields: [pkName, displayField.Field.Name],
+                    EntityName: entityInfo.Name,
+                    ExtraFilter: this.buildRecordIdFilter(entityInfo, chunk),
+                    Fields: [...entityInfo.PrimaryKeys.map(pk => pk.Name), displayField.Field.Name],
                     ResultType: 'simple'
                 });
                 if (result.Success) {
                     for (const row of result.Results as Array<Record<string, unknown>>) {
-                        valueMap.set(NormalizeUUID(String(row[pkName])), row[displayField.Field.Name]);
+                        const key = CompositeKey.FromEntityRecord(entityInfo, row).ToCompactURLSegment();
+                        valueMap.set(NormalizeUUID(key), row[displayField.Field.Name]);
                     }
                 }
             } catch (error) {
@@ -295,6 +297,22 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
             item.recordName = FormatRecordDisplayValue(id, value, displayField);
         }
         finish();
+    }
+
+    /**
+     * Predicate selecting the records identified by compact key segments. A single-column key
+     * collapses to one `<pk> IN (...)`; a composite key expands each segment to its full
+     * `(F1='v1' AND F2='v2')` predicate and ORs them — an IN on the first column alone would
+     * silently match the wrong rows.
+     */
+    private buildRecordIdFilter(entityInfo: EntityInfo, recordIds: string[]): string {
+        if (entityInfo.PrimaryKeys.length === 1) {
+            const inList = recordIds.map(id => `'${id.replace(/'/g, "''")}'`).join(',');
+            return `${entityInfo.FirstPrimaryKey.Name} IN (${inList})`; // first-pk-ok: guarded by PrimaryKeys.length === 1 above
+        }
+        return recordIds
+            .map(id => `(${CompositeKey.FromURLSegment(entityInfo, id).ToWhereClause()})`)
+            .join(' OR ');
     }
 
     // === Items pagination ===
@@ -672,7 +690,6 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         // (first non-PK/non-FK/non-system field). Text-typed fields also
         // drive the LIKE search so name-less entities remain searchable.
         const displayField = GetRecordDisplayField(sourceEntityInfo);
-        const pkField = sourceEntityInfo.FirstPrimaryKey?.Name || 'ID';
 
         let filter: string | undefined;
         if (displayField.Field && IsTextSearchableField(displayField.Field)) {
@@ -689,7 +706,8 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
 
         if (result.Success) {
             this.addableRecords = result.Results.map((record: Record<string, unknown>) => {
-                const recordId = String(record[pkField]);
+                // Compact key segment (raw value, or "F1|v1||F2|v2" for a composite key) — the form ListDetail.RecordID stores
+                const recordId = CompositeKey.FromEntityRecord(sourceEntityInfo, record).ToCompactURLSegment();
                 return {
                     ID: recordId,
                     Name: displayField.Field

@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy, ChangeDetectorRef, inject, OnChanges, SimpleChanges, OnDestroy, ElementRef, Renderer2 } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { BaseEntity, EntityInfo, EntityFieldInfo, EntityFieldTSType, CompositeKey, KeyValuePair, RunView, CoerceImageSrc, IsInlineImageDataUri, CoerceRawImageBase64ToDataUri, MaxStoredImageChars, MaxInlineImageBytes, FormatByteSize, ParseCssHexColor, PrettyPrintJson } from '@memberjunction/core';
+import { BaseEntity, EntityInfo, EntityFieldInfo, EntityFieldTSType, CompositeKey, KeyValuePair, RunView, CoerceImageSrc, IsInlineImageDataUri, CoerceRawImageBase64ToDataUri, MaxStoredImageChars, MaxInlineImageBytes, FormatByteSize, ParseCssHexColor, PrettyPrintJson, IsDateOnlySQLType, FormatDateOnly } from '@memberjunction/core';
 import { BaseEngineRegistry } from '@memberjunction/core';
 import { ValidationErrorInfo, HighlightSearchMatches, detectRichTextFormat, RichTextFormat, UUIDsEqual } from '@memberjunction/global';
 import { FormContext } from '../types/form-types';
@@ -223,6 +223,50 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     return this.Record?.EntityInfo?.Fields?.find(f => f.Name === this.FieldName);
   }
 
+  /** Memoized answer for {@link IsFieldReadableByUser}; invalidated in ngOnChanges. */
+  private _isReadableByUser: boolean | undefined;
+
+  /** Memoized answer for {@link IsFieldWritableByUser}; invalidated in ngOnChanges. */
+  private _isWritableByUser: boolean | undefined;
+
+  /** The `Record.IsSaved` state {@link _isWritableByUser} was computed against. */
+  private _isWritableForSavedState: boolean | undefined;
+
+  /**
+   * Whether field-level security permits the current user to READ this field.
+   *
+   * The template gates the whole field on this BEFORE anything reads a value, because
+   * `BaseEntity.Get()` throws for a denied field — so rendering one at all would take out the
+   * entire form rather than hiding a column. Everything downstream (`Value`, `ShouldHideField`,
+   * FK resolution) is safe only because this check runs first.
+   *
+   * Memoized: template getters are evaluated on every change-detection cycle, and
+   * `GetDeniedReadFields` walks every field on the entity and aggregates permissions across the
+   * user's roles. `ngOnChanges` clears the memo when `Record` or `FieldName` changes.
+   *
+   * Fails OPEN — on a missing entity, missing user, or an entity with field security switched
+   * off — matching `BaseEntity`'s own gate. A form that hid fields because no user had resolved
+   * yet would be worse than one that shows them, since the server is the real boundary.
+   */
+  get IsFieldReadableByUser(): boolean {
+    if (this._isReadableByUser === undefined) {
+      this._isReadableByUser = this.computeIsFieldReadableByUser();
+    }
+    return this._isReadableByUser;
+  }
+
+  private computeIsFieldReadableByUser(): boolean {
+    const entityInfo = this.Record?.EntityInfo;
+    if (!entityInfo?.EnableFieldLevelSecurity) {
+      return true; // one boolean for the overwhelming majority of entities
+    }
+    const user = this.ProviderToUse?.CurrentUser;
+    if (!user || !this.FieldName) {
+      return true;
+    }
+    return !entityInfo.GetDeniedReadFields(user).has(this.FieldName.trim().toLowerCase());
+  }
+
   /** Display name from metadata or override */
   get DisplayName(): string {
     if (this.DisplayNameOverride) return this.DisplayNameOverride;
@@ -259,7 +303,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     if (!this.Record) return;
     const oldValue = this.Record.Get(this.FieldName);
     this.Record.Set(this.FieldName, newValue);
-    this._touched = true;
+    this.markTouched();
     this.runFieldValidation();
     this.ValueChange.emit({ FieldName: this.FieldName, OldValue: oldValue, NewValue: newValue });
   }
@@ -267,7 +311,56 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   /** Whether this field is read-only based on entity metadata */
   get IsFieldReadOnly(): boolean {
     if (!this.FieldInfo) return false;
-    return this.FieldInfo.ReadOnly;
+    return this.FieldInfo.ReadOnly || !this.IsFieldWritableByUser;
+  }
+
+  /**
+   * Whether field-level security permits the current user to WRITE this field, against the verb
+   * that actually applies to the record in hand: Create on a new record, Update on a saved one.
+   *
+   * Read access is handled separately and earlier ({@link IsFieldReadableByUser}) — a field the
+   * user cannot see is not rendered at all. This is the narrower case of a field they CAN see
+   * but may not change, which should render as a read-only value rather than an editable control.
+   *
+   * Both verbs matter and they fail differently, which is why this picks by record state rather
+   * than checking update alone:
+   *
+   * - **Update denied** — the server rejects the save. Without this, the user types, saves, and
+   *   gets an error naming a field they had every reason to think was editable.
+   * - **Create denied** — the server does NOT reject. It silently drops the value and takes the
+   *   column default, matching the read path where a denied field is simply absent. So an
+   *   editable control on a new record quietly discards what was typed, with no error anywhere.
+   *   That is the worse of the two, and the only signal the user gets is this.
+   *
+   * Memoized alongside the read check and invalidated by the same `ngOnChanges`, for the same
+   * reason: template getters run every change-detection cycle and the underlying walk covers
+   * every field on the entity.
+   */
+  get IsFieldWritableByUser(): boolean {
+    // Keyed on IsSaved as well as memoized: the answer switches from the Create rules to the
+    // Update rules the moment a new record is saved, and that happens WITHOUT ngOnChanges firing
+    // — the Record input is the same object, only its state changed. A plain memo would keep
+    // answering with the create-time verb for the rest of the form's life.
+    const isSaved = this.Record?.IsSaved === true;
+    if (this._isWritableByUser === undefined || this._isWritableForSavedState !== isSaved) {
+      this._isWritableByUser = this.computeIsFieldWritableByUser();
+      this._isWritableForSavedState = isSaved;
+    }
+    return this._isWritableByUser;
+  }
+
+  private computeIsFieldWritableByUser(): boolean {
+    const entityInfo = this.Record?.EntityInfo;
+    if (!entityInfo?.EnableFieldLevelSecurity) {
+      return true; // one boolean for the overwhelming majority of entities
+    }
+    const user = this.ProviderToUse?.CurrentUser;
+    if (!user || !this.FieldName) {
+      return true; // fail open, matching the read gate
+    }
+    return this.Record?.IsSaved
+      ? entityInfo.IsFieldUpdatableByUser(this.FieldName, user)
+      : entityInfo.IsFieldCreatableByUser(this.FieldName, user);
   }
 
   /** Whether this field has been modified (dirty). Only shown for saved records (not new). */
@@ -296,19 +389,50 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   /** Whether the user has interacted with (changed) this field */
   private _touched = false;
 
+  /**
+   * `FormContext.validationRevision` as it stood when the user last edited this field. Compared with
+   * the current revision in {@link FieldErrors}: equal means the edit came AFTER the last failed
+   * save, so the user is addressing it and live local validation is the truth; lower means the
+   * failure is newer than the edit, so the form-level errors must win.
+   */
+  private _touchedAtRevision = 0;
+
   /** Set when an image upload is rejected (type/size) — shown with field validation. */
   private imageUploadError: string | null = null;
 
   /** Locally computed validation errors for this field */
   private _fieldErrors: ValidationErrorInfo[] = [];
 
+  /**
+   * The ONE way a user interaction marks this field touched: every site must also stamp the
+   * revision, or a field touched after a failed save would keep showing the stale form-level error.
+   */
+  private markTouched(): void {
+    this._touched = true;
+    this._touchedAtRevision = this.FormContext?.validationRevision ?? 0;
+  }
+
+  /**
+   * True when the user has edited this field since the form last published validation errors.
+   *
+   * Plain `_touched` was the wrong test: it stayed true from the moment the user typed, so after a
+   * failed save the field returned its own — necessarily local, synchronous — validation, and an
+   * error the SERVER had just reported for that very field (a `ValidateAsync()` refusal, which the
+   * client cannot compute) never showed on the one field the user had just been in.
+   */
+  private get editedSinceLastValidationFailure(): boolean {
+    return this._touched && this._touchedAtRevision === (this.FormContext?.validationRevision ?? 0);
+  }
+
   /** Validation errors for this field from the best available source */
   get FieldErrors(): ValidationErrorInfo[] {
-    // If touched, use fresh local validation (covers real-time feedback)
-    if (this._touched) {
+    // Edited after the last failure: fresh local validation (real-time feedback, and how a
+    // server-reported error clears — a later valid edit yields no local errors).
+    if (this.editedSinceLastValidationFailure) {
       return this._fieldErrors;
     }
-    // Otherwise use form-level errors from save failure (covers untouched fields)
+    // Otherwise the form-level errors from the failed save — whether this field was never touched,
+    // or was touched before the save that failed.
     const contextErrors = this.FormContext?.validationErrors;
     if (contextErrors && contextErrors.length > 0) {
       return contextErrors.filter(e => e.Source === this.FieldName);
@@ -374,6 +498,13 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
 
   /** Whether this field should be hidden (empty in read-only mode) */
   get ShouldHideField(): boolean {
+    // A read-denied field is always hidden. This must run before Value is touched: the
+    // template's own @if guards rendering behind IsFieldReadableByUser, but programmatic
+    // callers (MjCollapsiblePanelComponent.hasRenderableContent sweeps ShouldHideField to
+    // decide section visibility) reach this getter directly, and BaseEntity.Get() THROWS for
+    // a denied field. Returning true here is also what lets a section whose fields are all
+    // denied collapse away instead of rendering an empty card.
+    if (!this.IsFieldReadableByUser) return true;
     if (this.EditMode) return false;
     if (!this.HideWhenEmptyInReadOnlyMode) return false;
     if (this.FormContext?.showEmptyFields) return false;
@@ -412,9 +543,15 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     const fkValue = this.Value;
     if (fkValue == null || fkValue === '') return null;
 
-    // Fast path: name field is joined into our record's view
+    // Fast path: name field is joined into our record's view.
+    //
+    // The joined display column is a SEPARATE EntityField from the FK it accompanies, and can be
+    // denied independently — CompanyID readable while Company is not. `IsFieldReadableByUser`
+    // gates this component on its OWN field name, so it does not cover this read; without the
+    // check here, Get() throws and takes out the form. Falling through to the async lookup is
+    // right: that path reads the related record, which has its own permissions.
     const nameFieldMap = this.FieldInfo?.RelatedEntityNameFieldMap;
-    if (nameFieldMap) {
+    if (nameFieldMap && this.Record.EntityInfo?.IsFieldReadableByUser(nameFieldMap, this.ProviderToUse?.CurrentUser)) {
       const val = this.Record.Get(nameFieldMap);
       if (val != null && val !== '') return String(val);
     }
@@ -837,8 +974,16 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     const relatedEntity = this.getRelatedEntityInfo();
     if (!relatedEntity) return null;
 
-    const nameField = relatedEntity.NameField;
     const pkFields = relatedEntity.PrimaryKeys;
+    // Field-level security applies to the RELATED entity here, not this record's. A name field
+    // the user cannot read would throw from every downstream Get() — so drop to the primary key,
+    // which is unrestrictable by construction. This plan is the single chokepoint for every
+    // related-record read the FK control makes (dropdown rows, search, create-and-select), so
+    // filtering here is what keeps those safe rather than four separate guards.
+    const user = this.ProviderToUse?.CurrentUser;
+    const nameField = relatedEntity.NameField && relatedEntity.IsFieldReadableByUser(relatedEntity.NameField.Name, user)
+        ? relatedEntity.NameField
+        : null;
     if (!nameField && (!pkFields || pkFields.length !== 1)) return null;
 
     const nameFieldName = nameField ? nameField.Name : pkFields[0].Name;
@@ -846,10 +991,11 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
 
     // A field flagged ExtendedType='Icon' holds a per-row icon class — render it
     // as the row's leading glyph, not as a text column.
-    const iconField = relatedEntity.Fields.find(f => f.ExtendedType === 'Icon');
+    const iconField = relatedEntity.Fields.find(f => f.ExtendedType === 'Icon' && relatedEntity.IsFieldReadableByUser(f.Name, user));
     const iconFieldName = iconField?.Name ?? null;
 
-    const columnFields = this.computeOrderedColumns(relatedEntity, nameFieldName, pkFieldName, iconFieldName);
+    const columnFields = this.computeOrderedColumns(relatedEntity, nameFieldName, pkFieldName, iconFieldName)
+        .filter(c => relatedEntity.IsFieldReadableByUser(c, user));
     const extraFieldNames = columnFields.filter(c => c !== nameFieldName);
 
     this._fkColumnPlan = {
@@ -1016,9 +1162,13 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     this.FKSearchFieldLabel = this.labelForRelatedField(this.FKSearchField);
   }
 
-  /** Format a raw cell value for display in the dropdown (delegates to the pure helper). */
-  private formatCell(val: unknown): string {
-    return FormatFKCell(val);
+  /**
+   * Format a raw cell value for display in the dropdown (delegates to the pure helper). The
+   * related entity's column type lets a SQL `date` render as its stored day (MJ#4210).
+   */
+  private formatCell(val: unknown, fieldName?: string): string {
+    const sqlType = fieldName ? this.getRelatedEntityInfo()?.Fields.find(f => f.Name === fieldName)?.Type : undefined;
+    return FormatFKCell(val, sqlType);
   }
 
   /**
@@ -1035,17 +1185,17 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     // Only highlight the column actually being searched, and only when enabled.
     const nameQuery = (this.FKHighlightMatches && this.isSearchingNameField(plan)) ? query : '';
     return rows.map(row => {
-      const name = this.formatCell(row.get(plan.NameFieldName));
+      const name = this.formatCell(row.get(plan.NameFieldName), plan.NameFieldName);
       // Per-row icon from the entity's ExtendedType='Icon' field; else the
       // entity-level icon; else none.
-      const rowIcon = plan.IconFieldName ? this.formatCell(row.get(plan.IconFieldName)).trim() : '';
+      const rowIcon = plan.IconFieldName ? this.formatCell(row.get(plan.IconFieldName), plan.IconFieldName).trim() : '';
       return {
         PrimaryKeyValue: row.get(plan.PkFieldName),
         DisplayName: name,
         // Empty query yields the (still HTML-escaped) plain name — no marks.
         HighlightedName: HighlightSearchMatches(name, nameQuery, 'mj-forms-search-highlight'),
         ExtraColumns: plan.ExtraFieldNames.map((fieldName, i) => {
-          const value = this.formatCell(row.get(fieldName));
+          const value = this.formatCell(row.get(fieldName), fieldName);
           const colQuery = (this.FKHighlightMatches && fieldName === searchField) ? query : '';
           return {
             FieldName: fieldName,
@@ -1437,7 +1587,13 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
 
     this._fkQuery = query;
     const accessor = (r: BaseEntity) => ({ get: (field: string) => r.Get(field) });
-    const searchField = this.FKSearchField || plan.NameFieldName;
+    // plan.NameFieldName is already vetted for readability by buildColumnPlan; FKSearchField is
+    // caller-supplied and is not, so it falls back rather than throwing on the first row.
+    const relatedInfo = records[0]?.EntityInfo;
+    const searchField =
+      this.FKSearchField && relatedInfo?.IsFieldReadableByUser(this.FKSearchField, this.ProviderToUse?.CurrentUser) !== false
+        ? this.FKSearchField
+        : plan.NameFieldName;
     const matches = FilterCachedFKRows(
       records,
       query,
@@ -1590,7 +1746,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   private selectCreatedFKRecord(created: BaseEntity, plan: FKColumnPlan): void {
     const pk = created.Get(plan.PkFieldName);
     if (pk == null) return;
-    const name = this.formatCell(created.Get(plan.NameFieldName));
+    const name = this.formatCell(created.Get(plan.NameFieldName), plan.NameFieldName);
     this._fkInputText = name;
     this.Value = pk;
     this.FKIsMatched = true;
@@ -1963,7 +2119,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
    * an instant, and the correct way to show THAT is the reader's local zone.
    */
   private get IsDateOnlyField(): boolean {
-    return (this.FieldInfo?.Type ?? '').trim().toLowerCase() === 'date';
+    return IsDateOnlySQLType(this.FieldInfo?.Type);
   }
 
   FormatValue(): string {
@@ -1988,7 +2144,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
        * and local time is the right way to show one.
        */
       if (this.IsDateOnlyField) {
-        return val.toLocaleDateString(undefined, { timeZone: 'UTC' });
+        return FormatDateOnly(val);
       }
       return val.toLocaleString();
     }
@@ -1996,6 +2152,13 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   }
 
   ngOnChanges(changes: SimpleChanges): void {
+    // Field security depends on both the record's entity and which field this is, so the
+    // memoized answer has to be dropped whenever either changes.
+    if (changes['Record'] || changes['FieldName']) {
+      this._isReadableByUser = undefined;
+      this._isWritableByUser = undefined;
+      this._isWritableForSavedState = undefined;
+    }
     if (changes['FormContext'] || changes['EditMode'] || changes['Record']) {
       // Reset FK state when record changes
       if (changes['Record']) {
@@ -2147,7 +2310,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     const allowed = new Set(['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp', 'image/svg+xml']);
     if (file.type && !allowed.has(file.type)) {
       this.imageUploadError = 'That file is not a supported image type (PNG, JPEG, GIF, WebP, or SVG).';
-      this._touched = true;
+      this.markTouched();
       this.cdr.markForCheck();
       return;
     }
@@ -2155,7 +2318,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     const absoluteReadCap = 8 * 1024 * 1024;
     if (file.size > absoluteReadCap) {
       this.imageUploadError = `File is too large to read (max ${FormatByteSize(absoluteReadCap)}).`;
-      this._touched = true;
+      this.markTouched();
       this.cdr.markForCheck();
       return;
     }
@@ -2165,7 +2328,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
       const dataUri = await this.readFileAsDataUri(file);
       if (!IsInlineImageDataUri(dataUri)) {
         this.imageUploadError = 'That file is not a supported image type (PNG, JPEG, GIF, WebP, or SVG).';
-        this._touched = true;
+        this.markTouched();
         this.cdr.markForCheck();
         return;
       }
@@ -2181,10 +2344,10 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
         return;
       }
       this.imageUploadError = `Image is too large for this field (max ${this.ImageMaxSizeLabel}). Try a smaller file or paste an image URL.`;
-      this._touched = true;
+      this.markTouched();
     } catch {
       this.imageUploadError = 'Could not read that image.';
-      this._touched = true;
+      this.markTouched();
     }
     this.cdr.markForCheck();
   }

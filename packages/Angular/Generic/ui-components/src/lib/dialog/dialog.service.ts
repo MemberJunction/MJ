@@ -177,6 +177,11 @@ import { Component, Input, Output, EventEmitter } from '@angular/core';
 
     .mj-dialog-body {
       flex: 1;
+      /* CONTRACT: the body pads only STRING content (the "> p" rule below). A COMPONENT body arrives with no
+         inset and pads itself — see rating-dialog and input-dialog in ng-conversations, which both apply
+         4px 20px 8px. Padding here would double-pad them and break deliberately full-bleed bodies (About,
+         Profile, the action gallery, the sharing centre). If a third component rediscovers this, add a
+         padded setting to MJDialogSettings rather than a special case. */
       padding: 0;
       overflow: hidden;
       display: flex;

@@ -10,7 +10,7 @@ import { sortBySequenceAndCreatedAt } from '../Misc/util';
 import fs from 'fs';
 import path from 'path';
 import { configInfo } from '../Config/config';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, ordinalCompare } from '@memberjunction/global';
 
 
 /**
@@ -169,7 +169,7 @@ export class DBSchemaGeneratorBase {
         // first create a copy of the entities array and sort it by name
         let outputCount: number = 0;
         const sortedEntities = [...entities];
-        sortedEntities.sort((a, b) => a.Name.localeCompare(b.Name));
+        sortedEntities.sort((a, b) => ordinalCompare(a.Name, b.Name) || ordinalCompare(a.ID, b.ID));
         for (let i:number = 0; i < sortedEntities.length; ++i) {
             const entity = sortedEntities[i];
             if (!excludeEntities || !excludeEntities.includes(entity.Name)) {

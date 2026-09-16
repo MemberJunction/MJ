@@ -658,10 +658,22 @@ Reference fields from the root entity in nested structures:
 - `@root:CategoryID` -- Get the root's CategoryID
 - Useful for deeply nested relationships
 
+### @owner: References
+Reference fields synchronously in-memory from the owner record for children nested inside collections, embeds, or extensions:
+- `@owner:ShipToPersonID` -- Copies the owner's `ShipToPersonID` value into a nested child or subtype extension field without database queries.
+- Cannot be used at root level; valid only within child collections, embeds, or extensions where an enclosing owner entity exists.
+
 ### @env: References
 Support environment-specific values:
 - `@env:VARIABLE_NAME`
 - Useful for different environments (dev/staging/prod)
+
+### First-Class Composition Axes (`collections`, `embeds`, `extension`)
+MetadataSync natively supports three composition axes directly within `RecordData`, persisted in a single `Save()` call on the root entity graph:
+- **`collections`**: Declared `RelatedRecordCollection` sets (e.g. `Lines`, `AgendaItems`). Supports `upsert` mode (default: match by PK, leaves unmentioned items intact) and `authoritative` mode (configured in `.mj-sync.json`: computes deletion set, enforced with a 20% max implied delete safety rail unless `--allow-bulk-delete` is passed).
+- **`embeds`**: 1:1 peer record embeds keyed by foreign key field name (e.g. `ShipToAddressID`). Peer records are ensured and assigned before parent entity save.
+- **`extension`**: 1:1 IsA subtype extensions (e.g. `Event Order Lines` extending `Order Lines`). Leaf fields only (parent fields in leaf extensions are rejected during validation). Resolved automatically via prospective subtype resolution (`EnsureISAChild()`).
+
 
 ### Primary Key Handling
 The tool automatically detects primary key fields from entity metadata:

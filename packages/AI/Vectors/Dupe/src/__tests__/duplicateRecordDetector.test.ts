@@ -530,6 +530,7 @@ describe('DuplicateRecordDetector', () => {
                 PrimaryKey: {
                     KeyValuePairs: [{ FieldName: 'ID', Value: 'rec-1' }],
                     Values: () => 'rec-1',
+                    ToCompactURLSegment: () => 'rec-1',
                 },
                 Get: (fieldName: string) => {
                     const data: Record<string, string> = {
@@ -568,6 +569,7 @@ describe('DuplicateRecordDetector', () => {
                 PrimaryKey: {
                     KeyValuePairs: [{ FieldName: 'ID', Value: 'item-1' }],
                     Values: () => 'item-1',
+                    ToCompactURLSegment: () => 'item-1',
                 },
                 Get: (fieldName: string) => {
                     if (fieldName === 'Description') return 'A test item';
@@ -599,6 +601,7 @@ describe('DuplicateRecordDetector', () => {
                 PrimaryKey: {
                     KeyValuePairs: [{ FieldName: 'ID', Value: 'note-1' }],
                     Values: () => 'note-1',
+                    ToCompactURLSegment: () => 'note-1',
                 },
                 Get: (fieldName: string) => {
                     if (fieldName === 'Description') return longText;
@@ -642,6 +645,7 @@ describe('DuplicateRecordDetector', () => {
                 PrimaryKey: {
                     KeyValuePairs: [{ FieldName: 'ID', Value: 'p-1' }],
                     Values: () => 'p-1',
+                    ToCompactURLSegment: () => 'p-1',
                 },
                 Get: (fieldName: string) => {
                     if (fieldName === 'Name') return 'Alice';
@@ -673,6 +677,7 @@ describe('DuplicateRecordDetector', () => {
                 PrimaryKey: {
                     KeyValuePairs: [{ FieldName: 'ID', Value: 'c-1' }],
                     Values: () => 'c-1',
+                    ToCompactURLSegment: () => 'c-1',
                 },
                 Get: (fieldName: string) => {
                     const data: Record<string, string> = {
@@ -711,6 +716,7 @@ describe('DuplicateRecordDetector', () => {
                 PrimaryKey: {
                     KeyValuePairs: [{ FieldName: 'ID', Value: 'old-1' }],
                     Values: () => 'old-1',
+                    ToCompactURLSegment: () => 'old-1',
                 },
                 Get: (fieldName: string) => {
                     if (fieldName === 'Title') return 'Legacy Record';

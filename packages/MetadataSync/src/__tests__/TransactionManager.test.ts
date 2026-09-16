@@ -79,8 +79,8 @@ describe('TransactionManager', () => {
       mockProvider.RollbackTransaction.mockRejectedValueOnce(new Error('connection broken'));
       const tm = new TransactionManager();
       await tm.beginTransaction();
-      // Should not throw — rollback errors are logged, not rethrown
-      await expect(tm.rollbackTransaction()).resolves.toBeUndefined();
+      // Should not throw — rollback errors are logged, not rethrown, and returns false
+      await expect(tm.rollbackTransaction()).resolves.toBe(false);
     });
   });
 

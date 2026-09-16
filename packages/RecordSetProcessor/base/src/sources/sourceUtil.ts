@@ -23,20 +23,15 @@ const KEYSET_ORDERABLE_PK_TYPES = new Set<string>([
  * raw value; composite-PK entities use `CompositeKey.ToConcatenatedString()`.
  */
 export function serializeRecordId(entity: EntityInfo, row: Record<string, unknown>): string {
-    if (entity.PrimaryKeys.length === 1) {
-        return String(row[entity.PrimaryKeys[0].Name]);
-    }
-    const ck = new CompositeKey();
-    ck.KeyValuePairs = entity.PrimaryKeys.map((pk) => ({ FieldName: pk.Name, Value: row[pk.Name] as never }));
-    return ck.ToConcatenatedString();
+    return CompositeKey.FromEntityRecord(entity, row).ToCompactURLSegment();
 }
 
 /** Returns true when the entity has a single, orderable primary key suitable for keyset pagination. */
 export function canUseKeyset(entity: EntityInfo): boolean {
-    if (!entity.FirstPrimaryKey || entity.PrimaryKeys.length !== 1) {
+    if (!entity.FirstPrimaryKey || entity.PrimaryKeys.length !== 1) { // first-pk-ok: this is the single-column guard for keyset eligibility
         return false;
     }
-    const normalizedType = (entity.FirstPrimaryKey.Type || '')
+    const normalizedType = (entity.FirstPrimaryKey.Type || '') // first-pk-ok: guarded above — PrimaryKeys.length === 1
         .replace(/\s*\([^)]*\)\s*$/, '') // strip parameterization like "nvarchar(255)"
         .trim()
         .toLowerCase();
@@ -58,7 +53,7 @@ export async function pageEntityByFilter(opts: {
     preferKeyset: boolean;
 }): Promise<RecordBatch> {
     const { entity, filter, cursor, batchSize, contextUser, preferKeyset } = opts;
-    const pkName = entity.FirstPrimaryKey?.Name;
+    const pkName = entity.FirstPrimaryKey?.Name; // first-pk-ok: keyset seek column — used only when canUseKeyset(entity) (single-column) holds; composite keys take the offset path
     const useKeyset = preferKeyset && canUseKeyset(entity) && !!pkName;
 
     const rv = new RunView();

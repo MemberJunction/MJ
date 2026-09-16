@@ -3,6 +3,7 @@ import { cosmiconfigSync } from 'cosmiconfig';
 import { LogError, LogStatus, LogStatusEx } from '@memberjunction/core';
 import { mergeConfigs, parseBooleanEnv } from '@memberjunction/config';
 import { TelemetryEnabledDefault } from './telemetryConfigUnits.js';
+import { RealtimeEnabledDefault } from './realtimeConfigUnits.js';
 
 const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
 
@@ -539,11 +540,17 @@ const telephonySchema = z.object({
   teams: teamsMeetingsSchema.optional(),
 }).passthrough();
 
+const realtimeSchema = z.object({
+  /** Master switch. When false, the WebRTC SDP broker router is not mounted. Defaults to true. */
+  enabled: zodBooleanWithTransforms().default(true),
+}).passthrough();
+
 const configInfoSchema = z.object({
   userHandling: userHandlingInfoSchema,
   magicLink: magicLinkSchema.optional().default({}),
   widget: widgetSchema.optional().default({}),
   telephony: telephonySchema.optional().default({}),
+  realtime: realtimeSchema.optional().default({}),
   databaseSettings: databaseSettingsInfoSchema,
   viewingSystem: viewingSystemInfoSchema.optional(),
   restApiOptions: restApiOptionsSchema.optional().default({}),
@@ -598,6 +605,7 @@ export type UserHandlingInfo = z.infer<typeof userHandlingInfoSchema>;
 export type MagicLinkConfig = z.infer<typeof magicLinkSchema>;
 export type WidgetConfig = z.infer<typeof widgetSchema>;
 export type TelephonyConfig = z.infer<typeof telephonySchema>;
+export type RealtimeConfig = z.infer<typeof realtimeSchema>;
 export type TwilioTelephonyConfig = z.infer<typeof twilioTelephonySchema>;
 export type VonageTelephonyConfig = z.infer<typeof vonageTelephonySchema>;
 export type RingCentralTelephonyConfig = z.infer<typeof ringcentralTelephonySchema>;
@@ -663,7 +671,17 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
     autoCreateNewUsers: true,
     newUserLimitedToAuthorizedDomains: false,
     newUserAuthorizedDomains: [],
-    newUserRoles: ['UI', 'Developer'],
+    // 'UI' ONLY, deliberately (issue #4260). Auto-provisioning is on by default above, with no
+    // domain restriction, so this list is the standing authority of anyone the configured IdP will
+    // issue a token for. On the baseline seed 'Developer' and 'Integration' hold unfiltered
+    // CanUpdate on ~439 of the database's ~446 entities, so defaulting every such identity into
+    // either grants broad data-plane access no host should hand out by default. (The MJ: Users
+    // escalation this list also used to guard against — writing your own Type to 'Owner' — is now
+    // closed at the entity layer regardless of role: see MJUserEntityServer in
+    // @memberjunction/core-entities-server.) 'UI' carries the end-user surface (conversations,
+    // views, dashboards, settings) and no write on MJ: Users. Hosts that need more grant it
+    // per-deployment.
+    newUserRoles: ['UI'],
     updateCacheWhenNotFound: true,
     updateCacheWhenNotFoundDelay: 5000,
     // The seeded system user, named by `Name`. Its Email ('not.set@nowhere.com') resolves too —
@@ -732,6 +750,11 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
     systemUserEmail: 'not.set@nowhere.com',
     pollingIntervalMs: 15000,
     maxConcurrentRuns: 3
+  },
+
+  // Realtime WebRTC SDP broker defaults (on by default; can be disabled via MJ_REALTIME_ENABLED=false)
+  realtime: {
+    enabled: RealtimeEnabledDefault(process.env.MJ_REALTIME_ENABLED),
   },
 
   // Telemetry defaults — on unless the operator turns it off via MJ_TELEMETRY_ENABLED.

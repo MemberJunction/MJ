@@ -1,0 +1,24 @@
+{
+  "id": "marketing-dispatch-copywriter-01",
+  "agent": "Marketing Agent",
+  "tags": [
+    "sub-agent-dispatch",
+    "hybrid-coherence"
+  ],
+  "description": "Marketing is a pure orchestrator with no actions of its own. Drafting copy means dispatching the Copywriter — the hybrid-coherence probe, since sub-agent dispatch stays in the envelope under native mode.",
+  "input": {
+    "payload": {},
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "Write a launch announcement for our new analytics dashboard."
+      }
+    ]
+  },
+  "expect": {
+    "kind": "subAgent",
+    "subAgents": [
+      "Copywriter Agent"
+    ]
+  }
+}

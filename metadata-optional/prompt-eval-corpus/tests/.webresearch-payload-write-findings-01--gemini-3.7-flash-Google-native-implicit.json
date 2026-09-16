@@ -1,0 +1,112 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "webresearch-payload-write-findings-01 [gemini-3.7-flash · Google · native-implicit]",
+    "Description": "Findings must land in the payload rather than only in prose — or, per the Web Research prompt's 'combine multiple searches for comprehensive coverage', another search is a legitimate next step after a single summarized result .",
+    "InputDefinition": {
+      "payload": {
+        "sources": [],
+        "findings": []
+      },
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "Research grid-scale battery costs and record what you find."
+        },
+        {
+          "role": "user",
+          "content": "[Action Result] Summarize Content succeeded for 2 sources: costs fell 18% year over year; utility-scale deployments doubled."
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "webresearch-payload-write-findings-01",
+      "expect": {
+        "kind": "anyOf",
+        "anyOf": [
+          {
+            "kind": "taskComplete"
+          },
+          {
+            "kind": "payloadChange"
+          },
+          {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Perplexity Search"
+              }
+            ],
+            "allowAdditionalActions": true
+          },
+          {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Google Custom Search"
+              }
+            ],
+            "allowAdditionalActions": true
+          }
+        ]
+      }
+    },
+    "Configuration": {
+      "agentName": "Web Research Agent",
+      "modelId": "63B1434F-0400-4A98-A1B9-0765BE4362F0",
+      "vendorId": "E4A5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "toolCallingMode": "native",
+      "nativeControlFlow": "implicit",
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "anyOf",
+            "anyOf": [
+              {
+                "kind": "taskComplete"
+              },
+              {
+                "kind": "payloadChange"
+              },
+              {
+                "kind": "action",
+                "actions": [
+                  {
+                    "name": "Perplexity Search"
+                  }
+                ],
+                "allowAdditionalActions": true
+              },
+              {
+                "kind": "action",
+                "actions": [
+                  {
+                    "name": "Google Custom Search"
+                  }
+                ],
+                "allowAdditionalActions": true
+              }
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "57CBA633-6996-4A3D-AC6A-96A56F6B96A7"
+  }
+}

@@ -187,11 +187,30 @@ export class ProductionScoreRecordSetRunner implements IScoreRecordSetRunner {
       return [];
     }
 
-    // Load the member rows of the target entity as entity objects, keyed by their
-    // single-column PK (List Details store the PK string in RecordID).
-    const pkName = (provider ?? Metadata.Provider)?.EntityByName(entityName)?.FirstPrimaryKey?.Name ?? 'ID';
-    const inList = recordIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(', ');
-    return this.resolveFilter(entityName, `${pkName} IN (${inList})`, undefined, contextUser, provider);
+    // Load the member rows of the target entity as entity objects. List Details store each
+    // member's key as a compact CompositeKey URL segment (the bare value for a single-column
+    // key, whatever that column is called; `F1|v1||F2|v2` for a composite key), so the filter
+    // is built from the entity's real primary key(s) — never an assumed column named ID.
+    const entityInfo = (provider ?? Metadata.Provider)?.EntityByName(entityName);
+    if (!entityInfo) {
+      throw new Error(`Score Record Set: entity '${entityName}' not found in metadata.`);
+    }
+    return this.resolveFilter(entityName, this.primaryKeyInFilter(entityInfo, recordIds), undefined, contextUser, provider);
+  }
+
+  /**
+   * Build the filter that selects exactly the given records of `entityInfo`, where each id is a
+   * compact CompositeKey URL segment (the form `MJ: List Details.RecordID` and
+   * {@link RecordRef.RecordID} carry). A single-column key — whatever the column is called —
+   * becomes one `IN (...)`; a composite key needs one `(F1=.. AND F2=..)` term per record, since
+   * no single column can be compared against a multi-column value.
+   */
+  protected primaryKeyInFilter(entityInfo: EntityInfo, recordIds: string[]): string {
+    if (entityInfo.PrimaryKeys.length === 1) {
+      const inList = recordIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(', ');
+      return `${entityInfo.FirstPrimaryKey.Name} IN (${inList})`; // first-pk-ok: guarded by PrimaryKeys.length === 1 above
+    }
+    return recordIds.map((id) => `(${CompositeKey.FromURLSegment(entityInfo, id).ToWhereClause()})`).join(' OR ');
   }
 
   /** Resolve an entity + filter into entity-object record refs. */
@@ -463,8 +482,10 @@ export class ProductionScoreRecordSetRunner implements IScoreRecordSetRunner {
    * Resolve the strongly-typed target {@link BaseEntity} for a record. Most scopes
    * carry the already-loaded entity on `.Record`; reuse it (no extra DB round-trip)
    * when it is a real `BaseEntity`. Otherwise (id-only `records`/`single` refs)
-   * load it from the provider via the record's `EntityID` + single-column PK using
-   * the request user, so write-back works regardless of how the scope was resolved.
+   * load it from the provider via the record's `EntityID` + its `RecordID` — a compact
+   * CompositeKey URL segment, so a bare value maps onto the entity's real single key
+   * column and a `F1|v1||F2|v2` segment onto a composite key — using the request user,
+   * so write-back works regardless of how the scope was resolved.
    */
   protected async resolveTargetEntity(record: RecordRef, context: RecordProcessorContext): Promise<BaseEntity> {
     if (record.Record instanceof BaseEntity) {
@@ -474,11 +495,8 @@ export class ProductionScoreRecordSetRunner implements IScoreRecordSetRunner {
     if (!entityInfo) {
       throw new Error(`entity '${record.EntityID}' not found in metadata; cannot write back prediction.`);
     }
-    if (entityInfo.PrimaryKeys.length !== 1) {
-      throw new Error(`write-back supports single-primary-key entities only ('${entityInfo.Name}').`);
-    }
     const obj = await context.provider.GetEntityObject<BaseEntity>(entityInfo.Name, context.contextUser);
-    const loaded = await obj.InnerLoad(CompositeKey.FromKeyValuePair(entityInfo.FirstPrimaryKey.Name, record.RecordID));
+    const loaded = await obj.InnerLoad(CompositeKey.FromURLSegment(entityInfo, record.RecordID));
     if (!loaded) {
       throw new Error(`record '${record.RecordID}' of '${entityInfo.Name}' not found.`);
     }

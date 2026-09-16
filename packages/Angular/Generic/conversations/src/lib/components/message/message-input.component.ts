@@ -2962,11 +2962,27 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       const isConvoVisible = UUIDsEqual(this.bridge.ActiveConversationID$.value, task.conversationId)
         && (this.bridge.OverlayActive$.value || this.bridge.WorkspaceActive$.value);
       if (!isConvoVisible) {
-        MJNotificationService.Instance?.CreateSimpleNotification(
-          `${task.agentName} completed in ${task.conversationName || 'conversation'}`,
-          'success',
-          3000
-        );
+        // The server announces the same completion through its Agent Completion notification
+        // (when the run produced an artifact); the shared dedupe key folds the two into one
+        // toast, and this wording — the later of the two — is what stays on screen.
+        const agent = task.agentId
+          ? AIEngineBase.Instance.Agents.find(a => UUIDsEqual(a.ID, task.agentId))
+          : undefined;
+        // The task carries the name from send time; the engine has the current one (the
+        // first exchange auto-names the conversation). The placeholder a brand-new
+        // conversation starts with is not a name worth announcing.
+        const currentName = this.engine.Conversations.find(c => UUIDsEqual(c.ID, task.conversationId))?.Name
+          ?? task.conversationName;
+        const conversationName = currentName && currentName !== 'New Conversation' ? currentName : null;
+        MJNotificationService.Instance?.CreateRichNotification({
+          title: `${task.agentName} finished`,
+          message: conversationName ? `in ${conversationName}` : null,
+          imageUrl: agent?.LogoURL ?? null,
+          iconClass: agent?.IconClass ?? 'fa-solid fa-robot',
+          hideAfter: 5000,
+          dedupeKey: `agent-completion:${task.conversationId ?? task.id}`,
+          context: { conversationId: task.conversationId, agentId: task.agentId, agentName: task.agentName }
+        });
       }
     } else {
       // verboseOnly, and no longer a warning. A turn registers ONE task, against whichever message
