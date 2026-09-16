@@ -3,8 +3,10 @@ import {
     ClientRealtimeSessionConfig,
     JSONObject,
     JSONValue,
+    RealtimeDiagLog,
     RealtimeIdleSignal,
     RealtimeToolBatchBarrier,
+    RealtimeTrackDescriptor,
 } from '@memberjunction/ai';
 import {
     GoogleGenAI,
@@ -23,6 +25,8 @@ import { base64ToArrayBuffer } from '../audio/pcmUtils';
 import { IRealtimePcmPlayback, RealtimePcmPlayback } from '../audio/pcmPlayback';
 import { RealtimeAudioMeter } from '../audio/audioMeter';
 import { createPcmMicCapture, IPcmMicCapture } from '../audio/micCapture';
+import { createStreamFrameCapture, IFrameCapture } from '../audio/frameCapture';
+import type { RealtimeUsageModalityDetail } from '@memberjunction/ai';
 
 // ── Audio constants (Gemini Live wire formats) ─────────────────────────────────
 
@@ -44,12 +48,10 @@ const GEMINI_OUTPUT_SAMPLE_RATE = 24000;
  */
 export interface GeminiLiveClientSession {
     /**
-     * Streams realtime user input to the model — mic audio frames AND mid-session text.
-     * Text via realtime input is the Live API's "respond now" path for in-conversation
-     * messages: native-audio models treat {@link sendClientContent} as history seeding
-     * only and will NOT generate from it mid-call, but realtime text triggers immediately.
+     * Streams realtime user input to the model — mic audio frames, inbound video frames,
+     * and mid-session text.
      */
-    sendRealtimeInput(params: { audio?: GeminiBlob; text?: string }): void;
+    sendRealtimeInput(params: { audio?: GeminiBlob; text?: string; media?: GeminiBlob; video?: GeminiBlob }): void;
     /** Appends client content WITHOUT triggering generation (context notes, history seeding). */
     sendClientContent(params: { turns?: Content[]; turnComplete?: boolean }): void;
     /** Replies to a server tool call with one or more function responses. */
@@ -172,8 +174,24 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     // ── Transport / audio resources ────────────────────────────────────────────
     private session: GeminiLiveClientSession | null = null;
     private micStream: MediaStream | null = null;
+    private cameraStream: MediaStream | null = null;
     private micCapture: IGeminiMicCapture | null = null;
+    private cameraCapture: IFrameCapture | null = null;
     private playback: IGeminiAudioPlayback | null = null;
+    private lastVideoSendTimestamp = 0;
+    protected videoFramesSent = 0;
+    protected resumptionHandle: string | null = null;
+    private lastConnectArgs: GeminiClientConnectArgs | null = null;
+
+    /** Returns the latest session resumption handle reported by the server, if any. */
+    public get ResumptionHandle(): string | null {
+        return this.resumptionHandle;
+    }
+
+    /** Returns the count of video frames successfully sent over the established video track. */
+    public get VideoFramesSent(): number {
+        return this.videoFramesSent;
+    }
 
     // ── Model capability & profile state ───────────────────────────────────────
     private idleSignal: RealtimeIdleSignal = 'turnComplete';
@@ -227,24 +245,66 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * values the server LOCKED into the token, so tampering is ignored by the API), then wires
      * the mic-capture worklet. Reports `'listening'` once audio is flowing.
      */
-    public async Connect(config: ClientRealtimeSessionConfig, micStream: MediaStream): Promise<void> {
+    /**
+     * Opens the client-direct Gemini Live session: creates the playout engine, connects with
+     * the ephemeral token + the server-built `SessionConfig` (`{ model, config }` — the same
+     * values the server LOCKED into the token, so tampering is ignored by the API), negotiates
+     * tracks, then wires the mic-capture worklet and optional video capture.
+     * Reports `'listening'` once audio is flowing.
+     */
+    public async Connect(config: ClientRealtimeSessionConfig, micStream: MediaStream, cameraStream?: MediaStream): Promise<void> {
         this.micStream = micStream;
+        this.cameraStream = cameraStream ?? null;
+        this.clearSafetyBackstop();
+        this.toolBatchBarrier.Clear();
+        this.videoFramesSent = 0;
         this.setState('connecting');
-        const { model, liveConfig, idleSignal, supportsScheduling, supportsBlocking } = this.parseSessionConfig(config);
+        const { model, liveConfig, idleSignal, supportsScheduling, supportsBlocking, requestedTracks } =
+            this.parseSessionConfig(config);
         this.idleSignal = idleSignal;
         this.supportsScheduling = supportsScheduling;
         this.supportsBlocking = supportsBlocking;
+
+        // Negotiate tracks:
+        const isVideoModel = model.toLowerCase().startsWith('gemini-3.8-live');
+        const supportedTracks: RealtimeTrackDescriptor[] = [
+            { Modality: 'audio', Direction: 'inbound' },
+            { Modality: 'audio', Direction: 'outbound' },
+        ];
+        if (isVideoModel) {
+            supportedTracks.push({
+                Modality: 'video',
+                Direction: 'inbound',
+                Encoding: 'image/jpeg',
+                Rate: 1,
+                UsageBasis: ['tokens', 'frames'] as const,
+                RequiresConsent: true,
+            });
+        }
+        this.negotiateTracks(requestedTracks, supportedTracks);
+
         this.playback = this.createPlayback();
-        this.session = await this.connectLiveSession({
+        const connectArgs: GeminiClientConnectArgs = {
             Model: model,
             Config: liveConfig,
             EphemeralToken: config.EphemeralToken,
             OnMessage: (message) => this.handleServerMessage(message),
             OnError: (event) => this.handleTransportError(event),
             OnClose: () => this.handleTransportClose(),
-        });
+        };
+        this.lastConnectArgs = connectArgs;
+        this.session = await this.connectLiveSession(connectArgs);
         this.setState('connected');
         this.micCapture = await this.createMicCapture(micStream, (base64Pcm16) => this.sendMicChunk(base64Pcm16));
+
+        // Start camera capture if inbound video is established and cameraStream provided
+        if (this.cameraStream && this.IsTrackEstablished('video', 'inbound')) {
+            this.cameraCapture = createStreamFrameCapture(this.cameraStream, {
+                Rate: 1,
+                OnFrame: (frame) => this.SendVideoFrame(frame.data, frame.mimeType),
+            });
+        }
+
         // Audio-activity capability (base obligation #9): agent side taps the playout
         // engine's master gain; user side meters the mic stream. Null-safe — test fakes /
         // no-WebAudio environments simply leave the session un-metered.
@@ -254,9 +314,9 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     }
 
     /**
-     * Tears down the session, mic capture, mic tracks, and playout engine, resets the response
-     * state machine, and emits a final `'closed'` (unless already `'error'`). Safe to call
-     * more than once.
+     * Tears down the session, mic capture, mic tracks, camera capture, and playout engine,
+     * resets the response state machine, and emits a final `'closed'` (unless already `'error'`).
+     * Safe to call more than once.
      */
     public async Disconnect(): Promise<void> {
         this.closeAudioMeters();
@@ -264,10 +324,16 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.toolBatchBarrier.Clear();
         this.micStream?.getTracks().forEach((track) => track.stop());
         this.micStream = null;
+        this.cameraCapture?.Stop();
+        this.cameraCapture = null;
+        this.cameraStream?.getTracks().forEach((track) => track.stop());
+        this.cameraStream = null;
         this.micCapture?.Stop();
         this.micCapture = null;
         this.playback?.Close();
         this.playback = null;
+        this.resumptionHandle = null;
+        this.videoFramesSent = 0;
         if (this.session) {
             try {
                 this.session.close();
@@ -304,6 +370,27 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         }
         this.CancelActiveResponse();
         this.enqueueOrRun(() => this.sendTriggeringUserTurn(text, 'normal', true));
+    }
+
+    /**
+     * Streams one base64 image frame over the established inbound video track.
+     * Enforces the 1 fps ceiling (max 1 frame per 1000ms).
+     * If inbound video is not established, returns without error or frame sends (fallback).
+     */
+    public override SendVideoFrame(base64Image: string, mimeType: string = 'image/jpeg'): void {
+        if (!this.IsTrackEstablished('video', 'inbound')) {
+            return;
+        }
+        const now = Date.now();
+        if (now - this.lastVideoSendTimestamp < 1000) {
+            return; // Throttled to 1 fps max
+        }
+        this.lastVideoSendTimestamp = now;
+        this.videoFramesSent++;
+        this.session?.sendRealtimeInput({
+            media: { data: base64Image, mimeType },
+            video: { data: base64Image, mimeType },
+        });
     }
 
     /**
@@ -489,6 +576,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         idleSignal: RealtimeIdleSignal;
         supportsScheduling: boolean;
         supportsBlocking: boolean;
+        requestedTracks?: readonly RealtimeTrackDescriptor[];
     } {
         const sessionConfig: JSONObject = config.SessionConfig ?? {};
         const model = typeof sessionConfig['model'] === 'string' ? sessionConfig['model'] : config.Model;
@@ -500,7 +588,29 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
             rawIdle === 'interactionStatus' ? 'interactionStatus' : 'turnComplete';
         const supportsScheduling = sessionConfig['supportsScheduling'] !== false;
         const supportsBlocking = sessionConfig['supportsBlocking'] !== false;
-        return { model, liveConfig, idleSignal, supportsScheduling, supportsBlocking };
+        const rawRequestedTracks = sessionConfig['requestedTracks'];
+        let requestedTracks: readonly RealtimeTrackDescriptor[] | undefined = undefined;
+        if (Array.isArray(rawRequestedTracks)) {
+            const list: RealtimeTrackDescriptor[] = [];
+            for (const item of rawRequestedTracks) {
+                if (item !== null && typeof item === 'object' && !Array.isArray(item)) {
+                    const modality = typeof item['Modality'] === 'string' ? item['Modality'] : undefined;
+                    const direction = item['Direction'];
+                    if (modality && (direction === 'inbound' || direction === 'outbound')) {
+                        list.push({
+                            Modality: modality,
+                            Direction: direction,
+                            Encoding: typeof item['Encoding'] === 'string' ? item['Encoding'] : undefined,
+                            Rate: typeof item['Rate'] === 'number' ? item['Rate'] : undefined,
+                            RequiresConsent:
+                                typeof item['RequiresConsent'] === 'boolean' ? item['RequiresConsent'] : undefined,
+                        });
+                    }
+                }
+            }
+            requestedTracks = list;
+        }
+        return { model, liveConfig, idleSignal, supportsScheduling, supportsBlocking, requestedTracks };
     }
 
     /** Streams one base64 PCM16 mic chunk to the model (no-op once the session is gone). */
@@ -532,6 +642,22 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     private handleServerMessage(message: LiveServerMessage): void {
         this.checkInteractionStatus(message);
 
+        // Session continuity: track resumption token updates (F7)
+        if (message.sessionResumptionUpdate) {
+            if (message.sessionResumptionUpdate.resumable === false) {
+                this.resumptionHandle = null;
+            } else if (message.sessionResumptionUpdate.newHandle) {
+                this.resumptionHandle = message.sessionResumptionUpdate.newHandle;
+            }
+        }
+
+        // Server approaching timeout / abort: reconnect seamlessly using resumption handle (F7)
+        if (message.goAway) {
+            if (this.resumptionHandle) {
+                void this.resumeSession(this.resumptionHandle);
+            }
+        }
+
         if (message.serverContent) {
             this.handleServerContent(message.serverContent);
         }
@@ -540,6 +666,37 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         }
         if (message.usageMetadata) {
             this.handleUsageMetadata(message.usageMetadata);
+        }
+    }
+
+    /**
+     * Resumes the live session using a previously captured session resumption handle (F7).
+     */
+    protected async resumeSession(handle: string): Promise<void> {
+        if (!this.lastConnectArgs) {
+            return;
+        }
+        try {
+            const reconnectArgs: GeminiClientConnectArgs = {
+                ...this.lastConnectArgs,
+                Config: {
+                    ...this.lastConnectArgs.Config,
+                    sessionResumption: { handle },
+                },
+            };
+            const oldSession = this.session;
+            const newSession = await this.connectLiveSession(reconnectArgs);
+            this.session = newSession;
+            this.lastConnectArgs = reconnectArgs;
+            try {
+                oldSession?.close();
+            } catch {
+                /* safe */
+            }
+        } catch (err) {
+            RealtimeDiagLog(
+                `[GeminiRealtimeClient] Session resumption failed: ${err instanceof Error ? err.message : String(err)}`
+            );
         }
     }
 
@@ -588,9 +745,31 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * the server-bridged `GeminiRealtime` driver forwards the same payload to `IRealtimeSession.OnUsage`.
      */
     private handleUsageMetadata(usageMetadata: NonNullable<LiveServerMessage['usageMetadata']>): void {
+        let inputDetails: RealtimeUsageModalityDetail | undefined;
+        if (usageMetadata.promptTokensDetails && Array.isArray(usageMetadata.promptTokensDetails)) {
+            for (const detail of usageMetadata.promptTokensDetails) {
+                if (typeof detail.tokenCount === 'number') {
+                    inputDetails = inputDetails ?? {};
+                    const mod = String(detail.modality ?? '').toUpperCase();
+                    if (mod === 'AUDIO') {
+                        inputDetails.AudioTokens = (inputDetails.AudioTokens ?? 0) + detail.tokenCount;
+                    } else if (mod === 'TEXT') {
+                        inputDetails.TextTokens = (inputDetails.TextTokens ?? 0) + detail.tokenCount;
+                    } else if (mod === 'IMAGE') {
+                        inputDetails.ImageTokens = (inputDetails.ImageTokens ?? 0) + detail.tokenCount;
+                    }
+                }
+            }
+        }
+        if (this.videoFramesSent > 0) {
+            inputDetails = inputDetails ?? {};
+            inputDetails.VideoFrames = this.videoFramesSent;
+        }
         this.emitUsage({
             InputTokens: typeof usageMetadata.promptTokenCount === 'number' ? usageMetadata.promptTokenCount : undefined,
             OutputTokens: typeof usageMetadata.responseTokenCount === 'number' ? usageMetadata.responseTokenCount : undefined,
+            ...(inputDetails ? { InputTokenDetails: inputDetails } : {}),
+            ...(this.videoFramesSent > 0 ? { VideoFrames: this.videoFramesSent } : {}),
             Raw: usageMetadata,
         });
     }

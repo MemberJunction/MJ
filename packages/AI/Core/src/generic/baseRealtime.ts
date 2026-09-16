@@ -897,6 +897,10 @@ export interface RealtimeUsageModalityDetail {
     ImageTokens?: number;
     /** Tokens served from the provider's prompt cache (billed at the cached rate). */
     CachedTokens?: number;
+    /** Inbound video frames processed on video tracks (usage basis 'frames'). */
+    VideoFrames?: number;
+    /** Inbound or outbound video duration in seconds (usage basis 'seconds'). */
+    VideoSeconds?: number;
 }
 
 /**

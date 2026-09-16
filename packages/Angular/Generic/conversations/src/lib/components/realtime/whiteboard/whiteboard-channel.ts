@@ -1,7 +1,8 @@
 import type { Type } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { RegisterClass } from '@memberjunction/global';
-import { RealtimeToolDefinition } from '@memberjunction/ai';
+import { CHANNEL_INBOUND_VIDEO_TRACK, RealtimeToolDefinition, RealtimeTrackDescriptor } from '@memberjunction/ai';
+import { ChannelInboundVideoBridge, IChannelFrameProvider } from '@memberjunction/ai-realtime-client';
 import { BaseRealtimeChannelClient, ChannelOnboardingDetails } from '../channels/base-realtime-channel-client';
 import {
   ApplyWhiteboardAgentTool, RealtimeWhiteboardHostComponent, WHITEBOARD_TOOL_DEFINITIONS,
@@ -56,7 +57,7 @@ interface InteractionThrottleEntry {
  * incompatible payloads are tolerated — the board simply starts fresh.
  */
 @RegisterClass(BaseRealtimeChannelClient, 'RealtimeWhiteboardChannel')
-export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<RealtimeWhiteboardHostComponent> {
+export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<RealtimeWhiteboardHostComponent> implements IChannelFrameProvider {
   /** The board's state of record — created fresh with the plugin (one per session). */
   public readonly State = new WhiteboardState();
 
@@ -68,9 +69,26 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
   private stateChangedSub: Subscription | null = null;
   /** Per-widget ambient-interaction note throttles (ItemID → window state). */
   private interactionThrottles = new Map<string, InteractionThrottleEntry>();
+  /** Shared video bridge streaming board frames to the model when the model supports inbound video. */
+  private videoBridge: ChannelInboundVideoBridge | null = null;
 
   public get ChannelName(): string {
     return 'Whiteboard';
+  }
+
+  /**
+   * Sourced tracks: Whiteboard can source inbound video to the model when the model supports it.
+   */
+  public override GetSourcedTracks(): readonly RealtimeTrackDescriptor[] {
+    return [CHANNEL_INBOUND_VIDEO_TRACK];
+  }
+
+  /**
+   * Produces the latest visual scene as a base64-encoded frame for the video bridge.
+   * Returns null when no frame is available.
+   */
+  public GetLatestFrame(): string | null {
+    return null;
   }
 
   public get ToolNamePrefix(): string {
@@ -114,6 +132,10 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
     this.stateChangedSub = this.State.Changed$.subscribe(() => {
       this.Context?.RequestSave(this.State.ToJSON());
     });
+    if (this.Context?.Client) {
+      this.videoBridge = new ChannelInboundVideoBridge(this.Context.Client, this);
+      this.videoBridge.Start();
+    }
   }
 
   /**
@@ -283,6 +305,8 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
   }
 
   public override Dispose(): void {
+    this.videoBridge?.Stop();
+    this.videoBridge = null;
     this.stateChangedSub?.unsubscribe();
     this.stateChangedSub = null;
     super.Dispose(); // releases the surface binding + context

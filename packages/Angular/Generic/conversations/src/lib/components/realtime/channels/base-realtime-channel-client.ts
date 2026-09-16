@@ -1,7 +1,8 @@
 import type { Type } from '@angular/core';
 import type { Observable } from 'rxjs';
 import { IMetadataProvider } from '@memberjunction/core';
-import { JSONValue, RealtimeToolDefinition } from '@memberjunction/ai';
+import { JSONValue, RealtimeToolDefinition, RealtimeTrackDescriptor, RealtimeTrackDirection } from '@memberjunction/ai';
+import type { BaseRealtimeClient } from '@memberjunction/ai-realtime-client';
 import type { AppContextSnapshot } from '@memberjunction/ai-core-plus';
 
 /**
@@ -130,6 +131,26 @@ export interface RealtimeChannelContext {
     name: string,
     params: Record<string, unknown>
   ): Promise<{ Success: boolean; Result?: unknown; ErrorMessage?: string }>;
+
+  /**
+   * OPTIONAL — sends a visual frame into the live session's inbound video track
+   * (e.g. from Whiteboard or Remote Browser video bridges). No-op when the session
+   * has not established an inbound video track or is not live.
+   *
+   * @param base64Image The image data (base64-encoded JPEG/PNG).
+   * @param mimeType The image MIME type (defaults to 'image/jpeg').
+   */
+  SendVideoFrame?(base64Image: string, mimeType?: string): void;
+
+  /**
+   * OPTIONAL — checks whether a media track is currently established on the live session.
+   */
+  IsTrackEstablished?(modality: string, direction: RealtimeTrackDirection): boolean;
+
+  /**
+   * OPTIONAL — the underlying {@link BaseRealtimeClient} driving the media and transport planes.
+   */
+  Client?: BaseRealtimeClient | null;
 }
 
 /**
@@ -407,6 +428,22 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
    */
   public RequestFocusExit(): void {
     // default: the overlay's defensive clear handles it
+  }
+
+  /**
+   * Media tracks this client channel can SOURCE — samples flowing into the model.
+   * Default `[]`.
+   */
+  public GetSourcedTracks(): readonly RealtimeTrackDescriptor[] {
+    return [];
+  }
+
+  /**
+   * Media tracks this client channel can SINK — samples flowing from the model OUT.
+   * Default `[]`.
+   */
+  public GetSunkTracks(): readonly RealtimeTrackDescriptor[] {
+    return [];
   }
 
   /**
