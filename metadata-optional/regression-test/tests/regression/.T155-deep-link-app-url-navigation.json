@@ -3,7 +3,7 @@
     "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
     "Name": "T155 - Deep Link App URL Navigation",
     "Description": "Exercises the routed deep-link entry (app/:appName -> ResourceResolver/app load) initiated from the URL, distinct from clicking the app-switcher dropdown and from reload-based session persistence.",
-    "InputDefinition": "{\n  \"goal\": \"You are logged in at http://localhost:4200. Navigate the browser's address bar directly to the deep-link URL http://localhost:4200/app/Admin and press Enter. Verify the Explorer resolves this route and loads the Admin application (its landing screen or a section list), rather than showing a 404, a blank page, or bouncing to Home. Seeing the Admin app render from the typed URL is success. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "InputDefinition": "{\n  \"goal\": \"You are logged in at http://localhost:4200. Navigate the browser's address bar directly to the deep-link URL http://localhost:4200/app/Admin and press Enter. Verify the Explorer resolves this route and loads the Admin application (its landing screen or a section list), rather than showing a 404, a blank page, or bouncing to Home. Seeing the Admin app render from the typed URL is success. Pages can take 10-30s to load in this resource-constrained environment \u2014 wait, don't navigate away.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
     "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 35,\n  \"judgeValidationCriteria\": [\n    \"Navigating the address bar to /app/Admin loads the Admin application (its nav sections or landing render)\",\n    \"The route resolves to the correct app rather than a not-found/blank page or an unexpected redirect to Home\",\n    \"No error messages, blank screens, or crash pages\"\n  ]\n}",
     "Configuration": {
       "headless": true,
@@ -34,8 +34,7 @@
       "scoringWeights": {
         "goal-completion": 0.6,
         "step-count": 0.4
-      },
-      "ReplayScript": "@file:regression/scripts/t155-deep-link-app-url-navigation.json"
+      }
     },
     "Status": "Active",
     "Tags": "P2,regression,shell",
@@ -50,9 +49,5 @@
   },
   "primaryKey": {
     "ID": "72D0058B-6E19-4FD4-BCC9-A8238B610AE4"
-  },
-  "sync": {
-    "lastModified": "2026-09-11T21:36:54.306Z",
-    "checksum": "82d2bd2ab1d0d7b4d1babe21768fcfaf32b93c00d81ce9e0e3e5b8de165e5ff6"
   }
 }

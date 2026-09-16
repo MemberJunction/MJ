@@ -2,8 +2,8 @@
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
     "Name": "T116 - Home App Card Click Navigation",
-    "Description": "Exercises onAppClick() → NavigationService.SwitchToApp(app.ID) from the app-card grid — a distinct navigation entry point from the application-switcher dropdown covered elsewhere.",
-    "InputDefinition": "{\n  \"goal\": \"You are already logged in at http://localhost:4200. Go to the Home landing page (Home icon/logo or application switcher dropdown). Scroll to the 'My Applications' section and click one of the application cards (each shows an app icon, name, description, and a few nav-item chips). Verify that clicking the CARD navigates into that application — the workspace should switch to that app's view (a new/updated tab, the app's sections in the left nav, etc.), not just highlight the card. Success is that the app opens after clicking its card. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "Description": "Exercises onAppClick() \u2192 NavigationService.SwitchToApp(app.ID) from the app-card grid \u2014 a distinct navigation entry point from the application-switcher dropdown covered elsewhere.",
+    "InputDefinition": "{\n  \"goal\": \"You are already logged in at http://localhost:4200. Go to the Home landing page (Home icon/logo or application switcher dropdown). Scroll to the 'My Applications' section and click one of the application cards (each shows an app icon, name, description, and a few nav-item chips). Verify that clicking the CARD navigates into that application \u2014 the workspace should switch to that app's view (a new/updated tab, the app's sections in the left nav, etc.), not just highlight the card. Success is that the app opens after clicking its card. Pages can take 10-30s to load in this resource-constrained environment \u2014 wait, don't navigate away.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
     "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 35,\n  \"judgeValidationCriteria\": [\n    \"Clicking an application card in the 'My Applications' grid navigates into that application (its content/sections load)\",\n    \"The destination reflects the app that was clicked (title/sections match the chosen card)\",\n    \"No error messages, blank screens, or crash pages\"\n  ]\n}",
     "Configuration": {
       "headless": true,
@@ -34,8 +34,7 @@
       "scoringWeights": {
         "goal-completion": 0.6,
         "step-count": 0.4
-      },
-      "ReplayScript": "@file:regression/scripts/t116-home-app-card-click-navigation.json"
+      }
     },
     "Status": "Active",
     "Tags": "P1,regression,home",
@@ -50,9 +49,5 @@
   },
   "primaryKey": {
     "ID": "105FD41D-201B-4E3C-BAA2-B7C4BD703690"
-  },
-  "sync": {
-    "lastModified": "2026-09-11T21:36:53.933Z",
-    "checksum": "0ce78581d53eddd764d7d145689c003d26bee9105f604fc84132f88a5bf0f33a"
   }
 }

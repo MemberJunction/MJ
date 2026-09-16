@@ -2,8 +2,8 @@
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
     "Name": "T146 - New Component Dialog",
-    "Description": "Exercises the new-component-dialog reactive form (type-card selection + required-field validation gating the Create button) — a bespoke creation flow distinct from generic entity create.",
-    "InputDefinition": "{\n  \"goal\": \"In the Component Studio app (Components section), click the 'New Component' button. Verify the 'Create New Component' dialog opens showing a Name field (marked required), a Type selection rendered as a card grid, a Title field, and a Description textarea. Confirm the 'Create' button is DISABLED while Name is empty, then type a name and verify 'Create' becomes enabled. Pages can take 10-30s to load — wait, don't navigate away. Seeing the dialog render with its fields and the Create button gating on the required Name is success — you do NOT need to actually create the component (you may Cancel).\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "Description": "Exercises the new-component-dialog reactive form (type-card selection + required-field validation gating the Create button) \u2014 a bespoke creation flow distinct from generic entity create.",
+    "InputDefinition": "{\n  \"goal\": \"In the Component Studio app (Components section), click the 'New Component' button. Verify the 'Create New Component' dialog opens showing a Name field (marked required), a Type selection rendered as a card grid, a Title field, and a Description textarea. Confirm the 'Create' button is DISABLED while Name is empty, then type a name and verify 'Create' becomes enabled. Pages can take 10-30s to load \u2014 wait, don't navigate away. Seeing the dialog render with its fields and the Create button gating on the required Name is success \u2014 you do NOT need to actually create the component (you may Cancel).\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
     "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 35,\n  \"judgeValidationCriteria\": [\n    \"Clicking 'New Component' opens a 'Create New Component' dialog with a required Name field, a Type card grid, Title, and Description\",\n    \"The 'Create' button is disabled with an empty Name and becomes enabled after a name is entered\",\n    \"No error messages, blank screens, or crash pages\"\n  ]\n}",
     "Configuration": {
       "headless": true,
@@ -34,8 +34,7 @@
       "scoringWeights": {
         "goal-completion": 0.6,
         "step-count": 0.4
-      },
-      "ReplayScript": "@file:regression/scripts/t146-new-component-dialog.json"
+      }
     },
     "Status": "Active",
     "Tags": "P2,regression,component-studio",
@@ -50,9 +49,5 @@
   },
   "primaryKey": {
     "ID": "1AEF9642-3364-428D-B805-0480F27CF90B"
-  },
-  "sync": {
-    "lastModified": "2026-09-11T21:36:54.260Z",
-    "checksum": "40bc8e70b3c16d9c2115fb319b4d3655b9e36f2763bf61029a0cc36c60d74aaf"
   }
 }

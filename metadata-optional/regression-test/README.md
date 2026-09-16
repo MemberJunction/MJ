@@ -183,7 +183,11 @@ Always add `regression` as a tag too. Other useful tags: `smoke`, `crud`, `auth`
 A passing run records the actions it took as a **replay script**, so a later run can re-drive the
 test deterministically instead of paying for an LLM to rediscover the same path.
 
-Scripts live in `regression/scripts/`, one file per test, referenced from the test's
+**No scripts are committed on this branch yet.** `regression/scripts/` does not exist, so every
+test runs on the LLM tier and records nothing durable; the wiring below is in place for when the
+recordings are reviewed and landed.
+
+Once recorded, scripts live in `regression/scripts/`, one file per test, referenced from the test's
 `Configuration`:
 
 ```json

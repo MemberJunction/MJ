@@ -2,8 +2,8 @@
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
     "Name": "T096 - Conversation Selection Mode Bulk Bar",
-    "Description": "Exercises the isSelectionMode UI and bulk-delete action bar — a distinct multi-select branch of ConversationListComponent separate from single-item delete.",
-    "InputDefinition": "{\n  \"goal\": \"Open the Chat application and wait for the workspace. In the sidebar, click the '...' (Options) menu at the top of the conversation list and choose 'Select Conversations'. Confirm the list enters selection mode: checkboxes appear next to conversations and a selection action bar appears with a count, a 'Select All' (or 'Deselect All') link, a 'Delete (N)' button, and a 'Cancel' button. Tick a checkbox and confirm the count updates. Then click 'Cancel' to exit selection mode. Seeing selection mode toggle on with its action bar is success — you do NOT need to actually delete anything. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "Description": "Exercises the isSelectionMode UI and bulk-delete action bar \u2014 a distinct multi-select branch of ConversationListComponent separate from single-item delete.",
+    "InputDefinition": "{\n  \"goal\": \"Open the Chat application and wait for the workspace. In the sidebar, click the '...' (Options) menu at the top of the conversation list and choose 'Select Conversations'. Confirm the list enters selection mode: checkboxes appear next to conversations and a selection action bar appears with a count, a 'Select All' (or 'Deselect All') link, a 'Delete (N)' button, and a 'Cancel' button. Tick a checkbox and confirm the count updates. Then click 'Cancel' to exit selection mode. Seeing selection mode toggle on with its action bar is success \u2014 you do NOT need to actually delete anything. Pages can take 10-30s to load in this resource-constrained environment \u2014 wait, don't navigate away.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
     "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 35,\n  \"judgeValidationCriteria\": [\n    \"The list options menu offers 'Select Conversations' and choosing it shows checkboxes plus a selection action bar\",\n    \"The action bar shows a selected count, a Select/Deselect All control, a Delete button, and a Cancel button\",\n    \"Toggling a checkbox updates the selected count; Cancel exits selection mode\",\n    \"No error messages, blank screens, or crash pages\"\n  ]\n}",
     "Configuration": {
       "headless": true,
@@ -34,8 +34,7 @@
       "scoringWeights": {
         "goal-completion": 0.6,
         "step-count": 0.4
-      },
-      "ReplayScript": "@file:regression/scripts/t096-conversation-selection-mode-bulk-bar.json"
+      }
     },
     "Status": "Active",
     "Tags": "P2,regression,chat",
@@ -50,9 +49,5 @@
   },
   "primaryKey": {
     "ID": "B62C2A4E-9901-4B1A-8AE6-66B4D78D5F8D"
-  },
-  "sync": {
-    "lastModified": "2026-09-11T21:36:53.780Z",
-    "checksum": "3231c109bd46c353effc54fefda33dfb6c1fb0523636cb04f1f1a3d0dd9ce9b9"
   }
 }

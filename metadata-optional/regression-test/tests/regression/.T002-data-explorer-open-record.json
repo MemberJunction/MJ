@@ -42,8 +42,7 @@
         "goal-completion": 0.5,
         "step-count": 0.3,
         "url-match": 0.2
-      },
-      "ReplayScript": "@file:regression/scripts/t002-data-explorer-open-entity-record.json"
+      }
     },
     "Status": "Active",
     "Tags": "P0,regression",
@@ -57,10 +56,6 @@
     "SkipEmbeddings": false
   },
   "primaryKey": {
-    "ID": "2BB830E5-AAB2-4537-BC35-366E5F7D9D31"
-  },
-  "sync": {
-    "lastModified": "2026-09-11T21:36:52.924Z",
-    "checksum": "c302063d6807badbfc3dda178faa0f544d9e4502c855edb10868de59ac10a228"
+    "ID": "8FA3BAC1-016B-48F1-88DE-B751011B2452"
   }
 }

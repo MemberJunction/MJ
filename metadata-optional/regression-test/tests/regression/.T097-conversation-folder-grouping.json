@@ -2,8 +2,8 @@
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
     "Name": "T097 - Conversation Folder Grouping",
-    "Description": "Exercises the groupBy='project' folder-tree render and the flat/grouped toggle plus folder creation — a distinct organizational feature unique to the conversation sidebar.",
-    "InputDefinition": "{\n  \"goal\": \"Open the Chat application and wait for the workspace. In the sidebar, open the '...' (Options) menu at the top of the conversation list and choose 'Group by folder'. Confirm the list restructures to show a 'Folders' section (with a 'New Folder' / folder-plus affordance) and an 'Ungrouped'/'Messages' section. Optionally click the New Folder button and confirm a folder-creation dialog appears. Then use the menu again to switch back to 'Show as flat list' and confirm the flat 'Messages' list returns. The layout switching between folder-grouped and flat is success. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "Description": "Exercises the groupBy='project' folder-tree render and the flat/grouped toggle plus folder creation \u2014 a distinct organizational feature unique to the conversation sidebar.",
+    "InputDefinition": "{\n  \"goal\": \"Open the Chat application and wait for the workspace. In the sidebar, open the '...' (Options) menu at the top of the conversation list and choose 'Group by folder'. Confirm the list restructures to show a 'Folders' section (with a 'New Folder' / folder-plus affordance) and an 'Ungrouped'/'Messages' section. Optionally click the New Folder button and confirm a folder-creation dialog appears. Then use the menu again to switch back to 'Show as flat list' and confirm the flat 'Messages' list returns. The layout switching between folder-grouped and flat is success. Pages can take 10-30s to load in this resource-constrained environment \u2014 wait, don't navigate away.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
     "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 35,\n  \"judgeValidationCriteria\": [\n    \"'Group by folder' restructures the sidebar into a Folders section plus an Ungrouped/Messages section\",\n    \"A 'New Folder' affordance is present in the Folders section (and opens a folder dialog if clicked)\",\n    \"Switching back to 'Show as flat list' restores the flat Messages list\",\n    \"No error messages, blank screens, or crash pages\"\n  ]\n}",
     "Configuration": {
       "headless": true,
@@ -34,8 +34,7 @@
       "scoringWeights": {
         "goal-completion": 0.6,
         "step-count": 0.4
-      },
-      "ReplayScript": "@file:regression/scripts/t097-conversation-folder-grouping.json"
+      }
     },
     "Status": "Active",
     "Tags": "P2,regression,chat",
@@ -50,9 +49,5 @@
   },
   "primaryKey": {
     "ID": "610BF5AD-B684-4E85-A210-8D584735002A"
-  },
-  "sync": {
-    "lastModified": "2026-09-11T21:36:53.799Z",
-    "checksum": "f0c57a0653871f3bc6c68b4acea849b2769387db0b1dca170c2f481b4824aa4a"
   }
 }

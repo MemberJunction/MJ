@@ -3,7 +3,7 @@
     "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
     "Name": "T005 - Handle Invalid Navigation Gracefully",
     "Description": "Attempts to navigate to a non-existent entity or URL path and verifies the application handles it gracefully without crashing.",
-    "InputDefinition": "{\n  \"goal\": \"Navigate the browser to an invalid URL path like http://localhost:4200/app/nonexistent/invalid-path. The app handles invalid routes gracefully by REDIRECTING to the Home page (you will end up at /app/home/Home) — this may take a brief loading moment, so WAIT for the redirect to settle (do not conclude failure while it is still loading). Success = the app ends on a valid page (Home), or shows an error/'not found' message; it must NOT show a blank white screen or crash. Reaching the Home page after the invalid URL counts as graceful handling.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "InputDefinition": "{\n  \"goal\": \"Navigate the browser to an invalid URL path like http://localhost:4200/app/nonexistent/invalid-path. The app handles invalid routes gracefully by REDIRECTING to the Home page (you will end up at /app/home/Home) \u2014 this may take a brief loading moment, so WAIT for the redirect to settle (do not conclude failure while it is still loading). Success = the app ends on a valid page (Home), or shows an error/'not found' message; it must NOT show a blank white screen or crash. Reaching the Home page after the invalid URL counts as graceful handling.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
     "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"minConfidence\": 0.6,\n  \"maxSteps\": 35,\n  \"judgeValidationCriteria\": [\n    \"User navigated to an invalid/nonexistent path\",\n    \"Application displayed an error page or redirected gracefully\",\n    \"Application did NOT show a blank white screen or crash\"\n  ]\n}",
     "Configuration": {
       "headless": true,
@@ -34,8 +34,7 @@
       "scoringWeights": {
         "goal-completion": 0.7,
         "step-count": 0.3
-      },
-      "ReplayScript": "@file:regression/scripts/t005-handle-invalid-navigation-gracefully.json"
+      }
     },
     "Status": "Active",
     "Tags": "P3,regression",
@@ -49,10 +48,6 @@
     "SkipEmbeddings": false
   },
   "primaryKey": {
-    "ID": "36A5AAA2-25B8-42FC-A06A-DF19BFEA56F0"
-  },
-  "sync": {
-    "lastModified": "2026-09-11T21:36:52.967Z",
-    "checksum": "9bfa3086394332b692cda8fc973287777de6b9f01896a4a8d906a6419aa51791"
+    "ID": "F41D1D9B-73B1-499A-841C-E4A6E2C08FB3"
   }
 }

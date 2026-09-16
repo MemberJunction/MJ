@@ -3,7 +3,7 @@
     "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
     "Name": "T144 - Component Browser List Controls",
     "Description": "Opens the Component Studio browser once, then walks its list controls (search narrows list, collapsible filter panel), verifying each via checkpoints. Consolidates old T362, T363.",
-    "InputDefinition": "{\n  \"goal\": \"Open the Component Studio app using the application switcher dropdown next to the logo, then open the Components section. This shared setup is done ONCE. Then exercise these controls IN ORDER, and as you finish each set \\\"checkpointReached\\\" to the exact checkpoint name shown: (1) search-narrows — in the left browser panel's 'Search components...' box type a few characters of a likely component name (or a random string like 'zzz') and confirm the browser responds — the 'X of Y' count updates and the card list narrows to matches, or a 'No matching components' empty state appears for a non-matching query; (2) filter-panel — click the filter toggle button (a sliders icon) in the browser header controls row to expand the collapsible filter panel, confirm it renders its controls ('Favorites only' checkbox, 'Show deprecated' checkbox, and — if categories exist — category pill buttons), then toggle 'Favorites only' or a category pill and confirm the component list/count responds (or a no-results empty state). Keep going until both controls have been exercised. Pages can take 10-30s to load in this resource-constrained environment — wait for content rather than navigating away.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "InputDefinition": "{\n  \"goal\": \"Open the Component Studio app using the application switcher dropdown next to the logo, then open the Components section. This shared setup is done ONCE. Then exercise these controls IN ORDER, and as you finish each set \\\"checkpointReached\\\" to the exact checkpoint name shown: (1) search-narrows \u2014 in the left browser panel's 'Search components...' box type a few characters of a likely component name (or a random string like 'zzz') and confirm the browser responds \u2014 the 'X of Y' count updates and the card list narrows to matches, or a 'No matching components' empty state appears for a non-matching query; (2) filter-panel \u2014 click the filter toggle button (a sliders icon) in the browser header controls row to expand the collapsible filter panel, confirm it renders its controls ('Favorites only' checkbox, 'Show deprecated' checkbox, and \u2014 if categories exist \u2014 category pill buttons), then toggle 'Favorites only' or a category pill and confirm the component list/count responds (or a no-results empty state). Keep going until both controls have been exercised. Pages can take 10-30s to load in this resource-constrained environment \u2014 wait for content rather than navigating away.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
     "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"finalUrlPattern\": \"^http://localhost:4200\",\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 45,\n  \"checkpoints\": [\n    {\n      \"name\": \"search-narrows\",\n      \"instruction\": \"component search narrows the list\",\n      \"visualCriteria\": [\n        \"Typing in the 'Search components...' box changes the visible component list and/or the 'X of Y' count, and a non-matching query produces a 'No matching components' empty state rather than an unchanged full list\"\n      ]\n    },\n    {\n      \"name\": \"filter-panel\",\n      \"instruction\": \"filter panel expands and reacts\",\n      \"visualCriteria\": [\n        \"Clicking the filter toggle (sliders icon) expands a filter panel showing 'Favorites only' and 'Show deprecated' options, and toggling a filter (favorites or a category pill) updates the component list or the 'X of Y' count (or shows a no-results state)\"\n      ]\n    }\n  ]\n}",
     "Configuration": {
       "headless": true,
@@ -34,8 +34,7 @@
       "scoringWeights": {
         "goal-completion": 0.7,
         "url-match": 0.3
-      },
-      "ReplayScript": "@file:regression/scripts/t144-component-browser-list-controls.json"
+      }
     },
     "Status": "Active",
     "Tags": "P2,regression,component-studio",
@@ -50,9 +49,5 @@
   },
   "primaryKey": {
     "ID": "183EA69E-6D61-45AC-9460-5089DEFDE214"
-  },
-  "sync": {
-    "lastModified": "2026-09-11T21:36:54.257Z",
-    "checksum": "32a1ad1e931d211285fb619a594acc8dd1dda672b74710907d6579c3810160d4"
   }
 }

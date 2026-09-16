@@ -3,7 +3,7 @@
     "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
     "Name": "T007 - Data Explorer Search Members",
     "Description": "Verifies the Members grid quick-filter is functional.",
-    "InputDefinition": "{\n  \"goal\": \"Open the 'Members' entity grid — type 'Members' in the LEFT sidebar 'Search entities...' box and click the EXACT 'Members' match (not 'Board Members'/'Memberships'); if that is giving you trouble, navigate directly to http://localhost:4200/app/data-explorer/Data?entity=Members. The grid loads ~100 of ~2,002 records per page. Type a value into the grid's filter box (placeholder 'Filter records...') — e.g. a common first-name fragment — and verify the grid RESPONDS to the filter: the displayed rows narrow to matching ones, OR a clear 'No Matching Rows' state appears if none match on the loaded page. Either response confirms the filter is functional (it is client-side over the loaded page). Pages can take 10-30s to load — wait, don't navigate away.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "InputDefinition": "{\n  \"goal\": \"Open the 'Members' entity grid \u2014 type 'Members' in the LEFT sidebar 'Search entities...' box and click the EXACT 'Members' match (not 'Board Members'/'Memberships'); if that is giving you trouble, navigate directly to http://localhost:4200/app/data-explorer/Data?entity=Members. The grid loads ~100 of ~2,002 records per page. Type a value into the grid's filter box (placeholder 'Filter records...') \u2014 e.g. a common first-name fragment \u2014 and verify the grid RESPONDS to the filter: the displayed rows narrow to matching ones, OR a clear 'No Matching Rows' state appears if none match on the loaded page. Either response confirms the filter is functional (it is client-side over the loaded page). Pages can take 10-30s to load \u2014 wait, don't navigate away.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
     "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 45,\n  \"judgeValidationCriteria\": [\n    \"The Members entity grid is displayed with rows\",\n    \"The grid responded to filter input (rows narrowed to matches, or a clear no-match state was shown)\",\n    \"No error messages, blank screens, or crash pages\"\n  ]\n}",
     "Configuration": {
       "headless": true,
@@ -34,8 +34,7 @@
       "scoringWeights": {
         "goal-completion": 0.6,
         "step-count": 0.4
-      },
-      "ReplayScript": "@file:regression/scripts/t007-data-explorer-search-members.json"
+      }
     },
     "Status": "Active",
     "Tags": "P1,regression,search",
@@ -50,9 +49,5 @@
   },
   "primaryKey": {
     "ID": "FB8724E6-22E4-4E8A-8695-82A49A27306D"
-  },
-  "sync": {
-    "lastModified": "2026-09-11T21:36:52.987Z",
-    "checksum": "d4898c164e9e1596c86d54e568ee09d6f943ab6a8e56e4200646f075e71abf23"
   }
 }

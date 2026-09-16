@@ -2,8 +2,8 @@
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
     "Name": "T032 - AI Agent Run Timeline Steps",
-    "Description": "Opens a completed AI Agent Run and verifies the Timeline tab shows the run's execution steps with type/duration/status — exercising MJ's agent-run detail UI.",
-    "InputDefinition": "{\n  \"goal\": \"Open the 'MJ: AI Agent Runs' entity grid — type 'AI Agent Runs' in the LEFT sidebar 'Search entities...' box and click the 'MJ: AI Agent Runs' node (or navigate to http://localhost:4200/app/data-explorer/Data?entity=MJ:%20AI%20Agent%20Runs). Click a row whose Status is 'Completed', then click 'Open Full Record'. The AI Agent Run detail opens with a header (the agent name e.g. 'Memory Manager', a COMPLETED badge, and Started/Completed/Duration/Result fields) and a row of tabs: Timeline, Visualization, Analytics, Details. On the default 'Timeline' tab, verify the run's execution STEPS are listed — each step shows a name (e.g. 'Agent Validation', 'Load Conversations With New Activity'), a Type (e.g. Validation or Decision), a duration in ms, and a Completed status. Confirm at least the run header (Duration, Result: Success) AND one or more timeline steps are visible. Pages can take 10-30s to load — wait, don't navigate away.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "Description": "Opens a completed AI Agent Run and verifies the Timeline tab shows the run's execution steps with type/duration/status \u2014 exercising MJ's agent-run detail UI.",
+    "InputDefinition": "{\n  \"goal\": \"Open the 'MJ: AI Agent Runs' entity grid \u2014 type 'AI Agent Runs' in the LEFT sidebar 'Search entities...' box and click the 'MJ: AI Agent Runs' node (or navigate to http://localhost:4200/app/data-explorer/Data?entity=MJ:%20AI%20Agent%20Runs). Click a row whose Status is 'Completed', then click 'Open Full Record'. The AI Agent Run detail opens with a header (the agent name e.g. 'Memory Manager', a COMPLETED badge, and Started/Completed/Duration/Result fields) and a row of tabs: Timeline, Visualization, Analytics, Details. On the default 'Timeline' tab, verify the run's execution STEPS are listed \u2014 each step shows a name (e.g. 'Agent Validation', 'Load Conversations With New Activity'), a Type (e.g. Validation or Decision), a duration in ms, and a Completed status. Confirm at least the run header (Duration, Result: Success) AND one or more timeline steps are visible. Pages can take 10-30s to load \u2014 wait, don't navigate away.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
     "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 40,\n  \"judgeValidationCriteria\": [\n    \"A Completed AI Agent Run record opened showing its run header (agent name, COMPLETED, Duration, Result)\",\n    \"The Timeline lists one or more execution steps, each with a name, type, duration, and status\",\n    \"No error messages or crash pages\"\n  ]\n}",
     "Configuration": {
       "headless": true,
@@ -34,8 +34,7 @@
       "scoringWeights": {
         "goal-completion": 0.6,
         "step-count": 0.4
-      },
-      "ReplayScript": "@file:regression/scripts/t032-ai-agent-run-timeline-steps.json"
+      }
     },
     "Status": "Active",
     "Tags": "P2,regression,ai",
@@ -50,9 +49,5 @@
   },
   "primaryKey": {
     "ID": "967A045A-97AF-4EF1-A38D-16E05B62DB7E"
-  },
-  "sync": {
-    "lastModified": "2026-09-11T21:36:53.223Z",
-    "checksum": "20e954c8b0b0b4b6ea0feca7d7c834f7e7fa4dd3fea8f4c689e0a4f6ce6782c3"
   }
 }

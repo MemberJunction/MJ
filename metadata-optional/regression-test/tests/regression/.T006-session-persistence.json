@@ -3,7 +3,7 @@
     "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
     "Name": "T006 - Session Persistence Reload Page",
     "Description": "Logs in, navigates to Data Explorer, opens a record, reloads the browser page, and verifies the session is maintained.",
-    "InputDefinition": "{\n  \"goal\": \"Navigate to Data Explorer and open any entity (e.g., Members). Then reload the browser page (press F5 or use the Refresh action). After the page reloads, verify that the user is still logged in (not redirected to the login page) and the application is functional. Note: after reload, the app may show the loading screen again briefly — this is normal, wait for it to finish. You have a limited amount of steps to be sure to wait for a good amount of time.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "InputDefinition": "{\n  \"goal\": \"Navigate to Data Explorer and open any entity (e.g., Members). Then reload the browser page (press F5 or use the Refresh action). After the page reloads, verify that the user is still logged in (not redirected to the login page) and the application is functional. Note: after reload, the app may show the loading screen again briefly \u2014 this is normal, wait for it to finish. You have a limited amount of steps to be sure to wait for a good amount of time.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
     "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 35,\n  \"judgeValidationCriteria\": [\n    \"User was logged in and navigated to content\",\n    \"Page was reloaded\",\n    \"After reload, user is still logged in (not redirected to login)\",\n    \"Application is functional after reload\"\n  ]\n}",
     "Configuration": {
       "headless": true,
@@ -48,10 +48,6 @@
     "SkipEmbeddings": false
   },
   "primaryKey": {
-    "ID": "C2496941-0035-4B09-9E5C-C4D53822F940"
-  },
-  "sync": {
-    "lastModified": "2026-09-11T21:36:52.969Z",
-    "checksum": "06ba8cefb27ad279c8a79882f75e36f90ab71cd926ddfa442466dfb2feea705a"
+    "ID": "4F7533E2-29B3-48FD-BF83-934D309AE4C9"
   }
 }

@@ -2,9 +2,9 @@
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
     "Name": "T101 - Classify Pipeline Run and Monitor",
-    "Description": "Exercises the autotagging classification pipeline run path (RunPipeline) and the live pipeline-monitor rendering — a bespoke KPI/feed/progress UI, not the generic grid.",
-    "InputDefinition": "{\n  \"goal\": \"Open the application switcher dropdown next to the logo and switch to the Knowledge Hub app. The default landing is the Classify screen (fa-tags icon). In the left nav within Classify, click the 'Pipeline' section, then click the primary 'Run Pipeline' button in the top-right header. Success is that the Pipeline Monitor renders its KPI strip and 'Recent Processing' feed, AND that clicking Run Pipeline puts the pipeline into a running/monitoring state (a progress bar with a stage label and percent appears, OR the run kicks off with pause/cancel controls) — you do NOT need to wait for the run to finish. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
-    "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 35,\n  \"judgeValidationCriteria\": [\n    \"The Classify screen loads with a left-nav rail and the Pipeline section shows a KPI strip and a 'Recent Processing' feed\",\n    \"Clicking 'Run Pipeline' transitions to a running state — a progress bar with a stage label and percentage, OR pause/cancel controls appear (a valid already-running or empty-source state also counts)\",\n    \"No error messages, blank screens, or crash pages\"\n  ]\n}",
+    "Description": "Exercises the autotagging classification pipeline run path (RunPipeline) and the live pipeline-monitor rendering \u2014 a bespoke KPI/feed/progress UI, not the generic grid.",
+    "InputDefinition": "{\n  \"goal\": \"Open the application switcher dropdown next to the logo and switch to the Knowledge Hub app. The default landing is the Classify screen (fa-tags icon). In the left nav within Classify, click the 'Pipeline' section, then click the primary 'Run Pipeline' button in the top-right header. Success is that the Pipeline Monitor renders its KPI strip and 'Recent Processing' feed, AND that clicking Run Pipeline puts the pipeline into a running/monitoring state (a progress bar with a stage label and percent appears, OR the run kicks off with pause/cancel controls) \u2014 you do NOT need to wait for the run to finish. Pages can take 10-30s to load in this resource-constrained environment \u2014 wait, don't navigate away.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 35,\n  \"judgeValidationCriteria\": [\n    \"The Classify screen loads with a left-nav rail and the Pipeline section shows a KPI strip and a 'Recent Processing' feed\",\n    \"Clicking 'Run Pipeline' transitions to a running state \u2014 a progress bar with a stage label and percentage, OR pause/cancel controls appear (a valid already-running or empty-source state also counts)\",\n    \"No error messages, blank screens, or crash pages\"\n  ]\n}",
     "Configuration": {
       "headless": true,
       "maxSteps": 35,
@@ -34,8 +34,7 @@
       "scoringWeights": {
         "goal-completion": 0.6,
         "step-count": 0.4
-      },
-      "ReplayScript": "@file:regression/scripts/t101-classify-pipeline-run-and-monitor.json"
+      }
     },
     "Status": "Active",
     "Tags": "P1,regression,knowledge-hub",
@@ -50,9 +49,5 @@
   },
   "primaryKey": {
     "ID": "1B5A6380-8407-477C-82C9-EEE5C275D93F"
-  },
-  "sync": {
-    "lastModified": "2026-09-11T21:36:53.839Z",
-    "checksum": "6942b670c238b0f7ec7d8fffd6cb3b83e48dc04b9223c1ff6a68aa8955454349"
   }
 }

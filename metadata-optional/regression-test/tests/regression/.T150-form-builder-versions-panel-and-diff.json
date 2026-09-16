@@ -2,8 +2,8 @@
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
     "Name": "T150 - Form Builder Versions Panel And Diff",
-    "Description": "Exercises the version rail (fb-versions-list rows + activate/restore) and the side-by-side diff dialog (OnVersionDiffClick → fb-diff-modal) — Form Builder version-control UI unique to this surface.",
-    "InputDefinition": "{\n  \"goal\": \"In Component Studio → Form Studio, open an existing form in the left rail. Below the forms list, verify the 'Versions' panel renders showing version rows (v1, v2, …) with Active/Pending/Inactive tags — or a 'No version history yet' empty state if the form has none. If two or more versions exist, click the diff (code-compare) icon on one version row, then on another, to open the 'Compare versions' dialog showing side-by-side A/B code panes. Pages can take 10-30s to load — wait, don't navigate away. Seeing the versions panel render (and, when 2+ versions exist, the diff dialog open) is success. A clean 'no version history' empty state is also a pass.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "Description": "Exercises the version rail (fb-versions-list rows + activate/restore) and the side-by-side diff dialog (OnVersionDiffClick \u2192 fb-diff-modal) \u2014 Form Builder version-control UI unique to this surface.",
+    "InputDefinition": "{\n  \"goal\": \"In Component Studio \u2192 Form Studio, open an existing form in the left rail. Below the forms list, verify the 'Versions' panel renders showing version rows (v1, v2, \u2026) with Active/Pending/Inactive tags \u2014 or a 'No version history yet' empty state if the form has none. If two or more versions exist, click the diff (code-compare) icon on one version row, then on another, to open the 'Compare versions' dialog showing side-by-side A/B code panes. Pages can take 10-30s to load \u2014 wait, don't navigate away. Seeing the versions panel render (and, when 2+ versions exist, the diff dialog open) is success. A clean 'no version history' empty state is also a pass.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
     "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 35,\n  \"judgeValidationCriteria\": [\n    \"Opening a form shows a 'Versions' panel with version rows (with Active/Pending/Inactive tags) or a clear 'No version history yet' empty state\",\n    \"When multiple versions exist, initiating a diff opens a 'Compare versions' dialog with two side-by-side code panes\",\n    \"No error messages, blank screens, or crash pages\"\n  ]\n}",
     "Configuration": {
       "headless": true,
@@ -34,8 +34,7 @@
       "scoringWeights": {
         "goal-completion": 0.6,
         "step-count": 0.4
-      },
-      "ReplayScript": "@file:regression/scripts/t150-form-builder-versions-panel-and-diff.json"
+      }
     },
     "Status": "Active",
     "Tags": "P2,regression,component-studio",
@@ -50,9 +49,5 @@
   },
   "primaryKey": {
     "ID": "D2B2D2CB-E1AD-41E4-964B-21F7294A5D1F"
-  },
-  "sync": {
-    "lastModified": "2026-09-11T21:36:54.266Z",
-    "checksum": "b2e8caf2f5ecd1e4da6e3ce04aae073c18fbed33d1d2f56e7381c70989df2ffb"
   }
 }

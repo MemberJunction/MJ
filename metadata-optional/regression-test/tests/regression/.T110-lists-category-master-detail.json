@@ -2,8 +2,8 @@
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
     "Name": "T110 - Lists Category Master Detail",
-    "Description": "Tests the category tree master-detail selection and per-category list/subcategory aggregation in lists-categories-resource — a distinct code path from the flat lists grid.",
-    "InputDefinition": "{\n  \"goal\": \"Assume you are already logged in at http://localhost:4200. Open the application switcher dropdown next to the logo, select the Lists application, and open the 'Categories' section in its left nav. In the left 'Categories' tree panel, click a category node. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. Success is that clicking a category populates the right-hand 'Category Details' panel — showing the category Name, its Parent Category (or '(Top Level)'), and the Lists / Subcategories stat counts. If there are no categories yet, the 'No Categories Yet' empty state rendering is also a valid success.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "Description": "Tests the category tree master-detail selection and per-category list/subcategory aggregation in lists-categories-resource \u2014 a distinct code path from the flat lists grid.",
+    "InputDefinition": "{\n  \"goal\": \"Assume you are already logged in at http://localhost:4200. Open the application switcher dropdown next to the logo, select the Lists application, and open the 'Categories' section in its left nav. In the left 'Categories' tree panel, click a category node. Pages can take 10-30s to load in this resource-constrained environment \u2014 wait, don't navigate away. Success is that clicking a category populates the right-hand 'Category Details' panel \u2014 showing the category Name, its Parent Category (or '(Top Level)'), and the Lists / Subcategories stat counts. If there are no categories yet, the 'No Categories Yet' empty state rendering is also a valid success.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
     "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 35,\n  \"judgeValidationCriteria\": [\n    \"The Categories tree lists at least one category node OR a valid 'No Categories Yet' empty state is shown\",\n    \"Selecting a category node fills the 'Category Details' panel with its Name, Parent Category value, and the Lists / Subcategories stat counts (member list names appear when the category has lists)\",\n    \"No error messages, blank screens, or crash pages\"\n  ]\n}",
     "Configuration": {
       "headless": true,
@@ -34,8 +34,7 @@
       "scoringWeights": {
         "goal-completion": 0.6,
         "step-count": 0.4
-      },
-      "ReplayScript": "@file:regression/scripts/t110-lists-category-master-detail.json"
+      }
     },
     "Status": "Active",
     "Tags": "P2,regression,lists",
@@ -50,9 +49,5 @@
   },
   "primaryKey": {
     "ID": "7F235164-B8EB-4645-A64D-609D652B9CF9"
-  },
-  "sync": {
-    "lastModified": "2026-09-11T21:36:53.869Z",
-    "checksum": "8429aba1715d7add5e055c0ffe133b072e3bbf6e772a6ae2fce9c132522cff43"
   }
 }

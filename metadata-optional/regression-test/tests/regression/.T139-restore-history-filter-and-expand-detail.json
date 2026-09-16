@@ -2,8 +2,8 @@
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
     "Name": "T139 - Restore History Filter and Expand Detail",
-    "Description": "Exercises the restore-card ToggleExpand detail grid and the status-chip filter popover unique to VersionHistoryRestoreResource (loads MJ: Version Label Restores with progress bars/error log) — a code path not shared with the other surfaces.",
-    "InputDefinition": "{\n  \"goal\": \"In the Version History app → 'Restore History' (left nav), confirm four KPI cards (Total Restores, Successful, Failed, Partial) and a Filters popover with status chips. If restore rows exist, click one to expand it and confirm a detail grid (Status, Items Completed, Items Failed) appears; if none exist confirm the empty state. Apply a status filter from the popover and confirm the list responds. Pages can take 10-30s to load — wait, don't navigate away.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "Description": "Exercises the restore-card ToggleExpand detail grid and the status-chip filter popover unique to VersionHistoryRestoreResource (loads MJ: Version Label Restores with progress bars/error log) \u2014 a code path not shared with the other surfaces.",
+    "InputDefinition": "{\n  \"goal\": \"In the Version History app \u2192 'Restore History' (left nav), confirm four KPI cards (Total Restores, Successful, Failed, Partial) and a Filters popover with status chips. If restore rows exist, click one to expand it and confirm a detail grid (Status, Items Completed, Items Failed) appears; if none exist confirm the empty state. Apply a status filter from the popover and confirm the list responds. Pages can take 10-30s to load \u2014 wait, don't navigate away.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
     "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 35,\n  \"judgeValidationCriteria\": [\n    \"Restore History shows the four KPI cards and a status Filters control\",\n    \"Expanding a restore row reveals a detail grid (Status/Items Completed/Items Failed), or a valid empty state if there are no restores\",\n    \"Applying a status filter narrows the list or shows a no-results state\",\n    \"No error messages, blank screens, or crash pages\"\n  ]\n}",
     "Configuration": {
       "headless": true,
@@ -34,8 +34,7 @@
       "scoringWeights": {
         "goal-completion": 0.6,
         "step-count": 0.4
-      },
-      "ReplayScript": "@file:regression/scripts/t139-restore-history-filter-and-expand-detail.json"
+      }
     },
     "Status": "Active",
     "Tags": "P2,regression,version-history",
@@ -50,9 +49,5 @@
   },
   "primaryKey": {
     "ID": "545BD460-1611-40FD-A36C-15D5455144E1"
-  },
-  "sync": {
-    "lastModified": "2026-09-11T21:36:54.195Z",
-    "checksum": "6610fb37d8772f484eac71c47cd3ef951eb47c9f7aa9c74ac534c8dfd7699b5e"
   }
 }

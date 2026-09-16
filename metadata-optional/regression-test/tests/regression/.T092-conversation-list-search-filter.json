@@ -2,8 +2,8 @@
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
     "Name": "T092 - Conversation List Search Filter",
-    "Description": "Exercises ConversationListComponent's in-sidebar searchQuery filter over the conversation tree — distinct code from the entity-grid quick-search and from the global Chat search panel.",
-    "InputDefinition": "{\n  \"goal\": \"Open the Chat application via the app switcher and wait for the workspace. In the left sidebar there is a 'Search conversations...' input at the top of the conversation list. Type a few characters into it. Confirm the conversation list RESPONDS: the visible conversations narrow to those matching your text, OR a clear empty/no-match state is shown if nothing matches. Then clear the box and confirm the full list returns. The list reacting to your input is success regardless of how many conversations exist. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "Description": "Exercises ConversationListComponent's in-sidebar searchQuery filter over the conversation tree \u2014 distinct code from the entity-grid quick-search and from the global Chat search panel.",
+    "InputDefinition": "{\n  \"goal\": \"Open the Chat application via the app switcher and wait for the workspace. In the left sidebar there is a 'Search conversations...' input at the top of the conversation list. Type a few characters into it. Confirm the conversation list RESPONDS: the visible conversations narrow to those matching your text, OR a clear empty/no-match state is shown if nothing matches. Then clear the box and confirm the full list returns. The list reacting to your input is success regardless of how many conversations exist. Pages can take 10-30s to load in this resource-constrained environment \u2014 wait, don't navigate away.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
     "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 35,\n  \"judgeValidationCriteria\": [\n    \"Typing in the 'Search conversations...' box filters the sidebar list (fewer items) or shows a valid no-match/empty state\",\n    \"Clearing the search text restores the previously shown conversations\",\n    \"The search is client-side and responsive (no full page reload)\",\n    \"No error messages, blank screens, or crash pages\"\n  ]\n}",
     "Configuration": {
       "headless": true,
@@ -34,8 +34,7 @@
       "scoringWeights": {
         "goal-completion": 0.6,
         "step-count": 0.4
-      },
-      "ReplayScript": "@file:regression/scripts/t092-conversation-list-search-filter.json"
+      }
     },
     "Status": "Active",
     "Tags": "P2,regression,chat",
@@ -50,9 +49,5 @@
   },
   "primaryKey": {
     "ID": "D7F6860E-32C6-4428-9B79-8441F50E8514"
-  },
-  "sync": {
-    "lastModified": "2026-09-11T21:36:53.752Z",
-    "checksum": "97a4fd33bd8e1a28947cda13225c91d2fbd4c7f67bdf3cbaaee7f249cb133143"
   }
 }

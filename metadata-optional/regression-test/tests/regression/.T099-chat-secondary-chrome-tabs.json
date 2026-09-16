@@ -2,8 +2,8 @@
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
     "Name": "T099 - Chat Secondary Chrome Tabs",
-    "Description": "Opens the Chat application once, then walks its secondary chrome surfaces (Collections tab full view, Tasks tab full view, active-tasks nav dropdown), verifying each via checkpoints. Consolidates old T246–T248.",
-    "InputDefinition": "{\n  \"goal\": \"Do the shared setup ONCE: open the Chat application and wait for the workspace to load. Then walk these sections IN ORDER, and as you arrive at each one set \\\"checkpointReached\\\" to the exact checkpoint name shown: (1) collections-tab — click the 'Collections' tab in the top navigation and confirm the main area switches to the collections full view (a breadcrumb starting at 'Collections' home, a grid/list view-mode toggle button, and either collection/artifact cards or a valid empty state); (2) tasks-tab — click the 'Tasks' tab in the top navigation and confirm the main area switches to the tasks full view showing task cards/widgets with status and progress OR a valid no-tasks empty state. Keep going until both sections have been visited. Pages can take 10-30s to load in this resource-constrained environment — wait for content rather than navigating away.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "Description": "Opens the Chat application once, then walks its secondary chrome surfaces (Collections tab full view, Tasks tab full view, active-tasks nav dropdown), verifying each via checkpoints. Consolidates old T246\u2013T248.",
+    "InputDefinition": "{\n  \"goal\": \"Do the shared setup ONCE: open the Chat application and wait for the workspace to load. Then walk these sections IN ORDER, and as you arrive at each one set \\\"checkpointReached\\\" to the exact checkpoint name shown: (1) collections-tab \u2014 click the 'Collections' tab in the top navigation and confirm the main area switches to the collections full view (a breadcrumb starting at 'Collections' home, a grid/list view-mode toggle button, and either collection/artifact cards or a valid empty state); (2) tasks-tab \u2014 click the 'Tasks' tab in the top navigation and confirm the main area switches to the tasks full view showing task cards/widgets with status and progress OR a valid no-tasks empty state. Keep going until both sections have been visited. Pages can take 10-30s to load in this resource-constrained environment \u2014 wait for content rather than navigating away.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
     "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"finalUrlPattern\": \"^http://localhost:4200\",\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 45,\n  \"checkpoints\": [\n    {\n      \"name\": \"collections-tab\",\n      \"instruction\": \"Collections full view renders\",\n      \"visualCriteria\": [\n        \"The Collections tab swaps the main area to the collections full view with a 'Collections' breadcrumb/home and a grid/list view-mode toggle, and collection/artifact content renders OR a valid empty state is shown\"\n      ]\n    },\n    {\n      \"name\": \"tasks-tab\",\n      \"instruction\": \"Tasks full view renders\",\n      \"visualCriteria\": [\n        \"The Tasks tab swaps the main area to the tasks full view where task widgets/cards render with status/progress OR a clear no-tasks empty state is shown, and the view is stable\"\n      ]\n    },\n    {\n      \"name\": \"active-tasks-dropdown\",\n      \"instruction\": \"tasks dropdown in nav opens\",\n      \"visualCriteria\": [\n        \"A tasks dropdown control in the top navigation opens when clicked, showing active/recent tasks or a valid empty state, and closes cleanly when dismissed\"\n      ]\n    }\n  ]\n}",
     "Configuration": {
       "headless": true,
@@ -34,8 +34,7 @@
       "scoringWeights": {
         "goal-completion": 0.7,
         "url-match": 0.3
-      },
-      "ReplayScript": "@file:regression/scripts/t099-chat-secondary-chrome-tabs.json"
+      }
     },
     "Status": "Active",
     "Tags": "P2,regression,chat",
@@ -50,9 +49,5 @@
   },
   "primaryKey": {
     "ID": "E6098D0D-8C3D-4544-82D4-94700B449641"
-  },
-  "sync": {
-    "lastModified": "2026-09-11T21:36:53.820Z",
-    "checksum": "53aaca25ef497ac937d262db08665215f9791454c14dbf10816660a705824c94"
   }
 }

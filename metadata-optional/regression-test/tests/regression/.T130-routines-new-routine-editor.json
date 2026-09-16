@@ -34,8 +34,7 @@
       "scoringWeights": {
         "goal-completion": 0.7,
         "url-match": 0.3
-      },
-      "ReplayScript": "@file:regression/scripts/t130-routines-new-routine-editor.json"
+      }
     },
     "Status": "Active",
     "Tags": "P1,regression,routines",
@@ -50,9 +49,5 @@
   },
   "primaryKey": {
     "ID": "F0D76B03-303C-4CC3-BAB0-AB5E7621DBB0"
-  },
-  "sync": {
-    "lastModified": "2026-09-11T21:36:54.026Z",
-    "checksum": "b513221fe8f869a9718d89be528ffed993c79aa43adc4183f493305c77e3c6e2"
   }
 }

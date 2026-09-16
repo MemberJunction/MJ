@@ -2,9 +2,9 @@
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
     "Name": "T132 - Search Bulk Operations List",
-    "Description": "Exercises the studio's client-side Filtered getter (case-insensitive name/entity substring match) and onSearch handler — a self-contained filter feature, not the generic grid quick-search.",
-    "InputDefinition": "{\n  \"goal\": \"Assume you are already logged in at http://localhost:4200. Open the application switcher and choose 'Bulk Operations' so the Operations studio list is showing. Type a query into the 'Search bulk operations…' box at the top of the list. Verify the list RESPONDS — the visible rows narrow to operations whose name or entity matches, OR a clear empty result appears if nothing matches. Then clear the box and confirm the full list returns. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. This is data-agnostic: a narrowed list, an empty result, or the empty-state (if there are no operations at all) are all valid responses to the search.\",\n  \"startUrl\": \"http://localhost:4200/app/bulk-operations\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
-    "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 35,\n  \"judgeValidationCriteria\": [\n    \"Typing in the 'Search bulk operations…' box visibly filters the operations list (fewer/no matching rows) rather than being inert\",\n    \"Clearing the search restores the previous list\",\n    \"No error messages, blank screens, or crash pages\"\n  ]\n}",
+    "Description": "Exercises the studio's client-side Filtered getter (case-insensitive name/entity substring match) and onSearch handler \u2014 a self-contained filter feature, not the generic grid quick-search.",
+    "InputDefinition": "{\n  \"goal\": \"Assume you are already logged in at http://localhost:4200. Open the application switcher and choose 'Bulk Operations' so the Operations studio list is showing. Type a query into the 'Search bulk operations\u2026' box at the top of the list. Verify the list RESPONDS \u2014 the visible rows narrow to operations whose name or entity matches, OR a clear empty result appears if nothing matches. Then clear the box and confirm the full list returns. Pages can take 10-30s to load in this resource-constrained environment \u2014 wait, don't navigate away. This is data-agnostic: a narrowed list, an empty result, or the empty-state (if there are no operations at all) are all valid responses to the search.\",\n  \"startUrl\": \"http://localhost:4200/app/bulk-operations\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 35,\n  \"judgeValidationCriteria\": [\n    \"Typing in the 'Search bulk operations\u2026' box visibly filters the operations list (fewer/no matching rows) rather than being inert\",\n    \"Clearing the search restores the previous list\",\n    \"No error messages, blank screens, or crash pages\"\n  ]\n}",
     "Configuration": {
       "headless": true,
       "maxSteps": 35,
@@ -34,8 +34,7 @@
       "scoringWeights": {
         "goal-completion": 0.6,
         "step-count": 0.4
-      },
-      "ReplayScript": "@file:regression/scripts/t132-search-bulk-operations-list.json"
+      }
     },
     "Status": "Active",
     "Tags": "P2,regression,bulk",
@@ -50,9 +49,5 @@
   },
   "primaryKey": {
     "ID": "8D4D994A-7A0C-49ED-8FA1-52D857A1ACB7"
-  },
-  "sync": {
-    "lastModified": "2026-09-11T21:36:54.107Z",
-    "checksum": "19a99056bcdaa16d4d0f7088ba1e284ca1c430e18822f999cb5803c14b834863"
   }
 }

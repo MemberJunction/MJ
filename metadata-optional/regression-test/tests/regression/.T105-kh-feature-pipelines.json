@@ -3,7 +3,7 @@
     "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
     "Name": "T105 - Knowledge Hub Feature Pipelines",
     "Description": "Opens the Knowledge Hub Feature Pipelines screen once, then walks the list + client-side search and the pipeline editor dialog, verifying each via checkpoints. Consolidates old T259, T260.",
-    "InputDefinition": "{\n  \"goal\": \"Switch to the Knowledge Hub app (application switcher dropdown next to the logo) and click 'Feature Pipelines' in the left nav (fa-diagram-project icon). Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. Then walk these surfaces IN ORDER, and as you arrive at each one set \\\"checkpointReached\\\" to the exact checkpoint name shown: (1) pipelines-list-search — confirm the pipelines screen renders as a card grid (each card showing target entity, output attribute, last-run status, and Run/Edit buttons) OR a clear empty-state inviting you to create a pipeline, then type into the 'Search by name, entity, or attribute…' box and confirm the card grid narrows to matching pipelines (or shows a 'No matching pipelines' state); (2) pipeline-editor-dialog — click the primary '+ New Pipeline' button in the header (or the 'Edit' button on an existing pipeline card) and confirm a modal dialog titled 'Feature Pipeline' opens containing the record-process editor form (you do NOT need to save); confirm it can be cancelled/closed. Keep going until both are done.\",\n  \"startUrl\": \"http://localhost:4200/app/knowledge-hub\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "InputDefinition": "{\n  \"goal\": \"Switch to the Knowledge Hub app (application switcher dropdown next to the logo) and click 'Feature Pipelines' in the left nav (fa-diagram-project icon). Pages can take 10-30s to load in this resource-constrained environment \u2014 wait, don't navigate away. Then walk these surfaces IN ORDER, and as you arrive at each one set \\\"checkpointReached\\\" to the exact checkpoint name shown: (1) pipelines-list-search \u2014 confirm the pipelines screen renders as a card grid (each card showing target entity, output attribute, last-run status, and Run/Edit buttons) OR a clear empty-state inviting you to create a pipeline, then type into the 'Search by name, entity, or attribute\u2026' box and confirm the card grid narrows to matching pipelines (or shows a 'No matching pipelines' state); (2) pipeline-editor-dialog \u2014 click the primary '+ New Pipeline' button in the header (or the 'Edit' button on an existing pipeline card) and confirm a modal dialog titled 'Feature Pipeline' opens containing the record-process editor form (you do NOT need to save); confirm it can be cancelled/closed. Keep going until both are done.\",\n  \"startUrl\": \"http://localhost:4200/app/knowledge-hub\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
     "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"finalUrlPattern\": \"^http://localhost:4200\",\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 45,\n  \"checkpoints\": [\n    {\n      \"name\": \"pipelines-list-search\",\n      \"instruction\": \"Feature Pipelines list + search\",\n      \"assertions\": [\n        {\n          \"kind\": \"url\",\n          \"urlPattern\": \"/app/knowledge-hub\"\n        }\n      ],\n      \"visualCriteria\": [\n        \"The Feature Pipelines screen renders a pipeline card grid OR a valid 'No feature pipelines yet' empty state, and typing in the search box narrows the cards to matches OR shows a 'No matching pipelines' no-results state\"\n      ]\n    },\n    {\n      \"name\": \"pipeline-editor-dialog\",\n      \"instruction\": \"Feature Pipeline editor dialog\",\n      \"visualCriteria\": [\n        \"Clicking New Pipeline (or Edit on a card) opens a 'Feature Pipeline' modal dialog containing the record-process editor, and it can be closed/cancelled without error\"\n      ]\n    }\n  ]\n}",
     "Configuration": {
       "headless": true,
@@ -34,8 +34,7 @@
       "scoringWeights": {
         "goal-completion": 0.7,
         "url-match": 0.3
-      },
-      "ReplayScript": "@file:regression/scripts/t105-knowledge-hub-feature-pipelines.json"
+      }
     },
     "Status": "Active",
     "Tags": "P1,regression,knowledge-hub",
@@ -50,9 +49,5 @@
   },
   "primaryKey": {
     "ID": "978CC166-179B-4FE3-8954-95CD3EC638CF"
-  },
-  "sync": {
-    "lastModified": "2026-09-11T21:36:53.862Z",
-    "checksum": "b2c163b31f34f22af9d7b1aa971c7b1a90f13fe94478a32e2f074853d3a0ee2d"
   }
 }

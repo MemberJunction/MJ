@@ -3,7 +3,7 @@
     "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
     "Name": "T004 - Run a Saved Query",
     "Description": "Runs a saved query that has no required parameters and verifies tabular results.",
-    "InputDefinition": "{\n  \"goal\": \"Run a saved query and view its results. In the LEFT sidebar 'Search queries...' box (NOT the global Ctrl+K box), type 'Entities with Field Counts' and select that query. If it is not present, pick any other query that shows NO required-parameter asterisks (e.g. 'Server Installed Version History'). AVOID queries marked 'Pending' or showing required-parameter asterisks. Click Run and verify results display in a table with data rows. Pages can take 10-30s to load — wait, don't navigate away.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "InputDefinition": "{\n  \"goal\": \"Run a saved query and view its results. In the LEFT sidebar 'Search queries...' box (NOT the global Ctrl+K box), type 'Entities with Field Counts' and select that query. If it is not present, pick any other query that shows NO required-parameter asterisks (e.g. 'Server Installed Version History'). AVOID queries marked 'Pending' or showing required-parameter asterisks. Click Run and verify results display in a table with data rows. Pages can take 10-30s to load \u2014 wait, don't navigate away.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
     "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 35,\n  \"judgeValidationCriteria\": [\n    \"A no-parameter Approved query was located (via the 'Search queries...' box or a visible folder) and run\",\n    \"Query results are displayed in a table with data rows\",\n    \"No error messages, blank screens, or crash pages\"\n  ]\n}",
     "Configuration": {
       "headless": true,
@@ -48,10 +48,6 @@
     "SkipEmbeddings": false
   },
   "primaryKey": {
-    "ID": "A5174558-E08A-4A33-982C-2ADCACC01100"
-  },
-  "sync": {
-    "lastModified": "2026-09-11T21:36:52.949Z",
-    "checksum": "1b3da2d012034f30af88b4cdba8773a770067e4b3b81bccb93c9193bb1f53890"
+    "ID": "4BD5FB9B-FC4D-4FEA-9427-0132FF42D1A2"
   }
 }
