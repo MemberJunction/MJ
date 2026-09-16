@@ -402,11 +402,13 @@ export class OpenAILiveSession implements IRealtimeSession {
         if (this._params.InitialContext) {
             sections.push(this._params.InitialContext.trim());
         }
-        const alreadyHasToolFraming = !!this._params.SystemPrompt && (
-            this._params.SystemPrompt.includes('invoke-target-agent') ||
-            this._params.SystemPrompt.includes('Delegation policy') ||
-            this._params.SystemPrompt.includes('Backend tools') ||
-            this._params.SystemPrompt.includes('interactive-surface')
+        const alreadyHasToolFraming = this._params.HasToolFraming ?? (
+            !!this._params.SystemPrompt && (
+                this._params.SystemPrompt.includes('invoke-target-agent') ||
+                this._params.SystemPrompt.includes('Delegation policy') ||
+                this._params.SystemPrompt.includes('Backend tools') ||
+                this._params.SystemPrompt.includes('interactive-surface')
+            )
         );
         if (!alreadyHasToolFraming && this._params.Tools && this._params.Tools.length > 0) {
             sections.push(this.compileDelegationPolicy(this._params.Tools));
@@ -1093,7 +1095,7 @@ export class OpenAILiveRealtime extends BaseRealtimeModel {
         // instructions ("operated by YOU directly... NEVER route an interactive-surface request through invoke-target-agent")
         // and re-introduces the holding phrase stall. When tool framing is already present in SystemPrompt,
         // we omit appending a redundant and conflicting delegation policy altogether.
-        const alreadyHasToolFraming = config?.['hasToolFraming'] === true || (
+        const alreadyHasToolFraming = params.HasToolFraming ?? (
             !!params.SystemPrompt && (
                 params.SystemPrompt.includes('invoke-target-agent') ||
                 params.SystemPrompt.includes('Delegation policy') ||

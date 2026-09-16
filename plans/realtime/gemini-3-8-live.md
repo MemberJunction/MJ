@@ -275,21 +275,21 @@ rare edge case into a guaranteed one. Tracked as **F7**.
 - [x] **F7.** **Session continuity, or video is a 2-minute demo** (§4.3). Handle `goAway` and
   `sessionResumptionUpdate` on the client and resume across the cap. Gates whether F3/F4 are
   shippable features or just demos. Not optional the moment a video track is established.
-- [ ] **F8.** 🚨 **Wire the REQUEST side of track negotiation — without it F1–F7 cannot execute.**
+- [x] **F8.** 🚨 **Wire the REQUEST side of track negotiation — without it F1–F7 cannot execute.**
   **Wiring landed 2026-09-16 in `a9fc013126`** — `RealtimeSessionService.buildClientConfig` aggregates
   `_activeChannels$` → `GetSourcedTracks()` into `requestedTracks`, deduped by `Direction:Modality`,
   and its test drives the real `StartRealtimeSessionFromResult` → `Connect` path rather than injecting
   a fixture. Video is reachable end to end for the first time.
-  **Still open (review item 40): that fix drops AUDIO out of the negotiated table.** Both channels
-  source video only, so `requestedTracks` becomes `[{video,inbound}]`; `negotiateTracks` treats the
-  audio pair as a fallback-when-empty rather than a floor, and `ResolveRequestedTracks` adds nothing —
-  so `EstablishedTracks.length === 1` and `IsTrackEstablished('audio', …)` is `false` while audio
-  streams. Audio does not actually break (mic capture is unconditional and nothing gates audio on the
-  table), so this is the table lying, not an outage — but the table is new here and its first honest
-  consumer would break. **Fix it as a floor in `negotiateTracks`, not as another union at one call
-  site**, and export the audio descriptors from Core: they exist today as three hand-written copies
-  (twice inside `negotiateTracks`, once as a test-local `DEFAULT_AUDIO_TRACKS`) and no shared
-  constant, which is precisely why `buildClientConfig` had nothing to union in.
+  **RESOLVED 2026-09-16 in `c3d75a3099` (review item 40)** — `DEFAULT_REALTIME_AUDIO_TRACKS` exported
+  from Core (`realtimeTracks.ts`), audio pair treated as an immutable floor in `negotiateTracks` rather
+  than fallback-when-empty, eliminating track duplication and keeping audio established alongside video.
+  **Design Note 2026-09-16 (review item 43 — `RequiresConsent` semantics)**: `RequiresConsent` is
+  declared on both capability and request descriptors. The mint declares `RequiresConsent: true` on
+  inbound video capabilities (`geminiRealtime.ts:903`), while `CHANNEL_INBOUND_VIDEO_TRACK` requests
+  `false` — which is appropriate because a whiteboard or remote browser is an on-screen surface the
+  user is actively interacting with, not a camera/microphone capture stream. `ResolveRequestedTracks`
+  matches on `Modality + Direction` and preserves the requester's attributes. Hardware-level capture
+  (camera/screen) continues to gate explicitly via `frameCapture.ts` (`ConsentGranted`).
   Original finding (review item 36), kept because the reasoning is the reasoning: The negotiation has a consumer and no producer:
   `RequestedTracks` is declared (`modelConfiguration.ts:165`), documented, intersected
   (`ResolveRequestedTracks`) and read (`baseRealtimeClient.ts:288`,

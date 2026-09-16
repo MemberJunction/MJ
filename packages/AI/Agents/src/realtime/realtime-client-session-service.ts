@@ -1874,6 +1874,7 @@ export class RealtimeClientSessionService {
             // regardless of driver support via the session deadline stamped by the transport layer.
             MaxSessionSeconds: input.MaxSessionSeconds,
             UserID: contextUser?.ID,
+            HasToolFraming: true,
         };
     }
 

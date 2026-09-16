@@ -764,6 +764,14 @@ export interface RealtimeSessionParams {
      * Used for auditing, rate limiting, and proxy ticket attribution.
      */
     UserID?: string;
+
+    /**
+     * Optional boolean indicating that the SystemPrompt already provides its own tool framing
+     * (e.g. from BuildRealtimeAgentFraming in co-agent sessions). When true, drivers MUST NOT
+     * append their own standalone delegation policy. When false or omitted, drivers may fall back
+     * to heuristic substring sniffing or default policy compilation.
+     */
+    HasToolFraming?: boolean;
 }
 
 /**
