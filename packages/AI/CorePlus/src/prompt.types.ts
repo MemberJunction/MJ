@@ -332,6 +332,13 @@ export class AIModelSelectionInfo {
     model: MJAIModelEntityExtended;
     /** The vendor entity, if a specific vendor was considered */
     vendor?: MJAIVendorEntity;
+    /**
+     * The provider implementation this combination would run through (e.g. `OpenRouterLLM`).
+     * Optional because it is telemetry, not identity — a long candidate list is often a single
+     * driver class repeated, which is the difference between "the chain is misconfigured" and
+     * "one provider has no key".
+     */
+    driverClass?: string;
     /** Priority of this model/vendor combination */
     priority: number;
     /** Whether this model/vendor had an available API key */
