@@ -202,18 +202,16 @@ rare edge case into a guaranteed one. Tracked as **F7**.
   Also `tooling.Behavior` invents a field Core's `RealtimeToolingSettings` does not have. Pick one
   key, add it to the shared list, and put it on the Core type if it belongs there.
 
-### Phase D — idle and async tools
-
-- [ ] **D1.** Honour `IdleSignal`: `generationComplete` (typed) for `gemini-3.8-live`, `interaction_status` (untyped, narrow it) for Extended Thinking. See V3.
-- [ ] **D2.** `IsBusy` = reasoning in progress **or** tool batch non-empty **or** audio playing.
+- [x] **D1.** Honour `IdleSignal`: `generationComplete` (typed) for `gemini-3.8-live`, `interaction_status` (untyped, narrow it) for Extended Thinking. See V3.
+- [x] **D2.** `IsBusy` = reasoning in progress **or** tool batch non-empty **or** audio playing.
   **Includes `handleToolCallFrame`'s `responseActive = false`** (§4.1) — a tool call no longer means
   generation stopped. Its comment encodes the blocking assumption; change both together.
-- [ ] **D3.** `queuedSends` drains on **idle**, not `turnComplete`.
-- [ ] **D4.** Backstop timer for a lost `IDLE` frame (guard only, not the primary signal).
-- [ ] **D5.** `behavior: NON_BLOCKING` + `RealtimeToolBatchBarrier` wired for Gemini. **Must not
+- [x] **D3.** `queuedSends` drains on **idle**, not `turnComplete`.
+- [x] **D4.** Backstop timer for a lost `IDLE` frame (guard only, not the primary signal).
+- [x] **D5.** `behavior: NON_BLOCKING` + `RealtimeToolBatchBarrier` wired for Gemini. **Must not
   carry the `openClientTurn` release into the non-blocking path** (§4.1) — deferring the release to a
   real idle point is the obvious fix; committing the note another way is also legitimate. Record why.
-- [ ] **D6.** Function scheduling gated by `Tooling.SupportsScheduling`.
+- [x] **D6.** Function scheduling gated by `Tooling.SupportsScheduling`.
 
 ### Phase E — thinking and narration
 

@@ -1,7 +1,14 @@
 import { RegisterClass } from '@memberjunction/global';
-import { ClientRealtimeSessionConfig, JSONObject, JSONValue } from '@memberjunction/ai';
+import {
+    ClientRealtimeSessionConfig,
+    JSONObject,
+    JSONValue,
+    RealtimeIdleSignal,
+    RealtimeToolBatchBarrier,
+} from '@memberjunction/ai';
 import {
     GoogleGenAI,
+    FunctionResponseScheduling,
     type Blob as GeminiBlob,
     type Content,
     type FunctionCall,
@@ -160,11 +167,21 @@ export class GeminiPcmPlayback extends RealtimePcmPlayback {
  */
 @RegisterClass(BaseRealtimeClient, 'gemini')
 export class GeminiRealtimeClient extends BaseRealtimeClient {
+    public static readonly ASSISTANT_SAFETY_BACKSTOP_MS = 15000;
+
     // ── Transport / audio resources ────────────────────────────────────────────
     private session: GeminiLiveClientSession | null = null;
     private micStream: MediaStream | null = null;
     private micCapture: IGeminiMicCapture | null = null;
     private playback: IGeminiAudioPlayback | null = null;
+
+    // ── Model capability & profile state ───────────────────────────────────────
+    private idleSignal: RealtimeIdleSignal = 'turnComplete';
+    private supportsScheduling = true;
+    private supportsBlocking = true;
+    private interactionInProgress = false;
+    private toolBatchBarrier = new RealtimeToolBatchBarrier();
+    private assistantSafetyBackstopTimer: ReturnType<typeof setTimeout> | null = null;
 
     // ── Response state machine ─────────────────────────────────────────────────
     /** Accumulates the in-flight assistant transcript across delta frames. */
@@ -211,7 +228,10 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     public async Connect(config: ClientRealtimeSessionConfig, micStream: MediaStream): Promise<void> {
         this.micStream = micStream;
         this.setState('connecting');
-        const { model, liveConfig } = this.parseSessionConfig(config);
+        const { model, liveConfig, idleSignal, supportsScheduling, supportsBlocking } = this.parseSessionConfig(config);
+        this.idleSignal = idleSignal;
+        this.supportsScheduling = supportsScheduling;
+        this.supportsBlocking = supportsBlocking;
         this.playback = this.createPlayback();
         this.session = await this.connectLiveSession({
             Model: model,
@@ -238,6 +258,8 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      */
     public async Disconnect(): Promise<void> {
         this.closeAudioMeters();
+        this.clearSafetyBackstop();
+        this.toolBatchBarrier.Clear();
         this.micStream?.getTracks().forEach((track) => track.stop());
         this.micStream = null;
         this.micCapture?.Stop();
@@ -298,11 +320,13 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         if (!this.session) {
             return;
         }
-        if (!this.responseActive && !this.IsAudioPlaying) {
+        if (!this.responseActive && !this.IsAudioPlaying && !this.interactionInProgress) {
             return; // nothing active — no-op by contract
         }
+        this.clearSafetyBackstop();
         this.playback?.Flush();
         this.responseActive = false;
+        this.interactionInProgress = false;
         this.activeResponseKind = 'normal';
         this.flushQueuedSends();
         if (this.currentState === 'speaking') {
@@ -364,7 +388,12 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
             return;
         }
         const name = this.pendingToolCallNames.get(callID) ?? '';
-        this.enqueueOrRun(() => this.sendToolResponseTurn(callID, name, outputJson));
+        const isNonBlocking = !this.supportsBlocking || this.idleSignal === 'interactionStatus';
+        if (isNonBlocking) {
+            this.sendToolResponseTurn(callID, name, outputJson);
+        } else {
+            this.enqueueOrRun(() => this.sendToolResponseTurn(callID, name, outputJson));
+        }
     }
 
     /**
@@ -382,7 +411,15 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
 
     /** @inheritdoc */
     public get IsBusy(): boolean {
-        return this.responseActive;
+        const isNonBlocking = !this.supportsBlocking || this.idleSignal === 'interactionStatus';
+        if (isNonBlocking) {
+            return (
+                this.responseActive ||
+                this.interactionInProgress ||
+                !this.toolBatchBarrier.IsEmpty
+            );
+        }
+        return this.responseActive || this.interactionInProgress;
     }
 
     /**
@@ -444,13 +481,24 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * Falls back to the top-level `Model` / an empty config if a field is missing — the
      * server locked the real config into the token, so the session still behaves correctly.
      */
-    private parseSessionConfig(config: ClientRealtimeSessionConfig): { model: string; liveConfig: LiveConnectConfig } {
+    private parseSessionConfig(config: ClientRealtimeSessionConfig): {
+        model: string;
+        liveConfig: LiveConnectConfig;
+        idleSignal: RealtimeIdleSignal;
+        supportsScheduling: boolean;
+        supportsBlocking: boolean;
+    } {
         const sessionConfig: JSONObject = config.SessionConfig ?? {};
         const model = typeof sessionConfig['model'] === 'string' ? sessionConfig['model'] : config.Model;
         const raw = sessionConfig['config'];
         const liveConfig =
             raw !== null && typeof raw === 'object' && !Array.isArray(raw) ? (raw as LiveConnectConfig) : {};
-        return { model, liveConfig };
+        const rawIdle = sessionConfig['idleSignal'];
+        const idleSignal: RealtimeIdleSignal =
+            rawIdle === 'interactionStatus' ? 'interactionStatus' : 'turnComplete';
+        const supportsScheduling = sessionConfig['supportsScheduling'] !== false;
+        const supportsBlocking = sessionConfig['supportsBlocking'] !== false;
+        return { model, liveConfig, idleSignal, supportsScheduling, supportsBlocking };
     }
 
     /** Streams one base64 PCM16 mic chunk to the model (no-op once the session is gone). */
@@ -480,6 +528,8 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * handlers, including `usageMetadata` → {@link emitUsage}.
      */
     private handleServerMessage(message: LiveServerMessage): void {
+        this.checkInteractionStatus(message);
+
         if (message.serverContent) {
             this.handleServerContent(message.serverContent);
         }
@@ -488,6 +538,40 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         }
         if (message.usageMetadata) {
             this.handleUsageMetadata(message.usageMetadata);
+        }
+    }
+
+    /**
+     * Inspects inbound frames for the untyped `interaction_status` / `interactionStatus` wire field
+     * documented for Gemini Live Extended Thinking (V3). Narrowed via null-safe object/string helpers.
+     */
+    private checkInteractionStatus(message: LiveServerMessage): void {
+        const msgObj = GeminiRealtimeClient.readObject(message);
+        const contentObj = GeminiRealtimeClient.readObject(message.serverContent);
+        const rawStatus =
+            GeminiRealtimeClient.readString(msgObj?.['interaction_status']) ??
+            GeminiRealtimeClient.readString(msgObj?.['interactionStatus']) ??
+            GeminiRealtimeClient.readString(contentObj?.['interaction_status']) ??
+            GeminiRealtimeClient.readString(contentObj?.['interactionStatus']);
+
+        if (!rawStatus) {
+            return;
+        }
+
+        const status = rawStatus.toUpperCase();
+        if (status === 'IN_PROGRESS') {
+            this.interactionInProgress = true;
+            this.responseActive = true;
+            if (this.idleSignal === 'interactionStatus') {
+                this.scheduleSafetyBackstop();
+            }
+        } else if (status === 'IDLE') {
+            this.clearSafetyBackstop();
+            if (this.idleSignal === 'interactionStatus') {
+                this.handleIdleTerminal();
+            } else {
+                this.interactionInProgress = false;
+            }
         }
     }
 
@@ -523,8 +607,22 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         if (content.outputTranscription) {
             this.handleAssistantTranscription(content.outputTranscription);
         }
+        if (content.generationComplete) {
+            this.handleGenerationComplete();
+        }
         if (content.turnComplete) {
             this.handleTurnComplete();
+        }
+    }
+
+    /**
+     * generationComplete: indicates the model has finished generating all tokens for the turn.
+     * Playout may still be active (the delay between generationComplete and turnComplete).
+     */
+    private handleGenerationComplete(): void {
+        if (this.idleSignal === 'turnComplete') {
+            this.responseActive = false;
+            this.flushQueuedSends();
         }
     }
 
@@ -595,40 +693,78 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
 
     /**
      * Surfaces the model's tool calls to the host and caches each callID→name for
-     * {@link SendToolResult}. Two deliberate behaviors mirror the OpenAI driver: (1) the client
-     * silently leaves `'speaking'` (no emission) so a host-rendered busy indicator isn't
-     * clobbered by this turn's trailing frames; (2) `responseActive` is CLEARED — the model has
-     * yielded the floor pending the result, so a queued tool result can never deadlock waiting
-     * for a `turnComplete` that may not arrive until after the result is sent.
+     * {@link SendToolResult}.
+     *
+     * In synchronous BLOCKING mode (e.g. 3.1 preview), the model yields the floor pending
+     * the tool result: `responseActive` is cleared so the tool response can take the floor,
+     * and the client silently leaves 'speaking'.
+     *
+     * In asynchronous NON_BLOCKING mode (Extended Thinking and 3.8 default), the model keeps
+     * generating and reasoning in the background. We must NOT set `responseActive = false`,
+     * as the model is not idle and still generating. The tool batch barrier tracks the call.
      */
     private handleToolCallFrame(functionCalls: FunctionCall[] | undefined): void {
         if (!functionCalls || functionCalls.length === 0) {
             return;
         }
-        if (this.currentState === 'speaking') {
-            this.currentState = 'connected';
+        const isNonBlocking = !this.supportsBlocking || this.idleSignal === 'interactionStatus';
+        if (!isNonBlocking) {
+            if (this.currentState === 'speaking') {
+                this.currentState = 'connected';
+            }
+            this.responseActive = false;
         }
-        this.responseActive = false;
         for (const call of functionCalls) {
             const callID = call.id ?? '';
             const toolName = call.name ?? '';
             this.pendingToolCallNames.set(callID, toolName);
+            this.toolBatchBarrier.TrackPendingCall(callID, () => {
+                this.handleToolBatchTimeout();
+            });
             this.emitToolCall({ CallID: callID, ToolName: toolName, ArgumentsJson: JSON.stringify(call.args ?? {}) });
         }
     }
 
     /**
-     * Turn boundary: finalize any un-finished assistant transcript, release the busy lock,
-     * reset the response kind to `'normal'`, drain queued sends (stopping at the first one
-     * that starts a new turn), and return the floor to the user.
+     * Turn boundary: finalize any un-finished assistant transcript.
+     * Under 'turnComplete' idle signal, release the busy lock, reset response kind,
+     * drain queued sends, and return the floor to the user.
+     * Under 'interactionStatus' (Extended Thinking), turnComplete does NOT indicate idle:
+     * background reasoning or async tool calls may still be in flight, so the busy lock
+     * and queued sends remain held until the true IDLE signal lands.
      */
     private handleTurnComplete(): void {
         this.finalizeAssistantTranscript();
+        if (this.idleSignal === 'turnComplete') {
+            this.responseActive = false;
+            this.activeResponseKind = 'normal';
+            this.openClientTurn = false; // the completed generation consumed any open client content
+            this.flushQueuedSends();
+            if (this.currentState === 'speaking') {
+                this.setState('listening');
+            }
+        } else {
+            // Extended Thinking: turn complete within active interaction — re-arm liveness guard
+            this.scheduleSafetyBackstop();
+        }
+    }
+
+    /**
+     * Reached when the server emits true IDLE (interactionStatus) or the safety backstop fires.
+     * Releases busy state, commits any deferred open client turns without cutting off generation,
+     * drains queued sends, and returns the floor.
+     */
+    private handleIdleTerminal(): void {
+        this.clearSafetyBackstop();
+        this.interactionInProgress = false;
         this.responseActive = false;
         this.activeResponseKind = 'normal';
-        this.openClientTurn = false; // the completed generation consumed any open client content
+        if (this.openClientTurn) {
+            this.session?.sendClientContent({ turnComplete: true });
+            this.openClientTurn = false;
+        }
         this.flushQueuedSends();
-        if (this.currentState === 'speaking') {
+        if (this.currentState === 'speaking' && !this.IsAudioPlaying) {
             this.setState('listening');
         }
     }
@@ -641,6 +777,10 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     private markGenerationStarted(): void {
         this.finalizeUserTranscript();
         this.responseActive = true;
+        if (this.idleSignal === 'interactionStatus') {
+            this.interactionInProgress = true;
+            this.scheduleSafetyBackstop();
+        }
         if (this.currentState !== 'speaking') {
             this.setState('speaking');
         }
@@ -711,6 +851,10 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         // `openClientTurn` is left as-is — the model `turnComplete` that follows clears it.
         session.sendRealtimeInput({ text });
         this.responseActive = true;
+        if (this.idleSignal === 'interactionStatus') {
+            this.interactionInProgress = true;
+            this.scheduleSafetyBackstop();
+        }
         this.activeResponseKind = kind;
         if (emitSpeaking) {
             this.setState('speaking');
@@ -720,28 +864,55 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     /**
      * Sends the tool response (Gemini continues the turn with it) and marks the model busy.
      *
-     * When context notes have left a client content turn open ({@link openClientTurn}), the
-     * tool response alone does NOT start generation — the Live API holds for more client input
-     * until the turn is committed. The empty-turn commit (the SDK-documented
-     * `sendClientContent({ turnComplete: true })` form) releases generation so the model
-     * speaks the result immediately, matching the OpenAI driver's explicit `response.create`.
+     * In BLOCKING mode (legacy 3.1), if context notes have left a client content turn open
+     * ({@link openClientTurn}), the tool response alone does NOT start generation — the Live API
+     * holds for more client input until the turn is committed. The empty-turn commit
+     * (`sendClientContent({ turnComplete: true })`) releases generation.
+     *
+     * In NON_BLOCKING mode (Extended Thinking and 3.8 default), setting `turnComplete: true`
+     * unconditionally interrupts active model generation mid-sentence. We must NOT commit
+     * openClientTurn here; it is deferred until true IDLE (or a subsequent user turn commit).
      */
     private sendToolResponseTurn(callID: string, name: string, outputJson: string): void {
         const session = this.session;
         if (!session) {
             return;
         }
-        session.sendToolResponse({
-            functionResponses: [{ id: callID, name, response: this.parseToolOutput(outputJson) }],
-        });
-        if (this.openClientTurn) {
-            session.sendClientContent({ turnComplete: true });
-            this.openClientTurn = false;
+        this.toolBatchBarrier.RecordResult(callID);
+        const parsed = this.parseToolOutput(outputJson);
+        const functionResponse: FunctionResponse = {
+            id: callID,
+            name,
+            response: parsed,
+        };
+
+        if (this.supportsScheduling && typeof parsed['scheduling'] === 'string') {
+            const schedStr = parsed['scheduling'].trim().toUpperCase();
+            if (schedStr === 'SILENT') {
+                functionResponse.scheduling = FunctionResponseScheduling.SILENT;
+            } else if (schedStr === 'WHEN_IDLE') {
+                functionResponse.scheduling = FunctionResponseScheduling.WHEN_IDLE;
+            } else if (schedStr === 'INTERRUPT') {
+                functionResponse.scheduling = FunctionResponseScheduling.INTERRUPT;
+            }
         }
+
+        session.sendToolResponse({
+            functionResponses: [functionResponse],
+        });
+
+        const isNonBlocking = !this.supportsBlocking || this.idleSignal === 'interactionStatus';
+        if (!isNonBlocking) {
+            if (this.openClientTurn) {
+                session.sendClientContent({ turnComplete: true });
+                this.openClientTurn = false;
+            }
+            this.responseActive = true;
+            this.activeResponseKind = 'normal';
+            this.setState('speaking');
+        }
+
         this.pendingToolCallNames.delete(callID);
-        this.responseActive = true;
-        this.activeResponseKind = 'normal';
-        this.setState('speaking');
     }
 
     /**
@@ -763,21 +934,63 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
 
     // ── Helpers ────────────────────────────────────────────────────────────────
 
+    private scheduleSafetyBackstop(delayMs = GeminiRealtimeClient.ASSISTANT_SAFETY_BACKSTOP_MS): void {
+        this.clearSafetyBackstop();
+        this.assistantSafetyBackstopTimer = setTimeout(() => {
+            this.assistantSafetyBackstopTimer = null;
+            this.handleSafetyBackstopTrigger();
+        }, delayMs);
+    }
+
+    private clearSafetyBackstop(): void {
+        if (this.assistantSafetyBackstopTimer) {
+            clearTimeout(this.assistantSafetyBackstopTimer);
+            this.assistantSafetyBackstopTimer = null;
+        }
+    }
+
+    private handleSafetyBackstopTrigger(): void {
+        this.handleIdleTerminal();
+    }
+
+    private handleToolBatchTimeout(): void {
+        if (this.idleSignal === 'turnComplete') {
+            this.flushQueuedSends();
+        }
+    }
+
     /** Resets the per-session response state machine (used on Disconnect). */
     private resetResponseState(): void {
         this.pendingAssistantText = '';
         this.pendingUserText = '';
         this.responseActive = false;
+        this.interactionInProgress = false;
         this.activeResponseKind = 'normal';
         this.openClientTurn = false;
         this.queuedSends = [];
         this.pendingToolCallNames.clear();
+        this.toolBatchBarrier.Clear();
+        this.clearSafetyBackstop();
     }
 
     /** Updates the client's own state view and emits the change to the host. */
     private setState(state: RealtimeClientState): void {
         this.currentState = state;
         this.emitStateChange(state);
+    }
+
+    private static readObject(value: unknown): Record<string, unknown> | undefined {
+        return value !== null && typeof value === 'object' && !Array.isArray(value)
+            ? (value as Record<string, unknown>)
+            : undefined;
+    }
+
+    private static readString(value: unknown): string | undefined {
+        if (typeof value !== 'string') {
+            return undefined;
+        }
+        const trimmed = value.trim();
+        return trimmed.length > 0 ? trimmed : undefined;
     }
 }
 
