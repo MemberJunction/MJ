@@ -82,6 +82,20 @@ export interface AIConfig {
   apiKey: string;
   temperature?: number;
   maxTokens?: number;
+  /**
+   * Wall-clock ceiling, in milliseconds, on EACH model call. `0` disables the bound.
+   * Default: 120000 (two minutes).
+   *
+   * Every LLM call in this package was previously unbounded. The retry machinery below cannot
+   * help: it only engages once a promise settles, and a provider that accepts the socket and then
+   * stops sending never settles one. `maxTokens` bounds the RESPONSE, not the wait.
+   *
+   * The bound is applied two ways at once, mirroring how `AIPromptRunner` bounds its own calls:
+   * the request is aborted through `ChatParams.cancellationToken` (which the provider drivers
+   * forward to their SDKs, so the socket is torn down rather than abandoned) AND the awaited
+   * promise is rejected, so a driver that ignores the signal still cannot park a caller forever.
+   */
+  callTimeoutMs?: number;
   /** @deprecated Use rateLimits.requestsPerMinute instead */
   requestsPerMinute?: number;
   effortLevel?: number; // Optional effort level 1-100 (1=lowest, 100=highest). Not all models support this.
@@ -217,17 +231,31 @@ export interface OrganicKeyDetectionConfig {
   onRefinementError?: 'fail' | 'skip';
 
   // ─── Budget / Cost ───────────────────────────────────────────────────
-  /** Soft token budget for the entire detection pass (warns when exceeded). Default: 0 = unlimited. */
+  /**
+   * Token budget for the normalization pass. Default: 0 = unlimited.
+   *
+   * Enforced by NOT SCHEDULING further tables once the running total exceeds it; calls already in
+   * flight are allowed to finish, so the recorded total may overshoot by up to `concurrency`
+   * tables' worth. The result reports `budgetExhausted` and how many tables were skipped, because
+   * normalizing 300 of 500 tables and reporting success is its own defect.
+   *
+   * This was declared and read nowhere, so the pass had no token, cost or call-count cap at all.
+   */
   tokenBudget?: number;
 
   // ─── Embeddings ──────────────────────────────────────────────────────
   /**
    * Embedding provider override. Maps to a MemberJunction `BaseEmbeddings` driver
-   * (resolved via the ClassFactory). Defaults to `openai` when absent. The API key
-   * is taken from the top-level `ai` config.
+   * (resolved via the ClassFactory). The API key is taken from the top-level `ai` config.
+   *
+   * When absent this defaults to the embedding driver of the SAME vendor as the configured LLM
+   * provider, because that is the one credential the operator has definitely supplied. It used to
+   * default to the literal `openai`, which meant the shipped default configuration handed a Gemini
+   * key to `OpenAIEmbedding`. A vendor with no embedding driver (anthropic, groq, openrouter, …)
+   * is a named error asking for an explicit choice; `local` needs no key at all.
    */
   embedding?: {
-    provider?: 'openai' | 'mistral' | 'azure' | 'bedrock' | 'ollama' | 'local';
+    provider?: 'openai' | 'gemini' | 'mistral' | 'azure' | 'bedrock' | 'ollama' | 'local';
     model?: string;
     dimensions?: number;
     batchSize?: number;

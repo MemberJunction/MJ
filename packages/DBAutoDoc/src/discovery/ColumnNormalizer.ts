@@ -31,6 +31,7 @@ import { createLLMInstance } from '../utils/llm-factory.js';
 import { AIConfig } from '../types/config.js';
 import { OrganicKeyNormalizationStrategy } from '../types/organic-keys.js';
 import { cleanAndParseJSON } from '../utils/json.js';
+import { resolveCallTimeoutMs, withCallDeadline } from '../utils/call-deadline.js';
 
 /** One column's input to the normalizer. */
 export interface NormalizerInputColumn {
@@ -77,6 +78,13 @@ export interface NormalizationBatchResult {
     /** Tables where the LLM call failed entirely. */
     errors: number;
     tokens: { total: number; input: number; output: number };
+    /** True when the pass stopped scheduling tables because `tokenBudget` was reached. */
+    budgetExhausted: boolean;
+    /**
+     * Tables never attempted because the budget ran out. Non-zero means this result is PARTIAL:
+     * fewer clusters will be found, and that is a budget outcome rather than a schema fact.
+     */
+    tablesSkippedForBudget: number;
 }
 
 export interface NormalizerOptions {
@@ -86,6 +94,14 @@ export interface NormalizerOptions {
     maxRetries?: number;
     /** Progress callback (done count, total count). */
     onProgress?: (done: number, total: number) => void;
+    /**
+     * Token ceiling for the whole batch. 0 or absent = unlimited (the previous behaviour).
+     *
+     * Checked before scheduling each table, so calls already in flight finish and the total can
+     * overshoot by up to `concurrency` tables' worth. A hard mid-call cut would waste the tokens
+     * already spent on those requests and return nothing for them.
+     */
+    tokenBudget?: number;
 }
 
 export class TableNormalizer {
@@ -122,16 +138,27 @@ export class TableNormalizer {
 
         let lastError = '';
         let cumTokens = { total: 0, input: 0, output: 0 };
+        const what = `normalizer for ${input.schema}.${input.table}`;
         for (let attempt = 0; attempt <= maxRetries; attempt++) {
             let result: ChatResult | undefined;
             try {
-                result = await this.llm.ChatCompletion(params);
+                // Bounded, like every other live call site. A provider that accepts the socket and
+                // then stops sending never settles the promise, and this loop only runs once one
+                // settles — so without the deadline a single stalled table parks a worker for the
+                // rest of the run, and with concurrency N, N stalls park the whole pass.
+                result = await withCallDeadline(
+                    resolveCallTimeoutMs(this.aiConfig.callTimeoutMs),
+                    what,
+                    (signal) => this.llm.ChatCompletion({ ...params, cancellationToken: signal }),
+                );
             } catch (err) {
                 lastError = `LLM call threw: ${(err as Error).message}`;
+                await this.waitBeforeRetry(attempt, maxRetries);
                 continue;
             }
             if (!result.success) {
                 lastError = `LLM call failed: ${result.errorMessage ?? 'unknown'}`;
+                await this.waitBeforeRetry(attempt, maxRetries);
                 continue;
             }
 
@@ -180,6 +207,36 @@ export class TableNormalizer {
         return { normalized: [], tokens: cumTokens, errorMessage: lastError || 'unknown failure after retries' };
     }
 
+    /**
+     * Wait before retrying a TRANSPORT failure — a thrown call or an unsuccessful result.
+     *
+     * The retry loop had no delay at all: a rate-limited or failing provider was hit again
+     * immediately, three times per table, across every worker at once. That is the shape that
+     * turns one 429 into a burst of them.
+     *
+     * Parse and shape failures deliberately do NOT come here. Nothing upstream is recovering from
+     * a malformed JSON body, so waiting only makes the run longer.
+     *
+     * The knobs are `ai.retry`, shared with `PromptEngine` so one configuration governs both. Its
+     * defaults are tuned for a 5-retry documentation call, so when nothing is configured this uses
+     * its own smaller ones: a per-table normalizer with concurrency 8 and 2 retries should not sit
+     * out 30 seconds on the first failure.
+     */
+    private async waitBeforeRetry(attempt: number, maxRetries: number): Promise<void> {
+        if (attempt >= maxRetries) {
+            return; // the loop is about to end; a delay here only postpones the error
+        }
+        const retry = this.aiConfig.retry;
+        const initialDelayMs = retry?.initialDelayMs ?? 1_000;
+        const maxDelayMs = retry?.maxDelayMs ?? 30_000;
+        const multiplier = retry?.backoffMultiplier ?? 2;
+        const base = Math.min(initialDelayMs * Math.pow(multiplier, attempt), maxDelayMs);
+        // ±20% jitter, as in PromptEngine: concurrent workers that back off in lockstep re-converge
+        // on the provider together and reproduce the burst the backoff exists to break up.
+        const delay = Math.round(base + Math.random() * 0.2 * base);
+        await new Promise<void>((resolve) => setTimeout(resolve, delay));
+    }
+
     /** Batch normalize many tables with bounded concurrency. */
     public async normalizeAll(
         tables: TableNormalizationInput[],
@@ -187,6 +244,13 @@ export class TableNormalizer {
     ): Promise<NormalizationBatchResult> {
         const concurrency = Math.max(1, opts.concurrency ?? 8);
         const maxRetries = Math.max(0, opts.maxRetries ?? 2);
+        // One place decides what "has a budget" means, and it is the `> 0` test at the check below:
+        // absent, 0, negative and NaN all fail it, so every one of them means unlimited — which is
+        // exactly what this pass did before. Normalising here as well would be a second rule that
+        // could disagree with that one.
+        const tokenBudget = opts.tokenBudget ?? 0;
+        let budgetExhausted = false;
+        let tablesSkippedForBudget = 0;
 
         const allNormalized: NormalizedColumn[] = [];
         let rejected = 0;
@@ -201,6 +265,16 @@ export class TableNormalizer {
             while (true) {
                 const idx = cursor++;
                 if (idx >= tables.length) return;
+                // Checked here, before the call, so the budget can only be overshot by requests
+                // already in flight. `total` is read across workers without a lock: a single-
+                // threaded event loop makes this read-then-act safe, and the only cost of a stale
+                // read would be one more table, which is inside the overshoot this already allows.
+                if (tokenBudget > 0 && total >= tokenBudget) {
+                    budgetExhausted = true;
+                    tablesSkippedForBudget += tables.length - idx;
+                    cursor = tables.length; // stop the other workers too, rather than each finding out
+                    return;
+                }
                 const r = await this.normalizeTable(tables[idx], maxRetries);
                 total += r.tokens.total;
                 input += r.tokens.input;
@@ -219,7 +293,21 @@ export class TableNormalizer {
             }
         });
         await Promise.all(runners);
-        return { normalized: allNormalized, rejected, errors, tokens: { total, input, output } };
+        if (budgetExhausted) {
+            console.warn(
+                `[TableNormalizer] token budget of ${tokenBudget} reached after ${completed} of ` +
+                    `${tables.length} tables (${total} tokens used). ${tablesSkippedForBudget} table(s) were ` +
+                    `not normalized — organic-key results from this run are PARTIAL.`,
+            );
+        }
+        return {
+            normalized: allNormalized,
+            rejected,
+            errors,
+            tokens: { total, input, output },
+            budgetExhausted,
+            tablesSkippedForBudget,
+        };
     }
 }
 
