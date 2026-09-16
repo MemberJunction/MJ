@@ -928,4 +928,38 @@ describe('OpenAILiveRealtime Driver & Session', () => {
         expect(instructions).toContain('Backend tools:');
         expect(instructions).not.toContain('brief spoken holding phrases');
     });
+
+    it('CreateClientSession omits delegation policy when HasToolFraming is explicitly true', async () => {
+        const driver = new OpenAILiveRealtime('test-key');
+
+        const clientConfig = await driver.CreateClientSession({
+            Model: 'gpt-live-1',
+            SystemPrompt: 'You are a completely plain assistant with no special keywords.',
+            Tools: [{ Name: 't1', Description: 'tool 1' }],
+            HasToolFraming: true,
+        });
+
+        const sessionCfg = clientConfig.SessionConfig as Record<string, unknown>;
+        const instructions = String(sessionCfg['instructions'] ?? '');
+
+        expect(instructions).not.toContain('Delegation policy:');
+        expect(instructions).not.toContain('Backend tools:');
+    });
+
+    it('CreateClientSession appends delegation policy when HasToolFraming is explicitly false', async () => {
+        const driver = new OpenAILiveRealtime('test-key');
+
+        const clientConfig = await driver.CreateClientSession({
+            Model: 'gpt-live-1',
+            SystemPrompt: 'You are an agent with invoke-target-agent keyword.',
+            Tools: [{ Name: 't1', Description: 'tool 1' }],
+            HasToolFraming: false,
+        });
+
+        const sessionCfg = clientConfig.SessionConfig as Record<string, unknown>;
+        const instructions = String(sessionCfg['instructions'] ?? '');
+
+        expect(instructions).toContain('Delegation policy:');
+        expect(instructions).toContain('Backend tools:');
+    });
 });
