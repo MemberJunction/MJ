@@ -1,9 +1,9 @@
 // The Remote Browser channel imports its standalone Angular surface component (partial-compiled
 // Angular libs require the JIT compiler in this node test environment), so load the compiler FIRST.
 import '@angular/compiler';
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { EventEmitter } from '@angular/core';
-import { JSONValue } from '@memberjunction/ai';
+import { JSONValue, RealtimeTrack } from '@memberjunction/ai';
 import { MJGlobal } from '@memberjunction/global';
 import { BaseRealtimeChannelClient, RealtimeChannelContext } from '../lib/components/realtime/channels/base-realtime-channel-client';
 import {
@@ -38,7 +38,8 @@ interface CtxLog {
 function makeContext(
   log: CtxLog,
   response: Record<string, JSONValue> | null,
-  sessionId: string | null = 'session-1'
+  sessionId: string | null = 'session-1',
+  client: RealtimeChannelContext['Client'] = null
 ): RealtimeChannelContext {
   return {
     AgentName: 'Sage',
@@ -48,6 +49,7 @@ function makeContext(
     SetFocusMode: () => undefined,
     SaveAsArtifact: async () => null,
     AgentSessionID: sessionId,
+    Client: client,
     ExecuteServerAction: async <T>(query: string, variables: Record<string, JSONValue>): Promise<T | null> => {
       log.Calls.push({ Query: query, Variables: variables });
       return response as T | null;
@@ -1103,5 +1105,181 @@ describe('RemoteBrowserChannel — page changes the agent did not cause (#3496)'
     cTime.lastScreencastPushTime -= 1001;
     channel.OnScreencastFrame('frame-B', 'https://example.com/page2');
     expect(pushed).toEqual(['frame-A', 'frame-B', 'frame-B']);
+  });
+
+  it('OnScreencastFrame delivers trailing-edge settled frame after burst of rapid activity', () => {
+    vi.useFakeTimers();
+    try {
+      const log: CtxLog = { Notes: [], Calls: [] };
+      const channel = new RemoteBrowserChannel();
+      channel.Initialize(makeContext(log, null));
+
+      const pushed: string[] = [];
+      const mockBridge = {
+        PushFrame: (frame: string) => {
+          pushed.push(frame);
+          return true;
+        }
+      };
+      const c = channel as unknown as { streaming: boolean; videoBridge: typeof mockBridge };
+      c.streaming = true;
+      c.videoBridge = mockBridge;
+
+      // First frame at t=0 pushed immediately (leading edge)
+      channel.OnScreencastFrame('frame-0');
+      expect(pushed).toEqual(['frame-0']);
+
+      // Rapid burst during cooldown (< 1000ms):
+      vi.advanceTimersByTime(200);
+      channel.OnScreencastFrame('frame-1');
+      expect(pushed).toEqual(['frame-0']); // buffered, not pushed
+
+      vi.advanceTimersByTime(200);
+      channel.OnScreencastFrame('frame-2');
+      expect(pushed).toEqual(['frame-0']); // replaced in buffer
+
+      vi.advanceTimersByTime(200);
+      channel.OnScreencastFrame('frame-settled');
+      expect(pushed).toEqual(['frame-0']); // latest resting state
+
+      // Cooldown expires (total 1000ms reached)
+      vi.advanceTimersByTime(400);
+
+      // Trailing-edge timer fired and pushed the settled resting frame!
+      expect(pushed).toEqual(['frame-0', 'frame-settled']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('OnScreencastFrame trailing timer deduplicates if resting frame matches last pushed frame', () => {
+    vi.useFakeTimers();
+    try {
+      const log: CtxLog = { Notes: [], Calls: [] };
+      const channel = new RemoteBrowserChannel();
+      channel.Initialize(makeContext(log, null));
+
+      const pushed: string[] = [];
+      const mockBridge = {
+        PushFrame: (frame: string) => {
+          pushed.push(frame);
+          return true;
+        }
+      };
+      const c = channel as unknown as { streaming: boolean; videoBridge: typeof mockBridge };
+      c.streaming = true;
+      c.videoBridge = mockBridge;
+
+      channel.OnScreencastFrame('frame-A');
+      expect(pushed).toEqual(['frame-A']);
+
+      // Intermediate transient frame (e.g. cursor blink or hover)
+      vi.advanceTimersByTime(200);
+      channel.OnScreencastFrame('frame-transient');
+
+      // Settled back to identical frame
+      vi.advanceTimersByTime(200);
+      channel.OnScreencastFrame('frame-A');
+
+      // Advance past cadence
+      vi.advanceTimersByTime(600);
+
+      // Identical resting frame is not pushed to save tokens
+      expect(pushed).toEqual(['frame-A']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('cancelling screencast clears pending trailing settle timer', () => {
+    vi.useFakeTimers();
+    try {
+      const log: CtxLog = { Notes: [], Calls: [] };
+      const channel = new RemoteBrowserChannel();
+      channel.Initialize(makeContext(log, null));
+
+      const pushed: string[] = [];
+      const mockBridge = {
+        PushFrame: (frame: string) => {
+          pushed.push(frame);
+          return true;
+        }
+      };
+      const c = channel as unknown as { streaming: boolean; videoBridge: typeof mockBridge };
+      c.streaming = true;
+      c.videoBridge = mockBridge;
+
+      channel.OnScreencastFrame('frame-1');
+      expect(pushed).toEqual(['frame-1']);
+
+      vi.advanceTimersByTime(200);
+      channel.OnScreencastFrame('frame-2');
+
+      // Surface unbinds / stops screencast
+      channel.UnbindSurface();
+
+      // Time passes
+      vi.advanceTimersByTime(1000);
+
+      // Trailing timer was cancelled, frame-2 never pushed
+      expect(pushed).toEqual(['frame-1']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('paces pushes according to dynamically negotiated video track Rate', () => {
+    vi.useFakeTimers();
+    try {
+      const log: CtxLog = { Notes: [], Calls: [] };
+      const mockTrack: RealtimeTrack = {
+        TrackID: 'video-track-1',
+        State: 'live',
+        Descriptor: {
+          Modality: 'video',
+          Direction: 'inbound',
+          Rate: 4, // 4 fps -> 250ms cadence
+        }
+      };
+      const mockClient = {
+        EstablishedTracks: [mockTrack],
+        AllTracks: [mockTrack],
+        IsTrackEstablished: () => true
+      } as unknown as RealtimeChannelContext['Client'];
+
+      const channel = new RemoteBrowserChannel();
+      channel.Initialize(makeContext(log, null, 'session-1', mockClient));
+
+      const pushed: string[] = [];
+      const mockBridge = {
+        PushFrame: (frame: string) => {
+          pushed.push(frame);
+          return true;
+        }
+      };
+      const c = channel as unknown as { streaming: boolean; videoBridge: typeof mockBridge };
+      c.streaming = true;
+      c.videoBridge = mockBridge;
+
+      // t=0: frame-1 pushed immediately
+      channel.OnScreencastFrame('frame-1');
+      expect(pushed).toEqual(['frame-1']);
+
+      // t=100ms (< 250ms): frame-2 buffered
+      vi.advanceTimersByTime(100);
+      channel.OnScreencastFrame('frame-2');
+      expect(pushed).toEqual(['frame-1']);
+
+      // t=250ms: trailing timer delivers frame-2 (250ms cadence reached)
+      vi.advanceTimersByTime(150);
+      expect(pushed).toEqual(['frame-1', 'frame-2']);
+
+      // t=500ms (250ms since last push): leading edge delivers frame-3 immediately
+      vi.advanceTimersByTime(250);
+      channel.OnScreencastFrame('frame-3');
+      expect(pushed).toEqual(['frame-1', 'frame-2', 'frame-3']);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

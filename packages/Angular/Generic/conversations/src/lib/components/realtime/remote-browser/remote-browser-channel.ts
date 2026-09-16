@@ -1,7 +1,7 @@
 import type { Type } from '@angular/core';
 import type { Subscription } from 'rxjs';
 import { RegisterClass } from '@memberjunction/global';
-import { CHANNEL_INBOUND_VIDEO_TRACK, JSONValue, RealtimeToolDefinition, RealtimeTrackDescriptor } from '@memberjunction/ai';
+import { CHANNEL_INBOUND_VIDEO_TRACK, JSONValue, RealtimeToolDefinition, RealtimeTrack, RealtimeTrackDescriptor } from '@memberjunction/ai';
 import { ChannelInboundVideoBridge, IChannelFrameProvider } from '@memberjunction/ai-realtime-client';
 import { BaseRealtimeChannelClient, ChannelOnboardingDetails } from '../channels/base-realtime-channel-client';
 import { RemoteBrowserHumanInputEvent, RemoteBrowserSnapshotView, RemoteBrowserSurfaceComponent } from './remote-browser-surface.component';
@@ -478,6 +478,8 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
   }
 
   public override Dispose(): void {
+    this.clearScreencastTrailingTimer();
+    this.pendingScreencastFrame = null;
     this.videoBridge?.Stop();
     this.videoBridge = null;
     this.humanInputSub?.unsubscribe();
@@ -489,7 +491,7 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
     super.Dispose();
   }
 
-  /** Timestamp of the last screencast frame pushed to the video bridge (paces pushes to ≤ 1 fps). */
+  /** Timestamp of the last screencast frame pushed to the video bridge (paces pushes to negotiated cadence). */
   private lastScreencastPushTime = 0;
 
   /** Base64 content of the last frame pushed to the video bridge (for change-driven deduplication). */
@@ -498,8 +500,64 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
   /** URL associated with the last frame pushed to the video bridge. */
   private lastPushedUrl: string | null = null;
 
+  /** Minimum allowable screencast push cadence (250ms = 4 fps debounce limit during active bursts). */
+  private static readonly SCREENCAST_MIN_CADENCE_MS = 250;
+
+  /** Default screencast push cadence when not otherwise negotiated (1000ms = 1 fps ceiling for Gemini Live). */
+  private static readonly SCREENCAST_DEFAULT_CADENCE_MS = 1000;
+
   /** Maximum interval (ms) between visual frame pushes on a static page (heartbeat to maintain track liveness). */
   private static readonly SCREENCAST_HEARTBEAT_MS = 15_000;
+
+  /** Trailing timer to deliver the settled resting frame after a burst of rapid user activity. */
+  private screencastTrailingTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /** Pending frame buffered during an active cooldown interval, waiting to settle. */
+  private pendingScreencastFrame: { dataBase64: string; currentUrl?: string | null } | null = null;
+
+  /** Cancels any active trailing-edge settle timer and clears the handle. */
+  private clearScreencastTrailingTimer(): void {
+    if (this.screencastTrailingTimer != null) {
+      clearTimeout(this.screencastTrailingTimer);
+      this.screencastTrailingTimer = null;
+    }
+  }
+
+  /**
+   * Pushes a frame to the video bridge, recording timestamp, frame content, and URL.
+   */
+  private pushScreencastFrame(dataBase64: string, currentUrl?: string | null): void {
+    this.lastScreencastPushTime = Date.now();
+    this.lastPushedScreencastFrame = dataBase64;
+    this.lastPushedUrl = currentUrl ?? null;
+    this.ensureVideoBridge()?.PushFrame(dataBase64);
+  }
+
+  /**
+   * Resolves the effective push cadence in milliseconds based on the negotiated inbound video track.
+   * Defaults to 1000ms (1 fps ceiling for Gemini Live), but clamps down to a minimum of 250ms (4 fps)
+   * if the negotiated track specifies a higher `Rate`.
+   */
+  private getNegotiatedVideoCadenceMs(): number {
+    const client = this.Context?.Client;
+    if (!client) {
+      return RemoteBrowserChannel.SCREENCAST_DEFAULT_CADENCE_MS;
+    }
+    const tracks: readonly RealtimeTrack[] = client.EstablishedTracks ?? client.AllTracks ?? [];
+    const videoTrack = tracks.find(
+      (t: RealtimeTrack) =>
+        t.Descriptor.Modality === 'video' &&
+        t.Descriptor.Direction === 'inbound'
+    );
+    const rate = videoTrack?.Descriptor.Rate;
+    if (typeof rate === 'number' && rate > 0) {
+      return Math.max(
+        RemoteBrowserChannel.SCREENCAST_MIN_CADENCE_MS,
+        Math.floor(1000 / rate)
+      );
+    }
+    return RemoteBrowserChannel.SCREENCAST_DEFAULT_CADENCE_MS;
+  }
 
   /**
    * Forwards one PUSHED screencast frame to the bound surface's canvas. Called by the session service
@@ -511,32 +569,66 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
    * it, a user navigating during a screencast changed the picture and nothing else: the agent kept
    * describing the page it last opened, and the pixels proving otherwise were right there on screen.
    *
-   * Pushes to the video bridge are CHANGE-DRIVEN: when the page is static (same image and URL), pushes
-   * are deduplicated to avoid burning ~15k tokens/min of identical visual context. A frame is pushed
-   * only when visual content changes, the URL changes, or a 15-second heartbeat expires, all paced to
-   * ≤ 1 fps.
+   * Pushes to the video bridge are CHANGE-DRIVEN with a TRAILING-EDGE SETTLE DEBOUNCE:
+   * 1. The human user surface renders immediately at full 60fps responsiveness.
+   * 2. When the page is static (same image and URL), pushes are deduplicated to avoid burning
+   *    ~15k tokens/min of identical visual context.
+   * 3. A frame is pushed immediately on the leading edge when visual content or URL changes after
+   *    the negotiated cadence (default 1000ms, clamped to >= 250ms).
+   * 4. During rapid bursts (scrolling, typing, clicking) within the cooldown window, subsequent frames
+   *    are buffered; when the cooldown expires, a trailing timer delivers the settled resting frame
+   *    so the model never misses the final user state.
+   * 5. A 15-second heartbeat ensures visual track liveness even during extended idle periods.
    *
    * @param dataBase64 The frame image as raw base64 JPEG (no `data:` prefix).
    * @param currentUrl The browser's URL when the frame was captured; absent from older servers.
    */
   public OnScreencastFrame(dataBase64: string, currentUrl?: string | null): void {
-    if (this.streaming) {
-      this.surface?.RenderFrame(dataBase64);
-      const now = Date.now();
-      const hasCadence = now - this.lastScreencastPushTime >= 1000;
-      if (hasCadence) {
-        const frameChanged = dataBase64 !== this.lastPushedScreencastFrame;
-        const urlChanged = currentUrl != null && currentUrl !== this.lastPushedUrl;
-        const heartbeatElapsed = now - this.lastScreencastPushTime >= RemoteBrowserChannel.SCREENCAST_HEARTBEAT_MS;
+    if (!this.streaming) {
+      return;
+    }
 
-        if (frameChanged || urlChanged || heartbeatElapsed) {
-          this.lastScreencastPushTime = now;
-          this.lastPushedScreencastFrame = dataBase64;
-          this.lastPushedUrl = currentUrl ?? null;
-          this.ensureVideoBridge()?.PushFrame(dataBase64);
-        }
+    this.surface?.RenderFrame(dataBase64);
+    this.notePageChange(currentUrl, 'observed');
+
+    const now = Date.now();
+    const cadenceMs = this.getNegotiatedVideoCadenceMs();
+    const elapsed = now - this.lastScreencastPushTime;
+
+    if (elapsed >= cadenceMs) {
+      // Cooldown has expired: leading edge push.
+      this.clearScreencastTrailingTimer();
+      this.pendingScreencastFrame = null;
+
+      const frameChanged = dataBase64 !== this.lastPushedScreencastFrame;
+      const urlChanged = currentUrl != null && currentUrl !== this.lastPushedUrl;
+      const heartbeatElapsed = elapsed >= RemoteBrowserChannel.SCREENCAST_HEARTBEAT_MS;
+
+      if (frameChanged || urlChanged || heartbeatElapsed) {
+        this.pushScreencastFrame(dataBase64, currentUrl);
       }
-      this.notePageChange(currentUrl, 'observed');
+    } else {
+      // Within cooldown window: buffer latest frame and schedule trailing settle timer.
+      this.pendingScreencastFrame = { dataBase64, currentUrl };
+      if (!this.screencastTrailingTimer) {
+        const delay = Math.max(0, cadenceMs - elapsed);
+        this.screencastTrailingTimer = setTimeout(() => {
+          this.screencastTrailingTimer = null;
+          if (!this.streaming || !this.pendingScreencastFrame) {
+            return;
+          }
+          const { dataBase64: pendingData, currentUrl: pendingUrl } = this.pendingScreencastFrame;
+          this.pendingScreencastFrame = null;
+
+          const frameChanged = pendingData !== this.lastPushedScreencastFrame;
+          const urlChanged = pendingUrl != null && pendingUrl !== this.lastPushedUrl;
+          const heartbeat = (Date.now() - this.lastScreencastPushTime) >= RemoteBrowserChannel.SCREENCAST_HEARTBEAT_MS;
+
+          if (frameChanged || urlChanged || heartbeat) {
+            this.pushScreencastFrame(pendingData, pendingUrl);
+          }
+        }, delay);
+      }
     }
   }
 
@@ -653,6 +745,8 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
   private async stopScreencast(): Promise<void> {
     const wasStreaming = this.streaming;
     this.streaming = false;
+    this.clearScreencastTrailingTimer();
+    this.pendingScreencastFrame = null;
     this.lastPushedScreencastFrame = null;
     this.lastPushedUrl = null;
     this.lastScreencastPushTime = 0;
