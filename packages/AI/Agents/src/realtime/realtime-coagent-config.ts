@@ -533,8 +533,13 @@ export function ParseRealtimeTypeConfiguration(json: string | null | undefined):
     }
     try {
         const parsed: unknown = JSON.parse(json);
-        return isPlainObject(parsed) ? parsed : null;
-    } catch {
+        if (isPlainObject(parsed)) {
+            return parsed;
+        }
+        console.warn('[ParseRealtimeTypeConfiguration] Realtime configuration JSON is not a plain object; skipping layer.');
+        return null;
+    } catch (err) {
+        console.warn('[ParseRealtimeTypeConfiguration] Failed to parse realtime configuration JSON; skipping malformed layer:', err);
         return null;
     }
 }

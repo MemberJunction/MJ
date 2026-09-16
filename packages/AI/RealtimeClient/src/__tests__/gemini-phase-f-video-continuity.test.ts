@@ -385,10 +385,16 @@ describe('Phase F — Realtime Video Tracks, Bridge, and Continuity', () => {
                 bridge.Start();
                 await vi.advanceTimersByTimeAsync(1050);
 
+                expect(errSpy).toHaveBeenCalledTimes(1);
                 expect(errSpy).toHaveBeenCalledWith(
-                    expect.stringContaining('[ChannelInboundVideoBridge] Error fetching frame from provider:'),
+                    expect.stringContaining('[ChannelInboundVideoBridge] Error fetching frame from provider'),
                     expect.any(Error)
                 );
+
+                // Subsequent error ticks are latched and do not spam logs
+                await vi.advanceTimersByTimeAsync(2100);
+                expect(errSpy).toHaveBeenCalledTimes(1);
+
                 expect(bridge.IsActive).toBe(true);
                 bridge.Stop();
             } finally {

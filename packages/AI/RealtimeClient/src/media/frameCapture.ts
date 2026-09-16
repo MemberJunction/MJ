@@ -104,7 +104,14 @@ export function createStreamFrameCapture(
         }
     };
 
-    timer = setInterval(captureTick, intervalMs);
+    if (videoEl && canvasEl) {
+        timer = setInterval(captureTick, intervalMs);
+    } else {
+        console.warn(
+            '[FrameCapture] No video/canvas element available (no DOM, or element construction failed) — ' +
+            'this capture will emit no frames.'
+        );
+    }
 
     return {
         Stop: () => {
