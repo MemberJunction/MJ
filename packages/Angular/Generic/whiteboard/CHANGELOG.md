@@ -1,5 +1,43 @@
 # @memberjunction/ng-whiteboard
 
+## 5.51.3
+
+### Patch Changes
+
+- f0c73c7: Accessibility: shell landmarks + skip link, focus containment, and focus-ring token safety.
+
+  Fixes eight WCAG 2.1 A/AA findings raised against the Explorer shell and shared primitives. A ninth, `mj-dropdown` having no way to be given an accessible name, is NOT in this backport: it was fixed on `next` by #3860 and its follow-ups, which have not been backported to `lts/5`. The shell's search dropdown therefore stays unnamed on this line until #3860 is backported separately.
+
+  **Shell (`ng-explorer-core`)**
+  - Adds a "Skip to main content" link as the first focusable element in the shell, and marks the routed content region as the `main` landmark (`role="main"`, focusable target). **Consuming apps that added their own skip link should remove it on upgrade** — the shell's now comes first in DOM order, and two stacked skip links is worse than none.
+  - The global search input, the account/avatar button and the mobile-nav toggle now carry real accessible names. The avatar's name lives on the button, so it survives the icon-fallback path when the avatar image fails to load.
+  - The closed mobile nav drawer and the closed search popup are now `inert` and `visibility: hidden` (transitioned so the slide-out still animates). They previously kept every control inside them in the tab order while closed. When the drawer closes with focus inside it, focus returns to the toggle instead of dropping to `<body>`.
+  - The command palette already had `role="dialog"`/`aria-modal`; it now also traps Tab while open and returns focus to whatever was focused when it opened. `aria-modal` never stopped Tab on its own.
+
+  **Focus-ring tokens (`ng-shared-generic`)**
+  - New `--mj-focus-ring-color` companion to `--mj-focus-ring`. `--mj-focus-ring` is a two-part box-shadow value: `outline: 2px solid var(--mj-focus-ring)` looks correct, parses, and renders nothing. Use `--mj-focus-ring` in `box-shadow` and `--mj-focus-ring-color` in `outline`. A new `check:focus-ring` gate fails on the broken form, wired into the `ci-ui-tokens` workflow for this line.
+
+  **Whiteboard (`ng-whiteboard`)**
+  - The eleven bare single-character tool shortcuts (`v h p r s t m w i c e`) listened on `document` and fired anywhere on the page, failing WCAG 2.1.4. They are now scoped to focus being inside the whiteboard host, which is made click-focusable for that purpose. Scoping covers the host's whole keydown handler, so undo/redo (`Cmd/Ctrl+Z`, `+Y`), `Escape` and `Delete`/`Backspace` are focus-gated too — a board that swallows the document's `Cmd+Z` from anywhere on the page is its own bug. **Behavior change**: none of these fire while focus is elsewhere on the page. `EnableGlobalShortcuts` restores the old behavior for surfaces that accept the exposure.
+
+- d0eae37: Whiteboard: a host-controllable `ToolRoster` that gates the toolbar, the keyboard shortcuts and the canvas context menu together.
+
+  `RealtimeWhiteboardHostComponent` gains `@Input() ToolRoster: readonly WhiteboardTool[] | null` (default `null` = all eleven tools, today's rendering). It governs which tools are AVAILABLE, and closes every door to a tool it leaves out: the toolbar button, the single-letter shortcut, and the canvas right-click "add … here" action.
+
+  The invariant is enforced where the tool is written rather than at each place it is read: the host's `Tool` is a setter that ignores a disallowed write, so a shortcut or gesture added later cannot reintroduce a hole by forgetting a guard. If the tool you are holding leaves the roster, the host moves to `select`, or to the roster's first known entry when `select` is not on it — never to whatever the host happened to list first.
+
+  The roster is deliberately NOT a content policy. It does not restrict what already exists on the board, what the agent places, or authoring actions on existing items: Restyle, Duplicate and pasting an image are unaffected. Read-only is a separate axis and a separate input.
+
+  Why all three at once: a consumer that hid five toolbar buttons with CSS found the right-click menu still offered "Add widget here" and the `w` key still placed one. A roster that gated only the toolbar would have shipped the same hole as a prop.
+
+  Behavior change: none. Every default reproduces today's rendering; `BuildWhiteboardContextMenu(item)` without a roster is unchanged.
+
+- Updated dependencies [ca2021c]
+  - @memberjunction/global@5.51.3
+  - @memberjunction/ng-code-editor@5.51.3
+  - @memberjunction/ng-markdown@5.51.3
+  - @memberjunction/ng-ui-components@5.51.3
+
 ## 5.51.2
 
 ### Patch Changes

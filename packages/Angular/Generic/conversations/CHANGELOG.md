@@ -1,5 +1,44 @@
 # @memberjunction/ng-conversations
 
+## 5.51.3
+
+### Patch Changes
+
+- Updated dependencies [f0c73c7]
+- Updated dependencies [391fa16]
+- Updated dependencies [ca2021c]
+- Updated dependencies [ebe2f88]
+- Updated dependencies [849fea1]
+- Updated dependencies [d0eae37]
+  - @memberjunction/ng-shared-generic@5.51.3
+  - @memberjunction/ng-whiteboard@5.51.3
+  - @memberjunction/core@5.51.3
+  - @memberjunction/global@5.51.3
+  - @memberjunction/ai-core-plus@5.51.3
+  - @memberjunction/graphql-dataprovider@5.51.3
+  - @memberjunction/ai-engine-base@5.51.3
+  - @memberjunction/ng-artifacts@5.51.3
+  - @memberjunction/ng-resource-permissions@5.51.3
+  - @memberjunction/ng-tasks@5.51.3
+  - @memberjunction/ng-user-routines@5.51.3
+  - @memberjunction/ai-agent-client@5.51.3
+  - @memberjunction/ng-testing@5.51.3
+  - @memberjunction/ng-base-types@5.51.3
+  - @memberjunction/ng-code-editor@5.51.3
+  - @memberjunction/ng-composer@5.51.3
+  - @memberjunction/ng-container-directives@5.51.3
+  - @memberjunction/ng-media-player@5.51.3
+  - @memberjunction/ng-notifications@5.51.3
+  - @memberjunction/conversations-runtime@5.51.3
+  - @memberjunction/interactive-component-types@5.51.3
+  - @memberjunction/core-entities@5.51.3
+  - @memberjunction/ai@5.51.3
+  - @memberjunction/ai-realtime-client@5.51.3
+  - @memberjunction/ng-agent-client@5.51.3
+  - @memberjunction/ng-forms@5.51.3
+  - @memberjunction/ng-markdown@5.51.3
+  - @memberjunction/ng-ui-components@5.51.3
+
 ## 5.51.2
 
 ### Patch Changes

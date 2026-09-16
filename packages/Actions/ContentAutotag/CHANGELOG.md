@@ -1,5 +1,22 @@
 # Change Log - @memberjunction/actions-content-autotag
 
+## 5.51.3
+
+### Patch Changes
+
+- Updated dependencies [391fa16]
+- Updated dependencies [ca2021c]
+- Updated dependencies [ebe2f88]
+- Updated dependencies [849fea1]
+  - @memberjunction/core@5.51.3
+  - @memberjunction/global@5.51.3
+  - @memberjunction/ai-vector-sync@5.51.3
+  - @memberjunction/actions-base@5.51.3
+  - @memberjunction/core-actions@5.51.3
+  - @memberjunction/actions@5.51.3
+  - @memberjunction/content-autotagging@5.51.3
+  - @memberjunction/core-entities@5.51.3
+
 ## 5.51.2
 
 ### Patch Changes

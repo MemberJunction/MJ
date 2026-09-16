@@ -1,5 +1,109 @@
 # Change Log - @memberjunction/server
 
+## 5.51.3
+
+### Patch Changes
+
+- 3231af9: fix(server): correct the cache-refresh interval unit — the metadata cache was refreshing every ~50 hours instead of the configured 3 minutes. `databaseSettings.metadataCacheRefreshInterval` is milliseconds (default 180000 = 3 min), but MJServer passed it undivided into `SQLServerProviderConfigData`'s `checkRefreshIntervalSeconds` argument (seconds), and `SQLServerDataProvider` then scheduled `setInterval(RefreshIfNeeded, CheckRefreshIntervalSeconds * 1000)` → 180000 × 1000 ≈ 50 h, so the metadata cache effectively never auto-refreshed (the likely root cause of "stale metadata until MJAPI restart"). Fix (both required together): divide by 1000 at the two `MJServer/src/index.ts` call sites (matching the already-correct PostgreSQL siblings), and multiply `CheckRefreshIntervalSeconds` by 1000 where it is passed to `UserCache.Instance.Refresh` in `SQLServerDataProvider/src/config.ts` (that parameter is milliseconds) — otherwise fixing only the first half would make the user cache hammer the DB every 180 ms. After both, the metadata and user caches each refresh every 3 minutes, as configured.
+- Updated dependencies [391fa16]
+- Updated dependencies [ca2021c]
+- Updated dependencies [3231af9]
+- Updated dependencies [ebe2f88]
+- Updated dependencies [b82415e]
+- Updated dependencies [21b5425]
+- Updated dependencies [896268b]
+- Updated dependencies [896268b]
+- Updated dependencies [d492f0c]
+- Updated dependencies [849fea1]
+  - @memberjunction/core@5.51.3
+  - @memberjunction/generic-database-provider@5.51.3
+  - @memberjunction/global@5.51.3
+  - @memberjunction/ai-prompts@5.51.3
+  - @memberjunction/ai-core-plus@5.51.3
+  - @memberjunction/sqlserver-dataprovider@5.51.3
+  - @memberjunction/graphql-dataprovider@5.51.3
+  - @memberjunction/codegen-lib@5.51.3
+  - @memberjunction/postgresql-dataprovider@5.51.3
+  - @memberjunction/credentials@5.51.3
+  - @memberjunction/ai-engine-base@5.51.3
+  - @memberjunction/ai-agent-manager-actions@5.51.3
+  - @memberjunction/ai-agent-manager@5.51.3
+  - @memberjunction/ai-agents@5.51.3
+  - @memberjunction/clustering-engine@5.51.3
+  - @memberjunction/computer-use@5.51.3
+  - @memberjunction/aiengine@5.51.3
+  - @memberjunction/tag-engine@5.51.3
+  - @memberjunction/tag-engine-base@5.51.3
+  - @memberjunction/ai-mcp-client@5.51.3
+  - @memberjunction/computer-use-engine@5.51.3
+  - @memberjunction/ai-bridge-base@5.51.3
+  - @memberjunction/ai-bridge-ringcentral@5.51.3
+  - @memberjunction/ai-bridge-teams@5.51.3
+  - @memberjunction/ai-bridge-twilio@5.51.3
+  - @memberjunction/ai-bridge-vonage@5.51.3
+  - @memberjunction/ai-bridge-server@5.51.3
+  - @memberjunction/remote-browser-base@5.51.3
+  - @memberjunction/remote-browser-cdp@5.51.3
+  - @memberjunction/remote-browser-selfhost@5.51.3
+  - @memberjunction/remote-browser-server@5.51.3
+  - @memberjunction/ai-vectordb@5.51.3
+  - @memberjunction/ai-vectors-pinecone@5.51.3
+  - @memberjunction/ai-vector-sync@5.51.3
+  - @memberjunction/api-keys@5.51.3
+  - @memberjunction/actions-apollo@5.51.3
+  - @memberjunction/actions-base@5.51.3
+  - @memberjunction/actions-bizapps-accounting@5.51.3
+  - @memberjunction/actions-bizapps-crm@5.51.3
+  - @memberjunction/actions-bizapps-formbuilders@5.51.3
+  - @memberjunction/actions-bizapps-lms@5.51.3
+  - @memberjunction/actions-bizapps-social@5.51.3
+  - @memberjunction/core-actions@5.51.3
+  - @memberjunction/actions@5.51.3
+  - @memberjunction/auth-providers@5.51.3
+  - @memberjunction/communication-types@5.51.3
+  - @memberjunction/communication-engine@5.51.3
+  - @memberjunction/entity-communications-base@5.51.3
+  - @memberjunction/entity-communications-server@5.51.3
+  - @memberjunction/notifications@5.51.3
+  - @memberjunction/communication-ms-graph@5.51.3
+  - @memberjunction/communication-sendgrid@5.51.3
+  - @memberjunction/component-registry-client-sdk@5.51.3
+  - @memberjunction/doc-utils@5.51.3
+  - @memberjunction/encryption@5.51.3
+  - @memberjunction/external-change-detection@5.51.3
+  - @memberjunction/integration-engine@5.51.3
+  - @memberjunction/integration-engine-base@5.51.3
+  - @memberjunction/integration-schema-builder@5.51.3
+  - @memberjunction/interactive-component-types@5.51.3
+  - @memberjunction/lists@5.51.3
+  - @memberjunction/livekit-room-server@5.51.3
+  - @memberjunction/core-entities@5.51.3
+  - @memberjunction/core-entities-server@5.51.3
+  - @memberjunction/data-context@5.51.3
+  - @memberjunction/data-context-server@5.51.3
+  - @memberjunction/queue@5.51.3
+  - @memberjunction/storage@5.51.3
+  - @memberjunction/record-comparison@5.51.3
+  - @memberjunction/redis-provider@5.51.3
+  - @memberjunction/scheduling-actions@5.51.3
+  - @memberjunction/scheduling-engine-base@5.51.3
+  - @memberjunction/scheduling-engine@5.51.3
+  - @memberjunction/schema-engine@5.51.3
+  - @memberjunction/search-engine@5.51.3
+  - @memberjunction/server-extensions-core@5.51.3
+  - @memberjunction/templates@5.51.3
+  - @memberjunction/testing-engine@5.51.3
+  - @memberjunction/testing-engine-base@5.51.3
+  - @memberjunction/version-history@5.51.3
+  - @memberjunction/esignature@5.51.3
+  - @memberjunction/ai@5.51.3
+  - @memberjunction/integration-progress-artifacts@5.51.3
+  - @memberjunction/scheduling-base-types@5.51.3
+  - @memberjunction/ai-provider-bundle@5.51.3
+  - @memberjunction/config@5.51.3
+  - @memberjunction/lists-base@5.51.3
+  - @memberjunction/sql-dialect@5.51.3
+
 ## 5.51.2
 
 ### Patch Changes

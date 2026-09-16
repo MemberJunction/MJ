@@ -1,5 +1,31 @@
 # Change Log - @memberjunction/sqlserver-dataprovider
 
+## 5.51.3
+
+### Patch Changes
+
+- 3231af9: fix(server): correct the cache-refresh interval unit — the metadata cache was refreshing every ~50 hours instead of the configured 3 minutes. `databaseSettings.metadataCacheRefreshInterval` is milliseconds (default 180000 = 3 min), but MJServer passed it undivided into `SQLServerProviderConfigData`'s `checkRefreshIntervalSeconds` argument (seconds), and `SQLServerDataProvider` then scheduled `setInterval(RefreshIfNeeded, CheckRefreshIntervalSeconds * 1000)` → 180000 × 1000 ≈ 50 h, so the metadata cache effectively never auto-refreshed (the likely root cause of "stale metadata until MJAPI restart"). Fix (both required together): divide by 1000 at the two `MJServer/src/index.ts` call sites (matching the already-correct PostgreSQL siblings), and multiply `CheckRefreshIntervalSeconds` by 1000 where it is passed to `UserCache.Instance.Refresh` in `SQLServerDataProvider/src/config.ts` (that parameter is milliseconds) — otherwise fixing only the first half would make the user cache hammer the DB every 180 ms. After both, the metadata and user caches each refresh every 3 minutes, as configured.
+- Updated dependencies [391fa16]
+- Updated dependencies [ca2021c]
+- Updated dependencies [ebe2f88]
+- Updated dependencies [896268b]
+- Updated dependencies [849fea1]
+  - @memberjunction/core@5.51.3
+  - @memberjunction/generic-database-provider@5.51.3
+  - @memberjunction/global@5.51.3
+  - @memberjunction/aiengine@5.51.3
+  - @memberjunction/ai-vectordb@5.51.3
+  - @memberjunction/ai-vector-dupe@5.51.3
+  - @memberjunction/actions-base@5.51.3
+  - @memberjunction/actions@5.51.3
+  - @memberjunction/encryption@5.51.3
+  - @memberjunction/core-entities@5.51.3
+  - @memberjunction/queue@5.51.3
+  - @memberjunction/query-processor@5.51.3
+  - @memberjunction/ai@5.51.3
+  - @memberjunction/ai-provider-bundle@5.51.3
+  - @memberjunction/sql-dialect@5.51.3
+
 ## 5.51.2
 
 ### Patch Changes

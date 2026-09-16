@@ -1,5 +1,58 @@
 # @memberjunction/integration-test-suite
 
+## 5.51.3
+
+### Patch Changes
+
+- Updated dependencies [391fa16]
+- Updated dependencies [ca2021c]
+- Updated dependencies [3231af9]
+- Updated dependencies [ebe2f88]
+- Updated dependencies [eca31d5]
+- Updated dependencies [9e3ddbd]
+- Updated dependencies [b82415e]
+- Updated dependencies [849fea1]
+  - @memberjunction/core@5.51.3
+  - @memberjunction/global@5.51.3
+  - @memberjunction/ai-prompts@5.51.3
+  - @memberjunction/ai-core-plus@5.51.3
+  - @memberjunction/sqlserver-dataprovider@5.51.3
+  - @memberjunction/graphql-dataprovider@5.51.3
+  - @memberjunction/metadata-sync@5.51.3
+  - @memberjunction/codegen-lib@5.51.3
+  - @memberjunction/ai-engine-base@5.51.3
+  - @memberjunction/ai-agents@5.51.3
+  - @memberjunction/aiengine@5.51.3
+  - @memberjunction/predictive-studio@5.51.3
+  - @memberjunction/ai-bridge-base@5.51.3
+  - @memberjunction/ai-bridge-server@5.51.3
+  - @memberjunction/api-keys@5.51.3
+  - @memberjunction/actions-base@5.51.3
+  - @memberjunction/actions@5.51.3
+  - @memberjunction/communication-types@5.51.3
+  - @memberjunction/communication-engine@5.51.3
+  - @memberjunction/notifications@5.51.3
+  - @memberjunction/communication-ms-graph@5.51.3
+  - @memberjunction/communication-expo-push@5.51.3
+  - @memberjunction/communication-gmail@5.51.3
+  - @memberjunction/communication-sendgrid@5.51.3
+  - @memberjunction/communication-twilio@5.51.3
+  - @memberjunction/content-autotagging@5.51.3
+  - @memberjunction/conversations-runtime@5.51.3
+  - @memberjunction/core-entities@5.51.3
+  - @memberjunction/open-app-engine@5.51.3
+  - @memberjunction/query-processor@5.51.3
+  - @memberjunction/record-set-processor-base@5.51.3
+  - @memberjunction/record-set-processor@5.51.3
+  - @memberjunction/redis-provider@5.51.3
+  - @memberjunction/scheduling-engine@5.51.3
+  - @memberjunction/search-engine@5.51.3
+  - @memberjunction/templates-base-types@5.51.3
+  - @memberjunction/templates@5.51.3
+  - @memberjunction/testing-integration@5.51.3
+  - @memberjunction/ai@5.51.3
+  - @memberjunction/predictive-studio-core@5.51.3
+
 ## 5.51.2
 
 ### Patch Changes

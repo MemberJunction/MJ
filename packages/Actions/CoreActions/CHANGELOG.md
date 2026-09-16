@@ -1,5 +1,53 @@
 # Change Log - @memberjunction/core-actions
 
+## 5.51.3
+
+### Patch Changes
+
+- Updated dependencies [391fa16]
+- Updated dependencies [ca2021c]
+- Updated dependencies [3231af9]
+- Updated dependencies [ebe2f88]
+- Updated dependencies [896268b]
+- Updated dependencies [849fea1]
+  - @memberjunction/core@5.51.3
+  - @memberjunction/generic-database-provider@5.51.3
+  - @memberjunction/global@5.51.3
+  - @memberjunction/ai-prompts@5.51.3
+  - @memberjunction/ai-core-plus@5.51.3
+  - @memberjunction/sqlserver-dataprovider@5.51.3
+  - @memberjunction/ai-engine-base@5.51.3
+  - @memberjunction/ai-agent-manager@5.51.3
+  - @memberjunction/ai-agents@5.51.3
+  - @memberjunction/clustering-engine@5.51.3
+  - @memberjunction/aiengine@5.51.3
+  - @memberjunction/ai-mcp-client@5.51.3
+  - @memberjunction/ai-vector-sync@5.51.3
+  - @memberjunction/actions-base@5.51.3
+  - @memberjunction/code-execution@5.51.3
+  - @memberjunction/actions@5.51.3
+  - @memberjunction/communication-types@5.51.3
+  - @memberjunction/communication-engine@5.51.3
+  - @memberjunction/content-autotagging@5.51.3
+  - @memberjunction/external-change-detection@5.51.3
+  - @memberjunction/integration-engine@5.51.3
+  - @memberjunction/interactive-component-types@5.51.3
+  - @memberjunction/lists@5.51.3
+  - @memberjunction/core-entities@5.51.3
+  - @memberjunction/core-entities-server@5.51.3
+  - @memberjunction/storage@5.51.3
+  - @memberjunction/react-linter@5.51.3
+  - @memberjunction/record-set-processor-base@5.51.3
+  - @memberjunction/record-set-processor@5.51.3
+  - @memberjunction/search-engine@5.51.3
+  - @memberjunction/esignature@5.51.3
+  - @memberjunction/geo-core@5.51.3
+  - @memberjunction/ai@5.51.3
+  - @memberjunction/ai-betty-bot@5.51.3
+  - @memberjunction/lists-base@5.51.3
+  - @memberjunction/export-engine@5.51.3
+  - @memberjunction/sql-dialect@5.51.3
+
 ## 5.51.2
 
 ### Patch Changes

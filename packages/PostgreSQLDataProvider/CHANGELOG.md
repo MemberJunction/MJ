@@ -1,5 +1,33 @@
 # @memberjunction/postgresql-dataprovider
 
+## 5.51.3
+
+### Patch Changes
+
+- 21b5425: PostgreSQL no longer rejects a call to a function written in ALL-CAPS, such as `PERCENTILE_CONT(0.5)` or `DATE_TRUNC('day', d)`.
+
+  The provider quoted any capitalized word it did not recognize, so `PERCENTILE_CONT(0.5)` became `"PERCENTILE_CONT"(0.5)` and PostgreSQL looked for a function literally named in upper case, which never exists. An ALL-CAPS word immediately followed by `(` is now left as written, unless it is qualified with a `.` (MJ's own procedures such as `__mj.spCreate…` are unaffected). Mixed-case words followed by `(` are quoted exactly as before.
+
+- 896268b: PostgreSQL no longer rejects valid SQL because MJ quoted one of its keywords.
+
+  Before sending SQL to PostgreSQL, the provider quotes mixed-case identifiers so their case is preserved. It treated any capitalized word it did not recognize as an identifier, so valid SQL was rewritten into SQL PostgreSQL rejects: `SELECT CURRENT_DATE` became `SELECT "CURRENT_DATE"` (`column "CURRENT_DATE" does not exist`), and `ORDER BY x ASC NULLS LAST` became `ASC "NULLS" "LAST"`.
+
+  87 PostgreSQL words are now recognized, the same list 6.x uses: `CURRENT_DATE` and the other niladic functions, `NULLS`/`FIRST`/`LAST`, `WITHIN GROUP` and the other window and grouping words, type names such as `CHARACTER VARYING` and `INT8`, and utility, transaction and `MERGE` keywords.
+
+  They are recognized only in ALL-CAPS, so nothing that worked before changes: a mixed-case column such as `Cycle` or `Current_Date` is still quoted, and keywords written in Title Case (`Select … From …`) still pass through as before.
+
+- Updated dependencies [391fa16]
+- Updated dependencies [ca2021c]
+- Updated dependencies [ebe2f88]
+- Updated dependencies [896268b]
+- Updated dependencies [849fea1]
+  - @memberjunction/core@5.51.3
+  - @memberjunction/generic-database-provider@5.51.3
+  - @memberjunction/global@5.51.3
+  - @memberjunction/ai-vectordb@5.51.3
+  - @memberjunction/query-processor@5.51.3
+  - @memberjunction/sql-dialect@5.51.3
+
 ## 5.51.2
 
 ### Patch Changes

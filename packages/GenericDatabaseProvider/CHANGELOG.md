@@ -1,5 +1,69 @@
 # @memberjunction/generic-database-provider
 
+## 5.51.3
+
+### Patch Changes
+
+- 391fa16: A cached dataset no longer serves rows that an ordinary read left behind, including rows deleted since.
+
+  `GetDatasetByName` caches each dataset item's rows through the same cache-key builder an ordinary `RunView` uses, passing only the entity name and the item's `WhereClause`. Every shipped dataset item has a NULL `WhereClause`, so a dataset item and a plain unfiltered read of the same entity produced the identical key and silently shared one cache slot. Whichever ran first filled it, and the other was served those rows — observed as a cached `MJ_Metadata` dataset holding 51 `MJ: Query Entities` rows while the database held 48, because rows had been deleted after the slot was filled. Dataset items can also project a subset of columns (`DatasetItem.Columns`), where a `RunView` slot always holds the full field set, so the two are not interchangeable in shape either.
+
+  Each dataset item now has its own cache namespace (`<dataset>/<item code>`). The namespace is added only for dataset reads, so ordinary reads keep their exact previous key and no existing cache entry is invalidated.
+
+  Backported from the 6.x fix in #3425.
+
+- ebe2f88: Event-driven metadata refresh from dataset membership, and an authoritative dataset-status oracle.
+
+  **The problem.** A server process never refreshed its own in-memory metadata after a permission-bearing save it itself processed: the only trigger was the periodic `RefreshIfNeeded()` poller, and its staleness check (`GetDatasetStatusByName` Phase 1) derived each MJ_Metadata item's "remote" timestamp from the server's **own cached dataset slots** — a closed loop. A tightened field-security rule was therefore not enforced over the wire until process restart. Clients had no event-driven metadata refresh at all — a browser loaded metadata once per page load.
+
+  **The fix, in three parts:**
+  1. **Dataset-membership-driven refresh (`ProviderBase`).** When a provider loads the MJ_Metadata dataset, it records which entities compose it (`registerMetadataDatasetMembership`; persisted beside the metadata snapshot for warm boots). The existing write-invalidation event subscription now also routes save/delete/remote-invalidate events to `handleMetadataMemberEntityEvent`: a write to any member entity schedules a refresh of the provider that owns that metadata, gated by a fail-open backend-identity check for multi-provider processes. Membership is the dataset definition itself — adding a `DatasetItem` row extends coverage with no code change, and no entity names are hardcoded anywhere. Scheduling and refresh policy are per-tier: **database providers** debounce briefly (500ms, burst-coalescing, so the enclosing transaction commits first) and hard-`Refresh()` — the writer must not trust any cache for the re-read; **`GraphQLDataProvider`** coalesces into a long randomized window (15–45s, since every browser receives every write broadcast and MJ_Metadata's members include routinely-written entities like dashboards and queries — the window caps each browser at one staleness check and at most one metadata pull per window, jittered so sessions never stampede together) and then runs the staleness check, re-pulling the graph only when genuinely stale. Single-flight guards the reload itself: a refresh request arriving mid-reload queues exactly one follow-up instead of racing a concurrent reload whose older snapshot could win the swap.
+  2. **The staleness oracle is authoritative.** `GetDatasetStatusByName` no longer derives status from cached dataset slots — status is always the batched SQL MAX/COUNT per item (the cache remains fully in play for the _data_ reads in `GetDatasetByName`), and the status query now composes the stored item `WhereClause` with the runtime filter, matching the data read (previously the SQL path ignored the stored clause).
+  3. **Throttle bypass for event-driven checks.** `CheckToSeeIfRefreshNeeded`/`RefreshIfNeeded` accept an optional `bypassMinCheckInterval`; event-driven callers hold positive evidence a member entity was written, and the 30s min-check throttle would otherwise silently drop the second of two permission changes made inside one window.
+
+  Permission changes are now enforced by the server that processed them within ~1–2 seconds (one full metadata reload per debounced burst, in the background — requests keep serving the old graph until the atomic swap) instead of not until process restart. Other server instances converge on their periodic tick, which the oracle fix makes genuinely reliable. Connected browsers converge within the client coalescing window — display freshness only; enforcement is server-side either way.
+
+- 896268b: Applying a `MaxRows` cap no longer rewrites the caller's SQL on PostgreSQL.
+
+  `QueryPagingEngine.applyMaxRowsViaAST` injected the row cap by calling `SetOuterCap` and then re-emitting the entire statement with `SQLParser.ToSQL()`. That is an AST round-trip, and `node-sql-parser` normalizes as it generates — keywords come back upper-cased and identifiers re-quoted. Appending one clause should not rewrite the statement around it.
+
+  On SQL Server the normalization is invisible. On PostgreSQL it is a correctness bug, because the provider's identifier auto-quoter runs afterwards over the now-upper-cased statement and quotes any keyword missing from its allowlist:
+
+  ```
+  caller wrote:   ORDER BY x ASC nulls last
+  ToSQL emitted:  ORDER BY x ASC NULLS LAST
+  auto-quoted to: ORDER BY x ASC "NULLS" "LAST"
+  PostgreSQL:     syntax error at or near ""NULLS""
+  ```
+
+  The round-trip also rewrote `cp."recordKey"` to `"cp"."recordKey"` and `::integer` to `::INTEGER`.
+
+  Found in production alongside the auto-quoter keyword gaps fixed in `@memberjunction/sql-dialect`. The two are independent halves of the same failure: completing the keyword list makes the upper-cased output harmless, while this makes the output stop changing in the first place — which matters for every caller whose SQL has to survive a cap, not only those using a keyword the allowlist happened to miss.
+
+  Where a trailing `LIMIT N` is provably equivalent to the AST injection — a plain `SELECT` with no existing cap, on a dialect that caps with a suffix, and with no `OFFSET` / `FETCH` / `FOR UPDATE`-style clause that must follow `LIMIT` — the cap is now appended as text and the statement is left byte-identical. Every other shape falls through to the existing AST path unchanged, so this narrows the blast radius without altering any result.
+
+  Deliberately **not** switched to the existing `outerWrap` fallback, which is also text-preserving. Wrapping puts the cap above a subquery's `ORDER BY`, where PostgreSQL does not guarantee the inner ordering survives, so a "top 100 by rank" query could return an arbitrary 100. Inline injection is the semantically correct path and stays the default.
+
+  SQL Server is unaffected: `TOP N` is a prefix that has to sit between `SELECT` and the select list, a position no append can reach, so it continues to use the AST path.
+
+- Updated dependencies [391fa16]
+- Updated dependencies [ca2021c]
+- Updated dependencies [ebe2f88]
+- Updated dependencies [849fea1]
+  - @memberjunction/core@5.51.3
+  - @memberjunction/global@5.51.3
+  - @memberjunction/aiengine@5.51.3
+  - @memberjunction/ai-vectors-memory@5.51.3
+  - @memberjunction/actions-base@5.51.3
+  - @memberjunction/actions@5.51.3
+  - @memberjunction/encryption@5.51.3
+  - @memberjunction/core-entities@5.51.3
+  - @memberjunction/queue@5.51.3
+  - @memberjunction/query-processor@5.51.3
+  - @memberjunction/geo-core@5.51.3
+  - @memberjunction/sql-dialect@5.51.3
+  - @memberjunction/sql-parser@5.51.3
+
 ## 5.51.2
 
 ### Patch Changes

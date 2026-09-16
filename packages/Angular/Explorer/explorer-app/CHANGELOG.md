@@ -1,5 +1,31 @@
 # @memberjunction/ng-explorer-app
 
+## 5.51.3
+
+### Patch Changes
+
+- Updated dependencies [f0c73c7]
+- Updated dependencies [391fa16]
+- Updated dependencies [ca2021c]
+- Updated dependencies [ebe2f88]
+- Updated dependencies [849fea1]
+  - @memberjunction/ng-explorer-core@5.51.3
+  - @memberjunction/core@5.51.3
+  - @memberjunction/ai-core-plus@5.51.3
+  - @memberjunction/ng-bootstrap@5.51.3
+  - @memberjunction/ng-workspace-initializer@5.51.3
+  - @memberjunction/ng-shared@5.51.3
+  - @memberjunction/ng-conversations@5.51.3
+  - @memberjunction/ng-feedback@5.51.3
+  - @memberjunction/ai-agent-client@5.51.3
+  - @memberjunction/ng-auth-services@5.51.3
+  - @memberjunction/ng-base-application@5.51.3
+  - @memberjunction/ng-base-types@5.51.3
+  - @memberjunction/ng-notifications@5.51.3
+  - @memberjunction/core-entities@5.51.3
+  - @memberjunction/ng-agent-client@5.51.3
+  - @memberjunction/ng-explorer-service-worker@5.51.3
+
 ## 5.51.2
 
 ### Patch Changes

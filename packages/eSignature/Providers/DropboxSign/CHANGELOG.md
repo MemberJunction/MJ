@@ -1,5 +1,13 @@
 # @memberjunction/esignature-dropboxsign
 
+## 5.51.3
+
+### Patch Changes
+
+- Updated dependencies [ca2021c]
+  - @memberjunction/global@5.51.3
+  - @memberjunction/esignature@5.51.3
+
 ## 5.51.2
 
 ### Patch Changes

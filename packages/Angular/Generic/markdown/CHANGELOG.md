@@ -1,5 +1,11 @@
 # @memberjunction/ng-markdown
 
+## 5.51.3
+
+### Patch Changes
+
+- @memberjunction/markdown-core@5.51.3
+
 ## 5.51.2
 
 ### Patch Changes

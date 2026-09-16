@@ -1,5 +1,13 @@
 # Change Log - @memberjunction/ai-mistral
 
+## 5.51.3
+
+### Patch Changes
+
+- Updated dependencies [ca2021c]
+  - @memberjunction/global@5.51.3
+  - @memberjunction/ai@5.51.3
+
 ## 5.51.2
 
 ### Patch Changes

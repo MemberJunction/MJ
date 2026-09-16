@@ -1,5 +1,39 @@
 # @memberjunction/ng-bootstrap
 
+## 5.51.3
+
+### Patch Changes
+
+- Updated dependencies [f0c73c7]
+- Updated dependencies [391fa16]
+- Updated dependencies [ca2021c]
+- Updated dependencies [ebe2f88]
+- Updated dependencies [849fea1]
+  - @memberjunction/ng-explorer-core@5.51.3
+  - @memberjunction/core@5.51.3
+  - @memberjunction/ai-core-plus@5.51.3
+  - @memberjunction/graphql-dataprovider@5.51.3
+  - @memberjunction/ai-engine-base@5.51.3
+  - @memberjunction/ng-core-entity-forms@5.51.3
+  - @memberjunction/ng-dashboards@5.51.3
+  - @memberjunction/ng-explorer-settings@5.51.3
+  - @memberjunction/ng-shared@5.51.3
+  - @memberjunction/ng-artifacts@5.51.3
+  - @memberjunction/ng-conversations@5.51.3
+  - @memberjunction/ng-dashboard-viewer@5.51.3
+  - @memberjunction/ng-entity-viewer@5.51.3
+  - @memberjunction/ng-file-storage@5.51.3
+  - @memberjunction/tag-engine-base@5.51.3
+  - @memberjunction/ai-vectors-memory@5.51.3
+  - @memberjunction/actions-base@5.51.3
+  - @memberjunction/ng-auth-services@5.51.3
+  - @memberjunction/ng-clustering@5.51.3
+  - @memberjunction/ng-entity-action-ux@5.51.3
+  - @memberjunction/communication-types@5.51.3
+  - @memberjunction/entity-communications-base@5.51.3
+  - @memberjunction/core-entities@5.51.3
+  - @memberjunction/ai-realtime-client@5.51.3
+
 ## 5.51.2
 
 ### Patch Changes

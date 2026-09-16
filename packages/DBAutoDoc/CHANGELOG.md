@@ -1,5 +1,27 @@
 # @memberjunction/db-auto-doc
 
+## 5.51.3
+
+### Patch Changes
+
+- b82415e: DBAutoDoc now writes detected transitive bridge views in the analyzed database's SQL dialect.
+
+  The bridge-view body DBAutoDoc emits into additionalSchemaInfo (`TransitiveView.SQL`) was always
+  bracket-quoted SQL Server syntax, and CodeGen executes that body verbatim — so organic keys detected
+  on a PostgreSQL database produced a bridge view PostgreSQL could not create. Identifiers are now
+  quoted per `database.provider`: brackets on SQL Server (unchanged), double quotes on PostgreSQL and
+  Oracle, backticks on MySQL. On PostgreSQL the quoting also preserves mixed-case names, which would
+  otherwise fold to lower case and stop matching the catalog. Companion to the CodeGen fix for #4409.
+
+- Updated dependencies [391fa16]
+- Updated dependencies [ca2021c]
+- Updated dependencies [ebe2f88]
+- Updated dependencies [849fea1]
+  - @memberjunction/core@5.51.3
+  - @memberjunction/global@5.51.3
+  - @memberjunction/server-bootstrap-lite@5.51.3
+  - @memberjunction/ai@5.51.3
+
 ## 5.51.2
 
 ### Patch Changes

@@ -1,5 +1,31 @@
 # @memberjunction/ai-agents
 
+## 5.51.3
+
+### Patch Changes
+
+- Updated dependencies [391fa16]
+- Updated dependencies [ca2021c]
+- Updated dependencies [ebe2f88]
+- Updated dependencies [849fea1]
+  - @memberjunction/core@5.51.3
+  - @memberjunction/global@5.51.3
+  - @memberjunction/ai-prompts@5.51.3
+  - @memberjunction/ai-core-plus@5.51.3
+  - @memberjunction/ai-engine-base@5.51.3
+  - @memberjunction/aiengine@5.51.3
+  - @memberjunction/ai-reranker@5.51.3
+  - @memberjunction/ai-vector-dupe@5.51.3
+  - @memberjunction/ai-vector-sync@5.51.3
+  - @memberjunction/actions-base@5.51.3
+  - @memberjunction/actions@5.51.3
+  - @memberjunction/core-entities@5.51.3
+  - @memberjunction/storage@5.51.3
+  - @memberjunction/search-engine@5.51.3
+  - @memberjunction/templates@5.51.3
+  - @memberjunction/ai@5.51.3
+  - @memberjunction/context-crush@5.51.3
+
 ## 5.51.2
 
 ### Patch Changes

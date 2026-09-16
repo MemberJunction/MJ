@@ -1,5 +1,60 @@
 # @memberjunction/metadata-sync
 
+## 5.51.3
+
+### Patch Changes
+
+- eca31d5: 5.51.x: `mj sync push` and `mj sync pull` load the host's Open App server packages and generated
+  entity packages, so records go through their real entity classes.
+
+  `mj sync` registered only MJ core's entity classes. Every entity from an installed Open App
+  (`dynamicPackages.server`) or from the host's own generated packages (`codeGeneration.packages`)
+  was created as a generic `BaseEntity`: push silently skipped the app's custom `Save()`, validation
+  and lifecycle hooks, and pull — which keyed records through the missing typed properties — wrote
+  one record per run with an empty `primaryKey` (#3415, #4199).
+  - Port of MJ 6.x's dynamic-package loader (PR #4201) into metadata-sync, called only by
+    `mj sync push` / `mj sync pull` (process IDs `cli:sync:push` / `cli:sync:pull`). MJAPI and every
+    other command are unchanged. `Enabled`, `Processes` / `ExcludeProcesses`,
+    `dynamicPackages.policy` and `MJ_DYNAMIC_PACKAGES=none` behave exactly as on 6.x.
+  - Push (directory and `@lookup` auto-create paths) and pull warn once per entity when its
+    subclass is still not registered.
+
+- 9e3ddbd: `mj sync pull` no longer loses records when an entity's class isn't registered in the CLI process.
+
+  Pull read each record's primary key through the entity's typed property (`record.ID`). When the
+  entity's generated subclass isn't registered — an Open App whose server package didn't load, or
+  anything the CLI's class manifest doesn't cover — records arrive as a bare `BaseEntity` with no
+  typed properties, so every key read `undefined`. All records then shared one key and overwrote each
+  other in the write batch: a pull of N new records wrote exactly one, with an empty `primaryKey`
+  that was duplicated on the next pull, and existing records were never refreshed (#3415).
+  - Keys are now read through `BaseEntity.Get()`, which works with or without the subclass, and a
+    record whose key genuinely has no value stops the pull instead of overwriting others.
+  - `FileWriteBatch` refuses an array update for a record whose key has a field with no value. Real
+    key values that only look empty — an empty string, the text `null` — are accepted.
+  - The string pull matches records by is built in one place, and `|` inside a key value is escaped,
+    so a value containing the separator can no longer be mistaken for a different key.
+
+- Updated dependencies [391fa16]
+- Updated dependencies [ca2021c]
+- Updated dependencies [3231af9]
+- Updated dependencies [ebe2f88]
+- Updated dependencies [21b5425]
+- Updated dependencies [896268b]
+- Updated dependencies [896268b]
+- Updated dependencies [849fea1]
+  - @memberjunction/core@5.51.3
+  - @memberjunction/generic-database-provider@5.51.3
+  - @memberjunction/global@5.51.3
+  - @memberjunction/sqlserver-dataprovider@5.51.3
+  - @memberjunction/graphql-dataprovider@5.51.3
+  - @memberjunction/postgresql-dataprovider@5.51.3
+  - @memberjunction/core-entities@5.51.3
+  - @memberjunction/core-entities-server@5.51.3
+  - @memberjunction/server-bootstrap-lite@5.51.3
+  - @memberjunction/cli-core@5.51.3
+  - @memberjunction/config@5.51.3
+  - @memberjunction/sql-dialect@5.51.3
+
 ## 5.51.2
 
 ### Patch Changes

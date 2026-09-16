@@ -1,5 +1,60 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 5.51.3
+
+### Patch Changes
+
+- b82415e: CodeGen now creates organic-key `TransitiveView` bridge views on PostgreSQL (#4409).
+
+  The DDL was hardcoded as SQL Server's `CREATE OR ALTER VIEW`, which PostgreSQL rejects, so any
+  PostgreSQL deployment declaring a `TransitiveView` got neither the view nor the organic key it
+  backs — and the run still reported success, because the failure is caught per key and logged.
+
+  The statement now comes from a new provider hook, `CodeGenDatabaseProvider.generateCreateOrReplaceViewSQL`:
+  - **SQL Server** — `CREATE OR ALTER VIEW`, unchanged in behavior.
+  - **PostgreSQL** — `CREATE OR REPLACE VIEW`, falling back to drop-and-recreate when the body changes
+    the column list (SQLSTATE `42P16`). The drop is not `CASCADE`: if a user-owned object depends on
+    the view, the run fails with PostgreSQL's dependency error instead of silently destroying it.
+
+  Also fixed: on SQL Server the view was logged to the `CodeGen_Run_*.sql` migration without a `GO`
+  after it, so replaying that migration failed on the next statement. The view body is now documented
+  as dialect-specific — on PostgreSQL it is not auto-quoted, so mixed-case identifiers must be quoted.
+
+- Updated dependencies [391fa16]
+- Updated dependencies [ca2021c]
+- Updated dependencies [3231af9]
+- Updated dependencies [ebe2f88]
+- Updated dependencies [21b5425]
+- Updated dependencies [896268b]
+- Updated dependencies [896268b]
+- Updated dependencies [849fea1]
+  - @memberjunction/core@5.51.3
+  - @memberjunction/generic-database-provider@5.51.3
+  - @memberjunction/global@5.51.3
+  - @memberjunction/ai-prompts@5.51.3
+  - @memberjunction/ai-core-plus@5.51.3
+  - @memberjunction/sqlserver-dataprovider@5.51.3
+  - @memberjunction/postgresql-dataprovider@5.51.3
+  - @memberjunction/aiengine@5.51.3
+  - @memberjunction/actions-base@5.51.3
+  - @memberjunction/actions@5.51.3
+  - @memberjunction/external-data-sources@5.51.3
+  - @memberjunction/external-data-source-mongodb@5.51.3
+  - @memberjunction/external-data-source-mysql@5.51.3
+  - @memberjunction/external-data-source-oracle@5.51.3
+  - @memberjunction/external-data-source-postgres@5.51.3
+  - @memberjunction/external-data-source-sqlserver@5.51.3
+  - @memberjunction/external-data-source-snowflake@5.51.3
+  - @memberjunction/core-entities@5.51.3
+  - @memberjunction/core-entities-server@5.51.3
+  - @memberjunction/server-bootstrap-lite@5.51.3
+  - @memberjunction/ai@5.51.3
+  - @memberjunction/cli-core@5.51.3
+  - @memberjunction/ai-provider-bundle@5.51.3
+  - @memberjunction/config@5.51.3
+  - @memberjunction/sql-dialect@5.51.3
+  - @memberjunction/sql-parser@5.51.3
+
 ## 5.51.2
 
 ### Patch Changes
