@@ -42,7 +42,6 @@ export interface ChannelInboundVideoBridgeOptions {
  */
 export class ChannelInboundVideoBridge {
     private timer: ReturnType<typeof setInterval> | null = null;
-    private lastSentTimestamp = 0;
     private active = false;
 
     constructor(
@@ -87,30 +86,17 @@ export class ChannelInboundVideoBridge {
         if (typeof this.client.SendVideoFrame !== 'function') {
             return false;
         }
-        this.lastSentTimestamp = Date.now();
-        this.client.SendVideoFrame(base64Jpeg, this.options.MimeType ?? 'image/jpeg');
-        return true;
+        return Boolean(this.client.SendVideoFrame(base64Jpeg, this.options.MimeType ?? 'image/jpeg'));
     }
 
     /**
      * Pushes an event-driven frame (e.g. screencast push from RemoteBrowser or stroke completion).
-     * Throttled to at most 1 fps.
+     * Dispatches directly to the client's authoritative throttle gate.
      *
      * @param base64Jpeg The base64-encoded image frame.
      * @returns `true` if the frame was sent; `false` if dropped (throttled, track unestablished, or driver lacks video support).
      */
     public PushFrame(base64Jpeg: string): boolean {
-        if (!this.client || !this.client.IsTrackEstablished('video', 'inbound')) {
-            return false;
-        }
-        if (typeof this.client.SendVideoFrame !== 'function') {
-            return false;
-        }
-        const now = Date.now();
-        if (now - this.lastSentTimestamp < 1000) {
-            // Throttled: at most 1 frame per second
-            return false;
-        }
         return this.sendFrameDirect(base64Jpeg);
     }
 
