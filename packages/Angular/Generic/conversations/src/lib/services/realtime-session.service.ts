@@ -302,29 +302,6 @@ export interface RealtimeSessionRunOptions {
 }
 
 /**
- * Drives a **client-direct** real-time voice session: the browser mints an ephemeral
- * token from the MJ server, then connects DIRECTLY to the realtime provider. Audio
- * frames never transit the MJ server (low latency); only tool calls and final
- * transcripts are relayed back to MJ over GraphQL.
- *
- * This service is PROVIDER-AGNOSTIC policy/orchestration. All provider wire concerns
- * (transport, event translation, the response state machine, narration-kind tagging,
- * playback tracking) live in a {@link BaseRealtimeClient} driver resolved through the
- * MJ ClassFactory by the server-reported `Provider` key (e.g. `'openai'` →
- * `OpenAIRealtimeClient`). Future providers (Gemini Live, …) snap in by registering a
- * new driver — this service does not change.
- *
- * The Realtime Co-Agent (server-side) fronts the conversation's current agent — the server
- * bakes the companion instructions + tool set into `SessionConfigJson`, which the client
- * driver applies verbatim.
- *
- * Lifecycle: {@link StartRealtimeSession} → live duplex → {@link EndRealtimeSession}. A start is
- * two halves — MINT (the `StartRealtimeClientSession` mutation) and RUN (everything above) — and a
- * host that must mint through its own server surface enters at the second half via
- * {@link StartRealtimeSessionFromResult}; there is one implementation of the run half either way.
- */
-@Injectable({ providedIn: 'root' })
-/**
  * Converts a {@link RealtimeTrackDescriptor} to its JSON form for the session-config bag.
  *
  * Every field's VALUE is already JSON-safe; the interface simply is not assignable to `JSONValue`
@@ -365,6 +342,29 @@ function trackKeyFromJSON(raw: JSONValue): string | null {
   return `${direction}:${modality}`;
 }
 
+/**
+ * Drives a **client-direct** real-time voice session: the browser mints an ephemeral
+ * token from the MJ server, then connects DIRECTLY to the realtime provider. Audio
+ * frames never transit the MJ server (low latency); only tool calls and final
+ * transcripts are relayed back to MJ over GraphQL.
+ *
+ * This service is PROVIDER-AGNOSTIC policy/orchestration. All provider wire concerns
+ * (transport, event translation, the response state machine, narration-kind tagging,
+ * playback tracking) live in a {@link BaseRealtimeClient} driver resolved through the
+ * MJ ClassFactory by the server-reported `Provider` key (e.g. `'openai'` →
+ * `OpenAIRealtimeClient`). Future providers (Gemini Live, …) snap in by registering a
+ * new driver — this service does not change.
+ *
+ * The Realtime Co-Agent (server-side) fronts the conversation's current agent — the server
+ * bakes the companion instructions + tool set into `SessionConfigJson`, which the client
+ * driver applies verbatim.
+ *
+ * Lifecycle: {@link StartRealtimeSession} → live duplex → {@link EndRealtimeSession}. A start is
+ * two halves — MINT (the `StartRealtimeClientSession` mutation) and RUN (everything above) — and a
+ * host that must mint through its own server surface enters at the second half via
+ * {@link StartRealtimeSessionFromResult}; there is one implementation of the run half either way.
+ */
+@Injectable({ providedIn: 'root' })
 export class RealtimeSessionService {
   // ── Reactive UI state ──────────────────────────────────────────────────────
   private _connectionState$ = new BehaviorSubject<RealtimeConnectionState>('closed');
