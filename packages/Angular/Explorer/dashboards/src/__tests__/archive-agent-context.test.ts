@@ -119,28 +119,28 @@ describe('resolveArchiveRun', () => {
 
     it('matches by exact ID (case-insensitive)', () => {
         const r = ResolveArchiveRun('ID-1', runs);
-        expect(r.ok && r.run.ConfigurationName).toBe('Nightly Members');
+        expect(r.Ok && r.Run.ConfigurationName).toBe('Nightly Members');
     });
 
     it('matches by exact name then by contains', () => {
         const exact = ResolveArchiveRun('weekly logs', runs);
-        expect(exact.ok && exact.run.ID).toBe('id-2');
+        expect(exact.Ok && exact.Run.ID).toBe('id-2');
         const contains = ResolveArchiveRun('members', runs);
-        expect(contains.ok && contains.run.ID).toBe('id-1');
+        expect(contains.Ok && contains.Run.ID).toBe('id-1');
     });
 
     it('returns a tolerant error listing available runs on a miss', () => {
         const r = ResolveArchiveRun('nonexistent', runs);
-        expect(r.ok).toBe(false);
-        if (!r.ok) {
-            expect(r.error).toContain('Nightly Members');
-            expect(r.error).toContain('Weekly Logs');
+        expect(r.Ok).toBe(false);
+        if (!r.Ok) {
+            expect(r.Error).toContain('Nightly Members');
+            expect(r.Error).toContain('Weekly Logs');
         }
     });
 
     it('errors on empty input and empty run list', () => {
-        expect(ResolveArchiveRun('  ', runs).ok).toBe(false);
-        expect(ResolveArchiveRun('anything', []).ok).toBe(false);
+        expect(ResolveArchiveRun('  ', runs).Ok).toBe(false);
+        expect(ResolveArchiveRun('anything', []).Ok).toBe(false);
     });
 });
 

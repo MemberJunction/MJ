@@ -87,27 +87,27 @@ export function renderMarkdown(report: DiffReport): string {
 
 function formatObjectDiffRow(diff: ObjectDiff): string {
   const details = diff.details ? Ellipsize(diff.details, 120) : '';
-  return `| ${diff.kind} | \`${diff.qualifiedName}\` | ${diff.diffKind} | ${details} |`;
+  return `| ${diff.Kind} | \`${diff.QualifiedName}\` | ${diff.DiffKind} | ${details} |`;
 }
 
 function formatRowDiffsForTable(t: TableRowDiff): string {
   const lines: string[] = [];
-  lines.push(`### \`${t.schema}.${t.table}\``);
-  lines.push(`Rows — left: ${t.leftRowCount}, right: ${t.rightRowCount}, diffs: ${t.diffCount}${t.truncated ? ' (sample truncated)' : ''}`);
-  if (t.sampleDiffs.length === 0) return lines.join('\n');
+  lines.push(`### \`${t.Schema}.${t.Table}\``);
+  lines.push(`Rows — left: ${t.LeftRowCount}, right: ${t.RightRowCount}, diffs: ${t.DiffCount}${t.Truncated ? ' (sample truncated)' : ''}`);
+  if (t.SampleDiffs.length === 0) return lines.join('\n');
   lines.push('');
-  for (const r of t.sampleDiffs) lines.push(formatRowDiff(r));
+  for (const r of t.SampleDiffs) lines.push(formatRowDiff(r));
   return lines.join('\n');
 }
 
 function formatRowDiff(r: RowDiff): string {
-  if (r.diffKind !== 'changed' || !r.columnDiffs?.length) {
-    return `- ${r.diffKind}: \`${Ellipsize(r.key, 80)}\``;
+  if (r.DiffKind !== 'changed' || !r.columnDiffs?.length) {
+    return `- ${r.DiffKind}: \`${Ellipsize(r.Key, 80)}\``;
   }
   const cols = r.columnDiffs
-    .map((c) => `\`${c.column}\`: ${formatVal(c.leftValue)} → ${formatVal(c.rightValue)}`)
+    .map((c) => `\`${c.Column}\`: ${formatVal(c.LeftValue)} → ${formatVal(c.RightValue)}`)
     .join('; ');
-  return `- changed \`${Ellipsize(r.key, 60)}\`: ${cols}`;
+  return `- changed \`${Ellipsize(r.Key, 60)}\`: ${cols}`;
 }
 
 function formatVal(v: unknown): string {

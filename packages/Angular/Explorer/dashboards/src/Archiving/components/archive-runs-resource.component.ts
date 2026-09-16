@@ -212,14 +212,14 @@ export class ArchiveRunsResourceComponent extends BaseResourceComponent implemen
             return { Success: false, ErrorMessage: 'The run history view is not ready yet.' };
         }
         const resolution = ResolveArchiveRun(reference, this.loadedRuns());
-        if (!resolution.ok) {
-            return { Success: false, ErrorMessage: resolution.error };
+        if (!resolution.Ok) {
+            return { Success: false, ErrorMessage: resolution.Error };
         }
         // OpenRunDrawer wants the viewer's own run object; the resolved snapshot
         // shares the same ID, so re-find by ID to hand back the live reference.
-        const run = this.runViewer.Runs.find((r) => UUIDsEqual(r.ID, resolution.run.ID));
+        const run = this.runViewer.Runs.find((r) => UUIDsEqual(r.ID, resolution.Run.ID));
         if (!run) {
-            return { Success: false, ErrorMessage: `No archive run found with ID "${resolution.run.ID}".` };
+            return { Success: false, ErrorMessage: `No archive run found with ID "${resolution.Run.ID}".` };
         }
         await this.runViewer.OpenRunDrawer(run);
         this.publishAgentContext();

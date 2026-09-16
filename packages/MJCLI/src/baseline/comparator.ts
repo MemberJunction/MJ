@@ -29,13 +29,13 @@ import type {
 } from './types';
 
 export interface CompareInput {
-  left: { snapshot: SchemaSnapshot; data: readonly TableDataDump[]; label: string };
-  right: { snapshot: SchemaSnapshot; data: readonly TableDataDump[]; label: string };
-  options: BaselineCompareOptions;
+  Left: { snapshot: SchemaSnapshot; data: readonly TableDataDump[]; label: string };
+  Right: { snapshot: SchemaSnapshot; data: readonly TableDataDump[]; label: string };
+  Options: BaselineCompareOptions;
 }
 
 export function CompareSnapshots(input: CompareInput): DiffReport {
-  const { left, right, options } = input;
+  const { Left: left, Right: right, Options: options } = input;
   const ignored = options.ignorePattern;
   const matchesIgnore = (q: string) => {
     if (!ignored) return false;
@@ -57,11 +57,11 @@ export function CompareSnapshots(input: CompareInput): DiffReport {
   };
 
   // Schemas
-  counted(diffNamedSet('schema', left.snapshot.schemas, right.snapshot.schemas, (s) => s.name, matchesIgnore));
+  counted(diffNamedSet('schema', left.snapshot.Schemas, right.snapshot.Schemas, (s) => s.name, matchesIgnore));
 
   // Tables
-  const leftTables = new Map(left.snapshot.tables.map((t) => [qname(t.schema, t.name), t]));
-  const rightTables = new Map(right.snapshot.tables.map((t) => [qname(t.schema, t.name), t]));
+  const leftTables = new Map(left.snapshot.Tables.map((t) => [qname(t.Schema, t.Name), t]));
+  const rightTables = new Map(right.snapshot.Tables.map((t) => [qname(t.Schema, t.Name), t]));
   const allTableKeys = new Set([...leftTables.keys(), ...rightTables.keys()]);
 
   for (const key of [...allTableKeys].sort()) {
@@ -69,12 +69,12 @@ export function CompareSnapshots(input: CompareInput): DiffReport {
     const leftT = leftTables.get(key);
     const rightT = rightTables.get(key);
     if (!leftT && rightT) {
-      objectDiffs.push({ kind: 'table', diffKind: 'missing-on-left', qualifiedName: key });
+      objectDiffs.push({ Kind: 'table', DiffKind: 'missing-on-left', QualifiedName: key });
       objectsWithDiffs++;
       continue;
     }
     if (leftT && !rightT) {
-      objectDiffs.push({ kind: 'table', diffKind: 'missing-on-right', qualifiedName: key });
+      objectDiffs.push({ Kind: 'table', DiffKind: 'missing-on-right', QualifiedName: key });
       objectsWithDiffs++;
       continue;
     }
@@ -87,8 +87,8 @@ export function CompareSnapshots(input: CompareInput): DiffReport {
   counted(
     diffNamedSet(
       'view',
-      left.snapshot.views,
-      right.snapshot.views,
+      left.snapshot.Views,
+      right.snapshot.Views,
       (v) => `${v.schema}.${v.name}`,
       matchesIgnore,
       (l, r) =>
@@ -100,8 +100,8 @@ export function CompareSnapshots(input: CompareInput): DiffReport {
   counted(
     diffNamedSet(
       'procedure',
-      left.snapshot.procedures,
-      right.snapshot.procedures,
+      left.snapshot.Procedures,
+      right.snapshot.Procedures,
       (p) => `${p.schema}.${p.name}`,
       matchesIgnore,
       (l, r) =>
@@ -113,8 +113,8 @@ export function CompareSnapshots(input: CompareInput): DiffReport {
   counted(
     diffNamedSet(
       'function',
-      left.snapshot.functions,
-      right.snapshot.functions,
+      left.snapshot.Functions,
+      right.snapshot.Functions,
       (p) => `${p.schema}.${p.name}`,
       matchesIgnore,
       (l, r) =>
@@ -126,8 +126,8 @@ export function CompareSnapshots(input: CompareInput): DiffReport {
   counted(
     diffNamedSet(
       'trigger',
-      left.snapshot.triggers,
-      right.snapshot.triggers,
+      left.snapshot.Triggers,
+      right.snapshot.Triggers,
       (t) => `${t.schema}.${t.name}`,
       matchesIgnore,
       (l, r) =>
@@ -139,8 +139,8 @@ export function CompareSnapshots(input: CompareInput): DiffReport {
   counted(
     diffNamedSet(
       'sequence',
-      left.snapshot.sequences,
-      right.snapshot.sequences,
+      left.snapshot.Sequences,
+      right.snapshot.Sequences,
       (s) => `${s.schema}.${s.name}`,
       matchesIgnore,
       (l, r) => {
@@ -154,66 +154,66 @@ export function CompareSnapshots(input: CompareInput): DiffReport {
   );
 
   // User-defined types (table types)
-  counted(diffUserDefinedTypes(left.snapshot.userDefinedTypes, right.snapshot.userDefinedTypes, matchesIgnore));
+  counted(diffUserDefinedTypes(left.snapshot.UserDefinedTypes, right.snapshot.UserDefinedTypes, matchesIgnore));
 
   // Extended properties (sp_addextendedproperty entries — MS_Description etc.)
-  counted(diffExtendedProperties(left.snapshot.extendedProperties, right.snapshot.extendedProperties));
+  counted(diffExtendedProperties(left.snapshot.ExtendedProperties, right.snapshot.ExtendedProperties));
 
   // Database principals (users + custom roles)
-  counted(diffPrincipals(left.snapshot.principals, right.snapshot.principals));
+  counted(diffPrincipals(left.snapshot.Principals, right.snapshot.Principals));
 
   // Role memberships
-  counted(diffRoleMemberships(left.snapshot.roleMemberships, right.snapshot.roleMemberships));
+  counted(diffRoleMemberships(left.snapshot.RoleMemberships, right.snapshot.RoleMemberships));
 
   // Permissions (GRANT/DENY entries)
-  counted(diffPermissions(left.snapshot.permissions, right.snapshot.permissions));
+  counted(diffPermissions(left.snapshot.Permissions, right.snapshot.Permissions));
 
   // Row data
   const tableRowDiffs: TableRowDiff[] = [];
   let totalRowDiffs = 0;
-  if (options.rowCompareMode !== 'none') {
-    const leftDumps = new Map(left.data.map((d) => [qname(d.schema, d.table), d]));
-    const rightDumps = new Map(right.data.map((d) => [qname(d.schema, d.table), d]));
+  if (options.RowCompareMode !== 'none') {
+    const leftDumps = new Map(left.data.map((d) => [qname(d.Schema, d.Table), d]));
+    const rightDumps = new Map(right.data.map((d) => [qname(d.Schema, d.Table), d]));
     for (const key of [...new Set([...leftDumps.keys(), ...rightDumps.keys()])].sort()) {
       if (matchesIgnore(key)) continue;
       const leftD = leftDumps.get(key);
       const rightD = rightDumps.get(key);
       if (!leftD || !rightD) continue;     // missing tables already reported as objectDiff
       const td = diffTableRows(leftD, rightD, options);
-      if (td.diffCount > 0 || leftD.rowCount !== rightD.rowCount) {
+      if (td.DiffCount > 0 || leftD.RowCount !== rightD.RowCount) {
         tableRowDiffs.push(td);
-        totalRowDiffs += td.diffCount;
+        totalRowDiffs += td.DiffCount;
       }
     }
   }
 
   const summary = {
-    schemasChecked: left.snapshot.schemas.length,
+    schemasChecked: left.snapshot.Schemas.length,
     tablesChecked: allTableKeys.size,
-    viewsChecked: Math.max(left.snapshot.views.length, right.snapshot.views.length),
-    proceduresChecked: Math.max(left.snapshot.procedures.length, right.snapshot.procedures.length),
-    functionsChecked: Math.max(left.snapshot.functions.length, right.snapshot.functions.length),
-    triggersChecked: Math.max(left.snapshot.triggers.length, right.snapshot.triggers.length),
-    sequencesChecked: Math.max(left.snapshot.sequences.length, right.snapshot.sequences.length),
+    viewsChecked: Math.max(left.snapshot.Views.length, right.snapshot.Views.length),
+    proceduresChecked: Math.max(left.snapshot.Procedures.length, right.snapshot.Procedures.length),
+    functionsChecked: Math.max(left.snapshot.Functions.length, right.snapshot.Functions.length),
+    triggersChecked: Math.max(left.snapshot.Triggers.length, right.snapshot.Triggers.length),
+    sequencesChecked: Math.max(left.snapshot.Sequences.length, right.snapshot.Sequences.length),
     userDefinedTypesChecked: Math.max(
-      left.snapshot.userDefinedTypes.length,
-      right.snapshot.userDefinedTypes.length,
+      left.snapshot.UserDefinedTypes.length,
+      right.snapshot.UserDefinedTypes.length,
     ),
     extendedPropertiesChecked: Math.max(
-      left.snapshot.extendedProperties.length,
-      right.snapshot.extendedProperties.length,
+      left.snapshot.ExtendedProperties.length,
+      right.snapshot.ExtendedProperties.length,
     ),
     principalsChecked: Math.max(
-      left.snapshot.principals.length,
-      right.snapshot.principals.length,
+      left.snapshot.Principals.length,
+      right.snapshot.Principals.length,
     ),
     roleMembershipsChecked: Math.max(
-      left.snapshot.roleMemberships.length,
-      right.snapshot.roleMemberships.length,
+      left.snapshot.RoleMemberships.length,
+      right.snapshot.RoleMemberships.length,
     ),
     permissionsChecked: Math.max(
-      left.snapshot.permissions.length,
-      right.snapshot.permissions.length,
+      left.snapshot.Permissions.length,
+      right.snapshot.Permissions.length,
     ),
     objectsWithDiffs,
     tablesWithRowDiffs: tableRowDiffs.length,
@@ -224,9 +224,9 @@ export function CompareSnapshots(input: CompareInput): DiffReport {
     generatedAt: IsoUtcSeconds(new Date()),
     leftLabel: left.label,
     rightLabel: right.label,
-    rowCompareMode: options.rowCompareMode,
+    rowCompareMode: options.RowCompareMode,
     isClean: objectsWithDiffs === 0 && tableRowDiffs.length === 0,
-    objectDiffs: StableSortBy(objectDiffs, (d) => `${d.kind}:${d.qualifiedName}`),
+    objectDiffs: StableSortBy(objectDiffs, (d) => `${d.Kind}:${d.QualifiedName}`),
     tableRowDiffs,
     summary,
   };
@@ -253,11 +253,11 @@ function diffNamedSet<T>(
     if (ignore(key)) continue;
     const l = leftMap.get(key);
     const r = rightMap.get(key);
-    if (!l && r) out.push({ kind, diffKind: 'missing-on-left', qualifiedName: key });
-    else if (l && !r) out.push({ kind, diffKind: 'missing-on-right', qualifiedName: key });
+    if (!l && r) out.push({ Kind: kind, DiffKind: 'missing-on-left', QualifiedName: key });
+    else if (l && !r) out.push({ Kind: kind, DiffKind: 'missing-on-right', QualifiedName: key });
     else if (l && r && bodyDiff) {
       const detail = bodyDiff(l, r);
-      if (detail) out.push({ kind, diffKind: 'changed', qualifiedName: key, details: detail });
+      if (detail) out.push({ Kind: kind, DiffKind: 'changed', QualifiedName: key, details: detail });
     }
   }
   return out;
@@ -265,17 +265,17 @@ function diffNamedSet<T>(
 
 function diffTable(left: TableDef, right: TableDef): ObjectDiff[] {
   const out: ObjectDiff[] = [];
-  const tableQ = `${left.schema}.${left.name}`;
+  const tableQ = `${left.Schema}.${left.Name}`;
 
   // Columns
-  const lCols = new Map(left.columns.map((c) => [c.name.toLowerCase(), c]));
-  const rCols = new Map(right.columns.map((c) => [c.name.toLowerCase(), c]));
+  const lCols = new Map(left.Columns.map((c) => [c.name.toLowerCase(), c]));
+  const rCols = new Map(right.Columns.map((c) => [c.name.toLowerCase(), c]));
   for (const name of new Set([...lCols.keys(), ...rCols.keys()])) {
     const l = lCols.get(name);
     const r = rCols.get(name);
     const q = `${tableQ}.${name}`;
-    if (!l && r) out.push({ kind: 'column', diffKind: 'missing-on-left', qualifiedName: q });
-    else if (l && !r) out.push({ kind: 'column', diffKind: 'missing-on-right', qualifiedName: q });
+    if (!l && r) out.push({ Kind: 'column', DiffKind: 'missing-on-left', QualifiedName: q });
+    else if (l && !r) out.push({ Kind: 'column', DiffKind: 'missing-on-right', QualifiedName: q });
     else if (l && r) {
       const fields: string[] = [];
       if (l.dataType.toLowerCase() !== r.dataType.toLowerCase())
@@ -292,30 +292,30 @@ function diffTable(left: TableDef, right: TableDef): ObjectDiff[] {
         fields.push(`computedPersisted: ${l.isComputedPersisted} vs ${r.isComputedPersisted}`);
       if (normalizeDefault(l.defaultExpression) !== normalizeDefault(r.defaultExpression))
         fields.push(`default: ${l.defaultExpression} vs ${r.defaultExpression}`);
-      if (fields.length) out.push({ kind: 'column', diffKind: 'changed', qualifiedName: q, details: fields.join('; ') });
+      if (fields.length) out.push({ Kind: 'column', DiffKind: 'changed', QualifiedName: q, details: fields.join('; ') });
     }
   }
 
   // Primary key
   if (!!left.primaryKey !== !!right.primaryKey) {
     out.push({
-      kind: 'primaryKey',
-      diffKind: left.primaryKey ? 'missing-on-right' : 'missing-on-left',
-      qualifiedName: tableQ,
+      Kind: 'primaryKey',
+      DiffKind: left.primaryKey ? 'missing-on-right' : 'missing-on-left',
+      QualifiedName: tableQ,
     });
   } else if (left.primaryKey && right.primaryKey) {
     const reasons: string[] = [];
-    if (left.primaryKey.columns.join(',') !== right.primaryKey.columns.join(','))
-      reasons.push(`pk columns: ${left.primaryKey.columns} vs ${right.primaryKey.columns}`);
-    if (left.primaryKey.clustered !== right.primaryKey.clustered)
-      reasons.push(`pk clustered: ${left.primaryKey.clustered} vs ${right.primaryKey.clustered}`);
-    if (left.primaryKey.name !== right.primaryKey.name)
-      reasons.push(`pk name: ${left.primaryKey.name} vs ${right.primaryKey.name}`);
+    if (left.primaryKey.Columns.join(',') !== right.primaryKey.Columns.join(','))
+      reasons.push(`pk columns: ${left.primaryKey.Columns} vs ${right.primaryKey.Columns}`);
+    if (left.primaryKey.Clustered !== right.primaryKey.Clustered)
+      reasons.push(`pk clustered: ${left.primaryKey.Clustered} vs ${right.primaryKey.Clustered}`);
+    if (left.primaryKey.Name !== right.primaryKey.Name)
+      reasons.push(`pk name: ${left.primaryKey.Name} vs ${right.primaryKey.Name}`);
     if (reasons.length) {
       out.push({
-        kind: 'primaryKey',
-        diffKind: 'changed',
-        qualifiedName: tableQ,
+        Kind: 'primaryKey',
+        DiffKind: 'changed',
+        QualifiedName: tableQ,
         details: reasons.join('; '),
       });
     }
@@ -324,8 +324,8 @@ function diffTable(left: TableDef, right: TableDef): ObjectDiff[] {
   // Unique constraints (previously uncompared — silent gap)
   out.push(...diffNamedSet(
     'uniqueConstraint',
-    left.uniqueConstraints,
-    right.uniqueConstraints,
+    left.UniqueConstraints,
+    right.UniqueConstraints,
     (u) => `${tableQ}.${u.name}`,
     () => false,
     (l, r) => {
@@ -338,8 +338,8 @@ function diffTable(left: TableDef, right: TableDef): ObjectDiff[] {
   // Indexes
   out.push(...diffNamedSet(
     'index',
-    left.indexes,
-    right.indexes,
+    left.Indexes,
+    right.Indexes,
     (i) => `${tableQ}.${i.name}`,
     () => false,
     (l, r) => {
@@ -355,8 +355,8 @@ function diffTable(left: TableDef, right: TableDef): ObjectDiff[] {
   // FKs
   out.push(...diffNamedSet(
     'foreignKey',
-    left.foreignKeys,
-    right.foreignKeys,
+    left.ForeignKeys,
+    right.ForeignKeys,
     (f) => `${tableQ}.${f.name}`,
     () => false,
     (l, r) => {
@@ -373,8 +373,8 @@ function diffTable(left: TableDef, right: TableDef): ObjectDiff[] {
   // Checks
   out.push(...diffNamedSet(
     'check',
-    left.checks,
-    right.checks,
+    left.Checks,
+    right.Checks,
     (c) => `${tableQ}.${c.name}`,
     () => false,
     (l, r) =>
@@ -391,29 +391,29 @@ function diffTableRows(
 ): TableRowDiff {
   const sample: RowDiff[] = [];
   let diffCount = 0;
-  const limit = options.rowDiffSampleLimit;
+  const limit = options.RowDiffSampleLimit;
   const cap = (rd: RowDiff) => {
     diffCount++;
     if (sample.length < limit) sample.push(rd);
   };
 
-  if (options.rowCompareMode === 'counts') {
-    if (left.rowCount !== right.rowCount) cap({ diffKind: 'changed', key: '*', columnDiffs: [] });
+  if (options.RowCompareMode === 'counts') {
+    if (left.RowCount !== right.RowCount) cap({ DiffKind: 'changed', Key: '*', columnDiffs: [] });
     return {
-      schema: left.schema,
-      table: left.table,
-      leftRowCount: left.rowCount,
-      rightRowCount: right.rowCount,
-      sampleDiffs: sample,
-      truncated: false,
-      diffCount,
+      Schema: left.Schema,
+      Table: left.Table,
+      LeftRowCount: left.RowCount,
+      RightRowCount: right.RowCount,
+      SampleDiffs: sample,
+      Truncated: false,
+      DiffCount: diffCount,
     };
   }
 
   // Both rows[] are pre-ordered (PK then col order). Walk in lock-step using
   // a stringified row key to align even when the two sides have inserts/deletes.
-  const leftKeys = left.rows.map((r) => keyForRow(r, left.columns));
-  const rightKeys = right.rows.map((r) => keyForRow(r, right.columns));
+  const leftKeys = left.Rows.map((r) => keyForRow(r, left.Columns));
+  const rightKeys = right.Rows.map((r) => keyForRow(r, right.Columns));
   const leftIndex = new Map(leftKeys.map((k, i) => [k, i]));
   const rightIndex = new Map(rightKeys.map((k, i) => [k, i]));
 
@@ -421,37 +421,37 @@ function diffTableRows(
     const k = leftKeys[i];
     const ri = rightIndex.get(k);
     if (ri === undefined) {
-      cap({ diffKind: 'missing-on-right', key: k });
+      cap({ DiffKind: 'missing-on-right', Key: k });
       continue;
     }
-    if (options.rowCompareMode === 'full') {
-      const lRow = left.rows[i];
-      const rRow = right.rows[ri];
+    if (options.RowCompareMode === 'full') {
+      const lRow = left.Rows[i];
+      const rRow = right.Rows[ri];
       const colDiffs: ColumnValueDiff[] = [];
-      for (let c = 0; c < left.columns.length; c++) {
-        const colName = left.columns[c];
-        const rIdx = right.columns.indexOf(colName);
+      for (let c = 0; c < left.Columns.length; c++) {
+        const colName = left.Columns[c];
+        const rIdx = right.Columns.indexOf(colName);
         if (rIdx === -1) continue;
         if (!DeepValueEqual(lRow[c], rRow[rIdx])) {
-          colDiffs.push({ column: colName, leftValue: lRow[c], rightValue: rRow[rIdx] });
+          colDiffs.push({ Column: colName, LeftValue: lRow[c], RightValue: rRow[rIdx] });
         }
       }
-      if (colDiffs.length > 0) cap({ diffKind: 'changed', key: k, columnDiffs: colDiffs });
+      if (colDiffs.length > 0) cap({ DiffKind: 'changed', Key: k, columnDiffs: colDiffs });
     }
   }
   for (let i = 0; i < rightKeys.length; i++) {
     const k = rightKeys[i];
-    if (!leftIndex.has(k)) cap({ diffKind: 'missing-on-left', key: k });
+    if (!leftIndex.has(k)) cap({ DiffKind: 'missing-on-left', Key: k });
   }
 
   return {
-    schema: left.schema,
-    table: left.table,
-    leftRowCount: left.rowCount,
-    rightRowCount: right.rowCount,
-    sampleDiffs: sample,
-    truncated: diffCount > sample.length,
-    diffCount,
+    Schema: left.Schema,
+    Table: left.Table,
+    LeftRowCount: left.RowCount,
+    RightRowCount: right.RowCount,
+    SampleDiffs: sample,
+    Truncated: diffCount > sample.length,
+    DiffCount: diffCount,
   };
 }
 
@@ -507,20 +507,20 @@ function diffUserDefinedTypes(
     'userDefinedType',
     left,
     right,
-    (t) => `${t.schema}.${t.name}`,
+    (t) => `${t.Schema}.${t.Name}`,
     ignore,
     (l, r) => {
       const reasons: string[] = [];
-      if (l.kind !== r.kind) reasons.push(`kind: ${l.kind} vs ${r.kind}`);
-      if (l.isMemoryOptimized !== r.isMemoryOptimized) reasons.push('memory-optimized differs');
+      if (l.Kind !== r.Kind) reasons.push(`kind: ${l.Kind} vs ${r.Kind}`);
+      if (l.IsMemoryOptimized !== r.IsMemoryOptimized) reasons.push('memory-optimized differs');
       // Column-by-column structural diff. Order matters (TVPs have a fixed
       // column ordinal that affects INSERT compatibility).
-      if (l.columns.length !== r.columns.length) {
-        reasons.push(`column count: ${l.columns.length} vs ${r.columns.length}`);
+      if (l.Columns.length !== r.Columns.length) {
+        reasons.push(`column count: ${l.Columns.length} vs ${r.Columns.length}`);
       } else {
-        for (let i = 0; i < l.columns.length; i++) {
-          const lc = l.columns[i];
-          const rc = r.columns[i];
+        for (let i = 0; i < l.Columns.length; i++) {
+          const lc = l.Columns[i];
+          const rc = r.Columns[i];
           if (lc.name !== rc.name) reasons.push(`col[${i}] name: ${lc.name} vs ${rc.name}`);
           if (lc.dataType.toLowerCase() !== rc.dataType.toLowerCase())
             reasons.push(`col[${i}] dataType: ${lc.dataType} vs ${rc.dataType}`);
@@ -528,8 +528,8 @@ function diffUserDefinedTypes(
             reasons.push(`col[${i}] nullable: ${lc.isNullable} vs ${rc.isNullable}`);
         }
       }
-      const lPkCols = l.primaryKey?.columns.join(',') ?? '';
-      const rPkCols = r.primaryKey?.columns.join(',') ?? '';
+      const lPkCols = l.primaryKey?.Columns.join(',') ?? '';
+      const rPkCols = r.primaryKey?.Columns.join(',') ?? '';
       if (lPkCols !== rPkCols) reasons.push(`pk columns: ${lPkCols} vs ${rPkCols}`);
       return reasons.length === 0 ? null : reasons.join('; ');
     },
@@ -546,12 +546,12 @@ function diffExtendedProperties(
 ): ObjectDiff[] {
   const key = (p: ExtendedPropertyDef) =>
     [
-      p.schemaName,
+      p.SchemaName,
       p.level1Type ?? '',
       p.level1Name ?? '',
       p.level2Type ?? '',
       p.level2Name ?? '',
-      p.name,
+      p.Name,
     ]
       .join('::')
       .toLowerCase();
@@ -562,16 +562,16 @@ function diffExtendedProperties(
   for (const k of allKeys) {
     const l = leftMap.get(k);
     const r = rightMap.get(k);
-    if (!l && r) out.push({ kind: 'extendedProperty', diffKind: 'missing-on-left', qualifiedName: k });
-    else if (l && !r) out.push({ kind: 'extendedProperty', diffKind: 'missing-on-right', qualifiedName: k });
-    else if (l && r && l.value !== r.value) {
+    if (!l && r) out.push({ Kind: 'extendedProperty', DiffKind: 'missing-on-left', QualifiedName: k });
+    else if (l && !r) out.push({ Kind: 'extendedProperty', DiffKind: 'missing-on-right', QualifiedName: k });
+    else if (l && r && l.Value !== r.Value) {
       out.push({
-        kind: 'extendedProperty',
-        diffKind: 'changed',
-        qualifiedName: k,
+        Kind: 'extendedProperty',
+        DiffKind: 'changed',
+        QualifiedName: k,
         details: `value differs`,
-        leftValue: l.value,
-        rightValue: r.value,
+        leftValue: l.Value,
+        rightValue: r.Value,
       });
     }
   }
@@ -587,11 +587,11 @@ function diffPrincipals(
     'principal',
     left,
     right,
-    (p) => p.name,
+    (p) => p.Name,
     () => false,
     (l, r) => {
       const reasons: string[] = [];
-      if (l.kind !== r.kind) reasons.push(`kind: ${l.kind} vs ${r.kind}`);
+      if (l.Kind !== r.Kind) reasons.push(`kind: ${l.Kind} vs ${r.Kind}`);
       // Owner mismatch is informational only — emitted CREATE ROLE matches the
       // source's AUTHORIZATION clause. Skip if either side is missing the owner
       // (older snapshots / future formats may omit it).
@@ -619,8 +619,8 @@ function diffRoleMemberships(
   for (const k of allKeys) {
     const inL = leftMap.has(k);
     const inR = rightMap.has(k);
-    if (inL && !inR) out.push({ kind: 'roleMembership', diffKind: 'missing-on-right', qualifiedName: k });
-    else if (!inL && inR) out.push({ kind: 'roleMembership', diffKind: 'missing-on-left', qualifiedName: k });
+    if (inL && !inR) out.push({ Kind: 'roleMembership', DiffKind: 'missing-on-right', QualifiedName: k });
+    else if (!inL && inR) out.push({ Kind: 'roleMembership', DiffKind: 'missing-on-left', QualifiedName: k });
   }
   return out;
 }
@@ -653,13 +653,13 @@ function diffPermissions(
   for (const k of allKeys) {
     const l = leftMap.get(k);
     const r = rightMap.get(k);
-    if (l && !r) out.push({ kind: 'permission', diffKind: 'missing-on-right', qualifiedName: k });
-    else if (!l && r) out.push({ kind: 'permission', diffKind: 'missing-on-left', qualifiedName: k });
+    if (l && !r) out.push({ Kind: 'permission', DiffKind: 'missing-on-right', QualifiedName: k });
+    else if (!l && r) out.push({ Kind: 'permission', DiffKind: 'missing-on-left', QualifiedName: k });
     else if (l && r && l.state !== r.state) {
       out.push({
-        kind: 'permission',
-        diffKind: 'changed',
-        qualifiedName: k,
+        Kind: 'permission',
+        DiffKind: 'changed',
+        QualifiedName: k,
         details: `state: ${l.state} vs ${r.state}`,
       });
     }

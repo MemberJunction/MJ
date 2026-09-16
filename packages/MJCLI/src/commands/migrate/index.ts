@@ -62,7 +62,7 @@ export default class Migrate extends Command {
       this.logFetchSummary(flags.verbose, fetched);
       await this.executeMigration(config, flags, skywayConfig);
     } finally {
-      if (fetched) await fetched.cleanup();
+      if (fetched) await fetched.Cleanup();
     }
   }
 
@@ -124,17 +124,17 @@ export default class Migrate extends Command {
    */
   private resolveSourceDir(fetched: MigrationFetchResult | null, dirFlag: string | undefined): string | undefined {
     if (!fetched) return dirFlag;
-    if (!dirFlag) return fetched.dir;
+    if (!dirFlag) return fetched.Dir;
     const subPath = dirFlag.replace(/^filesystem:/, '').replace(/^\.\//, '');
-    return path.join(fetched.dir, subPath);
+    return path.join(fetched.Dir, subPath);
   }
 
   private logFetchSummary(verbose: boolean, fetched: MigrationFetchResult | null): void {
     if (!verbose || !fetched) return;
     this.log(
-      fetched.usedFallback
+      fetched.UsedFallback
         ? 'Fetched full migration history (partial clone unavailable)'
-        : `Fetched ${fetched.selected.length} migration file(s) for the target slice`,
+        : `Fetched ${fetched.Selected.length} migration file(s) for the target slice`,
     );
   }
 

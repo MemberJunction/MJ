@@ -352,7 +352,7 @@ export class DatabaseDesignerDashboardComponent extends BaseDashboard implements
 
     /** Field summaries for the selected entity (from the loaded detail), for the agent context. */
     private buildSelectedEntityFields(): FieldSummary[] {
-        const cols = this._selectedEntityDetail?.columns ?? [];
+        const cols = this._selectedEntityDetail?.Columns ?? [];
         return cols.map(c => ({
             Name: c.Name,
             Type: c.RawSqlType ?? c.Type ?? 'unknown',

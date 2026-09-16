@@ -31,8 +31,8 @@ export default function RecordDetailScreen() {
                     <Icons.ChevronLeft size={22} color={Colors.ink} strokeWidth={2.2} />
                 </Pressable>
                 <View style={styles.headerCenter}>
-                    <Text numberOfLines={1} style={styles.headerTitle}>{data?.title ?? 'Record'}</Text>
-                    <Text style={styles.headerSub}>{data?.entity.DisplayName ?? entity} · view only</Text>
+                    <Text numberOfLines={1} style={styles.headerTitle}>{data?.Title ?? 'Record'}</Text>
+                    <Text style={styles.headerSub}>{data?.Entity.DisplayName ?? entity} · view only</Text>
                 </View>
                 {data ? (
                     <Pressable
@@ -58,12 +58,12 @@ export default function RecordDetailScreen() {
             ) : (
                 <ScrollView contentContainerStyle={styles.body}>
                     <View style={styles.heroCard}>
-                        <Text style={styles.heroTitle}>{data.title}</Text>
-                        <Text style={styles.heroSub}>{data.entity.DisplayName}</Text>
+                        <Text style={styles.heroTitle}>{data.Title}</Text>
+                        <Text style={styles.heroSub}>{data.Entity.DisplayName}</Text>
                     </View>
                     <View style={styles.section}>
                         <Text style={styles.sectionTitle}>FIELDS</Text>
-                        {data.fields.map((f, idx) => (
+                        {data.Fields.map((f, idx) => (
                             <View key={f.key} style={[styles.kvRow, idx === 0 && styles.kvRowFirst]}>
                                 <Text style={styles.kvK}>{f.label}</Text>
                                 <Text style={styles.kvV} numberOfLines={3}>{f.value}</Text>
@@ -77,7 +77,7 @@ export default function RecordDetailScreen() {
                 <View style={styles.askBar}>
                     <Pressable style={styles.askBtn} onPress={() => router.push('/new-conversation')}>
                         <View style={styles.askAv}><Text style={styles.askAvText}>S</Text></View>
-                        <Text style={styles.askText}>Ask Skip about this {data.entity.DisplayName?.toLowerCase() ?? 'record'}</Text>
+                        <Text style={styles.askText}>Ask Skip about this {data.Entity.DisplayName?.toLowerCase() ?? 'record'}</Text>
                     </Pressable>
                 </View>
             ) : null}

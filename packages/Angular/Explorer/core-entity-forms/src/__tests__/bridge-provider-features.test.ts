@@ -11,7 +11,7 @@ describe('bridge-provider-features', () => {
     describe('layout', () => {
         it('groups all 16 documented capability flags', () => {
             expect(BRIDGE_FEATURE_KEYS).toHaveLength(16);
-            expect(BRIDGE_FEATURE_GROUPS.map(g => g.title)).toEqual([
+            expect(BRIDGE_FEATURE_GROUPS.map(g => g.Title)).toEqual([
                 'Join methods',
                 'Media tracks',
                 'Signals & telephony',
@@ -24,9 +24,9 @@ describe('bridge-provider-features', () => {
 
         it('every feature has a label and description', () => {
             for (const group of BRIDGE_FEATURE_GROUPS) {
-                for (const f of group.features) {
-                    expect(f.label.length).toBeGreaterThan(0);
-                    expect(f.description.length).toBeGreaterThan(0);
+                for (const f of group.Features) {
+                    expect(f.Label.length).toBeGreaterThan(0);
+                    expect(f.Description.length).toBeGreaterThan(0);
                 }
             }
         });

@@ -5,9 +5,9 @@ import { UUIDsEqual } from '@memberjunction/global';
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface EntitySelectorConfig {
-    entityName: string;
-    title: string;
-    displayField: string;
+    EntityName: string;
+    Title: string;
+    DisplayField: string;
     descriptionField?: string;
     statusField?: string;
     filters?: string;
@@ -23,7 +23,7 @@ export interface EntitySelectorConfig {
           <div class="dialog-header">
             <h3>@if (config.icon) {
               <i [class]="config.icon"></i>
-            } {{ config.title }}</h3>
+            } {{ config.Title }}</h3>
           </div>
           <div class="dialog-content">
             <!-- Search Bar -->
@@ -59,7 +59,7 @@ export interface EntitySelectorConfig {
                           <i [class]="config.icon || 'fa-solid fa-file'"></i>
                         </div>
                         <div class="item-content">
-                          <div class="item-title">{{ entity[config.displayField] || 'Untitled' }}</div>
+                          <div class="item-title">{{ entity[config.DisplayField] || 'Untitled' }}</div>
                           @if (config.descriptionField && entity[config.descriptionField]) {
                             <div class="item-description">{{ entity[config.descriptionField] }}</div>
                           }
@@ -313,8 +313,8 @@ export class EntitySelectorDialogComponent extends BaseAngularComponent implemen
     /** Title for the empty/no-results placeholder, echoing the active search term when narrowed. */
     public get EmptyStateTitle(): string {
         return this.SearchText
-            ? `No ${this.config.entityName} match "${this.SearchText}"`
-            : `No ${this.config.entityName} found`;
+            ? `No ${this.config.EntityName} match "${this.SearchText}"`
+            : `No ${this.config.EntityName} found`;
     }
 
     async ngOnInit() {
@@ -326,7 +326,7 @@ export class EntitySelectorDialogComponent extends BaseAngularComponent implemen
         try {
             const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView({
-                EntityName: this.config.entityName,
+                EntityName: this.config.EntityName,
                 ExtraFilter: this.config.filters,
                 OrderBy: this.config.orderBy 
             });
@@ -353,7 +353,7 @@ export class EntitySelectorDialogComponent extends BaseAngularComponent implemen
         } else {
             const searchLower = this.SearchText.toLowerCase();
             this.FilteredEntities = this.Entities.filter(entity => {
-                const displayValue = entity[this.config.displayField] || '';
+                const displayValue = entity[this.config.DisplayField] || '';
                 const descriptionValue = this.config.descriptionField ? (entity[this.config.descriptionField] || '') : '';
                 return displayValue.toLowerCase().includes(searchLower) || 
                        descriptionValue.toLowerCase().includes(searchLower);

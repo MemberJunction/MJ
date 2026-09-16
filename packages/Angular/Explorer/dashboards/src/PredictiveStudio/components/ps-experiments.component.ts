@@ -121,30 +121,30 @@ interface BudgetGaugeVM {
         <!-- Kanban -->
         <div class="kanban" data-testid="ps-experiments-kanban">
           <div class="kcol run" data-testid="ps-kanban-col-running">
-            <div class="kcol-head"><i class="fa-solid fa-spinner"></i><h3>Running</h3><span class="cnt">{{ kanban.running.length }}</span></div>
+            <div class="kcol-head"><i class="fa-solid fa-spinner"></i><h3>Running</h3><span class="cnt">{{ kanban.Running.length }}</span></div>
             <div class="kbody">
-              @for (c of kanban.running; track c.iteration) {
+              @for (c of kanban.Running; track c.Iteration) {
                 <ng-container [ngTemplateOutlet]="iterCard" [ngTemplateOutletContext]="{ c: c }"></ng-container>
               }
-              @if (kanban.running.length === 0) { <span class="ps-small ps-muted">No running iterations.</span> }
+              @if (kanban.Running.length === 0) { <span class="ps-small ps-muted">No running iterations.</span> }
             </div>
           </div>
           <div class="kcol done" data-testid="ps-kanban-col-completed">
-            <div class="kcol-head"><i class="fa-solid fa-circle-check"></i><h3>Completed</h3><span class="cnt">{{ kanban.completed.length }}</span></div>
+            <div class="kcol-head"><i class="fa-solid fa-circle-check"></i><h3>Completed</h3><span class="cnt">{{ kanban.Completed.length }}</span></div>
             <div class="kbody">
-              @for (c of kanban.completed; track c.iteration) {
+              @for (c of kanban.Completed; track c.Iteration) {
                 <ng-container [ngTemplateOutlet]="iterCard" [ngTemplateOutletContext]="{ c: c }"></ng-container>
               }
-              @if (kanban.completed.length === 0) { <span class="ps-small ps-muted">No completed iterations.</span> }
+              @if (kanban.Completed.length === 0) { <span class="ps-small ps-muted">No completed iterations.</span> }
             </div>
           </div>
           <div class="kcol prune" data-testid="ps-kanban-col-pruned">
-            <div class="kcol-head"><i class="fa-solid fa-scissors"></i><h3>Pruned</h3><span class="cnt">{{ kanban.pruned.length }}</span></div>
+            <div class="kcol-head"><i class="fa-solid fa-scissors"></i><h3>Pruned</h3><span class="cnt">{{ kanban.Pruned.length }}</span></div>
             <div class="kbody">
-              @for (c of kanban.pruned; track c.iteration) {
+              @for (c of kanban.Pruned; track c.Iteration) {
                 <ng-container [ngTemplateOutlet]="iterCard" [ngTemplateOutletContext]="{ c: c }"></ng-container>
               }
-              @if (kanban.pruned.length === 0) { <span class="ps-small ps-muted">Nothing pruned.</span> }
+              @if (kanban.Pruned.length === 0) { <span class="ps-small ps-muted">Nothing pruned.</span> }
             </div>
           </div>
         </div>
@@ -213,7 +213,7 @@ export class PSExperimentsComponent implements OnInit {
 
   /** The currently-displayed session ID (first Running, else most recent). */
   public sessionId = '';
-  public Kanban: PSKanbanColumns = { running: [], completed: [], pruned: [] };
+  public Kanban: PSKanbanColumns = { Running: [], Completed: [], Pruned: [] };
 
   /** @deprecated Use {@link Kanban}. */
   public get kanban(): PSKanbanColumns {
@@ -292,7 +292,7 @@ export class PSExperimentsComponent implements OnInit {
   }
 
   public get IterationCountLabel(): string {
-    const total = this.Kanban.running.length + this.Kanban.completed.length + this.Kanban.pruned.length;
+    const total = this.Kanban.Running.length + this.Kanban.Completed.length + this.Kanban.Pruned.length;
     return `${total} iteration${total === 1 ? '' : 's'}`;
   }
 
@@ -305,7 +305,7 @@ export class PSExperimentsComponent implements OnInit {
 
   private rebuild(): void {
     if (!this.sessionId) {
-      this.Kanban = { running: [], completed: [], pruned: [] };
+      this.Kanban = { Running: [], Completed: [], Pruned: [] };
       this.Leaderboard = [];
       this.Budget = [];
       return;
@@ -394,7 +394,7 @@ export class PSExperimentsComponent implements OnInit {
     return this.SessionDotColor;
   }
 
-  public StatusBadgeClass(status: PSIterationCard['status']): string {
+  public StatusBadgeClass(status: PSIterationCard['Status']): string {
     switch (status) {
       case 'Best': return 'green';
       case 'Completed': return 'gray';
@@ -405,11 +405,11 @@ export class PSExperimentsComponent implements OnInit {
   }
 
   /** @deprecated Use {@link StatusBadgeClass}. */
-  public statusBadgeClass(status: PSIterationCard['status']): string {
+  public statusBadgeClass(status: PSIterationCard['Status']): string {
     return this.StatusBadgeClass(status);
   }
 
-  public StatusLabel(status: PSIterationCard['status']): string {
+  public StatusLabel(status: PSIterationCard['Status']): string {
     switch (status) {
       case 'Best': return 'Best';
       case 'AwaitingApproval': return 'Awaiting approval';
@@ -418,7 +418,7 @@ export class PSExperimentsComponent implements OnInit {
   }
 
   /** @deprecated Use {@link StatusLabel}. */
-  public statusLabel(status: PSIterationCard['status']): string {
+  public statusLabel(status: PSIterationCard['Status']): string {
     return this.StatusLabel(status);
   }
 

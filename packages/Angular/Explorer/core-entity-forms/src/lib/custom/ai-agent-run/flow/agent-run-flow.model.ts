@@ -27,27 +27,27 @@ export type FlowNodeType =
 
 export interface FlowNode {
   /** Stable index within the flattened model (renderer scratch keys off this). */
-  id: number;
-  name: string;
-  type: FlowNodeType;
-  status: string;
-  model: string | null;
+  Id: number;
+  Name: string;
+  Type: FlowNodeType;
+  Status: string;
+  Model: string | null;
   /** Real duration in seconds (container nodes = sum of children). */
-  realDur: number;
+  RealDur: number;
   /** Normalized playback window [0..1]. */
-  t0: number;
-  t1: number;
-  tmid: number;
+  T0: number;
+  T1: number;
+  Tmid: number;
   /** Real cumulative wall-clock window in seconds. */
-  r0: number;
-  r1: number;
-  depth: number;
+  R0: number;
+  R1: number;
+  Depth: number;
   /** Relative heat tier 0..3 (3 = among the longest steps in this run). */
-  heat: 0 | 1 | 2 | 3;
-  parent: FlowNode | null;
-  children: FlowNode[];
+  Heat: 0 | 1 | 2 | 3;
+  Parent: FlowNode | null;
+  Children: FlowNode[];
   /** Underlying step entity (null for the synthetic root, and for task-graph nodes). */
-  raw: MJAIAgentRunStepEntity | null;
+  Raw: MJAIAgentRunStepEntity | null;
   /**
    * Which record this node came from, whatever entity that is.
    *
@@ -57,18 +57,18 @@ export interface FlowNode {
    */
   source?: { entity: string; id: string } | null;
   /** Font Awesome class (e.g. 'fa-brain'); sub-agents resolve their agent's icon. */
-  iconClass: string;
+  IconClass: string;
   /** Agent logo image URL when available (sub-agents / root), else null. */
-  logoUrl: string | null;
+  LogoUrl: string | null;
 }
 
 export interface FlowModel {
-  root: FlowNode;
-  nodes: FlowNode[];
-  leaves: FlowNode[];
-  total: number;
-  maxDepth: number;
-  maxLeafDur: number;
+  Root: FlowNode;
+  Nodes: FlowNode[];
+  Leaves: FlowNode[];
+  Total: number;
+  MaxDepth: number;
+  MaxLeafDur: number;
 }
 
 /** Categorical data-visualization palette (per CLAUDE.md, chart colors may be literal). */
@@ -136,10 +136,10 @@ function makeStepNode(step: MJAIAgentRunStepEntity, promptRuns: MJAIPromptRunEnt
   }
   const icon = stepIcon(step, type);
   return {
-    id: -1, name: step.StepName || `Step ${step.StepNumber}`, type, status: step.Status,
-    model, realDur: durationSeconds(step.StartedAt, step.CompletedAt),
-    t0: 0, t1: 0, tmid: 0, r0: 0, r1: 0, depth: 0, heat: 0,
-    parent: null, children: [], raw: step, iconClass: icon.iconClass, logoUrl: icon.logoUrl
+    Id: -1, Name: step.StepName || `Step ${step.StepNumber}`, Type: type, Status: step.Status,
+    Model: model, RealDur: durationSeconds(step.StartedAt, step.CompletedAt),
+    T0: 0, T1: 0, Tmid: 0, R0: 0, R1: 0, Depth: 0, Heat: 0,
+    Parent: null, Children: [], Raw: step, IconClass: icon.iconClass, LogoUrl: icon.logoUrl
   };
 }
 
@@ -161,9 +161,9 @@ async function attachStepTree(
     const node = byId.get(s.ID)!;
     if (s.ParentID && byId.has(s.ParentID)) {
       const par = byId.get(s.ParentID)!;
-      node.parent = par; par.children.push(node);
+      node.Parent = par; par.Children.push(node);
     } else {
-      node.parent = parent; parent.children.push(node);
+      node.Parent = parent; parent.Children.push(node);
     }
   }
 
@@ -184,37 +184,37 @@ async function attachStepTree(
 }
 
 function calcDur(n: FlowNode): number {
-  if (n.children.length) n.realDur = n.children.reduce((s, c) => s + calcDur(c), 0);
-  return n.realDur;
+  if (n.Children.length) n.RealDur = n.Children.reduce((s, c) => s + calcDur(c), 0);
+  return n.RealDur;
 }
 
 function assignT(n: FlowNode, t0: number, t1: number): void {
-  n.t0 = t0; n.t1 = t1; n.tmid = (t0 + t1) / 2;
-  if (n.children.length) {
-    const tot = n.children.reduce((s, c) => s + comp(c.realDur), 0) || 1;
+  n.T0 = t0; n.T1 = t1; n.Tmid = (t0 + t1) / 2;
+  if (n.Children.length) {
+    const tot = n.Children.reduce((s, c) => s + comp(c.RealDur), 0) || 1;
     let cur = t0;
-    for (const c of n.children) {
-      const w = (t1 - t0) * comp(c.realDur) / tot;
+    for (const c of n.Children) {
+      const w = (t1 - t0) * comp(c.RealDur) / tot;
       assignT(c, cur, cur + w); cur += w;
     }
   }
 }
 
 function assignReal(n: FlowNode, r0: number): number {
-  n.r0 = r0;
-  if (n.children.length) {
+  n.R0 = r0;
+  if (n.Children.length) {
     let cur = r0;
-    for (const c of n.children) { assignReal(c, cur); cur = c.r1; }
-    n.r1 = cur;
+    for (const c of n.Children) { assignReal(c, cur); cur = c.R1; }
+    n.R1 = cur;
   } else {
-    n.r1 = r0 + n.realDur;
+    n.R1 = r0 + n.RealDur;
   }
-  return n.r1;
+  return n.R1;
 }
 
 function flatten(n: FlowNode, depth: number, out: FlowNode[]): void {
-  n.depth = depth; n.id = out.length; out.push(n);
-  n.children.forEach(c => flatten(c, depth + 1, out));
+  n.Depth = depth; n.Id = out.length; out.push(n);
+  n.Children.forEach(c => flatten(c, depth + 1, out));
 }
 
 function heatTier(d: number, maxLeaf: number): 0 | 1 | 2 | 3 {
@@ -236,10 +236,10 @@ export async function BuildFlowModel(
   const { steps, promptRuns } = helper.getCurrentData();
 
   const root: FlowNode = {
-    id: -1, name: rootName || 'Agent run', type: 'agent', status: rootStatus,
-    model: null, realDur: 0, t0: 0, t1: 1, tmid: 0.5, r0: 0, r1: 0, depth: 0, heat: 0,
-    parent: null, children: [], raw: null,
-    iconClass: rootIcon.iconClass || 'fa-robot', logoUrl: rootIcon.logoUrl
+    Id: -1, Name: rootName || 'Agent run', Type: 'agent', Status: rootStatus,
+    Model: null, RealDur: 0, T0: 0, T1: 1, Tmid: 0.5, R0: 0, R1: 0, Depth: 0, Heat: 0,
+    Parent: null, Children: [], Raw: null,
+    IconClass: rootIcon.iconClass || 'fa-robot', LogoUrl: rootIcon.logoUrl
   };
 
   if (steps.length) {
@@ -274,15 +274,15 @@ export function FinalizeFlowModel(root: FlowNode): FlowModel {
 
   const nodes: FlowNode[] = [];
   flatten(root, 0, nodes);
-  nodes.forEach(n => { n.tmid = (n.t0 + n.t1) / 2; });
+  nodes.forEach(n => { n.Tmid = (n.T0 + n.T1) / 2; });
 
-  const leaves = nodes.filter(n => n.children.length === 0).sort((a, b) => a.t0 - b.t0);
-  const maxLeafDur = Math.max(0.001, ...leaves.map(n => n.realDur));
-  nodes.forEach(n => { n.heat = heatTier(n.realDur, maxLeafDur); });
+  const leaves = nodes.filter(n => n.Children.length === 0).sort((a, b) => a.T0 - b.T0);
+  const maxLeafDur = Math.max(0.001, ...leaves.map(n => n.RealDur));
+  nodes.forEach(n => { n.Heat = heatTier(n.RealDur, maxLeafDur); });
 
   return {
-    root, nodes, leaves, total: root.realDur,
-    maxDepth: Math.max(0, ...nodes.map(n => n.depth)), maxLeafDur
+    Root: root, Nodes: nodes, Leaves: leaves, Total: root.RealDur,
+    MaxDepth: Math.max(0, ...nodes.map(n => n.Depth)), MaxLeafDur: maxLeafDur
   };
 }
 
@@ -294,11 +294,11 @@ export function finalizeFlowModel(root: FlowNode): FlowModel {
 /* ----------------------------- shared lookups ----------------------------- */
 
 export function ActiveLeaf(model: FlowModel, p: number): FlowNode {
-  const L = model.leaves;
-  if (!L.length) return model.root;
+  const L = model.Leaves;
+  if (!L.length) return model.Root;
   if (p <= 0) return L[0];
   if (p >= 1) return L[L.length - 1];
-  return L.find(l => p >= l.t0 && p < l.t1) ?? L[L.length - 1];
+  return L.find(l => p >= l.T0 && p < l.T1) ?? L[L.length - 1];
 }
 
 /** @deprecated Use {@link ActiveLeaf}. */
@@ -308,7 +308,7 @@ export function activeLeaf(model: FlowModel, p: number): FlowNode {
 
 export function Ancestors(n: FlowNode): FlowNode[] {
   const out: FlowNode[] = []; let c: FlowNode | null = n;
-  while (c) { out.unshift(c); c = c.parent; }
+  while (c) { out.unshift(c); c = c.Parent; }
   return out;
 }
 
@@ -318,8 +318,8 @@ export function ancestors(n: FlowNode): FlowNode[] {
 }
 
 export function AgentOf(n: FlowNode): FlowNode {
-  let c = n.parent;
-  while (c) { if (c.type === 'agent' || c.type === 'subagent') return c; c = c.parent; }
+  let c = n.Parent;
+  while (c) { if (c.Type === 'agent' || c.Type === 'subagent') return c; c = c.Parent; }
   return n;
 }
 
@@ -330,8 +330,8 @@ export function agentOf(n: FlowNode): FlowNode {
 
 /** "Execute Sub-Agent: Query Strategist" → "Query Strategist". */
 export function AgentShortName(a: FlowNode): string {
-  const i = a.name.indexOf(': ');
-  return i >= 0 ? a.name.slice(i + 2) : a.name;
+  const i = a.Name.indexOf(': ');
+  return i >= 0 ? a.Name.slice(i + 2) : a.Name;
 }
 
 /** @deprecated Use {@link AgentShortName}. */
@@ -348,9 +348,9 @@ export function DisplayName(n: FlowNode): string {
   const a = AgentOf(n);
   if (a && a !== n) {
     const short = AgentShortName(a);
-    if (short && n.name.startsWith(short + ':')) return n.name.slice(short.length + 1).trim();
+    if (short && n.Name.startsWith(short + ':')) return n.Name.slice(short.length + 1).trim();
   }
-  return n.name;
+  return n.Name;
 }
 
 /** @deprecated Use {@link DisplayName}. */
@@ -367,7 +367,7 @@ export function displayName(n: FlowNode): string {
  *   "Agent Validation"                    → "Validation"
  */
 export function ShortLabel(n: FlowNode): string {
-  if (n.type === 'subagent') return `${AgentShortName(n)} Sub-Agent`;
+  if (n.Type === 'subagent') return `${AgentShortName(n)} Sub-Agent`;
   let s = DisplayName(n);
   s = s.replace(/^Execute Action:\s*/i, '').replace(/^Execute Sub-Agent:\s*/i, '');
   if (/^Execute Agent Prompt$/i.test(s)) s = 'Prompt';

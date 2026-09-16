@@ -853,7 +853,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
 
             // Configure the prompt selector for single selection
             promptSelector.config = {
-                title: 'Select Context Compression Prompt',
+                Title: 'Select Context Compression Prompt',
                 multiSelect: false,
                 selectedPromptIds: this.record.ContextCompressionPromptID ? [this.record.ContextCompressionPromptID] : [],
                 showCreateNew: false
@@ -862,8 +862,8 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
             // Subscribe to the result
             promptSelector.result.subscribe({
                 next: (result: PromptSelectorResult | null) => {
-                    if (result && result.selectedPrompts.length > 0) {
-                        const selectedPrompt = result.selectedPrompts[0];
+                    if (result && result.SelectedPrompts.length > 0) {
+                        const selectedPrompt = result.SelectedPrompts[0];
                         this.record.ContextCompressionPromptID = selectedPrompt.ID;
                         this.SelectedContextCompressionPrompt = selectedPrompt;
                         this.cdr.detectChanges();
@@ -2106,9 +2106,9 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                 viewContainerRef: this.viewContainerRef
             }).pipe(takeUntil(this.destroy$)).subscribe({
                 next: async (result) => {
-                    if (result && result.selectedPrompts.length > 0) {
+                    if (result && result.SelectedPrompts.length > 0) {
                         // Filter out already linked or pending prompts
-                        const newPrompts = result.selectedPrompts.filter(prompt =>
+                        const newPrompts = result.SelectedPrompts.filter(prompt =>
                             !allLinkedIds.some(id => UUIDsEqual(id, prompt.ID))
                         );
                         
@@ -3163,9 +3163,9 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                 viewContainerRef: this.viewContainerRef
             }).pipe(takeUntil(this.destroy$)).subscribe({
                 next: async (result) => {
-                    if (result && result.selectedAgents && result.selectedAgents.length > 0) {
+                    if (result && result.SelectedAgents && result.SelectedAgents.length > 0) {
                         // Filter out already linked or pending agents
-                        const newAgents = result.selectedAgents.filter(agent =>
+                        const newAgents = result.SelectedAgents.filter(agent =>
                             !allLinkedIds.some(id => UUIDsEqual(id, agent.ID))
                         );
                         
@@ -3207,7 +3207,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                             'info',
                             4000
                         );
-                    } else if (result && result.createNew) {
+                    } else if (result && result.CreateNew) {
                         // User wants to create a new sub-agent
                         await this.CreateSubAgent();
                     }
@@ -3631,12 +3631,12 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                     if (formData) {
                         try {
                             // Update the agent prompt entity with new values
-                            agentPrompt.ExecutionOrder = formData.executionOrder;
-                            agentPrompt.Purpose = formData.purpose;
-                            agentPrompt.ConfigurationID = formData.configurationID;
-                            agentPrompt.ContextBehavior = formData.contextBehavior;
-                            agentPrompt.ContextMessageCount = formData.contextMessageCount;
-                            agentPrompt.Status = formData.status;
+                            agentPrompt.ExecutionOrder = formData.ExecutionOrder;
+                            agentPrompt.Purpose = formData.Purpose;
+                            agentPrompt.ConfigurationID = formData.ConfigurationID;
+                            agentPrompt.ContextBehavior = formData.ContextBehavior;
+                            agentPrompt.ContextMessageCount = formData.ContextMessageCount;
+                            agentPrompt.Status = formData.Status;
 
                             // Save immediately to database
                             const saveResult = await agentPrompt.Save();
@@ -3710,11 +3710,11 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                     if (formData) {
                         try {
                             // Update the sub-agent entity with new values
-                            subAgentEntity.ExecutionOrder = formData.executionOrder;
-                            subAgentEntity.ExecutionMode = formData.executionMode;
-                            subAgentEntity.Status = formData.status;
-                            subAgentEntity.TypeID = formData.typeID;
-                            subAgentEntity.ExposeAsAction = formData.exposeAsAction;
+                            subAgentEntity.ExecutionOrder = formData.ExecutionOrder;
+                            subAgentEntity.ExecutionMode = formData.ExecutionMode;
+                            subAgentEntity.Status = formData.Status;
+                            subAgentEntity.TypeID = formData.TypeID;
+                            subAgentEntity.ExposeAsAction = formData.ExposeAsAction;
 
                             // Save immediately to database
                             const saveResult = await subAgentEntity.Save();
@@ -3728,11 +3728,11 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                                 // Update the local sub-agent data to reflect changes
                                 const localSubAgent = this.SubAgents.find(sa => UUIDsEqual(sa.ID, subAgentEntity.ID));
                                 if (localSubAgent) {
-                                    localSubAgent.ExecutionOrder = formData.executionOrder;
-                                    localSubAgent.ExecutionMode = formData.executionMode;
-                                    localSubAgent.Status = formData.status;
-                                    localSubAgent.TypeID = formData.typeID;
-                                    localSubAgent.ExposeAsAction = formData.exposeAsAction;
+                                    localSubAgent.ExecutionOrder = formData.ExecutionOrder;
+                                    localSubAgent.ExecutionMode = formData.ExecutionMode;
+                                    localSubAgent.Status = formData.Status;
+                                    localSubAgent.TypeID = formData.TypeID;
+                                    localSubAgent.ExposeAsAction = formData.ExposeAsAction;
                                 }
 
                                 // Mark for check instead of forcing immediate detection

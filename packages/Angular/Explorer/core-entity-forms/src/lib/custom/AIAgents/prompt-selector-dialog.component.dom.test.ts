@@ -38,7 +38,7 @@ async function render(opts: RenderOpts = {}): Promise<ComponentFixture<PromptSel
     declarations: [PromptSelectorDialogComponent],
   });
   const fixture = TestBed.createComponent(PromptSelectorDialogComponent);
-  fixture.componentInstance.config = opts.config ?? { title: 'Pick a Prompt' };
+  fixture.componentInstance.config = opts.config ?? { Title: 'Pick a Prompt' };
   fixture.componentRef.setInput('Provider', createFakeProvider({ runViewResults: opts.rows ?? ROWS }));
   fixture.detectChanges(false); // renders loading; ngOnInit kicks off async loadPrompts()
   await new Promise((r) => setTimeout(r, 0)); // let loadPrompts() settle (isLoading$ -> false)
@@ -93,7 +93,7 @@ describe('PromptSelectorDialogComponent (DOM)', () => {
     fixture.detectChanges(false);
     buttonByText(fixture, 'Select Prompt').click();
     expect(closed.length).toBe(1);
-    expect((results[0] as { selectedPrompts: Array<{ ID: string }> }).selectedPrompts[0].ID).toBe('b2');
+    expect((results[0] as { SelectedPrompts: Array<{ ID: string }> }).SelectedPrompts[0].ID).toBe('b2');
   });
 
   it('emits DialogClose and a null result on Cancel', async () => {
@@ -107,12 +107,12 @@ describe('PromptSelectorDialogComponent (DOM)', () => {
   });
 
   it('only renders Create New when config.showCreateNew is set', async () => {
-    const hidden = await render({ config: { title: 'Pick', showCreateNew: false } });
+    const hidden = await render({ config: { Title: 'Pick', showCreateNew: false } });
     expect(buttons(hidden).some((b) => b.textContent?.includes('Create New'))).toBe(false);
   });
 
   it('emits a createNew result when Create New is clicked', async () => {
-    const fixture = await render({ config: { title: 'Pick', showCreateNew: true } });
+    const fixture = await render({ config: { Title: 'Pick', showCreateNew: true } });
     const closed = capture(fixture.componentInstance.DialogClose);
     const results: Array<unknown> = [];
     fixture.componentInstance.result.subscribe((r) => results.push(r));

@@ -25,12 +25,12 @@ export function ResolveConnection(overrides: DbConnectionOverrides = {}, dialect
   if (!user) throw new Error('No DB user configured (set CODEGEN_DB_USERNAME).');
   if (!password) throw new Error('No DB password configured (set CODEGEN_DB_PASSWORD).');
   return {
-    dialect,
-    host,
+    Dialect: dialect,
+    Host: host,
     port,
-    database,
-    user,
-    password,
+    Database: database,
+    User: user,
+    Password: password,
     encrypt: overrides.encrypt ?? Boolean(config.dbEncrypt),
     trustServerCertificate: overrides.trustServerCertificate ?? Boolean(config.dbTrustServerCertificate),
   };

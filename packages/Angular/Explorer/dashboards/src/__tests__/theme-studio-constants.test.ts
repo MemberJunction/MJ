@@ -17,7 +17,7 @@ function check(overrides: Partial<ContrastCheck>): ContrastCheck {
 }
 
 function firstCategory(token: string): string | undefined {
-  return TOKEN_CATEGORIES.find((c) => c.match.test(token))?.key;
+  return TOKEN_CATEGORIES.find((c) => c.Match.test(token))?.Key;
 }
 
 describe('TOKEN_CATEGORIES', () => {

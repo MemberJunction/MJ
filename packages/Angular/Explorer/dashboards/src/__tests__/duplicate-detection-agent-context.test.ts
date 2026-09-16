@@ -52,47 +52,47 @@ describe('capDupeNames', () => {
 describe('resolveEntityDoc', () => {
     it('resolves by exact id (case-insensitive)', () => {
         const r = ResolveEntityDoc('d1', docs);
-        expect(r.ok && r.value.ID).toBe('D1');
+        expect(r.Ok && r.Value.ID).toBe('D1');
     });
     it('resolves by document name', () => {
         const r = ResolveEntityDoc('Companies Dedup', docs);
-        expect(r.ok && r.value.ID).toBe('D2');
+        expect(r.Ok && r.Value.ID).toBe('D2');
     });
     it('resolves by entity name', () => {
         const r = ResolveEntityDoc('members', docs);
-        expect(r.ok && r.value.ID).toBe('D1');
+        expect(r.Ok && r.Value.ID).toBe('D1');
     });
     it('resolves by partial contains', () => {
         const r = ResolveEntityDoc('compan', docs);
-        expect(r.ok && r.value.ID).toBe('D2');
+        expect(r.Ok && r.Value.ID).toBe('D2');
     });
     it('returns a tolerant error on miss', () => {
         const r = ResolveEntityDoc('zzz', docs);
-        expect(r.ok).toBe(false);
-        if (!r.ok) expect(r.error).toContain('Members Dedup');
+        expect(r.Ok).toBe(false);
+        if (!r.Ok) expect(r.Error).toContain('Members Dedup');
     });
     it('errors on empty input', () => {
         const r = ResolveEntityDoc('   ', docs);
-        expect(r.ok).toBe(false);
+        expect(r.Ok).toBe(false);
     });
 });
 
 describe('resolveEntityFilter', () => {
     it('treats empty / "all" as the no-filter sentinel', () => {
-        expect(ResolveEntityFilter('', ['Members'])).toEqual({ ok: true, value: '' });
-        expect(ResolveEntityFilter('all', ['Members'])).toEqual({ ok: true, value: '' });
+        expect(ResolveEntityFilter('', ['Members'])).toEqual({ Ok: true, Value: '' });
+        expect(ResolveEntityFilter('all', ['Members'])).toEqual({ Ok: true, Value: '' });
     });
     it('resolves to the canonical entity name', () => {
         const r = ResolveEntityFilter('members', ['Members', 'Companies']);
-        expect(r.ok && r.value).toBe('Members');
+        expect(r.Ok && r.Value).toBe('Members');
     });
     it('resolves partial', () => {
         const r = ResolveEntityFilter('comp', ['Members', 'Companies']);
-        expect(r.ok && r.value).toBe('Companies');
+        expect(r.Ok && r.Value).toBe('Companies');
     });
     it('errors on miss', () => {
         const r = ResolveEntityFilter('xyz', ['Members']);
-        expect(r.ok).toBe(false);
+        expect(r.Ok).toBe(false);
     });
 });
 

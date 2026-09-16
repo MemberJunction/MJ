@@ -76,7 +76,7 @@ export function ParseManagedBlock(content: string): ManagedBlock | null {
     const after = content.slice(endMatch.index + endMatch[0].length);
     const attrs = parseAttrs(startMatch[1]);
 
-    return { before, body, after, attrs };
+    return { Before: before, Body: body, After: after, Attrs: attrs };
 }
 
 /** @deprecated Use {@link ParseManagedBlock}. */
@@ -124,7 +124,7 @@ export function RewriteManagedBlock(
     if (!block) {
         throw new ManagedBlockError('Cannot rewrite — no managed block found in content.');
     }
-    return block.before + formatStartMarker(newAttrs) + newBody + formatEndMarker() + block.after;
+    return block.Before + formatStartMarker(newAttrs) + newBody + formatEndMarker() + block.After;
 }
 
 /** @deprecated Use {@link RewriteManagedBlock}. */

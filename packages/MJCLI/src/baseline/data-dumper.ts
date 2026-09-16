@@ -16,7 +16,7 @@ export interface DumpProgress {
 }
 
 export interface DumpOptions {
-  excludedTables: Set<string>;       // 'schema.table' lowercased
+  ExcludedTables: Set<string>;       // 'schema.table' lowercased
   /** Hard cap per table (defensive — baselines should not have huge tables). */
   maxRowsPerTable?: number;
 }
@@ -30,17 +30,17 @@ export async function DumpTables(
 ): Promise<TableDataDump[]> {
   const dumps: TableDataDump[] = [];
   for (const table of tables) {
-    const key = `${table.schema}.${table.name}`.toLowerCase();
-    if (options.excludedTables.has(key)) continue;
+    const key = `${table.Schema}.${table.Name}`.toLowerCase();
+    if (options.ExcludedTables.has(key)) continue;
 
-    const includedColumns = table.columns.filter((c) => !c.isComputed);
+    const includedColumns = table.Columns.filter((c) => !c.isComputed);
     if (includedColumns.length === 0) continue;
 
     const rows: unknown[][] = [];
     let count = 0;
     const orderBy = BuildOrderBy(table);
     const select = `SELECT ${includedColumns.map(selectExpressionForColumn).join(', ')} ` +
-      `FROM ${QuoteIdent(table.schema)}.${QuoteIdent(table.name)} ${orderBy}`;
+      `FROM ${QuoteIdent(table.Schema)}.${QuoteIdent(table.Name)} ${orderBy}`;
     let truncated = false;
 
     await db.stream(select, (row) => {
@@ -56,11 +56,11 @@ export async function DumpTables(
     progress.onTable?.(table, count);
 
     dumps.push({
-      schema: table.schema,
-      table: table.name,
-      columns: includedColumns.map((c) => c.name),
-      rows,
-      rowCount: rows.length,
+      Schema: table.Schema,
+      Table: table.Name,
+      Columns: includedColumns.map((c) => c.name),
+      Rows: rows,
+      RowCount: rows.length,
       truncated,
     });
   }
@@ -80,12 +80,12 @@ export async function dumpTables(
 /** Construct an ORDER BY clause for deterministic streaming. */
 export function BuildOrderBy(table: TableDef): string {
   const orderColumns = (() => {
-    if (table.primaryKey && table.primaryKey.columns.length) return table.primaryKey.columns;
-    if (table.uniqueConstraints[0]?.columns.length) return table.uniqueConstraints[0].columns;
+    if (table.primaryKey && table.primaryKey.Columns.length) return table.primaryKey.Columns;
+    if (table.UniqueConstraints[0]?.columns.length) return table.UniqueConstraints[0].columns;
     // Fall back to ALL non-LOB columns sorted by ordinal so we still get a
     // deterministic order. LOB types can't appear in ORDER BY in MSSQL.
     const sortable = StableSortBy(
-      table.columns.filter((c) => !c.isComputed && !isLobType(c.dataType)),
+      table.Columns.filter((c) => !c.isComputed && !isLobType(c.dataType)),
       (c) => String(c.ordinal).padStart(6, '0'),
     );
     return sortable.map((c) => c.name);

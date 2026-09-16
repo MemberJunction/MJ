@@ -133,12 +133,12 @@ describe('primaryAuc', () => {
 describe('metricsToDisplay', () => {
   it('orders canonically, excludes AUC by default, only present keys', () => {
     const display = MetricsToDisplay(ParseMetrics('{"F1":0.75,"Precision":0.8,"AUC":0.9}'));
-    expect(display.map((d) => d.key)).toEqual(['Precision', 'F1']);
-    expect(display.find((d) => d.key === 'Precision')?.value).toBe('0.80');
+    expect(display.map((d) => d.Key)).toEqual(['Precision', 'F1']);
+    expect(display.find((d) => d.Key === 'Precision')?.Value).toBe('0.80');
   });
   it('can include AUC when asked', () => {
     const display = MetricsToDisplay(ParseMetrics('{"AUC":0.9}'), { excludeAuc: false });
-    expect(display.map((d) => d.key)).toEqual(['AUC']);
+    expect(display.map((d) => d.Key)).toEqual(['AUC']);
   });
   it('returns [] for empty metrics', () => {
     expect(MetricsToDisplay({})).toEqual([]);
@@ -237,26 +237,26 @@ describe('groupIterationsToKanban', () => {
 
   it('buckets by status; Pending→running, Failed→pruned', () => {
     const k = GroupIterationsToKanban(rows);
-    expect(k.running.length).toBe(2); // Running + Pending
-    expect(k.completed.length).toBe(2);
-    expect(k.pruned.length).toBe(2); // Pruned + Failed
+    expect(k.Running.length).toBe(2); // Running + Pending
+    expect(k.Completed.length).toBe(2);
+    expect(k.Pruned.length).toBe(2); // Pruned + Failed
   });
 
   it('badges the single best completed iteration', () => {
     const k = GroupIterationsToKanban(rows);
-    const best = k.completed.filter((c) => c.status === 'Best');
+    const best = k.Completed.filter((c) => c.Status === 'Best');
     expect(best.length).toBe(1);
     expect(best[0].score).toBe(0.86);
   });
 
   it('computes Δ-from-best for non-best completed', () => {
     const k = GroupIterationsToKanban(rows);
-    const challenger = k.completed.find((c) => c.score === 0.84);
+    const challenger = k.Completed.find((c) => c.score === 0.84);
     expect(challenger?.scoreDelta).toBe('Δ −0.020');
   });
 
   it('handles an empty set', () => {
-    expect(GroupIterationsToKanban([])).toEqual({ running: [], completed: [], pruned: [] });
+    expect(GroupIterationsToKanban([])).toEqual({ Running: [], Completed: [], Pruned: [] });
   });
 });
 
@@ -303,18 +303,18 @@ describe('computeHomeKpis', () => {
     ];
     const runs = [processRun({ SuccessCount: 1000 }), processRun({ SuccessCount: 500 })];
     const kpis = ComputeHomeKpis(models, 2, runs, 14);
-    expect(kpis.publishedCount).toBe(2);
-    expect(kpis.activeExperiments).toBe(2);
-    expect(kpis.bestHoldout).toBe('0.910');
-    expect(kpis.scoredThisWeek).toBe((1500).toLocaleString());
-    expect(kpis.experimentRuns).toBe(14);
+    expect(kpis.PublishedCount).toBe(2);
+    expect(kpis.ActiveExperiments).toBe(2);
+    expect(kpis.BestHoldout).toBe('0.910');
+    expect(kpis.ScoredThisWeek).toBe((1500).toLocaleString());
+    expect(kpis.ExperimentRuns).toBe(14);
   });
 
   it('degrades gracefully with no data', () => {
     const kpis = ComputeHomeKpis([], 0, [], 0);
-    expect(kpis.bestHoldout).toBe('—');
-    expect(kpis.scoredThisWeek).toBe('0');
-    expect(kpis.publishedCount).toBe(0);
+    expect(kpis.BestHoldout).toBe('—');
+    expect(kpis.ScoredThisWeek).toBe('0');
+    expect(kpis.PublishedCount).toBe(0);
   });
 });
 
@@ -327,9 +327,9 @@ describe('deriveModelEvents', () => {
     ];
     const events = DeriveModelEvents(sources);
     expect(events.length).toBe(2); // Draft excluded
-    expect(events[0].name).toBe('B'); // most recent first
-    expect(events[0].kind).toBe('archive');
-    expect(events[1].kind).toBe('promote');
+    expect(events[0].Name).toBe('B'); // most recent first
+    expect(events[0].Kind).toBe('archive');
+    expect(events[1].Kind).toBe('promote');
   });
 });
 
@@ -345,9 +345,9 @@ describe('buildActivityFeed', () => {
     ]);
     const feed = BuildActivityFeed(runs, events, now, 6);
     expect(feed.length).toBe(3);
-    expect(feed[0].kind).toBe('run'); // 11:30 most recent
-    expect(feed.find((f) => f.kind === 'warn')).toBeTruthy(); // failed run
-    expect(feed.find((f) => f.kind === 'promote')?.title).toContain('promoted to Published');
+    expect(feed[0].Kind).toBe('run'); // 11:30 most recent
+    expect(feed.find((f) => f.Kind === 'warn')).toBeTruthy(); // failed run
+    expect(feed.find((f) => f.Kind === 'promote')?.Title).toContain('promoted to Published');
   });
 
   it('respects the limit and handles empty', () => {
@@ -362,8 +362,8 @@ describe('buildActivityFeed', () => {
     let feed: ReturnType<typeof BuildActivityFeed> = [];
     expect(() => { feed = BuildActivityFeed(runs, [], now, 6); }).not.toThrow();
     expect(feed.length).toBe(1);
-    expect(feed[0].when).toBe('just now'); // falls back to `now`
-    expect(Number.isNaN(feed[0].sortMs)).toBe(false);
+    expect(feed[0].When).toBe('just now'); // falls back to `now`
+    expect(Number.isNaN(feed[0].SortMs)).toBe(false);
   });
 });
 
@@ -422,18 +422,18 @@ describe('buildCompareMetricRows', () => {
       iteration({ ID: 'b', Status: 'Completed', Score: 0.8, ComputeCost: 3 }),
     ]);
     const rows = BuildCompareMetricRows(cols);
-    const auc = rows.find((r) => r.label === 'Holdout score')!;
-    const cost = rows.find((r) => r.label === 'Compute cost')!;
-    expect(auc.values).toEqual(['0.860', '0.800']);
-    expect(auc.bestIndex).toBe(0); // higher AUC
-    expect(cost.bestIndex).toBe(1); // lower cost
+    const auc = rows.find((r) => r.Label === 'Holdout score')!;
+    const cost = rows.find((r) => r.Label === 'Compute cost')!;
+    expect(auc.Values).toEqual(['0.860', '0.800']);
+    expect(auc.BestIndex).toBe(0); // higher AUC
+    expect(cost.BestIndex).toBe(1); // lower cost
   });
 
   it('formats missing values as — and yields no best index', () => {
     const cols = DeriveCompareColumns([iteration({ ID: 'a', Status: 'Completed', Score: 0.8, ComputeCost: null })]);
     const rows = BuildCompareMetricRows(cols);
-    expect(rows.find((r) => r.label === 'Compute cost')!.values).toEqual(['—']);
-    expect(rows.find((r) => r.label === 'Compute cost')!.bestIndex).toBe(-1);
+    expect(rows.find((r) => r.Label === 'Compute cost')!.Values).toEqual(['—']);
+    expect(rows.find((r) => r.Label === 'Compute cost')!.BestIndex).toBe(-1);
   });
 
   it('returns [] for empty columns', () => {

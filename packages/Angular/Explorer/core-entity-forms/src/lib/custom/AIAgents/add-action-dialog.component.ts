@@ -16,7 +16,7 @@ export interface CategoryTreeNode {
 }
 
 export interface ActionDisplayItem extends MJActionEntity {
-  selected: boolean;
+  Selected: boolean;
   categoryName?: string;
 }
 
@@ -263,7 +263,7 @@ export class AddActionDialogComponent extends BaseAngularComponent implements On
     if (actionsResult.Success) {
       const actions = (actionsResult.Results as MJActionEntity[] || []).map(action => ({
         ...action.GetAll(),
-        selected: false,
+        Selected: false,
         categoryName: action.Category || 'Uncategorized'
       } as ActionDisplayItem));
       
@@ -394,7 +394,7 @@ export class AddActionDialogComponent extends BaseAngularComponent implements On
       // Update action selection state
       const actions = this.AllActions$.value;
       actions.forEach(action => {
-        action.selected = selected.has(action.ID);
+        action.Selected = selected.has(action.ID);
       });
       this.AllActions$.next(actions);
     }
@@ -428,9 +428,9 @@ export class AddActionDialogComponent extends BaseAngularComponent implements On
     // Find the action and toggle its selection
     const actionToUpdate = actions.find(a => UUIDsEqual(a.ID, action.ID));
     if (actionToUpdate) {
-      actionToUpdate.selected = !actionToUpdate.selected;
+      actionToUpdate.Selected = !actionToUpdate.Selected;
       
-      if (actionToUpdate.selected) {
+      if (actionToUpdate.Selected) {
         selected.add(action.ID);
       } else {
         selected.delete(action.ID);
@@ -443,7 +443,7 @@ export class AddActionDialogComponent extends BaseAngularComponent implements On
       const filtered = this.FilteredActions$.value;
       const filteredAction = filtered.find(a => UUIDsEqual(a.ID, action.ID));
       if (filteredAction) {
-        filteredAction.selected = actionToUpdate.selected;
+        filteredAction.Selected = actionToUpdate.Selected;
         this.FilteredActions$.next(filtered);
       }
     }

@@ -40,18 +40,18 @@ function fixturePack(files: Record<string, string>, packVersion = '5.1.0', mjMaj
 function mockHttp(responses: Record<string, HttpResponse>): HttpGetter {
     return vi.fn(async (url: string) => {
         if (responses[url] === undefined) {
-            return { statusCode: 404, body: Buffer.from('') };
+            return { StatusCode: 404, Body: Buffer.from('') };
         }
         return responses[url];
     });
 }
 
 const ok = (body: string | Buffer): HttpResponse => ({
-    statusCode: 200,
-    body: typeof body === 'string' ? Buffer.from(body, 'utf8') : body,
+    StatusCode: 200,
+    Body: typeof body === 'string' ? Buffer.from(body, 'utf8') : body,
 });
-const notFound = (): HttpResponse => ({ statusCode: 404, body: Buffer.from('Not Found') });
-const serverError = (): HttpResponse => ({ statusCode: 500, body: Buffer.from('Server Error') });
+const notFound = (): HttpResponse => ({ StatusCode: 404, Body: Buffer.from('Not Found') });
+const serverError = (): HttpResponse => ({ StatusCode: 500, Body: Buffer.from('Server Error') });
 
 describe('fetchPack', () => {
     it('fetches manifest + all files when everything is reachable', async () => {

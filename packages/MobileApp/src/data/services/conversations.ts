@@ -23,19 +23,19 @@ const ENTITY_CONVERSATION_ARTIFACT = 'MJ: Conversation Artifacts';
  * aggregated client-side from `MJ: Conversation Details` rows.
  */
 export type ConversationListItem = {
-    entity: MJConversationEntity;
+    Entity: MJConversationEntity;
     /** Latest message body (or null if no messages yet). */
-    latestSnippet: string | null;
+    LatestSnippet: string | null;
     /** Latest message timestamp (Date) or fall back to UpdatedAt. */
-    latestAt: Date;
+    LatestAt: Date;
     /** Whether the latest agent task is still running. */
-    live: boolean;
+    Live: boolean;
     /** Distinct agent IDs that have participated. Empty if unknown. */
-    agentIds: string[];
+    AgentIds: string[];
     /** Distinct agent display names (parallel to agentIds when known). */
-    agentNames: string[];
+    AgentNames: string[];
     /** Total message count in the conversation. */
-    messageCount: number;
+    MessageCount: number;
 };
 
 /**
@@ -136,13 +136,13 @@ export async function LoadConversations(contextUser?: UserInfo): Promise<Convers
         const agentNames = agentIds.map((id) => agentNameById.get(id) ?? 'Agent');
         const updatedAt = (conv as unknown as { __mj_UpdatedAt?: Date }).__mj_UpdatedAt;
         return {
-            entity: conv,
-            latestSnippet: latest?.Message ?? null,
-            latestAt: latest ? new Date(latest.__mj_CreatedAt) : (updatedAt ? new Date(updatedAt) : new Date()),
-            live: details.some((d) => d.Status === 'In-Progress'),
-            agentIds,
-            agentNames,
-            messageCount: details.length,
+            Entity: conv,
+            LatestSnippet: latest?.Message ?? null,
+            LatestAt: latest ? new Date(latest.__mj_CreatedAt) : (updatedAt ? new Date(updatedAt) : new Date()),
+            Live: details.some((d) => d.Status === 'In-Progress'),
+            AgentIds: agentIds,
+            AgentNames: agentNames,
+            MessageCount: details.length,
         } satisfies ConversationListItem;
     });
 }
@@ -161,9 +161,9 @@ export type ConversationMessage = {
 
 /** A fully-loaded conversation: the `MJ: Conversations` entity, its ordered messages, and its artifacts. */
 export type ConversationDetailLoad = {
-    conversation: MJConversationEntity;
-    messages: ConversationMessage[];
-    artifacts: MJConversationArtifactEntity[];
+    Conversation: MJConversationEntity;
+    Messages: ConversationMessage[];
+    Artifacts: MJConversationArtifactEntity[];
 };
 
 /**
@@ -238,7 +238,7 @@ export async function LoadConversation(
         ? ((artifactsResult.Results as MJConversationArtifactEntity[]) ?? [])
         : [];
 
-    return { conversation, messages, artifacts };
+    return { Conversation: conversation, Messages: messages, Artifacts: artifacts };
 }
 
 /** @deprecated Use {@link LoadConversation}. */

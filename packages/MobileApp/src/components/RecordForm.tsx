@@ -22,13 +22,13 @@ import { Colors, Radius, Type } from '@/theme/tokens';
 /** Props for {@link RecordForm}. */
 export type RecordFormProps = {
     /** The editable field descriptors, in display order. */
-    descriptors: FieldEditorDescriptor[];
+    Descriptors: FieldEditorDescriptor[];
     /** The current field values, keyed by field name (owned by the parent). */
-    values: Record<string, FieldValue>;
+    Values: Record<string, FieldValue>;
     /** Inline validation errors to surface under their fields. */
-    errors: FieldValidationError[];
+    Errors: FieldValidationError[];
     /** Called whenever a field changes; the parent updates its `values` bag. */
-    onChange: (key: string, value: FieldValue) => void;
+    OnChange: (key: string, value: FieldValue) => void;
     /** When true, all editors are non-interactive (e.g. during save). */
     disabled?: boolean;
 };
@@ -49,7 +49,7 @@ function asText(value: FieldValue): string {
  * @param props See {@link RecordFormProps}.
  */
 export function RecordForm(props: RecordFormProps) {
-    const { descriptors, values, errors, onChange, disabled } = props;
+    const { Descriptors: descriptors, Values: values, Errors: errors, OnChange: onChange, disabled } = props;
     return (
         <View style={styles.form}>
             {descriptors.map((d) => (

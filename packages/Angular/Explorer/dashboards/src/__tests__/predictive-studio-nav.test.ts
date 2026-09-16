@@ -60,18 +60,18 @@ describe('predictive-studio.nav — lookups (tolerant fallbacks)', () => {
 
 describe('predictive-studio.nav — routeHomeNavigate (cross-door Overview navigation)', () => {
   it('a Studio target switches the section in-place', () => {
-    expect(RouteHomeNavigate('pipelines')).toEqual({ kind: 'section', key: 'pipelines' });
-    expect(RouteHomeNavigate('catalog')).toEqual({ kind: 'section', key: 'catalog' });
-    expect(RouteHomeNavigate('experiments')).toEqual({ kind: 'section', key: 'experiments' });
-    expect(RouteHomeNavigate('compare')).toEqual({ kind: 'section', key: 'compare' });
+    expect(RouteHomeNavigate('pipelines')).toEqual({ Kind: 'section', Key: 'pipelines' });
+    expect(RouteHomeNavigate('catalog')).toEqual({ Kind: 'section', Key: 'catalog' });
+    expect(RouteHomeNavigate('experiments')).toEqual({ Kind: 'section', Key: 'experiments' });
+    expect(RouteHomeNavigate('compare')).toEqual({ Kind: 'section', Key: 'compare' });
   });
 
   it('a Models target crosses to the Models door, deep-linked to that section', () => {
-    expect(RouteHomeNavigate('registry')).toEqual({ kind: 'app', navLabel: MODELS_NAV_LABEL, section: 'registry' });
-    expect(RouteHomeNavigate('production')).toEqual({ kind: 'app', navLabel: MODELS_NAV_LABEL, section: 'production' });
+    expect(RouteHomeNavigate('registry')).toEqual({ Kind: 'app', NavLabel: MODELS_NAV_LABEL, Section: 'registry' });
+    expect(RouteHomeNavigate('production')).toEqual({ Kind: 'app', NavLabel: MODELS_NAV_LABEL, Section: 'production' });
   });
 
   it('navigating to home (the section we are already on) is a no-op', () => {
-    expect(RouteHomeNavigate('home')).toEqual({ kind: 'none' });
+    expect(RouteHomeNavigate('home')).toEqual({ Kind: 'none' });
   });
 });

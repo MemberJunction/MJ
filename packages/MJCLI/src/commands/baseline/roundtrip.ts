@@ -89,17 +89,17 @@ export default class BaselineRoundtrip extends Command {
     fs.mkdirSync(flags.out, { recursive: true });
 
     // 1. Introspect source + dump rows
-    phase(`Connecting to ${sourceParams.database} (gold)`);
+    phase(`Connecting to ${sourceParams.Database} (gold)`);
     const sourceDb = await OpenConnection(sourceParams);
     let sourceSnapshot;
     let sourceDumps;
     try {
-      succeed(`Connected to ${sourceParams.database}`);
+      succeed(`Connected to ${sourceParams.Database}`);
       phase('Introspecting gold database');
       sourceSnapshot = await IntrospectMssql(sourceDb);
       succeed(`Gold: ${sourceSnapshot.tables.length} tables`);
       phase('Dumping all rows from gold');
-      sourceDumps = await DumpTables(sourceDb, sourceSnapshot.tables, { excludedTables: new Set() });
+      sourceDumps = await DumpTables(sourceDb, sourceSnapshot.tables, { ExcludedTables: new Set() });
       succeed(`Gold: dumped ${sourceDumps.reduce((s, d) => s + d.rowCount, 0).toLocaleString()} rows`);
     } finally {
       await sourceDb.close();
@@ -108,9 +108,9 @@ export default class BaselineRoundtrip extends Command {
     // 2. Emit baseline
     phase('Emitting baseline SQL');
     const sql = EmitBaselineTsql({
-      snapshot: sourceSnapshot,
-      dataDumps: sourceDumps,
-      options: {
+      Snapshot: sourceSnapshot,
+      DataDumps: sourceDumps,
+      Options: {
         baselineVersion,
         description: flags.description,
         generatedAtUtc,
@@ -153,13 +153,13 @@ export default class BaselineRoundtrip extends Command {
 
     // 4. Apply baseline to target
     const targetParams = ResolveConnection({ database: flags.target }, dialect);
-    phase(`Applying baseline to ${targetParams.database}`);
+    phase(`Applying baseline to ${targetParams.Database}`);
     const applyResult = applyBaseline(applyPath, targetParams, flags['apply-cmd']);
     if (applyResult.status !== 0) {
       fail(`Apply failed (exit ${applyResult.status})`);
       throw new Error('Baseline apply failed');
     }
-    succeed(`Applied baseline to ${targetParams.database}`);
+    succeed(`Applied baseline to ${targetParams.Database}`);
 
     // 5. Compare target vs source
     phase('Re-introspecting target for comparison');
@@ -169,18 +169,18 @@ export default class BaselineRoundtrip extends Command {
       const targetSnapshot = dialect === 'mssql'
         ? await IntrospectMssql(targetDb)
         : await IntrospectPostgres(targetDb);
-      const targetDumps = await DumpTables(targetDb, targetSnapshot.tables, { excludedTables: new Set() });
-      succeed(`Target: ${targetSnapshot.tables.length} tables, ${targetDumps.reduce((s, d) => s + d.rowCount, 0).toLocaleString()} rows`);
+      const targetDumps = await DumpTables(targetDb, targetSnapshot.Tables, { ExcludedTables: new Set() });
+      succeed(`Target: ${targetSnapshot.Tables.length} tables, ${targetDumps.reduce((s, d) => s + d.RowCount, 0).toLocaleString()} rows`);
 
       phase('Comparing snapshots');
       report = CompareSnapshots({
-        left: { snapshot: sourceSnapshot, data: sourceDumps, label: sourceParams.database },
-        right: { snapshot: targetSnapshot, data: targetDumps, label: targetParams.database },
-        options: {
-          rowCompareMode: flags['row-compare'] as 'full' | 'hash' | 'counts' | 'none',
-          rowHashAlgo: 'sha256',
+        Left: { snapshot: sourceSnapshot, data: sourceDumps, label: sourceParams.Database },
+        Right: { snapshot: targetSnapshot, data: targetDumps, label: targetParams.Database },
+        Options: {
+          RowCompareMode: flags['row-compare'] as 'full' | 'hash' | 'counts' | 'none',
+          RowHashAlgo: 'sha256',
           ignorePattern: /^flyway_schema_history$/i,
-          rowDiffSampleLimit: 100,
+          RowDiffSampleLimit: 100,
         },
       });
       report.isClean
@@ -235,27 +235,27 @@ export default class BaselineRoundtrip extends Command {
         `No V-files found in ${sourceDir}. Pass --baseline-version explicitly or point --source-dir at a folder with V<ts>__v<Major>.<Minor>...sql migrations.`,
       );
     }
-    const { generatedAtUtc } = ComputeAutoBaselineStamp(latest.timestamp);
+    const { generatedAtUtc } = ComputeAutoBaselineStamp(latest.Timestamp);
     return {
-      baselineVersion: latest.majorMinor,
+      baselineVersion: latest.MajorMinor,
       generatedAtUtc,
-      autoSource: { filename: latest.filename, timestamp: latest.timestamp },
+      autoSource: { filename: latest.Filename, timestamp: latest.Timestamp },
     };
   }
 }
 
 function applyBaseline(file: string, params: ReturnType<typeof ResolveConnection>, applyCmd?: string): { status: number | null } {
   if (applyCmd) {
-    const cmd = applyCmd.replace('{file}', file).replace('{database}', params.database);
+    const cmd = applyCmd.replace('{file}', file).replace('{database}', params.Database);
     const result = spawnSync('sh', ['-c', cmd], { stdio: 'inherit' });
     return { status: result.status };
   }
-  if (params.dialect === 'mssql') {
+  if (params.Dialect === 'mssql') {
     const args = [
-      '-S', `${params.host},${params.port ?? 1433}`,
-      '-U', params.user,
-      '-P', params.password,
-      '-d', params.database,
+      '-S', `${params.Host},${params.port ?? 1433}`,
+      '-U', params.User,
+      '-P', params.Password,
+      '-d', params.Database,
       '-i', file,
       '-b',
     ];
@@ -263,12 +263,12 @@ function applyBaseline(file: string, params: ReturnType<typeof ResolveConnection
     const result = spawnSync('sqlcmd', args, { stdio: 'inherit' });
     return { status: result.status };
   } else {
-    const env = { ...process.env, PGPASSWORD: params.password };
+    const env = { ...process.env, PGPASSWORD: params.Password };
     const args = [
-      '-h', params.host,
+      '-h', params.Host,
       '-p', String(params.port ?? 5432),
-      '-U', params.user,
-      '-d', params.database,
+      '-U', params.User,
+      '-d', params.Database,
       '-v', 'ON_ERROR_STOP=1',
       '-f', file,
     ];

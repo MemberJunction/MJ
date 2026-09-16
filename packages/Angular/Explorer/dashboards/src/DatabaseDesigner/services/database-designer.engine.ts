@@ -224,8 +224,8 @@ export class DatabaseDesignerEngine extends BaseSingleton<DatabaseDesignerEngine
             fieldCount: editableFields.length,
             createdAt: new Date(entity.__mj_CreatedAt),
             isOwner,
-            columns: editableFields.map(f => this.mapFieldToColumnSpec(f)),
-            foreignKeys: [],  // FK detail loaded on demand — Phase 5e
+            Columns: editableFields.map(f => this.mapFieldToColumnSpec(f)),
+            ForeignKeys: [],  // FK detail loaded on demand — Phase 5e
         };
     }
 
@@ -285,10 +285,10 @@ export class DatabaseDesignerEngine extends BaseSingleton<DatabaseDesignerEngine
 
         if (canUseUdt) {
             schemas.push({
-                value: UDT_SCHEMA_NAME,
-                label: `${UDT_SCHEMA_NAME} — User-Defined Tables (default)`,
-                isDefault: true,
-                requiresElevatedAuth: false,
+                Value: UDT_SCHEMA_NAME,
+                Label: `${UDT_SCHEMA_NAME} — User-Defined Tables (default)`,
+                IsDefault: true,
+                RequiresElevatedAuth: false,
             });
         }
 
@@ -299,19 +299,19 @@ export class DatabaseDesignerEngine extends BaseSingleton<DatabaseDesignerEngine
                 if (schemaName === UDT_SCHEMA_NAME) continue;
                 if (FRONTEND_BLOCKED_SCHEMAS.has(schemaName)) continue;
                 schemas.push({
-                    value: schemaName,
-                    label: schemaName,
-                    isDefault: false,
-                    requiresElevatedAuth: true,
+                    Value: schemaName,
+                    Label: schemaName,
+                    IsDefault: false,
+                    RequiresElevatedAuth: true,
                 });
             }
 
             // Free-text escape hatch for schemas not yet registered with MJ
             schemas.push({
-                value: '',
-                label: 'Other (enter schema name)',
-                isDefault: false,
-                requiresElevatedAuth: true,
+                Value: '',
+                Label: 'Other (enter schema name)',
+                IsDefault: false,
+                RequiresElevatedAuth: true,
             });
         }
 

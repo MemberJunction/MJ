@@ -1381,15 +1381,15 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     const request = this.parseRecordSelectionRequest(params);
     const recordNames = this.getVisibleRecordNames();
     const resolution = ResolveRecordSelection(recordNames, request);
-    if (!resolution.ok) {
-      return { Success: false, ErrorMessage: resolution.error };
+    if (!resolution.Ok) {
+      return { Success: false, ErrorMessage: resolution.Error };
     }
-    const record = this.loadedRecords[resolution.index];
+    const record = this.loadedRecords[resolution.Index];
     if (!record) {
       return { Success: false, ErrorMessage: 'The resolved record is no longer loaded in the view.' };
     }
     this.applyRecordSelection(record);
-    return { Success: true, Data: { SelectedRecordName: this.getRecordDisplayName(record), Index: resolution.index + 1 } };
+    return { Success: true, Data: { SelectedRecordName: this.getRecordDisplayName(record), Index: resolution.Index + 1 } };
   }
 
   /**

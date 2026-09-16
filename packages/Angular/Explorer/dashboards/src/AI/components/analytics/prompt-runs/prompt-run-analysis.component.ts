@@ -1060,9 +1060,9 @@ export class AnalyticsPromptRunsComponent extends BaseAngularComponent implement
         const successCount = runs.filter(r => r.Status === 'Completed').length;
         const p95 = this.percentile(latencies, 95);
         const cacheHit = CacheHitRate({
-            uncachedInputTokens: this.sumNullable(runs, r => r.TokensPrompt),
-            cacheReadTokens: this.sumNullable(runs, r => r.TokensCacheRead),
-            cacheWriteTokens: this.sumNullable(runs, r => r.TokensCacheWrite)
+            UncachedInputTokens: this.sumNullable(runs, r => r.TokensPrompt),
+            CacheReadTokens: this.sumNullable(runs, r => r.TokensCacheRead),
+            CacheWriteTokens: this.sumNullable(runs, r => r.TokensCacheWrite)
         });
 
         return {

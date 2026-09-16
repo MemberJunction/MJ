@@ -16,14 +16,14 @@ export interface CreateSubAgentConfig {
   /** Pre-selected agent type ID */
   initialTypeID?: string;
   /** Parent agent ID for relationship */
-  parentAgentId: string;
+  ParentAgentId: string;
   /** Parent agent name for display */
   parentAgentName?: string;
 }
 
 export interface CreateSubAgentResult {
   /** Created sub-agent entity (not saved to database) */
-  subAgent: MJAIAgentEntityExtended;
+  SubAgent: MJAIAgentEntityExtended;
   /** Agent prompt link entities (not saved to database) */
   agentPrompts?: MJAIAgentPromptEntity[];
   /** Agent action link entities (not saved to database) */
@@ -328,7 +328,7 @@ export class CreateSubAgentDialogComponent extends BaseAngularComponent implemen
       this.SubAgentEntity.Status = 'Pending';
       this.SubAgentEntity.ExecutionMode = 'Sequential';
       this.SubAgentEntity.ExposeAsAction = false; // Database constraint for sub-agents
-      this.SubAgentEntity.ParentID = this.config.parentAgentId;
+      this.SubAgentEntity.ParentID = this.config.ParentAgentId;
       this.SubAgentEntity.ModelSelectionMode = 'Agent Type';
       this.SubAgentEntity.Set('Temperature', 0.1);
       this.SubAgentEntity.Set('TopP', 0.1);
@@ -387,9 +387,9 @@ export class CreateSubAgentDialogComponent extends BaseAngularComponent implemen
         viewContainerRef: this.viewContainerRef
       }).subscribe({
         next: async (result) => {
-          if (result && result.selectedPrompts.length > 0) {
+          if (result && result.SelectedPrompts.length > 0) {
             // Filter out already linked prompts
-            const newPrompts = result.selectedPrompts.filter(prompt =>
+            const newPrompts = result.SelectedPrompts.filter(prompt =>
               !linkedPromptIds.some(id => UUIDsEqual(id, prompt.ID))
             );
             
@@ -672,7 +672,7 @@ export class CreateSubAgentDialogComponent extends BaseAngularComponent implemen
 
       // Return the created entities (not saved to database)
       const result: CreateSubAgentResult = {
-        subAgent: this.SubAgentEntity,
+        SubAgent: this.SubAgentEntity,
         agentPrompts: this.AgentPromptLinks,
         agentActions: this.AgentActionLinks,
         newPrompts: this.NewlyCreatedPrompts.length > 0 ? this.NewlyCreatedPrompts : undefined,

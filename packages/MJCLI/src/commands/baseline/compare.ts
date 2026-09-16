@@ -69,23 +69,23 @@ export default class BaselineCompare extends Command {
     const leftParams = ResolveConnection({ database: flags.left }, dialect);
     const rightParams = ResolveConnection({ database: flags.right }, dialect);
 
-    phase(`Connecting (${leftParams.database} & ${rightParams.database})`);
+    phase(`Connecting (${leftParams.Database} & ${rightParams.Database})`);
     const left = await OpenConnection(leftParams);
     const right = await OpenConnection(rightParams);
     succeed(`Connected to both databases`);
 
     try {
-      phase(`Introspecting ${leftParams.database}`);
+      phase(`Introspecting ${leftParams.Database}`);
       const leftSnapshot = dialect === 'mssql'
         ? await IntrospectMssql(left)
         : await IntrospectPostgres(left);
-      succeed(`${leftParams.database}: ${leftSnapshot.tables.length} tables, ${leftSnapshot.views.length} views`);
+      succeed(`${leftParams.Database}: ${leftSnapshot.Tables.length} tables, ${leftSnapshot.Views.length} views`);
 
-      phase(`Introspecting ${rightParams.database}`);
+      phase(`Introspecting ${rightParams.Database}`);
       const rightSnapshot = dialect === 'mssql'
         ? await IntrospectMssql(right)
         : await IntrospectPostgres(right);
-      succeed(`${rightParams.database}: ${rightSnapshot.tables.length} tables, ${rightSnapshot.views.length} views`);
+      succeed(`${rightParams.Database}: ${rightSnapshot.Tables.length} tables, ${rightSnapshot.Views.length} views`);
 
       const rowMode = flags['row-compare'] as RowCompareMode;
       let leftDumps = [] as Awaited<ReturnType<typeof DumpTables>>;
@@ -95,22 +95,22 @@ export default class BaselineCompare extends Command {
           this.warn('row data dump streaming optimised for MSSQL; PG path uses cursor fallback.');
         }
         phase(`Dumping rows (left)`);
-        leftDumps = await DumpTables(left, leftSnapshot.tables, { excludedTables: new Set() });
-        succeed(`Dumped ${leftDumps.reduce((s, d) => s + d.rowCount, 0).toLocaleString()} rows from ${leftParams.database}`);
+        leftDumps = await DumpTables(left, leftSnapshot.Tables, { ExcludedTables: new Set() });
+        succeed(`Dumped ${leftDumps.reduce((s, d) => s + d.RowCount, 0).toLocaleString()} rows from ${leftParams.Database}`);
         phase(`Dumping rows (right)`);
-        rightDumps = await DumpTables(right, rightSnapshot.tables, { excludedTables: new Set() });
-        succeed(`Dumped ${rightDumps.reduce((s, d) => s + d.rowCount, 0).toLocaleString()} rows from ${rightParams.database}`);
+        rightDumps = await DumpTables(right, rightSnapshot.Tables, { ExcludedTables: new Set() });
+        succeed(`Dumped ${rightDumps.reduce((s, d) => s + d.RowCount, 0).toLocaleString()} rows from ${rightParams.Database}`);
       }
 
       phase('Comparing');
       const report = CompareSnapshots({
-        left: { snapshot: leftSnapshot, data: leftDumps, label: leftParams.database },
-        right: { snapshot: rightSnapshot, data: rightDumps, label: rightParams.database },
-        options: {
-          rowCompareMode: rowMode,
-          rowHashAlgo: flags['row-hash-algo'] as RowHashAlgo,
+        Left: { snapshot: leftSnapshot, data: leftDumps, label: leftParams.Database },
+        Right: { snapshot: rightSnapshot, data: rightDumps, label: rightParams.Database },
+        Options: {
+          RowCompareMode: rowMode,
+          RowHashAlgo: flags['row-hash-algo'] as RowHashAlgo,
           ignorePattern: flags.ignore ? new RegExp(flags.ignore, 'i') : undefined,
-          rowDiffSampleLimit: flags['sample-limit'],
+          RowDiffSampleLimit: flags['sample-limit'],
         },
       });
       report.isClean ? succeed('Comparison complete: CLEAN') : fail(`Comparison complete: ${report.summary.objectsWithDiffs} object diff(s), ${report.summary.totalRowDiffs} row diff(s)`);

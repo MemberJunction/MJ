@@ -150,7 +150,7 @@ describe('replayQueue', () => {
 
         const result = await replayQueue();
 
-        expect(result).toEqual({ synced: 2, failed: 0 });
+        expect(result).toEqual({ Synced: 2, Failed: 0 });
         expect(count()).toBe(0);
         expect(state.saved[0]).toEqual({ entityName: 'Users', pk: 'r1', fields: { Name: 'Bob', Age: 30 } });
     });
@@ -162,7 +162,7 @@ describe('replayQueue', () => {
 
         const result = await replayQueue();
 
-        expect(result).toEqual({ synced: 1, failed: 1 });
+        expect(result).toEqual({ Synced: 1, Failed: 1 });
         expect(count()).toBe(0); // both removed: one synced, one dropped
         expect(state.saved.map((s) => s.pk)).toEqual(['good']);
     });
@@ -173,7 +173,7 @@ describe('replayQueue', () => {
 
         const result = await replayQueue();
 
-        expect(result).toEqual({ synced: 0, failed: 1 });
+        expect(result).toEqual({ Synced: 0, Failed: 1 });
         expect(count()).toBe(0);
     });
 
@@ -185,7 +185,7 @@ describe('replayQueue', () => {
 
         const result = await replayQueue();
 
-        expect(result).toEqual({ synced: 1, failed: 0 });
+        expect(result).toEqual({ Synced: 1, Failed: 0 });
         // first synced+removed; second (network) and third remain queued.
         expect(list().map((e) => e.primaryKey)).toEqual(['second', 'third']);
         expect(list()[0].lastError).toMatch(/network/i);
@@ -196,7 +196,7 @@ describe('replayQueue', () => {
         state.behaviors = ['ok'];
         await replayQueue();
         const second = await replayQueue();
-        expect(second).toEqual({ synced: 0, failed: 0 });
+        expect(second).toEqual({ Synced: 0, Failed: 0 });
         expect(count()).toBe(0);
     });
 });

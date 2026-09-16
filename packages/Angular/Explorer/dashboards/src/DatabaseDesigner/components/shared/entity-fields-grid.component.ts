@@ -112,7 +112,7 @@ export class EntityFieldsGridComponent {
     }
 
     public TypeLabel(type: ColumnSpec['Type']): string {
-        return FIELD_TYPE_OPTIONS.find(o => o.value === type)?.label ?? (type ?? 'String (NVARCHAR)');
+        return FIELD_TYPE_OPTIONS.find(o => o.Value === type)?.Label ?? (type ?? 'String (NVARCHAR)');
     }
 
     /** True when the selected type supports a Max Length field. */

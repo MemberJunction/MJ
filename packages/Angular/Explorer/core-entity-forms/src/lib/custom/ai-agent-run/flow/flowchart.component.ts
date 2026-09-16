@@ -93,13 +93,13 @@ export class FlowchartComponent implements OnDestroy {
 
   private visibleNodes(): FlowNode[] {
     const out: FlowNode[] = [];
-    const walk = (n: FlowNode) => { out.push(n); if (!this.collapsed.has(n.id)) n.children.forEach(walk); };
-    walk(this._model!.root);
+    const walk = (n: FlowNode) => { out.push(n); if (!this.collapsed.has(n.Id)) n.Children.forEach(walk); };
+    walk(this._model!.Root);
     return out;
   }
 
   private descendantCount(n: FlowNode): number {
-    return n.children.reduce((s, c) => s + 1 + this.descendantCount(c), 0);
+    return n.Children.reduce((s, c) => s + 1 + this.descendantCount(c), 0);
   }
 
   private buildScene(fit: boolean): void {
@@ -114,42 +114,42 @@ export class FlowchartComponent implements OnDestroy {
     const nodesG = SvgEl('g', {}, main);
 
     const pos = new Map<number, { x: number; y: number }>();
-    ordered.forEach((n, i) => pos.set(n.id, { x: this.PADX + n.depth * this.INDENT, y: rowY(i) }));
+    ordered.forEach((n, i) => pos.set(n.Id, { x: this.PADX + n.Depth * this.INDENT, y: rowY(i) }));
 
     // elbow connectors to parent (file-tree style)
     for (const n of ordered) {
-      if (!n.parent || !pos.has(n.parent.id)) continue;
-      const c = pos.get(n.id)!, p = pos.get(n.parent.id)!;
+      if (!n.Parent || !pos.has(n.Parent.Id)) continue;
+      const c = pos.get(n.Id)!, p = pos.get(n.Parent.Id)!;
       const spineX = p.x + 16, midY = c.y + this.NODE_H / 2;
       SvgEl('path', { d: `M${spineX},${p.y + this.NODE_H} L${spineX},${midY} L${c.x},${midY}`, fill: 'none', stroke: 'var(--mj-border-strong)', 'stroke-width': 1.5 }, edges);
     }
 
     for (const n of ordered) {
-      const { x, y } = pos.get(n.id)!;
-      const col = FLOW_COLORS[n.type];
-      const isContainer = n.children.length > 0;
-      const isCollapsed = this.collapsed.has(n.id);
+      const { x, y } = pos.get(n.Id)!;
+      const col = FLOW_COLORS[n.Type];
+      const isContainer = n.Children.length > 0;
+      const isCollapsed = this.collapsed.has(n.Id);
       const grp = SvgEl('g', {}, nodesG);
       (grp as SVGElement & { style: CSSStyleDeclaration }).style.color = col;
 
       const body = SvgEl('g', {}, grp);
       (body as SVGElement & { style: CSSStyleDeclaration }).style.cursor = 'pointer';
-      const sel = n.id === this.selectedId;
+      const sel = n.Id === this.selectedId;
       const rect = SvgEl('rect', {
         x, y, width: this.NODE_W, height: this.NODE_H, rx: 12,
         fill: sel ? 'var(--mj-bg-surface-hover)' : 'var(--mj-bg-surface-card)',
         stroke: col, 'stroke-width': sel ? 3 : isContainer ? 2 : 1.4, opacity: 0.98
       }, body);
-      if (n.heat >= 2) rect.setAttribute('class', 'glow' + n.heat);
+      if (n.Heat >= 2) rect.setAttribute('class', 'glow' + n.Heat);
       SvgEl('rect', { x, y, width: 5, height: this.NODE_H, rx: 2.5, fill: col }, body);
-      AppendTitle(body, `${n.name} · ${FormatDuration(n.realDur)}`);
-      AppendIcon(body, x + 14, y + this.NODE_H / 2 - 11, 22, n.iconClass, n.logoUrl, col);
+      AppendTitle(body, `${n.Name} · ${FormatDuration(n.RealDur)}`);
+      AppendIcon(body, x + 14, y + this.NODE_H / 2 - 11, 22, n.IconClass, n.LogoUrl, col);
       SvgEl('text', { x: x + 46, y: y + 22, 'font-size': 13, 'font-weight': 600, 'dominant-baseline': 'middle', text: Clip(ShortLabel(n), 26) }, body);
-      const baseSub = n.model ? `${FLOW_LABEL[n.type]} · ${n.model}` : FLOW_LABEL[n.type];
-      const sub = isContainer && isCollapsed ? `${FLOW_LABEL[n.type]} · ${this.descendantCount(n)} hidden` : baseSub;
+      const baseSub = n.Model ? `${FLOW_LABEL[n.Type]} · ${n.Model}` : FLOW_LABEL[n.Type];
+      const sub = isContainer && isCollapsed ? `${FLOW_LABEL[n.Type]} · ${this.descendantCount(n)} hidden` : baseSub;
       SvgEl('text', { x: x + 46, y: y + 41, 'font-size': 10.5, class: 'ftxt-muted', text: Clip(sub, 32) }, body);
-      if (n.realDur) {
-        SvgEl('text', { x: x + this.NODE_W - 14, y: y + this.NODE_H / 2, 'font-size': 11, 'font-weight': 600, 'text-anchor': 'end', 'dominant-baseline': 'middle', class: 'ftxt-secondary', text: FormatDuration(n.realDur) }, body);
+      if (n.RealDur) {
+        SvgEl('text', { x: x + this.NODE_W - 14, y: y + this.NODE_H / 2, 'font-size': 11, 'font-weight': 600, 'text-anchor': 'end', 'dominant-baseline': 'middle', class: 'ftxt-secondary', text: FormatDuration(n.RealDur) }, body);
       }
       body.addEventListener('mouseup', () => { if (!this.moved) { this.suppressBg = true; this.onNodeClick(n); } });
 
@@ -166,7 +166,7 @@ export class FlowchartComponent implements OnDestroy {
         tg.addEventListener('mouseup', () => { if (!this.moved) { this.suppressBg = true; this.toggleCollapse(n); } });
       }
 
-      this.boxes.set(n.id, { rect, node: n });
+      this.boxes.set(n.Id, { rect, node: n });
     }
 
     if (!this.listening) { this.attachListeners(); this.listening = true; }
@@ -175,7 +175,7 @@ export class FlowchartComponent implements OnDestroy {
   }
 
   private toggleCollapse(n: FlowNode): void {
-    if (this.collapsed.has(n.id)) this.collapsed.delete(n.id); else this.collapsed.add(n.id);
+    if (this.collapsed.has(n.Id)) this.collapsed.delete(n.Id); else this.collapsed.add(n.Id);
     this.buildScene(false);
   }
 
@@ -250,8 +250,8 @@ export class FlowchartComponent implements OnDestroy {
   /* ------------------------------- selection ------------------------------ */
 
   private onNodeClick(n: FlowNode): void {
-    if (this.selectedId === n.id) { this.deselect(); return; }
-    this.selectedId = n.id;
+    if (this.selectedId === n.Id) { this.deselect(); return; }
+    this.selectedId = n.Id;
     this.paintSelection();
     this.NodeSelected.emit(n);
   }
@@ -270,8 +270,8 @@ export class FlowchartComponent implements OnDestroy {
   }
   private paintSelection(): void {
     this.boxes.forEach(({ rect, node }) => {
-      const sel = node.id === this.selectedId;
-      rect.setAttribute('stroke-width', sel ? '3' : node.children.length ? '2' : '1.4');
+      const sel = node.Id === this.selectedId;
+      rect.setAttribute('stroke-width', sel ? '3' : node.Children.length ? '2' : '1.4');
       rect.setAttribute('fill', sel ? 'var(--mj-bg-surface-hover)' : 'var(--mj-bg-surface-card)');
     });
   }

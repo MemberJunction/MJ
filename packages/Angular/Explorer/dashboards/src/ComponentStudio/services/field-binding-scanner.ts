@@ -14,9 +14,9 @@
 
 export interface FieldBindingScanResult {
     /** Field names referenced via `record.X` or `record["X"]` patterns. */
-    boundFields: Set<string>;
+    BoundFields: Set<string>;
     /** True iff AST parsing succeeded. Regex fallback sets this to false. */
-    usedAst: boolean;
+    UsedAst: boolean;
     /** Parse error message if AST parsing failed. Useful in dev. */
     parseError?: string;
 }
@@ -29,7 +29,7 @@ export interface FieldBindingScanResult {
  */
 export function ScanFieldBindings(code: string | null | undefined): FieldBindingScanResult {
     if (!code || code.trim().length === 0) {
-        return { boundFields: new Set(), usedAst: false };
+        return { BoundFields: new Set(), UsedAst: false };
     }
 
     const babel = getBabelStandalone();
@@ -42,7 +42,7 @@ export function ScanFieldBindings(code: string | null | undefined): FieldBinding
             // just shows fewer bindings than the AST would have detected.
             const parseError = err instanceof Error ? err.message : String(err);
             const regexResult = scanViaRegex(code);
-            return { ...regexResult, usedAst: false, parseError };
+            return { ...regexResult, UsedAst: false, parseError };
         }
     }
 
@@ -81,7 +81,7 @@ function scanViaBabel(code: string, babel: unknown): FieldBindingScanResult {
         OptionalMemberExpression(path: { node: AstNode }) { collectRecordRef(path.node, bound); },
     });
 
-    return { boundFields: bound, usedAst: true };
+    return { BoundFields: bound, UsedAst: true };
 }
 
 /** Examines one Member/OptionalMember node, adds to `bound` if it's a `record.X` pattern. */
@@ -127,7 +127,7 @@ function scanViaRegex(code: string): FieldBindingScanResult {
         bound.add(m[1]);
     }
 
-    return { boundFields: bound, usedAst: false };
+    return { BoundFields: bound, UsedAst: false };
 }
 
 /** Pulls Babel-standalone off `window` if it's been loaded by the React runtime. */

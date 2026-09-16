@@ -10,18 +10,18 @@ export type PSPanelKey = 'home' | 'catalog' | 'pipelines' | 'experiments' | 'reg
 
 /** A kanban iteration card on the Experiments panel. */
 export interface PSIterationCard {
-  algorithm: string;
-  algorithmIcon: string;
-  algorithmColor: string;
-  iteration: string;
-  features: string[];
-  status: 'Running' | 'Best' | 'Completed' | 'AwaitingApproval' | 'Pruned';
+  Algorithm: string;
+  AlgorithmIcon: string;
+  AlgorithmColor: string;
+  Iteration: string;
+  Features: string[];
+  Status: 'Running' | 'Best' | 'Completed' | 'AwaitingApproval' | 'Pruned';
   /** For running cards: 0..100 progress; for completed/pruned: the holdout score. */
   progress?: number;
   progressDetail?: string;
   score?: number;
   scoreDelta?: string;
-  rationale: string;
+  Rationale: string;
 }
 
 /** A leaderboard pill on the Experiments panel. */

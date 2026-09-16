@@ -134,19 +134,19 @@ describe('registerForPushNotifications', () => {
         state.perm = { granted: false, ios: { status: 1 } };
         state.requestPerm = { granted: false, ios: { status: 1 } };
         const result = await registerForPushNotifications();
-        expect(result).toMatchObject({ granted: false, token: null, persisted: false });
+        expect(result).toMatchObject({ Granted: false, Token: null, Persisted: false });
     });
 
     it('degrades gracefully when granted but no token (simulator)', async () => {
         state.tokenThrows = true;
         const result = await registerForPushNotifications();
-        expect(result).toMatchObject({ granted: true, token: null, persisted: false });
+        expect(result).toMatchObject({ Granted: true, Token: null, Persisted: false });
         expect(result.reason).toMatch(/simulator|APNs/i);
     });
 
     it('persists the token on the happy path', async () => {
         const result = await registerForPushNotifications();
-        expect(result).toMatchObject({ granted: true, token: 'ExponentPushToken[abc]', persisted: true });
+        expect(result).toMatchObject({ Granted: true, Token: 'ExponentPushToken[abc]', Persisted: true });
     });
 });
 

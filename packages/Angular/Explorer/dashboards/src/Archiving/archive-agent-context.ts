@@ -110,8 +110,8 @@ export interface ArchiveRunSummaryItem {
 
 /** Outcome of {@link resolveArchiveRun}: a matched run, or a tolerant error. */
 export type ArchiveRunResolution =
-    | { ok: true; run: ArchiveRunSnapshot }
-    | { ok: false; error: string };
+    | { Ok: true; Run: ArchiveRunSnapshot }
+    | { Ok: false; Error: string };
 
 /**
  * Resolve an agent-supplied run reference (an ID or a configuration name) to one
@@ -133,29 +133,29 @@ export function ResolveArchiveRun(
 ): ArchiveRunResolution {
     const needle = reference.trim().toLowerCase();
     if (!needle) {
-        return { ok: false, error: 'A run ID or configuration name is required.' };
+        return { Ok: false, Error: 'A run ID or configuration name is required.' };
     }
     if (runs.length === 0) {
-        return { ok: false, error: 'No archive runs are currently loaded to select from.' };
+        return { Ok: false, Error: 'No archive runs are currently loaded to select from.' };
     }
     const byId = runs.find((r) => r.ID.toLowerCase() === needle);
     if (byId) {
-        return { ok: true, run: byId };
+        return { Ok: true, Run: byId };
     }
     const byName = runs.find((r) => (r.ConfigurationName ?? '').toLowerCase() === needle);
     if (byName) {
-        return { ok: true, run: byName };
+        return { Ok: true, Run: byName };
     }
     const byContains = runs.find((r) => (r.ConfigurationName ?? '').toLowerCase().includes(needle));
     if (byContains) {
-        return { ok: true, run: byContains };
+        return { Ok: true, Run: byContains };
     }
     const sample = CapArchiveNames(
         runs.map((r) => r.ConfigurationName).filter((n) => !!n),
     ).join(', ');
     return {
-        ok: false,
-        error: `No archive run matches "${reference}". Available runs include: ${sample}.`,
+        Ok: false,
+        Error: `No archive run matches "${reference}". Available runs include: ${sample}.`,
     };
 }
 

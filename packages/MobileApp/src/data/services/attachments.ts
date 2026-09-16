@@ -49,15 +49,15 @@ export type AttachmentKind = 'image' | 'document';
  */
 export type CapturedAttachment = {
     /** Local `file://` (or content) URI where the picked bytes live on device. */
-    uri: string;
+    Uri: string;
     /** Display filename, e.g. `IMG_0421.HEIC` or `Q3-report.pdf`. */
-    name: string;
+    Name: string;
     /** MIME type, e.g. `image/jpeg`, `application/pdf`. */
-    mimeType: string;
+    MimeType: string;
     /** Size in bytes, when the picker reported it (some sources omit it). */
     size?: number;
     /** Coarse classification driving preview UI (thumbnail vs. filename chip). */
-    kind: AttachmentKind;
+    Kind: AttachmentKind;
 };
 
 /** Minimal shape shared by every Expo permission response we consult. */
@@ -108,11 +108,11 @@ function imageResultToAttachment(result: ImagePicker.ImagePickerResult): Capture
     if (result.canceled || !result.assets || result.assets.length === 0) return null;
     const asset = result.assets[0];
     return {
-        uri: asset.uri,
-        name: asset.fileName ?? deriveName(asset.uri, 'image'),
-        mimeType: asset.mimeType ?? 'image/jpeg',
+        Uri: asset.uri,
+        Name: asset.fileName ?? deriveName(asset.uri, 'image'),
+        MimeType: asset.mimeType ?? 'image/jpeg',
         size: asset.fileSize,
-        kind: 'image',
+        Kind: 'image',
     };
 }
 
@@ -187,11 +187,11 @@ export async function PickDocument(): Promise<CapturedAttachment | null> {
         if (result.canceled || !result.assets || result.assets.length === 0) return null;
         const asset = result.assets[0];
         return {
-            uri: asset.uri,
-            name: asset.name ?? deriveName(asset.uri, 'document'),
-            mimeType: asset.mimeType ?? 'application/octet-stream',
+            Uri: asset.uri,
+            Name: asset.name ?? deriveName(asset.uri, 'document'),
+            MimeType: asset.mimeType ?? 'application/octet-stream',
             size: asset.size,
-            kind: 'document',
+            Kind: 'document',
         };
     } catch {
         return null;
@@ -213,7 +213,7 @@ export async function pickDocument(): Promise<CapturedAttachment | null> {
  */
 export async function ReadAttachmentBase64(att: CapturedAttachment): Promise<string | null> {
     try {
-        return await new File(att.uri).base64();
+        return await new File(att.Uri).base64();
     } catch {
         return null;
     }
@@ -240,8 +240,8 @@ function formatBytes(bytes: number): string {
  */
 export function DescribeAttachment(att: CapturedAttachment): string {
     const size = att.size != null ? `, ${formatBytes(att.size)}` : '';
-    const label = att.kind === 'image' ? 'image' : 'file';
-    return `[Attached ${label}: ${att.name} (${att.mimeType}${size})]`;
+    const label = att.Kind === 'image' ? 'image' : 'file';
+    return `[Attached ${label}: ${att.Name} (${att.MimeType}${size})]`;
 }
 
 /** @deprecated Use {@link DescribeAttachment}. */
@@ -321,9 +321,9 @@ export async function PersistAttachment(
 
     const file = await md.GetEntityObject<MJFileEntity>('MJ: Files', currentUser);
     file.NewRecord();
-    file.Name = att.name;
+    file.Name = att.Name;
     file.ProviderID = providerId;
-    file.ContentType = att.mimeType;
+    file.ContentType = att.MimeType;
     // 'Pending' == catalog row created, bytes not yet uploaded (see header TODO).
     file.Status = 'Pending';
 

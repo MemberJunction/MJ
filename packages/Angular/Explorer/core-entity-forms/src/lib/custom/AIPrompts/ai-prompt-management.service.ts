@@ -20,7 +20,7 @@ export class AIPromptManagementService {
    */
   OpenTemplateSelectorDialog(config: TemplateSelectorConfig & { viewContainerRef?: ViewContainerRef }): Observable<TemplateSelectorResult | null> {
     const dialogRef: MJDialogRef = this.dialogService.open({
-      title: config.title,
+      title: config.Title,
       content: TemplateSelectorDialogComponent,
       width: 800,
       height: 600,
@@ -30,7 +30,7 @@ export class AIPromptManagementService {
     // Configure the dialog component
     const dialogComponent = dialogRef.Content!.instance as unknown as TemplateSelectorDialogComponent;
     dialogComponent.config = {
-      title: config.title,
+      Title: config.Title,
       showCreateNew: config.showCreateNew ?? true,
       extraFilter: config.extraFilter,
       multiSelect: config.multiSelect ?? false,

@@ -77,9 +77,9 @@ export default class TestSuite extends Command {
         name: flags.name,
         format: ResolveLegacyFormat({
           format: flags.format,
-          legacy: 'console' as const,
-          legacyDefault: 'console' as const,
-          map: TEST_FORMAT_MAP,
+          Legacy: 'console' as const,
+          LegacyDefault: 'console' as const,
+          Map: TEST_FORMAT_MAP,
         }),
         output: flags.output,
         verbose: flags.verbose,

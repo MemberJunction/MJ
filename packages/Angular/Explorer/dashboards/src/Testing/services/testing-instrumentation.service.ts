@@ -6,15 +6,15 @@ import { MJTestRunFeedbackEntity } from '@memberjunction/core-entities';
 import { TestEngineBase } from '@memberjunction/testing-engine-base';
 
 export interface TestingDashboardKPIs {
-  totalTestsActive: number;
-  passRateThisMonth: number;
-  totalCostThisMonth: number;
-  averageDuration: number;
-  testsPendingReview: number;
-  totalTestRuns: number;
-  failedTests: number;
-  skippedTests: number;
-  passRateTrend: number; // Percentage change from previous period
+  TotalTestsActive: number;
+  PassRateThisMonth: number;
+  TotalCostThisMonth: number;
+  AverageDuration: number;
+  TestsPendingReview: number;
+  TotalTestRuns: number;
+  FailedTests: number;
+  SkippedTests: number;
+  PassRateTrend: number; // Percentage change from previous period
 }
 
 export interface TestRunSummary {
@@ -96,12 +96,12 @@ export interface TestAnalytics {
 }
 
 export interface FeedbackStats {
-  totalFeedback: number;
-  reviewedCount: number;
-  avgRating: number;
-  agreementRate: number;
-  disagreementRate: number;
-  accuracyRate: number;
+  TotalFeedback: number;
+  ReviewedCount: number;
+  AvgRating: number;
+  AgreementRate: number;
+  DisagreementRate: number;
+  AccuracyRate: number;
 }
 
 /**
@@ -579,15 +579,15 @@ export class TestingInstrumentationService {
     const passRateTrend = previousPassRate > 0 ? passRateThisMonth - previousPassRate : 0;
 
     return {
-      totalTestsActive,
-      passRateThisMonth,
-      totalCostThisMonth,
-      averageDuration,
-      testsPendingReview,
-      totalTestRuns,
-      failedTests: failedRuns.length,
-      skippedTests: skippedRuns.length,
-      passRateTrend
+      TotalTestsActive: totalTestsActive,
+      PassRateThisMonth: passRateThisMonth,
+      TotalCostThisMonth: totalCostThisMonth,
+      AverageDuration: averageDuration,
+      TestsPendingReview: testsPendingReview,
+      TotalTestRuns: totalTestRuns,
+      FailedTests: failedRuns.length,
+      SkippedTests: skippedRuns.length,
+      PassRateTrend: passRateTrend
     };
   }
 
@@ -1026,12 +1026,12 @@ export class TestingInstrumentationService {
 
     if (totalFeedback === 0) {
       return {
-        totalFeedback: 0,
-        reviewedCount: 0,
-        avgRating: 0,
-        agreementRate: 0,
-        disagreementRate: 0,
-        accuracyRate: 0
+        TotalFeedback: 0,
+        ReviewedCount: 0,
+        AvgRating: 0,
+        AgreementRate: 0,
+        DisagreementRate: 0,
+        AccuracyRate: 0
       };
     }
 
@@ -1049,12 +1049,12 @@ export class TestingInstrumentationService {
     const accuracyRate = agreementRate;
 
     return {
-      totalFeedback,
-      reviewedCount: totalFeedback, // All feedbacks in this query are reviewed
-      avgRating,
-      agreementRate,
-      disagreementRate,
-      accuracyRate
+      TotalFeedback: totalFeedback,
+      ReviewedCount: totalFeedback, // All feedbacks in this query are reviewed
+      AvgRating: avgRating,
+      AgreementRate: agreementRate,
+      DisagreementRate: disagreementRate,
+      AccuracyRate: accuracyRate
     };
   }
 

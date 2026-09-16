@@ -65,7 +65,7 @@ describe('buildFlowModelFromTree', () => {
 
     it('includes task-graph work, which the step-based model cannot see at all', () => {
         const model = BuildFlowModelFromTree(pipelineTree(), 'Content Pipeline', 'Completed', ICON)!;
-        const names = model.nodes.map((n) => n.name);
+        const names = model.Nodes.map((n) => n.Name);
 
         expect(names).toContain('Research');
         expect(names).toContain('Draft');
@@ -74,7 +74,7 @@ describe('buildFlowModelFromTree', () => {
 
     it('maps each kind to its visual type, in BOTH vocabularies', () => {
         const model = BuildFlowModelFromTree(pipelineTree(), 'Content Pipeline', 'Completed', ICON)!;
-        const typeOf = (name: string) => model.nodes.find((n) => n.name === name)?.type;
+        const typeOf = (name: string) => model.Nodes.find((n) => n.Name === name)?.Type;
 
         // A run step says 'Actions'/'Validation'; a task says 'Action'/'While'/'Human'.
         expect(typeOf('Agent Validation')).toBe('validation');
@@ -86,7 +86,7 @@ describe('buildFlowModelFromTree', () => {
 
     it('never leaves a known kind as the undifferentiated fallback', () => {
         const model = BuildFlowModelFromTree(pipelineTree(), 'Content Pipeline', 'Completed', ICON)!;
-        const untyped = model.nodes.filter((n) => n.type === 'other').map((n) => n.name);
+        const untyped = model.Nodes.filter((n) => n.Type === 'other').map((n) => n.Name);
 
         // 'other' is what makes a node invisible in the renderers — it is the bug being fixed.
         expect(untyped).toEqual([]);
@@ -94,32 +94,32 @@ describe('buildFlowModelFromTree', () => {
 
     it('carries a source reference for every node, whatever entity it lives in', () => {
         const model = BuildFlowModelFromTree(pipelineTree(), 'Content Pipeline', 'Completed', ICON)!;
-        const draft = model.nodes.find((n) => n.name === 'Draft');
+        const draft = model.Nodes.find((n) => n.Name === 'Draft');
 
         // `raw` is typed to a run STEP and cannot hold a Task — this is why `source` exists.
-        expect(draft?.raw).toBeNull();
+        expect(draft?.Raw).toBeNull();
         expect(draft?.source).toEqual({ entity: 'MJ: Tasks', id: 't2' });
     });
 
     it('preserves the tree depth so renderers indent correctly', () => {
         const model = BuildFlowModelFromTree(pipelineTree(), 'Content Pipeline', 'Completed', ICON)!;
-        const depthOf = (name: string) => model.nodes.find((n) => n.name === name)?.depth;
+        const depthOf = (name: string) => model.Nodes.find((n) => n.Name === name)?.Depth;
 
         expect(depthOf('Agent Validation')).toBe(1);
         expect(depthOf('Draft')).toBe(3);
 
         // The run and its graph share a name, so the graph is found by its ENTITY rather than by
         // label — which is exactly why every node carries a source reference.
-        const graph = model.nodes.find((n) => n.source?.entity === 'MJ: Tasks' && n.source.id === 'graph');
-        expect(graph?.depth).toBe(2);
+        const graph = model.Nodes.find((n) => n.source?.entity === 'MJ: Tasks' && n.source.id === 'graph');
+        expect(graph?.Depth).toBe(2);
     });
 
     it('rolls child durations into containers', () => {
         const model = BuildFlowModelFromTree(pipelineTree(), 'Content Pipeline', 'Completed', ICON)!;
-        const graph = model.nodes.find((n) => n.name === 'Content Pipeline' && n.depth === 2)!;
+        const graph = model.Nodes.find((n) => n.Name === 'Content Pipeline' && n.Depth === 2)!;
 
         // 1373 + 2254 + 5372 ms of task work, in seconds.
-        expect(graph.realDur).toBeCloseTo(8.999, 2);
+        expect(graph.RealDur).toBeCloseTo(8.999, 2);
     });
 
     it('treats an unfinished node as zero rather than inventing elapsed time', () => {
@@ -127,15 +127,15 @@ describe('buildFlowModelFromTree', () => {
             node({ NodeID: 'r', NodeType: 'Run', Children: [node({ NodeID: 's', DurationMs: null })] }),
             'run', 'Running', ICON,
         )!;
-        expect(model.nodes.find((n) => n.name === 's')?.realDur).toBe(0);
+        expect(model.Nodes.find((n) => n.Name === 's')?.RealDur).toBe(0);
     });
 
     it('keeps a skipped branch in the model', () => {
         const model = BuildFlowModelFromTree(pipelineTree(), 'Content Pipeline', 'Completed', ICON)!;
-        const approve = model.nodes.find((n) => n.name === 'Approve');
+        const approve = model.Nodes.find((n) => n.Name === 'Approve');
 
         // Skipped is a normal outcome, not an absence — dropping it would hide which branch was
         // not taken, which is usually the question someone opened the visualization to answer.
-        expect(approve?.status).toBe('Skipped');
+        expect(approve?.Status).toBe('Skipped');
     });
 });

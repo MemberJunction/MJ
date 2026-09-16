@@ -59,10 +59,10 @@ describe.skipIf(!hasToken())('integration: explorer', () => {
         const name = readableAgentsEntityName();
         const load = await loadEntityRecords(name, undefined, 10);
         expect(load).not.toBeNull();
-        expect(load!.entity.Name).toBe(name);
-        expect(load!.rows.length).toBeGreaterThan(0);
+        expect(load!.Entity.Name).toBe(name);
+        expect(load!.Rows.length).toBeGreaterThan(0);
 
-        const first = load!.rows[0];
+        const first = load!.Rows[0];
         expect(first.id).toBeTruthy();
         expect(typeof first.title).toBe('string');
         expect(first.raw).toBeTypeOf('object');
@@ -72,15 +72,15 @@ describe.skipIf(!hasToken())('integration: explorer', () => {
         const name = readableAgentsEntityName();
         const load = await loadEntityRecords(name, undefined, 5);
         expect(load).not.toBeNull();
-        const someId = load!.rows[0]?.id;
+        const someId = load!.Rows[0]?.id;
         expect(someId).toBeTruthy();
 
         const detail = await loadRecordDetail(name, someId!);
         expect(detail).not.toBeNull();
-        expect(detail!.entity.Name).toBe(name);
-        expect(detail!.fields.length).toBeGreaterThan(0);
+        expect(detail!.Entity.Name).toBe(name);
+        expect(detail!.Fields.length).toBeGreaterThan(0);
         // Every field row has a key + label.
-        for (const f of detail!.fields) {
+        for (const f of detail!.Fields) {
             expect(f.key).toBeTruthy();
             expect(f.label).toBeTruthy();
         }
@@ -90,6 +90,6 @@ describe.skipIf(!hasToken())('integration: explorer', () => {
         const load = await loadEntityRecords(readableAgentsEntityName(), undefined, 10);
         expect(load).not.toBeNull();
         // Seed data includes agents; expect at least one row.
-        expect(load!.rows.length).toBeGreaterThan(0);
+        expect(load!.Rows.length).toBeGreaterThan(0);
     });
 });

@@ -155,8 +155,8 @@ export interface RecordSelectionRequest {
 
 /** Outcome of {@link resolveRecordSelection}: a 0-based index into the loaded records, or an error. */
 export type RecordSelectionResult =
-    | { ok: true; index: number }
-    | { ok: false; error: string };
+    | { Ok: true; Index: number }
+    | { Ok: false; Error: string };
 
 /**
  * Resolve an agent record-selection request against the display values of the records
@@ -175,7 +175,7 @@ export type RecordSelectionResult =
  */
 export function ResolveRecordSelection(recordNames: readonly string[], request: RecordSelectionRequest): RecordSelectionResult {
     if (recordNames.length === 0) {
-        return { ok: false, error: 'No records are currently loaded in the view to select from.' };
+        return { Ok: false, Error: 'No records are currently loaded in the view to select from.' };
     }
 
     if (request.position !== undefined && request.position !== null) {
@@ -187,7 +187,7 @@ export function ResolveRecordSelection(recordNames: readonly string[], request: 
         return resolveRecordByName(recordNames, name);
     }
 
-    return { ok: false, error: 'Provide either a position ("first", "last", or a 1-based index) or a record name to select.' };
+    return { Ok: false, Error: 'Provide either a position ("first", "last", or a 1-based index) or a record name to select.' };
 }
 
 /** @deprecated Use {@link ResolveRecordSelection}. */
@@ -199,15 +199,15 @@ export function resolveRecordSelection(recordNames: readonly string[], request: 
 function resolveRecordByPosition(recordNames: readonly string[], position: 'first' | 'last' | number): RecordSelectionResult {
     const count = recordNames.length;
     if (position === 'first') {
-        return { ok: true, index: 0 };
+        return { Ok: true, Index: 0 };
     }
     if (position === 'last') {
-        return { ok: true, index: count - 1 };
+        return { Ok: true, Index: count - 1 };
     }
     if (typeof position === 'number' && Number.isInteger(position) && position >= 1 && position <= count) {
-        return { ok: true, index: position - 1 };
+        return { Ok: true, Index: position - 1 };
     }
-    return { ok: false, error: `Position "${String(position)}" is out of range. There ${count === 1 ? 'is 1 record' : `are ${count} records`} loaded (use 1-${count}, "first", or "last").` };
+    return { Ok: false, Error: `Position "${String(position)}" is out of range. There ${count === 1 ? 'is 1 record' : `are ${count} records`} loaded (use 1-${count}, "first", or "last").` };
 }
 
 /** Resolve a record by an exact (then contains) case-insensitive display-value match. */
@@ -215,14 +215,14 @@ function resolveRecordByName(recordNames: readonly string[], name: string): Reco
     const needle = name.toLowerCase();
     const exact = recordNames.findIndex(n => n.toLowerCase() === needle);
     if (exact >= 0) {
-        return { ok: true, index: exact };
+        return { Ok: true, Index: exact };
     }
     const contains = recordNames.findIndex(n => n.toLowerCase().includes(needle));
     if (contains >= 0) {
-        return { ok: true, index: contains };
+        return { Ok: true, Index: contains };
     }
     const sample = recordNames.slice(0, 5).join(', ');
-    return { ok: false, error: `No loaded record matches "${name}". Loaded records include: ${sample}.` };
+    return { Ok: false, Error: `No loaded record matches "${name}". Loaded records include: ${sample}.` };
 }
 
 /**

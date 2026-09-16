@@ -23,34 +23,34 @@ describe('PackTypes', () => {
     describe('recordOutcome', () => {
         it('appends added outcomes to the added bucket', () => {
             const log = EmptyActionLog();
-            RecordOutcome(log, { path: 'CLAUDE.md', outcome: 'added' });
+            RecordOutcome(log, { Path: 'CLAUDE.md', Outcome: 'added' });
             expect(log.added).toEqual(['CLAUDE.md']);
             expect(log.updated).toEqual([]);
         });
 
         it('appends updated outcomes to the updated bucket', () => {
             const log = EmptyActionLog();
-            RecordOutcome(log, { path: '.claude/settings.json', outcome: 'updated' });
+            RecordOutcome(log, { Path: '.claude/settings.json', Outcome: 'updated' });
             expect(log.updated).toEqual(['.claude/settings.json']);
         });
 
         it('appends skipped outcomes to the skipped bucket', () => {
             const log = EmptyActionLog();
-            RecordOutcome(log, { path: '.claude/commands/commit.md', outcome: 'skipped' });
+            RecordOutcome(log, { Path: '.claude/commands/commit.md', Outcome: 'skipped' });
             expect(log.skipped).toEqual(['.claude/commands/commit.md']);
         });
 
         it('appends error outcomes to the errors bucket', () => {
             const log = EmptyActionLog();
-            RecordOutcome(log, { path: '.claude/mj/core.md', outcome: 'error' });
+            RecordOutcome(log, { Path: '.claude/mj/core.md', Outcome: 'error' });
             expect(log.errors).toEqual(['.claude/mj/core.md']);
         });
 
         it('formats reason as a parenthetical suffix', () => {
             const log = EmptyActionLog();
             const result: FileMergeResult = {
-                path: '.claude/commands/commit.md',
-                outcome: 'skipped',
+                Path: '.claude/commands/commit.md',
+                Outcome: 'skipped',
                 reason: 'user-modified',
             };
             RecordOutcome(log, result);
@@ -59,16 +59,16 @@ describe('PackTypes', () => {
 
         it('omits the parenthetical when reason is absent', () => {
             const log = EmptyActionLog();
-            RecordOutcome(log, { path: 'CLAUDE.md', outcome: 'added' });
+            RecordOutcome(log, { Path: 'CLAUDE.md', Outcome: 'added' });
             expect(log.added).toEqual(['CLAUDE.md']);
         });
 
         it('handles multiple entries across buckets in order', () => {
             const log = EmptyActionLog();
-            RecordOutcome(log, { path: 'a', outcome: 'added' });
-            RecordOutcome(log, { path: 'b', outcome: 'updated' });
-            RecordOutcome(log, { path: 'c', outcome: 'added' });
-            RecordOutcome(log, { path: 'd', outcome: 'skipped', reason: 'identical' });
+            RecordOutcome(log, { Path: 'a', Outcome: 'added' });
+            RecordOutcome(log, { Path: 'b', Outcome: 'updated' });
+            RecordOutcome(log, { Path: 'c', Outcome: 'added' });
+            RecordOutcome(log, { Path: 'd', Outcome: 'skipped', reason: 'identical' });
             expect(log).toEqual({
                 added: ['a', 'c'],
                 updated: ['b'],

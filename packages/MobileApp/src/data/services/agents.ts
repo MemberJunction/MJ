@@ -85,17 +85,17 @@ export async function resolveTargetAgent(
 
 /** Progress update emitted while an agent run is in flight (via the push channel). */
 export type SendProgress = {
-    currentStep: string;
+    CurrentStep: string;
     percentage?: number;
-    message: string;
+    Message: string;
 };
 
 /** Outcome of {@link sendMessage}: the saved user message id, the placeholder AI reply id, and whether completion must be polled. */
 export type SendResult = {
-    success: boolean;
+    Success: boolean;
     errorMessage?: string;
     /** The user message we created (already saved). */
-    userMessageId: string;
+    UserMessageId: string;
     /** The in-progress AI response detail we created (server fills it). */
     aiMessageId?: string;
     /** True when the run was accepted but completion will arrive async (poll/reload). */
@@ -136,9 +136,9 @@ export async function SendMessage(args: {
     const saved = await detail.Save();
     if (!saved) {
         return {
-            success: false,
+            Success: false,
             errorMessage: detail.LatestResult?.CompleteMessage ?? 'Failed to save message.',
-            userMessageId: '',
+            UserMessageId: '',
         };
     }
 
@@ -154,7 +154,7 @@ export async function SendMessage(args: {
     if (!targetAgentId) {
         const resolved = sage ?? (await ResolveTargetAgent(text, currentUser));
         if (!resolved) {
-            return { success: false, errorMessage: 'No active agents available to respond.', userMessageId: detail.ID };
+            return { Success: false, errorMessage: 'No active agents available to respond.', UserMessageId: detail.ID };
         }
         targetAgentId = resolved.id;
     }
@@ -182,7 +182,7 @@ export async function SendMessage(args: {
     //    to pick up the finalized response.
     const provider = GraphQLDataProvider.Instance;
     if (!provider) {
-        return { success: false, errorMessage: 'GraphQL provider not initialized.', userMessageId: detail.ID, aiMessageId: aiDetail.ID };
+        return { Success: false, errorMessage: 'GraphQL provider not initialized.', UserMessageId: detail.ID, aiMessageId: aiDetail.ID };
     }
 
     try {
@@ -206,18 +206,18 @@ export async function SendMessage(args: {
                 })),
             },
             onProgress: onProgress
-                ? (p) => onProgress({ currentStep: p.currentStep, percentage: p.percentage, message: p.message })
+                ? (p) => onProgress({ CurrentStep: p.currentStep, percentage: p.percentage, Message: p.message })
                 : undefined,
         });
         // result.success can be false purely because the push WebSocket is unavailable
         // on this client — the run still executes server-side and fills the AI detail.
         // Report "submitted" and let the caller poll the AI detail for the real outcome.
-        return { success: true, userMessageId: detail.ID, aiMessageId: aiDetail.ID, pendingViaPoll: !result.success };
+        return { Success: true, UserMessageId: detail.ID, aiMessageId: aiDetail.ID, pendingViaPoll: !result.success };
     } catch (e) {
         // WS wait failed (push subscription unavailable). The run was accepted and
         // completes server-side; report submitted and let the caller poll for the reply.
         console.warn('[sendMessage] agent run WS wait did not complete (will poll):', e instanceof Error ? e.message : String(e));
-        return { success: true, userMessageId: detail.ID, aiMessageId: aiDetail.ID, pendingViaPoll: true };
+        return { Success: true, UserMessageId: detail.ID, aiMessageId: aiDetail.ID, pendingViaPoll: true };
     }
 }
 

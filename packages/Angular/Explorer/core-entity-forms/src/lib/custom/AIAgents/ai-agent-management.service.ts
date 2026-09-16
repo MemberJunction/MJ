@@ -92,7 +92,7 @@ export class AIAgentManagementService {
     viewContainerRef?: ViewContainerRef;
   }): Observable<PromptSelectorResult | null> {
     const selectorConfig: PromptSelectorConfig = {
-      title: config.title || 'Select Prompts',
+      Title: config.title || 'Select Prompts',
       multiSelect: config.multiSelect ?? true,
       selectedPromptIds: config.selectedPromptIds || [],
       showCreateNew: config.showCreateNew ?? true,
@@ -101,7 +101,7 @@ export class AIAgentManagementService {
     };
 
     const dialogRef = this.dialogService.open({
-      title: selectorConfig.title,
+      title: selectorConfig.Title,
       content: PromptSelectorDialogComponent,
       width: 900,
       height: 600,
@@ -149,8 +149,8 @@ export class AIAgentManagementService {
         extraFilter: undefined, // Show all active prompts
         viewContainerRef: config.viewContainerRef
       }).subscribe(result => {
-        if (result && result.selectedPrompts.length > 0) {
-          observer.next(result.selectedPrompts[0]);
+        if (result && result.SelectedPrompts.length > 0) {
+          observer.next(result.SelectedPrompts[0]);
         } else {
           observer.next(null);
         }
@@ -184,15 +184,15 @@ export class AIAgentManagementService {
     viewContainerRef?: ViewContainerRef;
   }): Observable<SubAgentSelectorResult | null> {
     const selectorConfig: SubAgentSelectorConfig = {
-      title: config.title || 'Add Sub-Agents',
-      multiSelect: config.multiSelect ?? true,
-      selectedAgentIds: config.selectedAgentIds || [],
-      showCreateNew: config.showCreateNew ?? true,
-      parentAgentId: config.parentAgentId
+      Title: config.title || 'Add Sub-Agents',
+      MultiSelect: config.multiSelect ?? true,
+      SelectedAgentIds: config.selectedAgentIds || [],
+      ShowCreateNew: config.showCreateNew ?? true,
+      ParentAgentId: config.parentAgentId
     };
 
     const dialogRef = this.dialogService.open({
-      title: selectorConfig.title,
+      title: selectorConfig.Title,
       content: SubAgentSelectorDialogComponent,
       width: 1000,
       height: 700,
@@ -367,7 +367,7 @@ export class AIAgentManagementService {
       title: config.title || 'Create New Sub-Agent',
       initialName: config.initialName,
       initialTypeID: config.initialTypeID,
-      parentAgentId: config.parentAgentId,
+      ParentAgentId: config.parentAgentId,
       parentAgentName: config.parentAgentName
     };
 

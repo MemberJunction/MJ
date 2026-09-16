@@ -34,7 +34,7 @@ async function render(opts: RenderOpts = {}): Promise<ComponentFixture<TemplateS
     imports: [TemplateSelectorDialogComponent],
   });
   const fixture = TestBed.createComponent(TemplateSelectorDialogComponent);
-  fixture.componentInstance.config = opts.config ?? { title: 'Pick a Template' };
+  fixture.componentInstance.config = opts.config ?? { Title: 'Pick a Template' };
   // loadData() issues two independent RunView calls (templates, then categories). The fake provider
   // returns the same canned set for each; only the template rows drive the visible list assertions.
   fixture.componentRef.setInput('Provider', createFakeProvider({ runViewResults: opts.rows ?? ROWS }));
@@ -91,7 +91,7 @@ describe('TemplateSelectorDialogComponent (DOM)', () => {
     fixture.detectChanges(false);
     buttonByText(fixture, 'Select').click();
     expect(closed.length).toBe(1);
-    expect((results[0] as { selectedTemplates: Array<{ ID: string }> }).selectedTemplates[0].ID).toBe('t2');
+    expect((results[0] as { SelectedTemplates: Array<{ ID: string }> }).SelectedTemplates[0].ID).toBe('t2');
   });
 
   it('emits DialogClose and a null result on Cancel', async () => {
@@ -105,12 +105,12 @@ describe('TemplateSelectorDialogComponent (DOM)', () => {
   });
 
   it('renders Create New when config.showCreateNew is true', async () => {
-    const shown = await render({ config: { title: 'Pick', showCreateNew: true } });
+    const shown = await render({ config: { Title: 'Pick', showCreateNew: true } });
     expect(buttons(shown).some((b) => b.textContent?.includes('Create New'))).toBe(true);
   });
 
   it('hides Create New when config.showCreateNew is false', async () => {
-    const hidden = await render({ config: { title: 'Pick', showCreateNew: false } });
+    const hidden = await render({ config: { Title: 'Pick', showCreateNew: false } });
     expect(buttons(hidden).some((b) => b.textContent?.includes('Create New'))).toBe(false);
   });
 });

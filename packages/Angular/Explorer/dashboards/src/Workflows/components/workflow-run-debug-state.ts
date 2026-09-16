@@ -19,8 +19,8 @@ export type WorkflowRunInvocation = {
 };
 
 export type WorkflowRunParentBag = {
-    debug: WorkflowRunDebugState;
-    invocation: WorkflowRunInvocation;
+    Debug: WorkflowRunDebugState;
+    Invocation: WorkflowRunInvocation;
 };
 
 export type WorkflowStall = {
@@ -48,14 +48,14 @@ export function EmptyDebugState(): WorkflowRunDebugState {
 }
 
 export function ParseWorkflowRunParentBag(raw: string | null | undefined): WorkflowRunParentBag {
-    const empty: WorkflowRunParentBag = { debug: EmptyDebugState(), invocation: {} };
+    const empty: WorkflowRunParentBag = { Debug: EmptyDebugState(), Invocation: {} };
     if (!raw) return empty;
     try {
         const parsed = JSON.parse(raw) as Record<string, unknown>;
         if (!parsed || typeof parsed !== 'object') return empty;
         return {
-            debug: readDebug(parsed['debug']),
-            invocation: readInvocation(parsed['invocation']),
+            Debug: readDebug(parsed['debug']),
+            Invocation: readInvocation(parsed['invocation']),
         };
     } catch {
         return empty;

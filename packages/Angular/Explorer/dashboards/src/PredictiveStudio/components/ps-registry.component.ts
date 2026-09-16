@@ -135,8 +135,8 @@ interface PendingPromotion {
                 </div>
                 @if (secondaryMetrics.length > 0) {
                   <div class="stat-bar">
-                    @for (s of secondaryMetrics; track s.key) {
-                      <div class="b"><span class="ps-muted ps-small">{{ s.label }}</span><strong>{{ s.value }}</strong></div>
+                    @for (s of secondaryMetrics; track s.Key) {
+                      <div class="b"><span class="ps-muted ps-small">{{ s.Label }}</span><strong>{{ s.Value }}</strong></div>
                     }
                   </div>
                 } @else {

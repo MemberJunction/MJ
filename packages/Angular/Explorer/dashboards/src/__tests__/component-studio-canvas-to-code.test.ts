@@ -119,10 +119,10 @@ describe('parseCanvasFromCode (round-trip)', () => {
         const code = GenerateCodeFromCanvas(original, schema(), 'CustomerForm');
         const result = ParseCanvasFromCode(code, schema());
 
-        expect(result.canvas).not.toBeNull();
-        expect(result.canvas!.sections).toHaveLength(1);
-        expect(result.canvas!.sections[0].title).toBe('Basics');
-        const fieldNames = result.canvas!.sections[0].elements
+        expect(result.Canvas).not.toBeNull();
+        expect(result.Canvas!.sections).toHaveLength(1);
+        expect(result.Canvas!.sections[0].title).toBe('Basics');
+        const fieldNames = result.Canvas!.sections[0].elements
             .filter(e => e.type === 'field')
             .map(e => e.fieldName);
         expect(fieldNames).toEqual(['Name', 'Count']);
@@ -131,14 +131,14 @@ describe('parseCanvasFromCode (round-trip)', () => {
     it('returns null canvas when there are no field references', () => {
         const code = 'function X() { return <div>Hi</div>; }';
         const result = ParseCanvasFromCode(code, schema());
-        expect(result.canvas).toBeNull();
-        expect(result.hasUnknownConstructs).toBe(true);
+        expect(result.Canvas).toBeNull();
+        expect(result.HasUnknownConstructs).toBe(true);
     });
 
     it('flags advanced constructs that the canvas cannot represent', () => {
         const code = 'function X() { const x = useMemo(() => value("Name"), []); return <div>{x}</div>; }';
         const result = ParseCanvasFromCode(code, schema());
         // useMemo is in the advanced-construct detector.
-        expect(result.hasUnknownConstructs).toBe(true);
+        expect(result.HasUnknownConstructs).toBe(true);
     });
 });

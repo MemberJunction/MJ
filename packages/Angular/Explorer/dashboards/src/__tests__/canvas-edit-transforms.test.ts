@@ -349,7 +349,7 @@ describe('buildCanvasStateSummary', () => {
         expect(s.SectionCount).toBe(2);
         expect(s.ElementCount).toBe(3);
         expect(s.FieldCount).toBe(3);
-        expect(s.Sections.map(x => x.fieldCount)).toEqual([2, 1]);
+        expect(s.Sections.map(x => x.FieldCount)).toEqual([2, 1]);
         expect(s.PlacedFieldNames).toEqual(['Name', 'Email', 'Notes']);
     });
     it('computes AvailableFieldNames as schema minus placed (ci)', () => {
@@ -360,9 +360,9 @@ describe('buildCanvasStateSummary', () => {
     });
     it('resolves the selected element and section by id', () => {
         const s = BuildCanvasStateSummary(canvas(), [], 'e2', 's2')!;
-        expect(s.SelectedElement?.label).toBe('Email');
-        expect(s.SelectedElement?.sectionId).toBe('s1');
-        expect(s.SelectedSection?.title).toBe('Details');
+        expect(s.SelectedElement?.Label).toBe('Email');
+        expect(s.SelectedElement?.SectionId).toBe('s1');
+        expect(s.SelectedSection?.Title).toBe('Details');
     });
     it('null selections resolve to null', () => {
         const s = BuildCanvasStateSummary(canvas(), [], null, null)!;

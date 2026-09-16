@@ -452,11 +452,11 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
                     const v = ValidateStringParam(params['document'], 'document');
                     if (!v.ok) return v.result;
                     const resolved = ResolveEntityDoc(v.value, this.getEntityDocCandidates());
-                    if (!resolved.ok) return { Success: false, ErrorMessage: resolved.error };
-                    this.SelectedEntityDocumentID = resolved.value.ID;
+                    if (!resolved.Ok) return { Success: false, ErrorMessage: resolved.Error };
+                    this.SelectedEntityDocumentID = resolved.Value.ID;
                     this.emitAgentContext();
                     this.cdr.detectChanges();
-                    return { Success: true, Data: { SelectedEntityDocID: resolved.value.ID, SelectedEntityDocName: resolved.value.Name } };
+                    return { Success: true, Data: { SelectedEntityDocID: resolved.Value.ID, SelectedEntityDocName: resolved.Value.Name } };
                 },
             },
             {
@@ -486,9 +486,9 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
                     const v = ValidateStringParam(params['entityName'], 'entityName');
                     if (!v.ok) return v.result;
                     const resolved = ResolveEntityFilter(v.value, this.EntityNames);
-                    if (!resolved.ok) return { Success: false, ErrorMessage: resolved.error };
-                    this.FilterByEntity(resolved.value);
-                    return { Success: true, Data: { EntityFilter: resolved.value || 'All', PendingCount: this.PendingGroups.length } };
+                    if (!resolved.Ok) return { Success: false, ErrorMessage: resolved.Error };
+                    this.FilterByEntity(resolved.Value);
+                    return { Success: true, Data: { EntityFilter: resolved.Value || 'All', PendingCount: this.PendingGroups.length } };
                 },
             },
             {

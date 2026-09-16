@@ -22,11 +22,11 @@ User notes here.
 `;
         const block = ParseManagedBlock(content);
         expect(block).not.toBeNull();
-        expect(block!.before).toBe('Hello\n\n');
-        expect(block!.body).toContain('managed body line 1');
-        expect(block!.body).toContain('managed body line 2');
-        expect(block!.after).toContain('User notes here.');
-        expect(block!.attrs).toEqual({ version: '5.1.0', 'mj-major': '5' });
+        expect(block!.Before).toBe('Hello\n\n');
+        expect(block!.Body).toContain('managed body line 1');
+        expect(block!.Body).toContain('managed body line 2');
+        expect(block!.After).toContain('User notes here.');
+        expect(block!.Attrs).toEqual({ version: '5.1.0', 'mj-major': '5' });
     });
 
     it('returns null when no markers are present', () => {
@@ -57,34 +57,34 @@ User notes here.
     it('parses attrs-less START marker', () => {
         const content = `<!-- MJ-MANAGED:CLAUDE-PACK START -->\nbody\n${END}\n`;
         const block = ParseManagedBlock(content);
-        expect(block!.attrs).toEqual({});
+        expect(block!.Attrs).toEqual({});
     });
 
     it('tolerates extra whitespace inside the marker', () => {
         const content = `<!--   MJ-MANAGED:CLAUDE-PACK   START   v=1.0  -->\nbody\n<!--  MJ-MANAGED:CLAUDE-PACK   END   -->\n`;
         const block = ParseManagedBlock(content);
         expect(block).not.toBeNull();
-        expect(block!.attrs).toEqual({ v: '1.0' });
+        expect(block!.Attrs).toEqual({ v: '1.0' });
     });
 
     it('handles markers at the very start of the file (empty before)', () => {
         const content = `${START}\nbody\n${END}\nafter\n`;
         const block = ParseManagedBlock(content);
-        expect(block!.before).toBe('');
-        expect(block!.after).toBe('\nafter\n');
+        expect(block!.Before).toBe('');
+        expect(block!.After).toBe('\nafter\n');
     });
 
     it('handles markers at the very end of the file (empty after)', () => {
         const content = `before\n${START}\nbody\n${END}`;
         const block = ParseManagedBlock(content);
-        expect(block!.before).toBe('before\n');
-        expect(block!.after).toBe('');
+        expect(block!.Before).toBe('before\n');
+        expect(block!.After).toBe('');
     });
 
     it('skips malformed attribute pairs silently', () => {
         const content = `<!-- MJ-MANAGED:CLAUDE-PACK START version=5.1.0 garbage =bad good=ok -->\nbody\n${END}`;
         const block = ParseManagedBlock(content);
-        expect(block!.attrs).toEqual({ version: '5.1.0', good: 'ok' });
+        expect(block!.Attrs).toEqual({ version: '5.1.0', good: 'ok' });
     });
 });
 
@@ -147,7 +147,7 @@ describe('wrapWithManagedBlock', () => {
         });
         const parsed = ParseManagedBlock(wrapped);
         expect(parsed).not.toBeNull();
-        expect(parsed!.body).toContain('block contents');
-        expect(parsed!.attrs).toEqual({ version: '5.1.0', 'mj-major': '5' });
+        expect(parsed!.Body).toContain('block contents');
+        expect(parsed!.Attrs).toEqual({ version: '5.1.0', 'mj-major': '5' });
     });
 });

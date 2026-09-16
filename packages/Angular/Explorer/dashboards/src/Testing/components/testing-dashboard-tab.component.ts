@@ -781,50 +781,50 @@ export class TestingDashboardTabComponent implements OnInit, OnDestroy {
   }
 
   private buildKpiCards(kpis: TestingDashboardKPIs): KPICardData[] {
-    const trendDir = kpis.passRateTrend > 0
+    const trendDir = kpis.PassRateTrend > 0
       ? 'up' as const
-      : kpis.passRateTrend < 0
+      : kpis.PassRateTrend < 0
         ? 'down' as const
         : 'stable' as const;
 
     return [
       {
         title: 'Active Tests',
-        value: kpis.totalTestsActive,
+        value: kpis.TotalTestsActive,
         icon: 'fa-vial',
         color: 'primary',
-        subtitle: `${kpis.totalTestRuns} runs this period`
+        subtitle: `${kpis.TotalTestRuns} runs this period`
       },
       {
         title: 'Pass Rate',
-        value: `${kpis.passRateThisMonth.toFixed(1)}%`,
+        value: `${kpis.PassRateThisMonth.toFixed(1)}%`,
         icon: 'fa-check-circle',
-        color: kpis.passRateThisMonth >= 90 ? 'success' : kpis.passRateThisMonth >= 75 ? 'warning' : 'danger',
-        trend: kpis.passRateTrend !== 0 ? {
+        color: kpis.PassRateThisMonth >= 90 ? 'success' : kpis.PassRateThisMonth >= 75 ? 'warning' : 'danger',
+        trend: kpis.PassRateTrend !== 0 ? {
           direction: trendDir,
-          percentage: Math.abs(Math.round(kpis.passRateTrend * 10) / 10),
+          percentage: Math.abs(Math.round(kpis.PassRateTrend * 10) / 10),
           period: 'vs previous period'
         } : undefined
       },
       {
         title: 'Total Cost',
-        value: `$${kpis.totalCostThisMonth.toFixed(2)}`,
+        value: `$${kpis.TotalCostThisMonth.toFixed(2)}`,
         icon: 'fa-dollar-sign',
         color: 'warning',
         subtitle: 'This period'
       },
       {
         title: 'Avg Duration',
-        value: this.FormatDuration(kpis.averageDuration),
+        value: this.FormatDuration(kpis.AverageDuration),
         icon: 'fa-clock',
         color: 'info',
         subtitle: 'Per test run'
       },
       {
         title: 'Pending Review',
-        value: kpis.testsPendingReview,
+        value: kpis.TestsPendingReview,
         icon: 'fa-clipboard-check',
-        color: kpis.testsPendingReview > 10 ? 'warning' : 'success',
+        color: kpis.TestsPendingReview > 10 ? 'warning' : 'success',
         subtitle: 'Tests need feedback'
       }
     ];

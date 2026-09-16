@@ -63,7 +63,7 @@ export function MergeSettings(opts: MergeSettingsOptions): MergeSettingsResult {
     }
 
     const result = deepClone(opts.Existing);
-    for (const dottedPath of packMeta.keys) {
+    for (const dottedPath of packMeta.Keys) {
         const packValue = GetAtPath(opts.Pack, dottedPath);
         if (packValue === undefined) continue; // pack declares the key but didn't ship a value — skip
         const existingValue = GetAtPath(result, dottedPath);
@@ -93,9 +93,9 @@ export function ReadManagedMeta(settings: Record<string, unknown>): ManagedSetti
     if (!Array.isArray(obj.keys)) return null;
     if (!obj.keys.every((k) => typeof k === 'string')) return null;
     return {
-        version: obj.version,
+        Version: obj.version,
         mjMajor: typeof obj.mjMajor === 'string' ? obj.mjMajor : undefined,
-        keys: obj.keys as string[],
+        Keys: obj.keys as string[],
     };
 }
 

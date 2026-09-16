@@ -13,10 +13,10 @@ import { loadArtifact, loadConversationArtifacts, type LoadedArtifact, type Arti
 
 /** Returned state shape for {@link useConversations} (the list screen). */
 export type UseConversationsState = {
-    conversations: ConversationListItem[] | null;
-    loading: boolean;
-    error: Error | null;
-    refresh: () => Promise<void>;
+    Conversations: ConversationListItem[] | null;
+    Loading: boolean;
+    Error: Error | null;
+    Refresh: () => Promise<void>;
 };
 
 /**
@@ -56,7 +56,7 @@ export function UseConversations(): UseConversationsState {
 
     useEffect(() => { void refresh(); }, [refresh]);
 
-    return { conversations, loading, error, refresh };
+    return { Conversations: conversations, Loading: loading, Error: error, Refresh: refresh };
 }
 
 /** @deprecated Use {@link UseConversations}. */
@@ -66,10 +66,10 @@ export function useConversations(): UseConversationsState {
 
 /** Returned state shape for {@link useConversation} (a single thread). */
 export type UseConversationState = {
-    data: ConversationDetailLoad | null;
-    loading: boolean;
-    error: Error | null;
-    refresh: () => Promise<void>;
+    Data: ConversationDetailLoad | null;
+    Loading: boolean;
+    Error: Error | null;
+    Refresh: () => Promise<void>;
 };
 
 /**
@@ -104,7 +104,7 @@ export function UseConversation(conversationId: string | undefined): UseConversa
 
     useEffect(() => { void refresh(); }, [refresh]);
 
-    return { data, loading, error, refresh };
+    return { Data: data, Loading: loading, Error: error, Refresh: refresh };
 }
 
 /** @deprecated Use {@link UseConversation}. */

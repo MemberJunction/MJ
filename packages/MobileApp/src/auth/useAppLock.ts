@@ -32,9 +32,9 @@ const UNLOCK_REASON = 'Unlock MJ Mobile';
 /** The value returned by {@link useAppLock}. */
 export type AppLock = {
     /** Current lock lifecycle state. */
-    state: AppLockState;
+    State: AppLockState;
     /** Re-trigger the biometric prompt (bound to the lock screen's Unlock button). */
-    unlock: () => Promise<void>;
+    Unlock: () => Promise<void>;
 };
 
 /**
@@ -90,7 +90,7 @@ export function UseAppLock(): AppLock {
         return () => sub.remove();
     }, [lockEnabled, unlock]);
 
-    return { state, unlock };
+    return { State: state, Unlock: unlock };
 }
 
 /** @deprecated Use {@link UseAppLock}. */

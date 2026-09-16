@@ -151,23 +151,23 @@ export function addMinutes(date: Date, minutes: number): Date {
  *   - `B202602151200__v5.0__Baseline.sql`                       (baseline marker)
  */
 export interface ParsedMigrationFilename {
-  kind: 'V' | 'B';
-  timestamp: string;     // 12-digit YYYYMMDDHHMM
-  major: number;
-  minor: number;
-  majorMinor: string;    // e.g. "5.32"
-  filename: string;
+  Kind: 'V' | 'B';
+  Timestamp: string;     // 12-digit YYYYMMDDHHMM
+  Major: number;
+  Minor: number;
+  MajorMinor: string;    // e.g. "5.32"
+  Filename: string;
 }
 export function ParseMigrationFilename(filename: string): ParsedMigrationFilename | null {
   const match = /^([VB])(\d{12})__v(\d+)\.(\d+)/.exec(filename);
   if (!match) return null;
   return {
-    kind: match[1] as 'V' | 'B',
-    timestamp: match[2],
-    major: Number(match[3]),
-    minor: Number(match[4]),
-    majorMinor: `${match[3]}.${match[4]}`,
-    filename,
+    Kind: match[1] as 'V' | 'B',
+    Timestamp: match[2],
+    Major: Number(match[3]),
+    Minor: Number(match[4]),
+    MajorMinor: `${match[3]}.${match[4]}`,
+    Filename: filename,
   };
 }
 
@@ -192,8 +192,8 @@ export function FindLatestVersionedMigration(sourceDir: string): ParsedMigration
   for (const name of entries) {
     if (!name.toLowerCase().endsWith('.sql')) continue;
     const parsed = ParseMigrationFilename(name);
-    if (!parsed || parsed.kind !== 'V') continue;
-    if (!best || parsed.timestamp > best.timestamp) best = parsed;
+    if (!parsed || parsed.Kind !== 'V') continue;
+    if (!best || parsed.Timestamp > best.Timestamp) best = parsed;
   }
   return best;
 }
@@ -213,8 +213,8 @@ export function FindLatestBaselineMigration(sourceDir: string): ParsedMigrationF
   for (const name of entries) {
     if (!name.toLowerCase().endsWith('.sql')) continue;
     const parsed = ParseMigrationFilename(name);
-    if (!parsed || parsed.kind !== 'B') continue;
-    if (!best || parsed.timestamp > best.timestamp) best = parsed;
+    if (!parsed || parsed.Kind !== 'B') continue;
+    if (!best || parsed.Timestamp > best.Timestamp) best = parsed;
   }
   return best;
 }

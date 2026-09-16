@@ -101,8 +101,8 @@ export interface TestRunNameCandidate {
 
 /** Outcome of {@link resolveTestRunByReference}: a matched run, or an error. */
 export type TestRunResolution<T extends TestRunNameCandidate> =
-    | { ok: true; run: T }
-    | { ok: false; error: string };
+    | { Ok: true; Run: T }
+    | { Ok: false; Error: string };
 
 /**
  * Resolve an agent-supplied run reference (either an exact run ID or a run name)
@@ -125,25 +125,25 @@ export function ResolveTestRunByReference<T extends TestRunNameCandidate>(
 ): TestRunResolution<T> {
     const needle = reference.trim().toLowerCase();
     if (!needle) {
-        return { ok: false, error: 'Provide a test-run ID or a test name to select.' };
+        return { Ok: false, Error: 'Provide a test-run ID or a test name to select.' };
     }
     if (candidates.length === 0) {
-        return { ok: false, error: 'No test runs are currently loaded in the Runs view to select from.' };
+        return { Ok: false, Error: 'No test runs are currently loaded in the Runs view to select from.' };
     }
     const byId = candidates.find(c => c.id.toLowerCase() === needle);
     if (byId) {
-        return { ok: true, run: byId };
+        return { Ok: true, Run: byId };
     }
     const byExactName = candidates.find(c => c.testName.toLowerCase() === needle);
     if (byExactName) {
-        return { ok: true, run: byExactName };
+        return { Ok: true, Run: byExactName };
     }
     const byContains = candidates.find(c => c.testName.toLowerCase().includes(needle));
     if (byContains) {
-        return { ok: true, run: byContains };
+        return { Ok: true, Run: byContains };
     }
     const sample = candidates.slice(0, 5).map(c => c.testName).join(', ');
-    return { ok: false, error: `No loaded test run matches "${reference}". Loaded runs include: ${sample}.` };
+    return { Ok: false, Error: `No loaded test run matches "${reference}". Loaded runs include: ${sample}.` };
 }
 
 /** @deprecated Use {@link ResolveTestRunByReference}. */
@@ -156,8 +156,8 @@ export function resolveTestRunByReference<T extends TestRunNameCandidate>(
 
 /** One analytics breakdown row published to the agent (name + a metric). */
 export interface TestingBreakdownEntry {
-    name: string;
-    value: number;
+    Name: string;
+    Value: number;
 }
 
 /**

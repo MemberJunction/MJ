@@ -105,8 +105,8 @@ export default class TranslateSQL extends Command {
 
         if (result.classification === 'rule-based') {
             const translated = RuleBasedTranslate(sql, from, to);
-            this.log(`\nRule-based translation (${translated.appliedRules.join(', ')}):`);
-            this.log(translated.translatedSQL);
+            this.log(`\nRule-based translation (${translated.AppliedRules.join(', ')}):`);
+            this.log(translated.TranslatedSQL);
             return;
         }
 
@@ -155,12 +155,12 @@ export default class TranslateSQL extends Command {
 
             if (classResult.classification === 'standard') {
                 reportItems.push({
-                    source: item.label,
-                    originalSQL: item.sql,
-                    classification: 'standard',
-                    translatedSQL: null,
-                    method: 'skipped',
-                    markers: classResult.markers,
+                    Source: item.label,
+                    OriginalSQL: item.sql,
+                    Classification: 'standard',
+                    TranslatedSQL: null,
+                    Method: 'skipped',
+                    Markers: classResult.markers,
                 });
                 continue;
             }
@@ -168,33 +168,33 @@ export default class TranslateSQL extends Command {
             if (classResult.classification === 'rule-based') {
                 const translated = RuleBasedTranslate(item.sql, from, to);
                 reportItems.push({
-                    source: item.label,
-                    originalSQL: item.sql,
-                    classification: 'rule-based',
-                    translatedSQL: translated.translatedSQL,
-                    method: 'rule-based',
-                    markers: classResult.markers,
-                    note: `Rules: ${translated.appliedRules.join(', ')}`,
+                    Source: item.label,
+                    OriginalSQL: item.sql,
+                    Classification: 'rule-based',
+                    TranslatedSQL: translated.TranslatedSQL,
+                    Method: 'rule-based',
+                    Markers: classResult.markers,
+                    note: `Rules: ${translated.AppliedRules.join(', ')}`,
                 });
                 continue;
             }
 
             // LLM-needed — flag for review
             reportItems.push({
-                source: item.label,
-                originalSQL: item.sql,
-                classification: 'llm-needed',
-                translatedSQL: null,
-                method: 'flagged',
-                markers: classResult.markers,
+                Source: item.label,
+                OriginalSQL: item.sql,
+                Classification: 'llm-needed',
+                TranslatedSQL: null,
+                Method: 'flagged',
+                Markers: classResult.markers,
                 note: 'Requires LLM translation — configure AI provider and re-run.',
             });
         }
 
         // Print summary
-        const standard = reportItems.filter(i => i.classification === 'standard').length;
-        const ruleBased = reportItems.filter(i => i.method === 'rule-based').length;
-        const flagged = reportItems.filter(i => i.method === 'flagged').length;
+        const standard = reportItems.filter(i => i.Classification === 'standard').length;
+        const ruleBased = reportItems.filter(i => i.Method === 'rule-based').length;
+        const flagged = reportItems.filter(i => i.Method === 'flagged').length;
 
         this.log(`\nResults:`);
         this.log(`  Total fragments: ${reportItems.length}`);

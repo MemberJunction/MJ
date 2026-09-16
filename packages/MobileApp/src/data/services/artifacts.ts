@@ -21,16 +21,16 @@ export type ArtifactRenderKind = 'json-table' | 'json' | 'markdown' | 'code' | '
 
 /** A fully-loaded artifact: metadata, latest-version content, and any parsed payload the chosen renderer needs. */
 export type LoadedArtifact = {
-    id: string;
-    name: string;
-    description: string | null;
-    typeName: string;
-    version: number;
-    versionCount: number;
+    Id: string;
+    Name: string;
+    Description: string | null;
+    TypeName: string;
+    Version: number;
+    VersionCount: number;
     /** Raw version content. */
-    content: string;
+    Content: string;
     /** How the UI should render `content`. */
-    kind: ArtifactRenderKind;
+    Kind: ArtifactRenderKind;
     /** When kind is json-table, parsed rows. */
     rows?: Record<string, unknown>[];
     /** When kind is json (object), parsed object. */
@@ -146,14 +146,14 @@ export async function LoadArtifact(artifactId: string, contextUser?: UserInfo): 
     const { kind, rows, json, chart, spec, language } = classify(artifact.ArtifactType ?? '', content);
 
     return {
-        id: artifact.ID,
-        name: artifact.Name,
-        description: artifact.Description,
-        typeName: artifact.ArtifactType ?? 'Artifact',
-        version: latest?.Version ?? 1,
-        versionCount: versions.length,
-        content,
-        kind,
+        Id: artifact.ID,
+        Name: artifact.Name,
+        Description: artifact.Description,
+        TypeName: artifact.ArtifactType ?? 'Artifact',
+        Version: latest?.Version ?? 1,
+        VersionCount: versions.length,
+        Content: content,
+        Kind: kind,
         rows,
         json,
         chart,
@@ -176,18 +176,18 @@ export type ArtifactTypeCategory = 'table' | 'chart' | 'document';
 
 /** Lightweight artifact summary for the conversation artifact dock. */
 export type ArtifactSummary = {
-    id: string;
-    name: string;
-    description: string | null;
-    typeName: string;
+    Id: string;
+    Name: string;
+    Description: string | null;
+    TypeName: string;
     /** Bucket for the Tables / Charts / Documents filter chips. */
-    category: ArtifactTypeCategory;
+    Category: ArtifactTypeCategory;
     /** Short preview snippet (from description, else the content head). */
-    preview: string;
+    Preview: string;
     /** Attributed agent id (the agent whose message produced the version), if known. */
-    agentId: string | null;
+    AgentId: string | null;
     /** Attributed agent display name, if known. */
-    agentName: string | null;
+    AgentName: string | null;
 };
 
 /** Bucket an artifact into a dock category using its type + latest content. */
@@ -251,14 +251,14 @@ export async function LoadConversationArtifacts(conversationId: string, contextU
         const agentId = agentByArtifact.get(artifact.ID) ?? null;
         const typeName = artifact.ArtifactType ?? 'Artifact';
         return {
-            id: artifact.ID,
-            name: artifact.Name,
-            description: artifact.Description,
-            typeName,
-            category: categorize(typeName, content),
-            preview: previewOf(artifact.Description, content),
-            agentId,
-            agentName: agentId ? (agentNameById.get(agentId) ?? null) : null,
+            Id: artifact.ID,
+            Name: artifact.Name,
+            Description: artifact.Description,
+            TypeName: typeName,
+            Category: categorize(typeName, content),
+            Preview: previewOf(artifact.Description, content),
+            AgentId: agentId,
+            AgentName: agentId ? (agentNameById.get(agentId) ?? null) : null,
         } satisfies ArtifactSummary;
     });
 }

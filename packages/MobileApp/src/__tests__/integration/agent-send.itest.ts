@@ -34,8 +34,8 @@ describe.skip('integration (slow, opt-in): agent send', () => {
             conversationId: conv!.id,
             text: '@sage say hello in one short sentence.',
         });
-        expect(send.success).toBe(true);
-        expect(send.userMessageId).toBeTruthy();
+        expect(send.Success).toBe(true);
+        expect(send.UserMessageId).toBeTruthy();
         expect(send.aiMessageId).toBeTruthy();
 
         // Poll the AI detail until it finalizes (Complete/Error) or we time out.

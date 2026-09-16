@@ -24,19 +24,19 @@ describe('buildDistribution — numeric (neutral terciles)', () => {
   it('returns three neutral bands with no moral direction', () => {
     const values = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
     const d = BuildDistribution(values, true);
-    expect(d.kind).toBe('numeric');
-    expect(d.buckets).toHaveLength(3);
+    expect(d.Kind).toBe('numeric');
+    expect(d.Buckets).toHaveLength(3);
     // Labels are neutral "Lower/Middle/Upper third" — never "good/bad", "risk", etc.
-    expect(d.buckets[0].label).toMatch(/^Lower third/);
-    expect(d.buckets[1].label).toMatch(/^Middle third/);
-    expect(d.buckets[2].label).toMatch(/^Upper third/);
-    expect(d.buckets.some((b) => /risk|good|bad|high risk/i.test(b.label))).toBe(false);
+    expect(d.Buckets[0].label).toMatch(/^Lower third/);
+    expect(d.Buckets[1].label).toMatch(/^Middle third/);
+    expect(d.Buckets[2].label).toMatch(/^Upper third/);
+    expect(d.Buckets.some((b) => /risk|good|bad|high risk/i.test(b.label))).toBe(false);
   });
 
   it('bands a uniform 0..9 spread roughly evenly across thirds', () => {
     const d = BuildDistribution([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], true);
     // boundaries at 3 and 6: [0,3) low, [3,6) mid, [6,9] high
-    const [low, mid, high] = d.buckets;
+    const [low, mid, high] = d.Buckets;
     expect(low.count).toBe(3); // 0,1,2
     expect(mid.count).toBe(3); // 3,4,5
     expect(high.count).toBe(4); // 6,7,8,9
@@ -45,46 +45,46 @@ describe('buildDistribution — numeric (neutral terciles)', () => {
 
   it('percentages within each band sum to ~100', () => {
     const d = BuildDistribution([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], true);
-    const total = d.buckets.reduce((s, b) => s + b.pct, 0);
+    const total = d.Buckets.reduce((s, b) => s + b.pct, 0);
     expect(total).toBeGreaterThan(99);
     expect(total).toBeLessThan(101);
   });
 
   it('collapses a degenerate (all-identical) range into a single band at 100%', () => {
     const d = BuildDistribution([0.5, 0.5, 0.5, 0.5], true);
-    expect(d.kind).toBe('numeric');
-    expect(d.buckets).toHaveLength(1);
-    expect(d.buckets[0].pct).toBe(100);
-    expect(d.buckets[0].count).toBe(4);
+    expect(d.Kind).toBe('numeric');
+    expect(d.Buckets).toHaveLength(1);
+    expect(d.Buckets[0].pct).toBe(100);
+    expect(d.Buckets[0].count).toBe(4);
   });
 
   it('parses numeric strings (probabilities stored as text)', () => {
     const d = BuildDistribution(['0.1', '0.5', '0.9'], true);
-    expect(d.kind).toBe('numeric');
-    expect(d.buckets).toHaveLength(3);
-    expect(d.sampled).toBe(3);
+    expect(d.Kind).toBe('numeric');
+    expect(d.Buckets).toHaveLength(3);
+    expect(d.Sampled).toBe(3);
   });
 
   it('falls back to categorical when a "numeric" column has no parseable values', () => {
     const d = BuildDistribution(['low', 'high', 'low'], true);
-    expect(d.kind).toBe('categorical');
-    expect(d.buckets.find((b) => b.label === 'low')?.count).toBe(2);
+    expect(d.Kind).toBe('categorical');
+    expect(d.Buckets.find((b) => b.label === 'low')?.count).toBe(2);
   });
 });
 
 describe('buildDistribution — categorical (group-by-value)', () => {
   it('groups class labels biggest-first', () => {
     const d = BuildDistribution(['A', 'B', 'A', 'A', 'C', 'B'], false);
-    expect(d.kind).toBe('categorical');
-    expect(d.buckets[0]).toMatchObject({ label: 'A', count: 3 });
-    expect(d.buckets[1]).toMatchObject({ label: 'B', count: 2 });
-    expect(d.buckets[2]).toMatchObject({ label: 'C', count: 1 });
+    expect(d.Kind).toBe('categorical');
+    expect(d.Buckets[0]).toMatchObject({ label: 'A', count: 3 });
+    expect(d.Buckets[1]).toMatchObject({ label: 'B', count: 2 });
+    expect(d.Buckets[2]).toMatchObject({ label: 'C', count: 1 });
   });
 
   it('handles booleans by stringifying the value', () => {
     const d = BuildDistribution([true, false, true, true], false);
-    expect(d.buckets[0]).toMatchObject({ label: 'true', count: 3 });
-    expect(d.buckets[1]).toMatchObject({ label: 'false', count: 1 });
+    expect(d.Buckets[0]).toMatchObject({ label: 'true', count: 3 });
+    expect(d.Buckets[1]).toMatchObject({ label: 'false', count: 1 });
   });
 
   it('folds the long tail beyond 8 buckets into "Other"', () => {
@@ -95,43 +95,43 @@ describe('buildDistribution — categorical (group-by-value)', () => {
       for (let r = 0; r < reps; r++) values.push(`class${i}`);
     }
     const d = BuildDistribution(values, false);
-    expect(d.buckets).toHaveLength(8); // 7 top + Other
-    expect(d.buckets[d.buckets.length - 1].label).toBe('Other');
-    const total = d.buckets.reduce((s, b) => s + b.count, 0);
+    expect(d.Buckets).toHaveLength(8); // 7 top + Other
+    expect(d.Buckets[d.Buckets.length - 1].label).toBe('Other');
+    const total = d.Buckets.reduce((s, b) => s + b.count, 0);
     expect(total).toBe(values.length);
   });
 
   it('does NOT add "Other" when classes fit within the cap', () => {
     const d = BuildDistribution(['A', 'B', 'C'], false);
-    expect(d.buckets.some((b) => b.label === 'Other')).toBe(false);
+    expect(d.Buckets.some((b) => b.label === 'Other')).toBe(false);
   });
 });
 
 describe('buildDistribution — edges', () => {
   it('drops null/undefined/empty values before bucketing', () => {
     const d = BuildDistribution([null, undefined, '', 'A', 'A'], false);
-    expect(d.sampled).toBe(2);
-    expect(d.buckets[0]).toMatchObject({ label: 'A', count: 2 });
+    expect(d.Sampled).toBe(2);
+    expect(d.Buckets[0]).toMatchObject({ label: 'A', count: 2 });
   });
 
   it('returns an empty distribution when there is nothing to summarize', () => {
     const d = BuildDistribution([null, undefined, ''], false);
-    expect(d.sampled).toBe(0);
-    expect(d.buckets).toHaveLength(0);
-    expect(d.capped).toBe(false);
+    expect(d.Sampled).toBe(0);
+    expect(d.Buckets).toHaveLength(0);
+    expect(d.Capped).toBe(false);
   });
 
   it('flags a capped sample when the population hits the sample cap', () => {
     const values = new Array(PRODUCTION_SAMPLE_CAP).fill('A');
     const d = BuildDistribution(values, false);
-    expect(d.capped).toBe(true);
-    expect(d.sampled).toBe(PRODUCTION_SAMPLE_CAP);
+    expect(d.Capped).toBe(true);
+    expect(d.Sampled).toBe(PRODUCTION_SAMPLE_CAP);
   });
 
   it('does NOT flag capped just below the cap', () => {
     const values = new Array(PRODUCTION_SAMPLE_CAP - 1).fill('A');
     const d = BuildDistribution(values, false);
-    expect(d.capped).toBe(false);
+    expect(d.Capped).toBe(false);
   });
 });
 
@@ -233,25 +233,25 @@ describe('summarizeRun', () => {
     const end = new Date('2026-06-01T10:00:00Z');
     const start = new Date('2026-06-01T09:00:00Z');
     const created = new Date('2026-06-01T08:00:00Z');
-    expect(SummarizeRun({ Status: 'Completed', EndTime: end, StartTime: start, CreatedAt: created })?.when).toBe(end);
-    expect(SummarizeRun({ Status: 'Completed', StartTime: start, CreatedAt: created })?.when).toBe(start);
-    expect(SummarizeRun({ Status: 'Completed', CreatedAt: created })?.when).toBe(created);
-    expect(SummarizeRun({ Status: 'Completed' })?.when).toBeNull();
+    expect(SummarizeRun({ Status: 'Completed', EndTime: end, StartTime: start, CreatedAt: created })?.When).toBe(end);
+    expect(SummarizeRun({ Status: 'Completed', StartTime: start, CreatedAt: created })?.When).toBe(start);
+    expect(SummarizeRun({ Status: 'Completed', CreatedAt: created })?.When).toBe(created);
+    expect(SummarizeRun({ Status: 'Completed' })?.When).toBeNull();
   });
 
   it('coerces nullable counts to 0 and totalCount to null', () => {
     const s = SummarizeRun({ Status: 'Failed' });
-    expect(s).toMatchObject({ status: 'Failed', statusVariant: 'red', successCount: 0, errorCount: 0, totalCount: null });
+    expect(s).toMatchObject({ Status: 'Failed', StatusVariant: 'red', SuccessCount: 0, ErrorCount: 0, TotalCount: null });
   });
 
   it('passes through counts and derives the status variant', () => {
     const s = SummarizeRun({ Status: 'Completed', SuccessCount: 1200, ErrorCount: 3, TotalItemCount: 1203 });
     expect(s).toMatchObject({
-      status: 'Completed',
-      statusVariant: 'green',
-      successCount: 1200,
-      errorCount: 3,
-      totalCount: 1203,
+      Status: 'Completed',
+      StatusVariant: 'green',
+      SuccessCount: 1200,
+      ErrorCount: 3,
+      TotalCount: 1203,
     });
   });
 });

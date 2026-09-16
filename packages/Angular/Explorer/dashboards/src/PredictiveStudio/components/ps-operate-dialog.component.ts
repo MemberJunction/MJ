@@ -52,7 +52,7 @@ const RUN_RECORD_PROCESS_JOB_TYPE = 'Run Record Process';
         <div class="ps-callout info op-target">
           <i class="fa-solid fa-table"></i>
           <div class="ps-small">
-            Scores <strong>{{ state.targetEntityName || '—' }}</strong> — the entity this model was trained on.
+            Scores <strong>{{ state.TargetEntityName || '—' }}</strong> — the entity this model was trained on.
           </div>
         </div>
 
@@ -60,23 +60,23 @@ const RUN_RECORD_PROCESS_JOB_TYPE = 'Run Record Process';
         <div class="ps-field">
           <label>Which records?</label>
           <div class="ps-seg" data-testid="ps-operate-scope">
-            <button [class.on]="state.scopeMode === 'all'" (click)="setScope('all')"><i class="fa-solid fa-globe"></i> Everyone</button>
-            <button [class.on]="state.scopeMode === 'view'" (click)="setScope('view')"><i class="fa-solid fa-table-list"></i> A saved view</button>
-            <button [class.on]="state.scopeMode === 'list'" (click)="setScope('list')"><i class="fa-solid fa-list-check"></i> A list</button>
+            <button [class.on]="state.ScopeMode === 'all'" (click)="setScope('all')"><i class="fa-solid fa-globe"></i> Everyone</button>
+            <button [class.on]="state.ScopeMode === 'view'" (click)="setScope('view')"><i class="fa-solid fa-table-list"></i> A saved view</button>
+            <button [class.on]="state.ScopeMode === 'list'" (click)="setScope('list')"><i class="fa-solid fa-list-check"></i> A list</button>
           </div>
-          @if (state.scopeMode === 'view') {
-            <select class="mj-input" data-testid="ps-operate-view" [value]="state.viewId || ''" (change)="state.viewId = $any($event.target).value">
+          @if (state.ScopeMode === 'view') {
+            <select class="mj-input" data-testid="ps-operate-view" [value]="state.ViewId || ''" (change)="state.ViewId = $any($event.target).value">
               <option value="" disabled>Choose a view…</option>
               @for (v of views; track v.ID) { <option [value]="v.ID">{{ v.Name }}</option> }
             </select>
-            @if (views.length === 0) { <div class="ps-small ps-muted op-hint">No saved views for {{ state.targetEntityName }} yet — pick Everyone or a list.</div> }
+            @if (views.length === 0) { <div class="ps-small ps-muted op-hint">No saved views for {{ state.TargetEntityName }} yet — pick Everyone or a list.</div> }
           }
-          @if (state.scopeMode === 'list') {
-            <select class="mj-input" data-testid="ps-operate-list" [value]="state.listId || ''" (change)="state.listId = $any($event.target).value">
+          @if (state.ScopeMode === 'list') {
+            <select class="mj-input" data-testid="ps-operate-list" [value]="state.ListId || ''" (change)="state.ListId = $any($event.target).value">
               <option value="" disabled>Choose a list…</option>
               @for (l of lists; track l.ID) { <option [value]="l.ID">{{ l.Name }}</option> }
             </select>
-            @if (lists.length === 0) { <div class="ps-small ps-muted op-hint">No lists for {{ state.targetEntityName }} yet — pick Everyone or a view.</div> }
+            @if (lists.length === 0) { <div class="ps-small ps-muted op-hint">No lists for {{ state.TargetEntityName }} yet — pick Everyone or a view.</div> }
           }
         </div>
 
@@ -84,18 +84,18 @@ const RUN_RECORD_PROCESS_JOB_TYPE = 'Run Record Process';
         <div class="ps-field">
           <label>Where do predictions go?</label>
           <div class="ps-seg" data-testid="ps-operate-output">
-            <button [class.on]="state.outputMode === 'generic'" (click)="state.outputMode = 'generic'"><i class="fa-solid fa-clock-rotate-left"></i> Run history only</button>
-            <button [class.on]="state.outputMode === 'writeback'" (click)="state.outputMode = 'writeback'"><i class="fa-solid fa-pen-to-square"></i> Write back to a column</button>
+            <button [class.on]="state.OutputMode === 'generic'" (click)="state.OutputMode = 'generic'"><i class="fa-solid fa-clock-rotate-left"></i> Run history only</button>
+            <button [class.on]="state.OutputMode === 'writeback'" (click)="state.OutputMode = 'writeback'"><i class="fa-solid fa-pen-to-square"></i> Write back to a column</button>
           </div>
-          @if (state.outputMode === 'writeback') {
+          @if (state.OutputMode === 'writeback') {
             <input class="mj-input" type="text" list="ps-operate-fields" data-testid="ps-operate-column"
-              placeholder="Column on {{ state.targetEntityName }} (e.g. RenewalProbability)"
-              [value]="state.outputField" (input)="state.outputField = $any($event.target).value" />
+              placeholder="Column on {{ state.TargetEntityName }} (e.g. RenewalProbability)"
+              [value]="state.OutputField" (input)="state.OutputField = $any($event.target).value" />
             <datalist id="ps-operate-fields">@for (f of entityFields; track f) { <option [value]="f"></option> }</datalist>
             @if (isClassification) {
               <div class="ps-seg sm" style="margin-top:8px">
-                <button [class.on]="state.valueKind === 'score'" (click)="state.valueKind = 'score'">Probability</button>
-                <button [class.on]="state.valueKind === 'class'" (click)="state.valueKind = 'class'">Predicted class</button>
+                <button [class.on]="state.ValueKind === 'score'" (click)="state.ValueKind = 'score'">Probability</button>
+                <button [class.on]="state.ValueKind === 'class'" (click)="state.ValueKind = 'class'">Predicted class</button>
               </div>
             }
           }
@@ -294,7 +294,7 @@ export class PSOperateDialogComponent extends BaseAngularComponent {
     const entity = pipeline?.TargetEntityID
       ? this.ProviderToUse.Entities.find((e) => UUIDsEqual(e.ID, pipeline.TargetEntityID))
       : undefined;
-    this.State.targetEntityName = entity?.Name ?? '';
+    this.State.TargetEntityName = entity?.Name ?? '';
     this.EntityFields = (entity?.Fields ?? []).map((f) => f.Name).sort((a, b) => a.localeCompare(b));
 
     await Promise.all([this.loadViews(entity?.ID), this.loadLists(entity?.ID), this.resolveJobType()]);
@@ -332,7 +332,7 @@ export class PSOperateDialogComponent extends BaseAngularComponent {
   }
 
   public SetScope(mode: OperateScopeMode): void {
-    this.State.scopeMode = mode;
+    this.State.ScopeMode = mode;
   }
 
   /** @deprecated Use {@link SetScope}. */
@@ -343,17 +343,17 @@ export class PSOperateDialogComponent extends BaseAngularComponent {
   // ---- live summary ----
 
   public get Summary(): string {
-    const entity = this.State.targetEntityName || 'the entity';
+    const entity = this.State.TargetEntityName || 'the entity';
     const scope =
-      this.State.scopeMode === 'all'
+      this.State.ScopeMode === 'all'
         ? `every record in <strong>${entity}</strong>`
-        : this.State.scopeMode === 'view'
+        : this.State.ScopeMode === 'view'
           ? `the <strong>${this.viewName() ?? 'selected'}</strong> view of ${entity}`
           : `the <strong>${this.listName() ?? 'selected'}</strong> list of ${entity}`;
     const output =
-      this.State.outputMode === 'writeback'
-        ? this.State.outputField.trim()
-          ? `writes the ${this.State.valueKind === 'class' ? 'predicted class' : 'probability'} into <strong>${this.State.outputField.trim()}</strong>`
+      this.State.OutputMode === 'writeback'
+        ? this.State.OutputField.trim()
+          ? `writes the ${this.State.ValueKind === 'class' ? 'predicted class' : 'probability'} into <strong>${this.State.OutputField.trim()}</strong>`
           : `writes back to a column you choose`
         : `records predictions in the run history (no column written)`;
     return `Scores ${scope} with <strong>${this.ModelLabel}</strong> and ${output}.`;
@@ -365,10 +365,10 @@ export class PSOperateDialogComponent extends BaseAngularComponent {
   }
 
   private viewName(): string | null {
-    return this.Views.find((v) => UUIDsEqual(v.ID, this.State.viewId ?? ''))?.Name ?? null;
+    return this.Views.find((v) => UUIDsEqual(v.ID, this.State.ViewId ?? ''))?.Name ?? null;
   }
   private listName(): string | null {
-    return this.Lists.find((l) => UUIDsEqual(l.ID, this.State.listId ?? ''))?.Name ?? null;
+    return this.Lists.find((l) => UUIDsEqual(l.ID, this.State.ListId ?? ''))?.Name ?? null;
   }
 
   // ---- actions ----
@@ -484,14 +484,14 @@ export class PSOperateDialogComponent extends BaseAngularComponent {
 
   private blankState(): OperateModelState {
     return {
-      modelId: this.modelId,
-      targetEntityName: '',
-      scopeMode: 'all',
-      viewId: null,
-      listId: null,
-      outputMode: 'generic',
-      outputField: '',
-      valueKind: 'score',
+      ModelId: this.modelId,
+      TargetEntityName: '',
+      ScopeMode: 'all',
+      ViewId: null,
+      ListId: null,
+      OutputMode: 'generic',
+      OutputField: '',
+      ValueKind: 'score',
     };
   }
 }

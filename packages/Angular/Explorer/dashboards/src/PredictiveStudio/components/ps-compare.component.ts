@@ -74,12 +74,12 @@ interface SessionOption {
                     <span class="ps-badge" [class]="r.isBest ? 'green' : 'gray'">{{ r.isBest ? 'Top scorer' : r.status }}</span>
                   </div>
                 }
-                @for (row of metricRows; track row.label) {
-                  <div class="rowhdr"><span>{{ row.label }}</span><span class="h ps-muted ps-small">{{ row.qualifier }}</span></div>
-                  @for (v of row.values; track $index) {
-                    <div class="cell" [class.best]="$index === row.bestIndex">
+                @for (row of metricRows; track row.Label) {
+                  <div class="rowhdr"><span>{{ row.Label }}</span><span class="h ps-muted ps-small">{{ row.Qualifier }}</span></div>
+                  @for (v of row.Values; track $index) {
+                    <div class="cell" [class.best]="$index === row.BestIndex">
                       <span class="v">{{ v }}</span>
-                      @if ($index === row.bestIndex) { <span class="best-pill">BEST</span> }
+                      @if ($index === row.BestIndex) { <span class="best-pill">BEST</span> }
                     </div>
                   }
                 }

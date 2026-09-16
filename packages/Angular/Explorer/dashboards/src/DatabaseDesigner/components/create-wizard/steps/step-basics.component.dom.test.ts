@@ -32,14 +32,14 @@ describe('StepBasicsComponent (DOM)', () => {
     const changes = capture(fixture.componentInstance.ValueChanged);
     typeInto(fixture, '#entityName', 'Project Milestones');
     expect(changes.length).toBeGreaterThan(0);
-    expect(lastValue(changes).entityName).toBe('Project Milestones');
+    expect(lastValue(changes).EntityName).toBe('Project Milestones');
   });
 
   it('auto-derives a space-free table name from the entity name', () => {
     const fixture = render();
     const changes = capture(fixture.componentInstance.ValueChanged);
     typeInto(fixture, '#entityName', 'Project Milestones');
-    const tableName = lastValue(changes).tableName;
+    const tableName = lastValue(changes).TableName;
     expect(tableName).toBeTruthy();
     expect(tableName).not.toContain(' ');
   });
@@ -56,7 +56,7 @@ describe('StepBasicsComponent (DOM)', () => {
     const changes = capture(fixture.componentInstance.ValueChanged);
     typeInto(fixture, '#tableName', 'MyCustomTable');
     fixture.detectChanges(false);
-    expect(lastValue(changes).tableNameIsAuto).toBe(false);
+    expect(lastValue(changes).TableNameIsAuto).toBe(false);
     expect(query(fixture, '.auto-badge')?.classList.contains('active')).toBe(false);
   });
 });

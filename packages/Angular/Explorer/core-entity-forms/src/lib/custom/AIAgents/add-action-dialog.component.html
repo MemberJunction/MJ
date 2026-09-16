@@ -86,15 +86,15 @@
         <div class="actions-grid">
           @for (action of filteredActions$ | async; track action.ID) {
             <div class="action-card" 
-                 [class.selected]="action.selected"
+                 [class.selected]="action.Selected"
                  [class.existing]="existingActionIds.includes(action.ID)"
                  (click)="toggleActionSelection(action)">
               
               <!-- Selection Indicator -->
               <div class="selection-indicator">
                 <i class="fa-solid" 
-                   [class.fa-check-circle]="action.selected" 
-                   [class.fa-circle]="!action.selected"></i>
+                   [class.fa-check-circle]="action.Selected" 
+                   [class.fa-circle]="!action.Selected"></i>
               </div>
               
               <!-- Card Content -->
@@ -152,14 +152,14 @@
           <!-- List Items -->
           @for (action of filteredActions$ | async; track action.ID) {
             <div class="list-item" 
-                 [class.selected]="action.selected"
+                 [class.selected]="action.Selected"
                  [class.existing]="existingActionIds.includes(action.ID)"
                  (click)="toggleActionSelection(action)">
               
               <span class="col-select">
                 <i class="fa-solid" 
-                   [class.fa-check-circle]="action.selected" 
-                   [class.fa-circle]="!action.selected"></i>
+                   [class.fa-check-circle]="action.Selected" 
+                   [class.fa-circle]="!action.Selected"></i>
               </span>
               
               <span class="col-name">

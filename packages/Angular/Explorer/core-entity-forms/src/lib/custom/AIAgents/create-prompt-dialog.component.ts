@@ -391,7 +391,7 @@ export class CreatePromptDialogComponent extends BaseAngularComponent implements
    */
   private async openTemplateSelector() {
     const config: TemplateSelectorConfig = {
-      title: 'Select Template for AI Prompt',
+      Title: 'Select Template for AI Prompt',
       showCreateNew: false,
       multiSelect: false,
       showActiveOnly: true
@@ -400,9 +400,9 @@ export class CreatePromptDialogComponent extends BaseAngularComponent implements
     try {
       const result = await this.aiPromptManagementService.openTemplateSelectorDialog(config).toPromise();
       
-      if (result && result.selectedTemplates && result.selectedTemplates.length > 0) {
+      if (result && result.SelectedTemplates && result.SelectedTemplates.length > 0) {
         // Link the selected template
-        this.TemplateEntity = result.selectedTemplates[0];
+        this.TemplateEntity = result.SelectedTemplates[0];
         this.PromptEntity!.TemplateID = this.TemplateEntity.ID;
         
         // Update UI to show selected template info

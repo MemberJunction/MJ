@@ -50,8 +50,8 @@ export interface CanvasEditToolResult {
 
 /** A successful transform plus a short human-readable note (for the agent). */
 export interface CanvasTransformResult {
-    canvas: FormCanvasModel;
-    note: string;
+    Canvas: FormCanvasModel;
+    Note: string;
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -611,23 +611,23 @@ export const CANVAS_CONTEXT_LIST_CAP = 25;
 
 /** One section, summarised for the agent: id, title, field-count, element ids. */
 export interface SectionSummary {
-    id: string;
-    title: string;
-    collapsible: boolean;
-    columns: 1 | 2;
-    elementCount: number;
-    fieldCount: number;
+    Id: string;
+    Title: string;
+    Collapsible: boolean;
+    Columns: 1 | 2;
+    ElementCount: number;
+    FieldCount: number;
 }
 
 /** One element, summarised for the agent so it can target it by id or label. */
 export interface ElementSummary {
-    id: string;
-    type: FormCanvasElement['type'];
-    label: string;
-    fieldName: string | null;
-    sectionId: string;
-    required: boolean;
-    span: 1 | 2;
+    Id: string;
+    Type: FormCanvasElement['type'];
+    Label: string;
+    FieldName: string | null;
+    SectionId: string;
+    Required: boolean;
+    Span: 1 | 2;
 }
 
 /**
@@ -666,24 +666,24 @@ export interface CanvasStateSummary {
 
 function summariseSection(section: FormCanvasSection): SectionSummary {
     return {
-        id: section.id,
-        title: section.title,
-        collapsible: section.collapsible,
-        columns: section.columns,
-        elementCount: section.elements.length,
-        fieldCount: section.elements.filter(e => e.type === 'field' && e.fieldName).length,
+        Id: section.id,
+        Title: section.title,
+        Collapsible: section.collapsible,
+        Columns: section.columns,
+        ElementCount: section.elements.length,
+        FieldCount: section.elements.filter(e => e.type === 'field' && e.fieldName).length,
     };
 }
 
 function summariseElement(el: FormCanvasElement, sectionId: string): ElementSummary {
     return {
-        id: el.id,
-        type: el.type,
-        label: ElementDisplayLabel(el),
-        fieldName: el.fieldName ?? null,
-        sectionId,
-        required: el.required ?? false,
-        span: el.span ?? 1,
+        Id: el.id,
+        Type: el.type,
+        Label: ElementDisplayLabel(el),
+        FieldName: el.fieldName ?? null,
+        SectionId: sectionId,
+        Required: el.required ?? false,
+        Span: el.span ?? 1,
     };
 }
 

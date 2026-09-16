@@ -10,7 +10,7 @@ import { UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface TemplateSelectorConfig {
   /** Title for the dialog */
-  title: string;
+  Title: string;
   /** Whether to show the "Create New" option */
   showCreateNew?: boolean;
   /** Filter criteria for templates */
@@ -25,7 +25,7 @@ export interface TemplateSelectorConfig {
 
 export interface TemplateSelectorResult {
   /** Selected templates */
-  selectedTemplates: MJTemplateEntity[];
+  SelectedTemplates: MJTemplateEntity[];
   /** Whether user chose to create new */
   createNew?: boolean;
 }
@@ -44,7 +44,7 @@ export interface TemplateSelectorResult {
 export class TemplateSelectorDialogComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   
   // Input configuration
-  config: TemplateSelectorConfig = { title: 'Select Template' };
+  config: TemplateSelectorConfig = { Title: 'Select Template' };
   
   // State management
   private destroy$ = new Subject<void>();
@@ -411,7 +411,7 @@ export class TemplateSelectorDialogComponent extends BaseAngularComponent implem
     }
 
     const result: TemplateSelectorResult = {
-      selectedTemplates: selectedTemplateObjects
+      SelectedTemplates: selectedTemplateObjects
     };
 
     this.Result.next(result);
@@ -425,7 +425,7 @@ export class TemplateSelectorDialogComponent extends BaseAngularComponent implem
 
   CreateNew() {
     const result: TemplateSelectorResult = {
-      selectedTemplates: [],
+      SelectedTemplates: [],
       createNew: true
     };
 

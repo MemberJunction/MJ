@@ -44,7 +44,7 @@ export async function LoadAllCliPlugins(
   // summaries. Registered for every profiled domain, including plugin-backed ones —
   // first-wins means a plugin that already declared one keeps it.
   for (const [domain, profile] of Object.entries(DOMAIN_PROFILES)) {
-    CLIPluginRegistry.RegisterDomainSummary(domain, profile.summary);
+    CLIPluginRegistry.RegisterDomainSummary(domain, profile.Summary);
   }
 
   if (oclifCommands?.length) RegisterDerivedUsage(oclifCommands);

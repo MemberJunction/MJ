@@ -29,8 +29,8 @@ import { BuildRemoteUrlPrefix } from './PackPaths.js';
  * both accept `Uint8Array` directly.
  */
 export interface HttpResponse {
-    statusCode: number;
-    body: Uint8Array;
+    StatusCode: number;
+    Body: Uint8Array;
 }
 
 /** Promise-based GET. Production = node:https; tests = mock. */
@@ -50,7 +50,7 @@ export const RealHttpGet: HttpGetter = (url) =>
             const chunks: Uint8Array[] = [];
             res.on('data', (chunk: Uint8Array) => chunks.push(chunk));
             res.on('end', () => {
-                resolve({ statusCode: res.statusCode ?? 0, body: concatBytes(chunks) });
+                resolve({ StatusCode: res.statusCode ?? 0, Body: concatBytes(chunks) });
             });
             res.on('error', reject);
         });
@@ -165,15 +165,15 @@ export async function FetchPack(opts: FetchPackOptions): Promise<FetchedPack> {
         const url = baseUrl + entry.path;
         onProgress(`fetching ${entry.path}`);
         const res = await httpGet(url);
-        if (res.statusCode !== 200) {
+        if (res.StatusCode !== 200) {
             throw new PackFetchError(
-                `Failed to fetch ${entry.path}: HTTP ${res.statusCode}`,
+                `Failed to fetch ${entry.path}: HTTP ${res.StatusCode}`,
                 url,
-                res.statusCode
+                res.StatusCode
             );
         }
-        verifyChecksum(entry, res.body);
-        files.set(entry.path, res.body);
+        verifyChecksum(entry, res.Body);
+        files.set(entry.path, res.Body);
     }
 
     return { Manifest: manifest, Files: files, RefUsed: refUsed, BaseUrl: baseUrl };
@@ -204,9 +204,9 @@ async function fetchManifestWithFallback(
 
     // First attempt: requested ref
     const first = await tryRef(requestedRef);
-    if (first.res.statusCode === 200) {
+    if (first.res.StatusCode === 200) {
         return {
-            manifest: parseManifest(first.res.body, first.manifestUrl),
+            manifest: parseManifest(first.res.Body, first.manifestUrl),
             refUsed: requestedRef,
             baseUrl: first.baseUrl,
         };
@@ -216,27 +216,27 @@ async function fetchManifestWithFallback(
     // Other status codes (5xx, network errors) propagate immediately —
     // fallback is for "this tag doesn't have the pack yet", not for "the
     // network is broken".
-    if (first.res.statusCode === 404 && requestedRef !== 'main') {
+    if (first.res.StatusCode === 404 && requestedRef !== 'main') {
         onProgress(`ref ${requestedRef} 404; falling back to main`);
         const second = await tryRef('main');
-        if (second.res.statusCode === 200) {
+        if (second.res.StatusCode === 200) {
             return {
-                manifest: parseManifest(second.res.body, second.manifestUrl),
+                manifest: parseManifest(second.res.Body, second.manifestUrl),
                 refUsed: 'main',
                 baseUrl: second.baseUrl,
             };
         }
         throw new PackFetchError(
-            `Failed to fetch manifest from both ${requestedRef} and main (HTTP ${second.res.statusCode})`,
+            `Failed to fetch manifest from both ${requestedRef} and main (HTTP ${second.res.StatusCode})`,
             second.manifestUrl,
-            second.res.statusCode
+            second.res.StatusCode
         );
     }
 
     throw new PackFetchError(
-        `Failed to fetch manifest from ${requestedRef}: HTTP ${first.res.statusCode}`,
+        `Failed to fetch manifest from ${requestedRef}: HTTP ${first.res.StatusCode}`,
         first.manifestUrl,
-        first.res.statusCode
+        first.res.StatusCode
     );
 }
 

@@ -142,26 +142,26 @@ describe('loadDashboard', () => {
                 : { Success: true, Results: [] };
 
         const dash = await loadDashboard('d1');
-        expect(dash?.parts).toHaveLength(2);
-        expect(dash?.parts.map((p) => p.kind)).toEqual(['view', 'query']);
+        expect(dash?.Parts).toHaveLength(2);
+        expect(dash?.Parts.map((p) => p.kind)).toEqual(['view', 'query']);
         // Title comes from the panel, else the resolved type name.
-        expect(dash?.parts[0].title).toBe('My View');
-        expect(dash?.parts[1].title).toBe('Query');
+        expect(dash?.Parts[0].title).toBe('My View');
+        expect(dash?.Parts[1].title).toBe('Query');
         // 'view' is not natively mobile-renderable -> counted as desktop-only.
-        expect(dash?.desktopOnlyCount).toBe(1);
+        expect(dash?.DesktopOnlyCount).toBe(1);
     });
 
     it('returns empty parts for malformed UIConfigDetails JSON', async () => {
         state.dashboard = dashboardEntity('{ this is not json');
         const dash = await loadDashboard('d1');
-        expect(dash?.parts).toEqual([]);
-        expect(dash?.desktopOnlyCount).toBe(0);
+        expect(dash?.Parts).toEqual([]);
+        expect(dash?.DesktopOnlyCount).toBe(0);
     });
 
     it('returns empty parts for empty UIConfigDetails', async () => {
         state.dashboard = dashboardEntity('');
         const dash = await loadDashboard('d1');
-        expect(dash?.parts).toEqual([]);
+        expect(dash?.Parts).toEqual([]);
     });
 
     it('returns null when the dashboard fails to load', async () => {
@@ -199,8 +199,8 @@ describe('loadEntityRecords — card subtitle rendering of normalized date cells
 
         const load = await loadEntityRecords('Test Orders');
 
-        expect(load?.rows[0].subtitle).toBe(orderDate.toLocaleDateString());
-        expect(load?.rows[0].subtitle).not.toContain('GMT');
+        expect(load?.Rows[0].subtitle).toBe(orderDate.toLocaleDateString());
+        expect(load?.Rows[0].subtitle).not.toContain('GMT');
     });
 
     it('renders a string cell unchanged (pre-normalization rows keep working)', async () => {
@@ -211,7 +211,7 @@ describe('loadEntityRecords — card subtitle rendering of normalized date cells
 
         const load = await loadEntityRecords('Test Orders');
 
-        expect(load?.rows[0].subtitle).toBe('2026-08-01T00:00:00.000Z');
+        expect(load?.Rows[0].subtitle).toBe('2026-08-01T00:00:00.000Z');
     });
 
     it('omits null and empty cells from the subtitle', async () => {
@@ -222,6 +222,6 @@ describe('loadEntityRecords — card subtitle rendering of normalized date cells
 
         const load = await loadEntityRecords('Test Orders');
 
-        expect(load?.rows[0].subtitle).toBe('');
+        expect(load?.Rows[0].subtitle).toBe('');
     });
 });

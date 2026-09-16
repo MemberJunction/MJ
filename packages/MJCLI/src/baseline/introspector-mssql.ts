@@ -75,22 +75,22 @@ export async function IntrospectMssql(db: QueryRunner, progress: Progress = {}):
   const permissions = await readPermissions(db);
 
   return {
-    dialect: 'mssql',
-    schemas: StableSortBy(schemas, (s) => s.name.toLowerCase()),
-    tables: StableSortBy(tables, (t) => `${t.schema}.${t.name}`.toLowerCase()),
-    views: StableSortBy(views, (v) => `${v.schema}.${v.name}`.toLowerCase()),
-    procedures: StableSortBy(procedures, (r) => `${r.schema}.${r.name}`.toLowerCase()),
-    functions: StableSortBy(functions, (r) => `${r.schema}.${r.name}`.toLowerCase()),
-    triggers: StableSortBy(triggers, (t) => `${t.schema}.${t.name}`.toLowerCase()),
-    sequences: StableSortBy(sequences, (s) => `${s.schema}.${s.name}`.toLowerCase()),
-    userDefinedTypes: StableSortBy(userDefinedTypes, (u) => `${u.schema}.${u.name}`.toLowerCase()),
-    extendedProperties: StableSortBy(
+    Dialect: 'mssql',
+    Schemas: StableSortBy(schemas, (s) => s.name.toLowerCase()),
+    Tables: StableSortBy(tables, (t) => `${t.Schema}.${t.Name}`.toLowerCase()),
+    Views: StableSortBy(views, (v) => `${v.schema}.${v.name}`.toLowerCase()),
+    Procedures: StableSortBy(procedures, (r) => `${r.schema}.${r.name}`.toLowerCase()),
+    Functions: StableSortBy(functions, (r) => `${r.schema}.${r.name}`.toLowerCase()),
+    Triggers: StableSortBy(triggers, (t) => `${t.schema}.${t.name}`.toLowerCase()),
+    Sequences: StableSortBy(sequences, (s) => `${s.schema}.${s.name}`.toLowerCase()),
+    UserDefinedTypes: StableSortBy(userDefinedTypes, (u) => `${u.Schema}.${u.Name}`.toLowerCase()),
+    ExtendedProperties: StableSortBy(
       extendedProperties,
       (p) => extPropSortKey(p),
     ),
-    principals: StableSortBy(principals, (p) => `${p.kind}|${p.name}`.toLowerCase()),
-    roleMemberships: StableSortBy(roleMemberships, (m) => `${m.role}|${m.member}`.toLowerCase()),
-    permissions: StableSortBy(permissions, (p) => permissionSortKey(p)),
+    Principals: StableSortBy(principals, (p) => `${p.Kind}|${p.Name}`.toLowerCase()),
+    RoleMemberships: StableSortBy(roleMemberships, (m) => `${m.role}|${m.member}`.toLowerCase()),
+    Permissions: StableSortBy(permissions, (p) => permissionSortKey(p)),
   };
 }
 
@@ -115,12 +115,12 @@ function permissionSortKey(p: PermissionDef): string {
 /** Canonical sort key for extended properties so output stays byte-deterministic. */
 function extPropSortKey(p: ExtendedPropertyDef): string {
   return [
-    p.schemaName.toLowerCase(),
+    p.SchemaName.toLowerCase(),
     (p.level1Type || '').toLowerCase(),
     (p.level1Name || '').toLowerCase(),
     (p.level2Type || '').toLowerCase(),
     (p.level2Name || '').toLowerCase(),
-    p.name.toLowerCase(),
+    p.Name.toLowerCase(),
   ].join('|');
 }
 
@@ -262,9 +262,9 @@ async function readTables(db: QueryRunner): Promise<TableDef[]> {
     );
     const primaryKey: PrimaryKeyDef | undefined = pkCols.length
       ? {
-          name: pkCols[0].constraint_name,
-          clustered: !!pkCols[0].is_clustered,
-          columns: StableSortBy(pkCols, (r) => String(r.key_ordinal).padStart(6, '0')).map((r) => r.column_name),
+          Name: pkCols[0].constraint_name,
+          Clustered: !!pkCols[0].is_clustered,
+          Columns: StableSortBy(pkCols, (r) => String(r.key_ordinal).padStart(6, '0')).map((r) => r.column_name),
         }
       : undefined;
 
@@ -333,15 +333,15 @@ async function readTables(db: QueryRunner): Promise<TableDef[]> {
     );
 
     tables.push({
-      schema: t.schema_name,
-      name: t.table_name,
-      hasIdentity: !!t.has_identity,
-      columns,
+      Schema: t.schema_name,
+      Name: t.table_name,
+      HasIdentity: !!t.has_identity,
+      Columns: columns,
       primaryKey,
-      uniqueConstraints,
-      indexes,
-      foreignKeys,
-      checks,
+      UniqueConstraints: uniqueConstraints,
+      Indexes: indexes,
+      ForeignKeys: foreignKeys,
+      Checks: checks,
     });
   }
   return tables;
@@ -400,7 +400,7 @@ async function readTriggers(db: QueryRunner): Promise<TriggerDef[]> {
  * Skipped types: A (application role) is kept; X/E/G handle AAD/Windows; everything
  * not in this table is filtered out at the WHERE level below so we never see it.
  */
-const PRINCIPAL_TYPE_MAP: Record<string, DatabasePrincipalDef['kind']> = {
+const PRINCIPAL_TYPE_MAP: Record<string, DatabasePrincipalDef['Kind']> = {
   S: 'sql_user',
   U: 'windows_user',
   R: 'database_role',
@@ -434,7 +434,7 @@ async function readPrincipals(db: QueryRunner): Promise<DatabasePrincipalDef[]> 
     .map((r): DatabasePrincipalDef | null => {
       const kind = PRINCIPAL_TYPE_MAP[r.type];
       if (!kind) return null;
-      const def: DatabasePrincipalDef = { name: r.name, kind };
+      const def: DatabasePrincipalDef = { Name: r.name, Kind: kind };
       if (r.owner_name) def.owner = r.owner_name;
       if (r.default_schema_name) def.defaultSchema = r.default_schema_name;
       return def;
@@ -631,18 +631,18 @@ async function readUserDefinedTypes(db: QueryRunner): Promise<UserDefinedTypeDef
     const pkCols = pkRows.filter((r) => r.type_table_object_id === t.type_table_object_id);
     const primaryKey: PrimaryKeyDef | undefined = pkCols.length
       ? {
-          name: pkCols[0].constraint_name,
-          clustered: !!pkCols[0].is_clustered,
-          columns: StableSortBy(pkCols, (r) => String(r.key_ordinal).padStart(6, '0')).map((r) => r.column_name),
+          Name: pkCols[0].constraint_name,
+          Clustered: !!pkCols[0].is_clustered,
+          Columns: StableSortBy(pkCols, (r) => String(r.key_ordinal).padStart(6, '0')).map((r) => r.column_name),
         }
       : undefined;
 
     out.push({
-      schema: t.schema_name,
-      name: t.type_name,
-      kind: 'table',
-      isMemoryOptimized: !!t.is_memory_optimized,
-      columns: cols,
+      Schema: t.schema_name,
+      Name: t.type_name,
+      Kind: 'table',
+      IsMemoryOptimized: !!t.is_memory_optimized,
+      Columns: cols,
       primaryKey,
     });
   }
@@ -759,9 +759,9 @@ async function readExtendedProperties(db: QueryRunner): Promise<ExtendedProperty
     // Mirror the table-level filter for any property attached to flyway_schema_history.
     if (r.level1_name && IsExcludedTable(r.level1_name)) continue;
     out.push({
-      name: r.prop_name,
-      value: r.prop_value ?? '',
-      schemaName: r.schema_name,
+      Name: r.prop_name,
+      Value: r.prop_value ?? '',
+      SchemaName: r.schema_name,
       level1Type: r.level1_type ?? undefined,
       level1Name: r.level1_name ?? undefined,
       level2Type: r.level2_type ?? undefined,

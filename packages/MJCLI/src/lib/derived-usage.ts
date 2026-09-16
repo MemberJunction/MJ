@@ -29,7 +29,7 @@ import { GetDomainProfile } from './domain-profiles.js';
  * in every caller.
  */
 export interface OclifCommandShape {
-  id: string;
+  Id: string;
   description?: string;
   summary?: string;
   hidden?: boolean;
@@ -110,7 +110,7 @@ function normalizeFlags(flags: OclifCommandShape['flags']): PluginUsageFlag[] | 
  * Exported for testing — the registration path below is what production calls.
  */
 export function DeriveUsage(command: OclifCommandShape): PluginUsage {
-  const key = normalizeCommandKey(command.id);
+  const key = normalizeCommandKey(command.Id);
   const domain = DomainOf(key);
   const profile = GetDomainProfile(domain);
   const description = command.description ?? command.summary;
@@ -122,7 +122,7 @@ export function DeriveUsage(command: OclifCommandShape): PluginUsage {
     description,
     flags: normalizeFlags(command.flags),
     examples: normalizeExamples(command.examples),
-    runtime: profile.runtime,
+    runtime: profile.Runtime,
   };
 }
 
@@ -145,8 +145,8 @@ export function deriveUsage(command: OclifCommandShape): PluginUsage {
 export function RegisterDerivedUsage(commands: readonly OclifCommandShape[]): string[] {
   const registered: string[] = [];
   for (const command of commands) {
-    if (!command?.id || command.hidden) continue;
-    if (BUILT_IN_COMMANDS.has(normalizeCommandKey(command.id))) continue;
+    if (!command?.Id || command.hidden) continue;
+    if (BUILT_IN_COMMANDS.has(normalizeCommandKey(command.Id))) continue;
     const usage = DeriveUsage(command);
     CLIPluginRegistry.RegisterUsage(usage);
     registered.push(usage.command);

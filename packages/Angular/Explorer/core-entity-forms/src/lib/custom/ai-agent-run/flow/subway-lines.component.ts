@@ -87,9 +87,9 @@ export class SubwayLinesComponent implements OnDestroy {
   private build(): void {
     const svg = this.SvgRef.nativeElement;
     const m = this._model!;
-    const agents = m.nodes.filter(n => n.type === 'agent' || n.type === 'subagent');
+    const agents = m.Nodes.filter(n => n.Type === 'agent' || n.Type === 'subagent');
     const lineY = new Map<number, number>();
-    agents.forEach((a, i) => lineY.set(a.id, this.TOP + i * this.LINE_GAP));
+    agents.forEach((a, i) => lineY.set(a.Id, this.TOP + i * this.LINE_GAP));
     const VH = this.TOP + Math.max(1, agents.length) * this.LINE_GAP + 30;
     svg.setAttribute('viewBox', `0 0 ${this.VW} ${VH}`);
 
@@ -99,47 +99,47 @@ export class SubwayLinesComponent implements OnDestroy {
     const stationG = SvgEl('g', {}, main);
     const trainG = SvgEl('g', {}, main);
 
-    const sx = (l: FlowNode) => this.PAD + l.tmid * this.IW;
-    const sy = (l: FlowNode) => lineY.get(AgentOf(l).id) ?? this.TOP;
-    const radius = (l: FlowNode) => Math.min(17, 8 + Math.sqrt(l.realDur) * 1.4);
+    const sx = (l: FlowNode) => this.PAD + l.Tmid * this.IW;
+    const sy = (l: FlowNode) => lineY.get(AgentOf(l).Id) ?? this.TOP;
+    const radius = (l: FlowNode) => Math.min(17, 8 + Math.sqrt(l.RealDur) * 1.4);
 
     // line backbones + agent labels (left gutter, with the agent's icon)
     for (const a of agents) {
-      const kids = m.leaves.filter(l => AgentOf(l) === a);
-      const y = lineY.get(a.id)!;
-      const col = FLOW_COLORS[a.type];
+      const kids = m.Leaves.filter(l => AgentOf(l) === a);
+      const y = lineY.get(a.Id)!;
+      const col = FLOW_COLORS[a.Type];
       if (kids.length) {
         const x0 = Math.min(...kids.map(sx)) - 32, x1 = Math.max(...kids.map(sx)) + 32;
         SvgEl('line', { x1: x0, y1: y, x2: x1, y2: y, stroke: col, 'stroke-width': 7, opacity: 0.32, 'stroke-linecap': 'round' }, lineG);
       }
-      AppendIcon(lineG, 14, y - 11, 22, a.iconClass, a.logoUrl, col);
+      AppendIcon(lineG, 14, y - 11, 22, a.IconClass, a.LogoUrl, col);
       SvgEl('text', { x: 44, y: y - 6, 'font-size': 13, 'font-weight': 700, fill: col, 'dominant-baseline': 'middle', text: Clip(AgentShortName(a), 18) }, lineG);
-      SvgEl('text', { x: 44, y: y + 10, 'font-size': 9.5, 'dominant-baseline': 'middle', class: 'ftxt-muted', text: `${kids.length} step${kids.length === 1 ? '' : 's'} · ${FormatDuration(a.realDur)}` }, lineG);
+      SvgEl('text', { x: 44, y: y + 10, 'font-size': 9.5, 'dominant-baseline': 'middle', class: 'ftxt-muted', text: `${kids.length} step${kids.length === 1 ? '' : 's'} · ${FormatDuration(a.RealDur)}` }, lineG);
     }
 
     // connectors carry the destination line's (agent's) colour
-    for (let i = 0; i < m.leaves.length - 1; i++) {
-      const a = m.leaves[i], b = m.leaves[i + 1];
+    for (let i = 0; i < m.Leaves.length - 1; i++) {
+      const a = m.Leaves[i], b = m.Leaves[i + 1];
       const ax = sx(a), ay = sy(a), bx = sx(b), by = sy(b);
       const mx = (ax + bx) / 2;
       const d = ay === by ? `M${ax},${ay} L${bx},${by}` : `M${ax},${ay} L${mx},${ay} L${mx},${by} L${bx},${by}`;
-      const path = SvgEl('path', { d, fill: 'none', stroke: FLOW_COLORS[AgentOf(b).type], 'stroke-width': 3, opacity: 0.14, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }, connG) as SVGGraphicsElement;
+      const path = SvgEl('path', { d, fill: 'none', stroke: FLOW_COLORS[AgentOf(b).Type], 'stroke-width': 3, opacity: 0.14, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }, connG) as SVGGraphicsElement;
       this.connectors.push({ path, to: b, len: (path as unknown as SVGPathElement).getTotalLength() });
     }
 
     // stations: ring + step icon; angled abbreviated label (thinned when dense)
     let lastLabelX = -1e9;
-    m.leaves.forEach((l) => {
+    m.Leaves.forEach((l) => {
       const x = sx(l), y = sy(l), r = radius(l);
-      const col = FLOW_COLORS[l.type];
+      const col = FLOW_COLORS[l.Type];
       const grp = SvgEl('g', {}, stationG);
       (grp as SVGElement & { style: CSSStyleDeclaration }).style.color = col;
       (grp as SVGElement & { style: CSSStyleDeclaration }).style.cursor = 'pointer';
-      AppendTitle(grp, `${l.name} · ${FormatDuration(l.realDur)}`);
+      AppendTitle(grp, `${l.Name} · ${FormatDuration(l.RealDur)}`);
       const ring = SvgEl('circle', { cx: x, cy: y, r, fill: 'var(--mj-bg-surface)', stroke: col, 'stroke-width': 3.2 }, grp);
-      AppendIcon(grp, x - r * 0.62, y - r * 0.62, r * 1.24, l.iconClass, l.logoUrl, col);
+      AppendIcon(grp, x - r * 0.62, y - r * 0.62, r * 1.24, l.IconClass, l.LogoUrl, col);
 
-      const show = (x - lastLabelX >= this.MIN_LABEL_GAP) || l.heat >= 2;
+      const show = (x - lastLabelX >= this.MIN_LABEL_GAP) || l.Heat >= 2;
       let lab: SVGElement | undefined;
       if (show) {
         lastLabelX = x;
@@ -147,11 +147,11 @@ export class SubwayLinesComponent implements OnDestroy {
         lab = SvgEl('text', {
           x: lx, y: ly, 'font-size': 10.5, 'font-weight': 600, 'text-anchor': 'start',
           transform: `rotate(-30 ${lx} ${ly})`, class: 'ftxt-secondary', opacity: 0.7,
-          text: `${Clip(ShortLabel(l), 22)}  ·  ${FormatDuration(l.realDur)}`
+          text: `${Clip(ShortLabel(l), 22)}  ·  ${FormatDuration(l.RealDur)}`
         }, grp);
       }
       grp.addEventListener('click', () => { if (!this.pz?.moved) this.NodeSelected.emit(l); });
-      this.stations.set(l.id, { ring, lab, leaf: l, r, sx: x, sy: y });
+      this.stations.set(l.Id, { ring, lab, leaf: l, r, sx: x, sy: y });
     });
 
     this.trainHalo = SvgEl('circle', { r: 17, opacity: 0, class: 'fhand-dot' }, trainG);
@@ -164,25 +164,25 @@ export class SubwayLinesComponent implements OnDestroy {
   private update(p: number, ts: number): void {
     const m = this._model!;
     this.stations.forEach(({ ring, lab, leaf, r }) => {
-      const started = p >= leaf.t0;
-      const active = started && p < leaf.t1;
-      const selected = leaf.id === this.selectedId;
-      ring.setAttribute('class', selected ? 'glow2' : active ? 'glow' + Math.max(1, leaf.heat) : '');
+      const started = p >= leaf.T0;
+      const active = started && p < leaf.T1;
+      const selected = leaf.Id === this.selectedId;
+      ring.setAttribute('class', selected ? 'glow2' : active ? 'glow' + Math.max(1, leaf.Heat) : '');
       ring.setAttribute('stroke-width', selected ? '4.5' : '3.2');
       ring.setAttribute('r', String(active ? r + 2 * Math.abs(Math.sin(ts / 220)) : r));
       ring.setAttribute('fill-opacity', started ? '1' : '0.55');
       lab?.setAttribute('opacity', active || selected ? '1' : started ? '0.85' : '0.6');
     });
     this.connectors.forEach(({ path, to }) => {
-      const done = p >= to.t1, lit = p >= to.t0;
+      const done = p >= to.T1, lit = p >= to.T0;
       path.setAttribute('opacity', done ? '0.7' : lit ? '0.45' : '0.14');
       path.setAttribute('stroke-width', lit ? '3.6' : '3');
     });
 
     const leaf = ActiveLeaf(m, p);
-    const idx = m.leaves.indexOf(leaf);
-    const frac = p >= leaf.t1 ? 1 : Math.max(0, (p - leaf.t0) / (leaf.t1 - leaf.t0));
-    const here = this.stations.get(leaf.id);
+    const idx = m.Leaves.indexOf(leaf);
+    const frac = p >= leaf.T1 ? 1 : Math.max(0, (p - leaf.T0) / (leaf.T1 - leaf.T0));
+    const here = this.stations.get(leaf.Id);
     let tx = here?.sx ?? 0, ty = here?.sy ?? 0;
     if (here && idx >= 0 && idx < this.connectors.length && frac >= this.DWELL) {
       const conn = this.connectors[idx];
@@ -191,7 +191,7 @@ export class SubwayLinesComponent implements OnDestroy {
       tx = pt.x; ty = pt.y;
     }
     const live = p > 0 && p < 1;
-    const lineCol = FLOW_COLORS[AgentOf(leaf).type];
+    const lineCol = FLOW_COLORS[AgentOf(leaf).Type];
     if (this.train) {
       this.train.setAttribute('cx', String(tx)); this.train.setAttribute('cy', String(ty));
       this.train.setAttribute('opacity', live ? '1' : '0');

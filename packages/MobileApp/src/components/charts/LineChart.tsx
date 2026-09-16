@@ -13,9 +13,9 @@ import type { ChartDatum } from './chart-spec';
 /** Props for {@link LineChart}. */
 export type LineChartProps = {
     /** Ordered data points plotted left-to-right along the x axis. */
-    data: ChartDatum[];
+    Data: ChartDatum[];
     /** Available container width in px; the chart scales to fill it. */
-    width: number;
+    Width: number;
     /** Plot height in px (default 150). */
     height?: number;
     /** Optional heading rendered above the plot. */
@@ -42,7 +42,7 @@ const PAD_BOTTOM = 22;
  * @param props See {@link LineChartProps} — data, width, optional height/title.
  * @returns A `<View>` wrapping the title and the `react-native-svg` plot.
  */
-export function LineChart({ data, width, height = 150, title }: LineChartProps) {
+export function LineChart({ Data: data, Width: width, height = 150, title }: LineChartProps) {
     const plotW = Math.max(1, width - PAD_LEFT - PAD_RIGHT);
     const plotH = Math.max(1, height - PAD_TOP - PAD_BOTTOM);
     const values = data.map((d) => d.value);

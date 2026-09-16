@@ -115,9 +115,9 @@ export class FormBuilderTabComponent {
         const existing = this.State.EditableCode ?? '';
         if (existing.length > 0) {
             const result = ParseCanvasFromCode(existing, schema);
-            if (result.canvas) {
-                this.State.FormCanvas = result.canvas;
-                this.State.FormCodeOnlySectionsDetected = result.hasUnknownConstructs;
+            if (result.Canvas) {
+                this.State.FormCanvas = result.Canvas;
+                this.State.FormCodeOnlySectionsDetected = result.HasUnknownConstructs;
             } else {
                 this.State.FormCanvas = BuildEmptyCanvas(entityName, schema.displayName);
                 this.State.FormCodeOnlySectionsDetected = true;
@@ -329,9 +329,9 @@ export class FormBuilderTabComponent {
         const existing = this.State.EditableCode ?? '';
         if (existing.length > 0) {
             const result = ParseCanvasFromCode(existing, schema);
-            if (result.canvas) {
-                this.State.FormCanvas = result.canvas;
-                this.State.FormCodeOnlySectionsDetected = result.hasUnknownConstructs;
+            if (result.Canvas) {
+                this.State.FormCanvas = result.Canvas;
+                this.State.FormCodeOnlySectionsDetected = result.HasUnknownConstructs;
                 return;
             }
         }

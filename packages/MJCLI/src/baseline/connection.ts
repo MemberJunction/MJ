@@ -20,12 +20,12 @@ export interface DbConnectionOverrides {
 }
 
 export interface DbConnectionParams {
-  dialect: Dialect;
-  host: string;
+  Dialect: Dialect;
+  Host: string;
   port?: number;
-  user: string;
-  password: string;
-  database: string;
+  User: string;
+  Password: string;
+  Database: string;
   encrypt?: boolean;
   trustServerCertificate?: boolean;
 }
@@ -41,7 +41,7 @@ export interface QueryRunner {
 }
 
 export async function OpenConnection(params: DbConnectionParams): Promise<QueryRunner> {
-  if (params.dialect === 'mssql') return openMssql(params);
+  if (params.Dialect === 'mssql') return openMssql(params);
   return openPostgres(params);
 }
 
@@ -58,11 +58,11 @@ async function openMssql(params: DbConnectionParams): Promise<QueryRunner> {
     ? mssqlMod
     : (mssqlMod as unknown as { default: typeof mssqlMod }).default;
   const config = {
-    server: params.host,
+    server: params.Host,
     port: params.port ?? 1433,
-    user: params.user,
-    password: params.password,
-    database: params.database,
+    user: params.User,
+    password: params.Password,
+    database: params.Database,
     options: {
       encrypt: params.encrypt ?? false,
       trustServerCertificate: params.trustServerCertificate ?? true,
@@ -74,7 +74,7 @@ async function openMssql(params: DbConnectionParams): Promise<QueryRunner> {
 
   return {
     dialect: 'mssql',
-    database: params.database,
+    database: params.Database,
     async query<T>(sql: string): Promise<T[]> {
       const result = await pool.request().query(sql);
       return result.recordset as T[];
@@ -104,17 +104,17 @@ async function openPostgres(params: DbConnectionParams): Promise<QueryRunner> {
   const pg = await import('pg');
   const Client = pg.Client ?? (pg as unknown as { default: { Client: typeof pg.Client } }).default.Client;
   const client = new Client({
-    host: params.host,
+    host: params.Host,
     port: params.port ?? 5432,
-    user: params.user,
-    password: params.password,
-    database: params.database,
+    user: params.User,
+    password: params.Password,
+    database: params.Database,
   });
   await client.connect();
 
   return {
     dialect: 'postgres',
-    database: params.database,
+    database: params.Database,
     async query<T>(sql: string, values?: unknown[]): Promise<T[]> {
       const result = await client.query(sql, values as unknown[] | undefined);
       return result.rows as T[];

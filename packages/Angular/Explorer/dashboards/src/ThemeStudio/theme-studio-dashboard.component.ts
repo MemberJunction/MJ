@@ -882,7 +882,7 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
       ...Object.keys(this.Derived.tokens.light),
       ...Object.keys(this.TokenOverrides),
     ]);
-    const groups: TokenGroup[] = TOKEN_CATEGORIES.map((c) => ({ key: c.key, label: c.label, rows: [], modified: 0 }));
+    const groups: TokenGroup[] = TOKEN_CATEGORIES.map((c) => ({ key: c.Key, label: c.Label, rows: [], modified: 0 }));
     const other: TokenGroup = { key: 'other', label: 'Other', rows: [], modified: 0 };
     for (const name of Array.from(names).sort()) {
       if (q && !name.toLowerCase().includes(q)) continue;
@@ -891,7 +891,7 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
       const value = overridden ? this.TokenOverrides[name] : derivedVal;
       const hex = /^#[0-9a-fA-F]{6}$/.test(value.trim());
       const row: TokenRow = { name, value, overridden, isColor: hex, colorValue: hex ? value.trim() : '#000000' };
-      const catIndex = TOKEN_CATEGORIES.findIndex((c) => c.match.test(name));
+      const catIndex = TOKEN_CATEGORIES.findIndex((c) => c.Match.test(name));
       const group = catIndex >= 0 ? groups[catIndex] : other;
       group.rows.push(row);
       if (overridden) group.modified++;

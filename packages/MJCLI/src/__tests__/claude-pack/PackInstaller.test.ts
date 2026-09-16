@@ -89,7 +89,7 @@ function mockHttp(responses: Record<string, HttpResponse>): HttpGetter {
     });
 }
 
-const ok = (body: string): HttpResponse => ({ statusCode: 200, body: utf8(body) });
+const ok = (body: string): HttpResponse => ({ StatusCode: 200, Body: utf8(body) });
 
 /** Construct a fully-populated mock httpGet that serves the fixture pack. */
 function mockServingFixturePack(major = '5', ref = 'main'): HttpGetter {

@@ -51,8 +51,8 @@ export interface DupeEntityDocCandidate {
 
 /** Outcome of {@link resolveEntityDoc}: the matched candidate, or a tolerant error. */
 export type DupeResolveResult<T> =
-    | { ok: true; value: T }
-    | { ok: false; error: string };
+    | { Ok: true; Value: T }
+    | { Ok: false; Error: string };
 
 /**
  * Resolve an agent-supplied entity-document reference to one of the available documents.
@@ -71,24 +71,24 @@ export function ResolveEntityDoc<T extends DupeEntityDocCandidate>(
 ): DupeResolveResult<T> {
     const needle = (input ?? '').trim().toLowerCase();
     if (!needle) {
-        return { ok: false, error: 'Provide an entity document ID, document name, or entity name.' };
+        return { Ok: false, Error: 'Provide an entity document ID, document name, or entity name.' };
     }
 
     const byId = candidates.find(c => c.ID.toLowerCase() === needle);
-    if (byId) return { ok: true, value: byId };
+    if (byId) return { Ok: true, Value: byId };
 
     const byDocName = candidates.find(c => c.Name.trim().toLowerCase() === needle);
-    if (byDocName) return { ok: true, value: byDocName };
+    if (byDocName) return { Ok: true, Value: byDocName };
 
     const byEntity = candidates.find(c => c.EntityName.trim().toLowerCase() === needle);
-    if (byEntity) return { ok: true, value: byEntity };
+    if (byEntity) return { Ok: true, Value: byEntity };
 
     const byPartial = candidates.find(
         c => c.Name.toLowerCase().includes(needle) || c.EntityName.toLowerCase().includes(needle),
     );
-    if (byPartial) return { ok: true, value: byPartial };
+    if (byPartial) return { Ok: true, Value: byPartial };
 
-    return { ok: false, error: BuildDupeNotFoundError(input, candidates.map(c => c.Name)) };
+    return { Ok: false, Error: BuildDupeNotFoundError(input, candidates.map(c => c.Name)) };
 }
 
 /** @deprecated Use {@link ResolveEntityDoc}. */
@@ -131,13 +131,13 @@ export function ResolveEntityFilter(
 ): DupeResolveResult<string> {
     const needle = (input ?? '').trim().toLowerCase();
     if (!needle || needle === 'all') {
-        return { ok: true, value: '' }; // '' = no entity filter ("All")
+        return { Ok: true, Value: '' }; // '' = no entity filter ("All")
     }
     const exact = entityNames.find(n => n.trim().toLowerCase() === needle);
-    if (exact) return { ok: true, value: exact };
+    if (exact) return { Ok: true, Value: exact };
     const partial = entityNames.find(n => n.toLowerCase().includes(needle));
-    if (partial) return { ok: true, value: partial };
-    return { ok: false, error: BuildDupeNotFoundError(input, entityNames) };
+    if (partial) return { Ok: true, Value: partial };
+    return { Ok: false, Error: BuildDupeNotFoundError(input, entityNames) };
 }
 
 /** @deprecated Use {@link ResolveEntityFilter}. */

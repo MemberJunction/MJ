@@ -433,16 +433,16 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
     this.navigationService.SetAgentContext(this, BuildTestingAgentContext({
       ActiveTab: tab,
       ActiveRunCount: this.ActiveRuns.length,
-      TotalTestsRun: k?.totalTestRuns ?? 0,
+      TotalTestsRun: k?.TotalTestRuns ?? 0,
       PassedCount: this.computePassedCount(k),
-      PassRate: k?.passRateThisMonth ?? 0,
-      FailureCount: k?.failedTests ?? 0,
-      SkippedCount: k?.skippedTests ?? 0,
+      PassRate: k?.PassRateThisMonth ?? 0,
+      FailureCount: k?.FailedTests ?? 0,
+      SkippedCount: k?.SkippedTests ?? 0,
       ActiveTestCount: this.computeActiveTestCount(k),
-      AverageRunDuration: k?.averageDuration ?? 0,
-      TotalTestCost: k?.totalCostThisMonth ?? 0,
-      PendingReviewCount: k?.testsPendingReview ?? 0,
-      PassRateTrend: k?.passRateTrend ?? 0,
+      AverageRunDuration: k?.AverageDuration ?? 0,
+      TotalTestCost: k?.TotalCostThisMonth ?? 0,
+      PendingReviewCount: k?.TestsPendingReview ?? 0,
+      PassRateTrend: k?.PassRateTrend ?? 0,
       ActiveRunNames: this.ActiveRuns.map(r => r.TestName),
       Runs: tab === 'runs' ? this.buildRunsSurfaceState() : undefined,
       Analytics: tab === 'analytics' ? this.buildAnalyticsSurfaceState() : undefined,
@@ -453,18 +453,18 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
   /** Derive the passing-run count from the KPI snapshot (total − failed − skipped, floored at 0). */
   private computePassedCount(k: TestingDashboardKPIs | null): number {
     if (!k) return 0;
-    return Math.max(0, k.totalTestRuns - k.failedTests - k.skippedTests);
+    return Math.max(0, k.TotalTestRuns - k.FailedTests - k.SkippedTests);
   }
 
   /** Active-test-catalog count: prefer the KPI value, fall back to the engine cache. */
   private computeActiveTestCount(k: TestingDashboardKPIs | null): number {
-    if (k && k.totalTestsActive > 0) {
-      return k.totalTestsActive;
+    if (k && k.TotalTestsActive > 0) {
+      return k.TotalTestsActive;
     }
     try {
       return TestEngineBase.Instance.Tests.filter(t => t.Status === 'Active').length;
     } catch {
-      return k?.totalTestsActive ?? 0;
+      return k?.TotalTestsActive ?? 0;
     }
   }
 
@@ -503,7 +503,7 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
     const view = s['viewMode'];
     return {
       View: (view === 'queue' || view === 'history') ? (view as TestingReviewView) : 'queue',
-      PendingCount: typeof s['pendingCount'] === 'number' ? s['pendingCount'] : (this.latestKPIs?.testsPendingReview ?? 0),
+      PendingCount: typeof s['pendingCount'] === 'number' ? s['pendingCount'] : (this.latestKPIs?.TestsPendingReview ?? 0),
       ReviewedCount: typeof s['reviewedCount'] === 'number' ? s['reviewedCount'] : 0,
       AverageHumanRating: typeof s['averageHumanRating'] === 'number' ? s['averageHumanRating'] : 0,
       AgreementRate: typeof s['agreementRate'] === 'number' ? s['agreementRate'] : 0,

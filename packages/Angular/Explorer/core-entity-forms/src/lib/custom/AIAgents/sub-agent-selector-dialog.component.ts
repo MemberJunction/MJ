@@ -8,20 +8,20 @@ import { UUIDsEqual } from '@memberjunction/global';
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface SubAgentSelectorResult {
-  selectedAgents: MJAIAgentEntityExtended[];
-  createNew: boolean;
+  SelectedAgents: MJAIAgentEntityExtended[];
+  CreateNew: boolean;
 }
 
 export interface SubAgentSelectorConfig {
-  title: string;
-  multiSelect: boolean;
-  selectedAgentIds: string[];
-  showCreateNew: boolean;
-  parentAgentId: string; // To exclude from selection
+  Title: string;
+  MultiSelect: boolean;
+  SelectedAgentIds: string[];
+  ShowCreateNew: boolean;
+  ParentAgentId: string; // To exclude from selection
 }
 
 export interface AgentDisplayItem extends MJAIAgentEntityExtended {
-  selected: boolean;
+  Selected: boolean;
   typeName?: string;
 }
 
@@ -205,7 +205,7 @@ export class SubAgentSelectorDialogComponent extends BaseAngularComponent implem
       // Root agents (index 0)
       {
         EntityName: 'MJ: AI Agents',
-        ExtraFilter: `ParentID IS NULL AND ID != '${this.config.parentAgentId}' AND Status = 'Active' AND (ExposeAsAction = 0 OR ExposeAsAction IS NULL)`,
+        ExtraFilter: `ParentID IS NULL AND ID != '${this.config.ParentAgentId}' AND Status = 'Active' AND (ExposeAsAction = 0 OR ExposeAsAction IS NULL)`,
         OrderBy: 'Name',
         ResultType: 'entity_object',
         MaxRows: 1000
@@ -224,7 +224,7 @@ export class SubAgentSelectorDialogComponent extends BaseAngularComponent implem
     if (results[0].Success) {
       const agents: AgentDisplayItem[] = (results[0].Results || []).map(agent => ({
         ...agent.GetAll(),
-        selected: false,
+        Selected: false,
         typeName: agent.Type || 'Default'
       } as AgentDisplayItem));
       
@@ -275,14 +275,14 @@ export class SubAgentSelectorDialogComponent extends BaseAngularComponent implem
   }
 
   private preselectExistingAgents() {
-    if (this.config.selectedAgentIds.length > 0) {
-      const selected = new Set(this.config.selectedAgentIds);
+    if (this.config.SelectedAgentIds.length > 0) {
+      const selected = new Set(this.config.SelectedAgentIds);
       this.SelectedAgents$.next(selected);
       
       // Update agent selection state
       const agents = this.AllAgents$.value;
       agents.forEach(agent => {
-        agent.selected = selected.has(agent.ID);
+        agent.Selected = selected.has(agent.ID);
       });
       this.AllAgents$.next(agents);
     }
@@ -306,15 +306,15 @@ export class SubAgentSelectorDialogComponent extends BaseAngularComponent implem
     // Find the agent and toggle its selection
     const agentToUpdate = agents.find(a => UUIDsEqual(a.ID, agent.ID));
     if (agentToUpdate) {
-      agentToUpdate.selected = !agentToUpdate.selected;
+      agentToUpdate.Selected = !agentToUpdate.Selected;
       
-      if (agentToUpdate.selected) {
-        if (!this.config.multiSelect) {
+      if (agentToUpdate.Selected) {
+        if (!this.config.MultiSelect) {
           // Single select mode - clear other selections
           selected.clear();
           agents.forEach(a => {
             if (!UUIDsEqual(a.ID, agent.ID)) {
-              a.selected = false;
+              a.Selected = false;
             }
           });
         }
@@ -330,7 +330,7 @@ export class SubAgentSelectorDialogComponent extends BaseAngularComponent implem
       const filtered = this.FilteredAgents$.value;
       const filteredAgent = filtered.find(a => UUIDsEqual(a.ID, agent.ID));
       if (filteredAgent) {
-        filteredAgent.selected = agentToUpdate.selected;
+        filteredAgent.Selected = agentToUpdate.Selected;
         this.FilteredAgents$.next(filtered);
       }
     }
@@ -401,8 +401,8 @@ export class SubAgentSelectorDialogComponent extends BaseAngularComponent implem
 
   CreateNew() {
     this.Result.next({
-      selectedAgents: [],
-      createNew: true
+      SelectedAgents: [],
+      CreateNew: true
     });
     this.DialogClose.emit();
   }
@@ -424,8 +424,8 @@ export class SubAgentSelectorDialogComponent extends BaseAngularComponent implem
     const selectedAgents: MJAIAgentEntityExtended[] = selectedDisplayItems.map(item => item as MJAIAgentEntityExtended);
     
     this.Result.next({
-      selectedAgents,
-      createNew: false
+      SelectedAgents: selectedAgents,
+      CreateNew: false
     });
     this.DialogClose.emit();
   }

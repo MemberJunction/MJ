@@ -849,7 +849,7 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
    */
   public ImprovePrediction(c: BusinessPredictionCard): void {
     this.PendingPrompt = BuildImprovePrompt({
-      name: c.title,
+      Name: c.title,
       trustGrade: c.trust.grade,
       reason: c.blockedReason ?? c.trust.gateReason ?? null,
     });

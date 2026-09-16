@@ -15,7 +15,7 @@ export interface ParameterPair {
 }
 
 export interface TemplateRunResult {
-    success: boolean;
+    Success: boolean;
     output?: string;
     error?: string;
     executionTimeMs?: number;
@@ -287,7 +287,7 @@ export class TemplateParamDialogComponent extends BaseAngularComponent implement
 
             {
                 this.TestResult = {
-                    success: opResult.Success,
+                    Success: opResult.Success,
                     output: opResult.Output?.output,
                     error: opResult.ErrorMessage,
                     executionTimeMs: opResult.Output?.executionTimeMs,
@@ -297,7 +297,7 @@ export class TemplateParamDialogComponent extends BaseAngularComponent implement
                 this.ParametersExpanded = false;
                 this.ResultsExpanded = true;
                 
-                if (this.TestResult?.success) {
+                if (this.TestResult?.Success) {
                     MJNotificationService.Instance.CreateSimpleNotification(
                         `Template executed successfully in ${this.TestResult.executionTimeMs || 0}ms`,
                         'success',
@@ -315,7 +315,7 @@ export class TemplateParamDialogComponent extends BaseAngularComponent implement
         } catch (error) {
             console.error('Template test error:', error);
             this.TestResult = {
-                success: false,
+                Success: false,
                 error: (error as Error).message || 'Unknown error occurred'
             };
             
@@ -414,13 +414,13 @@ export class TemplateParamDialogComponent extends BaseAngularComponent implement
     SaveResults() {
         if (!this.TestResult) return;
 
-        const content = this.TestResult.success 
+        const content = this.TestResult.Success 
             ? this.TestResult.output || 'No output'
             : this.TestResult.error || 'No error details';
         
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
         const templateName = this.Template?.Name?.replace(/[^a-zA-Z0-9]/g, '_') || 'template';
-        const status = this.TestResult.success ? 'success' : 'error';
+        const status = this.TestResult.Success ? 'success' : 'error';
         const filename = `${templateName}_${status}_${timestamp}.txt`;
 
         // Create blob and download

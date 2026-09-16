@@ -28,7 +28,7 @@ import { Colors, Radius, Shadow, Spacing, Type } from '@/theme/tokens';
  */
 export default function ConversationsScreen() {
     const { status } = useMJ();
-    const { conversations, loading, error, refresh } = useConversations();
+    const { Conversations: conversations, Loading: loading, Error: error, Refresh: refresh } = useConversations();
 
     const grouped = useMemo(() => {
         if (!conversations) return null;
@@ -102,38 +102,38 @@ export default function ConversationsScreen() {
                     </View>
                 ) : null}
 
-                {grouped?.pinned.length ? (
+                {grouped?.Pinned.length ? (
                     <>
                         <Section label="Pinned" icon={<Icons.Pin size={11} color="#c9a76b" />} />
                         <View style={styles.list}>
-                            {grouped.pinned.map((conv) => <ConversationRow key={conv.id} conv={conv} />)}
+                            {grouped.Pinned.map((conv) => <ConversationRow key={conv.Id} conv={conv} />)}
                         </View>
                     </>
                 ) : null}
 
-                {grouped?.today.length ? (
+                {grouped?.Today.length ? (
                     <>
-                        <Section label={`Today · ${grouped.today.length}`} />
+                        <Section label={`Today · ${grouped.Today.length}`} />
                         <View style={styles.list}>
-                            {grouped.today.map((conv) => <ConversationRow key={conv.id} conv={conv} />)}
+                            {grouped.Today.map((conv) => <ConversationRow key={conv.Id} conv={conv} />)}
                         </View>
                     </>
                 ) : null}
 
-                {grouped?.yesterday.length ? (
+                {grouped?.Yesterday.length ? (
                     <>
-                        <Section label={`Yesterday · ${grouped.yesterday.length}`} />
+                        <Section label={`Yesterday · ${grouped.Yesterday.length}`} />
                         <View style={styles.list}>
-                            {grouped.yesterday.map((conv) => <ConversationRow key={conv.id} conv={conv} />)}
+                            {grouped.Yesterday.map((conv) => <ConversationRow key={conv.Id} conv={conv} />)}
                         </View>
                     </>
                 ) : null}
 
-                {grouped?.earlier.length ? (
+                {grouped?.Earlier.length ? (
                     <>
-                        <Section label={`Earlier · ${grouped.earlier.length}`} />
+                        <Section label={`Earlier · ${grouped.Earlier.length}`} />
                         <View style={styles.list}>
-                            {grouped.earlier.map((conv) => <ConversationRow key={conv.id} conv={conv} />)}
+                            {grouped.Earlier.map((conv) => <ConversationRow key={conv.Id} conv={conv} />)}
                         </View>
                     </>
                 ) : null}
@@ -162,23 +162,23 @@ function Section({ label, icon }: { label: string; icon?: React.ReactNode }) {
 function ConversationRow({ conv }: { conv: ConversationSummary }) {
     return (
         <Pressable
-            onPress={() => router.push({ pathname: '/chat/[id]', params: { id: conv.id } })}
+            onPress={() => router.push({ pathname: '/chat/[id]', params: { id: conv.Id } })}
             style={styles.row}
         >
             <View style={styles.avSlot}>
-                <AgentAvatarStack agents={conv.agents} size={30} borderColor={Colors.bg} />
+                <AgentAvatarStack agents={conv.Agents} size={30} borderColor={Colors.bg} />
             </View>
             <View style={styles.body}>
                 <View style={styles.bodyTop}>
-                    <Text numberOfLines={1} style={styles.rowTitle}>{conv.title}</Text>
-                    <Text style={styles.rowTime}>{conv.timestamp}</Text>
+                    <Text numberOfLines={1} style={styles.rowTitle}>{conv.Title}</Text>
+                    <Text style={styles.rowTime}>{conv.Timestamp}</Text>
                 </View>
-                <Text numberOfLines={1} style={styles.rowSnippet}>{conv.snippet}</Text>
+                <Text numberOfLines={1} style={styles.rowSnippet}>{conv.Snippet}</Text>
                 <View style={styles.rowMeta}>
                     <Text style={styles.agentTag} numberOfLines={1}>
-                        {conv.agents.length > 0
-                            ? `${conv.agents.map(a => a.name).join(' · ')} · ${conv.messageCount} messages`
-                            : `${conv.messageCount} messages`}
+                        {conv.Agents.length > 0
+                            ? `${conv.Agents.map(a => a.name).join(' · ')} · ${conv.MessageCount} messages`
+                            : `${conv.MessageCount} messages`}
                     </Text>
                     {conv.live ? (
                         <View style={styles.liveTag}>

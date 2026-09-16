@@ -4,7 +4,7 @@
   <!-- Dialog Header -->
   <div class="dialog-header">
     <div class="header-info">
-      <h3>{{ config.title || 'Select Sub-Agents' }}</h3>
+      <h3>{{ config.Title || 'Select Sub-Agents' }}</h3>
       <p class="header-description">
         Choose existing root agents to convert into sub-agents. Only active agents without parents and not exposed as actions can be selected.
       </p>
@@ -79,12 +79,12 @@
         <div class="agents-grid">
           @for (agent of (filteredAgents$ | async); track agent.ID) {
             <div class="agent-card" 
-                 [class.selected]="agent.selected"
+                 [class.selected]="agent.Selected"
                  (click)="toggleAgentSelection(agent)">
               
               <!-- Selection Indicator -->
               <div class="selection-indicator">
-                @if (agent.selected) {
+                @if (agent.Selected) {
                   <i class="fa-solid fa-check-circle"></i>
                 } @else {
                   <i class="fa-regular fa-circle"></i>
@@ -130,7 +130,7 @@
   <!-- Dialog Footer -->
   <div class="dialog-footer">
     <div class="footer-left">
-      @if (config.showCreateNew) {
+      @if (config.ShowCreateNew) {
         <button mjButton
                 variant="primary"
                 (click)="createNew()">
@@ -151,7 +151,7 @@
               variant="primary"
               (click)="addSelectedAgents()"
               [disabled]="selectedCount === 0">
-        @if (config.multiSelect) {
+        @if (config.MultiSelect) {
           Add {{ selectedCount > 0 ? selectedCount + ' ' : '' }}Sub-Agent{{ selectedCount !== 1 ? 's' : '' }}
         } @else {
           Add Sub-Agent

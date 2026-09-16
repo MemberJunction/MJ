@@ -14,27 +14,27 @@ import { ScanFieldBindings } from '../ComponentStudio/services/field-binding-sca
 
 describe('scanFieldBindings — regex fallback path', () => {
     it('returns an empty set for falsy input', () => {
-        expect(ScanFieldBindings('').boundFields.size).toBe(0);
-        expect(ScanFieldBindings(null).boundFields.size).toBe(0);
-        expect(ScanFieldBindings(undefined).boundFields.size).toBe(0);
+        expect(ScanFieldBindings('').BoundFields.size).toBe(0);
+        expect(ScanFieldBindings(null).BoundFields.size).toBe(0);
+        expect(ScanFieldBindings(undefined).BoundFields.size).toBe(0);
     });
 
     it('captures simple `record.Field` accesses', () => {
         const code = `function F({record}){return <div>{record.Name}</div>;}`;
         const r = ScanFieldBindings(code);
-        expect(r.boundFields.has('Name')).toBe(true);
+        expect(r.BoundFields.has('Name')).toBe(true);
     });
 
     it('captures `record?.Field` (optional chaining)', () => {
         const code = `const v = record?.Description;`;
-        expect(ScanFieldBindings(code).boundFields.has('Description')).toBe(true);
+        expect(ScanFieldBindings(code).BoundFields.has('Description')).toBe(true);
     });
 
     it('captures bracket-string access', () => {
         const code = `const v = record["Name"]; const w = record['Description'];`;
         const r = ScanFieldBindings(code);
-        expect(r.boundFields.has('Name')).toBe(true);
-        expect(r.boundFields.has('Description')).toBe(true);
+        expect(r.BoundFields.has('Name')).toBe(true);
+        expect(r.BoundFields.has('Description')).toBe(true);
     });
 
     it('captures multiple distinct fields', () => {
@@ -44,13 +44,13 @@ describe('scanFieldBindings — regex fallback path', () => {
             const i = record.Icon;
         `;
         const r = ScanFieldBindings(code);
-        expect(r.boundFields).toEqual(new Set(['Name', 'Description', 'Icon']));
+        expect(r.BoundFields).toEqual(new Set(['Name', 'Description', 'Icon']));
     });
 
     it('does NOT capture dynamic bracket access (record[someVar])', () => {
         // Dynamic computed access is unknowable statically; both modes skip it.
         const code = `const v = record[someVar];`;
-        expect(ScanFieldBindings(code).boundFields.size).toBe(0);
+        expect(ScanFieldBindings(code).BoundFields.size).toBe(0);
     });
 
     it('does NOT pull "fields" out of comments', () => {
@@ -60,15 +60,15 @@ describe('scanFieldBindings — regex fallback path', () => {
             const real = record.Real;
         `;
         const r = ScanFieldBindings(code);
-        expect(r.boundFields.has('Real')).toBe(true);
-        expect(r.boundFields.has('Phantom')).toBe(false);
-        expect(r.boundFields.has('AlsoPhantom')).toBe(false);
+        expect(r.BoundFields.has('Real')).toBe(true);
+        expect(r.BoundFields.has('Phantom')).toBe(false);
+        expect(r.BoundFields.has('AlsoPhantom')).toBe(false);
     });
 
     it('marks regex mode in result', () => {
         const r = ScanFieldBindings('record.X');
         // Babel isn't installed in unit tests, so we get the regex path.
-        expect(r.usedAst).toBe(false);
+        expect(r.UsedAst).toBe(false);
     });
 
     it('ignores accesses on identifiers that are not exactly `record`', () => {
@@ -78,7 +78,7 @@ describe('scanFieldBindings — regex fallback path', () => {
             const c = record.Real;
         `;
         const r = ScanFieldBindings(code);
-        expect(Array.from(r.boundFields).sort()).toEqual(['Real']);
+        expect(Array.from(r.BoundFields).sort()).toEqual(['Real']);
     });
 });
 
@@ -96,7 +96,7 @@ describe('scanFieldBindings — AST path', () => {
     it('falls through to regex when stub Babel lacks .parse', () => {
         (globalThis as { Babel?: unknown }).Babel = { packages: {} }; // no parser
         const r = ScanFieldBindings('record.X');
-        expect(r.usedAst).toBe(false);
-        expect(r.boundFields.has('X')).toBe(true);
+        expect(r.UsedAst).toBe(false);
+        expect(r.BoundFields.has('X')).toBe(true);
     });
 });

@@ -98,29 +98,29 @@ describe('testing-agent-context', () => {
 
         it('matches by exact id (case-insensitive)', () => {
             const r = ResolveTestRunByReference('aaaa-1111', candidates);
-            expect(r.ok).toBe(true);
-            if (r.ok) expect(r.run.testName).toBe('Login Flow');
+            expect(r.Ok).toBe(true);
+            if (r.Ok) expect(r.Run.testName).toBe('Login Flow');
         });
 
         it('matches by exact test name', () => {
             const r = ResolveTestRunByReference('Checkout Flow', candidates);
-            expect(r.ok && r.run.id).toBe('BBBB-2222');
+            expect(r.Ok && r.Run.id).toBe('BBBB-2222');
         });
 
         it('falls back to a contains match on the name', () => {
             const r = ResolveTestRunByReference('search', candidates);
-            expect(r.ok && r.run.id).toBe('CCCC-3333');
+            expect(r.Ok && r.Run.id).toBe('CCCC-3333');
         });
 
         it('errors with a sample on a miss', () => {
             const r = ResolveTestRunByReference('nope', candidates);
-            expect(r.ok).toBe(false);
-            if (!r.ok) expect(r.error).toContain('Login Flow');
+            expect(r.Ok).toBe(false);
+            if (!r.Ok) expect(r.Error).toContain('Login Flow');
         });
 
         it('errors on empty input or empty candidate set', () => {
-            expect(ResolveTestRunByReference('', candidates).ok).toBe(false);
-            expect(ResolveTestRunByReference('x', []).ok).toBe(false);
+            expect(ResolveTestRunByReference('', candidates).Ok).toBe(false);
+            expect(ResolveTestRunByReference('x', []).Ok).toBe(false);
         });
     });
 

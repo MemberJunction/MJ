@@ -53,7 +53,7 @@ export const PS_CAPABILITY_CARDS: readonly PSCapabilityCard[] = [
 /** Context for {@link buildImprovePrompt} — a blocked prediction the user wants to improve. */
 export interface ImprovePromptInput {
   /** The prediction's display name. */
-  name: string;
+  Name: string;
   /** Its trust grade (Poor/Fair/…), when known. */
   trustGrade?: string | null;
   /** The plain-language reason it's blocked (trust gate / leakage), when known. */
@@ -73,7 +73,7 @@ function ensureSentence(text: string): string {
  * improvements (more/better data, different target framing, algorithm, more history). Pure + deterministic.
  */
 export function BuildImprovePrompt(input: ImprovePromptInput): string {
-  const name = trim(input.name) || 'this prediction';
+  const name = trim(input.Name) || 'this prediction';
   const grade = trim(input.trustGrade);
   const reason = trim(input.reason);
   const why = reason ? ` It's being held back because: ${ensureSentence(reason)}` : '';

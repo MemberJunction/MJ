@@ -133,10 +133,10 @@ export class EntityWizardStateService {
     public UpdateBasics(basics: BasicsStepValue): void {
         this._tableDefinition.next({
             ...this._tableDefinition.value,
-            EntityName: basics.entityName,
-            TableName:  basics.tableName,
-            SchemaName: basics.schemaName,
-            Description: basics.description || undefined,
+            EntityName: basics.EntityName,
+            TableName:  basics.TableName,
+            SchemaName: basics.SchemaName,
+            Description: basics.Description || undefined,
         });
     }
 
@@ -230,7 +230,7 @@ export class EntityWizardStateService {
             const result = modificationType === 'create'
                 ? await this.designerService.createEntity(td)
                 : await this.designerService.modifyEntity(td, {
-                    existingEntityId: existingEntityId ?? '',
+                    ExistingEntityId: existingEntityId ?? '',
                 });
             this._pipelineResult.next(result);
             return result;

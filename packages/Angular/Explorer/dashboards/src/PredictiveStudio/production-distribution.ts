@@ -22,12 +22,12 @@ export interface DistributionBucket {
 /** Result of bucketing a written column's current values across the population. */
 export interface DistributionResult {
   /** 'numeric' → neutral terciles (Low/Mid/High bands); 'categorical' → group-by-value. */
-  kind: 'numeric' | 'categorical';
-  buckets: DistributionBucket[];
+  Kind: 'numeric' | 'categorical';
+  Buckets: DistributionBucket[];
   /** Total records sampled (post NOT-NULL filter, pre-cap if the population is larger). */
-  sampled: number;
+  Sampled: number;
   /** True when the population hit {@link PRODUCTION_SAMPLE_CAP} and the distribution is a sample. */
-  capped: boolean;
+  Capped: boolean;
 }
 
 /**
@@ -47,7 +47,7 @@ export function BuildDistribution(values: ReadonlyArray<unknown>, numeric: boole
   const sampled = cleaned.length;
   const capped = sampled >= PRODUCTION_SAMPLE_CAP;
   if (sampled === 0) {
-    return { kind: numeric ? 'numeric' : 'categorical', buckets: [], sampled: 0, capped: false };
+    return { Kind: numeric ? 'numeric' : 'categorical', Buckets: [], Sampled: 0, Capped: false };
   }
   return numeric
     ? buildNumericTerciles(cleaned, sampled, capped)
@@ -73,10 +73,10 @@ function buildNumericTerciles(values: ReadonlyArray<unknown>, sampled: number, c
   // Degenerate range (all identical) → a single band.
   if (span === 0) {
     return {
-      kind: 'numeric',
-      buckets: [{ label: `${formatNum(min)}`, count: nums.length, pct: 100 }],
-      sampled,
-      capped,
+      Kind: 'numeric',
+      Buckets: [{ label: `${formatNum(min)}`, count: nums.length, pct: 100 }],
+      Sampled: sampled,
+      Capped: capped,
     };
   }
   const third = span / 3;
@@ -96,7 +96,7 @@ function buildNumericTerciles(values: ReadonlyArray<unknown>, sampled: number, c
     { label: `Middle third (${formatNum(b1)}–${formatNum(b2)})`, count: mid, pct: pct(mid, total) },
     { label: `Upper third (${formatNum(b2)}–${formatNum(max)})`, count: high, pct: pct(high, total) },
   ];
-  return { kind: 'numeric', buckets, sampled, capped };
+  return { Kind: 'numeric', Buckets: buckets, Sampled: sampled, Capped: capped };
 }
 
 function buildCategorical(values: ReadonlyArray<unknown>, sampled: number, capped: boolean): DistributionResult {
@@ -116,7 +116,7 @@ function buildCategorical(values: ReadonlyArray<unknown>, sampled: number, cappe
     buckets = top.map(([label, count]) => ({ label, count, pct: pct(count, total) }));
     buckets.push({ label: 'Other', count: otherCount, pct: pct(otherCount, total) });
   }
-  return { kind: 'categorical', buckets, sampled, capped };
+  return { Kind: 'categorical', Buckets: buckets, Sampled: sampled, Capped: capped };
 }
 
 function toNumber(v: unknown): number | null {
@@ -316,13 +316,13 @@ export interface RawRun {
 
 /** A summarized last-run view-model rendered in the panel's "Last run" cell. */
 export interface RunSummary {
-  status: string;
-  statusVariant: StatusVariant;
+  Status: string;
+  StatusVariant: StatusVariant;
   /** Best available timestamp: EndTime → StartTime → CreatedAt → null. */
-  when: Date | null;
-  successCount: number;
-  errorCount: number;
-  totalCount: number | null;
+  When: Date | null;
+  SuccessCount: number;
+  ErrorCount: number;
+  TotalCount: number | null;
 }
 
 /**
@@ -335,12 +335,12 @@ export interface RunSummary {
 export function SummarizeRun(run: RawRun | null | undefined): RunSummary | null {
   if (!run) return null;
   return {
-    status: run.Status,
-    statusVariant: RunStatusVariant(run.Status),
-    when: run.EndTime ?? run.StartTime ?? run.CreatedAt ?? null,
-    successCount: run.SuccessCount ?? 0,
-    errorCount: run.ErrorCount ?? 0,
-    totalCount: run.TotalItemCount ?? null,
+    Status: run.Status,
+    StatusVariant: RunStatusVariant(run.Status),
+    When: run.EndTime ?? run.StartTime ?? run.CreatedAt ?? null,
+    SuccessCount: run.SuccessCount ?? 0,
+    ErrorCount: run.ErrorCount ?? 0,
+    TotalCount: run.TotalItemCount ?? null,
   };
 }
 

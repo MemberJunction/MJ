@@ -52,25 +52,25 @@ export async function IntrospectPostgres(db: QueryRunner, progress: Progress = {
   const sequences = await readSequences(db);
 
   return {
-    dialect: 'postgres',
-    schemas: StableSortBy(schemas.map((s) => ({ name: s.schema_name })), (s) => s.name.toLowerCase()),
-    tables: StableSortBy(tables, (t) => `${t.schema}.${t.name}`.toLowerCase()),
-    views: StableSortBy(views, (v) => `${v.schema}.${v.name}`.toLowerCase()),
-    procedures: StableSortBy(procedures, (r) => `${r.schema}.${r.name}`.toLowerCase()),
-    functions: StableSortBy(functions, (r) => `${r.schema}.${r.name}`.toLowerCase()),
-    triggers: StableSortBy(triggers, (t) => `${t.schema}.${t.name}`.toLowerCase()),
-    sequences: StableSortBy(sequences, (s) => `${s.schema}.${s.name}`.toLowerCase()),
+    Dialect: 'postgres',
+    Schemas: StableSortBy(schemas.map((s) => ({ name: s.schema_name })), (s) => s.name.toLowerCase()),
+    Tables: StableSortBy(tables, (t) => `${t.Schema}.${t.Name}`.toLowerCase()),
+    Views: StableSortBy(views, (v) => `${v.schema}.${v.name}`.toLowerCase()),
+    Procedures: StableSortBy(procedures, (r) => `${r.schema}.${r.name}`.toLowerCase()),
+    Functions: StableSortBy(functions, (r) => `${r.schema}.${r.name}`.toLowerCase()),
+    Triggers: StableSortBy(triggers, (t) => `${t.schema}.${t.name}`.toLowerCase()),
+    Sequences: StableSortBy(sequences, (s) => `${s.schema}.${s.name}`.toLowerCase()),
     // PG introspection of UDTs / extended-property analogs is future work — the
     // MSSQL → PG converter currently doesn't translate `sp_addextendedproperty`
     // or `CREATE TYPE AS TABLE`, so returning empty here keeps the snapshot
     // shape consistent without misrepresenting the source.
-    userDefinedTypes: [],
-    extendedProperties: [],
+    UserDefinedTypes: [],
+    ExtendedProperties: [],
     // Principals/role memberships/permissions: PG uses a different model
     // (roles only — no users — with grants on namespaces). Future work.
-    principals: [],
-    roleMemberships: [],
-    permissions: [],
+    Principals: [],
+    RoleMemberships: [],
+    Permissions: [],
   };
 }
 
@@ -206,7 +206,7 @@ async function readTables(db: QueryRunner): Promise<TableDef[]> {
 
     const pkRow = myConstraints.find((r) => r.contype === 'p');
     const primaryKey: PrimaryKeyDef | undefined = pkRow && pkRow.column_names
-      ? { name: pkRow.constraint_name, columns: pkRow.column_names, clustered: false }
+      ? { Name: pkRow.constraint_name, Columns: pkRow.column_names, Clustered: false }
       : undefined;
 
     const uniqueConstraints: UniqueConstraintDef[] = StableSortBy(
@@ -255,15 +255,15 @@ async function readTables(db: QueryRunner): Promise<TableDef[]> {
     );
 
     tables.push({
-      schema: t.schema_name,
-      name: t.table_name,
-      hasIdentity: t.has_identity,
-      columns,
+      Schema: t.schema_name,
+      Name: t.table_name,
+      HasIdentity: t.has_identity,
+      Columns: columns,
       primaryKey,
-      uniqueConstraints,
-      indexes,
-      foreignKeys,
-      checks,
+      UniqueConstraints: uniqueConstraints,
+      Indexes: indexes,
+      ForeignKeys: foreignKeys,
+      Checks: checks,
     });
   }
   return tables;

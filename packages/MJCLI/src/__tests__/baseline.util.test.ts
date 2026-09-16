@@ -144,34 +144,34 @@ describe('baseline/util', () => {
     it('parses a V-file with .x patch', () => {
       const r = ParseMigrationFilename('V202605032236__v5.32.x__Metadata_Sync.sql');
       expect(r).not.toBeNull();
-      expect(r!.kind).toBe('V');
-      expect(r!.timestamp).toBe('202605032236');
-      expect(r!.major).toBe(5);
-      expect(r!.minor).toBe(32);
-      expect(r!.majorMinor).toBe('5.32');
+      expect(r!.Kind).toBe('V');
+      expect(r!.Timestamp).toBe('202605032236');
+      expect(r!.Major).toBe(5);
+      expect(r!.Minor).toBe(32);
+      expect(r!.MajorMinor).toBe('5.32');
     });
     it('parses a V-file without patch suffix', () => {
       const r = ParseMigrationFilename('V202602170015__v5.1__Regenerate_Delete_Stored_Procs.sql');
       expect(r).not.toBeNull();
-      expect(r!.majorMinor).toBe('5.1');
+      expect(r!.MajorMinor).toBe('5.1');
     });
     it('parses a B-file (baseline)', () => {
       const r = ParseMigrationFilename('B202602151200__v5.0__Baseline.sql');
       expect(r).not.toBeNull();
-      expect(r!.kind).toBe('B');
-      expect(r!.majorMinor).toBe('5.0');
+      expect(r!.Kind).toBe('B');
+      expect(r!.MajorMinor).toBe('5.0');
     });
     it('parses a B-file with literal x patch (current emitter convention)', () => {
       const r = ParseMigrationFilename('B202605032237__v5.32.x__Baseline.sql');
       expect(r).not.toBeNull();
-      expect(r!.kind).toBe('B');
-      expect(r!.majorMinor).toBe('5.32');
+      expect(r!.Kind).toBe('B');
+      expect(r!.MajorMinor).toBe('5.32');
     });
     it('also parses legacy B-files with uppercase X (back-compat)', () => {
       const r = ParseMigrationFilename('B202605032237__v5.32.X__Baseline.sql');
       expect(r).not.toBeNull();
-      expect(r!.kind).toBe('B');
-      expect(r!.majorMinor).toBe('5.32');
+      expect(r!.Kind).toBe('B');
+      expect(r!.MajorMinor).toBe('5.32');
     });
     it('returns null for unrecognized shapes', () => {
       expect(ParseMigrationFilename('R__RefreshMetadata.sql')).toBeNull();
@@ -197,8 +197,8 @@ describe('baseline/util', () => {
       ]);
       const r = FindLatestVersionedMigration(dir);
       expect(r).not.toBeNull();
-      expect(r!.timestamp).toBe('202605032236');
-      expect(r!.majorMinor).toBe('5.32');
+      expect(r!.Timestamp).toBe('202605032236');
+      expect(r!.MajorMinor).toBe('5.32');
     });
 
     it('ignores B-files when looking for V-files', () => {
@@ -207,7 +207,7 @@ describe('baseline/util', () => {
         'V202605032236__v5.32.x__Metadata.sql',
       ]);
       const r = FindLatestVersionedMigration(dir);
-      expect(r!.timestamp).toBe('202605032236');
+      expect(r!.Timestamp).toBe('202605032236');
     });
 
     it('finds the latest B-file', () => {
@@ -217,8 +217,8 @@ describe('baseline/util', () => {
         'V202605032236__v5.32.x__Metadata.sql',
       ]);
       const r = FindLatestBaselineMigration(dir);
-      expect(r!.timestamp).toBe('202605032237');
-      expect(r!.majorMinor).toBe('5.32');
+      expect(r!.Timestamp).toBe('202605032237');
+      expect(r!.MajorMinor).toBe('5.32');
     });
 
     it('returns null for an empty directory', () => {

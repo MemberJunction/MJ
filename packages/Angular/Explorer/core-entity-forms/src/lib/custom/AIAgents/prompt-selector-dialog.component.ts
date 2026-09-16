@@ -8,7 +8,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface PromptSelectorConfig {
   /** Title for the dialog */
-  title: string;
+  Title: string;
   /** Whether to show the "Create New" option */
   showCreateNew?: boolean;
   /** Filter criteria for prompts */
@@ -23,7 +23,7 @@ export interface PromptSelectorConfig {
 
 export interface PromptSelectorResult {
   /** Selected prompts */
-  selectedPrompts: MJAIPromptEntityExtended[];
+  SelectedPrompts: MJAIPromptEntityExtended[];
   /** Whether user chose to create new */
   createNew?: boolean;
 }
@@ -43,7 +43,7 @@ export interface PromptSelectorResult {
 export class PromptSelectorDialogComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   
   // Input configuration
-  config: PromptSelectorConfig = { title: 'Select Prompts' };
+  config: PromptSelectorConfig = { Title: 'Select Prompts' };
   
   // State management
   private destroy$ = new Subject<void>();
@@ -338,7 +338,7 @@ export class PromptSelectorDialogComponent extends BaseAngularComponent implemen
     }
 
     const result: PromptSelectorResult = {
-      selectedPrompts: selectedPromptObjects
+      SelectedPrompts: selectedPromptObjects
     };
 
     this.Result.next(result);
@@ -352,7 +352,7 @@ export class PromptSelectorDialogComponent extends BaseAngularComponent implemen
 
   CreateNew() {
     const result: PromptSelectorResult = {
-      selectedPrompts: [],
+      SelectedPrompts: [],
       createNew: true
     };
 

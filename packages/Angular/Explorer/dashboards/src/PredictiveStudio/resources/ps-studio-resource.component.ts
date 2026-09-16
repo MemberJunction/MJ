@@ -326,10 +326,10 @@ export class PSStudioResourceComponent extends PSResourceBase {
   /** The Overview panel's in-app navigation: switch section in-place, or cross to the Models door. */
   public MapNavigate(key: PSPanelKey): void {
     const target = RouteHomeNavigate(key);
-    if (target.kind === 'section') {
-      this.selectSection(target.key);
-    } else if (target.kind === 'app') {
-      void this.navigationService.SwitchToApp(PREDICTIVE_STUDIO_APP_ID, target.navLabel, { section: target.section });
+    if (target.Kind === 'section') {
+      this.selectSection(target.Key);
+    } else if (target.Kind === 'app') {
+      void this.navigationService.SwitchToApp(PREDICTIVE_STUDIO_APP_ID, target.NavLabel, { section: target.Section });
     }
   }
 

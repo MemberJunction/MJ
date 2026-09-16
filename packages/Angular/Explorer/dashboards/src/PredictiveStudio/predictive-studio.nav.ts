@@ -94,15 +94,15 @@ export function hasSection(sections: readonly PSSection[], key: PSPanelKey): boo
  * - `home` (or anything unmapped) → no-op (we're already on Studio's Overview).
  */
 export type HomeNavTarget =
-  | { readonly kind: 'section'; readonly key: PSPanelKey }
-  | { readonly kind: 'app'; readonly navLabel: string; readonly section: PSPanelKey }
-  | { readonly kind: 'none' };
+  | { readonly Kind: 'section'; readonly Key: PSPanelKey }
+  | { readonly Kind: 'app'; readonly NavLabel: string; readonly Section: PSPanelKey }
+  | { readonly Kind: 'none' };
 
 export function RouteHomeNavigate(key: PSPanelKey): HomeNavTarget {
-  if (key === 'home') return { kind: 'none' };
-  if (HasSection(MODELS_SECTIONS, key)) return { kind: 'app', navLabel: MODELS_NAV_LABEL, section: key };
-  if (HasSection(STUDIO_SECTIONS, key)) return { kind: 'section', key };
-  return { kind: 'none' };
+  if (key === 'home') return { Kind: 'none' };
+  if (HasSection(MODELS_SECTIONS, key)) return { Kind: 'app', NavLabel: MODELS_NAV_LABEL, Section: key };
+  if (HasSection(STUDIO_SECTIONS, key)) return { Kind: 'section', Key: key };
+  return { Kind: 'none' };
 }
 
 /** @deprecated Use {@link RouteHomeNavigate}. */

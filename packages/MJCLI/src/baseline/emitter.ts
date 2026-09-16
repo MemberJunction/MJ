@@ -56,34 +56,34 @@ import type {
 } from './types';
 
 export interface EmitInput {
-  snapshot: SchemaSnapshot;
-  dataDumps: readonly TableDataDump[];
-  options: BaselineEmitOptions;
+  Snapshot: SchemaSnapshot;
+  DataDumps: readonly TableDataDump[];
+  Options: BaselineEmitOptions;
 }
 
 export function EmitBaselineTsql(input: EmitInput): string {
-  if (input.snapshot.dialect !== 'mssql') {
+  if (input.Snapshot.Dialect !== 'mssql') {
     throw new Error('emitBaselineTsql requires an MSSQL snapshot');
   }
   const parts: string[] = [];
-  parts.push(emitHeader(input.options));
-  parts.push(emitSchemas(input.snapshot));
+  parts.push(emitHeader(input.Options));
+  parts.push(emitSchemas(input.Snapshot));
   // Principals (users + custom roles) come right after schemas so they exist
   // before any GRANT statement, and so AUTHORIZATION clauses on objects (if
   // any) can resolve. They're also independent of every other object kind, so
   // moving them early has no ordering risk.
-  parts.push(emitPrincipals(input.snapshot.principals));
-  parts.push(emitSequences(input.snapshot.sequences));
-  parts.push(emitTables(input.snapshot.tables));
-  parts.push(emitDefaults(input.snapshot.tables));
-  parts.push(emitChecks(input.snapshot.tables));
-  parts.push(emitIndexes(input.snapshot.tables));
-  if (input.options.includeData) {
-    parts.push(emitData(input.snapshot.tables, input.dataDumps, input.options.batchSize));
+  parts.push(emitPrincipals(input.Snapshot.Principals));
+  parts.push(emitSequences(input.Snapshot.Sequences));
+  parts.push(emitTables(input.Snapshot.Tables));
+  parts.push(emitDefaults(input.Snapshot.Tables));
+  parts.push(emitChecks(input.Snapshot.Tables));
+  parts.push(emitIndexes(input.Snapshot.Tables));
+  if (input.Options.includeData) {
+    parts.push(emitData(input.Snapshot.Tables, input.DataDumps, input.Options.batchSize));
   }
   // UDTs (table types) BEFORE any routine: procs/functions accept these as TVPs
   // and MSSQL needs the type to exist at create time.
-  parts.push(emitUserDefinedTypes(input.snapshot.userDefinedTypes));
+  parts.push(emitUserDefinedTypes(input.Snapshot.UserDefinedTypes));
   // Functions before views: MJ views frequently reference scalar/table UDFs
   // (e.g. vwActionCategories → fnActionCategoryParentID_GetRootID). MSSQL does
   // NOT defer name resolution for view bodies, so the function must already
@@ -92,20 +92,20 @@ export function EmitBaselineTsql(input: EmitInput): string {
   // Within each category we also topo-sort by inferred body references because
   // views can reference other views, functions can reference other functions,
   // etc. Cycles fall back to qname order so output stays deterministic.
-  parts.push(emitRoutines(TopoSortRoutinesByDefinition(input.snapshot.functions), 'function'));
-  parts.push(emitViews(TopoSortRoutinesByDefinition(input.snapshot.views)));
-  parts.push(emitRoutines(TopoSortRoutinesByDefinition(input.snapshot.procedures), 'procedure'));
-  parts.push(emitTriggers(TopoSortRoutinesByDefinition(input.snapshot.triggers)));
-  parts.push(emitForeignKeys(input.snapshot.tables));
+  parts.push(emitRoutines(TopoSortRoutinesByDefinition(input.Snapshot.Functions), 'function'));
+  parts.push(emitViews(TopoSortRoutinesByDefinition(input.Snapshot.Views)));
+  parts.push(emitRoutines(TopoSortRoutinesByDefinition(input.Snapshot.Procedures), 'procedure'));
+  parts.push(emitTriggers(TopoSortRoutinesByDefinition(input.Snapshot.Triggers)));
+  parts.push(emitForeignKeys(input.Snapshot.Tables));
   // Role memberships come AFTER principals + all objects exist. ALTER ROLE
   // requires both the role and the member principal to be present.
-  parts.push(emitRoleMemberships(input.snapshot.roleMemberships));
+  parts.push(emitRoleMemberships(input.Snapshot.RoleMemberships));
   // Permissions come last among real DDL: GRANT validates that both the
   // grantee principal AND the target object (table/view/proc/etc.) exist.
-  parts.push(emitPermissions(input.snapshot.permissions));
+  parts.push(emitPermissions(input.Snapshot.Permissions));
   // Extended properties LAST: every object they reference must already exist,
   // since sp_addextendedproperty validates the target.
-  parts.push(emitExtendedProperties(input.snapshot.extendedProperties));
+  parts.push(emitExtendedProperties(input.Snapshot.ExtendedProperties));
   parts.push(emitFooter());
   return parts.filter((p) => p.length > 0).join(NL + NL) + NL;
 }
@@ -135,7 +135,7 @@ function emitFooter(): string {
 }
 
 function emitSchemas(snapshot: SchemaSnapshot): string {
-  const schemas = StableSortBy(snapshot.schemas, (s) => s.name.toLowerCase());
+  const schemas = StableSortBy(snapshot.Schemas, (s) => s.name.toLowerCase());
   if (schemas.length === 0) return '';
   const lines: string[] = ['-- Schemas'];
   for (const schema of schemas) {
@@ -176,19 +176,19 @@ function emitTables(tables: readonly TableDef[]): string {
 
 function emitCreateTable(t: TableDef): string {
   const lines: string[] = [];
-  lines.push(`CREATE TABLE ${QuoteIdent(t.schema)}.${QuoteIdent(t.name)} (`);
+  lines.push(`CREATE TABLE ${QuoteIdent(t.Schema)}.${QuoteIdent(t.Name)} (`);
   const columnLines: string[] = [];
-  for (const c of t.columns) {
+  for (const c of t.Columns) {
     columnLines.push('    ' + columnDefinition(c));
   }
   if (t.primaryKey) {
-    const cluster = t.primaryKey.clustered ? 'CLUSTERED' : 'NONCLUSTERED';
+    const cluster = t.primaryKey.Clustered ? 'CLUSTERED' : 'NONCLUSTERED';
     columnLines.push(
-      `    CONSTRAINT ${QuoteIdent(t.primaryKey.name)} PRIMARY KEY ${cluster} ` +
-      `(${t.primaryKey.columns.map((n) => QuoteIdent(n)).join(', ')})`,
+      `    CONSTRAINT ${QuoteIdent(t.primaryKey.Name)} PRIMARY KEY ${cluster} ` +
+      `(${t.primaryKey.Columns.map((n) => QuoteIdent(n)).join(', ')})`,
     );
   }
-  for (const u of t.uniqueConstraints) {
+  for (const u of t.UniqueConstraints) {
     const cluster = u.clustered ? 'CLUSTERED' : 'NONCLUSTERED';
     columnLines.push(
       `    CONSTRAINT ${QuoteIdent(u.name)} UNIQUE ${cluster} ` +
@@ -224,14 +224,14 @@ function columnDefinition(c: ColumnDef): string {
 function emitDefaults(tables: readonly TableDef[]): string {
   const stmts: string[] = [];
   for (const t of tables) {
-    for (const c of t.columns) {
+    for (const c of t.Columns) {
       if (c.defaultExpression && !c.isComputed) {
         // Use the original constraint name if the introspector captured it
         // (it should, for every default — `sys.default_constraints.name`).
         // Fall back to the synthetic format only for hand-built test fixtures.
-        const constraintName = c.defaultConstraintName ?? `DF_${t.schema}_${t.name}_${c.name}`;
+        const constraintName = c.defaultConstraintName ?? `DF_${t.Schema}_${t.Name}_${c.name}`;
         stmts.push(
-          `ALTER TABLE ${QuoteIdent(t.schema)}.${QuoteIdent(t.name)} ` +
+          `ALTER TABLE ${QuoteIdent(t.Schema)}.${QuoteIdent(t.Name)} ` +
           `ADD CONSTRAINT ${QuoteIdent(constraintName)} DEFAULT ${c.defaultExpression} ` +
           `FOR ${QuoteIdent(c.name)};`,
         );
@@ -246,9 +246,9 @@ function emitDefaults(tables: readonly TableDef[]): string {
 function emitChecks(tables: readonly TableDef[]): string {
   const stmts: string[] = [];
   for (const t of tables) {
-    for (const c of t.checks) {
+    for (const c of t.Checks) {
       stmts.push(
-        `ALTER TABLE ${QuoteIdent(t.schema)}.${QuoteIdent(t.name)} ` +
+        `ALTER TABLE ${QuoteIdent(t.Schema)}.${QuoteIdent(t.Name)} ` +
         `ADD CONSTRAINT ${QuoteIdent(c.name)} CHECK ${c.expression};`,
       );
       stmts.push('GO');
@@ -261,7 +261,7 @@ function emitChecks(tables: readonly TableDef[]): string {
 function emitIndexes(tables: readonly TableDef[]): string {
   const stmts: string[] = [];
   for (const t of tables) {
-    for (const idx of t.indexes) {
+    for (const idx of t.Indexes) {
       stmts.push(emitCreateIndex(t, idx));
     }
   }
@@ -277,14 +277,14 @@ function emitCreateIndex(t: TableDef, idx: IndexDef): string {
   const filter = idx.filter ? ` WHERE ${idx.filter}` : '';
   return (
     `CREATE ${unique}${cluster} INDEX ${QuoteIdent(idx.name)} ON ` +
-    `${QuoteIdent(t.schema)}.${QuoteIdent(t.name)} (${cols})${incl}${filter};${NL}GO`
+    `${QuoteIdent(t.Schema)}.${QuoteIdent(t.Name)} (${cols})${incl}${filter};${NL}GO`
   );
 }
 
 function emitForeignKeys(tables: readonly TableDef[]): string {
   const stmts: string[] = [];
   for (const t of tables) {
-    for (const fk of t.foreignKeys) {
+    for (const fk of t.ForeignKeys) {
       stmts.push(emitForeignKey(t, fk));
     }
   }
@@ -298,7 +298,7 @@ function emitForeignKey(t: TableDef, fk: ForeignKeyDef): string {
   const onDelete = fk.onDelete !== 'NO_ACTION' ? ` ON DELETE ${fk.onDelete.replace('_', ' ')}` : '';
   const onUpdate = fk.onUpdate !== 'NO_ACTION' ? ` ON UPDATE ${fk.onUpdate.replace('_', ' ')}` : '';
   return (
-    `ALTER TABLE ${QuoteIdent(t.schema)}.${QuoteIdent(t.name)} ` +
+    `ALTER TABLE ${QuoteIdent(t.Schema)}.${QuoteIdent(t.Name)} ` +
     `ADD CONSTRAINT ${QuoteIdent(fk.name)} FOREIGN KEY (${cols}) ` +
     `REFERENCES ${QuoteIdent(fk.referencedSchema)}.${QuoteIdent(fk.referencedTable)} (${refCols})` +
     `${onDelete}${onUpdate};${NL}GO`
@@ -310,11 +310,11 @@ function emitData(
   dumps: readonly TableDataDump[],
   batchSize: number,
 ): string {
-  const dumpByKey = new Map(dumps.map((d) => [`${d.schema}.${d.table}`.toLowerCase(), d]));
+  const dumpByKey = new Map(dumps.map((d) => [`${d.Schema}.${d.Table}`.toLowerCase(), d]));
   const sections: string[] = ['-- Data'];
   for (const t of tables) {
-    const dump = dumpByKey.get(`${t.schema}.${t.name}`.toLowerCase());
-    if (!dump || dump.rows.length === 0) continue;
+    const dump = dumpByKey.get(`${t.Schema}.${t.Name}`.toLowerCase());
+    if (!dump || dump.Rows.length === 0) continue;
     sections.push(emitTableData(t, dump, batchSize));
   }
   return sections.join(NL + NL);
@@ -322,36 +322,36 @@ function emitData(
 
 function emitTableData(table: TableDef, dump: TableDataDump, batchSize: number): string {
   const lines: string[] = [];
-  const tableRef = `${QuoteIdent(table.schema)}.${QuoteIdent(table.name)}`;
-  const colList = dump.columns.map((n) => QuoteIdent(n)).join(', ');
+  const tableRef = `${QuoteIdent(table.Schema)}.${QuoteIdent(table.Name)}`;
+  const colList = dump.Columns.map((n) => QuoteIdent(n)).join(', ');
 
-  if (table.hasIdentity) {
+  if (table.HasIdentity) {
     lines.push(`SET IDENTITY_INSERT ${tableRef} ON;`);
     lines.push('GO');
   }
 
-  for (let i = 0; i < dump.rows.length; i += batchSize) {
-    const batch = dump.rows.slice(i, i + batchSize);
+  for (let i = 0; i < dump.Rows.length; i += batchSize) {
+    const batch = dump.Rows.slice(i, i + batchSize);
     const valuesLines = batch.map((row) => '    (' + row.map(FormatTsqlValue).join(', ') + ')');
     lines.push(`INSERT INTO ${tableRef} (${colList}) VALUES`);
     lines.push(valuesLines.join(',' + NL) + ';');
     lines.push('GO');
   }
 
-  if (table.hasIdentity) {
+  if (table.HasIdentity) {
     lines.push(`SET IDENTITY_INSERT ${tableRef} OFF;`);
     lines.push('GO');
     // Reseed to the maximum key so future inserts don't collide.
-    const idCol = table.columns.find((c) => c.isIdentity);
+    const idCol = table.Columns.find((c) => c.isIdentity);
     if (idCol) {
-      lines.push(`DECLARE @max_${table.name.replace(/\W/g, '_')} BIGINT;`);
+      lines.push(`DECLARE @max_${table.Name.replace(/\W/g, '_')} BIGINT;`);
       lines.push(
-        `SELECT @max_${table.name.replace(/\W/g, '_')} = MAX(${QuoteIdent(idCol.name)}) FROM ${tableRef};`,
+        `SELECT @max_${table.Name.replace(/\W/g, '_')} = MAX(${QuoteIdent(idCol.name)}) FROM ${tableRef};`,
       );
       lines.push(
-        `IF @max_${table.name.replace(/\W/g, '_')} IS NOT NULL ` +
-        `DBCC CHECKIDENT (${QuoteString(`${table.schema}.${table.name}`)}, RESEED, ` +
-        `@max_${table.name.replace(/\W/g, '_')});`,
+        `IF @max_${table.Name.replace(/\W/g, '_')} IS NOT NULL ` +
+        `DBCC CHECKIDENT (${QuoteString(`${table.Schema}.${table.Name}`)}, RESEED, ` +
+        `@max_${table.Name.replace(/\W/g, '_')});`,
       );
       lines.push('GO');
     }
@@ -402,17 +402,17 @@ function emitTriggers(triggers: readonly TriggerDef[]): string {
 function emitUserDefinedTypes(types: readonly UserDefinedTypeDef[]): string {
   if (types.length === 0) return '';
   const lines: string[] = ['-- User-defined types (table types)'];
-  for (const t of StableSortBy(types, (u) => `${u.schema}.${u.name}`.toLowerCase())) {
-    if (t.isMemoryOptimized) {
+  for (const t of StableSortBy(types, (u) => `${u.Schema}.${u.Name}`.toLowerCase())) {
+    if (t.IsMemoryOptimized) {
       // MEMORY_OPTIMIZED table types require a hash/range index in their body.
       // MJ doesn't use them today; if that changes we'll need to capture the
       // bucket-count + index columns and emit the proper WITH (...) clause.
       throw new Error(
-        `User-defined type ${t.schema}.${t.name} is MEMORY_OPTIMIZED — emitter has no path for that yet.`,
+        `User-defined type ${t.Schema}.${t.Name} is MEMORY_OPTIMIZED — emitter has no path for that yet.`,
       );
     }
     const colLines: string[] = [];
-    for (const c of t.columns) {
+    for (const c of t.Columns) {
       const parts = [QuoteIdent(c.name), c.dataType.toUpperCase()];
       // CREATE TYPE AS TABLE accepts COLLATE only on char-family columns, same as CREATE TABLE.
       if (c.collation && /char|text/.test(c.dataType.toLowerCase())) {
@@ -424,12 +424,12 @@ function emitUserDefinedTypes(types: readonly UserDefinedTypeDef[]): string {
     if (t.primaryKey) {
       // Table types can't have a named PK constraint — the name is auto-generated
       // by MSSQL. Use the inline `PRIMARY KEY (...)` clause.
-      const cluster = t.primaryKey.clustered ? 'CLUSTERED' : 'NONCLUSTERED';
+      const cluster = t.primaryKey.Clustered ? 'CLUSTERED' : 'NONCLUSTERED';
       colLines.push(
-        `    PRIMARY KEY ${cluster} (${t.primaryKey.columns.map((n) => QuoteIdent(n)).join(', ')})`,
+        `    PRIMARY KEY ${cluster} (${t.primaryKey.Columns.map((n) => QuoteIdent(n)).join(', ')})`,
       );
     }
-    lines.push(`CREATE TYPE ${QuoteIdent(t.schema)}.${QuoteIdent(t.name)} AS TABLE (`);
+    lines.push(`CREATE TYPE ${QuoteIdent(t.Schema)}.${QuoteIdent(t.Name)} AS TABLE (`);
     lines.push(colLines.join(',' + NL));
     lines.push(');');
     lines.push('GO');
@@ -451,9 +451,9 @@ function emitExtendedProperties(props: readonly ExtendedPropertyDef[]): string {
   const lines: string[] = ['-- Extended properties (descriptions etc.)'];
   for (const p of props) {
     const args: string[] = [
-      `@name = ${QuoteString(p.name)}`,
-      `@value = ${QuoteString(p.value)}`,
-      `@level0type = N'SCHEMA', @level0name = ${QuoteString(p.schemaName)}`,
+      `@name = ${QuoteString(p.Name)}`,
+      `@value = ${QuoteString(p.Value)}`,
+      `@level0type = N'SCHEMA', @level0name = ${QuoteString(p.SchemaName)}`,
     ];
     if (p.level1Type) {
       args.push(
@@ -490,22 +490,22 @@ function emitPrincipals(principals: readonly DatabasePrincipalDef[]): string {
   if (principals.length === 0) return '';
   const lines: string[] = ['-- Database principals (users + custom roles)', 'GO'];
 
-  const roles = principals.filter((p) => p.kind === 'database_role' || p.kind === 'application_role');
-  const users = principals.filter((p) => p.kind !== 'database_role' && p.kind !== 'application_role');
+  const roles = principals.filter((p) => p.Kind === 'database_role' || p.Kind === 'application_role');
+  const users = principals.filter((p) => p.Kind !== 'database_role' && p.Kind !== 'application_role');
 
-  for (const r of StableSortBy(roles, (p) => p.name.toLowerCase())) {
+  for (const r of StableSortBy(roles, (p) => p.Name.toLowerCase())) {
     const authClause = r.owner ? ` AUTHORIZATION ${QuoteIdent(r.owner)}` : '';
-    lines.push(`IF DATABASE_PRINCIPAL_ID(${QuoteString(r.name)}) IS NULL`);
-    lines.push(`    EXEC('CREATE ROLE ${QuoteIdent(r.name)}${authClause}');`);
+    lines.push(`IF DATABASE_PRINCIPAL_ID(${QuoteString(r.Name)}) IS NULL`);
+    lines.push(`    EXEC('CREATE ROLE ${QuoteIdent(r.Name)}${authClause}');`);
     lines.push('GO');
   }
 
-  for (const u of StableSortBy(users, (p) => p.name.toLowerCase())) {
+  for (const u of StableSortBy(users, (p) => p.Name.toLowerCase())) {
     // Windows / AAD users have a different `CREATE USER` syntax (no FOR LOGIN);
     // emit them straight if the principal isn't already in the DB.
-    if (u.kind === 'windows_user' || u.kind === 'aad_user' || u.kind === 'aad_group') {
-      lines.push(`IF DATABASE_PRINCIPAL_ID(${QuoteString(u.name)}) IS NULL`);
-      lines.push(`    EXEC('CREATE USER ${QuoteIdent(u.name)} FROM EXTERNAL PROVIDER');`);
+    if (u.Kind === 'windows_user' || u.Kind === 'aad_user' || u.Kind === 'aad_group') {
+      lines.push(`IF DATABASE_PRINCIPAL_ID(${QuoteString(u.Name)}) IS NULL`);
+      lines.push(`    EXEC('CREATE USER ${QuoteIdent(u.Name)} FROM EXTERNAL PROVIDER');`);
       lines.push('GO');
       continue;
     }
@@ -520,7 +520,7 @@ function emitPrincipals(principals: readonly DatabasePrincipalDef[]): string {
     //
     // Each block ends with a `GO` so the @associate / @user_exists
     // variables get a fresh scope per user — no name-mangling needed.
-    const nameForString = u.name.replace(/'/g, "''");
+    const nameForString = u.Name.replace(/'/g, "''");
     lines.push('DECLARE @associate bit');
     lines.push(`SELECT @associate = CASE SERVERPROPERTY('EngineEdition') WHEN 5 THEN 1 ELSE 0 END`);
     lines.push('DECLARE @user_exists bit');
@@ -532,11 +532,11 @@ function emitPrincipals(principals: readonly DatabasePrincipalDef[]): string {
     );
     lines.push('IF @associate = 1 AND @user_exists = 0');
     lines.push('BEGIN');
-    lines.push(`    CREATE USER ${QuoteIdent(u.name)} FOR LOGIN ${QuoteIdent(u.name)}`);
+    lines.push(`    CREATE USER ${QuoteIdent(u.Name)} FOR LOGIN ${QuoteIdent(u.Name)}`);
     lines.push('END');
     lines.push('ELSE IF @user_exists = 0');
     lines.push('BEGIN');
-    lines.push(`    CREATE USER ${QuoteIdent(u.name)} WITHOUT LOGIN`);
+    lines.push(`    CREATE USER ${QuoteIdent(u.Name)} WITHOUT LOGIN`);
     lines.push('END');
     lines.push('GO');
   }

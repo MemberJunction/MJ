@@ -155,11 +155,11 @@ describe('RuleBasedTranslate edge cases', () => {
                 'sqlserver',
                 'postgresql'
             );
-            expect(result.translatedSQL).toBe(
+            expect(result.TranslatedSQL).toBe(
                 '"FirstName" = \'John\' AND "LastName" = \'Doe\' AND "Email" LIKE \'%@test.com\''
             );
-            expect(result.appliedRules).toContain('bracket-to-doublequote');
-            expect(result.success).toBe(true);
+            expect(result.AppliedRules).toContain('bracket-to-doublequote');
+            expect(result.Success).toBe(true);
         });
 
         it('should handle mixed boolean and bracket identifiers', () => {
@@ -168,27 +168,27 @@ describe('RuleBasedTranslate edge cases', () => {
                 'sqlserver',
                 'postgresql'
             );
-            expect(result.translatedSQL).toBe(
+            expect(result.TranslatedSQL).toBe(
                 '"IsActive" = true AND "IsDeleted" = false AND "Status" = \'Active\''
             );
-            expect(result.appliedRules).toContain('bracket-to-doublequote');
-            expect(result.appliedRules).toContain('bit-1-to-true');
-            expect(result.appliedRules).toContain('bit-0-to-false');
+            expect(result.AppliedRules).toContain('bracket-to-doublequote');
+            expect(result.AppliedRules).toContain('bit-1-to-true');
+            expect(result.AppliedRules).toContain('bit-0-to-false');
         });
 
         it('should not apply rules when no SQL Server patterns are present', () => {
             const sql = "SELECT Name FROM Users WHERE Status = 'Active'";
             const result = RuleBasedTranslate(sql, 'sqlserver', 'postgresql');
-            expect(result.translatedSQL).toBe(sql);
-            expect(result.appliedRules).toHaveLength(0);
-            expect(result.success).toBe(false);
+            expect(result.TranslatedSQL).toBe(sql);
+            expect(result.AppliedRules).toHaveLength(0);
+            expect(result.Success).toBe(false);
         });
 
         it('should handle empty string input', () => {
             const result = RuleBasedTranslate('', 'sqlserver', 'postgresql');
-            expect(result.translatedSQL).toBe('');
-            expect(result.appliedRules).toHaveLength(0);
-            expect(result.success).toBe(false);
+            expect(result.TranslatedSQL).toBe('');
+            expect(result.AppliedRules).toHaveLength(0);
+            expect(result.Success).toBe(false);
         });
 
         it('should convert multiple boolean = 1 comparisons', () => {
@@ -197,7 +197,7 @@ describe('RuleBasedTranslate edge cases', () => {
                 'sqlserver',
                 'postgresql'
             );
-            expect(result.translatedSQL).toBe(
+            expect(result.TranslatedSQL).toBe(
                 '"IsActive" = true AND "IsVerified" = true AND "IsAdmin" = true'
             );
         });
@@ -206,7 +206,7 @@ describe('RuleBasedTranslate edge cases', () => {
             // The regex \[(\w+)\] only matches single-word identifiers in brackets
             // String content inside single quotes should be preserved
             const result = RuleBasedTranslate("[Name] = 'test'", 'sqlserver', 'postgresql');
-            expect(result.translatedSQL).toBe('"Name" = \'test\'');
+            expect(result.TranslatedSQL).toBe('"Name" = \'test\'');
         });
     });
 
@@ -217,10 +217,10 @@ describe('RuleBasedTranslate edge cases', () => {
                 'postgresql',
                 'sqlserver'
             );
-            expect(result.translatedSQL).toBe(
+            expect(result.TranslatedSQL).toBe(
                 "[FirstName] = 'John' AND [LastName] = 'Doe'"
             );
-            expect(result.appliedRules).toContain('doublequote-to-bracket');
+            expect(result.AppliedRules).toContain('doublequote-to-bracket');
         });
 
         it('should handle mixed boolean and identifier conversion', () => {
@@ -229,10 +229,10 @@ describe('RuleBasedTranslate edge cases', () => {
                 'postgresql',
                 'sqlserver'
             );
-            expect(result.translatedSQL).toBe('[IsActive] = 1 AND [IsDeleted] = 0');
-            expect(result.appliedRules).toContain('doublequote-to-bracket');
-            expect(result.appliedRules).toContain('true-to-bit-1');
-            expect(result.appliedRules).toContain('false-to-bit-0');
+            expect(result.TranslatedSQL).toBe('[IsActive] = 1 AND [IsDeleted] = 0');
+            expect(result.AppliedRules).toContain('doublequote-to-bracket');
+            expect(result.AppliedRules).toContain('true-to-bit-1');
+            expect(result.AppliedRules).toContain('false-to-bit-0');
         });
 
         it('should handle case-insensitive boolean TRUE/FALSE', () => {
@@ -241,15 +241,15 @@ describe('RuleBasedTranslate edge cases', () => {
                 'postgresql',
                 'sqlserver'
             );
-            expect(result.translatedSQL).toBe('[IsActive] = 1 AND [IsDeleted] = 0');
+            expect(result.TranslatedSQL).toBe('[IsActive] = 1 AND [IsDeleted] = 0');
         });
 
         it('should not apply rules when no PostgreSQL patterns are present', () => {
             const sql = "SELECT Name FROM Users WHERE Status = 'Active'";
             const result = RuleBasedTranslate(sql, 'postgresql', 'sqlserver');
-            expect(result.translatedSQL).toBe(sql);
-            expect(result.appliedRules).toHaveLength(0);
-            expect(result.success).toBe(false);
+            expect(result.TranslatedSQL).toBe(sql);
+            expect(result.AppliedRules).toHaveLength(0);
+            expect(result.Success).toBe(false);
         });
     });
 
@@ -263,8 +263,8 @@ describe('RuleBasedTranslate edge cases', () => {
                 'postgresql' as 'postgresql'
             );
             // same platform returns success with no rules
-            expect(result.success).toBe(true);
-            expect(result.appliedRules).toHaveLength(0);
+            expect(result.Success).toBe(true);
+            expect(result.AppliedRules).toHaveLength(0);
         });
     });
 
@@ -272,16 +272,16 @@ describe('RuleBasedTranslate edge cases', () => {
         it('should round-trip bracket identifiers: SS -> PG -> SS', () => {
             const original = "[Name] = 'Test'";
             const toPg = RuleBasedTranslate(original, 'sqlserver', 'postgresql');
-            const backToSs = RuleBasedTranslate(toPg.translatedSQL, 'postgresql', 'sqlserver');
-            expect(backToSs.translatedSQL).toBe(original);
+            const backToSs = RuleBasedTranslate(toPg.TranslatedSQL, 'postgresql', 'sqlserver');
+            expect(backToSs.TranslatedSQL).toBe(original);
         });
 
         it('should round-trip boolean literals: SS -> PG -> SS', () => {
             const original = "[IsActive] = 1 AND [IsDeleted] = 0";
             const toPg = RuleBasedTranslate(original, 'sqlserver', 'postgresql');
-            expect(toPg.translatedSQL).toBe('"IsActive" = true AND "IsDeleted" = false');
-            const backToSs = RuleBasedTranslate(toPg.translatedSQL, 'postgresql', 'sqlserver');
-            expect(backToSs.translatedSQL).toBe(original);
+            expect(toPg.TranslatedSQL).toBe('"IsActive" = true AND "IsDeleted" = false');
+            const backToSs = RuleBasedTranslate(toPg.TranslatedSQL, 'postgresql', 'sqlserver');
+            expect(backToSs.TranslatedSQL).toBe(original);
         });
     });
 });
@@ -292,13 +292,13 @@ describe('RuleBasedTranslate edge cases', () => {
 
 describe('GROUND_TRUTH_EXAMPLES extended', () => {
     it('should contain examples across multiple categories', () => {
-        const categories = new Set(GROUND_TRUTH_EXAMPLES.map(ex => ex.category));
+        const categories = new Set(GROUND_TRUTH_EXAMPLES.map(ex => ex.Category));
         // We expect at least 5 distinct categories
         expect(categories.size).toBeGreaterThanOrEqual(5);
     });
 
     it('should have unique categories covering identifier, boolean, date, and conversion patterns', () => {
-        const categories = new Set(GROUND_TRUTH_EXAMPLES.map(ex => ex.category));
+        const categories = new Set(GROUND_TRUTH_EXAMPLES.map(ex => ex.Category));
         expect(categories.has('identifier-quoting')).toBe(true);
         expect(categories.has('boolean-literal')).toBe(true);
         expect(categories.has('date-function')).toBe(true);
@@ -307,14 +307,14 @@ describe('GROUND_TRUTH_EXAMPLES extended', () => {
 
     it('should have source SQL that differs from target SQL in every example', () => {
         for (const ex of GROUND_TRUTH_EXAMPLES) {
-            expect(ex.source.sql).not.toBe(ex.target.sql);
+            expect(ex.Source.sql).not.toBe(ex.Target.sql);
         }
     });
 
     it('should have consistent platform assignments across all examples', () => {
         for (const ex of GROUND_TRUTH_EXAMPLES) {
-            expect(ex.source.platform).toBe('sqlserver');
-            expect(ex.target.platform).toBe('postgresql');
+            expect(ex.Source.platform).toBe('sqlserver');
+            expect(ex.Target.platform).toBe('postgresql');
         }
     });
 });
@@ -354,20 +354,20 @@ describe('GenerateTranslationReport extended', () => {
     it('should handle report with only standard items', () => {
         const items: TranslationReportItem[] = [
             {
-                source: 'Query: Basic Select',
-                originalSQL: 'SELECT * FROM Users',
-                classification: 'standard',
-                translatedSQL: null,
-                method: 'skipped',
-                markers: [],
+                Source: 'Query: Basic Select',
+                OriginalSQL: 'SELECT * FROM Users',
+                Classification: 'standard',
+                TranslatedSQL: null,
+                Method: 'skipped',
+                Markers: [],
             },
             {
-                source: 'Query: Another Select',
-                originalSQL: "SELECT Name FROM Users WHERE Status = 'Active'",
-                classification: 'standard',
-                translatedSQL: null,
-                method: 'skipped',
-                markers: [],
+                Source: 'Query: Another Select',
+                OriginalSQL: "SELECT Name FROM Users WHERE Status = 'Active'",
+                Classification: 'standard',
+                TranslatedSQL: null,
+                Method: 'skipped',
+                Markers: [],
             },
         ];
 
@@ -384,12 +384,12 @@ describe('GenerateTranslationReport extended', () => {
     it('should handle report with only flagged items', () => {
         const items: TranslationReportItem[] = [
             {
-                source: 'Query: Complex',
-                originalSQL: "SELECT TOP 10 ISNULL([Name], 'N/A') FROM [Users]",
-                classification: 'llm-needed',
-                translatedSQL: null,
-                method: 'flagged',
-                markers: ['TOP-N', 'ISNULL', 'bracket-identifiers'],
+                Source: 'Query: Complex',
+                OriginalSQL: "SELECT TOP 10 ISNULL([Name], 'N/A') FROM [Users]",
+                Classification: 'llm-needed',
+                TranslatedSQL: null,
+                Method: 'flagged',
+                Markers: ['TOP-N', 'ISNULL', 'bracket-identifiers'],
                 note: 'Requires LLM translation',
             },
         ];
@@ -404,12 +404,12 @@ describe('GenerateTranslationReport extended', () => {
     it('should handle report with LLM translations', () => {
         const items: TranslationReportItem[] = [
             {
-                source: 'Query: LLM Translated',
-                originalSQL: "SELECT TOP 5 [Name] FROM [Users]",
-                classification: 'llm-needed',
-                translatedSQL: 'SELECT "Name" FROM "Users" LIMIT 5',
-                method: 'llm',
-                markers: ['TOP-N', 'bracket-identifiers'],
+                Source: 'Query: LLM Translated',
+                OriginalSQL: "SELECT TOP 5 [Name] FROM [Users]",
+                Classification: 'llm-needed',
+                TranslatedSQL: 'SELECT "Name" FROM "Users" LIMIT 5',
+                Method: 'llm',
+                Markers: ['TOP-N', 'bracket-identifiers'],
                 note: 'Translated by AI model',
             },
         ];
@@ -425,12 +425,12 @@ describe('GenerateTranslationReport extended', () => {
     it('should render original and translated SQL in code blocks', () => {
         const items: TranslationReportItem[] = [
             {
-                source: 'Query: Rule Based',
-                originalSQL: "[IsActive] = 1",
-                classification: 'rule-based',
-                translatedSQL: '"IsActive" = true',
-                method: 'rule-based',
-                markers: ['bracket-identifiers', 'boolean-literal'],
+                Source: 'Query: Rule Based',
+                OriginalSQL: "[IsActive] = 1",
+                Classification: 'rule-based',
+                TranslatedSQL: '"IsActive" = true',
+                Method: 'rule-based',
+                Markers: ['bracket-identifiers', 'boolean-literal'],
             },
         ];
 
@@ -444,12 +444,12 @@ describe('GenerateTranslationReport extended', () => {
     it('should display "-- Translation failed" when translatedSQL is null in a translated item', () => {
         const items: TranslationReportItem[] = [
             {
-                source: 'Query: Failed LLM',
-                originalSQL: "EXEC sp_something",
-                classification: 'llm-needed',
-                translatedSQL: null,
-                method: 'llm',
-                markers: [],
+                Source: 'Query: Failed LLM',
+                OriginalSQL: "EXEC sp_something",
+                Classification: 'llm-needed',
+                TranslatedSQL: null,
+                Method: 'llm',
+                Markers: [],
             },
         ];
 
@@ -460,36 +460,36 @@ describe('GenerateTranslationReport extended', () => {
     it('should handle a mixed report with all classification types', () => {
         const items: TranslationReportItem[] = [
             {
-                source: 'Standard Query',
-                originalSQL: 'SELECT * FROM Users',
-                classification: 'standard',
-                translatedSQL: null,
-                method: 'skipped',
-                markers: [],
+                Source: 'Standard Query',
+                OriginalSQL: 'SELECT * FROM Users',
+                Classification: 'standard',
+                TranslatedSQL: null,
+                Method: 'skipped',
+                Markers: [],
             },
             {
-                source: 'Rule-Based Query',
-                originalSQL: '[IsActive] = 1',
-                classification: 'rule-based',
-                translatedSQL: '"IsActive" = true',
-                method: 'rule-based',
-                markers: ['bracket-identifiers', 'boolean-literal'],
+                Source: 'Rule-Based Query',
+                OriginalSQL: '[IsActive] = 1',
+                Classification: 'rule-based',
+                TranslatedSQL: '"IsActive" = true',
+                Method: 'rule-based',
+                Markers: ['bracket-identifiers', 'boolean-literal'],
             },
             {
-                source: 'LLM Query',
-                originalSQL: 'SELECT TOP 10 * FROM Users',
-                classification: 'llm-needed',
-                translatedSQL: 'SELECT * FROM Users LIMIT 10',
-                method: 'llm',
-                markers: ['TOP-N'],
+                Source: 'LLM Query',
+                OriginalSQL: 'SELECT TOP 10 * FROM Users',
+                Classification: 'llm-needed',
+                TranslatedSQL: 'SELECT * FROM Users LIMIT 10',
+                Method: 'llm',
+                Markers: ['TOP-N'],
             },
             {
-                source: 'Flagged Query',
-                originalSQL: 'EXEC sp_complex_proc @p1, @p2',
-                classification: 'llm-needed',
-                translatedSQL: null,
-                method: 'flagged',
-                markers: [],
+                Source: 'Flagged Query',
+                OriginalSQL: 'EXEC sp_complex_proc @p1, @p2',
+                Classification: 'llm-needed',
+                TranslatedSQL: null,
+                Method: 'flagged',
+                Markers: [],
                 note: 'Stored procedure call',
             },
         ];
@@ -516,12 +516,12 @@ describe('GenerateTranslationReport extended', () => {
     it('should not include Flagged section when there are no flagged items', () => {
         const items: TranslationReportItem[] = [
             {
-                source: 'Query: Rule',
-                originalSQL: '[X] = 1',
-                classification: 'rule-based',
-                translatedSQL: '"X" = true',
-                method: 'rule-based',
-                markers: ['bracket-identifiers', 'boolean-literal'],
+                Source: 'Query: Rule',
+                OriginalSQL: '[X] = 1',
+                Classification: 'rule-based',
+                TranslatedSQL: '"X" = true',
+                Method: 'rule-based',
+                Markers: ['bracket-identifiers', 'boolean-literal'],
             },
         ];
 
@@ -532,12 +532,12 @@ describe('GenerateTranslationReport extended', () => {
     it('should not include Standard SQL section when there are no standard items', () => {
         const items: TranslationReportItem[] = [
             {
-                source: 'Query: Flagged',
-                originalSQL: 'SELECT TOP 10 * FROM Users',
-                classification: 'llm-needed',
-                translatedSQL: null,
-                method: 'flagged',
-                markers: ['TOP-N'],
+                Source: 'Query: Flagged',
+                OriginalSQL: 'SELECT TOP 10 * FROM Users',
+                Classification: 'llm-needed',
+                TranslatedSQL: null,
+                Method: 'flagged',
+                Markers: ['TOP-N'],
             },
         ];
 

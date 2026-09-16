@@ -138,10 +138,10 @@ export default class AgentRun extends Command {
     // casts and applies the same --format/pipe rules as the rest of the CLI.
     const outputFormat: AuditOutputFormat = ResolveLegacyFormat({
       format: flags.format,
-      legacy: flags.output as AuditOutputFormat,
-      legacyDefault: 'compact' as const,
+      Legacy: flags.output as AuditOutputFormat,
+      LegacyDefault: 'compact' as const,
       legacyWasExplicit: metadata.flags.output?.setFromDefault === false,
-      map: { text: 'compact', json: 'json', md: 'markdown' },
+      Map: { text: 'compact', json: 'json', md: 'markdown' },
     });
 
     try {

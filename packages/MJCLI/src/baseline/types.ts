@@ -11,24 +11,24 @@ export type Dialect = 'mssql' | 'postgres';
 
 /** Top-level snapshot of an introspected database. */
 export interface SchemaSnapshot {
-  dialect: Dialect;
-  schemas: SchemaDef[];
-  tables: TableDef[];
-  views: ViewDef[];
-  procedures: RoutineDef[];
-  functions: RoutineDef[];
-  triggers: TriggerDef[];
-  sequences: SequenceDef[];
+  Dialect: Dialect;
+  Schemas: SchemaDef[];
+  Tables: TableDef[];
+  Views: ViewDef[];
+  Procedures: RoutineDef[];
+  Functions: RoutineDef[];
+  Triggers: TriggerDef[];
+  Sequences: SequenceDef[];
   /** User-defined types (table types primarily; scalar/CLR are future work). */
-  userDefinedTypes: UserDefinedTypeDef[];
+  UserDefinedTypes: UserDefinedTypeDef[];
   /** sp_addextendedproperty entries (descriptions etc.) on schemas/tables/columns/views/routines. */
-  extendedProperties: ExtendedPropertyDef[];
+  ExtendedProperties: ExtendedPropertyDef[];
   /** Non-system database principals (users + custom roles). */
-  principals: DatabasePrincipalDef[];
+  Principals: DatabasePrincipalDef[];
   /** Non-system role memberships (ALTER ROLE ... ADD MEMBER). */
-  roleMemberships: RoleMembershipDef[];
+  RoleMemberships: RoleMembershipDef[];
   /** Object/schema/database/type permission grants (no DENY/REVOKE captured by default). */
-  permissions: PermissionDef[];
+  Permissions: PermissionDef[];
 }
 
 export interface SchemaDef {
@@ -36,15 +36,15 @@ export interface SchemaDef {
 }
 
 export interface TableDef {
-  schema: string;
-  name: string;
-  columns: ColumnDef[];
+  Schema: string;
+  Name: string;
+  Columns: ColumnDef[];
   primaryKey?: PrimaryKeyDef;
-  uniqueConstraints: UniqueConstraintDef[];
-  indexes: IndexDef[];
-  foreignKeys: ForeignKeyDef[];
-  checks: CheckConstraintDef[];
-  hasIdentity: boolean;
+  UniqueConstraints: UniqueConstraintDef[];
+  Indexes: IndexDef[];
+  ForeignKeys: ForeignKeyDef[];
+  Checks: CheckConstraintDef[];
+  HasIdentity: boolean;
 }
 
 export interface ColumnDef {
@@ -66,9 +66,9 @@ export interface ColumnDef {
 }
 
 export interface PrimaryKeyDef {
-  name: string;
-  columns: string[];
-  clustered: boolean;
+  Name: string;
+  Columns: string[];
+  Clustered: boolean;
 }
 
 export interface UniqueConstraintDef {
@@ -134,11 +134,11 @@ export interface SequenceDef {
 
 /** A user-defined TYPE (currently only table types; scalar/CLR are future work). */
 export interface UserDefinedTypeDef {
-  schema: string;
-  name: string;
-  kind: 'table';
-  isMemoryOptimized: boolean;
-  columns: UserDefinedTypeColumnDef[];
+  Schema: string;
+  Name: string;
+  Kind: 'table';
+  IsMemoryOptimized: boolean;
+  Columns: UserDefinedTypeColumnDef[];
   /** Inline primary key, if any. CREATE TYPE AS TABLE supports a PK clause. */
   primaryKey?: PrimaryKeyDef;
 }
@@ -159,8 +159,8 @@ export interface UserDefinedTypeColumnDef {
  * time; the baseline never re-creates those.
  */
 export interface DatabasePrincipalDef {
-  name: string;
-  kind: 'sql_user' | 'database_role' | 'windows_user' | 'application_role' | 'aad_user' | 'aad_group';
+  Name: string;
+  Kind: 'sql_user' | 'database_role' | 'windows_user' | 'application_role' | 'aad_user' | 'aad_group';
   /** Owner principal name (e.g. `db_securityadmin` for MJ's cdp_* roles). Undefined falls back to the current user (typically `dbo`). */
   owner?: string;
   /** Default schema for users. Roles don't have one. */
@@ -200,11 +200,11 @@ export interface PermissionDef {
  */
 export interface ExtendedPropertyDef {
   /** Property name, e.g. 'MS_Description'. Case is preserved as stored. */
-  name: string;
+  Name: string;
   /** Property value, always serialized as NVARCHAR. */
-  value: string;
+  Value: string;
   /** level0 is always SCHEMA in MJ. Stored separately so we can emit the canonical 3-tier call. */
-  schemaName: string;
+  SchemaName: string;
   /** TABLE | VIEW | PROCEDURE | FUNCTION | TYPE | SEQUENCE | TRIGGER | null (for schema-level properties). */
   level1Type?: string;
   level1Name?: string;
@@ -215,15 +215,15 @@ export interface ExtendedPropertyDef {
 
 /** Per-table data dump (every row, ordered deterministically). */
 export interface TableDataDump {
-  schema: string;
-  table: string;
+  Schema: string;
+  Table: string;
   /** Column order matches the INSERT column list. */
-  columns: string[];
+  Columns: string[];
   /** Each row is an array of values matching `columns`. Null = JS null. */
-  rows: unknown[][];
+  Rows: unknown[][];
   /** Set when the dump was truncated due to a hard limit. */
   truncated?: boolean;
-  rowCount: number;
+  RowCount: number;
 }
 
 /** Output of a full diff between two snapshots (and optional row data). */
@@ -282,9 +282,9 @@ export type ObjectKind =
 export type DiffKind = 'missing-on-left' | 'missing-on-right' | 'changed';
 
 export interface ObjectDiff {
-  kind: ObjectKind;
-  diffKind: DiffKind;
-  qualifiedName: string;       // e.g. "dbo.Customer" or "dbo.Customer.FirstName"
+  Kind: ObjectKind;
+  DiffKind: DiffKind;
+  QualifiedName: string;       // e.g. "dbo.Customer" or "dbo.Customer.FirstName"
   /** Free-form details: which fields differ, with left/right values. */
   details?: string;
   leftValue?: unknown;
@@ -292,30 +292,30 @@ export interface ObjectDiff {
 }
 
 export interface TableRowDiff {
-  schema: string;
-  table: string;
-  leftRowCount: number;
-  rightRowCount: number;
+  Schema: string;
+  Table: string;
+  LeftRowCount: number;
+  RightRowCount: number;
   /** First N (default 100) row mismatches captured during full mode. */
-  sampleDiffs: RowDiff[];
+  SampleDiffs: RowDiff[];
   /** True if there are more diffs than `sampleDiffs` shows. */
-  truncated: boolean;
+  Truncated: boolean;
   /** Total mismatches counted (may exceed sampleDiffs.length). */
-  diffCount: number;
+  DiffCount: number;
 }
 
 export interface RowDiff {
-  diffKind: DiffKind;
+  DiffKind: DiffKind;
   /** Stringified key (PK or whole-row hash) used for matching. */
-  key: string;
+  Key: string;
   /** Per-column diffs in 'changed' rows only. */
   columnDiffs?: ColumnValueDiff[];
 }
 
 export interface ColumnValueDiff {
-  column: string;
-  leftValue: unknown;
-  rightValue: unknown;
+  Column: string;
+  LeftValue: unknown;
+  RightValue: unknown;
 }
 
 /** Build options passed to the emitter. */
@@ -329,8 +329,8 @@ export interface BaselineEmitOptions {
 }
 
 export interface BaselineCompareOptions {
-  rowCompareMode: RowCompareMode;
-  rowHashAlgo: RowHashAlgo;
+  RowCompareMode: RowCompareMode;
+  RowHashAlgo: RowHashAlgo;
   ignorePattern?: RegExp;
-  rowDiffSampleLimit: number;  // default 100
+  RowDiffSampleLimit: number;  // default 100
 }

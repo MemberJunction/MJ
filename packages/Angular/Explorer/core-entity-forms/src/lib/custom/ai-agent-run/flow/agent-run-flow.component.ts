@@ -289,7 +289,7 @@ export class AIAgentRunFlowComponent implements AfterViewInit, OnDestroy {
       : await BuildFlowModel(this.AgentName ?? '', this.RunStatus, rootIcon, this.DataHelper);
     if (!model) return;
     this.model = model;
-    this.HasData = model.leaves.length > 0;
+    this.HasData = model.Leaves.length > 0;
     if (wasEmpty) this.p = 0;
     this.lastLeafId = -1;
     this.cdr.markForCheck();
@@ -416,11 +416,11 @@ export class AIAgentRunFlowComponent implements AfterViewInit, OnDestroy {
   /** A node was clicked in any renderer (or a log row) — highlight it everywhere and show its detail. */
   public SelectStep(n: FlowNode): void {
     this.zone.run(() => {
-      this.selectedNodeId = n.id;
+      this.selectedNodeId = n.Id;
       this.SelectedStepItem = this.toTimelineItem(n);
       this.cdr.markForCheck();
     });
-    this.applyRendererSelection(n.id);
+    this.applyRendererSelection(n.Id);
   }
 
   /** @deprecated Use {@link SelectStep}. */
@@ -464,11 +464,11 @@ export class AIAgentRunFlowComponent implements AfterViewInit, OnDestroy {
   }
 
   private toTimelineItem(n: FlowNode): TimelineItem | null {
-    if (!n.raw) return null;
+    if (!n.Raw) return null;
     return {
-      id: n.raw.ID, type: 'step', title: n.name, subtitle: `Type: ${n.raw.StepType}`,
-      status: n.status, startTime: n.raw.StartedAt, endTime: n.raw.CompletedAt || undefined,
-      duration: FormatDuration(n.realDur), icon: 'fa-circle', color: '', data: n.raw, level: n.depth
+      id: n.Raw.ID, type: 'step', title: n.Name, subtitle: `Type: ${n.Raw.StepType}`,
+      status: n.Status, startTime: n.Raw.StartedAt, endTime: n.Raw.CompletedAt || undefined,
+      duration: FormatDuration(n.RealDur), icon: 'fa-circle', color: '', data: n.Raw, level: n.Depth
     };
   }
 
@@ -505,46 +505,46 @@ export class AIAgentRunFlowComponent implements AfterViewInit, OnDestroy {
     // (the @if remounted it with template defaults) or the model changed. Without
     // this, a remount at run-completion leaves an empty log + a blank now-card.
     if (this.loglistRef &&
-        (this.logModelRef !== m || (this.loglistRef.nativeElement.childElementCount === 0 && m.nodes.length > 1))) {
+        (this.logModelRef !== m || (this.loglistRef.nativeElement.childElementCount === 0 && m.Nodes.length > 1))) {
       this.buildLogTree();
       this.logModelRef = m;
       this.lastLeafId = -1; // force the now-card to repopulate the fresh DOM
     }
 
     const leaf = ActiveLeaf(m, this.p);
-    const prog = this.p >= leaf.t1 ? 1 : Math.max(0, (this.p - leaf.t0) / (leaf.t1 - leaf.t0));
+    const prog = this.p >= leaf.T1 ? 1 : Math.max(0, (this.p - leaf.T0) / (leaf.T1 - leaf.T0));
 
     if (this.scrubRef) this.scrubRef.nativeElement.value = String(Math.round(this.p * 1000));
     if (this.clockRef) {
-      const realT = this.p >= 1 ? m.total : leaf.r0 + prog * leaf.realDur;
-      this.clockRef.nativeElement.textContent = `${FormatDuration(realT)} / ${FormatDuration(m.total)}`;
+      const realT = this.p >= 1 ? m.Total : leaf.R0 + prog * leaf.RealDur;
+      this.clockRef.nativeElement.textContent = `${FormatDuration(realT)} / ${FormatDuration(m.Total)}`;
     }
     if (this.nowBarRef) this.nowBarRef.nativeElement.style.width = `${prog * 100}%`;
 
-    if (leaf.id !== this.lastLeafId) {
-      this.lastLeafId = leaf.id;
+    if (leaf.Id !== this.lastLeafId) {
+      this.lastLeafId = leaf.Id;
       this.refreshNowCard(leaf);
     }
     if (this.nowStatRef) {
-      this.nowStatRef.nativeElement.textContent = this.p >= 1 ? 'done' : (this.p > leaf.t0 ? 'running' : 'starting');
+      this.nowStatRef.nativeElement.textContent = this.p >= 1 ? 'done' : (this.p > leaf.T0 ? 'running' : 'starting');
     }
     if (this.loglistRef) this.updateLogTree();
   }
 
   private refreshNowCard(leaf: FlowNode): void {
-    const col = FLOW_COLORS[leaf.type];
-    if (this.nowIcoRef) this.nowIcoRef.nativeElement.textContent = FLOW_EMOJI[leaf.type];
-    if (this.nowNameRef) this.nowNameRef.nativeElement.textContent = leaf.name;
+    const col = FLOW_COLORS[leaf.Type];
+    if (this.nowIcoRef) this.nowIcoRef.nativeElement.textContent = FLOW_EMOJI[leaf.Type];
+    if (this.nowNameRef) this.nowNameRef.nativeElement.textContent = leaf.Name;
     if (this.nowTypeRef) {
-      this.nowTypeRef.nativeElement.textContent = FLOW_LABEL[leaf.type];
+      this.nowTypeRef.nativeElement.textContent = FLOW_LABEL[leaf.Type];
       this.nowTypeRef.nativeElement.style.color = col;
     }
-    if (this.nowDurRef) this.nowDurRef.nativeElement.textContent = FormatDuration(leaf.realDur);
-    if (this.nowModelRef) this.nowModelRef.nativeElement.textContent = leaf.model ?? '—';
+    if (this.nowDurRef) this.nowDurRef.nativeElement.textContent = FormatDuration(leaf.RealDur);
+    if (this.nowModelRef) this.nowModelRef.nativeElement.textContent = leaf.Model ?? '—';
     if (this.crumbRef) {
       const chain = Ancestors(leaf);
       this.crumbRef.nativeElement.innerHTML = chain.map((n, i) =>
-        `${i ? '<span class="sep">›</span>' : ''}<span style="color:${FLOW_COLORS[n.type]}">${FLOW_EMOJI[n.type]} ${this.escape(n.name)}</span>`
+        `${i ? '<span class="sep">›</span>' : ''}<span style="color:${FLOW_COLORS[n.Type]}">${FLOW_EMOJI[n.Type]} ${this.escape(n.Name)}</span>`
       ).join('');
     }
   }
@@ -558,39 +558,39 @@ export class AIAgentRunFlowComponent implements AfterViewInit, OnDestroy {
     this.logRows.clear();
     this.lastActiveRowId = -1;
     const m = this.model!;
-    for (const n of m.nodes) {
-      if (n.depth === 0) continue; // skip the synthetic root (it's the header)
-      const col = FLOW_COLORS[n.type];
+    for (const n of m.Nodes) {
+      if (n.Depth === 0) continue; // skip the synthetic root (it's the header)
+      const col = FLOW_COLORS[n.Type];
       const row = document.createElement('div');
       row.className = 'ftree-row';
-      row.style.paddingLeft = `${6 + (n.depth - 1) * 15}px`;
-      const ico = n.logoUrl
-        ? `<img class="ftree-logo" src="${this.escape(n.logoUrl)}" alt=""/>`
-        : `<i class="ftree-ico fa-solid ${this.escape(n.iconClass)}" style="color:${col}"></i>`;
+      row.style.paddingLeft = `${6 + (n.Depth - 1) * 15}px`;
+      const ico = n.LogoUrl
+        ? `<img class="ftree-logo" src="${this.escape(n.LogoUrl)}" alt=""/>`
+        : `<i class="ftree-ico fa-solid ${this.escape(n.IconClass)}" style="color:${col}"></i>`;
       row.innerHTML = ico +
         `<span class="ftree-name">${this.escape(ShortLabel(n))}</span>` +
-        `<span class="ftree-dur">${FormatDuration(n.realDur)}</span>`;
+        `<span class="ftree-dur">${FormatDuration(n.RealDur)}</span>`;
       row.addEventListener('click', () => this.SelectStep(n));
       list.appendChild(row);
-      this.logRows.set(n.id, row);
+      this.logRows.set(n.Id, row);
     }
   }
 
   /** Sync each log row's state (pending / running / done / selected) with the clock. */
   private updateLogTree(): void {
     const m = this.model!;
-    for (const n of m.nodes) {
-      if (n.depth === 0) continue;
-      const row = this.logRows.get(n.id);
+    for (const n of m.Nodes) {
+      if (n.Depth === 0) continue;
+      const row = this.logRows.get(n.Id);
       if (!row) continue;
-      const started = this.p >= n.t0;
-      const active = started && this.p < n.t1;
+      const started = this.p >= n.T0;
+      const active = started && this.p < n.T1;
       row.classList.toggle('ftree-pending', !started);
       row.classList.toggle('ftree-active', active);
-      row.classList.toggle('ftree-done', this.p >= n.t1);
-      row.classList.toggle('ftree-selected', n.id === this.selectedNodeId);
-      if (active && n.id !== this.lastActiveRowId && !n.children.length) {
-        this.lastActiveRowId = n.id;
+      row.classList.toggle('ftree-done', this.p >= n.T1);
+      row.classList.toggle('ftree-selected', n.Id === this.selectedNodeId);
+      if (active && n.Id !== this.lastActiveRowId && !n.Children.length) {
+        this.lastActiveRowId = n.Id;
         row.scrollIntoView({ block: 'nearest' });
       }
     }

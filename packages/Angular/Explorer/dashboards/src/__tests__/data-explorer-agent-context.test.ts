@@ -503,58 +503,58 @@ describe('resolveRecordSelection (FIX 2: pick a row)', () => {
     const recs = ['Betty Bot', 'Charlie Cat', 'Dana Dog'];
 
     it('resolves "first" and "last" positions', () => {
-        expect(ResolveRecordSelection(recs, { position: 'first' })).toEqual({ ok: true, index: 0 });
-        expect(ResolveRecordSelection(recs, { position: 'last' })).toEqual({ ok: true, index: 2 });
+        expect(ResolveRecordSelection(recs, { position: 'first' })).toEqual({ Ok: true, Index: 0 });
+        expect(ResolveRecordSelection(recs, { position: 'last' })).toEqual({ Ok: true, Index: 2 });
     });
 
     it('resolves a 1-based index position to a 0-based index', () => {
-        expect(ResolveRecordSelection(recs, { position: 1 })).toEqual({ ok: true, index: 0 });
-        expect(ResolveRecordSelection(recs, { position: 3 })).toEqual({ ok: true, index: 2 });
+        expect(ResolveRecordSelection(recs, { position: 1 })).toEqual({ Ok: true, Index: 0 });
+        expect(ResolveRecordSelection(recs, { position: 3 })).toEqual({ Ok: true, Index: 2 });
     });
 
     it('errors with a range hint when the index is out of bounds', () => {
         const r = ResolveRecordSelection(recs, { position: 9 });
-        expect(r.ok).toBe(false);
-        if (!r.ok) {
-            expect(r.error).toContain('out of range');
-            expect(r.error).toContain('3 records');
+        expect(r.Ok).toBe(false);
+        if (!r.Ok) {
+            expect(r.Error).toContain('out of range');
+            expect(r.Error).toContain('3 records');
         }
     });
 
     it('resolves by an exact case-insensitive name match', () => {
-        expect(ResolveRecordSelection(recs, { name: 'betty bot' })).toEqual({ ok: true, index: 0 });
+        expect(ResolveRecordSelection(recs, { name: 'betty bot' })).toEqual({ Ok: true, Index: 0 });
     });
 
     it('falls back to a contains match when there is no exact match', () => {
-        expect(ResolveRecordSelection(recs, { name: 'cat' })).toEqual({ ok: true, index: 1 });
+        expect(ResolveRecordSelection(recs, { name: 'cat' })).toEqual({ Ok: true, Index: 1 });
     });
 
     it('prefers position over name when both are supplied', () => {
-        expect(ResolveRecordSelection(recs, { position: 'last', name: 'Betty Bot' })).toEqual({ ok: true, index: 2 });
+        expect(ResolveRecordSelection(recs, { position: 'last', name: 'Betty Bot' })).toEqual({ Ok: true, Index: 2 });
     });
 
     it('errors clearly when no records are loaded', () => {
         const r = ResolveRecordSelection([], { position: 'first' });
-        expect(r.ok).toBe(false);
-        if (!r.ok) {
-            expect(r.error).toContain('No records are currently loaded');
+        expect(r.Ok).toBe(false);
+        if (!r.Ok) {
+            expect(r.Error).toContain('No records are currently loaded');
         }
     });
 
     it('errors when neither a position nor a name is given', () => {
         const r = ResolveRecordSelection(recs, {});
-        expect(r.ok).toBe(false);
-        if (!r.ok) {
-            expect(r.error).toContain('Provide either a position');
+        expect(r.Ok).toBe(false);
+        if (!r.Ok) {
+            expect(r.Error).toContain('Provide either a position');
         }
     });
 
     it('errors with a sample list when the name does not match', () => {
         const r = ResolveRecordSelection(recs, { name: 'zebra' });
-        expect(r.ok).toBe(false);
-        if (!r.ok) {
-            expect(r.error).toContain('No loaded record matches "zebra"');
-            expect(r.error).toContain('Betty Bot');
+        expect(r.Ok).toBe(false);
+        if (!r.Ok) {
+            expect(r.Error).toContain('No loaded record matches "zebra"');
+            expect(r.Error).toContain('Betty Bot');
         }
     });
 });

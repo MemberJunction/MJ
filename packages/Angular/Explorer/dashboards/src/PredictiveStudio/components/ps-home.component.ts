@@ -51,10 +51,10 @@ import {
           design the pipeline for you.
         </div>
         <div class="hero-stats">
-          <div class="s"><div class="n">{{ kpis.publishedCount }}</div><div class="l">Published</div></div>
-          <div class="s"><div class="n">{{ kpis.activeExperiments }}</div><div class="l">Active Experiments</div></div>
-          <div class="s"><div class="n">{{ kpis.bestHoldout }}</div><div class="l">Best Holdout AUC</div></div>
-          <div class="s"><div class="n">{{ kpis.scoredThisWeek }}</div><div class="l">Scored this week</div></div>
+          <div class="s"><div class="n">{{ kpis.PublishedCount }}</div><div class="l">Published</div></div>
+          <div class="s"><div class="n">{{ kpis.ActiveExperiments }}</div><div class="l">Active Experiments</div></div>
+          <div class="s"><div class="n">{{ kpis.BestHoldout }}</div><div class="l">Best Holdout AUC</div></div>
+          <div class="s"><div class="n">{{ kpis.ScoredThisWeek }}</div><div class="l">Scored this week</div></div>
         </div>
         <div class="hero-actions">
           <button mjButton variant="secondary" size="sm" (click)="navigate.emit('pipelines')">
@@ -99,13 +99,13 @@ import {
           <div class="ps-card-body">
             @if (activity.length > 0) {
               <div class="feed">
-                @for (item of activity; track item.title + item.when) {
+                @for (item of activity; track item.Title + item.When) {
                   <div class="fitem">
-                    <div class="ev" [class]="item.kind"><i [class]="item.icon"></i></div>
+                    <div class="ev" [class]="item.Kind"><i [class]="item.Icon"></i></div>
                     <div>
-                      <div class="ftitle">{{ item.title }}</div>
-                      <div class="ps-muted ps-small">{{ item.detail }}</div>
-                      <div class="when">{{ item.when }}</div>
+                      <div class="ftitle">{{ item.Title }}</div>
+                      <div class="ps-muted ps-small">{{ item.Detail }}</div>
+                      <div class="when">{{ item.When }}</div>
                     </div>
                   </div>
                 }
@@ -126,10 +126,10 @@ import {
               <h3>This Week</h3>
             </div>
             <div class="ps-card-body">
-              <div class="mini-kpi"><div class="ps-muted ps-small">Records scored</div><div class="v">{{ kpis.scoredThisWeek }}</div></div>
-              <div class="mini-kpi"><div class="ps-muted ps-small">Best holdout AUC</div><div class="v">{{ kpis.bestHoldout }}</div></div>
-              <div class="mini-kpi"><div class="ps-muted ps-small">Experiment runs</div><div class="v">{{ kpis.experimentRuns }}</div></div>
-              <div class="mini-kpi"><div class="ps-muted ps-small">Published models</div><div class="v">{{ kpis.publishedCount }}</div></div>
+              <div class="mini-kpi"><div class="ps-muted ps-small">Records scored</div><div class="v">{{ kpis.ScoredThisWeek }}</div></div>
+              <div class="mini-kpi"><div class="ps-muted ps-small">Best holdout AUC</div><div class="v">{{ kpis.BestHoldout }}</div></div>
+              <div class="mini-kpi"><div class="ps-muted ps-small">Experiment runs</div><div class="v">{{ kpis.ExperimentRuns }}</div></div>
+              <div class="mini-kpi"><div class="ps-muted ps-small">Published models</div><div class="v">{{ kpis.PublishedCount }}</div></div>
             </div>
           </div>
         </div>
@@ -190,7 +190,7 @@ export class PSHomeComponent implements OnInit {
   }
 
   /** Derived KPI strip. Starts from the synchronously-available counts, refined once runs load. */
-  public Kpis: PSHomeKpis = { publishedCount: 0, activeExperiments: 0, bestHoldout: '—', scoredThisWeek: '0', experimentRuns: 0 };
+  public Kpis: PSHomeKpis = { PublishedCount: 0, ActiveExperiments: 0, BestHoldout: '—', ScoredThisWeek: '0', ExperimentRuns: 0 };
 
   /** @deprecated Use {@link Kpis}. */
   public get kpis(): PSHomeKpis {

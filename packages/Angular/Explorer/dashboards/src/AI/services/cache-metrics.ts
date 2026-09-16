@@ -14,18 +14,18 @@
  */
 export interface CacheRate {
     /** Currency per uncached input token. */
-    inputRate: number;
+    InputRate: number;
     /** Currency per cache-read token (≤ inputRate for every provider). */
-    cacheReadRate: number;
+    CacheReadRate: number;
     /** Currency per cache-write token (≥ inputRate for providers that bill writes, e.g. Anthropic). */
-    cacheWriteRate: number;
+    CacheWriteRate: number;
 }
 
 /** Aggregate cache token counts, e.g. summed across a set of runs. */
 export interface CacheTokenTotals {
-    uncachedInputTokens: number;
-    cacheReadTokens: number;
-    cacheWriteTokens: number;
+    UncachedInputTokens: number;
+    CacheReadTokens: number;
+    CacheWriteTokens: number;
 }
 
 /**
@@ -34,8 +34,8 @@ export interface CacheTokenTotals {
  * only wrote to cache (first call) reads as 0% and a fully-cached follow-up approaches 100%.
  */
 export function CacheHitRate(totals: CacheTokenTotals): number {
-    const totalInput = totals.uncachedInputTokens + totals.cacheReadTokens + totals.cacheWriteTokens;
-    return totalInput > 0 ? totals.cacheReadTokens / totalInput : 0;
+    const totalInput = totals.UncachedInputTokens + totals.CacheReadTokens + totals.CacheWriteTokens;
+    return totalInput > 0 ? totals.CacheReadTokens / totalInput : 0;
 }
 
 /** @deprecated Use {@link CacheHitRate}. */
@@ -45,7 +45,7 @@ export function cacheHitRate(totals: CacheTokenTotals): number {
 
 /** True when caching actually engaged (any read or write), so a 0% hit rate can be shown meaningfully. */
 export function HasCacheActivity(totals: CacheTokenTotals): boolean {
-    return totals.cacheReadTokens > 0 || totals.cacheWriteTokens > 0;
+    return totals.CacheReadTokens > 0 || totals.CacheWriteTokens > 0;
 }
 
 /** @deprecated Use {@link HasCacheActivity}. */
@@ -69,8 +69,8 @@ export function NetCacheSavings(totals: CacheTokenTotals, rate: CacheRate | unde
         return 0;
     }
     return (
-        totals.cacheReadTokens * (rate.inputRate - rate.cacheReadRate) +
-        totals.cacheWriteTokens * (rate.inputRate - rate.cacheWriteRate)
+        totals.CacheReadTokens * (rate.InputRate - rate.CacheReadRate) +
+        totals.CacheWriteTokens * (rate.InputRate - rate.CacheWriteRate)
     );
 }
 

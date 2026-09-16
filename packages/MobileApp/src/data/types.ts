@@ -22,13 +22,13 @@ export type ConversationParticipantAgent = {
  * {@link ../adapt} from MJ `MJ: Conversations` + `MJ: Conversation Details` data.
  */
 export type ConversationSummary = {
-    id: string;
-    title: string;
-    snippet: string;
+    Id: string;
+    Title: string;
+    Snippet: string;
     /** Human-friendly relative time label (e.g. "Now", "5m", "Yest"). */
-    timestamp: string;
-    agents: ConversationParticipantAgent[];
-    messageCount: number;
+    Timestamp: string;
+    Agents: ConversationParticipantAgent[];
+    MessageCount: number;
     /** True while an agent task in the conversation is still running. */
     live?: boolean;
     /** True when the conversation is pinned to the top of the list. */
@@ -41,8 +41,8 @@ export type ConversationSummary = {
  * horizontally-scrolling quick-access rows.
  */
 export type RecentConvoChip = {
-    id: string;
-    title: string;
-    participants: ConversationParticipantAgent[];
+    Id: string;
+    Title: string;
+    Participants: ConversationParticipantAgent[];
     live?: boolean;
 };

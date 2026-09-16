@@ -9,11 +9,11 @@ import { UUIDsEqual } from '@memberjunction/global';
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface SubAgentAdvancedSettingsFormData {
-  executionOrder: number;
-  executionMode: 'Sequential' | 'Parallel';
-  status: 'Active' | 'Disabled' | 'Pending';
-  typeID: string | null;
-  exposeAsAction: boolean;
+  ExecutionOrder: number;
+  ExecutionMode: 'Sequential' | 'Parallel';
+  Status: 'Active' | 'Disabled' | 'Pending';
+  TypeID: string | null;
+  ExposeAsAction: boolean;
 }
 
 /**
@@ -347,11 +347,11 @@ export class SubAgentAdvancedSettingsDialogComponent extends BaseAngularComponen
     
     try {
       const formData: SubAgentAdvancedSettingsFormData = {
-        executionOrder: this.AdvancedForm.get('executionOrder')?.value,
-        executionMode: this.AdvancedForm.get('executionMode')?.value,
-        status: this.AdvancedForm.get('status')?.value,
-        typeID: this.AdvancedForm.get('typeID')?.value || null,
-        exposeAsAction: false // Sub-agents cannot be exposed as actions
+        ExecutionOrder: this.AdvancedForm.get('executionOrder')?.value,
+        ExecutionMode: this.AdvancedForm.get('executionMode')?.value,
+        Status: this.AdvancedForm.get('status')?.value,
+        TypeID: this.AdvancedForm.get('typeID')?.value || null,
+        ExposeAsAction: false // Sub-agents cannot be exposed as actions
       };
 
       this.Result.next(formData);

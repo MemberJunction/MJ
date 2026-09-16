@@ -803,16 +803,16 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
             // as the server-side cost calculator does — which makes the corresponding savings term 0.
             const cacheReadRate = (row.CacheReadPricePerUnit ?? row.InputPricePerUnit ?? 0) / divisor;
             const cacheWriteRate = (row.CacheWritePricePerUnit ?? row.InputPricePerUnit ?? 0) / divisor;
-            this.cacheRates.set(this.rateKey(row.ModelID, row.VendorID), { inputRate, cacheReadRate, cacheWriteRate });
+            this.cacheRates.set(this.rateKey(row.ModelID, row.VendorID), { InputRate: inputRate, CacheReadRate: cacheReadRate, CacheWriteRate: cacheWriteRate });
         }
     }
 
     /** Sum net cache savings across a set of runs using each run's model+vendor rate. */
     private sumCacheSavings(runs: PromptRunRecord[]): number {
         return runs.reduce((total, run) => total + NetCacheSavings({
-            uncachedInputTokens: 0,
-            cacheReadTokens: run.TokensCacheRead ?? 0,
-            cacheWriteTokens: run.TokensCacheWrite ?? 0
+            UncachedInputTokens: 0,
+            CacheReadTokens: run.TokensCacheRead ?? 0,
+            CacheWriteTokens: run.TokensCacheWrite ?? 0
         }, this.rateFor(run)), 0);
     }
 
@@ -877,11 +877,11 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
 
     /** Append the cache hit-rate and cache-savings KPIs (computed from the current-period runs). */
     private appendCacheKpis(): void {
-        const totals: CacheTokenTotals = { uncachedInputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
+        const totals: CacheTokenTotals = { UncachedInputTokens: 0, CacheReadTokens: 0, CacheWriteTokens: 0 };
         for (const r of this.allRuns) {
-            totals.uncachedInputTokens += r.TokensPrompt ?? 0;
-            totals.cacheReadTokens += r.TokensCacheRead ?? 0;
-            totals.cacheWriteTokens += r.TokensCacheWrite ?? 0;
+            totals.UncachedInputTokens += r.TokensPrompt ?? 0;
+            totals.CacheReadTokens += r.TokensCacheRead ?? 0;
+            totals.CacheWriteTokens += r.TokensCacheWrite ?? 0;
         }
         const savings = this.sumCacheSavings(this.allRuns);
         const activity = HasCacheActivity(totals);
@@ -991,7 +991,7 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
                 OutputTokens: outputTokens,
                 CacheReadTokens: cacheReadTokens,
                 CacheWriteTokens: cacheWriteTokens,
-                CacheHitRate: CacheHitRate({ uncachedInputTokens: inputTokens, cacheReadTokens, cacheWriteTokens }),
+                CacheHitRate: CacheHitRate({ UncachedInputTokens: inputTokens, CacheReadTokens: cacheReadTokens, CacheWriteTokens: cacheWriteTokens }),
                 CacheSavings: this.sumCacheSavings(modelRuns),
                 InputCost: inputCost,
                 OutputCost: outputCost,

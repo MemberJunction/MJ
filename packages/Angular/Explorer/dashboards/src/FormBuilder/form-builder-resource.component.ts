@@ -2460,7 +2460,7 @@ export class FormBuilderResourceComponent
         const existing = this.EditableCode ?? '';
         if (existing.length > 0) {
             const result = ParseCanvasFromCode(existing, schema);
-            this.Canvas = result.canvas ?? BuildEmptyCanvas(entityName, schema.displayName);
+            this.Canvas = result.Canvas ?? BuildEmptyCanvas(entityName, schema.displayName);
         } else if (this.IsNewForm) {
             // Retrospective fix #4: new-form flow seeds the canvas + code
             // from the CodeGen-equivalent scaffold. Previously the user got
@@ -2470,7 +2470,7 @@ export class FormBuilderResourceComponent
             if (scaffold?.code) {
                 this.EditableCode = scaffold.code;
                 const result = ParseCanvasFromCode(scaffold.code, schema);
-                this.Canvas = result.canvas ?? BuildEmptyCanvas(entityName, schema.displayName);
+                this.Canvas = result.Canvas ?? BuildEmptyCanvas(entityName, schema.displayName);
             } else {
                 this.Canvas = BuildEmptyCanvas(entityName, schema.displayName);
             }
@@ -2634,14 +2634,14 @@ export class FormBuilderResourceComponent
             return;
         }
         const result = ParseCanvasFromCode(this.EditableCode, this.Schema);
-        this.Canvas = result.canvas
+        this.Canvas = result.Canvas
             ?? BuildEmptyCanvas(this.TargetEntityName, this.Schema.displayName);
         // Retrospective fix #6: parseCanvasFromCode signals "code has stuff
         // the canvas can't represent" via `hasUnknownConstructs` (true when
         // the parser found JSX it couldn't round-trip) and `canvas: null`
         // (parse failed outright). Either is a divergence signal — surface
         // it via the Layout-tab banner so users know saving will overwrite.
-        this.CanvasDiverged = !!result.hasUnknownConstructs || !result.canvas;
+        this.CanvasDiverged = !!result.HasUnknownConstructs || !result.Canvas;
         this.SelectedElementId = null;
         this.SelectedSectionId = this.Canvas?.sections[0]?.id ?? null;
     }

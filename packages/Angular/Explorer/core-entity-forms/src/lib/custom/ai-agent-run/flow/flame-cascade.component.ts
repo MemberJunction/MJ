@@ -89,13 +89,13 @@ export class FlameCascadeComponent implements OnDestroy {
   }
 
   private subtreeMaxDepth(n: FlowNode): number {
-    return n.children.length ? Math.max(...n.children.map(c => this.subtreeMaxDepth(c))) : n.depth;
+    return n.Children.length ? Math.max(...n.Children.map(c => this.subtreeMaxDepth(c))) : n.Depth;
   }
 
   private build(): void {
     const svg = this.SvgRef.nativeElement;
     const m = this._model!;
-    const VH = this.TOP + (m.maxDepth + 1) * this.ROW + 26;
+    const VH = this.TOP + (m.MaxDepth + 1) * this.ROW + 26;
     svg.setAttribute('viewBox', `0 0 ${this.VW} ${VH}`);
     const defs = SvgEl('defs', {}, svg);
     const main = SvgEl('g', {}, svg);
@@ -111,35 +111,35 @@ export class FlameCascadeComponent implements OnDestroy {
     }
 
     // swimlane bands behind sub-agent / loop containers (nested grouping)
-    for (const n of m.nodes) {
-      if (n.children.length === 0 || n.depth === 0) continue;
-      const x = this.PAD + n.t0 * this.IW;
-      const w = Math.max(2, (n.t1 - n.t0) * this.IW);
-      const y = this.TOP + n.depth * this.ROW - 3;
-      const h = (this.subtreeMaxDepth(n) - n.depth + 1) * this.ROW - this.GAP + 6;
-      const band = SvgEl('rect', { x: x - 3, y, width: w + 6, height: h, rx: 12, fill: FLOW_COLORS[n.type], opacity: 0.07 }, bands);
-      band.setAttribute('stroke', FLOW_COLORS[n.type]);
+    for (const n of m.Nodes) {
+      if (n.Children.length === 0 || n.Depth === 0) continue;
+      const x = this.PAD + n.T0 * this.IW;
+      const w = Math.max(2, (n.T1 - n.T0) * this.IW);
+      const y = this.TOP + n.Depth * this.ROW - 3;
+      const h = (this.subtreeMaxDepth(n) - n.Depth + 1) * this.ROW - this.GAP + 6;
+      const band = SvgEl('rect', { x: x - 3, y, width: w + 6, height: h, rx: 12, fill: FLOW_COLORS[n.Type], opacity: 0.07 }, bands);
+      band.setAttribute('stroke', FLOW_COLORS[n.Type]);
       band.setAttribute('stroke-width', '1');
       band.setAttribute('stroke-opacity', '0.18');
     }
 
-    for (const n of m.nodes) {
-      const x = this.PAD + n.t0 * this.IW;
-      const fw = Math.max(2, (n.t1 - n.t0) * this.IW);
-      const y = this.TOP + n.depth * this.ROW;
+    for (const n of m.Nodes) {
+      const x = this.PAD + n.T0 * this.IW;
+      const fw = Math.max(2, (n.T1 - n.T0) * this.IW);
+      const y = this.TOP + n.Depth * this.ROW;
       const h = this.ROW - this.GAP;
-      const col = FLOW_COLORS[n.type];
+      const col = FLOW_COLORS[n.Type];
       const grp = SvgEl('g', {}, g);
       (grp as SVGElement & { style: CSSStyleDeclaration }).style.color = col;
       (grp as SVGElement & { style: CSSStyleDeclaration }).style.cursor = 'pointer';
-      AppendTitle(grp, `${n.name} · ${FormatDuration(n.realDur)}`);
+      AppendTitle(grp, `${n.Name} · ${FormatDuration(n.RealDur)}`);
 
       // outline = always-visible structure; fill = animated progress overlay
       const outline = SvgEl('rect', { x, y, width: fw, height: h, rx: 8, fill: col, 'fill-opacity': 0.14, stroke: col, 'stroke-width': 1.4, 'stroke-opacity': 0.7 }, grp);
       const fill = SvgEl('rect', { x, y, width: 0, height: h, rx: 8, fill: col, opacity: 0 }, grp);
 
       // label group, clipped to the bar so it never bleeds into neighbours
-      const clipId = `${this.uid}-${n.id}`;
+      const clipId = `${this.uid}-${n.Id}`;
       const cp = SvgEl('clipPath', { id: clipId }, defs);
       SvgEl('rect', { x, y, width: fw, height: h, rx: 8 }, cp);
       const content = SvgEl('g', { 'clip-path': `url(#${clipId})` }, grp);
@@ -147,7 +147,7 @@ export class FlameCascadeComponent implements OnDestroy {
       const name = ShortLabel(n);
       const showIcon = fw > 22;
       const iconRight = showIcon ? 30 : 9;
-      if (showIcon) AppendIcon(content, x + 7, cy - 9, 18, n.iconClass, n.logoUrl, col);
+      if (showIcon) AppendIcon(content, x + 7, cy - 9, 18, n.IconClass, n.LogoUrl, col);
       // shrink the font until the (already abbreviated) label fits, before giving up
       let fontSize = 0;
       for (const fs of [12.5, 11.5, 10.5, 9.5, 8.5]) {
@@ -155,12 +155,12 @@ export class FlameCascadeComponent implements OnDestroy {
       }
       if (fontSize > 0) {
         SvgEl('text', { x: x + iconRight, y: cy + 1, 'font-size': fontSize, 'font-weight': 600, 'dominant-baseline': 'middle', class: 'ftxt-on', text: name }, content);
-        if (n.realDur && iconRight + name.length * fontSize * 0.56 + 52 <= fw) {
-          SvgEl('text', { x: x + fw - 12, y: cy + 1, 'font-size': 10.5, 'text-anchor': 'end', 'dominant-baseline': 'middle', class: 'ftxt-on', opacity: 0.72, text: FormatDuration(n.realDur) }, content);
+        if (n.RealDur && iconRight + name.length * fontSize * 0.56 + 52 <= fw) {
+          SvgEl('text', { x: x + fw - 12, y: cy + 1, 'font-size': 10.5, 'text-anchor': 'end', 'dominant-baseline': 'middle', class: 'ftxt-on', opacity: 0.72, text: FormatDuration(n.RealDur) }, content);
         }
       }
       grp.addEventListener('click', () => { if (!this.pz?.moved) this.NodeSelected.emit(n); });
-      this.cells.set(n.id, { outline, fill, x, fw, node: n });
+      this.cells.set(n.Id, { outline, fill, x, fw, node: n });
     }
 
     this.playhead = SvgEl('line', { x1: this.PAD, y1: this.TOP - 8, x2: this.PAD, y2: VH - 16, 'stroke-width': 1.5, opacity: 0, class: 'fhand' }, g);
@@ -172,14 +172,14 @@ export class FlameCascadeComponent implements OnDestroy {
 
   private update(p: number, ts: number): void {
     this.cells.forEach(({ outline, fill, fw, node }) => {
-      const started = p >= node.t0;
-      const active = started && p < node.t1;
-      const selected = node.id === this.selectedId;
-      const cw = p >= node.t1 ? fw : started ? (p - node.t0) / (node.t1 - node.t0) * fw : 0;
+      const started = p >= node.T0;
+      const active = started && p < node.T1;
+      const selected = node.Id === this.selectedId;
+      const cw = p >= node.T1 ? fw : started ? (p - node.T0) / (node.T1 - node.T0) * fw : 0;
       fill.setAttribute('width', String(Math.max(0, cw)));
       const fillOp = active ? 0.92 + 0.08 * Math.sin(ts / 170) : started ? 0.6 : 0;
       fill.setAttribute('opacity', String(fillOp));
-      outline.setAttribute('class', selected ? 'glow2' : active && node.heat ? 'glow' + node.heat : '');
+      outline.setAttribute('class', selected ? 'glow2' : active && node.Heat ? 'glow' + node.Heat : '');
       outline.setAttribute('stroke-width', selected ? '3' : '1.4');
       outline.setAttribute('stroke-opacity', selected || active ? '1' : started ? '0.85' : '0.55');
     });

@@ -51,8 +51,8 @@ import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
  */
 export default function ChatThreadScreen() {
     const { id, autosend } = useLocalSearchParams<{ id: string; autosend?: string }>();
-    const { data, loading, error, refresh } = useConversation(id);
-    const { conversations: allConversations, refresh: refreshList } = useConversations();
+    const { Data: data, Loading: loading, Error: error, Refresh: refresh } = useConversation(id);
+    const { Conversations: allConversations, Refresh: refreshList } = useConversations();
 
     const [sending, setSending] = useState(false);
     const [progress, setProgress] = useState<SendProgress | null>(null);
@@ -67,7 +67,7 @@ export default function ChatThreadScreen() {
         setSending(true);
         setSendError(null);
         setPendingUserText(text.trim());
-        setProgress({ currentStep: 'starting', message: 'Sending…' });
+        setProgress({ CurrentStep: 'starting', Message: 'Sending…' });
         try {
             const result = await sendMessage({
                 conversationId: id,
@@ -78,7 +78,7 @@ export default function ChatThreadScreen() {
             setPendingUserText(null);
             await refresh();
             void refreshList();
-            if (!result.success) {
+            if (!result.Success) {
                 setSendError(result.errorMessage ?? 'Send failed.');
                 return;
             }
@@ -121,7 +121,7 @@ export default function ChatThreadScreen() {
         if (!allConversations) return [];
         const summaries = allConversations.map(adaptConversationToSummary);
         return summaries
-            .filter((s) => s.id !== id)
+            .filter((s) => s.Id !== id)
             .slice(0, 5);
     }, [allConversations, id]);
 
@@ -176,7 +176,7 @@ export default function ChatThreadScreen() {
                     ) : (
                         <>
                             <Text style={styles.dayDivider}>Conversation</Text>
-                            {view.messages.map((msg) => <MessageRenderer key={msg.id} message={msg} />)}
+                            {view.messages.map((msg) => <MessageRenderer key={msg.Id} message={msg} />)}
                         </>
                     )}
 
@@ -196,7 +196,7 @@ export default function ChatThreadScreen() {
                                 </View>
                                 <Text style={styles.agentName}>Working…</Text>
                             </View>
-                            {progress?.message ? <Text style={styles.progressText}>{progress.message}</Text> : null}
+                            {progress?.Message ? <Text style={styles.progressText}>{progress.Message}</Text> : null}
                         </View>
                     ) : null}
 
@@ -270,21 +270,21 @@ function RecentsStrip({ activeId, chips }: { activeId: string; chips: RecentChip
             contentContainerStyle={styles.recentsContent}
         >
             {chips.map((chip) => {
-                const active = chip.id === activeId;
+                const active = chip.Id === activeId;
                 return (
                     <Pressable
-                        key={chip.id}
+                        key={chip.Id}
                         style={[styles.chip, active && styles.chipActive]}
-                        onPress={() => !active && router.replace({ pathname: '/chat/[id]', params: { id: chip.id } })}
+                        onPress={() => !active && router.replace({ pathname: '/chat/[id]', params: { id: chip.Id } })}
                     >
                         {active && chip.live ? <View style={styles.chipPulse} /> : null}
                         <AgentAvatarStack
-                            agents={chip.agents}
+                            agents={chip.Agents}
                             size={13}
                             borderColor={active ? Colors.ink : Colors.surface}
                         />
                         <Text style={[styles.chipText, active && styles.chipTextActive]} numberOfLines={1}>
-                            {chip.title}
+                            {chip.Title}
                         </Text>
                     </Pressable>
                 );
@@ -300,34 +300,34 @@ function RecentsStrip({ activeId, chips }: { activeId: string; chips: RecentChip
  * suggested-response chips.
  */
 function MessageRenderer({ message }: { message: AdaptedMessage }) {
-    if (message.kind === 'user') {
+    if (message.Kind === 'user') {
         return (
             <View style={styles.userMsgWrap}>
-                <Text style={styles.userMsg}>{parseUserMessage(message.text)}</Text>
+                <Text style={styles.userMsg}>{parseUserMessage(message.Text)}</Text>
             </View>
         );
     }
     return (
         <View style={styles.agentMsg}>
             <View style={styles.agentLine}>
-                <View style={[styles.agentAv, { backgroundColor: message.agent.color }]}>
-                    <Text style={styles.agentAvText}>{message.agent.initial}</Text>
+                <View style={[styles.agentAv, { backgroundColor: message.Agent.color }]}>
+                    <Text style={styles.agentAvText}>{message.Agent.initial}</Text>
                 </View>
-                <Text style={styles.agentName}>{message.agent.name}</Text>
+                <Text style={styles.agentName}>{message.Agent.name}</Text>
                 <Text style={styles.agentMeta}>
-                    · {message.completionMs ? `${(message.completionMs / 1000).toFixed(1)}s` : message.status}
+                    · {message.CompletionMs ? `${(message.CompletionMs / 1000).toFixed(1)}s` : message.Status}
                 </Text>
             </View>
-            <MarkdownView value={message.body} style={styles.msgBodyWrap} />
-            {message.status === 'In-Progress' ? (
+            <MarkdownView value={message.Body} style={styles.msgBodyWrap} />
+            {message.Status === 'In-Progress' ? (
                 <View style={styles.stepRow}>
                     <ActivityIndicator size="small" color={Colors.brand} />
                     <Text style={styles.stepText}>Working…</Text>
                 </View>
             ) : null}
-            {message.suggestedResponses.length > 0 ? (
+            {message.SuggestedResponses.length > 0 ? (
                 <View style={styles.chips}>
-                    {message.suggestedResponses.map((action) => (
+                    {message.SuggestedResponses.map((action) => (
                         <Pressable key={action} style={styles.actionChip}>
                             <Text style={styles.actionChipText}>{action}</Text>
                         </Pressable>
@@ -400,7 +400,7 @@ function Composer({ onSend, disabled, conversationId }: { onSend: (text: string)
         <View style={styles.composerWrap}>
             {attachment ? (
                 <View style={styles.attachRow}>
-                    <AttachmentChip attachment={attachment} onRemove={() => setAttachment(null)} />
+                    <AttachmentChip Attachment={attachment} OnRemove={() => setAttachment(null)} />
                 </View>
             ) : null}
             <View style={styles.composer}>
@@ -427,9 +427,9 @@ function Composer({ onSend, disabled, conversationId }: { onSend: (text: string)
                 )}
             </View>
             <AttachmentPicker
-                visible={pickerVisible}
-                onClose={() => setPickerVisible(false)}
-                onPicked={(a) => setAttachment(a)}
+                Visible={pickerVisible}
+                OnClose={() => setPickerVisible(false)}
+                OnPicked={(a) => setAttachment(a)}
             />
         </View>
     );

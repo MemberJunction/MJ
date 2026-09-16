@@ -21,11 +21,11 @@ import { syncNow as runSync, type ReplayResult } from '@/data/offline-sync';
 /** The value returned by {@link useOfflineQueue}. */
 export type OfflineQueueState = {
     /** Number of mutations currently waiting to sync. */
-    count: number;
+    Count: number;
     /** True while a replay pass is in flight. */
-    syncing: boolean;
+    Syncing: boolean;
     /** Manually drain the queue; resolves with what synced/failed. */
-    syncNow: () => Promise<ReplayResult>;
+    SyncNow: () => Promise<ReplayResult>;
 };
 
 /**
@@ -61,7 +61,7 @@ export function UseOfflineQueue(): OfflineQueueState {
         return () => sub.remove();
     }, [syncNow]);
 
-    return { count, syncing, syncNow };
+    return { Count: count, Syncing: syncing, SyncNow: syncNow };
 }
 
 /** @deprecated Use {@link UseOfflineQueue}. */

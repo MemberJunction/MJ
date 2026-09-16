@@ -12,9 +12,9 @@ import {
 function testFamily(format: string | undefined, opts: { stdoutIsTTY?: boolean; env?: NodeJS.ProcessEnv } = {}) {
   return ResolveLegacyFormat({
     format,
-    legacy: 'console' as const,
-    legacyDefault: 'console' as const,
-    map: TEST_FORMAT_MAP,
+    Legacy: 'console' as const,
+    LegacyDefault: 'console' as const,
+    Map: TEST_FORMAT_MAP,
     stdoutIsTTY: opts.stdoutIsTTY ?? true,
     env: opts.env ?? {},
   });
@@ -28,10 +28,10 @@ function aiFamily(
 ) {
   return ResolveLegacyFormat({
     format,
-    legacy,
-    legacyDefault: 'compact' as const,
+    Legacy: legacy,
+    LegacyDefault: 'compact' as const,
     legacyWasExplicit: opts.legacyWasExplicit,
-    map: AI_FORMAT_MAP,
+    Map: AI_FORMAT_MAP,
     stdoutIsTTY: opts.stdoutIsTTY ?? true,
     env: opts.env ?? {},
   });

@@ -22,27 +22,27 @@ import {
  */
 export interface PredictionCard {
     /** Binding ID — used as the @for track key. */
-    bindingId: string;
+    BindingId: string;
     /** Human label for the prediction (model target → bound column → fallback). */
-    label: string;
+    Label: string;
     /** True when the model is a 0–1 probability we can render as a gauge. */
-    isProbability: boolean;
+    IsProbability: boolean;
     /** True for regression models showing a raw numeric value. */
-    isNumeric: boolean;
+    IsNumeric: boolean;
     /** True for classification models showing a class label. */
-    isClass: boolean;
+    IsClass: boolean;
     /** Pre-formatted primary value string ("72%", "1,240.5", "Renewing", "—"). */
-    displayValue: string;
+    DisplayValue: string;
     /** 0–100 fill for the probability gauge (only meaningful when isProbability). */
-    gaugePct: number;
+    GaugePct: number;
     /** Neutral band for the gauge segment styling (only meaningful when isProbability). */
-    band: PredictionBand | null;
+    Band: PredictionBand | null;
     /** Top feature-importance drivers, or empty when unavailable. */
-    drivers: PredictionDriver[];
+    Drivers: PredictionDriver[];
     /** Provenance: "Pipeline Name v3". */
-    provenance: string;
+    Provenance: string;
     /** "Last scored" timestamp string, or null when unavailable. */
-    lastScored: string | null;
+    LastScored: string | null;
 }
 
 /**
@@ -200,17 +200,17 @@ export class ModelPredictionPanel extends BaseFormPanel implements OnInit {
         const kind = ValueKind(model.ProblemType, numeric);
 
         return {
-            bindingId: binding.ID,
-            label: ResolveLabel(model.TargetVariable, binding.TargetColumn),
-            isProbability: kind === 'probability',
-            isNumeric: kind === 'numeric',
-            isClass: kind === 'class',
-            displayValue: FormatValue(rawValue, numeric, kind),
-            gaugePct: kind === 'probability' && numeric != null ? GaugePct(numeric) : 0,
-            band: kind === 'probability' && numeric != null ? BandFor(numeric) : null,
-            drivers: ParseDrivers(model.FeatureImportance),
-            provenance: `${model.Pipeline} v${model.Version}`,
-            lastScored: FormatLastScored(binding.LastScoredAt),
+            BindingId: binding.ID,
+            Label: ResolveLabel(model.TargetVariable, binding.TargetColumn),
+            IsProbability: kind === 'probability',
+            IsNumeric: kind === 'numeric',
+            IsClass: kind === 'class',
+            DisplayValue: FormatValue(rawValue, numeric, kind),
+            GaugePct: kind === 'probability' && numeric != null ? GaugePct(numeric) : 0,
+            Band: kind === 'probability' && numeric != null ? BandFor(numeric) : null,
+            Drivers: ParseDrivers(model.FeatureImportance),
+            Provenance: `${model.Pipeline} v${model.Version}`,
+            LastScored: FormatLastScored(binding.LastScoredAt),
         };
     }
 

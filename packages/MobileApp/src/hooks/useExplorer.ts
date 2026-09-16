@@ -268,7 +268,7 @@ export function UseQueryRun(queryId: string | undefined) {
         if (status !== 'ready' || !queryId) return;
         setLoading(true);
         try { setResult(await runQuery(queryId, parameters)); }
-        catch (e) { setResult({ columns: [], rows: [], rowCount: 0, success: false, errorMessage: e instanceof Error ? e.message : String(e) }); }
+        catch (e) { setResult({ Columns: [], Rows: [], RowCount: 0, Success: false, errorMessage: e instanceof Error ? e.message : String(e) }); }
         finally { setLoading(false); }
     }, [status, queryId]);
 

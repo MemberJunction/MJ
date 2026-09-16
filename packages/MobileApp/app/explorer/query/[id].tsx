@@ -33,7 +33,7 @@ export default function QueryRunScreen() {
                 </Pressable>
                 <View style={styles.headerCenter}>
                     <Text numberOfLines={1} style={styles.headerTitle}>Query results</Text>
-                    <Text style={styles.headerSub}>{result ? `${result.rowCount} rows` : 'Running…'}</Text>
+                    <Text style={styles.headerSub}>{result ? `${result.RowCount} rows` : 'Running…'}</Text>
                 </View>
                 <Pressable hitSlop={8} style={styles.iconBtn} onPress={() => void run()}>
                     <Icons.Sliders size={20} color={Colors.ink} />
@@ -42,18 +42,18 @@ export default function QueryRunScreen() {
 
             {loading && !result ? (
                 <View style={styles.loadingBlock}><ActivityIndicator color={Colors.brand} /><Text style={styles.loadingText}>Running query…</Text></View>
-            ) : result && !result.success ? (
+            ) : result && !result.Success ? (
                 <View style={styles.loadingBlock}>
                     <Text style={styles.errorText}>{result.errorMessage}</Text>
                     <Pressable onPress={() => void run()}><Text style={styles.retry}>Try again</Text></Pressable>
                 </View>
-            ) : result && result.rows.length === 0 ? (
+            ) : result && result.Rows.length === 0 ? (
                 <View style={styles.loadingBlock}><Text style={styles.empty}>No rows returned.</Text></View>
             ) : result ? (
                 <ScrollView contentContainerStyle={styles.list}>
-                    {result.rows.map((row, idx) => (
+                    {result.Rows.map((row, idx) => (
                         <View key={idx} style={styles.card}>
-                            {result.columns.slice(0, 6).map((col) => (
+                            {result.Columns.slice(0, 6).map((col) => (
                                 <View key={col} style={styles.cell}>
                                     <Text style={styles.cellKey}>{col}</Text>
                                     <Text style={styles.cellVal} numberOfLines={2}>
@@ -66,7 +66,7 @@ export default function QueryRunScreen() {
                 </ScrollView>
             ) : null}
 
-            {result?.success ? (
+            {result?.Success ? (
                 <View style={styles.askBar}>
                     <Pressable style={styles.askBtn} onPress={() => router.push('/new-conversation')}>
                         <View style={styles.askAv}><Text style={styles.askAvText}>S</Text></View>

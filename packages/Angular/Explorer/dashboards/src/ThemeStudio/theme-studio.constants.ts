@@ -25,8 +25,8 @@ export function isBuiltInTheme(id: string | null | undefined): boolean {
 
 /** A chrome selector a themer can target from Custom CSS, with a one-line description. */
 export interface ChromeSelectorInfo {
-  selector: string;
-  description: string;
+  Selector: string;
+  Description: string;
 }
 
 /**
@@ -38,35 +38,35 @@ export interface ChromeSelectorInfo {
  * and generally not selectable from an overlay.
  */
 export const MJ_CHROME_SELECTOR_INFO: ChromeSelectorInfo[] = [
-  { selector: 'mj-shell', description: 'The top-level app shell (header bar + workspace)' },
-  { selector: 'mj-app-nav', description: 'Top app navigation strip' },
-  { selector: 'mj-app-switcher', description: 'App switcher menu' },
-  { selector: 'mj-tab-container', description: 'Workspace tab strip + tab content host' },
-  { selector: 'mj-single-dashboard', description: 'Dashboard resource host' },
-  { selector: 'mj-single-record', description: 'Record form resource host' },
-  { selector: 'mj-single-query', description: 'Query resource host' },
-  { selector: 'mj-single-search-result', description: 'Search results resource host' },
-  { selector: 'mj-command-palette', description: 'Cmd/Ctrl-K command palette' },
-  { selector: 'mj-omnibar-palette', description: 'Omnibar search palette' },
-  { selector: 'mj-notifications-resource', description: 'Notifications panel' },
-  { selector: 'mj-empty-state', description: 'Empty-state placeholder blocks' },
-  { selector: 'mj-loading', description: 'Loading indicator (animated logo)' },
-  { selector: 'mj-dialog', description: 'Modal dialogs' },
-  { selector: 'mj-dialog-actions', description: 'Dialog footer action row' },
-  { selector: 'mj-profile-dialog', description: 'User profile dialog' },
-  { selector: 'mj-server-connectivity-banner', description: 'Server connectivity banner' },
-  { selector: 'mj-system-validation-banner', description: 'System validation banner' },
-  { selector: '.mj-logo', description: 'The shell logo element' },
+  { Selector: 'mj-shell', Description: 'The top-level app shell (header bar + workspace)' },
+  { Selector: 'mj-app-nav', Description: 'Top app navigation strip' },
+  { Selector: 'mj-app-switcher', Description: 'App switcher menu' },
+  { Selector: 'mj-tab-container', Description: 'Workspace tab strip + tab content host' },
+  { Selector: 'mj-single-dashboard', Description: 'Dashboard resource host' },
+  { Selector: 'mj-single-record', Description: 'Record form resource host' },
+  { Selector: 'mj-single-query', Description: 'Query resource host' },
+  { Selector: 'mj-single-search-result', Description: 'Search results resource host' },
+  { Selector: 'mj-command-palette', Description: 'Cmd/Ctrl-K command palette' },
+  { Selector: 'mj-omnibar-palette', Description: 'Omnibar search palette' },
+  { Selector: 'mj-notifications-resource', Description: 'Notifications panel' },
+  { Selector: 'mj-empty-state', Description: 'Empty-state placeholder blocks' },
+  { Selector: 'mj-loading', Description: 'Loading indicator (animated logo)' },
+  { Selector: 'mj-dialog', Description: 'Modal dialogs' },
+  { Selector: 'mj-dialog-actions', Description: 'Dialog footer action row' },
+  { Selector: 'mj-profile-dialog', Description: 'User profile dialog' },
+  { Selector: 'mj-server-connectivity-banner', Description: 'Server connectivity banner' },
+  { Selector: 'mj-system-validation-banner', Description: 'System validation banner' },
+  { Selector: '.mj-logo', Description: 'The shell logo element' },
 ];
 
 /** Flat selector list (autocomplete + validation). */
-export const MJ_CHROME_SELECTORS: string[] = MJ_CHROME_SELECTOR_INFO.map((i) => i.selector);
+export const MJ_CHROME_SELECTORS: string[] = MJ_CHROME_SELECTOR_INFO.map((i) => i.Selector);
 
 /** One category in the visual token browser. */
 export interface TokenCategory {
-  key: string;
-  label: string;
-  match: RegExp;
+  Key: string;
+  Label: string;
+  Match: RegExp;
 }
 
 /**
@@ -76,15 +76,15 @@ export interface TokenCategory {
  * component appends.
  */
 export const TOKEN_CATEGORIES: TokenCategory[] = [
-  { key: 'brand', label: 'Brand', match: /^--mj-brand-/ },
-  { key: 'bg', label: 'Backgrounds', match: /^--mj-bg-/ },
-  { key: 'text', label: 'Text', match: /^--mj-text-/ },
-  { key: 'border', label: 'Borders', match: /^--mj-border-/ },
-  { key: 'status', label: 'Status', match: /^--mj-status-/ },
-  { key: 'viz', label: 'Viz', match: /^--mj-viz-/ },
-  { key: 'shape', label: 'Shape', match: /^--mj-(radius|shadow)-/ },
-  { key: 'type', label: 'Type', match: /^--mj-font-/ },
-  { key: 'ramps', label: 'Ramps (primitives)', match: /^--mj-color-/ },
+  { Key: 'brand', Label: 'Brand', Match: /^--mj-brand-/ },
+  { Key: 'bg', Label: 'Backgrounds', Match: /^--mj-bg-/ },
+  { Key: 'text', Label: 'Text', Match: /^--mj-text-/ },
+  { Key: 'border', Label: 'Borders', Match: /^--mj-border-/ },
+  { Key: 'status', Label: 'Status', Match: /^--mj-status-/ },
+  { Key: 'viz', Label: 'Viz', Match: /^--mj-viz-/ },
+  { Key: 'shape', Label: 'Shape', Match: /^--mj-(radius|shadow)-/ },
+  { Key: 'type', Label: 'Type', Match: /^--mj-font-/ },
+  { Key: 'ramps', Label: 'Ramps (primitives)', Match: /^--mj-color-/ },
 ];
 
 /**

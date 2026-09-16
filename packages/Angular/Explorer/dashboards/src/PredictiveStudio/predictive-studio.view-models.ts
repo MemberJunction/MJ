@@ -173,9 +173,9 @@ export function primaryAuc(model: Pick<PSModelRow, 'Metrics' | 'HoldoutMetrics'>
 
 /** A labeled metric ready for display (value formatted to a sensible precision). */
 export interface PSMetricDisplay {
-  key: PSMetricKey;
-  label: string;
-  value: string;
+  Key: PSMetricKey;
+  Label: string;
+  Value: string;
 }
 
 /** Human labels for the canonical metric keys. */
@@ -206,7 +206,7 @@ export function MetricsToDisplay(metrics: PSMetricMap, options?: { excludeAuc?: 
     if (excludeAuc && key === 'AUC') continue;
     const value = metrics[key];
     if (value == null) continue;
-    out.push({ key, label: METRIC_LABELS[key], value: FormatMetricValue(key, value) });
+    out.push({ Key: key, Label: METRIC_LABELS[key], Value: FormatMetricValue(key, value) });
   }
   return out;
 }
@@ -358,9 +358,9 @@ export function algoStyle(name: string | null | undefined): AlgoStyle {  // case
 
 /** The three kanban buckets an iteration set is grouped into. */
 export interface PSKanbanColumns {
-  running: PSIterationCard[];
-  completed: PSIterationCard[];
-  pruned: PSIterationCard[];
+  Running: PSIterationCard[];
+  Completed: PSIterationCard[];
+  Pruned: PSIterationCard[];
 }
 
 /**
@@ -393,7 +393,7 @@ export function GroupIterationsToKanban(iterations: PSIterationRow[]): PSKanbanC
       pruned.push(toScoredCard(it, 'Pruned', bestScore));
     }
   }
-  return { running, completed, pruned };
+  return { Running: running, Completed: completed, Pruned: pruned };
 }
 
 /** @deprecated Use {@link GroupIterationsToKanban}. */
@@ -453,15 +453,15 @@ function toRunningCard(it: PSIterationRow): PSIterationCard {
   const algo = it.AlgorithmName ?? 'Unknown';
   const style = algoStyle(algo);
   return {
-    algorithm: algo,
-    algorithmIcon: style.icon,
-    algorithmColor: style.color,
-    iteration: `iteration ${it.Sequence}${it.Status === 'Pending' ? ' · queued' : ' · in progress'}`,
-    features: featureChips(it.Label),
-    status: 'Running',
+    Algorithm: algo,
+    AlgorithmIcon: style.icon,
+    AlgorithmColor: style.color,
+    Iteration: `iteration ${it.Sequence}${it.Status === 'Pending' ? ' · queued' : ' · in progress'}`,
+    Features: featureChips(it.Label),
+    Status: 'Running',
     progress: it.Status === 'Pending' ? 8 : 50,
     progressDetail: it.Status === 'Pending' ? 'waiting for a slot' : 'training…',
-    rationale: it.Rationale ?? 'No rationale recorded.',
+    Rationale: it.Rationale ?? 'No rationale recorded.',
   };
 }
 
@@ -470,15 +470,15 @@ function toScoredCard(it: PSIterationRow, status: 'Best' | 'Completed' | 'Pruned
   const algo = it.AlgorithmName ?? 'Unknown';
   const style = algoStyle(algo);
   return {
-    algorithm: algo,
-    algorithmIcon: style.icon,
-    algorithmColor: status === 'Pruned' ? ALGO_FALLBACK.color : style.color,
-    iteration: `iteration ${it.Sequence}`,
-    features: featureChips(it.Label),
-    status,
+    Algorithm: algo,
+    AlgorithmIcon: style.icon,
+    AlgorithmColor: status === 'Pruned' ? ALGO_FALLBACK.color : style.color,
+    Iteration: `iteration ${it.Sequence}`,
+    Features: featureChips(it.Label),
+    Status: status,
     score: it.Score ?? undefined,
     scoreDelta: scoreDelta(it.Score, bestScore, status),
-    rationale: it.Rationale ?? 'No rationale recorded.',
+    Rationale: it.Rationale ?? 'No rationale recorded.',
   };
 }
 
@@ -508,14 +508,14 @@ function scoreDelta(score: number | null | undefined, bestScore: number | null, 
 
 /** A derived Home KPI strip — all entity-agnostic counts/metrics. */
 export interface PSHomeKpis {
-  publishedCount: number;
-  activeExperiments: number;
+  PublishedCount: number;
+  ActiveExperiments: number;
   /** Best holdout AUC across published models, formatted, or '—' when none. */
-  bestHoldout: string;
+  BestHoldout: string;
   /** Sum of SuccessCount across recent non-dry-run ML scoring runs this week. */
-  scoredThisWeek: string;
+  ScoredThisWeek: string;
   /** Total training runs (experiment iterations) recorded. */
-  experimentRuns: number;
+  ExperimentRuns: number;
 }
 
 /**
@@ -538,11 +538,11 @@ export function ComputeHomeKpis(
   }, null);
   const scored = recentScoringRuns.reduce((sum, r) => sum + (r.SuccessCount || 0), 0);
   return {
-    publishedCount: published.length,
-    activeExperiments: runningSessionCount,
-    bestHoldout: bestHoldoutNum == null ? '—' : bestHoldoutNum.toFixed(3),
-    scoredThisWeek: scored.toLocaleString(),
-    experimentRuns: experimentRunCount,
+    PublishedCount: published.length,
+    ActiveExperiments: runningSessionCount,
+    BestHoldout: bestHoldoutNum == null ? '—' : bestHoldoutNum.toFixed(3),
+    ScoredThisWeek: scored.toLocaleString(),
+    ExperimentRuns: experimentRunCount,
   };
 }
 
@@ -558,13 +558,13 @@ export function computeHomeKpis(
 
 /** A vertical activity-feed item, with the icon/kind chosen by {@link buildActivityFeed}. */
 export interface PSActivityFeedItem {
-  kind: 'promote' | 'run' | 'warn' | 'archive';
-  icon: string;
-  title: string;
-  detail: string;
-  when: string;
+  Kind: 'promote' | 'run' | 'warn' | 'archive';
+  Icon: string;
+  Title: string;
+  Detail: string;
+  When: string;
   /** Sort key (epoch ms) — most recent first. Not rendered. */
-  sortMs: number;
+  SortMs: number;
 }
 
 /**
@@ -591,33 +591,33 @@ export function BuildActivityFeed(
     const when = ToDate(run.StartTime) ?? ToDate(run.CreatedAt) ?? now;
     const failed = run.Status === 'Failed';
     items.push({
-      kind: failed ? 'warn' : 'run',
-      icon: failed ? 'fa-solid fa-triangle-exclamation' : 'fa-solid fa-bolt',
-      title: failed
+      Kind: failed ? 'warn' : 'run',
+      Icon: failed ? 'fa-solid fa-triangle-exclamation' : 'fa-solid fa-bolt',
+      Title: failed
         ? `Scoring run failed${run.ProcessName ? ` — ${run.ProcessName}` : ''}`
         : `Scored ${run.SuccessCount.toLocaleString()} ${run.EntityName ?? 'records'}`,
-      detail: `${run.ProcessName ?? 'ML scoring'}${run.DryRun ? ' · dry run' : ''} · ${run.Status}`,
-      when: RelativeTime(when, now),
-      sortMs: when.getTime(),
+      Detail: `${run.ProcessName ?? 'ML scoring'}${run.DryRun ? ' · dry run' : ''} · ${run.Status}`,
+      When: RelativeTime(when, now),
+      SortMs: when.getTime(),
     });
   }
 
   for (const ev of modelEvents) {
-    const isArchive = ev.kind === 'archive';
-    const when = ToDate(ev.when) ?? now;
+    const isArchive = ev.Kind === 'archive';
+    const when = ToDate(ev.When) ?? now;
     items.push({
-      kind: isArchive ? 'archive' : 'promote',
-      icon: isArchive ? 'fa-solid fa-box-archive' : 'fa-solid fa-arrow-up',
-      title: isArchive
-        ? `${ev.name} archived`
-        : `${ev.name} promoted to ${ev.status}`,
-      detail: ev.auc != null ? `${ev.algorithm ?? 'model'} · holdout AUC ${ev.auc.toFixed(3)}` : (ev.algorithm ?? 'model'),
-      when: RelativeTime(when, now),
-      sortMs: when.getTime(),
+      Kind: isArchive ? 'archive' : 'promote',
+      Icon: isArchive ? 'fa-solid fa-box-archive' : 'fa-solid fa-arrow-up',
+      Title: isArchive
+        ? `${ev.Name} archived`
+        : `${ev.Name} promoted to ${ev.Status}`,
+      Detail: ev.Auc != null ? `${ev.Algorithm ?? 'model'} · holdout AUC ${ev.Auc.toFixed(3)}` : (ev.Algorithm ?? 'model'),
+      When: RelativeTime(when, now),
+      SortMs: when.getTime(),
     });
   }
 
-  items.sort((a, b) => b.sortMs - a.sortMs);
+  items.sort((a, b) => b.SortMs - a.SortMs);
   return items.slice(0, limit);
 }
 
@@ -633,12 +633,12 @@ export function buildActivityFeed(
 
 /** A model lifecycle event (promotion / archive) feeding the activity timeline. */
 export interface PSModelEvent {
-  kind: 'promote' | 'archive';
-  name: string;
-  status: string;
-  algorithm: string | null;
-  auc: number | null;
-  when: Date;
+  Kind: 'promote' | 'archive';
+  Name: string;
+  Status: string;
+  Algorithm: string | null;
+  Auc: number | null;
+  When: Date;
 }
 
 /**
@@ -653,12 +653,12 @@ export function DeriveModelEvents(models: PSModelEventSource[], limit = 8): PSMo
   const events: PSModelEvent[] = [];
   for (const m of models) {
     if (m.Status === 'Published' || m.Status === 'Validated') {
-      events.push({ kind: 'promote', name: m.Name, status: m.Status, algorithm: m.Algorithm, auc: PrimaryAuc(m), when: m.UpdatedAt });
+      events.push({ Kind: 'promote', Name: m.Name, Status: m.Status, Algorithm: m.Algorithm, Auc: PrimaryAuc(m), When: m.UpdatedAt });
     } else if (m.Status === 'Archived') {
-      events.push({ kind: 'archive', name: m.Name, status: m.Status, algorithm: m.Algorithm, auc: PrimaryAuc(m), when: m.UpdatedAt });
+      events.push({ Kind: 'archive', Name: m.Name, Status: m.Status, Algorithm: m.Algorithm, Auc: PrimaryAuc(m), When: m.UpdatedAt });
     }
   }
-  events.sort((a, b) => b.when.getTime() - a.when.getTime());
+  events.sort((a, b) => b.When.getTime() - a.When.getTime());
   return events.slice(0, limit);
 }
 
@@ -762,10 +762,10 @@ export function deriveCompareColumns(iterations: PSIterationRow[], maxRuns = 3):
 
 /** A compare metric row (label + per-run formatted values + which column is best). */
 export interface PSCompareMetricRow {
-  label: string;
-  qualifier: string;
-  values: string[];
-  bestIndex: number;
+  Label: string;
+  Qualifier: string;
+  Values: string[];
+  BestIndex: number;
 }
 
 /**
@@ -779,16 +779,16 @@ export function BuildCompareMetricRows(columns: PSCompareColumn[]): PSCompareMet
   const costs = columns.map((c) => c.computeCost);
   return [
     {
-      label: 'Holdout score',
-      qualifier: 'the honest number · higher is better',
-      values: aucs.map((v) => (v == null ? '—' : v.toFixed(3))),
-      bestIndex: indexOfExtreme(aucs, 'max'),
+      Label: 'Holdout score',
+      Qualifier: 'the honest number · higher is better',
+      Values: aucs.map((v) => (v == null ? '—' : v.toFixed(3))),
+      BestIndex: indexOfExtreme(aucs, 'max'),
     },
     {
-      label: 'Compute cost',
-      qualifier: 'lower is better',
-      values: costs.map((v) => (v == null ? '—' : v.toFixed(2))),
-      bestIndex: indexOfExtreme(costs, 'min'),
+      Label: 'Compute cost',
+      Qualifier: 'lower is better',
+      Values: costs.map((v) => (v == null ? '—' : v.toFixed(2))),
+      BestIndex: indexOfExtreme(costs, 'min'),
     },
   ];
 }

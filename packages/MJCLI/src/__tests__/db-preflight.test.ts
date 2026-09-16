@@ -58,9 +58,9 @@ describe('verifyDatabaseConnection', () => {
 
     expect(openConnectionMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        dialect: 'mssql',
-        host: 'localhost',
-        user: 'MJ_CodeGen',
+        Dialect: 'mssql',
+        Host: 'localhost',
+        User: 'MJ_CodeGen',
         encrypt: true,
         trustServerCertificate: false,
       }),
@@ -72,7 +72,7 @@ describe('verifyDatabaseConnection', () => {
 
     await VerifyDatabaseConnection({ ...baseConfig, dbPlatform: 'postgresql' });
 
-    expect(openConnectionMock).toHaveBeenCalledWith(expect.objectContaining({ dialect: 'postgres' }));
+    expect(openConnectionMock).toHaveBeenCalledWith(expect.objectContaining({ Dialect: 'postgres' }));
   });
 
   it('classifies a self-signed cert error and suggests trusting the cert when trust is off', async () => {

@@ -171,7 +171,7 @@ describe('readManagedMeta', () => {
         const meta = ReadManagedMeta({
             __mj_managed: { version: '5.1.0', mjMajor: '5', keys: ['permissions.allow'] },
         });
-        expect(meta).toEqual({ version: '5.1.0', mjMajor: '5', keys: ['permissions.allow'] });
+        expect(meta).toEqual({ Version: '5.1.0', mjMajor: '5', Keys: ['permissions.allow'] });
     });
 
     it('returns null when the block is absent', () => {

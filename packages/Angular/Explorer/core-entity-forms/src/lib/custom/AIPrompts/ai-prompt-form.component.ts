@@ -580,7 +580,7 @@ export class MJAIPromptFormComponentExtended extends MJAIPromptFormComponent imp
     public async LinkExistingTemplate() {
         try {
             this.promptManagementService.openTemplateSelectorDialog({
-                title: 'Link Existing Template',
+                Title: 'Link Existing Template',
                 multiSelect: false,
                 showCreateNew: true,
                 showActiveOnly: true,
@@ -588,8 +588,8 @@ export class MJAIPromptFormComponentExtended extends MJAIPromptFormComponent imp
                 viewContainerRef: this.viewContainerRef
             }).subscribe({
                 next: async (result) => {
-                    if (result && result.selectedTemplates.length > 0) {
-                        const selectedTemplate = result.selectedTemplates[0];
+                    if (result && result.SelectedTemplates.length > 0) {
+                        const selectedTemplate = result.SelectedTemplates[0];
                         
                         // First, clean up any pending changes related to the old template
                         this.cleanupOldTemplateRecords();

@@ -26,11 +26,11 @@ export const PUSH_TOKEN_SETTING_KEY = 'mobile.pushDeviceToken';
 /** Outcome of {@link registerForPushNotifications}. */
 export type PushRegistrationResult = {
     /** Whether the OS granted notification permission (or provisional on iOS). */
-    granted: boolean;
+    Granted: boolean;
     /** The acquired Expo push token, or `null` when one couldn't be minted (simulator). */
-    token: string | null;
+    Token: string | null;
     /** Whether the token was successfully written to the backend. */
-    persisted: boolean;
+    Persisted: boolean;
     /** Human-readable explanation when `token`/`persisted` is falsy. */
     reason?: string;
 };
@@ -196,16 +196,16 @@ export async function RegisterForPushNotifications(contextUser?: UserInfo): Prom
 
     const granted = await RequestNotificationPermission();
     if (!granted) {
-        return { granted: false, token: null, persisted: false, reason: 'Notification permission not granted.' };
+        return { Granted: false, Token: null, Persisted: false, reason: 'Notification permission not granted.' };
     }
 
     const token = await GetExpoPushToken();
     if (!token) {
-        return { granted: true, token: null, persisted: false, reason: 'No Expo push token (simulator or APNs unavailable).' };
+        return { Granted: true, Token: null, Persisted: false, reason: 'No Expo push token (simulator or APNs unavailable).' };
     }
 
     const persisted = await RegisterDeviceToken(token, contextUser);
-    return { granted: true, token, persisted, reason: persisted ? undefined : 'Token acquired but backend persistence failed.' };
+    return { Granted: true, Token: token, Persisted: persisted, reason: persisted ? undefined : 'Token acquired but backend persistence failed.' };
 }
 
 /** @deprecated Use {@link RegisterForPushNotifications}. */

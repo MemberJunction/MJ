@@ -109,7 +109,7 @@ export class EntityPipelinePanelComponent implements AfterViewInit {
             const result = this.ModificationType === 'create'
                 ? await this.service.createEntity(this.TableDefinition, { skipRestart: true })
                 : await this.service.modifyEntity(this.TableDefinition, {
-                    existingEntityId: this.ExistingEntityId ?? '',
+                    ExistingEntityId: this.ExistingEntityId ?? '',
                     skipRestart: true,
                 });
 

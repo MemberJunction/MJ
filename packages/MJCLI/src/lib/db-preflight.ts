@@ -113,12 +113,12 @@ function classifyFailure(message: string, config: DbConnectionConfig): DbPreflig
  */
 export async function VerifyDatabaseConnection(config: DbConnectionConfig): Promise<DbPreflightResult> {
   const params: DbConnectionParams = {
-    dialect: dialectFor(config.dbPlatform),
-    host: config.dbHost,
+    Dialect: dialectFor(config.dbPlatform),
+    Host: config.dbHost,
     port: config.dbPort,
-    user: config.codeGenLogin,
-    password: config.codeGenPassword,
-    database: config.dbDatabase,
+    User: config.codeGenLogin,
+    Password: config.codeGenPassword,
+    Database: config.dbDatabase,
     encrypt: config.dbEncrypt,
     trustServerCertificate: config.dbTrustServerCertificate,
   };

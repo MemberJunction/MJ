@@ -1,11 +1,11 @@
 import { Component, Input } from '@angular/core';
 
 export interface OracleResult {
-  name: string;
-  status: 'Passed' | 'Failed' | 'Skipped' | 'Error';
-  score: number;
-  cost: number;
-  duration: number; // milliseconds
+  Name: string;
+  Status: 'Passed' | 'Failed' | 'Skipped' | 'Error';
+  Score: number;
+  Cost: number;
+  Duration: number; // milliseconds
   errorMessage?: string;
   details?: any;
 }
@@ -39,36 +39,36 @@ export interface OracleResult {
               <div class="header-cell">Duration</div>
             </div>
     
-            @for (oracle of results; track oracle.name) {
+            @for (oracle of results; track oracle.Name) {
               <div class="table-row" [class.has-error]="oracle.errorMessage">
                 <div class="table-cell">
                   <div class="oracle-name">
-                    @if (oracle.status === 'Passed') {
+                    @if (oracle.Status === 'Passed') {
                       <i class="fa-solid fa-check-circle oracle-icon"></i>
                     }
-                    @if (oracle.status === 'Failed') {
+                    @if (oracle.Status === 'Failed') {
                       <i class="fa-solid fa-times-circle oracle-icon"></i>
                     }
-                    @if (oracle.status === 'Error') {
+                    @if (oracle.Status === 'Error') {
                       <i class="fa-solid fa-exclamation-triangle oracle-icon"></i>
                     }
-                    @if (oracle.status === 'Skipped') {
+                    @if (oracle.Status === 'Skipped') {
                       <i class="fa-solid fa-forward oracle-icon"></i>
                     }
-                    <span>{{ oracle.name }}</span>
+                    <span>{{ oracle.Name }}</span>
                   </div>
                 </div>
                 <div class="table-cell">
-                  <app-test-status-badge [status]="oracle.status" [showIcon]="false"></app-test-status-badge>
+                  <app-test-status-badge [status]="oracle.Status" [showIcon]="false"></app-test-status-badge>
                 </div>
                 <div class="table-cell">
-                  <app-score-indicator [score]="oracle.score" [showBar]="true"></app-score-indicator>
+                  <app-score-indicator [score]="oracle.Score" [showBar]="true"></app-score-indicator>
                 </div>
                 <div class="table-cell">
-                  <app-cost-display [cost]="oracle.cost" [showIcon]="true" [decimals]="6"></app-cost-display>
+                  <app-cost-display [cost]="oracle.Cost" [showIcon]="true" [decimals]="6"></app-cost-display>
                 </div>
                 <div class="table-cell">
-                  {{ formatDuration(oracle.duration) }}
+                  {{ formatDuration(oracle.Duration) }}
                 </div>
               </div>
     
@@ -340,7 +340,7 @@ export class OracleBreakdownTableComponent {
 
   GetAggregateScore(): number {
     if (!this.Results || this.Results.length === 0) return 0;
-    const total = this.Results.reduce((sum, r) => sum + r.score, 0);
+    const total = this.Results.reduce((sum, r) => sum + r.Score, 0);
     return total / this.Results.length;
   }
 
@@ -351,7 +351,7 @@ export class OracleBreakdownTableComponent {
 
   GetTotalCost(): number {
     if (!this.Results || this.Results.length === 0) return 0;
-    return this.Results.reduce((sum, r) => sum + r.cost, 0);
+    return this.Results.reduce((sum, r) => sum + r.Cost, 0);
   }
 
   /** @deprecated Use {@link GetTotalCost}. */
@@ -361,7 +361,7 @@ export class OracleBreakdownTableComponent {
 
   GetTotalDuration(): number {
     if (!this.Results || this.Results.length === 0) return 0;
-    return this.Results.reduce((sum, r) => sum + r.duration, 0);
+    return this.Results.reduce((sum, r) => sum + r.Duration, 0);
   }
 
   /** @deprecated Use {@link GetTotalDuration}. */

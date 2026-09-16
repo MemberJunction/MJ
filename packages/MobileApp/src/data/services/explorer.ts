@@ -89,9 +89,9 @@ export type EntityRecordRow = {
 
 /** Result of {@link loadEntityRecords}: the entity metadata, the card rows, and how many were returned. */
 export type EntityRecordsLoad = {
-    entity: EntityInfo;
-    rows: EntityRecordRow[];
-    totalShown: number;
+    Entity: EntityInfo;
+    Rows: EntityRecordRow[];
+    TotalShown: number;
 };
 
 /**
@@ -149,7 +149,7 @@ export async function LoadEntityRecords(
         return { id: idVal, title, subtitle, raw: r };
     });
 
-    return { entity, rows, totalShown: rows.length };
+    return { Entity: entity, Rows: rows, TotalShown: rows.length };
 }
 
 /** @deprecated Use {@link LoadEntityRecords}. */
@@ -166,9 +166,9 @@ export type RecordFieldRow = { key: string; label: string; value: string };
 
 /** Result of {@link loadRecordDetail}: the entity metadata, a title, and the projected field rows. */
 export type RecordDetailLoad = {
-    entity: EntityInfo;
-    title: string;
-    fields: RecordFieldRow[];
+    Entity: EntityInfo;
+    Title: string;
+    Fields: RecordFieldRow[];
 };
 
 /**
@@ -205,7 +205,7 @@ export async function LoadRecordDetail(
             };
         });
 
-    return { entity: entityInfo, title, fields };
+    return { Entity: entityInfo, Title: title, Fields: fields };
 }
 
 /** @deprecated Use {@link LoadRecordDetail}. */
@@ -265,10 +265,10 @@ export function queryCount(): number {
 
 /** Result of running a saved query: column names, row objects, count, and success/error. */
 export type QueryRunResult = {
-    columns: string[];
-    rows: Record<string, unknown>[];
-    rowCount: number;
-    success: boolean;
+    Columns: string[];
+    Rows: Record<string, unknown>[];
+    RowCount: number;
+    Success: boolean;
     errorMessage?: string;
 };
 
@@ -297,10 +297,10 @@ export async function runQuery(  // case-violation-ok-legacy-back-compat: the Pa
     const rows = (result.Results ?? []) as Record<string, unknown>[];
     const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
     return {
-        columns,
-        rows,
-        rowCount: result.RowCount ?? rows.length,
-        success: result.Success,
+        Columns: columns,
+        Rows: rows,
+        RowCount: result.RowCount ?? rows.length,
+        Success: result.Success,
         errorMessage: result.Success ? undefined : (result.ErrorMessage ?? 'Query failed.'),
     };
 }
@@ -364,13 +364,13 @@ export type DashboardPart = {
 
 /** A dashboard resolved into its renderable parts. */
 export type DashboardLoad = {
-    id: string;
-    name: string;
-    description: string | null;
-    updatedAt: Date | null;
-    parts: DashboardPart[];
+    Id: string;
+    Name: string;
+    Description: string | null;
+    UpdatedAt: Date | null;
+    Parts: DashboardPart[];
     /** Count of parts that can't render natively on mobile (desktop-only). */
-    desktopOnlyCount: number;
+    DesktopOnlyCount: number;
 };
 
 /** A node in the Golden Layout tree stored in `Dashboard.UIConfigDetails`. */
@@ -473,12 +473,12 @@ export async function LoadDashboard(dashboardId: string, contextUser?: UserInfo)
 
     const updatedAtRaw = (dashboard as unknown as { __mj_UpdatedAt?: Date }).__mj_UpdatedAt;
     return {
-        id: dashboard.ID,
-        name: dashboard.Name,
-        description: dashboard.Description,
-        updatedAt: updatedAtRaw ? new Date(updatedAtRaw) : null,
-        parts,
-        desktopOnlyCount: parts.filter((p) => p.kind === 'unknown' || p.kind === 'weburl' || p.kind === 'view').length,
+        Id: dashboard.ID,
+        Name: dashboard.Name,
+        Description: dashboard.Description,
+        UpdatedAt: updatedAtRaw ? new Date(updatedAtRaw) : null,
+        Parts: parts,
+        DesktopOnlyCount: parts.filter((p) => p.kind === 'unknown' || p.kind === 'weburl' || p.kind === 'view').length,
     };
 }
 

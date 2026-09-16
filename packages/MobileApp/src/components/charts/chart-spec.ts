@@ -16,9 +16,9 @@ export type ChartDatum = { label: string; value: number };
 
 /** Normalized, render-ready chart description. */
 export type ChartSpec = {
-    kind: ChartKind;
+    Kind: ChartKind;
     title?: string;
-    data: ChartDatum[];
+    Data: ChartDatum[];
 };
 
 /**
@@ -161,7 +161,7 @@ export function ParseChartSpec(input: unknown): ChartSpec | null {
     if (data.length === 0) return null;
 
     const title = typeof input.title === 'string' ? input.title : undefined;
-    return { kind: kind ?? 'bar', title, data };
+    return { Kind: kind ?? 'bar', title, Data: data };
 }
 
 /** @deprecated Use {@link ParseChartSpec}. */

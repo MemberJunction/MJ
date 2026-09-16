@@ -53,8 +53,8 @@ export type FileOutcome = 'added' | 'updated' | 'skipped' | 'error';
  * explanation surfaced in `--verbose` output and warnings.
  */
 export interface FileMergeResult {
-  path: string;
-  outcome: FileOutcome;
+  Path: string;
+  Outcome: FileOutcome;
   reason?: string;
 }
 
@@ -120,8 +120,8 @@ const OUTCOME_TO_BUCKET: Record<FileOutcome, keyof ActionLog> = {
 
 /** Apply a single file's outcome to the rolling action log. */
 export function RecordOutcome(log: ActionLog, result: FileMergeResult): void {
-  const bucket = OUTCOME_TO_BUCKET[result.outcome];
-  log[bucket].push(result.reason ? `${result.path} (${result.reason})` : result.path);
+  const bucket = OUTCOME_TO_BUCKET[result.Outcome];
+  log[bucket].push(result.reason ? `${result.Path} (${result.reason})` : result.Path);
 }
 
 /** @deprecated Use {@link RecordOutcome}. */
@@ -139,8 +139,8 @@ export function recordOutcome(log: ActionLog, result: FileMergeResult): void {
  * an already-installed copy (the user's existing `.claude/mj/`).
  */
 export type PackSource =
-  | { kind: 'remote'; baseUrl: string; ref: string }
-  | { kind: 'local'; rootDir: string };
+  | { Kind: 'remote'; BaseUrl: string; Ref: string }
+  | { Kind: 'local'; RootDir: string };
 
 // ---------------------------------------------------------------------------
 // Managed settings.json metadata
@@ -155,11 +155,11 @@ export type PackSource =
  */
 export interface ManagedSettingsMeta {
   /** Pack semver that last wrote this block. */
-  version: string;
+  Version: string;
   /** MJ major the pack was built for. */
   mjMajor?: string;
   /** Dotted paths in `settings.json` that MJ manages. */
-  keys: string[];
+  Keys: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -172,10 +172,10 @@ export interface ManagedSettingsMeta {
  * rewritten block reconstitute the full file.
  */
 export interface ManagedBlock {
-  before: string;
+  Before: string;
   /** The contents between START and END markers (exclusive of marker lines). */
-  body: string;
-  after: string;
+  Body: string;
+  After: string;
   /** Attributes parsed off the START marker, e.g. `version=5.1.0` and `mj-major=5`. */
-  attrs: Record<string, string>;
+  Attrs: Record<string, string>;
 }

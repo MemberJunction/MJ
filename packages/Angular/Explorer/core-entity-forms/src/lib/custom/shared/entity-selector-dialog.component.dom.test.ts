@@ -21,9 +21,9 @@ import { EntitySelectorDialogComponent, EntitySelectorConfig } from './entity-se
  */
 
 const CONFIG: EntitySelectorConfig = {
-  entityName: 'AI Prompts',
-  title: 'Pick a Prompt',
-  displayField: 'Name',
+  EntityName: 'AI Prompts',
+  Title: 'Pick a Prompt',
+  DisplayField: 'Name',
   descriptionField: 'Description',
   statusField: 'Status',
   icon: 'fa-solid fa-comment',

@@ -70,9 +70,9 @@ export interface LegacyFormatInput<TLegacy extends string> {
   /** The canonical `--format` value, if the caller passed one. */
   format?: string;
   /** The family's own flag value as oclif parsed it (its default included). */
-  legacy: TLegacy;
+  Legacy: TLegacy;
   /** What that flag falls back to when nothing was specified. */
-  legacyDefault: TLegacy;
+  LegacyDefault: TLegacy;
   /**
    * Whether the caller actually typed the family's flag. Pass
    * `metadata.flags.<name>?.setFromDefault === false` from the command's `parse()`.
@@ -84,7 +84,7 @@ export interface LegacyFormatInput<TLegacy extends string> {
    */
   legacyWasExplicit?: boolean;
   /** How each canonical format maps onto this family's vocabulary. */
-  map: Record<OutputFormat, TLegacy>;
+  Map: Record<OutputFormat, TLegacy>;
   /** Defaults to `process.stdout.isTTY`. Injectable for tests. */
   stdoutIsTTY?: boolean;
   /** Defaults to `process.env`. Injectable for tests. */
@@ -108,12 +108,12 @@ export interface LegacyFormatInput<TLegacy extends string> {
  */
 export function ResolveLegacyFormat<TLegacy extends string>(input: LegacyFormatInput<TLegacy>): TLegacy {
   const explicitCanonical = NormalizeFormatAlias(input.format);
-  if (explicitCanonical) return input.map[explicitCanonical];
+  if (explicitCanonical) return input.Map[explicitCanonical];
 
   // The caller typed the family's own flag — an explicit choice that outranks any
   // inference we could make, even when the value they typed IS the default.
-  const legacyWasExplicit = input.legacyWasExplicit ?? input.legacy !== input.legacyDefault;
-  if (legacyWasExplicit) return input.legacy;
+  const legacyWasExplicit = input.legacyWasExplicit ?? input.Legacy !== input.LegacyDefault;
+  if (legacyWasExplicit) return input.Legacy;
 
   const { format, reason } = ResolveOutputFormat({
     stdoutIsTTY: input.stdoutIsTTY,
@@ -122,7 +122,7 @@ export function ResolveLegacyFormat<TLegacy extends string>(input: LegacyFormatI
 
   // 'tty-default' means nothing at all asked for a format — keep the family's own
   // default rather than flattening every human rendering to a generic 'text'.
-  return reason === 'tty-default' ? input.legacyDefault : input.map[format];
+  return reason === 'tty-default' ? input.LegacyDefault : input.Map[format];
 }
 
 /** @deprecated Use {@link ResolveLegacyFormat}. */

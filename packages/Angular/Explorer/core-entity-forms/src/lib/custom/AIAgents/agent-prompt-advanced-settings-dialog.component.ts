@@ -8,12 +8,12 @@ import { UUIDsEqual } from '@memberjunction/global';
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface AgentPromptAdvancedSettingsFormData {
-  executionOrder: number;
-  purpose: string | null;
-  configurationID: string | null;
-  contextBehavior: 'Complete' | 'Smart' | 'None' | 'RecentMessages' | 'InitialMessages' | 'Custom';
-  contextMessageCount: number | null;
-  status: 'Active' | 'Inactive' | 'Deprecated' | 'Preview';
+  ExecutionOrder: number;
+  Purpose: string | null;
+  ConfigurationID: string | null;
+  ContextBehavior: 'Complete' | 'Smart' | 'None' | 'RecentMessages' | 'InitialMessages' | 'Custom';
+  ContextMessageCount: number | null;
+  Status: 'Active' | 'Inactive' | 'Deprecated' | 'Preview';
 }
 
 /**
@@ -344,12 +344,12 @@ export class AgentPromptAdvancedSettingsDialogComponent extends BaseAngularCompo
     
     try {
       const formData: AgentPromptAdvancedSettingsFormData = {
-        executionOrder: this.AdvancedForm.get('executionOrder')?.value,
-        purpose: this.AdvancedForm.get('purpose')?.value || null,
-        configurationID: this.AdvancedForm.get('configurationID')?.value || null,
-        contextBehavior: this.AdvancedForm.get('contextBehavior')?.value,
-        contextMessageCount: this.AdvancedForm.get('contextMessageCount')?.value || null,
-        status: this.AdvancedForm.get('status')?.value
+        ExecutionOrder: this.AdvancedForm.get('executionOrder')?.value,
+        Purpose: this.AdvancedForm.get('purpose')?.value || null,
+        ConfigurationID: this.AdvancedForm.get('configurationID')?.value || null,
+        ContextBehavior: this.AdvancedForm.get('contextBehavior')?.value,
+        ContextMessageCount: this.AdvancedForm.get('contextMessageCount')?.value || null,
+        Status: this.AdvancedForm.get('status')?.value
       };
 
       this.Result.next(formData);

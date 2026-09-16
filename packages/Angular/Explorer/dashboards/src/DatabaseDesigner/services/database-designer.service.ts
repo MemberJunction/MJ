@@ -55,7 +55,7 @@ export interface CreateEntityOptions {
 
 export interface ModifyEntityOptions extends CreateEntityOptions {
     /** ID of the existing entity being modified. */
-    existingEntityId: string;
+    ExistingEntityId: string;
 }
 
 // ─── Service ─────────────────────────────────────────────────────────────────
@@ -154,7 +154,7 @@ export class DatabaseDesignerService {
             const actionId = await this.resolveActionId(ACTION_NAMES.MODIFY_ENTITY);
             const params: ActionParam[] = [
                 ...this.buildPipelineParams(tableSpec, options),
-                { Name: 'ExistingEntityID', Type: 'Input', Value: options.existingEntityId },
+                { Name: 'ExistingEntityID', Type: 'Input', Value: options.ExistingEntityId },
             ];
             const result = await this.getActionClient().RunAction(actionId, params);
             return this.extractPipelineResult(result);
