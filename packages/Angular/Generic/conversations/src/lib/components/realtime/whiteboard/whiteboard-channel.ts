@@ -10,6 +10,26 @@ import {
 } from '@memberjunction/ng-whiteboard';
 
 /**
+ * Whether a whiteboard tool result reports success.
+ *
+ * `ApplyWhiteboardAgentTool` returns a JSON `WhiteboardToolResult` string — `{ success: true, … }`
+ * or `{ success: false, error }` — for every tool and every failure path. Anything that does not
+ * parse as an object with `success === true` is treated as NOT a successful mutation, which is the
+ * safe direction: the cost of missing a confirmation frame is one stale picture until the next
+ * change, while the cost of a false one is telling the model an edit landed when it did not.
+ */
+function toolSucceeded(result: string): boolean {
+  try {
+    const parsed: unknown = JSON.parse(result);
+    return parsed !== null && typeof parsed === 'object' && (parsed as { success?: unknown }).success === true;
+  } catch {
+    // A non-JSON result cannot be confirmed as a mutation — the host returned something this
+    // channel does not understand, so it does not get a "your change is on screen" note.
+    return false;
+  }
+}
+
+/**
  * Asynchronously rasterizes an SVG string to a JPEG base64 string (without the `data:image/jpeg;base64,` prefix)
  * using an offscreen canvas. Returns null in non-DOM environments or when rendering fails.
  */
@@ -177,7 +197,15 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
 
   private static readonly WHITEBOARD_DEFAULT_CADENCE_MS = 1000;
   private static readonly WHITEBOARD_MIN_CADENCE_MS = 250;
-  private static readonly WHITEBOARD_HEARTBEAT_MS = 15_000;
+
+  // NO liveness heartbeat here, deliberately. This channel is 100% CHANGE-DRIVEN: the only thing
+  // that pushes a frame is a board mutation. A periodic keep-alive would have to be driven by its
+  // own always-on interval — this channel does no work at all while the board is idle, and
+  // resurrecting it every 15 seconds to re-send an unchanged picture is a cost with no shown
+  // benefit. (It also cannot be smuggled in via the mutation path: a 15s elapsed-check inside
+  // onUserMutation only runs when a mutation arrives, so on an idle board it is never evaluated —
+  // which is exactly what the constant this replaced did.) If the inbound video track ever needs
+  // keep-alive frames, that belongs on the track or the bridge, once, not per channel.
 
   /** Trailing timer to deliver the settled resting frame after rapid user drawing/edits. */
   private whiteboardTrailingTimer: ReturnType<typeof setTimeout> | null = null;
@@ -248,9 +276,7 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
         if (!frame) {
           return;
         }
-        const frameChanged = frame !== this.lastPushedWhiteboardFrame;
-        const heartbeatElapsed = elapsed >= RealtimeWhiteboardChannel.WHITEBOARD_HEARTBEAT_MS;
-        if (frameChanged || heartbeatElapsed) {
+        if (frame !== this.lastPushedWhiteboardFrame) {
           this.pushWhiteboardFrame(frame);
         }
       } else {
@@ -267,9 +293,7 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
               if (!frame) {
                 return;
               }
-              const frameChanged = frame !== this.lastPushedWhiteboardFrame;
-              const heartbeat = (Date.now() - this.lastPushTimestamp) >= RealtimeWhiteboardChannel.WHITEBOARD_HEARTBEAT_MS;
-              if (frameChanged || heartbeat) {
+              if (frame !== this.lastPushedWhiteboardFrame) {
                 this.pushWhiteboardFrame(frame);
               }
             } catch (err) {
@@ -512,9 +536,15 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
     } else {
       result = ApplyWhiteboardAgentTool(this.State, toolName, argsJson);
     }
-    // Agent tool execution triggers exactly ONE immediate visual confirmation frame
-    // and informs the model context to prevent repetition loops.
-    void this.pushAgentConfirmationFrame();
+    // A SUCCESSFUL agent tool triggers exactly ONE immediate visual confirmation frame and a note
+    // telling the model not to narrate its own change. A FAILED one must trigger neither: every
+    // failure path returns `{ success: false, error }` (bad JSON args, unknown tool, per-tool
+    // validation), and confirming it would tell the model its edit landed AND instruct it to stay
+    // quiet about it — so the failure would vanish from the user's view while the model carried on.
+    // It would also push a frame identical to the last one, since a failed tool changes nothing.
+    if (toolSucceeded(result)) {
+      void this.pushAgentConfirmationFrame();
+    }
     return result;
   }
 

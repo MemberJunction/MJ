@@ -136,6 +136,102 @@ describe('Phase F — Realtime Video Tracks, Bridge, and Continuity', () => {
             expect(client.EstablishedTracks).toHaveLength(3);
         });
 
+        /**
+         * Video capability and its rate ceiling are PER-MODEL DATA minted from the provider's
+         * profile table, not inferred from the model id. These four cases pin that the minted
+         * fields decide — including for a model id the legacy prefix sniff would have judged
+         * the opposite way, which is the whole reason the sniff had to go.
+         */
+        it('takes video capability from the minted profile field, not the model id', async () => {
+            const track = new FakeTrack();
+            const config: ClientRealtimeSessionConfig = {
+                Provider: 'gemini',
+                Model: 'gemini-9.9-future-live',
+                EphemeralToken: 'auth_tokens/ephemeral-video',
+                ExpiresAt: new Date(Date.now() + 60000).toISOString(),
+                SessionConfig: {
+                    model: 'gemini-9.9-future-live',
+                    supportsInboundVideo: true,
+                    maxInboundVideoRate: 1,
+                    requestedTracks: [...DEFAULT_AUDIO_TRACKS, CHANNEL_INBOUND_VIDEO_TRACK],
+                },
+            };
+
+            await client.Connect(config, new FakeMediaStream([track]));
+
+            // The legacy prefix sniff would have said NO for this model id.
+            expect(client.IsTrackEstablished('video', 'inbound')).toBe(true);
+        });
+
+        it('refuses video when the minted profile field says the model does not support it', async () => {
+            const track = new FakeTrack();
+            const config: ClientRealtimeSessionConfig = {
+                Provider: 'gemini',
+                Model: 'gemini-3.8-live-audio-only',
+                EphemeralToken: 'auth_tokens/ephemeral-video',
+                ExpiresAt: new Date(Date.now() + 60000).toISOString(),
+                SessionConfig: {
+                    model: 'gemini-3.8-live-audio-only',
+                    supportsInboundVideo: false,
+                    requestedTracks: [...DEFAULT_AUDIO_TRACKS, CHANNEL_INBOUND_VIDEO_TRACK],
+                },
+            };
+
+            await client.Connect(config, new FakeMediaStream([track]));
+
+            // The legacy prefix sniff would have said YES for this model id.
+            expect(client.IsTrackEstablished('video', 'inbound')).toBe(false);
+            expect(client.IsTrackEstablished('audio', 'inbound')).toBe(true);
+        });
+
+        it("clamps the live track's Rate to the model's minted ceiling when the request asks for more", async () => {
+            const track = new FakeTrack();
+            const config: ClientRealtimeSessionConfig = {
+                Provider: 'gemini',
+                Model: 'gemini-3.8-live',
+                EphemeralToken: 'auth_tokens/ephemeral-video',
+                ExpiresAt: new Date(Date.now() + 60000).toISOString(),
+                SessionConfig: {
+                    model: 'gemini-3.8-live',
+                    supportsInboundVideo: true,
+                    maxInboundVideoRate: 1,
+                    requestedTracks: [
+                        ...DEFAULT_AUDIO_TRACKS,
+                        { ...CHANNEL_INBOUND_VIDEO_TRACK, Rate: 8 },
+                    ],
+                },
+            };
+
+            await client.Connect(config, new FakeMediaStream([track]));
+
+            const video = client.EstablishedTracks.find(
+                (t) => t.Descriptor.Modality === 'video' && t.Descriptor.Direction === 'inbound');
+            expect(video?.Descriptor.Rate).toBe(1);
+        });
+
+        it("adopts the model's minted rate when the request declares none", async () => {
+            const track = new FakeTrack();
+            const { Rate: _dropped, ...videoWithoutRate } = CHANNEL_INBOUND_VIDEO_TRACK;
+            const config: ClientRealtimeSessionConfig = {
+                Provider: 'gemini',
+                Model: 'gemini-3.8-live',
+                EphemeralToken: 'auth_tokens/ephemeral-video',
+                ExpiresAt: new Date(Date.now() + 60000).toISOString(),
+                SessionConfig: {
+                    model: 'gemini-3.8-live',
+                    supportsInboundVideo: true,
+                    maxInboundVideoRate: 2,
+                    requestedTracks: [...DEFAULT_AUDIO_TRACKS, videoWithoutRate],
+                },
+            };
+
+            await client.Connect(config, new FakeMediaStream([track]));
+
+            const video = client.EstablishedTracks.find(
+                (t) => t.Descriptor.Modality === 'video' && t.Descriptor.Direction === 'inbound');
+            expect(video?.Descriptor.Rate).toBe(2);
+        });
+
         it('Test #7: video requested on non-video model falls back cleanly with no error', async () => {
             const track = new FakeTrack();
             const config: ClientRealtimeSessionConfig = {
