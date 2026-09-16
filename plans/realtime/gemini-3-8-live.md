@@ -206,7 +206,12 @@ rare edge case into a guaranteed one. Tracked as **F7**.
 - [x] **D2.** `IsBusy` = reasoning in progress **or** tool batch non-empty **or** audio playing.
   **Includes `handleToolCallFrame`'s `responseActive = false`** (§4.1) — a tool call no longer means
   generation stopped. Its comment encodes the blocking assumption; change both together.
-- [x] **D3.** `queuedSends` drains on **idle**, not `turnComplete`.
+- [x] **D3.** `queuedSends` drains on **idle**, not `turnComplete`. **Decision recorded 2026-09-16
+  (review item 20):** `generationComplete` clears `responseActive` but deliberately does **not** drain
+  the queue — draining stays on true `IDLE` / `turnComplete`. The reason is worth keeping: the SDK
+  documents a gap between `generationComplete` and `turnComplete` caused by "model waiting for playback
+  to finish", so draining at `generationComplete` would release deferred user input while the user is
+  still hearing the previous answer. Clearing busy early is right; sending early is not.
 - [x] **D4.** Backstop timer for a lost `IDLE` frame (guard only, not the primary signal).
 - [x] **D5.** `behavior: NON_BLOCKING` + `RealtimeToolBatchBarrier` wired for Gemini. **Must not
   carry the `openClientTurn` release into the non-blocking path** (§4.1) — deferring the release to a
@@ -246,7 +251,14 @@ rare edge case into a guaranteed one. Tracked as **F7**.
   Declarative JSON, `uuidgen` primary keys, **no `sync` block, no `*__Metadata_Sync.sql`** — that
   is release work.
 - [x] **G2.** Changeset `minor` (ships metadata).
-- [x] **G3.** Full repo unit tier + deterministic integration tier.
+- [x] **G3.** Full repo unit tier + deterministic integration tier. **What has actually been
+  demonstrated (2026-09-16):** six touched packages' unit suites, 4,447 tests — Core 319, Gemini 182,
+  RealtimeClient 468, ai-agents 2,399, remote-browser-server 73, ng-conversations 1,006. Three of those
+  counts were independently re-run and matched exactly. That is narrower than this task's wording: the
+  **full repo** tier is the root `npm test` across every package, and the **deterministic integration
+  tier** needs a live database, so neither is provable from a per-package run. CI is the instrument for
+  both — the unit shards and the `Integration (SQL Server, deterministic)` job — and both must be green
+  on the final head before this box means what it says.
 - [x] **G4.** Every **VERIFY** resolved or the PR does not merge.
 
 ## 7. Verification tasks (must precede the code that depends on them)
