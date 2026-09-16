@@ -37,6 +37,8 @@ import {
     type JSONValue,
     type RealtimeSessionCapabilities,
     type RealtimeVoiceOption,
+    type RealtimeTrackDescriptor,
+    type RealtimeUsageModalityDetail,
     REALTIME_SHARED_CONFIG_KEYS,
 } from '@memberjunction/ai';
 import {
@@ -823,7 +825,25 @@ class GeminiRealtimeSession implements IRealtimeSession {
      * intentionally omitted.
      */
     public get Capabilities(): RealtimeSessionCapabilities {
-        return { CanReconfigureTurnMode: false };
+        const inbound: RealtimeTrackDescriptor[] = [{ Modality: 'audio', Direction: 'inbound' }];
+        if (this.profile.SupportsInboundVideo) {
+            inbound.push({
+                Modality: 'video',
+                Direction: 'inbound',
+                Encoding: 'image/jpeg',
+                Rate: 1,
+                UsageBasis: ['tokens', 'frames'] as const,
+                RequiresConsent: true,
+            });
+        }
+        return {
+            CanReconfigureTurnMode: false,
+            SupportedInboundTracks: inbound,
+            SupportedOutboundTracks: [{ Modality: 'audio', Direction: 'outbound' }],
+            ProvidesThoughtSummaries: this.profile.SupportsThoughtSummaries,
+            SupportsAsynchronousReasoning: !this.profile.Tooling.SupportsBlockingExecution,
+            UsageBases: this.profile.SupportsInboundVideo ? ['tokens', 'seconds', 'frames'] : ['tokens', 'seconds'],
+        };
     }
 
     /**
@@ -1165,7 +1185,7 @@ class GeminiRealtimeSession implements IRealtimeSession {
             this.handleToolCall(message.toolCall.functionCalls);
         }
         if (message.usageMetadata) {
-            this.handleUsage(message.usageMetadata.promptTokenCount, message.usageMetadata.responseTokenCount);
+            this.handleUsage(message.usageMetadata);
         }
     }
 
@@ -1288,10 +1308,34 @@ class GeminiRealtimeSession implements IRealtimeSession {
     }
 
     /**
-     * Emits an incremental usage update, defaulting missing token counts to zero.
+     * Emits an incremental usage update, defaulting missing token counts to zero,
+     * and attributing modality breakdown (text, audio, image/video) when reported.
      */
-    private handleUsage(promptTokens: number | undefined, responseTokens: number | undefined): void {
-        this.usageHandler?.({ InputTokens: promptTokens ?? 0, OutputTokens: responseTokens ?? 0 });
+    private handleUsage(usageMetadata: LiveServerMessage['usageMetadata']): void {
+        if (!usageMetadata) {
+            return;
+        }
+        let inputDetails: RealtimeUsageModalityDetail | undefined;
+        if (usageMetadata.promptTokensDetails && Array.isArray(usageMetadata.promptTokensDetails)) {
+            for (const detail of usageMetadata.promptTokensDetails) {
+                if (typeof detail.tokenCount === 'number') {
+                    inputDetails = inputDetails ?? {};
+                    const mod = String(detail.modality ?? '').toUpperCase();
+                    if (mod === 'AUDIO') {
+                        inputDetails.AudioTokens = (inputDetails.AudioTokens ?? 0) + detail.tokenCount;
+                    } else if (mod === 'TEXT') {
+                        inputDetails.TextTokens = (inputDetails.TextTokens ?? 0) + detail.tokenCount;
+                    } else if (mod === 'IMAGE') {
+                        inputDetails.ImageTokens = (inputDetails.ImageTokens ?? 0) + detail.tokenCount;
+                    }
+                }
+            }
+        }
+        this.usageHandler?.({
+            InputTokens: usageMetadata.promptTokenCount ?? 0,
+            OutputTokens: usageMetadata.responseTokenCount ?? 0,
+            ...(inputDetails ? { InputTokenDetails: inputDetails } : {}),
+        });
     }
 
     /** Drops all registered handlers so a closed session can't fire stale callbacks. */

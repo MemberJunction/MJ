@@ -5,7 +5,7 @@ import { UserInfoEngine } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJGlobal } from '@memberjunction/global';
-import { ClientRealtimeSessionConfig, JSONObject, JSONValue, RealtimeToolDefinition } from '@memberjunction/ai';
+import { ClientRealtimeSessionConfig, JSONObject, JSONValue, RealtimeToolDefinition, RealtimeTrackDirection } from '@memberjunction/ai';
 import { AppContextSnapshot } from '@memberjunction/ai-core-plus';
 import {
   BaseRealtimeClient,
@@ -1029,6 +1029,30 @@ export class RealtimeSessionService {
     return this.client?.GetAudioActivity() ?? null;
   }
 
+  /**
+   * The active {@link BaseRealtimeClient} driving the media plane, or null when not connected.
+   */
+  public get Client(): BaseRealtimeClient | null {
+    return this.client;
+  }
+
+  /**
+   * Relays a video frame to the underlying realtime client if active.
+   */
+  public SendVideoFrame(base64Image: string, mimeType?: string): void {
+    if (!this.client || !this.isSessionLive()) {
+      return;
+    }
+    this.client.SendVideoFrame?.(base64Image, mimeType);
+  }
+
+  /**
+   * Checks whether a media track is established on the active realtime client.
+   */
+  public IsTrackEstablished(modality: string, direction: RealtimeTrackDirection): boolean {
+    return this.client?.IsTrackEstablished(modality, direction) ?? false;
+  }
+
   // ── Browser-side call recording ────────────────────────────────────────────
 
   /**
@@ -1394,7 +1418,12 @@ export class RealtimeSessionService {
       // (Explorer) feeds both; absent on hosts that supply no app context / register no client tools.
       AppContext$: this.AppContext$,
       ExecuteClientTool: (name: string, params: Record<string, unknown>) =>
-        this.executeAppClientTool(name, params)
+        this.executeAppClientTool(name, params),
+      get Client(): BaseRealtimeClient | null {
+        return service.client;
+      },
+      SendVideoFrame: (base64Image: string, mimeType?: string) => this.SendVideoFrame(base64Image, mimeType),
+      IsTrackEstablished: (modality: string, direction: RealtimeTrackDirection) => this.IsTrackEstablished(modality, direction),
     };
   }
 

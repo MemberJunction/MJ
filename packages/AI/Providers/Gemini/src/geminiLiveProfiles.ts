@@ -75,6 +75,9 @@ export interface GeminiLiveModelProfile {
 
     /** The model's OWN turn-coverage default, i.e. what we get if we say nothing. */
     ProviderDefaultTurnCoverage: RealtimeTurnCoverage;
+
+    /** Whether the model supports inbound video input stream. */
+    SupportsInboundVideo: boolean;
 }
 
 /**
@@ -93,6 +96,7 @@ export const GEMINI_LIVE_MODEL_PROFILES: readonly GeminiLiveModelProfile[] = [
         AffectiveDialogRemoved: true,
         ProactiveAudioAlwaysOn: true,
         ProviderDefaultTurnCoverage: 'audioActivityAndAllVideo',
+        SupportsInboundVideo: true,
     },
     {
         MatchPrefix: 'gemini-3.8-live',
@@ -106,6 +110,7 @@ export const GEMINI_LIVE_MODEL_PROFILES: readonly GeminiLiveModelProfile[] = [
         AffectiveDialogRemoved: true,
         ProactiveAudioAlwaysOn: true,
         ProviderDefaultTurnCoverage: 'audioActivityAndAllVideo',
+        SupportsInboundVideo: true,
     },
     {
         // The legacy preview model. Retained deliberately: the capability table is what makes
@@ -119,6 +124,7 @@ export const GEMINI_LIVE_MODEL_PROFILES: readonly GeminiLiveModelProfile[] = [
         AffectiveDialogRemoved: false,
         ProactiveAudioAlwaysOn: false,
         ProviderDefaultTurnCoverage: 'audioActivityOnly',
+        SupportsInboundVideo: false,
     },
 ];
 
@@ -139,6 +145,7 @@ export const GEMINI_LIVE_FALLBACK_PROFILE: GeminiLiveModelProfile = {
     AffectiveDialogRemoved: false,
     ProactiveAudioAlwaysOn: false,
     ProviderDefaultTurnCoverage: 'audioActivityOnly',
+    SupportsInboundVideo: false,
 };
 
 /**

@@ -100,6 +100,19 @@ export interface RealtimeTrackDescriptor {
 }
 
 /**
+ * Canonical track descriptor for channel-sourced inbound video (e.g. Whiteboard, Remote Browser).
+ * Encoded as JPEG, 1 fps rate ceiling, billed on tokens + frames, and requires no human OS consent grant.
+ */
+export const CHANNEL_INBOUND_VIDEO_TRACK: RealtimeTrackDescriptor = Object.freeze({
+    Modality: 'video',
+    Direction: 'inbound',
+    Encoding: 'image/jpeg',
+    Rate: 1,
+    UsageBasis: ['tokens', 'frames'] as const,
+    RequiresConsent: false,
+});
+
+/**
  * Where a track is in its lifecycle.
  *
  * `'denied'` and `'unsupported'` are distinct on purpose: the first is a human refusing consent

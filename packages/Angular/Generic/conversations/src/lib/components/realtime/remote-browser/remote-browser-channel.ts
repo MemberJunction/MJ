@@ -1,7 +1,8 @@
 import type { Type } from '@angular/core';
 import type { Subscription } from 'rxjs';
 import { RegisterClass } from '@memberjunction/global';
-import { JSONValue, RealtimeToolDefinition } from '@memberjunction/ai';
+import { CHANNEL_INBOUND_VIDEO_TRACK, JSONValue, RealtimeToolDefinition, RealtimeTrackDescriptor } from '@memberjunction/ai';
+import { ChannelInboundVideoBridge, IChannelFrameProvider } from '@memberjunction/ai-realtime-client';
 import { BaseRealtimeChannelClient, ChannelOnboardingDetails } from '../channels/base-realtime-channel-client';
 import { RemoteBrowserHumanInputEvent, RemoteBrowserSnapshotView, RemoteBrowserSurfaceComponent } from './remote-browser-surface.component';
 import {
@@ -290,9 +291,27 @@ interface RemoteBrowserToolResult {
  * the server — so {@link SerializeState} / {@link RestoreState} use the base no-op behavior.
  */
 @RegisterClass(BaseRealtimeChannelClient, 'RealtimeRemoteBrowserChannel')
-export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowserSurfaceComponent> {
+export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowserSurfaceComponent> implements IChannelFrameProvider {
   /** The live bound surface, when the channel tab's pane is instantiated. */
   private surface: RemoteBrowserSurfaceComponent | null = null;
+
+  /** Shared video bridge streaming browser frames to the model when the model supports inbound video. */
+  private videoBridge: ChannelInboundVideoBridge | null = null;
+
+  /**
+   * Sourced tracks: Remote Browser can source inbound video to the model when the model supports it.
+   */
+  public override GetSourcedTracks(): readonly RealtimeTrackDescriptor[] {
+    return [CHANNEL_INBOUND_VIDEO_TRACK];
+  }
+
+  /**
+   * Produces the latest browser screenshot as a base64-encoded frame for the video bridge.
+   */
+  public async GetLatestFrame(): Promise<string | null> {
+    const snapshot = await this.fetchSnapshot();
+    return snapshot?.ScreenshotBase64 ?? null;
+  }
 
   /** Subscription to the bound surface's `HumanInput` output, torn down on unbind/dispose. */
   private humanInputSub: Subscription | null = null;
@@ -392,6 +411,14 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
     };
   }
 
+  /** Starts the video bridge streaming browser frames to the model when inbound video is supported. */
+  protected override OnInitialize(): void {
+    if (this.Context?.Client) {
+      this.videoBridge = new ChannelInboundVideoBridge(this.Context.Client, this);
+      this.videoBridge.Start();
+    }
+  }
+
   /**
    * Wires the dynamically-created surface: hands it a snapshot fetcher closing over the
    * channel context (session id + provider live there), so the surface stays transport-
@@ -433,6 +460,8 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
   }
 
   public override Dispose(): void {
+    this.videoBridge?.Stop();
+    this.videoBridge = null;
     this.humanInputSub?.unsubscribe();
     this.humanInputSub = null;
     this.audioMutedSub?.unsubscribe();
@@ -458,6 +487,7 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
   public OnScreencastFrame(dataBase64: string, currentUrl?: string | null): void {
     if (this.streaming) {
       this.surface?.RenderFrame(dataBase64);
+      this.videoBridge?.PushFrame(dataBase64);
       this.notePageChange(currentUrl, 'observed');
     }
   }

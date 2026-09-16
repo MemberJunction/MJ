@@ -225,17 +225,17 @@ rare edge case into a guaranteed one. Tracked as **F7**.
 
 ### Phase F — video tracks, the proof point
 
-- [ ] **F1.** Frame capture beside `micCapture.ts`: `getUserMedia` (camera), `getDisplayMedia`
+- [x] **F1.** Frame capture beside `micCapture.ts`: `getUserMedia` (camera), `getDisplayMedia`
   (screen), consent-gated via `RequiresConsent`.
-- [ ] **F2.** Gemini driver sends frames as inbound video when the track is established.
-- [ ] **F3.** **Whiteboard channel sources inbound video** when the model supports it — the agent
+- [x] **F2.** Gemini driver sends frames as inbound video when the track is established.
+- [x] **F3.** **Whiteboard channel sources inbound video** when the model supports it — the agent
   sees what it draws. Falls back to today's tool-only behaviour otherwise.
-- [ ] **F4.** **Remote browser channel sources inbound video** when supported — the model watches
+- [x] **F4.** **Remote browser channel sources inbound video** when supported — the model watches
   the page continuously while the agent still acts through tools. Falls back to
   screenshot-as-tool-result.
-- [ ] **F5.** One shared "channel → inbound video" path; F3/F4 must not be two implementations.
-- [ ] **F6.** Per-track cost accounting so video's $0.002/min is attributable.
-- [ ] **F7.** **Session continuity, or video is a 2-minute demo** (§4.3). Handle `goAway` and
+- [x] **F5.** One shared "channel → inbound video" path; F3/F4 must not be two implementations.
+- [x] **F6.** Per-track cost accounting so video's $0.002/min is attributable.
+- [x] **F7.** **Session continuity, or video is a 2-minute demo** (§4.3). Handle `goAway` and
   `sessionResumptionUpdate` on the client and resume across the cap. Gates whether F3/F4 are
   shippable features or just demos. Not optional the moment a video track is established.
 
