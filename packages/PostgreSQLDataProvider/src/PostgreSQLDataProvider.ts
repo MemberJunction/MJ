@@ -371,6 +371,11 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
                 const bypassResult = await bypass.query(quotedQuery, processedParams);
                 return bypassResult.rows as T[];
             }
+            if (options?.ignoreAmbientTransaction) {
+                // A read that does not join the ambient transaction: straight to the pool (#4514).
+                const poolResult = await this._connectionManager.Pool.query(quotedQuery, processedParams);
+                return poolResult.rows as T[];
+            }
             this.AssertAmbientTransactionUsable();
             const source = this._transaction ?? this._connectionManager.Pool;
             const result = await source.query(quotedQuery, processedParams);
