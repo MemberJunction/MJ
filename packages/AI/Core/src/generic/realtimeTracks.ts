@@ -97,6 +97,12 @@ export interface RealtimeTrackDescriptor {
      * generically and the audit trail is uniform across modalities we have not invented yet.
      */
     RequiresConsent?: boolean;
+
+    /**
+     * Whether this track is required for the session to proceed (`true`) or optional/best-effort (`false`).
+     * When optional, failure to establish the track does not terminate the session.
+     */
+    Required?: boolean;
 }
 
 /**

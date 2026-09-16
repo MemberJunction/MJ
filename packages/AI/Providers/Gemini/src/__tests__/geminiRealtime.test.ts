@@ -923,7 +923,7 @@ describe('per-model Live legality', () => {
             expect(thinkingOf(d)?.thinkingLevel).toBe('MEDIUM');
         });
 
-        it('refuses minimal on Extended Thinking without killing the session', async () => {
+        it('refuses minimal on Extended Thinking without killing the session, falling back to default medium', async () => {
             const d = new TestGeminiRealtime('k');
             await d.StartSession(
                 makeParams({
@@ -931,7 +931,7 @@ describe('per-model Live legality', () => {
                     Config: { reasoning: { Remote: { Effort: 'minimal' } } },
                 })
             );
-            expect(thinkingOf(d)?.thinkingLevel).toBeUndefined();
+            expect(thinkingOf(d)?.thinkingLevel).toBe('MEDIUM');
             expect(warn).toHaveBeenCalledWith(expect.stringContaining('accepts only'));
         });
 
@@ -971,10 +971,10 @@ describe('per-model Live legality', () => {
             expect(thinkingOf(d2)).toBeUndefined();
         });
 
-        it('sends no thinkingConfig when nothing asks for thinking', async () => {
+        it('defaults to medium thinkingLevel on Extended Thinking when none specified', async () => {
             const d = new TestGeminiRealtime('k');
             await d.StartSession(makeParams({ Model: 'gemini-3.8-live-extended-thinking' }));
-            expect(thinkingOf(d)).toBeUndefined();
+            expect(thinkingOf(d)?.thinkingLevel).toBe('MEDIUM');
         });
     });
 

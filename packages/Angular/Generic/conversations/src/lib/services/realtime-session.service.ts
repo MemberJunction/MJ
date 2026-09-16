@@ -926,6 +926,15 @@ export class RealtimeSessionService {
       this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       await client.Connect(this.buildClientConfig(session), this.localStream);
 
+      // Notify active channels that the session client is connected and tracks are established
+      for (const channel of this._activeChannels$.value) {
+        try {
+          channel.OnSessionStarted?.();
+        } catch (err) {
+          console.error(`[RealtimeSession] Error in channel '${channel.ChannelName}' OnSessionStarted:`, err);
+        }
+      }
+
       // Start browser-side recording (mic + agent mix) when consented. Best-effort: an
       // unsupported browser / missing remote stream degrades gracefully (mic-only or off)
       // and never blocks the call. The remote stream may still be null here (the WebRTC

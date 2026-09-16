@@ -410,11 +410,20 @@ export function GetSessionTuningSettings(config: RealtimeCoAgentConfig | null | 
  * @returns The flat bag layer, or `null` when the catalog contributes nothing.
  */
 export function GetModelCatalogSessionSettings(config: AIModelConfiguration | null | undefined): JSONObjectLike | null {
+    const bag: JSONObjectLike = {};
     const turnDetection = config?.Realtime?.TurnDetection;
-    if (!isPlainObject(turnDetection)) {
-        return null;
+    if (isPlainObject(turnDetection)) {
+        bag['turnDetection'] = { ...turnDetection } as JSONObjectLike;
     }
-    return { turnDetection: { ...turnDetection } as JSONObjectLike };
+    const reasoning = config?.Realtime?.Reasoning;
+    if (isPlainObject(reasoning)) {
+        bag['reasoning'] = { ...reasoning } as JSONObjectLike;
+    }
+    const tooling = config?.Realtime?.Tooling;
+    if (isPlainObject(tooling)) {
+        bag['tooling'] = { ...tooling } as JSONObjectLike;
+    }
+    return Object.keys(bag).length > 0 ? bag : null;
 }
 
 /** The fully-normalized effective configuration for a Realtime co-agent. */

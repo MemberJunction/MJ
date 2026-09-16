@@ -49,6 +49,13 @@ export interface GeminiLiveModelProfile {
     /** Whether `thinkingConfig.includeThoughts` yields thought summaries. */
     SupportsThoughtSummaries: boolean;
 
+    /**
+     * Default thinking level to send when the model supports/requires thinking level and none
+     * was explicitly requested. For `gemini-3.8-live-extended-thinking`, Google's API requires
+     * a thinkingLevel in thinkingConfig.
+     */
+    DefaultThinkingLevel?: GeminiThinkingLevel;
+
     /** Tool-execution semantics. */
     Tooling: Required<Pick<RealtimeToolingSettings, 'SupportsBlockingExecution' | 'SupportsScheduling'>>;
 
@@ -89,6 +96,7 @@ export const GEMINI_LIVE_MODEL_PROFILES: readonly GeminiLiveModelProfile[] = [
         MatchPrefix: 'gemini-3.8-live-extended-thinking',
         SupportsThinkingLevel: true,
         AllowedThinkingLevels: ['low', 'medium', 'high'],
+        DefaultThinkingLevel: 'medium',
         SupportsThoughtSummaries: true,
         // Blocking mode "is not supported and returns a hard error"; scheduling is unsupported too.
         Tooling: { SupportsBlockingExecution: false, SupportsScheduling: false },

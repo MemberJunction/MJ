@@ -45,10 +45,14 @@ export class ChannelInboundVideoBridge {
     private active = false;
 
     constructor(
-        private readonly client: BaseRealtimeClient | null | undefined,
+        private readonly clientOrGetter: BaseRealtimeClient | (() => BaseRealtimeClient | null | undefined) | null | undefined,
         private readonly provider: IChannelFrameProvider,
         private readonly options: ChannelInboundVideoBridgeOptions = {}
     ) {}
+
+    private get client(): BaseRealtimeClient | null | undefined {
+        return typeof this.clientOrGetter === 'function' ? this.clientOrGetter() : this.clientOrGetter;
+    }
 
     /**
      * Starts the periodic frame pump if the session has an established inbound video track.

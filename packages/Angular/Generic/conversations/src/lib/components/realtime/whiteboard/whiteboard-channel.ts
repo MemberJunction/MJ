@@ -151,7 +151,8 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
    * Pushes the latest board visual scene when mutations occur, paced to at most 1 fps.
    */
   private async pushVisualScene(): Promise<void> {
-    if (!this.videoBridge || !this.Context?.Client?.IsTrackEstablished('video', 'inbound')) {
+    const bridge = this.ensureVideoBridge();
+    if (!bridge || !this.Context?.Client?.IsTrackEstablished('video', 'inbound')) {
       return;
     }
     const now = Date.now();
@@ -161,7 +162,7 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
     this.lastPushTimestamp = now;
     const frame = await this.GetLatestFrame();
     if (frame) {
-      this.videoBridge.PushFrame(frame);
+      bridge.PushFrame(frame);
     }
   }
 
@@ -207,10 +208,21 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
       this.Context?.RequestSave(this.State.ToJSON());
       void this.pushVisualScene();
     });
-    if (this.Context?.Client) {
-      this.videoBridge = new ChannelInboundVideoBridge(this.Context.Client, this);
-      this.videoBridge.Start();
+    this.ensureVideoBridge();
+  }
+
+  public override OnSessionStarted(): void {
+    this.ensureVideoBridge();
+  }
+
+  private ensureVideoBridge(): ChannelInboundVideoBridge | null {
+    if (!this.videoBridge && this.Context) {
+      this.videoBridge = new ChannelInboundVideoBridge(() => this.Context?.Client, this);
     }
+    if (this.videoBridge && !this.videoBridge.IsActive && this.Context?.Client?.IsTrackEstablished('video', 'inbound')) {
+      this.videoBridge.Start?.();
+    }
+    return this.videoBridge;
   }
 
   /**
@@ -219,6 +231,7 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
    * outputs are subscribed back into the host context — the overlay never sees any of it.
    */
   public BindSurface(instance: RealtimeWhiteboardHostComponent): void {
+    this.ensureVideoBridge();
     this.releaseSurface();
     this.host = instance;
     instance.State = this.State;

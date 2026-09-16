@@ -367,6 +367,9 @@ export class GeminiRealtime extends BaseRealtimeModel {
         if (config.maxOutputTokens != null) {
             constraint.maxOutputTokens = config.maxOutputTokens;
         }
+        if (config.thinkingConfig) {
+            constraint.thinkingConfig = config.thinkingConfig;
+        }
         if (config.sessionResumption) {
             constraint.sessionResumption = config.sessionResumption;
         }
@@ -565,14 +568,21 @@ export class GeminiRealtime extends BaseRealtimeModel {
         const bag: Record<string, unknown> = (params.Config as Record<string, unknown> | undefined) ?? {};
         const reasoning = GeminiRealtime.readObject(bag['reasoning']);
         const turnDetection = GeminiRealtime.readObject(bag['turnDetection']);
-        // Structured `reasoning.Remote.Effort` first; fall back to the flat legacy bag keys so an
-        // existing co-agent config keeps working unchanged.
+        // Structured `reasoning.Remote.Effort` first; fall back to `reasoning.Level` / `reasoning.Effort`
+        // (e.g. from model catalog metadata) or flat legacy bag keys so every source resolves.
         const effort =
             GeminiRealtime.readString(GeminiRealtime.readObject(reasoning?.['Remote'])?.['Effort']) ??
+            GeminiRealtime.readString(reasoning?.['Level']) ??
+            GeminiRealtime.readString(reasoning?.['level']) ??
+            GeminiRealtime.readString(reasoning?.['Effort']) ??
+            GeminiRealtime.readString(reasoning?.['effort']) ??
             GeminiRealtime.readString(bag['effortLevel']) ??
             GeminiRealtime.readString(bag['reasoningEffort']);
         const includeThoughts =
             reasoning?.['IncludeThoughtSummaries'] === true ||
+            reasoning?.['includeThoughtSummaries'] === true ||
+            reasoning?.['IncludeThoughts'] === true ||
+            reasoning?.['includeThoughts'] === true ||
             bag['includeThoughts'] === true ||
             bag['includeThoughtSummaries'] === true;
         const coverageSetting = GeminiRealtime.readString(turnDetection?.['Coverage']);
@@ -601,18 +611,18 @@ export class GeminiRealtime extends BaseRealtimeModel {
         if (thinking.Warning) {
             console.warn(`[GeminiRealtime] ${thinking.Warning}`);
         }
+        const effectiveLevel = thinking.Level ?? profile.DefaultThinkingLevel;
         const wantSummaries = profile.SupportsThoughtSummaries && includeThoughts;
         if (!profile.SupportsThinkingLevel && !wantSummaries) {
             // Omit the whole block, as the model page instructs — not merely the level.
-            if (config.thinkingConfig !== undefined) {
-                delete config.thinkingConfig;
-            }
-        } else if (thinking.Level || wantSummaries) {
+            delete config.thinkingConfig;
+        } else if (effectiveLevel || wantSummaries) {
             config.thinkingConfig = {
-                ...(config.thinkingConfig ?? {}),
-                ...(thinking.Level ? { thinkingLevel: GeminiRealtime.MapThinkingLevel(thinking.Level) } : {}),
+                ...(effectiveLevel ? { thinkingLevel: GeminiRealtime.MapThinkingLevel(effectiveLevel) } : {}),
                 ...(wantSummaries ? { includeThoughts: true } : {}),
             };
+        } else {
+            delete config.thinkingConfig;
         }
 
         // C4 — turn coverage is STATED, never inherited. The SDK's enum doc says coverage defaults to

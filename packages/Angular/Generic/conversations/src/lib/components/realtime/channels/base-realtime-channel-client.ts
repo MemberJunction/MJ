@@ -355,6 +355,16 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
   }
 
   /**
+   * Subclass hook invoked once the realtime session is connected and live (the client driver
+   * is created, connected, and media tracks negotiated). Channels that establish media bridges
+   * (e.g. video streaming) can start them here when `Context.Client` is available.
+   * Default: no-op.
+   */
+  public OnSessionStarted(): void {
+    // default: nothing to do
+  }
+
+  /**
    * Max time {@link ResolveAgentSessionId} waits for the session id to bind before giving up, and the
    * poll interval it re-checks on. Protected so tests can shrink the wait; production keeps the
    * defaults (the real mint race is sub-second, 8s is generous headroom).
