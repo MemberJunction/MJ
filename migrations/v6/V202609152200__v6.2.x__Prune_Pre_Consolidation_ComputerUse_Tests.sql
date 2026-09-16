@@ -56,12 +56,12 @@ INSERT INTO @ObsoleteTests (ID) VALUES
     ('98B5BFE9-41F3-465E-9C68-25CBD4B7E48A'); -- T25 - Multiple Tab Workflow
 
 -- Memberships first: FK_TestSuiteTest_Test blocks the test delete while they stand.
-DELETE FROM [__mj].[TestSuiteTest]
+DELETE FROM [${flyway:defaultSchema}].[TestSuiteTest]
 WHERE [TestID] IN (SELECT [ID] FROM @ObsoleteTests);
 
 DELETE t
-FROM [__mj].[Test] AS t
+FROM [${flyway:defaultSchema}].[Test] AS t
 WHERE t.[ID] IN (SELECT [ID] FROM @ObsoleteTests)
   AND NOT EXISTS (
-      SELECT 1 FROM [__mj].[TestRun] AS tr WHERE tr.[TestID] = t.[ID]
+      SELECT 1 FROM [${flyway:defaultSchema}].[TestRun] AS tr WHERE tr.[TestID] = t.[ID]
   );
