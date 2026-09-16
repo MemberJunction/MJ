@@ -25211,5 +25211,427 @@
     "primaryKey": {
       "ID": "699D1B9D-F63F-4E13-8C1F-6D10F21D55D3"
     }
+  },
+  {
+    "fields": {
+      "Name": "Gemini 3.8 Live",
+      "PowerRank": 15,
+      "Description": "Google's Gemini 3.8 Live multimodal realtime model for low-latency streaming voice, audio, and visual interaction over the Gemini Live API. Features native full-duplex conversational audio, visual frame input up to 1 fps, and non-blocking and blocking tool calling. Drives the Realtime agent type / Voice Co-Agent via BaseRealtimeModel (DriverClass GeminiRealtime).",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Realtime",
+      "IsActive": true,
+      "SpeedRank": 9,
+      "CostRank": 4,
+      "InheritTypeModalities": false,
+      "ModelConfiguration": {
+        "Realtime": {
+          "IdleSignal": "turnComplete",
+          "Tooling": {
+            "SupportsBlockingExecution": true,
+            "SupportsScheduling": true
+          },
+          "TurnDetection": {
+            "Coverage": "audioActivityAndAllVideo"
+          }
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 0,
+            "Status": "Active",
+            "DriverClass": "GeminiRealtime",
+            "APIName": "gemini-3.8-live",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "Realtime": {
+                "IdleSignal": "turnComplete",
+                "Tooling": {
+                  "SupportsBlockingExecution": true,
+                  "SupportsScheduling": true
+                },
+                "TurnDetection": {
+                  "Coverage": "audioActivityAndAllVideo"
+                }
+              }
+            }
+          },
+          "primaryKey": {
+            "ID": "36768861-A896-4650-9A3D-7844F305C551"
+          },
+          "sync": {
+            "lastModified": "2026-09-16T01:46:08.462Z",
+            "checksum": "dd069eb4871bed14cdbceb9ce69965f0b21537fa59061b6aaa1e2390d206505b"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "StartedAt": "2026-09-15T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.75,
+            "OutputPricePerUnit": 4.5,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Gemini 3.8 Live text token pricing: $0.75 / 1M input tokens, $4.50 / 1M output tokens.",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "6CC70EAC-BE56-413D-8F82-5FC709422996"
+          },
+          "sync": {
+            "lastModified": "2026-09-16T01:46:08.500Z",
+            "checksum": "f0d972b1d8847df0225e935b32d00947070102a67e17d38b0ce0f0f58aa8d13e"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "StartedAt": "2026-09-15T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Minutes",
+            "InputPricePerUnit": 0.005,
+            "OutputPricePerUnit": 0.018,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per Minute",
+            "ProcessingType": "Realtime",
+            "Comments": "Gemini 3.8 Live audio time pricing: $0.005 / min audio input, $0.018 / min audio output (including thinking tokens). Image/video input: $0.002 / min ($1.00 / 1M). Search grounding: 5K/mo free shared across Gemini 3.x, then $14 / 1K.",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "552436EE-50F5-4AA0-82E9-322D0A780E5A"
+          },
+          "sync": {
+            "lastModified": "2026-09-16T01:46:08.522Z",
+            "checksum": "3309f8854e907cea481f6e2381b9fc1cc2487f8e17e8750cec56ea9c75186d56"
+          }
+        }
+      ],
+      "MJ: AI Model Modalities": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+            "Direction": "Input",
+            "IsSupported": true
+          },
+          "primaryKey": {
+            "ID": "081B672B-D640-4C52-83C5-73AE191567C4"
+          },
+          "sync": {
+            "lastModified": "2026-09-16T01:46:08.558Z",
+            "checksum": "f8171426b7dc656559fc1d68637c37f797d940b9c5b929773f690788b582a155"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Text",
+            "Direction": "Input",
+            "IsSupported": true
+          },
+          "primaryKey": {
+            "ID": "806DF274-FF1B-4151-A85D-1263655807B2"
+          },
+          "sync": {
+            "lastModified": "2026-09-16T01:46:08.580Z",
+            "checksum": "e62690b66a41bf9d5d5bd30218d3c45f05062f347770a683d15135dca97f803a"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Image",
+            "Direction": "Input",
+            "IsSupported": true
+          },
+          "primaryKey": {
+            "ID": "C5EA6C6F-0F41-49C9-8918-DD44444029F8"
+          },
+          "sync": {
+            "lastModified": "2026-09-16T01:46:08.600Z",
+            "checksum": "856a80f030eeeb2474a5175b94d7156d7c27000ef1010e647e5716cfe6510c00"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Video",
+            "Direction": "Input",
+            "IsSupported": true
+          },
+          "primaryKey": {
+            "ID": "3757862B-E4AC-4FA7-A081-9741D381AC00"
+          },
+          "sync": {
+            "lastModified": "2026-09-16T01:46:08.616Z",
+            "checksum": "c9e1bf2b9193a5fe359ad318bf51e5b32bb73e46ef963fcd636f407877e6a923"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+            "Direction": "Output",
+            "IsSupported": true
+          },
+          "primaryKey": {
+            "ID": "FE95FD49-D1C1-4919-B970-2D35F4C8D50A"
+          },
+          "sync": {
+            "lastModified": "2026-09-16T01:46:08.635Z",
+            "checksum": "8d6d666fa5eb5d736786ac5179ba5e83a67e54c5e46e55119f71fa7cb1c4678b"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Text",
+            "Direction": "Output",
+            "IsSupported": true
+          },
+          "primaryKey": {
+            "ID": "9BB08960-417A-4901-BC46-94915EBF1045"
+          },
+          "sync": {
+            "lastModified": "2026-09-16T01:46:08.653Z",
+            "checksum": "16dd2415bd0f49e0bd34d574f77c77aa96912cbdf9218f57d322995db6f5574a"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "C5650EB0-9394-4800-B514-462272FF4011"
+    },
+    "sync": {
+      "lastModified": "2026-09-16T01:46:08.294Z",
+      "checksum": "ad5d50d8a30f7e2ecdf59f430ed3d0691debe4b319014f2f5cb41432c26a32a7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gemini 3.8 Live Extended Thinking",
+      "PowerRank": 18,
+      "Description": "Google's Gemini 3.8 Live Extended Thinking model with asynchronous reasoning, thought summaries, and non-blocking tool execution for complex real-time problem solving. Uses interactionStatus (IN_PROGRESS/IDLE) for turn management and supports thinkingLevels low/medium/high. Drives the Realtime agent type / Voice Co-Agent via BaseRealtimeModel (DriverClass GeminiRealtime).",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Realtime",
+      "IsActive": true,
+      "SpeedRank": 7,
+      "CostRank": 4,
+      "InheritTypeModalities": false,
+      "ModelConfiguration": {
+        "Realtime": {
+          "IdleSignal": "interactionStatus",
+          "Tooling": {
+            "SupportsBlockingExecution": false,
+            "SupportsScheduling": false
+          },
+          "Reasoning": {
+            "IncludeThoughtSummaries": true,
+            "Level": "medium"
+          }
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 0,
+            "Status": "Active",
+            "DriverClass": "GeminiRealtime",
+            "APIName": "gemini-3.8-live-extended-thinking",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "Realtime": {
+                "IdleSignal": "interactionStatus",
+                "Tooling": {
+                  "SupportsBlockingExecution": false,
+                  "SupportsScheduling": false
+                },
+                "Reasoning": {
+                  "IncludeThoughtSummaries": true,
+                  "Level": "medium"
+                }
+              }
+            }
+          },
+          "primaryKey": {
+            "ID": "9C4C6061-5E16-48FD-806F-4D441FEBECAB"
+          },
+          "sync": {
+            "lastModified": "2026-09-16T01:46:08.460Z",
+            "checksum": "c56a71ab624693152dae987664d6bbdb65193a43b484d22a189be3060c87ffbb"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "StartedAt": "2026-09-15T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.75,
+            "OutputPricePerUnit": 4.5,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Gemini 3.8 Live Extended Thinking text token pricing: $0.75 / 1M input tokens, $4.50 / 1M output tokens.",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "36BFD436-279E-4CE3-9CC9-E623F8E6EFE7"
+          },
+          "sync": {
+            "lastModified": "2026-09-16T01:46:08.499Z",
+            "checksum": "e814374a9590d7bd403e5338af3a22ca7ba27e73c61469bb1b0a718116e36d83"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "StartedAt": "2026-09-15T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Minutes",
+            "InputPricePerUnit": 0.005,
+            "OutputPricePerUnit": 0.018,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per Minute",
+            "ProcessingType": "Realtime",
+            "Comments": "Gemini 3.8 Live Extended Thinking audio time pricing: $0.005 / min audio input, $0.018 / min audio output (including thinking tokens). Image/video input: $0.002 / min ($1.00 / 1M). Search grounding: 5K/mo free shared across Gemini 3.x, then $14 / 1K.",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "44E109C3-E233-4D06-8965-EE17E10639F7"
+          },
+          "sync": {
+            "lastModified": "2026-09-16T01:46:08.523Z",
+            "checksum": "f5f457d1c6302051a5a9f088ea23a893438a35b83ad22597d30a892893df67e9"
+          }
+        }
+      ],
+      "MJ: AI Model Modalities": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+            "Direction": "Input",
+            "IsSupported": true
+          },
+          "primaryKey": {
+            "ID": "E6F3B977-481E-4A6D-8785-05CE6C4728D6"
+          },
+          "sync": {
+            "lastModified": "2026-09-16T01:46:08.558Z",
+            "checksum": "f8171426b7dc656559fc1d68637c37f797d940b9c5b929773f690788b582a155"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Text",
+            "Direction": "Input",
+            "IsSupported": true
+          },
+          "primaryKey": {
+            "ID": "1FB7CAE7-3A26-468C-B404-C23F019B692B"
+          },
+          "sync": {
+            "lastModified": "2026-09-16T01:46:08.580Z",
+            "checksum": "e62690b66a41bf9d5d5bd30218d3c45f05062f347770a683d15135dca97f803a"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Image",
+            "Direction": "Input",
+            "IsSupported": true
+          },
+          "primaryKey": {
+            "ID": "9D80BDBD-2F73-44E7-9DE4-7410FBF4C55F"
+          },
+          "sync": {
+            "lastModified": "2026-09-16T01:46:08.599Z",
+            "checksum": "856a80f030eeeb2474a5175b94d7156d7c27000ef1010e647e5716cfe6510c00"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Video",
+            "Direction": "Input",
+            "IsSupported": true
+          },
+          "primaryKey": {
+            "ID": "37456E85-80E7-49F4-8328-E174E65A780B"
+          },
+          "sync": {
+            "lastModified": "2026-09-16T01:46:08.617Z",
+            "checksum": "c9e1bf2b9193a5fe359ad318bf51e5b32bb73e46ef963fcd636f407877e6a923"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+            "Direction": "Output",
+            "IsSupported": true
+          },
+          "primaryKey": {
+            "ID": "78266FE5-EC98-422F-919C-E1BE85755CC5"
+          },
+          "sync": {
+            "lastModified": "2026-09-16T01:46:08.635Z",
+            "checksum": "8d6d666fa5eb5d736786ac5179ba5e83a67e54c5e46e55119f71fa7cb1c4678b"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Text",
+            "Direction": "Output",
+            "IsSupported": true
+          },
+          "primaryKey": {
+            "ID": "66C1345A-8592-40E5-8485-21C34CCAB9E2"
+          },
+          "sync": {
+            "lastModified": "2026-09-16T01:46:08.653Z",
+            "checksum": "16dd2415bd0f49e0bd34d574f77c77aa96912cbdf9218f57d322995db6f5574a"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "A49C8499-56ED-4BFB-9538-9A0472B5AB23"
+    },
+    "sync": {
+      "lastModified": "2026-09-16T01:46:08.293Z",
+      "checksum": "83bc5757be51e2f182f05d5808eec3f18d478d1f706ab1ed7f94ab3a32ccf9ab"
+    }
   }
 ]

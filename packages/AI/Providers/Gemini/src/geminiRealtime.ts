@@ -2,6 +2,8 @@
 import {
     GoogleGenAI,
     Modality,
+    Behavior,
+    FunctionResponseScheduling,
     type AuthToken,
     type CreateAuthTokenParameters,
     type LiveServerMessage,
@@ -15,6 +17,8 @@ import {
     type Blob as GeminiBlob,
     type ActivityStart,
     type ActivityEnd,
+    TurnCoverage,
+    ThinkingLevel,
 } from '@google/genai';
 
 // MemberJunction AI core contract
@@ -33,8 +37,18 @@ import {
     type JSONValue,
     type RealtimeSessionCapabilities,
     type RealtimeVoiceOption,
+    type RealtimeTrackDescriptor,
+    type RealtimeUsageModalityDetail,
     REALTIME_SHARED_CONFIG_KEYS,
+    ExtractToolSchedulingHint,
 } from '@memberjunction/ai';
+import {
+    ResolveGeminiLiveProfile,
+    ResolveGeminiThinkingLevel,
+    GEMINI_LIVE_FALLBACK_PROFILE,
+    type GeminiThinkingLevel,
+    type GeminiLiveModelProfile,
+} from './geminiLiveProfiles';
 import { RegisterClass } from '@memberjunction/global';
 
 /**
@@ -176,7 +190,8 @@ export class GeminiRealtime extends BaseRealtimeModel {
      * provider's frames and the MemberJunction realtime contract.
      */
     public async StartSession(params: RealtimeSessionParams): Promise<IRealtimeSession> {
-        const session = new GeminiRealtimeSession();
+        const profile = ResolveGeminiLiveProfile(params.Model);
+        const session = new GeminiRealtimeSession(profile);
         session.SetConnectTimeTools(params.Tools ?? []);
         const config = this.buildConnectConfig(params);
         // Meeting mode (auto activity detection disabled) → the session must drive turns manually.
@@ -206,6 +221,11 @@ export class GeminiRealtime extends BaseRealtimeModel {
     public override get SupportsClientDirect(): boolean {
         return true;
     }
+
+    /**
+     * Gemini Live sessions accept dynamically-defined tools at connect/mint time.
+     */
+    public static override readonly SupportsDynamicToolSet = true;
 
     /**
      * Mints an ephemeral, server-scoped Live credential for a **client-direct** session.
@@ -251,6 +271,7 @@ export class GeminiRealtime extends BaseRealtimeModel {
         if (!token.name) {
             throw new Error('Gemini auth-token mint returned no token name');
         }
+        const profile = ResolveGeminiLiveProfile(params.Model);
         return {
             Provider: 'gemini',
             Model: params.Model,
@@ -258,7 +279,15 @@ export class GeminiRealtime extends BaseRealtimeModel {
             ExpiresAt: expireTime,
             // Plain-JSON copy of what the browser passes to live.connect (model + config). The
             // token lock above makes these values authoritative even if a client tampers.
-            SessionConfig: JSON.parse(JSON.stringify({ model: params.Model, config })) as JSONObject,
+            SessionConfig: JSON.parse(
+                JSON.stringify({
+                    model: params.Model,
+                    config,
+                    idleSignal: profile.IdleSignal,
+                    supportsScheduling: profile.Tooling.SupportsScheduling,
+                    supportsBlocking: profile.Tooling.SupportsBlockingExecution,
+                })
+            ) as JSONObject,
         };
     }
 
@@ -343,6 +372,9 @@ export class GeminiRealtime extends BaseRealtimeModel {
         if (config.maxOutputTokens != null) {
             constraint.maxOutputTokens = config.maxOutputTokens;
         }
+        if (config.thinkingConfig) {
+            constraint.thinkingConfig = config.thinkingConfig;
+        }
         if (config.sessionResumption) {
             constraint.sessionResumption = config.sessionResumption;
         }
@@ -421,7 +453,13 @@ export class GeminiRealtime extends BaseRealtimeModel {
             systemInstruction: params.SystemPrompt,
         };
         if (params.Tools && params.Tools.length > 0) {
-            config.tools = [{ functionDeclarations: GeminiRealtime.MapToolsToFunctionDeclarations(params.Tools) }];
+            const bag: Record<string, unknown> = (params.Config as Record<string, unknown> | undefined) ?? {};
+            const tooling = GeminiRealtime.readObject(bag['tooling']);
+            const requestedBehavior =
+                GeminiRealtime.readString(tooling?.['Behavior']) ??
+                GeminiRealtime.readString(bag['toolBehavior']) ??
+                GeminiRealtime.readString(bag['functionCallingBehavior']);
+            config.tools = [{ functionDeclarations: GeminiRealtime.MapToolsToFunctionDeclarations(params.Tools, params.Model, requestedBehavior) }];
         }
         // The open config bag is merged last so per-conversation overrides (generation parameters,
         // language, turn-taking) win over the defaults above. Cast through the shared JSON object
@@ -436,6 +474,9 @@ export class GeminiRealtime extends BaseRealtimeModel {
             const cfg = { ...(params.Config as Record<string, unknown>) };
             const disableAutoResponse = cfg.disableAutoResponse === true;
             delete cfg.disableAutoResponse;
+            delete cfg.tooling;
+            delete cfg.toolBehavior;
+            delete cfg.functionCallingBehavior;
             // Consume the driver-NEUTRAL `voice` key the same way: it is not a Gemini config field
             // (LiveConnectConfig has no `voice`), so spreading it raw sends nothing — the SDK's
             // config converter is a path allowlist and drops unknown keys silently. Gemini takes an
@@ -508,7 +549,177 @@ export class GeminiRealtime extends BaseRealtimeModel {
                 };
             }
         }
+        // Applied LAST, deliberately: these are legality rules rather than preferences, so the open
+        // config bag must not be able to reintroduce a key the target model has retired. Anything the
+        // merge above put back is removed here.
+        this.applyModelLegality(config, params);
         return config;
+    }
+
+    /**
+     * Enforces what the TARGET model actually accepts, and states what MJ wants rather than
+     * inheriting a provider default.
+     *
+     * Every rule here fails at SESSION MINT if broken — upstream of all UI code, the same failure
+     * class as an illegal tool name — so none of it can be left to discover at connect time. Facts
+     * come from the resolved {@link ResolveGeminiLiveProfile} table; see
+     * `plans/realtime/gemini-3-8-live.md` §3 for their sourcing.
+     */
+    private applyModelLegality(config: LiveConnectConfig, params: RealtimeSessionParams): void {
+        const profile = ResolveGeminiLiveProfile(params.Model);
+        // The catalog's ModelConfiguration.Realtime reaches a driver folded into the session Config
+        // BAG as neutral keys (the same route `turnDetection` already travels), not as a field on
+        // RealtimeSessionParams — so read it from there.
+        const bag: Record<string, unknown> = (params.Config as Record<string, unknown> | undefined) ?? {};
+        const reasoning = GeminiRealtime.readObject(bag['reasoning']);
+        const turnDetection = GeminiRealtime.readObject(bag['turnDetection']);
+        // Structured `reasoning.Remote.Effort` first; fall back to `reasoning.Level` / `reasoning.Effort`
+        // (e.g. from model catalog metadata) or flat legacy bag keys so every source resolves.
+        const effort =
+            GeminiRealtime.readString(GeminiRealtime.readObject(reasoning?.['Remote'])?.['Effort']) ??
+            GeminiRealtime.readString(reasoning?.['Level']) ??
+            GeminiRealtime.readString(reasoning?.['level']) ??
+            GeminiRealtime.readString(reasoning?.['Effort']) ??
+            GeminiRealtime.readString(reasoning?.['effort']) ??
+            GeminiRealtime.readString(bag['effortLevel']) ??
+            GeminiRealtime.readString(bag['reasoningEffort']);
+        const includeThoughts =
+            reasoning?.['IncludeThoughtSummaries'] === true ||
+            reasoning?.['includeThoughtSummaries'] === true ||
+            reasoning?.['IncludeThoughts'] === true ||
+            reasoning?.['includeThoughts'] === true ||
+            bag['includeThoughts'] === true ||
+            bag['includeThoughtSummaries'] === true;
+        const coverageSetting = GeminiRealtime.readString(turnDetection?.['Coverage']);
+
+        // C1 — affective dialogue is REMOVED from the API on the 3.8 family; sending it errors. The
+        // SDK still declares `enableAffectiveDialog` (it remains valid for 3.1), so it will not stop
+        // us and the guard has to be ours.
+        if (profile.AffectiveDialogRemoved && config.enableAffectiveDialog !== undefined) {
+            delete config.enableAffectiveDialog;
+            console.warn(
+                `[GeminiRealtime] Dropped \`enableAffectiveDialog\` for ${params.Model}: affective dialogue is removed from the API on this model and sending it returns an error.`
+            );
+        }
+
+        // C2 — proactive audio is permanently ON; `proactiveAudio: false` is an error, not a default.
+        if (profile.ProactiveAudioAlwaysOn && config.proactivity?.proactiveAudio === false) {
+            delete config.proactivity;
+            console.warn(
+                `[GeminiRealtime] Dropped \`proactivity.proactiveAudio: false\` for ${params.Model}: proactive audio is permanently enabled on this model and disabling it returns an error.`
+            );
+        }
+
+        // C3 — thinking level, per model. `gemini-3.8-live` documents that thinkingConfig must be
+        // omitted ENTIRELY; Extended Thinking takes low/medium/high and rejects minimal.
+        const thinking = ResolveGeminiThinkingLevel(effort, profile);
+        if (thinking.Warning) {
+            console.warn(`[GeminiRealtime] ${thinking.Warning}`);
+        }
+        const effectiveLevel = thinking.Level ?? profile.DefaultThinkingLevel;
+        const wantSummaries = profile.SupportsThoughtSummaries && includeThoughts;
+        if (!profile.SupportsThinkingLevel && !wantSummaries) {
+            // Omit the whole block, as the model page instructs — not merely the level.
+            delete config.thinkingConfig;
+        } else if (effectiveLevel || wantSummaries) {
+            config.thinkingConfig = {
+                ...(effectiveLevel ? { thinkingLevel: GeminiRealtime.MapThinkingLevel(effectiveLevel) } : {}),
+                ...(wantSummaries ? { includeThoughts: true } : {}),
+            };
+        } else {
+            delete config.thinkingConfig;
+        }
+
+        // C4 — turn coverage is STATED, never inherited. The SDK's enum doc says coverage defaults to
+        // TURN_INCLUDES_ONLY_ACTIVITY while the 3.8 model page says the default includes all video;
+        // sending it explicitly makes that contradiction irrelevant. Absent config means audio-only,
+        // because video frames are billed and consume context, so the expensive option must be asked
+        // for rather than inherited.
+        const coverage = coverageSetting ?? 'audioActivityOnly';
+        config.realtimeInputConfig = {
+            ...(config.realtimeInputConfig ?? {}),
+            turnCoverage:
+                coverage === 'audioActivityAndAllVideo'
+                    ? TurnCoverage.TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO
+                    : TurnCoverage.TURN_INCLUDES_ONLY_ACTIVITY,
+        };
+
+        // C5 / C5a / C5b — state behavior on every declaration, whatever its origin.
+        // Drops the !SupportsBlockingExecution gate so 3.8-live bag tools are stated too.
+        if (config.tools) {
+            for (const toolGroup of config.tools) {
+                if ('functionDeclarations' in toolGroup && toolGroup.functionDeclarations) {
+                    for (const fn of toolGroup.functionDeclarations) {
+                        const rawBehavior = fn.behavior ? String(fn.behavior).trim().toUpperCase() : undefined;
+                        if (!profile.Tooling.SupportsBlockingExecution) {
+                            if (rawBehavior === Behavior.BLOCKING || rawBehavior === 'BLOCKING') {
+                                console.warn(
+                                    `[GeminiRealtime] Forcing \`behavior: NON_BLOCKING\` for tool "${fn.name}" on ${params.Model}: ` +
+                                    `blocking tool execution is not supported on this model and returns a hard error.`
+                                );
+                                fn.behavior = Behavior.NON_BLOCKING;
+                            } else if (!rawBehavior || rawBehavior === Behavior.NON_BLOCKING || rawBehavior === 'NON_BLOCKING') {
+                                fn.behavior = Behavior.NON_BLOCKING;
+                            } else {
+                                console.warn(
+                                    `[GeminiRealtime] Unrecognized behavior value "${fn.behavior}" for tool "${fn.name}". Forcing NON_BLOCKING.`
+                                );
+                                fn.behavior = Behavior.NON_BLOCKING;
+                            }
+                        } else {
+                            if (!rawBehavior) {
+                                fn.behavior = Behavior.NON_BLOCKING;
+                            } else if (rawBehavior === Behavior.BLOCKING || rawBehavior === 'BLOCKING') {
+                                fn.behavior = Behavior.BLOCKING;
+                            } else if (rawBehavior === Behavior.NON_BLOCKING || rawBehavior === 'NON_BLOCKING') {
+                                fn.behavior = Behavior.NON_BLOCKING;
+                            } else {
+                                console.warn(
+                                    `[GeminiRealtime] Unrecognized behavior value "${fn.behavior}" for tool "${fn.name}". Defaulting to NON_BLOCKING.`
+                                );
+                                fn.behavior = Behavior.NON_BLOCKING;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Narrows a bag value to a plain object, or `undefined`.
+     *
+     * The session Config bag is `JSONObject`, so every nested read needs narrowing. Returning
+     * `undefined` rather than throwing is deliberate: a malformed catalog value must degrade to "that
+     * setting is absent" and never cost the user their voice session.
+     */
+    private static readObject(value: unknown): Record<string, unknown> | undefined {
+        return value !== null && typeof value === 'object' && !Array.isArray(value)
+            ? (value as Record<string, unknown>)
+            : undefined;
+    }
+
+    /** Narrows a bag value to a non-blank trimmed string, or `undefined`. */
+    private static readString(value: unknown): string | undefined {
+        if (typeof value !== 'string') {
+            return undefined;
+        }
+        const trimmed = value.trim();
+        return trimmed.length > 0 ? trimmed : undefined;
+    }
+
+    /** Maps MJ's lowercase thinking level onto the SDK's uppercase {@link ThinkingLevel} enum. */
+    public static MapThinkingLevel(level: GeminiThinkingLevel): ThinkingLevel {
+        switch (level) {
+            case 'minimal':
+                return ThinkingLevel.MINIMAL;
+            case 'low':
+                return ThinkingLevel.LOW;
+            case 'medium':
+                return ThinkingLevel.MEDIUM;
+            case 'high':
+                return ThinkingLevel.HIGH;
+        }
     }
 
     /**
@@ -516,13 +727,83 @@ export class GeminiRealtime extends BaseRealtimeModel {
      *
      * The Core `ParametersSchema` is a JSON-schema object, so it rides in `parametersJsonSchema`
      * (the SDK's JSON-schema slot) rather than the OpenAPI-style `parameters` slot.
+     *
+     * In Gemini Live, function calling defaults to asynchronous execution (`Behavior.NON_BLOCKING`).
+     * On models that forbid synchronous blocking execution (e.g. `gemini-3.8-live-extended-thinking`),
+     * `Behavior.BLOCKING` is refused locally and forced to `Behavior.NON_BLOCKING` with a warning,
+     * preventing a hard error from the Live API server.
      */
-    public static MapToolsToFunctionDeclarations(tools: RealtimeToolDefinition[]): FunctionDeclaration[] {
+    public static MapToolsToFunctionDeclarations(
+        tools: RealtimeToolDefinition[],
+        model?: string,
+        requestedBehavior?: Behavior | string
+    ): FunctionDeclaration[] {
+        const profile = ResolveGeminiLiveProfile(model);
+        const normalized = typeof requestedBehavior === 'string' ? requestedBehavior.trim().toUpperCase() : requestedBehavior;
+        let behavior: Behavior;
+
+        if (normalized === Behavior.BLOCKING || normalized === 'BLOCKING') {
+            if (!profile.Tooling.SupportsBlockingExecution) {
+                console.warn(
+                    `[GeminiRealtime] Forcing \`behavior: NON_BLOCKING\` for tools on ${model ?? 'model'}: ` +
+                    `blocking tool execution is not supported on this model and returns a hard error.`
+                );
+                behavior = Behavior.NON_BLOCKING;
+            } else {
+                behavior = Behavior.BLOCKING;
+            }
+        } else if (normalized === Behavior.NON_BLOCKING || normalized === 'NON_BLOCKING') {
+            behavior = Behavior.NON_BLOCKING;
+        } else if (normalized) {
+            console.warn(
+                `[GeminiRealtime] Unrecognized behavior value "${requestedBehavior}". Defaulting to NON_BLOCKING.`
+            );
+            behavior = Behavior.NON_BLOCKING;
+        } else {
+            behavior = Behavior.NON_BLOCKING;
+        }
+
         return tools.map((tool) => ({
             name: tool.Name,
             description: tool.Description,
             parametersJsonSchema: tool.ParametersSchema,
+            behavior,
         }));
+    }
+
+    /**
+     * Extracts scheduling hints (`__mj_scheduling` or legacy `scheduling`) from the tool output,
+     * strips both keys so they do not leak into the model's response payload, resolves the scheduling
+     * directive accepting both 'INTERRUPT' and 'INTERRUPTED', and warns on unrecognized values or
+     * unsupported models (delegates normalization to Core `ExtractToolSchedulingHint`).
+     */
+    public static ExtractAndResolveScheduling(
+        parsed: Record<string, unknown>,
+        supportsScheduling: boolean,
+        toolName: string
+    ): FunctionResponseScheduling | undefined {
+        const hint = ExtractToolSchedulingHint(parsed, toolName, 'GeminiRealtime');
+        if (!hint) {
+            return undefined;
+        }
+
+        const schedStr = hint === 'silent' ? 'SILENT' : hint === 'whenIdle' ? 'WHEN_IDLE' : 'INTERRUPT';
+        if (!supportsScheduling) {
+            console.warn(
+                `[GeminiRealtime] Dropping scheduling hint "${schedStr}" for tool "${toolName}": ` +
+                `function scheduling is only supported on gemini-3.8-live.`
+            );
+            return undefined;
+        }
+
+        switch (hint) {
+            case 'silent':
+                return FunctionResponseScheduling.SILENT;
+            case 'whenIdle':
+                return FunctionResponseScheduling.WHEN_IDLE;
+            case 'interrupt':
+                return FunctionResponseScheduling.INTERRUPT;
+        }
     }
 }
 
@@ -544,6 +825,11 @@ class GeminiRealtimeSession implements IRealtimeSession {
     public readonly OutputSampleRate = 24000;
 
     private live: GeminiLiveSession | null = null;
+    private profile: GeminiLiveModelProfile;
+
+    constructor(profile?: GeminiLiveModelProfile) {
+        this.profile = profile ?? GEMINI_LIVE_FALLBACK_PROFILE;
+    }
 
     private outputHandler: ((chunk: ArrayBuffer) => void) | null = null;
     private transcriptHandler: ((t: RealtimeTranscript) => void) | null = null;
@@ -561,6 +847,9 @@ class GeminiRealtimeSession implements IRealtimeSession {
      * once the result is sent.
      */
     private pendingToolCallNames = new Map<string, string>();
+
+    /** Accumulates in-flight thought text deltas until finalized on turn completion. */
+    private pendingThoughtText = '';
 
     /**
      * Fingerprint of the tool set bound at connect time (set via {@link SetConnectTimeTools});
@@ -620,7 +909,26 @@ class GeminiRealtimeSession implements IRealtimeSession {
      * intentionally omitted.
      */
     public get Capabilities(): RealtimeSessionCapabilities {
-        return { CanReconfigureTurnMode: false };
+        const inbound: RealtimeTrackDescriptor[] = [{ Modality: 'audio', Direction: 'inbound' }];
+        if (this.profile.SupportsInboundVideo) {
+            inbound.push({
+                Modality: 'video',
+                Direction: 'inbound',
+                Encoding: 'image/jpeg',
+                Rate: 1,
+                UsageBasis: ['tokens', 'frames'] as const,
+                RequiresConsent: true,
+            });
+        }
+        return {
+            CanReconfigureTurnMode: false,
+            SupportsDynamicToolSet: GeminiRealtime.SupportsDynamicToolSet,
+            SupportedInboundTracks: inbound,
+            SupportedOutboundTracks: [{ Modality: 'audio', Direction: 'outbound' }],
+            ProvidesThoughtSummaries: this.profile.SupportsThoughtSummaries,
+            SupportsAsynchronousReasoning: !this.profile.Tooling.SupportsBlockingExecution,
+            UsageBases: this.profile.SupportsInboundVideo ? ['tokens', 'seconds', 'frames'] : ['tokens', 'seconds'],
+        };
     }
 
     /**
@@ -754,11 +1062,19 @@ class GeminiRealtimeSession implements IRealtimeSession {
      */
     public async SendToolResult(callID: string, output: string): Promise<void> {
         const name = this.pendingToolCallNames.get(callID) ?? '';
+        const parsed = this.parseToolOutput(output);
+        const sched = GeminiRealtime.ExtractAndResolveScheduling(
+            parsed,
+            this.profile.Tooling.SupportsScheduling ?? false,
+            name
+        );
         const functionResponse: FunctionResponse = {
             id: callID,
             name,
-            response: this.parseToolOutput(output),
+            response: parsed,
+            ...(sched ? { scheduling: sched } : {}),
         };
+
         this.requireLive().sendToolResponse({ functionResponses: [functionResponse] });
         this.pendingToolCallNames.delete(callID);
     }
@@ -904,6 +1220,17 @@ class GeminiRealtimeSession implements IRealtimeSession {
             clearTimeout(this.meetingResponseWatchdog);
             this.meetingResponseWatchdog = undefined;
         }
+        if (this.pendingThoughtText.trim().length > 0) {
+            const text = this.pendingThoughtText;
+            this.pendingThoughtText = '';
+            this.transcriptHandler?.({
+                Role: 'assistant',
+                Text: text,
+                IsFinal: true,
+                Kind: 'narration',
+                IsThought: true,
+            });
+        }
         RealtimeDiagLog(`[GeminiRealtime][diag] turn boundary — clearing responseActive (was ${this.responseActive}), draining ${this.queuedSends.length} queued send(s)`);
         this.responseActive = false;
         while (!this.responseActive && this.queuedSends.length > 0) {
@@ -932,7 +1259,7 @@ class GeminiRealtimeSession implements IRealtimeSession {
             this.handleToolCall(message.toolCall.functionCalls);
         }
         if (message.usageMetadata) {
-            this.handleUsage(message.usageMetadata.promptTokenCount, message.usageMetadata.responseTokenCount);
+            this.handleUsage(message.usageMetadata);
         }
     }
 
@@ -953,26 +1280,32 @@ class GeminiRealtimeSession implements IRealtimeSession {
             }
             this.responseActive = true;
             this.emitAudioOutput(content.modelTurn);
+            this.emitThoughtOutput(content.modelTurn);
         }
         if (content.turnComplete) {
             this.completeTurn();
         }
         if (content.inputTranscription) {
-            this.emitTranscript('user', content.inputTranscription.text, content.inputTranscription.finished);
+            this.emitTranscript('user', content.inputTranscription.text, content.inputTranscription.finished, 'normal');
         }
         if (content.outputTranscription) {
-            this.emitTranscript('assistant', content.outputTranscription.text, content.outputTranscription.finished);
+            this.emitTranscript('assistant', content.outputTranscription.text, content.outputTranscription.finished, 'normal');
         }
     }
 
     /**
      * Extracts inline audio parts from the model turn and forwards each as a raw `ArrayBuffer`.
+     * Thought parts (`part.thought === true`) are skipped — thoughts are reasoning summaries,
+     * not synthesized audio.
      */
     private emitAudioOutput(modelTurn: Content): void {
         if (!this.outputHandler || !modelTurn.parts) {
             return;
         }
         for (const part of modelTurn.parts) {
+            if (part.thought) {
+                continue;
+            }
             const data = part.inlineData?.data;
             if (data) {
                 this.outputHandler(GeminiRealtimeSession.Base64ToArrayBuffer(data));
@@ -981,13 +1314,44 @@ class GeminiRealtimeSession implements IRealtimeSession {
     }
 
     /**
+     * Extracts thought parts (`part.thought === true`) from the model turn and emits each
+     * as an interim narration transcript (`Kind: 'narration'`).
+     */
+    private emitThoughtOutput(modelTurn: Content): void {
+        if (!this.transcriptHandler || !modelTurn.parts) {
+            return;
+        }
+        for (const part of modelTurn.parts) {
+            if (part.thought && part.text) {
+                this.pendingThoughtText += part.text;
+                this.transcriptHandler({
+                    Role: 'assistant',
+                    Text: part.text,
+                    IsFinal: false,
+                    Kind: 'narration',
+                    IsThought: true,
+                });
+            }
+        }
+    }
+
+    /**
      * Emits a transcript event, defaulting missing text to empty and `finished` to a partial update.
      */
-    private emitTranscript(role: 'user' | 'assistant', text: string | undefined, finished: boolean | undefined): void {
+    private emitTranscript(
+        role: 'user' | 'assistant',
+        text: string | undefined,
+        finished: boolean | undefined,
+        kind?: 'normal' | 'narration',
+    ): void {
         if (!this.transcriptHandler) {
             return;
         }
-        this.transcriptHandler({ Role: role, Text: text ?? '', IsFinal: finished ?? false });
+        const t: RealtimeTranscript = { Role: role, Text: text ?? '', IsFinal: finished ?? false };
+        if (kind === 'narration') {
+            t.Kind = 'narration';
+        }
+        this.transcriptHandler(t);
     }
 
     /**
@@ -1019,10 +1383,34 @@ class GeminiRealtimeSession implements IRealtimeSession {
     }
 
     /**
-     * Emits an incremental usage update, defaulting missing token counts to zero.
+     * Emits an incremental usage update, defaulting missing token counts to zero,
+     * and attributing modality breakdown (text, audio, image/video) when reported.
      */
-    private handleUsage(promptTokens: number | undefined, responseTokens: number | undefined): void {
-        this.usageHandler?.({ InputTokens: promptTokens ?? 0, OutputTokens: responseTokens ?? 0 });
+    private handleUsage(usageMetadata: LiveServerMessage['usageMetadata']): void {
+        if (!usageMetadata) {
+            return;
+        }
+        let inputDetails: RealtimeUsageModalityDetail | undefined;
+        if (usageMetadata.promptTokensDetails && Array.isArray(usageMetadata.promptTokensDetails)) {
+            for (const detail of usageMetadata.promptTokensDetails) {
+                if (typeof detail.tokenCount === 'number') {
+                    inputDetails = inputDetails ?? {};
+                    const mod = String(detail.modality ?? '').toUpperCase();
+                    if (mod === 'AUDIO') {
+                        inputDetails.AudioTokens = (inputDetails.AudioTokens ?? 0) + detail.tokenCount;
+                    } else if (mod === 'TEXT') {
+                        inputDetails.TextTokens = (inputDetails.TextTokens ?? 0) + detail.tokenCount;
+                    } else if (mod === 'IMAGE') {
+                        inputDetails.ImageTokens = (inputDetails.ImageTokens ?? 0) + detail.tokenCount;
+                    }
+                }
+            }
+        }
+        this.usageHandler?.({
+            InputTokens: usageMetadata.promptTokenCount ?? 0,
+            OutputTokens: usageMetadata.responseTokenCount ?? 0,
+            ...(inputDetails ? { InputTokenDetails: inputDetails } : {}),
+        });
     }
 
     /** Drops all registered handlers so a closed session can't fire stale callbacks. */
@@ -1035,6 +1423,7 @@ class GeminiRealtimeSession implements IRealtimeSession {
         this.pendingToolCallNames.clear();
         this.queuedSends = [];
         this.responseActive = false;
+        this.pendingThoughtText = '';
     }
 
     /** Returns the bound live session or throws if it was never attached / already closed. */

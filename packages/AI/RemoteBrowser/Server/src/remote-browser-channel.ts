@@ -20,7 +20,7 @@
  * @author MemberJunction.com
  */
 
-import { BaseRealtimeChannelServer, RealtimeChannelCloseReason } from '@memberjunction/ai';
+import { BaseRealtimeChannelServer, CHANNEL_INBOUND_VIDEO_TRACK, RealtimeChannelCloseReason, RealtimeTrackDescriptor } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 import { LogError } from '@memberjunction/core';
 import { RemoteBrowserEngine } from './remote-browser-engine';
@@ -43,6 +43,13 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelServer {
     /** @inheritdoc */
     public get ChannelName(): string {
         return REMOTE_BROWSER_CHANNEL_NAME;
+    }
+
+    /**
+     * Sourced tracks: Remote Browser can source inbound video to the model when the model supports it.
+     */
+    public override GetSourcedTracks(): readonly RealtimeTrackDescriptor[] {
+        return [CHANNEL_INBOUND_VIDEO_TRACK];
     }
 
     /**

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { IMetadataProvider } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
-import { ClientRealtimeSessionConfig, RealtimeToolDefinition } from '@memberjunction/ai';
+import { CHANNEL_INBOUND_VIDEO_TRACK, ClientRealtimeSessionConfig, RealtimeToolDefinition } from '@memberjunction/ai';
 import { BaseRealtimeClient } from '@memberjunction/ai-realtime-client';
 import {
   RealtimeSessionService,
@@ -360,5 +360,38 @@ describe('RealtimeSessionService — StartRealtimeSession after the mint/run spl
     expect(variables['recordingConsent']).toBe(false);
     expect(variables['recordingStartedAt']).toBeNull();
     expect(service.SessionCreatedConversationId).toBeNull(); // joined an existing conversation
+  });
+
+  it('aggregates channel-sourced tracks into sessionConfig requestedTracks', async () => {
+    const channel = new RestoringChannel();
+    // The REAL descriptor the channels source, not a hand-written stand-in: `Required` is not a
+    // field on RealtimeTrackDescriptor, and asserting it only passed while descriptors were stored
+    // by reference. `requestedTracks` crosses a JSON boundary, so the assertion below is the
+    // descriptor's JSON form — which also proves the mapper carries every declared field.
+    vi.spyOn(channel, 'GetSourcedTracks').mockReturnValue([CHANNEL_INBOUND_VIDEO_TRACK]);
+    internals(service)._activeChannels$.next([channel]);
+
+    await service.StartRealtimeSessionFromResult(
+      mintedResult({ SessionConfigJson: '{"instructions":"be an interviewer"}' })
+    );
+
+    expect(FakeRealtimeDriver.Connects).toHaveLength(1);
+    const config = FakeRealtimeDriver.Connects[0];
+    const tracks = config.SessionConfig['requestedTracks'] as unknown[];
+    expect(tracks).toHaveLength(3);
+    expect(tracks).toEqual(
+      expect.arrayContaining([
+        { Modality: 'audio', Direction: 'inbound' },
+        { Modality: 'audio', Direction: 'outbound' },
+        {
+          Modality: 'video',
+          Direction: 'inbound',
+          Encoding: 'image/jpeg',
+          Rate: 1,
+          UsageBasis: ['tokens', 'frames'],
+          RequiresConsent: false
+        }
+      ])
+    );
   });
 });
