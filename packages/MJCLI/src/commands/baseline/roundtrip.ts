@@ -246,7 +246,9 @@ export default class BaselineRoundtrip extends Command {
 
 function applyBaseline(file: string, params: ReturnType<typeof ResolveConnection>, applyCmd?: string): { status: number | null } {
   if (applyCmd) {
-    const cmd = applyCmd.replace('{file}', file).replace('{database}', params.Database);
+    // Function replacements: this builds a SHELL command, and a string replacement expands `$&`
+    // and friends in the path or database name rather than inserting them.
+    const cmd = applyCmd.replace('{file}', () => file).replace('{database}', () => params.Database);
     const result = spawnSync('sh', ['-c', cmd], { stdio: 'inherit' });
     return { status: result.status };
   }

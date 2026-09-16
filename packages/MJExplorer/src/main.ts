@@ -1,6 +1,6 @@
 import { platformBrowserDynamic } from '@angular/platform-browser-dynamic';
 import { AuthProviderCatalog } from '@memberjunction/ng-auth-services';
-import { Environment } from './environments/environment';
+import { environment } from './environments/environment';
 
 async function initAndBootstrap() {
   // Fetch the server's public authentication-provider catalog BEFORE the root module is
@@ -9,7 +9,7 @@ async function initAndBootstrap() {
   // hand before that module is evaluated. Preload never rejects: on any failure it yields an
   // empty catalog and the app falls back to the compiled `AUTH_TYPE`, so a slow or older server
   // delays the login screen briefly but never blocks it.
-  await AuthProviderCatalog.Preload(Environment.GRAPHQL_URI);
+  await AuthProviderCatalog.Preload(environment.GRAPHQL_URI);
 
   // Dynamic import is REQUIRED here, not a convenience. A static import is hoisted, so AppModule
   // — and with it AuthServicesModule.forRoot — would evaluate before the await above ever ran,

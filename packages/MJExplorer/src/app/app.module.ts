@@ -45,7 +45,7 @@ import { InteractionType } from '@azure/msal-browser';
 //***********************************************************
 import { AppComponent } from './app.component';
 import { GeneratedFormsModule } from './generated/generated-forms.module';
-import { Environment } from '../environments/environment';
+import { environment } from '../environments/environment';
 
 /**
  * Set your default interaction type for MSALGuard here. If you have any
@@ -88,10 +88,10 @@ export function initializeAuth(authService: MJAuthBase): () => Promise<void> {
     // Auth (needs forRoot configuration)
     // Resolves against the provider catalog preloaded in main.ts (see AuthProviderCatalog.Preload).
     // No catalog => falls back to environment.AUTH_TYPE, exactly as before.
-    AuthServicesModule.forRoot(Environment),
+    AuthServicesModule.forRoot(environment),
 
     // Explorer App Shell (includes login UI, validation, and mj-shell wrapper)
-    MJExplorerAppModule.forRoot(Environment),
+    MJExplorerAppModule.forRoot(environment),
 
     // App-specific modules
     GeneratedFormsModule

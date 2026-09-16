@@ -162,10 +162,12 @@ export function generateBridgeView(
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function buildViewName(pattern: string, path: BridgePath): string {
+    // Function replacements: a string replacement expands `$&`, `$\`` and `$1` in the DATA, so a
+    // table name containing `$` would splice the pattern's own text into the view name.
     const raw = pattern
-        .replace(/\{hub\}/g, path.HubTable)
-        .replace(/\{spoke\}/g, path.SpokeTable)
-        .replace(/\{key\}/g, path.HubKeyField);
+        .replace(/\{hub\}/g, () => path.HubTable)
+        .replace(/\{spoke\}/g, () => path.SpokeTable)
+        .replace(/\{key\}/g, () => path.HubKeyField);
     // Sanitize: SQL identifier — alphanumeric + underscore only, max 128 chars.
     const cleaned = raw.replace(/[^A-Za-z0-9_]/g, '_').slice(0, 128);
     return cleaned;
