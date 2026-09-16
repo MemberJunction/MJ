@@ -1,5 +1,15 @@
 # @memberjunction/integration-schema-builder
 
+## 6.1.2
+
+### Patch Changes
+
+- @memberjunction/integration-engine@6.1.2
+- @memberjunction/schema-engine@6.1.2
+- @memberjunction/core@6.1.2
+- @memberjunction/global@6.1.2
+- @memberjunction/sql-dialect@6.1.2
+
 ## 6.1.1
 
 ### Patch Changes

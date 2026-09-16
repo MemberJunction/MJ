@@ -1,5 +1,17 @@
 # @memberjunction/integration-engine
 
+## 6.1.2
+
+### Patch Changes
+
+- Updated dependencies [e1a8894]
+  - @memberjunction/core-entities@6.1.2
+  - @memberjunction/integration-engine-base@6.1.2
+  - @memberjunction/integration-pk-classifier@6.1.2
+  - @memberjunction/integration-progress-artifacts@6.1.2
+  - @memberjunction/core@6.1.2
+  - @memberjunction/global@6.1.2
+
 ## 6.1.1
 
 ### Patch Changes

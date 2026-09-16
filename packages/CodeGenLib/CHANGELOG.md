@@ -1,5 +1,43 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 6.1.2
+
+### Patch Changes
+
+- Updated dependencies [e1a8894]
+- Updated dependencies [283f83d]
+- Updated dependencies [842e28b]
+- Updated dependencies [6e2f000]
+- Updated dependencies [b9178ed]
+  - @memberjunction/ai@6.1.2
+  - @memberjunction/aiengine@6.1.2
+  - @memberjunction/core-entities@6.1.2
+  - @memberjunction/server-bootstrap-lite@6.1.2
+  - @memberjunction/ai-core-plus@6.1.2
+  - @memberjunction/ai-prompts@6.1.2
+  - @memberjunction/actions@6.1.2
+  - @memberjunction/core-entities-server@6.1.2
+  - @memberjunction/sqlserver-dataprovider@6.1.2
+  - @memberjunction/generic-database-provider@6.1.2
+  - @memberjunction/actions-base@6.1.2
+  - @memberjunction/external-data-sources@6.1.2
+  - @memberjunction/external-data-source-databricks@6.1.2
+  - @memberjunction/external-data-source-mongodb@6.1.2
+  - @memberjunction/external-data-source-mysql@6.1.2
+  - @memberjunction/external-data-source-oracle@6.1.2
+  - @memberjunction/external-data-source-postgres@6.1.2
+  - @memberjunction/external-data-source-sqlserver@6.1.2
+  - @memberjunction/external-data-source-snowflake@6.1.2
+  - @memberjunction/query-processor@6.1.2
+  - @memberjunction/ai-provider-bundle@6.1.2
+  - @memberjunction/postgresql-dataprovider@6.1.2
+  - @memberjunction/cli-core@6.1.2
+  - @memberjunction/config@6.1.2
+  - @memberjunction/core@6.1.2
+  - @memberjunction/global@6.1.2
+  - @memberjunction/sql-dialect@6.1.2
+  - @memberjunction/sql-parser@6.1.2
+
 ## 6.1.1
 
 ### Patch Changes

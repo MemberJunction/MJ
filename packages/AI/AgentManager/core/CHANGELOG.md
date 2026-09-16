@@ -1,5 +1,22 @@
 # @memberjunction/ai-agent-manager
 
+## 6.1.2
+
+### Patch Changes
+
+- Updated dependencies [e1a8894]
+- Updated dependencies [283f83d]
+- Updated dependencies [dbc5b7d]
+- Updated dependencies [6e2f000]
+  - @memberjunction/aiengine@6.1.2
+  - @memberjunction/core-entities@6.1.2
+  - @memberjunction/ai-agents@6.1.2
+  - @memberjunction/ai-engine-base@6.1.2
+  - @memberjunction/ai-core-plus@6.1.2
+  - @memberjunction/templates@6.1.2
+  - @memberjunction/core@6.1.2
+  - @memberjunction/global@6.1.2
+
 ## 6.1.1
 
 ### Patch Changes

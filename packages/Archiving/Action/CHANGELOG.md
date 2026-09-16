@@ -1,5 +1,15 @@
 # @memberjunction/archiving-action
 
+## 6.1.2
+
+### Patch Changes
+
+- @memberjunction/actions@6.1.2
+- @memberjunction/actions-base@6.1.2
+- @memberjunction/archiving-engine@6.1.2
+- @memberjunction/core@6.1.2
+- @memberjunction/global@6.1.2
+
 ## 6.1.1
 
 ### Patch Changes

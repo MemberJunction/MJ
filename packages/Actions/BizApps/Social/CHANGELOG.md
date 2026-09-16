@@ -1,5 +1,18 @@
 # @memberjunction/actions-bizapps-social
 
+## 6.1.2
+
+### Patch Changes
+
+- Updated dependencies [e1a8894]
+  - @memberjunction/core-entities@6.1.2
+  - @memberjunction/actions@6.1.2
+  - @memberjunction/actions-base@6.1.2
+  - @memberjunction/credentials@6.1.2
+  - @memberjunction/core@6.1.2
+  - @memberjunction/global@6.1.2
+  - @memberjunction/network-utils@6.1.2
+
 ## 6.1.1
 
 ### Patch Changes

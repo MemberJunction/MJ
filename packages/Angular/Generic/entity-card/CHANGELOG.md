@@ -1,5 +1,13 @@
 # @memberjunction/ng-entity-card
 
+## 6.1.2
+
+### Patch Changes
+
+- @memberjunction/ng-base-types@6.1.2
+- @memberjunction/core@6.1.2
+- @memberjunction/global@6.1.2
+
 ## 6.1.1
 
 ### Patch Changes

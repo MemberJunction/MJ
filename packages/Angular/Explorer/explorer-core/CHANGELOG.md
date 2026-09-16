@@ -1,5 +1,65 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 6.1.2
+
+### Patch Changes
+
+- Updated dependencies [e1a8894]
+- Updated dependencies [283f83d]
+- Updated dependencies [dbc5b7d]
+- Updated dependencies [842e28b]
+- Updated dependencies [b9178ed]
+  - @memberjunction/core-entities@6.1.2
+  - @memberjunction/ng-conversations@6.1.2
+  - @memberjunction/ai-engine-base@6.1.2
+  - @memberjunction/ai-core-plus@6.1.2
+  - @memberjunction/ng-ai-test-harness@6.1.2
+  - @memberjunction/ng-base-application@6.1.2
+  - @memberjunction/ng-dashboards@6.1.2
+  - @memberjunction/ng-entity-form-dialog@6.1.2
+  - @memberjunction/ng-entity-permissions@6.1.2
+  - @memberjunction/ng-explorer-settings@6.1.2
+  - @memberjunction/ng-list-detail-grid@6.1.2
+  - @memberjunction/ng-shared@6.1.2
+  - @memberjunction/ng-artifacts@6.1.2
+  - @memberjunction/ng-base-forms@6.1.2
+  - @memberjunction/ng-base-types@6.1.2
+  - @memberjunction/ng-dashboard-viewer@6.1.2
+  - @memberjunction/ng-entity-viewer@6.1.2
+  - @memberjunction/ng-file-storage@6.1.2
+  - @memberjunction/ng-list-management@6.1.2
+  - @memberjunction/ng-notifications@6.1.2
+  - @memberjunction/ng-query-viewer@6.1.2
+  - @memberjunction/ng-react@6.1.2
+  - @memberjunction/ng-record-changes@6.1.2
+  - @memberjunction/ng-record-selector@6.1.2
+  - @memberjunction/ng-record-tags@6.1.2
+  - @memberjunction/ng-resource-permissions@6.1.2
+  - @memberjunction/ng-search@6.1.2
+  - @memberjunction/ng-shared-generic@6.1.2
+  - @memberjunction/ng-user-avatar@6.1.2
+  - @memberjunction/communication-types@6.1.2
+  - @memberjunction/entity-communications-client@6.1.2
+  - @memberjunction/graphql-dataprovider@6.1.2
+  - @memberjunction/templates-base-types@6.1.2
+  - @memberjunction/ng-feedback@6.1.2
+  - @memberjunction/ng-mj-livekit-room@6.1.2
+  - @memberjunction/ng-auth-services@6.1.2
+  - @memberjunction/ng-composer@6.1.2
+  - @memberjunction/ng-container-directives@6.1.2
+  - @memberjunction/ng-export-service@6.1.2
+  - @memberjunction/ng-generic-dialog@6.1.2
+  - @memberjunction/ng-markdown@6.1.2
+  - @memberjunction/ng-pagination@6.1.2
+  - @memberjunction/ng-ui-components@6.1.2
+  - @memberjunction/ng-word-cloud@6.1.2
+  - @memberjunction/interactive-component-types@6.1.2
+  - @memberjunction/lists-base@6.1.2
+  - @memberjunction/core@6.1.2
+  - @memberjunction/export-engine@6.1.2
+  - @memberjunction/global@6.1.2
+  - @memberjunction/theme-engine@6.1.2
+
 ## 6.1.1
 
 ### Patch Changes

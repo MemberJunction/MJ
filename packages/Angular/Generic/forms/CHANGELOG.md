@@ -1,5 +1,13 @@
 # @memberjunction/ng-forms
 
+## 6.1.2
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@6.1.2
+- @memberjunction/ng-markdown@6.1.2
+- @memberjunction/ng-ui-components@6.1.2
+
 ## 6.1.1
 
 ### Patch Changes

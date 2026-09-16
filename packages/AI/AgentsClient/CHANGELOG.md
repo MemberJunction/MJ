@@ -1,5 +1,13 @@
 # @memberjunction/ai-agent-client
 
+## 6.1.2
+
+### Patch Changes
+
+- @memberjunction/graphql-dataprovider@6.1.2
+- @memberjunction/core@6.1.2
+- @memberjunction/global@6.1.2
+
 ## 6.1.1
 
 ### Patch Changes

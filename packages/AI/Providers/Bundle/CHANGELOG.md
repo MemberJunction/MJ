@@ -1,5 +1,43 @@
 # @memberjunction/ai-provider-bundle
 
+## 6.1.2
+
+### Patch Changes
+
+- Updated dependencies [283f83d]
+- Updated dependencies [dbc5b7d]
+- Updated dependencies [842e28b]
+- Updated dependencies [6e2f000]
+- Updated dependencies [b9178ed]
+  - @memberjunction/ai-gemini@6.1.2
+  - @memberjunction/ai-openai@6.1.2
+  - @memberjunction/ai-anthropic@6.1.2
+  - @memberjunction/ai-assemblyai@6.1.2
+  - @memberjunction/ai-azure@6.1.2
+  - @memberjunction/ai-bedrock@6.1.2
+  - @memberjunction/ai-betty-bot@6.1.2
+  - @memberjunction/ai-blackforestlabs@6.1.2
+  - @memberjunction/ai-cerebras@6.1.2
+  - @memberjunction/ai-cohere@6.1.2
+  - @memberjunction/ai-elevenlabs@6.1.2
+  - @memberjunction/ai-fireworks@6.1.2
+  - @memberjunction/ai-groq@6.1.2
+  - @memberjunction/ai-heygen@6.1.2
+  - @memberjunction/ai-inception@6.1.2
+  - @memberjunction/ai-inworld@6.1.2
+  - @memberjunction/ai-lmstudio@6.1.2
+  - @memberjunction/ai-llamacpp@6.1.2
+  - @memberjunction/ai-local-embeddings@6.1.2
+  - @memberjunction/ai-minimax@6.1.2
+  - @memberjunction/ai-mistral@6.1.2
+  - @memberjunction/ai-ollama@6.1.2
+  - @memberjunction/ai-openrouter@6.1.2
+  - @memberjunction/ai-recommendations-rex@6.1.2
+  - @memberjunction/ai-vertex@6.1.2
+  - @memberjunction/ai-zhipu@6.1.2
+  - @memberjunction/ai-xai@6.1.2
+  - @memberjunction/ai-vectors-pinecone@6.1.2
+
 ## 6.1.1
 
 ### Patch Changes

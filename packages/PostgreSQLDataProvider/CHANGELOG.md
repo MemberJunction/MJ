@@ -1,5 +1,16 @@
 # @memberjunction/postgresql-dataprovider
 
+## 6.1.2
+
+### Patch Changes
+
+- @memberjunction/generic-database-provider@6.1.2
+- @memberjunction/query-processor@6.1.2
+- @memberjunction/ai-vectordb@6.1.2
+- @memberjunction/core@6.1.2
+- @memberjunction/global@6.1.2
+- @memberjunction/sql-dialect@6.1.2
+
 ## 6.1.1
 
 ### Patch Changes

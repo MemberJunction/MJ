@@ -1,5 +1,19 @@
 # @memberjunction/notifications
 
+## 6.1.2
+
+### Patch Changes
+
+- Updated dependencies [e1a8894]
+  - @memberjunction/core-entities@6.1.2
+  - @memberjunction/sqlserver-dataprovider@6.1.2
+  - @memberjunction/templates@6.1.2
+  - @memberjunction/generic-database-provider@6.1.2
+  - @memberjunction/communication-types@6.1.2
+  - @memberjunction/communication-engine@6.1.2
+  - @memberjunction/core@6.1.2
+  - @memberjunction/global@6.1.2
+
 ## 6.1.1
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @memberjunction/ng-test-utils
 
+## 6.1.2
+
+### Patch Changes
+
+- @memberjunction/core@6.1.2
+
 ## 6.1.1
 
 ### Patch Changes

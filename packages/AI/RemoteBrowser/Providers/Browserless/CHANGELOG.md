@@ -1,5 +1,14 @@
 # @memberjunction/remote-browser-browserless
 
+## 6.1.2
+
+### Patch Changes
+
+- @memberjunction/remote-browser-base@6.1.2
+- @memberjunction/remote-browser-cdp@6.1.2
+- @memberjunction/core@6.1.2
+- @memberjunction/global@6.1.2
+
 ## 6.1.1
 
 ### Patch Changes

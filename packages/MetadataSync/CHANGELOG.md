@@ -1,5 +1,25 @@
 # @memberjunction/metadata-sync
 
+## 6.1.2
+
+### Patch Changes
+
+- Updated dependencies [e1a8894]
+- Updated dependencies [283f83d]
+  - @memberjunction/core-entities@6.1.2
+  - @memberjunction/server-bootstrap-lite@6.1.2
+  - @memberjunction/core-entities-server@6.1.2
+  - @memberjunction/sqlserver-dataprovider@6.1.2
+  - @memberjunction/generic-database-provider@6.1.2
+  - @memberjunction/graphql-dataprovider@6.1.2
+  - @memberjunction/postgresql-dataprovider@6.1.2
+  - @memberjunction/cli-core@6.1.2
+  - @memberjunction/config@6.1.2
+  - @memberjunction/core@6.1.2
+  - @memberjunction/global@6.1.2
+  - @memberjunction/network-utils@6.1.2
+  - @memberjunction/sql-dialect@6.1.2
+
 ## 6.1.1
 
 ### Patch Changes
