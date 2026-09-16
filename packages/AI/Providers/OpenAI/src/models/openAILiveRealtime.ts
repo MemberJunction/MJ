@@ -1022,13 +1022,12 @@ export class OpenAILiveRealtime extends BaseRealtimeModel {
 
     /**
      * Compiles the delegation policy block informing GPT-Live about available backend tools
-     * in browser-direct / companion sessions where spoken holding phrases must NOT be used.
+     * in browser-direct / standalone sessions where spoken holding phrases must NOT be used.
      *
-     * In browser-direct companion sessions, holding phrases ("one moment", "let me look that up")
-     * introduce latency and audio artifacts while interactive surfaces or backend tools run.
-     * Furthermore, when the companion system prompt already contains tool framing or mentions
-     * interactive surface / delegation rules, appending any delegation policy causes prompt
-     * contradiction and stalls.
+     * Note: This policy is only appended for standalone / bare-tool sessions that lack co-agent companion
+     * framing. On co-agent sessions (where `hasToolFraming: true` or `invoke-target-agent` is present),
+     * the companion prompt itself defines tool guidance (`BuildRealtimeAgentFraming`), so this block is
+     * omitted to prevent contradictory instructions and holding phrase stalls.
      */
     public static CompileBrowserDelegationPolicy(tools: RealtimeToolDefinition[]): string {
         const toolBullets = tools
@@ -1094,11 +1093,13 @@ export class OpenAILiveRealtime extends BaseRealtimeModel {
         // instructions ("operated by YOU directly... NEVER route an interactive-surface request through invoke-target-agent")
         // and re-introduces the holding phrase stall. When tool framing is already present in SystemPrompt,
         // we omit appending a redundant and conflicting delegation policy altogether.
-        const alreadyHasToolFraming = !!params.SystemPrompt && (
-            params.SystemPrompt.includes('invoke-target-agent') ||
-            params.SystemPrompt.includes('Delegation policy') ||
-            params.SystemPrompt.includes('Backend tools') ||
-            params.SystemPrompt.includes('interactive-surface')
+        const alreadyHasToolFraming = config?.['hasToolFraming'] === true || (
+            !!params.SystemPrompt && (
+                params.SystemPrompt.includes('invoke-target-agent') ||
+                params.SystemPrompt.includes('Delegation policy') ||
+                params.SystemPrompt.includes('Backend tools') ||
+                params.SystemPrompt.includes('interactive-surface')
+            )
         );
         if (!alreadyHasToolFraming && hasTools && params.Tools && params.Tools.length > 0) {
             sections.push(OpenAILiveRealtime.CompileBrowserDelegationPolicy(params.Tools));
