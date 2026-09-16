@@ -452,13 +452,20 @@ export function evaluateBatchStop(params: {
     return null;
 }
 
+/** The phrase Playwright appends to a line naming what blocked a click. */
+const INTERCEPTION_PHRASE = 'intercepts pointer events';
+
 /**
- * Matches Playwright's interception lines, both shapes it emits:
+ * The blocker tag on an interception line, in both shapes Playwright emits:
  *   - <div class="x">…</div> intercepts pointer events
  *   - <div class="y"></div> from <div class="z">…</div> subtree intercepts pointer events
  * The first tag is the actual blocker in both, so a single capture serves both.
+ *
+ * The phrase is located by index rather than folded into this pattern: a regex
+ * spanning the gap between tag and phrase needs an ambiguous `[^\n]*`, which
+ * matches in quadratic time on a long line that never reaches the phrase.
  */
-const INTERCEPTION_PATTERN = /-\s*(<[^>]+>)[^\n]{0,1000}?intercepts pointer events/g;
+const INTERCEPTION_BLOCKER = /-\s*(<[^>]+>)/;
 
 /** Angular's per-component attributes carry no meaning for the controller. */
 const ANGULAR_SCOPE_ATTRIBUTE = /(?<!\s)\s*_ng(content|host)-[a-z0-9-]+="[^"]*"/g;
@@ -483,7 +490,14 @@ export function distillActionError(message: string | undefined): string {
         return 'unknown';
     }
     const headline = message.split('\n')[0].trim();
-    const blockers = [...message.matchAll(INTERCEPTION_PATTERN)].map(match => condenseTag(match[1]));
+    const blockers = message.split('\n').flatMap(line => {
+        const phrase = line.indexOf(INTERCEPTION_PHRASE);
+        if (phrase < 0) {
+            return [];
+        }
+        const blocker = INTERCEPTION_BLOCKER.exec(line.slice(0, phrase));
+        return blocker ? [condenseTag(blocker[1])] : [];
+    });
     if (blockers.length === 0) {
         return headline;
     }
