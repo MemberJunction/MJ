@@ -23,6 +23,12 @@ import {
 import { MapUsageModalityDetail } from './openAIRealtime.js';
 
 /**
+ * Default backend reasoning/planning model used by OpenAI Live when in `responses` delegation mode
+ * and no explicit `Reasoning.Remote.Ref` is configured on the model row.
+ */
+export const DEFAULT_OPENAI_LIVE_PLANNING_MODEL = 'gpt-5.6-terra';
+
+/**
  * Structural interface for the underlying WebSocket transport (Node 22+ built-in or test mock).
  */
 export interface ILiveWebSocketLike {
@@ -342,7 +348,15 @@ export class OpenAILiveSession implements IRealtimeSession {
                     ...(plane === 'remote' || hasTools
                         ? {
                               responses: {
-                                  model: this._options.remoteSettings?.Ref ?? 'gpt-4o',
+                                  model: (() => {
+                                      const ref = this._options.remoteSettings?.Ref;
+                                      if (!ref) {
+                                          console.warn(
+                                              `[OpenAILiveRealtime] No remote reasoning model configured (Reasoning.Remote.Ref is undefined). Falling back to default planning model: ${DEFAULT_OPENAI_LIVE_PLANNING_MODEL}`
+                                          );
+                                      }
+                                      return ref ?? DEFAULT_OPENAI_LIVE_PLANNING_MODEL;
+                                  })(),
                                   ...(this._options.remoteSettings?.Effort
                                       ? {
                                             reasoning: {
@@ -388,7 +402,15 @@ export class OpenAILiveSession implements IRealtimeSession {
         if (this._params.InitialContext) {
             sections.push(this._params.InitialContext.trim());
         }
-        if (this._params.Tools && this._params.Tools.length > 0) {
+        const alreadyHasToolFraming = this._params.HasToolFraming ?? (
+            !!this._params.SystemPrompt && (
+                this._params.SystemPrompt.includes('invoke-target-agent') ||
+                this._params.SystemPrompt.includes('Delegation policy') ||
+                this._params.SystemPrompt.includes('Backend tools') ||
+                this._params.SystemPrompt.includes('interactive-surface')
+            )
+        );
+        if (!alreadyHasToolFraming && this._params.Tools && this._params.Tools.length > 0) {
             sections.push(this.compileDelegationPolicy(this._params.Tools));
         }
         const interruptionPolicy = this.resolveInterruptionPolicy();
@@ -1001,6 +1023,34 @@ export class OpenAILiveRealtime extends BaseRealtimeModel {
     }
 
     /**
+     * Compiles the delegation policy block informing GPT-Live about available backend tools
+     * in browser-direct / standalone sessions where spoken holding phrases must NOT be used.
+     *
+     * Note: This policy is only appended for standalone / bare-tool sessions that lack co-agent companion
+     * framing. On co-agent sessions (where `hasToolFraming: true` or `invoke-target-agent` is present),
+     * the companion prompt itself defines tool guidance (`BuildRealtimeAgentFraming`), so this block is
+     * omitted to prevent contradictory instructions and holding phrase stalls.
+     */
+    public static CompileBrowserDelegationPolicy(tools: RealtimeToolDefinition[]): string {
+        const toolBullets = tools
+            .map((t) => `- ${t.Name}: ${t.Description || 'Execute backend capability'}`)
+            .join('\n');
+
+        return (
+            'Delegation policy:\n' +
+            'Backend tools:\n' +
+            toolBullets +
+            '\n\n' +
+            'Delegate to the backend when:\n' +
+            '- The user asks for assistance or changes requiring backend capabilities.\n\n' +
+            'Do not delegate to the backend when:\n' +
+            '- The user greets you or asks you to repeat a result already provided.\n\n' +
+            'Delegate before giving an answer that depends on backend work.\n' +
+            'Do not guess the result while waiting.'
+        );
+    }
+
+    /**
      * Mints a client session config for the browser-direct WebRTC topology.
      *
      * In the OpenAI Live WebRTC topology, the browser exchanges its offer SDP with the
@@ -1037,8 +1087,24 @@ export class OpenAILiveRealtime extends BaseRealtimeModel {
         if (params.InitialContext) {
             sections.push(params.InitialContext.trim());
         }
-        if (hasTools && params.Tools && params.Tools.length > 0) {
-            sections.push(OpenAILiveRealtime.CompileDelegationPolicy(params.Tools));
+        // Check if the system prompt already provides its own tool framing (e.g. companion prompt
+        // instructing the model to operate interactive surfaces directly or prohibiting invoke-target-agent).
+        //
+        // NOTE: An alternative of scoping the interactive surface prohibition to named tools only
+        // was rejected because CompileDelegationPolicy still fundamentally conflicts with companion prompt
+        // instructions ("operated by YOU directly... NEVER route an interactive-surface request through invoke-target-agent")
+        // and re-introduces the holding phrase stall. When tool framing is already present in SystemPrompt,
+        // we omit appending a redundant and conflicting delegation policy altogether.
+        const alreadyHasToolFraming = params.HasToolFraming ?? (
+            !!params.SystemPrompt && (
+                params.SystemPrompt.includes('invoke-target-agent') ||
+                params.SystemPrompt.includes('Delegation policy') ||
+                params.SystemPrompt.includes('Backend tools') ||
+                params.SystemPrompt.includes('interactive-surface')
+            )
+        );
+        if (!alreadyHasToolFraming && hasTools && params.Tools && params.Tools.length > 0) {
+            sections.push(OpenAILiveRealtime.CompileBrowserDelegationPolicy(params.Tools));
         }
         const compiledInstructions = sections.join('\n\n');
 
@@ -1057,7 +1123,15 @@ export class OpenAILiveRealtime extends BaseRealtimeModel {
                 ...(delegationType === 'responses'
                     ? {
                           responses: {
-                              model: reasoningConfig?.Remote?.Ref ?? 'gpt-4o',
+                              model: (() => {
+                                  const ref = reasoningConfig?.Remote?.Ref;
+                                  if (!ref) {
+                                      console.warn(
+                                          `[OpenAILiveRealtime] No remote reasoning model configured (Reasoning.Remote.Ref is undefined). Falling back to default planning model: ${DEFAULT_OPENAI_LIVE_PLANNING_MODEL}`
+                                      );
+                                  }
+                                  return ref ?? DEFAULT_OPENAI_LIVE_PLANNING_MODEL;
+                              })(),
                               ...(reasoningConfig?.Remote?.Effort
                                   ? {
                                         reasoning: {
