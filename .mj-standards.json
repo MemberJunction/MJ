@@ -17,7 +17,12 @@
       "Severity": "error",
       "Roots": [
         "packages"
-      ]
+      ],
+      "Options": {
+        "allowedNames": [
+          "environment"
+        ]
+      }
     }
   }
 }

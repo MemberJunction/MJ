@@ -26,7 +26,7 @@ import { Base64ToArrayBuffer } from '../audio/pcmUtils';
 import { IRealtimePcmPlayback, RealtimePcmPlayback } from '../audio/pcmPlayback';
 import { RealtimeAudioMeter } from '../audio/audioMeter';
 import { CreatePcmMicCapture, IPcmMicCapture } from '../audio/micCapture';
-import { createStreamFrameCapture, IFrameCapture } from '../media/frameCapture';
+import { CreateStreamFrameCapture, IFrameCapture } from '../media/frameCapture';
 import type { RealtimeUsageModalityDetail } from '@memberjunction/ai';
 
 // ── Audio constants (Gemini Live wire formats) ─────────────────────────────────
@@ -344,7 +344,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
 
         // Start camera capture if inbound video is established and cameraStream provided
         if (this.cameraStream && this.IsTrackEstablished('video', 'inbound')) {
-            this.cameraCapture = createStreamFrameCapture(this.cameraStream, {
+            this.cameraCapture = CreateStreamFrameCapture(this.cameraStream, {
                 Rate: 1,
                 OnFrame: (frame) => this.SendVideoFrame(frame.data, frame.mimeType),
             });

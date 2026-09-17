@@ -924,7 +924,7 @@ export class RealtimeSessionService {
       this.wireClientHandlers(client);
 
       this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      await client.Connect(this.buildClientConfig(session), this.localStream);
+      await client.Connect(this.BuildClientConfig(session), this.localStream);
 
       // Notify active channels that the session client is connected and tracks are established
       for (const channel of this._activeChannels$.value) {
@@ -1743,7 +1743,7 @@ export class RealtimeSessionService {
    * Aggregates tracks sourced by active channels into `requestedTracks` so the driver
    * can negotiate them (e.g., establishing inbound video streaming for Whiteboard / RemoteBrowser).
    */
-  public buildClientConfig(session: StartRealtimeClientSessionResult): ClientRealtimeSessionConfig {
+  public BuildClientConfig(session: StartRealtimeClientSessionResult): ClientRealtimeSessionConfig {
     const sessionConfig = this.parseSessionConfig(session.SessionConfigJson);
     const channelTracks = this._activeChannels$.value.flatMap((c) => c.GetSourcedTracks());
     if (channelTracks.length > 0) {
@@ -1777,6 +1777,11 @@ export class RealtimeSessionService {
       ExpiresAt: session.ExpiresAt,
       SessionConfig: sessionConfig
     };
+  }
+
+  /** @deprecated Use {@link BuildClientConfig}. */
+  public buildClientConfig(session: StartRealtimeClientSessionResult): ClientRealtimeSessionConfig {
+    return this.BuildClientConfig(session);
   }
 
   /**
