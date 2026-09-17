@@ -106,6 +106,16 @@ describe('reconcileOrphanedConversationDetails', () => {
 
         expect(closed).toBe(1);
         expect(writableStore.last?.Status).toBe('Error');
+        expect(writableStore.last?.Message).toBe('watchdog force-fail');
+    });
+
+    it('falls back to a failure marker only when the failed run carries no error text', async () => {
+        script([detail()], [{ ConversationDetailID: DETAIL_ID, Status: 'Failed', CompletedAt: longAgo() }]);
+
+        await reconcileOrphanedConversationDetails(PROVIDER, USER);
+
+        expect(writableStore.last?.Status).toBe('Error');
+        expect(writableStore.last?.Message).toBe('❌ Failed');
     });
 
     it('marks a completed run as Complete, not Error', async () => {
@@ -115,6 +125,9 @@ describe('reconcileOrphanedConversationDetails', () => {
         await reconcileOrphanedConversationDetails(PROVIDER, USER);
 
         expect(writableStore.last?.Status).toBe('Complete');
+        // A successful run has no error to report, so an empty message stays empty rather than
+        // carrying a failure marker that contradicts the status beside it.
+        expect(writableStore.last?.Message).toBe('');
     });
 
     it('leaves a message alone while its run is still executing', async () => {

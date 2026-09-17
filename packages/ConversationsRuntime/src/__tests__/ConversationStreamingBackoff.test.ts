@@ -37,6 +37,18 @@ function build() {
     return { streaming, open, handlers };
 }
 
+/**
+ * Fail each live subscription exactly once, then let its retry timer run. Stops early when the
+ * stream opens no replacement, so a stream that gives up is measured as giving up rather than
+ * being handed a fresh error it could never have received.
+ */
+function failCycles(handlers: Handlers[], cycles: number): void {
+    for (let errored = 0; errored < cycles && errored < handlers.length; errored++) {
+        handlers[errored].error(new Error('dead'));
+        vi.advanceTimersByTime(120_000);
+    }
+}
+
 describe('ConversationStreaming reconnection backoff', () => {
     beforeEach(() => {
         vi.useFakeTimers();
@@ -68,6 +80,46 @@ describe('ConversationStreaming reconnection backoff', () => {
 
         handlers[handlers.length - 1].next({ message: JSON.stringify({ type: 'noop' }) });
         expect(open.reconnectionAttempts).toBe(0);
+    });
+
+    it('keeps retrying past the point an attempt cap would have stopped it', () => {
+        const { streaming, handlers } = build();
+        streaming.initialize();
+
+        // Well past any fixed cap. A stream that stands down opens no further subscription, so
+        // `failCycles` runs out of live handlers to fail and the count stops climbing. Nothing in
+        // the repo calls initialize() again outside ngOnInit, so that state needs a page reload.
+        failCycles(handlers, 25);
+
+        expect(handlers.length).toBe(26);
+        expect(streaming.getConnectionStatus()).not.toBe('error');
+    });
+
+    it('recovers on the first frame delivered after a long outage', () => {
+        const { streaming, open, handlers } = build();
+        streaming.initialize();
+
+        failCycles(handlers, 25);
+        handlers[handlers.length - 1].next({ message: JSON.stringify({ type: 'noop' }) });
+
+        expect(open.reconnectionAttempts).toBe(0);
+        expect(streaming.getConnectionStatus()).toBe('connected');
+    });
+
+    it('holds the retry delay at the ceiling', () => {
+        const { streaming, handlers } = build();
+        streaming.initialize();
+
+        // Escalate past the point where doubling meets the ceiling.
+        failCycles(handlers, 6);
+
+        // The ceiling is the only thing bounding the retry rate, so it carries the whole guarantee.
+        const before = handlers.length;
+        handlers[before - 1].error(new Error('dead'));
+        vi.advanceTimersByTime(59_999);
+        expect(handlers.length).toBe(before);
+        vi.advanceTimersByTime(1);
+        expect(handlers.length).toBe(before + 1);
     });
 
 });

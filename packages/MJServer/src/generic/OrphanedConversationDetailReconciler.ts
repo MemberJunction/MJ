@@ -106,9 +106,15 @@ export async function reconcileOrphanedConversationDetails(
                 LogError(`[OrphanDetailReconciler] Could not load detail ${detail.ID} for write`);
                 continue;
             }
-            writable.Status = run.Status === 'Completed' ? 'Complete' : 'Error';
-            if (!writable.Message) {
-                writable.Message = run.ErrorMessage ?? '❌ Failed';
+            // The failure marker belongs only to the error branch. A completed run has nothing to
+            // report, so an empty message stays empty rather than contradicting its own status.
+            if (run.Status === 'Completed') {
+                writable.Status = 'Complete';
+            } else {
+                writable.Status = 'Error';
+                if (!writable.Message) {
+                    writable.Message = run.ErrorMessage ?? '❌ Failed';
+                }
             }
 
             if (await writable.Save()) {

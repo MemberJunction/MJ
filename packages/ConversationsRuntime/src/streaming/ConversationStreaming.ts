@@ -95,18 +95,11 @@ const RECENT_COMPLETION_TTL_MS = 5 * 60 * 1000;
 const RECONNECTION_DELAY_MS = 5_000;
 
 /**
- * Ceiling on the backoff. Without one, doubling runs away; without backoff at all (the previous
- * behaviour) a permanently unreachable server is retried every 5s forever, which is a request
- * storm dressed up as resilience.
+ * Ceiling on the backoff, and the only bound on the retry rate. Retries never stop, so a
+ * permanently unreachable server settles at one attempt per minute per tab rather than the
+ * every-5s storm an uncapped base delay would produce.
  */
 const MAX_RECONNECTION_DELAY_MS = 60_000;
-
-/**
- * How many consecutive reconnects to attempt before standing down. Standing down is not
- * giving up: `initialized` is left false, so any later `initialize()` — which the host calls
- * when the tab regains focus or the browser comes back online — resumes from a clean slate.
- */
-const MAX_RECONNECTION_ATTEMPTS = 10;
 
 /**
  * Global streaming service that manages PubSub subscriptions for all conversations.
@@ -207,9 +200,8 @@ export class ConversationStreaming {
                 // this subscription turns out to be dead too.
                 //
                 // `reconnectionAttempts` is deliberately NOT cleared here. Re-subscribing proves
-                // nothing — the call returns normally against a black-holed socket — so clearing
-                // it here reset the counter on every cycle, which pinned the delay at its base
-                // value, made MAX_RECONNECTION_ATTEMPTS unreachable, and left both guards inert.
+                // nothing — the call returns normally against a black-holed socket — so clearing it
+                // here would reset the counter every cycle and pin the delay at its base value.
                 // Only a delivered frame clears it; see noteStreamAlive().
                 this.reconnecting = false;
                 this.streamReconnected$.next();
@@ -622,21 +614,9 @@ export class ConversationStreaming {
         // abandoned entries from lingering for the session.
         this.streamingAccumulator.clear();
 
-        if (this.reconnectionAttempts >= MAX_RECONNECTION_ATTEMPTS) {
-            // Stand down rather than hammer an unreachable server. `initialized` stays false, so
-            // the host's next initialize() — on tab focus, on `online`, or on an explicit retry —
-            // starts over.
-            console.error(
-                `[ConversationStreaming] Giving up after ${this.reconnectionAttempts} reconnection attempts; ` +
-                'will retry when the host re-initializes.'
-            );
-            this.reconnectionAttempts = 0;
-            this.reconnecting = false;
-            this.connectionStatus$.next('error');
-            return;
-        }
-
-        // Exponential backoff with a ceiling. The previous fixed 5s retry never relented.
+        // Exponential backoff with a ceiling, retried for as long as the page lives. Recovery has
+        // to be autonomous: no host calls initialize() outside ngOnInit, so a stream that stopped
+        // retrying would stay stopped until a reload.
         const delay = Math.min(
             RECONNECTION_DELAY_MS * 2 ** this.reconnectionAttempts,
             MAX_RECONNECTION_DELAY_MS
