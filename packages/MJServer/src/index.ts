@@ -68,7 +68,7 @@ import { IntegrationProgressEmitter } from '@memberjunction/integration-progress
 import { PublishIntegrationProgress } from './resolvers/IntegrationProgressResolver.js';
 import { ClientToolRequestManager, AgentRunWatchdog } from '@memberjunction/ai-agents';
 import { SessionJanitor } from './agentSessions/index.js';
-import { CACHE_INVALIDATION_TOPIC } from './generic/CacheInvalidationResolver.js';
+import { CACHE_INVALIDATION_TOPIC, MayBroadcastRecordData } from './generic/CacheInvalidationResolver.js';
 import { ConnectorFactory, IntegrationEngine, IntegrationSyncOptions } from '@memberjunction/integration-engine';
 import { CronExpressionHelper } from '@memberjunction/scheduling-engine';
 import {
@@ -839,14 +839,21 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     if (event.event === MJEventType.ComponentEvent && event.eventCode === BaseEntity.BaseEventCode) {
       const beEvent = event.args as BaseEntityEvent;
       if (beEvent.type === 'save' || beEvent.type === 'delete') {
+        const entityName = beEvent.baseEntity.EntityInfo.Name;
         PubSubManager.Instance.Publish(CACHE_INVALIDATION_TOPIC, {
-          entityName: beEvent.baseEntity.EntityInfo.Name,
+          entityName,
           primaryKeyValues: JSON.stringify(beEvent.baseEntity.PrimaryKey.KeyValuePairs),
           action: beEvent.type,
           sourceServerId: MJGlobal.Instance.ProcessUUID,
           timestamp: new Date(),
           originSessionId: null,
-          recordData: beEvent.type === 'save' ? JSON.stringify(beEvent.baseEntity.GetAll()) : undefined,
+          // Opt-in only: this event reaches every connected client unfiltered, and this listener
+          // fires for server-internal saves too (agents, actions, orchestrator), which are exactly
+          // the ones no browser session asked for.
+          recordData:
+            beEvent.type === 'save' && MayBroadcastRecordData(entityName)
+              ? JSON.stringify(beEvent.baseEntity.GetAll())
+              : undefined,
         });
       }
     }
