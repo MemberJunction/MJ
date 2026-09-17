@@ -2688,6 +2688,56 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Entity Form Contributions (Parent Entity) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJEntityFormContributionsEntityID"
+        SectionName="Entity Form Contributions (Parent Entity)"
+        Icon="fa fa-puzzle-piece"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJEntityFormContributionsEntityID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Form Contributions','EntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: Entity Form Contributions','EntityID')"
+                [AllowLoad]="IsSectionExpanded('mJEntityFormContributionsEntityID')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJEntityFormContributionsEntityID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Entity Form Contributions (Related Entity) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJEntityFormContributionsRelatedEntityID"
+        SectionName="Entity Form Contributions (Related Entity)"
+        Icon="fa fa-puzzle-piece"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJEntityFormContributionsRelatedEntityID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Form Contributions','RelatedEntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: Entity Form Contributions','RelatedEntityID')"
+                [AllowLoad]="IsSectionExpanded('mJEntityFormContributionsRelatedEntityID')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJEntityFormContributionsRelatedEntityID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
         

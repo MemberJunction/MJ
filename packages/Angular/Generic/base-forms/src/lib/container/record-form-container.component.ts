@@ -1412,7 +1412,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   private UnsavedLeadGroupKey(): string | null {
     return UnsavedLeadGroupKey(
       this.EffectiveEntityInfo?.Name,
-      CollectFormPanelRegistrations(),
+      CollectFormContributionRegistrations(this.EffectiveEntityInfo, this.ProviderToUse),
       contributionRailKey,
     );
   }

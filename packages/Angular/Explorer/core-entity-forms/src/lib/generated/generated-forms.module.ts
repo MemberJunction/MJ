@@ -218,6 +218,7 @@ import { MJEntityFieldFormComponent } from "./Entities/MJEntityField/mjentityfie
 import { MJEntityFieldPermissionFormComponent } from "./Entities/MJEntityFieldPermission/mjentityfieldpermission.form.component";
 import { MJEntityFieldValueFormComponent } from "./Entities/MJEntityFieldValue/mjentityfieldvalue.form.component";
 import { MJEntityFormComponent } from "./Entities/MJEntity/mjentity.form.component";
+import { MJEntityFormContributionFormComponent } from "./Entities/MJEntityFormContribution/mjentityformcontribution.form.component";
 import { MJEntityFormOverrideFormComponent } from "./Entities/MJEntityFormOverride/mjentityformoverride.form.component";
 import { MJEntityOrganicKeyFormComponent } from "./Entities/MJEntityOrganicKey/mjentityorganickey.form.component";
 import { MJEntityOrganicKeyRelatedEntityFormComponent } from "./Entities/MJEntityOrganicKeyRelatedEntity/mjentityorganickeyrelatedentity.form.component";
@@ -1177,6 +1178,7 @@ declarations: [
     MJConversationFormComponent,
     MJEntityActionInvocationTypeFormComponent,
     MJEntityCommunicationFieldFormComponent,
+    MJEntityFormContributionFormComponent,
     MJEntityOrganicKeyFormComponent,
     MJEntityRecordDocumentFormComponent,
     MJOpenAppFormComponent,
