@@ -73,9 +73,15 @@ export class SyncPushPlugin extends BaseCLIPlugin {
       description: 'Delete database-only records that reference records being deleted (prevents FK errors)',
       default: false,
     }),
+    atomic: Flags.boolean({
+      description:
+        'All-or-nothing push: one transaction, one JSON-root graph at a time (default). ' +
+        '--no-atomic runs graphs in parallel and commits each create/update as it is saved, so a failure does not roll those back. ' +
+        'Overrides push.atomic in .mj-sync.json',
+      allowNo: true,
+    }),
     'parallel-batch-size': Flags.integer({
-      description: 'JSON-root graphs to process in parallel (default: 10, not 1)',
-      default: 10,
+      description: 'With --no-atomic: JSON-root graphs to process in parallel (default: 10). Ignored in an atomic push',
       min: 1,
       max: 50,
     }),
@@ -103,6 +109,8 @@ export class SyncPushPlugin extends BaseCLIPlugin {
       { name: '--ci', type: 'boolean', description: 'No prompts; non-zero exit on error' },
       { name: '--no-validate', type: 'boolean', description: 'Skip pre-push validation' },
       { name: '--incremental', type: 'boolean', description: 'Skip unchanged files using stored checksums' },
+      { name: '--no-atomic', type: 'boolean', description: 'Run graphs in parallel; creates/updates commit as they go and are not rolled back' },
+      { name: '--parallel-batch-size', type: 'number', description: 'Graphs at once with --no-atomic (default 10)' },
       { name: '--format', type: 'text|json|md', description: 'Output format (json for machine-readable result)' },
     ],
     examples: ['mj sync push --dir=ai-agents', 'mj sync push --ci --format=json'],
@@ -191,6 +199,7 @@ export class SyncPushPlugin extends BaseCLIPlugin {
         noValidate: flags['no-validate'],
         deleteDbOnly: flags['delete-db-only'],
         parallelBatchSize: flags['parallel-batch-size'],
+        atomic: flags.atomic,
         include: includeFilter,
         exclude: excludeFilter,
         incremental: flags.incremental,
@@ -226,18 +235,9 @@ export class SyncPushPlugin extends BaseCLIPlugin {
     const endTime = Date.now();
     for (const w of result.warnings) if (!warnings.includes(w)) warnings.push(w);
 
-    // Recovery decision: with non-fatal errors, the original CLI asked whether to
-    // keep the successfully-committed changes. Preserve that for interactive text
-    // mode. CI / non-interactive keeps the failure (no prompt possible).
-    let success = result.errors === 0 && errors.length === 0;
-    if (!success && result.errors > 0 && !flags.ci && isText) {
-      const commit = await confirm({
-        message: 'Push completed with errors. Do you want to commit the successful changes?',
-        default: false,
-      });
-      if (commit) success = true;
-      else warnings.push('Push cancelled due to errors.');
-    }
+    // A push that fails rolls back and throws (see the catch below), so a result with
+    // errors only comes from a dry run. There is nothing to commit, so no prompt.
+    const success = result.errors === 0 && errors.length === 0;
 
     if (isText) {
       this.renderPushTextSummary(formatter, result, flags['change-detail'], startTime, endTime);
