@@ -1,6 +1,6 @@
 import type { BaseEntity, CompositeKey, PlatformSQL } from '@memberjunction/core';
 import { SimpleEntityFieldInfo } from '@memberjunction/interactive-component-types';
-import type { FormPanelHostProps } from '@memberjunction/interactive-component-types/forms';
+import type { FormContributionSpec, FormPanelHostProps } from '@memberjunction/interactive-component-types/forms';
 import type { BaseFormComponent } from '../base-form-component';
 import type { FormContributionRegistration } from '../panel-slot/form-contribution';
 import { StripJoinFieldBrackets } from '../panel-slot/form-contribution';
@@ -88,4 +88,39 @@ function plainSQL(value: string | PlatformSQL | undefined): string | undefined {
     if (value === undefined || value === null) return undefined;
     if (typeof value === 'string') return value;
     return value.sqlserver ?? value.default;
+}
+
+/**
+ * A registration for a spec that has not been persisted yet — the artifact viewer's
+ * preview, where there is no contribution row and no component ID.
+ *
+ * `Priority` is the merged model's rank field; a preview never competes with anything,
+ * so it takes the base rank.
+ */
+export function ContributionSpecToRegistration(
+    entityName: string,
+    contribution: FormContributionSpec,
+    componentID?: string,
+): FormContributionRegistration {
+    return {
+        Priority: 0,
+        Source: 'metadata',
+        ComponentID: componentID,
+        Title: contribution.title,
+        Icon: contribution.icon,
+        Presentation: contribution.presentation,
+        Configuration: contribution.configuration ?? {},
+        Metadata: {
+            entity: entityName,
+            slot: contribution.slot,
+            sortKey: contribution.sortKey ?? 0,
+            contributionKey: contribution.contributionKey,
+            relatedEntity: contribution.relatedEntity,
+            relatedJoinField: contribution.relatedJoinField,
+            replacesSectionKey: contribution.replacesSectionKey,
+            inclusion: contribution.inclusion,
+            chromeGroup: contribution.chromeGroup,
+            presentation: contribution.presentation,
+        },
+    };
 }

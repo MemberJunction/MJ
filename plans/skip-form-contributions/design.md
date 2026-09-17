@@ -279,7 +279,7 @@ Fallback for agents with no browser snapshot: `Get Form Composition For Entity` 
 |---|---|---|
 | 1 | Equal-precedence tie between a row and a compiled panel with the same key | Compiled wins. Rows outrank only with strictly higher `Precedence`; the apply flow sets `incumbent + 1` on confirmation. Skip never sets precedence |
 | 2 | `MJ: Components.Type` for panel components | `Widget` with `componentRole: 'form-panel'`. Whole forms stay `Form` |
-| 2a | How the engine scopes its Component load | **Referenced components only**: `Type='Form' OR ID IN (SELECT ComponentID FROM vwEntityFormContributions)`. Not `Type IN ('Form','Widget')` — `Widget` is an open set that grows independently of this feature and is cached to local storage on every boot. Cost: a contribution write invalidates the component cache too |
+| 2a | How the engine scopes its Component load | ~~**Referenced components only**: `Type='Form' OR ID IN (SELECT ComponentID FROM vwEntityFormContributions)`~~ — **reverted during Phase A; see §17.** The filter stays `Type='Form'` and the panel host fetches the one component it needs by ID. Still not `Type IN ('Form','Widget')` — `Widget` is an open set that grows independently of this feature and is cached to local storage on every boot |
 | 3 | OpenApps shipping `Scope='Global'` React contributions via `mj sync` without a promotion gate | Acceptable, with mechanism. Installing the package is the gate, as for compiled panels; additionally, no write path may place a Global contribution on an identity entity, and an instance-level kill switch disables metadata contributions wholesale. L3 can suppress per site. The argument is written out in §16 rather than asserted |
 | 4 | `replacesSectionKey` against custom forms whose section keys are not CodeGen's | Validate, do not restrict: apply-time snapshot check with an extra-pane fallback, render-time diagnostic and Form Studio badge, prompt limited to `[FORM CONTEXT]` keys |
 | 5 | Snapshot transport to Skip | Full composition on every message, merged into `AdditionalContext` and stamped with the entity and record it describes |
@@ -331,7 +331,7 @@ The posture, and what enforces it:
 | Concern | Control |
 |---|---|
 | An installed package silently changes a form for all users | Accepted, and the same trust decision as installing the package's compiled panels. Global rows are listed in Form Studio with their source package, and L3 `MJ: Form Chrome Rules` suppress one per site without touching the package |
-| A contribution lands on an identity or authorization surface | Refused at every write path — action family and `mj sync` alike — for `MJ: Users`, `MJ: Roles`, `MJ: User Roles`, `MJ: Authorizations`, and `MJ: Auth*` entities at `Global` or `Role` scope. A user may still place one on their own form at `User` scope |
+| A contribution lands on an identity or authorization surface | Refused at the **read path** — `InteractiveFormsEngine.GetApplicableContributions` drops `Global` and `Role` rows on `MJ: Users`, `MJ: Roles`, `MJ: User Roles`, `MJ: Authorizations` and `MJ: Authorization Roles`, whatever wrote them. A user may still place one on their own form at `User` scope. (The first draft put this at the write paths; that could not work — see §17) |
 | An agent escalates its own contribution to everyone | The existing clamp: agents write `User` scope; `Global` and `Role` remain human acts through Form Studio |
 | A panel reads or exfiltrates more than it should | Unchanged from the whole-form path — the spec runs in the same React runtime, under the same user's permissions, and a panel that queries anything does so through `utilities.rv.RunView` as that user |
 | The feature itself misbehaves in production | The kill switch below |
@@ -339,3 +339,80 @@ The posture, and what enforces it:
 **Kill switch.** An instance-level configuration flag disables metadata contributions wholesale: the collector returns class registrations only, the engine skips the contribution load, and forms render exactly as they do today. This is the rollback path for a bad engine load, a runaway contribution, or a rendering regression, and it needs no migration to exercise. It is the answer to "what do we turn off at 2am", which the first draft did not have.
 
 Accessibility is a security-adjacent gap that the first draft also missed entirely: the contract's hard rules (§7) now cover headings, labels, focus order, and keyboard reachability, and a bare hero — which sits outside the rail and therefore outside the rail's keyboard path — carries its own landmark.
+
+---
+
+## 17. Implementation deviations
+
+What was built differs from this design in seven places. Each is a correction the implementation
+forced, not a shortcut, and the reason is recorded here so the next reader trusts the code over
+the prose where they disagree.
+
+### 17.1 Decision 2a reverted — the engine loads `Type='Form'` only
+
+The reference-scoped filter (`… OR ID IN (SELECT ComponentID FROM vwEntityFormContributions)`)
+shipped and immediately broke every form. `BaseEngine` builds the query against the core schema,
+but an unqualified view name inside it resolves against the connecting user's *default* schema,
+so the filter threw `Invalid object name 'vwEntityFormContributions'`. A filter that throws takes
+the whole engine down, so the contribution cache never loaded, every slot host waited out its
+readiness timeout, and the console filled.
+
+The filter is now `Type='Form'`, and `InteractiveFormPanelComponent` fetches the single component
+it needs by ID when it mounts. This is strictly better than the design intended: no cross-schema
+SQL, no cache-invalidation coupling between two entities, and the same bounded load. **Risk
+"Component cache coupling" in §15 no longer applies**, and neither does the load-size measurement
+§13 asked for.
+
+### 17.2 The identity clamp lives on the read path
+
+§16 said a contribution on an identity entity is *"refused at every write path — action family and
+`mj sync` alike"*. Neither half was enforceable:
+
+- The action family already clamps **every** write to `Scope='User'`, so a restricted-entity check
+  there can never fire. It is dead code that implies protection it does not add.
+- `mj sync` has no hook for it. The directory config is declarative JSON, and sync bypasses actions
+  entirely — which is precisely the path the concern was about.
+
+The clamp is now applied where the rows are consumed, in `GetApplicableContributions`. That covers
+`mj sync`, direct SQL, and any future writer, and cannot be routed around. `RESTRICTED_ENTITY` is
+not a result code any action returns.
+
+### 17.3 The kill switch also gates the read accessor
+
+Removing the entity from the engine's load list was not enough. A process that had already loaded
+rows kept serving them from the engine's data map, so flipping the switch appeared to do nothing
+until a restart — the opposite of "what do we turn off at 2am". The `Contributions` accessor now
+returns nothing while the switch is off. Found by integration check FC8, which failed on the first
+run against a real database.
+
+### 17.4 Activation demotes before it promotes
+
+`UQ_EntityFormContribution_Key` is unique over `(EntityID, ContributionKey, Scope, UserID, RoleID)`
+filtered to `Status='Active'`. Promoting the new version first therefore puts two Active rows on
+one key for the duration of a statement, and the index refuses the write. `Activate Form
+Contribution Version` demotes the prior sibling first and runs both steps in one transaction where
+the provider supports it. Found by integration check FC5.
+
+### 17.5 A contribution key may contain spaces
+
+The key charset was specified as `[A-Za-z0-9:._-]`. A derived related-grid key embeds an entity
+name, and MJ entity names contain spaces by convention (`MJ_BizApps_Orders: Event Order Lines`), so
+that set rejected **every** derived key. The space is permitted. It is not what breaks a SQL string
+literal — quotes and control characters are, and neither is in the set. Every entity name in a
+reference database was checked against the widened set before widening it.
+
+### 17.6 `FormContributionRegistration.Priority` keeps its name
+
+The review asked for `Priority` → `Precedence` to remove the collision with ClassFactory's own
+`Priority`. The **database column is `Precedence`**, as specified. The Angular-side registration
+field stayed `Priority`, because one field carries both meanings there — a compiled registration's
+ClassFactory priority and a metadata row's `Precedence` — and both mean "higher wins". Renaming it
+would have implied the two were different things.
+
+### 17.7 The slot readiness gate is process-wide
+
+Specified per slot host, it is `static`. The wait is a one-time courtesy so the first paint shows
+both sources together; per-instance state made a failing engine cost every slot on every form
+1.5 seconds apiece, which is far worse than the pop-in it avoids. It now resolves once per process,
+ready or timed out, and logs once.
+

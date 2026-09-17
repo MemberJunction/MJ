@@ -310,6 +310,39 @@ Worked examples (Orders hero, Person tickets, Sales fill-in, competing headers):
 
 Related section keys use the same camelCase as CodeGen (`FormSectionCamelCase` / `RelatedEntitySectionKey`) so hide-baked and skip-baked hit the right panel.
 
+## Metadata contributions (React form panels)
+
+`BaseFormPanel` is the compiled path. The same slots also accept **rows**: a
+`MJ: Entity Form Contributions` row pointing at a `Type='Widget'` Component whose spec declares
+`componentRole: 'form-panel'`. No Angular, no build, no deployment.
+
+A row carries the same registration bag this document describes for the compiled metadata object —
+`Slot`, `SortKey`, `ContributionKey`, `RelatedEntityID` + `RelatedJoinField`, `ReplacesSectionKey`,
+`Inclusion`, `ChromeGroup`, `Presentation` — plus `Title`, `Icon`, a free-form `Configuration` JSON
+blob handed to the component, and scope (`User` / `Role` / `Global`) with status
+(`Active` / `Pending` / `Inactive`).
+
+**You do not need to do anything to support this.** `CollectFormContributionRegistrations` merges
+rows and class registrations into one list before the composer runs, so a compiled panel competes
+with a row on exactly the terms it competes with another compiled panel: same `contributionKey`,
+highest rank wins, and a compiled registration wins a tie.
+
+What a panel author should know:
+
+- **Your panel can be replaced by a row**, but only deliberately — the apply flow asks the user
+  before writing a row whose precedence exceeds an installed contribution's.
+- **`presentation: 'bare'`** is how both sources declare a hero: a strip that draws no collapsible
+  chrome and never becomes a rail item. Set it in your metadata bag rather than relying on the slot.
+- **A row's panel is React**, hosted by `InteractiveFormPanelComponent`. It receives
+  `FormPanelHostProps` — the record snapshot, entity metadata, permissions, and the contribution's
+  own key / slot / title / configuration — and reports validation back through the same
+  `BaseFormPanel.validate()` contract your panel implements.
+
+Rows are authored by an OpenApp under `metadata/entity-form-contributions/`, or by an agent through
+the `Create` / `Modify` / `Activate Form Contribution Version` actions. See
+[Forms Architecture §7c Scenario I](../../../../guides/FORMS_ARCHITECTURE_GUIDE.md) for the full
+picture.
+
 ## Implementation files
 
 | File                                                                                  | Role                                                          |

@@ -196,8 +196,31 @@ export class InteractiveFormsEngine extends BaseEngine<InteractiveFormsEngine> {
         return this.ObserveProperty<MJEntityFormOverrideEntity>('_overrides');
     }
 
-    /** All cached EntityFormContribution rows (all scopes, all statuses — callers filter). */
+    // ─── Convenience queries ────────────────────────────────────────────────
+
+    /**
+     * Return the override rows for a specific user (User-scope only).
+     * Roles + Global overrides are filtered out — they're per-policy,
+     * not per-user. Use {@link GetActiveOverrideForEntity} when you need
+     * the resolver-style lookup that considers all scopes.
+     */
+    public GetUserOverrides(userID: string): MJEntityFormOverrideEntity[] {
+        if (!userID) return [];
+        return this.Overrides.filter(o =>
+            o.Scope === 'User' && o.UserID && UUIDsEqual(o.UserID, userID),
+        );
+    }
+
+    /**
+     * All cached EntityFormContribution rows (all scopes, all statuses — callers filter).
+     *
+     * Returns nothing while the kill switch is off. Dropping the entity from the load list is
+     * not enough on its own: a process that already loaded rows would keep serving them from
+     * the engine's data map, so the switch would appear to do nothing until a restart. The
+     * rollback path has to work in the process that is misbehaving.
+     */
     public get Contributions(): MJEntityFormContributionEntity[] {
+        if (!InteractiveFormsEngine.MetadataContributionsEnabled) return [];
         return this.GetConfigData<MJEntityFormContributionEntity>('_contributions');
     }
 
@@ -218,6 +241,30 @@ export class InteractiveFormsEngine extends BaseEngine<InteractiveFormsEngine> {
     }
 
     /**
+     * Entities whose forms never carry a Global or Role contribution, whatever wrote the row.
+     *
+     * A contribution places a runtime-interpreted React spec on a form; on an identity or
+     * authorization surface that is the one place it must not happen silently for other
+     * people. A user may still place a `User`-scope contribution on their own form.
+     */
+    private static readonly RESTRICTED_CONTRIBUTION_ENTITIES: ReadonlySet<string> = new Set([
+        'mj: users', 'mj: roles', 'mj: user roles', 'mj: authorizations', 'mj: authorization roles',
+    ]);
+
+    /**
+     * The clamp is applied here, on the read path, rather than at the write paths.
+     * The action family already forces `Scope='User'` on every write, so a check there can
+     * never fire, and `mj sync` — the path an OpenApp actually uses — bypasses actions
+     * altogether. Filtering where the rows are consumed covers every writer, including
+     * direct SQL, and cannot be routed around.
+     */
+    private static scopeAllowedOnEntity(entityName: string | null, scope: string): boolean {
+        if (scope === 'User') return true;
+        const name = (entityName ?? '').trim().toLowerCase();
+        return !InteractiveFormsEngine.RESTRICTED_CONTRIBUTION_ENTITIES.has(name);
+    }
+
+    /**
      * Active contribution rows that apply to (entity, user, roles): User rows for this
      * user, Role rows for any of the user's roles, and Global rows. Sorted by
      * `Precedence` DESC then `SortKey` DESC. Last-wins collapse against compiled
@@ -232,6 +279,7 @@ export class InteractiveFormsEngine extends BaseEngine<InteractiveFormsEngine> {
         const rows = this.Contributions.filter(c =>
             c.EntityID && UUIDsEqual(c.EntityID, entityID)
             && c.Status === 'Active'
+            && InteractiveFormsEngine.scopeAllowedOnEntity(c.Entity, c.Scope)
             && (
                 (c.Scope === 'User'   && !!c.UserID && !!userID && UUIDsEqual(c.UserID, userID)) ||
                 (c.Scope === 'Role'   && !!c.RoleID && roleIDs.some(r => UUIDsEqual(r, c.RoleID as string))) ||

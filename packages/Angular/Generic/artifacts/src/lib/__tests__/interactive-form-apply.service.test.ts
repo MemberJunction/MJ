@@ -23,9 +23,29 @@ const hoisted = vi.hoisted(() => ({
     actionCalls: [] as Array<{ id: string; params: unknown }>,
     runViewResponses: [] as Array<{ Success: boolean; Results: Array<{ ID: string }>; ErrorMessage?: string }>,
     notifications: [] as Array<{ message: string; type: string }>,
+    /**
+     * Opt-in: resolve an action's ID to its own Name instead of consuming the
+     * positional `runViewResponses` queue. The original tests depend on the queue
+     * running dry (an unresolvable ID is how they assert an action is never reached),
+     * so this stays off unless a test asks for it.
+     */
+    resolveActionIdsByName: false,
 }));
 
 // ─── Module mocks ────────────────────────────────────────────────────────
+
+/**
+ * Action-ID lookup. A queued `runViewResponses` entry wins, so the original tests keep
+ * their positional control; otherwise the action's own Name becomes its ID, which lets
+ * the newer tests key `actionResponses` by name and assert on the call sequence.
+ */
+function resolveRunView(params: { ExtraFilter?: string }): { Success: boolean; Results: Array<{ ID: string }>; ErrorMessage?: string } {
+    if (hoisted.runViewResponses.length > 0) return hoisted.runViewResponses.shift()!;
+    if (!hoisted.resolveActionIdsByName) return { Success: true, Results: [] };
+    const match = /Name='([^']*)'/.exec(params?.ExtraFilter ?? '');
+    return match ? { Success: true, Results: [{ ID: match[1] }] } : { Success: true, Results: [] };
+}
+
 
 vi.mock('@angular/core', () => ({
     Injectable: () => (target: Function) => target,
@@ -84,15 +104,11 @@ vi.mock('@memberjunction/core', async () => {
         // globally-constructed RunView, so the mock answers the static factory too.
         RunView: Object.assign(
             class {
-                async RunView() {
-                    return hoisted.runViewResponses.shift() ?? { Success: true, Results: [] };
-                }
+                async RunView(p: { ExtraFilter?: string }) { return resolveRunView(p); }
             },
             {
                 FromMetadataProvider: () => ({
-                    async RunView() {
-                        return hoisted.runViewResponses.shift() ?? { Success: true, Results: [] };
-                    },
+                    async RunView(p: { ExtraFilter?: string }) { return resolveRunView(p); },
                 }),
             },
         ),
@@ -118,6 +134,7 @@ function spec(over: Partial<ComponentSpec> = {}): ComponentSpec {
 
 beforeEach(() => {
     hoisted.dialogResult = 'apply';
+    hoisted.resolveActionIdsByName = false;
     hoisted.actionResponses.clear();
     hoisted.actionCalls.length = 0;
     hoisted.runViewResponses.length = 0;
@@ -268,5 +285,200 @@ describe('InteractiveFormApplyService', () => {
         const result = await svc.ConfirmAndApply(spec(), 'MJ: Apps', mockProvider());
         expect(result.Success).toBe(false);
         expect(hoisted.notifications.some(n => n.type === 'error')).toBe(true);
+    });
+});
+
+/**
+ * Form panels take a different route than whole forms: the contribution action family,
+ * plus two confirmations driven by the live composition snapshot — a `replacesSectionKey`
+ * that matches no section, and an installed compiled contribution holding the same key.
+ */
+describe('InteractiveFormApplyService — form-panel specs', () => {
+    const ENTITY = 'MJ_BizApps_Common: People';
+
+    function panelSpec(formContribution: Record<string, unknown> = {}): ComponentSpec {
+        return {
+            name: 'PersonLtvStrip', title: 'Lifetime value', componentRole: 'form-panel',
+            location: 'embedded', code: 'function PersonLtvStrip(){return null;}',
+            formContribution: {
+                slot: 'before-fields', presentation: 'bare', title: 'Lifetime value',
+                contributionKey: 'header', replacesSectionKey: 'details', ...formContribution,
+            },
+        } as unknown as ComponentSpec;
+    }
+
+    function snapshot(over: Record<string, unknown> = {}) {
+        return {
+            Entity: ENTITY, Layout: 'accordion',
+            Sections: [{ Key: 'details', Title: 'Details', Variant: 'default', Group: null, Hidden: false }],
+            Related: [], Contributions: [], SlotsPresent: ['before-fields'], ChromeRuleCount: 0,
+            ...over,
+        } as never;
+    }
+
+    const provider = () => mockProvider({ EntityByName: () => ({ ID: 'ENT-PEOPLE', Name: ENTITY }) });
+
+    beforeEach(() => {
+        hoisted.resolveActionIdsByName = true;
+        hoisted.actionResponses.set('Get Form Contributions For Entity', {
+            Success: true, Message: JSON.stringify({ EntityName: ENTITY, Contributions: [] }),
+        });
+        hoisted.actionResponses.set('Create Form Contribution', {
+            Success: true, Message: JSON.stringify({ ContributionID: 'ROW-1', ComponentID: 'COMP-1', Version: '1.0.0' }),
+        });
+        hoisted.actionResponses.set('Activate Form Contribution Version', {
+            Success: true, Message: JSON.stringify({ ContributionID: 'ROW-1' }),
+        });
+    });
+
+    it('routes to Create then Activate, and reports Kind contribution', async () => {
+        const svc = new InteractiveFormApplyService();
+        const result = await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot());
+        expect(result.Success).toBe(true);
+        expect(result.Kind).toBe('contribution');
+        expect(result.ContributionID).toBe('ROW-1');
+        expect(hoisted.actionCalls.map(c => c.id)).toEqual([
+            'Get Form Contributions For Entity', 'Create Form Contribution', 'Activate Form Contribution Version',
+        ]);
+    });
+
+    it('never runs the whole-form actions for a panel spec', async () => {
+        const svc = new InteractiveFormApplyService();
+        await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot());
+        const ids = hoisted.actionCalls.map(c => c.id);
+        expect(ids).not.toContain('Get Active Form For Entity');
+        expect(ids).not.toContain('Create Interactive Form');
+    });
+
+    it('passes incumbent + 1 as Precedence when a compiled contribution holds the same key', async () => {
+        const svc = new InteractiveFormApplyService();
+        await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot({
+            Contributions: [{ Key: 'header', Slot: 'before-fields', Source: 'class', Title: 'Header', Presentation: 'bare', Hidden: false, Precedence: 3 }],
+        }));
+        const create = hoisted.actionCalls.find(c => c.id === 'Create Form Contribution')!;
+        const precedence = (create.params as Array<{ Name: string; Value: string }>).find(p => p.Name === 'Precedence');
+        expect(precedence?.Value).toBe('4');
+    });
+
+    it('cancels without writing when the user declines to replace a compiled contribution', async () => {
+        hoisted.dialogResult = 'cancel';
+        const svc = new InteractiveFormApplyService();
+        const result = await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot({
+            Contributions: [{ Key: 'header', Slot: 'before-fields', Source: 'class', Title: 'Header', Presentation: 'bare', Hidden: false, Precedence: 3 }],
+        }));
+        expect(result).toMatchObject({ Success: false, Kind: 'contribution' });
+        expect(hoisted.actionCalls).toHaveLength(0);
+    });
+
+    it('drops replacesSectionKey when the snapshot has no such section', async () => {
+        const svc = new InteractiveFormApplyService();
+        await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot({
+            Sections: [{ Key: 'summary', Title: 'Summary', Variant: 'default', Group: null, Hidden: false }],
+        }));
+        const create = hoisted.actionCalls.find(c => c.id === 'Create Form Contribution')!;
+        const sent = JSON.parse((create.params as Array<{ Name: string; Value: string }>).find(p => p.Name === 'Spec')!.Value) as
+            { formContribution: { replacesSectionKey?: string } };
+        expect(sent.formContribution.replacesSectionKey).toBeUndefined();
+    });
+
+    it('keeps replacesSectionKey when the section exists', async () => {
+        const svc = new InteractiveFormApplyService();
+        await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot());
+        const create = hoisted.actionCalls.find(c => c.id === 'Create Form Contribution')!;
+        const sent = JSON.parse((create.params as Array<{ Name: string; Value: string }>).find(p => p.Name === 'Spec')!.Value) as
+            { formContribution: { replacesSectionKey?: string } };
+        expect(sent.formContribution.replacesSectionKey).toBe('details');
+    });
+
+    it('leaves replacesSectionKey alone when no snapshot is supplied', async () => {
+        const svc = new InteractiveFormApplyService();
+        await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), null);
+        const create = hoisted.actionCalls.find(c => c.id === 'Create Form Contribution')!;
+        const sent = JSON.parse((create.params as Array<{ Name: string; Value: string }>).find(p => p.Name === 'Spec')!.Value) as
+            { formContribution: { replacesSectionKey?: string } };
+        expect(sent.formContribution.replacesSectionKey).toBe('details');
+    });
+
+    it('ignores a snapshot taken on a different entity', async () => {
+        const svc = new InteractiveFormApplyService();
+        await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot({ Entity: 'MJ: Something Else', Sections: [] }));
+        const create = hoisted.actionCalls.find(c => c.id === 'Create Form Contribution')!;
+        const sent = JSON.parse((create.params as Array<{ Name: string; Value: string }>).find(p => p.Name === 'Spec')!.Value) as
+            { formContribution: { replacesSectionKey?: string } };
+        expect(sent.formContribution.replacesSectionKey).toBe('details');
+    });
+
+    it('routes to Modify when the caller already has a Pending row with the same key', async () => {
+        hoisted.actionResponses.set('Get Form Contributions For Entity', {
+            Success: true,
+            Message: JSON.stringify({ EntityName: ENTITY, Contributions: [
+                { ContributionID: 'ROW-9', ContributionKey: 'header', Status: 'Pending', Scope: 'User', ComponentName: 'OldName' },
+            ] }),
+        });
+        hoisted.actionResponses.set('Modify Form Contribution', {
+            Success: true, Message: JSON.stringify({ ContributionID: 'ROW-9', ComponentID: 'COMP-9', Version: '1.0.0', Mode: 'in-place' }),
+        });
+        const svc = new InteractiveFormApplyService();
+        const result = await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot());
+        const ids = hoisted.actionCalls.map(c => c.id);
+        expect(ids).toContain('Modify Form Contribution');
+        expect(ids).not.toContain('Create Form Contribution');
+        expect(result.Mode).toBe('modify-in-place');
+        const modify = hoisted.actionCalls.find(c => c.id === 'Modify Form Contribution')!;
+        const bump = (modify.params as Array<{ Name: string; Value: string }>).find(p => p.Name === 'VersionBumpKind');
+        expect(bump?.Value).toBe('in-place');
+    });
+
+    it('bumps a minor version when the existing row is Active', async () => {
+        hoisted.actionResponses.set('Get Form Contributions For Entity', {
+            Success: true,
+            Message: JSON.stringify({ EntityName: ENTITY, Contributions: [
+                { ContributionID: 'ROW-9', ContributionKey: 'header', Status: 'Active', Scope: 'User', ComponentName: 'OldName' },
+            ] }),
+        });
+        hoisted.actionResponses.set('Modify Form Contribution', {
+            Success: true, Message: JSON.stringify({ ContributionID: 'ROW-10', ComponentID: 'COMP-10', Version: '1.1.0', Mode: 'new-version' }),
+        });
+        const svc = new InteractiveFormApplyService();
+        const result = await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot());
+        expect(result.Mode).toBe('modify-new-version');
+        const modify = hoisted.actionCalls.find(c => c.id === 'Modify Form Contribution')!;
+        const bump = (modify.params as Array<{ Name: string; Value: string }>).find(p => p.Name === 'VersionBumpKind');
+        expect(bump?.Value).toBe('minor');
+    });
+
+    it('derives the same related-grid key the write path persists', async () => {
+        const spec = panelSpec({
+            contributionKey: undefined, replacesSectionKey: undefined,
+            relatedEntity: 'MJ_BizApps_Orders: Event Order Lines', relatedJoinField: '[PersonID]',
+        });
+        hoisted.actionResponses.set('Get Form Contributions For Entity', {
+            Success: true,
+            Message: JSON.stringify({ EntityName: ENTITY, Contributions: [
+                { ContributionID: 'ROW-7', ContributionKey: 'related:MJ_BizApps_Orders: Event Order Lines:PersonID', Status: 'Active', Scope: 'User' },
+            ] }),
+        });
+        hoisted.actionResponses.set('Modify Form Contribution', {
+            Success: true, Message: JSON.stringify({ ContributionID: 'ROW-7', ComponentID: 'C', Version: '1.1.0' }),
+        });
+        const svc = new InteractiveFormApplyService();
+        await svc.ConfirmAndApply(spec, ENTITY, provider(), snapshot());
+        expect(hoisted.actionCalls.map(c => c.id)).toContain('Modify Form Contribution');
+    });
+
+    it('reports success as a Pending draft when activation fails', async () => {
+        hoisted.actionResponses.set('Activate Form Contribution Version', { Success: false, Message: 'nope' });
+        const svc = new InteractiveFormApplyService();
+        const result = await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot());
+        expect(result.Success).toBe(true);
+        expect(hoisted.notifications.at(-1)?.message).toMatch(/Pending draft/);
+    });
+
+    it('surfaces a Create failure', async () => {
+        hoisted.actionResponses.set('Create Form Contribution', { Success: false, Message: 'LINT_FAILED' });
+        const svc = new InteractiveFormApplyService();
+        const result = await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot());
+        expect(result).toMatchObject({ Success: false, Kind: 'contribution' });
+        expect(hoisted.notifications.at(-1)?.type).toBe('error');
     });
 });

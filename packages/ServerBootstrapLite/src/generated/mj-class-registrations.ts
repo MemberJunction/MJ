@@ -188,7 +188,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (410 classes)
+// @memberjunction/core-entities (411 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -406,6 +406,7 @@ import {
     MJEntityFieldEntity,
     MJEntityFieldEntityExtended,
     MJEntityFieldValueEntity,
+    MJEntityFormContributionEntity,
     MJEntityFormOverrideEntity,
     MJEntityOrganicKeyEntity,
     MJEntityOrganicKeyRelatedEntityEntity,
@@ -1058,10 +1059,11 @@ import {
     MJVectorIndexEntityServer,
 } from '@memberjunction/core-entities-server';
 
-// @memberjunction/core-actions (147 classes)
+// @memberjunction/core-actions (151 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
+    ActivateFormContributionVersionAction,
     ActivateInteractiveFormVersionAction,
     AddDocumentContentAction,
     AddRecordsToListAction,
@@ -1081,6 +1083,7 @@ import {
     CreateDirectoryAction,
     CreateDocumentAction,
     CreateEmployeeAction,
+    CreateFormContributionAction,
     CreateInteractiveFormAction,
     CreateListAction,
     CreateMermaidDiagramAction,
@@ -1125,6 +1128,7 @@ import {
     GetEntityListAction,
     GetEntitySchemaForFormAction,
     GetFileContentAction,
+    GetFormContributionsForEntityAction,
     GetListRecordsAction,
     GetMetadataAction,
     GetObjectAction,
@@ -1151,6 +1155,7 @@ import {
     MCPToolAction,
     MaterializeListFromViewAction,
     ModifyDocumentSectionAction,
+    ModifyFormContributionAction,
     ModifyInteractiveFormAction,
     MoveListMembersAction,
     MoveObjectAction,
@@ -1502,6 +1507,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJEntityFieldEntity,
     MJEntityFieldEntityExtended,
     MJEntityFieldValueEntity,
+    MJEntityFormContributionEntity,
     MJEntityFormOverrideEntity,
     MJEntityOrganicKeyEntity,
     MJEntityOrganicKeyRelatedEntityEntity,
@@ -1636,11 +1642,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJSignatureProviderEntity,
     MJSignatureRequestDocumentEntity,
     MJSignatureRequestEntity,
-    MJSignatureRequestLogEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJSignatureRequestLogEntity,
     MJSignatureRequestRecipientEntity,
     MJSkillEntity,
     MJStateProvinceEntity,
@@ -1840,11 +1846,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     InstagramCreatePostAction,
     InstagramCreateStoryAction,
     InstagramGetAccountInsightsAction,
-    InstagramGetBusinessPostsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    InstagramGetBusinessPostsAction,
     InstagramGetCommentsAction,
     InstagramGetPostInsightsAction,
     InstagramSchedulePostAction,
@@ -2034,6 +2040,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MJVectorIndexEntityServer,
     APIRateLimiterAction,
     ActionSmithAgent,
+    ActivateFormContributionVersionAction,
     ActivateInteractiveFormVersionAction,
     AddDocumentContentAction,
     AddRecordsToListAction,
@@ -2043,12 +2050,12 @@ const CLASS_REGISTRATIONS_3: any[] = [
     BulkUpdateListItemStatusAction,
     BusinessDaysCalculatorAction,
     CSVParserAction,
-    CalculateExpressionAction,
-    CensusDataLookupAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    CalculateExpressionAction,
+    CensusDataLookupAction,
     CheckUserPermissionAction,
     ColorConverterAction,
     ComposeListsAction,
@@ -2057,6 +2064,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     CreateDirectoryAction,
     CreateDocumentAction,
     CreateEmployeeAction,
+    CreateFormContributionAction,
     CreateInteractiveFormAction,
     CreateListAction,
     CreateMermaidDiagramAction,
@@ -2101,6 +2109,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     GetEntityListAction,
     GetEntitySchemaForFormAction,
     GetFileContentAction,
+    GetFormContributionsForEntityAction,
     GetListRecordsAction,
     GetMetadataAction,
     GetObjectAction,
@@ -2127,6 +2136,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MCPToolAction,
     MaterializeListFromViewAction,
     ModifyDocumentSectionAction,
+    ModifyFormContributionAction,
     ModifyInteractiveFormAction,
     MoveListMembersAction,
     MoveObjectAction,
@@ -2205,7 +2215,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 941;
+export const CLASS_REGISTRATIONS_COUNT = 946;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

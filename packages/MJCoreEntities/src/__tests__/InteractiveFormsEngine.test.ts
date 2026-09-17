@@ -67,3 +67,72 @@ describe('InteractiveFormsEngine.GetApplicableContributions', () => {
         expect(InteractiveFormsEngine.Instance.GetApplicableContributions(ENTITY.toLowerCase(), USER, [])).toHaveLength(1);
     });
 });
+
+/**
+ * design.md §16 refuses a Global or Role contribution on an identity or authorization
+ * surface. The action layer cannot enforce it — it already clamps every write to User
+ * scope, so the check is unreachable there — and `mj sync` bypasses actions entirely.
+ * The read path is the only place that sees every row however it was written.
+ */
+describe('InteractiveFormsEngine identity-entity clamp', () => {
+    beforeEach(() => { backing = {}; });
+
+    it('drops Global and Role rows on an identity entity', () => {
+        backing._contributions = [
+            row({ ID: 'global', Entity: 'MJ: Users' }),
+            row({ ID: 'role', Scope: 'Role', RoleID: ROLE, Entity: 'MJ: Users' }),
+            row({ ID: 'mine', Scope: 'User', UserID: USER, Entity: 'MJ: Users' }),
+        ];
+        const ids = InteractiveFormsEngine.Instance
+            .GetApplicableContributions(ENTITY, USER, [ROLE]).map(r => r.ID);
+        expect(ids).toEqual(['mine']);
+    });
+
+    it('leaves every scope alone on an ordinary entity', () => {
+        backing._contributions = [
+            row({ ID: 'global', Entity: 'MJ: Applications' }),
+            row({ ID: 'mine', Scope: 'User', UserID: USER, Entity: 'MJ: Applications' }),
+        ];
+        expect(InteractiveFormsEngine.Instance
+            .GetApplicableContributions(ENTITY, USER, [ROLE])).toHaveLength(2);
+    });
+
+    it('matches the restricted name regardless of casing or padding', () => {
+        backing._contributions = [row({ ID: 'global', Entity: '  mj: user roles ' })];
+        expect(InteractiveFormsEngine.Instance
+            .GetApplicableContributions(ENTITY, USER, [ROLE])).toHaveLength(0);
+    });
+});
+
+/**
+ * The kill switch is the rollback path — "what do we turn off at 2am". Dropping the entity
+ * from the load list is not enough on its own: a process that already loaded rows keeps
+ * serving them from the engine's data map, so the switch appears to do nothing until a
+ * restart. The read side has to honour it too.
+ */
+describe('InteractiveFormsEngine kill switch', () => {
+    beforeEach(() => {
+        backing = {};
+        InteractiveFormsEngine.MetadataContributionsEnabled = true;
+    });
+
+    it('reports no contributions once disabled, even with rows already loaded', () => {
+        backing._contributions = [row({ ID: 'loaded' })];
+        expect(InteractiveFormsEngine.Instance.Contributions).toHaveLength(1);
+        InteractiveFormsEngine.MetadataContributionsEnabled = false;
+        expect(InteractiveFormsEngine.Instance.Contributions).toEqual([]);
+    });
+
+    it('makes nothing applicable to a form once disabled', () => {
+        backing._contributions = [row({ ID: 'loaded', Entity: 'MJ: Applications' })];
+        InteractiveFormsEngine.MetadataContributionsEnabled = false;
+        expect(InteractiveFormsEngine.Instance.GetApplicableContributions(ENTITY, USER, [ROLE])).toEqual([]);
+    });
+
+    it('serves the rows again when re-enabled', () => {
+        backing._contributions = [row({ ID: 'loaded' })];
+        InteractiveFormsEngine.MetadataContributionsEnabled = false;
+        InteractiveFormsEngine.MetadataContributionsEnabled = true;
+        expect(InteractiveFormsEngine.Instance.Contributions).toHaveLength(1);
+    });
+});

@@ -9,10 +9,15 @@ import { IMetadataProvider, UserInfo } from "@memberjunction/core";
 import { UUIDsEqual } from "@memberjunction/global";
 import {
     MJComponentEntity,
+    MJEntityFormContributionEntity,
     MJEntityFormOverrideEntity,
 } from "@memberjunction/core-entities";
 import type { ComponentSpec } from "@memberjunction/interactive-component-types";
-import { isFormRole } from "@memberjunction/interactive-component-types/forms";
+import {
+    isFormPanelRole,
+    isFormRole,
+    type FormContributionSpec,
+} from "@memberjunction/interactive-component-types/forms";
 import { ComponentLinter } from "@memberjunction/react-linter";
 
 // ── parameter helpers ────────────────────────────────────────────────────
@@ -66,17 +71,32 @@ export function parseSpecParam(raw: unknown): ComponentSpec | { error: string } 
 }
 
 /**
- * Lint a form-role ComponentSpec. Returns null on success, a fail-fast
- * ActionResultSimple on failure. Two rules are suppressed for form-role
- * specs (component-props-validation, callback-event-validation) — see
- * lint comments in the original create-interactive-form action for the
- * rationale.
+ * Rules suppressed for both form roles. The form host (mj-react-component) creates
+ * `callbacks` / `utilities` / `components` / `styles` once per instance (stable refs),
+ * so depending on them in useEffect does not loop here; the prop and callback shape
+ * rules only know the generic component surface, not the host-provided one.
  */
-export async function lintFormSpec(spec: ComponentSpec, contextUser: UserInfo): Promise<ActionResultSimple | null> {
-    if (!isFormRole(spec)) {
+const ROLE_SUPPRESSED_RULES = new Set([
+    "component-props-validation",
+    "callback-event-validation",
+    "useeffect-unstable-dependencies",
+]);
+
+/**
+ * Lint body shared by both roles. `roleCheck` decides which role the spec must
+ * declare; `roleLabel` names it in the failure message. Returns null on success,
+ * a fail-fast ActionResultSimple on failure.
+ */
+async function lintRoleSpec(
+    spec: ComponentSpec,
+    contextUser: UserInfo,
+    roleCheck: (s: Pick<ComponentSpec, 'componentRole'>) => boolean,
+    roleLabel: string,
+): Promise<ActionResultSimple | null> {
+    if (!roleCheck(spec)) {
         return failure(
             "LINT_FAILED",
-            `Spec must declare componentRole='form'. Got '${spec.componentRole ?? "(unset)"}'. The InteractiveForm runtime refuses to mount any other role.`,
+            `Spec must declare componentRole='${roleLabel}'. Got '${spec.componentRole ?? "(unset)"}'. The InteractiveForm runtime refuses to mount any other role.`,
         );
     }
     if (!spec.name || spec.name.trim().length === 0) {
@@ -91,16 +111,6 @@ export async function lintFormSpec(spec: ComponentSpec, contextUser: UserInfo): 
             "Spec.location is required (use 'embedded' for inline JSX or 'registry' to reference a published component).",
         );
     }
-
-    const FORM_ROLE_SUPPRESSED_RULES = new Set([
-        "component-props-validation",
-        "callback-event-validation",
-        // The form host (mj-react-component) creates `callbacks`/`utilities`/`components`/
-        // `styles` once per instance (stable refs), so depending on them in useEffect does
-        // not loop here. This rule only flags those host-provided prop names, making it a
-        // false positive on the form-role surface.
-        "useeffect-unstable-dependencies",
-    ]);
     try {
         const result = await ComponentLinter.lintComponent(
             spec.code, spec.name, spec, true, contextUser,
@@ -108,7 +118,7 @@ export async function lintFormSpec(spec: ComponentSpec, contextUser: UserInfo): 
         const blocking = (result.violations ?? []).filter(v => {
             const isBlocking = v.severity === "critical" || v.severity === "high";
             if (!isBlocking) return false;
-            if (v.rule && FORM_ROLE_SUPPRESSED_RULES.has(v.rule)) return false;
+            if (v.rule && ROLE_SUPPRESSED_RULES.has(v.rule)) return false;
             return true;
         });
         if (blocking.length > 0) {
@@ -128,6 +138,16 @@ export async function lintFormSpec(spec: ComponentSpec, contextUser: UserInfo): 
         );
     }
     return null;
+}
+
+/** Lint a whole-form spec — `componentRole: 'form'`. */
+export async function lintFormSpec(spec: ComponentSpec, contextUser: UserInfo): Promise<ActionResultSimple | null> {
+    return lintRoleSpec(spec, contextUser, isFormRole, 'form');
+}
+
+/** Lint a form-panel spec — `componentRole: 'form-panel'`. Same rules as {@link lintFormSpec}. */
+export async function lintFormPanelSpec(spec: ComponentSpec, contextUser: UserInfo): Promise<ActionResultSimple | null> {
+    return lintRoleSpec(spec, contextUser, isFormPanelRole, 'form-panel');
 }
 
 // ── component / override fetch + write helpers ───────────────────────────
@@ -150,6 +170,15 @@ export async function loadOverride(
     return loaded ? o : null;
 }
 
+/** Load a Contribution entity object by primary key. */
+export async function loadContribution(
+    provider: IMetadataProvider, user: UserInfo, contributionID: string,
+): Promise<MJEntityFormContributionEntity | null> {
+    const c = await provider.GetEntityObject<MJEntityFormContributionEntity>("MJ: Entity Form Contributions", user);
+    const loaded = await c.Load(contributionID);
+    return loaded ? c : null;
+}
+
 /**
  * Defense-in-depth ownership check for the override-mutation actions
  * (Modify / Activate / Revert).
@@ -167,17 +196,36 @@ export async function loadOverride(
  *
  * Returns `null` on success; a `FORBIDDEN` failure result on rejection.
  */
-export function checkOverrideOwnership(
-    override: Pick<MJEntityFormOverrideEntity, 'ID' | 'Scope' | 'UserID' | 'RoleID'>,
-    user: UserInfo,
-): ActionResultSimple | null {
-    const ID = override.ID;
-    switch (override.Scope) {
+/** Row shape both override and contribution ownership checks read. */
+export interface ScopedRow {
+    ID: string;
+    Scope: 'User' | 'Role' | 'Global' | string;
+    UserID: string | null;
+    RoleID: string | null;
+}
+
+/**
+ * Ownership rules shared by every mutation action.
+ *
+ * `Create` is naturally self-scoped — it always emits a fresh User-scope row owned
+ * by the caller. The mutation actions take a row ID from the caller and operate on
+ * it; without this guard a user could mutate another user's User-scope row by
+ * guessing the ID. Row-level security may catch some of this, but we don't rely on it.
+ *
+ *   - `Scope='User'`   → caller must be the owning user.
+ *   - `Scope='Role'`   → caller must be a member of the row's role.
+ *   - `Scope='Global'` → caller must be a system admin (`UserInfo.Type === 'Owner'`,
+ *     MJ's canonical admin marker — see packages/MJCore/src/userInfo.ts).
+ *
+ * Returns `null` on success; a `FORBIDDEN` failure result on rejection.
+ */
+export function checkScopedOwnership(row: ScopedRow, user: UserInfo, label: string): ActionResultSimple | null {
+    switch (row.Scope) {
         case 'User': {
-            if (!UUIDsEqual(override.UserID, user.ID)) {
+            if (!UUIDsEqual(row.UserID, user.ID)) {
                 return failure(
                     "FORBIDDEN",
-                    `Override ${ID} is User-scoped to a different user. Only the owning user can mutate it.`,
+                    `${label} ${row.ID} is User-scoped to a different user. Only the owning user can mutate it.`,
                 );
             }
             return null;
@@ -185,24 +233,20 @@ export function checkOverrideOwnership(
         case 'Role': {
             const userRoleIds = ((user as { UserRoles?: { RoleID?: string }[] }).UserRoles ?? [])
                 .map(r => r.RoleID).filter((x): x is string => !!x);
-            if (!override.RoleID || !userRoleIds.includes(override.RoleID)) {
+            if (!row.RoleID || !userRoleIds.includes(row.RoleID)) {
                 return failure(
                     "FORBIDDEN",
-                    `Override ${ID} is Role-scoped (${override.RoleID}). Only members of that role can mutate it.`,
+                    `${label} ${row.ID} is Role-scoped (${row.RoleID}). Only members of that role can mutate it.`,
                 );
             }
             return null;
         }
         case 'Global': {
-            // `UserInfo.Type === 'Owner'` is MJ's canonical admin marker —
-            // see packages/MJCore/src/userInfo.ts (Type is a Pick from the
-            // generated entity field). Owners can manage Global overrides;
-            // everyone else is rejected.
             const isOwner = ((user as { Type?: string }).Type ?? '').toLowerCase() === 'owner';
             if (!isOwner) {
                 return failure(
                     "FORBIDDEN",
-                    `Override ${ID} is Global. Only Owner-type users can mutate Global overrides; promote / demote them via Component Studio with appropriate privileges.`,
+                    `${label} ${row.ID} is Global. Only Owner-type users can mutate Global rows; promote / demote them via Component Studio with appropriate privileges.`,
                 );
             }
             return null;
@@ -210,9 +254,25 @@ export function checkOverrideOwnership(
         default:
             return failure(
                 "FORBIDDEN",
-                `Override ${ID} has an unrecognized Scope ('${override.Scope}').`,
+                `${label} ${row.ID} has an unrecognized Scope ('${row.Scope}').`,
             );
     }
+}
+
+/** Ownership check for the override-mutation actions (Modify / Activate / Revert). */
+export function checkOverrideOwnership(
+    override: Pick<MJEntityFormOverrideEntity, 'ID' | 'Scope' | 'UserID' | 'RoleID'>,
+    user: UserInfo,
+): ActionResultSimple | null {
+    return checkScopedOwnership(override, user, 'Override');
+}
+
+/** Ownership check for the contribution-mutation actions. */
+export function checkContributionOwnership(
+    contribution: Pick<MJEntityFormContributionEntity, 'ID' | 'Scope' | 'UserID' | 'RoleID'>,
+    user: UserInfo,
+): ActionResultSimple | null {
+    return checkScopedOwnership(contribution, user, 'Contribution');
 }
 
 /**
@@ -261,6 +321,8 @@ export async function insertComponent(opts: {
     version: string;
     versionSequence: number;
     componentStatus: FormLifecycle;
+    /** 'Form' for whole forms (default), 'Widget' for form panels. */
+    componentType?: 'Form' | 'Widget';
 }): Promise<{ id: string } | { error: ActionResultSimple }> {
     const { provider, user, spec, fallbackName, description, version, versionSequence, componentStatus } = opts;
     const component = await provider.GetEntityObject<MJComponentEntity>("MJ: Components", user);
@@ -268,7 +330,7 @@ export async function insertComponent(opts: {
     component.Name = spec.name ?? fallbackName;
     component.Title = spec.title ?? fallbackName;
     component.Description = description ?? spec.description ?? null;
-    component.Type = "Form";
+    component.Type = opts.componentType ?? "Form";
     component.Status = mapToComponentStatus(componentStatus);
     component.Version = version;
     component.VersionSequence = versionSequence;
@@ -404,4 +466,114 @@ export function parseVersionBumpKind(raw: unknown): VersionBumpKind | null {
     if (s === 'minor') return 'minor';
     if (s === 'major') return 'major';
     return null;
+}
+
+// ── form contribution helpers ────────────────────────────────────────────
+
+/**
+ * Permitted character set for a contribution key.
+ *
+ * Keys are compared in SQL filters and matched by `MJ: Form Chrome Rules`, and they
+ * arrive from an LLM. Constraining the character set is stronger than escaping at each
+ * call site: a key that cannot contain a quote cannot break a filter, and a rejected
+ * key is a clear action failure rather than a subtly malformed query.
+ *
+ * The space is permitted because a derived related-grid key embeds an entity name, and
+ * MJ entity names contain spaces by convention (`MJ_BizApps_Orders: Event Order Lines`).
+ * A set without it rejects every derived key. Spaces are not what breaks a SQL string
+ * literal; quotes and control characters are, and neither is in the set.
+ */
+export const CONTRIBUTION_KEY_PATTERN = /^[A-Za-z0-9:._ -]{1,256}$/;
+
+/**
+ * Strips one wrapping `[...]` pair from a join field.
+ *
+ * Byte-identical to `StripJoinFieldBrackets` in `@memberjunction/ng-base-forms`. It is
+ * duplicated rather than imported because an Actions package must not depend on Angular.
+ * Both sides must derive the same key or a persisted key stops matching the one the
+ * renderer computes, and the two contributions never collapse.
+ */
+function stripJoinFieldBrackets(joinField: string | null | undefined): string {
+    return (joinField ?? '').trim().replace(/^\[/, '').replace(/\]$/, '');
+}
+
+/**
+ * The key a row will actually carry. A related-grid claim with no author-supplied key
+ * gets the same `related:<entity>:<join>` value the renderer would derive, so the
+ * unique index sees it.
+ *
+ * Must stay byte-identical to `RelatedContributionKey` in `@memberjunction/ng-base-forms`.
+ */
+export function ResolveWriteContributionKey(
+    contribution: FormContributionSpec,
+    relatedEntityName: string | null,
+): string | null {
+    if (contribution.contributionKey) return contribution.contributionKey;
+    if (!relatedEntityName) return null;
+    return `related:${relatedEntityName.trim()}:${stripJoinFieldBrackets(contribution.relatedJoinField)}`;
+}
+
+/**
+ * Insert a new EntityFormContribution row. Always User-scoped — promotion to Role or
+ * Global is a deliberate human act, not something an agent write path can reach.
+ */
+export async function insertContribution(opts: {
+    provider: IMetadataProvider;
+    user: UserInfo;
+    entityID: string;
+    componentID: string;
+    name: string;
+    description: string | null;
+    notes?: string | null;
+    contribution: FormContributionSpec;
+    /** Resolved related entity — `Name` for the derived key, `ID` for the column. */
+    relatedEntityName: string | null;
+    relatedEntityID: string | null;
+    status: 'Active' | 'Pending';
+    precedence: number;
+}): Promise<{ id: string } | { error: ActionResultSimple }> {
+    const {
+        provider, user, entityID, componentID, name, description, notes,
+        contribution, relatedEntityName, relatedEntityID, status, precedence,
+    } = opts;
+    const row = await provider.GetEntityObject<MJEntityFormContributionEntity>(
+        "MJ: Entity Form Contributions", user,
+    );
+    row.NewRecord();
+    row.EntityID = entityID;
+    row.ComponentID = componentID;
+    row.Name = name;
+    row.Description = description;
+    row.Notes = notes ?? null;
+    row.Slot = contribution.slot;
+    row.SortKey = contribution.sortKey ?? 0;
+    // Derive and persist. A related claim with no author-supplied key resolves to
+    // `related:<entity>:<join>` at render time, but a NULL column is invisible to the
+    // ContributionKey unique index, so two Active rows could otherwise claim the same
+    // grid and the winner would be decided by row order.
+    row.ContributionKey = ResolveWriteContributionKey(contribution, relatedEntityName);
+    row.RelatedEntityID = relatedEntityID;
+    row.RelatedJoinField = contribution.relatedJoinField ?? null;
+    row.ReplacesSectionKey = contribution.replacesSectionKey ?? null;
+    row.Inclusion = contribution.inclusion ?? null;
+    row.ChromeGroup = contribution.chromeGroup ?? null;
+    row.Presentation = contribution.presentation;
+    row.Title = contribution.title;
+    row.Icon = contribution.icon ?? null;
+    row.Configuration = contribution.configuration && Object.keys(contribution.configuration).length > 0
+        ? JSON.stringify(contribution.configuration) : null;
+    // Security clamp: agents write User scope only. Promotion is a human act.
+    row.Scope = "User";
+    row.UserID = user.ID;
+    row.RoleID = null;
+    row.Precedence = precedence;
+    row.Status = status;
+    const saved = await row.Save();
+    if (!saved) {
+        return { error: failure(
+            "PERSIST_FAILED",
+            `Contribution insert failed: ${row.LatestResult?.CompleteMessage ?? "unknown error"}`,
+        ) };
+    }
+    return { id: row.ID };
 }

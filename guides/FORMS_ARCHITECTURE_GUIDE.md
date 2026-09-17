@@ -408,6 +408,42 @@ Extra pane. Does not replace anything. Generated subscription fields stay.
 
 Orders' full custom form already wraps `<mj-record-form-container>` and emits `before-fields`. A contribution registered for Order Headers still mounts there. You do **not** have to replace the whole form to get a hero — start with B, grow to a custom form only when the line editor / tab strip demand it.
 
+#### Scenario I — A contribution that is a database row (no Angular, no build)
+
+A contribution does not have to be compiled. A `MJ: Entity Form Contributions` row points a
+parent entity at a `MJ: Components` row (`Type='Widget'`, spec `componentRole: 'form-panel'`) and
+carries the same registration bag as `@RegisterClassEx` — `Slot`, `SortKey`, `ContributionKey`,
+`RelatedEntityID` + `RelatedJoinField`, `ReplacesSectionKey`, `Inclusion`, `ChromeGroup` — plus
+`Presentation` (`panel` | `bare`), `Title`, `Icon`, `Configuration`, and User / Role / Global scope
+with `Active` / `Pending` / `Inactive` status.
+
+`CollectFormContributionRegistrations(entity, provider)` merges these rows (from
+`InteractiveFormsEngine`) with the ClassFactory registrations. The composer, the slot hosts and the
+chrome layers see **one** list and cannot tell the two sources apart. `<mj-form-panel-slot>` mounts
+a row through `InteractiveFormPanelComponent`, which renders the React component with
+`FormPanelHostProps` inside a collapsible panel — or bare, for a hero.
+
+**Precedence.** Rows and compiled registrations collapse on `contributionKey`. Highest rank wins,
+and **on a tie the compiled registration wins** — an installed app's panel is not displaced by
+accident. A row that deliberately replaces one carries `Precedence = incumbent + 1`, which the
+apply flow sets only after the user confirms.
+
+**Where rows come from.** An OpenApp without Angular ships them under
+`metadata/entity-form-contributions/`. An agent writes them through `Create Form Contribution` /
+`Modify Form Contribution` / `Activate Form Contribution Version`, and
+`Get Form Contributions For Entity` reads back what a user already has. The action family clamps
+**every** write to `Scope='User'` — Global and Role remain human acts.
+
+**Two safety properties worth knowing.** Contributions on identity and authorization surfaces
+(`MJ: Users`, `MJ: Roles`, `MJ: User Roles`, `MJ: Authorizations`, `MJ: Authorization Roles`) are
+dropped at `Global` or `Role` scope when the form resolves them — whatever wrote the row, including
+`mj sync` and direct SQL. And an instance flag
+(`MJ_FORMS_METADATA_CONTRIBUTIONS=false`, or `InteractiveFormsEngine.MetadataContributionsEnabled`)
+turns the whole source off in a running process: the engine loads nothing, the collector returns
+compiled registrations only, and forms render exactly as they did before the feature existed.
+
+L3 `MJ: Form Chrome Rules` still suppresses any of them by `ContributionKey`.
+
 ### 7d. Form chrome — accordion, left-nav, and More
 
 Contributions decide *what* is on the form. Chrome decides *which of those

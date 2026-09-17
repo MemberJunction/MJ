@@ -3,7 +3,13 @@ import { RegisterClass, SafeJSONParse } from '@memberjunction/global';
 import { BaseArtifactViewerPluginComponent, ArtifactViewerTab } from '../base-artifact-viewer.component';
 import { MJReactComponent, AngularAdapterService } from '@memberjunction/ng-react';
 import { BuildComponentCompleteCode, ComponentSpec } from '@memberjunction/interactive-component-types';
-import { isFormRole, getDeclaredFormEntityName } from '@memberjunction/interactive-component-types/forms';
+import {
+  isFormRole, isFormPanelRole, getDeclaredFormEntityName, getDeclaredFormContribution,
+  type FormPanelHostProps,
+} from '@memberjunction/interactive-component-types/forms';
+import {
+  BuildFormPanelHostProps, ContributionSpecToRegistration, ResolveContributionKey,
+} from '@memberjunction/ng-base-forms';
 import { BaseEntity, CompositeKey, DataSnapshot, EntityInfo, LogError, RunView } from '@memberjunction/core';
 import { InteractiveFormComponent } from '@memberjunction/ng-base-forms';
 import { DataRequirementsViewerComponent } from './data-requirements-viewer/data-requirements-viewer.component';
@@ -42,6 +48,12 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
 
   /** True when this artifact's spec declares `componentRole: 'form'`. */
   public isFormArtifact = false;
+
+  /** True for `componentRole: 'form-panel'` — a single contribution, not a whole form. */
+  public isFormPanelArtifact = false;
+
+  /** Host props for the panel preview. Null until a record is bound. */
+  public panelPreviewProps: FormPanelHostProps | null = null;
 
   /** Entity the form targets — resolved from spec.entityName / dataRequirements. */
   public formEntityInfo: EntityInfo | null = null;
@@ -392,6 +404,8 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
    */
   private async detectAndInitFormArtifact(): Promise<void> {
     this.isFormArtifact = false;
+    this.isFormPanelArtifact = false;
+    this.panelPreviewProps = null;
     this.formEntityInfo = null;
     this.formRecord = null;
     this.formRecordIsReal = false;
@@ -399,9 +413,10 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
     this.formInitError = null;
 
     const spec = this.component;
-    if (!spec || !isFormRole(spec)) return;
+    if (!spec || (!isFormRole(spec) && !isFormPanelRole(spec))) return;
 
     this.isFormArtifact = true;
+    this.isFormPanelArtifact = isFormPanelRole(spec);
 
     const entityName = getDeclaredFormEntityName(spec);
     if (!entityName) {
@@ -430,6 +445,7 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
       this.formRecordIsReal = false;
       this.formRecordLabel = 'Mock data';
     }
+    this.rebuildPanelPreviewProps();
     // This runs after an await on a RunView that resolves outside Angular's zone,
     // so nothing would refresh the view until the next user event — leaving the
     // "Could not bind a record" message up until the user clicks. Force CD so the
@@ -539,6 +555,7 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
         this.formRecord = rec;
         this.formRecordIsReal = true;
         this.formRecordLabel = item.Label;
+        this.rebuildPanelPreviewProps();
         this.showRecordPicker = false;
         this.recordSearchTerm = '';
         this.recordSearchResults = [];
@@ -559,6 +576,27 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
    * Source #2 covers the common form-artifact case where the React component lives inside
    * <mj-interactive-form> and resolvedComponentSpec falls back to the stripped local spec.
    */
+  /**
+   * Host props for a form-panel preview. There is no host form here, so permissions
+   * read false and the panel renders as if opened read-only — the preview shows what
+   * the panel looks like, not what it can do once installed.
+   */
+  private rebuildPanelPreviewProps(): void {
+    this.panelPreviewProps = null;
+    if (!this.isFormPanelArtifact || !this.formRecord || !this.formEntityInfo || !this.component) return;
+    const contribution = getDeclaredFormContribution(this.component);
+    if (!contribution) return;
+    const registration = ContributionSpecToRegistration(this.formEntityInfo.Name, contribution);
+    this.panelPreviewProps = BuildFormPanelHostProps({
+      Record: this.formRecord,
+      FormComponent: null,
+      Contribution: registration,
+      SectionKey: ResolveContributionKey(registration.Metadata) || `preview:${this.component.name}`,
+      Layout: 'accordion',
+      IsExpanded: true,
+    });
+  }
+
   public async onApplyClicked(): Promise<void> {
     if (!this.formEntityInfo) return;
 

@@ -45,6 +45,7 @@
     "@memberjunction/interactive-component-types": "6.1.0-edge.5",
     "@memberjunction/ng-agent-client": "6.1.0-edge.5",
     "@memberjunction/ng-artifacts": "6.1.0-edge.5",
+    "@memberjunction/ng-base-forms": "6.1.0-edge.5",
     "@memberjunction/ng-base-types": "6.1.0-edge.5",
     "@memberjunction/ng-code-editor": "6.1.0-edge.5",
     "@memberjunction/ng-composer": "6.1.0-edge.5",

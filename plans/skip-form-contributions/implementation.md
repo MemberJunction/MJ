@@ -4407,20 +4407,35 @@ git add packages/Angular/Generic/base-forms/src/lib/interactive-form/form-panel-
 | 1 | Entity `MJ: Entity Form Contributions` exists with every column from A2, the two filtered indexes, and the three CHECK constraints | A migration that lands partially, or a CodeGen run that drops a column |
 | 2 | `Create Form Contribution` with a valid spec produces a `Type='Widget'` component and a `Pending`, `User`-scope row whose `ContributionKey` is persisted (including the derived `related:…` form) | The keyless-claim hole |
 | 3 | A second `Create` for the same key returns `ALREADY_EXISTS`; a second keyless claim on the same relationship is refused by the index | Duplicate claims decided by row order |
-| 4 | `Create` against `MJ: Users` at `Global` scope returns `RESTRICTED_ENTITY`; the same at `User` scope succeeds | The §16 clamp, on the action path |
+| 4 | ~~`Create` against `MJ: Users` at `Global` scope returns `RESTRICTED_ENTITY`~~ — **not writable as specified.** `Create` takes no scope and clamps every write to `User`, so the code is unreachable. Rewritten as **FC6/FC7**: a `Global` row written directly onto `MJ: Users` is dropped by `GetApplicableContributions`, and the caller's own `User` row is not | The §16 clamp, at the read path where it is actually enforced (design §17.2) |
 | 5 | `Activate Form Contribution Version` deactivates the prior Active row sharing the key | Two Active winners |
-| 6 | `Get Form Composition For Entity` returns the metadata-derivable subset and states that it cannot see compiled panels | The D3 fallback silently claiming completeness |
-| 7 | `InteractiveFormsEngine.Config` loads a contribution's component through the reference-scoped filter, and re-loads it when a new row references a component the cache did not hold | Decision 2a's invalidation coupling — the one failure mode the narrow filter introduces |
+| 6 | `Get Form Composition For Entity` returns the metadata-derivable subset and states that it cannot see compiled panels | The D3 fallback silently claiming completeness. **Deferred with D3** — the action does not exist yet |
+| 7 | ~~`InteractiveFormsEngine.Config` loads a contribution's component through the reference-scoped filter~~ | **Dropped.** Decision 2a was reverted in Phase A (design §17.1); there is no reference-scoped filter and no invalidation coupling left to test |
 | 8 | With the kill switch off, the engine loads no contributions and the collector returns class registrations only | The rollback path actually rolling back |
 
-Checks 1–6 are Phase B work. Check 7 exercises A3 and check 8 exercises §16; both belong here because the bundle is the first place they can run against a real database.
+**As built — `form-contributions` (FC1–FC8), Test row `IT88 - Form Contributions`:**
+
+| Check | Covers |
+|---|---|
+| FC1 | The migration landed whole: every column, both filtered uniqueness indexes, the eight CHECK constraints |
+| FC2 | `Create` persists a `Type='Widget'` component and a `Pending`, `User`-scope row carrying its key |
+| FC3 | A keyless related claim persists the derived `related:<entity>:<join>` key, brackets stripped |
+| FC4 | A second `Create` on the same key returns `ALREADY_EXISTS` |
+| FC5 | `Activate` promotes the draft and demotes the Active sibling sharing the key |
+| FC6 | A `Global` row on `MJ: Users`, written directly, never reaches a form |
+| FC7 | A `User`-scope row on the same entity still does |
+| FC8 | The kill switch leaves the engine with no contributions at all |
+
+FC5 and FC8 both failed on their first run against a real database and found real defects —
+the activation ordering (design §17.4) and the kill switch's read side (§17.3). That is the
+bundle paying for itself before it ever guarded a regression.
 
 ```bash
-pnpm mj test run "IT — Form Contributions"
+MJ_INTEGRATION_TEST=1 ./node_modules/.bin/mj test run --name "IT88 - Form Contributions"
 pnpm run test:integration
 ```
 
-Expected: the new bundle green, and the whole deterministic tier still green.
+Status: **green** — FC1–FC8 pass, and the whole deterministic tier passes (66 tests, 0 failures).
 
 Phase B done-when: `pnpm run test:integration` green from the MJ root after migrate + codegen, **including the new bundle**; a form-panel artifact applies, activates, and mounts on the next open of the record.
 
@@ -5865,6 +5880,75 @@ git add guides/FORMS_ARCHITECTURE_GUIDE.md packages/Angular/Generic/base-forms/P
 Also confirm the changeset covers the testing-framework package if B5's bundle lives in one that publishes. The gates are Skip-Brain's `packages/component-engine` and are versioned in that repo, not here.
 
 ---
+
+# Task G: Remove the PR #2609 worked example (MJ)
+
+`InteractiveApplicationForm` is the worked example that shipped with PR #2609 to prove the
+Interactive Forms substrate end-to-end. It routes every `MJ: Applications` record to a React
+form that labels itself "PR #2609 example" on screen. The substrate is proven once this plan
+lands, so the example comes out — it is demo data on a core entity, and no deployment should
+inherit it.
+
+Do this LAST. The example is the only end-to-end exercise of the whole-form path in the repo,
+so A10 and any manual whole-form verification need it present.
+
+**Files:**
+- Modify: `metadata/entity-form-overrides/.entity-form-overrides.json` (remove the only row; leave `[]`)
+- Modify: `metadata/components/.components.json` (remove the `InteractiveApplicationForm` entry)
+- Delete: `metadata/components/spec/interactive-application-form.spec.json`
+- Delete: `metadata/components/code/interactive-application-form.js`
+- Create: `migrations/v6/V<ts>__v6.1.x__Remove_PR2609_Example_Form.sql`
+
+Keep `metadata/entity-form-overrides/.mj-sync.json` — that is the directory's sync config for
+`MJ: Entity Form Overrides`, not example data.
+
+- [ ] **Step 1: Confirm the example is still unreferenced**
+
+```bash
+grep -rln "InteractiveApplicationForm\|interactive-application-form" . \
+  --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=dist
+```
+
+Expect only the four metadata files above and the v5 migrations. The v5 migrations are applied
+history — **do not edit them**; Step 3 removes the rows they created.
+
+- [ ] **Step 2: Remove the metadata**
+
+Delete the spec and code files and their two parent entries. `.entity-form-overrides.json`
+holds exactly one row, so the file becomes `[]`.
+
+- [ ] **Step 3: Migration to delete the rows from deployed databases**
+
+`mj sync` does not delete rows that disappear from a metadata file, and the v5 baselines
+already inserted these into every existing database. Delete by primary key, override first —
+`EntityFormOverride.ComponentID` is a foreign key to `Component`:
+
+```sql
+DELETE FROM [__mj].[EntityFormOverride]
+WHERE [ID] = 'D9AE968C-CB29-435A-AD73-D9962CE9898F';
+
+DELETE FROM [__mj].[Component]
+WHERE [ID] = 'A0D8DC78-9E2D-4866-91F4-7B474B2E7A9F';
+```
+
+Both are idempotent — a database that never received the example is unaffected.
+
+- [ ] **Step 4: Verify**
+
+Run `mj migrate`, then open an `MJ: Applications` record in Explorer. It must render the
+generated Angular form with no "PR #2609 example" badge, and the console must show no
+form-resolution error.
+
+**Note for whoever does this:** the example also exposes a live inconsistency worth fixing
+separately. Its `Component.Type` is `Other` while its specification declares
+`componentRole: 'form'`, so `InteractiveFormsEngine`'s `Filter: "Type='Form'"` never caches
+it and every open falls back to the one-shot `RunView` in `InteractiveFormComponent`. Removing
+the example removes today's only instance of the mismatch but not its cause: a whole form
+authored with `Type` set to anything but `Form` will be uncacheable in the same way. That is a
+pre-existing defect on `main`, not this plan's, and it wants its own fix.
+
+---
+
 
 ## Self-review
 

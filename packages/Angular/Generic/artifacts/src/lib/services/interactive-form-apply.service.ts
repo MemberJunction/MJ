@@ -22,19 +22,37 @@ import { GraphQLActionClient, GraphQLDataProvider } from '@memberjunction/graphq
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJDialogService } from '@memberjunction/ng-ui-components';
 import type { ComponentSpec } from '@memberjunction/interactive-component-types';
+import {
+    getDeclaredFormContribution, isFormPanelRole, type FormContributionSpec,
+} from '@memberjunction/interactive-component-types/forms';
+import type { FormCompositionSnapshot } from '@memberjunction/ng-base-forms';
 
 /** Result of an apply attempt — surfaced to the caller for any post-apply UI. */
 export interface InteractiveFormApplyResult {
     Success: boolean;
+    /** `'form'` for a whole-form override, `'contribution'` for a single form panel. */
+    Kind?: 'form' | 'contribution';
     /** Mode the server ran: 'create' / 'modify-new-version' / 'modify-in-place'. */
     Mode?: 'create' | 'modify-new-version' | 'modify-in-place';
     /** OverrideID the user can now reference. */
     OverrideID?: string;
+    /** Contribution row the user can now reference — panel applies only. */
+    ContributionID?: string;
     /** ComponentID that now holds the spec. */
     ComponentID?: string;
     /** Version string (e.g. '1.0.0' for create, '1.1.0' for modify-new). */
     Version?: string;
     Message?: string;
+}
+
+/** The subset of a `Get Form Contributions For Entity` row this service reads. */
+interface ParsedContribution {
+    ContributionID: string;
+    ContributionKey: string | null;
+    Status: string;
+    Scope: string;
+    Name?: string;
+    ComponentName?: string | null;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -50,6 +68,7 @@ export class InteractiveFormApplyService {
         spec: ComponentSpec,
         entityName: string,
         provider?: IMetadataProvider,
+        snapshot: FormCompositionSnapshot | null = null,
     ): Promise<InteractiveFormApplyResult> {
         const p = provider ?? Metadata.Provider;
         if (!p) {
@@ -70,6 +89,12 @@ export class InteractiveFormApplyService {
 
         const client = new GraphQLActionClient(gqlProvider);
 
+        // A form panel is a contribution, not a whole-form override — a different
+        // action family and a different set of confirmations.
+        if (isFormPanelRole(spec)) {
+            return this.applyContribution(spec, entity.Name, client, p, snapshot);
+        }
+
         // Step 1: detect existing state via Get Active Form For Entity.
         const activeResult = await this.runActionByName(client, 'Get Active Form For Entity', [
             { Name: 'EntityName', Value: entityName, Type: 'Input' },
@@ -86,7 +111,7 @@ export class InteractiveFormApplyService {
         // Step 2: confirm with the user.
         const proceed = await this.confirm(hasExistingOverride, entityName, existingOverride?.ComponentVersion);
         if (!proceed) {
-            return { Success: false, Message: 'Cancelled by user.' };
+            return { Success: false, Kind: 'form', Message: 'Cancelled by user.' };
         }
 
         // Step 3: run Create or Modify.
@@ -140,6 +165,212 @@ export class InteractiveFormApplyService {
             ? await this.activateCreatedOverride(client, createResult.Message, p)
             : false;
         return this.summarize(createResult, 'create', user, activated);
+    }
+
+    // ── form-panel contributions ─────────────────────────────────────────
+
+    /**
+     * Apply a `componentRole: 'form-panel'` spec as a `MJ: Entity Form Contributions`
+     * row for the calling user.
+     *
+     * Two confirmations happen before anything is written, both driven by the live
+     * composition snapshot when the caller supplies one for this entity:
+     *
+     *  - **A `replacesSectionKey` that names no section on the current form.** Left
+     *    alone the panel would replace nothing and mount silently at its slot, which
+     *    reads as a bug. The user is offered the extra-pane fallback, and declining
+     *    cancels.
+     *  - **An installed compiled contribution holding the same key.** Compiled wins
+     *    ties by design, so replacing one is never implicit: on confirmation the new
+     *    row takes `incumbent + 1`.
+     */
+    private async applyContribution(
+        spec: ComponentSpec,
+        entityName: string,
+        client: GraphQLActionClient,
+        provider: IMetadataProvider,
+        snapshot: FormCompositionSnapshot | null,
+    ): Promise<InteractiveFormApplyResult> {
+        const contribution = getDeclaredFormContribution(spec);
+        if (!contribution) {
+            return this.fail('This component declares componentRole form-panel but has no readable formContribution block.');
+        }
+        // A snapshot for a different entity tells us nothing about this form.
+        const sameEntity = snapshot && snapshot.Entity === entityName ? snapshot : null;
+
+        if (!(await this.resolveMissingSectionKey(contribution, entityName, sameEntity))) {
+            return { Success: false, Kind: 'contribution', Message: 'Cancelled by user.' };
+        }
+
+        const key = this.writeKeyFor(contribution);
+        const precedence = await this.resolvePrecedence(key, sameEntity);
+        if (precedence === null) {
+            return { Success: false, Kind: 'contribution', Message: 'Cancelled by user.' };
+        }
+
+        const existingResult = await this.runActionByName(client, 'Get Form Contributions For Entity', [
+            { Name: 'EntityName', Value: entityName, Type: 'Input' },
+        ], provider);
+        if (!existingResult.Success) {
+            return this.fail(`Could not check existing contributions: ${existingResult.Message ?? 'unknown error'}`);
+        }
+        const existing = this.parseContributions(existingResult.Message).find(c =>
+            !!key && c.ContributionKey === key && c.Scope === 'User'
+            && (c.Status === 'Active' || c.Status === 'Pending'));
+
+        const proceed = await this.ask(
+            'Add this to your form?',
+            existing
+                ? `You already have "${existing.Name ?? key}" on "${entityName}". Applying creates a new version and makes it active for your user.`
+                : `This adds "${contribution.title}" to the "${entityName}" form at ${contribution.slot}, for your user only.`,
+            'Add',
+        );
+        if (!proceed) return { Success: false, Kind: 'contribution', Message: 'Cancelled by user.' };
+
+        const specToSend: ComponentSpec = { ...spec, formContribution: contribution };
+        const { result, mode } = existing
+            ? await this.modifyContribution(client, provider, specToSend, existing)
+            : await this.createContribution(client, provider, specToSend, entityName, contribution, precedence);
+
+        if (!result.Success) {
+            this.notifications.CreateSimpleNotification(
+                `Add failed: ${result.Message ?? result.ResultCode ?? 'unknown error'}`, 'error', 5000);
+            return { Success: false, Kind: 'contribution', Message: result.Message };
+        }
+
+        let payload: { ContributionID?: string; ComponentID?: string; Version?: string } = {};
+        try { payload = JSON.parse(result.Message ?? '{}'); } catch { /* best effort */ }
+
+        const activated = payload.ContributionID
+            ? await this.activateContribution(client, provider, payload.ContributionID)
+            : false;
+        this.notifications.CreateSimpleNotification(
+            activated
+                ? `"${contribution.title}" is now on your ${entityName} form.`
+                : `"${contribution.title}" was saved as a Pending draft. Activate it from Form Studio.`,
+            'success', 4000,
+        );
+        return {
+            Success: true, Kind: 'contribution', Mode: mode,
+            ContributionID: payload.ContributionID, ComponentID: payload.ComponentID,
+            Version: payload.Version, Message: result.Message,
+        };
+    }
+
+    /**
+     * Drops a `replacesSectionKey` that names no section on the live form, with the
+     * user's consent. Returns false when the user cancels instead.
+     */
+    private async resolveMissingSectionKey(
+        contribution: FormContributionSpec,
+        entityName: string,
+        snapshot: FormCompositionSnapshot | null,
+    ): Promise<boolean> {
+        const replaces = contribution.replacesSectionKey;
+        if (!replaces || !snapshot) return true;
+        if (snapshot.Sections.some(s => s.Key === replaces)) return true;
+        const mountAsPane = await this.ask(
+            'Section not found',
+            `The current "${entityName}" form has no section "${replaces}", so nothing would be replaced. Add this as an extra pane instead?`,
+            'Add as extra pane',
+        );
+        if (!mountAsPane) return false;
+        delete contribution.replacesSectionKey;
+        return true;
+    }
+
+    /**
+     * Precedence for a new row: 0 normally, or one above an installed compiled
+     * contribution the user has agreed to replace. Null means the user cancelled.
+     */
+    private async resolvePrecedence(
+        key: string | null,
+        snapshot: FormCompositionSnapshot | null,
+    ): Promise<number | null> {
+        const incumbent = key
+            ? snapshot?.Contributions.find(c => c.Key === key && c.Source === 'class')
+            : undefined;
+        if (!incumbent) return 0;
+        const replace = await this.ask(
+            'Replace an installed contribution?',
+            `An installed app already provides "${incumbent.Title}" on this form. Replace it with this panel for your user?`,
+            'Replace',
+        );
+        return replace ? incumbent.Precedence + 1 : null;
+    }
+
+    /**
+     * The key the row will carry. Must stay byte-identical to the write path's
+     * `ResolveWriteContributionKey` and the renderer's `RelatedContributionKey`, or the
+     * duplicate lookup and the incumbent lookup both miss.
+     */
+    private writeKeyFor(contribution: FormContributionSpec): string | null {
+        if (contribution.contributionKey) return contribution.contributionKey;
+        if (!contribution.relatedEntity) return null;
+        const join = (contribution.relatedJoinField ?? '').trim().replace(/^\[/, '').replace(/\]$/, '');
+        return `related:${contribution.relatedEntity.trim()}:${join}`;
+    }
+
+    private async createContribution(
+        client: GraphQLActionClient,
+        provider: IMetadataProvider,
+        spec: ComponentSpec,
+        entityName: string,
+        contribution: FormContributionSpec,
+        precedence: number,
+    ): Promise<{ result: { Success: boolean; Message?: string; ResultCode?: string }; mode: InteractiveFormApplyResult['Mode'] }> {
+        const result = await this.runActionByName(client, 'Create Form Contribution', [
+            { Name: 'EntityName', Value: entityName, Type: 'Input' },
+            { Name: 'Name', Value: contribution.title, Type: 'Input' },
+            { Name: 'Spec', Value: JSON.stringify(spec), Type: 'Input' },
+            { Name: 'Precedence', Value: String(precedence), Type: 'Input' },
+        ], provider);
+        return { result, mode: 'create' };
+    }
+
+    private async modifyContribution(
+        client: GraphQLActionClient,
+        provider: IMetadataProvider,
+        spec: ComponentSpec,
+        existing: ParsedContribution,
+    ): Promise<{ result: { Success: boolean; Message?: string; ResultCode?: string }; mode: InteractiveFormApplyResult['Mode'] }> {
+        // Modify operates on a Component lineage keyed by Name, same as the whole-form path.
+        if (existing.ComponentName) this.alignSpecToLineage(spec, existing.ComponentName);
+        const isPending = existing.Status === 'Pending';
+        const result = await this.runActionByName(client, 'Modify Form Contribution', [
+            { Name: 'ContributionID', Value: existing.ContributionID, Type: 'Input' },
+            { Name: 'Spec', Value: JSON.stringify(spec), Type: 'Input' },
+            { Name: 'Notes', Value: `Applied from chat artifact at ${new Date().toISOString()}`, Type: 'Input' },
+            { Name: 'VersionBumpKind', Value: isPending ? 'in-place' : 'minor', Type: 'Input' },
+        ], provider);
+        return { result, mode: isPending ? 'modify-in-place' : 'modify-new-version' };
+    }
+
+    /**
+     * Best-effort activation. On failure the row stays a Pending draft the user can
+     * activate from Form Studio, so we log rather than failing the whole apply.
+     */
+    private async activateContribution(
+        client: GraphQLActionClient,
+        provider: IMetadataProvider,
+        contributionID: string,
+    ): Promise<boolean> {
+        const act = await this.runActionByName(client, 'Activate Form Contribution Version', [
+            { Name: 'ContributionID', Value: contributionID, Type: 'Input' },
+        ], provider);
+        if (!act.Success) {
+            LogError(`InteractiveFormApplyService: contribution ${contributionID} created but activation failed: ${act.Message ?? 'unknown error'}`);
+        }
+        return act.Success;
+    }
+
+    private parseContributions(message: string | undefined): ParsedContribution[] {
+        if (!message) return [];
+        try {
+            return (JSON.parse(message) as { Contributions?: ParsedContribution[] }).Contributions ?? [];
+        } catch {
+            return [];
+        }
     }
 
     // ── internals ────────────────────────────────────────────────────────
@@ -267,12 +498,17 @@ export class InteractiveFormApplyService {
         // undefined for backdrop/X dismissal). Detect intent via the
         // `primary` flag — Apply / Create Pending are the primary actions;
         // Cancel and dismissal both resolve false.
+        return this.ask('Apply this form?', content, 'Apply');
+    }
+
+    /** Two-button confirm; resolves true when the user picks the primary action. */
+    private async ask(title: string, content: string, primaryText: string): Promise<boolean> {
         const ref = this.dialog.Open({
-            title: 'Apply this form?',
+            title,
             content,
             width: 540,
             actions: [
-                { text: 'Apply', primary: true, themeColor: 'primary' },
+                { text: primaryText, primary: true, themeColor: 'primary' },
                 { text: 'Cancel' },
             ],
         });
@@ -309,7 +545,7 @@ export class InteractiveFormApplyService {
                 `Apply failed: ${result.Message ?? result.ResultCode ?? 'unknown error'}`,
                 'error', 5000,
             );
-            return { Success: false, Message: result.Message };
+            return { Success: false, Kind: 'form', Message: result.Message };
         }
         let payload: Record<string, unknown> = {};
         try { payload = JSON.parse(result.Message ?? '{}'); } catch { /* best effort */ }
@@ -328,6 +564,7 @@ export class InteractiveFormApplyService {
         this.notifications.CreateSimpleNotification(note, 'success', 4000);
         return {
             Success: true,
+            Kind: 'form',
             Mode: mode,
             OverrideID: payload.OverrideID as string | undefined,
             ComponentID: payload.ComponentID as string | undefined,
