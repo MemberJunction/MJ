@@ -1,5 +1,13 @@
 import { Injectable, EventEmitter } from '@angular/core';
-import { ActionableCommand, AutomaticCommand, RefreshDataCommand, OpenURLCommand } from '@memberjunction/ai-core-plus';
+import {
+  ActionableCommand,
+  AutomaticCommand,
+  RefreshDataCommand,
+  OpenURLCommand,
+  ComposeEmailCommand,
+  BuildMailtoURL,
+  IsMailtoURLWithinLimit
+} from '@memberjunction/ai-core-plus';
 import { DataCacheService } from './data-cache.service';
 
 export interface ActionableCommandRequest {
@@ -41,15 +49,25 @@ export class UICommandHandlerService {
   public async executeActionableCommand(command: ActionableCommand, origin?: Omit<ActionableCommandRequest, 'command'>): Promise<void> {
     if (command.type === 'open:url') {
       this.handleOpenUrl(command);
-    } else {
-      // open:resource requires app-specific navigation — emit for host to handle
-      console.log('📤 Emitting actionable command for host app:', command);
-      this.actionableCommandRequested.emit({
-        command,
-        conversationId: origin?.conversationId ?? null,
-        conversationDetailId: origin?.conversationDetailId ?? null
-      });
+      return;
     }
+
+    if (command.type === 'compose:email') {
+      const openedMailClient = this.handleComposeEmail(command);
+      if (openedMailClient) {
+        return;
+      }
+      // Too long for a mailto: URL. Deliberately falls through to the host, which opens the full
+      // Email Draft artifact instead of opening a truncated compose window.
+    }
+
+    // open:resource (and the compose:email fallback above) require app-specific navigation
+    console.log('📤 Emitting actionable command for host app:', command);
+    this.actionableCommandRequested.emit({
+      command,
+      conversationId: origin?.conversationId ?? null,
+      conversationDetailId: origin?.conversationDetailId ?? null
+    });
   }
 
   /**
@@ -66,6 +84,48 @@ export class UICommandHandlerService {
       const target = newTab ? '_blank' : '_self';
       window.open(url, target, target === '_blank' ? 'noopener,noreferrer' : undefined);
     }
+  }
+
+  /**
+   * Handle compose:email by opening the user's own mail client with the fields pre-filled.
+   *
+   * NOTHING IS SENT HERE. The agent drafted; the user sends. This only opens a compose window.
+   *
+   * @returns true when the mail client was opened; false when the draft is too long for a
+   *          mailto: URL, in which case the caller must fall back to the host (which opens the
+   *          artifact). We do NOT open an over-long URL: a mail client past its limit does not
+   *          refuse it, it opens a draft with the body SILENTLY TRUNCATED and the user sends half
+   *          a message without noticing.
+   */
+  private handleComposeEmail(command: ComposeEmailCommand): boolean {
+    const url = BuildMailtoURL(command);
+    if (!IsMailtoURLWithinLimit(url)) {
+      // Best-effort convenience so the text is not lost. Unavailable over plain HTTP and deniable
+      // by permissions policy, so it must never gate the fallback.
+      if (command.body) {
+        navigator.clipboard?.writeText(command.body).catch(() => {
+          /* clipboard unavailable — the artifact still carries the full draft */
+        });
+      }
+      return false;
+    }
+    this.openMailto(url);
+    return true;
+  }
+
+  /**
+   * Open a mailto: URL via a synthesized anchor click.
+   *
+   * Deliberately not window.open: Chrome treats window.open with a non-http scheme as a popup and
+   * strands an about:blank tab behind the compose window.
+   */
+  private openMailto(url: string): void {
+    const a = document.createElement('a');
+    a.href = url;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   }
 
   /**

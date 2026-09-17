@@ -2,7 +2,8 @@
 type ActionableCommand =
     | OpenResourceCommand
     | OpenURLCommand
-    | CaptureDataSnapshotCommand;
+    | CaptureDataSnapshotCommand
+    | ComposeEmailCommand;
 
 interface OpenResourceCommand {
     type: 'open:resource';  // Command type identifier
@@ -58,5 +59,17 @@ interface ShowNotificationCommand {
     message: string;  // Message text to display.
     severity?: 'success' | 'info' | 'warning' | 'error';  // Severity level affecting icon and color:
     duration?: number;  // Duration in milliseconds before auto-dismissing.
+}
+
+interface ComposeEmailCommand {
+    type: 'compose:email';  // Command type identifier
+    label: string;  // Button label shown to the user.
+    icon?: string;  // Optional Font Awesome icon class to display on the button.
+    to?: string[];  // Recipient addresses.
+    cc?: string[];  // Carbon-copy addresses. Same rule as {@link to}: omit rather than guess.
+    bcc?: string[];  // Blind-carbon-copy addresses. Same rule as {@link to}: omit rather than guess.
+    subject?: string;  // Subject line.
+    body?: string;  // Body text. PLAIN TEXT only — see the note on this interface.
+    artifactId?: string;  // Optional artifact holding the full draft.
 }
 ```

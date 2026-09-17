@@ -13,7 +13,7 @@
  * @see https://learn.microsoft.com/en-us/adaptive-cards/
  */
 
-import { ExecuteAgentResult, MJAIAgentEntityExtended, ActionableCommand, OpenResourceCommand, AutomaticCommand, MediaOutput, AgentResponseForm, FormQuestion } from '@memberjunction/ai-core-plus';
+import { ExecuteAgentResult, MJAIAgentEntityExtended, ActionableCommand, OpenResourceCommand, ComposeEmailCommand, AutomaticCommand, MediaOutput, AgentResponseForm, FormQuestion } from '@memberjunction/ai-core-plus';
 import { buildExplorerDeepLink, isOpenableURI, splitMarkdownIntoSections } from '../base/message-formatter.js';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -264,20 +264,48 @@ export function buildArtifactCard(
  * (unlike Slack, there is no file-upload path here).
  */
 export function buildUnopenableResourceNotes(commands: ActionableCommand[]): Record<string, unknown>[] {
-    const labels = commands
-        .slice(0, 5)
-        .filter(cmd => cmd.type === 'open:url' && 'url' in cmd && !isOpenableURI(cmd.url))
-        .map(cmd => cmd.label ?? 'File');
+    const notes: string[] = [];
 
-    if (labels.length === 0) return [];
+    for (const cmd of commands.slice(0, 5)) {
+        if (cmd.type === 'open:url' && 'url' in cmd && !isOpenableURI(cmd.url)) {
+            notes.push(`📄 _${cmd.label ?? 'File'} — open it with "View in MJ Explorer" below._`);
+        } else if (cmd.type === 'compose:email') {
+            // A mailto: URL fails isOpenableURI, so buildActionButtons drops it. Without this note
+            // the command would render as nothing at all and the user would never learn a draft
+            // exists. Name the recipient and subject so the note identifies WHICH draft.
+            notes.push(formatComposeEmailNote(cmd));
+        }
+    }
 
-    return labels.map(label => ({
+    if (notes.length === 0) return [];
+
+    return notes.map(text => ({
         type: 'TextBlock',
-        text: `📄 _${label} — open it with "View in MJ Explorer" below._`,
+        text,
         wrap: true,
         isSubtle: true,
         spacing: 'Small',
     }));
+}
+
+/**
+ * Describe a `compose:email` command for a Teams body note.
+ *
+ * Teams cannot open a `mailto:` from an Action.OpenUrl (its URI check accepts http/https only), so
+ * the draft is described and the user is pointed at Explorer, where the Email Draft artifact holds
+ * the full text.
+ */
+function formatComposeEmailNote(cmd: ComposeEmailCommand): string {
+    const parts: string[] = [];
+    const to = (cmd.to ?? []).filter(r => r.trim().length > 0);
+    if (to.length > 0) {
+        parts.push(`to ${to.join(', ')}`);
+    }
+    if (cmd.subject) {
+        parts.push(cmd.subject);
+    }
+    const detail = parts.length > 0 ? ` (${parts.join(' — ')})` : '';
+    return `✉️ _${cmd.label ?? 'Email draft'}${detail} — open it with "View in MJ Explorer" below to send._`;
 }
 
 /**

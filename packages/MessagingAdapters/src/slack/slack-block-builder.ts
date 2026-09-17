@@ -9,7 +9,7 @@
  * @see https://api.slack.com/reference/block-kit
  */
 
-import { ExecuteAgentResult, MJAIAgentEntityExtended, ActionableCommand, OpenResourceCommand, AutomaticCommand, AgentResponseForm, FormQuestion, MediaOutput } from '@memberjunction/ai-core-plus';
+import { ExecuteAgentResult, MJAIAgentEntityExtended, ActionableCommand, OpenResourceCommand, ComposeEmailCommand, AutomaticCommand, AgentResponseForm, FormQuestion, MediaOutput } from '@memberjunction/ai-core-plus';
 import { parseBase64DataUrl } from '@memberjunction/ai';
 import { LogStatus } from '@memberjunction/core';
 import { markdownToBlocks } from './slack-formatter.js';
@@ -371,6 +371,12 @@ export function buildActionButtons(commands: ActionableCommand[], explorerBaseUR
       } else {
         resourceInfoItems.push(`<${cmd.url}|${escapeMrkdwn(cmd.label) || 'Open link'}>`);
       }
+    } else if (cmd.type === 'compose:email') {
+      // A mailto: URL fails isOpenableURI (http/https only), so Slack would silently drop a button
+      // built from one — and without an explicit branch the command renders as NOTHING AT ALL.
+      // Degrade to a note naming the draft and pointing back at Explorer, where the Email Draft
+      // artifact carries the full text.
+      resourceInfoItems.push(formatComposeEmailInfo(cmd));
     } else if (cmd.type === 'open:resource') {
       const resourceCmd = cmd as OpenResourceCommand;
       const deepLink = buildExplorerDeepLink(resourceCmd, explorerBaseURL);
@@ -403,6 +409,26 @@ export function buildActionButtons(commands: ActionableCommand[], explorerBaseUR
   }
 
   return blocks;
+}
+
+/**
+ * Describe a `compose:email` command as text for a context block.
+ *
+ * Slack cannot open a `mailto:` link from a button (its URL check accepts http/https only), so the
+ * draft is described rather than offered. The recipient and subject are included because they are
+ * what makes the note actionable — the reader can recognise which draft it refers to.
+ */
+function formatComposeEmailInfo(cmd: ComposeEmailCommand): string {
+  const parts: string[] = [];
+  const to = (cmd.to ?? []).filter((r) => r.trim().length > 0);
+  if (to.length > 0) {
+    parts.push(`to ${escapeMrkdwn(to.join(', '))}`);
+  }
+  if (cmd.subject) {
+    parts.push(`_${escapeMrkdwn(cmd.subject)}_`);
+  }
+  const detail = parts.length > 0 ? ` (${parts.join(' — ')})` : '';
+  return `✉️ _${escapeMrkdwn(cmd.label) || 'Email draft'}${detail} — open it in MJ Explorer to send._`;
 }
 
 /**

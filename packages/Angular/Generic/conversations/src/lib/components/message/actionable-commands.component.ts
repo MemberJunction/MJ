@@ -46,6 +46,9 @@ export class ActionableCommandsComponent {
   public getButtonVariant(command: ActionableCommand): 'primary' | 'secondary' | 'outline' | 'flat' {
     if (command.type === 'open:resource') {
       return 'primary';
+    } else if (command.type === 'compose:email') {
+      // A drafted email is the turn's call to action, so it leads.
+      return 'primary';
     } else if (command.type === 'open:url') {
       return 'outline';
     }

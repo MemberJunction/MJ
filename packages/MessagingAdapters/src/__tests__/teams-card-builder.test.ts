@@ -734,3 +734,33 @@ describe('teams-card-builder', () => {
         });
     });
 });
+
+describe('buildUnopenableResourceNotes — compose:email', () => {
+    // Teams drops a mailto: Action.OpenUrl (isOpenableURI is http/https only), so without a body
+    // note the command renders as nothing and the user never learns a draft exists.
+    const cmd = (over: Record<string, unknown> = {}) => ({
+        type: 'compose:email' as const,
+        label: 'Open draft in Mail',
+        to: ['bob@example.com'],
+        subject: 'Membership renewal',
+        ...over,
+    });
+
+    it('emits a note naming the recipient and subject', () => {
+        const notes = buildUnopenableResourceNotes([cmd()]);
+        expect(notes.length).toBe(1);
+        const text = JSON.stringify(notes);
+        expect(text).toContain('bob@example.com');
+        expect(text).toContain('Membership renewal');
+    });
+
+    it('never puts a mailto: URL in an action button', () => {
+        const actions = buildActionButtons([cmd()]);
+        expect(JSON.stringify(actions)).not.toContain('mailto:');
+        expect(actions).toHaveLength(0);
+    });
+
+    it('still names the draft with no recipient', () => {
+        expect(JSON.stringify(buildUnopenableResourceNotes([cmd({ to: undefined })]))).toContain('Open draft in Mail');
+    });
+});

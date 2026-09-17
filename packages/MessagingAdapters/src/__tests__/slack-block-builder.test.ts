@@ -947,3 +947,36 @@ describe('slack-block-builder', () => {
     });
 
 });
+
+describe('buildActionButtons — compose:email', () => {
+    // A mailto: URL fails isOpenableURI (http/https only), so a button built from one is dropped.
+    // Without an explicit branch the command renders as NOTHING AT ALL — these assertions are what
+    // stop that regressing back to silence.
+    const cmd = (over: Record<string, unknown> = {}) => ({
+        type: 'compose:email' as const,
+        label: 'Open draft in Mail',
+        to: ['bob@example.com'],
+        subject: 'Membership renewal',
+        ...over,
+    });
+
+    it('renders a context note rather than nothing', () => {
+        const blocks = buildActionButtons([cmd()]);
+        expect(blocks.length).toBeGreaterThan(0);
+        const text = JSON.stringify(blocks);
+        expect(text).toContain('bob@example.com');
+        expect(text).toContain('Membership renewal');
+    });
+
+    it('never emits a button carrying a mailto: URL', () => {
+        const blocks = buildActionButtons([cmd()]);
+        expect(JSON.stringify(blocks)).not.toContain('mailto:');
+        const actions = blocks.filter((b) => (b as { type?: string }).type === 'actions');
+        expect(actions).toHaveLength(0);
+    });
+
+    it('still names the draft when no recipient is known', () => {
+        const blocks = buildActionButtons([cmd({ to: undefined })]);
+        expect(JSON.stringify(blocks)).toContain('Open draft in Mail');
+    });
+});
