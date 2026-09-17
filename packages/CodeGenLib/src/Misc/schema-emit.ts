@@ -10,6 +10,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import { ordinalCompare } from '@memberjunction/global';
 
 import { writeFileIfChanged } from './file-write';
 
@@ -203,7 +204,7 @@ export function buildSchemaBarrel(
 ): string {
   const dir = relativeDir.replace(/\\/g, '/').replace(/\/+$/, '');
   const exports = [...schemas]
-    .sort((a, b) => a.localeCompare(b))
+    .sort((a, b) => ordinalCompare(a, b))
     .map((schema) => `export * from './${dir}/${sanitizeSchemaFileName(schema)}.js';`)
     .join('\n');
   return `${extraHeader}${exports}\n`;

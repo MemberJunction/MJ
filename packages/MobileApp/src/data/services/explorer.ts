@@ -50,7 +50,7 @@ function primaryDisplayField(entity: EntityInfo): EntityFieldInfo | undefined {
         entity.Fields.find((f) => f.Name === entity.NameField?.Name) ??
         entity.Fields.find((f) => f.Name.toLowerCase() === 'name') ??
         entity.Fields.find((f) => f.Type === 'nvarchar' && !f.IsPrimaryKey) ??
-        entity.FirstPrimaryKey
+        entity.FirstPrimaryKey // first-pk-ok: card-title display fallback only; record identity is built from the full key (see loadEntityRecords)
     );
 }
 
@@ -98,15 +98,15 @@ export async function loadEntityRecords(
     if (!entity) return null;
 
     const titleField = primaryDisplayField(entity);
-    const pk = entity.FirstPrimaryKey;
 
     // Pick up to 3 secondary display fields (default-in-view, non-PK, simple types)
     const secondary = entity.Fields
         .filter((f) => f.DefaultInView && !f.IsPrimaryKey && f.Name !== titleField?.Name)
         .slice(0, 3);
 
+    // Every primary-key column must be selected so the record id round-trips for composite keys too.
     const fields = Array.from(new Set([
-        pk?.Name,
+        ...entity.PrimaryKeys.map((pk) => pk.Name),
         titleField?.Name,
         ...secondary.map((f) => f.Name),
     ].filter((x): x is string => !!x)));
@@ -127,7 +127,9 @@ export async function loadEntityRecords(
     }
 
     const rows: EntityRecordRow[] = (result.Results ?? []).map((r) => {
-        const idVal = pk ? String(r[pk.Name] ?? '') : '';
+        // Compact record id — the bare value for a single-column key, `F1|v1||F2|v2` for a composite
+        // key — which loadRecordDetail reads back with CompositeKey.FromURLSegment.
+        const idVal = entity.PrimaryKeys.length > 0 ? CompositeKey.FromEntityRecord(entity, r).ToCompactURLSegment() : '';
         const title = titleField ? String(r[titleField.Name] ?? '(no name)') : idVal;
         const subtitle = secondary
             .map((f) => r[f.Name])
@@ -164,7 +166,9 @@ export async function loadRecordDetail(
     if (!entityInfo) return null;
 
     const obj = await md.GetEntityObject(entityName, contextUser);
-    const loaded = await obj.InnerLoad(CompositeKey.FromID(recordId));
+    // The entity is arbitrary — its key column can have any name — so resolve the key against
+    // its metadata rather than assuming `ID` via FromID.
+    const loaded = await obj.InnerLoad(CompositeKey.FromURLSegment(entityInfo, recordId));
     if (!loaded) return null;
 
     const titleField = primaryDisplayField(entityInfo);

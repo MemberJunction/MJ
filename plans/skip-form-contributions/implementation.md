@@ -4413,7 +4413,7 @@ git add packages/Angular/Generic/base-forms/src/lib/interactive-form/form-panel-
 | 7 | ~~`InteractiveFormsEngine.Config` loads a contribution's component through the reference-scoped filter~~ | **Dropped.** Decision 2a was reverted in Phase A (design §17.1); there is no reference-scoped filter and no invalidation coupling left to test |
 | 8 | With the kill switch off, the engine loads no contributions and the collector returns class registrations only | The rollback path actually rolling back |
 
-**As built — `form-contributions` (FC1–FC8), Test row `IT88 - Form Contributions`:**
+**As built — `form-contributions` (FC1–FC8), Test row `IT94 - Form Contributions`:**
 
 | Check | Covers |
 |---|---|
@@ -4431,7 +4431,7 @@ the activation ordering (design §17.4) and the kill switch's read side (§17.3)
 bundle paying for itself before it ever guarded a regression.
 
 ```bash
-MJ_INTEGRATION_TEST=1 ./node_modules/.bin/mj test run --name "IT88 - Form Contributions"
+MJ_INTEGRATION_TEST=1 ./node_modules/.bin/mj test run --name "IT94 - Form Contributions"
 pnpm run test:integration
 ```
 

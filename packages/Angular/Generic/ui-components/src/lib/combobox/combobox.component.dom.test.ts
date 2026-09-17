@@ -1,5 +1,8 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import { renderComponentFixture, query, capture, overlayQuery, overlayQueryAll, overlayText, clearOverlayContainers } from '@memberjunction/ng-test-utils';
+import { Component, Input } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { MJComboboxComponent } from './combobox.component';
 
 /**
@@ -95,5 +98,142 @@ describe('MJComboboxComponent (DOM)', () => {
     await new Promise((r) => setTimeout(r, 200)); // OnInputBlur commits after a 150ms guard
     f.detectChanges();
     expect(changes.at(-1)).toBe('Dragonfruit');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Disabled-state contract — the control is unusable exactly when the `Disabled` input OR the
+ * reactive-forms disabled state says so, **at every point in time**, not only at the moment
+ * Angular Forms registers the ControlValueAccessor.
+ *
+ * Needs a real `ngModel` host, unlike the specs above which render the component bare: the defect
+ * this guards lives in the seam between the two. `IsDisabled` — the only gate on `Toggle()`/`Open()`
+ * — is derived state, and the only thing that ever assigned it was `setDisabledState()`. The
+ * forms-driven half was always live (`setUpControl` also wires `registerOnDisabledChange`, so the
+ * hook re-fires on every `control.disable()`/`enable()`); what had no recompute path at all was the
+ * `Disabled` @Input, a plain field. So the gate froze whatever `Disabled` happened to be when the
+ * hook last ran and dropped every later change to the input:
+ *
+ *   - `Disabled` true at that moment → the control was dead FOREVER, even after it went false;
+ *   - `Disabled` false at that moment → the control could never be locked afterwards;
+ *   - no forms binding at all → the hook never ran, so `[Disabled]` was completely inert.
+ *
+ * The first direction shipped a real user-facing failure (a picker gated on "pick a company first"
+ * never came back to life once the company was picked). All five MJ form controls carried the
+ * identical defect; each now has an equivalent block.
+ */
+@Component({
+  standalone: true,
+  imports: [MJComboboxComponent, FormsModule],
+  template: `
+    <mj-combobox
+      [Data]="Items" TextField="text" ValueField="value" [ValuePrimitive]="true"
+      [Disabled]="Locked" [(ngModel)]="Value" />
+  `,
+})
+class DisabledHostComponent {
+  public Items = DATA;
+  /** An @Input so specs flip it via `componentRef.setInput()` — the zoneless-correct way to mark
+   *  the view dirty; a plain field assignment trips NG0100 on the verify pass. */
+  @Input() Locked = false;
+  public Value: string | null = null;
+}
+
+describe('MJComboboxComponent — disabled state (DOM, ngModel host)', () => {
+  let fixture: ComponentFixture<DisabledHostComponent>;
+
+  const control = (): MJComboboxComponent =>
+    fixture.debugElement.children[0].componentInstance as MJComboboxComponent;
+  const hostTrigger = (): HTMLElement =>
+    fixture.nativeElement.querySelector('.mj-combobox') as HTMLElement;
+  /**
+   * Open the way a user actually can. Unlike mj-dropdown, whose `.mj-dropdown` wrapper carries
+   * `(click)="Toggle()"`, the `.mj-combobox` wrapper is an inert `<div>` — this control opens on
+   * `(focus)` of its inner input or `(mousedown)` on `.mj-combobox-toggle`. Dispatching the event
+   * directly (rather than relying on the DOM suppressing it while `[disabled]` is set) is
+   * deliberate: it puts the assertion on the component's own `IsDisabled` gate, which is the
+   * thing under test.
+   */
+  const pressToggle = (): void => {
+    (fixture.nativeElement.querySelector('.mj-combobox-toggle') as HTMLElement)
+      .dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+    fixture.detectChanges();
+  };
+  const lock = (value: boolean): void => {
+    fixture.componentRef.setInput('Locked', value);
+    fixture.detectChanges();
+  };
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({ imports: [DisabledHostComponent] }).compileComponents();
+    fixture = TestBed.createComponent(DisabledHostComponent);
+  });
+
+  it('RE-ENABLES when Disabled flips to false after registration', () => {
+    lock(true);
+    expect(control().IsDisabled).toBe(true);
+    expect(hostTrigger().classList.contains('mj-combobox--disabled')).toBe(true);
+
+    lock(false);
+    expect(control().Disabled, 'the @Input itself is false').toBe(false);
+    expect(control().IsDisabled, 'and the gate must have followed it').toBe(false);
+    expect(hostTrigger().classList.contains('mj-combobox--disabled')).toBe(false);
+
+    pressToggle();
+    expect(control().IsOpen, 're-enabled combobox must open').toBe(true);
+  });
+
+  it('LOCKS when Disabled flips to true after registration', () => {
+    lock(false);
+    pressToggle();
+    expect(control().IsOpen).toBe(true);
+
+    lock(true);
+    expect(control().IsDisabled).toBe(true);
+    expect(control().IsOpen, 'locking an open combobox must close its panel').toBe(false);
+
+    pressToggle();
+    expect(control().IsOpen, 'and must stay shut on a further gesture').toBe(false);
+  });
+
+  it('stays disabled while the forms-driven state holds, regardless of @Input churn', () => {
+    lock(false); // first CD pass — this is what registers the ControlValueAccessor
+
+    // `setDisabledState` is how Angular Forms reports a programmatically disabled control. Render
+    // it via a `lock()` (setInput) rather than a bare `detectChanges()`: a direct call mutates
+    // state without marking the view dirty, and zoneless dev-mode check-no-changes then throws
+    // NG0100 (guides/ANGULAR_TESTING_GUIDE.md). The @Input churn is the assertion anyway.
+    control().setDisabledState(true);
+    lock(true);
+    lock(false);
+    expect(control().IsDisabled, 'forms-driven disable survives @Input churn').toBe(true);
+
+    control().setDisabledState(false);
+    lock(true);
+    lock(false);
+    expect(control().IsDisabled, 'released by both sources ⇒ usable').toBe(false);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The same defect in its broadest form — no Angular Forms anywhere. With no `ngModel` /
+ * `formControl` on the element, `setDisabledState()` is never called at all, so the gate was left
+ * at its initialiser and `[Disabled]` was completely inert: the control rendered fully enabled and
+ * responded to gestures. `Disabled` only ever worked as a side effect of a forms binding happening
+ * to compose it in, which is why this is the widest case and the cheapest one to regress.
+ */
+describe('MJComboboxComponent — Disabled with no Angular Forms binding (DOM)', () => {
+  it('honours [Disabled] on its own, with no ngModel present', () => {
+    const f = render({ Disabled: true });
+
+    expect(f.componentInstance.IsDisabled, 'the gate must follow the input unaided').toBe(true);
+    expect((query(f, '.mj-combobox') as HTMLElement).classList.contains('mj-combobox--disabled')).toBe(true);
+
+    focusOpen(f);
+    expect(f.componentInstance.IsOpen, 'a disabled combobox must not open').toBe(false);
   });
 });

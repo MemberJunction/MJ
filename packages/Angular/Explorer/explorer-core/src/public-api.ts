@@ -22,6 +22,7 @@ export * from './lib/command-palette/command-palette.service';
 // New Shell Module (New Explorer UX)
 export * from './lib/shell/shell.module'
 export * from './lib/shell/shell.component'
+export * from './lib/shell/shell-chrome-policy'
 export * from './lib/single-record/single-record.component'
 export * from './lib/single-search-result/single-search-result.component'
 export * from './lib/single-dashboard/single-dashboard.component'

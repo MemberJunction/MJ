@@ -254,26 +254,10 @@ export class EntityCRUDHandler {
     }
     
     /**
-     * Helper method to create a composite key from an ID
+     * Build the record key from the `:id` path segment. A single-column key (any column name) is
+     * the bare value; a composite key is the URL-encoded `Field1|Value1||Field2|Value2` segment.
      */
     private static createCompositeKeyFromId(entity: BaseEntity, id: string | number): CompositeKey {
-        if (entity.EntityInfo.PrimaryKeys.length === 1) {
-            // Single primary key
-            const primaryKeyField = entity.EntityInfo.PrimaryKeys[0].Name;
-            const compositeKey = new CompositeKey();
-            const strId = id.toString();
-            
-            // Use key-value pairs instead of SetValue
-            compositeKey.KeyValuePairs = [
-                { FieldName: primaryKeyField, Value: strId }
-            ];
-            
-            return compositeKey;
-        } else {
-            // Composite primary key - this is a simplification
-            // In a real implementation, you would need to parse a composite ID string
-            // or accept an object with all primary key values
-            throw new Error('Composite primary keys are not supported in this simplified implementation');
-        }
+        return CompositeKey.FromURLSegment(entity.EntityInfo, id.toString());
     }
 }

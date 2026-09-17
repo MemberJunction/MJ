@@ -78,10 +78,11 @@ export class TransactionManager {
 
   /**
    * Rollback the current transaction.
+   * Returns true if rollback succeeded or no transaction was active, false if rollback failed.
    */
-  async rollbackTransaction(): Promise<void> {
+  async rollbackTransaction(): Promise<boolean> {
     if (!this.inTransaction) {
-      return; // No transaction to rollback
+      return true; // No transaction to rollback
     }
 
     const provider = getDataProvider();
@@ -92,9 +93,11 @@ export class TransactionManager {
     try {
       await provider.RollbackTransaction();
       this.inTransaction = false;
+      return true;
     } catch (error) {
       // Log but don't throw - we're already in an error state
       console.error('Failed to rollback transaction:', error);
+      return false;
     }
   }
 

@@ -4,7 +4,9 @@ import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } 
 import { Metadata, RunView } from '@memberjunction/core';
 import { MJUserEntity, MJRoleEntity, MJUserRoleEntity } from '@memberjunction/core-entities';
 
+import { UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { EnrolledRow, serverRefusalReasons } from '../transaction-group-refusals';
 export interface UserDialogData {
   user?: MJUserEntity;
   mode: 'create' | 'edit';
@@ -236,9 +238,25 @@ export class UserDialogComponent extends BaseAngularComponent implements OnInit,
       // Batch all role deletes and adds into one transactional GraphQL call
       const tg = await this.metadata.CreateTransactionGroup();
 
+      // Each Delete()/Save() only ENROLS the row in the group; the write is deferred to Submit().
+      // A false return therefore means the row was refused CLIENT-side and never enrolled — so
+      // submitting anyway writes a PARTIAL change, or an empty one whose Submit() returns true for
+      // having nothing to do, and either way the dialog closes reporting success. Same rule and
+      // same reason as `UserManagementComponent.executeBulkRoleAssign`, where the transaction-group
+      // semantics — and why the server-side #4282 guard is NOT what this catches — are set out in full.
+      const refusals: string[] = [];
+      // Enrolled rows are kept so the SERVER's reason can be read back off them below; without
+      // that, the reason #4309 puts on LatestResult has nobody left to read it.
+      const enrolled: EnrolledRow[] = [];
+
       for (const userRole of rolesToRemove) {
         userRole.TransactionGroup = tg;
-        await userRole.Delete();
+        if (!await userRole.Delete()) {
+          refusals.push(`Remove ${this.describeRole(userRole.RoleID)}: ${userRole.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
+        else {
+          enrolled.push({ label: `Remove ${this.describeRole(userRole.RoleID)}`, entity: userRole });
+        }
       }
 
       for (const roleId of rolesToAdd) {
@@ -247,16 +265,37 @@ export class UserDialogComponent extends BaseAngularComponent implements OnInit,
         userRole.UserID = userId;
         userRole.RoleID = roleId;
         userRole.TransactionGroup = tg;
-        await userRole.Save();
+        if (!await userRole.Save()) {
+          refusals.push(`Add ${this.describeRole(roleId)}: ${userRole.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
+        else {
+          enrolled.push({ label: `Add ${this.describeRole(roleId)}`, entity: userRole });
+        }
+      }
+
+      if (refusals.length > 0) {
+        // Nothing was written: the refused rows never enrolled, and the rest are still only queued
+        // because Submit() is not reached.
+        throw new Error(`Failed to update user roles — no role changes were made.\n${refusals.join('\n')}`);
       }
 
       if (!await tg.Submit()) {
-        throw new Error('Failed to update user roles — all changes have been rolled back');
+        // Every row enrolled, so this is a SERVER-side refusal (or a rollback). Since #4309 the
+        // server says which row and why, and that reason is now on each entity's LatestResult.
+        const reasons = serverRefusalReasons(enrolled);
+        throw new Error(reasons.length > 0
+          ? `Failed to update user roles — all changes have been rolled back.\n${reasons.join('\n')}`
+          : 'Failed to update user roles — all changes have been rolled back');
       }
     } catch (error) {
       console.error('Error updating user roles:', error);
       throw error;
     }
+  }
+
+  /** Names a role for a refusal message; falls back to the ID when the catalog has no match. */
+  private describeRole(roleId: string): string {
+    return this.data?.availableRoles.find(r => UUIDsEqual(r.ID, roleId))?.Name ?? roleId;
   }
 
   public onCancel(): void {

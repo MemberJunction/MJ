@@ -1,0 +1,63 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "adversarial-subagent-field-shape-01 [gemini-3.7-flash · Google · native-implicit]",
+    "Description": "Detects the subAgent.payload defect: a shipped Agent Manager exemplar carried a payload block the runtime silently drops. A dispatch is only correct if it names the sub-agent through the fields the runtime actually maps.",
+    "InputDefinition": {
+      "payload": {
+        "brief": {
+          "product": "Analytics Dashboard"
+        }
+      },
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "Get the SEO specialist to review our positioning for this launch."
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "adversarial-subagent-field-shape-01",
+      "expect": {
+        "kind": "subAgent",
+        "subAgents": [
+          "SEO AIEO Specialist Agent"
+        ]
+      }
+    },
+    "Configuration": {
+      "agentName": "Marketing Agent",
+      "modelId": "63B1434F-0400-4A98-A1B9-0765BE4362F0",
+      "vendorId": "E4A5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "toolCallingMode": "native",
+      "nativeControlFlow": "implicit",
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "subAgent",
+            "subAgents": [
+              "SEO AIEO Specialist Agent"
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "D1B5C383-A522-4C8C-ACA6-22CA5FA722CB"
+  }
+}

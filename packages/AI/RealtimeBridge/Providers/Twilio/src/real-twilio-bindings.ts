@@ -112,6 +112,20 @@ export function encodeTwilioMediaFrame(pcm: ArrayBuffer, streamSid: string): Twi
     };
 }
 
+/**
+ * **Pure** encode of a Twilio Media-Streams outbound `clear` frame to flush Twilio's internal
+ * audio playback buffer on barge-in / interruption.
+ *
+ * @param streamSid The Media-Streams stream SID the frame is addressed to.
+ * @returns A Media-Streams outbound `clear` frame ready to JSON-serialize and send.
+ */
+export function encodeTwilioClearFrame(streamSid: string): TwilioMediaFrame {
+    return {
+        event: 'clear',
+        streamSid,
+    };
+}
+
 /** Escapes the five XML attribute-significant characters so a stream URL is safe inside the TwiML attribute. */
 function escapeXmlAttribute(value: string): string {
     return value
@@ -288,6 +302,12 @@ export class RealTwilioBindings implements ITwilioClientBindings {
                 cb();
             }
         });
+    }
+
+    /** @inheritdoc */
+    public flushOutbound(callSid: string): void {
+        const streamSid = this.mediaPump.GetStreamSid(callSid);
+        this.mediaPump.Send(callSid, encodeTwilioClearFrame(streamSid));
     }
 }
 

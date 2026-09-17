@@ -2,7 +2,7 @@ import { CodeNameFromString, EntityFieldValueListType, EntityInfo, Metadata, Sev
 import fs from 'fs';
 import path from 'path';
 import { makeDir } from '../Misc/util';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual, ordinalCompare } from '@memberjunction/global';
 import { MJActionEntity, MJActionLibraryEntity } from '@memberjunction/core-entities';
 import { MJActionEntityServer } from '@memberjunction/core-entities-server';
 import { logError, logMessage, logStatus } from './status_logging';
@@ -69,7 +69,7 @@ export class ActionSubClassGeneratorBase {
 
             // Sort actions alphabetically by name for consistent output across CodeGen runs
             // This prevents git diffs from showing random reordering when no actual changes occurred
-            const sortedActions = [...actions].sort((a, b) => a.Name.localeCompare(b.Name));
+            const sortedActions = [...actions].sort((a, b) => ordinalCompare(a.Name, b.Name) || ordinalCompare(a.ID, b.ID));
 
             // get all of the libraries from the combination of distinct libraries from all of the actions we have here
             const allActionLibraries = this.getAllActionLibrariesAndUsedItems(sortedActions);

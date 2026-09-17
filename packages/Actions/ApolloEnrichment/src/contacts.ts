@@ -539,7 +539,8 @@ export class ApolloEnrichmentContactsAction extends BaseAction {
                                     continue;
                                 }
                                 
-                                const contactEntity: BaseEntity = await md.GetEntityObject<BaseEntity>(params.EntityName, CompositeKey.FromID(entityRecord.ID), params.CurrentUser);
+                                // The contact entity is configured, not fixed — build the key from its real primary key column(s).
+                                const contactEntity: BaseEntity = await md.GetEntityObject<BaseEntity>(params.EntityName, CompositeKey.FromEntityRecord(md.EntityByName(params.EntityName)!, entityRecord), params.CurrentUser);
 
                                 contactEntity.Set(params.EmailField, match.email);
                                 contactEntity.Set(params.EnrichedAtField, new Date());
@@ -694,7 +695,8 @@ export class ApolloEnrichmentContactsAction extends BaseAction {
                             continue;
                         }
 
-                        const contactEntity: BaseEntity = await params.Md.GetEntityObject<BaseEntity>(params.EntityName, params.CurrentUser);
+                        // Load the matched contact from its row so its primary key (any column name/type) is populated for the history FK filters.
+                        const contactEntity: BaseEntity = await params.Md.GetEntityObject<BaseEntity>(params.EntityName, CompositeKey.FromEntityRecord(params.Md.EntityByName(params.EntityName)!, rvContactResults.Results[0]), params.CurrentUser);
                         await this.UpsertContactEmploymentAndEducationHistory(p, contactEntity, params);
                     }
 
@@ -727,11 +729,17 @@ export class ApolloEnrichmentContactsAction extends BaseAction {
                 return;
             }
 
-            const quotes = contactEntity.FirstPrimaryKey.NeedsQuotes ? "'" : "";
+            // The history entities' contact FK column references the contact's key, so that key must be a single column.
+            if (contactEntity.PrimaryKeys.length !== 1) {
+                LogError(`Unable to upsert contact employment history: entity '${contactEntity.EntityInfo.Name}' has a composite primary key, which the single ${params.EmploymentHistoryContactIDFieldName} foreign key column cannot reference`);
+                return;
+            }
+            const contactPK = contactEntity.FirstPrimaryKey; // first-pk-ok: FK target — the history entities' contact FK column references the contact's single-column key (guarded above)
+            const quotes = contactPK.NeedsQuotes ? "'" : "";
+            const contactID: unknown = contactPK.Value;
             const rv: RunView = new RunView();
 
             for(const employment of contact.employment_history){
-                const contactID: unknown = contactEntity.Get("ID");
                 const rvResults: RunViewResult = await rv.RunView({
                     EntityName: params.EmploymentHistoryEntityName,
                     ExtraFilter: `${params.EmploymentHistoryContactIDFieldName} = ${quotes}${contactID}${quotes} 
@@ -749,7 +757,7 @@ export class ApolloEnrichmentContactsAction extends BaseAction {
                 
                 if(results.length > 0) {
                     // update the existing record
-                    historyEntity = await params.Md.GetEntityObject<BaseEntity>(params.EmploymentHistoryEntityName, CompositeKey.FromID(results[0].ID), params.CurrentUser);
+                    historyEntity = await params.Md.GetEntityObject<BaseEntity>(params.EmploymentHistoryEntityName, CompositeKey.FromEntityRecord(params.Md.EntityByName(params.EmploymentHistoryEntityName)!, results[0]), params.CurrentUser);
                 }
                 else {
                     historyEntity = await params.Md.GetEntityObject<BaseEntity>(params.EmploymentHistoryEntityName, params.CurrentUser);
@@ -800,7 +808,7 @@ export class ApolloEnrichmentContactsAction extends BaseAction {
                     
                     if(educationResults.length > 0){
                         // update the existing record
-                        educationEntity = await params.Md.GetEntityObject<BaseEntity>(params.EducationHistoryEntityName, CompositeKey.FromID(educationResults[0].ID), params.CurrentUser);
+                        educationEntity = await params.Md.GetEntityObject<BaseEntity>(params.EducationHistoryEntityName, CompositeKey.FromEntityRecord(params.Md.EntityByName(params.EducationHistoryEntityName)!, educationResults[0]), params.CurrentUser);
                     }
                     else {
                         educationEntity= await params.Md.GetEntityObject<BaseEntity>(params.EducationHistoryEntityName, params.CurrentUser);

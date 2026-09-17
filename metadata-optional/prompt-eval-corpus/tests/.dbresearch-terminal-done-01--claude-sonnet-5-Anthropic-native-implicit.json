@@ -1,0 +1,100 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "dbresearch-terminal-done-01 [claude-sonnet-5 · Anthropic · native-implicit]",
+    "Description": "The query returned the answer. Returning it is the decision; running another query is churn. This agent's prompt mandates storing its output via payloadChangeRequest, so under the implicit protocol — where a payload write is its own turn — the write is the prompt-correct first decision and is accepted alongside completion. The loop itself treats a payload-only envelope as completion (LoopAgentType auto-sets taskComplete), so the branch matches runtime in both arms.",
+    "InputDefinition": {
+      "payload": {
+        "queries": [
+          {
+            "sql": "SELECT COUNT(*) FROM vwAIAgents WHERE Status='Active'",
+            "rows": [
+              {
+                "n": 64
+              }
+            ]
+          }
+        ]
+      },
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "How many active AI agents are there?"
+        },
+        {
+          "role": "user",
+          "content": "[Action Result] Run Ad-hoc Query succeeded. 1 row: { n: 64 }"
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "dbresearch-terminal-done-01",
+      "expect": {
+        "kind": "anyOf",
+        "anyOf": [
+          {
+            "kind": "taskComplete",
+            "forbiddenActions": [
+              "Run Ad-hoc Query",
+              "Get Entity Details"
+            ]
+          },
+          {
+            "kind": "payloadChange",
+            "forbiddenActions": [
+              "Run Ad-hoc Query",
+              "Get Entity Details"
+            ]
+          }
+        ]
+      }
+    },
+    "Configuration": {
+      "agentName": "Database Research Agent",
+      "modelId": "31280CE6-5EFC-4407-BEFB-339322D0CC2E",
+      "vendorId": "DAA5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "toolCallingMode": "native",
+      "nativeControlFlow": "implicit",
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "anyOf",
+            "anyOf": [
+              {
+                "kind": "taskComplete",
+                "forbiddenActions": [
+                  "Run Ad-hoc Query",
+                  "Get Entity Details"
+                ]
+              },
+              {
+                "kind": "payloadChange",
+                "forbiddenActions": [
+                  "Run Ad-hoc Query",
+                  "Get Entity Details"
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "D1BCB679-A613-4420-AEA7-1343A1A81345"
+  }
+}

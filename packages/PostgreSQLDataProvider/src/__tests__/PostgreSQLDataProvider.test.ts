@@ -347,9 +347,15 @@ describe('PostgreSQLDataProvider', () => {
             expect(result).toBe(false);
         });
 
-        it('GetRecordDependencies should return empty array', async () => {
-            const result = await provider.GetRecordDependencies('Entity', {} as never);
-            expect(result).toEqual([]);
+        it('GetRecordDependencies should reject an entity that is not in metadata', async () => {
+            // Previously this returned [] for an unknown entity, because it bailed out as soon as no
+            // foreign-key dependents were found. Now that polymorphic dependents are also queried,
+            // an unresolvable entity is an error rather than an answer: telling a caller that is
+            // about to delete a record "nothing depends on this" when we could not look is exactly
+            // the orphaning this path exists to prevent.
+            await expect(provider.GetRecordDependencies('Entity', {} as never)).rejects.toThrow(
+                /not found in metadata/i,
+            );
         });
 
         it('GetRecordDuplicates should throw without contextUser', async () => {
@@ -682,7 +688,8 @@ describe('PostgreSQLDataProvider', () => {
         };
 
         function buildEntity(pks: { Name: string; Value: unknown }[]) {
-            return { PrimaryKeys: pks } as unknown as Parameters<Validator['ValidateDeleteResult']>[0];
+            // FirstPrimaryKey mirrors BaseEntity's accessor, which the single-PK path reads.
+            return { PrimaryKeys: pks, FirstPrimaryKey: pks[0] } as unknown as Parameters<Validator['ValidateDeleteResult']>[0];
         }
 
         let validator: Validator;

@@ -6,6 +6,7 @@ import { RunView } from "./views/runView";
 export * from "./generic/metadata";
 export * from "./generic/baseInfo";
 export * from "./generic/baseEngine";
+export * from "./generic/wellKnownUserSource";
 export * from "./views/runView";
 export * from "./generic/runQuery";
 export * from "./generic/queryResultEnricher";
@@ -23,6 +24,7 @@ export * from "./generic/BaseEntitySaveQueue";
 export * from "./generic/EntityFieldRules";
 export * from "./generic/applicationInfo";
 export * from "./generic/providerBase";
+export * from "./generic/recordChangeFieldSecurity";
 export * from "./generic/baseRemotableOperation";
 export * from "./generic/remoteOperationDispatch";
 export * from "./generic/entityInfo";
@@ -66,7 +68,9 @@ export * from "./generic/column-descriptors";
 export * from "./generic/data-table";
 export * from "./generic/data-snapshot";
 export * from "./generic/permissionInterfaces";
+export * from "./generic/entitySubtypeResolver";
 export * from "./generic/JSONType-interfaces/IFileStorageProviderConfiguration";
+export * from "./generic/JSONType-interfaces/IEntitySubtypeSelectorConfig";
 
 export function SetProvider(provider) {
     Metadata.Provider = provider; // global-provider-ok: this IS the global provider setter

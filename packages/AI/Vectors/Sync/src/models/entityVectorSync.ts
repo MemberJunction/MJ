@@ -735,7 +735,7 @@ export class EntityVectorSyncer extends VectorBase {
       // Falls back to OFFSET-based PageNumber when the entity has a composite PK
       // (correct but progressively slower on deep pages).
       const canUseKeyset = this.CanUseKeysetPagination(params.entityID);
-      const pkField = entity.FirstPrimaryKey;
+      const pkField = entity.FirstPrimaryKey; // first-pk-ok: keyset cursor column, only read under useKeysetForThisRun, which CanUseKeysetPagination gates on PrimaryKeys.length === 1
       let pageNumber = 0;
       let lastSeenKey: CompositeKey | undefined;
 
@@ -777,7 +777,7 @@ export class EntityVectorSyncer extends VectorBase {
         for (const record of recordsPage) {
           const typedRecord = record as Record<string, unknown>;
           const templateData: Record<string, unknown> = await this.GetTemplateData(entity, typedRecord, template, relatedData);
-          templateData.__mj_recordID = typedRecord[entity.FirstPrimaryKey.Name];
+          templateData.__mj_recordID = this.BuildRecordID(entity, typedRecord);
           templateData.__mj_compositeKey = entity.PrimaryKeys.map((key) => `${key.Name}|${typedRecord[key.Name]}`).join('||');
           templateData.VectorIndexID = vectorIndexEntity.ID;
           templateData.TemplateContent = template.Content[0].TemplateText;
@@ -1204,7 +1204,7 @@ export class EntityVectorSyncer extends VectorBase {
             break;
           }
           // Related entities use their relationship name as prefix: {{RelationshipName.FieldName}}
-          const pkValue = record[entity.FirstPrimaryKey.Name];
+          const pkValue = record[entity.FirstPrimaryKey.Name]; // first-pk-ok: LinkedParameterField is a single-column FK on the related entity pointing at this entity's key
           templateData[param.Name] = paramData.Data.filter((rdfr: unknown) => {
             const typedRdfr = rdfr as Record<string, unknown>;
             return typedRdfr[param.LinkedParameterField] === pkValue;
@@ -1224,6 +1224,18 @@ export class EntityVectorSyncer extends VectorBase {
     return templateData;
   }
 
+  /**
+   * The record-id string persisted to `MJ: Entity Record Documents.RecordID` and carried through
+   * the pipeline as `__mj_recordID`: the entity's actual primary key column(s) read off the row,
+   * in compact URL-segment form — the bare value for a single-column key (whatever that column
+   * is called), `F1|v1||F2|v2` for a composite key. `CompositeKey.FromURLSegment` reads either
+   * form back, so a customer entity keyed by `individual_id` or `(OrderID, LineNo)` round-trips
+   * instead of being reduced to whichever column happens to be listed first.
+   */
+  protected BuildRecordID(entity: EntityInfo, record: Record<string, unknown>): string {
+    return CompositeKey.FromEntityRecord(entity, record).ToCompactURLSegment();
+  }
+
   protected async GetRelatedTemplateDataForBatch(entity: EntityInfo, records: unknown[], template: MJTemplateEntityExtended): Promise<TemplateParamData[]> {
     const relatedData: TemplateParamData[] = [];
 
@@ -1234,8 +1246,8 @@ export class EntityVectorSyncer extends VectorBase {
 
       const relatedEntity = templateParam.Entity;
       const relatedField = templateParam.LinkedParameterField;
-      const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : '';
-      const pkName = entity.FirstPrimaryKey.Name;
+      const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : ''; // first-pk-ok: LinkedParameterField is a single-column FK on the related entity pointing at this entity's key
+      const pkName = entity.FirstPrimaryKey.Name; // first-pk-ok: LinkedParameterField is a single-column FK on the related entity pointing at this entity's key
       const filter = `${relatedField} in (${records.map((record: unknown) => {
         const typedRecord = record as Record<string, unknown>;
         return `${quotes}${typedRecord[pkName]}${quotes}`;

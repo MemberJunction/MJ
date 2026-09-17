@@ -7,6 +7,7 @@ import { BaseDashboard } from '@memberjunction/ng-shared';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 import { UserDialogData, UserDialogResult } from './user-dialog/user-dialog.component';
+import { EnrolledRow, serverRefusalReasons } from './transaction-group-refusals';
 import {
   buildUserManagementAgentContext,
   isValidUserStatusFilter,
@@ -570,8 +571,21 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
   public async toggleUserStatus(user: MJUserEntity): Promise<void> {
     try {
       user.IsActive = !user.IsActive;
-      await user.Save();
+      // BaseEntity.Save() returns false on a validation failure — it does NOT throw. Discarding
+      // the result meant the catch below never ran for a refused save: no revert, no message, and
+      // calculateStats() re-rendered the row as toggled, so the UI asserted success while nothing
+      // had been written. Reachable for every non-Owner admin since the #4260 privilege-elevation
+      // guard on MJ: Users, because deactivating a user is a write to another user's row.
+      // Mirrors deleteUser() above, which already checks its result this way.
+      if (!(await user.Save())) {
+        throw new Error(user.LatestResult?.Message || 'Failed to update user status');
+      }
       this.ngZone.run(() => {
+        // Clear any banner left by a PREVIOUS refused toggle. Without this a non-Owner who is
+        // refused on one row, then succeeds on a row they may edit (their own), keeps reading the
+        // stale refusal. `loadInitialData()` is the only other place `error` is reset and this path
+        // does not call it.
+        this.error = null;
         this.calculateStats();
         this.cdr.markForCheck();
       });
@@ -579,6 +593,7 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
       console.error('Error updating user status:', error);
       this.ngZone.run(() => {
         user.IsActive = !user.IsActive; // Revert on error
+        this.error = error instanceof Error ? error.message : 'Failed to update user status';
         this.cdr.markForCheck();
       });
     }
@@ -938,17 +953,61 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
 
       if (usersNeedingRole.length > 0) {
         const tg = await this.metadata.CreateTransactionGroup();
+        // Each Save() only ENROLS the row in the group — the write is deferred to Submit(). Inside
+        // a TransactionGroup, Save() therefore reports ENROLMENT, not the write's outcome: the
+        // provider queues the item locally and returns true with no round trip
+        // (`GraphQLDataProvider.Save` — "part of a TG always return true").
+        //
+        // So the role-elevation guard is NOT what this check catches. `MJUserRoleEntityServer`
+        // (issue #4282) lives in `@memberjunction/core-entities-server`, which no browser package
+        // depends on, so it never registers here — it refuses on the server, during Submit().
+        //
+        // That server refusal used to reach the user NOWHERE: `ExecuteTransactionGroup` discarded
+        // the refused row's `Save()` return, so the row never enrolled in the SERVER's group
+        // either; an all-refused batch submitted an empty group, whose `Submit()` returns true for
+        // having nothing to do, and the screen closed reporting success having written nothing.
+        // Issue #4309 fixed that in the resolver — the only layer that still knows which row was
+        // refused and why. It now reports the refusal, `Submit()` returns FALSE, and
+        // `GraphQLTransactionGroup.recordServerFailure` copies the server's reason onto each
+        // item's `BaseEntity.LatestResult`. The `!await tg.Submit()` branch below reads it back;
+        // that is the only place a server-side refusal surfaces on this screen.
+        //
+        // What this check DOES catch is a CLIENT-side refusal — a CheckPermissions denial or a
+        // field-rule failure — which really does return false here, leaving that row unenrolled.
+        // Ignoring the return meant an all-refused batch left the group EMPTY, and an empty group's
+        // Submit() returns true for having nothing to do, so the screen reported success having
+        // assigned nothing. That is the failure this guards; keep it.
+        const refusals: string[] = [];
+        const enrolled: EnrolledRow[] = [];
         for (const userId of usersNeedingRole) {
           const userRole = await this.metadata.GetEntityObject<MJUserRoleEntity>('MJ: User Roles');
           userRole.NewRecord();
           userRole.UserID = userId;
           userRole.RoleID = this.bulkRoleId;
           userRole.TransactionGroup = tg;
-          await userRole.Save();
+          if (!await userRole.Save()) {
+            refusals.push(`${this.describeUser(userId)}: ${userRole.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+          }
+          else {
+            // Kept so the SERVER's reason can be read back off it below. Without this the entity
+            // goes out of scope at the end of the iteration and the reason #4309 puts on
+            // LatestResult has nobody left to read it.
+            enrolled.push({ label: this.describeUser(userId), entity: userRole });
+          }
+        }
+        if (refusals.length > 0) {
+          // Nothing was written: the refused rows never enrolled, and the rest are still only
+          // queued because Submit() is not reached.
+          throw new Error(`Failed to assign roles — nothing was changed.\n${refusals.join('\n')}`);
         }
 
         if (!await tg.Submit()) {
-          throw new Error('Failed to assign roles — all changes have been rolled back');
+          // Every row enrolled, so this is a SERVER-side refusal (or a rollback). Since #4309 the
+          // server says which row and why, and that reason is now on each entity's LatestResult.
+          const reasons = serverRefusalReasons(enrolled);
+          throw new Error(reasons.length > 0
+            ? `Failed to assign roles — all changes have been rolled back.\n${reasons.join('\n')}`
+            : 'Failed to assign roles — all changes have been rolled back');
         }
       }
 
@@ -1028,5 +1087,14 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
   public getUserRoles(userId: string): MJRoleEntity[] {
     const roleIds = this.userRoleMap.get(userId) || [];
     return this.roles.filter(role => roleIds.some(id => UUIDsEqual(id, role.ID)));
+  }
+
+  /**
+   * Names a user for an error message. Falls back to the raw ID rather than to a placeholder so a
+   * refusal for a user who has dropped out of the loaded page is still traceable.
+   */
+  private describeUser(userId: string): string {
+    const user = this.users.find(u => UUIDsEqual(u.ID, userId));
+    return user?.Email ?? user?.Name ?? userId;
   }
 }

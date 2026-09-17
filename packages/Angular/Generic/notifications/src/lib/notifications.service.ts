@@ -14,6 +14,53 @@ import { map, shareReplay } from 'rxjs/operators';
  * Multi-provider note: callers under a non-default provider should set
  * `service.Provider = component.ProviderToUse` before invoking any methods.
  */
+/** What a rich toast knows about the thing it announces — handed to {@link MJNotificationService.CompletionImageUrlResolver}. */
+export interface MJNotificationContext {
+  conversationId?: string | null;
+  agentId?: string | null;
+  agentName?: string | null;
+}
+
+/** A toast with an image (or icon), a bold title and a line of detail — see {@link MJNotificationService.CreateRichNotification}. */
+export interface MJRichNotificationOptions {
+  /** Bold first line, e.g. "Sage finished". */
+  title: string;
+  /** Second line, e.g. "in General Discussion". */
+  message?: string | null;
+  /** Image at the left — an agent's avatar. Wins over `iconClass`. */
+  imageUrl?: string | null;
+  /** Font Awesome class used when there is no image, e.g. "fa-solid fa-robot". */
+  iconClass?: string | null;
+  /** Auto-hide in ms; omit for a sticky toast with a close button. */
+  hideAfter?: number;
+  /**
+   * Toasts sharing a key within `dedupeWindowMs` collapse into ONE. A toast already on screen
+   * wins — a later call with the same key only keeps it up longer, so the wording never
+   * changes under the reader's eyes. A toast still waiting on `deferMs` is replaced by the
+   * later call and shown at once. An agent run's completion is announced twice — by the
+   * server's Agent Completion notification and by the client that ran it — and the reader
+   * should hear it once, in one wording.
+   */
+  dedupeKey?: string;
+  /**
+   * Default 3 000 — wide enough to fold the two announcements of one completion (the deferred
+   * server notification and the client's, tens of ms apart), narrow enough that a different
+   * agent finishing seconds later in the same conversation is announced on its own.
+   */
+  dedupeWindowMs?: number;
+  /**
+   * Hold the toast this long before showing it, giving a better-worded announcement with the
+   * same `dedupeKey` the chance to take its place. The server's completion notification uses
+   * this: the client that ran the agent announces the same completion a few ms later with the
+   * agent's name and the conversation's, and that is the one to show.
+   */
+  deferMs?: number;
+  /** Runs when the toast body is clicked, e.g. open the conversation. */
+  onClick?: () => void;
+  /** Handed to {@link MJNotificationService.CompletionImageUrlResolver}, whose answer wins over `imageUrl`. */
+  context?: MJNotificationContext;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -63,6 +110,23 @@ export class MJNotificationService {
    * The notification DB record is still created and the badge count still updates.
    */
   public ShouldSuppressToast?: (statusObj: Record<string, unknown>) => boolean;
+
+  /**
+   * Host hook: the image for agent-completion toasts. A white-label host brands the
+   * assistant itself — the avatar on its chat bubbles — and that is the face the toast
+   * should wear, whichever path announced the completion. Return null/undefined to fall back
+   * to the agent's own LogoURL / IconClass.
+   */
+  public CompletionImageUrlResolver: ((context: MJNotificationContext) => string | null | undefined) | null = null;
+
+  /**
+   * Rich toasts on screen by dedupe key, so a repeat announcement extends rather than stacks.
+   * An entry lives exactly as long as its toast: it is dropped the moment dismissal starts, so
+   * a same-key call during the slide-out renders a fresh toast instead of extending a dying one.
+   */
+  private readonly liveRichToasts = new Map<string, { element: HTMLElement; shownAt: number; extend: (hideAfter: number | undefined) => void }>();
+  /** Rich toasts held back by `deferMs`, by dedupe key — a same-key call takes their place. */
+  private readonly pendingRichToasts = new Map<string, ReturnType<typeof setTimeout>>();
 
   constructor() {
     const g = GetGlobalObjectStore()!;
@@ -127,7 +191,20 @@ export class MJNotificationService {
                 // (e.g., user is actively viewing the conversation that triggered it)
                 const suppress = this.ShouldSuppressToast?.(statusObj) ?? false;
                 if (!suppress) {
-                  this.CreateSimpleNotification(statusObj.title || 'New Notification Available', "success", 3000);
+                  if (statusObj.conversationId) {
+                    // An agent finished in a conversation. The client that ran it announces the
+                    // same completion from message-input; the shared key folds the two into one.
+                    this.CreateRichNotification({
+                      title: statusObj.title || 'Finished',
+                      message: statusObj.message || null,
+                      hideAfter: 5000,
+                      dedupeKey: `agent-completion:${statusObj.conversationId}`,
+                      deferMs: 1500,
+                      context: { conversationId: statusObj.conversationId }
+                    });
+                  } else {
+                    this.CreateSimpleNotification(statusObj.title || 'New Notification Available', "success", 3000);
+                  }
                 }
                 // Always refresh the notification list (badge count, unread state)
                 MJNotificationService.RefreshUserNotifications();
@@ -276,6 +353,186 @@ export class MJNotificationService {
   }
 
   /**
+   * Shows a rich toast: an image or icon, a bold title and a line of detail, on the surface
+   * tokens (so a white-label brand ramp themes it) with the brand colour as its accent.
+   * See {@link MJRichNotificationOptions} for de-duplication.
+   */
+  public CreateRichNotification(options: MJRichNotificationOptions): void {
+    const key = options.dedupeKey;
+    if (key) {
+      const live = this.liveRichToasts.get(key);
+      if (live) {
+        if (live.element.isConnected && Date.now() - live.shownAt < (options.dedupeWindowMs ?? 3000)) {
+          // Already announced — keep what the reader is looking at, just a little longer.
+          live.extend(options.hideAfter);
+          return;
+        }
+        this.liveRichToasts.delete(key);
+      }
+      const pending = this.pendingRichToasts.get(key);
+      if (pending) {
+        // A held-back announcement is superseded by this one.
+        clearTimeout(pending);
+        this.pendingRichToasts.delete(key);
+      }
+      if (options.deferMs) {
+        // Deferred (or deferred again): the wait starts over with the latest wording.
+        this.pendingRichToasts.set(key, setTimeout(() => {
+          this.pendingRichToasts.delete(key);
+          this.showRichToast(options);
+        }, options.deferMs));
+        return;
+      }
+    } else if (options.deferMs) {
+      setTimeout(() => this.showRichToast(options), options.deferMs);
+      return;
+    }
+    this.showRichToast(options);
+  }
+
+  private showRichToast(options: MJRichNotificationOptions): void {
+    const imageUrl = this.resolveRichImage(options);
+    const key = options.dedupeKey;
+    const container = this.ensureToastContainer();
+    this.ensureToastKeyframes();
+    const toast = document.createElement('div');
+    toast.className = 'mj-toast mj-toast--rich';
+    toast.setAttribute('role', 'status');
+    toast.style.cssText = `
+      pointer-events: auto; display: flex; align-items: center; gap: var(--mj-space-3);
+      min-width: 280px; max-width: 420px; padding: var(--mj-space-3) var(--mj-space-4);
+      background: var(--mj-bg-surface-card); color: var(--mj-text-primary);
+      border: 1px solid var(--mj-border-default); border-left: 4px solid var(--mj-brand-primary);
+      border-radius: var(--mj-radius-lg); box-shadow: var(--mj-shadow-lg);
+      font-family: var(--mj-font-family); font-size: var(--mj-text-sm);
+      animation: mj-toast-slide-in 0.28s cubic-bezier(0.16, 1, 0.3, 1); ${options.onClick ? 'cursor: pointer;' : ''}
+    `;
+    // The live region enters the DOM empty and is filled on the NEXT frame, not in the same
+    // task: a region that is already populated when the accessibility tree first sees it is
+    // not announced. Everything else about the toast — registry entry, timers, click handling —
+    // is wired now, so nothing waits on the fill.
+    container.appendChild(toast);
+    this.nextFrame(() => {
+      if (toast.isConnected) {
+        this.fillRichToast(toast, options, imageUrl);
+      }
+    });
+
+    const dismiss = () => {
+      if (key && this.liveRichToasts.get(key)?.element === toast) {
+        this.liveRichToasts.delete(key);
+      }
+      this.dismissToast(toast);
+    };
+    // Delegated, because the close button does not exist until the fill.
+    toast.addEventListener('click', (e) => {
+      if ((e.target as HTMLElement).closest('.mj-toast-close')) {
+        dismiss();
+        return;
+      }
+      if (options.onClick) {
+        options.onClick();
+        dismiss();
+      }
+    });
+
+    // Auto-hide with hover-pause, the same contract as the simple toast.
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let hideAfter = options.hideAfter;
+    const arm = () => {
+      if (timer) {
+        clearTimeout(timer);
+      }
+      timer = hideAfter ? setTimeout(dismiss, hideAfter) : null;
+    };
+    toast.addEventListener('mouseenter', () => {
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+    });
+    toast.addEventListener('mouseleave', () => {
+      if (hideAfter && !timer) {
+        timer = setTimeout(dismiss, 2000);
+      }
+    });
+    arm();
+    if (key) {
+      this.liveRichToasts.set(key, {
+        element: toast,
+        shownAt: Date.now(),
+        extend: (nextHideAfter) => {
+          hideAfter = nextHideAfter;
+          arm();
+        }
+      });
+    }
+  }
+
+  /** Host resolver first (it knows how the assistant is branded), then the caller's image. */
+  private resolveRichImage(options: MJRichNotificationOptions): string | null {
+    const fromHost = options.context ? this.CompletionImageUrlResolver?.(options.context) : null;
+    return fromHost || options.imageUrl || null;
+  }
+
+  /** Writes a rich toast's content. Written once per toast — a de-duplicated repeat never re-fills. */
+  private fillRichToast(toast: HTMLElement, options: MJRichNotificationOptions, imageUrl: string | null): void {
+    // The icon chip uses the house tint — the brand colour mixed to 14% under itself — which
+    // holds contrast in both themes; a solid brand-light background does not.
+    const media = imageUrl
+      ? `<img src="${this.escapeAttribute(imageUrl)}" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;flex:none;background:var(--mj-bg-surface);" />`
+      : `<span aria-hidden="true" style="width:40px;height:40px;border-radius:50%;flex:none;display:inline-flex;align-items:center;justify-content:center;background:color-mix(in srgb, var(--mj-brand-primary) 14%, transparent);color:var(--mj-brand-primary);font-size:18px;"><i class="${this.escapeAttribute(options.iconClass || 'fa-solid fa-robot')}"></i></span>`;
+    const detail = options.message
+      ? `<div style="color:var(--mj-text-secondary);margin-top:2px;">${this.escapeHtml(options.message)}</div>`
+      : '';
+    toast.innerHTML = `
+      ${media}
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:var(--mj-font-semibold);font-size:var(--mj-text-base);">${this.escapeHtml(options.title)}</div>
+        ${detail}
+      </div>
+      <button type="button" class="mj-toast-close" aria-label="Dismiss" style="background:transparent;border:none;padding:4px 6px;border-radius:4px;color:var(--mj-text-muted);cursor:pointer;flex:none;"><i class="fa-solid fa-xmark"></i></button>
+    `;
+  }
+
+  /** Next paint, or the next task where no frame scheduler exists (tests, workers). */
+  private nextFrame(callback: () => void): void {
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => callback());
+    } else {
+      setTimeout(callback, 0);
+    }
+  }
+
+  private dismissToast(toast: HTMLElement): void {
+    if (!toast.isConnected) return;
+    toast.style.animation = 'mj-toast-slide-out 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards';
+    toast.addEventListener('animationend', () => toast.remove(), { once: true });
+  }
+
+  /** One writer for the toast keyframes — the simple and rich toasts share the same animation. */
+  private ensureToastKeyframes(): void {
+    if (document.getElementById('mj-toast-keyframes')) return;
+    const styleEl = document.createElement('style');
+    styleEl.id = 'mj-toast-keyframes';
+    styleEl.textContent = `
+      @keyframes mj-toast-slide-in {
+        from { opacity: 0; transform: translateY(-12px) scale(0.96); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+      }
+      @keyframes mj-toast-slide-out {
+        from { opacity: 1; transform: translateY(0) scale(1); }
+        to { opacity: 0; transform: translateY(-12px) scale(0.96); }
+      }
+    `;
+    document.head.appendChild(styleEl);
+  }
+
+  private escapeAttribute(value: string): string {
+    return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  /**
    * Ensures the toast container element exists in the DOM.
    */
   private ensureToastContainer(): HTMLElement {
@@ -375,22 +632,7 @@ export class MJNotificationService {
 
     container.appendChild(toast);
 
-    // Inject keyframes if not already present
-    if (!document.getElementById('mj-toast-keyframes')) {
-      const styleEl = document.createElement('style');
-      styleEl.id = 'mj-toast-keyframes';
-      styleEl.textContent = `
-        @keyframes mj-toast-slide-in {
-          from { opacity: 0; transform: translateY(-12px) scale(0.96); }
-          to { opacity: 1; transform: translateY(0) scale(1); }
-        }
-        @keyframes mj-toast-slide-out {
-          from { opacity: 1; transform: translateY(0) scale(1); }
-          to { opacity: 0; transform: translateY(-12px) scale(0.96); }
-        }
-      `;
-      document.head.appendChild(styleEl);
-    }
+    this.ensureToastKeyframes();
 
     // Auto-hide with hover-pause support
     if (hideAfter > 0) {
