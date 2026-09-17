@@ -9205,7 +9205,8 @@ The context is now within limits. Please retry your request with the recovered c
         if (!previousDecision) {
             // First execution - ask the agent type what to do
             const initialStep = await this.AgentTypeInstance.DetermineInitialStep<P>(params, params.payload, this.AgentTypeState);
-            
+            await this.recordExecutionRouting(params);
+
             if (initialStep) {
                 // Agent type provided an initial step
                 return initialStep;
@@ -9404,6 +9405,28 @@ The context is now within limits. Please retry your request with the recovered c
      */
     private getDefaultPayloadSelfWritePaths(): string[] | undefined {
         return undefined;
+    }
+
+    /**
+     * Writes the agent type's execution routing to the run as a completed `Decision` step.
+     *
+     * Only agent types that can run an agent more than one way report anything (see
+     * {@link BaseAgentType.DescribeExecutionRouting}). Recorded on the run rather than only logged,
+     * because "which engine ran this?" is asked long after the process logs are gone.
+     *
+     * @private
+     */
+    private async recordExecutionRouting(params: ExecuteAgentParams): Promise<void> {
+        const routing = this.AgentTypeInstance.DescribeExecutionRouting(this.AgentTypeState);
+        if (!routing) return;
+
+        this.logStatus(`🧭 ${routing.StepName}: ${routing.Reason}`, true, params);
+        await this.createStepEntity({
+            stepType: 'Decision',
+            stepName: routing.StepName,
+            contextUser: params.contextUser,
+            completed: { success: true, outputData: { ...routing.Detail, reason: routing.Reason } }
+        });
     }
 
     /**
