@@ -105,6 +105,15 @@ export interface SyncConfig {
      * Defaults to false.
      */
     alwaysPush?: boolean;
+    /**
+     * Whether a push is all-or-nothing. Root-level config only.
+     * - `true` (default): every create, update and delete runs in one database transaction,
+     *   one JSON-root graph at a time. If anything fails, nothing is saved.
+     * - `false`: sibling graphs run in parallel (`--parallel-batch-size`), and each create and
+     *   update commits as soon as it is saved. A failure does NOT roll those back.
+     * The CLI flags `--atomic` / `--no-atomic` override this setting.
+     */
+    atomic?: boolean;
   };
   /** SQL logging configuration (only applies to root-level config, not inherited by subdirectories) */
   sqlLogging?: {
