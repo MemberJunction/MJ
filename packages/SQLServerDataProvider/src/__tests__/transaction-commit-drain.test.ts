@@ -9,8 +9,10 @@ import { mssqlState, MockConnectionPool, MockTransaction } from './helpers/mock-
 /**
  * #4447 — commit/rollback must not race a transactional query still executing on the handle.
  *
- * Every transactional query is serialized through the instance SQL queue, but commit and rollback
- * bypass it. The old code approximated "queue drained" by polling a private mssql field for 2s,
+ * Every transactional query is serialized through the instance SQL queue. The code these tests were
+ * written against had commit and rollback bypass it and approximated "queue drained" by polling a
+ * private mssql field for 2s (#4448 replaced that with a drain; #4454 then routed commit and rollback
+ * through the queue itself — see transaction-commit-through-queue.test.ts). The old code polled,
  * gave up silently, and committed anyway — `Can't commit transaction. There is a request in
  * progress.` — then nulled the handle in a `finally`, so the base class's abandon had nothing to
  * roll back and the caller's own rollback reported 'No active transaction to rollback'. That was

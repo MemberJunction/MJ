@@ -117,6 +117,8 @@ export interface ExecuteSQLBatchOptions {
     ignoreLogging?: boolean;
     /** Whether this batch contains data mutation operations */
     isMutation?: boolean;
+    /** Run on the pool even while an ambient transaction is open — see ExecuteSQLOptions.ignoreAmbientTransaction (#4514). */
+    ignoreAmbientTransaction?: boolean;
 }
 
 /**
@@ -965,6 +967,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             description: options.description,
             ignoreLogging: options.ignoreLogging,
             isMutation: options.isMutation,
+            ignoreAmbientTransaction: options.ignoreAmbientTransaction,
         } : undefined;
 
         const promises = queries.map((query, index) => {
@@ -1232,6 +1235,21 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     ): SaveSQLFragment;
 
     /**
+     * Optional replay form of a CREATE for the SQL log only (never executed). Dialects that
+     * record saves for migration replay (SQL Server's Metadata_Sync migrations) override
+     * this to emit a create-or-update guarded on the primary key, so replaying the
+     * recording on a database that already holds the row converges instead of failing
+     * (MemberJunction/MJ#4503). Default: no replay form, the plain save SQL is logged.
+     */
+    protected RenderReplaySaveSQL(
+        _binding: SaveCallBinding,
+        _entity: BaseEntity,
+        _fieldValues: Map<EntityFieldInfo, unknown>,
+    ): string | undefined {
+        return undefined;
+    }
+
+    /**
      * Concrete implementation of the abstract save-SQL builder defined on
      * `DatabaseProviderBase`. Iterates fields via the single `IsSPParameter`
      * predicate, applies provider-specific value coercion, encrypts, then
@@ -1304,7 +1322,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         //    record-change-free form to fall back to.
         const baseSaveSQL = this.WrapSaveCallForResult(binding, entity, spName);
         let saveSQL = baseSaveSQL;
-        const simpleSQL = baseSaveSQL.sql;
+        // A CREATE's logged form is guarded on the primary key so a migration replay of
+        // the recording converges on a database that already holds the row (#4503).
+        // Updates and dialects without a replay form log the plain save SQL.
+        const replaySQL = isNew ? this.RenderReplaySaveSQL(binding, entity, fieldValueMap) : undefined;
+        const simpleSQL = replaySQL ?? baseSaveSQL.sql;
 
         // 5. Optionally wrap with record-change emission.
         let overlappingChangeData: { changesJSON: string; changesDescription: string } | undefined;
@@ -5083,6 +5105,17 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     /**************************************************************************/
 
     /**
+     * Whether a dataset's reads run on the pool regardless of the ambient transaction. The
+     * metadata dataset is read by a timer-driven refresh that is not part of any caller's unit of
+     * work, so it must never land on a transaction's connection beside its COMMIT (#4514). Every
+     * other dataset keeps joining the ambient transaction: a caller that writes and then loads a
+     * dataset inside one transaction expects to see its own rows.
+     */
+    protected datasetReadsOnPool(datasetName: string): boolean {
+        return datasetName === GenericDatabaseProvider._mjMetadataDatasetName;
+    }
+
+    /**
      * Builds a parameter placeholder for parameterized queries.
      * Default: PG-style ($1, $2, ...). SQL Server overrides to @p0, @p1, etc.
      */
@@ -5118,7 +5151,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             `INNER JOIN ${provider.QuoteSchemaAndView(schema, 'vwEntities')} e ON di.${provider.QuoteIdentifier('EntityID')} = e.${provider.QuoteIdentifier('ID')} ` +
             `WHERE d.${provider.QuoteIdentifier('Name')} = ${provider.BuildParameterPlaceholder(0)}`;
 
-        const items = await provider.ExecuteSQL<Record<string, unknown>>(sSQL, [datasetName], undefined, contextUser);
+        const readOptions: ExecuteSQLOptions = { ignoreAmbientTransaction: this.datasetReadsOnPool(datasetName) };
+        const items = await provider.ExecuteSQL<Record<string, unknown>>(sSQL, [datasetName], readOptions, contextUser);
 
         if (!items || items.length === 0) {
             return {
@@ -5252,7 +5286,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         let batchError: string | null = null;
         if (uncachedQueries.length > 0) {
             try {
-                batchResults = await provider.ExecuteSQLBatch(uncachedQueries, undefined, undefined, contextUser);
+                batchResults = await provider.ExecuteSQLBatch(
+                    uncachedQueries, undefined, { ignoreAmbientTransaction: readOptions.ignoreAmbientTransaction }, contextUser,
+                );
             } catch (err) {
                 batchError = err instanceof Error ? err.message : String(err);
                 LogError(`GetDatasetByName("${datasetName}"): Batch execution failed: ${batchError}`);
@@ -5400,7 +5436,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             `INNER JOIN ${provider.QuoteSchemaAndView(schema, 'vwEntities')} e ON di.${provider.QuoteIdentifier('EntityID')} = e.${provider.QuoteIdentifier('ID')} ` +
             `WHERE d.${provider.QuoteIdentifier('Name')} = ${provider.BuildParameterPlaceholder(0)}`;
 
-        const items = await provider.ExecuteSQL<Record<string, unknown>>(sSQL, [datasetName], undefined, contextUser);
+        const items = await provider.ExecuteSQL<Record<string, unknown>>(
+            sSQL, [datasetName], { ignoreAmbientTransaction: this.datasetReadsOnPool(datasetName) }, contextUser,
+        );
 
         if (!items || items.length === 0) {
             return {
