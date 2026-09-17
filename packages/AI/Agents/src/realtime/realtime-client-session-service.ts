@@ -1839,7 +1839,8 @@ export class RealtimeClientSessionService {
         modelVendorID?: string
     ): Promise<RealtimeSessionParams> {
         const directTools = this.buildDirectActionTools(input.TargetAgentID, effectiveConfig, driverClass, input.AgentSessionID);
-        const systemPrompt = await this.buildCompanionSystemPrompt(input, coAgent, contextUser, provider, effectiveConfig, directTools.length > 0);
+        const hasDirectTools = directTools.length > 0 || (input.ExtraTools != null && input.ExtraTools.length > 0);
+        const systemPrompt = await this.buildCompanionSystemPrompt(input, coAgent, contextUser, provider, effectiveConfig, hasDirectTools);
         const memoryContext = await this.assembleMemoryContext(input, coAgent, contextUser, provider);
         const combinedExtra = directTools.length > 0
             ? [...(input.ExtraTools ?? []), ...directTools]
@@ -1873,6 +1874,7 @@ export class RealtimeClientSessionService {
             // regardless of driver support via the session deadline stamped by the transport layer.
             MaxSessionSeconds: input.MaxSessionSeconds,
             UserID: contextUser?.ID,
+            HasToolFraming: true,
         };
     }
 
