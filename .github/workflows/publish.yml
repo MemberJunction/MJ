@@ -246,6 +246,13 @@ jobs:
       PACKAGE: ${{ github.event.inputs.seed_package }}
       VERSION: ${{ github.event.inputs.seed_version }}
     steps:
+      # Only for the guard script the last step runs; the seed package itself is built in /tmp.
+      - name: Check out the guard scripts
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+          sparse-checkout-cone-mode: false
+
       - name: Set up node
         uses: actions/setup-node@v6
         with:
@@ -319,29 +326,16 @@ jobs:
           npm publish --provenance --access public --tag seed 2>&1 | tee /tmp/seed-publish.log
       # Read back what the publish deposited, so the operator sees the same evidence the
       # gate will, without waiting for a PR run.
+      # The attestation endpoint is eventually consistent with the publish: a read 0.66s after
+      # `npm publish` returned answered 404 for a seed whose provenance had been signed and
+      # logged, and the job failed telling the operator to re-check `npm trust list` — while
+      # the attestation appeared moments later. The script polls for up to three minutes and
+      # then applies the PR gate's own provenance check, so this job and the gate cannot
+      # disagree about what a valid seed is.
       - name: Verify the attestation is public and names this workflow
         run: |
           set -euo pipefail
-          encoded="${PACKAGE/\//%2f}"
-          url="https://registry.npmjs.org/-/npm/v1/attestations/$encoded@$VERSION"
-          code=$(curl -s -o /tmp/att.json -w '%{http_code}' "$url")
-          echo "attestation endpoint returned HTTP $code"
-          if [ "$code" != "200" ]; then
-            echo "::error::Published, but no public attestation at $url. The gate will still block. Confirm 'npm trust list $PACKAGE' names publish.yml."
-            exit 1
-          fi
-          node -e '
-            const d = require("/tmp/att.json");
-            let ok = false;
-            for (const a of d.attestations ?? []) {
-              const p = a?.bundle?.dsseEnvelope?.payload;
-              if (!p) continue;
-              const s = JSON.parse(Buffer.from(p, "base64").toString());
-              const w = s?.predicate?.buildDefinition?.externalParameters?.workflow;
-              if (w) { console.log("workflow path :", w.path); console.log("workflow repo :", w.repository); ok ||= w.path === ".github/workflows/publish.yml"; }
-            }
-            if (!ok) { console.error("::error::No attestation names .github/workflows/publish.yml — the gate would reject this seed."); process.exit(1); }
-          '
+          node .github/scripts/verify-seed-attestation.mjs "$PACKAGE" "$VERSION"
           {
             echo "## Seeded ${PACKAGE}@${VERSION}"
             echo ''
