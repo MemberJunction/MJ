@@ -51,6 +51,19 @@
   // ── Schema (OPTIONAL — the SCHEMA-BACKED form) ──────────────────────────────
   // Present only when the app ships its own database objects. The engine creates this
   // schema at install and drops it at remove. Omit entirely for metadata-/code-only apps.
+  //
+  // Naming: MemberJunction reserves the `__` prefix. MJ's own Open Apps use
+  // `__mj_<AppName>` (e.g. `__mj_BizAppsForms`). By convention a third-party app picks a name
+  // that does not start with `__` — nothing checks the publisher, so `__`-prefixed names
+  // outside `__mj_<AppName>` are simply refused for everyone unless the install is run with
+  // the double-underscore override.
+  //
+  // Reserved outright and never claimable, on either platform, with or without that override:
+  // every schema the DATABASE owns — `dbo`, `sys`, `guest`, SQL Server's nine `db_*` fixed
+  // database-role schemas, `public`, anything starting `pg_`, and `information_schema` — plus
+  // every schema MJ owns: `__mj` and `__mj_UDT`. These all exist in a stock database, so
+  // naming one does not create it, it ADOPTS it — and `mj app remove` would then drop it.
+  // `ReservedOwnerOf` in the engine's schema-manager.ts is the authoritative rule.
   "schema": {
     "name": "acme_crm",                                    // REQUIRED within schema — SQL schema name
     "createIfNotExists": true,                             // OPTIONAL — default true
