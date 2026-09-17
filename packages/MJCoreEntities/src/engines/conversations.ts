@@ -552,6 +552,14 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
 
     /** Track the environment ID used for the last projects (folders) load */
     private _lastProjectsEnvironmentId: string | null = null;
+    /**
+     * The user the cached projects were loaded FOR. Part of the cache key because
+     * the project read is now user-dependent (personal folders): keyed on the
+     * environment alone, a second user in the same process — a server-side caller,
+     * an impersonated context — would be served the first user's personal folders
+     * from cache and never issue a read of their own.
+     */
+    private _lastProjectsUserId: string | null = null;
 
     /**
      * For conversations the current user *received* via sharing, this map goes
@@ -754,28 +762,45 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     }
 
     /**
-     * Loads the projects (conversation folders) for an environment and emits via Projects$.
-     * Projects are environment-scoped (not user-scoped) and small, so the full active set
-     * is cached. Skips reloading when already loaded for the same environment unless forced.
+     * Loads the projects (conversation folders) visible to a user in an environment and
+     * emits via Projects$.
+     *
+     * Visible means SHARED (OwnerUserID IS NULL — every folder that existed before
+     * ownership was expressible) plus the user's OWN personal folders. A personal folder
+     * never reaches anyone else's sidebar. The set is small, so it is cached whole;
+     * reloading is skipped only when both the environment AND the user match, because the
+     * read now depends on both.
      *
      * @param environmentId - The environment to filter projects by
-     * @param contextUser - The current user context
-     * @param forceRefresh - If true, reloads even if already cached for this environment
+     * @param contextUser - The current user context; also decides which personal folders load
+     * @param forceRefresh - If true, reloads even if already cached for this environment/user
      */
     public async LoadProjects(
         environmentId: string,
         contextUser: UserInfo,
         forceRefresh: boolean = false
     ): Promise<void> {
-        if (!forceRefresh && this._lastProjectsEnvironmentId === environmentId) {
+        const userId = contextUser?.ID ?? null;
+        if (!forceRefresh
+            && this._lastProjectsEnvironmentId === environmentId
+            && this._lastProjectsUserId === userId) {
             return;
         }
+
+        // Shared folders, plus this user's own. A missing/instanceless user gets SHARED
+        // ONLY — never every personal folder in the environment: without an identity there
+        // is no one to be the owner of, and widening on absent input is how a personal
+        // folder ends up in a stranger's sidebar.
+        const ownership = userId
+            ? `(OwnerUserID IS NULL OR OwnerUserID='${userId}')`
+            : `OwnerUserID IS NULL`;
 
         const rv = new RunView();
         const result = await rv.RunView<MJProjectEntity>(
             {
                 EntityName: 'MJ: Projects',
-                ExtraFilter: `EnvironmentID='${environmentId}' AND (IsArchived IS NULL OR IsArchived=0)`,
+                ExtraFilter: `EnvironmentID='${environmentId}' AND (IsArchived IS NULL OR IsArchived=0)`
+                    + ` AND ${ownership}`,
                 OrderBy: 'Name ASC',
                 MaxRows: 1000,
                 ResultType: 'entity_object'
@@ -785,6 +810,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
 
         if (result.Success) {
             this._lastProjectsEnvironmentId = environmentId;
+            this._lastProjectsUserId = userId;
             this._projects$.next(result.Results || []);
         } else {
             console.error('[ConversationEngine] Failed to load projects:', result.ErrorMessage);
@@ -2225,6 +2251,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         this._detailCache.clear();
         this._lastEnvironmentId = null;
         this._lastProjectsEnvironmentId = null;
+        this._lastProjectsUserId = null;
     }
 
     // ========================================================================
