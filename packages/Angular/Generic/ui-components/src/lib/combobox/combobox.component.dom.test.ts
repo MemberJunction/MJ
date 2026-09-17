@@ -35,13 +35,14 @@ describe('MJComboboxComponent (DOM)', () => {
   it('renders the text input with the placeholder', () => {
     const f = render({ Placeholder: 'Pick a fruit' });
     expect(input(f).placeholder).toBe('Pick a fruit');
-    expect(query(f, '.mj-combobox[role="combobox"]')?.getAttribute('aria-expanded')).toBe('false');
+    // role="combobox" and aria-expanded live on the INPUT — the element that takes focus.
+    expect(query(f, '.mj-combobox-input[role="combobox"]')?.getAttribute('aria-expanded')).toBe('false');
   });
 
   it('opens the panel and lists all options on focus', () => {
     const f = render();
     focusOpen(f);
-    expect(query(f, '.mj-combobox')?.getAttribute('aria-expanded')).toBe('true');
+    expect(input(f).getAttribute('aria-expanded')).toBe('true');
     expect(overlayQueryAll('.mj-dropdown-option').map((o) => o.textContent?.trim())).toEqual(['Apples', 'Bananas', 'Cherries']);
   });
 
@@ -62,7 +63,7 @@ describe('MJComboboxComponent (DOM)', () => {
     f.detectChanges();
     expect(changes).toEqual(['b']);
     expect(input(f).value).toBe('Bananas');
-    expect(query(f, '.mj-combobox')?.getAttribute('aria-expanded')).toBe('false');
+    expect(input(f).getAttribute('aria-expanded')).toBe('false');
   });
 
   it('shows a clear button once there is input text and clears the value on click', () => {
@@ -235,5 +236,137 @@ describe('MJComboboxComponent — Disabled with no Angular Forms binding (DOM)',
 
     focusOpen(f);
     expect(f.componentInstance.IsOpen, 'a disabled combobox must not open').toBe(false);
+  });
+
+});
+
+/** Id of the hidden span holding one composed word, found by the word itself. */
+const srOnlyId = (f: ReturnType<typeof render>, word: string) =>
+  Array.from(f.nativeElement.querySelectorAll('.mj-combobox-sr-only') as NodeListOf<HTMLElement>)
+    .find((el) => el.textContent?.trim() === word)
+    ?.getAttribute('id');
+
+describe('MJComboboxComponent — accessible name (#4116)', () => {
+  const toggle = (f: ReturnType<typeof render>) => query(f, '.mj-combobox-toggle') as HTMLElement;
+  const keydown = (el: Element, key: string) => el.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+
+  it('names the INPUT with AriaLabel — and the popup listbox with the same name', () => {
+    // The name has to land on the input: that is the element that takes focus, so it is the one
+    // a screen reader announces. Naming the wrapper names something nobody ever visits.
+    const f = render({ AriaLabel: 'Interview persona' });
+    expect(input(f).getAttribute('aria-label')).toBe('Interview persona');
+    focusOpen(f);
+    expect(overlayQuery('.mj-dropdown-panel')?.getAttribute('aria-label')).toBe('Interview persona');
+  });
+
+  it('names the input from a visible label via AriaLabelledBy — input AND popup listbox', () => {
+    const f = render({ AriaLabelledBy: 'persona-label' });
+    expect(input(f).getAttribute('aria-labelledby')).toBe('persona-label');
+    focusOpen(f);
+    expect(overlayQuery('.mj-dropdown-panel')?.getAttribute('aria-labelledby')).toBe('persona-label');
+  });
+
+  it('puts InputId on the real <input>, which IS a valid <label for> target', () => {
+    // The divergence from mj-dropdown, whose trigger is a div that label[for] can neither name
+    // nor focus. Here the id lands on a labelable form element, so label[for] works.
+    const f = render({ InputId: 'persona-combo' });
+    expect(input(f).getAttribute('id')).toBe('persona-combo');
+    expect(input(f).tagName).toBe('INPUT');
+  });
+
+  it('passes AriaDescribedBy through for hint and error text', () => {
+    const f = render({ AriaDescribedBy: 'persona-hint' });
+    expect(input(f).getAttribute('aria-describedby')).toBe('persona-hint');
+  });
+
+  it('renders NO empty name attributes when nothing is configured — absent beats empty', () => {
+    // aria-label="" is worse than no attribute: it overrides every other naming source with an
+    // explicitly empty name.
+    const f = render({});
+    expect(input(f).hasAttribute('aria-label')).toBe(false);
+    expect(input(f).hasAttribute('aria-labelledby')).toBe(false);
+    expect(input(f).hasAttribute('id')).toBe(false);
+    expect(input(f).hasAttribute('aria-describedby')).toBe(false);
+  });
+
+  it('names the toggle button from the combobox name — it had no name at all before', () => {
+    const f = render({ AriaLabel: 'Interview persona' });
+    expect(toggle(f).getAttribute('aria-label')).toBe('Show options for Interview persona');
+  });
+
+  it('names the toggle button from the VISIBLE label too, via an id list', () => {
+    // A concatenated string cannot work here: the component never sees the label's text, only
+    // its id. Without the id list every toggle on a form announces an identical "Show options".
+    const f = render({ AriaLabelledBy: 'persona-label' });
+    const wordId = srOnlyId(f, 'Show options for');
+    expect(wordId).toBeTruthy();
+    expect(toggle(f).getAttribute('aria-labelledby')).toBe(`${wordId} persona-label`);
+    // aria-label must be ABSENT, not empty: it would otherwise win over aria-labelledby.
+    expect(toggle(f).hasAttribute('aria-label')).toBe(false);
+  });
+
+  it('keeps the composed words out of the reading order with aria-hidden', () => {
+    // A hidden node DIRECTLY referenced by aria-labelledby still counts toward the name
+    // (accname §4.1), so the words compose without being read as stray text beside the field.
+    const f = render({ AriaLabelledBy: 'persona-label' });
+    const words = Array.from(f.nativeElement.querySelectorAll('.mj-combobox-sr-only') as NodeListOf<HTMLElement>);
+    expect(words.length).toBe(2);
+    expect(words.every((w) => w.getAttribute('aria-hidden') === 'true')).toBe(true);
+  });
+
+  it('falls back to a generic toggle name when the combobox itself is unnamed', () => {
+    const f = render({});
+    expect(toggle(f).getAttribute('aria-label')).toBe('Show options');
+  });
+
+  it('names the clear button from the combobox name instead of a bare "Clear"', () => {
+    const f = render({ AriaLabel: 'Interview persona' });
+    focusOpen(f);
+    mousedown(overlayQueryAll('.mj-dropdown-option')[0]);
+    f.detectChanges();
+    expect((query(f, '.mj-combobox-clear') as HTMLElement).getAttribute('aria-label')).toBe('Clear Interview persona');
+  });
+
+  it('does not double a name that already begins with the composed word', () => {
+    // The house habit `AriaLabel="Clear filters"` would otherwise announce "Clear Clear filters".
+    const f = render({ AriaLabel: 'Clear filters' });
+    focusOpen(f);
+    mousedown(overlayQueryAll('.mj-dropdown-option')[0]);
+    f.detectChanges();
+    expect((query(f, '.mj-combobox-clear') as HTMLElement).getAttribute('aria-label')).toBe('Clear filters');
+  });
+
+  it('carries role=combobox and its state attributes on the INPUT, not the wrapper', () => {
+    // aria-expanded on a non-focusable wrapper is announced to nobody.
+    const f = render();
+    expect(input(f).getAttribute('role')).toBe('combobox');
+    expect(input(f).getAttribute('aria-haspopup')).toBe('listbox');
+    expect(input(f).getAttribute('aria-autocomplete')).toBe('list');
+    expect(query(f, '.mj-combobox')?.hasAttribute('role')).toBe(false);
+    expect(query(f, '.mj-combobox')?.hasAttribute('aria-expanded')).toBe(false);
+  });
+
+  it('points the input at the listbox with aria-controls while open', () => {
+    const f = render();
+    expect(input(f).hasAttribute('aria-controls')).toBe(false);   // nothing to point at yet
+    focusOpen(f);
+    const listboxId = overlayQuery('.mj-dropdown-panel')?.getAttribute('id');
+    expect(listboxId).toBeTruthy();
+    expect(input(f).getAttribute('aria-controls')).toBe(listboxId);
+  });
+
+  it('follows the arrow-key highlight with aria-activedescendant', () => {
+    // Focus never leaves the input, so without this the highlight is a CSS class and nothing
+    // else — a screen-reader user arrowing through the list hears no change at all.
+    const f = render();
+    focusOpen(f);
+    expect(input(f).hasAttribute('aria-activedescendant')).toBe(false);
+
+    keydown(input(f), 'ArrowDown');
+    f.detectChanges();
+
+    const highlighted = overlayQueryAll('.mj-dropdown-option')[0];
+    expect(highlighted.getAttribute('id')).toBeTruthy();
+    expect(input(f).getAttribute('aria-activedescendant')).toBe(highlighted.getAttribute('id'));
   });
 });

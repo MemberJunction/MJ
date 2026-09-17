@@ -1,22 +1,48 @@
-import { Component, Input, forwardRef, HostBinding, ChangeDetectorRef, inject } from '@angular/core';
+import {
+  AfterViewInit,
+  ChangeDetectorRef,
+  Component,
+  ElementRef,
+  HostBinding,
+  Input,
+  ViewChild,
+  forwardRef,
+  inject
+} from '@angular/core';
 import { NG_VALUE_ACCESSOR, ControlValueAccessor } from '@angular/forms';
+import { MJNamedControlBase } from '../a11y/named-control.base';
+import { warnIfUnnamed } from '../a11y/unnamed-control-guard';
 
 /**
  * mj-numeric-input — Numeric input with min/max/step. Replaces `<kendo-numerictextbox>`.
+ *
+ * A spinbutton with no accessible name announces as "spin button, blank" (WCAG 2.1 4.1.2). Use
+ * {@link MJNamedControlBase.AriaLabelledBy} when a visible label exists,
+ * {@link MJNamedControlBase.AriaLabel} when none does. The control here is a real `<input>`, so
+ * {@link MJNamedControlBase.InputId} IS a valid `<label for>` target.
+ *
+ * @example
+ * ```html
+ * <mj-numeric-input AriaLabel="Quantity" [(ngModel)]="quantity" [Min]="0" [Max]="100" />
+ * ```
  */
 @Component({
   selector: 'mj-numeric-input',
   standalone: true,
   template: `
-    <input type="number" class="mj-input mj-numeric-input"
+    <input #numericInput type="number" class="mj-input mj-numeric-input"
       [attr.min]="Min" [attr.max]="Max" [attr.step]="Step"
+      [attr.id]="InputId || null"
+      [attr.aria-label]="AriaLabel || null"
+      [attr.aria-labelledby]="AriaLabelledBy || null"
+      [attr.aria-describedby]="AriaDescribedBy || null"
       [attr.placeholder]="Placeholder" [disabled]="IsDisabled"
       [value]="DisplayValue"
       (input)="OnInput($event)" (blur)="OnBlur()" />
   `,
   providers: [{ provide: NG_VALUE_ACCESSOR, useExisting: forwardRef(() => MJNumericInputComponent), multi: true }]
 })
-export class MJNumericInputComponent implements ControlValueAccessor {
+export class MJNumericInputComponent extends MJNamedControlBase implements ControlValueAccessor, AfterViewInit {
   @Input() Min: number | null = null;
   @Input() Max: number | null = null;
   @Input() Step: number = 1;
@@ -33,6 +59,7 @@ export class MJNumericInputComponent implements ControlValueAccessor {
   get Disabled(): boolean { return this.disabledInput; }
   @Input() Placeholder = '';
   @HostBinding('class.mj-numeric-input-host') readonly hostClass = true;
+  @ViewChild('numericInput') private numericInputEl: ElementRef<HTMLInputElement> | undefined;
 
   /** The rendered `[disabled]` state — true when EITHER source says so. Assign via `syncDisabled()`. */
   IsDisabled = false;
@@ -60,6 +87,8 @@ export class MJNumericInputComponent implements ControlValueAccessor {
   private internalValue: number | null = null;
   private onChange: (value: number | null) => void = () => {};
   private onTouched: () => void = () => {};
+
+  ngAfterViewInit(): void { warnIfUnnamed(this.numericInputEl?.nativeElement, 'mj-numeric-input'); }
 
   OnInput(event: Event): void {
     const raw = (event.target as HTMLInputElement).value;

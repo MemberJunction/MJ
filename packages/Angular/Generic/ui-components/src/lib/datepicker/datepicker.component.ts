@@ -1,10 +1,24 @@
-import { Component, Input, Output, EventEmitter, forwardRef, HostBinding, ElementRef, ViewChild, OnDestroy, inject, ChangeDetectorRef } from '@angular/core';
+import { AfterViewInit, Component, Input, Output, EventEmitter, forwardRef, HostBinding, ElementRef, ViewChild, OnDestroy, inject, ChangeDetectorRef } from '@angular/core';
 import { NG_VALUE_ACCESSOR, ControlValueAccessor } from '@angular/forms';
 import { OverlayModule, ConnectedPosition } from '@angular/cdk/overlay';
 import { CalendarDay, WEEK_DAYS, BuildCalendarWeeks, FormatDate, GetMonthYearLabel } from '../calendar/calendar-utils';
+import { MJNamedControlBase } from '../a11y/named-control.base';
+import { warnIfUnnamed } from '../a11y/unnamed-control-guard';
 
 /**
  * mj-datepicker — Date picker with calendar popup. Replaces `<kendo-datepicker>`.
+ *
+ * Without an accessible name the date field announces as "edit, blank" and its calendar popup as a
+ * generic "Calendar" — so a form with a start date and an end date presents two identical grids
+ * (WCAG 2.1 4.1.2). Use {@link MJNamedControlBase.AriaLabelledBy} when a visible label exists,
+ * {@link MJNamedControlBase.AriaLabel} when none does; the toggle button and the calendar take
+ * their names from the same source. The field is a real `<input>`, so
+ * {@link MJNamedControlBase.InputId} IS a valid `<label for>` target.
+ *
+ * @example
+ * ```html
+ * <mj-datepicker AriaLabel="Due date" [(ngModel)]="dueDate" [Min]="minDate" />
+ * ```
  */
 @Component({
   selector: 'mj-datepicker',
@@ -14,10 +28,28 @@ import { CalendarDay, WEEK_DAYS, BuildCalendarWeeks, FormatDate, GetMonthYearLab
     <div class="mj-datepicker" #trigger cdkOverlayOrigin #overlayOrigin="cdkOverlayOrigin"
       [class.mj-datepicker--disabled]="IsDisabled">
       <input #dateInput class="mj-input mj-datepicker-input" type="text"
+        [attr.id]="InputId || null"
+        [attr.aria-label]="AriaLabel || null"
+        [attr.aria-labelledby]="AriaLabelledBy || null"
+        [attr.aria-describedby]="AriaDescribedBy || null"
         [placeholder]="Placeholder" [disabled]="IsDisabled" [value]="DisplayValue"
         (input)="OnInputChange($event)" (blur)="OnBlur()" (keydown)="OnKeyDown($event)" />
+      <!--
+        The fixed words live in hidden spans rather than in concatenated strings so the
+        AriaLabelledBy path can name the toggle and the calendar from the same visible label that
+        names the field: aria-labelledby takes an ID LIST, so the word plus the label's own text is
+        composed by the accessibility tree without this component ever seeing that text. The
+        calendar's word sits here, outside the overlay, because ids resolve document-wide.
+        A hidden node that is DIRECTLY referenced by aria-labelledby is still included in the name
+        (accname §4.1), so aria-hidden keeps the word out of the reading order without costing the
+        composed name.
+      -->
+      <span class="mj-datepicker-sr-only" aria-hidden="true" [attr.id]="SecondaryWordId('toggle-word')">Open calendar for</span>
+      <span class="mj-datepicker-sr-only" aria-hidden="true" [attr.id]="SecondaryWordId('calendar-word')">Calendar for</span>
       <button type="button" class="mj-datepicker-toggle" tabindex="-1" [disabled]="IsDisabled"
-        (click)="Toggle()" aria-label="Open calendar">
+        (click)="Toggle()"
+        [attr.aria-labelledby]="ToggleLabelledBy || null"
+        [attr.aria-label]="ToggleLabelledBy ? null : ToggleLabel">
         <i class="fa-solid fa-calendar"></i>
       </button>
     </div>
@@ -25,7 +57,9 @@ import { CalendarDay, WEEK_DAYS, BuildCalendarWeeks, FormatDate, GetMonthYearLab
       [cdkConnectedOverlayOpen]="IsOpen" [cdkConnectedOverlayPositions]="Positions"
       [cdkConnectedOverlayHasBackdrop]="true" cdkConnectedOverlayBackdropClass="mj-dropdown-backdrop"
       (backdropClick)="Close()" (detach)="Close()">
-      <div class="mj-calendar" role="grid" aria-label="Calendar">
+      <div class="mj-calendar" role="grid"
+        [attr.aria-labelledby]="CalendarLabelledBy || null"
+        [attr.aria-label]="CalendarLabelledBy ? null : CalendarLabel">
         <div class="mj-calendar-header">
           <button type="button" (click)="PreviousMonth()" aria-label="Previous month" class="mj-calendar-nav">
             <i class="fa-solid fa-chevron-left"></i></button>
@@ -56,7 +90,7 @@ import { CalendarDay, WEEK_DAYS, BuildCalendarWeeks, FormatDate, GetMonthYearLab
   `,
   providers: [{ provide: NG_VALUE_ACCESSOR, useExisting: forwardRef(() => MJDatepickerComponent), multi: true }]
 })
-export class MJDatepickerComponent implements ControlValueAccessor, OnDestroy {
+export class MJDatepickerComponent extends MJNamedControlBase implements ControlValueAccessor, AfterViewInit, OnDestroy {
   @Input() Min: Date | null = null;
   @Input() Max: Date | null = null;
   @Input() Format = 'MM/dd/yyyy';
@@ -72,6 +106,7 @@ export class MJDatepickerComponent implements ControlValueAccessor, OnDestroy {
   get Disabled(): boolean { return this.disabledInput; }
   @Output() ValueChange = new EventEmitter<Date | null>();
   @ViewChild('trigger') private triggerEl!: ElementRef<HTMLElement>;
+  @ViewChild('dateInput') private dateInputEl: ElementRef<HTMLInputElement> | undefined;
   @HostBinding('class.mj-datepicker-host') readonly hostClass = true;
   private cdr = inject(ChangeDetectorRef);
 
@@ -87,6 +122,20 @@ export class MJDatepickerComponent implements ControlValueAccessor, OnDestroy {
   private onTouched: () => void = () => {};
 
   get MonthYearLabel(): string { return GetMonthYearLabel(this.viewDate); }
+
+  /** `aria-labelledby` id list for the toggle button when a VISIBLE label names the field. */
+  get ToggleLabelledBy(): string { return this.SecondaryLabelledBy('toggle-word'); }
+
+  /** `aria-label` for the toggle button in the no-visible-label case. */
+  get ToggleLabel(): string { return this.SecondaryLabel('Open calendar for', 'Open calendar'); }
+
+  /** `aria-labelledby` id list for the calendar grid when a VISIBLE label names the field. */
+  get CalendarLabelledBy(): string { return this.SecondaryLabelledBy('calendar-word'); }
+
+  /** `aria-label` for the calendar grid in the no-visible-label case. */
+  get CalendarLabel(): string { return this.SecondaryLabel('Calendar for', 'Calendar'); }
+
+  ngAfterViewInit(): void { warnIfUnnamed(this.dateInputEl?.nativeElement, 'mj-datepicker'); }
 
   Toggle(): void { if (this.IsDisabled) return; this.IsOpen ? this.Close() : this.Open(); }
   Open(): void {
