@@ -472,10 +472,11 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             }
 
             // ──────────────────────────────────────────────────────────
-            // Dedup → content-item exclusion → permission safety net → score threshold → enrich
+            // Dedup → content-item promotion/exclusion → merge promoted entities → permission safety net → score threshold → enrich
             // ──────────────────────────────────────────────────────────
             let results = this._fusion.Deduplicate(fusedResults);
             results = await this._enricher.ExcludeEntitySourcedContentItems(results, contextUser);
+            results = this._fusion.Deduplicate(results);
 
             const beforePermCount = results.length;
             results = await this.filterByPermissions(results, contextUser);
@@ -1308,7 +1309,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
     ): Promise<{
         scopeID: string;
         fused: SearchResultItem[];
-        sourceCounts: { Vector: number; FullText: number; Entity: number; Storage: number };
+        sourceCounts: { Vector: number; FullText: number; Entity: number; Storage: number; Tag?: number };
         /**
          * What this scope decided — dimension provenance and per-lane outcomes.
          *
@@ -1871,8 +1872,8 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
     /**
      * Count results contributed by each source before fusion.
      */
-    private countSources(lists: LabeledResultList[]): { Vector: number; FullText: number; Entity: number; Storage: number } {
-        const counts = { Vector: 0, FullText: 0, Entity: 0, Storage: 0 };
+    private countSources(lists: LabeledResultList[]): { Vector: number; FullText: number; Entity: number; Storage: number; Tag?: number } {
+        const counts = { Vector: 0, FullText: 0, Entity: 0, Storage: 0, Tag: 0 };
         for (const list of lists) {
             switch (list.Source) {
                 case 'vector':
@@ -1886,6 +1887,9 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                     break;
                 case 'storage':
                     counts.Storage += list.Results.length;
+                    break;
+                case 'tag':
+                    counts.Tag += list.Results.length;
                     break;
             }
         }
