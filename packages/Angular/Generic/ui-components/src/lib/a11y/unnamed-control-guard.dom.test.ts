@@ -48,12 +48,52 @@ describe('warnIfUnnamed', () => {
 
   it.each([
     ['aria-label', '<input aria-label="Quantity">'],
-    ['aria-labelledby', '<input aria-labelledby="qty-label">'],
     ['title', '<input title="Quantity">'],
-    ['placeholder', '<input placeholder="Search templates...">'],
   ])('stays silent when the name comes from %s', (_source, html) => {
     withWarnSpy((warn) => {
       warnIfUnnamed(element(html), 'mj-numeric-input');
+      expect(warn).not.toHaveBeenCalled();
+    });
+  });
+
+  it('stays silent when aria-labelledby resolves to a real element', () => {
+    withWarnSpy((warn) => {
+      document.body.appendChild(element('<span id="qty-label">Quantity</span>'));
+      warnIfUnnamed(element('<input aria-labelledby="qty-label">'), 'mj-numeric-input');
+      expect(warn).not.toHaveBeenCalled();
+    });
+  });
+
+  it('warns when aria-labelledby points at nothing — a dangling idref names nothing', () => {
+    // The half-wiring case: the label was renamed or removed, the attribute stayed. The accessible
+    // name computes to empty, so markup that looks correct leaves the control unnamed.
+    withWarnSpy((warn) => {
+      warnIfUnnamed(element('<input aria-labelledby="qty-label">'), 'mj-numeric-input');
+      expect(warn).toHaveBeenCalledOnce();
+    });
+  });
+
+  it('stays silent when ONE of several aria-labelledby ids resolves', () => {
+    withWarnSpy((warn) => {
+      document.body.appendChild(element('<span id="qty-label">Quantity</span>'));
+      warnIfUnnamed(element('<input aria-labelledby="missing-word qty-label">'), 'mj-numeric-input');
+      expect(warn).not.toHaveBeenCalled();
+    });
+  });
+
+  it('does NOT count a placeholder as a name by default', () => {
+    // A placeholder disappears the moment the user types. Counting it everywhere would silence the
+    // guard for most of the controls it exists to catch: nearly every mj-combobox and mj-datepicker
+    // call site in this repo already passes a Placeholder.
+    withWarnSpy((warn) => {
+      warnIfUnnamed(element('<input placeholder="Select a category">'), 'mj-combobox');
+      expect(warn).toHaveBeenCalledOnce();
+    });
+  });
+
+  it('counts a placeholder only for the control that opts in', () => {
+    withWarnSpy((warn) => {
+      warnIfUnnamed(element('<input placeholder="Search templates...">'), 'mj-page-search', { placeholderIsName: true });
       expect(warn).not.toHaveBeenCalled();
     });
   });
@@ -127,12 +167,13 @@ describe('every named control is wired to the guard', () => {
 });
 
 /**
- * mj-page-search is deliberately absent from the table above: its `Placeholder` defaults to
- * "Search...", which IS the fallback the name computation uses, so an unconfigured page-search has
- * a name and the guard is correctly silent. Its wiring is covered by the placeholder-less case.
+ * mj-page-search is deliberately absent from the table above: it is the one control that opts into
+ * `placeholderIsName`, because its placeholder ("Search templates…") IS the caller's statement of
+ * what the box searches and its default is never absent. Every other control warns without a real
+ * name, placeholder or not.
  */
 describe('mj-page-search and the placeholder fallback', () => {
-  it('stays silent on the default placeholder and warns once the placeholder is cleared', () => {
+  it('stays silent on its default placeholder and warns once the placeholder is cleared', () => {
     const quiet = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     renderComponentFixture(MJPageSearchComponent, {});
     expect(quiet).not.toHaveBeenCalled();

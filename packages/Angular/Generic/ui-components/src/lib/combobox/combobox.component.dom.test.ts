@@ -305,6 +305,17 @@ describe('MJComboboxComponent — accessible name (#4116)', () => {
     expect(toggle(f).hasAttribute('aria-label')).toBe(false);
   });
 
+  it('hides the composed words with styles that ship WITH the component', () => {
+    // The rest of this control's styling is a global stylesheet the host application imports. If
+    // the hiding rule lived there too, a host that skipped the import would render the literal
+    // text "Clear Show options for" in the middle of the field — so this one rule is
+    // component-scoped, and this spec renders with no global stylesheet loaded at all.
+    const f = render({ AriaLabelledBy: 'persona-label' });
+    const word = f.nativeElement.querySelector('.mj-combobox-sr-only') as HTMLElement;
+    expect(getComputedStyle(word).position).toBe('absolute');
+    expect(getComputedStyle(word).width).toBe('1px');
+  });
+
   it('keeps the composed words out of the reading order with aria-hidden', () => {
     // A hidden node DIRECTLY referenced by aria-labelledby still counts toward the name
     // (accname §4.1), so the words compose without being read as stray text beside the field.
@@ -341,9 +352,15 @@ describe('MJComboboxComponent — accessible name (#4116)', () => {
     const f = render();
     expect(input(f).getAttribute('role')).toBe('combobox');
     expect(input(f).getAttribute('aria-haspopup')).toBe('listbox');
-    expect(input(f).getAttribute('aria-autocomplete')).toBe('list');
+    expect(input(f).getAttribute('aria-autocomplete')).toBe('list');   // Filterable defaults to true
     expect(query(f, '.mj-combobox')?.hasAttribute('role')).toBe(false);
     expect(query(f, '.mj-combobox')?.hasAttribute('aria-expanded')).toBe(false);
+  });
+
+  it('does not claim autocomplete behaviour the control does not have', () => {
+    // With [Filterable]="false" typing does NOT narrow the list, so announcing an autocomplete-list
+    // combobox would send the user typing at a list that never responds.
+    expect(input(render({ Filterable: false })).getAttribute('aria-autocomplete')).toBe('none');
   });
 
   it('points the input at the listbox with aria-controls while open', () => {

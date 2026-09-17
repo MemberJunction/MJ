@@ -70,7 +70,7 @@ Three things hold across all six:
 - **The name reaches the whole control** — the popup listbox, the calendar grid, the filter box, the toggle and clear buttons all take their name from the same source, so a form with six filterable dropdowns does not present six identical "Filter options" boxes. Under `AriaLabelledBy` this works through an `aria-labelledby` id list, the only mechanism that can compose a fixed word with a visible label's own text.
 - **`InputId` is a `<label for>` target only where the focusable element is a real form control** — true for `mj-combobox`, `mj-datepicker`, `mj-numeric-input` and `mj-page-search`; **not** for `mj-dropdown` (a `div[role=combobox]`) or `mj-switch` (a `<button>`), where `label[for]` neither names nor focuses and the visible-label path is `AriaLabelledBy`.
 
-**A control that renders with no accessible name warns in dev mode** (`warnIfUnnamed`, alongside the existing `mjButton` and `mjClickable` guards) and is silent in production. It fires only when the name would be genuinely empty; it does not judge name quality, so a `mj-page-search` carrying only its placeholder stays quiet.
+**A control that renders with no accessible name warns in dev mode** (`warnIfUnnamed`, alongside the existing `mjButton` and `mjClickable` guards) and is silent in production. It fires when the name would be genuinely empty — including an `aria-labelledby` whose ids resolve to nothing, which names the control no better than no attribute at all. A `placeholder` does **not** count as a name for a form control, since it disappears the moment the user types; `mj-page-search` is the one control that opts into counting it, because its placeholder is the caller's statement of what the box searches.
 
 ---
 

@@ -84,18 +84,3 @@
 .mj-combobox--open .mj-combobox-toggle i {
   transform: rotate(180deg);
 }
-
-/* Visually hidden, still in the accessibility tree: holds one fixed word of a secondary control's
-   name ("Clear", "Show options for") so an aria-labelledby id list can compose it with the
-   combobox's own visible label. */
-.mj-combobox-sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}

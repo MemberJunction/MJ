@@ -123,7 +123,15 @@ export class MJPageSearchComponent extends MJNamedControlBase implements AfterVi
 
   public focused: boolean = false;
 
-  public ngAfterViewInit(): void { warnIfUnnamed(this.searchInputEl?.nativeElement, 'mj-page-search'); }
+  /**
+   * `placeholderIsName` is passed here and nowhere else: this is a toolbar widget whose placeholder
+   * ("Search templates…") IS the caller's statement of what the box searches, and whose default is
+   * never absent. On a form control a placeholder is not a name — it disappears as soon as the user
+   * types — so those controls warn without one.
+   */
+  public ngAfterViewInit(): void {
+    warnIfUnnamed(this.searchInputEl?.nativeElement, 'mj-page-search', { placeholderIsName: true });
+  }
 
   public onInput(event: Event): void {
     const v = (event.target as HTMLInputElement).value;

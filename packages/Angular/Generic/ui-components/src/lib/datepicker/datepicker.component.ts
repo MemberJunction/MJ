@@ -88,6 +88,28 @@ import { warnIfUnnamed } from '../a11y/unnamed-control-guard';
       </div>
     </ng-template>
   `,
+  styles: [`
+  /*
+   * Component-scoped ON PURPOSE, unlike the rest of this control's styling, which ships as a global
+   * stylesheet the host application imports. A host that skips that import gets unstyled chrome —
+   * survivable — but a hidden-word span that is not hidden renders its word as literal text in the
+   * middle of the field. The rule that hides it therefore has to travel with the component.
+   *
+   * Not display:none or visibility:hidden — both remove the element from the accessibility tree,
+   * which is the one thing this element exists to be in.
+   */
+  .mj-datepicker-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  `],
   providers: [{ provide: NG_VALUE_ACCESSOR, useExisting: forwardRef(() => MJDatepickerComponent), multi: true }]
 })
 export class MJDatepickerComponent extends MJNamedControlBase implements ControlValueAccessor, AfterViewInit, OnDestroy {

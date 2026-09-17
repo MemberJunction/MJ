@@ -89,15 +89,30 @@ export abstract class MJNamedControlBase {
    * The already-starts-with-`word` guard is not cosmetic: this repo's house habit is
    * `AriaLabel="Filter roles"`, and an unconditional prefix announces that box as
    * "Filter Filter roles".
+   *
+   * The match ends on a WORD BOUNDARY, not on a space: `AriaLabel="Filter: roles"` already begins
+   * with the word and must not be prefixed either, while `"Filters"` is a different word and must
+   * be. A space-only test gets the punctuated case wrong in the doubling direction.
    */
   SecondaryLabel(word: string, fallback: string): string {
     const name = this.AriaLabel.trim();
     if (!name) {
       return fallback;
     }
-    const lowerName = name.toLowerCase();
-    const lowerWord = word.toLowerCase();
-    const alreadyPrefixed = lowerName === lowerWord || lowerName.startsWith(`${lowerWord} `);
-    return alreadyPrefixed ? name : `${word} ${name}`;
+    return this.beginsWithWord(name.toLowerCase(), word.toLowerCase()) ? name : `${word} ${name}`;
+  }
+
+  /** True when `name` starts with `word` and the next character (if any) ends that word. */
+  private beginsWithWord(name: string, word: string): boolean {
+    if (!name.startsWith(word)) {
+      return false;
+    }
+    const next = name.charAt(word.length);
+    return next === '' || !MJNamedControlBase.isWordCharacter(next);
+  }
+
+  /** `\w` as a regular expression means it: ASCII letters, digits and underscore. Input is lowercased. */
+  private static isWordCharacter(character: string): boolean {
+    return (character >= 'a' && character <= 'z') || (character >= '0' && character <= '9') || character === '_';
   }
 }
