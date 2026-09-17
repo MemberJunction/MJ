@@ -472,10 +472,11 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             }
 
             // ──────────────────────────────────────────────────────────
-            // Dedup → content-item exclusion → permission safety net → score threshold → enrich
+            // Dedup → content-item promotion/exclusion → merge promoted entities → permission safety net → score threshold → enrich
             // ──────────────────────────────────────────────────────────
             let results = this._fusion.Deduplicate(fusedResults);
             results = await this._enricher.ExcludeEntitySourcedContentItems(results, contextUser);
+            results = this._fusion.Deduplicate(results);
 
             const beforePermCount = results.length;
             results = await this.filterByPermissions(results, contextUser);
