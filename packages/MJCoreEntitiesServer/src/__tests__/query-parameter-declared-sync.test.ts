@@ -190,7 +190,11 @@ describe('SyncParameters — declared parameters are authoritative', () => {
         expect(table.rows).toHaveLength(1);
     });
 
-    it('keeps a Manual row the SQL no longer references, and says so', async () => {
+    // The SQL decides which parameters exist. Keeping a declared row the SQL dropped would
+    // break the query outright: validateParameters errors on every IsRequired definition
+    // with no supplied value, and a caller has no reason to pass a parameter the SQL does
+    // not use. So the row goes, loudly.
+    it('removes a Manual row the SQL no longer references, and says so', async () => {
         const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
         const table = new FakeQueryParameterTable();
         table.rows.push(declaredRow());
@@ -200,8 +204,21 @@ describe('SyncParameters — declared parameters are authoritative', () => {
             QUERY_ID, [extracted({ name: 'SomethingElse' })], CONTEXT_USER, metadataProvider, runViewProvider, true
         );
 
-        expect(table.Find('CompanyIDs')).toBeDefined();
+        expect(table.Find('CompanyIDs')).toBeUndefined();
         expect(warn).toHaveBeenCalledWith(expect.stringContaining('CompanyIDs'));
+    });
+
+    it('does not warn when an AI row is removed — only a declaration is noteworthy', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        const table = new FakeQueryParameterTable();
+        table.rows.push({ ...declaredRow(), DetectionMethod: 'AI' });
+        const { metadataProvider, runViewProvider } = buildProviders(table);
+
+        await SyncParameters(
+            QUERY_ID, [extracted({ name: 'SomethingElse' })], CONTEXT_USER, metadataProvider, runViewProvider, true
+        );
+
+        expect(warn).not.toHaveBeenCalledWith(expect.stringContaining('declares parameter'));
     });
 
     it('still removes an AI row the SQL no longer references', async () => {

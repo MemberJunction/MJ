@@ -77,6 +77,71 @@ describe('GraphProviderPool', () => {
         expect(a.releases).toBe(1);
     });
 
+    // A graph is RELEASED as soon as its provider is safe to hand back — settled depth, or
+    // the host fallback where there is no instance at all — which can happen at a level
+    // before its last. It is COMPLETE only once its last record is written. Deferred work
+    // keyed off the release predicate ran while later levels were still unwritten, which
+    // is the collision the hook exists to prevent.
+    it('does not run graph-complete work at an early level for a settled (depth 0) graph', async () => {
+        const host = new FakeProvider();
+        host.leftoverDepth = 0; // Save settles immediately — released at every level
+        const firedAt: number[] = [];
+        let level = 0;
+        const pool = new GraphProviderPool(host, () => undefined, async () => {
+            firedAt.push(level);
+        });
+        // Graph A spans two levels: the parent record, then its nested children.
+        pool.noteLevels([[{ graphId: 'A' }], [{ graphId: 'A' }]]);
+
+        level = 0;
+        await pool.obtain('A');
+        await pool.drainBatch(['A'], 0);
+
+        level = 1;
+        await pool.obtain('A');
+        await pool.drainBatch(['A'], 1);
+        await pool.releaseAll();
+
+        expect(firedAt).toEqual([1]);
+    });
+
+    it('does not run graph-complete work at an early level in the host-fallback topology', async () => {
+        const host = new FakeProvider();
+        host.independentShouldThrow = true; // every graph falls back to the host provider
+        const firedAt: number[] = [];
+        let level = 0;
+        const pool = new GraphProviderPool(host, () => undefined, async () => {
+            firedAt.push(level);
+        });
+        pool.noteLevels([[{ graphId: 'A' }], [{ graphId: 'A' }]]);
+
+        level = 0;
+        await pool.obtain('A');
+        await pool.drainBatch(['A'], 0);
+
+        level = 1;
+        await pool.obtain('A');
+        await pool.drainBatch(['A'], 1);
+        await pool.releaseAll();
+
+        expect(firedAt).toEqual([1]);
+    });
+
+    it('runs graph-complete work exactly once when a drained graph is also in releaseAll', async () => {
+        const host = new FakeProvider();
+        let calls = 0;
+        const pool = new GraphProviderPool(host, () => undefined, async () => {
+            calls++;
+        });
+        pool.noteLevels([[{ graphId: 'A' }]]);
+
+        await pool.obtain('A');
+        await pool.drainBatch(['A'], 0);
+        await pool.releaseAll();
+
+        expect(calls).toBe(1);
+    });
+
     it('skips graph-complete work for a file that has already failed', async () => {
         const host = new FakeProvider();
         let calls = 0;

@@ -144,6 +144,30 @@ interface DeferredRecord {
  * here instead of being mutated directly, so they can be applied sequentially
  * after Promise.all() resolves — eliminating race conditions in parallel batches.
  */
+/**
+ * An entity that recorded derived-data work during Save() for the caller to run later.
+ * @see BaseEntity.DeferDerivedData
+ */
+interface DeferredDerivedDataEntity {
+  DeferDerivedData: boolean;
+  ProcessDeferredDerivedData: () => Promise<void>;
+  EntityInfo: { Name: string };
+}
+
+/**
+ * Tests the capability rather than the class. `instanceof BaseEntity` would be an identity
+ * check against whichever copy of @memberjunction/core this module resolved, and a second
+ * copy anywhere in the tree would make it silently false for every record — which, now that
+ * Save() only RECORDS the derivation, means a push would quietly produce queries with no
+ * parameters, fields or dependencies and report success.
+ */
+function hasDeferredDerivedData(candidate: unknown): candidate is DeferredDerivedDataEntity {
+  const entity = candidate as Partial<DeferredDerivedDataEntity> | null | undefined;
+  return !!entity
+    && entity.DeferDerivedData === true
+    && typeof entity.ProcessDeferredDerivedData === 'function';
+}
+
 interface ProcessRecordResult {
   status: 'created' | 'updated' | 'unchanged' | 'error' | 'deleted' | 'skipped' | 'deferred';
   isDuplicate?: boolean;
@@ -796,7 +820,7 @@ export class PushService {
         // written — the authored children are not there yet, and it would create colliding
         // copies of them. The pool calls back once a graph is complete so the derivation
         // sees the finished graph and settles in the same transaction.
-        const deferredDerivedData = new Map<string, BaseEntity[]>();
+        const deferredDerivedData = new Map<string, DeferredDerivedDataEntity[]>();
         const graphPool = new GraphProviderPool(
           hostProvider,
           (msg) => callbacks?.onLog?.(msg),
@@ -915,7 +939,7 @@ export class PushService {
                   applyProcessResult(batchResult.result);
 
                   const saved = batchResult.result.batchContextEntry?.entity;
-                  if (saved instanceof BaseEntity && saved.DeferDerivedData) {
+                  if (hasDeferredDerivedData(saved)) {
                     const forGraph = deferredDerivedData.get(batchResult.graphId);
                     if (forGraph) forGraph.push(saved);
                     else deferredDerivedData.set(batchResult.graphId, [saved]);
@@ -2257,7 +2281,7 @@ export class PushService {
 
     // Same contract as the graph path: derived-data work waits until every record in this
     // phase is written, then runs before the host transaction commits.
-    const deferredDerivedData: BaseEntity[] = [];
+    const deferredDerivedData: DeferredDerivedDataEntity[] = [];
 
     for (const deferred of this.deferredRecords) {
       const { flattenedRecord, entityDir, entityConfig } = deferred;
@@ -2283,7 +2307,7 @@ export class PushService {
         if (result.batchContextEntry) {
           batchContext.set(result.batchContextEntry.key, result.batchContextEntry.entity);
           const saved = result.batchContextEntry.entity;
-          if (saved instanceof BaseEntity && saved.DeferDerivedData) {
+          if (hasDeferredDerivedData(saved)) {
             deferredDerivedData.push(saved);
           }
         }
