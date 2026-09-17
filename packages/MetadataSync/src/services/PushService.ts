@@ -15,7 +15,9 @@ import { SQLLogger } from '../lib/sql-logger';
 import { TransactionManager } from '../lib/transaction-manager';
 import { JsonWriteHelper } from '../lib/json-write-helper';
 import { RecordDependencyAnalyzer, FlattenedRecord, groupRecordsByGraphId } from '../lib/record-dependency-analyzer';
-import { GraphProviderPool } from '../lib/graph-provider-pool';
+import { GraphProviderPool, GraphSettleOutcome, probeIndependentInstances } from '../lib/graph-provider-pool';
+import { PushWriteMode, resolvePushWritePlan, parallelModeWarning } from '../lib/push-write-mode';
+import { CommittedWrite, PushAbortedError, describeCommitFailure, describeRollbackOutcome } from '../lib/push-outcome';
 import { JsonPreprocessor } from '../lib/json-preprocessor';
 import { findEntityDirectories } from '../lib/provider-utils';
 import { DeletionAuditor, DeletionAudit } from '../lib/deletion-auditor';
@@ -25,18 +27,27 @@ import { SyncStateManager } from '../lib/sync-state-manager';
 import { resolveCollectionRelationship } from '../lib/collection-resolver';
 import type { GenericDatabaseProvider, SqlLoggingSession } from '@memberjunction/generic-database-provider';
 
-// Parallelism is across JSON-root graphs (independent Actions), not flattened rows.
-// Nested relatedEntities share the root's provider so parent+child stay on one TX.
-// Default 10 — never 1. 1 was a wrong workaround for mixed-provider hangs;
-// callers can pass --parallel-batch-size 1 for debugging.
-const PARALLEL_BATCH_SIZE = 10;
+// Atomic pushes (the default) run one JSON-root graph at a time on the host provider, inside
+// the push transaction. Non-atomic pushes run sibling graphs in parallel on independent
+// provider instances; nested relatedEntities always share the root's provider.
+// See lib/push-write-mode.ts.
 
 export interface PushOptions {
   dir?: string;
   dryRun?: boolean;
   verbose?: boolean;
   noValidate?: boolean;
-  parallelBatchSize?: number; // Number of records to process in parallel (default: 10)
+  /**
+   * JSON-root graphs to run at once in a non-atomic push (default: 10).
+   * Ignored, with a warning, when the push is atomic.
+   */
+  parallelBatchSize?: number;
+  /**
+   * true: all-or-nothing, one transaction, graphs one at a time.
+   * false: graphs in parallel, creates and updates commit as they are saved.
+   * Undefined: use `push.atomic` from the root `.mj-sync.json`, else true.
+   */
+  atomic?: boolean;
   include?: string[]; // Only process these directories (whitelist, supports patterns)
   exclude?: string[]; // Skip these directories (blacklist, supports patterns)
   deleteDbOnly?: boolean; // Delete database-only records that reference records being deleted
@@ -156,6 +167,63 @@ interface ProcessRecordResult {
   warnings?: string[];
 }
 
+/** Everything one push run needs, passed between the phase helpers. */
+interface PushRun {
+  entityDirs: string[];
+  deletionAudit: DeletionAudit | null;
+  options: PushOptions;
+  fileBackupManager: FileBackupManager;
+  callbacks?: PushCallbacks;
+  configDir: string;
+}
+
+/** One JSON file's graphs, run level by level. */
+interface FileGraphRun {
+  filePath: string;
+  entityDir: string;
+  entityConfig: EntityConfig;
+  options: PushOptions;
+  callbacks?: PushCallbacks;
+  batchContext: BatchContextIndex;
+  levels: FlattenedRecord[][];
+  /** Applies one record result to the directory counters. */
+  applyResult: (result: ProcessRecordResult) => void;
+  /** Record errors counted so far in this directory. */
+  errorCount: () => number;
+}
+
+type GraphRecordSuccess = { success: true; result: ProcessRecordResult; record: FlattenedRecord; graphId: string };
+type GraphRecordFailure = { success: false; error: unknown; record: FlattenedRecord; graphId: string };
+type GraphRecordOutcome = GraphRecordSuccess | GraphRecordFailure;
+
+function emptyPushTotals(): EntityPushResult {
+  return { created: 0, updated: 0, unchanged: 0, deleted: 0, skipped: 0, deferred: 0, errors: 0 };
+}
+
+function addPushTotals(totals: EntityPushResult, result: EntityPushResult): void {
+  totals.created += result.created;
+  totals.updated += result.updated;
+  totals.unchanged += result.unchanged;
+  totals.deleted += result.deleted;
+  totals.skipped += result.skipped;
+  totals.deferred += result.deferred;
+  totals.errors += result.errors;
+}
+
+/** The status a committed write is reported with, or undefined when the result wrote nothing. */
+function committedStatusOf(result: ProcessRecordResult): CommittedWrite['status'] | undefined {
+  if (result.isDuplicate || result.isDeletedRecord) {
+    return undefined;
+  }
+  if (result.status === 'updated') {
+    return 'updated';
+  }
+  if (result.status === 'created' || result.status === 'deferred') {
+    return 'created';
+  }
+  return undefined;
+}
+
 export class PushService {
   private syncEngine: SyncEngine;
   private contextUser: UserInfo;
@@ -167,6 +235,16 @@ export class PushService {
   private stateManager: SyncStateManager | undefined;
   private syncMetadataEngine: SyncMetadataEngine;
   private confirmedCollections: Set<string> = new Set<string>();
+  /** How this push writes creates and updates. Set at the start of each push. */
+  private writeMode: PushWriteMode = 'atomic';
+  private graphBatchSize = 1;
+  /** Non-atomic mode: creates and updates that were committed outside the push transaction. */
+  private committedWrites: CommittedWrite[] = [];
+  /** Incremental state, applied only after the push commits. Keyed by path relative to the sync root. */
+  private pendingChecksums: Map<string, string> = new Map();
+  private pushedEntityDirs: string[] = [];
+  /** Errors whose record was already sent to onRecordError, so a caller does not report it twice. */
+  private reportedRecordErrors = new WeakSet<Error>();
 
   constructor(syncEngine: SyncEngine, contextUser: UserInfo, stateManager?: SyncStateManager) {
     this.syncEngine = syncEngine;
@@ -276,9 +354,12 @@ export class PushService {
       throw new Error('Cannot specify both --include and --exclude options. Please use one or the other.');
     }
 
-    // Reset deferred tracking for this push operation
+    // Reset per-push tracking
     this.deferredFileWrites.clear();
     this.deferredRecords = [];
+    this.committedWrites = [];
+    this.pendingChecksums.clear();
+    this.pushedEntityDirs = [];
     
     const fileBackupManager = new FileBackupManager();
     
@@ -294,6 +375,7 @@ export class PushService {
     if (this.syncConfig?.push?.autoCreateMissingRecords && !options.dryRun) {
       callbacks?.onWarn?.('\n🔧 WARNING: autoCreateMissingRecords is enabled - Missing records with primaryKey will be created\n');
     }
+    await this.applyWritePlan(options, callbacks);
     
     if (options.verbose) {
       callbacks?.onLog?.(`Original working directory: ${configManager.getOriginalCwd()}`);
@@ -304,7 +386,8 @@ export class PushService {
     }
     
     const sqlLogger = new SQLLogger(this.syncConfig);
-    const transactionManager = new TransactionManager(sqlLogger);
+    // The push transaction lives on the same provider every atomic save runs on.
+    const transactionManager = new TransactionManager(sqlLogger, this.hostProvider());
     
     if (options.verbose) {
       callbacks?.onLog?.(`SQLLogger enabled status: ${sqlLogger.enabled}`);
@@ -314,53 +397,8 @@ export class PushService {
     let sqlLoggingSession: SqlLoggingSession | null = null;
     
     try {
-      // Initialize SQL logger if enabled and not dry-run
-      if (sqlLogger.enabled && !options.dryRun) {
-        const provider = Metadata.Provider as GenericDatabaseProvider; // global-provider-ok: metadata sync operates on the configured provider only
-        
-        if (options.verbose) {
-          callbacks?.onLog?.(`SQL logging enabled: ${sqlLogger.enabled}`);
-          callbacks?.onLog?.(`Provider type: ${provider?.constructor?.name || 'Unknown'}`);
-          callbacks?.onLog?.(`Has CreateSqlLogger: ${typeof provider?.CreateSqlLogger === 'function'}`);
-        }
-        
-        if (provider && typeof provider.CreateSqlLogger === 'function') {
-          // Generate filename with timestamp
-          const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-          const filename = this.syncConfig?.sqlLogging?.formatAsMigration
-            ? `MetadataSync_Push_${timestamp}.sql`
-            : `push_${timestamp}.sql`;
+      sqlLoggingSession = await this.startSqlLogging(sqlLogger, options, configDir, callbacks);
 
-          // Use .sql-log-push directory in the config directory (where sync was initiated)
-          const outputDir = path.join(configDir, this.syncConfig?.sqlLogging?.outputDirectory || './sql-log-push');
-          const filepath = path.join(outputDir, filename);
-
-          // Ensure the directory exists
-          await fs.ensureDir(path.dirname(filepath));
-
-          // Create the SQL logging session
-          sqlLoggingSession = await provider.CreateSqlLogger(filepath, {
-            formatAsMigration: this.syncConfig?.sqlLogging?.formatAsMigration || false,
-            description: 'MetadataSync push operation',
-            statementTypes: "mutations",
-            prettyPrint: true,
-            // batchSeparator is intentionally omitted — CreateSqlLogger injects the platform-appropriate
-            // separator automatically (GO for SQL Server, nothing for PostgreSQL) via PlatformBatchSeparator.
-            filterPatterns: this.syncConfig?.sqlLogging?.filterPatterns,
-            filterType: this.syncConfig?.sqlLogging?.filterType,
-            verboseOutput: this.syncConfig?.sqlLogging?.verboseOutput || false,
-          });
-          
-          if (options.verbose) {
-            callbacks?.onLog?.(`📝 SQL logging enabled: ${filepath}`);
-          }
-        } else {
-          if (options.verbose) {
-            callbacks?.onWarn?.('SQL logging requested but provider does not support it');
-          }
-        }
-      }
-      
       // Find entity directories to process
       // Note: If options.dir is specified, configDir already points to that directory
       // So we don't need to pass it as specificDir
@@ -377,33 +415,8 @@ export class PushService {
         throw new Error('No entity directories found');
       }
 
-      // Preload entities and cache files.
-      // We pass the SyncEngine's provider explicitly rather than reaching for
-      // Metadata.Provider — `mj sync` is single-process so they resolve to the
-      // same instance today, but routing through SyncEngine keeps the wiring
-      // self-consistent and makes future provider plumbing trivial.
-      // Preload is internal plumbing — emit its progress only in verbose mode so a
-      // normal run jumps straight from validation to per-directory results.
-      if (options.verbose) {
-        callbacks?.onLog?.('⚡ Preloading metadata and caching files...');
-      }
-      this.syncMetadataEngine.setEntityDirs(entityDirs);
-      await this.syncMetadataEngine.Config(true, this.contextUser, this.syncEngine.getProvider());
-      for (const warning of this.syncMetadataEngine.drainWarnings()) {
-        callbacks?.onWarn?.(`   ⚠️  ${warning}`);
-      }
-      if (options.verbose) {
-        const delegations = this.syncMetadataEngine.getDelegationSummary();
-        if (delegations.length > 0) {
-          const donorCount = new Set(delegations.map(d => d.engineClassName)).size;
-          callbacks?.onLog?.(`   ↪ Reused in-memory caches for ${delegations.length} ${delegations.length === 1 ? 'entity' : 'entities'} already loaded by ${donorCount} ${donorCount === 1 ? 'engine' : 'engines'}`);
-          for (const d of delegations.sort((a, b) => a.entityName.localeCompare(b.entityName))) {
-            callbacks?.onLog?.(`      • ${d.entityName} ← ${d.engineClassName}`);
-          }
-        }
-        callbacks?.onLog?.('✓ Preload completed successfully\n');
-      }
-      
+      await this.preloadMetadata(entityDirs, options, callbacks);
+
       if (options.verbose) {
         callbacks?.onLog?.(`Found ${entityDirs.length} entity ${entityDirs.length === 1 ? 'directory' : 'directories'} to process`);
       }
@@ -415,15 +428,6 @@ export class PushService {
           callbacks?.onLog?.('📁 File backup manager initialized');
         }
       }
-      
-      // Process each entity directory
-      let totalCreated = 0;
-      let totalUpdated = 0;
-      let totalUnchanged = 0;
-      let totalDeleted = 0;
-      let totalSkipped = 0;
-      let totalDeferred = 0;
-      let totalErrors = 0;
       
       // PHASE 0: Audit all deletions across all entities (if any exist)
       let deletionAudit: DeletionAudit | null = null;
@@ -438,25 +442,7 @@ export class PushService {
       if (!options.dryRun && deletionAudit) {
         const shouldProceed = await this.promptForConfirmation(deletionAudit, callbacks);
         if (!shouldProceed) {
-          callbacks?.onLog?.('\n❌ Push operation cancelled by user.\n');
-
-          // Clean up SQL logging session and file if it was created
-          if (sqlLoggingSession) {
-            const sqlLogPath = sqlLoggingSession.filePath;
-            try {
-              await sqlLoggingSession.dispose();
-              // Delete the empty SQL log file since no operations occurred
-              if (await fs.pathExists(sqlLogPath)) {
-                await fs.remove(sqlLogPath);
-                if (options.verbose) {
-                  callbacks?.onLog?.(`🗑️  Removed empty SQL log file: ${sqlLogPath}`);
-                }
-              }
-            } catch (cleanupError) {
-              callbacks?.onWarn?.(`Failed to clean up SQL logging session: ${cleanupError}`);
-            }
-          }
-
+          await this.cancelPush(sqlLoggingSession, options, callbacks);
           return {
             created: 0,
             updated: 0,
@@ -471,146 +457,19 @@ export class PushService {
         }
       }
 
-      // Host TX wraps Phase 2 deletions and Phase 2.5 deferred records.
-      // Phase 1 graph writes go to independent instances (or, if those are
-      // unavailable, ALL graphs share this host TX — never a mix).
+      // One host transaction wraps the whole push. In atomic mode (the default) Phase 1 saves run
+      // on the host too, one graph at a time. In non-atomic mode they commit on independent
+      // instances as they go (see lib/push-write-mode.ts).
       if (!options.dryRun) {
         await transactionManager.beginTransaction();
       }
 
-      try {
-        // PHASE 1: Process creates/updates for all entities
-        if (options.verbose) {
-          callbacks?.onLog?.('📝 Processing creates and updates...\n');
-        }
+      const totals = await this.runPushInTransaction(
+        { entityDirs, deletionAudit, options, fileBackupManager, callbacks, configDir },
+        transactionManager
+      );
 
-        for (const [dirIdx, entityDir] of entityDirs.entries()) {
-          // "X of N" position prefix — only when there's more than one directory, so a
-          // single-directory push stays uncluttered.
-          const progressPrefix = entityDirs.length > 1 ? `[${dirIdx + 1}/${entityDirs.length}] ` : '';
-
-          const entityConfig = await loadEntityConfig(entityDir);
-          if (!entityConfig) {
-            const warning = `Skipping ${entityDir} - no valid entity configuration`;
-            this.warnings.push(warning);
-            callbacks?.onWarn?.(warning);
-            totalSkipped++; // Count skipped directories
-            continue;
-          }
-
-          // Show folder with spinner at start. The folder header is redundant in a
-          // normal run (the per-directory result line below names the directory), so
-          // it's verbose-only; the live spinner still shows "[X/N] Processing <dir>…".
-          const dirName = path.relative(process.cwd(), entityDir) || '.';
-          if (options.verbose) {
-            callbacks?.onLog?.(`\n📁 ${dirName}:`);
-          }
-
-          // Use onProgress for animated spinner if available
-          if (callbacks?.onProgress) {
-            callbacks.onProgress(`${progressPrefix}Processing ${dirName}...`);
-          } else {
-            callbacks?.onLog?.(`   ⏳ Processing...`);
-          }
-          
-          if (options.verbose && callbacks?.onLog) {
-            callbacks.onLog(`Processing ${entityConfig.entity} in ${entityDir}`);
-          }
-          
-          const result = await this.processEntityDirectory(
-            entityDir,
-            entityConfig,
-            options,
-            fileBackupManager,
-            callbacks,
-            configDir
-          );
-          
-          // Per-directory result: one compact line (always), naming the directory and
-          // its changes — or "no changes" for a clean dir. The detailed per-status
-          // breakdown is verbose-only since the final summary box already aggregates it.
-          const dirTotal = result.created + result.updated + result.unchanged + result.deleted + result.skipped;
-          const { text: dirSummary, changed: dirChanged } = this.formatDirectorySummary(progressPrefix, dirName, result, dirTotal);
-          if (callbacks?.onProgress && callbacks?.onSuccess) {
-            callbacks.onSuccess(dirSummary, dirChanged);
-          } else {
-            callbacks?.onLog?.(`   ${dirSummary}`);
-          }
-
-          if (options.verbose && (dirTotal > 0 || result.errors > 0)) {
-            callbacks?.onLog?.(`   Total processed: ${dirTotal} records`);
-            if (result.created > 0) {
-              callbacks?.onLog?.(`   ✓ Created: ${result.created}`);
-            }
-            if (result.updated > 0) {
-              callbacks?.onLog?.(`   ✓ Updated: ${result.updated}`);
-            }
-            if (result.deleted > 0) {
-              callbacks?.onLog?.(`   ✓ Deleted: ${result.deleted}`);
-            }
-            if (result.deferred > 0) {
-              callbacks?.onLog?.(`   ⏳ Deferred: ${result.deferred}`);
-            }
-            if (result.unchanged > 0) {
-              callbacks?.onLog?.(`   - Unchanged: ${result.unchanged}`);
-            }
-            if (result.skipped > 0) {
-              callbacks?.onLog?.(`   - Skipped: ${result.skipped}`);
-            }
-            if (result.errors > 0) {
-              callbacks?.onLog?.(`   ✗ Errors: ${result.errors}`);
-            }
-          }
-
-          totalCreated += result.created;
-          totalUpdated += result.updated;
-          totalUnchanged += result.unchanged;
-          totalDeleted += result.deleted;
-          totalSkipped += result.skipped;
-          totalDeferred += result.deferred;
-          totalErrors += result.errors;
-        }
-
-        // PHASE 2: Process deletions in reverse dependency order (if any exist)
-        if (deletionAudit && totalErrors === 0) {
-          const deletionResult = await this.processDeletionsFromAudit(deletionAudit, options, callbacks);
-          totalDeleted += deletionResult.deleted;
-          totalErrors += deletionResult.errors;
-        }
-
-        // PHASE 2.5: Process deferred records (for circular dependencies)
-        if (this.deferredRecords.length > 0 && totalErrors === 0) {
-          const deferredResult = await this.processDeferredRecords(options, callbacks);
-          totalCreated += deferredResult.created;
-          totalUpdated += deferredResult.updated;
-          totalErrors += deferredResult.errors;
-        }
-
-        // Commit transaction if successful
-        if (!options.dryRun && totalErrors === 0) {
-          await transactionManager.commitTransaction();
-        }
-
-        // PHASE 3: Write deferred files with updated deletion timestamps
-        if (!options.dryRun && totalErrors === 0 && this.deferredFileWrites.size > 0) {
-          await this.writeDeferredFiles(options, callbacks);
-        }
-      } catch (error) {
-        // Rollback transaction on error.
-        if (!options.dryRun) {
-          callbacks?.onLog?.('\n⚠️  Rolling back database transaction due to error...');
-          const rolledBack = await transactionManager.rollbackTransaction();
-          if (rolledBack) {
-            callbacks?.onLog?.('✓ Database transaction rolled back successfully\n');
-          } else {
-            callbacks?.onLog?.('❌ Database transaction rollback failed\n');
-          }
-        }
-        throw error;
-      }
-      
-      // Commit file backups if successful and not in dry-run mode
-      if (!options.dryRun && totalErrors === 0) {
+      if (!options.dryRun) {
         await fileBackupManager.cleanup();
         if (options.verbose) {
           callbacks?.onLog?.('✅ File backups committed');
@@ -635,13 +494,7 @@ export class PushService {
       }
       
       return {
-        created: totalCreated,
-        updated: totalUpdated,
-        unchanged: totalUnchanged,
-        deleted: totalDeleted,
-        skipped: totalSkipped,
-        deferred: totalDeferred,
-        errors: totalErrors,
+        ...totals,
         warnings: this.warnings,
         sqlLogPath,
         changeLog: this.changeDetails
@@ -671,6 +524,390 @@ export class PushService {
     }
   }
   
+  /** Open the SQL logging session when the config asks for one and this is not a dry run. */
+  private async startSqlLogging(
+    sqlLogger: SQLLogger,
+    options: PushOptions,
+    configDir: string,
+    callbacks?: PushCallbacks
+  ): Promise<SqlLoggingSession | null> {
+    let sqlLoggingSession: SqlLoggingSession | null = null;
+    if (sqlLogger.enabled && !options.dryRun) {
+      const provider = Metadata.Provider as GenericDatabaseProvider; // global-provider-ok: metadata sync operates on the configured provider only
+      
+      if (options.verbose) {
+        callbacks?.onLog?.(`SQL logging enabled: ${sqlLogger.enabled}`);
+        callbacks?.onLog?.(`Provider type: ${provider?.constructor?.name || 'Unknown'}`);
+        callbacks?.onLog?.(`Has CreateSqlLogger: ${typeof provider?.CreateSqlLogger === 'function'}`);
+      }
+      
+      if (provider && typeof provider.CreateSqlLogger === 'function') {
+        // Generate filename with timestamp
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const filename = this.syncConfig?.sqlLogging?.formatAsMigration
+          ? `MetadataSync_Push_${timestamp}.sql`
+          : `push_${timestamp}.sql`;
+
+        // Use .sql-log-push directory in the config directory (where sync was initiated)
+        const outputDir = path.join(configDir, this.syncConfig?.sqlLogging?.outputDirectory || './sql-log-push');
+        const filepath = path.join(outputDir, filename);
+
+        // Ensure the directory exists
+        await fs.ensureDir(path.dirname(filepath));
+
+        // Create the SQL logging session
+        sqlLoggingSession = await provider.CreateSqlLogger(filepath, {
+          formatAsMigration: this.syncConfig?.sqlLogging?.formatAsMigration || false,
+          description: 'MetadataSync push operation',
+          statementTypes: "mutations",
+          prettyPrint: true,
+          // batchSeparator is intentionally omitted — CreateSqlLogger injects the platform-appropriate
+          // separator automatically (GO for SQL Server, nothing for PostgreSQL) via PlatformBatchSeparator.
+          filterPatterns: this.syncConfig?.sqlLogging?.filterPatterns,
+          filterType: this.syncConfig?.sqlLogging?.filterType,
+          verboseOutput: this.syncConfig?.sqlLogging?.verboseOutput || false,
+        });
+        
+        if (options.verbose) {
+          callbacks?.onLog?.(`📝 SQL logging enabled: ${filepath}`);
+        }
+      } else {
+        if (options.verbose) {
+          callbacks?.onWarn?.('SQL logging requested but provider does not support it');
+        }
+      }
+    }
+    return sqlLoggingSession;
+  }
+
+  /**
+   * Preload entity metadata and cache the files on disk.
+   *
+   * The SyncEngine's provider is passed explicitly rather than reaching for Metadata.Provider —
+   * `mj sync` is single-process so they resolve to the same instance today, but routing through
+   * SyncEngine keeps the wiring self-consistent.
+   */
+  private async preloadMetadata(entityDirs: string[], options: PushOptions, callbacks?: PushCallbacks): Promise<void> {
+    // We pass the SyncEngine's provider explicitly rather than reaching for
+    // Metadata.Provider — `mj sync` is single-process so they resolve to the
+    // same instance today, but routing through SyncEngine keeps the wiring
+    // self-consistent and makes future provider plumbing trivial.
+    // Preload is internal plumbing — emit its progress only in verbose mode so a
+    // normal run jumps straight from validation to per-directory results.
+    if (options.verbose) {
+      callbacks?.onLog?.('⚡ Preloading metadata and caching files...');
+    }
+    this.syncMetadataEngine.setEntityDirs(entityDirs);
+    await this.syncMetadataEngine.Config(true, this.contextUser, this.syncEngine.getProvider());
+    for (const warning of this.syncMetadataEngine.drainWarnings()) {
+      callbacks?.onWarn?.(`   ⚠️  ${warning}`);
+    }
+    if (options.verbose) {
+      const delegations = this.syncMetadataEngine.getDelegationSummary();
+      if (delegations.length > 0) {
+        const donorCount = new Set(delegations.map(d => d.engineClassName)).size;
+        callbacks?.onLog?.(`   ↪ Reused in-memory caches for ${delegations.length} ${delegations.length === 1 ? 'entity' : 'entities'} already loaded by ${donorCount} ${donorCount === 1 ? 'engine' : 'engines'}`);
+        for (const d of delegations.sort((a, b) => a.entityName.localeCompare(b.entityName))) {
+          callbacks?.onLog?.(`      • ${d.entityName} ← ${d.engineClassName}`);
+        }
+      }
+      callbacks?.onLog?.('✓ Preload completed successfully\n');
+    }
+  }
+
+  /** The user declined the deletion prompt: drop an empty SQL log and say nothing happened. */
+  private async cancelPush(
+    sqlLoggingSession: SqlLoggingSession | null,
+    options: PushOptions,
+    callbacks?: PushCallbacks
+  ): Promise<void> {
+        callbacks?.onLog?.('\n❌ Push operation cancelled by user.\n');
+
+        // Clean up SQL logging session and file if it was created
+        if (sqlLoggingSession) {
+          const sqlLogPath = sqlLoggingSession.filePath;
+          try {
+            await sqlLoggingSession.dispose();
+            // Delete the empty SQL log file since no operations occurred
+            if (await fs.pathExists(sqlLogPath)) {
+              await fs.remove(sqlLogPath);
+              if (options.verbose) {
+                callbacks?.onLog?.(`🗑️  Removed empty SQL log file: ${sqlLogPath}`);
+              }
+            }
+          } catch (cleanupError) {
+            callbacks?.onWarn?.(`Failed to clean up SQL logging session: ${cleanupError}`);
+          }
+        }
+  }
+
+  /**
+   * Decide how this push writes creates and updates (atomic unless opted out) and warn about it.
+   * A non-atomic push that cannot create independent provider instances runs atomically instead.
+   */
+  private async applyWritePlan(options: PushOptions, callbacks?: PushCallbacks): Promise<void> {
+    const plan = resolvePushWritePlan({
+      atomicFlag: options.atomic,
+      configAtomic: this.syncConfig?.push?.atomic,
+      parallelBatchSize: options.parallelBatchSize,
+    });
+    for (const warning of plan.warnings) {
+      this.addWarning(warning, callbacks);
+    }
+    this.writeMode = plan.mode;
+    this.graphBatchSize = plan.graphBatchSize;
+
+    if (plan.mode === 'parallel') {
+      await this.confirmIndependentInstances(options, callbacks);
+    }
+    if (options.verbose) {
+      const detail = this.writeMode === 'atomic' ? 'one transaction, one graph at a time' : `${this.graphBatchSize} graphs in parallel`;
+      callbacks?.onLog?.(`Write mode: ${this.writeMode} (${detail}; from ${plan.source})`);
+    }
+  }
+
+  private async confirmIndependentInstances(options: PushOptions, callbacks?: PushCallbacks): Promise<void> {
+    const reason = await probeIndependentInstances(this.hostProvider());
+    if (reason) {
+      this.addWarning(
+        `Independent provider instances are not available (${reason}), so this push runs atomically: ` +
+          `one transaction, one graph at a time.`,
+        callbacks
+      );
+      this.writeMode = 'atomic';
+      this.graphBatchSize = 1;
+      return;
+    }
+    if (!options.dryRun) {
+      this.addWarning(parallelModeWarning(this.graphBatchSize), callbacks);
+    }
+  }
+
+  private addWarning(message: string, callbacks?: PushCallbacks): void {
+    this.warnings.push(message);
+    callbacks?.onWarn?.(`⚠️  ${message}`);
+  }
+
+  /** The process-wide provider that owns the push transaction. */
+  private hostProvider(): DatabaseProviderBase {
+    return Metadata.Provider as unknown as DatabaseProviderBase; // global-provider-ok: mj sync is single-process; this provider owns the push transaction
+  }
+
+  /**
+   * Run every phase inside the push transaction, commit it, then do the post-commit work.
+   * Never returns or throws with the transaction still open.
+   */
+  private async runPushInTransaction(run: PushRun, transactionManager: TransactionManager): Promise<EntityPushResult> {
+    let committed = false;
+    try {
+      const totals = await this.runPushPhases(run);
+      if (!run.options.dryRun) {
+        await this.commitPushTransaction(transactionManager);
+        committed = true;
+        // PHASE 3: files that contained deletions, then the incremental state
+        await this.writeDeferredFiles(run.options, run.callbacks);
+        await this.persistIncrementalState(run.configDir);
+      }
+      return totals;
+    } catch (error) {
+      if (committed) {
+        throw await this.failAfterCommit(error, run);
+      }
+      throw await this.abortPush(error, transactionManager, run.options, run.callbacks);
+    } finally {
+      await this.ensureTransactionClosed(transactionManager, run.callbacks);
+    }
+  }
+
+  /** Phases 1, 2 and 2.5. Any failure throws; counted errors only survive a dry run. */
+  private async runPushPhases(run: PushRun): Promise<EntityPushResult> {
+    const { options, callbacks } = run;
+    if (options.verbose) {
+      callbacks?.onLog?.('📝 Processing creates and updates...\n');
+    }
+    // PHASE 1: creates and updates
+    const totals = await this.processAllEntityDirectories(run);
+
+    // PHASE 2: deletions in reverse dependency order
+    if (run.deletionAudit && totals.errors === 0) {
+      const deletionResult = await this.processDeletionsFromAudit(run.deletionAudit, options, callbacks);
+      totals.deleted += deletionResult.deleted;
+      totals.errors += deletionResult.errors;
+    }
+
+    // PHASE 2.5: deferred records (circular dependencies)
+    if (this.deferredRecords.length > 0 && totals.errors === 0) {
+      const deferredResult = await this.processDeferredRecords(options, callbacks);
+      totals.created += deferredResult.created;
+      totals.updated += deferredResult.updated;
+      totals.errors += deferredResult.errors;
+    }
+
+    if (!options.dryRun && totals.errors > 0) {
+      throw new Error(`${totals.errors} record error${totals.errors === 1 ? '' : 's'} occurred; the push was not committed.`);
+    }
+    return totals;
+  }
+
+  private async commitPushTransaction(transactionManager: TransactionManager): Promise<void> {
+    try {
+      await transactionManager.commitTransaction();
+    } catch (error) {
+      throw new Error(describeCommitFailure(error, this.hostProvider()?.PlatformKey), { cause: error });
+    }
+  }
+
+  /** Roll back, say truthfully what is left in the database, and wrap the failure. */
+  private async abortPush(
+    error: unknown,
+    transactionManager: TransactionManager,
+    options: PushOptions,
+    callbacks?: PushCallbacks
+  ): Promise<PushAbortedError> {
+    let rolledBack = true;
+    if (!options.dryRun) {
+      callbacks?.onWarn?.('\n⚠️  Rolling back database transaction due to error...');
+      rolledBack = await transactionManager.rollbackTransaction();
+      for (const line of describeRollbackOutcome(rolledBack, this.committedWrites, configManager.getOriginalCwd())) {
+        callbacks?.onWarn?.(line);
+      }
+    }
+    return new PushAbortedError({
+      mode: this.writeMode,
+      rolledBack,
+      committedWrites: [...this.committedWrites],
+      cause: error,
+    });
+  }
+
+  /**
+   * The database already committed, so the metadata files must keep what they were written with.
+   * Drop the file backups so the caller's error path does not restore stale files.
+   */
+  private async failAfterCommit(error: unknown, run: PushRun): Promise<unknown> {
+    await run.fileBackupManager.cleanup();
+    const message = error instanceof Error ? error.message : String(error);
+    run.callbacks?.onWarn?.(
+      `⚠️  The database changes were committed, but a step after the commit failed: ${message}. ` +
+        `Some metadata files or the incremental state may not match the database; run the push again to bring them in line.`
+    );
+    return error;
+  }
+
+  private async ensureTransactionClosed(transactionManager: TransactionManager, callbacks?: PushCallbacks): Promise<void> {
+    if (!transactionManager.isInTransaction) {
+      return;
+    }
+    const rolledBack = await transactionManager.rollbackTransaction();
+    callbacks?.onWarn?.(
+      rolledBack
+        ? '⚠️  The push transaction was still open when the push ended, so it was rolled back.'
+        : '❌ The push transaction was still open when the push ended, and rolling it back failed.'
+    );
+  }
+
+  /** Apply incremental checksums and push timestamps. Called only after the push commits. */
+  private async persistIncrementalState(syncRootDir: string): Promise<void> {
+    if (!this.stateManager) {
+      return;
+    }
+    for (const [relativePath, checksum] of this.pendingChecksums) {
+      this.stateManager.setFileChecksum(relativePath, checksum);
+    }
+    const pushedAt = new Date().toISOString();
+    for (const relativeEntityDir of this.pushedEntityDirs) {
+      this.stateManager.setLastPushTimestamp(relativeEntityDir, pushedAt);
+    }
+    await this.stateManager.pruneStaleChecksums(syncRootDir);
+    await this.stateManager.save();
+  }
+
+  /** PHASE 1 over every entity directory, in order. */
+  private async processAllEntityDirectories(run: PushRun): Promise<EntityPushResult> {
+    const { entityDirs, options, callbacks } = run;
+    const totals = emptyPushTotals();
+    for (const [dirIdx, entityDir] of entityDirs.entries()) {
+      // "X of N" position prefix — only when there's more than one directory.
+      const progressPrefix = entityDirs.length > 1 ? `[${dirIdx + 1}/${entityDirs.length}] ` : '';
+      const entityConfig = await loadEntityConfig(entityDir);
+      if (!entityConfig) {
+        const warning = `Skipping ${entityDir} - no valid entity configuration`;
+        this.warnings.push(warning);
+        callbacks?.onWarn?.(warning);
+        totals.skipped++;
+        continue;
+      }
+      const dirName = path.relative(process.cwd(), entityDir) || '.';
+      this.announceDirectory(dirName, progressPrefix, entityConfig.entity, entityDir, options, callbacks);
+      const result = await this.processEntityDirectory(
+        entityDir, entityConfig, options, run.fileBackupManager, callbacks, run.configDir
+      );
+      this.reportDirectoryResult(progressPrefix, dirName, result, options, callbacks);
+      addPushTotals(totals, result);
+    }
+    return totals;
+  }
+
+  private announceDirectory(
+    dirName: string,
+    progressPrefix: string,
+    entityName: string,
+    entityDir: string,
+    options: PushOptions,
+    callbacks?: PushCallbacks
+  ): void {
+    // The folder header is verbose-only; the live spinner still shows "[X/N] Processing <dir>…".
+    if (options.verbose) {
+      callbacks?.onLog?.(`\n📁 ${dirName}:`);
+    }
+    if (callbacks?.onProgress) {
+      callbacks.onProgress(`${progressPrefix}Processing ${dirName}...`);
+    } else {
+      callbacks?.onLog?.(`   ⏳ Processing...`);
+    }
+    if (options.verbose) {
+      callbacks?.onLog?.(`Processing ${entityName} in ${entityDir}`);
+    }
+  }
+
+  /** One compact line per directory, plus the per-status breakdown in verbose mode. */
+  private reportDirectoryResult(
+    progressPrefix: string,
+    dirName: string,
+    result: EntityPushResult,
+    options: PushOptions,
+    callbacks?: PushCallbacks
+  ): void {
+    const dirTotal = result.created + result.updated + result.unchanged + result.deleted + result.skipped;
+    const { text: dirSummary, changed: dirChanged } = this.formatDirectorySummary(progressPrefix, dirName, result, dirTotal);
+    if (callbacks?.onProgress && callbacks?.onSuccess) {
+      callbacks.onSuccess(dirSummary, dirChanged);
+    } else {
+      callbacks?.onLog?.(`   ${dirSummary}`);
+    }
+    if (options.verbose && (dirTotal > 0 || result.errors > 0)) {
+      this.logDirectoryBreakdown(result, dirTotal, callbacks);
+    }
+  }
+
+  private logDirectoryBreakdown(result: EntityPushResult, dirTotal: number, callbacks?: PushCallbacks): void {
+    const lines: Array<[number, string]> = [
+      [result.created, `   ✓ Created: ${result.created}`],
+      [result.updated, `   ✓ Updated: ${result.updated}`],
+      [result.deleted, `   ✓ Deleted: ${result.deleted}`],
+      [result.deferred, `   ⏳ Deferred: ${result.deferred}`],
+      [result.unchanged, `   - Unchanged: ${result.unchanged}`],
+      [result.skipped, `   - Skipped: ${result.skipped}`],
+      [result.errors, `   ✗ Errors: ${result.errors}`],
+    ];
+    callbacks?.onLog?.(`   Total processed: ${dirTotal} records`);
+    for (const [count, line] of lines) {
+      if (count > 0) {
+        callbacks?.onLog?.(line);
+      }
+    }
+  }
+
   private async processEntityDirectory(
     entityDir: string,
     entityConfig: any,
@@ -777,19 +1014,9 @@ export class PushService {
           callbacks?.onLog?.(`   Analyzed ${analysisResult.sortedRecords.length} records (including nested)`);
         }
         
-        // Create batch context for in-memory entity resolution
-        // Note: While JavaScript is single-threaded, async operations can interleave.
-        // Map operations themselves are atomic, but we ensure records are added to
-        // the context AFTER successful save to maintain consistency.
+        // Records are added to the batch context only AFTER a successful save (applyProcessResult),
+        // so later lookups in this file see consistent state.
         const batchContext = new BatchContextIndex();
-
-        // One provider per JSON-root graph (Action + nested Action Params share a
-        // connection). Parallelize sibling roots only. Drain a graph when its last
-        // level finishes, or when TransactionDepth is already 0 (Save settled).
-        // Peak live independent instances is then the current batch plus any
-        // leftover-depth graphs still spanning later levels.
-        const hostProvider = Metadata.Provider as unknown as DatabaseProviderBase; // global-provider-ok: host provider template for GraphProviderPool cloning
-        const graphPool = new GraphProviderPool(hostProvider, (msg) => callbacks?.onLog?.(msg));
 
         const applyProcessResult = (result: ProcessRecordResult): void => {
           if (result.batchContextEntry) {
@@ -811,102 +1038,29 @@ export class PushService {
           else if (result.status === 'unchanged') unchanged++;
           else if (result.status === 'deleted') deleted++;
           else if (result.status === 'skipped') skipped++;
-          else if (result.status === 'error') {
-            // A non-throwing record error must not commit leftover graph depth —
-            // the previous per-record release rolled that work back.
-            errors++;
-            graphPool.markFailed();
-          }
+          else if (result.status === 'error') errors++;
           else if (result.status === 'deferred') {
             created++;
             deferred++;
           }
         };
 
-        // Fail-fast: the first thrown record error aborts the file. That is
-        // intentional and matches the parallel path; it is a change from the
-        // old sequential fallback, which continued after onError.
-        let runError: unknown;
-        try {
-          const levels =
-            analysisResult.dependencyLevels && analysisResult.dependencyLevels.length > 0
-              ? analysisResult.dependencyLevels
-              : [analysisResult.sortedRecords];
+        const levels =
+          analysisResult.dependencyLevels && analysisResult.dependencyLevels.length > 0
+            ? analysisResult.dependencyLevels
+            : [analysisResult.sortedRecords];
 
-          graphPool.noteLevels(levels);
-
-          for (let levelIndex = 0; levelIndex < levels.length; levelIndex++) {
-            const level = levels[levelIndex];
-            const byGraph = groupRecordsByGraphId(level);
-            const graphIds = Array.from(byGraph.keys());
-            const batchSize = options.parallelBatchSize || PARALLEL_BATCH_SIZE;
-
-            if (options.verbose && graphIds.length > 1) {
-              callbacks?.onLog?.(
-                `   Level ${levelIndex}: ${level.length} records in ${graphIds.length} graphs (parallel batch ${batchSize})`
-              );
-            }
-
-            for (let i = 0; i < graphIds.length; i += batchSize) {
-              const batchIds = graphIds.slice(i, i + batchSize);
-              const batchResults = await Promise.all(
-                batchIds.map(async (graphId) => {
-                  const recs = byGraph.get(graphId)!;
-                  const provider = await graphPool.obtain(graphId);
-                  const results: Array<
-                    | { success: true; result: ProcessRecordResult; record: FlattenedRecord; graphId: string }
-                    | { success: false; error: unknown; record: FlattenedRecord; graphId: string }
-                  > = [];
-                  for (const flattenedRecord of recs) {
-                    try {
-                      const result = await this.processFlattenedRecord(
-                        flattenedRecord,
-                        entityDir,
-                        options,
-                        batchContext,
-                        callbacks,
-                        entityConfig,
-                        true,
-                        provider as unknown as IMetadataProvider
-                      );
-                      results.push({ success: true, result, record: flattenedRecord, graphId });
-                    } catch (error) {
-                      graphPool.markFailed();
-                      results.push({ success: false, error, record: flattenedRecord, graphId });
-                      break;
-                    }
-                  }
-                  return results;
-                })
-              );
-
-              for (const graphResults of batchResults) {
-                for (const batchResult of graphResults) {
-                  if (batchResult.success === false) {
-                    const err = batchResult.error as Error;
-                    const rec = batchResult.record;
-                    callbacks?.onLog?.(`\n❌ Processing failed for ${rec.entityName} at ${rec.path}`);
-                    callbacks?.onLog?.(`   ${err.message}\n`);
-                    if (err.stack) {
-                      callbacks?.onLog?.(`   Stack: ${err.stack}\n`);
-                    }
-                    throw err;
-                  }
-                  applyProcessResult(batchResult.result);
-                }
-              }
-
-              const drainError = await graphPool.drainBatch(batchIds, levelIndex);
-              if (drainError) throw drainError;
-            }
-          }
-        } catch (e) {
-          graphPool.markFailed();
-          runError = e;
-        }
-        const settleError = await graphPool.releaseAll();
-        if (runError) throw runError;
-        if (settleError) throw settleError;
+        await this.runFileGraphs({
+          filePath,
+          entityDir,
+          entityConfig,
+          options,
+          callbacks,
+          batchContext,
+          levels,
+          applyResult: applyProcessResult,
+          errorCount: () => errors,
+        });
         
         // Check if this file has any deletion records (including nested relatedEntities)
         const hasDeletions = this.hasAnyDeletions(records);
@@ -932,15 +1086,20 @@ export class PushService {
             // Drop the cached snapshot — file on disk no longer matches it,
             // and any later reader within this push must see fresh contents.
             this.syncMetadataEngine.invalidateCachedFile(filePath);
+            // Non-atomic: this file's records are already committed, so a later failure must
+            // not restore the old file and lose their primary keys and sync blocks.
+            if (this.writeMode === 'parallel') {
+              fileBackupManager.releaseBackup(filePath);
+            }
           }
         }
 
-        // Update stored checksum after successful processing (reuse cached value if available)
+        // Remember the checksum; it is stored only after the push commits (persistIncrementalState).
         // Uses resolved content (after @include) so included-file changes are tracked.
         if (this.stateManager && syncRootDir) {
           const relativePath = path.relative(syncRootDir, filePath);
           const checksum = cachedChecksum ?? this.syncEngine.calculateChecksum(fileData);
-          this.stateManager.setFileChecksum(relativePath, checksum);
+          this.pendingChecksums.set(relativePath, checksum);
         }
       } catch (fileError) {
         // Error details already logged by lower-level handlers, just re-throw
@@ -948,15 +1107,163 @@ export class PushService {
       }
     }
 
-    // Persist push timestamp for this entity directory after all files processed
+    // The push timestamp for this directory is stored only after the push commits.
     if (this.stateManager && syncRootDir) {
-      const relativeEntityDir = path.relative(syncRootDir, entityDir);
-      this.stateManager.setLastPushTimestamp(relativeEntityDir, new Date().toISOString());
-      await this.stateManager.pruneStaleChecksums(syncRootDir);
-      await this.stateManager.save();
+      this.pushedEntityDirs.push(path.relative(syncRootDir, entityDir));
     }
 
     return { created, updated, unchanged, deleted, skipped, deferred, errors };
+  }
+
+  /**
+   * Run one file's JSON-root graphs, level by level. Atomic mode: one graph at a time on the host.
+   * Non-atomic mode: `graphBatchSize` graphs at once, each on its own independent instance.
+   * Fail-fast: the first failed record (thrown or `status: 'error'`) stops the file.
+   */
+  private async runFileGraphs(run: FileGraphRun): Promise<void> {
+    const pendingWrites = new Map<string, CommittedWrite[]>();
+    const pool = this.createGraphPool(pendingWrites, run.callbacks);
+    pool.noteLevels(run.levels);
+
+    let runError: unknown;
+    try {
+      for (let levelIndex = 0; levelIndex < run.levels.length; levelIndex++) {
+        await this.runGraphLevel(run, pool, pendingWrites, levelIndex);
+      }
+    } catch (e) {
+      pool.markFailed();
+      runError = e;
+    }
+    const settleError = await pool.releaseAll();
+    if (runError) throw runError;
+    if (settleError) throw settleError;
+  }
+
+  private createGraphPool(pendingWrites: Map<string, CommittedWrite[]>, callbacks?: PushCallbacks): GraphProviderPool {
+    return new GraphProviderPool(this.hostProvider(), {
+      mode: this.writeMode === 'atomic' ? 'host' : 'independent',
+      log: (msg) => callbacks?.onLog?.(msg),
+      onGraphSettled: (graphId, outcome) => this.recordGraphOutcome(pendingWrites, graphId, outcome),
+    });
+  }
+
+  /** Non-atomic mode: a graph whose instance committed leaves its writes in the database. */
+  private recordGraphOutcome(pendingWrites: Map<string, CommittedWrite[]>, graphId: string, outcome: GraphSettleOutcome): void {
+    const writes = pendingWrites.get(graphId);
+    pendingWrites.delete(graphId);
+    if (writes && outcome === 'committed') {
+      this.committedWrites.push(...writes);
+    }
+  }
+
+  private async runGraphLevel(
+    run: FileGraphRun,
+    pool: GraphProviderPool,
+    pendingWrites: Map<string, CommittedWrite[]>,
+    levelIndex: number
+  ): Promise<void> {
+    const byGraph = groupRecordsByGraphId(run.levels[levelIndex]);
+    const graphIds = Array.from(byGraph.keys());
+    const batchSize = this.graphBatchSize;
+    if (run.options.verbose && graphIds.length > 1) {
+      run.callbacks?.onLog?.(
+        `   Level ${levelIndex}: ${run.levels[levelIndex].length} records in ${graphIds.length} graphs (batch ${batchSize}, ${this.writeMode})`
+      );
+    }
+    for (let i = 0; i < graphIds.length; i += batchSize) {
+      const batchIds = graphIds.slice(i, i + batchSize);
+      const outcomes = await Promise.all(
+        batchIds.map((graphId) => this.runGraph(run, pool, graphId, byGraph.get(graphId) ?? []))
+      );
+      this.applyGraphOutcomes(run, pool, pendingWrites, outcomes.flat());
+      const drainError = await pool.drainBatch(batchIds, levelIndex);
+      if (drainError) throw drainError;
+    }
+  }
+
+  /** One graph's records, in order, on the graph's provider. Stops at the first thrown error. */
+  private async runGraph(
+    run: FileGraphRun,
+    pool: GraphProviderPool,
+    graphId: string,
+    records: FlattenedRecord[]
+  ): Promise<GraphRecordOutcome[]> {
+    const provider = await pool.obtain(graphId);
+    const outcomes: GraphRecordOutcome[] = [];
+    for (const record of records) {
+      try {
+        const result = await this.processFlattenedRecord(
+          record, run.entityDir, run.options, run.batchContext, run.callbacks, run.entityConfig, true,
+          provider as unknown as IMetadataProvider
+        );
+        outcomes.push({ success: true, result, record, graphId });
+      } catch (error) {
+        pool.markFailed();
+        outcomes.push({ success: false, error, record, graphId });
+        break;
+      }
+    }
+    return outcomes;
+  }
+
+  /**
+   * Apply a batch's results. Successful writes are tracked first, so a failure still reports
+   * what non-atomic graphs committed. Then the first thrown error, or any counted record
+   * error outside a dry run, stops the push.
+   */
+  private applyGraphOutcomes(
+    run: FileGraphRun,
+    pool: GraphProviderPool,
+    pendingWrites: Map<string, CommittedWrite[]>,
+    outcomes: GraphRecordOutcome[]
+  ): void {
+    let firstFailure: GraphRecordFailure | undefined;
+    for (const outcome of outcomes) {
+      if (outcome.success === false) {
+        firstFailure ??= outcome;
+        continue;
+      }
+      run.applyResult(outcome.result);
+      if (outcome.result.status === 'error') {
+        // A non-throwing record error must not commit leftover graph depth.
+        pool.markFailed();
+      }
+      this.trackPendingWrite(pendingWrites, run.filePath, outcome);
+    }
+    if (firstFailure) {
+      this.throwRecordFailure(firstFailure, run.callbacks);
+    }
+    const errorCount = run.errorCount();
+    if (!run.options.dryRun && errorCount > 0) {
+      throw new Error(
+        `${errorCount} record${errorCount === 1 ? '' : 's'} in ${path.basename(run.filePath)} could not be pushed ` +
+          `(see the errors above). The push stops at the first failed record.`
+      );
+    }
+  }
+
+  private trackPendingWrite(pendingWrites: Map<string, CommittedWrite[]>, filePath: string, outcome: GraphRecordSuccess): void {
+    if (this.writeMode !== 'parallel') {
+      return; // atomic: nothing commits before the push does
+    }
+    const status = committedStatusOf(outcome.result);
+    if (!status) {
+      return;
+    }
+    const writes = pendingWrites.get(outcome.graphId) ?? [];
+    writes.push({ filePath, entityName: outcome.record.entityName, recordPath: outcome.record.path, status });
+    pendingWrites.set(outcome.graphId, writes);
+  }
+
+  private throwRecordFailure(failure: GraphRecordFailure, callbacks?: PushCallbacks): never {
+    const err = failure.error instanceof Error ? failure.error : new Error(String(failure.error));
+    const rec = failure.record;
+    callbacks?.onLog?.(`\n❌ Processing failed for ${rec.entityName} at ${rec.path}`);
+    callbacks?.onLog?.(`   ${err.message}\n`);
+    if (err.stack) {
+      callbacks?.onLog?.(`   Stack: ${err.stack}\n`);
+    }
+    throw err;
   }
 
   protected async processFlattenedRecord(
@@ -1542,7 +1849,9 @@ export class PushService {
       });
 
       // Throw error to trigger rollback and stop processing
-      throw new Error(`Failed to save ${entityName} record at ${flattenedRecord.path}: ${errorMessage}`);
+      const saveFailure = new Error(`Failed to save ${entityName} record at ${flattenedRecord.path}: ${errorMessage}`);
+      this.reportedRecordErrors.add(saveFailure);
+      throw saveFailure;
     }
     
     // Return batch context entry as a side effect instead of mutating directly.
@@ -1884,7 +2193,9 @@ export class PushService {
     }
 
     messages.push('');
-    messages.push('All operations will occur within a transaction and can be rolled back on error.');
+    for (const line of this.transactionBannerLines()) {
+      messages.push(line);
+    }
     messages.push('');
     messages.push('═'.repeat(80));
     messages.push('');
@@ -1910,6 +2221,17 @@ export class PushService {
    * Audit all deletions across all metadata files
    * This pre-processes all records to identify deletion dependencies and order
    */
+  /** What the deletion confirmation says about rollback. Must match the write mode. */
+  private transactionBannerLines(): string[] {
+    if (this.writeMode === 'atomic') {
+      return ['All creates, updates and deletes run in one database transaction. If anything fails, nothing is saved.'];
+    }
+    return [
+      'Deletes and deferred records run in one database transaction and are rolled back on error.',
+      'Creates and updates are NOT: this is a non-atomic push, so each one is committed as soon as it is saved.',
+    ];
+  }
+
   private async auditAllDeletions(
     entityDirs: string[],
     options: PushOptions,
@@ -2263,7 +2585,7 @@ export class PushService {
         }
 
       } catch (error) {
-        const err = error as Error;
+        const err = error instanceof Error ? error : new Error(String(error));
 
         callbacks?.onError?.(
           `   ✗ Failed to process deferred record: ${entityName} (${recordId})`
@@ -2274,8 +2596,20 @@ export class PushService {
         callbacks?.onError?.(
           `     Tip: Ensure all referenced records exist or remove the ?allowDefer flag`
         );
+        if (!this.reportedRecordErrors.has(err)) {
+          callbacks?.onRecordError?.({
+            entityName,
+            path: flattenedRecord.path,
+            primaryKey: recordId,
+            message: `Deferred record could not be resolved: ${err.message}`,
+          });
+        }
 
         errors++;
+        if (!options.dryRun) {
+          // Same as a thrown Phase 1 error: stop, and let push() roll the transaction back.
+          throw new Error(`Failed to process deferred record ${entityName} (${recordId}): ${err.message}`, { cause: err });
+        }
       }
     }
 
