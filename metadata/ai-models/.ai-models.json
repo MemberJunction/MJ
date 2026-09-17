@@ -16626,7 +16626,7 @@
             "OutputPricePerUnit": 0.6,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "DeepSeek direct, OFF-PEAK tier, effective 2026-09-10. $0.15 uncached input / $0.60 output / $0.003 cached input per 1M. PEAK is exactly double ($0.30/$1.20, $0.006 cached) during Monday-Friday 01:00-04:00 and 06:00-10:00 UTC. Off-peak is recorded rather than a blend, so the figure always matches a rate DeepSeek actually charges. No OpenRouter cost row is recorded: the OpenRouter route exists (deepseek/deepseek-v4.1-flash) but its rate was not confirmed at research time, and a guessed price is worse than an absent one. Sources: https://openrouter.ai/deepseek/deepseek-v4.1-flash ; https://techbriefly.com/2026/09/11/deepseek-v4-1-flash-api-pricing/",
+            "Comments": "DeepSeek direct, OFF-PEAK tier, effective 2026-09-10. $0.15 uncached input / $0.60 output / $0.003 cached input per 1M. PEAK is exactly double ($0.30/$1.20, $0.006 cached) during Monday-Friday 01:00-04:00 and 06:00-10:00 UTC. Off-peak is recorded rather than a blend, so the figure always matches a rate DeepSeek actually charges. Sources: https://openrouter.ai/deepseek/deepseek-v4.1-flash ; https://techbriefly.com/2026/09/11/deepseek-v4-1-flash-api-pricing/",
             "CacheReadPricePerUnit": 0.003,
             "CacheWritePricePerUnit": null
           },
@@ -16634,8 +16634,32 @@
             "ID": "73DCEBF1-A6C4-4AED-9DEA-A9DF70FCC346"
           },
           "sync": {
-            "lastModified": "2026-09-13T20:06:41.417Z",
-            "checksum": "4b4378f6d83dbee1505a1ba55b0df703a2bab0864b77ff5dfd3fdf0b0ce16103"
+            "lastModified": "2026-09-15T13:56:43.125Z",
+            "checksum": "90f33ed4aaccbc43dc03938fb56865e8b602cd27985bbf720fe748745d4f4a89"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "StartedAt": "2026-09-10T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.15,
+            "OutputPricePerUnit": 0.6,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "OpenRouter passthrough of DeepSeek's rate card for deepseek/deepseek-v4.1-flash, OFF-PEAK tier: $0.15 uncached input / $0.60 output / $0.003 cached input per 1M, at parity with DeepSeek direct. PEAK is exactly double ($0.30/$1.20) during Monday-Friday 01:00-04:00 and 06:00-10:00 UTC. Off-peak is recorded for the same reason as the DeepSeek-direct row. This closes the follow-up left open by the 2026-09-13 report, which added the OpenRouter inference route without a cost record because the rate was unconfirmed. Sources: https://openrouter.ai/deepseek/deepseek-v4.1-flash ; https://www.eesel.ai/blog/deepseek-v4-1-flash-pricing",
+            "CacheReadPricePerUnit": 0.003,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "1C259373-F5C4-45DD-9A98-E9A30D4C4967"
+          },
+          "sync": {
+            "lastModified": "2026-09-15T13:56:43.142Z",
+            "checksum": "36439a74a5ab44bd3887131bc4a53995f8082e55c742e67e2a1859a12b0a52f7"
           }
         }
       ]
@@ -21018,7 +21042,8 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
             "StartedAt": "2026-07-10T00:00:00.000Z",
-            "Status": "Active",
+            "EndedAt": "2026-08-21T00:00:00.000Z",
+            "Status": "Expired",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
             "InputPricePerUnit": 5,
@@ -21027,14 +21052,38 @@
             "CacheWritePricePerUnit": null,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT 5.6 (gpt-5.6 alias -> sol) pricing on OpenAI as of July 2026. $5.00/$30.00 per 1M tokens. Cache read 0.1x input (Family B, published cached-input price); OpenAI does not charge for cache writes."
+            "Comments": "GPT 5.6 (gpt-5.6 alias -> sol) launch pricing on OpenAI, July 2026: $5.00/$30.00 per 1M tokens, cache read 0.1x input (Family B, published cached-input price); OpenAI does not charge for cache writes. EXPIRED 2026-08-21: OpenAI cut the Sol rate to $4.00/$20.00 with cached input at $0.40. Row preserved for historical pricing lookups. Source: https://developers.openai.com/api/docs/models/gpt-5.6-sol"
           },
           "primaryKey": {
             "ID": "FA7A4744-FAD8-43FC-A5F6-9D029101C0B5"
           },
           "sync": {
-            "lastModified": "2026-07-10T23:26:27.479Z",
-            "checksum": "e08205ce10ae3da82c4184bc749be9c406066dc320e485b7d65a03acc0487943"
+            "lastModified": "2026-09-15T13:56:43.193Z",
+            "checksum": "efdb9a88595336a387e71ae40ae0e60f817d30b18af2e59172b74c9699b3bf69"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "StartedAt": "2026-08-21T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 4,
+            "OutputPricePerUnit": 20,
+            "CacheReadPricePerUnit": 0.4,
+            "CacheWritePricePerUnit": null,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT 5.6 (gpt-5.6 alias -> sol) pricing on OpenAI effective 2026-08-21: $4.00 input / $0.40 cached input / $20.00 output per 1M tokens - a 20% input and 33% output reduction from the $5/$30 launch rate. OpenAI describes this as PROMOTIONAL and guarantees it only through 2026-11-21; the rate may revert to $5/$30 after that date, so re-check in November. Applies to metered API usage and purchased credits, not consumer subscriptions. Batch API remains half rate. OpenAI does not charge for cache writes. Sources: https://developers.openai.com/api/docs/models/gpt-5.6-sol ; https://techjacksolutions.com/ai-brief/openai-gpt-5-6-sol-api-price-cut-20-percent-november-2026/ ; https://cellcog.ai/blog/gpt-5-6-pricing/"
+          },
+          "primaryKey": {
+            "ID": "23270618-9761-4EE1-911B-EBDD024A24AF"
+          },
+          "sync": {
+            "lastModified": "2026-09-15T13:56:43.210Z",
+            "checksum": "f059442166f5fbeca4cc0e6a5e92d92f333a3808fa090ad534722741d79cb3da"
           }
         }
       ]
@@ -23737,7 +23786,7 @@
     "fields": {
       "Name": "GLM 5.3",
       "PowerRank": 23,
-      "Description": "Z.AI (Zhipu AI) flagship LLM released 2026-08-14, successor to GLM-5.2. 743B base parameters. Reported leader on CyberGym and AutomationBench evaluations at launch. Open weights staged behind safety review at launch time. AS OF 2026-08-24: no per-token API rate has been published on the Z.AI pricing page — model is available only through the GLM Coding Plan ($18/mo starting) and Z.AI's ZCode agent. Direct-API and inference-provider pricing will be added once Zhipu posts the rate card. Sources: https://emergent.sh/news/glm-53-officially-launched ; https://models.dev/models/zhipuai/glm-5.3/ ; https://www.explainx.ai/blog/glm-5-3-launch-cyber-defense-benchmarks-august-2026",
+      "Description": "Z.AI (Zhipu AI) flagship LLM released 2026-08-14, successor to GLM-5.2. 743B base parameters. Reported leader on CyberGym and AutomationBench evaluations at launch. Open weights staged behind safety review at launch time. Z.AI posted the per-token rate card effective 2026-08-19 ($1.40 input / $4.40 output / $0.26 cached input per 1M), recorded below; the model also remains available through the GLM Coding Plan ($18/mo starting) and Z.AI's ZCode agent. Sources: https://emergent.sh/news/glm-53-officially-launched ; https://docs.z.ai/guides/llm/glm-5.3 ; https://models.dev/models/zhipuai/glm-5.3/ ; https://www.explainx.ai/blog/glm-5-3-launch-cyber-defense-benchmarks-august-2026",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "IsActive": true,
       "SpeedRank": 6,
@@ -23805,7 +23854,7 @@
             "Status": "Active",
             "DriverClass": "OpenRouterLLM",
             "APIName": "z-ai/glm-5.3",
-            "MaxInputTokens": 200000,
+            "MaxInputTokens": 1310720,
             "MaxOutputTokens": 128000,
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": false,
@@ -23816,8 +23865,8 @@
             "ID": "A6A6D2F5-BA61-469C-B334-1486E9D40E0F"
           },
           "sync": {
-            "lastModified": "2026-08-26T08:34:00.769Z",
-            "checksum": "418a5e22c25947ebba6c02e55a5d49118b8185733512b1a058d34be9d94d2fe5"
+            "lastModified": "2026-09-15T13:56:43.286Z",
+            "checksum": "bfe8eaf927a59c3310e1b2e5d81031e2fb5062575d5f6208e5aceaee3eb7c5e1"
           }
         }
       ],
@@ -23852,8 +23901,8 @@
       "ID": "D5DC6B04-AA19-459A-9ED3-D44B2C42D6A5"
     },
     "sync": {
-      "lastModified": "2026-09-13T20:06:41.828Z",
-      "checksum": "3d4494156ac41ea7760445216a9e64e2731bb0b5fb375202e8f268a27ee4ea90"
+      "lastModified": "2026-09-15T13:56:43.251Z",
+      "checksum": "b46525a2b42e9df51de0c789963e4be1c83fb2fddd29dd7f35d9b9c6a930c409"
     }
   },
   {
@@ -25003,6 +25052,204 @@
     "sync": {
       "lastModified": "2026-09-11T18:26:10.296Z",
       "checksum": "2f15dc0b913fa23cfa395c278048ceeee97896b3541e3d6c27b0b1da7652ada5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Fugu Max",
+      "PowerRank": 22,
+      "Description": "Sakana AI's cost-performance orchestration model, released September 11, 2026. Fugu is not a single model but a learned multi-agent orchestrator: a language model trained to route each task across a fixed pool of open-weight and specialist models (including NVIDIA's Nemotron family) and to recursively call instances of itself, then stitch the results together. Fugu Max dynamically selects efficient combinations of expert agents to improve quality and cost together. 1,048,576-token context window, 128,000-token maximum output, priced flat regardless of context length. Accepts text, image and PDF input and returns text. Supports function calling, structured (JSON) outputs via response_format, configurable reasoning effort (high, xhigh, max), and built-in web search and web fetch (billed separately at $10 per 1,000 search calls, which MJ does not model). Reached here through OpenRouter (sakana/fugu-max); Sakana's own OpenAI-compatible API is not wired up because MJ has no Sakana driver class yet. Note: Sakana does not serve the Fugu family inside the EU or EEA pending GDPR compliance work.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 5,
+      "CostRank": 6,
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Sakana AI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "A5BDEE42-C17C-4CA8-B9AC-B513CE7D7B99"
+          },
+          "sync": {
+            "lastModified": "2026-09-15T13:56:43.007Z",
+            "checksum": "cce89cd401901080da6108c5690aa4d7e72eac6d591eee21deebb85ee50ef1de"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "sakana/fugu-max",
+            "MaxInputTokens": 1048576,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "E6C10499-8200-46FA-9BAB-343A0C386218"
+          },
+          "sync": {
+            "lastModified": "2026-09-15T13:56:43.041Z",
+            "checksum": "99908abcf9de7a6b09bb8a76e234216ee9bafbca7ea35fe134cc6faac2a843d7"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "StartedAt": "2026-09-11T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 2,
+            "OutputPricePerUnit": 6,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Fugu Max launch pricing on OpenRouter (passthrough of Sakana's own rate card) as of the September 11, 2026 launch: $2.00/1M input, $6.00/1M output, $0.25/1M cache read. Flat across the full 1M-token context - there is no long-context surcharge tier on Fugu Max, unlike Fugu Ultra v2. Built-in web search bills separately at $10.00 per 1,000 calls and is not modelled here, because MJ prices per token rather than per call. Sources: https://openrouter.ai/sakana/fugu-max ; https://tokencost.app/blog/sakana-fugu-max-pricing-orchestration-tokens ; https://datanorth.ai/news/sakana-ai-launches-fugu-max-and-fugu-ultra-v2",
+            "CacheReadPricePerUnit": 0.25,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "57CF26BE-1CC0-4D23-8782-68CC658B48F8"
+          },
+          "sync": {
+            "lastModified": "2026-09-15T13:56:43.081Z",
+            "checksum": "15fcf525629b0bdbc2bc3fd87ad44d4ea02dc5ba1cf5e788c17790194f569c3e"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "3049E1EB-6B53-4B58-9D94-75D5F86C76E6"
+    },
+    "sync": {
+      "lastModified": "2026-09-15T13:56:42.795Z",
+      "checksum": "549f3f90de548744471251ec8cff1fec8d748b2ffcdf2e35329b4e6e4aed0f71"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Fugu Ultra v2",
+      "PowerRank": 25,
+      "Description": "Sakana AI's highest-capability orchestration model, released September 11, 2026, successor to Fugu Ultra. Like the rest of the Fugu family it is a learned multi-agent orchestrator rather than a single model: it routes each task across a pool of open-weight and specialist models and recursively calls instances of itself. Fugu Ultra v2 prioritises answer quality on complex multi-step reasoning, autonomous research and full-stack software development, and notably does not rely on any proprietary frontier model in its pool. 1,000,000-token context window, 128,000-token maximum output. Accepts text, image and PDF input and returns text. Supports function calling, structured (JSON) outputs, configurable reasoning effort (high, xhigh, max) and built-in web search. Reached here through OpenRouter (sakana/fugu-ultra-v2); Sakana's own OpenAI-compatible API is not wired up because MJ has no Sakana driver class yet. Note: Sakana does not serve the Fugu family inside the EU or EEA pending GDPR compliance work. Ranks are set conservatively - Sakana's benchmark claims are strong but the orchestration architecture means latency and per-task token consumption are both higher than a single-model call of comparable quality.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 4,
+      "CostRank": 8,
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Sakana AI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "E99EC9ED-551B-45CF-8EB8-50B151C80104"
+          },
+          "sync": {
+            "lastModified": "2026-09-15T13:56:43.011Z",
+            "checksum": "cce89cd401901080da6108c5690aa4d7e72eac6d591eee21deebb85ee50ef1de"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "sakana/fugu-ultra-v2",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "87B75ABD-2ED1-48B6-9EDC-7F481FC9F2E7"
+          },
+          "sync": {
+            "lastModified": "2026-09-15T13:56:43.039Z",
+            "checksum": "4f3e53a336acf9656515eb639c4b17bb5c193a33e484e911d123f4b41095cd49"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "StartedAt": "2026-09-11T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 5,
+            "OutputPricePerUnit": 30,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Fugu Ultra v2 launch pricing on OpenRouter (passthrough of Sakana's own rate card) as of the September 11, 2026 launch, SHORT-CONTEXT tier (prompts at or below 272,000 tokens): $5.00/1M input, $30.00/1M output, $0.50/1M cache read. Above 272K input the rate rises to $10.00/$45.00 per 1M - only the short-context tier is recorded, matching the convention already used for GPT-6 Astra and Grok 4.6. Built-in web search bills separately per call and is not modelled here. Sources: https://openrouter.ai/sakana/fugu-ultra-v2 ; https://aicybr.com/blog/sakana-fugu-max-ultra-v2-orchestration-pricing-api ; https://theroboticsmedia.com/article/sakana-ai-fugu-ultra-v2-0-1m-context-multi-agent-orchestration-september-11-2026",
+            "CacheReadPricePerUnit": 0.5,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "471069B4-DE07-4376-BF3D-6A6AB3BD0EB4"
+          },
+          "sync": {
+            "lastModified": "2026-09-15T13:56:43.080Z",
+            "checksum": "83e167d4fa4516b83fb5d8c30b692ec21c28babca1363b538f1eac2f33570bd3"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "699D1B9D-F63F-4E13-8C1F-6D10F21D55D3"
+    },
+    "sync": {
+      "lastModified": "2026-09-15T13:56:42.794Z",
+      "checksum": "d29681ec5f774ec79703f7192815b468f9d8ffa7bf2b4aa76e7d7a4350498783"
     }
   },
   {
