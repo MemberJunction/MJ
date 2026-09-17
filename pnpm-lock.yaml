@@ -3703,6 +3703,9 @@ importers:
       '@memberjunction/storage':
         specifier: 6.1.0
         version: link:../../MJStorage
+      '@memberjunction/web-search-engine':
+        specifier: 6.1.0
+        version: link:../../WebSearchEngine
       '@types/d3-cloud':
         specifier: ^1.2.9
         version: 1.2.9
@@ -14140,6 +14143,9 @@ importers:
       '@memberjunction/testing-integration':
         specifier: 6.1.0
         version: link:../TestingFramework/testing-integration
+      '@memberjunction/web-search-engine':
+        specifier: 6.1.0
+        version: link:../WebSearchEngine
       cosmiconfig:
         specifier: ^9.0.0
         version: 9.0.0(typescript@5.9.3)
@@ -15048,6 +15054,31 @@ importers:
       jsdom:
         specifier: 26.1.0
         version: 26.1.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/WebSearchEngine:
+    dependencies:
+      '@memberjunction/core':
+        specifier: 6.1.0
+        version: link:../MJCore
+      '@memberjunction/core-entities':
+        specifier: 6.1.0
+        version: link:../MJCoreEntities
+      '@memberjunction/credentials':
+        specifier: 6.1.0
+        version: link:../Credentials/Engine
+      '@memberjunction/global':
+        specifier: 6.1.0
+        version: link:../MJGlobal
+      '@memberjunction/network-utils':
+        specifier: 6.1.0
+        version: link:../NetworkUtils
+    devDependencies:
+      '@types/node':
+        specifier: 24.10.11
+        version: 24.10.11
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
