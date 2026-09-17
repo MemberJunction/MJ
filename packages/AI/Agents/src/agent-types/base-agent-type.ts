@@ -20,6 +20,22 @@ import { LogError, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { ActionResult } from '@memberjunction/actions-base';
 
 /**
+ * How an agent type decided to execute a run, recorded on the run as a completed `Decision` step.
+ *
+ * Some agent types can run the same agent in more than one way (a Flow agent runs either in this
+ * process or on the task-graph dispatcher). Which way was taken changes what the run record means,
+ * so it belongs on the record, not only in a log line that is gone by the time someone investigates.
+ */
+export interface AgentTypeExecutionRouting {
+    /** The step name shown in the run timeline, naming the chosen mode. */
+    StepName: string;
+    /** Why this mode was chosen, in words an operator can act on. */
+    Reason: string;
+    /** Stored as the step's output data. */
+    Detail: Record<string, string>;
+}
+
+/**
  * Abstract base class for agent type implementations.
  * 
  * Agent types define reusable execution patterns that control how agents behave.
@@ -596,6 +612,20 @@ export abstract class BaseAgentType {
     ): Promise<BaseAgentNextStep<P> | null> {
         // Default implementation: return null to use base-agent's default behavior
         // (fall back to prompt execution if prompts are configured)
+        return null;
+    }
+
+    /**
+     * Describes how this run is being executed, once {@link DetermineInitialStep} has decided.
+     *
+     * BaseAgent calls this right after `DetermineInitialStep` and, when it returns a value, writes
+     * it to the run as a completed `Decision` step. Default: null, meaning the agent type has only
+     * one way to run and there is nothing to record.
+     *
+     * @param agentTypeState - The state returned by {@link InitializeAgentTypeState}
+     * @since 6.1.3
+     */
+    public DescribeExecutionRouting<ATS>(agentTypeState: ATS): AgentTypeExecutionRouting | null {
         return null;
     }
 
