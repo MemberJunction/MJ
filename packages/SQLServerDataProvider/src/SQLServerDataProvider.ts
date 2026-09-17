@@ -1296,7 +1296,64 @@ export class SQLServerDataProvider
       setSQL: setStatements.join('\n'),
       callArgsSQL: execParams.join(',\n                '),
       simpleParamsSQL: simpleParams,
+      suffix: uniqueSuffix,
     };
+  }
+
+  /**
+   * Replay form of a CREATE for the SQL log (never executed): the same DECLARE/SET
+   * block, then `IF NOT EXISTS (row with this PK) EXEC spCreate ELSE EXEC spUpdate`.
+   *
+   * The consolidated Metadata_Sync migrations are recordings of `mj sync push`, and a
+   * push creates rows with fixed primary keys from `metadata/**`. Replaying an
+   * unguarded create on a database where a push already created the row fails on the
+   * primary key (MemberJunction/MJ#4503).
+   *
+   * Ownership contract: rows that flow through a recording are release-owned metadata,
+   * so an existing row with the same primary key is converged to the recorded content
+   * (overwrite, not skip). CodeGen emits spCreate and spUpdate with name-compatible
+   * parameters (same names, optionality inverted for the PK and required columns), so
+   * the update branch reuses the create's named argument list. One narrow exception to
+   * "converges": a NOT NULL column with a non-NULL default whose value is left unset on
+   * the recording (uniqueidentifier defaults are left to the server, see BaseEntity)
+   * gets no `_Clear` companion, so the update's `ISNULL(@p, [col])` keeps the existing
+   * value while the create would have applied the default. On a full MJ database that is
+   * nine columns (e.g. AIAgent.OwnerUserID), and preserving the existing value there is
+   * the safer reading.
+   *
+   * Entities without a generated update proc (AllowUpdateAPI, spUpdateGenerated,
+   * VirtualEntity, the same test CodeGen applies) get the guard with no ELSE branch, so
+   * the replay never names a proc that does not exist. Returns undefined when any
+   * primary key value is not part of the call (the DB default would generate it, so
+   * there is nothing to look up).
+   */
+  protected override RenderReplaySaveSQL(
+    binding: SaveCallBinding,
+    entity: BaseEntity,
+    fieldValues: Map<EntityFieldInfo, unknown>,
+  ): string | undefined {
+    if (binding.kind !== 'mssql-declare-exec') {
+      throw new Error(`SQLServerDataProvider.RenderReplaySaveSQL: unexpected binding kind '${binding.kind}'`);
+    }
+    const info = entity.EntityInfo;
+    const pks = info.PrimaryKeys;
+    if (pks.length === 0 || !pks.every((pk) => fieldValues.has(pk))) {
+      return undefined;
+    }
+    const schema = info.SchemaName;
+    const where = pks.map((pk) => `[${pk.Name}] = @${pk.CodeName}${binding.suffix}`).join(' AND ');
+    const createSpName = this.GetCreateUpdateSPName(entity, true);
+    const createBranch = `IF NOT EXISTS (SELECT 1 FROM [${schema}].[${info.BaseTable}] WHERE ${where})\nBEGIN\n    EXEC [${schema}].${createSpName} ${binding.callArgsSQL}\nEND`;
+    const hasUpdateProc = info.AllowUpdateAPI && info.spUpdateGenerated && !info.VirtualEntity;
+    const updateBranch = hasUpdateProc
+      ? `\nELSE\nBEGIN\n    EXEC [${schema}].${this.GetCreateUpdateSPName(entity, false)} ${binding.callArgsSQL}\nEND`
+      : '';
+    return `${this.renderDeclareSetHead(binding)}${createBranch}${updateBranch}`;
+  }
+
+  /** `DECLARE ...\n\nSET ...\n\n` when the binding declares variables, else empty. */
+  private renderDeclareSetHead(binding: Extract<SaveCallBinding, { kind: 'mssql-declare-exec' }>): string {
+    return binding.preambleSQL ? `${binding.preambleSQL}\n\n${binding.setSQL}\n\n` : '';
   }
 
   /**
@@ -1314,10 +1371,7 @@ export class SQLServerDataProvider
       throw new Error(`SQLServerDataProvider.WrapSaveCallForResult: unexpected binding kind '${binding.kind}'`);
     }
     const execSQL = `EXEC [${entity.EntityInfo.SchemaName}].${spName} ${binding.callArgsSQL}`;
-    const sql = binding.preambleSQL
-      ? `${binding.preambleSQL}\n\n${binding.setSQL}\n\n${execSQL}`
-      : execSQL;
-    return { sql };
+    return { sql: `${this.renderDeclareSetHead(binding)}${execSQL}` };
   }
 
   /**

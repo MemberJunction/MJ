@@ -449,6 +449,166 @@
   },
   {
     "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Live",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Puck",
+      "Sequence": 1,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "FDF566C6-383E-4AF6-A699-7EB9D49EA5D3"
+    },
+    "sync": {
+      "lastModified": "2026-09-16T02:20:14.468Z",
+      "checksum": "cd754a1e1555b7b07c0c675d045738dce5479595d325c80efaa9e1c7e2801d03"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Live",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Charon",
+      "Sequence": 2,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "DB0184D1-442D-41D4-BFBE-FE99F50B5567"
+    },
+    "sync": {
+      "lastModified": "2026-09-16T02:20:14.468Z",
+      "checksum": "d39ccd8a185eba3ca470e38f60ff54e0155cdceb04303038010aaf69fe5c9d25"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Live",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Kore",
+      "Sequence": 3,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "8E40DCCC-BF38-44AD-9668-795DCCB828CF"
+    },
+    "sync": {
+      "lastModified": "2026-09-16T02:20:14.500Z",
+      "checksum": "3dff847c5a53ebe50ef414299336657999adc2cca05ea989a93672291f63ab8e"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Live",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Fenrir",
+      "Sequence": 4,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "BB6F86A4-49EA-400E-B008-F6898394FFCE"
+    },
+    "sync": {
+      "lastModified": "2026-09-16T02:20:14.499Z",
+      "checksum": "edf69ee0ac2b5f0b5ef4a4b903d18091d14a1ad54249c7004c4308bffdd8af63"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Live",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Aoede",
+      "Sequence": 5,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "5582B1CF-548E-4A47-BFB0-99DC16D4BBB9"
+    },
+    "sync": {
+      "lastModified": "2026-09-16T02:20:14.499Z",
+      "checksum": "7d71a975ea0bf20df8c424cf8d34e81d3f5fe0475042511eceb68979724c19eb"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Live Extended Thinking",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Puck",
+      "Sequence": 1,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "2D4806E8-A6EA-4687-BF03-CE16D1935976"
+    },
+    "sync": {
+      "lastModified": "2026-09-16T02:20:14.510Z",
+      "checksum": "0e9680a44eac06c01aa3fc933987e6732aa6d7d1c3088058f0cd02aae6e974c1"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Live Extended Thinking",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Charon",
+      "Sequence": 2,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "3C2861E9-11EE-4B77-A8A0-58E348633C0D"
+    },
+    "sync": {
+      "lastModified": "2026-09-16T02:20:14.508Z",
+      "checksum": "cc35f5b34504b5c28e27d0fefc82bdf3e695f2c1bd97d494f4dbd72807808090"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Live Extended Thinking",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Kore",
+      "Sequence": 3,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "F790ECA4-2D31-46B6-A849-F2AB36586152"
+    },
+    "sync": {
+      "lastModified": "2026-09-16T02:20:14.508Z",
+      "checksum": "3c795c9ee621a1e45947cb3ae5b5dc9e03ea6b79b0db810eed6021736b1e6fa4"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Live Extended Thinking",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Fenrir",
+      "Sequence": 4,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "8C9812BB-ED98-49EF-94D1-105269F600E9"
+    },
+    "sync": {
+      "lastModified": "2026-09-16T02:20:14.509Z",
+      "checksum": "cf3112f6a5766b8d64c601b65fe0ff243924e4e8f275d0656f2807b8513e5223"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Live Extended Thinking",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Aoede",
+      "Sequence": 5,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "DDA2C80B-5DB5-4CF4-BF24-3F35AC00A3CD"
+    },
+    "sync": {
+      "lastModified": "2026-09-16T02:20:14.507Z",
+      "checksum": "a9dd6840b4c333edf4324a7c7e8ab9a3d9f8bb28ce689a428a43fa2b03a7feae"
+    }
+  },
+  {
+    "fields": {
       "ModelID": "@lookup:MJ: AI Models.Name=AssemblyAI Voice Agent",
       "PersonaID": "@lookup:MJ: AI Personas.Name=Ivy",
       "Sequence": 1,
