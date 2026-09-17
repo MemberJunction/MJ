@@ -122,9 +122,21 @@ export async function SyncParameters(
         const paramsToUpdate = existingParams.filter(
             ep => filteredParams.some(p => p.name.toLowerCase() === ep.Name.toLowerCase())
         );
+        // Only extraction-created rows are extraction's to remove. A row whose
+        // DetectionMethod is 'Manual' was authored by a human or by a metadata sync and is
+        // owned by whoever authored it — deleting it here would drop it on every SQL edit
+        // and the author's next push would put it straight back.
         const paramsToRemove = existingParams.filter(
-            ep => !extractedParamNames.includes(ep.Name.toLowerCase())
+            ep => !extractedParamNames.includes(ep.Name.toLowerCase()) && ep.DetectionMethod !== 'Manual'
         );
+        for (const orphan of existingParams) {
+            if (!extractedParamNames.includes(orphan.Name.toLowerCase()) && orphan.DetectionMethod === 'Manual') {
+                console.warn(
+                    `Query ${queryID} declares parameter "${orphan.Name}" but the SQL no longer references it. ` +
+                    `Keeping the declared row — remove the declaration if the parameter is gone.`
+                );
+            }
+        }
 
         const factories: (() => Promise<boolean>)[] = [];
 
@@ -193,6 +205,16 @@ function updateParameterIfChanged(
     existing: MJQueryParameterEntity,
     extracted: ExtractedParameter
 ): boolean {
+    // A declared parameter is authoritative. DetectionMethod 'Manual' is the column's own
+    // default and means the row was authored deliberately — by a person in the UI or by a
+    // metadata sync — so extraction confirms it still matches a token in the SQL and leaves
+    // every authored attribute alone. Overwriting them here would make the authored metadata
+    // and the database permanently disagree: the values would be restored on the next push
+    // and rewritten again on the next SQL edit, forever.
+    if (existing.DetectionMethod === 'Manual') {
+        return false;
+    }
+
     let hasChanges = false;
 
     const { type: targetType } = normalizeParamType(extracted.type);
@@ -456,8 +478,11 @@ export async function SyncEntities(
         const entitiesToAdd = entityMappings.filter(
             mapping => !existingEntities.some(ee => UUIDsEqual(ee.EntityID, mapping.entityID))
         );
+        // As with parameters, a 'Manual' row was authored deliberately and is not
+        // extraction's to delete.
         const entitiesToRemove = existingEntities.filter(
-            ee => !entityMappings.some(mapping => UUIDsEqual(mapping.entityID, ee.EntityID))
+            ee => !entityMappings.some(mapping => UUIDsEqual(mapping.entityID, ee.EntityID)) &&
+                  ee.DetectionMethod !== 'Manual'
         );
 
         const factories: (() => Promise<boolean>)[] = [];

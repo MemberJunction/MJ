@@ -32,6 +32,14 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
      *  Keys are parameter names, values are the tested sample values. */
     public ParameterHints?: Map<string, string>;
 
+    /**
+     * Derived-data work that Save() recorded instead of performing, because
+     * @see BaseEntity.DeferDerivedData was set. 'extract' runs the extraction pipeline
+     * and dialect auto-conversion; 'cleanup' removes extraction data for an emptied query.
+     * Null means nothing is pending.
+     */
+    private pendingDerivedData: 'extract' | 'cleanup' | null = null;
+
     // ─── Embedding Methods ───────────────────────────────────────────────────────
 
     /**
@@ -91,13 +99,29 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
                 return false;
             }
 
-            // Extract and sync parameters AFTER saving, outside of any transaction
-            if (shouldExtractData && this.SQL && this.SQL.trim().length > 0) {
-                await this.extractAndSyncDataAsync();
-                await this.autoConvertDialectsAsync();
-            } else if (!this.SQL || this.SQL.trim().length === 0) {
+            // Extract and sync parameters AFTER saving the query itself.
+            //
+            // A caller that also authors this query's children — `mj sync push` declaring
+            // MJ: Query Parameters rows — sets DeferDerivedData, because extraction here
+            // would create its own parameter rows before the authored ones are written and
+            // the authored INSERT would then violate UQ_QueryParameter_QueryID_Name. In that
+            // case we only record what is owed and the caller runs it once the graph is
+            // complete, via ProcessDeferredDerivedData.
+            const hasSQL = !!this.SQL && this.SQL.trim().length > 0;
+            if (shouldExtractData && hasSQL) {
+                if (this.DeferDerivedData) {
+                    this.pendingDerivedData = 'extract';
+                } else {
+                    await this.extractAndSyncDataAsync();
+                    await this.autoConvertDialectsAsync();
+                }
+            } else if (!hasSQL) {
                 this.UsesTemplate = false;
-                await this.cleanupEmptyQueryAsync();
+                if (this.DeferDerivedData) {
+                    this.pendingDerivedData = 'cleanup';
+                } else {
+                    await this.cleanupEmptyQueryAsync();
+                }
             }
 
             return true;
@@ -213,6 +237,24 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
      */
     public async RerunExtraction(): Promise<void> {
         await this.extractAndSyncDataAsync();
+    }
+
+    /**
+     * Runs the extraction (or cleanup) that Save() deferred. Called by a caller that
+     * authors this query together with its children, once the whole graph is persisted
+     * and before its transaction commits. Extraction then sees the authored parameter
+     * rows and reconciles with them by name rather than inserting duplicates.
+     */
+    public override async ProcessDeferredDerivedData(): Promise<void> {
+        const pending = this.pendingDerivedData;
+        this.pendingDerivedData = null;
+
+        if (pending === 'extract') {
+            await this.extractAndSyncDataAsync();
+            await this.autoConvertDialectsAsync();
+        } else if (pending === 'cleanup') {
+            await this.cleanupEmptyQueryAsync();
+        }
     }
 
     /**

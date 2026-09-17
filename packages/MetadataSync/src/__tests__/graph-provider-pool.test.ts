@@ -41,6 +41,57 @@ describe('GraphProviderPool', () => {
         FakeProvider.created = 0;
     });
 
+    it('runs graph-complete work before the graph commits', async () => {
+        const host = new FakeProvider();
+        const order: string[] = [];
+        const pool = new GraphProviderPool(host, () => undefined, async (graphId) => {
+            order.push(`complete:${graphId}`);
+        });
+        pool.noteLevels([[{ graphId: 'A' }]]);
+
+        const a = (await pool.obtain('A')) as FakeProvider;
+        const origCommit = a.CommitTransaction.bind(a);
+        a.CommitTransaction = async () => {
+            order.push('commit:A');
+            await origCommit();
+        };
+
+        expect(await pool.drainBatch(['A'], 0)).toBeUndefined();
+        expect(order).toEqual(['complete:A', 'commit:A']);
+    });
+
+    it('rolls the graph back when graph-complete work throws, and reports the error', async () => {
+        const host = new FakeProvider();
+        const pool = new GraphProviderPool(host, () => undefined, async () => {
+            throw new Error('deferred extraction failed');
+        });
+        pool.noteLevels([[{ graphId: 'A' }]]);
+
+        const a = (await pool.obtain('A')) as FakeProvider;
+        const settleError = await pool.drainBatch(['A'], 0);
+
+        expect(settleError?.message).toBe('deferred extraction failed');
+        expect(pool.hasFailed).toBe(true);
+        expect(a.commits).toBe(0);
+        expect(a.rollbacks).toBe(1);
+        expect(a.releases).toBe(1);
+    });
+
+    it('skips graph-complete work for a file that has already failed', async () => {
+        const host = new FakeProvider();
+        let calls = 0;
+        const pool = new GraphProviderPool(host, () => undefined, async () => {
+            calls++;
+        });
+        pool.noteLevels([[{ graphId: 'A' }]]);
+
+        await pool.obtain('A');
+        pool.markFailed();
+        await pool.drainBatch(['A'], 0);
+
+        expect(calls).toBe(0);
+    });
+
     it('keeps leftover-depth graphs live across levels and releases at last level', async () => {
         const host = new FakeProvider();
         host.leftoverDepth = 1;

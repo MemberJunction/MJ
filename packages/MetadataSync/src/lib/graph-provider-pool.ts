@@ -28,9 +28,17 @@ export class GraphProviderPool {
   private unavailableLogged = false;
   private anyFailed = false;
 
+  /**
+   * @param onGraphComplete invoked for each graph once every record in it is written and
+   *   BEFORE its transaction settles. This is where work that had to wait for the whole
+   *   graph runs — see BaseEntity.ProcessDeferredDerivedData — so its rows commit with the
+   *   graph's own. It is skipped when the file has already failed, and a throw from it
+   *   fails the graph, which rolls it back.
+   */
   constructor(
     private readonly host: GraphProviderLike,
     private readonly log: (message: string) => void = () => undefined,
+    private readonly onGraphComplete?: (graphId: string) => Promise<void>,
   ) {}
 
   /**
@@ -123,6 +131,19 @@ export class GraphProviderPool {
   private async releaseGraphs(ids: string[]): Promise<Error | undefined> {
     let settleError: Error | undefined;
     for (const id of ids) {
+      // Graph-complete work runs before the commit below, and before the host check —
+      // a graph on the host provider is still a completed graph and still owed its
+      // deferred work; it just settles with the host transaction instead of its own.
+      if (this.onGraphComplete && !this.anyFailed) {
+        try {
+          await this.onGraphComplete(id);
+        } catch (e) {
+          this.anyFailed = true;
+          settleError ??= e as Error;
+          this.log(`Failed to complete graph ${id}: ${(e as Error).message}`);
+        }
+      }
+
       const provider = this.providers.get(id);
       this.providers.delete(id);
       if (!provider || provider === this.host) continue;

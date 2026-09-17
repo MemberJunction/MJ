@@ -789,7 +789,27 @@ export class PushService {
         // Peak live independent instances is then the current batch plus any
         // leftover-depth graphs still spanning later levels.
         const hostProvider = Metadata.Provider as unknown as DatabaseProviderBase; // global-provider-ok: host provider template for GraphProviderPool cloning
-        const graphPool = new GraphProviderPool(hostProvider, (msg) => callbacks?.onLog?.(msg));
+
+        // Entities that deferred derived-data work during Save(), keyed by the graph they
+        // belong to. An entity that derives child records from its own data (MJ: Queries
+        // derives its parameters from its SQL) cannot do so while the graph is still being
+        // written — the authored children are not there yet, and it would create colliding
+        // copies of them. The pool calls back once a graph is complete so the derivation
+        // sees the finished graph and settles in the same transaction.
+        const deferredDerivedData = new Map<string, BaseEntity[]>();
+        const graphPool = new GraphProviderPool(
+          hostProvider,
+          (msg) => callbacks?.onLog?.(msg),
+          async (graphId) => {
+            const entities = deferredDerivedData.get(graphId);
+            deferredDerivedData.delete(graphId);
+            if (!entities) return;
+            // Serial: these share the graph's single connection.
+            for (const entity of entities) {
+              await entity.ProcessDeferredDerivedData();
+            }
+          }
+        );
 
         const applyProcessResult = (result: ProcessRecordResult): void => {
           if (result.batchContextEntry) {
@@ -893,6 +913,13 @@ export class PushService {
                     throw err;
                   }
                   applyProcessResult(batchResult.result);
+
+                  const saved = batchResult.result.batchContextEntry?.entity;
+                  if (saved instanceof BaseEntity && saved.DeferDerivedData) {
+                    const forGraph = deferredDerivedData.get(batchResult.graphId);
+                    if (forGraph) forGraph.push(saved);
+                    else deferredDerivedData.set(batchResult.graphId, [saved]);
+                  }
                 }
               }
 
@@ -1404,6 +1431,11 @@ export class PushService {
       // Skip embedding generation during sync — vectors can be computed later by the
       // API server. This avoids loading the ~50MB Xenova model in short-lived CLI processes.
       entity.SkipEmbeddings = true;
+      // Sync authors a record together with its children, so the parent must not derive
+      // child records of its own while the graph is mid-write — the authored children are
+      // written after it and would collide with the derived copies on their natural key.
+      // The caller runs the derivation once the graph is complete.
+      entity.DeferDerivedData = true;
       const saveOptions = new EntitySaveOptions();
       if (alwaysPush) saveOptions.IgnoreDirtyState = true;
       if (entityConfig?.push?.skipGeoCoding) saveOptions.SkipGeoCoding = true;
@@ -2223,6 +2255,10 @@ export class PushService {
     // Records are in DB now, so this is mainly for tracking within this phase
     const batchContext = new BatchContextIndex();
 
+    // Same contract as the graph path: derived-data work waits until every record in this
+    // phase is written, then runs before the host transaction commits.
+    const deferredDerivedData: BaseEntity[] = [];
+
     for (const deferred of this.deferredRecords) {
       const { flattenedRecord, entityDir, entityConfig } = deferred;
       const entityName = flattenedRecord.entityName;
@@ -2246,6 +2282,10 @@ export class PushService {
         // Apply side effects (sequential here, but consistent with parallel path)
         if (result.batchContextEntry) {
           batchContext.set(result.batchContextEntry.key, result.batchContextEntry.entity);
+          const saved = result.batchContextEntry.entity;
+          if (saved instanceof BaseEntity && saved.DeferDerivedData) {
+            deferredDerivedData.push(saved);
+          }
         }
         if (result.warnings) {
           this.warnings.push(...result.warnings);
@@ -2275,6 +2315,17 @@ export class PushService {
           `     Tip: Ensure all referenced records exist or remove the ?allowDefer flag`
         );
 
+        errors++;
+      }
+    }
+
+    for (const entity of deferredDerivedData) {
+      try {
+        await entity.ProcessDeferredDerivedData();
+      } catch (error) {
+        callbacks?.onError?.(
+          `   ✗ Failed to complete deferred processing for ${entity.EntityInfo.Name}: ${(error as Error).message}`
+        );
         errors++;
       }
     }
