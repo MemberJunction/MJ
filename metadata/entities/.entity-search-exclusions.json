@@ -1,6 +1,56 @@
 [
   {
     "fields": {
+      "Name": "MJ: Tags",
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Tags"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MJ: Tagged Items",
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Tagged Items"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MJ: Tag Synonyms",
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Tag Synonyms"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MJ: Tag Scopes",
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Tag Scopes"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MJ: Tag Co Occurrences",
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Tag Co Occurrences"
+    }
+  },
+  {
+    "fields": {
       "Name": "MJ: Content Items",
       "AllowUserSearchAPI": false,
       "AutoUpdateAllowUserSearchAPI": false
