@@ -199,10 +199,11 @@ export class EntityActionInvocationSingleRecord extends EntityActionInvocationBa
      * lifecycle event that participates in the save (Validate / Before*).
      *
      * After* + Durable with no queue submitter (local / no-queue process — e.g. CLI
-     * `mj sync push`): do **not** nest in the caller's EntityTransactionScope. Defer until
-     * TransactionDepth is 0, then fire-and-forget. Dropping the work would make Durable worse
-     * than leaving it off; nesting it is what blew up cheese (LogActivity inside Person.Save
-     * on a shared provider).
+     * `mj sync push`): do **not** nest in the caller's EntityTransactionScope. Hand the run to the
+     * provider's post-commit queue (`RunAfterCommit`): it runs once the ambient transaction commits
+     * and is dropped if that transaction rolls back. Dropping the work on a *successful* save would
+     * make Durable worse than leaving it off; nesting it is what blew up cheese (LogActivity inside
+     * Person.Save on a shared provider).
      */
     protected BuildDurableDeferral(
         params: EntityActionInvocationParams,
@@ -223,7 +224,8 @@ export class EntityActionInvocationSingleRecord extends EntityActionInvocationBa
                 return {
                     Success: true,
                     ResultCode: 'DEFERRED_LOCAL',
-                    Message: 'Durable action deferred until the ambient transaction settles (no queue submitter in this process).',
+                    Message: 'Durable action deferred until the ambient transaction commits, and dropped if it rolls back ' +
+                        '(no queue submitter in this process).',
                 };
             };
         }
@@ -265,31 +267,38 @@ export class EntityActionInvocationSingleRecord extends EntityActionInvocationBa
     }
 
     /**
-     * Local / no-queue Durable fallback (CLI `mj sync push` is one host): wait until the save's
-     * transaction has settled, then run the action without DeferExecution. Errors are logged; the
-     * originating Save already succeeded. Protected so subclasses can replace the wait/run policy.
+     * Local / no-queue Durable fallback (CLI `mj sync push` is one host): run the action without
+     * DeferExecution once the save is durable. When the entity's provider has a post-commit queue
+     * (`DatabaseProviderBase.RunAfterCommit`), the run follows the transaction the save ran in —
+     * identified by `params.PostCommitToken`, captured when the save dispatched the action — waiting
+     * for its outermost commit and discarded if it (or the savepoint the save ran in) rolls back, so
+     * it never fires against rows that no longer exist. That holds even when this registers after the
+     * transaction settled. A provider without one runs it on the next tick, fire-and-forget. Errors are
+     * logged; the originating Save already succeeded. Protected so subclasses can replace the policy.
      */
     protected scheduleDurableLocalRun(
         params: EntityActionInvocationParams,
         action: MJActionEntityExtended,
         runParams: RunActionParams,
     ): void {
-        const provider = params.EntityObject?.ProviderToUse as unknown as DatabaseProviderBase | undefined;
-        const tick = () => {
-            const depth = provider?.TransactionDepth ?? 0;
-            if (depth > 0) {
-                setImmediate(tick);
-                return;
-            }
-            const { DeferExecution: _d, ...rest } = runParams;
-            ActionEngineServer.Instance.RunAction(rest).catch((e: unknown) => {
+        const { DeferExecution: _d, ...rest } = runParams;
+        const run = async (): Promise<void> => {
+            try {
+                await ActionEngineServer.Instance.RunAction(rest);
+            } catch (e: unknown) {
                 LogError(
                     `Durable entity action ${params.EntityAction.ID} (${action.Name}) failed after deferral: ` +
                     `${e instanceof Error ? e.message : String(e)}`,
                 );
-            });
+            }
         };
-        setImmediate(tick);
+        const provider = params.EntityObject?.ProviderToUse;
+        if (hasPostCommitQueue(provider)) {
+            provider.RunAfterCommit(run, `Durable entity action ${action.Name}`, params.PostCommitToken);
+        } else {
+            // Next tick, as before: let the save that triggered this finish unwinding first.
+            setImmediate(() => void run());
+        }
     }
 
     /**
@@ -540,4 +549,12 @@ export class EntityActionInvocationMultipleRecords extends EntityActionInvocatio
  */
 @RegisterClass(EntityActionInvocationBase, 'Validate')
 export class EntityActionInvocationValidate extends EntityActionInvocationSingleRecord {
+}
+
+/**
+ * True when `provider` exposes {@link DatabaseProviderBase.RunAfterCommit}. Checked structurally
+ * rather than with `instanceof`, so any provider that implements the post-commit contract qualifies.
+ */
+function hasPostCommitQueue(provider: object | undefined | null): provider is Pick<DatabaseProviderBase, 'RunAfterCommit'> {
+    return !!provider && 'RunAfterCommit' in provider && typeof provider.RunAfterCommit === 'function';
 }
