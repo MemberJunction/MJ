@@ -141,7 +141,7 @@ creation. The base design includes that clause anyway, so the extension doesn't 
 | `GetStats` | Cloud Monitoring metrics `subscription/num_undelivered_messages`, `oldest_unacked_message_age` on the source and `<sub>.dlq-reader` subscriptions; `InFlight` unavailable → 0 with note; `BlockedKeys = null` |
 | `ListDeadLetters` | pull from `<sub>.dlq-reader` with a short ack deadline and **no ack** (`PeekDeadLetters: 'BestEffort'`, as on AWS; messages reappear after the deadline) |
 | `Replay` | scan-pull the reader for the `MessageID`; republish the envelope to the topic with `mj_target`, same ordering key, `mj_replay=true`; ack the dead-letter copy |
-| `Discard` | dead letters: scan-pull and ack. Pending: `{ Supported: false }` (`CancelPending: false`) |
+| `Discard` | dead letters: scan-pull and ack. Pending and in-flight: `{ Supported: false }` (`CancelPending`/`CancelInFlight` both `false`) |
 | `ListPartitions` / `SkipSequence` | unsupported (`null` / `{ Supported: false }`); staged `Ordered` subscriptions use the Database operator |
 
 All operations are reached through the `WorkQueue.*` remote operations (03 §8).
@@ -167,8 +167,9 @@ Governance delta: filters and `enable_message_ordering` are immutable, so change
 - No MJ tables. `Transport.Configuration`: `{ "ProjectId": "…" }`.
 - Subscription `BindingConfig`: `{ "SubscriptionPath": "…", "DeliveryType": "Pull" | "Push", "DeadLetterTopicPath": "…", "DeadLetterReaderPath": "…" }`.
 - `TransportCapabilities`: `SupportsOrdered: false`, `SupportsExternalHosts: true`, `CancelPending: false`,
-  `ListPartitions: false`, `PeekDeadLetters: 'BestEffort'`, `ReplaySingleDeadLetter: true`, `PersistsProgress: false`,
-  `MaxRetryDelaySeconds: 600`.
+  `CancelInFlight: false` (an ack deadline cannot be revoked by a third party; staged `Ordered` subscriptions get the
+  Database behaviour of 03 §7), `ListPartitions: false`, `PeekDeadLetters: 'BestEffort'`,
+  `ReplaySingleDeadLetter: true`, `PersistsProgress: false`, `MaxRetryDelaySeconds: 600`.
 - Contract proposals: **C3** (`MaxLeaseSeconds` ≤ 600), **C6** (only with the native-`Ordered` extension or batch
   checkpoints). Absent-attribute semantics and reserved `mj_*` attribute names (`mj_target`, `mj_seq`, `mj_replay`)
   are already adopted in 03.

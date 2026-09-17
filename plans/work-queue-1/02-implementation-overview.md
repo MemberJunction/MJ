@@ -61,6 +61,24 @@ events use `None`/`Exclusive`; ordered integration batches need MJ entities and 
 `Ordered` subscriptions into the database transport gives them the exact Database semantics with no extra
 infrastructure.
 
+## 1a. Where the queue stops
+
+The queue owns exactly three guarantees:
+
+1. **Durable delivery** — an accepted publish reaches every matching subscription at least once.
+2. **One valid lease holder at a time** — per delivery, and per key for `Exclusive`/`Ordered`, while a handler runs.
+3. **Fencing** — a holder whose lease was revoked or taken over cannot settle or write lease state.
+
+Everything below is a **consumer responsibility**, by design (see [10 — Consumer guide](10-consumer-guide.md)):
+
+| Not the queue's job | Why | The consumer's tool |
+|---|---|---|
+| Preventing duplicate *side effects* | At-least-once delivery plus lease takeover means a handler can run twice | Idempotent handlers; a domain lock for non-restartable work (e.g. Terraform state lock) |
+| Work that finishes **after** the handler returns (an external job completed by webhook) | A queue item's guarantees end when its handler settles | Split-message pattern: record the external job on a domain row, publish a completion message from the webhook |
+| "Only one active per key" policy, coalescing, superseding | Needs domain knowledge (is this request redundant?) | `Exclusive` mode serialises deliveries per key; the handler then checks its domain row and completes or merges |
+| Output, history, results, operator UI | The item is a claim check, not the record | A domain row referenced from the payload |
+| Knowing whether a remote executor is still alive | Cloud-specific probing does not belong in a transport-agnostic queue | A lease long enough to cover the worst heartbeat outage, plus the domain lock above |
+
 ## 2. Core concepts
 
 - **Topic** — named destination; declares `OrderingMode`, transport, `AllowExternalPublish`, payload cap,
@@ -81,7 +99,7 @@ infrastructure.
 | Deduplication | A `DeduplicationKey` suppresses repeats per topic within its TTL, on every transport (MJ ledger). |
 | Delivery | **At least once** per matching subscription. |
 | Isolation | Subscriptions are independent. |
-| Exclusivity | One valid lease holder per delivery; superseded holders are fenced out. `Exclusive`/`Ordered`: one in flight per key, enforced by a unique filtered index (Database/staged) or FIFO message groups (SQS). |
+| Exclusivity | One valid lease holder per delivery; superseded holders are fenced out (see "why guarded writes" below). `Exclusive`/`Ordered`: one in flight per key, enforced by a unique filtered index (Database/staged) or FIFO message groups (SQS). |
 | Ordering | `Ordered` only, per key, strict. |
 | Idempotency | Handler responsibility; `MessageID` is stable. |
 
@@ -122,7 +140,21 @@ infrastructure.
 | `Discarded` | Operator cancelled a `Pending` item or resolved a dead letter | yes |
 
 On SQS (non-staged) the same vocabulary is reported by the operator but not stored per message: `Pending`/`InFlight`
-are queue counts, `DeadLettered` is the dead-letter queue, `Discard` of a `Pending` message is unsupported.
+are queue counts, `DeadLettered` is the dead-letter queue, and `Discard` of a `Pending` or `InFlight` message is
+unsupported.
+
+**Cancelling in-flight work** (Database/staged): `Discard` sets `CancelRequestedAt` and rotates the lease token. The
+handler's next heartbeat resolves `false`, its `Signal` aborts, and its settle is fenced out. The row stays `InFlight`
+until the lease expires — so an `Exclusive`/`Ordered` key is not handed on while the old handler is still stopping —
+then becomes `Discarded`.
+
+**Why guarded writes, and why handlers never touch the row.** Every settle is one statement guarded on
+`ID + Status='InFlight' + LeaseToken`, and succeeds only if it changes exactly one row. The tempting alternative —
+load the row, check `Status` in TypeScript, call `Save()` — *looks* like a compare-and-swap and is not one: two workers
+can both read `Pending`, and MJ's generated update procedure writes every column, so the loser's save restores a stale
+lease token and attempt count over the winner's claim. That is how a reaped-but-still-alive worker marks someone else's
+in-progress work complete. Delivery rows are therefore closed to `BaseEntity.Save()` (03 §6.8), and handlers settle only
+by returning an outcome.
 
 ### 3.3 Handler outcomes
 
@@ -143,6 +175,16 @@ Backoff: full jitter, `random(0, min(BackoffMax, BackoffBase × 2^(attempt−1))
 | `Auto` (default) | Runtime every `LeaseSeconds / 3` while the handler runs, until `MaxProcessingSeconds` | Dead process / host / partition; runaway handlers past the cap |
 | `Manual` | Only `context.Heartbeat(progress?)` (returns `false` once the lease is lost) | Additionally hung handlers in a live process |
 
+**Liveness lives in dedicated columns.** `__mj_CreatedAt`/`__mj_UpdatedAt` are never the lease. (A heartbeat that
+"dirties" a row by re-assigning a field to its current value writes nothing — `Save()` skips the no-op — so the
+timestamp never moves and every live run is reaped.) `LeaseExpiresAt` and `LastHeartbeatAt` are moved by guarded SQL.
+A transient heartbeat failure is retried on the next tick; only a lost lease, or the lease passing its expiry, aborts
+the handler.
+
+**Crash recovery is lease expiry, nothing else.** After a restart, an in-flight row that nobody owns is simply a lease
+that ran out; the next claim cycle picks it up with its attempt counted. There are no per-state recovery steps and no
+bespoke "stale after N hours" sweeps — the pattern to retire wherever a `Status` column doubles as a lock today.
+
 Expired leases: Database/staged — `ExpireLeases` moves expired `InFlight` rows back to `Pending` (or `DeadLettered`
 at the attempt limit) before each claim cycle and in the sweeper. SQS — the visibility timeout returns the message;
 the runtime dead-letters at `MaxAttempts`, and the redrive policy (`MaxAttempts + 2`) catches crash loops. Staged
@@ -162,7 +204,8 @@ permanently absent. An `Ordered` head in retry backoff holds its key.
 
 ### 3.6 Fan-out, filters, payloads
 
-Filters see attributes only (03 §4). Database: deliveries created at publish for every `Active`/`Paused` matching
+Filters see attributes only, and are stored as MJ's `CompositeFilterDescriptor` JSON restricted to a
+broker-translatable subset, edited with the existing `mj-filter-builder` component (03 §4). Database: deliveries created at publish for every `Active`/`Paused` matching
 subscription. AWS: SNS filter policies; staged subscriptions filter at SNS and are staged as received. Inline payload
 ≤ 256 KB envelope, ≤ 10 attributes; otherwise `PayloadRef`.
 
@@ -207,6 +250,19 @@ SNS topic ─(filter policy, raw delivery)─► SQS queue per subscription (+ D
      DeadLetter / exhausted → SendMessage to DLQ with mj_* reason attributes → DeleteMessage
 ```
 
+### 4.4a Consume — one-shot container job (KEDA and friends)
+
+```
+scaler: SELECT claimable Pending + InFlight for the subscription   (SELECT-only login; WorkQueue.GetBacklog remote op
+        returns the same number)  ── counts InFlight too: KEDA subtracts running executions from the metric, and a
+        Pending-only count starves the queue
+job:    mj queue work --subscription venue-import --once      → WorkQueueHost.RunOnce({ MaxDeliveries: 1, IdleExitMs })
+        claim → run → settle → drain → exit 0 (also on empty queue)
+```
+
+The container needs no transport code: it claims from the Database transport exactly as an MJ worker does. Scale to
+zero between items; size `LeaseSeconds` to survive the job's worst heartbeat outage.
+
 ### 4.5 Operator
 
 Remote operations (03 §8) — callable from Explorer/GraphQL and from the CLI:
@@ -221,7 +277,11 @@ mj queue skip-sequence --subscription integration.apply --key <integrationId> --
 mj queue export-topology --transport AWS-prod > manifest.json
 mj queue import-bindings  terraform-output.json
 mj queue validate-bindings [--transport AWS-prod]
+mj queue work           --subscription venue-import --once    # container-job worker; exits 0
 ```
+
+`DiscardDelivery` on an in-flight item reports `cancelRequested: true` — the handler is asked to stop, and the row
+settles as `Discarded` when its lease expires.
 
 ## 5. Configuration surfaces
 

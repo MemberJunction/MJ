@@ -45,7 +45,7 @@ entities; no operation is needed for it.
 | `WorkQueue.GetSubscriptionStats` | Overview, stats strips | none |
 | `WorkQueue.ListDeadLetters` | Dead Letters | none |
 | `WorkQueue.ReplayDeadLetter` | Dead Letters (replay) | yes |
-| `WorkQueue.DiscardDelivery` | Dead Letters (discard); pending-item cancel where `CancelPending` | yes |
+| `WorkQueue.DiscardDelivery` | Dead Letters (discard); cancel a pending item where `CancelPending`, or a running one where `CancelInFlight` (03 §7 — the row clears when its lease expires, so the UI shows "cancelling…" until then) | yes |
 | `WorkQueue.ListPartitions` | Partitions | none |
 | `WorkQueue.SkipSequence` | Partitions | yes |
 | `WorkQueue.ValidateBindings` | Bindings | none |

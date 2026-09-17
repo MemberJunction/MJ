@@ -2,21 +2,24 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Create the work-queue schema and metadata, and build the data layer of `@memberjunction/work-queue-engine`: the SQL executor seam, SQL Server and PostgreSQL statement builders, the Database transport driver, consumer and operator, the deduplication ledger, the Database driver factory, entity validation, the publish coordinator, topology validation and manifest export, and `WorkQueueEngine`.
+**Goal:** Create the work-queue schema and metadata, the browser-safe metadata tier `@memberjunction/work-queue-base` (`WorkQueueEngineBase`), and the data layer of `@memberjunction/work-queue-engine`: the SQL executor seam, SQL Server and PostgreSQL statement builders, the Database transport driver, consumer and operator, the deduplication ledger, the Database driver factory, entity validation, the publish coordinator, manifest export, and the server `WorkQueueEngine`.
 
-**Architecture:** Seven core-schema tables (03 §6) hold transports, topics, subscriptions, messages, deliveries, explicit-sequence partition state and deduplication keys. All runtime SQL is built by per-platform statement builders (`SqlServer*Sql`, `PostgreSQL*Sql`) behind three narrow interfaces (publish, consume, operator) and executed through a structural `WorkQueueSqlExecutor` that `DatabaseProviderBase` already satisfies. Single-flight per partition key is enforced by the unique filtered index `UQ_WorkQueueDelivery_InFlightPartition`; `Ordered` blocking is derived from the head delivery; publish order per key is serialized with an application lock taken inside the publish transaction. `WorkQueueEngine` (a `BaseEngine`) caches topology, resolves transport drivers through `BaseTransportDriverFactory` registrations, and delegates publishing to a testable `WorkQueuePublishCoordinator` that owns the deduplication ledger protocol (03 §2.1).
+**Architecture:** Seven core-schema tables (03 §6) hold transports, topics, subscriptions, messages, deliveries, explicit-sequence partition state and deduplication keys. All runtime SQL is built by per-platform statement builders (`SqlServer*Sql`, `PostgreSQL*Sql`) behind three narrow interfaces (publish, consume, operator) and executed through a structural `WorkQueueSqlExecutor` that `DatabaseProviderBase` already satisfies. Single-flight per partition key is enforced by the unique filtered index `UQ_WorkQueueDelivery_InFlightPartition`; `Ordered` blocking is derived from the head delivery; publish order per key is serialized with an application lock taken inside the publish transaction.
 
-**Tech Stack:** TypeScript 5.9 (ESM), Vitest 3, `@memberjunction/work-queue-core` (plan 04), `@memberjunction/core`, `@memberjunction/global`, `@memberjunction/core-entities`, `@memberjunction/sql-dialect`, SQL Server and PostgreSQL through MJ data providers, MJ CodeGen and mj-sync.
+The metadata tier is split in two, mirroring `AIEngineBase`/`AIEngine` (03 §0, §11): **`@memberjunction/work-queue-base`** is browser-safe and holds `WorkQueueEngineBase` (a `BaseEngine` caching transports, topics and subscriptions) plus the pure row types, binding builders, filter parsing and topology validation that Explorer, dashboards and any client-tier code need. **`@memberjunction/work-queue-engine`** is server-only: `WorkQueueEngine` is a `BaseSingleton` **facade** that delegates every metadata member to `WorkQueueEngineBase.Instance` — composition, not inheritance, exactly as `AIEngine` delegates to `AIEngineBase` (`packages/AI/Engine/src/AIEngine.ts`) — and adds drivers, the publish coordinator (which owns the deduplication ledger protocol, 03 §2.1), the operator, staging, the manifest and the autoscaler metric. Subscription filters are MJ's `CompositeFilterDescriptor` JSON restricted to the broker-translatable subset (03 §4), parsed by core and validated per transport.
 
-**Spec:** [`03-interfaces-and-tables.md`](03-interfaces-and-tables.md) (normative — §5, §6, §7, §11), [`02-implementation-overview.md`](02-implementation-overview.md), [`README.md`](README.md). Read all three before starting. Plan [04](04-core-implementation-plan.md) must be complete.
+**Tech Stack:** TypeScript 5.9 (ESM), Vitest 3, `@memberjunction/work-queue-core` (plan 04), `@memberjunction/work-queue-base` (this plan), `@memberjunction/core`, `@memberjunction/global`, `@memberjunction/core-entities`, `@memberjunction/sql-dialect`, SQL Server and PostgreSQL through MJ data providers, MJ CodeGen and mj-sync.
+
+**Spec:** [`03-interfaces-and-tables.md`](03-interfaces-and-tables.md) (normative — §0, §4, §5, §6, §7, §11), [`02-implementation-overview.md`](02-implementation-overview.md), [`README.md`](README.md). Read all three before starting. Plan [04](04-core-implementation-plan.md) must be complete.
 
 ## Global Constraints
 
 - **Package manager:** pnpm only. Run `pnpm install` at the repository root only — never inside a package, never `npm install`.
-- **Per-package commands:** `cd packages/WorkQueue/engine && pnpm test` and `cd packages/WorkQueue/engine && pnpm run build`. Do not build single packages with turbo from the root.
+- **Per-package commands:** `cd packages/WorkQueue/base && pnpm test` / `pnpm run build`, and the same under `packages/WorkQueue/engine`. Build `base` before `engine`. Do not build single packages with turbo from the root.
 - **Package shape (verified against `packages/Scheduling/engine`):** `"type": "module"`; build script `tsc && tsc-alias -f`; `tsconfig.json` extends `../../../tsconfig.server.json` with `outDir: dist`, `rootDir: src`; `vitest.config.ts` merges `../../../vitest.shared`; tests in `src/__tests__/*.test.ts`; extensionless relative imports.
 - **Internal dependency versions:** pin every `@memberjunction/*` dependency to the exact `version` in `packages/MJCore/package.json` (`6.1.0` when this plan was written). Dev dependencies: `@types/node` `24.10.11`, `typescript` `^5.9.3`, `vitest` `^3.1.1`.
-- **Engine dependencies in this plan:** `@memberjunction/work-queue-core`, `@memberjunction/core`, `@memberjunction/global`, `@memberjunction/core-entities`, `@memberjunction/sql-dialect` **only**. The engine must **not** depend on `@memberjunction/work-queue-aws` here — plan 07 adds that dependency and the AWS driver factory.
+- **Base package dependencies (03 §0):** `@memberjunction/work-queue-core`, `@memberjunction/core`, `@memberjunction/global`, `@memberjunction/core-entities` **only**. `@memberjunction/work-queue-base` is **browser-safe**: no `@memberjunction/sql-dialect`, no drivers, no `node:` imports, no SQL. A unit test asserts its `package.json` declares nothing else and that no source file imports `node:*` or `sql-dialect`.
+- **Engine dependencies in this plan:** `@memberjunction/work-queue-base`, `@memberjunction/work-queue-core`, `@memberjunction/core`, `@memberjunction/global`, `@memberjunction/core-entities`, `@memberjunction/sql-dialect` **only**. The engine must **not** depend on `@memberjunction/work-queue-aws` here — plan 07 adds that dependency and the AWS driver factory.
 - **Migrations:** T-SQL only, in `migrations/v6/`, named `V<YYYYMMDDHHMM>__v6.<minor>.x__Add_Work_Queue_Schema.sql`, where `<minor>` is taken from the newest non-CodeGen file in `migrations/v6/` (`v6.2.x` when this plan was written) and the timestamp is later than every existing migration. DDL and `sp_addextendedproperty` only. Use `${flyway:defaultSchema}`, never `__mj`. No `__mj_CreatedAt`/`__mj_UpdatedAt` columns and no single-column foreign-key indexes (CodeGen owns both). Simple CHECK constraints; no `OR Column IS NULL` on nullable columns. Every non-key column gets a description. **Do not write a PostgreSQL migration** — say in the PR description that the counterpart is produced by the release build.
 - **CodeGen block:** after the hand DDL, at least 50 blank lines, then the CodeGen comment block, then the full `CodeGen_Run_*.sql` output; delete the standalone `CodeGen_Run_*.sql`. EntityField INSERTs must use the apply-time `(SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM … WHERE [EntityID] = '…')` expression — never a literal. Gate: `node .github/scripts/check-migration-entityfield-sequence.mjs` must exit 0.
 - **CodeGen order for new tables (migrations/CLAUDE.md "four steps"):** `pnpm run mj:migrate` → `pnpm exec mj codegen --skipfiles` → append output → `pnpm exec mj sync push --dir=metadata --ci` → `pnpm exec mj codegen --skipdb`. Never run a full `mj codegen` at step 2.
@@ -34,24 +37,24 @@
 
 | # | Task | Deliverable |
 | --- | --- | --- |
-| 1 | Schema, CodeGen, entity flags, API scopes, `Database` transport seed | Seven entities generated; metadata pushed |
-| 2 | Engine scaffold, SQL executor seam, execution helpers, test fakes | `@memberjunction/work-queue-engine` builds; helper tests pass |
+| 1 | Schema (incl. `CancelRequestedAt`), CodeGen, entity flags (API mutations off for driver-owned state), API scopes, `Database` transport seed | Seven entities generated; metadata pushed |
+| 2 | Base + engine scaffolds, SQL executor seam, execution helpers, test fakes | Both packages build; helper and dependency-guard tests pass |
 | 3 | Row types, builder interfaces, SQL Server publish and ledger statements | Statement shapes tested |
 | 4 | SQL Server consume statements (expire, claim, settle, sequence) | Statement shapes tested |
-| 5 | SQL Server operator and sweeper statements | Statement shapes tested |
+| 5 | SQL Server operator and sweeper statements, cancel-in-flight, autoscaler backlog query and scaler login | Statement shapes tested; scaler script written |
 | 6 | PostgreSQL statements and the builder factory | Statement shapes tested for both platforms |
 | 7 | Transaction helper and `DeduplicationLedger` | Ledger protocol tested |
 | 8 | Driver dependencies, row mapping, `DatabaseTransportOperator` | Mapping and operator methods tested |
 | 9 | `DatabaseTransportDriver` and `DatabaseTransportConsumer` | Publish, claim and settle tested with a recording executor |
-| 10 | `BaseTransportDriverFactory`, Database factory, `MJWorkLogger`, entity validation | Factory resolution and validation tested |
-| 11 | Topology bindings, validation, manifest, `WorkQueuePublishCoordinator` | Pure topology and publish orchestration tested |
+| 10 | Topology rows and field validation (**base**); `BaseTransportDriverFactory`, Database factory, `MJWorkLogger`, entity servers, driver-owned state guards (**engine**) | Factory resolution, validation and refused `Save()`/`Delete()` tested |
+| 11 | Topology bindings and validation incl. per-transport filter support (**base**); manifest and `WorkQueuePublishCoordinator` (**engine**) | Pure topology and publish orchestration tested |
 | 12 | `StageDeliveries` for staged `Ordered` subscriptions | Staging insert tested (consumed by plan 07) |
-| 13 | `WorkQueueEngine` | Engine builds; driver resolution, listeners and cache keys tested |
-| 14 | Database conformance harness, full build, changeset | Harness exported; full build green |
+| 13 | `WorkQueueEngineBase` (**base**) and the `WorkQueueEngine` facade (**engine**, incl. `OnDeadLettered`, `GetBacklog`) | Both build; metadata tier, delegation, driver resolution, listeners and cache keys tested |
+| 14 | Database conformance harness, filter parity test, full build, changeset | Harness exported; parity with `CompositeFilter` proven; full build green |
 
 ## Pre-flight
 
-- [ ] Plan 04 is complete: `cd packages/WorkQueue/core && pnpm test` passes and `pnpm-workspace.yaml` plus the root `package.json` `workspaces` array both contain `packages/WorkQueue/*` (plan 04 adds them; if missing, add `'packages/WorkQueue/*'` to both lists next to `'packages/Scheduling/*'` and run `pnpm install` at the root).
+- [ ] Plan 04 is complete: `cd packages/WorkQueue/core && pnpm test` passes, it exports the 03 §4.2 filter API (`FilterOperator`, `FilterRule`, `FilterGroup`, `SubscriptionFilter`, `FilterSupport`, `ParseSubscriptionFilter(json, support)`, `MatchesFilter`), and `pnpm-workspace.yaml` plus the root `package.json` `workspaces` array both contain `packages/WorkQueue/*` (plan 04 adds them; if missing, add `'packages/WorkQueue/*'` to both lists next to `'packages/Scheduling/*'` and run `pnpm install` at the root).
 - [ ] You are on `feat/work-queue` and `git branch -vv` shows `[origin/feat/work-queue]`.
 - [ ] The database in `.env` is yours alone (see Global Constraints).
 - [ ] `cd packages/MJCore && pnpm test` passes (baseline health check).
@@ -66,12 +69,25 @@ metadata/
   api-scopes/.workqueue-scopes.json                                                  Task 1
   work-queue-transports/.mj-sync.json · .work-queue-transports.json                  Task 1
 
+scripts/work-queue-scaler-login.sql                                                  Task 5
+
+packages/WorkQueue/base/                        browser-safe metadata tier (03 §0)
+  package.json · tsconfig.json · vitest.config.ts                                    Task 2
+  src/index.ts · src/constants.ts · src/json.ts                                      Task 2
+  src/topology/rows.ts · src/entities/validation.ts                                  Task 10
+  src/topology/bindings.ts · src/topology/validateTopology.ts                        Task 11
+  src/WorkQueueEngineBase.ts                                                         Task 13
+  src/testing/rowFixtures.ts                                                         Task 10
+  src/__tests__/dependencyGuard.test.ts                                              Task 2
+  src/__tests__/entityValidation.test.ts · src/__tests__/topology.test.ts            Tasks 10–11
+  src/__tests__/WorkQueueEngineBase.test.ts                                          Task 13
+
 packages/WorkQueue/engine/
   package.json · tsconfig.json · vitest.config.ts                                    Task 2
   src/index.ts                                                                       Task 2, extended by every later task
   src/constants.ts                                                                   Task 2
   src/sql/WorkQueueSqlExecutor.ts · src/sql/SqlParamList.ts · src/sql/sqlExecution.ts   Task 2
-  src/sql/rows.ts · src/sql/WorkQueueSqlBuilder.ts · src/sql/StatementBase.ts         Task 3
+  src/sql/rows.ts · src/sql/WorkQueueSqlBuilder.ts · src/sql/StatementBase.ts         Task 3   (SQL row shapes — not topology rows)
   src/sql/sqlserver/SqlServerPublishSql.ts                                           Task 3
   src/sql/sqlserver/SqlServerFragments.ts · SqlServerConsumeSql.ts                   Task 4
   src/sql/sqlserver/SqlServerOperatorSql.ts                                          Task 5
@@ -83,17 +99,18 @@ packages/WorkQueue/engine/
   src/publish/publishResults.ts                                                      Task 9
   src/transports/database/databaseCapabilities.ts · deliveryPlan.ts                  Task 9
   src/transports/database/DatabaseTransportDriver.ts · DatabaseTransportConsumer.ts  Task 9
-  src/topology/rows.ts                                                               Task 10
   src/transports/BaseTransportDriverFactory.ts                                       Task 10
   src/transports/database/DatabaseTransportDriverFactory.ts                          Task 10
   src/logging/MJWorkLogger.ts                                                        Task 10
-  src/entities/validation.ts · WorkQueueTransportEntityServer.ts · WorkQueueTopicEntityServer.ts · WorkQueueSubscriptionEntityServer.ts   Task 10
-  src/topology/bindings.ts · validateTopology.ts · manifest.ts                       Task 11
+  src/entities/WorkQueueTransportEntityServer.ts · WorkQueueTopicEntityServer.ts · WorkQueueSubscriptionEntityServer.ts   Task 10
+  src/entities/DriverOwnedEntityServers.ts                                           Task 10
+  src/topology/manifest.ts                                                           Task 11
   src/publish/WorkQueuePublishCoordinator.ts                                         Task 11
   src/transports/database/stageDeliveries.ts                                         Task 12
   src/engine/driverResolution.ts · src/engine/PublishListenerSet.ts                  Task 13
   src/WorkQueueEngine.ts                                                             Task 13
   src/testing/DatabaseConformanceHarness.ts                                          Task 14
+  src/__tests__/filterParity.test.ts                                                 Task 14
   src/__tests__/fakes.ts                                                             Task 2, extended by later tasks
   src/__tests__/*.test.ts                                                            every code task
 
@@ -274,6 +291,7 @@ CREATE TABLE ${flyway:defaultSchema}.WorkQueueDelivery (
     DeadLetterReason NVARCHAR(100) NULL,
     DeadLetteredAt DATETIMEOFFSET(7) NULL,
     CompletedAt DATETIMEOFFSET(7) NULL,
+    CancelRequestedAt DATETIMEOFFSET(7) NULL,
     ResolvedByUserID UNIQUEIDENTIFIER NULL,
     ResolutionNote NVARCHAR(1000) NULL,
     CONSTRAINT PK_WorkQueueDelivery PRIMARY KEY (ID),
@@ -372,7 +390,7 @@ GO
 EXEC sp_addextendedproperty @name=N'MS_Description', @value=N'A consumer''s standing request for a topic''s messages: filter, partition mode, retry and lease policy, and where the handler runs.', @level0type=N'SCHEMA', @level0name=N'${flyway:defaultSchema}', @level1type=N'TABLE', @level1name=N'WorkQueueSubscription';
 EXEC sp_addextendedproperty @name=N'MS_Description', @value=N'Globally unique subscription name, used in manifests and consumer configuration.', @level0type=N'SCHEMA', @level0name=N'${flyway:defaultSchema}', @level1type=N'TABLE', @level1name=N'WorkQueueSubscription', @level2type=N'COLUMN', @level2name=N'Name';
 EXEC sp_addextendedproperty @name=N'MS_Description', @value=N'What this consumer does and who owns it.', @level0type=N'SCHEMA', @level0name=N'${flyway:defaultSchema}', @level1type=N'TABLE', @level1name=N'WorkQueueSubscription', @level2type=N'COLUMN', @level2name=N'Description';
-EXEC sp_addextendedproperty @name=N'MS_Description', @value=N'Optional JSON attribute filter (03 section 4). Keys are attribute names; each value is an array of conditions. Null matches every message.', @level0type=N'SCHEMA', @level0name=N'${flyway:defaultSchema}', @level1type=N'TABLE', @level1name=N'WorkQueueSubscription', @level2type=N'COLUMN', @level2name=N'Filter';
+EXEC sp_addextendedproperty @name=N'MS_Description', @value=N'Optional attribute filter as MJ CompositeFilterDescriptor JSON (03 section 4), restricted to the broker-translatable operators eq, neq, startswith, isnull and isnotnull over envelope attribute names. Null matches every message.', @level0type=N'SCHEMA', @level0name=N'${flyway:defaultSchema}', @level1type=N'TABLE', @level1name=N'WorkQueueSubscription', @level2type=N'COLUMN', @level2name=N'Filter';
 EXEC sp_addextendedproperty @name=N'MS_Description', @value=N'None: no key constraints. Exclusive: one delivery in flight per partition key, no order promise. Ordered: strict order per key; a dead-lettered head blocks its key.', @level0type=N'SCHEMA', @level0name=N'${flyway:defaultSchema}', @level1type=N'TABLE', @level1name=N'WorkQueueSubscription', @level2type=N'COLUMN', @level2name=N'PartitionMode';
 EXEC sp_addextendedproperty @name=N'MS_Description', @value=N'Attempts allowed per delivery, including lease expiries, before it is dead-lettered.', @level0type=N'SCHEMA', @level0name=N'${flyway:defaultSchema}', @level1type=N'TABLE', @level1name=N'WorkQueueSubscription', @level2type=N'COLUMN', @level2name=N'MaxAttempts';
 EXEC sp_addextendedproperty @name=N'MS_Description', @value=N'Base retry delay in seconds; full-jitter exponential backoff doubles it per attempt.', @level0type=N'SCHEMA', @level0name=N'${flyway:defaultSchema}', @level1type=N'TABLE', @level1name=N'WorkQueueSubscription', @level2type=N'COLUMN', @level2name=N'BackoffBaseSeconds';
@@ -415,6 +433,7 @@ EXEC sp_addextendedproperty @name=N'MS_Description', @value=N'Most recent failur
 EXEC sp_addextendedproperty @name=N'MS_Description', @value=N'Why the delivery was dead-lettered: a handler reason, MaxAttemptsExceeded, LeaseExpired or HandlerNotRegistered.', @level0type=N'SCHEMA', @level0name=N'${flyway:defaultSchema}', @level1type=N'TABLE', @level1name=N'WorkQueueDelivery', @level2type=N'COLUMN', @level2name=N'DeadLetterReason';
 EXEC sp_addextendedproperty @name=N'MS_Description', @value=N'When the delivery entered DeadLettered.', @level0type=N'SCHEMA', @level0name=N'${flyway:defaultSchema}', @level1type=N'TABLE', @level1name=N'WorkQueueDelivery', @level2type=N'COLUMN', @level2name=N'DeadLetteredAt';
 EXEC sp_addextendedproperty @name=N'MS_Description', @value=N'Terminal time for both Completed and Discarded; the retention purge key.', @level0type=N'SCHEMA', @level0name=N'${flyway:defaultSchema}', @level1type=N'TABLE', @level1name=N'WorkQueueDelivery', @level2type=N'COLUMN', @level2name=N'CompletedAt';
+EXEC sp_addextendedproperty @name=N'MS_Description', @value=N'Set when an operator cancels an in-flight delivery; the lease token is rotated at the same moment so the holder is fenced out. ExpireLeases turns such a row into Discarded rather than retrying it.', @level0type=N'SCHEMA', @level0name=N'${flyway:defaultSchema}', @level1type=N'TABLE', @level1name=N'WorkQueueDelivery', @level2type=N'COLUMN', @level2name=N'CancelRequestedAt';
 EXEC sp_addextendedproperty @name=N'MS_Description', @value=N'Operator note recorded with a replay or the reason recorded with a discard.', @level0type=N'SCHEMA', @level0name=N'${flyway:defaultSchema}', @level1type=N'TABLE', @level1name=N'WorkQueueDelivery', @level2type=N'COLUMN', @level2name=N'ResolutionNote';
 GO
 
@@ -464,6 +483,19 @@ Expected: exits 0 — no literal `Sequence` values in EntityField INSERTs.
 
 - [ ] **Step 6: Write the entity setting overrides**
 
+Delivery state is **driver-owned** (03 §6.8). Beyond the write-volume flags, these four entities set
+`AllowCreateAPI`, `AllowUpdateAPI` and `AllowDeleteAPI` to `false`, which:
+
+- removes create/update/delete from the GraphQL API, so nobody edits a claim, a lease or a cancel flag from
+  Explorer or a client;
+- stops CodeGen emitting `spCreate`/`spUpdate`/`spDelete` for them (`packages/CodeGenLib/src/Database/sql_codegen.ts:925-933`
+  gates each routine on the matching flag), so `BaseEntity.Save()` has nothing to call. Task 10 adds server entity
+  subclasses that fail such a save with a clear message instead of a missing-routine error.
+
+CodeGen's new-entity defaults set all three to `true` (`packages/CodeGenLib/src/Config/config.ts:465`), so Step 9 pushes
+this metadata **before** the CodeGen pass whose SQL is appended to the migration — otherwise the migration would carry
+CRUD procedures the design forbids.
+
 `metadata/entities/.work-queue-entities.json`:
 
 ```json
@@ -471,22 +503,22 @@ Expected: exits 0 — no literal `Sequence` values in EntityField INSERTs.
   {
     "_comments": ["Runtime table written by set-based SQL: no change tracking, no search, direct SQL sanctioned"],
     "primaryKey": { "ID": "@lookup:MJ: Entities.Name=MJ: Work Queue Messages" },
-    "fields": { "Name": "MJ: Work Queue Messages", "TrackRecordChanges": false, "AllowUserSearchAPI": false, "TrustServerCacheCompletely": false, "AllowDirectSQLInsert": true, "AllowDirectSQLUpdate": true, "AllowDirectSQLDelete": true }
+    "fields": { "Name": "MJ: Work Queue Messages", "TrackRecordChanges": false, "AllowUserSearchAPI": false, "TrustServerCacheCompletely": false, "AllowCreateAPI": false, "AllowUpdateAPI": false, "AllowDeleteAPI": false, "AllowDirectSQLInsert": true, "AllowDirectSQLUpdate": true, "AllowDirectSQLDelete": true }
   },
   {
     "_comments": ["Claim table: every claim, heartbeat and settle is a direct SQL write"],
     "primaryKey": { "ID": "@lookup:MJ: Entities.Name=MJ: Work Queue Deliveries" },
-    "fields": { "Name": "MJ: Work Queue Deliveries", "TrackRecordChanges": false, "AllowUserSearchAPI": false, "TrustServerCacheCompletely": false, "AllowDirectSQLInsert": true, "AllowDirectSQLUpdate": true, "AllowDirectSQLDelete": true }
+    "fields": { "Name": "MJ: Work Queue Deliveries", "TrackRecordChanges": false, "AllowUserSearchAPI": false, "TrustServerCacheCompletely": false, "AllowCreateAPI": false, "AllowUpdateAPI": false, "AllowDeleteAPI": false, "AllowDirectSQLInsert": true, "AllowDirectSQLUpdate": true, "AllowDirectSQLDelete": true }
   },
   {
     "_comments": ["Explicit-sequence high-water marks maintained by set-based SQL"],
     "primaryKey": { "ID": "@lookup:MJ: Entities.Name=MJ: Work Queue Partition States" },
-    "fields": { "Name": "MJ: Work Queue Partition States", "TrackRecordChanges": false, "AllowUserSearchAPI": false, "TrustServerCacheCompletely": false, "AllowDirectSQLInsert": true, "AllowDirectSQLUpdate": true, "AllowDirectSQLDelete": true }
+    "fields": { "Name": "MJ: Work Queue Partition States", "TrackRecordChanges": false, "AllowUserSearchAPI": false, "TrustServerCacheCompletely": false, "AllowCreateAPI": false, "AllowUpdateAPI": false, "AllowDeleteAPI": false, "AllowDirectSQLInsert": true, "AllowDirectSQLUpdate": true, "AllowDirectSQLDelete": true }
   },
   {
     "_comments": ["Short-lived deduplication keys"],
     "primaryKey": { "ID": "@lookup:MJ: Entities.Name=MJ: Work Queue Deduplications" },
-    "fields": { "Name": "MJ: Work Queue Deduplications", "TrackRecordChanges": false, "AllowUserSearchAPI": false, "TrustServerCacheCompletely": false, "AllowDirectSQLInsert": true, "AllowDirectSQLUpdate": true, "AllowDirectSQLDelete": true }
+    "fields": { "Name": "MJ: Work Queue Deduplications", "TrackRecordChanges": false, "AllowUserSearchAPI": false, "TrustServerCacheCompletely": false, "AllowCreateAPI": false, "AllowUpdateAPI": false, "AllowDeleteAPI": false, "AllowDirectSQLInsert": true, "AllowDirectSQLUpdate": true, "AllowDirectSQLDelete": true }
   }
 ]
 ```
@@ -578,13 +610,28 @@ Expected: exits 0 — no literal `Sequence` values in EntityField INSERTs.
 ]
 ```
 
-- [ ] **Step 9: Push the metadata, then generate files**
+- [ ] **Step 9: Push the metadata, re-run the SQL pass, then generate files**
 
 Run: `pnpm exec mj sync push --dir=metadata --ci --dry-run`
 Expected: 4 entity updates, 4 API scope creates, 1 work-queue transport create; no lookup failures.
 
 Run: `pnpm exec mj sync push --dir=metadata --ci`
 Expected: completes without errors.
+
+Run: `pnpm exec mj codegen --skipfiles`
+Expected: completes. This second SQL pass re-emits with `AllowCreateAPI/UpdateAPI/DeleteAPI = false` in force.
+**Replace** the generated section appended in Step 5 with this run's `CodeGen_Run_*.sql` output (same rule: hand DDL,
+≥ 50 blank lines, the comment block, then the generated tail), and delete the standalone `CodeGen_Run_*.sql`.
+
+Run:
+```bash
+grep -cE "CREATE PROCEDURE \[?__mj\]?\.\[?(spCreate|spUpdate|spDelete)WorkQueue(Message|Delivery|PartitionState|Deduplication)\]?" migrations/v6/*Add_Work_Queue_Schema.sql
+```
+Expected: `0` — no CRUD procedures for the four driver-owned entities. (`spCreate/spUpdate/spDelete` for Transports,
+Topics and Subscriptions are expected and stay.)
+
+Run: `node .github/scripts/check-migration-entityfield-sequence.mjs`
+Expected: exits 0 (re-check after replacing the generated tail).
 
 Run: `pnpm exec mj codegen --skipdb`
 Expected: completes; regenerates TypeScript only.
@@ -618,6 +665,12 @@ If any name differs, record the actual names; Task 2 puts them in `WorkQueueEnti
 Run: `grep -n "get OrderingMode\|get PartitionMode\|get HeartbeatMode\|get HostType" packages/MJCoreEntities/src/generated/entities/__mj.ts | head`
 Expected: generated union getters exist (for example `'PublishOrder' | 'ExplicitSequence'`), confirming the CHECK constraints were read.
 
+Run:
+```bash
+grep -rlE "WorkQueue(Message|Delivery|PartitionState|Deduplication)" packages/MJServer/src/generated | xargs grep -lE "@Mutation" 2>/dev/null | wc -l
+```
+Expected: `0` — the driver-owned entities expose no GraphQL mutations.
+
 Run: `cd packages/MJCoreEntities && pnpm run build`
 Expected: builds.
 
@@ -631,9 +684,12 @@ git commit -m "feat(work-queue): schema, entities, API scopes and Database trans
 ```
 
 ---
-### Task 2: Engine scaffold, SQL executor seam, execution helpers and test fakes
+### Task 2: Base + engine scaffolds, SQL executor seam, execution helpers and test fakes
 
 **Files:**
+- Create: `packages/WorkQueue/base/package.json`, `tsconfig.json`, `vitest.config.ts`
+- Create: `packages/WorkQueue/base/src/index.ts`, `src/constants.ts`, `src/json.ts`
+- Create: `packages/WorkQueue/base/src/__tests__/dependencyGuard.test.ts`
 - Create: `packages/WorkQueue/engine/package.json`, `tsconfig.json`, `vitest.config.ts`
 - Create: `packages/WorkQueue/engine/src/index.ts`, `src/constants.ts`
 - Create: `packages/WorkQueue/engine/src/sql/WorkQueueSqlExecutor.ts`, `src/sql/SqlParamList.ts`, `src/sql/sqlExecution.ts`
@@ -642,16 +698,155 @@ git commit -m "feat(work-queue): schema, entities, API scopes and Database trans
 
 **Interfaces:**
 - Consumes: entity names verified in Task 1.
-- Produces:
+- Produces (base — `@memberjunction/work-queue-base`):
+  - Constants `WorkQueueEntityNames`, `DATABASE_DRIVER_CLASS = 'Database'` (the engine re-exports both, so existing imports from `@memberjunction/work-queue-engine` keep working)
+  - `IsWorkJson(value: unknown): value is WorkJson` (both tiers validate JSON columns; the engine's `rowMapping` re-exports it)
+- Produces (engine):
   - `type SqlParam = string | number | boolean | Date | null`; `interface SqlStatement { SQL: string; Params: SqlParam[] }`
   - `interface WorkQueueSqlExecutor` (03 §11 plus `BuildParameterPlaceholder(index: number): string`), `interface WorkQueueTransactionalExecutor extends WorkQueueSqlExecutor { BeginEntityTransaction(): Promise<EntityTransactionScope> }`, `interface WorkQueueIndependentExecutor extends WorkQueueTransactionalExecutor { ReleaseIndependentInstance(): Promise<void> }`, `interface WorkQueueExecutorSource extends WorkQueueTransactionalExecutor { CreateIndependentInstance(): Promise<WorkQueueIndependentExecutor> }`, `type SqlBuilderContext = Pick<WorkQueueSqlExecutor, 'MJCoreSchemaName' | 'QuoteIdentifier' | 'BuildParameterPlaceholder'>`
   - `IsWorkQueueTransactionalExecutor(value: object | null | undefined): value is WorkQueueTransactionalExecutor`, `IsWorkQueueExecutorSource(value: object | null | undefined): value is WorkQueueExecutorSource`
   - `class SqlParamList { constructor(context: Pick<SqlBuilderContext, 'BuildParameterPlaceholder'>); Add(value: SqlParam): string; get Values(): SqlParam[] }`
   - `QualifiedTable(context: SqlBuilderContext, table: string): string`, `ExecuteWrite(executor: WorkQueueSqlExecutor, statement: SqlStatement, contextUser: UserInfo): Promise<number>`, `ExecuteRows<T>(executor: WorkQueueSqlExecutor, statement: SqlStatement, contextUser: UserInfo): Promise<T[]>`, `IsUniqueViolation(error: unknown, indexName: string): boolean`, `IsTransientDatabaseError(error: unknown): boolean`, `ToNumber(value: number | string | bigint | null | undefined): number | null`, `ToBoolean(value: boolean | number | string | null | undefined): boolean`, `ToIsoString(value: Date | string | null | undefined): string | null`, `ErrorText(error: unknown): string`
-  - Constants `WorkQueueTables`, `type WorkQueueTableName`, `WorkQueueEntityNames`, `IN_FLIGHT_PARTITION_INDEX`, `MESSAGE_SEQUENCE_INDEX`, `DEDUPLICATION_KEY_INDEX`, `DEDUP_RESERVATION_SECONDS = 120`, `DELIVERY_INSERT_CHUNK = 250`, `DATABASE_DRIVER_CLASS = 'Database'`
+  - Constants `WorkQueueTables`, `type WorkQueueTableName`, `IN_FLIGHT_PARTITION_INDEX`, `MESSAGE_SEQUENCE_INDEX`, `DEDUPLICATION_KEY_INDEX`, `DEDUP_RESERVATION_SECONDS = 120`, `DELIVERY_INSERT_CHUNK = 250`, plus `export { WorkQueueEntityNames, DATABASE_DRIVER_CLASS } from '@memberjunction/work-queue-base'`
   - Test fakes: `class RecordingExecutor implements WorkQueueExecutorSource, WorkQueueIndependentExecutor` (`Calls`, `Events`, `QueueRows(rows)`, `QueueError(error)`), `TEST_USER`
 
-- [ ] **Step 1: Create the package files**
+- [ ] **Step 1: Create the base package files**
+
+`packages/WorkQueue/base/package.json`:
+
+```json
+{
+  "name": "@memberjunction/work-queue-base",
+  "type": "module",
+  "version": "6.1.0",
+  "description": "MemberJunction: durable work queue — browser-safe metadata tier (topology cache, bindings, validation)",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["/dist"],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "watch": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "author": "MemberJunction.com",
+  "license": "BUSL-1.1",
+  "dependencies": {
+    "@memberjunction/core": "6.1.0",
+    "@memberjunction/core-entities": "6.1.0",
+    "@memberjunction/global": "6.1.0",
+    "@memberjunction/work-queue-core": "6.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.11",
+    "typescript": "^5.9.3",
+    "vitest": "^3.1.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}
+```
+
+`packages/WorkQueue/base/tsconfig.json` and `vitest.config.ts` are the same shape as the engine's below (both extend
+`../../../tsconfig.server.json`; the base package compiles without DOM or Node globals because it uses neither).
+
+`packages/WorkQueue/base/src/constants.ts`:
+
+```typescript
+/** Generated entity names for the work-queue tables (Task 1). Verify against the generated entity subclasses. */
+export const WorkQueueEntityNames = {
+    Transports: 'MJ: Work Queue Transports',
+    Topics: 'MJ: Work Queue Topics',
+    Subscriptions: 'MJ: Work Queue Subscriptions',
+    Messages: 'MJ: Work Queue Messages',
+    Deliveries: 'MJ: Work Queue Deliveries',
+    PartitionStates: 'MJ: Work Queue Partition States',
+    Deduplications: 'MJ: Work Queue Deduplications',
+} as const;
+
+/** Transport.DriverClass of the built-in Database transport. */
+export const DATABASE_DRIVER_CLASS = 'Database';
+```
+
+`packages/WorkQueue/base/src/json.ts`:
+
+```typescript
+import type { WorkJson } from '@memberjunction/work-queue-core';
+
+/** True when a parsed value is JSON-safe for a work-queue payload or config column. */
+export function IsWorkJson(value: unknown): value is WorkJson {
+    if (value === null || typeof value === 'string' || typeof value === 'boolean') {
+        return true;
+    }
+    if (typeof value === 'number') {
+        return Number.isFinite(value);
+    }
+    if (Array.isArray(value)) {
+        return value.every(IsWorkJson);
+    }
+    if (typeof value === 'object') {
+        return Object.values(value).every(IsWorkJson);
+    }
+    return false;
+}
+```
+
+`packages/WorkQueue/base/src/index.ts`:
+
+```typescript
+export * from './constants';
+export * from './json';
+```
+
+- [ ] **Step 1b: Write the base dependency-guard test**
+
+`packages/WorkQueue/base/src/__tests__/dependencyGuard.test.ts`:
+
+```typescript
+import { describe, it, expect } from 'vitest';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { join } from 'node:path';
+
+const ALLOWED = new Set([
+    '@memberjunction/core', '@memberjunction/core-entities', '@memberjunction/global', '@memberjunction/work-queue-core',
+]);
+
+function SourceFiles(dir: string): string[] {
+    return readdirSync(dir).flatMap(entry => {
+        const full = join(dir, entry);
+        if (statSync(full).isDirectory()) {
+            return entry === '__tests__' ? [] : SourceFiles(full);
+        }
+        return full.endsWith('.ts') ? [full] : [];
+    });
+}
+
+describe('work-queue-base dependency guard', () => {
+    it('declares only browser-safe MemberJunction dependencies', () => {
+        const pkg = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as {
+            dependencies?: Record<string, string>;
+        };
+        for (const name of Object.keys(pkg.dependencies ?? {})) {
+            expect(ALLOWED.has(name), `unexpected dependency ${name}`).toBe(true);
+        }
+    });
+
+    it('imports nothing server-only (node builtins, sql-dialect, drivers)', () => {
+        const offenders: string[] = [];
+        for (const file of SourceFiles(new URL('../', import.meta.url).pathname)) {
+            const text = readFileSync(file, 'utf8');
+            if (/from '(node:|@memberjunction\/sql-dialect|@memberjunction\/work-queue-engine)/.test(text)) {
+                offenders.push(file);
+            }
+        }
+        expect(offenders).toEqual([]);
+    });
+});
+```
+
+- [ ] **Step 1c: Create the engine package files**
 
 `packages/WorkQueue/engine/package.json`:
 
@@ -677,6 +872,7 @@ git commit -m "feat(work-queue): schema, entities, API scopes and Database trans
     "@memberjunction/core-entities": "6.1.0",
     "@memberjunction/global": "6.1.0",
     "@memberjunction/sql-dialect": "6.1.0",
+    "@memberjunction/work-queue-base": "6.1.0",
     "@memberjunction/work-queue-core": "6.1.0"
   },
   "devDependencies": {
@@ -717,7 +913,10 @@ export default mergeConfig(sharedConfig, defineProject({ test: { environment: 'n
 ```
 
 Run: `pnpm install` (repository root)
-Expected: installs; `@memberjunction/work-queue-engine` links `@memberjunction/work-queue-core` from the workspace.
+Expected: installs; `@memberjunction/work-queue-base` links `@memberjunction/work-queue-core`, and `@memberjunction/work-queue-engine` links both from the workspace.
+
+Run: `cd packages/WorkQueue/base && pnpm test && pnpm run build`
+Expected: the dependency-guard suite passes (2) and the package builds. Build `base` before `engine` from here on.
 
 - [ ] **Step 2: Write `src/constants.ts`**
 
@@ -735,16 +934,12 @@ export const WorkQueueTables = {
 
 export type WorkQueueTableName = typeof WorkQueueTables[keyof typeof WorkQueueTables];
 
-/** Entity names. If CodeGen produced different names in Task 1, change them here only. */
-export const WorkQueueEntityNames = {
-    Transports: 'MJ: Work Queue Transports',
-    Topics: 'MJ: Work Queue Topics',
-    Subscriptions: 'MJ: Work Queue Subscriptions',
-    Messages: 'MJ: Work Queue Messages',
-    Deliveries: 'MJ: Work Queue Deliveries',
-    PartitionStates: 'MJ: Work Queue Partition States',
-    Deduplications: 'MJ: Work Queue Deduplications',
-} as const;
+/**
+ * Entity names and the Database DriverClass live in `@memberjunction/work-queue-base` (both tiers need them).
+ * Re-exported here so server-side imports keep working. If CodeGen produced different entity names in Task 1,
+ * change them in the base package only.
+ */
+export { DATABASE_DRIVER_CLASS, WorkQueueEntityNames } from '@memberjunction/work-queue-base';
 
 /** Unique index enforcing one in-flight delivery per (subscription, partition key). */
 export const IN_FLIGHT_PARTITION_INDEX = 'UQ_WorkQueueDelivery_InFlightPartition';
@@ -760,9 +955,6 @@ export const DEDUP_RESERVATION_SECONDS = 120;
 
 /** Deliveries per INSERT statement (4 bound values per row, well under SQL Server's 2,100 parameter limit). */
 export const DELIVERY_INSERT_CHUNK = 250;
-
-/** ClassFactory key and transport DriverClass of the MJ-native transport. */
-export const DATABASE_DRIVER_CLASS = 'Database';
 ```
 
 - [ ] **Step 3: Write `src/sql/WorkQueueSqlExecutor.ts`**
@@ -1187,7 +1379,7 @@ git commit -m "feat(work-queue-engine): package scaffold, SQL executor seam and 
 **Interfaces:**
 - Consumes: `SqlStatement`, `SqlParam`, `SqlBuilderContext`, `SqlParamList`, `QualifiedTable`, `WorkQueueTables`, `WorkQueueTableName`, `DELIVERY_INSERT_CHUNK` (Task 2); `PartitionCondition` from `@memberjunction/work-queue-core`.
 - Produces:
-  - Row types in `rows.ts`: `MessageInsertRow`, `MessageInsertOutcomeRow`, `DeliveryInsertRow`, `ReservationRow`, `ClaimedDeliveryRow`, `PartitionCandidateRow`, `CompletedDeliveryRow`, `SequenceMarkRow`, `StatsRow`, `DeadLetterRow`, `PartitionRow`, `DiscardedDeliveryRow`, `DeadLetterCursor`, `type ClaimPartitionMode = 'Exclusive' | 'Ordered'`
+  - Row types in `rows.ts`: `MessageInsertRow`, `MessageInsertOutcomeRow`, `DeliveryInsertRow`, `ReservationRow`, `ClaimedDeliveryRow`, `PartitionCandidateRow`, `CompletedDeliveryRow`, `SequenceMarkRow`, `StatsRow`, `DeadLetterRow`, `PartitionRow`, `DiscardedDeliveryRow`, `BacklogRow`, `DeadLetterCursor`, `type ClaimPartitionMode = 'Exclusive' | 'Ordered'`, `type BacklogPartitionMode = ClaimPartitionMode | 'None'`
   - Interfaces `PublishSqlBuilder`, `ConsumeSqlBuilder`, `OperatorSqlBuilder`, `WorkQueueSqlBuilder { readonly Publish; readonly Consume; readonly Operator }` (method list below — Tasks 4–6 implement them)
   - `PublishOrderLockResource(topicID: string, partitionKey: string): string`
   - `abstract class StatementBase { constructor(context: SqlBuilderContext) }`
@@ -1206,7 +1398,8 @@ Builder method contract (row-returning methods say so; every other method return
 | Publish | `ConfirmDeduplication(topicID, key, messageID, ttlSeconds)` | write |
 | Publish | `ReleaseDeduplication(topicID, key, messageID)` | write |
 | Publish | `PurgeExpiredDeduplications(batchSize)` | write |
-| Consume | `ExpireLeases(subscriptionID, maxAttempts)` | write |
+| Consume | `ExpireLeases(subscriptionID, maxAttempts)` | rows `ExpiredDeadLetterRow` (0–n) |
+| Consume | `SubscriptionBacklog(subscriptionID, mode, explicitSequence)` | rows `BacklogRow` (exactly 1) |
 | Consume | `ClaimUnpartitioned(subscriptionID, leaseOwner, leaseSeconds, maxRows)` | rows `ClaimedDeliveryRow` |
 | Consume | `SelectPartitionCandidates(subscriptionID, mode, explicitSequence, maxRows)` | rows `PartitionCandidateRow` |
 | Consume | `ClaimPartitionCandidate(subscriptionID, deliveryID, mode, explicitSequence, leaseOwner, leaseSeconds)` | rows `ClaimedDeliveryRow` (0–1) |
@@ -1223,8 +1416,10 @@ Builder method contract (row-returning methods say so; every other method return
 | Operator | `ListPartitions(subscriptionID, ordered, condition, afterPartitionKey, pageSize)` | rows `PartitionRow` |
 | Operator | `ReplayDelivery(subscriptionID, deliveryID, actorUserID, note)` | write |
 | Operator | `DiscardDelivery(subscriptionID, deliveryID, allowPending, actorUserID, reason)` | rows `DiscardedDeliveryRow` (0–1) |
+| Operator | `CancelInFlightDelivery(subscriptionID, deliveryID, actorUserID, reason)` | write (1 = lease revoked) |
 | Operator | `SkipSequence(subscriptionID, partitionKey, sequence)` | write |
-| Operator | `ExpireLeasesAll()` / `FlagGapStalls()` / `DiscardSkippedSequences()` | write |
+| Operator | `ExpireLeasesAll()` | rows `ExpiredDeadLetterRow` (0–n) |
+| Operator | `FlagGapStalls()` / `DiscardSkippedSequences()` | write |
 | Operator | `PurgeTerminalDeliveries(batchSize)` / `PurgeOrphanMessages(batchSize)` | write |
 
 - [ ] **Step 1: Write `src/sql/rows.ts`**
@@ -1346,12 +1541,26 @@ export interface DiscardedDeliveryRow {
     OrderKey: number | string;
 }
 
+/** A delivery that an expire pass moved to DeadLettered; feeds the engine's OnDeadLettered seam (03 §11). */
+export interface ExpiredDeadLetterRow {
+    DeliveryID: string;
+    SubscriptionID: string;
+    PartitionKey: string | null;
+}
+
+/** One row from SubscriptionBacklog: the autoscaler metric (03 §11). */
+export interface BacklogRow {
+    Claimable: number | string;
+    InFlight: number | string;
+}
+
 /** Keyset position for ListDeadLetters (ordered by delivery ID, which is stable and unique). */
 export interface DeadLetterCursor {
     DeliveryID: string;
 }
 
 export type ClaimPartitionMode = 'Exclusive' | 'Ordered';
+export type BacklogPartitionMode = ClaimPartitionMode | 'None';
 ```
 
 - [ ] **Step 2: Write `src/sql/WorkQueueSqlBuilder.ts`**
@@ -1376,9 +1585,12 @@ export interface PublishSqlBuilder {
 
 /** Statements used by a Database consumer: expire, claim, heartbeat, settle, sequence bookkeeping. */
 export interface ConsumeSqlBuilder {
+    /** Returns the deliveries this pass dead-lettered (`ExpiredDeadLetterRow`), for the OnDeadLettered seam. */
     ExpireLeases(subscriptionID: string, maxAttempts: number): SqlStatement;
     ClaimUnpartitioned(subscriptionID: string, leaseOwner: string, leaseSeconds: number, maxRows: number): SqlStatement;
     SelectPartitionCandidates(subscriptionID: string, mode: ClaimPartitionMode, explicitSequence: boolean, maxRows: number): SqlStatement;
+    /** Autoscaler metric (03 §11): claimable Pending under the partition rules, plus InFlight. One row, `BacklogRow`. */
+    SubscriptionBacklog(subscriptionID: string, mode: BacklogPartitionMode, explicitSequence: boolean): SqlStatement;
     ClaimPartitionCandidate(subscriptionID: string, deliveryID: string, mode: ClaimPartitionMode, explicitSequence: boolean,
                             leaseOwner: string, leaseSeconds: number): SqlStatement;
     MarkAwaitingSequence(subscriptionID: string): SqlStatement;
@@ -1400,7 +1612,10 @@ export interface OperatorSqlBuilder {
                    afterPartitionKey: string | null, pageSize: number): SqlStatement;
     ReplayDelivery(subscriptionID: string, deliveryID: string, actorUserID: string | null, note: string | null): SqlStatement;
     DiscardDelivery(subscriptionID: string, deliveryID: string, allowPending: boolean, actorUserID: string | null, reason: string): SqlStatement;
+    /** Cancels an in-flight delivery (03 §7): stamps CancelRequestedAt and rotates the lease token so the holder is fenced. */
+    CancelInFlightDelivery(subscriptionID: string, deliveryID: string, actorUserID: string | null, reason: string): SqlStatement;
     SkipSequence(subscriptionID: string, partitionKey: string, sequence: number): SqlStatement;
+    /** Sweeper-wide expiry; same shape as `ConsumeSqlBuilder.ExpireLeases` — returns the rows it dead-lettered. */
     ExpireLeasesAll(): SqlStatement;
     FlagGapStalls(): SqlStatement;
     DiscardSkippedSequences(): SqlStatement;
@@ -1796,10 +2011,28 @@ describe('SqlServerConsumeSql.ExpireLeases', () => {
     const statement = sql.ExpireLeases(SUB, 5);
 
     it('returns expired in-flight rows to Pending or dead-letters them at the attempt limit', () => {
-        expect(statement.SQL).toContain("[Status] = CASE WHEN [AttemptCount] >= @p1 THEN N'DeadLettered' ELSE N'Pending' END");
-        expect(statement.SQL).toContain("[LastError] = N'LeaseExpired'");
+        expect(statement.SQL).toContain("WHEN [AttemptCount] >= @p1 THEN N'DeadLettered' ELSE N'Pending' END");
+        expect(statement.SQL).toContain("[LastError] = CASE WHEN [CancelRequestedAt] IS NOT NULL THEN [LastError] ELSE N'LeaseExpired' END");
         expect(statement.SQL).toContain("WHERE [SubscriptionID] = @p0 AND [Status] = N'InFlight' AND [LeaseExpiresAt] < SYSDATETIMEOFFSET()");
         expect(statement.Params).toEqual([SUB, 5]);
+    });
+
+    it('counts the autoscaler backlog as claimable Pending plus InFlight', () => {
+        const keyless = sql.SubscriptionBacklog(SUB, 'None', false);
+        expect(keyless.SQL).toContain('+ 0 AS [Claimable]');
+        expect(keyless.SQL).toContain("d.[Status] = N'InFlight') AS [InFlight]");
+        expect(keyless.Params).toEqual([SUB]);
+
+        const ordered = sql.SubscriptionBacklog(SUB, 'Ordered', true);
+        expect(ordered.SQL).toContain('COUNT(DISTINCT d.[PartitionKey])');     // one claimable item per key
+        expect(ordered.SQL).toContain('[LastCompletedSequence]');              // head-of-line + next-sequence rules apply
+    });
+
+    it('settles a cancelled in-flight row as Discarded instead of retrying it (03 §7)', () => {
+        expect(statement.SQL).toContain("[Status] = CASE WHEN [CancelRequestedAt] IS NOT NULL THEN N'Discarded'");
+        expect(statement.SQL).toContain("[CompletedAt] = CASE WHEN [CancelRequestedAt] IS NOT NULL THEN SYSDATETIMEOFFSET() ELSE [CompletedAt] END");
+        // a cancelled row never dead-letters, whatever its attempt count
+        expect(statement.SQL).toContain("[DeadLetterReason] = CASE WHEN [CancelRequestedAt] IS NULL AND [AttemptCount] >= @p1");
     });
 });
 
@@ -1982,6 +2215,13 @@ export function ClaimedSelect(messageTable: string): string {
 
 /** Lease columns cleared by every settle. */
 export const CLEAR_LEASE = '[LeaseToken] = NULL, [LeaseOwner] = NULL, [LeaseExpiresAt] = NULL';
+
+/** Expire passes OUTPUT every touched row (CodeGen tables have triggers, so OUTPUT needs INTO) and return only the
+ *  ones that ended DeadLettered — the engine's OnDeadLettered seam (03 §11). Exactly one result set. */
+export const EXPIRED_TABLE_DECLARATION =
+    'DECLARE @Expired TABLE ([ID] UNIQUEIDENTIFIER, [SubscriptionID] UNIQUEIDENTIFIER, [PartitionKey] NVARCHAR(200), [Status] NVARCHAR(20));';
+export const EXPIRED_DEAD_LETTER_SELECT =
+    "SELECT [ID] AS [DeliveryID], [SubscriptionID], [PartitionKey] FROM @Expired WHERE [Status] = N'DeadLettered';";
 ```
 
 - [ ] **Step 4: Write `src/sql/sqlserver/SqlServerConsumeSql.ts`**
@@ -2003,12 +2243,18 @@ export class SqlServerConsumeSql extends StatementBase implements ConsumeSqlBuil
         const sub = p.Add(subscriptionID);
         const max = p.Add(maxAttempts);
         return this.Statement(`
+${EXPIRED_TABLE_DECLARATION}
 UPDATE ${this.Table(WorkQueueTables.Delivery)} SET
-    [Status] = CASE WHEN [AttemptCount] >= ${max} THEN N'DeadLettered' ELSE N'Pending' END,
-    [DeadLetterReason] = CASE WHEN [AttemptCount] >= ${max} THEN N'LeaseExpired' ELSE [DeadLetterReason] END,
-    [DeadLetteredAt] = CASE WHEN [AttemptCount] >= ${max} THEN SYSDATETIMEOFFSET() ELSE [DeadLetteredAt] END,
-    [LastError] = N'LeaseExpired', [VisibleAt] = SYSDATETIMEOFFSET(), ${CLEAR_LEASE}
-WHERE [SubscriptionID] = ${sub} AND [Status] = N'InFlight' AND [LeaseExpiresAt] < SYSDATETIMEOFFSET()`, p);
+    [Status] = CASE WHEN [CancelRequestedAt] IS NOT NULL THEN N'Discarded'
+                    WHEN [AttemptCount] >= ${max} THEN N'DeadLettered' ELSE N'Pending' END,
+    [DeadLetterReason] = CASE WHEN [CancelRequestedAt] IS NULL AND [AttemptCount] >= ${max} THEN N'LeaseExpired' ELSE [DeadLetterReason] END,
+    [DeadLetteredAt] = CASE WHEN [CancelRequestedAt] IS NULL AND [AttemptCount] >= ${max} THEN SYSDATETIMEOFFSET() ELSE [DeadLetteredAt] END,
+    [CompletedAt] = CASE WHEN [CancelRequestedAt] IS NOT NULL THEN SYSDATETIMEOFFSET() ELSE [CompletedAt] END,
+    [LastError] = CASE WHEN [CancelRequestedAt] IS NOT NULL THEN [LastError] ELSE N'LeaseExpired' END,
+    [VisibleAt] = SYSDATETIMEOFFSET(), ${CLEAR_LEASE}
+OUTPUT inserted.[ID], inserted.[SubscriptionID], inserted.[PartitionKey], inserted.[Status] INTO @Expired
+WHERE [SubscriptionID] = ${sub} AND [Status] = N'InFlight' AND [LeaseExpiresAt] < SYSDATETIMEOFFSET();
+${EXPIRED_DEAD_LETTER_SELECT}`, p);
     }
 
     public ClaimUnpartitioned(subscriptionID: string, leaseOwner: string, leaseSeconds: number, maxRows: number): SqlStatement {
@@ -2049,6 +2295,25 @@ SELECT TOP (${max}) [ID] AS [DeliveryID], [PartitionKey]
 FROM [Ready]
 WHERE [KeyRank] = 1
 ORDER BY [VisibleAt], [OrderKey];`, p);
+    }
+
+    public SubscriptionBacklog(subscriptionID: string, mode: BacklogPartitionMode, explicitSequence: boolean): SqlStatement {
+        const p = this.NewParams();
+        const sub = p.Add(subscriptionID);
+        const deliveries = this.Table(WorkQueueTables.Delivery);
+        const keyed = mode === 'None' ? '0' : `(
+        SELECT COUNT(DISTINCT d.[PartitionKey]) FROM ${deliveries} d
+        WHERE d.[SubscriptionID] = ${sub} AND d.[PartitionKey] IS NOT NULL AND d.[Status] = N'Pending'
+          AND d.[VisibleAt] <= SYSDATETIMEOFFSET()
+          AND ${NoInFlightForKey(deliveries, 'd')}${this.HeadPredicates(mode === 'None' ? 'Exclusive' : mode, explicitSequence)})`;
+        return this.Statement(`
+SELECT
+    (SELECT COUNT(*) FROM ${deliveries} d
+     WHERE d.[SubscriptionID] = ${sub} AND d.[PartitionKey] IS NULL AND d.[Status] = N'Pending'
+       AND d.[VisibleAt] <= SYSDATETIMEOFFSET())
+    + ${keyed} AS [Claimable],
+    (SELECT COUNT(*) FROM ${deliveries} d
+     WHERE d.[SubscriptionID] = ${sub} AND d.[Status] = N'InFlight') AS [InFlight];`, p);
     }
 
     public ClaimPartitionCandidate(subscriptionID: string, deliveryID: string, mode: ClaimPartitionMode, explicitSequence: boolean,
@@ -2325,6 +2590,14 @@ describe('SqlServerOperatorSql resolutions', () => {
         expect(withPending.SQL).toContain("[Status] IN (N'DeadLettered', N'Pending')");
     });
 
+    it('cancels an in-flight delivery by stamping CancelRequestedAt and rotating the lease token', () => {
+        const statement = sql.CancelInFlightDelivery(SUB, DELIVERY, USER, 'operator cancelled');
+        expect(statement.SQL).toContain('[CancelRequestedAt] = SYSDATETIMEOFFSET(), [LeaseToken] = NEWID()');
+        expect(statement.SQL).toContain("WHERE [ID] = @p1 AND [SubscriptionID] = @p0 AND [Status] = N'InFlight' AND [CancelRequestedAt] IS NULL");
+        expect(statement.SQL).not.toContain("[Status] = N'Discarded'");   // the row stays InFlight until its lease expires
+        expect(statement.Params).toEqual([SUB, DELIVERY, USER, 'operator cancelled']);
+    });
+
     it('skips a sequence only from the previous mark when no live delivery holds it', () => {
         const statement = sql.SkipSequence(SUB, 'venue-42', 5);
         expect(statement.SQL).toContain('[LastCompletedSequence] = @p2 - 1');
@@ -2339,6 +2612,12 @@ describe('SqlServerOperatorSql sweeper statements', () => {
         expect(statement.SQL).toContain('INNER JOIN [__mj].[WorkQueueSubscription] s ON s.[ID] = d.[SubscriptionID]');
         expect(statement.SQL).toContain('d.[AttemptCount] >= s.[MaxAttempts]');
         expect(statement.Params).toEqual([]);
+    });
+
+    it('sweeps cancelled in-flight rows to Discarded', () => {
+        const statement = sql.ExpireLeasesAll();
+        expect(statement.SQL).toContain("[Status] = CASE WHEN d.[CancelRequestedAt] IS NOT NULL THEN N'Discarded'");
+        expect(statement.SQL).toContain("[CompletedAt] = CASE WHEN d.[CancelRequestedAt] IS NOT NULL THEN SYSDATETIMEOFFSET() ELSE d.[CompletedAt] END");
     });
 
     it('flags gap stalls past the subscription alert threshold', () => {
@@ -2480,6 +2759,19 @@ WHERE [ID] = ${id} AND [SubscriptionID] = ${sub} AND [Status] IN (${statuses});
 SELECT [PartitionKey], [OrderKey] FROM @Discarded;`, p);
     }
 
+    public CancelInFlightDelivery(subscriptionID: string, deliveryID: string, actorUserID: string | null, reason: string): SqlStatement {
+        const p = this.NewParams();
+        const sub = p.Add(subscriptionID);
+        const id = p.Add(deliveryID);
+        const actor = p.Add(actorUserID);
+        const text = p.Add(reason);
+        return this.Statement(`
+UPDATE ${this.Table(WorkQueueTables.Delivery)}
+SET [CancelRequestedAt] = SYSDATETIMEOFFSET(), [LeaseToken] = NEWID(),
+    [ResolvedByUserID] = ${actor}, [ResolutionNote] = ${text}
+WHERE [ID] = ${id} AND [SubscriptionID] = ${sub} AND [Status] = N'InFlight' AND [CancelRequestedAt] IS NULL`, p);
+    }
+
     public SkipSequence(subscriptionID: string, partitionKey: string, sequence: number): SqlStatement {
         const p = this.NewParams();
         const sub = p.Add(subscriptionID);
@@ -2496,14 +2788,20 @@ WHERE [SubscriptionID] = ${sub} AND [PartitionKey] = ${key} AND [LastCompletedSe
     public ExpireLeasesAll(): SqlStatement {
         const p = this.NewParams();
         return this.Statement(`
+${EXPIRED_TABLE_DECLARATION}
 UPDATE d SET
-    [Status] = CASE WHEN d.[AttemptCount] >= s.[MaxAttempts] THEN N'DeadLettered' ELSE N'Pending' END,
-    [DeadLetterReason] = CASE WHEN d.[AttemptCount] >= s.[MaxAttempts] THEN N'LeaseExpired' ELSE d.[DeadLetterReason] END,
-    [DeadLetteredAt] = CASE WHEN d.[AttemptCount] >= s.[MaxAttempts] THEN SYSDATETIMEOFFSET() ELSE d.[DeadLetteredAt] END,
-    [LastError] = N'LeaseExpired', [VisibleAt] = SYSDATETIMEOFFSET(), ${CLEAR_LEASE}
+    [Status] = CASE WHEN d.[CancelRequestedAt] IS NOT NULL THEN N'Discarded'
+                    WHEN d.[AttemptCount] >= s.[MaxAttempts] THEN N'DeadLettered' ELSE N'Pending' END,
+    [DeadLetterReason] = CASE WHEN d.[CancelRequestedAt] IS NULL AND d.[AttemptCount] >= s.[MaxAttempts] THEN N'LeaseExpired' ELSE d.[DeadLetterReason] END,
+    [DeadLetteredAt] = CASE WHEN d.[CancelRequestedAt] IS NULL AND d.[AttemptCount] >= s.[MaxAttempts] THEN SYSDATETIMEOFFSET() ELSE d.[DeadLetteredAt] END,
+    [CompletedAt] = CASE WHEN d.[CancelRequestedAt] IS NOT NULL THEN SYSDATETIMEOFFSET() ELSE d.[CompletedAt] END,
+    [LastError] = CASE WHEN d.[CancelRequestedAt] IS NOT NULL THEN d.[LastError] ELSE N'LeaseExpired' END,
+    [VisibleAt] = SYSDATETIMEOFFSET(), ${CLEAR_LEASE}
+OUTPUT inserted.[ID], inserted.[SubscriptionID], inserted.[PartitionKey], inserted.[Status] INTO @Expired
 FROM ${this.Table(WorkQueueTables.Delivery)} d
 INNER JOIN ${this.Table(WorkQueueTables.Subscription)} s ON s.[ID] = d.[SubscriptionID]
-WHERE d.[Status] = N'InFlight' AND d.[LeaseExpiresAt] < SYSDATETIMEOFFSET()`, p);
+WHERE d.[Status] = N'InFlight' AND d.[LeaseExpiresAt] < SYSDATETIMEOFFSET();
+${EXPIRED_DEAD_LETTER_SELECT}`, p);
     }
 
     public FlagGapStalls(): SqlStatement {
@@ -2555,19 +2853,78 @@ Append to `packages/WorkQueue/engine/src/index.ts`:
 export * from './sql/sqlserver/SqlServerOperatorSql';
 ```
 
-- [ ] **Step 5: Run the tests and build**
+- [ ] **Step 5: Write the autoscaler scaler query and its least-privilege login**
+
+External autoscalers (KEDA's `mssql`/`postgresql` scalers, Azure Container Apps job scale rules) run **one SELECT**
+against the queue, with no MJ code in the loop. It must count claimable `Pending` **and** `InFlight`: scalers subtract
+running executions from the metric, so a Pending-only count stops new workers starting while a backlog drains (this is
+exactly what starved MJ Central's queue — [01 use case 3](01-use-cases.md), R3.5). Keep it index-friendly: it runs every
+few seconds.
+
+`scripts/work-queue-scaler-login.sql` (flat `scripts/` folder, as `scripts/pg-bootstrap-helpers.sql`):
+
+```sql
+-- Least-privilege login for an external autoscaler (KEDA / ACA job scale rules).
+-- Grants SELECT on the two work-queue tables the scaler query reads, and nothing else.
+-- Usage: sqlcmd -S <server> -d <database> -v Password="<strong-password>" -i scripts/work-queue-scaler-login.sql
+CREATE LOGIN mj_workqueue_scaler WITH PASSWORD = '$(Password)';
+GO
+CREATE USER mj_workqueue_scaler FOR LOGIN mj_workqueue_scaler;
+GO
+GRANT SELECT ON OBJECT::__mj.WorkQueueDelivery TO mj_workqueue_scaler;
+GRANT SELECT ON OBJECT::__mj.WorkQueueSubscription TO mj_workqueue_scaler;
+GO
+```
+
+PostgreSQL equivalent (same file, in a commented block at the end):
+
+```sql
+-- CREATE ROLE mj_workqueue_scaler LOGIN PASSWORD '<strong-password>';
+-- GRANT USAGE ON SCHEMA __mj TO mj_workqueue_scaler;
+-- GRANT SELECT ON __mj."WorkQueueDelivery", __mj."WorkQueueSubscription" TO mj_workqueue_scaler;
+```
+
+The scaler query itself, parameterised by subscription name (SQL Server shown; the PostgreSQL form replaces
+`SYSDATETIMEOFFSET()` with `now()`, brackets with double quotes, and `+ 0` stays):
+
+```sql
+SELECT
+    (SELECT COUNT(*) FROM __mj.WorkQueueDelivery d
+      INNER JOIN __mj.WorkQueueSubscription s ON s.ID = d.SubscriptionID
+     WHERE s.Name = @SubscriptionName AND s.Status = 'Active'
+       AND d.Status = 'Pending' AND d.PartitionKey IS NULL AND d.VisibleAt <= SYSDATETIMEOFFSET())
+  + (SELECT COUNT(DISTINCT d.PartitionKey) FROM __mj.WorkQueueDelivery d
+      INNER JOIN __mj.WorkQueueSubscription s ON s.ID = d.SubscriptionID
+     WHERE s.Name = @SubscriptionName AND s.Status = 'Active'
+       AND d.Status = 'Pending' AND d.PartitionKey IS NOT NULL AND d.VisibleAt <= SYSDATETIMEOFFSET()
+       AND NOT EXISTS (SELECT 1 FROM __mj.WorkQueueDelivery f
+                       WHERE f.SubscriptionID = d.SubscriptionID AND f.PartitionKey = d.PartitionKey AND f.Status = 'InFlight'))
+  + (SELECT COUNT(*) FROM __mj.WorkQueueDelivery d
+      INNER JOIN __mj.WorkQueueSubscription s ON s.ID = d.SubscriptionID
+     WHERE s.Name = @SubscriptionName AND s.Status = 'Active' AND d.Status = 'InFlight') AS Backlog;
+```
+
+Notes to carry into plan 06's runbook (which owns the KEDA/ACA job recipe):
+
+- This standalone form approximates `Ordered` subscriptions: it applies single-flight per key but not head-of-line or
+  next-sequence rules, so a blocked key can overcount by one. A container that starts and claims nothing exits 0 in
+  seconds, so the cost is a wasted start, never a stuck queue. `WorkQueue.GetBacklog` (remote operation, plan 06) uses
+  `SubscriptionBacklog` and is exact; prefer it where the scaler can call an API.
+- `targetValue` of 1 with `parallelism = 1` gives one container per claimable item.
+
+- [ ] **Step 6: Run the tests and build**
 
 Run: `cd packages/WorkQueue/engine && pnpm test`
-Expected: PASS — sqlExecution (15), SqlServerPublishSql (13), SqlServerConsumeSql (17), SqlServerOperatorSql (13).
+Expected: PASS — sqlExecution (15), SqlServerPublishSql (13), SqlServerConsumeSql (19), SqlServerOperatorSql (15).
 
 Run: `cd packages/WorkQueue/engine && pnpm run build`
 Expected: builds.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add packages/WorkQueue/engine/src
-git commit -m "feat(work-queue-engine): SQL Server operator and sweeper statements"
+git add packages/WorkQueue/engine/src scripts/work-queue-scaler-login.sql
+git commit -m "feat(work-queue-engine): SQL Server operator and sweeper statements, autoscaler backlog query"
 ```
 
 ---
@@ -2674,6 +3031,12 @@ describe('PostgreSQLConsumeSql', () => {
         expect(consume.CompleteDelivery(DELIVERY, TOKEN).SQL).toContain('RETURNING "SubscriptionID", "PartitionKey", "OrderKey"');
     });
 
+    it('counts the autoscaler backlog with the same claimability rules', () => {
+        expect(consume.SubscriptionBacklog(SUB, 'Exclusive', false).SQL).toContain('count(DISTINCT d."PartitionKey")');
+        expect(consume.SubscriptionBacklog(SUB, 'None', false).SQL).toContain('+ 0 AS "Claimable"');
+        expect(consume.SubscriptionBacklog(SUB, 'None', false).SQL).toContain(`d."Status" = 'InFlight') AS "InFlight"`);
+    });
+
     it('advances the sequence mark with a recursive CTE', () => {
         const statement = consume.AdvanceSequenceMark(SUB, 'venue-42');
         expect(statement.SQL.startsWith('WITH RECURSIVE')).toBe(true);
@@ -2691,6 +3054,10 @@ describe('PostgreSQLOperatorSql', () => {
 
     it('discards with RETURNING and purges by retention', () => {
         expect(operator.DiscardDelivery(SUB, DELIVERY, true, null, 'x').SQL).toContain('RETURNING "PartitionKey", "OrderKey"');
+        expect(operator.CancelInFlightDelivery(SUB, DELIVERY, null, 'x').SQL)
+            .toContain('"CancelRequestedAt" = now(), "LeaseToken" = gen_random_uuid()');
+        expect(operator.CancelInFlightDelivery(SUB, DELIVERY, null, 'x').SQL)
+            .toContain(`"Status" = 'InFlight' AND "CancelRequestedAt" IS NULL`);
         expect(operator.PurgeTerminalDeliveries(100).SQL).toContain('make_interval(days => t."RetentionDays")');
     });
 
@@ -2780,6 +3147,10 @@ export function ClaimedSelect(messageTable: string): string {
 }
 
 export const CLEAR_LEASE = '"LeaseToken" = NULL, "LeaseOwner" = NULL, "LeaseExpiresAt" = NULL';
+
+/** Expire passes return only the rows that ended DeadLettered — the engine's OnDeadLettered seam (03 §11). */
+export const EXPIRED_DEAD_LETTER_RETURNING =
+    `RETURNING CASE WHEN "Status" = 'DeadLettered' THEN "ID" END AS "DeliveryID", "SubscriptionID", "PartitionKey", "Status"`;
 ```
 
 - [ ] **Step 4: Write `src/sql/postgresql/PostgreSQLPublishSql.ts`**
@@ -2937,11 +3308,15 @@ export class PostgreSQLConsumeSql extends StatementBase implements ConsumeSqlBui
         const max = p.Add(maxAttempts);
         return this.Statement(`
 UPDATE ${this.Table(WorkQueueTables.Delivery)} SET
-    "Status" = CASE WHEN "AttemptCount" >= ${max}::int THEN 'DeadLettered' ELSE 'Pending' END,
-    "DeadLetterReason" = CASE WHEN "AttemptCount" >= ${max}::int THEN 'LeaseExpired' ELSE "DeadLetterReason" END,
-    "DeadLetteredAt" = CASE WHEN "AttemptCount" >= ${max}::int THEN now() ELSE "DeadLetteredAt" END,
-    "LastError" = 'LeaseExpired', "VisibleAt" = now(), ${CLEAR_LEASE}
-WHERE "SubscriptionID" = ${sub}::uuid AND "Status" = 'InFlight' AND "LeaseExpiresAt" < now()`, p);
+    "Status" = CASE WHEN "CancelRequestedAt" IS NOT NULL THEN 'Discarded'
+                    WHEN "AttemptCount" >= ${max}::int THEN 'DeadLettered' ELSE 'Pending' END,
+    "DeadLetterReason" = CASE WHEN "CancelRequestedAt" IS NULL AND "AttemptCount" >= ${max}::int THEN 'LeaseExpired' ELSE "DeadLetterReason" END,
+    "DeadLetteredAt" = CASE WHEN "CancelRequestedAt" IS NULL AND "AttemptCount" >= ${max}::int THEN now() ELSE "DeadLetteredAt" END,
+    "CompletedAt" = CASE WHEN "CancelRequestedAt" IS NOT NULL THEN now() ELSE "CompletedAt" END,
+    "LastError" = CASE WHEN "CancelRequestedAt" IS NOT NULL THEN "LastError" ELSE 'LeaseExpired' END,
+    "VisibleAt" = now(), ${CLEAR_LEASE}
+WHERE "SubscriptionID" = ${sub}::uuid AND "Status" = 'InFlight' AND "LeaseExpiresAt" < now()
+${EXPIRED_DEAD_LETTER_RETURNING}`, p);
     }
 
     public ClaimUnpartitioned(subscriptionID: string, leaseOwner: string, leaseSeconds: number, maxRows: number): SqlStatement {
@@ -2987,6 +3362,25 @@ FROM ready r
 WHERE r."KeyRank" = 1
 ORDER BY r."VisibleAt", r."OrderKey"
 LIMIT ${max}::int`, p);
+    }
+
+    public SubscriptionBacklog(subscriptionID: string, mode: BacklogPartitionMode, explicitSequence: boolean): SqlStatement {
+        const p = this.NewParams();
+        const sub = p.Add(subscriptionID);
+        const deliveries = this.Table(WorkQueueTables.Delivery);
+        const keyed = mode === 'None' ? '0' : `(
+        SELECT count(DISTINCT d."PartitionKey") FROM ${deliveries} d
+        WHERE d."SubscriptionID" = ${sub}::uuid AND d."PartitionKey" IS NOT NULL AND d."Status" = 'Pending'
+          AND d."VisibleAt" <= now()
+          AND ${NoInFlightForKey(deliveries, 'd')}${this.HeadPredicates(mode === 'None' ? 'Exclusive' : mode, explicitSequence)})`;
+        return this.Statement(`
+SELECT
+    (SELECT count(*) FROM ${deliveries} d
+     WHERE d."SubscriptionID" = ${sub}::uuid AND d."PartitionKey" IS NULL AND d."Status" = 'Pending'
+       AND d."VisibleAt" <= now())
+    + ${keyed} AS "Claimable",
+    (SELECT count(*) FROM ${deliveries} d
+     WHERE d."SubscriptionID" = ${sub}::uuid AND d."Status" = 'InFlight') AS "InFlight"`, p);
     }
 
     public ClaimPartitionCandidate(subscriptionID: string, deliveryID: string, mode: ClaimPartitionMode, explicitSequence: boolean,
@@ -3252,6 +3646,19 @@ WHERE "ID" = ${id}::uuid AND "SubscriptionID" = ${sub}::uuid AND "Status" IN (${
 RETURNING "PartitionKey", "OrderKey"`, p);
     }
 
+    public CancelInFlightDelivery(subscriptionID: string, deliveryID: string, actorUserID: string | null, reason: string): SqlStatement {
+        const p = this.NewParams();
+        const sub = p.Add(subscriptionID);
+        const id = p.Add(deliveryID);
+        const actor = p.Add(actorUserID);
+        const text = p.Add(reason);
+        return this.Statement(`
+UPDATE ${this.Table(WorkQueueTables.Delivery)}
+SET "CancelRequestedAt" = now(), "LeaseToken" = gen_random_uuid(),
+    "ResolvedByUserID" = ${actor}::uuid, "ResolutionNote" = ${text}::text
+WHERE "ID" = ${id}::uuid AND "SubscriptionID" = ${sub}::uuid AND "Status" = 'InFlight' AND "CancelRequestedAt" IS NULL`, p);
+    }
+
     public SkipSequence(subscriptionID: string, partitionKey: string, sequence: number): SqlStatement {
         const p = this.NewParams();
         const sub = p.Add(subscriptionID);
@@ -3269,12 +3676,16 @@ WHERE "SubscriptionID" = ${sub}::uuid AND "PartitionKey" = ${key}::text AND "Las
         const p = this.NewParams();
         return this.Statement(`
 UPDATE ${this.Table(WorkQueueTables.Delivery)} d SET
-    "Status" = CASE WHEN d."AttemptCount" >= s."MaxAttempts" THEN 'DeadLettered' ELSE 'Pending' END,
-    "DeadLetterReason" = CASE WHEN d."AttemptCount" >= s."MaxAttempts" THEN 'LeaseExpired' ELSE d."DeadLetterReason" END,
-    "DeadLetteredAt" = CASE WHEN d."AttemptCount" >= s."MaxAttempts" THEN now() ELSE d."DeadLetteredAt" END,
-    "LastError" = 'LeaseExpired', "VisibleAt" = now(), ${CLEAR_LEASE}
+    "Status" = CASE WHEN d."CancelRequestedAt" IS NOT NULL THEN 'Discarded'
+                    WHEN d."AttemptCount" >= s."MaxAttempts" THEN 'DeadLettered' ELSE 'Pending' END,
+    "DeadLetterReason" = CASE WHEN d."CancelRequestedAt" IS NULL AND d."AttemptCount" >= s."MaxAttempts" THEN 'LeaseExpired' ELSE d."DeadLetterReason" END,
+    "DeadLetteredAt" = CASE WHEN d."CancelRequestedAt" IS NULL AND d."AttemptCount" >= s."MaxAttempts" THEN now() ELSE d."DeadLetteredAt" END,
+    "CompletedAt" = CASE WHEN d."CancelRequestedAt" IS NOT NULL THEN now() ELSE d."CompletedAt" END,
+    "LastError" = CASE WHEN d."CancelRequestedAt" IS NOT NULL THEN d."LastError" ELSE 'LeaseExpired' END,
+    "VisibleAt" = now(), ${CLEAR_LEASE}
 FROM ${this.Table(WorkQueueTables.Subscription)} s
-WHERE s."ID" = d."SubscriptionID" AND d."Status" = 'InFlight' AND d."LeaseExpiresAt" < now()`, p);
+WHERE s."ID" = d."SubscriptionID" AND d."Status" = 'InFlight' AND d."LeaseExpiresAt" < now()
+${EXPIRED_DEAD_LETTER_RETURNING}`, p);
     }
 
     public FlagGapStalls(): SqlStatement {
@@ -4026,10 +4437,35 @@ describe('DatabaseTransportOperator resolutions', () => {
             .QueueRows([{ LastCompletedSequence: 3 }]);
         const binding = SubscriptionBindingFixture({ PartitionMode: 'Ordered', OrderingMode: 'ExplicitSequence' });
         const result = await new DatabaseTransportOperator(executor, TestDeps(executor)).Discard(binding, DELIVERY, 'bad batch', null);
-        expect(result).toEqual({ Supported: true, Changed: true });
+        expect(result).toEqual({ Supported: true, Changed: true, CancelRequested: false });
         expect(executor.Calls[0].SQL).toContain("N'DeadLettered', N'Pending'");
         expect(executor.Calls[1].SQL).toContain('@Mark');
         expect(executor.Events).toEqual(['independent', 'begin', 'commit', 'release']);
+    });
+
+    it('falls back to revoking the lease when the delivery is in flight', async () => {
+        const executor = new RecordingExecutor()
+            .QueueRows([])                          // DiscardDelivery matched nothing (row is InFlight)
+            .QueueRows([{ AffectedRows: 1 }]);      // CancelInFlightDelivery revoked the lease
+        const result = await new DatabaseTransportOperator(executor, TestDeps(executor))
+            .Discard(SubscriptionBindingFixture(), DELIVERY, 'operator cancelled', USER);
+        expect(result).toEqual({ Supported: true, Changed: true, CancelRequested: true });
+        expect(executor.Calls[1].SQL).toContain('[CancelRequestedAt] = SYSDATETIMEOFFSET(), [LeaseToken] = NEWID()');
+    });
+
+    it('reports no change when the delivery is already completed', async () => {
+        const executor = new RecordingExecutor().QueueRows([]).QueueRows([{ AffectedRows: 0 }]);
+        const result = await new DatabaseTransportOperator(executor, TestDeps(executor))
+            .Discard(SubscriptionBindingFixture(), DELIVERY, 'too late', null);
+        expect(result).toEqual({ Supported: true, Changed: false, CancelRequested: false });
+    });
+
+    it('reports the autoscaler backlog as claimable plus in-flight counts', async () => {
+        const executor = new RecordingExecutor().QueueRows([{ Claimable: '7', InFlight: 2 }]);
+        const backlog = await new DatabaseTransportOperator(executor, TestDeps(executor))
+            .GetBacklog(SubscriptionBindingFixture({ PartitionMode: 'Ordered', OrderingMode: 'ExplicitSequence' }));
+        expect(backlog).toEqual({ Claimable: 7, InFlight: 2 });
+        expect(executor.Calls[0].SQL).toContain('AS [Claimable]');
     });
 
     it('rejects skip-sequence on subscriptions that are not Ordered explicit-sequence', async () => {
@@ -4066,12 +4502,21 @@ import type { WorkLogger } from '@memberjunction/work-queue-core';
 import type { WorkQueueExecutorSource } from '../sql/WorkQueueSqlExecutor';
 
 /** Everything a transport driver factory hands to the drivers it builds (03 §11). */
+export interface DeadLetteredEvent {
+    SubscriptionName: string;
+    DeliveryID: string;
+    Reason: string;
+    PartitionKey: string | null;
+}
+
 export interface TransportDriverDeps {
     ContextUser: UserInfo;
     Executor: WorkQueueExecutorSource;
     Log: WorkLogger;
     /** Lease owner identity for claims; defaults to host:pid:random. */
     InstanceID?: string;
+    /** Alerting seam (03 §11): the engine passes a notifier that fans out to its OnDeadLettered listeners. */
+    NotifyDeadLettered?: (event: DeadLetteredEvent) => void;
 }
 ```
 
@@ -4129,21 +4574,8 @@ export interface MessageColumns {
     PublishedAt: Date | string;
 }
 
-export function IsWorkJson(value: unknown): value is WorkJson {
-    if (value === null || typeof value === 'string' || typeof value === 'boolean') {
-        return true;
-    }
-    if (typeof value === 'number') {
-        return Number.isFinite(value);
-    }
-    if (Array.isArray(value)) {
-        return value.every(IsWorkJson);
-    }
-    if (typeof value === 'object') {
-        return Object.values(value).every(IsWorkJson);
-    }
-    return false;
-}
+// The JSON-safety guard lives in the browser-safe base package (both tiers validate JSON columns).
+export { IsWorkJson } from '@memberjunction/work-queue-base';
 
 export function ParseAttributes(json: string | null): Record<string, string> {
     if (json === null || json.trim() === '') {
@@ -4369,8 +4801,17 @@ export class DatabaseTransportOperator implements ITransportOperator {
             }
             return { Commit: true, Value: discarded !== undefined };
         });
-        this.deps.Log.Info(`Discard of delivery ${deliveryID} on '${subscription.Policy.SubscriptionName}': ${changed ? 'discarded' : 'not discardable'} (${reason})`);
-        return { Supported: true, Changed: changed };
+        if (changed) {
+            this.deps.Log.Info(`Discard of delivery ${deliveryID} on '${subscription.Policy.SubscriptionName}': discarded (${reason})`);
+            return { Supported: true, Changed: true, CancelRequested: false };
+        }
+        // Not Pending or DeadLettered: if it is in flight, revoke its lease (03 §7). The row stays InFlight until the
+        // lease expires so an Exclusive/Ordered key is not handed on while the old handler is still stopping;
+        // ExpireLeases then settles it as Discarded.
+        const revoked = await ExecuteWrite(
+            this.executor, this.sql.Operator.CancelInFlightDelivery(ids.SubscriptionID, deliveryID, actorUserID, reason), this.deps.ContextUser);
+        this.deps.Log.Info(`Discard of delivery ${deliveryID} on '${subscription.Policy.SubscriptionName}': ${revoked === 1 ? 'cancel requested (lease revoked)' : 'not discardable'} (${reason})`);
+        return { Supported: true, Changed: revoked === 1, CancelRequested: revoked === 1 };
     }
 
     public async SkipSequence(subscription: SubscriptionBinding, partitionKey: string, sequence: number,
@@ -4389,6 +4830,19 @@ export class DatabaseTransportOperator implements ITransportOperator {
         });
         this.deps.Log.Info(`SkipSequence ${sequence} for key '${partitionKey}' on '${subscription.Policy.SubscriptionName}' by ${actorUserID ?? 'system'}: ${changed ? 'skipped' : 'not skippable'} (${reason})`);
         return { Supported: true, Changed: changed };
+    }
+
+    /**
+     * Autoscaler metric (03 §11). `Claimable` applies the partition rules, so a blocked Ordered key contributes
+     * nothing; `InFlight` is reported separately because scalers subtract running executions from the metric.
+     */
+    public async GetBacklog(subscription: SubscriptionBinding): Promise<{ Claimable: number; InFlight: number }> {
+        const ids = ReadSubscriptionIDs(subscription);
+        const statement = this.sql.Consume.SubscriptionBacklog(
+            ids.SubscriptionID, subscription.Policy.PartitionMode, subscription.Policy.OrderingMode === 'ExplicitSequence');
+        const rows = await ExecuteRows<BacklogRow>(this.executor, statement, this.deps.ContextUser);
+        const row = rows[0];
+        return { Claimable: ToNumber(row?.Claimable) ?? 0, InFlight: ToNumber(row?.InFlight) ?? 0 };
     }
 
     private IsSequenced(subscription: SubscriptionBinding): boolean {
@@ -4456,7 +4910,7 @@ git commit -m "feat(work-queue-engine): Database transport operator and row mapp
 **Interfaces:**
 - Consumes: Tasks 2–8 (`CreateWorkQueueSqlBuilder`, rows, execution helpers, `RunInWorkQueueTransaction`, `RetryTransient`, `TransportDriverDeps`, `ReadTopicID`, `ReadSubscriptionIDs`, `MessageFromColumns`, `SerializeProgress`, `DatabaseTransportOperator`, fakes); from core: `ITransportDriver`, `ITransportConsumer`, `TransportCapabilities`, `DatabasePublishOptions`, `TopicBinding`, `SubscriptionBinding`, `WorkMessage`, `WorkJson`, `WorkProgress`, `PublishResult`, `ReceivedDelivery`, `SettleResult`, `BindingValidationIssue`, `PartitionMode`, `MatchesFilter`.
 - Produces:
-  - `DATABASE_TRANSPORT_CAPABILITIES: TransportCapabilities` (03 §5 Database values)
+  - `DATABASE_TRANSPORT_CAPABILITIES: TransportCapabilities` (03 §5 Database values, including `Filters: WORK_QUEUE_FILTER_SUPPORT`)
   - `Accepted(messageID: string): PublishResult`, `Duplicate(messageID: string): PublishResult`, `Rejected(messageID: string, code: string, message: string, retryable: boolean): PublishResult`
   - `interface PlannedDelivery { SubscriptionID: string; PartitionMode: PartitionMode }`, `interface DeliveryPlan { Deliveries: PlannedDelivery[]; NeedsPublishOrderLock: boolean; SequenceStateSubscriptionIDs: string[] }`
   - `BuildDeliveryPlan(topic: TopicBinding, message: WorkMessage, subscriptions: SubscriptionBinding[]): DeliveryPlan`, `ToMessageInsertRow(message: WorkMessage, topicID: string, userID: string | null): MessageInsertRow`, `ToDeliveryRows(message: WorkMessage, plan: DeliveryPlan, orderKey: number): DeliveryInsertRow[]`, `SameEnvelope(existing: MessageInsertOutcomeRow, row: MessageInsertRow): boolean`, `ResolveExistingOutcome(outcomes: MessageInsertOutcomeRow[], row: MessageInsertRow): PublishResult`
@@ -4497,7 +4951,10 @@ const ORDERED = SubscriptionBindingFixture({ SubscriptionName: 'apply', Partitio
 
 describe('BuildDeliveryPlan', () => {
     it('includes only subscriptions whose filter matches', () => {
-        const filtered = { ...EXCLUSIVE, Filter: { eventType: ['click'] } };
+        const filtered = {
+            ...EXCLUSIVE,
+            Filter: { logic: 'and' as const, filters: [{ field: 'eventType', operator: 'eq' as const, value: 'click' }] },
+        };
         const plan = BuildDeliveryPlan(TopicBindingFixture(), MESSAGE, [NONE, filtered]);
         expect(plan.Deliveries.map(d => d.SubscriptionID)).toEqual(['S-NONE']);
     });
@@ -4663,7 +5120,8 @@ describe('DatabaseTransportDriver surface', () => {
         const driver = new DatabaseTransportDriver(executor, TestDeps(executor));
         expect(driver.Name).toBe('Database');
         expect(driver.Capabilities).toBe(DATABASE_TRANSPORT_CAPABILITIES);
-        expect(DATABASE_TRANSPORT_CAPABILITIES).toMatchObject({ SupportsOrdered: true, SupportsExternalHosts: false, CancelPending: true, PeekDeadLetters: 'Full' });
+        expect(DATABASE_TRANSPORT_CAPABILITIES).toMatchObject({ SupportsOrdered: true, SupportsExternalHosts: false, CancelPending: true, CancelInFlight: true, PeekDeadLetters: 'Full' });
+        expect(DATABASE_TRANSPORT_CAPABILITIES.Filters.Operators).toEqual(['eq', 'neq', 'startswith', 'isnull', 'isnotnull']);
     });
 
     it('opens consumers and a cached operator', () => {
@@ -4816,6 +5274,7 @@ Expected: FAIL — unresolved imports.
 - [ ] **Step 3: Write `src/transports/database/databaseCapabilities.ts`**
 
 ```typescript
+import { WORK_QUEUE_FILTER_SUPPORT } from '@memberjunction/work-queue-core';
 import type { TransportCapabilities } from '@memberjunction/work-queue-core';
 
 /** Database transport capabilities (03 §5). */
@@ -4825,11 +5284,14 @@ export const DATABASE_TRANSPORT_CAPABILITIES: TransportCapabilities = {
     SupportsOrdered: true,
     SupportsExternalHosts: false,
     CancelPending: true,
+    CancelInFlight: true,
     ListPartitions: true,
     PeekDeadLetters: 'Full',
     ReplaySingleDeadLetter: true,
     CompletedCounts: true,
     MaxRetryDelaySeconds: 2147483647,
+    // The Database transport evaluates filters in TypeScript, so it accepts the whole queue-wide subset (03 §4.1).
+    Filters: WORK_QUEUE_FILTER_SUPPORT,
 };
 ```
 
@@ -4973,7 +5435,14 @@ export class DatabaseTransportConsumer<TPayload extends WorkJson = WorkJson> imp
             return [];
         }
         const policy = this.binding.Policy;
-        await ExecuteWrite(this.executor, this.sql.Consume.ExpireLeases(this.ids.SubscriptionID, policy.MaxAttempts), this.deps.ContextUser);
+        const expired = await ExecuteRows<ExpiredDeadLetterRow>(
+            this.executor, this.sql.Consume.ExpireLeases(this.ids.SubscriptionID, policy.MaxAttempts), this.deps.ContextUser);
+        for (const row of expired) {
+            this.deps.NotifyDeadLettered?.({
+                SubscriptionName: policy.SubscriptionName, DeliveryID: row.DeliveryID,
+                Reason: 'LeaseExpired', PartitionKey: row.PartitionKey,
+            });
+        }
         const claimed: ClaimedDeliveryRow[] = policy.PartitionMode === 'None' ? [] : await this.ClaimPartitioned(max, signal);
         if (claimed.length < max && !signal.aborted) {
             const keyless = await ExecuteRows<ClaimedDeliveryRow>(this.executor,
@@ -5010,9 +5479,16 @@ export class DatabaseTransportConsumer<TPayload extends WorkJson = WorkJson> imp
             this.sql.Consume.RetryDelivery(delivery.DeliveryID, delivery.LeaseToken, Math.max(0, Math.round(delaySeconds)), error));
     }
 
-    public DeadLetter(delivery: ReceivedDelivery<TPayload>, reason: string, error: string | null): Promise<SettleResult> {
-        return this.SettleWrite(delivery, 'DeadLettered',
+    public async DeadLetter(delivery: ReceivedDelivery<TPayload>, reason: string, error: string | null): Promise<SettleResult> {
+        const result = await this.SettleWrite(delivery, 'DeadLettered',
             this.sql.Consume.DeadLetterDelivery(delivery.DeliveryID, delivery.LeaseToken, reason, error));
+        if (result.Kind === 'Settled') {
+            this.deps.NotifyDeadLettered?.({
+                SubscriptionName: this.binding.Policy.SubscriptionName, DeliveryID: delivery.DeliveryID,
+                Reason: reason, PartitionKey: delivery.Message.PartitionKey ?? null,
+            });
+        }
+        return result;
     }
 
     public Release(delivery: ReceivedDelivery<TPayload>): Promise<SettleResult> {
@@ -5283,26 +5759,31 @@ git commit -m "feat(work-queue-engine): Database transport driver and consumer"
 
 ---
 
-### Task 10: Driver factories, `MJWorkLogger`, topology rows and entity validation
+### Task 10: Topology rows and field validation (base); driver factories, `MJWorkLogger` and entity servers (engine)
 
 **Files:**
-- Create: `packages/WorkQueue/engine/src/topology/rows.ts`
-- Create: `packages/WorkQueue/engine/src/transports/BaseTransportDriverFactory.ts`, `src/transports/database/DatabaseTransportDriverFactory.ts`
-- Create: `packages/WorkQueue/engine/src/logging/MJWorkLogger.ts`
-- Create: `packages/WorkQueue/engine/src/entities/validation.ts`, `src/entities/WorkQueueTopicEntityServer.ts`, `src/entities/WorkQueueSubscriptionEntityServer.ts`, `src/entities/WorkQueueTransportEntityServer.ts`
-- Modify: `packages/WorkQueue/engine/src/index.ts`
-- Test: `packages/WorkQueue/engine/src/__tests__/entityValidation.test.ts`, `src/__tests__/DatabaseTransportDriverFactory.test.ts`
-- Extend: `packages/WorkQueue/engine/src/__tests__/fakes.ts` (`TRANSPORT_ROW`, `TOPIC_ROW`, `SUBSCRIPTION_ROW`)
+- Create (**base**): `packages/WorkQueue/base/src/topology/rows.ts`, `src/entities/validation.ts`, `src/testing/rowFixtures.ts`
+- Modify (**base**): `packages/WorkQueue/base/src/index.ts`
+- Test (**base**): `packages/WorkQueue/base/src/__tests__/entityValidation.test.ts`
+- Create (**engine**): `packages/WorkQueue/engine/src/transports/BaseTransportDriverFactory.ts`, `src/transports/database/DatabaseTransportDriverFactory.ts`
+- Create (**engine**): `packages/WorkQueue/engine/src/logging/MJWorkLogger.ts`
+- Create (**engine**): `packages/WorkQueue/engine/src/entities/WorkQueueTopicEntityServer.ts`, `src/entities/WorkQueueSubscriptionEntityServer.ts`, `src/entities/WorkQueueTransportEntityServer.ts`, `src/entities/DriverOwnedEntityServers.ts`
+- Modify (**engine**): `packages/WorkQueue/engine/src/index.ts`
+- Test (**engine**): `packages/WorkQueue/engine/src/__tests__/DatabaseTransportDriverFactory.test.ts`
+- Extend (**engine**): `packages/WorkQueue/engine/src/__tests__/fakes.ts` (re-exports the base row fixtures as `TRANSPORT_ROW`, `TOPIC_ROW`, `SUBSCRIPTION_ROW`)
 
 **Interfaces:**
-- Consumes: `DatabaseTransportDriver` (Task 9); `TransportDriverDeps` (Task 8); `WorkQueueEntityNames`, `DATABASE_DRIVER_CLASS` (Task 2); from core: `ITransportDriver`, `WorkLogger`, `WorkJson`, `OrderingMode`, `PartitionMode`, `HeartbeatMode`, `HostType`, `ParseSubscriptionFilter`, `WorkQueueConfigurationError`; generated `MJWorkQueueTopicEntity`, `MJWorkQueueSubscriptionEntity`, `MJWorkQueueTransportEntity` (Task 1).
-- Produces:
+- Consumes: `DatabaseTransportDriver` (Task 9); `TransportDriverDeps` (Task 8); `WorkQueueEntityNames`, `DATABASE_DRIVER_CLASS`, `IsWorkJson` (Task 2, base); from core: `ITransportDriver`, `WorkLogger`, `WorkJson`, `OrderingMode`, `PartitionMode`, `HeartbeatMode`, `HostType`, `ParseSubscriptionFilter`, `WORK_QUEUE_FILTER_SUPPORT`, `WorkQueueConfigurationError`; generated `MJWorkQueueTopicEntity`, `MJWorkQueueSubscriptionEntity`, `MJWorkQueueTransportEntity` (Task 1).
+- Produces (base — `@memberjunction/work-queue-base`):
   - `interface TransportRow`, `interface TopicRow`, `interface SubscriptionRow` — structural views the generated entities satisfy
+  - `interface FieldIssue { Field: string; Message: string; Value: string | number | null }`, `ParseJsonObject(json: string | null, subject: string): Record<string, WorkJson>`, `ValidateTransportFields(row: TransportRow): FieldIssue[]`, `ValidateTopicFields(row: TopicRow): FieldIssue[]`, `ValidateSubscriptionFields(row: SubscriptionRow): FieldIssue[]`
+  - Row fixtures `TRANSPORT_ROW_FIXTURE`, `TOPIC_ROW_FIXTURE`, `SUBSCRIPTION_ROW_FIXTURE` (`src/testing/rowFixtures.ts`), re-exported by the engine's test fakes
+- Produces (engine):
   - `abstract class BaseTransportDriverFactory { abstract Create(transport: TransportRow, deps: TransportDriverDeps): Promise<ITransportDriver> }`
   - `@RegisterClass(BaseTransportDriverFactory, 'Database') class DatabaseTransportDriverFactory`
   - `class MJWorkLogger implements WorkLogger { constructor(prefix?: string) }`
-  - `interface FieldIssue { Field: string; Message: string; Value: string | number | null }`, `ParseJsonObject(json: string | null, subject: string): Record<string, WorkJson>`, `ValidateTransportFields(row: TransportRow): FieldIssue[]`, `ValidateTopicFields(row: TopicRow): FieldIssue[]`, `ValidateSubscriptionFields(row: SubscriptionRow): FieldIssue[]`
   - Server entity subclasses `MJWorkQueueTransportEntityServer`, `MJWorkQueueTopicEntityServer`, `MJWorkQueueSubscriptionEntityServer` registered under the Task 1 entity names
+  - Driver-owned state guards `MJWorkQueueDeliveryEntityServer`, `MJWorkQueueMessageEntityServer`, `MJWorkQueuePartitionStateEntityServer`, `MJWorkQueueDeduplicationEntityServer` plus `DRIVER_OWNED_STATE_MESSAGE` (03 §6.8)
 
 Validation performed on save (everything that needs a transport driver — FIFO rules, host/transport compatibility — is `WorkQueueEngine.ValidateTopology` in Task 12):
 
@@ -5310,39 +5791,56 @@ Validation performed on save (everything that needs a transport driver — FIFO 
 | --- | --- |
 | Transport | `Configuration`, when present, is a JSON object |
 | Topic | `Name` matches `^[a-z0-9]+([._-][a-z0-9]+)*$`; `BindingConfig`, when present, is a JSON object |
-| Subscription | `MJWorker` requires a non-blank `HandlerKey`; `Filter` parses (03 §4); `BackoffMaxSeconds >= BackoffBaseSeconds`; `MaxProcessingSeconds` and `SequenceGapAlertSeconds` are positive when set; `SequenceGapAlertSeconds` only with `PartitionMode = 'Ordered'`; `BindingConfig`, when present, is a JSON object |
+| Subscription | `MJWorker` requires a non-blank `HandlerKey`; `Filter` parses against the queue-wide subset `WORK_QUEUE_FILTER_SUPPORT` (03 §4 — the *transport-specific* check is `ValidateTopologyRows`, Task 11); `BackoffMaxSeconds >= BackoffBaseSeconds`; `MaxProcessingSeconds` and `SequenceGapAlertSeconds` are positive when set; `SequenceGapAlertSeconds` only with `PartitionMode = 'Ordered'`; `BindingConfig`, when present, is a JSON object |
 
-- [ ] **Step 1: Add topology row fixtures to the test fakes**
+- [ ] **Step 1: Write the shared row fixtures in the base package**
 
-Append to `packages/WorkQueue/engine/src/__tests__/fakes.ts` (and add `import type { SubscriptionRow, TopicRow, TransportRow } from '../topology/rows';` to its imports):
+`packages/WorkQueue/base/src/testing/rowFixtures.ts` (shipped, not test-only: both packages' suites and plan 06 use
+them; export it from `packages/WorkQueue/base/src/index.ts`):
 
 ```typescript
-export const TRANSPORT_ROW: TransportRow = {
+import type { SubscriptionRow, TopicRow, TransportRow } from '../topology/rows';
+
+export const TRANSPORT_ROW_FIXTURE: TransportRow = {
     ID: 'D1ED3F08-7008-4DA8-BA2B-7CD6A820AEB5', Name: 'Database', DriverClass: 'Database', Configuration: null, CredentialID: null, Status: 'Active',
 };
 
-export const TOPIC_ROW: TopicRow = {
-    ID: 'AAAAAAAA-0000-0000-0000-000000000001', Name: 'import.ready', TransportID: TRANSPORT_ROW.ID, OrderingMode: 'PublishOrder',
+export const TOPIC_ROW_FIXTURE: TopicRow = {
+    ID: 'AAAAAAAA-0000-0000-0000-000000000001', Name: 'import.ready', TransportID: TRANSPORT_ROW_FIXTURE.ID, OrderingMode: 'PublishOrder',
     IsFifo: false, AllowExternalPublish: false, MaxPayloadBytes: 262144, DefaultDeduplicationTTLSeconds: 86400, RetentionDays: 7,
     BindingConfig: null, Status: 'Active',
 };
 
-export const SUBSCRIPTION_ROW: SubscriptionRow = {
-    ID: 'BBBBBBBB-0000-0000-0000-000000000001', TopicID: TOPIC_ROW.ID, Name: 'venue-import', Filter: null, PartitionMode: 'Ordered',
+export const SUBSCRIPTION_ROW_FIXTURE: SubscriptionRow = {
+    ID: 'BBBBBBBB-0000-0000-0000-000000000001', TopicID: TOPIC_ROW_FIXTURE.ID, Name: 'venue-import', Filter: null, PartitionMode: 'Ordered',
     MaxAttempts: 5, BackoffBaseSeconds: 10, BackoffMaxSeconds: 900, LeaseSeconds: 60, HeartbeatMode: 'Auto', MaxProcessingSeconds: null,
     SequenceGapAlertSeconds: null, HostType: 'MJWorker', HandlerKey: 'VenueImport', ExternalRef: null, BindingConfig: null, Status: 'Active',
 };
 ```
 
+Then append to `packages/WorkQueue/engine/src/__tests__/fakes.ts`, so every engine suite keeps its short names:
+
+```typescript
+export {
+    TRANSPORT_ROW_FIXTURE as TRANSPORT_ROW,
+    TOPIC_ROW_FIXTURE as TOPIC_ROW,
+    SUBSCRIPTION_ROW_FIXTURE as SUBSCRIPTION_ROW,
+} from '@memberjunction/work-queue-base';
+```
+
 - [ ] **Step 1b: Write the failing tests**
 
-`packages/WorkQueue/engine/src/__tests__/entityValidation.test.ts`:
+`packages/WorkQueue/base/src/__tests__/entityValidation.test.ts`:
 
 ```typescript
 import { describe, it, expect } from 'vitest';
 import { WorkQueueConfigurationError } from '@memberjunction/work-queue-core';
 import { ParseJsonObject, ValidateSubscriptionFields, ValidateTopicFields, ValidateTransportFields } from '../entities/validation';
-import { SUBSCRIPTION_ROW, TOPIC_ROW, TRANSPORT_ROW } from './fakes';
+import {
+    SUBSCRIPTION_ROW_FIXTURE as SUBSCRIPTION_ROW,
+    TOPIC_ROW_FIXTURE as TOPIC_ROW,
+    TRANSPORT_ROW_FIXTURE as TRANSPORT_ROW,
+} from '../testing/rowFixtures';
 
 describe('ParseJsonObject', () => {
     it('returns an empty object for null or blank text', () => {
@@ -5391,8 +5889,17 @@ describe('ValidateSubscriptionFields', () => {
         expect(ValidateSubscriptionFields({ ...SUBSCRIPTION_ROW, HostType: 'External', HandlerKey: null })).toEqual([]);
     });
 
-    it('reports an unparseable filter', () => {
+    it('accepts a CompositeFilterDescriptor filter in the supported subset', () => {
+        const filter = '{"logic":"and","filters":[{"field":"eventType","operator":"eq","value":"click"}]}';
+        expect(ValidateSubscriptionFields({ ...SUBSCRIPTION_ROW, Filter: filter })).toEqual([]);
+    });
+
+    it('reports a filter that is not a CompositeFilterDescriptor or uses an unsupported operator', () => {
         expect(ValidateSubscriptionFields({ ...SUBSCRIPTION_ROW, Filter: '{"eventType":"click"}' })[0].Field).toBe('Filter');
+        const contains = '{"logic":"and","filters":[{"field":"url","operator":"contains","value":"x"}]}';
+        const issue = ValidateSubscriptionFields({ ...SUBSCRIPTION_ROW, Filter: contains })[0];
+        expect(issue.Field).toBe('Filter');
+        expect(issue.Message).toContain('contains');
     });
 
     it('checks backoff ordering and positive optional durations', () => {
@@ -5450,10 +5957,10 @@ describe('MJWorkLogger', () => {
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
-Run: `cd packages/WorkQueue/engine && pnpm test entityValidation DatabaseTransportDriverFactory`
-Expected: FAIL — unresolved imports `../entities/validation`, `../topology/rows`, `../transports/BaseTransportDriverFactory`.
+Run: `cd packages/WorkQueue/base && pnpm test entityValidation` and `cd packages/WorkQueue/engine && pnpm test DatabaseTransportDriverFactory`
+Expected: FAIL — unresolved imports `../entities/validation` and `../topology/rows` (base), `../transports/BaseTransportDriverFactory` (engine).
 
-- [ ] **Step 3: Write `src/topology/rows.ts`**
+- [ ] **Step 3: Write `packages/WorkQueue/base/src/topology/rows.ts`**
 
 ```typescript
 import type { HeartbeatMode, HostType, OrderingMode, PartitionMode } from '@memberjunction/work-queue-core';
@@ -5507,7 +6014,7 @@ export interface SubscriptionRow {
 
 ```typescript
 import type { ITransportDriver } from '@memberjunction/work-queue-core';
-import type { TransportRow } from '../topology/rows';
+import type { TransportRow } from '@memberjunction/work-queue-base';
 import type { TransportDriverDeps } from './TransportDriverDeps';
 
 /**
@@ -5524,8 +6031,8 @@ export abstract class BaseTransportDriverFactory {
 ```typescript
 import { RegisterClass } from '@memberjunction/global';
 import type { ITransportDriver } from '@memberjunction/work-queue-core';
+import type { TransportRow } from '@memberjunction/work-queue-base';
 import { DATABASE_DRIVER_CLASS } from '../../constants';
-import type { TransportRow } from '../../topology/rows';
 import { BaseTransportDriverFactory } from '../BaseTransportDriverFactory';
 import type { TransportDriverDeps } from '../TransportDriverDeps';
 import { DatabaseTransportDriver } from './DatabaseTransportDriver';
@@ -5566,12 +6073,12 @@ export class MJWorkLogger implements WorkLogger {
 }
 ```
 
-- [ ] **Step 7: Write `src/entities/validation.ts`**
+- [ ] **Step 7: Write `packages/WorkQueue/base/src/entities/validation.ts`**
 
 ```typescript
-import { ParseSubscriptionFilter, WorkQueueConfigurationError } from '@memberjunction/work-queue-core';
+import { ParseSubscriptionFilter, WORK_QUEUE_FILTER_SUPPORT, WorkQueueConfigurationError } from '@memberjunction/work-queue-core';
 import type { WorkJson } from '@memberjunction/work-queue-core';
-import { IsWorkJson } from '../transports/database/rowMapping';
+import { IsWorkJson } from '../json';
 import type { SubscriptionRow, TopicRow, TransportRow } from '../topology/rows';
 
 export interface FieldIssue {
@@ -5624,7 +6131,9 @@ export function ValidateSubscriptionFields(row: SubscriptionRow): FieldIssue[] {
         issues.push({ Field: 'HandlerKey', Message: 'MJWorker subscriptions require a HandlerKey', Value: row.HandlerKey });
     }
     try {
-        ParseSubscriptionFilter(row.Filter);
+        // Structural check only: the whole queue-wide subset (03 §4.1). ValidateTopologyRows re-parses with the
+        // target transport's FilterSupport, so a filter the broker cannot express is caught there, not here.
+        ParseSubscriptionFilter(row.Filter, WORK_QUEUE_FILTER_SUPPORT);
     } catch (error) {
         issues.push({ Field: 'Filter', Message: error instanceof Error ? error.message : String(error), Value: row.Filter });
     }
@@ -5671,8 +6180,8 @@ import { BaseEntity, ValidationErrorInfo, ValidationErrorType } from '@memberjun
 import type { ValidationResult } from '@memberjunction/core';
 import { MJWorkQueueSubscriptionEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
+import { ValidateSubscriptionFields } from '@memberjunction/work-queue-base';
 import { WorkQueueEntityNames } from '../constants';
-import { ValidateSubscriptionFields } from './validation';
 
 @RegisterClass(BaseEntity, WorkQueueEntityNames.Subscriptions)
 export class MJWorkQueueSubscriptionEntityServer extends MJWorkQueueSubscriptionEntity {
@@ -5695,8 +6204,8 @@ import { BaseEntity, ValidationErrorInfo, ValidationErrorType } from '@memberjun
 import type { ValidationResult } from '@memberjunction/core';
 import { MJWorkQueueTopicEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
+import { ValidateTopicFields } from '@memberjunction/work-queue-base';
 import { WorkQueueEntityNames } from '../constants';
-import { ValidateTopicFields } from './validation';
 
 @RegisterClass(BaseEntity, WorkQueueEntityNames.Topics)
 export class MJWorkQueueTopicEntityServer extends MJWorkQueueTopicEntity {
@@ -5719,8 +6228,8 @@ import { BaseEntity, ValidationErrorInfo, ValidationErrorType } from '@memberjun
 import type { ValidationResult } from '@memberjunction/core';
 import { MJWorkQueueTransportEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
+import { ValidateTransportFields } from '@memberjunction/work-queue-base';
 import { WorkQueueEntityNames } from '../constants';
-import { ValidateTransportFields } from './validation';
 
 @RegisterClass(BaseEntity, WorkQueueEntityNames.Transports)
 export class MJWorkQueueTransportEntityServer extends MJWorkQueueTransportEntity {
@@ -5738,25 +6247,142 @@ export class MJWorkQueueTransportEntityServer extends MJWorkQueueTransportEntity
 
 If the build reports that a generated entity is not assignable to `TransportRow`/`TopicRow`/`SubscriptionRow` (for example a status union CodeGen emitted differently), align the row interface with the generated property type — never cast.
 
+- [ ] **Step 8b: Write the driver-owned state guards**
+
+Messages, Deliveries, Partition States and Deduplications are written **only** by guarded driver SQL (03 §6.8). Task 1
+already removed their API mutations; these subclasses close the in-process door and, crucially, say why.
+
+**The failure mode they prevent.** MJ's update procedure writes *every* column from the entity in memory, so a
+`Save()` from a snapshot loaded minutes ago restores that snapshot's `LeaseToken`, `AttemptCount` and
+`CancelRequestedAt` over a newer claim — erasing another worker's lease, resurrecting a consumed attempt, or clearing
+a cancel an operator just requested. It is the "load, check `Status`, `Save()`" pattern that reads like a
+compare-and-swap and is not one. Settles are single guarded statements instead (03 §7), so a stale writer changes zero
+rows and is told it lost the lease.
+
+`src/entities/DriverOwnedEntityServers.ts`:
+
+```typescript
+import { BaseEntity, BaseEntityResult } from '@memberjunction/core';
+import type { EntityDeleteOptions, EntitySaveOptions } from '@memberjunction/core';
+import {
+    MJWorkQueueDeduplicationEntity, MJWorkQueueDeliveryEntity, MJWorkQueueMessageEntity, MJWorkQueuePartitionStateEntity,
+} from '@memberjunction/core-entities';
+import { RegisterClass } from '@memberjunction/global';
+import { WorkQueueEntityNames } from '../constants';
+
+export const DRIVER_OWNED_STATE_MESSAGE =
+    'work-queue delivery state is managed by the transport driver; use the operator API (Replay / Discard / SkipSequence)';
+
+/** Records the refusal on the entity's result history so callers see it through LatestResult.CompleteMessage. */
+function RefuseDriverOwnedWrite(entity: BaseEntity, type: 'create' | 'update' | 'delete'): boolean {
+    const result = new BaseEntityResult();
+    result.StartedAt = new Date();
+    result.Success = false;
+    result.Type = type;
+    result.Message = DRIVER_OWNED_STATE_MESSAGE;
+    result.EndedAt = new Date();
+    entity.RegisterResultHistoryEntry(result);
+    return false;
+}
+
+@RegisterClass(BaseEntity, WorkQueueEntityNames.Deliveries)
+export class MJWorkQueueDeliveryEntityServer extends MJWorkQueueDeliveryEntity {
+    public override async Save(_options?: EntitySaveOptions): Promise<boolean> {
+        return RefuseDriverOwnedWrite(this, this.IsSaved ? 'update' : 'create');
+    }
+
+    public override async Delete(_options?: EntityDeleteOptions): Promise<boolean> {
+        return RefuseDriverOwnedWrite(this, 'delete');
+    }
+}
+
+@RegisterClass(BaseEntity, WorkQueueEntityNames.Messages)
+export class MJWorkQueueMessageEntityServer extends MJWorkQueueMessageEntity {
+    public override async Save(_options?: EntitySaveOptions): Promise<boolean> {
+        return RefuseDriverOwnedWrite(this, this.IsSaved ? 'update' : 'create');
+    }
+
+    public override async Delete(_options?: EntityDeleteOptions): Promise<boolean> {
+        return RefuseDriverOwnedWrite(this, 'delete');
+    }
+}
+
+@RegisterClass(BaseEntity, WorkQueueEntityNames.PartitionStates)
+export class MJWorkQueuePartitionStateEntityServer extends MJWorkQueuePartitionStateEntity {
+    public override async Save(_options?: EntitySaveOptions): Promise<boolean> {
+        return RefuseDriverOwnedWrite(this, this.IsSaved ? 'update' : 'create');
+    }
+
+    public override async Delete(_options?: EntityDeleteOptions): Promise<boolean> {
+        return RefuseDriverOwnedWrite(this, 'delete');
+    }
+}
+
+@RegisterClass(BaseEntity, WorkQueueEntityNames.Deduplications)
+export class MJWorkQueueDeduplicationEntityServer extends MJWorkQueueDeduplicationEntity {
+    public override async Save(_options?: EntitySaveOptions): Promise<boolean> {
+        return RefuseDriverOwnedWrite(this, this.IsSaved ? 'update' : 'create');
+    }
+
+    public override async Delete(_options?: EntityDeleteOptions): Promise<boolean> {
+        return RefuseDriverOwnedWrite(this, 'delete');
+    }
+}
+```
+
+Add to `packages/WorkQueue/engine/src/__tests__/entityServers.test.ts` (the suite written in Step 1b):
+
+```typescript
+describe('driver-owned state guards', () => {
+    it('refuses Save and Delete and reports why', async () => {
+        const delivery = new MJWorkQueueDeliveryEntityServer();
+        expect(await delivery.Save()).toBe(false);
+        expect(delivery.LatestResult?.Message).toBe(DRIVER_OWNED_STATE_MESSAGE);
+        expect(await delivery.Delete()).toBe(false);
+
+        for (const entity of [new MJWorkQueueMessageEntityServer(), new MJWorkQueuePartitionStateEntityServer(),
+                              new MJWorkQueueDeduplicationEntityServer()]) {
+            expect(await entity.Save()).toBe(false);
+        }
+    });
+});
+```
+
+If instantiating a generated entity directly needs metadata the test environment lacks, construct them through the
+fake provider already used by `entityServers.test.ts` rather than loosening the guard.
+
 - [ ] **Step 9: Export the new modules**
 
-Append to `packages/WorkQueue/engine/src/index.ts`:
+Append to `packages/WorkQueue/base/src/index.ts`:
 
 ```typescript
 export * from './topology/rows';
+export * from './entities/validation';
+export * from './testing/rowFixtures';
+```
+
+Append to `packages/WorkQueue/engine/src/index.ts` (the row types and validators are re-exported so server-side
+consumers — plans 06–08 — need only one import):
+
+```typescript
+export { ParseJsonObject, ValidateSubscriptionFields, ValidateTopicFields, ValidateTransportFields } from '@memberjunction/work-queue-base';
+export type { FieldIssue, SubscriptionRow, TopicRow, TransportRow } from '@memberjunction/work-queue-base';
 export * from './transports/BaseTransportDriverFactory';
 export * from './transports/database/DatabaseTransportDriverFactory';
 export * from './logging/MJWorkLogger';
-export * from './entities/validation';
 export * from './entities/WorkQueueTransportEntityServer';
 export * from './entities/WorkQueueTopicEntityServer';
 export * from './entities/WorkQueueSubscriptionEntityServer';
+export * from './entities/DriverOwnedEntityServers';
 ```
 
 - [ ] **Step 10: Run the tests and build**
 
+Run: `cd packages/WorkQueue/base && pnpm test && pnpm run build`
+Expected: PASS — dependency guard (2) and entityValidation (12); builds.
+
 Run: `cd packages/WorkQueue/engine && pnpm test`
-Expected: PASS — previous suites plus entityValidation (11) and DatabaseTransportDriverFactory (3).
+Expected: PASS — previous suites plus DatabaseTransportDriverFactory (3) and the entity-server guards.
 
 Run: `cd packages/WorkQueue/engine && pnpm run build`
 Expected: builds; the three entity subclasses compile against the generated classes, which confirms the row interfaces match.
@@ -5764,27 +6390,30 @@ Expected: builds; the three entity subclasses compile against the generated clas
 - [ ] **Step 11: Commit**
 
 ```bash
-git add packages/WorkQueue/engine/src
-git commit -m "feat(work-queue-engine): driver factories, logger and topology entity validation"
+git add packages/WorkQueue/base/src packages/WorkQueue/engine/src
+git commit -m "feat(work-queue): topology rows and field validation in the base tier; driver factories and entity servers in the engine"
 ```
 
 ---
 
-### Task 11: Topology bindings, validation, manifest and `WorkQueuePublishCoordinator`
+### Task 11: Topology bindings and validation (base); manifest and `WorkQueuePublishCoordinator` (engine)
 
 **Files:**
-- Create: `packages/WorkQueue/engine/src/topology/bindings.ts`, `src/topology/validateTopology.ts`, `src/topology/manifest.ts`
-- Create: `packages/WorkQueue/engine/src/publish/WorkQueuePublishCoordinator.ts`
-- Modify: `packages/WorkQueue/engine/src/index.ts`
-- Test: `packages/WorkQueue/engine/src/__tests__/topology.test.ts`, `src/__tests__/WorkQueuePublishCoordinator.test.ts`
+- Create (**base**): `packages/WorkQueue/base/src/topology/bindings.ts`, `src/topology/validateTopology.ts`
+- Modify (**base**): `packages/WorkQueue/base/src/index.ts`
+- Test (**base**): `packages/WorkQueue/base/src/__tests__/topology.test.ts`
+- Create (**engine**): `packages/WorkQueue/engine/src/topology/manifest.ts`, `src/publish/WorkQueuePublishCoordinator.ts`
+- Modify (**engine**): `packages/WorkQueue/engine/src/index.ts`
+- Test (**engine**): `packages/WorkQueue/engine/src/__tests__/manifest.test.ts`, `src/__tests__/WorkQueuePublishCoordinator.test.ts`
 
 **Interfaces:**
-- Consumes: rows and `ParseJsonObject` (Task 10); `DeduplicationLedger`, `RunInWorkQueueTransaction`, `RetryTransient` (Task 7); `DatabaseTransportPublishOptions`, `DATABASE_TRANSPORT_CAPABILITIES`, `Accepted`/`Duplicate`/`Rejected` (Task 9); `DATABASE_DRIVER_CLASS` (Task 2); from core: `TopicBinding`, `SubscriptionBinding`, `SubscriptionPolicy`, `TransportCapabilities`, `BindingValidationIssue`, `TopologyManifest`, `ManifestTopic`, `ManifestSubscription`, `BindingImport`, `PublishRequest`, `PublishResult`, `PublishError`, `WorkMessage`, `WorkJson`, `WorkLogger`, `ITransportDriver`, `ParseSubscriptionFilter`, `SubscriptionUnsupportedReason`, `ValidatePublishRequest`, `BuildWorkMessage`, `WorkQueueConfigurationError`.
-- Produces:
+- Consumes: rows and `ParseJsonObject` (Task 10, base); `DeduplicationLedger`, `RunInWorkQueueTransaction`, `RetryTransient` (Task 7); `DatabaseTransportPublishOptions`, `DATABASE_TRANSPORT_CAPABILITIES`, `Accepted`/`Duplicate`/`Rejected` (Task 9); `DATABASE_DRIVER_CLASS` (Task 2, base); from core: `TopicBinding`, `SubscriptionBinding`, `SubscriptionPolicy`, `TransportCapabilities`, `FilterSupport`, `BindingValidationIssue`, `TopologyManifest`, `ManifestTopic`, `ManifestSubscription`, `BindingImport`, `PublishRequest`, `PublishResult`, `PublishError`, `WorkMessage`, `WorkJson`, `WorkLogger`, `ITransportDriver`, `ParseSubscriptionFilter`, `WORK_QUEUE_FILTER_SUPPORT`, `SubscriptionUnsupportedReason`, `ValidatePublishRequest`, `BuildWorkMessage`, `WorkQueueConfigurationError`.
+- Produces (base — `@memberjunction/work-queue-base`):
   - `interface TopologySnapshot { Transports: TransportRow[]; Topics: TopicRow[]; Subscriptions: SubscriptionRow[] }`, `interface ResolvedTopic { Topic: TopicRow; Transport: TransportRow; Binding: TopicBinding; Subscriptions: SubscriptionBinding[] }`
   - `FindByName<T extends { Name: string }>(rows: T[], name: string): T | undefined`, `FindByID<T extends { ID: string }>(rows: T[], id: string): T | undefined`
-  - `ToTopicBinding(topic: TopicRow): TopicBinding`, `ToSubscriptionPolicy(subscription: SubscriptionRow, topic: TopicRow): SubscriptionPolicy`, `ToSubscriptionBinding(subscription: SubscriptionRow, topic: TopicRow): SubscriptionBinding`, `IsStagedSubscription(subscription: SubscriptionRow, transport: TransportRow): boolean`, `ResolveTopic(snapshot: TopologySnapshot, topicName: string): ResolvedTopic | undefined`
+  - `ToTopicBinding(topic: TopicRow): TopicBinding`, `ToSubscriptionPolicy(subscription: SubscriptionRow, topic: TopicRow): SubscriptionPolicy`, `ToSubscriptionBinding(subscription: SubscriptionRow, topic: TopicRow, support?: FilterSupport): SubscriptionBinding`, `IsStagedSubscription(subscription: SubscriptionRow, transport: TransportRow): boolean`, `ResolveTopic(snapshot: TopologySnapshot, topicName: string): ResolvedTopic | undefined`
   - `KNOWN_HOST_CEILING_SECONDS: Record<HostType, number | null>`, `ValidateTopologyRows(snapshot: TopologySnapshot, capabilities: Map<string, TransportCapabilities | Error>): BindingValidationIssue[]`
+- Produces (engine):
   - `BuildTopologyManifest(snapshot: TopologySnapshot, transportName: string, generatedAt: Date): TopologyManifest`, `interface BindingUpdate { ID: string; Name: string; BindingConfig: string }`, `interface BindingImportPlan { TopicUpdates: BindingUpdate[]; SubscriptionUpdates: BindingUpdate[]; Issues: BindingValidationIssue[] }`, `PlanBindingImport(snapshot: TopologySnapshot, bindings: BindingImport): BindingImportPlan`
   - `type LedgerOperations = Pick<DeduplicationLedger, 'Reserve' | 'Confirm' | 'Release'>`, `interface PublishCoordinatorDeps`, `interface CoordinatorPublishOptions { UserID: string | null; External: boolean; CallerExecutor: WorkQueueTransactionalExecutor | null }`, `class WorkQueuePublishCoordinator { constructor(deps: PublishCoordinatorDeps); Publish<TPayload extends WorkJson>(topicName: string, requests: PublishRequest<TPayload>[], options: CoordinatorPublishOptions): Promise<PublishResult[]> }`
 
@@ -5801,6 +6430,7 @@ Topology validation (per active topic and each non-disabled subscription):
 | Database topic with `IsFifo = true` | Warning |
 | `SubscriptionUnsupportedReason(binding, capabilities, staged)` returns a reason | Error |
 | Filter or binding JSON does not parse | Error |
+| Filter uses an operator or structure the topic's transport cannot express (re-parsed with `capabilities.Filters`), naming the field and operator | Error |
 | `MaxProcessingSeconds` above the host's known ceiling (`External`: 900 s) | Warning |
 | `SequenceGapAlertSeconds` set on a `PublishOrder` topic | Warning |
 
@@ -5808,25 +6438,37 @@ Publish orchestration (03 §2.1, §1.1): topic lookup → topic rejections (`Top
 
 - [ ] **Step 1: Write the failing tests**
 
-`packages/WorkQueue/engine/src/__tests__/topology.test.ts`:
+`packages/WorkQueue/base/src/__tests__/topology.test.ts` (the base package has no drivers, so it declares both
+capability fixtures locally — the Database values must stay in step with `DATABASE_TRANSPORT_CAPABILITIES`, Task 9):
 
 ```typescript
 import { describe, it, expect } from 'vitest';
+import { WORK_QUEUE_FILTER_SUPPORT } from '@memberjunction/work-queue-core';
 import type { TransportCapabilities } from '@memberjunction/work-queue-core';
 import {
     FindByName, IsStagedSubscription, ResolveTopic, ToSubscriptionBinding, ToTopicBinding,
 } from '../topology/bindings';
 import type { TopologySnapshot } from '../topology/bindings';
 import { ValidateTopologyRows } from '../topology/validateTopology';
-import { BuildTopologyManifest, PlanBindingImport } from '../topology/manifest';
-import { DATABASE_TRANSPORT_CAPABILITIES } from '../transports/database/databaseCapabilities';
-import { SUBSCRIPTION_ROW, TOPIC_ROW, TRANSPORT_ROW } from './fakes';
+import {
+    SUBSCRIPTION_ROW_FIXTURE as SUBSCRIPTION_ROW,
+    TOPIC_ROW_FIXTURE as TOPIC_ROW,
+    TRANSPORT_ROW_FIXTURE as TRANSPORT_ROW,
+} from '../testing/rowFixtures';
 
+const DATABASE_CAPABILITIES: TransportCapabilities = {
+    DetectsMessageIDDuplicates: true, PersistsProgress: true, SupportsOrdered: true, SupportsExternalHosts: false,
+    CancelPending: true, CancelInFlight: true, ListPartitions: true, PeekDeadLetters: 'Full',
+    ReplaySingleDeadLetter: true, CompletedCounts: true, MaxRetryDelaySeconds: 2147483647,
+    Filters: WORK_QUEUE_FILTER_SUPPORT,
+};
 const AWS_TRANSPORT = { ...TRANSPORT_ROW, ID: 'A0000000-0000-0000-0000-000000000001', Name: 'AWS-dev', DriverClass: 'AWS', Configuration: '{"Region":"us-east-1"}' };
 const AWS_CAPABILITIES: TransportCapabilities = {
-    ...DATABASE_TRANSPORT_CAPABILITIES, SupportsOrdered: false, SupportsExternalHosts: true, CancelPending: false,
+    ...DATABASE_CAPABILITIES, SupportsOrdered: false, SupportsExternalHosts: true, CancelPending: false, CancelInFlight: false,
     ListPartitions: false, PeekDeadLetters: 'BestEffort', CompletedCounts: false, PersistsProgress: false,
     DetectsMessageIDDuplicates: false, MaxRetryDelaySeconds: 43200,
+    // A cloud transport that cannot express prefix matching, so `startswith` must be rejected at save time.
+    Filters: { ...WORK_QUEUE_FILTER_SUPPORT, Operators: ['eq', 'neq', 'isnull', 'isnotnull'] },
 };
 
 function Snapshot(overrides: Partial<TopologySnapshot> = {}): TopologySnapshot {
@@ -5860,7 +6502,7 @@ describe('bindings', () => {
 
 describe('ValidateTopologyRows', () => {
     const capabilities = new Map<string, TransportCapabilities | Error>([
-        [TRANSPORT_ROW.ID.toLowerCase(), DATABASE_TRANSPORT_CAPABILITIES],
+        [TRANSPORT_ROW.ID.toLowerCase(), DATABASE_CAPABILITIES],
         [AWS_TRANSPORT.ID.toLowerCase(), AWS_CAPABILITIES],
     ]);
 
@@ -5894,7 +6536,34 @@ describe('ValidateTopologyRows', () => {
         const badFilter = { ...SUBSCRIPTION_ROW, Filter: '{"eventType":"click"}' };
         expect(ValidateTopologyRows(Snapshot({ Subscriptions: [badFilter] }), capabilities)[0].Subject).toBe('venue-import');
     });
+
+    it('rejects a filter the topic transport cannot express, naming field and operator', () => {
+        const startswith = '{"logic":"and","filters":[{"field":"tenant","operator":"startswith","value":"acme-"}]}';
+        // Valid on Database (full subset)…
+        expect(ValidateTopologyRows(Snapshot({ Subscriptions: [{ ...SUBSCRIPTION_ROW, Filter: startswith }] }), capabilities)).toEqual([]);
+        // …and an Error on the cloud transport whose FilterSupport omits `startswith`.
+        const topic = { ...TOPIC_ROW, TransportID: AWS_TRANSPORT.ID, IsFifo: true };
+        const issue = ValidateTopologyRows(Snapshot({ Topics: [topic], Subscriptions: [{ ...SUBSCRIPTION_ROW, Filter: startswith }] }), capabilities)[0];
+        expect(issue).toMatchObject({ Severity: 'Error', Subject: 'venue-import' });
+        expect(issue.Message).toContain('startswith');
+        expect(issue.Message).toContain('tenant');
+    });
 });
+```
+
+`packages/WorkQueue/engine/src/__tests__/manifest.test.ts`:
+
+```typescript
+import { describe, it, expect } from 'vitest';
+import type { TopologySnapshot } from '@memberjunction/work-queue-base';
+import { BuildTopologyManifest, PlanBindingImport } from '../topology/manifest';
+import { SUBSCRIPTION_ROW, TOPIC_ROW, TRANSPORT_ROW } from './fakes';
+
+const AWS_TRANSPORT = { ...TRANSPORT_ROW, ID: 'A0000000-0000-0000-0000-000000000001', Name: 'AWS-dev', DriverClass: 'AWS', Configuration: '{"Region":"us-east-1"}' };
+
+function Snapshot(overrides: Partial<TopologySnapshot> = {}): TopologySnapshot {
+    return { Transports: [TRANSPORT_ROW, AWS_TRANSPORT], Topics: [TOPIC_ROW], Subscriptions: [SUBSCRIPTION_ROW], ...overrides };
+}
 
 describe('manifest', () => {
     it('exports active topics and non-disabled subscriptions of one transport, sorted by name', () => {
@@ -5936,8 +6605,8 @@ import { WorkQueuePublishCoordinator } from '../publish/WorkQueuePublishCoordina
 import type { LedgerOperations, PublishCoordinatorDeps } from '../publish/WorkQueuePublishCoordinator';
 import type { LedgerReservation } from '../dedup/DeduplicationLedger';
 import { Accepted, Rejected } from '../publish/publishResults';
-import { ResolveTopic } from '../topology/bindings';
-import type { TopicRow, TransportRow } from '../topology/rows';
+import { ResolveTopic } from '@memberjunction/work-queue-base';
+import type { TopicRow, TransportRow } from '@memberjunction/work-queue-base';
 import { DATABASE_TRANSPORT_CAPABILITIES } from '../transports/database/databaseCapabilities';
 import { IsDatabaseTransportPublishOptions } from '../transports/database/DatabaseTransportDriver';
 import { RecordingExecutor, RecordingLogger, SUBSCRIPTION_ROW, TOPIC_ROW, TRANSPORT_ROW } from './fakes';
@@ -6100,14 +6769,14 @@ describe('WorkQueuePublishCoordinator on a cloud transport', () => {
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
-Run: `cd packages/WorkQueue/engine && pnpm test topology WorkQueuePublishCoordinator`
-Expected: FAIL — unresolved imports under `../topology/` and `../publish/WorkQueuePublishCoordinator`.
+Run: `cd packages/WorkQueue/base && pnpm test topology` and `cd packages/WorkQueue/engine && pnpm test manifest WorkQueuePublishCoordinator`
+Expected: FAIL — unresolved imports under `../topology/` (base) and `../topology/manifest` / `../publish/WorkQueuePublishCoordinator` (engine).
 
-- [ ] **Step 3: Write `src/topology/bindings.ts`**
+- [ ] **Step 3: Write `packages/WorkQueue/base/src/topology/bindings.ts`**
 
 ```typescript
-import { ParseSubscriptionFilter, WorkQueueConfigurationError } from '@memberjunction/work-queue-core';
-import type { SubscriptionBinding, SubscriptionPolicy, TopicBinding } from '@memberjunction/work-queue-core';
+import { ParseSubscriptionFilter, WORK_QUEUE_FILTER_SUPPORT, WorkQueueConfigurationError } from '@memberjunction/work-queue-core';
+import type { FilterSupport, SubscriptionBinding, SubscriptionPolicy, TopicBinding } from '@memberjunction/work-queue-core';
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { DATABASE_DRIVER_CLASS } from '../constants';
 import { ParseJsonObject } from '../entities/validation';
@@ -6167,10 +6836,15 @@ export function ToSubscriptionPolicy(subscription: SubscriptionRow, topic: Topic
     return policy;
 }
 
-export function ToSubscriptionBinding(subscription: SubscriptionRow, topic: TopicRow): SubscriptionBinding {
+/**
+ * `support` defaults to the queue-wide subset (03 §4.1) so callers that only need the shape need not know the
+ * transport. `ValidateTopologyRows` passes the transport's own `FilterSupport` to catch filters a broker cannot express.
+ */
+export function ToSubscriptionBinding(subscription: SubscriptionRow, topic: TopicRow,
+                                      support: FilterSupport = WORK_QUEUE_FILTER_SUPPORT): SubscriptionBinding {
     return {
         Policy: ToSubscriptionPolicy(subscription, topic),
-        Filter: ParseSubscriptionFilter(subscription.Filter),
+        Filter: ParseSubscriptionFilter(subscription.Filter, support),
         HostType: subscription.HostType,
         Config: {
             ...ParseJsonObject(subscription.BindingConfig, `Subscription ${subscription.Name} BindingConfig`),
@@ -6204,7 +6878,7 @@ export function ResolveTopic(snapshot: TopologySnapshot, topicName: string): Res
 }
 ```
 
-- [ ] **Step 4: Write `src/topology/validateTopology.ts`**
+- [ ] **Step 4: Write `packages/WorkQueue/base/src/topology/validateTopology.ts`**
 
 ```typescript
 import { SubscriptionUnsupportedReason } from '@memberjunction/work-queue-core';
@@ -6273,7 +6947,9 @@ function ValidateSubscription(topic: TopicRow, transport: TransportRow, subscrip
     const issues: BindingValidationIssue[] = [];
     let reason: string | null;
     try {
-        reason = SubscriptionUnsupportedReason(ToSubscriptionBinding(subscription, topic), caps, IsStagedSubscription(subscription, transport));
+        // Re-parsing with the transport's own FilterSupport is what rejects `contains`, cross-field OR and the rest
+        // on a cloud topic: the thrown message names the offending field and operator (03 §4.1).
+        reason = SubscriptionUnsupportedReason(ToSubscriptionBinding(subscription, topic, caps.Filters), caps, IsStagedSubscription(subscription, transport));
     } catch (error) {
         return [Issue('Error', subscription.Name, error instanceof Error ? error.message : String(error))];
     }
@@ -6295,16 +6971,14 @@ function Issue(severity: 'Error' | 'Warning', subject: string, message: string):
 }
 ```
 
-- [ ] **Step 5: Write `src/topology/manifest.ts`**
+- [ ] **Step 5: Write `packages/WorkQueue/engine/src/topology/manifest.ts`**
 
 ```typescript
-import { ParseSubscriptionFilter, WorkQueueConfigurationError } from '@memberjunction/work-queue-core';
+import { ParseSubscriptionFilter, WORK_QUEUE_FILTER_SUPPORT, WorkQueueConfigurationError } from '@memberjunction/work-queue-core';
 import type { BindingImport, BindingValidationIssue, ManifestSubscription, TopologyManifest } from '@memberjunction/work-queue-core';
 import { UUIDsEqual } from '@memberjunction/global';
-import { ParseJsonObject } from '../entities/validation';
-import { FindByName, IsStagedSubscription, ToSubscriptionPolicy } from './bindings';
-import type { TopologySnapshot } from './bindings';
-import type { SubscriptionRow, TopicRow, TransportRow } from './rows';
+import { FindByName, IsStagedSubscription, ParseJsonObject, ToSubscriptionPolicy } from '@memberjunction/work-queue-base';
+import type { SubscriptionRow, TopicRow, TopologySnapshot, TransportRow } from '@memberjunction/work-queue-base';
 
 export interface BindingUpdate {
     ID: string;
@@ -6352,7 +7026,7 @@ export function BuildTopologyManifest(snapshot: TopologySnapshot, transportName:
 function ToManifestSubscription(subscription: SubscriptionRow, topic: TopicRow, transport: TransportRow): ManifestSubscription {
     return {
         Name: subscription.Name,
-        Filter: ParseSubscriptionFilter(subscription.Filter),
+        Filter: ParseSubscriptionFilter(subscription.Filter, WORK_QUEUE_FILTER_SUPPORT),
         Policy: ToSubscriptionPolicy(subscription, topic),
         HostType: subscription.HostType,
         StagedToDatabase: IsStagedSubscription(subscription, transport),
@@ -6398,7 +7072,7 @@ import { DATABASE_DRIVER_CLASS } from '../constants';
 import type { DeduplicationLedger } from '../dedup/DeduplicationLedger';
 import { ErrorText } from '../sql/sqlExecution';
 import type { WorkQueueExecutorSource, WorkQueueSqlExecutor, WorkQueueTransactionalExecutor } from '../sql/WorkQueueSqlExecutor';
-import type { ResolvedTopic } from '../topology/bindings';
+import type { ResolvedTopic } from '@memberjunction/work-queue-base';
 import { RetryTransient, RunInWorkQueueTransaction } from '../transaction/RunInWorkQueueTransaction';
 import type { DatabaseTransportPublishOptions } from '../transports/database/DatabaseTransportDriver';
 import { Duplicate, Rejected } from './publishResults';
@@ -6612,19 +7286,33 @@ function TopicRejection(resolved: ResolvedTopic, external: boolean): PublishErro
 
 - [ ] **Step 7: Export the new modules**
 
-Append to `packages/WorkQueue/engine/src/index.ts`:
+Append to `packages/WorkQueue/base/src/index.ts`:
 
 ```typescript
 export * from './topology/bindings';
 export * from './topology/validateTopology';
+```
+
+Append to `packages/WorkQueue/engine/src/index.ts` (binding builders and topology validation are re-exported so
+plans 06–08 keep importing them from the engine):
+
+```typescript
+export {
+    FindByID, FindByName, IsStagedSubscription, KNOWN_HOST_CEILING_SECONDS, ResolveTopic,
+    ToSubscriptionBinding, ToSubscriptionPolicy, ToTopicBinding, ValidateTopologyRows,
+} from '@memberjunction/work-queue-base';
+export type { ResolvedTopic, TopologySnapshot } from '@memberjunction/work-queue-base';
 export * from './topology/manifest';
 export * from './publish/WorkQueuePublishCoordinator';
 ```
 
 - [ ] **Step 8: Run the tests and build**
 
+Run: `cd packages/WorkQueue/base && pnpm test && pnpm run build`
+Expected: PASS — previous base suites plus topology (12, including the per-transport filter-support case); builds.
+
 Run: `cd packages/WorkQueue/engine && pnpm test`
-Expected: PASS — previous suites plus topology (11) and WorkQueuePublishCoordinator (10).
+Expected: PASS — previous suites plus manifest (3) and WorkQueuePublishCoordinator (10).
 
 Run: `cd packages/WorkQueue/engine && pnpm run build`
 Expected: builds.
@@ -6632,8 +7320,8 @@ Expected: builds.
 - [ ] **Step 9: Commit**
 
 ```bash
-git add packages/WorkQueue/engine/src
-git commit -m "feat(work-queue-engine): topology bindings, validation, manifest and publish coordinator"
+git add packages/WorkQueue/base/src packages/WorkQueue/engine/src
+git commit -m "feat(work-queue): topology bindings and validation in the base tier; manifest and publish coordinator in the engine"
 ```
 
 ---
@@ -6884,21 +7572,32 @@ git commit -m "feat(work-queue-engine): stage cloud deliveries into Database row
 
 ---
 
-### Task 13: `WorkQueueEngine`
+### Task 13: `WorkQueueEngineBase` (base) and the `WorkQueueEngine` facade (engine)
 
 **Files:**
-- Create: `packages/WorkQueue/engine/src/engine/driverResolution.ts`, `src/engine/PublishListenerSet.ts`
-- Create: `packages/WorkQueue/engine/src/WorkQueueEngine.ts`
-- Modify: `packages/WorkQueue/engine/src/index.ts`
-- Test: `packages/WorkQueue/engine/src/__tests__/driverResolution.test.ts`, `src/__tests__/PublishListenerSet.test.ts`
+- Create (**base**): `packages/WorkQueue/base/src/WorkQueueEngineBase.ts`
+- Modify (**base**): `packages/WorkQueue/base/src/index.ts`
+- Test (**base**): `packages/WorkQueue/base/src/__tests__/WorkQueueEngineBase.test.ts`
+- Create (**engine**): `packages/WorkQueue/engine/src/engine/driverResolution.ts`, `src/engine/PublishListenerSet.ts`
+- Create (**engine**): `packages/WorkQueue/engine/src/WorkQueueEngine.ts`
+- Modify (**engine**): `packages/WorkQueue/engine/src/index.ts`
+- Test (**engine**): `packages/WorkQueue/engine/src/__tests__/driverResolution.test.ts`, `src/__tests__/PublishListenerSet.test.ts`
 
 **Interfaces:**
-- Consumes: everything from Tasks 2–12; generated `MJWorkQueueTransportEntity`, `MJWorkQueueTopicEntity`, `MJWorkQueueSubscriptionEntity`; `BaseEngine`, `BaseEnginePropertyConfig`, `IMetadataProvider`, `UserInfo` from `@memberjunction/core`; `MJGlobal`, `UUIDsEqual` from `@memberjunction/global`; from core: `IWorkPublisher`, `ITransportDriver`, `ITransportOperator`, `TopicBinding`, `SubscriptionBinding`, `BindingValidationIssue`, `TransportCapabilities`, `TopologyManifest`, `BindingImport`, `PublishRequest`, `PublishResult`, `WorkJson`, `WorkQueueConfigurationError`.
-- Produces:
+- Consumes: everything from Tasks 2–12; generated `MJWorkQueueTransportEntity`, `MJWorkQueueTopicEntity`, `MJWorkQueueSubscriptionEntity`; `BaseEngine`, `BaseEnginePropertyConfig`, `BaseSingleton`, `IMetadataProvider`, `UserInfo` from `@memberjunction/core` / `@memberjunction/global`; `MJGlobal`, `NormalizeUUID` from `@memberjunction/global`; from core: `IWorkPublisher`, `ITransportDriver`, `ITransportOperator`, `TopicBinding`, `SubscriptionBinding`, `SubscriptionPolicy`, `FilterSupport`, `SubscriptionFilter`, `BindingValidationIssue`, `TransportCapabilities`, `TopologyManifest`, `BindingImport`, `PublishRequest`, `PublishResult`, `WorkJson`, `WorkQueueConfigurationError`.
+- Produces (base — `@memberjunction/work-queue-base`):
+  - `class WorkQueueEngineBase extends BaseEngine<WorkQueueEngineBase>` (03 §11): `static Instance`, `Config(forceRefresh?, contextUser?, provider?)`, `Transports`, `Topics`, `Subscriptions`, `GetTopicByName`, `GetSubscriptionByName`, `SubscriptionsForTopic(topicID)`, `BuildTopicBinding(topic)`, `BuildSubscriptionBinding(subscription, support?)`, `BuildSubscriptionPolicy(subscription)`, `ParseFilter(subscription, support)`, `IsStagedToDatabase(subscription)`, `ValidateTopologyRows(capabilitiesByDriverClass: Record<string, TransportCapabilities>)`, plus `get Snapshot(): TopologySnapshot` for the server tier
+- Produces (engine):
   - `DriverCacheKey(transport: TransportRow): string`, `ResolveDriverFactory(driverClass: string): BaseTransportDriverFactory`
-  - `class PublishListenerSet { Add(listener: (topicName: string) => void): () => void; Notify(topicName: string): void; get Count(): number }`
+  - `class ListenerSet<TEvent> { constructor(label: string); Add(listener: (event: TEvent) => void): () => void; Notify(event: TEvent): void; get Count(): number }` and `class PublishListenerSet extends ListenerSet<string>` (the engine also holds a `ListenerSet<DeadLetteredEvent>` for `OnDeadLettered`)
   - `interface WorkQueuePublishOptions { ContextUser: UserInfo; Provider?: IMetadataProvider; External?: boolean }`
-  - `class WorkQueueEngine extends BaseEngine<WorkQueueEngine> implements IWorkPublisher` with exactly the 03 §11 surface: `static Instance`, `Config(forceRefresh?, contextUser?, provider?)`, `Transports`, `Topics`, `Subscriptions`, `GetTopicByName`, `GetSubscriptionByName`, `GetDriver(transportID)`, `BuildTopicBinding(topic)`, `BuildSubscriptionBinding(subscription)`, `IsStagedToDatabase(subscription)`, `GetOperator(subscription)`, `ValidateTopology()`, `PublishAs`, `Publish`, `ExportManifest(transportName)`, `ImportBindings(bindings, contextUser)`, plus `OnPublished(listener: (topicName: string) => void): () => void` (plan 06 host kick) and `GetDatabaseDriver(): Promise<DatabaseTransportDriver>` (plan 07 stager target)
+  - `class WorkQueueEngine extends BaseSingleton<WorkQueueEngine> implements IWorkPublisher` — a **facade** over `WorkQueueEngineBase.Instance` (composition, not inheritance, exactly like `AIEngine`/`AIEngineBase`), with the full 03 §11 surface: `static Instance`, `get Metadata(): WorkQueueEngineBase`, `Config(forceRefresh?, contextUser?, provider?)`, delegated `Transports`, `Topics`, `Subscriptions`, `GetTopicByName`, `GetSubscriptionByName`, `SubscriptionsForTopic`, `BuildTopicBinding`, `BuildSubscriptionBinding`, `IsStagedToDatabase`, `Loaded`, `ContextUser`, plus server-only `GetDriver(transportID)`, `GetDatabaseDriver()`, `GetOperator(subscription)`, `ValidateTopology()`, `PublishAs`, `Publish`, `ExportManifest(transportName)`, `ImportBindings(bindings, contextUser)`, `OnPublished(listener)`, `OnDeadLettered(listener)` and `GetBacklog(subscriptionName)`
+
+**Why a facade and not a subclass** (`packages/AI/BaseAIEngine/src/BaseAIEngine.ts` carries the same rationale):
+`BaseEngine<T>` is a singleton keyed on its own type, so a server subclass would give a *second* cache of the same
+three entities. The metadata tier is loaded once, in the base, and the server engine proxies it — which also lets
+Explorer and the operator dashboard load topology with no server-only dependency. **When you add a public member to
+`WorkQueueEngineBase`, add its one-line delegate to `WorkQueueEngine`**, or server call sites fail to compile.
 
 Engine rules: the engine requires a server-side provider that satisfies `WorkQueueExecutorSource` (`DatabaseProviderBase` does); a browser provider raises `WorkQueueConfigurationError`. Drivers are cached per transport and rebuilt when the transport's `DriverClass`, `Configuration`, `CredentialID` or `Status` change. `GetOperator` returns the Database operator for Database topics **and** staged subscriptions (03 §5.2), otherwise the transport driver's operator. `Publish` (two-argument) publishes as the engine's context user, which is the system user server-side (`BaseEngine.ContextUser`). `PublishAs` enlists in the caller's transaction when `options.Provider` satisfies `WorkQueueTransactionalExecutor`. `ImportBindings` saves each binding through the entity (so validation and cache invalidation run), refreshes the engine, and returns import issues plus `ValidateTopology()` issues.
 
@@ -6940,7 +7639,17 @@ describe('ResolveDriverFactory', () => {
 
 ```typescript
 import { describe, it, expect } from 'vitest';
-import { PublishListenerSet } from '../engine/PublishListenerSet';
+import { ListenerSet, PublishListenerSet } from '../engine/PublishListenerSet';
+
+describe('ListenerSet', () => {
+    it('carries typed events, so the engine can fan out dead-letter notifications', () => {
+        const set = new ListenerSet<{ DeliveryID: string; Reason: string }>('dead-letter');
+        const seen: string[] = [];
+        set.Add(event => seen.push(`${event.DeliveryID}:${event.Reason}`));
+        set.Notify({ DeliveryID: 'd1', Reason: 'MaxAttemptsExceeded' });
+        expect(seen).toEqual(['d1:MaxAttemptsExceeded']);
+    });
+});
 
 describe('PublishListenerSet', () => {
     it('notifies every listener and supports unsubscribe', () => {
@@ -6973,12 +7682,17 @@ describe('PublishListenerSet', () => {
 Run: `cd packages/WorkQueue/engine && pnpm test driverResolution PublishListenerSet`
 Expected: FAIL — unresolved imports under `../engine/`.
 
+The engine's own wiring of these two seams is covered in Step 6 below: `OnDeadLettered` receives what
+`TransportDriverDeps.NotifyDeadLettered` reports (explicit dead-letter settles and lease-expiry dead-letters, Task 9),
+and `GetBacklog` delegates to `DatabaseTransportOperator.GetBacklog` for Database and staged subscriptions while
+cloud-hosted ones answer `Supported: false`.
+
 - [ ] **Step 3: Write `src/engine/driverResolution.ts`**
 
 ```typescript
 import { MJGlobal } from '@memberjunction/global';
+import type { TransportRow } from '@memberjunction/work-queue-base';
 import { WorkQueueConfigurationError } from '@memberjunction/work-queue-core';
-import type { TransportRow } from '../topology/rows';
 import { BaseTransportDriverFactory } from '../transports/BaseTransportDriverFactory';
 
 /** Identity of everything that shapes a driver instance; a change rebuilds the cached driver. */
@@ -7010,23 +7724,25 @@ export function ResolveDriverFactory(driverClass: string): BaseTransportDriverFa
 ```typescript
 import { LogError } from '@memberjunction/core';
 
-/** In-process "something was published to topic X" listeners, used to wake local consumers immediately. */
-export class PublishListenerSet {
-    private readonly listeners = new Set<(topicName: string) => void>();
+/** In-process fan-out to listeners; one bad listener never breaks the others or the caller. */
+export class ListenerSet<TEvent> {
+    private readonly listeners = new Set<(event: TEvent) => void>();
 
-    public Add(listener: (topicName: string) => void): () => void {
+    constructor(private readonly label: string) {}
+
+    public Add(listener: (event: TEvent) => void): () => void {
         this.listeners.add(listener);
         return () => {
             this.listeners.delete(listener);
         };
     }
 
-    public Notify(topicName: string): void {
+    public Notify(event: TEvent): void {
         for (const listener of this.listeners) {
             try {
-                listener(topicName);
+                listener(event);
             } catch (error) {
-                LogError(`[WorkQueue] publish listener failed for '${topicName}': ${error instanceof Error ? error.message : String(error)}`);
+                LogError(`[WorkQueue] ${this.label} listener failed: ${error instanceof Error ? error.message : String(error)}`);
             }
         }
     }
@@ -7035,61 +7751,47 @@ export class PublishListenerSet {
         return this.listeners.size;
     }
 }
+
+/** "Something was published to topic X" listeners, used to wake local consumers immediately (plan 06 host kick). */
+export class PublishListenerSet extends ListenerSet<string> {
+    constructor() {
+        super('publish');
+    }
+}
 ```
 
-- [ ] **Step 5: Write `src/WorkQueueEngine.ts`**
+- [ ] **Step 4b: Write `packages/WorkQueue/base/src/WorkQueueEngineBase.ts`**
 
 ```typescript
-import { randomUUID } from 'node:crypto';
 import { BaseEngine } from '@memberjunction/core';
 import type { BaseEnginePropertyConfig, IMetadataProvider, UserInfo } from '@memberjunction/core';
 import type { MJWorkQueueSubscriptionEntity, MJWorkQueueTopicEntity, MJWorkQueueTransportEntity } from '@memberjunction/core-entities';
-import { WorkQueueConfigurationError } from '@memberjunction/work-queue-core';
+import { UUIDsEqual } from '@memberjunction/global';
+import { WORK_QUEUE_FILTER_SUPPORT, WorkQueueConfigurationError } from '@memberjunction/work-queue-core';
 import type {
-    BindingImport, BindingValidationIssue, ITransportDriver, ITransportOperator, IWorkPublisher, PublishRequest,
-    PublishResult, SubscriptionBinding, TopicBinding, TopologyManifest, TransportCapabilities, WorkJson,
+    BindingValidationIssue, FilterSupport, SubscriptionBinding, SubscriptionFilter, SubscriptionPolicy,
+    TopicBinding, TransportCapabilities,
 } from '@memberjunction/work-queue-core';
-import { NormalizeUUID } from '@memberjunction/global';
-import { DATABASE_DRIVER_CLASS, WorkQueueEntityNames } from './constants';
-import { DeduplicationLedger } from './dedup/DeduplicationLedger';
-import { DriverCacheKey, ResolveDriverFactory } from './engine/driverResolution';
-import { PublishListenerSet } from './engine/PublishListenerSet';
-import { MJWorkLogger } from './logging/MJWorkLogger';
-import { WorkQueuePublishCoordinator } from './publish/WorkQueuePublishCoordinator';
-import { IsWorkQueueExecutorSource, IsWorkQueueTransactionalExecutor } from './sql/WorkQueueSqlExecutor';
-import type { WorkQueueExecutorSource } from './sql/WorkQueueSqlExecutor';
-import { FindByID, FindByName, IsStagedSubscription, ResolveTopic, ToSubscriptionBinding, ToTopicBinding } from './topology/bindings';
+import { WorkQueueEntityNames } from './constants';
+import {
+    FindByID, FindByName, IsStagedSubscription, ToSubscriptionBinding, ToSubscriptionPolicy, ToTopicBinding,
+} from './topology/bindings';
 import type { TopologySnapshot } from './topology/bindings';
-import { BuildTopologyManifest, PlanBindingImport } from './topology/manifest';
-import type { BindingUpdate } from './topology/manifest';
 import { ValidateTopologyRows } from './topology/validateTopology';
-import { DatabaseTransportDriver } from './transports/database/DatabaseTransportDriver';
-import type { TransportDriverDeps } from './transports/TransportDriverDeps';
 
-export interface WorkQueuePublishOptions {
-    ContextUser: UserInfo;
-    Provider?: IMetadataProvider;
-    External?: boolean;
-}
-
-interface CachedDriver {
-    Key: string;
-    Driver: Promise<ITransportDriver>;
-}
-
-/** Caches work-queue topology and is the in-process publisher and driver registry (03 §11). */
-export class WorkQueueEngine extends BaseEngine<WorkQueueEngine> implements IWorkPublisher {
-    public static get Instance(): WorkQueueEngine {
-        return super.getInstance<WorkQueueEngine>();
+/**
+ * Browser-safe metadata tier for the work queue (03 §11): the cached topology plus the pure derivations over it.
+ * The server tier (`WorkQueueEngine`, plan 05 Task 13) delegates to this instance; Explorer and the operator
+ * dashboard use it directly, with no drivers, SQL or Node dependencies.
+ */
+export class WorkQueueEngineBase extends BaseEngine<WorkQueueEngineBase> {
+    public static get Instance(): WorkQueueEngineBase {
+        return super.getInstance<WorkQueueEngineBase>();
     }
 
     private _Transports: MJWorkQueueTransportEntity[] = [];
     private _Topics: MJWorkQueueTopicEntity[] = [];
     private _Subscriptions: MJWorkQueueSubscriptionEntity[] = [];
-    private readonly drivers = new Map<string, CachedDriver>();
-    private readonly listeners = new PublishListenerSet();
-    private readonly log = new MJWorkLogger();
-    private databaseDriver: DatabaseTransportDriver | null = null;
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
         const configs: Partial<BaseEnginePropertyConfig>[] = [
@@ -7112,6 +7814,11 @@ export class WorkQueueEngine extends BaseEngine<WorkQueueEngine> implements IWor
         return this.GetConfigData<MJWorkQueueSubscriptionEntity>('_Subscriptions');
     }
 
+    /** The row view the pure topology helpers work over. */
+    public get Snapshot(): TopologySnapshot {
+        return { Transports: this.Transports, Topics: this.Topics, Subscriptions: this.Subscriptions };
+    }
+
     public GetTopicByName(name: string): MJWorkQueueTopicEntity | undefined {
         return FindByName(this.Topics, name);
     }
@@ -7120,8 +7827,216 @@ export class WorkQueueEngine extends BaseEngine<WorkQueueEngine> implements IWor
         return FindByName(this.Subscriptions, name);
     }
 
+    public SubscriptionsForTopic(topicID: string): MJWorkQueueSubscriptionEntity[] {
+        return this.Subscriptions.filter(s => UUIDsEqual(s.TopicID, topicID));
+    }
+
+    public BuildTopicBinding(topic: MJWorkQueueTopicEntity): TopicBinding {
+        return ToTopicBinding(topic);
+    }
+
+    public BuildSubscriptionBinding(subscription: MJWorkQueueSubscriptionEntity,
+                                    support: FilterSupport = WORK_QUEUE_FILTER_SUPPORT): SubscriptionBinding {
+        return ToSubscriptionBinding(subscription, this.TopicOf(subscription), support);
+    }
+
+    public BuildSubscriptionPolicy(subscription: MJWorkQueueSubscriptionEntity): SubscriptionPolicy {
+        return ToSubscriptionPolicy(subscription, this.TopicOf(subscription));
+    }
+
+    /** Parses the subscription's CompositeFilterDescriptor JSON against the transport's supported subset (03 §4). */
+    public ParseFilter(subscription: MJWorkQueueSubscriptionEntity, support: FilterSupport): SubscriptionFilter | null {
+        return ToSubscriptionBinding(subscription, this.TopicOf(subscription), support).Filter;
+    }
+
+    public IsStagedToDatabase(subscription: MJWorkQueueSubscriptionEntity): boolean {
+        return IsStagedSubscription(subscription, this.TransportOf(this.TopicOf(subscription)));
+    }
+
+    /**
+     * Validates the cached topology against capabilities supplied per `Transport.DriverClass` (03 §11). The server
+     * engine resolves real drivers per transport and calls `ValidateTopologyRows` directly so that one unresolvable
+     * transport is reported as an Error rather than failing the whole pass.
+     */
+    public ValidateTopologyRows(capabilitiesByDriverClass: Record<string, TransportCapabilities>): BindingValidationIssue[] {
+        const byTransport = new Map<string, TransportCapabilities | Error>();
+        for (const transport of this.Transports) {
+            const caps = capabilitiesByDriverClass[transport.DriverClass];
+            byTransport.set(transport.ID.toLowerCase(),
+                caps ?? new Error(`No capabilities supplied for DriverClass '${transport.DriverClass}'`));
+        }
+        return ValidateTopologyRows(this.Snapshot, byTransport);
+    }
+
+    public TopicOf(subscription: MJWorkQueueSubscriptionEntity): MJWorkQueueTopicEntity {
+        const topic = FindByID(this.Topics, subscription.TopicID);
+        if (!topic) {
+            throw new WorkQueueConfigurationError(`Subscription '${subscription.Name}' references a topic that does not exist`);
+        }
+        return topic;
+    }
+
+    public TransportOf(topic: MJWorkQueueTopicEntity): MJWorkQueueTransportEntity {
+        const transport = FindByID(this.Transports, topic.TransportID);
+        if (!transport) {
+            throw new WorkQueueConfigurationError(`Topic '${topic.Name}' references a transport that does not exist`);
+        }
+        return transport;
+    }
+}
+```
+
+`packages/WorkQueue/base/src/__tests__/WorkQueueEngineBase.test.ts` covers only what does not need a provider —
+the derivations over an injected snapshot. Load a fake by assigning the private arrays through a small helper:
+
+```typescript
+import { describe, it, expect } from 'vitest';
+import { WorkQueueEngineBase } from '../WorkQueueEngineBase';
+import {
+    SUBSCRIPTION_ROW_FIXTURE, TOPIC_ROW_FIXTURE, TRANSPORT_ROW_FIXTURE,
+} from '../testing/rowFixtures';
+
+/** Seeds the engine's caches without a provider; BaseEngine exposes them through GetConfigData. */
+function Seed(engine: WorkQueueEngineBase): void {
+    const anyEngine = engine as unknown as Record<string, unknown>;
+    anyEngine._Transports = [TRANSPORT_ROW_FIXTURE];
+    anyEngine._Topics = [TOPIC_ROW_FIXTURE];
+    anyEngine._Subscriptions = [SUBSCRIPTION_ROW_FIXTURE];
+}
+
+describe('WorkQueueEngineBase', () => {
+    it('looks up topics and subscriptions by trimmed, case-insensitive name', () => {
+        const engine = WorkQueueEngineBase.Instance;
+        Seed(engine);
+        expect(engine.GetTopicByName(' IMPORT.READY ')?.Name).toBe('import.ready');
+        expect(engine.GetSubscriptionByName('VENUE-IMPORT')?.Name).toBe('venue-import');
+        expect(engine.SubscriptionsForTopic(TOPIC_ROW_FIXTURE.ID)).toHaveLength(1);
+    });
+
+    it('builds bindings and reports staging for cloud Ordered subscriptions', () => {
+        const engine = WorkQueueEngineBase.Instance;
+        Seed(engine);
+        expect(engine.BuildSubscriptionBinding(engine.Subscriptions[0]).Policy.PartitionMode).toBe('Ordered');
+        expect(engine.IsStagedToDatabase(engine.Subscriptions[0])).toBe(false);
+    });
+});
+```
+
+If `GetConfigData` refuses values that were not loaded through `Load`, seed instead with the provider fake the
+engine suites already use, or drop to testing the pure helpers directly (they are covered in Task 11) — do not
+loosen `BaseEngine`.
+
+- [ ] **Step 5: Write `packages/WorkQueue/engine/src/WorkQueueEngine.ts` (the facade)**
+
+```typescript
+import { randomUUID } from 'node:crypto';
+import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import type { MJWorkQueueSubscriptionEntity, MJWorkQueueTopicEntity, MJWorkQueueTransportEntity } from '@memberjunction/core-entities';
+import { BaseSingleton } from '@memberjunction/global';
+import { WorkQueueConfigurationError } from '@memberjunction/work-queue-core';
+import type {
+    BindingImport, BindingValidationIssue, ITransportDriver, ITransportOperator, IWorkPublisher, PublishRequest,
+    PublishResult, SubscriptionBinding, TopicBinding, TopologyManifest, TransportCapabilities, WorkJson,
+} from '@memberjunction/work-queue-core';
+import { NormalizeUUID } from '@memberjunction/global';
+import { WorkQueueEngineBase } from '@memberjunction/work-queue-base';
+import { DATABASE_DRIVER_CLASS, WorkQueueEntityNames } from './constants';
+import { DeduplicationLedger } from './dedup/DeduplicationLedger';
+import { DriverCacheKey, ResolveDriverFactory } from './engine/driverResolution';
+import { ListenerSet, PublishListenerSet } from './engine/PublishListenerSet';
+import { DatabaseTransportOperator } from './transports/database/DatabaseTransportOperator';
+import type { DeadLetteredEvent } from './transports/TransportDriverDeps';
+import { MJWorkLogger } from './logging/MJWorkLogger';
+import { WorkQueuePublishCoordinator } from './publish/WorkQueuePublishCoordinator';
+import { IsWorkQueueExecutorSource, IsWorkQueueTransactionalExecutor } from './sql/WorkQueueSqlExecutor';
+import type { WorkQueueExecutorSource } from './sql/WorkQueueSqlExecutor';
+import { FindByID, ResolveTopic, ValidateTopologyRows } from '@memberjunction/work-queue-base';
+import type { TopologySnapshot } from '@memberjunction/work-queue-base';
+import { BuildTopologyManifest, PlanBindingImport } from './topology/manifest';
+import type { BindingUpdate } from './topology/manifest';
+import { DatabaseTransportDriver } from './transports/database/DatabaseTransportDriver';
+import type { TransportDriverDeps } from './transports/TransportDriverDeps';
+
+export interface WorkQueuePublishOptions {
+    ContextUser: UserInfo;
+    Provider?: IMetadataProvider;
+    External?: boolean;
+}
+
+interface CachedDriver {
+    Key: string;
+    Driver: Promise<ITransportDriver>;
+}
+
+/**
+ * Server tier: the in-process publisher, driver registry and operator entry point (03 §11).
+ *
+ * 🚨 THIS CLASS IS A FACADE, NOT A SUBCLASS. Metadata lives in `WorkQueueEngineBase` (browser-safe) and is reached
+ * through the delegates below — the same arrangement as `AIEngine`/`AIEngineBase`. Add a public member to
+ * `WorkQueueEngineBase` and you must add its one-line delegate here, or server callers stop compiling.
+ */
+export class WorkQueueEngine extends BaseSingleton<WorkQueueEngine> implements IWorkPublisher {
+    public static get Instance(): WorkQueueEngine {
+        return super.getInstance<WorkQueueEngine>();
+    }
+
+    private _provider: IMetadataProvider | null = null;
+    private readonly drivers = new Map<string, CachedDriver>();
+    private readonly listeners = new PublishListenerSet();
+    private readonly deadLetterListeners = new ListenerSet<DeadLetteredEvent>('dead-letter');
+    private readonly log = new MJWorkLogger();
+    private databaseDriver: DatabaseTransportDriver | null = null;
+
+    /** The metadata tier this facade delegates to. */
+    public get Metadata(): WorkQueueEngineBase {
+        return WorkQueueEngineBase.Instance;
+    }
+
+    /** Loads (or refreshes) the metadata tier and remembers the provider the server side runs against. */
+    public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
+        if (provider) {
+            this._provider = provider;
+        }
+        await this.Metadata.Config(forceRefresh ?? false, contextUser, provider);
+    }
+
+    // ── Delegated metadata surface (add a delegate here for every new WorkQueueEngineBase member) ──
+    public get Loaded(): boolean { return this.Metadata.Loaded; }
+    public get ContextUser(): UserInfo { return this.Metadata.ContextUser; }
+    public get Transports(): MJWorkQueueTransportEntity[] { return this.Metadata.Transports; }
+    public get Topics(): MJWorkQueueTopicEntity[] { return this.Metadata.Topics; }
+    public get Subscriptions(): MJWorkQueueSubscriptionEntity[] { return this.Metadata.Subscriptions; }
+    public GetTopicByName(name: string): MJWorkQueueTopicEntity | undefined { return this.Metadata.GetTopicByName(name); }
+    public GetSubscriptionByName(name: string): MJWorkQueueSubscriptionEntity | undefined { return this.Metadata.GetSubscriptionByName(name); }
+    public SubscriptionsForTopic(topicID: string): MJWorkQueueSubscriptionEntity[] { return this.Metadata.SubscriptionsForTopic(topicID); }
+    public BuildTopicBinding(topic: MJWorkQueueTopicEntity): TopicBinding { return this.Metadata.BuildTopicBinding(topic); }
+    public BuildSubscriptionBinding(subscription: MJWorkQueueSubscriptionEntity): SubscriptionBinding { return this.Metadata.BuildSubscriptionBinding(subscription); }
+    public IsStagedToDatabase(subscription: MJWorkQueueSubscriptionEntity): boolean { return this.Metadata.IsStagedToDatabase(subscription); }
+
     public OnPublished(listener: (topicName: string) => void): () => void {
         return this.listeners.Add(listener);
+    }
+
+    /** Alerting seam (03 §11): fires for Database and staged subscriptions when a delivery is dead-lettered. */
+    public OnDeadLettered(listener: (event: DeadLetteredEvent) => void): () => void {
+        return this.deadLetterListeners.Add(listener);
+    }
+
+    /**
+     * Autoscaler metric (03 §11). Database and staged subscriptions report real counts; cloud-hosted subscriptions
+     * answer `Supported: false` (scale those from the transport's own metrics).
+     */
+    public async GetBacklog(subscriptionName: string): Promise<{ Supported: boolean; Claimable: number; InFlight: number; Total: number }> {
+        const subscription = this.GetSubscriptionByName(subscriptionName);
+        if (!subscription) {
+            throw new WorkQueueConfigurationError(`Work-queue subscription '${subscriptionName}' does not exist`);
+        }
+        const operator = await this.GetOperator(subscription);
+        if (!(operator instanceof DatabaseTransportOperator)) {
+            return { Supported: false, Claimable: 0, InFlight: 0, Total: 0 };
+        }
+        const counts = await operator.GetBacklog(this.BuildSubscriptionBinding(subscription));
+        return { Supported: true, ...counts, Total: counts.Claimable + counts.InFlight };
     }
 
     public async GetDriver(transportID: string): Promise<ITransportDriver> {
@@ -7147,21 +8062,9 @@ export class WorkQueueEngine extends BaseEngine<WorkQueueEngine> implements IWor
         return this.databaseDriver;
     }
 
-    public BuildTopicBinding(topic: MJWorkQueueTopicEntity): TopicBinding {
-        return ToTopicBinding(topic);
-    }
-
-    public BuildSubscriptionBinding(subscription: MJWorkQueueSubscriptionEntity): SubscriptionBinding {
-        return ToSubscriptionBinding(subscription, this.TopicOf(subscription));
-    }
-
-    public IsStagedToDatabase(subscription: MJWorkQueueSubscriptionEntity): boolean {
-        return IsStagedSubscription(subscription, this.TransportOf(this.TopicOf(subscription)));
-    }
-
     public async GetOperator(subscription: MJWorkQueueSubscriptionEntity): Promise<ITransportOperator> {
-        const transport = this.TransportOf(this.TopicOf(subscription));
-        if (transport.DriverClass === DATABASE_DRIVER_CLASS || IsStagedSubscription(subscription, transport)) {
+        const transport = this.Metadata.TransportOf(this.Metadata.TopicOf(subscription));
+        if (transport.DriverClass === DATABASE_DRIVER_CLASS || this.Metadata.IsStagedToDatabase(subscription)) {
             return (await this.GetDatabaseDriver()).Operator();
         }
         return (await this.GetDriver(transport.ID)).Operator();
@@ -7217,12 +8120,18 @@ export class WorkQueueEngine extends BaseEngine<WorkQueueEngine> implements IWor
         }
         await this.Config(true, contextUser, this.ProviderToUse);
         this.drivers.clear();
+        this.databaseDriver = null;
         issues.push(...await this.ValidateTopology());
         return issues;
     }
 
     private get Snapshot(): TopologySnapshot {
-        return { Transports: this.Transports, Topics: this.Topics, Subscriptions: this.Subscriptions };
+        return this.Metadata.Snapshot;
+    }
+
+    /** The server provider: the one Config() was given, else the metadata tier's. */
+    public get ProviderToUse(): IMetadataProvider {
+        return this._provider ?? this.Metadata.ProviderToUse;
     }
 
     private get Executor(): WorkQueueExecutorSource {
@@ -7234,28 +8143,15 @@ export class WorkQueueEngine extends BaseEngine<WorkQueueEngine> implements IWor
     }
 
     private DriverDeps(): TransportDriverDeps {
-        return { ContextUser: this.ContextUser, Executor: this.Executor, Log: this.log };
+        return {
+            ContextUser: this.ContextUser, Executor: this.Executor, Log: this.log,
+            NotifyDeadLettered: event => this.deadLetterListeners.Notify(event),
+        };
     }
 
     private async DriverForPublish(transportID: string): Promise<ITransportDriver> {
         const transport = FindByID(this.Transports, transportID);
         return transport?.DriverClass === DATABASE_DRIVER_CLASS ? this.GetDatabaseDriver() : this.GetDriver(transportID);
-    }
-
-    private TopicOf(subscription: MJWorkQueueSubscriptionEntity): MJWorkQueueTopicEntity {
-        const topic = FindByID(this.Topics, subscription.TopicID);
-        if (!topic) {
-            throw new WorkQueueConfigurationError(`Subscription '${subscription.Name}' references a topic that does not exist`);
-        }
-        return topic;
-    }
-
-    private TransportOf(topic: MJWorkQueueTopicEntity): MJWorkQueueTransportEntity {
-        const transport = FindByID(this.Transports, topic.TransportID);
-        if (!transport) {
-            throw new WorkQueueConfigurationError(`Topic '${topic.Name}' references a transport that does not exist`);
-        }
-        return transport;
     }
 
     private async SaveBinding(entityName: string, update: BindingUpdate, contextUser: UserInfo): Promise<BindingValidationIssue[]> {
@@ -7276,6 +8172,10 @@ export class WorkQueueEngine extends BaseEngine<WorkQueueEngine> implements IWor
 
 Two provider-level notes, verified against `packages/MJCore/src/generic/databaseProviderBase.ts`: `CreateIndependentInstance` shares the pool and metadata but owns a transaction stack, and `BeginEntityTransaction` joins an open transaction with a savepoint — together they let concurrent publishes and claims share the long-lived server provider without interleaving transactions.
 
+`BaseSingleton` gives the facade its `Instance` but no loading machinery, so `Loaded`, `ContextUser` and
+`ProviderToUse` come from the metadata tier (or, for the provider, from whatever `Config()` was handed). Anything
+that reaches the database goes through `Executor`, which refuses a browser provider.
+
 - [ ] **Step 6: Export the new modules**
 
 Append to `packages/WorkQueue/engine/src/index.ts`:
@@ -7284,9 +8184,13 @@ Append to `packages/WorkQueue/engine/src/index.ts`:
 export * from './engine/driverResolution';
 export * from './engine/PublishListenerSet';
 export * from './WorkQueueEngine';
+export { WorkQueueEngineBase } from '@memberjunction/work-queue-base';
 ```
 
 - [ ] **Step 7: Run the tests and build**
+
+Run: `cd packages/WorkQueue/base && pnpm test && pnpm run build`
+Expected: PASS — previous base suites plus WorkQueueEngineBase (2); builds.
 
 Run: `cd packages/WorkQueue/engine && pnpm test`
 Expected: PASS — previous suites plus driverResolution (3) and PublishListenerSet (2).
@@ -7297,18 +8201,18 @@ Expected: builds. The engine has no unit test of its own: its logic lives in the
 - [ ] **Step 8: Commit**
 
 ```bash
-git add packages/WorkQueue/engine/src
-git commit -m "feat(work-queue-engine): WorkQueueEngine topology cache, driver registry and publisher"
+git add packages/WorkQueue/base/src packages/WorkQueue/engine/src
+git commit -m "feat(work-queue): WorkQueueEngineBase metadata tier and the server WorkQueueEngine facade"
 ```
 
 ---
 
-### Task 14: Database conformance harness, full build and changeset
+### Task 14: Database conformance harness, filter parity, full build and changeset
 
 **Files:**
 - Create: `packages/WorkQueue/engine/src/testing/DatabaseConformanceHarness.ts`
 - Modify: `packages/WorkQueue/engine/src/index.ts`
-- Test: `packages/WorkQueue/engine/src/__tests__/DatabaseConformanceHarness.test.ts`
+- Test: `packages/WorkQueue/engine/src/__tests__/DatabaseConformanceHarness.test.ts`, `src/__tests__/filterParity.test.ts`
 - Create: `.changeset/work-queue-native-data-layer.md`
 
 **Interfaces:**
@@ -7365,7 +8269,7 @@ import { CreateWorkQueueSqlBuilder } from '../sql/CreateWorkQueueSqlBuilder';
 import { SqlParamList } from '../sql/SqlParamList';
 import { ExecuteWrite, QualifiedTable } from '../sql/sqlExecution';
 import type { WorkQueueExecutorSource } from '../sql/WorkQueueSqlExecutor';
-import { ToSubscriptionBinding, ToTopicBinding } from '../topology/bindings';
+import { ToSubscriptionBinding, ToTopicBinding } from '@memberjunction/work-queue-base';
 import { DATABASE_TRANSPORT_CAPABILITIES } from '../transports/database/databaseCapabilities';
 import { DatabaseTransportDriver } from '../transports/database/DatabaseTransportDriver';
 
@@ -7491,6 +8395,92 @@ async function DeleteWhereIn(executor: WorkQueueExecutorSource, contextUser: Use
 
 On PostgreSQL the `IN (...)` comparison is between `uuid` and text parameters; the PostgreSQL provider binds untyped parameters, which the server coerces to `uuid` in an `IN` list against a `uuid` column. If your PostgreSQL run reports `operator does not exist: uuid = text`, append `::uuid` to each placeholder when `executor.PlatformKey === 'postgresql'`.
 
+- [ ] **Step 3b: Write the filter parity test**
+
+Core ships its own evaluator because `work-queue-core` may not depend on `@memberjunction/core` (03 §0, §4.3). The
+engine package *can*, so this is where the two are held together: for every case in the table, core's `MatchesFilter`
+must agree with MJ's `CompositeFilter.Evaluate`. Case-**insensitive** fixtures are deliberately absent — work-queue
+matching is case-sensitive to match the brokers, and that divergence is the point of 03 §4.3 item 3.
+
+`packages/WorkQueue/engine/src/__tests__/filterParity.test.ts`:
+
+```typescript
+import { describe, it, expect } from 'vitest';
+import { CompositeFilter } from '@memberjunction/core';
+import { MatchesFilter, ParseSubscriptionFilter, WORK_QUEUE_FILTER_SUPPORT } from '@memberjunction/work-queue-core';
+
+/** Each case is CompositeFilterDescriptor JSON plus the attribute map both evaluators see. */
+const CASES: { Name: string; Filter: string; Attributes: Record<string, string> }[] = [
+    {
+        Name: 'single eq match',
+        Filter: '{"logic":"and","filters":[{"field":"eventType","operator":"eq","value":"click"}]}',
+        Attributes: { eventType: 'click' },
+    },
+    {
+        Name: 'single eq miss',
+        Filter: '{"logic":"and","filters":[{"field":"eventType","operator":"eq","value":"click"}]}',
+        Attributes: { eventType: 'open' },
+    },
+    {
+        Name: 'and across fields',
+        Filter: '{"logic":"and","filters":[{"field":"eventType","operator":"eq","value":"click"},{"field":"tenant","operator":"eq","value":"acme"}]}',
+        Attributes: { eventType: 'click', tenant: 'acme' },
+    },
+    {
+        Name: 'single-field or group, second value',
+        Filter: '{"logic":"and","filters":[{"logic":"or","filters":[{"field":"tenant","operator":"eq","value":"acme"},{"field":"tenant","operator":"eq","value":"globex"}]}]}',
+        Attributes: { tenant: 'globex' },
+    },
+    {
+        Name: 'neq on a present attribute',
+        Filter: '{"logic":"and","filters":[{"field":"source","operator":"neq","value":"test"}]}',
+        Attributes: { source: 'live' },
+    },
+    {
+        Name: 'startswith prefix match',
+        Filter: '{"logic":"and","filters":[{"field":"tenant","operator":"startswith","value":"acme-"}]}',
+        Attributes: { tenant: 'acme-eu' },
+    },
+    {
+        Name: 'isnotnull with the attribute present',
+        Filter: '{"logic":"and","filters":[{"field":"campaign","operator":"isnotnull"}]}',
+        Attributes: { campaign: 'spring' },
+    },
+    {
+        Name: 'isnull with the attribute absent',
+        Filter: '{"logic":"and","filters":[{"field":"campaign","operator":"isnull"}]}',
+        Attributes: { eventType: 'click' },
+    },
+    {
+        Name: 'missing attribute fails eq',
+        Filter: '{"logic":"and","filters":[{"field":"campaign","operator":"eq","value":"spring"}]}',
+        Attributes: {},
+    },
+];
+
+describe('filter parity with @memberjunction/core CompositeFilter', () => {
+    for (const testCase of CASES) {
+        it(`agrees on: ${testCase.Name}`, () => {
+            const ours = MatchesFilter(ParseSubscriptionFilter(testCase.Filter, WORK_QUEUE_FILTER_SUPPORT), testCase.Attributes);
+            const theirs = CompositeFilter.FromJSON(testCase.Filter).Evaluate({ '': testCase.Attributes });
+            expect(ours, `${testCase.Name}: work-queue evaluator`).toBe(theirs);
+        });
+    }
+
+    it('is case-sensitive where CompositeFilter is not (the one deliberate divergence, 03 §4.3)', () => {
+        const filter = '{"logic":"and","filters":[{"field":"eventType","operator":"eq","value":"Click"}]}';
+        const attributes = { eventType: 'click' };
+        expect(MatchesFilter(ParseSubscriptionFilter(filter, WORK_QUEUE_FILTER_SUPPORT), attributes)).toBe(false);
+        expect(CompositeFilter.FromJSON(filter).Evaluate({ '': attributes })).toBe(true);
+    });
+});
+```
+
+If a parity case fails, fix core's evaluator (plan 04) to match `CompositeFilter` — not the test — unless the
+difference is the documented case sensitivity. If `CompositeFilter`'s `FilterEvalContext` keying differs from
+`{ '': attrs }` for bare field names, check `ParseFilterField` in `MJCore/src/generic/filters/filter.types.ts` and
+key the context the way it resolves.
+
 - [ ] **Step 4: Export the harness**
 
 Append to `packages/WorkQueue/engine/src/index.ts`:
@@ -7501,16 +8491,20 @@ export * from './testing/DatabaseConformanceHarness';
 
 - [ ] **Step 5: Run the tests and build the whole data layer**
 
+Run: `cd packages/WorkQueue/base && pnpm test`
+Expected: PASS — dependency guard, entityValidation, topology and WorkQueueEngineBase, 0 failures.
+
 Run: `cd packages/WorkQueue/engine && pnpm test`
-Expected: PASS — every suite from Tasks 2–14, 0 failures.
+Expected: PASS — every suite from Tasks 2–14 including filterParity (10), 0 failures.
 
 Run:
 ```bash
 cd packages/MJCoreEntities && pnpm run build
 cd ../WorkQueue/core && pnpm run build
+cd ../base && pnpm run build
 cd ../engine && pnpm run build
 ```
-Expected: all three build with no errors.
+Expected: all four build with no errors (`base` before `engine`).
 
 Run: `node .github/scripts/check-migration-entityfield-sequence.mjs` (repository root)
 Expected: exits 0.
@@ -7522,10 +8516,11 @@ Expected: exits 0.
 ```markdown
 ---
 "@memberjunction/core-entities": minor
+"@memberjunction/work-queue-base": minor
 "@memberjunction/work-queue-engine": minor
 ---
 
-Add the durable work queue's database layer: seven work-queue tables and entities (transports, topics, subscriptions, messages, deliveries, explicit-sequence partition state and the deduplication ledger), `workqueue:*` API scopes, the seeded `Database` transport, and `@memberjunction/work-queue-engine` with SQL Server and PostgreSQL statement builders, the Database transport driver, consumer and operator, the deduplication ledger, staging for ordered cloud subscriptions, topology validation and manifest export, and `WorkQueueEngine`.
+Add the durable work queue's database layer: seven work-queue tables and entities (transports, topics, subscriptions, messages, deliveries, explicit-sequence partition state and the deduplication ledger), `workqueue:*` API scopes, the seeded `Database` transport, the browser-safe `@memberjunction/work-queue-base` metadata tier (`WorkQueueEngineBase`, topology rows, binding builders, filter and topology validation), and `@memberjunction/work-queue-engine` with SQL Server and PostgreSQL statement builders, the Database transport driver, consumer and operator, the deduplication ledger, staging for ordered cloud subscriptions, manifest export, and the server `WorkQueueEngine` facade.
 ```
 
 Run: `npm run check:changeset`
@@ -7534,8 +8529,8 @@ Expected: passes — the branch changes a migration and `metadata/`, and the cha
 - [ ] **Step 7: Commit**
 
 ```bash
-git add packages/WorkQueue/engine/src .changeset/work-queue-native-data-layer.md
-git commit -m "feat(work-queue-engine): Database conformance harness and changeset"
+git add packages/WorkQueue/base/src packages/WorkQueue/engine/src .changeset/work-queue-native-data-layer.md
+git commit -m "feat(work-queue-engine): Database conformance harness, filter parity test and changeset"
 ```
 
 In the PR description, state that the PostgreSQL migration counterpart is produced by the release build.
@@ -7559,4 +8554,14 @@ Differences between this plan and spec 03 (and neighbouring plans) that should b
 | ND9 | Conformance harness: this plan exports `CreateDatabaseConformanceHarness(provider, contextUser, transportID?)` returning plan 04's `ConformanceHarness` (plus `Cleanup()`); plan 06 currently expects `TransportConformanceHarness` / `RunTransportConformance` from core `/testing`. Align plan 06 to plan 04's names. The consume builder exposes test-only `ShiftTimestampsForConformance`. | Name mismatch between plans 04 and 06. |
 | ND10 | Plan 06 lists its own `src/runtime/MJWorkLogger.ts` and `WorkQueueSweeperSql.ts`; this plan already provides `src/logging/MJWorkLogger.ts` and the sweeper statements on `OperatorSqlBuilder` (`ExpireLeasesAll`, `FlagGapStalls`, `DiscardSkippedSequences`, `PurgeTerminalDeliveries`, `PurgeOrphanMessages`) plus `DeduplicationLedger.PurgeExpired`. Plan 06 should reuse them. | Avoids duplicate implementations. |
 | ND11 | Dead-letter paging cursor is keyed on delivery ID only (`DeadLetterCursor { DeliveryID }`); page size clamps to 1–500 (default 50). `SubscriptionStats.CompletedLastHour` is a number (never null) on the Database transport; `BlockedKeys` is null for non-`Ordered` subscriptions. | 03 §5.2 leaves paging and nullability open. |
+| ND13 | Revision 3 adopted here: `WorkQueueDelivery.CancelRequestedAt` (03 §6.5); `OperatorSqlBuilder.CancelInFlightDelivery`; `Discard` of an `InFlight` delivery revokes the lease and returns `CancelRequested: true`; expire passes settle cancelled rows as `Discarded`; `DATABASE_TRANSPORT_CAPABILITIES.CancelInFlight = true`. | 03 §5, §5.2, §7 |
+| ND14 | Both expire statements (`ConsumeSqlBuilder.ExpireLeases`, `OperatorSqlBuilder.ExpireLeasesAll`) now **return** the rows they dead-lettered (`ExpiredDeadLetterRow`) instead of only a row count, so lease-expiry dead letters reach `OnDeadLettered`. Plan 06's sweeper must read rows and forward them (it previously used `ExecuteWrite`). | 03 §11 · plan 06 |
+| ND15 | `TransportDriverDeps` gains `NotifyDeadLettered?: (event: DeadLetteredEvent) => void`; the engine injects it and fans out through a generic `ListenerSet<TEvent>` (`PublishListenerSet` is now `ListenerSet<string>`). | 03 §11 |
+| ND16 | `ConsumeSqlBuilder.SubscriptionBacklog(subscriptionID, mode, explicitSequence)` + `DatabaseTransportOperator.GetBacklog(subscription)` back `WorkQueueEngine.GetBacklog`. The standalone KEDA query (Task 5) approximates `Ordered` — single-flight per key, without head-of-line or next-sequence rules — so it can overcount a blocked key by one; the remote operation is exact. | 03 §11 |
+| ND17 | Entity metadata sets `AllowCreateAPI/AllowUpdateAPI/AllowDeleteAPI = false` for the four driver-owned entities, so CodeGen emits **no** `spCreate/spUpdate/spDelete` for them. The metadata push therefore runs **before** the CodeGen pass whose SQL is appended to the migration (Task 1 Step 9). | 03 §6.8 |
 | ND12 | `InsertDeliveries` is idempotent on `(SubscriptionID, MessageID)`, and `InsertMessage` returns the existing row's `PublishOrdinal` on conflict. | Required for staging redelivery and for multiple staged subscriptions sharing one message row. |
+| ND18 | **Adopted (03 §0, §11):** the metadata tier moves to `@memberjunction/work-queue-base`. `WorkQueueEngineBase extends BaseEngine` owns the topology cache, lookups, binding/policy builders, `ParseFilter`, `IsStagedToDatabase` and `ValidateTopologyRows`; `WorkQueueEngine` becomes a `BaseSingleton` **facade** delegating to it (`AIEngine`/`AIEngineBase` pattern). The engine re-exports the row types, validators, binding builders and `WorkQueueEngineBase`, so plans 06–08 need no import changes. | 03 §0, §11 |
+| ND19 | `WorkQueueEngineBase.ValidateTopologyRows(capabilitiesByDriverClass)` (03 §11) is a convenience over the standalone `ValidateTopologyRows(snapshot, capabilities: Map<transportID, TransportCapabilities \| Error>)`, which the server engine keeps using directly so **one** unresolvable transport is reported as an Error instead of failing the pass. `WorkQueueEngineBase` also exposes `Snapshot`, `TopicOf` and `TransportOf` (the facade and plan 07's stager need them). | 03 §11 |
+| ND20 | **Adopted (03 §4):** subscription filters are MJ `CompositeFilterDescriptor` JSON. `ToSubscriptionBinding(subscription, topic, support?)` and `WorkQueueEngineBase.BuildSubscriptionBinding(subscription, support?)` take an optional `FilterSupport` (default `WORK_QUEUE_FILTER_SUPPORT`); entity-save validation checks the queue-wide subset, and `ValidateTopologyRows` re-parses with the transport's `capabilities.Filters` so an untranslatable operator is an Error naming field and operator. `DATABASE_TRANSPORT_CAPABILITIES.Filters = WORK_QUEUE_FILTER_SUPPORT`. | 03 §4, §5 |
+| ND21 | Plan 04 must export `WORK_QUEUE_FILTER_SUPPORT` (the queue-wide `FilterSupport` constant) alongside `ParseSubscriptionFilter(json, support)` — 03 §4.2 lists the functions but not the constant, and every tier needs a default. | 03 §4.2 |
+| ND22 | `IsWorkJson` moves to the base package (`@memberjunction/work-queue-base`); the engine's `rowMapping` re-exports it. The row fixtures used by both packages' suites ship from `work-queue-base/src/testing/rowFixtures.ts` as `TRANSPORT_ROW_FIXTURE` / `TOPIC_ROW_FIXTURE` / `SUBSCRIPTION_ROW_FIXTURE`, re-exported by the engine's test fakes under their old short names. | this plan |

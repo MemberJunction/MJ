@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build `@memberjunction/work-queue-core` — the transport-neutral contracts, publish validation, filter grammar, backoff, consumer runtime, in-memory reference transport, transport conformance kit and REST publisher client — with **zero** `@memberjunction/*` dependencies, so Lambda consumers stay lightweight.
+**Goal:** Build `@memberjunction/work-queue-core` — the transport-neutral contracts, publish validation, filters, backoff, consumer runtime, in-memory reference transport, transport conformance kit and REST publisher client — with **zero** `@memberjunction/*` dependencies, so Lambda consumers stay lightweight.
 
 **Architecture:** Every other work-queue package builds on this one. Contract types mirror spec 03 §1–§5 and §10 exactly. Pure helpers (`ValidatePublishRequest`, `MatchesFilter`, `ComputeBackoffSeconds`, `SubscriptionUnsupportedReason`) are shared by every publish and consume path. `ConsumerRuntime` drives any `ITransportConsumer`: it receives deliveries, runs handlers through `DeliveryExecution` (lease heartbeats, processing caps, abort signals, outcome mapping) and settles them. `InMemoryTransport` implements the full Database-transport semantics in memory and is the reference the conformance kit (`@memberjunction/work-queue-core/testing`) is proven against. `WorkQueueApiPublisher` is the `fetch`-based client for the REST publish endpoint.
 
@@ -30,12 +30,12 @@
 | --- | --- | --- |
 | 1 | Scaffold, workspace glob, dependency guard, contract types, errors, outcomes | Package builds; guard, error and outcome tests pass |
 | 2 | Publish validation and envelope building | `ValidatePublishRequest`, `BuildWorkMessage`, `SerializedEnvelopeBytes` tested |
-| 3 | Filter grammar | `ParseSubscriptionFilter`, `MatchesFilter` tested |
+| 3 | Filters (`CompositeFilterDescriptor`, restricted) | `ParseSubscriptionFilter`, `MatchesFilter`, `FilterFields` tested |
 | 4 | Backoff and subscription compatibility | `ComputeBackoffSeconds`, `SubscriptionUnsupportedReason` tested |
-| 5 | Outcome mapping and `DeliveryExecution` | Handler outcomes, heartbeats, caps, lease loss tested with fake timers |
+| 5 | Outcome mapping and `DeliveryExecution` | Handler outcomes, heartbeat retry, caps, lease loss and cancel tested with fake timers |
 | 6 | `ConsumerRuntime` | Receive loop, concurrency, idle polling, `Kick`, `Stop`, `ProcessBatch` tested |
-| 7 | `InMemoryTransport` | Full Database-like semantics in memory, tested |
-| 8 | Conformance kit (`./testing`, `./testing/vitest`) | 25 runner-agnostic cases pass against `InMemoryTransport` via `RunConformanceChecks` and the vitest wrapper |
+| 7 | `InMemoryTransport` | Full Database-like semantics in memory, including in-flight cancel, tested |
+| 8 | Conformance kit (`./testing`, `./testing/vitest`) | 27 runner-agnostic cases pass against `InMemoryTransport` via `RunConformanceChecks` and the vitest wrapper |
 | 9 | REST contract mapping and `WorkQueueApiPublisher` | Mapping and HTTP client tested with a fake `fetch` |
 | 10 | Exports, README, changeset, full verification | Build, tests, ESM guard and changeset check green |
 
@@ -110,7 +110,7 @@ packages/WorkQueue/core/
   - Spec 03 §2: `PublishRequest<TPayload>`, `PublishStatus`, `PublishError`, `PublishResult`, `IWorkPublisher`; plus `PublishErrorCodes` (const object of every code string), `PublishErrorCode`, `IsRetryablePublishErrorCode(code: string): boolean`, `CreatePublishError(code: string, message: string): PublishError`, `RejectedPublishResult(messageID: string, code: string, message: string): PublishResult`
   - Spec 03 §3: `WorkProgress`, `WorkLogger`, `WorkContext`, `WorkOutcome`, `Outcome`, `WorkHandler<TPayload>`, `FatalWorkError`, `TransientWorkError`, `WorkQueueConfigurationError`; plus `NULL_WORK_LOGGER: WorkLogger`
   - Spec 03 §3.1: `PartitionMode`, `OrderingMode`, `HeartbeatMode`, `HostType`, `DeliveryStatus`, `SubscriptionPolicy`; plus `SUBSCRIPTION_POLICY_DEFAULTS`
-  - Spec 03 §4 types: `FilterCondition`, `SubscriptionFilter`
+  - Spec 03 §4 types: `FilterOperator`, `FilterRule`, `FilterGroup`, `SubscriptionFilter`, `FilterSupport`
   - Spec 03 §5: `TopicBinding`, `SubscriptionBinding`, `ReceivedDelivery<TPayload>`, `SettleResult`, `TransportCapabilities`, `ITransportDriver`, `DatabasePublishOptions`, `ITransportConsumer<TPayload>`, `BindingValidationIssue`
   - Spec 03 §5.2: `SubscriptionStats`, `DeadLetterRecord`, `PartitionCondition`, `PartitionStateRecord`, `Page<T>`, `OperatorResult`, `ITransportOperator`
   - Spec 03 §10: `TopologyManifest`, `ManifestTopic`, `ManifestSubscription`, `BindingImport`
@@ -382,7 +382,11 @@ export interface WorkMessage<TPayload extends WorkJson = WorkJson> {
     PartitionKey?: string;
     /** Present only on ExplicitSequence topics. Starts at 1 per PartitionKey. */
     Sequence?: number;
-    /** ≤ 10 entries; keys 1–64 chars [A-Za-z0-9_.-], values ≤ 256 chars. The only fields filters see. */
+    /**
+     * ≤ 10 entries; keys 1–64 chars [A-Za-z0-9_-] (no dots: a dotted name is MJ's `source.field` filter form,
+     * which filters reject, so a dotted attribute would be unfilterable); values ≤ 256 chars.
+     * The only fields filters see.
+     */
     Attributes: Record<string, string>;
     Payload?: TPayload;
     PayloadRef?: WorkPayloadRef;
@@ -525,15 +529,34 @@ export const SUBSCRIPTION_POLICY_DEFAULTS: Readonly<
 `src/filterTypes.ts`:
 
 ```typescript
-/** One condition on one attribute (spec 03 §4). */
-export type FilterCondition =
-    | string
-    | { prefix: string }
-    | { exists: boolean }
-    | { 'anything-but': string[] };
+/**
+ * Subscription filters are MJ's `CompositeFilterDescriptor` JSON (the shape `mj-filter-builder` edits and user views
+ * persist), restricted to what every transport can express — spec 03 §4. `field` is an envelope attribute name.
+ */
+export type FilterOperator = 'eq' | 'neq' | 'startswith' | 'isnull' | 'isnotnull';
 
-/** Attribute name → conditions. OR within an array, AND across keys. */
-export type SubscriptionFilter = Record<string, FilterCondition[]>;
+export interface FilterRule {
+    field: string;
+    operator: FilterOperator;
+    /** Normalised to a string when parsed; absent for isnull/isnotnull. */
+    value?: string | number | boolean | null;
+}
+
+export interface FilterGroup {
+    logic: 'and' | 'or';
+    filters: (FilterRule | FilterGroup)[];
+}
+
+export type SubscriptionFilter = FilterGroup;
+
+/** What one transport accepts; drivers publish this as `TransportCapabilities.Filters` (spec 03 §4.1). */
+export interface FilterSupport {
+    Operators: FilterOperator[];
+    /** A nested group may only be a single-field OR of `eq`. */
+    SingleFieldOrGroups: boolean;
+    MaxFields: number;
+    MaxValues: number;
+}
 ```
 
 - [ ] **Step 8: Write `src/handler.ts` and `src/errors.ts`**
@@ -566,9 +589,13 @@ export interface WorkContext {
     readonly Attempt: number;
     readonly MaxAttempts: number;
     readonly IsReplay: boolean;
-    /** Aborted on lease loss, MaxProcessingSeconds, or host shutdown. */
+    /** Aborted on lease loss (including operator cancel), MaxProcessingSeconds, or host shutdown. */
     readonly Signal: AbortSignal;
-    /** Renews the lease and records progress. Resolves false once the lease is lost; the handler must stop. */
+    /**
+     * Renews the lease and records progress. Resolves false once the lease is lost — either taken over after
+     * expiry, or revoked by an operator cancel (spec 03 §7) — and the handler must stop. A transient transport
+     * failure does not resolve false: it is retried on the next tick while the lease is still valid.
+     */
     Heartbeat(progress?: WorkProgress): Promise<boolean>;
     readonly Log: WorkLogger;
 }
@@ -647,7 +674,7 @@ export class WorkQueueConfigurationError extends Error {
 
 ```typescript
 import type { WorkJson, WorkMessage } from './envelope';
-import type { SubscriptionFilter } from './filterTypes';
+import type { FilterSupport, SubscriptionFilter } from './filterTypes';
 import type { WorkProgress } from './handler';
 import type { ITransportOperator } from './operator';
 import type { DeliveryStatus, HostType, OrderingMode, SubscriptionPolicy } from './policy';
@@ -686,6 +713,8 @@ export type SettleResult =
     | { Kind: 'Failed'; DeliveryID: string; Error: string };
 
 export interface TransportCapabilities {
+    /** Filter operators and structure this transport accepts (spec 03 §4.1). */
+    Filters: FilterSupport;
     /** Database true; AWS false */
     DetectsMessageIDDuplicates: boolean;
     /** Database true; AWS false */
@@ -696,6 +725,8 @@ export interface TransportCapabilities {
     SupportsExternalHosts: boolean;
     /** Database true; AWS false */
     CancelPending: boolean;
+    /** Cancel an InFlight delivery by revoking its lease (spec 03 §7). Database true; AWS false. */
+    CancelInFlight: boolean;
     /** Database true; AWS false */
     ListPartitions: boolean;
     /** Database Full; AWS BestEffort (≤ 100 scanned) */
@@ -794,7 +825,10 @@ export interface Page<T> {
     NextCursor: string | null;
 }
 
-export type OperatorResult = { Supported: false } | { Supported: true; Changed: boolean };
+export type OperatorResult =
+    | { Supported: false }
+    /** CancelRequested: an InFlight delivery was revoked (lease token rotated); it settles as Discarded when its lease expires. */
+    | { Supported: true; Changed: boolean; CancelRequested?: boolean };
 
 export interface ITransportOperator {
     GetStats(subscription: SubscriptionBinding): Promise<SubscriptionStats>;
@@ -807,7 +841,8 @@ export interface ITransportOperator {
         pageSize: number,
     ): Promise<Page<PartitionStateRecord> | null>;
     Replay(subscription: SubscriptionBinding, deliveryID: string, actorUserID: string | null, note: string | null): Promise<OperatorResult>;
-    /** Pending (requires CancelPending) or DeadLettered → Discarded. InFlight → Changed false. */
+    /** Pending (requires CancelPending) or DeadLettered → Discarded immediately.
+     *  InFlight (requires CancelInFlight) → lease revoked, `CancelRequested: true` (spec 03 §7). */
     Discard(subscription: SubscriptionBinding, deliveryID: string, reason: string, actorUserID: string | null): Promise<OperatorResult>;
     SkipSequence(
         subscription: SubscriptionBinding,
@@ -910,7 +945,7 @@ Rules (spec 03 §1.1). Core checks every rule that needs no MJ state, in this or
 | Order | Rule | Code |
 | --- | --- | --- |
 | 1 | `MessageID`, if supplied, is a UUID (any case) | `InvalidMessageID` |
-| 2 | ≤ 10 attributes; key matches `^[A-Za-z0-9_.-]{1,64}$`; key does not start with `mj.`/`mj_` (case-insensitive); value is a string ≤ 256 chars | `InvalidAttributes` |
+| 2 | ≤ 10 attributes; key matches `^[A-Za-z0-9_-]{1,64}$` (no dots — spec 03 §1.1); key does not start with `mj` followed by `.` or `_` (case-insensitive); value is a string ≤ 256 chars | `InvalidAttributes` |
 | 3 | Not both `Payload` and `PayloadRef`; `PayloadRef.Uri` non-empty | `InvalidPayload` |
 | 4 | `PartitionKey`, if supplied, is 1–200 chars | `InvalidPartitionKey` |
 | 5 | `PublishOrder` topic: no `Sequence` | `SequenceNotAllowed` |
@@ -979,9 +1014,12 @@ describe('ValidatePublishRequest', () => {
         expect(codeOf(topic(), { Attributes: attributes })).toBe('InvalidAttributes');
     });
 
-    it('rejects attribute keys outside the allowed pattern', () => {
+    it('rejects attribute keys outside the allowed pattern, including dotted names', () => {
         expect(codeOf(topic(), { Attributes: { 'bad key': 'v' } })).toBe('InvalidAttributes');
         expect(codeOf(topic(), { Attributes: { ['k'.repeat(65)]: 'v' } })).toBe('InvalidAttributes');
+        // A dot would make the attribute unfilterable: filters read 'a.b' as the source.field form (spec 03 §1.1).
+        expect(codeOf(topic(), { Attributes: { 'a.b': 'v' } })).toBe('InvalidAttributes');
+        expect(codeOf(topic(), { Attributes: { 'a-b_C9': 'v' } })).toBeNull();
     });
 
     it('rejects reserved attribute prefixes regardless of case', () => {
@@ -1136,7 +1174,8 @@ export const MAX_DEDUPLICATION_KEY_LENGTH = 200;
 export const MIN_DEDUPLICATION_TTL_SECONDS = 60;
 export const MAX_DEDUPLICATION_TTL_SECONDS = 2592000;
 
-const ATTRIBUTE_KEY_PATTERN = /^[A-Za-z0-9_.-]{1,64}$/;
+/** No dot: a dotted name is MJ's `source.field` filter form, so a dotted attribute key could never be filtered. */
+const ATTRIBUTE_KEY_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 const UUID_PATTERN = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 const RESERVED_ATTRIBUTE_PREFIXES = ['mj.', 'mj_'];
 const SIZE_PLACEHOLDER_MESSAGE_ID = '00000000-0000-0000-0000-000000000000';
@@ -1322,7 +1361,7 @@ git commit -m "feat(work-queue-core): publish request validation and envelope bu
 
 ---
 
-### Task 3: Filter grammar
+### Task 3: Filters (`CompositeFilterDescriptor`, restricted)
 
 **Files:**
 - Create: `packages/WorkQueue/core/src/filter.ts`
@@ -1330,14 +1369,27 @@ git commit -m "feat(work-queue-core): publish request validation and envelope bu
 - Test: `packages/WorkQueue/core/src/__tests__/filter.test.ts`
 
 **Interfaces:**
-- Consumes: `FilterCondition`, `SubscriptionFilter` (filterTypes.ts), `WorkQueueConfigurationError` (errors.ts) — Task 1.
+- Consumes: `FilterOperator`, `FilterRule`, `FilterGroup`, `SubscriptionFilter`, `FilterSupport` (filterTypes.ts), `WorkQueueConfigurationError` (errors.ts) — Task 1.
 - Produces:
-  - `MAX_FILTER_KEYS = 5`, `MAX_FILTER_VALUES = 50`
-  - `ParseSubscriptionFilter(json: string | null): SubscriptionFilter | null` — null/blank text → `null`; throws `WorkQueueConfigurationError` on invalid JSON or grammar
-  - `ValidateSubscriptionFilter(value: unknown): SubscriptionFilter` — the grammar check on an already-parsed value (used by the engine's entity validation)
+  - `WORK_QUEUE_FILTER_SUPPORT: FilterSupport` — every operator, single-field OR groups, `MaxFields` 5, `MaxValues` 50 (what the Database transport accepts)
+  - `ParseSubscriptionFilter(json: string | null, support: FilterSupport): SubscriptionFilter | null` — null/blank text → `null`; throws `WorkQueueConfigurationError` on invalid JSON or an unsupported shape
+  - `ValidateSubscriptionFilter(value: unknown, support: FilterSupport): SubscriptionFilter` — the same check on an already-parsed value (used by the engine's entity validation and by `SubscriptionUnsupportedReason`)
   - `MatchesFilter(filter: SubscriptionFilter | null, attributes: Record<string, string>): boolean`
+  - `FilterFields(filter: SubscriptionFilter | null): string[]` — distinct field names, for binding validation and manifest rendering
 
-Grammar (spec 03 §4): a JSON object; each key is a valid attribute name mapping to a non-empty array; each entry is a string, `{ "prefix": non-empty string }`, `{ "exists": boolean }` or `{ "anything-but": non-empty string[] }` with exactly one property. At most 5 keys and 50 values in total (a string, `prefix` or `exists` counts 1; `anything-but` counts its array length). Matching: AND across keys, OR within an array. A missing attribute fails every condition except `{ "exists": false }`.
+Shape (spec 03 §4): MJ's `CompositeFilterDescriptor` — `{ logic: 'and' | 'or', filters: (rule | group)[] }`, where a rule is
+`{ field, operator, value? }`. `field` is a bare envelope attribute name; the dotted `source.field` form used by
+multi-record view filters is rejected. The root's `logic` must be `and`; a nested group may only be a single-field OR of
+`eq` (its depth limit is one level). Operators: `eq`, `neq`, `startswith`, `isnull`, `isnotnull`, each subject to
+`support.Operators`. Values are normalised to strings (`String(value)`), because envelope attributes are strings; `eq`,
+`neq` and `startswith` require a value, `isnull`/`isnotnull` must not carry one. **Each field may be constrained only
+once** — one rule, or one single-field OR group: brokers read a field's value array as OR, so two AND-ed rules on one
+field would silently widen the filter instead of narrowing it (plan 07's `ToSnsFilterPolicy` relies on this). Limits:
+`support.MaxFields` distinct fields, `support.MaxValues` values in total.
+
+Matching is **case-sensitive** (brokers match exactly; MJ's own `CompositeFilter` lowercases both sides, and spec 03 §4.3
+records this as the one deliberate divergence). A missing attribute fails every operator except `isnull`. A `null` filter,
+or one whose `filters` array is empty, matches everything.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1345,106 +1397,249 @@ Grammar (spec 03 §4): a JSON object; each key is a valid attribute name mapping
 
 ```typescript
 import { describe, it, expect } from 'vitest';
-import { MatchesFilter, ParseSubscriptionFilter, ValidateSubscriptionFilter } from '../filter';
+import { WORK_QUEUE_FILTER_SUPPORT, FilterFields, MatchesFilter, ParseSubscriptionFilter, ValidateSubscriptionFilter } from '../filter';
 import { WorkQueueConfigurationError } from '../errors';
-import type { SubscriptionFilter } from '../filterTypes';
+import type { FilterSupport, SubscriptionFilter } from '../filterTypes';
+
+const NO_GROUPS: FilterSupport = { ...WORK_QUEUE_FILTER_SUPPORT, SingleFieldOrGroups: false };
+const EQ_ONLY: FilterSupport = { ...WORK_QUEUE_FILTER_SUPPORT, Operators: ['eq'] };
 
 describe('ParseSubscriptionFilter', () => {
     it('returns null for null or blank text', () => {
-        expect(ParseSubscriptionFilter(null)).toBeNull();
-        expect(ParseSubscriptionFilter('   ')).toBeNull();
+        expect(ParseSubscriptionFilter(null, WORK_QUEUE_FILTER_SUPPORT)).toBeNull();
+        expect(ParseSubscriptionFilter('   ', WORK_QUEUE_FILTER_SUPPORT)).toBeNull();
     });
 
-    it('parses all four condition kinds', () => {
+    it('parses the spec 03 §4 example: rules, a single-field OR group and a presence test', () => {
         const filter = ParseSubscriptionFilter(
-            '{"eventType":["click","open"],"tenant":[{"prefix":"acme-"}],"priority":[{"exists":true}],"source":[{"anything-but":["test"]}]}',
+            JSON.stringify({
+                logic: 'and',
+                filters: [
+                    { field: 'eventType', operator: 'eq', value: 'click' },
+                    { logic: 'or', filters: [
+                        { field: 'tenant', operator: 'eq', value: 'acme' },
+                        { field: 'tenant', operator: 'eq', value: 'globex' },
+                    ] },
+                    { field: 'campaign', operator: 'isnotnull', value: null },
+                ],
+            }),
+            WORK_QUEUE_FILTER_SUPPORT,
         );
         expect(filter).toEqual({
-            eventType: ['click', 'open'],
-            tenant: [{ prefix: 'acme-' }],
-            priority: [{ exists: true }],
-            source: [{ 'anything-but': ['test'] }],
+            logic: 'and',
+            filters: [
+                { field: 'eventType', operator: 'eq', value: 'click' },
+                { logic: 'or', filters: [
+                    { field: 'tenant', operator: 'eq', value: 'acme' },
+                    { field: 'tenant', operator: 'eq', value: 'globex' },
+                ] },
+                { field: 'campaign', operator: 'isnotnull' },
+            ],
+        });
+    });
+
+    it('normalises number and boolean values to strings', () => {
+        const filter = ParseSubscriptionFilter(
+            '{"logic":"and","filters":[{"field":"attempt","operator":"eq","value":2},{"field":"live","operator":"eq","value":true}]}',
+            WORK_QUEUE_FILTER_SUPPORT,
+        );
+        expect(filter).toEqual({
+            logic: 'and',
+            filters: [
+                { field: 'attempt', operator: 'eq', value: '2' },
+                { field: 'live', operator: 'eq', value: 'true' },
+            ],
         });
     });
 
     it('rejects text that is not JSON', () => {
-        expect(() => ParseSubscriptionFilter('{eventType:')).toThrow(WorkQueueConfigurationError);
+        expect(() => ParseSubscriptionFilter('{logic:', WORK_QUEUE_FILTER_SUPPORT)).toThrow(WorkQueueConfigurationError);
     });
 
-    it('rejects a root that is not an object', () => {
-        expect(() => ParseSubscriptionFilter('["click"]')).toThrow('Filter must be a JSON object');
-        expect(() => ParseSubscriptionFilter('"click"')).toThrow('Filter must be a JSON object');
+    it('rejects a root that is not a CompositeFilterDescriptor', () => {
+        expect(() => ParseSubscriptionFilter('[]', WORK_QUEUE_FILTER_SUPPORT)).toThrow('Filter must be a CompositeFilterDescriptor');
+        expect(() => ParseSubscriptionFilter('{"field":"a","operator":"eq","value":"1"}', WORK_QUEUE_FILTER_SUPPORT))
+            .toThrow('Filter must be a CompositeFilterDescriptor');
     });
 
-    it('rejects more than five keys', () => {
-        expect(() => ParseSubscriptionFilter('{"a":["1"],"b":["1"],"c":["1"],"d":["1"],"e":["1"],"f":["1"]}')).toThrow('at most 5');
+    it("rejects a root whose logic is not 'and'", () => {
+        expect(() => ParseSubscriptionFilter('{"logic":"or","filters":[{"field":"a","operator":"eq","value":"1"}]}', WORK_QUEUE_FILTER_SUPPORT))
+            .toThrow("Filter root logic must be 'and'");
     });
 
-    it('rejects more than fifty values in total', () => {
-        const values = Array.from({ length: 26 }, (_, i) => `v${i}`);
-        const json = JSON.stringify({ a: values, b: [{ 'anything-but': values }] });
-        expect(() => ParseSubscriptionFilter(json)).toThrow('at most 50');
+    it('rejects an operator the transport does not support, naming field and operator', () => {
+        expect(() => ValidateSubscriptionFilter(
+            { logic: 'and', filters: [{ field: 'tenant', operator: 'contains', value: 'acme' }] },
+            WORK_QUEUE_FILTER_SUPPORT,
+        )).toThrow("Filter operator 'contains' on field 'tenant' is not supported");
+        expect(() => ValidateSubscriptionFilter(
+            { logic: 'and', filters: [{ field: 'tenant', operator: 'startswith', value: 'acme' }] },
+            EQ_ONLY,
+        )).toThrow("Filter operator 'startswith' on field 'tenant' is not supported");
     });
 
-    it('rejects invalid attribute names', () => {
-        expect(() => ParseSubscriptionFilter('{"bad key":["x"]}')).toThrow("Filter key 'bad key'");
+    it('rejects dotted multi-record field names', () => {
+        expect(() => ValidateSubscriptionFilter(
+            { logic: 'and', filters: [{ field: 'source.name', operator: 'eq', value: 'x' }] },
+            WORK_QUEUE_FILTER_SUPPORT,
+        )).toThrow("Filter field 'source.name'");
     });
 
-    it('rejects keys that do not map to a non-empty array', () => {
-        expect(() => ParseSubscriptionFilter('{"a":[]}')).toThrow('non-empty array');
-        expect(() => ParseSubscriptionFilter('{"a":"x"}')).toThrow('non-empty array');
+    it('rejects a group that mixes fields or uses an operator other than eq', () => {
+        expect(() => ValidateSubscriptionFilter(
+            { logic: 'and', filters: [{ logic: 'or', filters: [
+                { field: 'tenant', operator: 'eq', value: 'acme' },
+                { field: 'region', operator: 'eq', value: 'eu' },
+            ] }] },
+            WORK_QUEUE_FILTER_SUPPORT,
+        )).toThrow('single field');
+        expect(() => ValidateSubscriptionFilter(
+            { logic: 'and', filters: [{ logic: 'or', filters: [
+                { field: 'tenant', operator: 'eq', value: 'acme' },
+                { field: 'tenant', operator: 'startswith', value: 'glo' },
+            ] }] },
+            WORK_QUEUE_FILTER_SUPPORT,
+        )).toThrow("only 'eq'");
     });
 
-    it('rejects malformed condition objects', () => {
-        expect(() => ValidateSubscriptionFilter({ a: [{ prefix: '' }] })).toThrow("condition for 'a'");
-        expect(() => ValidateSubscriptionFilter({ a: [{ exists: 'yes' }] })).toThrow("condition for 'a'");
-        expect(() => ValidateSubscriptionFilter({ a: [{ 'anything-but': [1] }] })).toThrow("condition for 'a'");
-        expect(() => ValidateSubscriptionFilter({ a: [{ prefix: 'x', exists: true }] })).toThrow("condition for 'a'");
-        expect(() => ValidateSubscriptionFilter({ a: [{ numeric: 1 }] })).toThrow("condition for 'a'");
-        expect(() => ValidateSubscriptionFilter({ a: [7] })).toThrow("condition for 'a'");
+    it('rejects groups when the transport does not support them, and rejects deeper nesting', () => {
+        expect(() => ValidateSubscriptionFilter(
+            { logic: 'and', filters: [{ logic: 'or', filters: [{ field: 'a', operator: 'eq', value: '1' }] }] },
+            NO_GROUPS,
+        )).toThrow('does not support OR groups');
+        expect(() => ValidateSubscriptionFilter(
+            { logic: 'and', filters: [{ logic: 'or', filters: [
+                { logic: 'or', filters: [{ field: 'a', operator: 'eq', value: '1' }] },
+            ] }] },
+            WORK_QUEUE_FILTER_SUPPORT,
+        )).toThrow('nesting');
+    });
+
+    it('rejects a field constrained more than once', () => {
+        expect(() => ValidateSubscriptionFilter(
+            { logic: 'and', filters: [
+                { field: 'tenant', operator: 'eq', value: 'acme' },
+                { field: 'tenant', operator: 'startswith', value: 'ac' },
+            ] },
+            WORK_QUEUE_FILTER_SUPPORT,
+        )).toThrow("Filter field 'tenant' is constrained more than once");
+        expect(() => ValidateSubscriptionFilter(
+            { logic: 'and', filters: [
+                { field: 'tenant', operator: 'eq', value: 'acme' },
+                { logic: 'or', filters: [
+                    { field: 'tenant', operator: 'eq', value: 'globex' },
+                    { field: 'tenant', operator: 'eq', value: 'initech' },
+                ] },
+            ] },
+            WORK_QUEUE_FILTER_SUPPORT,
+        )).toThrow('constrained more than once');
+    });
+
+    it('rejects more fields or values than the transport allows', () => {
+        const manyFields = { logic: 'and', filters: ['a', 'b', 'c', 'd', 'e', 'f'].map((field) => ({ field, operator: 'eq', value: '1' })) };
+        expect(() => ValidateSubscriptionFilter(manyFields, WORK_QUEUE_FILTER_SUPPORT)).toThrow('at most 5 fields');
+
+        const manyValues = {
+            logic: 'and',
+            filters: [{ logic: 'or', filters: Array.from({ length: 51 }, (_, i) => ({ field: 'tenant', operator: 'eq', value: `v${i}` })) }],
+        };
+        expect(() => ValidateSubscriptionFilter(manyValues, WORK_QUEUE_FILTER_SUPPORT)).toThrow('at most 50 values');
+    });
+
+    it('requires a value for eq, neq and startswith, and forbids one for isnull', () => {
+        expect(() => ValidateSubscriptionFilter(
+            { logic: 'and', filters: [{ field: 'a', operator: 'eq' }] },
+            WORK_QUEUE_FILTER_SUPPORT,
+        )).toThrow("operator 'eq' on field 'a' requires a value");
+        expect(() => ValidateSubscriptionFilter(
+            { logic: 'and', filters: [{ field: 'a', operator: 'isnull', value: 'x' }] },
+            WORK_QUEUE_FILTER_SUPPORT,
+        )).toThrow("operator 'isnull' on field 'a' takes no value");
+    });
+
+    it('lists distinct fields', () => {
+        const filter = ValidateSubscriptionFilter(
+            { logic: 'and', filters: [
+                { field: 'eventType', operator: 'eq', value: 'click' },
+                { logic: 'or', filters: [
+                    { field: 'tenant', operator: 'eq', value: 'acme' },
+                    { field: 'tenant', operator: 'eq', value: 'globex' },
+                ] },
+            ] },
+            WORK_QUEUE_FILTER_SUPPORT,
+        );
+        expect(FilterFields(filter)).toEqual(['eventType', 'tenant']);
+        expect(FilterFields(null)).toEqual([]);
     });
 });
 
 describe('MatchesFilter', () => {
+    const parse = (value: unknown): SubscriptionFilter => ValidateSubscriptionFilter(value, WORK_QUEUE_FILTER_SUPPORT);
+
     it('matches everything for a null or empty filter', () => {
         expect(MatchesFilter(null, {})).toBe(true);
-        expect(MatchesFilter({}, { eventType: 'click' })).toBe(true);
+        expect(MatchesFilter({ logic: 'and', filters: [] }, { eventType: 'click' })).toBe(true);
     });
 
-    it('matches exact values as any-of', () => {
-        const filter: SubscriptionFilter = { eventType: ['click', 'open'] };
-        expect(MatchesFilter(filter, { eventType: 'open' })).toBe(true);
-        expect(MatchesFilter(filter, { eventType: 'bounce' })).toBe(false);
+    it('matches eq exactly', () => {
+        const filter = parse({ logic: 'and', filters: [{ field: 'eventType', operator: 'eq', value: 'click' }] });
+        expect(MatchesFilter(filter, { eventType: 'click' })).toBe(true);
+        expect(MatchesFilter(filter, { eventType: 'open' })).toBe(false);
     });
 
-    it('matches prefixes', () => {
-        expect(MatchesFilter({ tenant: [{ prefix: 'acme-' }] }, { tenant: 'acme-7' })).toBe(true);
-        expect(MatchesFilter({ tenant: [{ prefix: 'acme-' }] }, { tenant: 'globex' })).toBe(false);
+    it('is case-sensitive, unlike MJ CompositeFilter', () => {
+        const filter = parse({ logic: 'and', filters: [{ field: 'eventType', operator: 'eq', value: 'click' }] });
+        expect(MatchesFilter(filter, { eventType: 'Click' })).toBe(false);
+        const prefix = parse({ logic: 'and', filters: [{ field: 'tenant', operator: 'startswith', value: 'acme' }] });
+        expect(MatchesFilter(prefix, { tenant: 'ACME-7' })).toBe(false);
     });
 
-    it('matches exists true and false against present and missing attributes', () => {
-        expect(MatchesFilter({ priority: [{ exists: true }] }, { priority: 'high' })).toBe(true);
-        expect(MatchesFilter({ priority: [{ exists: true }] }, {})).toBe(false);
-        expect(MatchesFilter({ priority: [{ exists: false }] }, {})).toBe(true);
-        expect(MatchesFilter({ priority: [{ exists: false }] }, { priority: 'high' })).toBe(false);
-    });
-
-    it('matches anything-but only when the attribute is present', () => {
-        const filter: SubscriptionFilter = { source: [{ 'anything-but': ['test'] }] };
+    it('matches neq only when the attribute is present and different', () => {
+        const filter = parse({ logic: 'and', filters: [{ field: 'source', operator: 'neq', value: 'test' }] });
         expect(MatchesFilter(filter, { source: 'prod' })).toBe(true);
         expect(MatchesFilter(filter, { source: 'test' })).toBe(false);
         expect(MatchesFilter(filter, {})).toBe(false);
     });
 
-    it('requires every key to match', () => {
-        const filter: SubscriptionFilter = { eventType: ['unsubscribe'], provider: ['sendgrid'] };
+    it('matches startswith', () => {
+        const filter = parse({ logic: 'and', filters: [{ field: 'tenant', operator: 'startswith', value: 'acme-' }] });
+        expect(MatchesFilter(filter, { tenant: 'acme-7' })).toBe(true);
+        expect(MatchesFilter(filter, { tenant: 'globex' })).toBe(false);
+    });
+
+    it('matches isnull and isnotnull against missing and present attributes', () => {
+        const present = parse({ logic: 'and', filters: [{ field: 'priority', operator: 'isnotnull' }] });
+        const absent = parse({ logic: 'and', filters: [{ field: 'priority', operator: 'isnull' }] });
+        expect(MatchesFilter(present, { priority: 'high' })).toBe(true);
+        expect(MatchesFilter(present, {})).toBe(false);
+        expect(MatchesFilter(absent, {})).toBe(true);
+        expect(MatchesFilter(absent, { priority: 'high' })).toBe(false);
+    });
+
+    it('requires every top-level rule to match', () => {
+        const filter = parse({ logic: 'and', filters: [
+            { field: 'eventType', operator: 'eq', value: 'unsubscribe' },
+            { field: 'provider', operator: 'eq', value: 'sendgrid' },
+        ] });
         expect(MatchesFilter(filter, { eventType: 'unsubscribe', provider: 'sendgrid' })).toBe(true);
         expect(MatchesFilter(filter, { eventType: 'unsubscribe', provider: 'ses' })).toBe(false);
     });
 
-    it('fails string and prefix conditions on a missing attribute', () => {
-        expect(MatchesFilter({ eventType: ['click'] }, {})).toBe(false);
-        expect(MatchesFilter({ tenant: [{ prefix: '' + 'a' }] }, {})).toBe(false);
+    it('matches any value inside a single-field OR group', () => {
+        const filter = parse({ logic: 'and', filters: [{ logic: 'or', filters: [
+            { field: 'tenant', operator: 'eq', value: 'acme' },
+            { field: 'tenant', operator: 'eq', value: 'globex' },
+        ] }] });
+        expect(MatchesFilter(filter, { tenant: 'globex' })).toBe(true);
+        expect(MatchesFilter(filter, { tenant: 'initech' })).toBe(false);
+    });
+
+    it('fails every operator except isnull on a missing attribute', () => {
+        for (const operator of ['eq', 'neq', 'startswith'] as const) {
+            const filter = parse({ logic: 'and', filters: [{ field: 'tenant', operator, value: 'acme' }] });
+            expect(MatchesFilter(filter, {})).toBe(false);
+        }
+        expect(MatchesFilter(parse({ logic: 'and', filters: [{ field: 'tenant', operator: 'isnull' }] }), {})).toBe(true);
     });
 });
 ```
@@ -1458,15 +1653,22 @@ Expected: FAIL — unresolved import `../filter`.
 
 ```typescript
 import { WorkQueueConfigurationError } from './errors';
-import type { FilterCondition, SubscriptionFilter } from './filterTypes';
+import type { FilterGroup, FilterOperator, FilterRule, FilterSupport, SubscriptionFilter } from './filterTypes';
 
-export const MAX_FILTER_KEYS = 5;
-export const MAX_FILTER_VALUES = 50;
+const ALL_OPERATORS: FilterOperator[] = ['eq', 'neq', 'startswith', 'isnull', 'isnotnull'];
+const VALUELESS_OPERATORS: FilterOperator[] = ['isnull', 'isnotnull'];
+const ATTRIBUTE_NAME_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 
-const ATTRIBUTE_KEY_PATTERN = /^[A-Za-z0-9_.-]{1,64}$/;
+/** What the Database transport accepts; cloud drivers narrow it. */
+export const WORK_QUEUE_FILTER_SUPPORT: FilterSupport = {
+    Operators: ALL_OPERATORS,
+    SingleFieldOrGroups: true,
+    MaxFields: 5,
+    MaxValues: 50,
+};
 
 /** Parses a subscription's Filter column. Null or blank text means "match everything". */
-export function ParseSubscriptionFilter(json: string | null): SubscriptionFilter | null {
+export function ParseSubscriptionFilter(json: string | null, support: FilterSupport): SubscriptionFilter | null {
     if (json === null || json.trim() === '') {
         return null;
     }
@@ -1476,92 +1678,186 @@ export function ParseSubscriptionFilter(json: string | null): SubscriptionFilter
     } catch {
         throw new WorkQueueConfigurationError('Filter is not valid JSON');
     }
-    return ValidateSubscriptionFilter(parsed);
+    return ValidateSubscriptionFilter(parsed, support);
 }
 
-/** Checks an already-parsed value against the filter grammar and limits. */
-export function ValidateSubscriptionFilter(value: unknown): SubscriptionFilter {
-    if (!isPlainObject(value)) {
-        throw new WorkQueueConfigurationError('Filter must be a JSON object');
+/** Checks an already-parsed CompositeFilterDescriptor against the queue's subset and this transport's support. */
+export function ValidateSubscriptionFilter(value: unknown, support: FilterSupport): SubscriptionFilter {
+    if (!isGroup(value)) {
+        throw new WorkQueueConfigurationError(
+            'Filter must be a CompositeFilterDescriptor object: { "logic": "and", "filters": [...] }',
+        );
     }
-    const entries = Object.entries(value);
-    if (entries.length > MAX_FILTER_KEYS) {
-        throw new WorkQueueConfigurationError(`Filter may have at most ${MAX_FILTER_KEYS} keys; got ${entries.length}`);
+    if (value.logic !== 'and') {
+        throw new WorkQueueConfigurationError("Filter root logic must be 'and'; OR is only allowed inside a single-field group");
     }
-    const filter: SubscriptionFilter = {};
-    let totalValues = 0;
-    for (const [key, conditions] of entries) {
-        if (!ATTRIBUTE_KEY_PATTERN.test(key)) {
-            throw new WorkQueueConfigurationError(`Filter key '${key}' is not a valid attribute name`);
+    const filters = value.filters.map((entry) => (isGroup(entry) ? validateGroup(entry, support) : validateRule(entry, support)));
+    const constrained = new Set<string>();
+    for (const entry of filters) {
+        const field = entryField(entry);
+        if (constrained.has(field)) {
+            throw new WorkQueueConfigurationError(
+                `Filter field '${field}' is constrained more than once; combine the conditions into a single rule or one OR group`,
+            );
         }
-        if (!Array.isArray(conditions) || conditions.length === 0) {
-            throw new WorkQueueConfigurationError(`Filter key '${key}' must map to a non-empty array of conditions`);
-        }
-        const parsedConditions = conditions.map((condition) => parseCondition(key, condition));
-        totalValues += parsedConditions.reduce((sum, condition) => sum + conditionValueCount(condition), 0);
-        filter[key] = parsedConditions;
+        constrained.add(field);
     }
-    if (totalValues > MAX_FILTER_VALUES) {
-        throw new WorkQueueConfigurationError(`Filter may have at most ${MAX_FILTER_VALUES} values in total; got ${totalValues}`);
+    const result: SubscriptionFilter = { logic: 'and', filters };
+    const fields = FilterFields(result);
+    if (fields.length > support.MaxFields) {
+        throw new WorkQueueConfigurationError(`Filter may reference at most ${support.MaxFields} fields; got ${fields.length}`);
     }
-    return filter;
+    const values = countValues(result);
+    if (values > support.MaxValues) {
+        throw new WorkQueueConfigurationError(`Filter may have at most ${support.MaxValues} values in total; got ${values}`);
+    }
+    return result;
 }
 
-/** AND across keys, OR within each key's conditions. */
+/** AND across the root's entries; OR inside a single-field group. Case-sensitive (spec 03 §4.3). */
 export function MatchesFilter(filter: SubscriptionFilter | null, attributes: Record<string, string>): boolean {
-    if (filter === null) {
+    if (filter === null || filter.filters.length === 0) {
         return true;
     }
-    return Object.entries(filter).every(([key, conditions]) => {
-        const value = Object.prototype.hasOwnProperty.call(attributes, key) ? attributes[key] : undefined;
-        return conditions.some((condition) => matchesCondition(condition, value));
-    });
+    return matchesGroup(filter, attributes);
 }
 
-function matchesCondition(condition: FilterCondition, value: string | undefined): boolean {
-    if (typeof condition === 'string') {
-        return value === condition;
+/** Distinct field names, in first-seen order. */
+export function FilterFields(filter: SubscriptionFilter | null): string[] {
+    if (filter === null) {
+        return [];
     }
-    if ('exists' in condition) {
-        return condition.exists === (value !== undefined);
+    const seen: string[] = [];
+    walkRules(filter, (rule) => {
+        if (!seen.includes(rule.field)) {
+            seen.push(rule.field);
+        }
+    });
+    return seen;
+}
+
+function matchesGroup(group: FilterGroup, attributes: Record<string, string>): boolean {
+    const results = group.filters.map((entry) =>
+        isGroup(entry) ? matchesGroup(entry, attributes) : matchesRule(entry, attributes),
+    );
+    return group.logic === 'and' ? results.every(Boolean) : results.some(Boolean);
+}
+
+function matchesRule(rule: FilterRule, attributes: Record<string, string>): boolean {
+    const present = Object.prototype.hasOwnProperty.call(attributes, rule.field);
+    const value = present ? attributes[rule.field] : undefined;
+    if (rule.operator === 'isnull') {
+        return !present;
+    }
+    if (rule.operator === 'isnotnull') {
+        return present;
     }
     if (value === undefined) {
         return false;
     }
-    if ('prefix' in condition) {
-        return value.startsWith(condition.prefix);
+    const expected = String(rule.value ?? '');
+    switch (rule.operator) {
+        case 'eq':
+            return value === expected;
+        case 'neq':
+            return value !== expected;
+        default:
+            return value.startsWith(expected);
     }
-    return !condition['anything-but'].includes(value);
 }
 
-function parseCondition(key: string, value: unknown): FilterCondition {
-    if (typeof value === 'string') {
-        return value;
+function validateGroup(group: FilterGroup, support: FilterSupport): FilterGroup {
+    if (!support.SingleFieldOrGroups) {
+        throw new WorkQueueConfigurationError('This transport does not support OR groups in a subscription filter');
     }
-    if (isPlainObject(value) && Object.keys(value).length === 1) {
-        const prefix = value['prefix'];
-        if (typeof prefix === 'string' && prefix.length > 0) {
-            return { prefix };
-        }
-        const exists = value['exists'];
-        if (typeof exists === 'boolean') {
-            return { exists };
-        }
-        const excluded = value['anything-but'];
-        if (Array.isArray(excluded) && excluded.length > 0 && excluded.every((item): item is string => typeof item === 'string')) {
-            return { 'anything-but': excluded };
-        }
+    if (group.logic !== 'or') {
+        throw new WorkQueueConfigurationError("A nested filter group must use logic 'or'");
     }
-    throw new WorkQueueConfigurationError(
-        `Invalid condition for '${key}': expected a string, {"prefix": string}, {"exists": boolean} or {"anything-but": string[]}`,
-    );
+    if (group.filters.some(isGroup)) {
+        throw new WorkQueueConfigurationError('Filter nesting is limited to one OR group inside the root');
+    }
+    const rules = group.filters.map((entry) => validateRule(entry, support));
+    const fields = new Set(rules.map((rule) => rule.field));
+    if (fields.size !== 1) {
+        throw new WorkQueueConfigurationError(`An OR group must test a single field; got ${[...fields].join(', ')}`);
+    }
+    const offender = rules.find((rule) => rule.operator !== 'eq');
+    if (offender) {
+        throw new WorkQueueConfigurationError(
+            `An OR group may use only 'eq'; field '${offender.field}' uses '${offender.operator}'`,
+        );
+    }
+    return { logic: 'or', filters: rules };
 }
 
-function conditionValueCount(condition: FilterCondition): number {
-    if (typeof condition !== 'string' && 'anything-but' in condition) {
-        return condition['anything-but'].length;
+function validateRule(value: unknown, support: FilterSupport): FilterRule {
+    if (!isPlainObject(value) || typeof value['field'] !== 'string' || typeof value['operator'] !== 'string') {
+        throw new WorkQueueConfigurationError('Each filter entry must be { field, operator, value? } or a nested group');
     }
-    return 1;
+    const field = value['field'];
+    const operator = value['operator'];
+    if (field.includes('.')) {
+        throw new WorkQueueConfigurationError(
+            `Filter field '${field}' is not supported: use a bare attribute name, not the dotted source.field form`,
+        );
+    }
+    if (!ATTRIBUTE_NAME_PATTERN.test(field)) {
+        throw new WorkQueueConfigurationError(`Filter field '${field}' is not a valid attribute name`);
+    }
+    if (!isOperator(operator) || !support.Operators.includes(operator)) {
+        throw new WorkQueueConfigurationError(`Filter operator '${operator}' on field '${field}' is not supported by this transport`);
+    }
+    const raw = value['value'];
+    if (VALUELESS_OPERATORS.includes(operator)) {
+        if (raw !== undefined && raw !== null) {
+            throw new WorkQueueConfigurationError(`Filter operator '${operator}' on field '${field}' takes no value`);
+        }
+        return { field, operator };
+    }
+    if (raw === undefined || raw === null || raw === '') {
+        throw new WorkQueueConfigurationError(`Filter operator '${operator}' on field '${field}' requires a value`);
+    }
+    if (typeof raw !== 'string' && typeof raw !== 'number' && typeof raw !== 'boolean') {
+        throw new WorkQueueConfigurationError(`Filter value for field '${field}' must be a string, number or boolean`);
+    }
+    return { field, operator, value: String(raw) };
+}
+
+/** The field a validated root entry constrains; a group is single-field by construction. */
+function entryField(entry: FilterRule | FilterGroup): string {
+    if (!isGroup(entry)) {
+        return entry.field;
+    }
+    const first = entry.filters[0];
+    return isGroup(first) ? '' : first.field;
+}
+
+function countValues(filter: SubscriptionFilter): number {
+    let count = 0;
+    walkRules(filter, (rule) => {
+        if (rule.value !== undefined) {
+            count += 1;
+        }
+    });
+    return count;
+}
+
+function walkRules(group: FilterGroup, visit: (rule: FilterRule) => void): void {
+    for (const entry of group.filters) {
+        if (isGroup(entry)) {
+            walkRules(entry, visit);
+        } else {
+            visit(entry);
+        }
+    }
+}
+
+function isOperator(value: string): value is FilterOperator {
+    return (ALL_OPERATORS as string[]).includes(value);
+}
+
+function isGroup(value: unknown): value is FilterGroup {
+    return isPlainObject(value) && typeof value['logic'] === 'string' && Array.isArray(value['filters']);
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -1580,7 +1876,7 @@ export * from './filter';
 - [ ] **Step 5: Run the tests and build**
 
 Run: `cd packages/WorkQueue/core && pnpm test`
-Expected: PASS — previous 36 plus filter (16): **52 tests**.
+Expected: PASS — previous 36 plus filter (23): **59 tests**.
 
 Run: `cd packages/WorkQueue/core && pnpm run build`
 Expected: builds.
@@ -1589,7 +1885,7 @@ Expected: builds.
 
 ```bash
 git add packages/WorkQueue/core/src
-git commit -m "feat(work-queue-core): subscription filter grammar and matching"
+git commit -m "feat(work-queue-core): CompositeFilterDescriptor subscription filters, restricted to the broker-translatable subset"
 ```
 
 ---
@@ -1602,10 +1898,11 @@ git commit -m "feat(work-queue-core): subscription filter grammar and matching"
 - Test: `packages/WorkQueue/core/src/__tests__/backoff.test.ts`, `packages/WorkQueue/core/src/__tests__/compatibility.test.ts`
 
 **Interfaces:**
-- Consumes: `SubscriptionPolicy` (policy.ts), `SubscriptionBinding`, `TransportCapabilities` (transport.ts) — Task 1.
+- Consumes: `SubscriptionPolicy` (policy.ts), `SubscriptionBinding`, `TransportCapabilities` (transport.ts) — Task 1; `ValidateSubscriptionFilter` (filter.ts) — Task 3.
 - Produces:
   - `ComputeBackoffSeconds(policy: SubscriptionPolicy, attempt: number, handlerDelaySeconds?: number, random?: () => number): number` — a handler-supplied finite delay wins (rounded up, clamped to `[0, BackoffMaxSeconds]`); otherwise full jitter `round(random() × min(BackoffMaxSeconds, BackoffBaseSeconds × 2^(attempt−1)))`, exponent capped at 30
-  - `SubscriptionUnsupportedReason(binding: SubscriptionBinding, capabilities: TransportCapabilities, stagedToDatabase: boolean): string | null` — rules in the order of spec 03 §5
+  - `SubscriptionUnsupportedReason(binding: SubscriptionBinding, capabilities: TransportCapabilities, stagedToDatabase: boolean): string | null` — rules in the order of spec 03 §5, ending with the filter check
+  - `FilterUnsupportedReason(filter: SubscriptionFilter | null, capabilities: TransportCapabilities): string | null` — re-validates the parsed filter against `capabilities.Filters` (spec 03 §4.1) and returns the thrown message
 
 Warnings for `MaxProcessingSeconds` above a host ceiling are the engine's job (plan 05), not core's.
 
@@ -1678,16 +1975,19 @@ describe('ComputeBackoffSeconds', () => {
 
 ```typescript
 import { describe, it, expect } from 'vitest';
-import { SubscriptionUnsupportedReason } from '../compatibility';
+import { FilterUnsupportedReason, SubscriptionUnsupportedReason } from '../compatibility';
+import { WORK_QUEUE_FILTER_SUPPORT } from '../filter';
 import type { SubscriptionBinding, TransportCapabilities } from '../transport';
 import type { HostType, PartitionMode } from '../policy';
 
 const DATABASE_LIKE: TransportCapabilities = {
+    Filters: WORK_QUEUE_FILTER_SUPPORT,
     DetectsMessageIDDuplicates: true,
     PersistsProgress: true,
     SupportsOrdered: true,
     SupportsExternalHosts: false,
     CancelPending: true,
+    CancelInFlight: true,
     ListPartitions: true,
     PeekDeadLetters: 'Full',
     ReplaySingleDeadLetter: true,
@@ -1697,11 +1997,13 @@ const DATABASE_LIKE: TransportCapabilities = {
 
 const CLOUD_LIKE: TransportCapabilities = {
     ...DATABASE_LIKE,
+    Filters: { ...WORK_QUEUE_FILTER_SUPPORT, Operators: ['eq', 'neq', 'startswith', 'isnull', 'isnotnull'] },
     DetectsMessageIDDuplicates: false,
     PersistsProgress: false,
     SupportsOrdered: false,
     SupportsExternalHosts: true,
     CancelPending: false,
+    CancelInFlight: false,
     ListPartitions: false,
     PeekDeadLetters: 'BestEffort',
     CompletedCounts: false,
@@ -1757,6 +2059,32 @@ describe('SubscriptionUnsupportedReason', () => {
         const reason = SubscriptionUnsupportedReason(binding('External', 'Ordered', 999999), DATABASE_LIKE, false);
         expect(reason).toContain('HostType External');
     });
+
+    it('rejects a filter this transport cannot express, naming the subscription', () => {
+        const withFilter = {
+            ...binding('MJWorker', 'None'),
+            Filter: { logic: 'and' as const, filters: [{ field: 'tenant', operator: 'startswith' as const, value: 'acme' }] },
+        };
+        const eqOnly: TransportCapabilities = { ...CLOUD_LIKE, Filters: { ...WORK_QUEUE_FILTER_SUPPORT, Operators: ['eq'] } };
+        const reason = SubscriptionUnsupportedReason(withFilter, eqOnly, false);
+        expect(reason).toContain("integration.apply");
+        expect(reason).toContain("operator 'startswith' on field 'tenant'");
+        expect(SubscriptionUnsupportedReason(withFilter, DATABASE_LIKE, false)).toBeNull();
+    });
+});
+
+describe('FilterUnsupportedReason', () => {
+    it('passes a null filter and a supported filter, and explains an unsupported one', () => {
+        expect(FilterUnsupportedReason(null, CLOUD_LIKE)).toBeNull();
+        const filter = { logic: 'and' as const, filters: [{ field: 'eventType', operator: 'eq' as const, value: 'click' }] };
+        expect(FilterUnsupportedReason(filter, CLOUD_LIKE)).toBeNull();
+        const groups: TransportCapabilities = { ...CLOUD_LIKE, Filters: { ...WORK_QUEUE_FILTER_SUPPORT, SingleFieldOrGroups: false } };
+        const grouped = { logic: 'and' as const, filters: [{ logic: 'or' as const, filters: [
+            { field: 'tenant', operator: 'eq' as const, value: 'acme' },
+            { field: 'tenant', operator: 'eq' as const, value: 'globex' },
+        ] }] };
+        expect(FilterUnsupportedReason(grouped, groups)).toContain('does not support OR groups');
+    });
 });
 ```
 
@@ -1800,7 +2128,29 @@ function clamp(value: number, min: number, max: number): number {
 - [ ] **Step 4: Write `src/compatibility.ts`**
 
 ```typescript
+import { ValidateSubscriptionFilter } from './filter';
+import type { SubscriptionFilter } from './filterTypes';
+import { WorkQueueConfigurationError } from './errors';
 import type { SubscriptionBinding, TransportCapabilities } from './transport';
+
+/** Why this transport cannot express the subscription's filter (spec 03 §4.1), or null when it can. */
+export function FilterUnsupportedReason(
+    filter: SubscriptionFilter | null,
+    capabilities: TransportCapabilities,
+): string | null {
+    if (filter === null) {
+        return null;
+    }
+    try {
+        ValidateSubscriptionFilter(filter, capabilities.Filters);
+        return null;
+    } catch (error) {
+        if (error instanceof WorkQueueConfigurationError) {
+            return error.message;
+        }
+        throw error;
+    }
+}
 
 /**
  * Why a transport cannot run a subscription as configured, or null when it can. Used when a
@@ -1825,6 +2175,10 @@ export function SubscriptionUnsupportedReason(
     if (policy.BackoffMaxSeconds > capabilities.MaxRetryDelaySeconds) {
         return `Subscription '${name}' has BackoffMaxSeconds ${policy.BackoffMaxSeconds}, above this transport's limit of ${capabilities.MaxRetryDelaySeconds}`;
     }
+    const filterReason = FilterUnsupportedReason(binding.Filter, capabilities);
+    if (filterReason) {
+        return `Subscription '${name}': ${filterReason}`;
+    }
     return null;
 }
 ```
@@ -1841,7 +2195,7 @@ export * from './compatibility';
 - [ ] **Step 6: Run the tests and build**
 
 Run: `cd packages/WorkQueue/core && pnpm test`
-Expected: PASS — previous 52 plus backoff (8) and compatibility (7): **67 tests**.
+Expected: PASS — previous 59 plus backoff (8) and compatibility (9): **76 tests**.
 
 Run: `cd packages/WorkQueue/core && pnpm run build`
 Expected: builds.
@@ -1866,9 +2220,9 @@ git commit -m "feat(work-queue-core): jittered backoff and subscription capabili
 **Interfaces:**
 - Consumes: `WorkJson`, `WorkMessage`; `WorkContext`, `WorkHandler`, `WorkLogger`, `WorkOutcome`, `WorkProgress`, `Outcome`; `FatalWorkError`, `TransientWorkError`; `SubscriptionPolicy`, `DeliveryStatus`; `ITransportConsumer`, `ReceivedDelivery`, `SettleResult` (Task 1); `ComputeBackoffSeconds` (Task 4).
 - Produces:
-  - `runtime/types.ts`: `ConsumerRuntimeOptions` (spec 03 §3.2 plus optional `ReceiveWaitSeconds`), `ExecutionStopReason = 'LeaseLost' | 'MaxProcessingSeconds' | 'Shutdown'`
+  - `runtime/types.ts`: `ConsumerRuntimeOptions` (spec 03 §3.2 plus optional `ReceiveWaitSeconds`), `ExecutionStopReason = 'LeaseLost' | 'LeaseExpired' | 'MaxProcessingSeconds' | 'Shutdown'`
   - `runtime/outcomes.ts`: `MAX_ATTEMPTS_EXCEEDED_REASON = 'MaxAttemptsExceeded'`, `MAX_DEAD_LETTER_REASON_LENGTH = 100`, `interface HandlerResult { Outcome: WorkOutcome; ErrorText: string | null }`, `type SettleAction = { Kind: 'Complete' } | { Kind: 'Retry'; DelaySeconds: number; Error: string } | { Kind: 'DeadLetter'; Reason: string; Error: string | null }`, `IsWorkOutcome(value: unknown): value is WorkOutcome`, `MapHandlerReturn(value: unknown): HandlerResult`, `MapThrownError(error: unknown): HandlerResult`, `DescribeError(error: unknown): string`, `ErrorMessageOf(error: unknown): string`, `ResolveSettleAction(result: HandlerResult, attempt: number, policy: SubscriptionPolicy, random?: () => number): SettleAction`
-  - `runtime/DeliveryExecution.ts`: `MIN_AUTO_HEARTBEAT_INTERVAL_MS = 1000`, `interface DeliveryExecutionOptions<TPayload>`, `class DeliveryExecution<TPayload>` with `Run(): Promise<SettleResult>`, `Abort(reason: ExecutionStopReason): void`, getters `DeliveryID`, `StopReason`
+  - `runtime/DeliveryExecution.ts`: `MIN_AUTO_HEARTBEAT_INTERVAL_MS = 1000`, `LEASE_EXPIRY_GRACE_MS = 5000`, `interface DeliveryExecutionOptions<TPayload>` (adds optional `LeaseExpiryGraceMs`), `class DeliveryExecution<TPayload>` with `Run(): Promise<SettleResult>`, `Abort(reason: ExecutionStopReason): void`, getters `DeliveryID`, `StopReason`
 
 Behaviour (spec 03 §3, §3.2):
 
@@ -1880,13 +2234,16 @@ Behaviour (spec 03 §3, §3.2):
 | `DeadLetter` / `FatalWorkError` | `consumer.DeadLetter(delivery, reason ≤ 100 chars, error)` |
 | `HeartbeatMode = 'Auto'` | `ExtendLease` every `max(1000 ms, LeaseSeconds × 1000 / 3)` while the handler runs |
 | `HeartbeatMode = 'Manual'` | `ExtendLease` only when the handler calls `context.Heartbeat(progress?)` |
-| `ExtendLease` → `Lost` | signal aborted with reason `'LeaseLost'`; `Heartbeat` resolves `false`; outcome discarded; `Run` returns `{ Kind: 'LeaseLost' }` |
-| `ExtendLease` throws | logged as a warning; `Heartbeat` resolves `true` (the next heartbeat retries) |
+| `ExtendLease` → `Lost` (taken over after expiry, **or revoked by an operator cancel** — spec 03 §7) | signal aborted with reason `'LeaseLost'`; `Heartbeat` resolves `false`; outcome discarded; `Run` returns `{ Kind: 'LeaseLost' }` |
+| `ExtendLease` throws, lease still valid | logged as a warning; `Heartbeat` resolves `true`; the next tick retries (spec 03 §3.2: a transient transport failure never aborts a handler) |
+| `ExtendLease` throws and `now ≥ LeaseExpiresAt + LEASE_EXPIRY_GRACE_MS` | the lease can no longer be held: signal aborted with reason `'LeaseExpired'`; `Heartbeat` resolves `false`; outcome discarded; `Run` returns `{ Kind: 'LeaseLost' }` |
 | `MaxProcessingSeconds` elapsed | signal aborted with reason `'MaxProcessingSeconds'`; automatic renewal stops; `Heartbeat` resolves `false`; a later outcome is still settled (the transport fences it if the lease expired) |
 | `Abort('Shutdown')` and the outcome is not `Complete` | `consumer.Release` (no attempt consumed on the Database transport) |
 | settle call throws | `Run` returns `{ Kind: 'Failed', Error }` |
 
 Concurrent heartbeats are coalesced: a `Heartbeat` call made while another `ExtendLease` is in flight shares its result (its progress is not sent).
+
+**Lease horizon.** The execution tracks the lease's wall-clock expiry: it starts at `Delivery.LeaseExpiresAt` and moves to `now + LeaseSeconds` on every `ExtendLease` that returns `Held`. Only that horizon (plus `LEASE_EXPIRY_GRACE_MS`, to absorb clock skew between this host and the transport) ends a run whose heartbeats are failing — never a single failed call. An operator cancel needs no separate channel: it rotates the delivery's lease token, so the next `ExtendLease` returns `Lost` (spec 03 §7).
 
 - [ ] **Step 1: Write the shared test doubles**
 
@@ -1914,6 +2271,8 @@ export class ScriptedConsumer implements ITransportConsumer {
     public ReceiveImpl: ((max: number) => Promise<ReceivedDelivery[]>) | null = null;
     public ReceiveError: Error | null = null;
     public ExtendLeaseResult: 'Held' | 'Lost' | Error = 'Held';
+    /** Consumed in order before falling back to ExtendLeaseResult; lets a test script "fail, then succeed". */
+    public ExtendLeaseSequence: ('Held' | 'Lost' | Error)[] = [];
     public SettleError: Error | null = null;
 
     public async Receive(max: number, waitSeconds: number, _signal: AbortSignal): Promise<ReceivedDelivery[]> {
@@ -1934,10 +2293,11 @@ export class ScriptedConsumer implements ITransportConsumer {
 
     public async ExtendLease(delivery: ReceivedDelivery, leaseSeconds: number, progress?: WorkProgress): Promise<'Held' | 'Lost'> {
         this.Calls.push({ Op: 'ExtendLease', DeliveryID: delivery.DeliveryID, LeaseSeconds: leaseSeconds, Progress: progress });
-        if (this.ExtendLeaseResult instanceof Error) {
-            throw this.ExtendLeaseResult;
+        const result = this.ExtendLeaseSequence.length > 0 ? this.ExtendLeaseSequence.shift() ?? this.ExtendLeaseResult : this.ExtendLeaseResult;
+        if (result instanceof Error) {
+            throw result;
         }
-        return this.ExtendLeaseResult;
+        return result;
     }
 
     public async Complete(delivery: ReceivedDelivery): Promise<SettleResult> {
@@ -2352,6 +2712,68 @@ describe('DeliveryExecution leases', () => {
         expect(Logger.Has('Warn', 'Heartbeat failed')).toBe(true);
     });
 
+    it('retries a failed heartbeat on the next tick and keeps the handler running', async () => {
+        vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+        const gate = CreateDeferred<WorkOutcome>();
+        const { Execution, Consumer, Logger } = setup(async () => gate.Promise, { HeartbeatMode: 'Auto', LeaseSeconds: 30 });
+        // The delivery's lease runs to 00:01:00, so the first failure is well inside the horizon.
+        Consumer.ExtendLeaseSequence = [new Error('network blip')];
+        const run = Execution.Run();
+        await vi.advanceTimersByTimeAsync(10_000);
+        expect(Consumer.Count('ExtendLease')).toBe(1);
+        expect(Logger.Has('Warn', 'Heartbeat failed')).toBe(true);
+        await vi.advanceTimersByTimeAsync(10_000);
+        expect(Consumer.Count('ExtendLease')).toBe(2);
+        expect(Execution.StopReason).toBeNull();
+        gate.Resolve(Outcome.Complete());
+        expect(await run).toMatchObject({ Kind: 'Settled', Status: 'Completed' });
+        expect(Consumer.Count('Complete')).toBe(1);
+    });
+
+    it('aborts once heartbeats have failed past the lease horizon', async () => {
+        vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+        const contexts: WorkContext[] = [];
+        const gate = CreateDeferred<WorkOutcome>();
+        const { Execution, Consumer, Logger } = setup(
+            async (_message, context) => {
+                contexts.push(context);
+                return gate.Promise;
+            },
+            { HeartbeatMode: 'Auto', LeaseSeconds: 30 },
+        );
+        // Lease horizon is 00:01:00 (MakeDelivery) + 5 s grace; every renewal fails.
+        Consumer.ExtendLeaseResult = new Error('database unreachable');
+        const run = Execution.Run();
+        await vi.advanceTimersByTimeAsync(50_000);
+        expect(contexts[0].Signal.aborted).toBe(false);
+        await vi.advanceTimersByTimeAsync(20_000);
+        expect(contexts[0].Signal.aborted).toBe(true);
+        expect(String(contexts[0].Signal.reason)).toBe('LeaseExpired');
+        expect(Execution.StopReason).toBe('LeaseExpired');
+        expect(Logger.Has('Warn', 'Heartbeats kept failing')).toBe(true);
+        gate.Resolve(Outcome.Complete());
+        expect(await run).toEqual({ Kind: 'LeaseLost', DeliveryID: 'd1' });
+        expect(Consumer.Count('Complete')).toBe(0);
+    });
+
+    it('treats an operator cancel (rotated lease token) as a lost lease and discards the outcome', async () => {
+        // Spec 03 §7: Discard on an InFlight delivery rotates LeaseToken, so the next ExtendLease reports Lost.
+        const seen: boolean[] = [];
+        const { Execution, Consumer } = setup(
+            async (_message, context) => {
+                seen.push(await context.Heartbeat());
+                // A handler that ignores the signal still cannot settle: the fence rejects it.
+                return Outcome.Complete();
+            },
+            { HeartbeatMode: 'Manual' },
+        );
+        Consumer.ExtendLeaseResult = 'Lost';
+        expect(await Execution.Run()).toEqual({ Kind: 'LeaseLost', DeliveryID: 'd1' });
+        expect(seen).toEqual([false]);
+        expect(Consumer.Count('Complete')).toBe(0);
+        expect(Execution.StopReason).toBe('LeaseLost');
+    });
+
     it('MaxProcessingSeconds aborts the handler and stops renewing', async () => {
         const gate = CreateDeferred<WorkOutcome>();
         const contexts: WorkContext[] = [];
@@ -2423,7 +2845,11 @@ export interface ConsumerRuntimeOptions {
     ReceiveWaitSeconds?: number;
 }
 
-export type ExecutionStopReason = 'LeaseLost' | 'MaxProcessingSeconds' | 'Shutdown';
+/**
+ * Why a run stopped early. 'LeaseLost' = the transport reported the lease gone (taken over, or revoked by an
+ * operator cancel); 'LeaseExpired' = heartbeats kept failing until the lease's wall-clock horizon passed.
+ */
+export type ExecutionStopReason = 'LeaseLost' | 'LeaseExpired' | 'MaxProcessingSeconds' | 'Shutdown';
 ```
 
 - [ ] **Step 5: Write `src/runtime/outcomes.ts`**
@@ -2534,6 +2960,9 @@ import type { ExecutionStopReason } from './types';
 
 export const MIN_AUTO_HEARTBEAT_INTERVAL_MS = 1000;
 
+/** Clock-skew allowance added to the lease horizon before a run whose heartbeats keep failing is abandoned. */
+export const LEASE_EXPIRY_GRACE_MS = 5000;
+
 export interface DeliveryExecutionOptions<TPayload extends WorkJson = WorkJson> {
     Delivery: ReceivedDelivery<TPayload>;
     Consumer: ITransportConsumer<TPayload>;
@@ -2542,6 +2971,8 @@ export interface DeliveryExecutionOptions<TPayload extends WorkJson = WorkJson> 
     Log: WorkLogger;
     Now?: () => number;
     Random?: () => number;
+    /** Defaults to LEASE_EXPIRY_GRACE_MS. */
+    LeaseExpiryGraceMs?: number;
 }
 
 /** Runs one handler for one delivery: context, lease heartbeats, processing cap, outcome, settle. */
@@ -2552,8 +2983,16 @@ export class DeliveryExecution<TPayload extends WorkJson = WorkJson> {
     private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
     private capTimer: ReturnType<typeof setTimeout> | null = null;
     private pendingHeartbeat: Promise<boolean> | null = null;
+    /** Wall-clock instant this lease is good until; moves forward on every ExtendLease that returns Held. */
+    private leaseExpiresAtMs: number;
 
-    constructor(private readonly options: DeliveryExecutionOptions<TPayload>) {}
+    constructor(private readonly options: DeliveryExecutionOptions<TPayload>) {
+        this.leaseExpiresAtMs = options.Delivery.LeaseExpiresAt.getTime();
+    }
+
+    private now(): number {
+        return (this.options.Now ?? Date.now)();
+    }
 
     public get DeliveryID(): string {
         return this.options.Delivery.DeliveryID;
@@ -2574,8 +3013,7 @@ export class DeliveryExecution<TPayload extends WorkJson = WorkJson> {
     }
 
     public async Run(): Promise<SettleResult> {
-        const now = this.options.Now ?? (() => Date.now());
-        const startedAt = now();
+        const startedAt = this.now();
         this.startTimers();
         let result: HandlerResult;
         try {
@@ -2587,7 +3025,7 @@ export class DeliveryExecution<TPayload extends WorkJson = WorkJson> {
             await this.pendingHeartbeat;
         }
         if (this.leaseLost) {
-            this.options.Log.Warn('Lease lost before settle; handler outcome discarded', this.logData({ DurationMs: now() - startedAt }));
+            this.options.Log.Warn('Lease lost before settle; handler outcome discarded', this.logData({ DurationMs: this.now() - startedAt, StopReason: this.stopReason }));
             return { Kind: 'LeaseLost', DeliveryID: this.DeliveryID };
         }
         if (this.stopReason === 'Shutdown' && result.Outcome.Kind !== 'Complete') {
@@ -2640,13 +3078,24 @@ export class DeliveryExecution<TPayload extends WorkJson = WorkJson> {
         try {
             const status = await Consumer.ExtendLease(Delivery, Policy.LeaseSeconds, progress);
             if (status === 'Lost') {
+                // Taken over after expiry, or revoked by an operator cancel (spec 03 §7).
                 this.leaseLost = true;
                 this.Abort('LeaseLost');
                 Log.Warn('Lease lost; aborting handler', this.logData({}));
                 return false;
             }
+            this.leaseExpiresAtMs = this.now() + Policy.LeaseSeconds * 1000;
             return true;
         } catch (error) {
+            // A transient transport failure must not abort a healthy handler: keep going until the lease
+            // horizon itself has passed, then give up (spec 03 §3.2).
+            const graceMs = this.options.LeaseExpiryGraceMs ?? LEASE_EXPIRY_GRACE_MS;
+            if (this.now() >= this.leaseExpiresAtMs + graceMs) {
+                this.leaseLost = true;
+                this.Abort('LeaseExpired');
+                Log.Warn('Heartbeats kept failing until the lease expired; aborting handler', this.logData({ Error: ErrorMessageOf(error) }));
+                return false;
+            }
             Log.Warn('Heartbeat failed; the next heartbeat will retry', this.logData({ Error: ErrorMessageOf(error) }));
             return true;
         }
@@ -2732,7 +3181,7 @@ export * from './runtime/DeliveryExecution';
 - [ ] **Step 8: Run the tests and build**
 
 Run: `cd packages/WorkQueue/core && pnpm test`
-Expected: PASS — previous 67 plus outcomes (11) and DeliveryExecution (17): **95 tests**.
+Expected: PASS — previous 76 plus outcomes (11) and DeliveryExecution (20): **107 tests**.
 
 Run: `cd packages/WorkQueue/core && pnpm run build`
 Expected: builds.
@@ -3348,7 +3797,7 @@ export * from './runtime/ConsumerRuntime';
 - [ ] **Step 5: Run the tests and build**
 
 Run: `cd packages/WorkQueue/core && pnpm test`
-Expected: PASS — previous 95 plus ConsumerRuntime (14): **109 tests**.
+Expected: PASS — previous 107 plus ConsumerRuntime (14): **121 tests**.
 
 Run: `cd packages/WorkQueue/core && pnpm run build`
 Expected: builds.
@@ -3373,7 +3822,7 @@ git commit -m "feat(work-queue-core): consumer runtime loop, graceful stop and b
 **Interfaces:**
 - Consumes: every contract type (Task 1); `BuildWorkMessage`, `MAX_ENVELOPE_BYTES` (Task 2); `MatchesFilter` (Task 3); `SUBSCRIPTION_POLICY_DEFAULTS`, `PublishErrorCodes`, `RejectedPublishResult` (Task 1).
 - Produces:
-  - `memory/InMemoryStore.ts`: `LEASE_EXPIRED_REASON = 'LeaseExpired'`, `SEQUENCE_ALREADY_RESOLVED_NOTE = 'SequenceAlreadyResolved'`, `interface DeliveryHandle { DeliveryID: string; LeaseToken: string }`, `interface InMemoryDeliverySnapshot { DeliveryID; MessageID; Status: DeliveryStatus; PartitionKey: string | null; OrderKey: number; AttemptCount: number; IsReplay: boolean; ResolutionNote: string | null }`, `class InMemoryStore` (internal to the memory folder)
+  - `memory/InMemoryStore.ts`: `LEASE_EXPIRED_REASON = 'LeaseExpired'`, `SEQUENCE_ALREADY_RESOLVED_NOTE = 'SequenceAlreadyResolved'`, `interface DeliveryHandle { DeliveryID: string; LeaseToken: string }`, `interface DiscardResult { Changed: boolean; CancelRequested: boolean }`, `interface InMemoryDeliverySnapshot { DeliveryID; MessageID; Status: DeliveryStatus; PartitionKey: string | null; OrderKey: number; AttemptCount: number; IsReplay: boolean; ResolutionNote: string | null }`, `class InMemoryStore` (internal to the memory folder)
   - `memory/InMemoryTransport.ts`: `IN_MEMORY_TRANSPORT_CAPABILITIES: TransportCapabilities` (identical to the Database transport's), `interface InMemoryTransportOptions { Now?: () => number; NewId?: () => string }`, `class InMemoryTransport implements ITransportDriver` with `Name = 'InMemory'`, `RunSweep(): { ExpiredLeases: number; GapStalls: number }`, `Snapshot(subscriptionName: string): InMemoryDeliverySnapshot[]`
   - `memory/InMemoryConsumer.ts`: `class InMemoryConsumer<TPayload> implements ITransportConsumer<TPayload>`
   - `memory/InMemoryOperator.ts`: `class InMemoryOperator implements ITransportOperator`
@@ -3391,6 +3840,7 @@ The in-memory transport implements spec 03 §7 exactly, so it can stand in for t
 | Holder writes | Guarded on `ID`, `InFlight` and `LeaseToken`; otherwise `LeaseLost` / `Lost`. |
 | Sequence mark | Advances when the next sequence completes, is discarded or is skipped, then keeps advancing through consecutive already-discarded sequences. |
 | Operator | Replay (`DeadLettered` → `Pending`, attempts reset, `IsReplay`); Discard (`Pending` or `DeadLettered`); SkipSequence (only when mark = sequence − 1 and no non-discarded delivery has that sequence). |
+| Cancel in flight | Discard of an `InFlight` delivery leaves `Status` alone: it records `CancelRequestedAt`, rotates `LeaseToken` (so the holder's next heartbeat reports `Lost`) and returns `CancelRequested: true`. The row stays `InFlight` — and an `Exclusive`/`Ordered` key stays busy — until its lease expires, when `ExpireLeases` makes it `Discarded` instead of retrying it (spec 03 §7). |
 
 - [ ] **Step 1: Write the failing test**
 
@@ -3409,7 +3859,7 @@ describe('InMemoryTransport publish', () => {
         const transport = new InMemoryTransport();
         const topic = BuildTopicBinding('email.events');
         const archive = BuildSubscriptionBinding(topic, 'email.archive');
-        const clicks = BuildSubscriptionBinding(topic, 'email.clicks', { Filter: { eventType: ['click'] } });
+        const clicks = BuildSubscriptionBinding(topic, 'email.clicks', { Filter: { logic: 'and', filters: [{ field: 'eventType', operator: 'eq', value: 'click' }] } });
         const results = await transport.Publish(
             topic,
             BuildMessages(topic, [{ Attributes: { eventType: 'open' } }, { Attributes: { eventType: 'click' } }]),
@@ -3567,9 +4017,35 @@ describe('InMemoryTransport operator and sweep', () => {
         expect(again.Attempt).toBe(1);
     });
 
+    it('cancels an in-flight delivery by revoking its lease', async () => {
+        const clock = new ManualClock();
+        const transport = new InMemoryTransport({ Now: clock.Now });
+        const topic = BuildTopicBinding('t');
+        const subscription = BuildSubscriptionBinding(topic, 's', { PartitionMode: 'Exclusive', LeaseSeconds: 30 });
+        const consumer = transport.OpenConsumer(subscription);
+        await transport.Publish(topic, BuildMessages(topic, [{ PartitionKey: 'k' }, { PartitionKey: 'k' }]), [subscription]);
+        const [delivery] = await consumer.Receive(10, 0, signal);
+
+        expect(await transport.Operator().Discard(subscription, delivery.DeliveryID, 'operator cancelled', null)).toEqual({
+            Supported: true,
+            Changed: true,
+            CancelRequested: true,
+        });
+        // The holder is fenced out immediately, but the key stays busy until the lease runs out.
+        expect(await consumer.ExtendLease(delivery, 30)).toBe('Lost');
+        expect(await consumer.Complete(delivery)).toEqual({ Kind: 'LeaseLost', DeliveryID: delivery.DeliveryID });
+        expect(transport.Snapshot('s').find((row) => row.DeliveryID === delivery.DeliveryID)?.Status).toBe('InFlight');
+        expect(await consumer.Receive(10, 0, signal)).toEqual([]);
+
+        clock.Advance(31_000);
+        expect(transport.RunSweep()).toEqual({ ExpiredLeases: 1, GapStalls: 0 });
+        expect(transport.Snapshot('s').find((row) => row.DeliveryID === delivery.DeliveryID)?.Status).toBe('Discarded');
+        expect((await consumer.Receive(10, 0, signal)).length).toBe(1);
+    });
+
     it('declares Database-transport capabilities', () => {
         expect(new InMemoryTransport().Capabilities).toBe(IN_MEMORY_TRANSPORT_CAPABILITIES);
-        expect(IN_MEMORY_TRANSPORT_CAPABILITIES).toMatchObject({ SupportsOrdered: true, SupportsExternalHosts: false, CancelPending: true, PeekDeadLetters: 'Full' });
+        expect(IN_MEMORY_TRANSPORT_CAPABILITIES).toMatchObject({ SupportsOrdered: true, SupportsExternalHosts: false, CancelPending: true, CancelInFlight: true, PeekDeadLetters: 'Full' });
     });
 });
 ```
@@ -3663,6 +4139,12 @@ export interface DeliveryHandle {
     LeaseToken: string;
 }
 
+/** Discard of an InFlight delivery revokes its lease instead of settling it (spec 03 §7). */
+export interface DiscardResult {
+    Changed: boolean;
+    CancelRequested: boolean;
+}
+
 export interface InMemoryDeliverySnapshot {
     DeliveryID: string;
     MessageID: string;
@@ -3699,6 +4181,7 @@ interface StoredDelivery {
     DeadLetterReason: string | null;
     DeadLetteredAtMs: number | null;
     CompletedAtMs: number | null;
+    CancelRequestedAtMs: number | null;
     ResolvedByUserID: string | null;
     ResolutionNote: string | null;
 }
@@ -3763,6 +4246,15 @@ export class InMemoryStore {
                 continue;
             }
             clearLease(delivery);
+            if (delivery.CancelRequestedAtMs !== null) {
+                // A cancelled delivery is never retried: it settles as Discarded once its lease has run out,
+                // which is also when its partition key is released (spec 03 §7).
+                delivery.Status = 'Discarded';
+                delivery.CompletedAtMs = now;
+                this.onResolved(delivery);
+                expired += 1;
+                continue;
+            }
             delivery.LastError = LEASE_EXPIRED_REASON;
             if (delivery.AttemptCount < this.policyOf(delivery.SubscriptionName).MaxAttempts) {
                 delivery.Status = 'Pending';
@@ -3894,17 +4386,32 @@ export class InMemoryStore {
         return true;
     }
 
-    public Discard(binding: SubscriptionBinding, deliveryID: string, reason: string, actorUserID: string | null): boolean {
+    public Discard(binding: SubscriptionBinding, deliveryID: string, reason: string, actorUserID: string | null): DiscardResult {
         const delivery = this.ownDelivery(binding, deliveryID);
-        if (delivery === null || (delivery.Status !== 'Pending' && delivery.Status !== 'DeadLettered')) {
-            return false;
+        if (delivery === null) {
+            return { Changed: false, CancelRequested: false };
+        }
+        if (delivery.Status === 'InFlight') {
+            if (delivery.CancelRequestedAtMs !== null) {
+                return { Changed: false, CancelRequested: true };
+            }
+            // Revoke the lease rather than settling now: rotating the token fences the holder out on its next
+            // heartbeat, and the key stays busy until the lease expires (spec 03 §7).
+            delivery.CancelRequestedAtMs = this.now();
+            delivery.LeaseToken = this.newId();
+            delivery.ResolvedByUserID = actorUserID;
+            delivery.ResolutionNote = reason;
+            return { Changed: true, CancelRequested: true };
+        }
+        if (delivery.Status !== 'Pending' && delivery.Status !== 'DeadLettered') {
+            return { Changed: false, CancelRequested: false };
         }
         delivery.Status = 'Discarded';
         delivery.CompletedAtMs = this.now();
         delivery.ResolvedByUserID = actorUserID;
         delivery.ResolutionNote = reason;
         this.onResolved(delivery);
-        return true;
+        return { Changed: true, CancelRequested: false };
     }
 
     public SkipSequence(binding: SubscriptionBinding, partitionKey: string, sequence: number): boolean {
@@ -4008,6 +4515,7 @@ export class InMemoryStore {
             DeadLetterReason: null,
             DeadLetteredAtMs: null,
             CompletedAtMs: null,
+            CancelRequestedAtMs: null,
             ResolvedByUserID: null,
             ResolutionNote: null,
         };
@@ -4324,7 +4832,11 @@ export class InMemoryOperator implements ITransportOperator {
     }
 
     public async Discard(subscription: SubscriptionBinding, deliveryID: string, reason: string, actorUserID: string | null): Promise<OperatorResult> {
-        return { Supported: true, Changed: this.store.Discard(subscription, deliveryID, reason, actorUserID) };
+        const result = this.store.Discard(subscription, deliveryID, reason, actorUserID);
+        // CancelRequested is only set for the in-flight case, so plain discards keep the simple shape.
+        return result.CancelRequested
+            ? { Supported: true, Changed: result.Changed, CancelRequested: true }
+            : { Supported: true, Changed: result.Changed };
     }
 
     public async SkipSequence(
@@ -4343,6 +4855,7 @@ export class InMemoryOperator implements ITransportOperator {
 
 ```typescript
 import type { WorkJson, WorkMessage } from '../envelope';
+import { WORK_QUEUE_FILTER_SUPPORT } from '../filter';
 import type { ITransportOperator } from '../operator';
 import type { PublishResult } from '../publishing';
 import type {
@@ -4361,11 +4874,13 @@ import type { InMemoryDeliverySnapshot } from './InMemoryStore';
 
 /** Identical to the Database transport's capabilities, so it can stand in for it in tests. */
 export const IN_MEMORY_TRANSPORT_CAPABILITIES: TransportCapabilities = {
+    Filters: WORK_QUEUE_FILTER_SUPPORT,
     DetectsMessageIDDuplicates: true,
     PersistsProgress: true,
     SupportsOrdered: true,
     SupportsExternalHosts: false,
     CancelPending: true,
+    CancelInFlight: true,
     ListPartitions: true,
     PeekDeadLetters: 'Full',
     ReplaySingleDeadLetter: true,
@@ -4435,7 +4950,7 @@ export { LEASE_EXPIRED_REASON, SEQUENCE_ALREADY_RESOLVED_NOTE } from './memory/I
 - [ ] **Step 7: Run the tests and build**
 
 Run: `cd packages/WorkQueue/core && pnpm test`
-Expected: PASS — previous 109 plus InMemoryTransport (13): **122 tests**.
+Expected: PASS — previous 121 plus InMemoryTransport (14): **135 tests**.
 
 Run: `cd packages/WorkQueue/core && pnpm run build`
 Expected: builds.
@@ -4465,7 +4980,7 @@ git commit -m "feat(work-queue-core): in-memory reference transport with Databas
   - `interface ConformanceTraits { ReleaseConsumesAttempt: boolean; ExpiredLeaseDeadLetters: boolean; ReceiveWaitSeconds: number }`
   - `interface ConformanceHarness { readonly Capabilities: TransportCapabilities; readonly Traits: ConformanceTraits; CreateDriver(): Promise<ITransportDriver>; CreateTopic(driver: ITransportDriver, name: string, overrides?: Partial<TopicBinding>): Promise<TopicBinding>; CreateSubscription(driver: ITransportDriver, topic: TopicBinding, name: string, overrides?: SubscriptionBindingOverrides): Promise<SubscriptionBinding>; AdvanceTime(ms: number): Promise<void>; Dispose?(driver: ITransportDriver): Promise<void> }`
   - `interface ConformanceCase { Id: string; Title: string; Gate(harness: ConformanceHarness): string | null; Run(harness: ConformanceHarness): Promise<void> }` — `Gate` returns a skip reason or `null`; `Run` throws `ConformanceAssertionError` on failure and disposes its own driver
-  - `const CONFORMANCE_CASES: readonly ConformanceCase[]` (25 cases, ids `C01`–`C25`)
+  - `const CONFORMANCE_CASES: readonly ConformanceCase[]` (27 cases, ids `C01`–`C27`)
   - `interface ConformanceCheckResult { Id: string; Title: string; Status: 'Passed' | 'Failed' | 'Skipped'; Detail: string | null; DurationMs: number }`
   - `RunConformanceChecks(harness: ConformanceHarness): Promise<ConformanceCheckResult[]>` — runs cases sequentially, never throws
 - Produces from `@memberjunction/work-queue-core/testing/vitest`:
@@ -4912,7 +5427,7 @@ const C03: ConformanceCase = {
     Title: 'selects deliveries with attribute filters',
     Gate: always,
     Run: (harness) =>
-        WithScenario(harness, {}, [['clicks', { Filter: { eventType: ['click'] } }]], async (s) => {
+        WithScenario(harness, {}, [['clicks', { Filter: { logic: 'and', filters: [{ field: 'eventType', operator: 'eq', value: 'click' }] } }]], async (s) => {
             await s.Publish([{ Attributes: { eventType: 'open', n: '1' } }, { Attributes: { eventType: 'click', n: '2' } }]);
             AssertEqual(Numbers(await s.Receive('clicks')), ['2'], 'filtered deliveries');
         }),
@@ -5243,10 +5758,51 @@ const C25: ConformanceCase = {
         }),
 };
 
+const whenCancelInFlight = (harness: ConformanceHarness): string | null =>
+    harness.Capabilities.CancelInFlight ? null : 'Transport cannot cancel in-flight deliveries';
+
+const C26: ConformanceCase = {
+    Id: 'C26',
+    Title: 'cancelling in flight fences the holder and settles as Discarded when the lease expires',
+    Gate: whenCancelInFlight,
+    Run: (harness) =>
+        WithScenario(harness, {}, [['a', { LeaseSeconds: 5 }]], async (s) => {
+            await s.Publish([{ Attributes: { n: '1' } }]);
+            const [delivery] = await s.Receive('a');
+            AssertEqual(
+                await s.Operator.Discard(s.Subscription('a'), delivery.DeliveryID, 'operator cancelled', null),
+                { Supported: true, Changed: true, CancelRequested: true },
+                'cancel in flight',
+            );
+            // The lease is revoked at once: the holder learns on its next heartbeat and cannot settle.
+            AssertEqual(await s.Consumer('a').ExtendLease(delivery, 5), 'Lost', 'heartbeat after cancel');
+            AssertMatch(await s.Consumer('a').Complete(delivery), { Kind: 'LeaseLost' }, 'settle after cancel');
+            await harness.AdvanceTime(6000);
+            AssertLength(await s.Receive('a'), 0, 'cancelled work is not redelivered');
+            AssertMatch(await s.Operator.GetStats(s.Subscription('a')), { Pending: 0, InFlight: 0, DeadLettered: 0 }, 'stats after cancel');
+        }),
+};
+
+const C27: ConformanceCase = {
+    Id: 'C27',
+    Title: 'a cancelled key is released only once the old lease expires',
+    Gate: whenCancelInFlight,
+    Run: (harness) =>
+        WithScenario(harness, PARTITIONED_TOPIC, [['a', { PartitionMode: 'Exclusive', LeaseSeconds: 5 }]], async (s) => {
+            await s.Publish([Keyed('1'), Keyed('2')]);
+            const [head] = await s.Receive('a');
+            await s.Operator.Discard(s.Subscription('a'), head.DeliveryID, 'operator cancelled', null);
+            // Still in flight: the next item must not start while the old handler is winding down.
+            AssertLength(await s.Receive('a'), 0, 'key busy while the cancelled lease is alive');
+            await harness.AdvanceTime(6000);
+            AssertEqual(Numbers(await s.Receive('a')), ['2'], 'next item after the cancelled lease expired');
+        }),
+};
+
 /** The transport conformance cases (spec 02 §6), in execution order. */
 export const CONFORMANCE_CASES: readonly ConformanceCase[] = [
     C01, C02, C03, C04, C05, C06, C07, C08, C09, C10, C11, C12, C13,
-    C14, C15, C16, C17, C18, C19, C20, C21, C22, C23, C24, C25,
+    C14, C15, C16, C17, C18, C19, C20, C21, C22, C23, C24, C25, C26, C27,
 ];
 ```
 
@@ -5374,7 +5930,7 @@ Expected: succeeds; the lockfile records the optional peer.
 - [ ] **Step 10: Run the tests and build**
 
 Run: `cd packages/WorkQueue/core && pnpm test`
-Expected: PASS — previous 122 plus conformanceAssertions (3), RunConformanceChecks (3) and conformance (25): **153 tests**.
+Expected: PASS — previous 135 plus conformanceAssertions (3), RunConformanceChecks (3) and conformance (27): **168 tests**.
 
 Run: `cd packages/WorkQueue/core && pnpm run build`
 Expected: builds; `dist/testing/index.js` and `dist/testing/vitest.js` exist.
@@ -6176,7 +6732,7 @@ export * from './api/WorkQueueApiPublisher';
 - [ ] **Step 6: Run the tests and build**
 
 Run: `cd packages/WorkQueue/core && pnpm test`
-Expected: PASS — previous 153 plus restContract (6) and WorkQueueApiPublisher (11): **170 tests**.
+Expected: PASS — previous 168 plus restContract (6) and WorkQueueApiPublisher (11): **185 tests**.
 
 Run: `cd packages/WorkQueue/core && pnpm run build`
 Expected: builds.
@@ -6218,7 +6774,10 @@ describe('public API', () => {
             'BuildWorkMessage',
             'SerializedEnvelopeBytes',
             'ParseSubscriptionFilter',
+            'ValidateSubscriptionFilter',
             'MatchesFilter',
+            'FilterFields',
+            'WORK_QUEUE_FILTER_SUPPORT',
             'ComputeBackoffSeconds',
             'SubscriptionUnsupportedReason',
             'ConsumerRuntime',
@@ -6311,7 +6870,7 @@ Design and contract: `plans/work-queue-1/02-implementation-overview.md` and `03-
 | --- | --- |
 | Envelope & publishing | `WorkMessage`, `PublishRequest`, `PublishResult`, `IWorkPublisher`, `ValidatePublishRequest`, `BuildWorkMessage`, `PublishErrorCodes` |
 | Handlers | `WorkHandler`, `WorkContext`, `Outcome`, `FatalWorkError`, `TransientWorkError` |
-| Policy & rules | `SubscriptionPolicy`, `ParseSubscriptionFilter`, `MatchesFilter`, `ComputeBackoffSeconds`, `SubscriptionUnsupportedReason` |
+| Policy & rules | `SubscriptionPolicy`, `ParseSubscriptionFilter`, `ValidateSubscriptionFilter`, `MatchesFilter`, `FilterFields`, `WORK_QUEUE_FILTER_SUPPORT`, `ComputeBackoffSeconds`, `SubscriptionUnsupportedReason`, `FilterUnsupportedReason` |
 | Transports | `ITransportDriver`, `ITransportConsumer`, `ITransportOperator`, `TransportCapabilities` |
 | Runtime | `ConsumerRuntime` (loop or `ProcessBatch`), `DeliveryExecution` |
 | Reference transport | `InMemoryTransport` (Database-transport semantics, in memory) |
@@ -6337,8 +6896,47 @@ export class UnsubscribeHandler implements WorkHandler<UnsubscribePayload> {
 }
 ```
 
-Long-running handlers check `context.Signal` and call `await context.Heartbeat({ Percent })` at progress
-boundaries; `Heartbeat` resolves `false` once the lease is lost, and the handler must stop.
+### Handler rules
+
+The queue guarantees durable delivery, one valid lease holder while your handler runs, and fencing. Everything
+else is yours — see `plans/work-queue-1/10-consumer-guide.md`. Four rules cover most handlers:
+
+1. **Long awaits need no heartbeat code.** Keep `HeartbeatMode: 'Auto'` (the default) and set
+   `MaxProcessingSeconds` to the longest a healthy run should take: the runtime renews the lease while your
+   handler awaits, and aborts once the cap passes. Use `'Manual'` only when you want a *stuck* handler detected,
+   then call `await context.Heartbeat({ Percent })` at real progress boundaries.
+2. **Honor `context.Signal`.** It aborts when the lease is lost, an operator cancels the item, or the host shuts
+   down. Stop whatever external work you started — a child process, a remote job, a long query.
+3. **Never block the event loop.** A long synchronous CPU-bound loop stops the heartbeat timer with it and the
+   lease expires under you; move that work to a worker thread or child process.
+4. **Non-restartable side effects need your own guard.** At-least-once delivery means a handler can run twice.
+   Make handlers idempotent (`message.MessageID` is stable across redeliveries and replays), and for work that
+   must not overlap — an infrastructure apply, a financial posting — set a `LeaseSeconds` larger than your worst
+   heartbeat outage *and* hold a domain lock of your own.
+
+`context.Heartbeat` resolves `false` once the lease is gone (taken over, or revoked by an operator cancel); a
+transient transport error does not — it is retried on the next tick while the lease is still valid.
+
+## Subscription filters
+
+A filter is MJ's standard `CompositeFilterDescriptor` JSON over **envelope attributes** — the shape
+`mj-filter-builder` edits and user views persist — restricted to what every transport can express:
+
+```jsonc
+{ "logic": "and", "filters": [
+  { "field": "eventType", "operator": "eq", "value": "click" },
+  { "logic": "or", "filters": [
+      { "field": "tenant", "operator": "eq", "value": "acme" },
+      { "field": "tenant", "operator": "eq", "value": "globex" } ] }
+] }
+```
+
+Operators: `eq`, `neq`, `startswith`, `isnull`, `isnotnull`. The root is `and`; a nested group may only be a
+single-field OR of `eq`; and each field may be constrained only once (brokers read a field's values as OR, so two
+AND-ed rules on one field would widen the filter rather than narrow it). Matching is **case-sensitive** (brokers match exactly, so MJ and the broker agree),
+which is the one deliberate divergence from `CompositeFilter`'s case-insensitive comparison. Richer filters are
+rejected by `ValidateSubscriptionFilter` / `SubscriptionUnsupportedReason` when a subscription is saved, rather
+than silently delivering everything.
 
 ## Publishing from outside MJ
 
@@ -6369,7 +6967,7 @@ RunTransportConformanceSuite('MyTransport', {
 ```
 
 Outside vitest (for example an integration runner against a live database), call
-`await RunConformanceChecks(harness)` from `/testing`: it runs the same 25 cases sequentially, never throws, and
+`await RunConformanceChecks(harness)` from `/testing`: it runs the same 27 cases sequentially, never throws, and
 returns `{ Id, Title, Status: 'Passed' | 'Failed' | 'Skipped', Detail, DurationMs }` per case.
 
 `vitest` is an optional peer dependency used only by `/testing/vitest`.
@@ -6395,7 +6993,7 @@ Add `@memberjunction/work-queue-core`: transport-neutral durable work-queue cont
 - [ ] **Step 6: Full verification**
 
 Run: `cd packages/WorkQueue/core && pnpm test`
-Expected: PASS — **173 tests** (dependencyGuard 3, errors 6, publishing 2, validation 25, filter 16, backoff 8, compatibility 7, outcomes 11, DeliveryExecution 17, ConsumerRuntime 14, InMemoryTransport 13, conformanceAssertions 3, RunConformanceChecks 3, conformance 25, restContract 6, WorkQueueApiPublisher 11, publicApi 3).
+Expected: PASS — **188 tests** (dependencyGuard 3, errors 6, publishing 2, validation 25, filter 23, backoff 8, compatibility 9, outcomes 11, DeliveryExecution 20, ConsumerRuntime 14, InMemoryTransport 14, conformanceAssertions 3, RunConformanceChecks 3, conformance 27, restContract 6, WorkQueueApiPublisher 11, publicApi 3).
 
 Run: `cd packages/WorkQueue/core && pnpm run build`
 Expected: builds; `dist/index.js`, `dist/testing/index.js` and `dist/testing/vitest.js` exist.
@@ -6437,22 +7035,29 @@ git push
 | 03 §9 REST JSON shapes | 9 |
 | 03 §10 manifest types | 1 |
 | 02 §6 conformance kit (vitest and runner-agnostic) | 8 |
+| 03 §7 cancel in flight (lease revocation, key held until expiry) | 5 (runtime), 7 (store/operator), 8 (C26–C27) |
+| 02 §1a consumer responsibilities (handler rules) | 10 (README) |
 
 ## Contract deltas
 
-Differences between this plan and spec 03 that must be folded into 03 (and honoured by plans 05–08):
+Differences between this plan and spec 03 that must be folded into 03 (and honoured by plans 05–08). **Adopted**
+means 03 already carries the rule (Revision 2/3) and the row is kept for traceability.
 
 | # | Delta | Why |
 | --- | --- | --- |
-| CD1 | `ConsumerRuntimeOptions` gains optional `ReceiveWaitSeconds` (default 0), passed as `Receive`'s `waitSeconds`. | 03 §3.2 gives the runtime no way to long-poll SQS (plan 07's MJ worker needs 20 s). |
-| CD2 | 03 §0's "lint rule (`no-restricted-imports`)" is not implementable as written: the repo has ESLint packages but no ESLint configuration wired into package builds or CI. Enforcement is `dependencyGuard.test.ts` (package.json fields + source import scan), which runs in every `pnpm test`. | Verified: no `.eslintrc*`/`eslint.config.*` at the root or in any package. |
-| CD3 | `ProcessBatch` skips the remainder of a partition lane after a delivery that did not settle `Completed`, reporting `{ Kind: 'Failed', Error: 'SkippedAfterEarlierFailureInPartition' }` (exported `SKIPPED_AFTER_PARTITION_FAILURE`). | SQS FIFO batches must not run later items of a message group after an earlier one fails; plan 07's Lambda adapter maps these to batch item failures. |
-| CD4 | Dead-letter reasons are truncated to 100 characters in the runtime (`MAX_DEAD_LETTER_REASON_LENGTH`). | `WorkQueueDelivery.DeadLetterReason` is `nvarchar(100)` (03 §6.5); a long `FatalWorkError` message would otherwise fail the settle. |
-| CD5 | 03 §7 must add two sequence rules: (a) the `LastCompletedSequence` mark keeps advancing through consecutive already-`Discarded` sequences after Complete/Discard/Skip; (b) a delivery created for an `Ordered` + `ExplicitSequence` subscription whose `Sequence ≤ LastCompletedSequence` is created `Discarded` (note `SequenceAlreadyResolved`). | Without (a), discarding sequence 3 while 2 is pending leaves 4 waiting forever. Without (b), a late publish of a skipped sequence becomes an unclaimable head and wedges its key (possible on the Database transport once the original message row is purged, and on staged subscriptions). |
-| CD6 | Awaiting-sequence state is cleared as soon as the head becomes the next sequence (not only on completion). | Otherwise `ListPartitions` keeps reporting `AwaitingSequence` for a key whose missing sequence has arrived. |
+| CD1 *(adopted — 03 §3.2)* | `ConsumerRuntimeOptions` gains optional `ReceiveWaitSeconds` (default 0), passed as `Receive`'s `waitSeconds`. | 03 §3.2 gives the runtime no way to long-poll SQS (plan 07's MJ worker needs 20 s). |
+| CD2 *(adopted — 03 §0)* | 03 §0's "lint rule (`no-restricted-imports`)" is not implementable as written: the repo has ESLint packages but no ESLint configuration wired into package builds or CI. Enforcement is `dependencyGuard.test.ts` (package.json fields + source import scan), which runs in every `pnpm test`. | Verified: no `.eslintrc*`/`eslint.config.*` at the root or in any package. |
+| CD3 *(adopted — 03 §3.2)* | `ProcessBatch` skips the remainder of a partition lane after a delivery that did not settle `Completed`, reporting `{ Kind: 'Failed', Error: 'SkippedAfterEarlierFailureInPartition' }` (exported `SKIPPED_AFTER_PARTITION_FAILURE`). | SQS FIFO batches must not run later items of a message group after an earlier one fails; plan 07's Lambda adapter maps these to batch item failures. |
+| CD4 *(adopted — 03 §3.2)* | Dead-letter reasons are truncated to 100 characters in the runtime (`MAX_DEAD_LETTER_REASON_LENGTH`). | `WorkQueueDelivery.DeadLetterReason` is `nvarchar(100)` (03 §6.5); a long `FatalWorkError` message would otherwise fail the settle. |
+| CD5 *(adopted — 03 §7)* | 03 §7 must add two sequence rules: (a) the `LastCompletedSequence` mark keeps advancing through consecutive already-`Discarded` sequences after Complete/Discard/Skip; (b) a delivery created for an `Ordered` + `ExplicitSequence` subscription whose `Sequence ≤ LastCompletedSequence` is created `Discarded` (note `SequenceAlreadyResolved`). | Without (a), discarding sequence 3 while 2 is pending leaves 4 waiting forever. Without (b), a late publish of a skipped sequence becomes an unclaimable head and wedges its key (possible on the Database transport once the original message row is purged, and on staged subscriptions). |
+| CD6 *(adopted — 03 §7)* | Awaiting-sequence state is cleared as soon as the head becomes the next sequence (not only on completion). | Otherwise `ListPartitions` keeps reporting `AwaitingSequence` for a key whose missing sequence has arrived. |
 | CD7 | 03 §9 does not pin the casing of `status` values or `payloadRef` field names. This plan emits `Accepted`/`Duplicate`/`Rejected` (parsed case-insensitively) and camelCase `payloadRef` fields (`uri`, `contentType`, `sizeBytes`, `checksum`), and exports the mapping (`ParseRestPublishBody`, `ToRestPublishResult`, …) from core so the REST extension (plan 06) uses the identical code. | Client and server are written in different plans; one shared mapping removes drift. |
 | CD8 | `PublishErrorCodes` adds client-side codes `BadRequest`, `Unauthorized` and `InvalidResponse` (retryable). An ExplicitSequence request with `Sequence` but no `PartitionKey` returns `InvalidSequence` (03 §1.1 names no code for that case). | Needed to report HTTP failures and a malformed success body per item. |
-| CD9 | Heartbeats are coalesced: a `Heartbeat` call made while another `ExtendLease` is in flight shares its result and its progress is not sent. After `MaxProcessingSeconds`, `Heartbeat` resolves `false` but a later handler outcome is still settled (the transport's lease token fences it if the lease expired). | 03 §3.2 does not specify either case. |
-| CD10 | Extra exports beyond 03: `PublishErrorCodes`, `CreatePublishError`, `RejectedPublishResult`, `IsRetryablePublishErrorCode`, `SUBSCRIPTION_POLICY_DEFAULTS`, `NULL_WORK_LOGGER`, `ValidateSubscriptionFilter`, runtime helpers (`MapThrownError`, `ResolveSettleAction`, …), `DeliveryExecution`, `IN_MEMORY_TRANSPORT_CAPABILITIES`, and in `/testing`: fixtures, `ConformanceHarness` (with `Capabilities` and `Traits { ReleaseConsumesAttempt, ExpiredLeaseDeadLetters, ReceiveWaitSeconds }`), `ConformanceCase`, `CONFORMANCE_CASES`, `ConformanceAssertionError`, `ConformanceCheckResult`, `RunConformanceChecks`; in `/testing/vitest`: `RunTransportConformanceSuite`. | Shared by plans 05–07 so rules are implemented once. |
-| CD12 | The conformance kit is runner-agnostic: cases are data (`CONFORMANCE_CASES`, each with `Gate` returning a skip reason and `Run` throwing `ConformanceAssertionError`), `RunConformanceChecks(harness)` runs them sequentially without throwing and disposes the driver per case, and the vitest wrapper lives in a separate `./testing/vitest` entry — the only module importing `vitest`. 02 §6 should name both entries. | Plan 06's integration bundle runs the kit against a live database outside vitest. |
-| CD11 | Workspace globs: `packages/WorkQueue/*` must be added to both `pnpm-workspace.yaml` and the root `package.json` `workspaces` (Task 1). | Nested `packages/WorkQueue/{core,aws,engine,server}` folders are not covered by `packages/*`. |
+| CD9 *(adopted — 03 §3.2)* | Heartbeats are coalesced: a `Heartbeat` call made while another `ExtendLease` is in flight shares its result and its progress is not sent. After `MaxProcessingSeconds`, `Heartbeat` resolves `false` but a later handler outcome is still settled (the transport's lease token fences it if the lease expired). | 03 §3.2 does not specify either case. |
+| CD10 | Extra exports beyond 03: `PublishErrorCodes`, `CreatePublishError`, `RejectedPublishResult`, `IsRetryablePublishErrorCode`, `SUBSCRIPTION_POLICY_DEFAULTS`, `NULL_WORK_LOGGER`, `ValidateSubscriptionFilter`, `FilterFields`, `WORK_QUEUE_FILTER_SUPPORT`, `FilterUnsupportedReason`, runtime helpers (`MapThrownError`, `ResolveSettleAction`, …), `DeliveryExecution`, `IN_MEMORY_TRANSPORT_CAPABILITIES`, and in `/testing`: fixtures, `ConformanceHarness` (with `Capabilities` and `Traits { ReleaseConsumesAttempt, ExpiredLeaseDeadLetters, ReceiveWaitSeconds }`), `ConformanceCase`, `CONFORMANCE_CASES`, `ConformanceAssertionError`, `ConformanceCheckResult`, `RunConformanceChecks`; in `/testing/vitest`: `RunTransportConformanceSuite`. | Shared by plans 05–07 so rules are implemented once. |
+| CD12 *(adopted — 02 §6)* | The conformance kit is runner-agnostic: cases are data (`CONFORMANCE_CASES`, each with `Gate` returning a skip reason and `Run` throwing `ConformanceAssertionError`), `RunConformanceChecks(harness)` runs them sequentially without throwing and disposes the driver per case, and the vitest wrapper lives in a separate `./testing/vitest` entry — the only module importing `vitest`. 02 §6 should name both entries. | Plan 06's integration bundle runs the kit against a live database outside vitest. |
+| CD11 *(adopted — 03 §0)* | Workspace globs: `packages/WorkQueue/*` must be added to both `pnpm-workspace.yaml` and the root `package.json` `workspaces` (Task 1). | Nested `packages/WorkQueue/{core,aws,engine,server}` folders are not covered by `packages/*`. |
+| CD13 | The lease horizon is enforced in the runtime, not only by the transport: `DeliveryExecution` tracks `LeaseExpiresAt` (moved forward on every `Held` renewal) and aborts with the **new** `ExecutionStopReason` value `'LeaseExpired'` once heartbeats have failed past it plus `LEASE_EXPIRY_GRACE_MS` (5 s, overridable per execution). 03 §3.2 says "only `Lost`, or the lease passing its expiry, aborts" without naming the grace allowance or the stop reason. | A transient database or SQS failure must not abort an hour-long handler, but a handler whose lease is genuinely gone must stop before another worker takes over. |
+| CD14 | Cancel needs no new consumer method: 03 §7's token rotation surfaces through the existing `ExtendLease → 'Lost'` path. The **operator** side does change — `ITransportOperator.Discard` may return `CancelRequested: true`, and the field is emitted **only** when true, so plain discards keep the `{ Supported, Changed }` shape that existing assertions and plans 05–07 use. `TransportCapabilities.CancelInFlight` gates conformance cases C26–C27. | 03 §5.2 types `CancelRequested` as optional but does not say when it is present. |
+| CD15 *(resolved — 03 §1/§1.1)* | Attribute keys may not contain a dot: the charset is `[A-Za-z0-9_-]{1,64}`, and the reserved-prefix rule is "starts with `mj` followed by `.` or `_`, case-insensitive". Filter field names are therefore always bare names, and a dotted field stays rejected as MJ's multi-record `source.field` form. | Allowing dotted attribute keys would make those attributes unfilterable, since `CompositeFilterDescriptor` overloads `field` for multi-record filters (`CompositeFilter.ParseFilterField`). |
+| CD16 | Filter details 03 §4 leaves open: an empty `filters: []` array matches everything (same as `null`); rule values are normalised with `String(value)` at parse time, so the stored filter always holds strings; an empty-string value is rejected for `eq`/`neq`/`startswith`; a nested group must use `logic: 'or'` (an inner `and` is rejected); `FilterSupport` is carried on `TransportCapabilities.Filters`, which every driver and fake must now set; and a field may be constrained only once per filter (matching plan 07's `ToSnsFilterPolicy`, delta D15). | Needed so the Database, AWS and in-memory transports agree byte-for-byte on what a stored filter means. |

@@ -13,8 +13,10 @@ size, open questions. Priority reflects expected demand after Phase 1.
 | 6 | Priority lanes | P3 | S (pattern) / M (engine) |
 | 7 | Per-key concurrency > 1 and latest-wins coalescing | P3 | M |
 | 8 | Sampled per-message delivery ledger for cloud transports | P3 | M |
-| 9 | Cooperative in-flight cancel (C8) | P1 (needed by 09e) | M |
+| 9 | Cancel reason on the abort signal (the rest of C8 shipped in Phase 1) | P2 | S |
 | 10 | `Ordered` for External (serverless) hosts on cloud transports | P3 (only with a real use case) | L |
+
+Items **considered and declined** in Revision 3 are recorded at the end, with the evidence that would reopen each.
 
 ---
 
@@ -206,26 +208,29 @@ delivery (D11 keeps it off by default).
 
 ---
 
-## 9. Cooperative in-flight cancel (C8)
+## 9. Cancel reason on the abort signal (residue of C8)
 
-**Summary.** Cancel an **in-flight** delivery. Needed by 09e (integration run cancel) and useful generally.
-Cancelling **pending** work is already in Phase 1: `WorkQueue.DiscardDelivery` on a `Pending` delivery
-(`CancelPending` capability, 03 §5.2).
+**In-flight cancel itself shipped in Phase 1** (Revision 3, R12). `WorkQueue.DiscardDelivery` on an `InFlight`
+delivery sets `WorkQueueDelivery.CancelRequestedAt`, rotates `LeaseToken` and answers `CancelRequested: true`; the
+holder's next heartbeat resolves `false`, `WorkContext.Signal` aborts, any later settle is fenced, and the row
+becomes `Discarded` when its lease expires (03 §7, capability `CancelInFlight`). No separate
+`ITransportOperator.CancelInFlight` method was added — `Discard` covers `Pending`, `InFlight` and `DeadLettered`.
+AWS (non-staged) reports `CancelInFlight: false`; staged `Ordered` subscriptions get the Database behaviour.
 
-**Design.**
-- Contract: `ITransportOperator.CancelInFlight(subscription, deliveryID, reason, actorUserID)` and a capability
-  flag `CancelInFlight`. `ExtendLease` returns `'Held' | 'Lost' | 'Cancelled'`. `WorkContext.Signal` aborts with
-  `reason = new WorkCancelledError(reason)`.
-- **Database / staged:** set `WorkQueueDelivery.CancelRequestedAt`. The next heartbeat returns `Cancelled`, and
-  the handler's returned outcome is honored (usually `Complete`). If the handler ignores the signal until lease
-  expiry, `ExpireLeases` moves the delivery to `Discarded` instead of retrying it.
-- **AWS / GCP (non-staged):** `CancelInFlight: false`. Without an external state store (Revision 2), thin consumers
-  have nowhere to read a flag; subscriptions that need in-flight cancel should be MJ-hosted (and, if long-running,
-  are usually `Ordered`/staged already).
-- **Azure:** a session control message for session subscriptions; unsupported for non-session subscriptions.
-- `Manual` / `Auto` heartbeat: `Auto` renewals also check the flag, so cancel latency ≤ `LeaseSeconds/3`.
+**What is left.** A handler cannot tell *why* it was stopped: lease lost, host shutting down, or operator cancel all
+surface as `Heartbeat() → false` and an aborted `Signal`. Handlers that want to record "cancelled by operator" on
+their domain row (09e's integration runs, for one) must infer it.
 
-**Schema.** `WorkQueueDelivery.CancelRequestedAt datetimeoffset NULL`, `CancelRequestedByUserID NULL`.
+**Design.** Carry a reason on the abort: `WorkContext.Signal.reason` set to a typed
+`WorkAbortedError { Kind: 'LeaseLost' | 'Cancelled' | 'Shutdown' | 'MaxProcessingSeconds' }`, sourced from the
+transport's `ExtendLease` result (`'Held' | 'Lost' | 'Cancelled'`) plus the runtime's own reasons. A handler that
+sees `Cancelled` may still settle: the fence has not moved for shutdown, and for cancel the queue ignores the
+outcome because the row is already destined for `Discarded`.
+
+**Schema.** None beyond Phase 1's `CancelRequestedAt`; add `CancelRequestedByUserID` only if the operator identity
+is wanted separately from `ResolvedByUserID`.
+
+**Size.** S. **Priority.** P2 — cosmetic until a consumer needs cancelled-vs-crashed on its own record.
 
 ---
 
@@ -261,3 +266,19 @@ sequence gaps, skip) against each store, plus crash injection between park-write
 
 **Open question.** Is Azure's native session-state option enough to satisfy the first real use case, avoiding a
 store on AWS/GCP entirely?
+
+---
+
+## Considered and declined (Revision 3)
+
+Reviewed against MJ Central's two hand-rolled queues ([01](../01-use-cases.md) use case 3) and declined on the
+boundary rule in [02 §1a](../02-implementation-overview.md#1a-where-the-queue-stops): the queue guarantees durable
+delivery, one valid lease holder while a handler runs, and fencing — everything else is the consumer's. Each row
+names the evidence that would reopen it.
+
+| Declined | Why | Consumer does this instead | Reopen when |
+|---|---|---|---|
+| **`AwaitExternal` delivery state** — a delivery parks (lease released, key still held) until `CompleteExternal(completionKey)` or a timeout | Needs a new status, a completion-key index, a widened in-flight index, a timeout sweeper and a new API; works only on Database/staged, so the contract would diverge per transport. It also puts the domain's stall policy inside the queue | Split-message pattern ([10](../10-consumer-guide.md) §5): the handler starts the vendor job, records it on its domain row and completes; the webhook publishes a completion message. Overlap, coalescing and stall detection stay with the integration, which knows the rules | Many concurrent long external jobs make worker slots (option B: hold the lease and poll) genuinely expensive, **and** the split-message pattern's domain bookkeeping has been written more than twice |
+| **Cloud liveness probe before reclaiming a lease** — sweeper asks the platform (e.g. Azure's execution API) whether the lease owner is alive before expiring it | Makes lease expiry cloud-aware and non-SQL, needs a probe registry and an owner-ID convention, and a dead-but-reported-alive executor blocks its key indefinitely. MJ Central needed it because its heartbeat was entangled with a full-row `Save()`; ours is a small guarded update, retried within the lease | Size `LeaseSeconds` above the worst plausible heartbeat outage, and guard non-restartable side effects in the handler (a state lock or a domain row claimed by conditional UPDATE) — [10](../10-consumer-guide.md) §4 | Long-lease subscriptions still see healthy-but-silent workers reclaimed in practice, with lease sizing already tuned |
+| **`DeduplicationMode = 'UntilResolved'`** — hold a deduplication key until the work finishes instead of for a TTL | "Resolved" is ambiguous under fan-out (all subscriptions? the first?), couples the ledger to delivery state, cannot work on AWS (no per-message tracking), and a dead letter silently blocks publishes until an operator acts | `Exclusive` serialises deliveries per key, so the handler can check its domain row without a race and coalesce or complete; a short `DeduplicationKey` TTL absorbs genuine double-submits — [10](../10-consumer-guide.md) §6 | A consumer needs cross-transport "one active per key" *at publish time* (not at handle time) and cannot see domain state from the producer |
+| **Child-process / heartbeat helpers in core** — `HeartbeatWhile(promise)`, `RunChildProcess` with SIGTERM→grace→SIGKILL and a bounded output tail | `HeartbeatMode: 'Auto'` already renews the lease while a handler awaits anything, so no helper is needed for liveness; signal escalation and output tails are domain utilities, and Node-only code has no place in the Lambda-safe core | Await normally, honour `context.Signal`, set `MaxProcessingSeconds`, and offload CPU-bound work off the event loop — [10](../10-consumer-guide.md) §3 | Several consumers ship near-identical process-supervision code; then it belongs in a general MJ Node utility, still not in `work-queue-core` |

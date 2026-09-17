@@ -120,6 +120,8 @@ the session continues. No session state is needed.
 ### `Ordered` (Phase 1a baseline: staged)
 
 `TransportCapabilities` for Azure: `SupportsOrdered: false`, `SupportsExternalHosts: true`, `CancelPending: false`,
+`CancelInFlight: false` (a peek-lock cannot be revoked from outside the receiver; staged `Ordered` subscriptions get
+the Database behaviour of 03 §7),
 `ListPartitions: false`, `PeekDeadLetters: 'Full'` (non-destructive peek), `ReplaySingleDeadLetter: true`,
 `PersistsProgress: false`, `MaxRetryDelaySeconds` bounded by scheduled-enqueue (effectively unbounded).
 An `Ordered` subscription must be `HostType = 'MJWorker'`; its MJ worker runs the engine's stager (03 §5.1) over a
@@ -223,7 +225,7 @@ Host ceilings for D5 warnings: Functions Consumption 10 min, Flex/Premium config
 | `GetStats` | `ServiceBusAdministrationClient.getSubscriptionRuntimeProperties` → `activeMessageCount` (Pending) and `deadLetterMessageCount` (DeadLettered). Service Bus doesn't expose locked-message counts, so `InFlight` is reported as 0 with an "unavailable" note. `BlockedKeys = null` (staged subscriptions use the Database operator). |
 | `ListDeadLetters` | **`peekMessages` on the DLQ receiver, non-destructive**, cursor = `fromSequenceNumber`. This is a real advantage over SQS, where browsing a DLQ means receiving from it. |
 | `Replay` | receive (peek-lock) the target DLQ message by scanning; re-send to the topic with `mj_target`, same `MessageID`, `SessionId`, `mj_attempt=0`, `mj_replay=true`; complete the DLQ copy. |
-| `Discard` | dead letters: receive + complete the DLQ copy. Pending: `{ Supported: false }` (`CancelPending: false`). |
+| `Discard` | dead letters: receive + complete the DLQ copy. Pending and in-flight: `{ Supported: false }` (`CancelPending`/`CancelInFlight` both `false`). |
 | `ListPartitions` | `null` (`ListPartitions: false`); staged `Ordered` subscriptions use the Database operator |
 | `SkipSequence` | `{ Supported: false }`; staged subscriptions use the Database operator |
 

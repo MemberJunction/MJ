@@ -2,11 +2,17 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Run work-queue subscriptions inside MJ servers and operate them — handler binding, the `WorkQueueHost`, the sweeper, the seven operator Remote Operations, MJServer wiring, the REST publish Server Extension, `mj queue` CLI commands, bootstrap manifests and the deterministic integration bundle — on top of the core (plan 04) and the Database data layer (plan 05).
+**Goal:** Run work-queue subscriptions inside MJ servers and operate them — handler binding, the `WorkQueueHost` (long-running and one-shot container-job modes), the sweeper, the eight operator Remote Operations, MJServer wiring, the REST publish Server Extension, `mj queue` CLI commands, bootstrap manifests and the deterministic integration bundle — on top of the core (plan 04) and the Database data layer (plan 05).
 
-**Architecture:** `WorkQueueHost` (engine package) plans which subscriptions this instance may run (host type, status, capability gating via `SubscriptionUnsupportedReason`, handler presence), starts one `ConsumerRuntime` per runnable subscription over its transport's consumer, and re-plans on a timer so pausing, adding or changing a subscription takes effect without a restart. A `WorkQueueHostLoopRegistry` lets transport packages attach auxiliary loops (plan 07's SQS stager) keyed by transport `DriverClass`. `WorkQueueSweeper` runs set-based maintenance on the database clock. Operators use Remote Operations (Explorer/GraphQL/CLI); REST is publish-only and lives in the new `@memberjunction/work-queue-server` Server Extension (post-auth). MJServer starts the host after `listen()` when `workQueue.enabled` is set; the host self-registers with `ShutdownRegistry`.
+**Architecture:** Metadata is split across two tiers (03 §0, §11): `WorkQueueEngineBase` (browser-safe
+`@memberjunction/work-queue-base`, plan 05) caches Transports/Topics/Subscriptions and builds bindings and policies for
+any tier, and the server `WorkQueueEngine` delegates to it — composition, mirroring `AIEngine`/`AIEngineBase` — while
+adding drivers, publishing, the operator and staging. Everything in this plan talks to the **server** engine (directly
+or through the `WorkQueueHostEngine` structural subset), so the split changes no call site here; it only adds a package
+to the bootstrap manifests and keeps server-only types out of anything a dashboard may import.
+`WorkQueueHost` (engine package) plans which subscriptions this instance may run (host type, status, capability gating via `SubscriptionUnsupportedReason`, handler presence), starts one `ConsumerRuntime` per runnable subscription over its transport's consumer, and re-plans on a timer so pausing, adding or changing a subscription takes effect without a restart. A `WorkQueueHostLoopRegistry` lets transport packages attach auxiliary loops (plan 07's SQS stager) keyed by transport `DriverClass`. `WorkQueueSweeper` runs set-based maintenance on the database clock. Operators use Remote Operations (Explorer/GraphQL/CLI); REST is publish-only and lives in the new `@memberjunction/work-queue-server` Server Extension (post-auth). MJServer starts the host after `listen()` when `workQueue.enabled` is set; the host self-registers with `ShutdownRegistry`. The same host also runs **one-shot**: `RunOnce()` claims a bounded number of deliveries, drains and resolves, so `mj queue work --once` is a container-job entrypoint that scales from the `WorkQueue.GetBacklog` metric (02 §4.4a).
 
-**Tech Stack:** TypeScript 5.9 (ESM), Vitest 3, `@memberjunction/work-queue-core` (plan 04), `@memberjunction/work-queue-engine` (plan 05), MJ core/global/core-entities/sql-dialect/api-keys, `@memberjunction/server-extensions-core`, Express 5, zod 3 (MJServer config), oclif 3 (MJCLI), MJ CodeGen + mj-sync, `@memberjunction/testing-integration`.
+**Tech Stack:** TypeScript 5.9 (ESM), Vitest 3, `@memberjunction/work-queue-core` (plan 04), `@memberjunction/work-queue-base` + `@memberjunction/work-queue-engine` (plan 05), MJ core/global/core-entities/sql-dialect/api-keys, `@memberjunction/server-extensions-core`, Express 5, zod 3 (MJServer config), oclif 3 (MJCLI), MJ CodeGen + mj-sync, `@memberjunction/testing-integration`.
 
 **Spec:** [`03-interfaces-and-tables.md`](03-interfaces-and-tables.md) (normative — §3, §5, §7, §8, §9, §10, §11), [`02-implementation-overview.md`](02-implementation-overview.md), [`README.md`](README.md). Plans [04](04-core-implementation-plan.md) and [05](05-native-data-implementation-plan.md) must be complete. Read 03 before starting.
 
@@ -16,7 +22,7 @@
 - **Per-package commands:** `cd packages/<Path> && pnpm test` and `cd packages/<Path> && pnpm run build`. Do not build single packages with turbo from the root.
 - **Internal dependency versions:** pin every `@memberjunction/*` dependency to the version in `packages/MJCore/package.json` (`6.1.0` when this plan was written).
 - **New package shape** (`packages/WorkQueue/server`): `"type": "module"`, build `tsc && tsc-alias -f`, `tsconfig.json` extends `../../../tsconfig.server.json`, `vitest.config.ts` merges `../../../vitest.shared`, tests in `src/__tests__/*.test.ts`, extensionless relative imports (MJServer and MJCLI keep their existing `.js`-suffixed relative imports).
-- **Dependency rule (03 §0):** `@memberjunction/work-queue-core` and `@memberjunction/work-queue-aws` gain **no** `@memberjunction/*` dependencies from this plan. Everything here lives in `work-queue-engine`, `work-queue-server`, `MJServer`, `MJCLI`, the bootstrap packages and the integration suite.
+- **Dependency rule (03 §0):** `@memberjunction/work-queue-core` and `@memberjunction/work-queue-aws` gain **no** `@memberjunction/*` dependencies from this plan, and **nothing server-only ever moves into `@memberjunction/work-queue-base`** — no drivers, no SQL executor, no host, no Express, no `@memberjunction/server*`. Base stays importable by Explorer. Everything here lives in `work-queue-engine`, `work-queue-server`, `MJServer`, `MJCLI`, the bootstrap packages and the integration suite.
 - **Metadata:** primary keys are the `uuidgen` values written into the tasks; never add `sync` blocks by hand. Push with `pnpm exec mj sync push --dir=metadata --ci`, then regenerate with `pnpm exec mj codegen --skipdb`.
 - **One database per agent.** Before `mj sync push` or `mj codegen`, confirm no other session uses the `DB_DATABASE` in your `.env`.
 - **Code rules:** no `any`; `unknown` only at trust boundaries (request bodies, parsed JSON) and narrowed immediately; `as unknown as` only in test fakes; compare UUIDs with `UUIDsEqual`; pass `contextUser` to every data call; static imports only; PascalCase public members; functions around 30–40 lines.
@@ -34,21 +40,22 @@
 | 1 | Handler binding | `BaseWorkHandler`, `ResolveWorkHandler`, `BoundWorkHandler`, `WorkQueueProviderSource` — tested |
 | 2 | Host loop registry and subscription planner | `WorkQueueHostLoopRegistry`, `PlanHostedSubscriptions` with capability gating — tested |
 | 3 | `WorkQueueHost` | Start, reconcile, kick, health, auxiliary loops, sweeper timer, shutdown — tested |
-| 4 | `WorkQueueSweeper` | Sequences plan 05's operator maintenance statements; overlap guard — tested |
-| 5 | Remote-operation metadata | Category, 7 operations, 14 type files; CodeGen bases generated |
-| 6 | Operator service and server operations | `WorkQueueOperatorService`, 7 `@RegisterClass` server operations — tested |
+| 3b | `WorkQueueHost.RunOnce` | Budgeted one-shot mode for container jobs: claim → run → drain → exit — tested |
+| 4 | `WorkQueueSweeper` | Sequences plan 05's operator maintenance statements, forwards lease-expiry dead letters to `OnDeadLettered`; overlap guard — tested |
+| 5 | Remote-operation metadata | Category, 8 operations, 16 type files; CodeGen bases generated |
+| 6 | Operator service and server operations | `WorkQueueOperatorService`, 8 `@RegisterClass` server operations — tested |
 | 7 | MJServer configuration and host startup | `workQueue` config section, `StartWorkQueueHost`, provider source, `serve()` wiring — tested |
 | 8 | `@memberjunction/work-queue-server` scaffold and request mapping | Package builds; body parsing, settings, response mapping — tested |
 | 9 | Publish handler, scope authorizer and Server Extension | `POST {root}/topics/{topic}/messages` mounted post-auth — tested |
-| 10 | `mj queue` CLI commands | 9 commands + formatting helpers — tested |
+| 10 | `mj queue` CLI commands | 10 commands (including the container-job worker) + formatting helpers — tested |
 | 11 | Bootstrap dependencies, manifests and full build | Registrations in `ServerBootstrap`/`ServerBootstrapLite`; `pnpm run build` green |
-| 12 | Integration bundle `work-queue-runtime` (IT94) | 13 checks (including the Database conformance run) pass against a live database |
-| 13 | READMEs and operator runbook | Engine + server READMEs, soak-test runbook |
+| 12 | Integration bundle `work-queue-runtime` (IT94) | 16 checks (including the Database conformance run) pass against a live database |
+| 13 | READMEs and operator runbook | Engine + server READMEs, container-job/KEDA recipe, soak-test runbook |
 
 ## Pre-flight
 
 - [ ] You are on `feat/work-queue` and `git branch -vv` shows `[origin/feat/work-queue]`.
-- [ ] Plans 04 and 05 are merged into the branch: `cd packages/WorkQueue/core && pnpm test` and `cd packages/WorkQueue/engine && pnpm test` pass; `pnpm-workspace.yaml` lists `packages/WorkQueue/*`.
+- [ ] Plans 04 and 05 are merged into the branch: `cd packages/WorkQueue/core && pnpm test`, `cd packages/WorkQueue/base && pnpm test` and `cd packages/WorkQueue/engine && pnpm test` pass; `pnpm-workspace.yaml` lists `packages/WorkQueue/*`.
 - [ ] Plan 05's migration, CodeGen and metadata are applied to **your** database: `grep -c "class MJWorkQueueSubscriptionEntity" packages/MJCoreEntities/src/generated/entities/__mj.ts` prints `1`, and `grep -l "workqueue:operate" metadata/api-scopes/.*.json` finds the scope file.
 - [ ] The names this plan consumes from plans 04 and 05 exist (see "Consumed surface" below). If any differs, stop and reconcile against 03 before Task 1.
 - [ ] `pnpm install` at the root; `cd packages/MJServer && pnpm test` passes (baseline).
@@ -58,7 +65,8 @@
 | Package | Names |
 | --- | --- |
 | `@memberjunction/work-queue-core` | `WorkJson`, `WorkMessage`, `WorkPayloadRef`, `WorkContext`, `WorkHandler`, `WorkOutcome`, `Outcome`, `WorkLogger`, `WorkProgress`, `ConsumerRuntime`, `ConsumerRuntimeOptions`, `SubscriptionPolicy`, `SubscriptionBinding`, `TopicBinding`, `ReceivedDelivery`, `SettleResult`, `ITransportDriver`, `ITransportConsumer`, `ITransportOperator`, `TransportCapabilities`, `SubscriptionUnsupportedReason`, `BindingValidationIssue`, `SubscriptionStats`, `DeadLetterRecord`, `PartitionCondition`, `PartitionStateRecord`, `Page`, `OperatorResult`, `PublishRequest`, `PublishResult`, `PublishError`, `TopologyManifest`, `BindingImport`, `WorkQueueConfigurationError`; subpath `@memberjunction/work-queue-core/testing` (plan 04 Task 8): `ConformanceHarness`, `ConformanceTraits`, `RunConformanceChecks(harness: ConformanceHarness): Promise<ConformanceCheckResult[]>` with `ConformanceCheckResult { Id; Title; Status: 'Passed' \| 'Failed' \| 'Skipped'; Detail: string \| null; DurationMs }` (Vitest-free; used by IT94 WR13). The Vitest wrapper `RunTransportConformanceSuite` lives at `@memberjunction/work-queue-core/testing/vitest` and is not used by this plan |
-| `@memberjunction/work-queue-engine` (plan 05) | `WorkQueueSqlExecutor`, `WorkQueueExecutorSource`, `SqlStatement`, `SqlParam` (`src/sql/WorkQueueSqlExecutor.ts`, Task 2); `ExecuteWrite(executor, statement, contextUser): Promise<number>` (`src/sql/sqlExecution.ts`, Task 2); `CreateWorkQueueSqlBuilder(context): WorkQueueSqlBuilder` (Task 6) and `OperatorSqlBuilder` sweeper statements `ExpireLeasesAll()`, `FlagGapStalls()`, `DiscardSkippedSequences()`, `PurgeTerminalDeliveries(batchSize)`, `PurgeOrphanMessages(batchSize)` (Task 5); `DeduplicationLedger` with `constructor(executor, contextUser)` and `PurgeExpired(batchSize?, maxBatches?)` (Task 7); `TransportDriverDeps { ContextUser; Executor: WorkQueueExecutorSource; Log; InstanceID? }` (Task 8); `DatabaseTransportDriver` including `StageDeliveries(request: StageDeliveriesRequest): Promise<StageResult[]>` (Tasks 9, 12 — plan 07's stager calls it; this plan does not); `BaseTransportDriverFactory`, `DatabaseTransportDriverFactory` (Task 10); `MJWorkLogger` — `constructor(prefix = '[WorkQueue]')`, `src/logging/MJWorkLogger.ts` (Task 10); `WorkQueueEngine` (Task 13) — the 03 §11 surface plus `OnPublished(listener: (topicName: string) => void): () => void` and `GetDatabaseDriver(): Promise<DatabaseTransportDriver>`; `WorkQueuePublishOptions { ContextUser; Provider?; External? }` (Task 13); `CreateDatabaseConformanceHarness(provider: ConformanceProvider, contextUser: UserInfo, transportID?: string): Promise<DatabaseConformanceHarness>` (Task 14); test fake `RecordingExecutor` (`QueueRows`, `QueueError`, `Calls`) in `src/__tests__/fakes.ts` |
+| `@memberjunction/work-queue-engine` (plan 05) | `WorkQueueSqlExecutor`, `WorkQueueExecutorSource`, `SqlStatement`, `SqlParam` (`src/sql/WorkQueueSqlExecutor.ts`, Task 2); `ExecuteWrite(executor, statement, contextUser): Promise<number>` and `ExecuteRows<T>(executor, statement, contextUser): Promise<T[]>` (`src/sql/sqlExecution.ts`, Task 2); `CreateWorkQueueSqlBuilder(context): WorkQueueSqlBuilder` (Task 6) and `OperatorSqlBuilder` sweeper statements `ExpireLeasesAll()` (**returns `ExpiredDeadLetterRow[]`**, ND14), `FlagGapStalls()`, `DiscardSkippedSequences()`, `PurgeTerminalDeliveries(batchSize)`, `PurgeOrphanMessages(batchSize)` (Task 5); `ExpiredDeadLetterRow { DeliveryID; SubscriptionID; PartitionKey: string \| null }` (`src/sql/rows.ts`, Task 3); `DeduplicationLedger` with `constructor(executor, contextUser)` and `PurgeExpired(batchSize?, maxBatches?)` (Task 7); `TransportDriverDeps { ContextUser; Executor: WorkQueueExecutorSource; Log; InstanceID?; NotifyDeadLettered?: (event: DeadLetteredEvent) => void }` and `DeadLetteredEvent { SubscriptionName; DeliveryID; Reason; PartitionKey: string \| null }` (`src/transports/TransportDriverDeps.ts`, Task 8 — ND15); `DatabaseTransportDriver` including `StageDeliveries(request: StageDeliveriesRequest): Promise<StageResult[]>` (Tasks 9, 12 — plan 07's stager calls it; this plan does not); `BaseTransportDriverFactory`, `DatabaseTransportDriverFactory` (Task 10); `MJWorkLogger` — `constructor(prefix = '[WorkQueue]')`, `src/logging/MJWorkLogger.ts` (Task 10); `ListenerSet<TEvent>` and `PublishListenerSet extends ListenerSet<string>` (`src/engine/PublishListenerSet.ts`, Task 13 — ND15); `WorkQueueEngine` (Task 13) — the 03 §11 surface plus `OnPublished(listener: (topicName: string) => void): () => void` and `GetDatabaseDriver(): Promise<DatabaseTransportDriver>`; `WorkQueuePublishOptions { ContextUser; Provider?; External? }` (Task 13); `CreateDatabaseConformanceHarness(provider: ConformanceProvider, contextUser: UserInfo, transportID?: string): Promise<DatabaseConformanceHarness>` (Task 14); test fake `RecordingExecutor` (`QueueRows`, `QueueError`, `Calls`) in `src/__tests__/fakes.ts`. **Revision 3 additions** (03 §5.2, §6.5, §7, §11): `WorkQueueEngine.GetBacklog(subscriptionName): Promise<{ Supported; Claimable; InFlight; Total }>`; `WorkQueueEngine.OnDeadLettered(listener): () => void`; `ITransportOperator.Discard(...)` returning `{ Supported: true; Changed: boolean; CancelRequested?: boolean }` — an `InFlight` delivery is cancelled by setting `CancelRequestedAt` and rotating `LeaseToken`; the delivery-state entity save guards (Messages, Deliveries, Partition States, Deduplications reject `Save()`/`Delete()`); and the SELECT-only scaler login script `scripts/work-queue-scaler-login.sql` (flat `scripts/` folder, as plan 05 Task 5 writes it). If any of these is missing when you start, plan 05 has not landed Revision 3 — reconcile against 03 first |
+| `@memberjunction/work-queue-base` (plan 05, 03 §0) | `WorkQueueEngineBase extends BaseEngine<WorkQueueEngineBase>` — the **browser-safe metadata tier**: `Instance`, `Config`, `Transports`, `Topics`, `Subscriptions`, `GetTopicByName`, `GetSubscriptionByName`, `SubscriptionsForTopic`, `BuildTopicBinding`, `BuildSubscriptionBinding`, `BuildSubscriptionPolicy`, `ParseFilter(subscription, support)`, `IsStagedToDatabase`, `ValidateTopologyRows`. This plan never imports it directly: the server `WorkQueueEngine` proxies every one of these members (03 §11), so host and operator call sites are unchanged. It appears here only because Task 11 must add the package to the bootstrap manifests |
 | `@memberjunction/core-entities` | `MJWorkQueueTransportEntity`, `MJWorkQueueTopicEntity`, `MJWorkQueueSubscriptionEntity` (CodeGen, plan 05) |
 | `metadata/api-scopes` | `workqueue`, `workqueue:publish`, `workqueue:read`, `workqueue:operate` (plan 05) |
 
@@ -76,13 +84,14 @@ packages/WorkQueue/engine/                                           (plan 05 pa
   src/__tests__/handlers.test.ts                                     Task 1
   src/__tests__/WorkQueueHostLoopRegistry.test.ts · HostedSubscriptionPlanner.test.ts   Task 2
   src/__tests__/WorkQueueHost.test.ts                                Task 3
+  src/__tests__/WorkQueueHostRunOnce.test.ts                         Task 3b
   src/__tests__/WorkQueueSweeper.test.ts                             Task 4
   src/__tests__/WorkQueueOperatorService.test.ts · WorkQueueOperations.test.ts           Task 6
   README.md                                                          Task 13
 
 metadata/remote-operation-categories/.work-queue-category.json       Task 5
 metadata/remote-operations/.work-queue-operations.json               Task 5
-metadata/remote-operations/types/work-queue-*.ts (14 files)          Task 5
+metadata/remote-operations/types/work-queue-*.ts (16 files)          Task 5
 packages/MJCoreEntities/src/generated/remote_operations.ts           Task 5 (CodeGen)
 
 packages/MJServer/
@@ -101,7 +110,7 @@ packages/WorkQueue/server/                                           (new)
 packages/MJCLI/
   package.json · src/utils/open-app-context.ts · src/lib/domain-profiles.ts       Task 10
   src/lib/work-queue/queue-format.ts · queue-session.ts              Task 10
-  src/commands/queue/{index,usage,stats,dead-letters,partitions,replay,discard,skip-sequence,export-topology,import-bindings,validate-bindings}.ts   Task 10
+  src/commands/queue/{index,usage,stats,dead-letters,partitions,replay,discard,skip-sequence,work,export-topology,import-bindings,validate-bindings}.ts   Task 10
   src/__tests__/work-queue-cli.test.ts · work-queue-commands.test.ts Task 10
 
 packages/ServerBootstrap/package.json · src/generated/mj-class-registrations.ts           Task 11
@@ -476,23 +485,29 @@ import type { MJWorkQueueSubscriptionEntity, MJWorkQueueTopicEntity, MJWorkQueue
 import { UUIDsEqual } from '@memberjunction/global';
 import {
     Outcome,
-    type BindingValidationIssue, type ITransportConsumer, type ITransportDriver, type ITransportOperator,
-    type PublishResult, type ReceivedDelivery, type SettleResult, type SubscriptionBinding, type SubscriptionPolicy,
+    type BindingValidationIssue, type FilterSupport, type ITransportConsumer, type ITransportDriver,
+    type ITransportOperator, type PublishResult, type ReceivedDelivery, type SettleResult, type SubscriptionBinding, type SubscriptionPolicy,
     type TopicBinding, type TransportCapabilities, type WorkOutcome,
 } from '@memberjunction/work-queue-core';
 import { BaseWorkHandler } from '../handlers/BaseWorkHandler';
+import type { DeadLetteredEvent } from '../transports/TransportDriverDeps';
 import type { WorkQueueHostEngine } from '../host/HostedSubscriptionPlanner';
+
+/** Mirrors plan 05's DATABASE_TRANSPORT_CAPABILITIES (03 §4.1, §5). Keep both in step. */
+const QUEUE_FILTER_SUPPORT: FilterSupport = {
+    Operators: ['eq', 'neq', 'startswith', 'isnull', 'isnotnull'], SingleFieldOrGroups: true, MaxFields: 5, MaxValues: 50,
+};
 
 export const DATABASE_CAPABILITIES: TransportCapabilities = {
     DetectsMessageIDDuplicates: true, PersistsProgress: true, SupportsOrdered: true, SupportsExternalHosts: false,
-    CancelPending: true, ListPartitions: true, PeekDeadLetters: 'Full', ReplaySingleDeadLetter: true,
-    CompletedCounts: true, MaxRetryDelaySeconds: 2147483647,
+    CancelPending: true, CancelInFlight: true, ListPartitions: true, PeekDeadLetters: 'Full', ReplaySingleDeadLetter: true,
+    CompletedCounts: true, MaxRetryDelaySeconds: 2147483647, Filters: QUEUE_FILTER_SUPPORT,
 };
 
 export const AWS_CAPABILITIES: TransportCapabilities = {
     DetectsMessageIDDuplicates: false, PersistsProgress: false, SupportsOrdered: false, SupportsExternalHosts: true,
-    CancelPending: false, ListPartitions: false, PeekDeadLetters: 'BestEffort', ReplaySingleDeadLetter: true,
-    CompletedCounts: false, MaxRetryDelaySeconds: 43200,
+    CancelPending: false, CancelInFlight: false, ListPartitions: false, PeekDeadLetters: 'BestEffort', ReplaySingleDeadLetter: true,
+    CompletedCounts: false, MaxRetryDelaySeconds: 43200, Filters: QUEUE_FILTER_SUPPORT,
 };
 
 export const IDS = {
@@ -500,6 +515,10 @@ export const IDS = {
     AwsTransport: '10000000-0000-4000-8000-000000000002',
     EmailTopic: '20000000-0000-4000-8000-000000000001',
     IntegrationTopic: '20000000-0000-4000-8000-000000000002',
+    IntegrationSubscription: '30000000-0000-4000-8000-000000000001',
+    UnknownSubscription: '30000000-0000-4000-8000-0000000000ff',
+    DeliveryA: '40000000-0000-4000-8000-000000000001',
+    DeliveryB: '40000000-0000-4000-8000-000000000002',
 } as const;
 
 interface FakeTransportFields { ID: string; Name: string; DriverClass: string; Status?: 'Active' | 'Disabled' }
@@ -595,7 +614,13 @@ export class FakeHostEngine implements WorkQueueHostEngine {
     public readonly DriverErrors = new Map<string, Error>();
     public readonly StagedSubscriptionNames = new Set<string>();
     public GetDriverCalls = 0;
+    /** Dead-letter events the host forwarded from the sweeper (03 §11). */
+    public readonly DeadLettered: DeadLetteredEvent[] = [];
     private readonly listeners = new Set<(topicName: string) => void>();
+
+    public NotifyDeadLettered = (event: DeadLetteredEvent): void => {
+        this.DeadLettered.push(event);
+    };
 
     public async GetDriver(transportID: string): Promise<ITransportDriver> {
         this.GetDriverCalls++;
@@ -631,6 +656,8 @@ export class FakeHostEngine implements WorkQueueHostEngine {
             LeaseSeconds: subscription.LeaseSeconds,
             HeartbeatMode: subscription.HeartbeatMode,
         };
+        // Filter: null matches everything (03 §4). Real bindings carry MJ CompositeFilterDescriptor JSON parsed by
+        // WorkQueueEngineBase.ParseFilter; the host never inspects it, so the fakes leave it null.
         return { Policy: policy, Filter: null, HostType: subscription.HostType, Config: {} };
     }
 
@@ -943,6 +970,7 @@ function normalize(driverClass: string): string {
 import type { MJWorkQueueSubscriptionEntity, MJWorkQueueTopicEntity, MJWorkQueueTransportEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 import { SubscriptionUnsupportedReason, type ITransportDriver, type SubscriptionBinding } from '@memberjunction/work-queue-core';
+import type { DeadLetteredEvent } from '../transports/TransportDriverDeps';
 import type { WorkHandlerResolver } from '../handlers/BoundWorkHandler';
 
 export type HostedSubscriptionState = 'Running' | 'Paused' | 'Unsupported' | 'HandlerNotRegistered' | 'Error';
@@ -953,7 +981,11 @@ export interface HostSubscriptionRequest {
     Concurrency: number;
 }
 
-/** The part of WorkQueueEngine the host needs. WorkQueueEngine satisfies it structurally. */
+/**
+ * The structural subset of the server `WorkQueueEngine` this host needs. `WorkQueueEngine` satisfies it structurally. Every metadata member here is one the
+ * server engine proxies from `WorkQueueEngineBase` (03 §11), so the base/engine split is invisible to the host:
+ * nothing in this plan imports `@memberjunction/work-queue-base` directly.
+ */
 export interface WorkQueueHostEngine {
     readonly Transports: MJWorkQueueTransportEntity[];
     readonly Topics: MJWorkQueueTopicEntity[];
@@ -964,6 +996,12 @@ export interface WorkQueueHostEngine {
     BuildSubscriptionBinding(subscription: MJWorkQueueSubscriptionEntity): SubscriptionBinding;
     IsStagedToDatabase(subscription: MJWorkQueueSubscriptionEntity): boolean;
     OnPublished(listener: (topicName: string) => void): () => void;
+    /**
+     * Fans a dead-letter event out to the engine's `OnDeadLettered` listeners (03 §11). The sweeper finds
+     * lease-expiry dead letters that no driver saw, so the host forwards them here. Optional: an engine built
+     * before plan 05 exposed it simply reports nothing (CD16).
+     */
+    NotifyDeadLettered?: (event: DeadLetteredEvent) => void;
 }
 
 export interface ExpandedSubscriptionRequest {
@@ -1804,7 +1842,9 @@ export class WorkQueueHost implements IShutdownable {
             return this.dependencies.CreateSweeper();
         }
         const ledger = new DeduplicationLedger(this.executor, this.contextUser);
-        return new WorkQueueSweeper(this.executor, ledger, this.engine, this.contextUser, this.log);
+        // Lease-expiry dead letters found by the sweeper reach the engine's OnDeadLettered listeners (plan 05, ND14/ND15).
+        return new WorkQueueSweeper(this.executor, ledger, this.engine, this.contextUser, this.log, undefined,
+            event => this.engine.NotifyDeadLettered?.(event));
     }
 }
 
@@ -1825,13 +1865,15 @@ Task 4 replaces this file. Write `packages/WorkQueue/engine/src/host/WorkQueueSw
 
 ```typescript
 import type { UserInfo } from '@memberjunction/core';
-import type { MJWorkQueueTopicEntity } from '@memberjunction/core-entities';
+import type { MJWorkQueueSubscriptionEntity, MJWorkQueueTopicEntity } from '@memberjunction/core-entities';
 import type { WorkLogger } from '@memberjunction/work-queue-core';
 import type { DeduplicationLedger } from '../dedup/DeduplicationLedger';
+import type { DeadLetteredEvent } from '../transports/TransportDriverDeps';
 import type { WorkQueueSqlExecutor } from '../sql/WorkQueueSqlExecutor';
 
 export interface WorkQueueSweeperEngine {
     readonly Topics: MJWorkQueueTopicEntity[];
+    readonly Subscriptions: MJWorkQueueSubscriptionEntity[];
 }
 
 /** Placeholder with the final constructor shape; Task 4 supplies the implementation. */
@@ -1843,6 +1885,7 @@ export class WorkQueueSweeper {
         _contextUser: UserInfo,
         _log: WorkLogger,
         _options?: { PurgeBatchSize: number; MaxPurgeBatchesPerRun: number },
+        _notifyDeadLettered?: (event: DeadLetteredEvent) => void,
     ) {}
 
     public async RunOnce(): Promise<Record<string, number>> {
@@ -1877,6 +1920,500 @@ git commit -m "feat(work-queue-engine): WorkQueueHost with reconcile, kicks, aux
 
 ---
 
+### Task 3b: `WorkQueueHost.RunOnce` (one-shot container mode)
+
+**Files:**
+- Modify: `packages/WorkQueue/engine/src/host/WorkQueueHost.ts`, `packages/WorkQueue/engine/src/__tests__/runtimeFakes.ts`
+- Test: `packages/WorkQueue/engine/src/__tests__/WorkQueueHostRunOnce.test.ts`
+
+**Interfaces:**
+- Consumes: everything Task 3 produces; `ITransportConsumer`, `ReceivedDelivery`, `SettleResult`, `WorkQueueConfigurationError`, `WorkJson` (plan 04).
+- Produces:
+  - `interface RunOnceOptions { MaxDeliveries?: number; IdleExitMs?: number; MaxDurationMs?: number }`
+  - `type RunOnceReason = 'MaxDeliveries' | 'Idle' | 'MaxDuration' | 'Shutdown'`
+  - `interface RunOnceResult { Processed: number; Reason: RunOnceReason }`
+  - `WorkQueueHost.RunOnce(options?: RunOnceOptions): Promise<RunOnceResult>` (03 §11)
+  - `WorkQueueHostDependencies.RunOnceTickMs?: number` (poll interval of the exit loop; default 50 ms)
+  - Fakes: `ScriptedConsumer`, `MakeReceivedDelivery(id)`; `FakeTransportDriver.NextConsumer`
+
+A container job claims a bounded amount of work and exits, so the scheduler (KEDA, ACA jobs, Kubernetes) owns
+concurrency and scale-to-zero instead of a long-running host (02 §4.4a). Rules:
+
+| Rule | Behavior |
+| --- | --- |
+| Budget | `MaxDeliveries` is enforced **before** the claim: the host wraps every consumer, and `Receive(max, …)` reserves from the budget and asks the driver for at most the remaining count. When the budget is spent the wrapper returns `[]` without touching the transport, so a job never claims more than it was asked to — even at `Concurrency > 1`. Unused reservations (the driver returned fewer rows than offered) go back to the budget. |
+| `Processed` | Deliveries **received** by this host. Counted at claim time, so it is stable even if a handler is still settling when the budget closes. |
+| Idle | With nothing in flight and no receive or settle for `IdleExitMs` (default 5,000), `RunOnce` resolves `Idle`. An empty queue therefore exits promptly instead of polling forever. |
+| `MaxDurationMs` | A wall-clock cap, checked on every tick. It resolves while work may still be in flight; the drain below still runs. |
+| Shutdown | An external `Shutdown()` (SIGTERM handler, `ShutdownRegistry`) resolves `Shutdown`. |
+| Drain | `RunOnce` always calls `Shutdown()` in a `finally`, so it never resolves before in-flight handlers settle or hit `ShutdownDrainMs`. Released deliveries stay claimable for the next job. |
+| Not re-entrant | Calling `RunOnce` on a started host, or with `MaxDeliveries < 1`, throws `WorkQueueConfigurationError`. |
+
+Set `SweeperIntervalMs: 0` and `ReconcileIntervalMs: 0` for job hosts: a short-lived process should not sweep or
+re-plan. Leave sweeping to a long-running host or a scheduled job.
+
+- [ ] **Step 1: Extend the fakes**
+
+Append to `packages/WorkQueue/engine/src/__tests__/runtimeFakes.ts`, merging imports:
+
+```typescript
+/** A consumer the test drives: each Receive hands back the next queued batch. */
+export class ScriptedConsumer implements ITransportConsumer {
+    public readonly Batches: ReceivedDelivery[][] = [];
+    public readonly OfferedMax: number[] = [];
+    public Settled = 0;
+    public Closed = 0;
+
+    public async Receive(max: number): Promise<ReceivedDelivery[]> {
+        this.OfferedMax.push(max);
+        return this.Batches.shift() ?? [];
+    }
+
+    public async ExtendLease(): Promise<'Held' | 'Lost'> {
+        return 'Held';
+    }
+
+    public async Complete(delivery: ReceivedDelivery): Promise<SettleResult> {
+        this.Settled++;
+        return { Kind: 'Settled', DeliveryID: delivery.DeliveryID, Status: 'Completed' };
+    }
+
+    public async Retry(delivery: ReceivedDelivery): Promise<SettleResult> {
+        this.Settled++;
+        return { Kind: 'Settled', DeliveryID: delivery.DeliveryID, Status: 'Pending' };
+    }
+
+    public async DeadLetter(delivery: ReceivedDelivery): Promise<SettleResult> {
+        this.Settled++;
+        return { Kind: 'Settled', DeliveryID: delivery.DeliveryID, Status: 'DeadLettered' };
+    }
+
+    public async Release(delivery: ReceivedDelivery): Promise<SettleResult> {
+        this.Settled++;
+        return { Kind: 'Settled', DeliveryID: delivery.DeliveryID, Status: 'Pending' };
+    }
+
+    public async Close(): Promise<void> {
+        this.Closed++;
+    }
+}
+
+export function MakeReceivedDelivery(id: string): ReceivedDelivery {
+    return {
+        Message: MakeMessage({ MessageID: id }),
+        DeliveryID: id,
+        LeaseToken: `token-${id}`,
+        Attempt: 1,
+        IsReplay: false,
+        LeaseExpiresAt: new Date(Date.now() + 60000),
+    };
+}
+```
+
+In the same file, let a test choose the consumer a driver hands out. In `FakeTransportDriver`, add the field and
+use it in `OpenConsumer`:
+
+```typescript
+    /** When set, OpenConsumer returns this instead of an InertConsumer (used by the RunOnce tests). */
+    public NextConsumer: ITransportConsumer | null = null;
+```
+
+```typescript
+    public OpenConsumer<TPayload extends WorkJson>(subscription: SubscriptionBinding): ITransportConsumer<TPayload> {
+        if (this.OpenError) {
+            throw this.OpenError;
+        }
+        this.OpenedBindings.push(subscription);
+        return (this.NextConsumer as ITransportConsumer<TPayload> | null) ?? new InertConsumer<TPayload>();
+    }
+```
+
+- [ ] **Step 2: Write the failing test**
+
+`packages/WorkQueue/engine/src/__tests__/WorkQueueHostRunOnce.test.ts`:
+
+```typescript
+import { describe, it, expect, afterEach } from 'vitest';
+import type { IMetadataProvider } from '@memberjunction/core';
+import type { ITransportConsumer } from '@memberjunction/work-queue-core';
+import { WorkQueueHost, type WorkQueueHostConfig, type WorkQueueHostDependencies } from '../host/WorkQueueHost';
+import {
+    BuildHostScenario, FakeRuntime, MakeReceivedDelivery, ScriptedConsumer, SilentLogger, TEST_PROVIDER, TEST_USER,
+    TestHandlerResolver, type FakeHostEngine,
+} from './runtimeFakes';
+import { RecordingExecutor } from './fakes';
+
+const SIGNAL = new AbortController().signal;
+const hosts: WorkQueueHost[] = [];
+
+interface RunOnceHarness {
+    Host: WorkQueueHost;
+    Runtimes: FakeRuntime[];
+    Consumers: ITransportConsumer[];
+}
+
+/** One runnable subscription ('integration.apply' on the Database driver) whose consumer the test drives. */
+function makeRunOnceHost(engine: FakeHostEngine, config: Partial<WorkQueueHostConfig> = {}, dependencies: Partial<WorkQueueHostDependencies> = {}): RunOnceHarness {
+    const runtimes: FakeRuntime[] = [];
+    const consumers: ITransportConsumer[] = [];
+    const host = new WorkQueueHost(
+        {
+            InstanceID: 'job-host', Subscriptions: [{ Name: 'integration.apply', Concurrency: 2 }], IdlePollMinMs: 10,
+            IdlePollMaxMs: 20, ShutdownDrainMs: 200, SweeperIntervalMs: 0, ReconcileIntervalMs: 0, ...config,
+        },
+        engine, TEST_USER, new RecordingExecutor(), new SilentLogger(),
+        {
+            ProviderSource: { CreateProvider: async (): Promise<IMetadataProvider> => TEST_PROVIDER },
+            ResolveHandler: TestHandlerResolver,
+            RunOnceTickMs: 5,
+            CreateRuntime: args => {
+                consumers.push(args.Consumer);
+                const runtime = new FakeRuntime(args);
+                runtimes.push(runtime);
+                return runtime;
+            },
+            ...dependencies,
+        },
+    );
+    hosts.push(host);
+    return { Host: host, Runtimes: runtimes, Consumers: consumers };
+}
+
+async function waitFor(condition: () => boolean, label: string): Promise<void> {
+    const deadline = Date.now() + 2000;
+    while (!condition()) {
+        if (Date.now() > deadline) {
+            throw new Error(`timed out waiting for ${label}`);
+        }
+        await new Promise(resolve => setTimeout(resolve, 5));
+    }
+}
+
+afterEach(async () => {
+    for (const host of hosts.splice(0)) {
+        await host.Shutdown();
+    }
+});
+
+describe('WorkQueueHost.RunOnce budget', () => {
+    it('never claims more than MaxDeliveries and returns them back when the driver has fewer', async () => {
+        const scenario = BuildHostScenario();
+        const scripted = new ScriptedConsumer();
+        scripted.Batches.push([MakeReceivedDelivery('d1')], [MakeReceivedDelivery('d2'), MakeReceivedDelivery('d3')]);
+        scenario.DatabaseDriver.NextConsumer = scripted;
+        const { Host, Consumers } = makeRunOnceHost(scenario.Engine);
+
+        const run = Host.RunOnce({ MaxDeliveries: 3, IdleExitMs: 50 });
+        await waitFor(() => Consumers.length === 1, 'the consumer to be wrapped');
+        const consumer = Consumers[0]!;
+
+        expect((await consumer.Receive(10, 0, SIGNAL)).map(d => d.DeliveryID)).toEqual(['d1']);
+        expect(scripted.OfferedMax).toEqual([3]);                       // capped to the budget, not the caller's 10
+        expect((await consumer.Receive(10, 0, SIGNAL)).map(d => d.DeliveryID)).toEqual(['d2', 'd3']);
+        expect(scripted.OfferedMax).toEqual([3, 2]);                    // the unused reservation came back
+        expect(await consumer.Receive(10, 0, SIGNAL)).toEqual([]);      // spent: the transport is not touched again
+        expect(scripted.OfferedMax).toEqual([3, 2]);
+
+        expect(await run).toEqual({ Processed: 3, Reason: 'MaxDeliveries' });
+    });
+
+    it('waits for in-flight work and drains the runtime before resolving', async () => {
+        const scenario = BuildHostScenario();
+        const scripted = new ScriptedConsumer();
+        scripted.Batches.push([MakeReceivedDelivery('d1')]);
+        scenario.DatabaseDriver.NextConsumer = scripted;
+        const { Host, Consumers, Runtimes } = makeRunOnceHost(scenario.Engine);
+
+        const run = Host.RunOnce({ MaxDeliveries: 1, IdleExitMs: 50 });
+        await waitFor(() => Consumers.length === 1, 'the consumer to be wrapped');
+        Runtimes[0]!.InFlightCount = 1;
+        await Consumers[0]!.Receive(5, 0, SIGNAL);
+
+        let settled = false;
+        void run.then(() => { settled = true; });
+        await new Promise(resolve => setTimeout(resolve, 60));
+        expect(settled).toBe(false);                                     // still running the handler
+
+        Runtimes[0]!.InFlightCount = 0;
+        expect(await run).toEqual({ Processed: 1, Reason: 'MaxDeliveries' });
+        expect(Runtimes[0]!.Stopped).toBe(1);                            // drained through Shutdown()
+        expect(Host.IsStarted).toBe(false);
+    });
+});
+
+describe('WorkQueueHost.RunOnce exits', () => {
+    it('exits Idle on an empty queue without claiming anything', async () => {
+        const { Engine } = BuildHostScenario();
+        const { Host } = makeRunOnceHost(Engine);
+        expect(await Host.RunOnce({ IdleExitMs: 40 })).toEqual({ Processed: 0, Reason: 'Idle' });
+    });
+
+    it('exits MaxDuration while work is still arriving', async () => {
+        const scenario = BuildHostScenario();
+        const scripted = new ScriptedConsumer();
+        scripted.Batches.push([MakeReceivedDelivery('d1')]);
+        scenario.DatabaseDriver.NextConsumer = scripted;
+        const { Host, Consumers } = makeRunOnceHost(scenario.Engine);
+
+        const run = Host.RunOnce({ IdleExitMs: 10000, MaxDurationMs: 60 });
+        await waitFor(() => Consumers.length === 1, 'the consumer to be wrapped');
+        await Consumers[0]!.Receive(5, 0, SIGNAL);
+        expect(await run).toEqual({ Processed: 1, Reason: 'MaxDuration' });
+    });
+
+    it('exits Shutdown when another caller stops the host', async () => {
+        const { Engine } = BuildHostScenario();
+        const { Host } = makeRunOnceHost(Engine);
+        const run = Host.RunOnce({ IdleExitMs: 10000 });
+        await waitFor(() => Host.IsStarted, 'the host to start');
+        await Host.Shutdown();
+        expect(await run).toEqual({ Processed: 0, Reason: 'Shutdown' });
+    });
+
+    it('refuses a started host and a budget below one', async () => {
+        const { Engine } = BuildHostScenario();
+        const { Host } = makeRunOnceHost(Engine);
+        await expect(Host.RunOnce({ MaxDeliveries: 0 })).rejects.toThrow('MaxDeliveries must be an integer >= 1');
+        await Host.Start();
+        await expect(Host.RunOnce({})).rejects.toThrow('RunOnce cannot be called on a started host');
+    });
+});
+```
+
+- [ ] **Step 3: Run the test to verify it fails**
+
+Run: `cd packages/WorkQueue/engine && pnpm test WorkQueueHostRunOnce`
+Expected: FAIL — `Host.RunOnce is not a function`, and `ScriptedConsumer` / `MakeReceivedDelivery` are unresolved
+until Step 1's fakes compile.
+
+- [ ] **Step 4: Add the budget, the consumer wrapper and `RunOnce` to `src/host/WorkQueueHost.ts`**
+
+Extend the core import with the names this step needs:
+
+```typescript
+import {
+    ConsumerRuntime, WorkQueueConfigurationError,
+    type ConsumerRuntimeOptions, type ITransportConsumer, type ReceivedDelivery, type SettleResult,
+    type SubscriptionPolicy, type WorkHandler, type WorkJson, type WorkLogger,
+} from '@memberjunction/work-queue-core';
+```
+
+After `WorkQueueHostHealth`, add the one-shot types and the budget:
+
+```typescript
+export interface RunOnceOptions {
+    /** Stop claiming once this many deliveries have been received. Default: unbounded. */
+    MaxDeliveries?: number;
+    /** Resolve when nothing is in flight and nothing was received or settled for this long. Default 5000. */
+    IdleExitMs?: number;
+    /** Wall-clock cap; in-flight work is still drained. Default: unbounded. */
+    MaxDurationMs?: number;
+}
+
+export type RunOnceReason = 'MaxDeliveries' | 'Idle' | 'MaxDuration' | 'Shutdown';
+
+export interface RunOnceResult {
+    Processed: number;
+    Reason: RunOnceReason;
+}
+
+const DEFAULT_IDLE_EXIT_MS = 5000;
+const DEFAULT_RUN_ONCE_TICK_MS = 50;
+
+/** Claim budget for one-shot mode: reserved before the transport is asked, so a job never over-claims. */
+class RunBudget {
+    private reserved = 0;
+    private received = 0;
+    private lastActivityAt = Date.now();
+
+    constructor(private readonly max: number) {}
+
+    public Reserve(want: number): number {
+        const take = Math.max(0, Math.min(want, this.max - this.reserved));
+        this.reserved += take;
+        return take;
+    }
+
+    public Release(unused: number): void {
+        this.reserved -= unused;
+    }
+
+    public NoteReceived(count: number): void {
+        this.received += count;
+        this.lastActivityAt = Date.now();
+    }
+
+    public NoteActivity(): void {
+        this.lastActivityAt = Date.now();
+    }
+
+    public get Received(): number {
+        return this.received;
+    }
+
+    public get IsSpent(): boolean {
+        return this.reserved >= this.max;
+    }
+
+    public get IdleMs(): number {
+        return Date.now() - this.lastActivityAt;
+    }
+}
+
+/** Wraps a transport consumer so one-shot mode can cap claims and notice activity. */
+class BudgetedConsumer<TPayload extends WorkJson = WorkJson> implements ITransportConsumer<TPayload> {
+    constructor(private readonly inner: ITransportConsumer<TPayload>, private readonly budget: RunBudget) {}
+
+    public async Receive(max: number, waitSeconds: number, signal: AbortSignal): Promise<ReceivedDelivery<TPayload>[]> {
+        const allowed = this.budget.Reserve(max);
+        if (allowed === 0) {
+            return [];
+        }
+        const received = await this.inner.Receive(allowed, waitSeconds, signal);
+        this.budget.Release(allowed - received.length);
+        if (received.length > 0) {
+            this.budget.NoteReceived(received.length);
+        }
+        return received;
+    }
+
+    public ExtendLease(delivery: ReceivedDelivery<TPayload>, leaseSeconds: number, progress?: WorkProgress): Promise<'Held' | 'Lost'> {
+        return this.inner.ExtendLease(delivery, leaseSeconds, progress);
+    }
+
+    public Complete(delivery: ReceivedDelivery<TPayload>): Promise<SettleResult> {
+        return this.settle(this.inner.Complete(delivery));
+    }
+
+    public Retry(delivery: ReceivedDelivery<TPayload>, delaySeconds: number, error: string): Promise<SettleResult> {
+        return this.settle(this.inner.Retry(delivery, delaySeconds, error));
+    }
+
+    public DeadLetter(delivery: ReceivedDelivery<TPayload>, reason: string, error: string | null): Promise<SettleResult> {
+        return this.settle(this.inner.DeadLetter(delivery, reason, error));
+    }
+
+    public Release(delivery: ReceivedDelivery<TPayload>): Promise<SettleResult> {
+        return this.settle(this.inner.Release(delivery));
+    }
+
+    public Close(): Promise<void> {
+        return this.inner.Close();
+    }
+
+    private async settle(work: Promise<SettleResult>): Promise<SettleResult> {
+        const result = await work;
+        this.budget.NoteActivity();
+        return result;
+    }
+}
+```
+
+`WorkProgress` joins the type-only core import (`type WorkProgress`).
+
+Add the tick seam to `WorkQueueHostDependencies`:
+
+```typescript
+    /** Poll interval of the RunOnce exit loop. Default 50 ms. */
+    RunOnceTickMs?: number;
+```
+
+Add the budget field beside the other private state:
+
+```typescript
+    private budget: RunBudget | null = null;
+```
+
+Wrap the consumer in `startEntry` — replace its `Consumer:` line with:
+
+```typescript
+            Consumer: this.wrapConsumer(plan.ConsumerDriver.OpenConsumer(plan.Binding)),
+```
+
+Add the public method after `Start()`:
+
+```typescript
+    /**
+     * One-shot mode for container jobs (02 §4.4a): start, claim up to the budget, drain, resolve. The budget is
+     * enforced before each claim, so a job never takes more work than the scheduler asked it to.
+     */
+    public async RunOnce(options: RunOnceOptions = {}): Promise<RunOnceResult> {
+        if (this.started) {
+            throw new WorkQueueConfigurationError('RunOnce cannot be called on a started host; use Start() instead');
+        }
+        const max = options.MaxDeliveries ?? Number.MAX_SAFE_INTEGER;
+        if (!Number.isInteger(max) || max < 1) {
+            throw new WorkQueueConfigurationError('MaxDeliveries must be an integer >= 1');
+        }
+        const budget = new RunBudget(max);
+        this.budget = budget;
+        const startedAt = Date.now();
+        try {
+            await this.Start();
+            const reason = await this.waitForRunOnceExit(budget, startedAt, options);
+            this.log.Info(`Host ${this.config.InstanceID} finished a one-shot run`, { Processed: budget.Received, Reason: reason });
+            return { Processed: budget.Received, Reason: reason };
+        } finally {
+            this.budget = null;
+            await this.Shutdown();
+        }
+    }
+```
+
+And the two private helpers, beside `startEntry`:
+
+```typescript
+    private wrapConsumer<TPayload extends WorkJson>(consumer: ITransportConsumer<TPayload>): ITransportConsumer<TPayload> {
+        return this.budget ? new BudgetedConsumer<TPayload>(consumer, this.budget) : consumer;
+    }
+
+    private async waitForRunOnceExit(budget: RunBudget, startedAt: number, options: RunOnceOptions): Promise<RunOnceReason> {
+        const idleExitMs = options.IdleExitMs ?? DEFAULT_IDLE_EXIT_MS;
+        const tickMs = this.dependencies.RunOnceTickMs ?? DEFAULT_RUN_ONCE_TICK_MS;
+        for (;;) {
+            if (!this.started || this.shuttingDown) {
+                return 'Shutdown';
+            }
+            if (options.MaxDurationMs !== undefined && Date.now() - startedAt >= options.MaxDurationMs) {
+                return 'MaxDuration';
+            }
+            const inFlight = this.inFlightCount();
+            if (inFlight === 0 && budget.IsSpent) {
+                return 'MaxDeliveries';
+            }
+            if (inFlight === 0 && budget.IdleMs >= idleExitMs) {
+                return 'Idle';
+            }
+            await new Promise(resolve => setTimeout(resolve, tickMs));
+        }
+    }
+
+    private inFlightCount(): number {
+        let total = 0;
+        for (const entry of this.running.values()) {
+            total += entry.Runtime.InFlightCount;
+        }
+        return total;
+    }
+```
+
+- [ ] **Step 5: Run the tests and build**
+
+Run: `cd packages/WorkQueue/engine && pnpm test WorkQueueHostRunOnce WorkQueueHost`
+Expected: PASS — WorkQueueHostRunOnce (6), WorkQueueHost (11).
+
+Run: `cd packages/WorkQueue/engine && pnpm run build`
+Expected: builds.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add packages/WorkQueue/engine/src/host/WorkQueueHost.ts packages/WorkQueue/engine/src/__tests__
+git commit -m "feat(work-queue): one-shot RunOnce host mode for container jobs"
+```
+
+---
+
 ### Task 4: `WorkQueueSweeper`
 
 **Files:**
@@ -1884,17 +2421,17 @@ git commit -m "feat(work-queue-engine): WorkQueueHost with reconcile, kicks, aux
 - Test: `packages/WorkQueue/engine/src/__tests__/WorkQueueSweeper.test.ts`
 
 **Interfaces:**
-- Consumes (plan 05): `WorkQueueSqlExecutor` (`src/sql/WorkQueueSqlExecutor.ts`); `CreateWorkQueueSqlBuilder(context): WorkQueueSqlBuilder` (`src/sql/CreateWorkQueueSqlBuilder.ts`) and its `Operator` statements `ExpireLeasesAll()`, `FlagGapStalls()`, `DiscardSkippedSequences()`, `PurgeTerminalDeliveries(batchSize)`, `PurgeOrphanMessages(batchSize)`; `ExecuteWrite(executor, statement, contextUser): Promise<number>` (`src/sql/sqlExecution.ts`); `DeduplicationLedger.PurgeExpired(batchSize?: number, maxBatches?: number): Promise<number>`; test fake `RecordingExecutor` (`src/__tests__/fakes.ts`). From this plan: `WorkLogger` (plan 04); `FakeTopic`, `SilentLogger`, `TEST_USER`, `IDS` (runtimeFakes).
+- Consumes (plan 05): `WorkQueueSqlExecutor` (`src/sql/WorkQueueSqlExecutor.ts`); `CreateWorkQueueSqlBuilder(context): WorkQueueSqlBuilder` (`src/sql/CreateWorkQueueSqlBuilder.ts`) and its `Operator` statements `ExpireLeasesAll()` (**returns `ExpiredDeadLetterRow[]`**), `FlagGapStalls()`, `DiscardSkippedSequences()`, `PurgeTerminalDeliveries(batchSize)`, `PurgeOrphanMessages(batchSize)`; `ExecuteWrite(executor, statement, contextUser): Promise<number>` and `ExecuteRows<T>(executor, statement, contextUser): Promise<T[]>` (`src/sql/sqlExecution.ts`); `ExpiredDeadLetterRow` (`src/sql/rows.ts`); `DeadLetteredEvent` (`src/transports/TransportDriverDeps.ts`); `DeduplicationLedger.PurgeExpired(batchSize?: number, maxBatches?: number): Promise<number>`; test fake `RecordingExecutor` (`src/__tests__/fakes.ts`). From this plan: `WorkLogger` (plan 04); `FakeTopic`, `FakeSubscription`, `SilentLogger`, `TEST_USER`, `IDS` (runtimeFakes).
 - Produces:
-  - `interface WorkQueueSweeperEngine { readonly Topics: MJWorkQueueTopicEntity[] }`
+  - `interface WorkQueueSweeperEngine { readonly Topics: MJWorkQueueTopicEntity[]; readonly Subscriptions: MJWorkQueueSubscriptionEntity[] }`
   - `interface WorkQueueSweeperOptions { PurgeBatchSize: number; MaxPurgeBatchesPerRun: number }`, `DEFAULT_SWEEPER_OPTIONS`
-  - `class WorkQueueSweeper` — `constructor(executor: WorkQueueSqlExecutor, ledger: Pick<DeduplicationLedger, 'PurgeExpired'>, engine: WorkQueueSweeperEngine, contextUser: UserInfo, log: WorkLogger, options?: WorkQueueSweeperOptions)`, `RunOnce(): Promise<Record<string, number>>` (03 §11)
+  - `class WorkQueueSweeper` — `constructor(executor: WorkQueueSqlExecutor, ledger: Pick<DeduplicationLedger, 'PurgeExpired'>, engine: WorkQueueSweeperEngine, contextUser: UserInfo, log: WorkLogger, options?: WorkQueueSweeperOptions, notifyDeadLettered?: (event: DeadLetteredEvent) => void)`, `RunOnce(): Promise<Record<string, number>>` (03 §11)
 
 The sweeper owns **scheduling and reporting only**; every statement comes from plan 05's operator builder, so the claim path and the sweeper can never disagree about lease expiry. All statements are set-based on the database clock and safe to run on every instance at once:
 
 | Key | Plan 05 statement | Effect (03 §7) |
 | --- | --- | --- |
-| `ExpireLeases` | `Operator.ExpireLeasesAll()` | Expired `InFlight` → `Pending` (attempts remain) or `DeadLettered` (`LeaseExpired`) across all subscriptions |
+| `ExpireLeases` | `Operator.ExpireLeasesAll()` | Expired `InFlight` → `Pending` (attempts remain), `DeadLettered` (`LeaseExpired`) or `Discarded` (a cancel was requested — 03 §7) across all subscriptions. The statement **returns the rows it dead-lettered** (ND14), so the sweeper reads rows with `ExecuteRows` rather than counting with `ExecuteWrite`, and forwards each to `notifyDeadLettered` (the engine wires this to `OnDeadLettered`, 03 §11). The reported count is the number of dead-lettered rows |
 | `GapStalls` | `Operator.FlagGapStalls()` | `GapStalled = 1` past `SequenceGapAlertSeconds` |
 | `SkippedSequences` | `Operator.DiscardSkippedSequences()` | Publishes for already-skipped sequences → `Discarded` |
 | `PurgeRetention` | `Operator.PurgeTerminalDeliveries(n)` then `Operator.PurgeOrphanMessages(n)`, each repeated | Terminal deliveries past topic `RetentionDays`, then messages with no delivery left. Skipped when the engine has no topics. A purge repeats while a batch deletes exactly `PurgeBatchSize` rows, at most `MaxPurgeBatchesPerRun` times |
@@ -1910,13 +2447,19 @@ A step that throws is logged and reported as `-1`; later steps still run. A `Run
 import { describe, it, expect } from 'vitest';
 import { CreateWorkQueueSqlBuilder } from '../sql/CreateWorkQueueSqlBuilder';
 import type { SqlStatement } from '../sql/WorkQueueSqlExecutor';
+import type { DeadLetteredEvent } from '../transports/TransportDriverDeps';
 import { WorkQueueSweeper, type WorkQueueSweeperEngine } from '../host/WorkQueueSweeper';
 import { RecordingExecutor } from './fakes';
-import { FakeTopic, IDS, SilentLogger, TEST_USER } from './runtimeFakes';
+import { FakeSubscription, FakeTopic, IDS, SilentLogger, TEST_USER } from './runtimeFakes';
+
+const SWEEPER_SUBSCRIPTION = FakeSubscription({ ID: IDS.IntegrationSubscription, Name: 'integration.apply', TopicID: IDS.IntegrationTopic });
 
 const ENGINE_WITH_TOPICS: WorkQueueSweeperEngine = {
     Topics: [FakeTopic({ ID: IDS.IntegrationTopic, Name: 'integration.batch-ready', TransportID: IDS.DatabaseTransport })],
+    Subscriptions: [SWEEPER_SUBSCRIPTION],
 };
+
+const EMPTY_ENGINE: WorkQueueSweeperEngine = { Topics: [], Subscriptions: [SWEEPER_SUBSCRIPTION] };
 
 interface LedgerCall {
     BatchSize: number | undefined;
@@ -1942,18 +2485,23 @@ function counted(executor: RecordingExecutor, statement: SqlStatement): string {
 describe('WorkQueueSweeper.RunOnce', () => {
     it("runs plan 05's operator statements in order and reports counts", async () => {
         const executor = new RecordingExecutor()
-            .QueueRows([{ AffectedRows: 2 }])
+            .QueueRows([
+                { DeliveryID: IDS.DeliveryA, SubscriptionID: IDS.IntegrationSubscription, PartitionKey: 'venue-42' },
+                { DeliveryID: IDS.DeliveryB, SubscriptionID: IDS.IntegrationSubscription, PartitionKey: null },
+            ])
             .QueueRows([{ AffectedRows: 1 }])
             .QueueRows([{ AffectedRows: 0 }])
             .QueueRows([{ AffectedRows: 3 }])
             .QueueRows([{ AffectedRows: 4 }]);
         const ledgerCalls: LedgerCall[] = [];
-        const sweeper = new WorkQueueSweeper(executor, ledger(5, ledgerCalls), ENGINE_WITH_TOPICS, TEST_USER, new SilentLogger(), { PurgeBatchSize: 10, MaxPurgeBatchesPerRun: 5 });
+        const events: DeadLetteredEvent[] = [];
+        const sweeper = new WorkQueueSweeper(executor, ledger(5, ledgerCalls), ENGINE_WITH_TOPICS, TEST_USER, new SilentLogger(),
+            { PurgeBatchSize: 10, MaxPurgeBatchesPerRun: 5 }, event => events.push(event));
         expect(await sweeper.RunOnce()).toEqual({ ExpireLeases: 2, GapStalls: 1, SkippedSequences: 0, PurgeRetention: 7, PurgeDeduplications: 5 });
 
         const operator = CreateWorkQueueSqlBuilder(executor).Operator;
         expect(executor.Calls.map(call => call.SQL)).toEqual([
-            counted(executor, operator.ExpireLeasesAll()),
+            operator.ExpireLeasesAll().SQL,
             counted(executor, operator.FlagGapStalls()),
             counted(executor, operator.DiscardSkippedSequences()),
             counted(executor, operator.PurgeTerminalDeliveries(10)),
@@ -1963,9 +2511,31 @@ describe('WorkQueueSweeper.RunOnce', () => {
         expect(ledgerCalls).toEqual([{ BatchSize: 10, MaxBatches: 5 }]);
     });
 
+    it('forwards every lease-expiry dead letter to the notifier, with the subscription name resolved', async () => {
+        const executor = new RecordingExecutor().QueueRows([
+            { DeliveryID: IDS.DeliveryA, SubscriptionID: IDS.IntegrationSubscription, PartitionKey: 'venue-42' },
+            { DeliveryID: IDS.DeliveryB, SubscriptionID: IDS.UnknownSubscription, PartitionKey: null },
+        ]);
+        const events: DeadLetteredEvent[] = [];
+        const sweeper = new WorkQueueSweeper(executor, ledger(0), EMPTY_ENGINE, TEST_USER, new SilentLogger(), undefined, event => events.push(event));
+        expect((await sweeper.RunOnce()).ExpireLeases).toBe(2);
+        expect(events).toEqual([
+            { SubscriptionName: 'integration.apply', DeliveryID: IDS.DeliveryA, Reason: 'LeaseExpired', PartitionKey: 'venue-42' },
+            { SubscriptionName: IDS.UnknownSubscription, DeliveryID: IDS.DeliveryB, Reason: 'LeaseExpired', PartitionKey: null },
+        ]);
+    });
+
+    it('still reports the count when no notifier is wired', async () => {
+        const executor = new RecordingExecutor().QueueRows([
+            { DeliveryID: IDS.DeliveryA, SubscriptionID: IDS.IntegrationSubscription, PartitionKey: null },
+        ]);
+        const sweeper = new WorkQueueSweeper(executor, ledger(0), EMPTY_ENGINE, TEST_USER, new SilentLogger());
+        expect((await sweeper.RunOnce()).ExpireLeases).toBe(1);
+    });
+
     it('repeats a purge while batches come back full, up to the per-run cap', async () => {
         const executor = new RecordingExecutor()
-            .QueueRows([{ AffectedRows: 0 }])
+            .QueueRows([])
             .QueueRows([{ AffectedRows: 0 }])
             .QueueRows([{ AffectedRows: 0 }])
             .QueueRows([{ AffectedRows: 10 }])
@@ -1981,12 +2551,12 @@ describe('WorkQueueSweeper.RunOnce', () => {
         const executor = new RecordingExecutor('postgresql');
         const sweeper = new WorkQueueSweeper(executor, ledger(0), ENGINE_WITH_TOPICS, TEST_USER, new SilentLogger());
         await sweeper.RunOnce();
-        expect(executor.Calls[0].SQL).toBe(counted(executor, CreateWorkQueueSqlBuilder(executor).Operator.ExpireLeasesAll()));
+        expect(executor.Calls[0].SQL).toBe(CreateWorkQueueSqlBuilder(executor).Operator.ExpireLeasesAll().SQL);
     });
 
     it('skips retention when the engine has no topics', async () => {
         const executor = new RecordingExecutor();
-        const sweeper = new WorkQueueSweeper(executor, ledger(0), { Topics: [] }, TEST_USER, new SilentLogger());
+        const sweeper = new WorkQueueSweeper(executor, ledger(0), EMPTY_ENGINE, TEST_USER, new SilentLogger());
         expect((await sweeper.RunOnce()).PurgeRetention).toBe(0);
         expect(executor.Calls).toHaveLength(3);
     });
@@ -1994,7 +2564,7 @@ describe('WorkQueueSweeper.RunOnce', () => {
     it('reports a failing step as -1 and still runs the rest', async () => {
         const executor = new RecordingExecutor().QueueError(new Error('deadlock victim'));
         const log = new SilentLogger();
-        const sweeper = new WorkQueueSweeper(executor, ledger(new Error('ledger down')), { Topics: [] }, TEST_USER, log);
+        const sweeper = new WorkQueueSweeper(executor, ledger(new Error('ledger down')), EMPTY_ENGINE, TEST_USER, log);
         expect(await sweeper.RunOnce()).toEqual({ ExpireLeases: -1, GapStalls: 0, SkippedSequences: 0, PurgeRetention: 0, PurgeDeduplications: -1 });
         expect(log.Lines.filter(line => line.startsWith('error:'))).toHaveLength(2);
     });
@@ -2002,7 +2572,7 @@ describe('WorkQueueSweeper.RunOnce', () => {
     it('returns an empty result when a pass is already running', async () => {
         let release: () => void = () => {};
         const slowLedger = { PurgeExpired: () => new Promise<number>(resolve => { release = () => resolve(0); }) };
-        const sweeper = new WorkQueueSweeper(new RecordingExecutor(), slowLedger, { Topics: [] }, TEST_USER, new SilentLogger());
+        const sweeper = new WorkQueueSweeper(new RecordingExecutor(), slowLedger, EMPTY_ENGINE, TEST_USER, new SilentLogger());
         const first = sweeper.RunOnce();
         await new Promise(resolve => setTimeout(resolve, 0));
         expect(await sweeper.RunOnce()).toEqual({});
@@ -2012,27 +2582,33 @@ describe('WorkQueueSweeper.RunOnce', () => {
 });
 ```
 
-`RecordingExecutor` returns `[]` for calls with no queued response, which `ExecuteWrite` reads as `0` rows.
+`RecordingExecutor` returns `[]` for calls with no queued response, which `ExecuteWrite` reads as `0` rows and
+`ExecuteRows` reads as "nothing was dead-lettered".
 
 - [ ] **Step 2: Run the test to verify it fails**
 
 Run: `cd packages/WorkQueue/engine && pnpm test WorkQueueSweeper`
-Expected: FAIL — the Task 3 stub returns `{}`, so the first assertion reports `expected {} to deeply equal { ExpireLeases: 2, … }`.
+Expected: FAIL — the Task 3 stub returns `{}`, so the first assertion reports `expected {} to deeply equal { ExpireLeases: 2, … }`, and `WorkQueueSweeper` takes no notifier argument yet.
 
 - [ ] **Step 3: Replace `src/host/WorkQueueSweeper.ts`**
 
 ```typescript
+import { UUIDsEqual } from '@memberjunction/global';
 import type { UserInfo } from '@memberjunction/core';
-import type { MJWorkQueueTopicEntity } from '@memberjunction/core-entities';
+import type { MJWorkQueueSubscriptionEntity, MJWorkQueueTopicEntity } from '@memberjunction/core-entities';
 import type { WorkLogger } from '@memberjunction/work-queue-core';
 import type { DeduplicationLedger } from '../dedup/DeduplicationLedger';
+import type { ExpiredDeadLetterRow } from '../sql/rows';
+import type { DeadLetteredEvent } from '../transports/TransportDriverDeps';
 import { CreateWorkQueueSqlBuilder } from '../sql/CreateWorkQueueSqlBuilder';
-import { ExecuteWrite } from '../sql/sqlExecution';
+import { ExecuteRows, ExecuteWrite } from '../sql/sqlExecution';
 import type { OperatorSqlBuilder } from '../sql/WorkQueueSqlBuilder';
 import type { SqlStatement, WorkQueueSqlExecutor } from '../sql/WorkQueueSqlExecutor';
 
 export interface WorkQueueSweeperEngine {
     readonly Topics: MJWorkQueueTopicEntity[];
+    /** Used only to name a dead-lettered delivery's subscription in the OnDeadLettered event. */
+    readonly Subscriptions: MJWorkQueueSubscriptionEntity[];
 }
 
 export interface WorkQueueSweeperOptions {
@@ -2057,6 +2633,7 @@ export class WorkQueueSweeper {
         private readonly contextUser: UserInfo,
         private readonly log: WorkLogger,
         private readonly options: WorkQueueSweeperOptions = DEFAULT_SWEEPER_OPTIONS,
+        private readonly notifyDeadLettered?: (event: DeadLetteredEvent) => void,
     ) {
         this.operatorSql = CreateWorkQueueSqlBuilder(executor).Operator;
     }
@@ -2069,7 +2646,7 @@ export class WorkQueueSweeper {
         this.running = true;
         try {
             const result: Record<string, number> = {};
-            result.ExpireLeases = await this.step('ExpireLeases', () => this.write(this.operatorSql.ExpireLeasesAll()));
+            result.ExpireLeases = await this.step('ExpireLeases', () => this.expireLeases());
             result.GapStalls = await this.step('GapStalls', () => this.write(this.operatorSql.FlagGapStalls()));
             result.SkippedSequences = await this.step('SkippedSequences', () => this.write(this.operatorSql.DiscardSkippedSequences()));
             result.PurgeRetention = this.engine.Topics.length === 0 ? 0 : await this.step('PurgeRetention', () => this.purgeRetention());
@@ -2089,6 +2666,29 @@ export class WorkQueueSweeper {
             this.log.Error(`Sweeper step ${name} failed`, error instanceof Error ? error : new Error(String(error)));
             return -1;
         }
+    }
+
+    /**
+     * ExpireLeasesAll returns the deliveries it dead-lettered (plan 05, ND14) rather than a count, so every
+     * lease-expiry dead letter reaches OnDeadLettered. The reported number is how many were dead-lettered;
+     * rows returned to Pending or settled as Discarded (a cancel was requested) are not counted here.
+     */
+    private async expireLeases(): Promise<number> {
+        const expired = await ExecuteRows<ExpiredDeadLetterRow>(this.executor, this.operatorSql.ExpireLeasesAll(), this.contextUser);
+        for (const row of expired) {
+            this.notifyDeadLettered?.({
+                SubscriptionName: this.subscriptionName(row.SubscriptionID),
+                DeliveryID: row.DeliveryID,
+                Reason: 'LeaseExpired',
+                PartitionKey: row.PartitionKey,
+            });
+        }
+        return expired.length;
+    }
+
+    /** Falls back to the ID when metadata has not caught up with a subscription created since the last refresh. */
+    private subscriptionName(subscriptionID: string): string {
+        return this.engine.Subscriptions.find(s => UUIDsEqual(s.ID, subscriptionID))?.Name ?? subscriptionID;
     }
 
     private async purgeRetention(): Promise<number> {
@@ -2127,7 +2727,7 @@ If plan 05 exported `OperatorSqlBuilder` or `SqlStatement` from a different modu
 - [ ] **Step 4: Run the tests and build**
 
 Run: `cd packages/WorkQueue/engine && pnpm test WorkQueueSweeper`
-Expected: PASS — WorkQueueSweeper (6).
+Expected: PASS — WorkQueueSweeper (8).
 
 Run: `cd packages/WorkQueue/engine && pnpm test && pnpm run build`
 Expected: all engine suites pass (including WorkQueueHost (11)); builds.
@@ -2145,13 +2745,13 @@ git commit -m "feat(work-queue-engine): sweeper sequencing lease expiry, gap sta
 
 **Files:**
 - Create: `metadata/remote-operation-categories/.work-queue-category.json`, `metadata/remote-operations/.work-queue-operations.json`
-- Create: 14 type files in `metadata/remote-operations/types/`: `work-queue-get-subscription-stats`, `work-queue-list-dead-letters`, `work-queue-list-partitions`, `work-queue-replay-dead-letter`, `work-queue-discard-delivery`, `work-queue-skip-sequence`, `work-queue-validate-bindings` — each `.input.ts` and `.output.ts`
+- Create: 16 type files in `metadata/remote-operations/types/`: `work-queue-get-subscription-stats`, `work-queue-list-dead-letters`, `work-queue-list-partitions`, `work-queue-replay-dead-letter`, `work-queue-discard-delivery`, `work-queue-skip-sequence`, `work-queue-get-backlog`, `work-queue-validate-bindings` — each `.input.ts` and `.output.ts`
 - Regenerate (CodeGen): `packages/MJCoreEntities/src/generated/remote_operations.ts`
 
 **Interfaces:**
 - Consumes: scopes `workqueue:read` and `workqueue:operate` (plan 05 metadata); the `MJ: Remote Operations` / `MJ: Remote Operation Categories` metadata conventions already used by `metadata/remote-operations/.remote-operations.json`.
 - Produces (CodeGen, exported from `@memberjunction/core-entities`):
-  - Bases: `WorkQueueGetSubscriptionStatsOperation`, `WorkQueueListDeadLettersOperation`, `WorkQueueListPartitionsOperation`, `WorkQueueReplayDeadLetterOperation`, `WorkQueueDiscardDeliveryOperation`, `WorkQueueSkipSequenceOperation`, `WorkQueueValidateBindingsOperation`
+  - Bases: `WorkQueueGetSubscriptionStatsOperation`, `WorkQueueListDeadLettersOperation`, `WorkQueueListPartitionsOperation`, `WorkQueueReplayDeadLetterOperation`, `WorkQueueDiscardDeliveryOperation`, `WorkQueueSkipSequenceOperation`, `WorkQueueGetBacklogOperation`, `WorkQueueValidateBindingsOperation`
   - Types: each `…Input` / `…Output`, plus `WorkQueueSubscriptionStatsRow`, `WorkQueueStatsFailureRow`, `WorkQueuePayloadRefRow`, `WorkQueueDeadLetterMessageRow`, `WorkQueueDeadLetterRow`, `WorkQueuePartitionStateRow`, `WorkQueueBindingIssueRow`
 
 I/O conventions (03 §8): top-level input and output fields are camelCase, matching `RecordProcess.*` operations; row objects mirror the core contract's PascalCase records field for field so the service can copy them without renaming. Dead-letter rows carry `PayloadJSON` (the inline payload serialized) instead of a recursive JSON type — see "Contract deltas".
@@ -2268,7 +2868,7 @@ I/O conventions (03 §8): top-level input and output fields are camelCase, match
       "Name": "Discard Work Queue Delivery",
       "OperationKey": "WorkQueue.DiscardDelivery",
       "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Work Queue",
-      "Description": "Resolves one pending or dead-lettered delivery without processing it, with a required reason; discarding a dead-lettered Ordered head unblocks its key. In-flight deliveries cannot be discarded. Implemented by WorkQueueDiscardDeliveryServerOperation in @memberjunction/work-queue-engine.",
+      "Description": "Resolves one delivery without processing it, with a required reason. A pending or dead-lettered delivery becomes Discarded immediately; discarding a dead-lettered Ordered head unblocks its key. An in-flight delivery is cancelled instead: its lease is revoked so the running handler stops, and it settles as Discarded when the lease expires (cancelRequested = true). Implemented by WorkQueueDiscardDeliveryServerOperation in @memberjunction/work-queue-engine.",
       "InputTypeName": "WorkQueueDiscardDeliveryInput",
       "InputTypeDefinition": "@file:types/work-queue-discard-delivery.input.ts",
       "InputTypeIsArray": false,
@@ -2283,6 +2883,27 @@ I/O conventions (03 §8): top-level input and output fields are camelCase, match
       "Status": "Active"
     },
     "primaryKey": { "ID": "FACEE516-41BD-4346-BB6F-07F44CF97E2F" }
+  },
+  {
+    "fields": {
+      "Name": "Get Work Queue Backlog",
+      "OperationKey": "WorkQueue.GetBacklog",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Work Queue",
+      "Description": "Returns the autoscaler metric for one subscription: claimable pending deliveries (partition rules applied) plus in-flight deliveries. Both counts matter — schedulers such as KEDA subtract running executions from the metric, so a pending-only count starves the queue. Implemented by WorkQueueGetBacklogServerOperation in @memberjunction/work-queue-engine.",
+      "InputTypeName": "WorkQueueGetBacklogInput",
+      "InputTypeDefinition": "@file:types/work-queue-get-backlog.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "WorkQueueGetBacklogOutput",
+      "OutputTypeDefinition": "@file:types/work-queue-get-backlog.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "workqueue:read",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": { "ID": "6CE1A749-455A-4315-B3DA-44F56D1834C0" }
   },
   {
     "fields": {
@@ -2512,10 +3133,38 @@ export interface WorkQueueDiscardDeliveryInput {
 // metadata/remote-operations/types/work-queue-discard-delivery.output.ts
 /** Output of `WorkQueue.DiscardDelivery`. */
 export interface WorkQueueDiscardDeliveryOutput {
-    /** False when the transport cannot discard this kind of delivery (for example a pending SQS message). */
+    /** False when the transport cannot discard this kind of delivery (for example any SQS message). */
     supported: boolean;
-    /** False when the delivery does not exist or is neither pending nor dead-lettered. */
+    /** True when the delivery is now Discarded, or (for an in-flight delivery) its cancel was recorded. */
     discarded: boolean;
+    /**
+     * True when the delivery was in flight: its lease is revoked, the running handler's next heartbeat resolves
+     * false, and the row settles as Discarded once the lease expires (03 §7).
+     */
+    cancelRequested: boolean;
+}
+```
+
+```typescript
+// metadata/remote-operations/types/work-queue-get-backlog.input.ts
+/** Input for `WorkQueue.GetBacklog`. */
+export interface WorkQueueGetBacklogInput {
+    subscriptionName: string;
+}
+```
+
+```typescript
+// metadata/remote-operations/types/work-queue-get-backlog.output.ts
+/** Output of `WorkQueue.GetBacklog` — the autoscaler metric for one subscription. */
+export interface WorkQueueGetBacklogOutput {
+    /** False when the subscription's transport cannot report a backlog (for example AWS without staging). */
+    supported: boolean;
+    /** Pending deliveries that a worker could claim right now (partition rules applied). */
+    claimable: number;
+    /** Deliveries currently leased by a worker. */
+    inFlight: number;
+    /** claimable + inFlight — the value a scheduler should scale on. */
+    total: number;
 }
 ```
 
@@ -2571,16 +3220,17 @@ export interface WorkQueueValidateBindingsOutput {
 - [ ] **Step 4: Push the metadata and generate the operation bases**
 
 Run: `pnpm exec mj sync push --dir=metadata --ci --dry-run`
-Expected: 1 `MJ: Remote Operation Categories` create and 7 `MJ: Remote Operations` creates; no lookup failures.
+Expected: 1 `MJ: Remote Operation Categories` create and 8 `MJ: Remote Operations` creates; no lookup failures.
 
 Run: `pnpm exec mj sync push --dir=metadata --ci`
 Run: `pnpm exec mj codegen --skipdb`
 
 Run: `grep -oE "export class WorkQueue[A-Za-z]+Operation " packages/MJCoreEntities/src/generated/remote_operations.ts | sort`
-Expected — exactly these seven lines:
+Expected — exactly these eight lines:
 
 ```
 export class WorkQueueDiscardDeliveryOperation 
+export class WorkQueueGetBacklogOperation 
 export class WorkQueueGetSubscriptionStatsOperation 
 export class WorkQueueListDeadLettersOperation 
 export class WorkQueueListPartitionsOperation 
@@ -2614,10 +3264,10 @@ git commit -m "feat(metadata): work queue operator remote operations"
 **Interfaces:**
 - Consumes: the Task 5 CodeGen bases and types; `ITransportOperator`, `ITransportDriver`, `OperatorResult`, `Page`, `SubscriptionStats`, `DeadLetterRecord`, `PartitionStateRecord`, `PartitionCondition`, `BindingValidationIssue`, `SubscriptionBinding`, `TopicBinding`, `WorkQueueConfigurationError` (plan 04); `WorkQueueEngine` (plan 05); fakes from Tasks 1–3.
 - Produces:
-  - `interface WorkQueueOperatorEngine` — `Transports`, `Topics`, `Subscriptions`, `GetSubscriptionByName(name)`, `BuildTopicBinding(topic)`, `BuildSubscriptionBinding(subscription)`, `GetOperator(subscription)`, `GetDriver(transportID)`, `ValidateTopology()` (structural subset of `WorkQueueEngine`)
+  - `interface WorkQueueOperatorEngine` — `Transports`, `Topics`, `Subscriptions`, `GetSubscriptionByName(name)`, `BuildTopicBinding(topic)`, `BuildSubscriptionBinding(subscription)`, `GetOperator(subscription)`, `GetDriver(transportID)`, `GetBacklog(subscriptionName)`, `ValidateTopology()` (structural subset of `WorkQueueEngine`)
   - `OPERATOR_DEFAULT_PAGE_SIZE = 50`, `OPERATOR_MAX_PAGE_SIZE = 100`
-  - `class WorkQueueOperatorService` — `constructor(engine: WorkQueueOperatorEngine)`, `GetSubscriptionStats(input)`, `ListDeadLetters(input)`, `ListPartitions(input)`, `ReplayDeadLetter(input, user)`, `DiscardDelivery(input, user)`, `SkipSequence(input, user)`, `ValidateBindings(input)` returning the Task 5 output types
-  - Server operations registered with `@RegisterClass(BaseRemotableOperation, '<key>')`: `WorkQueueGetSubscriptionStatsServerOperation`, `WorkQueueListDeadLettersServerOperation`, `WorkQueueListPartitionsServerOperation`, `WorkQueueReplayDeadLetterServerOperation`, `WorkQueueDiscardDeliveryServerOperation`, `WorkQueueSkipSequenceServerOperation`, `WorkQueueValidateBindingsServerOperation`; `LoadWorkQueueOperations(): void` tree-shaking anchor
+  - `class WorkQueueOperatorService` — `constructor(engine: WorkQueueOperatorEngine)`, `GetSubscriptionStats(input)`, `ListDeadLetters(input)`, `ListPartitions(input)`, `ReplayDeadLetter(input, user)`, `DiscardDelivery(input, user)`, `SkipSequence(input, user)`, `GetBacklog(input)`, `ValidateBindings(input)` returning the Task 5 output types
+  - Server operations registered with `@RegisterClass(BaseRemotableOperation, '<key>')`: `WorkQueueGetSubscriptionStatsServerOperation`, `WorkQueueListDeadLettersServerOperation`, `WorkQueueListPartitionsServerOperation`, `WorkQueueReplayDeadLetterServerOperation`, `WorkQueueDiscardDeliveryServerOperation`, `WorkQueueSkipSequenceServerOperation`, `WorkQueueGetBacklogServerOperation`, `WorkQueueValidateBindingsServerOperation`; `LoadWorkQueueOperations(): void` tree-shaking anchor
 
 Operation rules:
 
@@ -2627,8 +3277,9 @@ Operation rules:
 | ListDeadLetters | `subscriptionName` required; `pageSize` integer 1–100 (default 50) | Operator `null` → `supported: false`; payload serialized to `PayloadJSON` |
 | ListPartitions | + `condition` one of the five values | Operator `null` → `supported: false` |
 | ReplayDeadLetter | `deliveryID` UUID | `{ Supported: false }` → `supported: false, replayed: false`; else `replayed = Changed`. Actor = `user.ID` |
-| DiscardDelivery | `deliveryID` UUID; `reason` non-blank | same, `discarded` |
+| DiscardDelivery | `deliveryID` UUID; `reason` non-blank | `discarded = Changed`, `cancelRequested = CancelRequested === true`. An in-flight delivery is cancelled, not discarded on the spot (03 §7): both flags are true and the row settles as `Discarded` when its lease expires |
 | SkipSequence | `partitionKey` non-blank; `sequence` integer ≥ 1; `reason` non-blank | same, `skipped` |
+| GetBacklog | `subscriptionName` required; unknown name throws | `engine.GetBacklog(subscription.Name)` mapped field for field. Never throws for an unsupported transport — it answers `supported: false` with zeros |
 | ValidateBindings | `transportName` optional; unknown name throws | None: `engine.ValidateTopology()`. Named: `driver.ValidateBindings(topicBinding, subscriptionBindings)` for each topic on that transport, sorted by topic name |
 
 Each server operation configures `WorkQueueEngine` with the invoking provider and user, then delegates to a new `WorkQueueOperatorService`. Validation errors surface as `ResultCode: 'EXECUTION_ERROR'` through `BaseRemotableOperation.ExecuteServer`.
@@ -2720,6 +3371,11 @@ class FakeOperator implements ITransportOperator {
 class FakeOperatorEngine extends FakeHostEngine implements WorkQueueOperatorEngine {
     public readonly Operators = new Map<string, FakeOperator>();
     public TopologyIssues: BindingValidationIssue[] = [];
+    public Backlog = { Supported: true, Claimable: 3, InFlight: 1, Total: 4 };
+
+    public async GetBacklog(_subscriptionName: string): Promise<{ Supported: boolean; Claimable: number; InFlight: number; Total: number }> {
+        return this.Backlog;
+    }
 
     public GetSubscriptionByName(name: string): MJWorkQueueSubscriptionEntity | undefined {
         return this.Subscriptions.find(s => s.Name.toLowerCase() === name.trim().toLowerCase());
@@ -2843,7 +3499,26 @@ describe('WorkQueueOperatorService repairs', () => {
         await expect(Service.DiscardDelivery({ subscriptionName: 'integration.apply', deliveryID: DELIVERY_ID, reason: '  ' }, TEST_USER)).rejects.toThrow('reason is required');
         Engine.OperatorFor('email.subscriber-update').Result = { Supported: false };
         expect(await Service.DiscardDelivery({ subscriptionName: 'email.subscriber-update', deliveryID: DELIVERY_ID, reason: 'test data' }, TEST_USER))
-            .toEqual({ supported: false, discarded: false });
+            .toEqual({ supported: false, discarded: false, cancelRequested: false });
+    });
+
+    it('reports a revoked lease when an in-flight delivery is cancelled', async () => {
+        const { Engine, Service } = scenario();
+        Engine.OperatorFor('integration.apply').Result = { Supported: true, Changed: true, CancelRequested: true };
+        expect(await Service.DiscardDelivery({ subscriptionName: 'integration.apply', deliveryID: DELIVERY_ID, reason: 'operator cancel' }, TEST_USER))
+            .toEqual({ supported: true, discarded: true, cancelRequested: true });
+        expect(Engine.OperatorFor('integration.apply').LastArgs).toEqual([DELIVERY_ID, 'operator cancel', TEST_USER.ID]);
+    });
+
+    it('returns the autoscaler backlog and rejects an unknown subscription', async () => {
+        const { Engine, Service } = scenario();
+        Engine.Backlog = { Supported: true, Claimable: 7, InFlight: 2, Total: 9 };
+        expect(await Service.GetBacklog({ subscriptionName: ' integration.apply ' }))
+            .toEqual({ supported: true, claimable: 7, inFlight: 2, total: 9 });
+        Engine.Backlog = { Supported: false, Claimable: 0, InFlight: 0, Total: 0 };
+        expect(await Service.GetBacklog({ subscriptionName: 'integration.apply' }))
+            .toEqual({ supported: false, claimable: 0, inFlight: 0, total: 0 });
+        await expect(Service.GetBacklog({ subscriptionName: 'nope' })).rejects.toThrow("Unknown work queue subscription 'nope'");
     });
 
     it('validates a sequence skip and reports an unchanged skip', async () => {
@@ -2883,9 +3558,9 @@ import { describe, it, expect } from 'vitest';
 import { BaseRemotableOperation } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import {
-    WorkQueueDiscardDeliveryServerOperation, WorkQueueGetSubscriptionStatsServerOperation, WorkQueueListDeadLettersServerOperation,
-    WorkQueueListPartitionsServerOperation, WorkQueueReplayDeadLetterServerOperation, WorkQueueSkipSequenceServerOperation,
-    WorkQueueValidateBindingsServerOperation,
+    WorkQueueDiscardDeliveryServerOperation, WorkQueueGetBacklogServerOperation, WorkQueueGetSubscriptionStatsServerOperation,
+    WorkQueueListDeadLettersServerOperation, WorkQueueListPartitionsServerOperation, WorkQueueReplayDeadLetterServerOperation,
+    WorkQueueSkipSequenceServerOperation, WorkQueueValidateBindingsServerOperation,
 } from '../operations/WorkQueueOperations';
 
 interface DeclaredOperation {
@@ -2901,6 +3576,7 @@ const OPERATIONS: Array<[string, new () => DeclaredOperation, string]> = [
     ['WorkQueue.ReplayDeadLetter', WorkQueueReplayDeadLetterServerOperation, 'workqueue:operate'],
     ['WorkQueue.DiscardDelivery', WorkQueueDiscardDeliveryServerOperation, 'workqueue:operate'],
     ['WorkQueue.SkipSequence', WorkQueueSkipSequenceServerOperation, 'workqueue:operate'],
+    ['WorkQueue.GetBacklog', WorkQueueGetBacklogServerOperation, 'workqueue:read'],
     ['WorkQueue.ValidateBindings', WorkQueueValidateBindingsServerOperation, 'workqueue:read'],
 ];
 
@@ -2932,6 +3608,7 @@ import type { UserInfo } from '@memberjunction/core';
 import type {
     MJWorkQueueSubscriptionEntity, MJWorkQueueTopicEntity, MJWorkQueueTransportEntity,
     WorkQueueBindingIssueRow, WorkQueueDeadLetterRow, WorkQueueDiscardDeliveryInput, WorkQueueDiscardDeliveryOutput,
+    WorkQueueGetBacklogInput, WorkQueueGetBacklogOutput,
     WorkQueueGetSubscriptionStatsInput, WorkQueueGetSubscriptionStatsOutput, WorkQueueListDeadLettersInput,
     WorkQueueListDeadLettersOutput, WorkQueueListPartitionsInput, WorkQueueListPartitionsOutput, WorkQueuePartitionStateRow,
     WorkQueueReplayDeadLetterInput, WorkQueueReplayDeadLetterOutput, WorkQueueSkipSequenceInput, WorkQueueSkipSequenceOutput,
@@ -2954,6 +3631,8 @@ export interface WorkQueueOperatorEngine {
     BuildSubscriptionBinding(subscription: MJWorkQueueSubscriptionEntity): SubscriptionBinding;
     GetOperator(subscription: MJWorkQueueSubscriptionEntity): Promise<ITransportOperator>;
     GetDriver(transportID: string): Promise<ITransportDriver>;
+    /** Autoscaler metric (03 §11): claimable pending + in flight. */
+    GetBacklog(subscriptionName: string): Promise<{ Supported: boolean; Claimable: number; InFlight: number; Total: number }>;
     ValidateTopology(): Promise<BindingValidationIssue[]>;
 }
 
@@ -3021,7 +3700,17 @@ export class WorkQueueOperatorService {
         const reason = requireText(input.reason, 'reason');
         const operator = await this.engine.GetOperator(subscription);
         const result = await operator.Discard(this.binding(subscription), deliveryID, reason, user.ID);
-        return { supported: result.Supported, discarded: changed(result) };
+        return { supported: result.Supported, discarded: changed(result), cancelRequested: cancelRequested(result) };
+    }
+
+    /**
+     * The autoscaler metric. Both numbers matter: schedulers subtract running executions from the metric, so a
+     * claimable-only count scales to zero while work is still in flight and starves the queue (02 §4.4a).
+     */
+    public async GetBacklog(input: WorkQueueGetBacklogInput): Promise<WorkQueueGetBacklogOutput> {
+        const subscription = this.requireSubscription(requireText(input.subscriptionName, 'subscriptionName'));
+        const backlog = await this.engine.GetBacklog(subscription.Name);
+        return { supported: backlog.Supported, claimable: backlog.Claimable, inFlight: backlog.InFlight, total: backlog.Total };
     }
 
     public async SkipSequence(input: WorkQueueSkipSequenceInput, user: UserInfo): Promise<WorkQueueSkipSequenceOutput> {
@@ -3109,6 +3798,11 @@ function changed(result: OperatorResult): boolean {
     return result.Supported ? result.Changed : false;
 }
 
+/** True when the operator revoked a running handler's lease instead of settling the row (03 §7). */
+function cancelRequested(result: OperatorResult): boolean {
+    return result.Supported ? result.CancelRequested === true : false;
+}
+
 function optionalText(value: unknown): string | null {
     return typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
 }
@@ -3171,9 +3865,11 @@ function describe(error: unknown): string {
 ```typescript
 import { BaseRemotableOperation, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import {
-    WorkQueueDiscardDeliveryOperation, WorkQueueGetSubscriptionStatsOperation, WorkQueueListDeadLettersOperation,
+    WorkQueueDiscardDeliveryOperation, WorkQueueGetBacklogOperation, WorkQueueGetSubscriptionStatsOperation,
+    WorkQueueListDeadLettersOperation,
     WorkQueueListPartitionsOperation, WorkQueueReplayDeadLetterOperation, WorkQueueSkipSequenceOperation,
     WorkQueueValidateBindingsOperation,
+    type WorkQueueGetBacklogInput, type WorkQueueGetBacklogOutput,
     type WorkQueueDiscardDeliveryInput, type WorkQueueDiscardDeliveryOutput, type WorkQueueGetSubscriptionStatsInput,
     type WorkQueueGetSubscriptionStatsOutput, type WorkQueueListDeadLettersInput, type WorkQueueListDeadLettersOutput,
     type WorkQueueListPartitionsInput, type WorkQueueListPartitionsOutput, type WorkQueueReplayDeadLetterInput,
@@ -3232,6 +3928,13 @@ export class WorkQueueSkipSequenceServerOperation extends WorkQueueSkipSequenceO
     }
 }
 
+@RegisterClass(BaseRemotableOperation, 'WorkQueue.GetBacklog')
+export class WorkQueueGetBacklogServerOperation extends WorkQueueGetBacklogOperation {
+    protected async InternalExecute(input: WorkQueueGetBacklogInput, provider: IMetadataProvider, user: UserInfo): Promise<WorkQueueGetBacklogOutput> {
+        return (await serviceFor(provider, user)).GetBacklog(input);
+    }
+}
+
 @RegisterClass(BaseRemotableOperation, 'WorkQueue.ValidateBindings')
 export class WorkQueueValidateBindingsServerOperation extends WorkQueueValidateBindingsOperation {
     protected async InternalExecute(input: WorkQueueValidateBindingsInput, provider: IMetadataProvider, user: UserInfo): Promise<WorkQueueValidateBindingsOutput> {
@@ -3257,7 +3960,7 @@ export * from './operations/WorkQueueOperations';
 - [ ] **Step 6: Run the tests and build**
 
 Run: `cd packages/WorkQueue/engine && pnpm test WorkQueueOperatorService WorkQueueOperations`
-Expected: PASS — WorkQueueOperatorService (11), WorkQueueOperations (2).
+Expected: PASS — WorkQueueOperatorService (13), WorkQueueOperations (2).
 
 Run: `cd packages/WorkQueue/engine && pnpm test && pnpm run build`
 Expected: all suites pass; builds. A type error saying `WorkQueueEngine` is not assignable to `WorkQueueOperatorEngine` means plan 05's engine drifted from 03 §11 — fix the engine, not this interface.
@@ -4684,16 +5387,16 @@ git commit -m "feat(work-queue-server): scoped REST publish endpoint as a post-a
 
 **Files:**
 - Create: `packages/MJCLI/src/lib/work-queue/queue-format.ts`, `src/lib/work-queue/queue-session.ts`
-- Create: `packages/MJCLI/src/commands/queue/index.ts`, `usage.ts`, `stats.ts`, `dead-letters.ts`, `partitions.ts`, `replay.ts`, `discard.ts`, `skip-sequence.ts`, `export-topology.ts`, `import-bindings.ts`, `validate-bindings.ts`
+- Create: `packages/MJCLI/src/commands/queue/index.ts`, `usage.ts`, `stats.ts`, `dead-letters.ts`, `partitions.ts`, `replay.ts`, `discard.ts`, `skip-sequence.ts`, `work.ts`, `export-topology.ts`, `import-bindings.ts`, `validate-bindings.ts`
 - Modify: `packages/MJCLI/package.json`, `packages/MJCLI/src/utils/open-app-context.ts`, `packages/MJCLI/src/lib/domain-profiles.ts`
 - Test: `packages/MJCLI/src/__tests__/work-queue-cli.test.ts`, `src/__tests__/work-queue-commands.test.ts`
 
 **Interfaces:**
-- Consumes: the Task 5 operation classes and row types (`@memberjunction/core-entities`); `WorkQueueEngine` with `ExportManifest(transportName)` and `ImportBindings(bindings, contextUser)` (plan 05, 03 §11); `BindingImport`, `WorkJson` (plan 04); `RemoteOpResult`, `DatabaseProviderBase`, `UserInfo` (`@memberjunction/core`); `initializeProvider`-backed `ensureProviderInitialized`, `buildContextUser`, `closeConnectionPool` (`src/utils/open-app-context.ts`); `DomainUsageCommand` (`src/lib/domain-usage-command.ts`); oclif `Command`, `Flags`, `Args`.
+- Consumes: the Task 5 operation classes and row types (`@memberjunction/core-entities`); `WorkQueueEngine` with `ExportManifest(transportName)` and `ImportBindings(bindings, contextUser)` (plan 05, 03 §11); `WorkQueueHost`, `RunOnceResult` (Tasks 3, 3b), `SharedProviderSource` (Task 1), `MJWorkLogger` (plan 05); `BindingImport`, `WorkJson` (plan 04); `RemoteOpResult`, `DatabaseProviderBase`, `UserInfo` (`@memberjunction/core`); `initializeProvider`-backed `ensureProviderInitialized`, `buildContextUser`, `closeConnectionPool` (`src/utils/open-app-context.ts`); `DomainUsageCommand` (`src/lib/domain-usage-command.ts`); oclif `Command`, `Flags`, `Args`.
 - Produces:
   - `FormatTable(headers, rows)`, `FormatStatsTable(rows, failures)`, `FormatDeadLetters(output)`, `FormatPartitions(output)`, `FormatBindingIssues(issues)`, `HasBindingErrors(issues)`, `ParseBindingImport(json)`, `RequireOperationOutput(result, operationKey)`, `ToPartitionCondition(value)`, `PARTITION_CONDITION_OPTIONS`
   - `interface WorkQueueCliSession { Provider: DatabaseProviderBase; User: UserInfo; Close(): Promise<void> }`, `OpenWorkQueueSession(): Promise<WorkQueueCliSession>`
-  - Commands `mj queue stats | dead-letters | partitions | replay | discard | skip-sequence | export-topology | import-bindings | validate-bindings`
+  - Commands `mj queue stats | dead-letters | partitions | replay | discard | skip-sequence | work | export-topology | import-bindings | validate-bindings`
 
 Command surface:
 
@@ -4705,6 +5408,7 @@ Command surface:
 | `replay` | `--subscription`, `--delivery` (required), `--note` | `WorkQueue.ReplayDeadLetter` | unsupported or nothing replayed |
 | `discard` | `--subscription`, `--delivery`, `--reason` (required) | `WorkQueue.DiscardDelivery` | unsupported or nothing discarded |
 | `skip-sequence` | `--subscription`, `--key`, `--sequence`, `--reason` (required) | `WorkQueue.SkipSequence` | unsupported or nothing skipped |
+| `work` | `--subscription` (required), `--once`, `--max`, `--idle-exit-ms`, `--concurrency` | `WorkQueueHost.RunOnce` (with `--once`) or `Start` until SIGINT/SIGTERM | the host cannot start (config, unknown subscription, no handler) — **never** for an empty queue |
 | `export-topology` | `--transport` (required), `--output` | `WorkQueueEngine.ExportManifest` → stdout or file | the transport is unknown |
 | `import-bindings` | `<file>` (required), `--json` | `WorkQueueEngine.ImportBindings` | the file is invalid or any issue is an `Error` |
 | `validate-bindings` | `--transport`, `--json` | `WorkQueue.ValidateBindings` | any issue is an `Error` |
@@ -4837,6 +5541,7 @@ import QueueReplay from '../commands/queue/replay.js';
 import QueueSkipSequence from '../commands/queue/skip-sequence.js';
 import QueueStats from '../commands/queue/stats.js';
 import QueueValidateBindings from '../commands/queue/validate-bindings.js';
+import QueueWork from '../commands/queue/work.js';
 
 interface FlagSurface {
     required?: boolean;
@@ -4851,6 +5556,7 @@ const COMMANDS: Array<[string, CommandSurface, string[], string[]]> = [
     ['replay', QueueReplay, ['delivery', 'note', 'subscription'], ['delivery', 'subscription']],
     ['discard', QueueDiscard, ['delivery', 'reason', 'subscription'], ['delivery', 'reason', 'subscription']],
     ['skip-sequence', QueueSkipSequence, ['key', 'reason', 'sequence', 'subscription'], ['key', 'reason', 'sequence', 'subscription']],
+    ['work', QueueWork, ['concurrency', 'idle-exit-ms', 'max', 'once', 'subscription'], ['subscription']],
     ['export-topology', QueueExportTopology, ['output', 'transport'], ['transport']],
     ['import-bindings', QueueImportBindings, ['json'], []],
     ['validate-bindings', QueueValidateBindings, ['json', 'transport'], []],
@@ -5318,6 +6024,88 @@ export default class QueueDiscard extends Command {
 }
 ```
 
+`packages/MJCLI/src/commands/queue/work.ts` — the container-job entrypoint (02 §4.4a). It exits 0 whenever the host
+ran, including an empty queue, so a scheduler never records a failure for "no work"; a non-zero exit means the host
+could not start:
+
+```typescript
+import { Command, Flags } from '@oclif/core';
+import { MJWorkLogger, SharedProviderSource, WorkQueueEngine, WorkQueueHost } from '@memberjunction/work-queue-engine';
+import { OpenWorkQueueSession } from '../../lib/work-queue/queue-session.js';
+
+const DEFAULT_IDLE_EXIT_MS = 5000;
+
+export default class QueueWork extends Command {
+  static description = 'Run work-queue subscriptions in this process: once for a container job, or until stopped';
+
+  static examples = [
+    '<%= config.bin %> <%= command.id %> --subscription venue-import --once',
+    '<%= config.bin %> <%= command.id %> --subscription venue-import --once --max 5 --concurrency 2',
+    '<%= config.bin %> <%= command.id %> --subscription "*"',
+  ];
+
+  static flags = {
+    subscription: Flags.string({ char: 's', description: "Subscription name, or '*' for every MJWorker subscription", required: true }),
+    once: Flags.boolean({ description: 'Claim up to --max deliveries, drain and exit (container-job mode)', default: false }),
+    max: Flags.integer({ description: 'With --once: how many deliveries to claim', default: 1, min: 1 }),
+    'idle-exit-ms': Flags.integer({ description: 'With --once: exit after this long with nothing to claim', default: DEFAULT_IDLE_EXIT_MS, min: 0 }),
+    concurrency: Flags.integer({ description: 'Handlers in flight per subscription', default: 1, min: 1 }),
+  };
+
+  async run(): Promise<void> {
+    const { flags } = await this.parse(QueueWork);
+    const session = await OpenWorkQueueSession();
+    let failure: string | null = null;
+    try {
+      await WorkQueueEngine.Instance.Config(false, session.User, session.Provider);
+      const host = new WorkQueueHost(
+        {
+          InstanceID: `mj-queue-work-${process.pid}`,
+          Subscriptions: [{ Name: flags.subscription, Concurrency: flags.concurrency }],
+          IdlePollMinMs: 250, IdlePollMaxMs: 2000, ShutdownDrainMs: 30000,
+          SweeperIntervalMs: 0, ReconcileIntervalMs: 0,        // a short-lived job neither sweeps nor re-plans
+        },
+        WorkQueueEngine.Instance, session.User, session.Provider, new MJWorkLogger('[mj queue work]'),
+        { ProviderSource: new SharedProviderSource(session.Provider) },
+      );
+      if (flags.once) {
+        const result = await host.RunOnce({ MaxDeliveries: flags.max, IdleExitMs: flags['idle-exit-ms'] });
+        this.log(`Processed ${result.Processed} deliver${result.Processed === 1 ? 'y' : 'ies'} (${result.Reason}).`);
+      } else {
+        await host.Start();
+        this.log(`Running ${flags.subscription}; press Ctrl-C to stop.`);
+        await waitForStopSignal();
+        await host.Shutdown();
+      }
+      const blocked = host.GetHealth().Subscriptions.filter(s => s.State !== 'Running' && s.State !== 'Paused');
+      for (const subscription of blocked) {
+        this.warn(`${subscription.Name}: ${subscription.State}${subscription.Reason ? ` — ${subscription.Reason}` : ''}`);
+      }
+    } catch (error) {
+      failure = error instanceof Error ? error.message : String(error);
+    } finally {
+      await session.Close();
+    }
+    if (failure) {
+      this.error(failure, { exit: 1 });
+    }
+  }
+}
+
+/** Resolves on the first SIGINT or SIGTERM; both listeners are removed afterwards. */
+function waitForStopSignal(): Promise<void> {
+  return new Promise<void>(resolve => {
+    const stop = (): void => {
+      process.off('SIGINT', stop);
+      process.off('SIGTERM', stop);
+      resolve();
+    };
+    process.once('SIGINT', stop);
+    process.once('SIGTERM', stop);
+  });
+}
+```
+
 `packages/MJCLI/src/commands/queue/skip-sequence.ts`:
 
 ```typescript
@@ -5530,7 +6318,7 @@ git commit -m "feat(cli): mj queue commands over work queue remote operations an
 - Regenerate: `packages/ServerBootstrap/src/generated/mj-class-registrations.ts`, `packages/ServerBootstrapLite/src/generated/mj-class-registrations.ts`
 
 **Interfaces:**
-- Consumes: every `@RegisterClass` in `@memberjunction/work-queue-engine` (the seven `…ServerOperation` classes from Task 6, plus plan 05's `DatabaseTransportDriverFactory` and entity server subclasses) and in `@memberjunction/work-queue-server` (`WorkQueueServerExtension`).
+- Consumes: every `@RegisterClass` in `@memberjunction/work-queue-engine` (the eight `…ServerOperation` classes from Task 6, plus plan 05's `DatabaseTransportDriverFactory` and its driver-owned entity server subclasses) and in `@memberjunction/work-queue-server` (`WorkQueueServerExtension`). `@memberjunction/work-queue-base` carries no registrations of its own, but the engine depends on it, so both bootstrap packages resolve it transitively — no manifest entry is expected for it.
 - Produces: bootstrap manifests that import those registrations, so a bundled MJAPI resolves the Remote Operations, the Database driver factory and the Server Extension, and `mj queue` (which loads `ServerBootstrapLite`) resolves the Remote Operations.
 
 MJ apps load `@RegisterClass` registrations through generated manifests (`mj codegen manifest`), not side-effect imports. A class missing from a manifest fails only in bundled builds — every unit test still passes. `ServerBootstrapLite` gets the engine only: its manifest command excludes `@memberjunction/server`, and the REST extension belongs to MJAPI.
@@ -5550,13 +6338,17 @@ In `packages/ServerBootstrapLite/package.json` `dependencies`, add (alphabetical
 "@memberjunction/work-queue-engine": "6.1.0",
 ```
 
+`@memberjunction/work-queue-base` is **not** listed in either file: the engine depends on it, so pnpm resolves it
+transitively and the manifest generator walks it. Add it explicitly only if a package imports `WorkQueueEngineBase`
+directly — an Explorer dashboard would (09b), no server package here does.
+
 Run: `pnpm install` (repository root)
 Expected: installs with no peer-dependency warnings for the work-queue packages.
 
 - [ ] **Step 2: Build the chain**
 
 Run: `pnpm exec turbo run build --filter=@memberjunction/work-queue-server --filter=@memberjunction/server --filter=@memberjunction/cli`
-Expected: builds `work-queue-core`, `work-queue-engine`, `work-queue-server`, `@memberjunction/server` and `@memberjunction/cli` with no errors.
+Expected: builds `work-queue-core`, `work-queue-base`, `work-queue-engine`, `work-queue-server`, `@memberjunction/server` and `@memberjunction/cli` with no errors.
 
 - [ ] **Step 3: Regenerate the manifests**
 
@@ -5564,11 +6356,12 @@ Run: `pnpm run mj:manifest:server-bootstrap`
 Run: `pnpm run mj:manifest:server-bootstrap-lite`
 
 Run: `grep -ohE "WorkQueue[A-Za-z]+ServerOperation|WorkQueueServerExtension|DatabaseTransportDriverFactory" packages/ServerBootstrap/src/generated/mj-class-registrations.ts | sort -u`
-Expected — exactly these nine lines:
+Expected — exactly these ten lines:
 
 ```
 DatabaseTransportDriverFactory
 WorkQueueDiscardDeliveryServerOperation
+WorkQueueGetBacklogServerOperation
 WorkQueueGetSubscriptionStatsServerOperation
 WorkQueueListDeadLettersServerOperation
 WorkQueueListPartitionsServerOperation
@@ -5579,7 +6372,7 @@ WorkQueueValidateBindingsServerOperation
 ```
 
 Run: `grep -ohE "WorkQueue[A-Za-z]+ServerOperation|WorkQueueServerExtension|DatabaseTransportDriverFactory" packages/ServerBootstrapLite/src/generated/mj-class-registrations.ts | sort -u`
-Expected — the same list **without** `WorkQueueServerExtension` (eight lines).
+Expected — the same list **without** `WorkQueueServerExtension` (nine lines).
 
 If a list is empty, the generator did not see the dependency: confirm Step 1, confirm `packages/WorkQueue/engine/dist` and `packages/WorkQueue/server/dist` exist, and rerun Step 3.
 
@@ -5657,8 +6450,8 @@ git commit -m "build(bootstrap): register work queue operations, driver factory 
 - Modify: `metadata-optional/integration-test/test-suites/.integration-suite.json`
 
 **Interfaces:**
-- Consumes: `WorkQueueEngine`, `WorkQueueHost`, `WorkQueueSweeper`, `DeduplicationLedger`, `BaseWorkHandler`, `SharedProviderSource`, `MJWorkLogger`, `CreateDatabaseConformanceHarness(provider: ConformanceProvider, contextUser: UserInfo, transportID?: string): Promise<DatabaseConformanceHarness>` (plan 05 Task 14; `Cleanup(): Promise<void>`) (`@memberjunction/work-queue-engine`); `RunConformanceChecks(harness): Promise<ConformanceCheckResult[]>` (`@memberjunction/work-queue-core/testing`, plan 04); `HandleWorkQueuePublish`, `APIKeyScopeAuthorizer` (`@memberjunction/work-queue-server`); `Outcome`, `ITransportConsumer`, `ReceivedDelivery`, `WorkContext`, `WorkMessage`, `WorkOutcome` (`@memberjunction/work-queue-core`); the Task 5 operation classes (`@memberjunction/core-entities`); `GetAPIKeyEngine` (`@memberjunction/api-keys`); `Assert`, `AssertEqual`, `IntegrationCheckRegistry`, `IntegrationCheckContext`, `NamedCheck` (`@memberjunction/testing-integration`).
-- Produces: `WorkQueueRuntimeChecks: NamedCheck[]` (13 checks, ids `work-queue-runtime.WR1`–`WR13`), the `'work-queue-runtime'` lifecycle, and `MJ: Tests` record `IT94 - Work Queue Runtime (native host, operators, REST)`.
+- Consumes: `WorkQueueEngine`, `WorkQueueHost`, `WorkQueueSweeper`, `DeduplicationLedger`, `BaseWorkHandler`, `SharedProviderSource`, `MJWorkLogger`, `CreateDatabaseConformanceHarness(provider: ConformanceProvider, contextUser: UserInfo, transportID?: string): Promise<DatabaseConformanceHarness>` (plan 05 Task 14; `Cleanup(): Promise<void>`) (`@memberjunction/work-queue-engine`); `RunConformanceChecks(harness): Promise<ConformanceCheckResult[]>` (`@memberjunction/work-queue-core/testing`, plan 04); `HandleWorkQueuePublish`, `APIKeyScopeAuthorizer` (`@memberjunction/work-queue-server`); `Outcome`, `ITransportConsumer`, `ReceivedDelivery`, `WorkContext`, `WorkMessage`, `WorkOutcome` (`@memberjunction/work-queue-core`); the Task 5 operation classes and `MJWorkQueueDeliveryEntity` (`@memberjunction/core-entities`); `GetAPIKeyEngine` (`@memberjunction/api-keys`); `Assert`, `AssertEqual`, `IntegrationCheckRegistry`, `IntegrationCheckContext`, `NamedCheck` (`@memberjunction/testing-integration`).
+- Produces: `WorkQueueRuntimeChecks: NamedCheck[]` (16 checks, ids `work-queue-runtime.WR1`–`WR16`), the `'work-queue-runtime'` lifecycle, and `MJ: Tests` record `IT94 - Work Queue Runtime (native host, operators, REST)`.
 
 Unit tests prove shapes against fakes; this bundle proves the pieces **behave together** on a real database: the host claims and settles, the unique in-flight index enforces single flight across consumers, `Ordered` keys block and unblock through the Remote Operations, sequence gaps wait and skip, the sweeper expires leases and purges, the ledger suppresses duplicates, and the REST handler enforces scope and `AllowExternalPublish` with a real API key.
 
@@ -5677,6 +6470,9 @@ Unit tests prove shapes against fakes; this bundle proves the pieces **behave to
 | WR11 | The sweeper purges a terminal delivery past topic retention |
 | WR12 | Host shutdown is idempotent, clears `WorkQueueHost.Active` and unregisters from `ShutdownRegistry` |
 | WR13 | Plan 04's transport conformance checks pass against plan 05's Database harness on the live provider (Failed ids fail the check; Skipped ids are logged) |
+| WR14 | Delivery rows are driver-owned: `BaseEntity.Save()` on a delivery is rejected and the row is unchanged (03 §6.8) |
+| WR15 | Cancelling an **in-flight** delivery revokes the lease (`cancelRequested`), the holder's heartbeat reports `Lost` and its settle is fenced, the `Exclusive` key is held until the lease expires, and the row then settles `Discarded` (03 §7) |
+| WR16 | `WorkQueue.GetBacklog` counts claimable pending **plus** in-flight deliveries and returns to its starting value once work settles |
 
 Safety in a shared development database:
 
@@ -5703,8 +6499,8 @@ Run: `pnpm install` (repository root)
 In `packages/TestingFramework/integration-test-suite/src/__tests__/check-registry.test.ts`:
 
 - add `import { WorkQueueRuntimeChecks } from '../checks/work-queue-runtime.checks';` after the other check imports;
-- add `['work-queue-runtime', WorkQueueRuntimeChecks, 13],` to the `bundles` table directly after `['user-routines', UserRoutinesChecks, 16],`;
-- add `'work-queue-runtime': 13,` to `EXPECTED_BUNDLE_COUNTS` directly after `'view-security': 4,`;
+- add `['work-queue-runtime', WorkQueueRuntimeChecks, 16],` to the `bundles` table directly after `['user-routines', UserRoutinesChecks, 16],`;
+- add `'work-queue-runtime': 16,` to `EXPECTED_BUNDLE_COUNTS` directly after `'view-security': 4,`;
 - change `expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(93);` to `toHaveLength(94)`.
 
 Run: `cd packages/TestingFramework/integration-test-suite && pnpm test check-registry`
@@ -5724,10 +6520,10 @@ Expected: FAIL — unresolved import `../checks/work-queue-runtime.checks`.
  */
 import { DatabaseProviderBase, RunView, type RemoteOpResult, type UserInfo } from '@memberjunction/core';
 import {
-    WorkQueueDiscardDeliveryOperation, WorkQueueListPartitionsOperation, WorkQueueReplayDeadLetterOperation,
-    WorkQueueSkipSequenceOperation,
-    type MJAPIKeyEntity, type MJAPIKeyScopeEntity, type MJAPIKeyUsageLogEntity, type MJWorkQueueSubscriptionEntity,
-    type MJWorkQueueTopicEntity,
+    WorkQueueDiscardDeliveryOperation, WorkQueueGetBacklogOperation, WorkQueueListPartitionsOperation,
+    WorkQueueReplayDeadLetterOperation, WorkQueueSkipSequenceOperation,
+    type MJAPIKeyEntity, type MJAPIKeyScopeEntity, type MJAPIKeyUsageLogEntity, type MJWorkQueueDeliveryEntity,
+    type MJWorkQueueSubscriptionEntity, type MJWorkQueueTopicEntity, type WorkQueueGetBacklogOutput,
 } from '@memberjunction/core-entities';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 import { MJGlobal, ShutdownRegistry, UUIDsEqual } from '@memberjunction/global';
@@ -6297,6 +7093,88 @@ export const WorkQueueRuntimeChecks: NamedCheck[] = [
             }
         },
     },
+    {
+        Id: 'work-queue-runtime.WR14',
+        Name: 'WR14: a work-queue delivery rejects BaseEntity.Save()',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const options = { provider: fx().Provider, user: ctx.User };
+            const messageID = await publishOne(ctx.User, NAMES.InternalTopic);
+            const row = await delivery(ctx.User, NAMES.InternalSub, messageID);
+            const entity = await fx().Provider.GetEntityObject<MJWorkQueueDeliveryEntity>('MJ: Work Queue Deliveries', ctx.User);
+            Assert(await entity.Load(row.ID), 'loading the delivery entity');
+            entity.Status = 'Completed';
+            AssertEqual(await entity.Save(), false, 'Save() on a work-queue delivery must be rejected');
+            const message = entity.LatestResult?.CompleteMessage ?? '';
+            Assert(message.toLowerCase().includes('transport driver'), `guard message should name the driver: '${message}'`);
+            AssertEqual((await delivery(ctx.User, NAMES.InternalSub, messageID)).Status, 'Pending', 'the delivery row is unchanged');
+            const cleanup = operationOutput(await new WorkQueueDiscardDeliveryOperation().Execute(
+                { subscriptionName: NAMES.InternalSub, deliveryID: row.ID, reason: 'it: WR14 cleanup' }, options,
+            ), 'WorkQueue.DiscardDelivery');
+            Assert(cleanup.discarded, `cleanup discard: ${JSON.stringify(cleanup)}`);
+        },
+    },
+    {
+        Id: 'work-queue-runtime.WR15',
+        Name: 'WR15: cancelling an in-flight delivery revokes the lease and holds its key until the lease expires',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const { Provider } = fx();
+            const options = { provider: Provider, user: ctx.User };
+            const held = await publishOne(ctx.User, NAMES.ExclusiveTopic, { PartitionKey: 'cancel-1' });
+            const queued = await publishOne(ctx.User, NAMES.ExclusiveTopic, { PartitionKey: 'cancel-1' });
+            const consumer = await openConsumer(NAMES.ExclusiveSub);
+            const batch = await receive(consumer);
+            const claimed = onlyMessage(batch.filter(d => d.Message.PartitionKey === 'cancel-1'), held, 'the in-flight delivery');
+            await settleAll(consumer, batch.filter(d => d.Message.PartitionKey !== 'cancel-1'));
+
+            const row = await delivery(ctx.User, NAMES.ExclusiveSub, held);
+            const cancel = operationOutput(await new WorkQueueDiscardDeliveryOperation().Execute(
+                { subscriptionName: NAMES.ExclusiveSub, deliveryID: row.ID, reason: 'it: operator cancel' }, options,
+            ), 'WorkQueue.DiscardDelivery');
+            Assert(cancel.supported && cancel.discarded && cancel.cancelRequested, `cancel result: ${JSON.stringify(cancel)}`);
+
+            AssertEqual((await delivery(ctx.User, NAMES.ExclusiveSub, held)).Status, 'InFlight', 'a cancelled delivery stays in flight until its lease expires');
+            AssertEqual(await consumer.ExtendLease(claimed, 60), 'Lost', "the holder's heartbeat reports the revoked lease");
+            AssertEqual((await consumer.Complete(claimed)).Kind, 'LeaseLost', 'the revoked holder cannot settle');
+            const whileWindingDown = await receive(consumer);
+            AssertEqual(whileWindingDown.filter(d => d.Message.PartitionKey === 'cancel-1').length, 0, 'the key is not handed on while the old handler winds down');
+            await settleAll(consumer, whileWindingDown);
+
+            await setDeliveryTimestamp(Provider, ctx.User, row.ID, 'LeaseExpiresAt', 1);
+            const sweeper = new WorkQueueSweeper(Provider, new DeduplicationLedger(Provider, ctx.User), WorkQueueEngine.Instance, ctx.User, new MJWorkLogger('[WorkQueue:IT]'));
+            await sweeper.RunOnce();
+            AssertEqual((await delivery(ctx.User, NAMES.ExclusiveSub, held)).Status, 'Discarded', 'a cancelled delivery settles as Discarded when its lease expires');
+            const afterExpiry = await receive(consumer);
+            await settleAll(consumer, [onlyMessage(afterExpiry.filter(d => d.Message.PartitionKey === 'cancel-1'), queued, 'the next delivery for the key')]);
+            await settleAll(consumer, afterExpiry.filter(d => d.Message.PartitionKey !== 'cancel-1'));
+        },
+    },
+    {
+        Id: 'work-queue-runtime.WR16',
+        Name: 'WR16: GetBacklog counts claimable pending plus in-flight deliveries',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const options = { provider: fx().Provider, user: ctx.User };
+            const backlog = async (): Promise<WorkQueueGetBacklogOutput> => operationOutput(
+                await new WorkQueueGetBacklogOperation().Execute({ subscriptionName: NAMES.InternalSub }, options), 'WorkQueue.GetBacklog',
+            );
+            const before = await backlog();
+            Assert(before.supported, `GetBacklog must be supported on the Database transport: ${JSON.stringify(before)}`);
+            await publishOne(ctx.User, NAMES.InternalTopic);
+            await publishOne(ctx.User, NAMES.InternalTopic);
+            AssertEqual((await backlog()).claimable, before.claimable + 2, 'two published deliveries are claimable');
+
+            const consumer = await openConsumer(NAMES.InternalSub);
+            const claimed = await receive(consumer);
+            Assert(claimed.length > 0, 'the consumer claimed nothing');
+            const during = await backlog();
+            AssertEqual(during.inFlight, before.inFlight + claimed.length, 'claimed deliveries count as in flight, not claimable');
+            AssertEqual(during.total, during.claimable + during.inFlight, 'total is claimable + in flight');
+
+            await settleAll(consumer, claimed);
+            const rest = await receive(consumer);
+            await settleAll(consumer, rest);
+            AssertEqual((await backlog()).total, before.total, 'the backlog returns to its starting value once the work is settled');
+        },
+    },
 ];
 
 for (const check of WorkQueueRuntimeChecks) {
@@ -6343,7 +7221,7 @@ export * from './checks/work-queue-runtime.checks';
 - [ ] **Step 5: Run the registry test and build**
 
 Run: `cd packages/TestingFramework/integration-test-suite && pnpm test check-registry`
-Expected: PASS — the bundle registers 13 checks and the pinned catalog has 94 bundles.
+Expected: PASS — the bundle registers 16 checks and the pinned catalog has 94 bundles.
 
 Run: `cd packages/TestingFramework/integration-test-suite && pnpm run build`
 Expected: builds.
@@ -6357,7 +7235,7 @@ Expected: builds.
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
     "Name": "IT94 - Work Queue Runtime (native host, operators, REST)",
-    "Description": "Deterministic end-to-end behavior of the durable work queue's MJ runtime on the Database transport — no LLM calls. WR1: a started WorkQueueHost plans fixture subscriptions (registered handler Running, unknown handler HandlerNotRegistered). WR2: publish → host claim → handler → Completed. WR3: one publish settles independently per subscription (Completed / DeadLettered / untouched Pending). WR4: the sweeper expires a lease, the stale lease token is fenced out, the retry is attempt 2. WR5: Exclusive single flight across two consumers. WR6: an Ordered dead-lettered head blocks its key; WorkQueue.ListPartitions reports Blocked; WorkQueue.ReplayDeadLetter unblocks in order. WR7: ExplicitSequence gap waits; WorkQueue.SkipSequence releases it. WR8: WorkQueue.DiscardDelivery discards a pending delivery. WR9: DeduplicationKey suppression. WR10: REST publish enforces workqueue:publish with a real API key and AllowExternalPublish. WR11: retention purge. WR12: host shutdown contract. WR13: plan 04's transport conformance checks (RunConformanceChecks) pass against plan 05's Database conformance harness. Fixtures are 'mj-it-wq-*' topics and subscriptions on the seeded Database transport, removed in Setup and Teardown.",
+    "Description": "Deterministic end-to-end behavior of the durable work queue's MJ runtime on the Database transport — no LLM calls. WR1: a started WorkQueueHost plans fixture subscriptions (registered handler Running, unknown handler HandlerNotRegistered). WR2: publish → host claim → handler → Completed. WR3: one publish settles independently per subscription (Completed / DeadLettered / untouched Pending). WR4: the sweeper expires a lease, the stale lease token is fenced out, the retry is attempt 2. WR5: Exclusive single flight across two consumers. WR6: an Ordered dead-lettered head blocks its key; WorkQueue.ListPartitions reports Blocked; WorkQueue.ReplayDeadLetter unblocks in order. WR7: ExplicitSequence gap waits; WorkQueue.SkipSequence releases it. WR8: WorkQueue.DiscardDelivery discards a pending delivery. WR9: DeduplicationKey suppression. WR10: REST publish enforces workqueue:publish with a real API key and AllowExternalPublish. WR11: retention purge. WR12: host shutdown contract. WR13: plan 04's transport conformance checks (RunConformanceChecks) pass against plan 05's Database conformance harness. WR14: a delivery row rejects BaseEntity.Save() and is unchanged. WR15: cancelling an in-flight delivery revokes its lease, fences the holder's settle, holds the Exclusive key until the lease expires and then settles Discarded. WR16: WorkQueue.GetBacklog counts claimable pending plus in-flight deliveries. Fixtures are 'mj-it-wq-*' topics and subscriptions on the seeded Database transport, removed in Setup and Teardown.",
     "InputDefinition": {},
     "ExpectedOutcomes": {
       "summary": "The host claims and settles fixture deliveries, partition modes enforce single flight, blocking and sequence gaps, operator Remote Operations repair blocked keys, the sweeper expires leases and purges retention, duplicates are suppressed, and REST publishing honors scope and topic exposure."
@@ -6405,7 +7283,7 @@ Expected: 1 `MJ: Tests` create and 1 `MJ: Test Suite Tests` create; no lookup fa
 Run: `pnpm exec mj sync push --dir=metadata-optional/integration-test --ci`
 
 Run: `MJ_INTEGRATION_TEST=1 pnpm mj test run "IT94 - Work Queue Runtime (native host, operators, REST)"`
-Expected: 13 passed, 0 failed, 0 skipped. Diagnose any failure before continuing — WR5–WR7 failing usually means plan 05's claim statements disagree with 03 §7, not that this bundle is wrong.
+Expected: 16 passed, 0 failed, 0 skipped. Diagnose any failure before continuing — WR5–WR7 failing usually means plan 05's claim statements disagree with 03 §7, not that this bundle is wrong.
 
 Run the bundle twice more in a row.
 Expected: identical results (Setup removes leftovers; WR13's harness cleans up after itself; no state leaks between runs).
@@ -6448,6 +7326,15 @@ workQueue: {
   reconcileIntervalMs: 30000,
 }
 ```
+
+Subscription metadata is cached by `WorkQueueEngineBase` (`@memberjunction/work-queue-base`, browser-safe) and
+reached here through the server `WorkQueueEngine`, which proxies it (03 §11) — the same split as
+`AIEngineBase`/`AIEngine`, so Explorer can read the topology without pulling in drivers or SQL.
+
+A subscription's `Filter` is MJ `CompositeFilterDescriptor` JSON over envelope attributes, restricted to the
+operators every transport can express (`eq`, `neq`, `startswith`, `isnull`/`isnotnull`, AND across fields, OR of `eq`
+on one field) and matched **case-sensitively** (03 §4). Richer filters are rejected when the subscription is saved,
+not silently ignored, and `mj-filter-builder` is the editor.
 
 Any number of instances may run the same subscription: claims are atomic against the database (or the cloud
 queue), leases are fenced, and each instance only decides what **it** runs. `MJ_DISABLE_WORK_QUEUE_HOST=1`
@@ -6502,11 +7389,89 @@ thrown error retries with backoff.
 | Dead letters | `mj queue dead-letters --subscription s` | `WorkQueue.ListDeadLetters` |
 | Blocked / awaiting keys | `mj queue partitions --subscription s --condition Blocked` | `WorkQueue.ListPartitions` |
 | Retry a dead letter | `mj queue replay --subscription s --delivery id` | `WorkQueue.ReplayDeadLetter` |
-| Drop work | `mj queue discard --subscription s --delivery id --reason "…"` | `WorkQueue.DiscardDelivery` |
+| Drop work, or cancel a running handler | `mj queue discard --subscription s --delivery id --reason "…"` | `WorkQueue.DiscardDelivery` |
+| Backlog for an autoscaler | (scaler SQL below) | `WorkQueue.GetBacklog` |
+| Run work in a container job | `mj queue work --subscription s --once` | — |
 | Unstick a sequence gap | `mj queue skip-sequence --subscription s --key k --sequence n --reason "…"` | `WorkQueue.SkipSequence` |
 | Check bindings | `mj queue validate-bindings [--transport t]` | `WorkQueue.ValidateBindings` |
 
 API-key callers need `workqueue:read` for reads and `workqueue:operate` for replay, discard and skip.
+
+Discarding a **pending** or **dead-lettered** delivery resolves it immediately. Discarding an **in-flight** delivery
+cancels it: the lease is revoked, so the running handler's next heartbeat resolves `false` and its `Signal` aborts;
+the row keeps its `Exclusive`/`Ordered` key until the lease expires and then settles `Discarded`. The operation
+reports this as `cancelRequested: true`, and cancellation is therefore as fast as the handler notices — bounded by
+`LeaseSeconds / 3` for `Auto` heartbeats.
+
+To alert on dead letters, subscribe once at startup: `WorkQueueEngine.Instance.OnDeadLettered(event => …)` (Database
+and staged subscriptions; AWS uses its DLQ alarms).
+
+### Container-job workers (KEDA, Azure Container Apps jobs, Kubernetes)
+
+Instead of a long-running host, run one-shot jobs that claim a bounded amount of work and exit:
+
+```bash
+mj queue work --subscription venue-import --once                  # claim 1, run, drain, exit 0
+mj queue work --subscription venue-import --once --max 5 --concurrency 2
+```
+
+**Exit codes.** `0` whenever the host ran — including "the queue was empty", so a scheduler never records a failure
+for idleness. Non-zero only when the host could not start (bad configuration, unknown subscription, no registered
+handler). `RunOnce` always drains: it resolves after in-flight handlers settle or hit `ShutdownDrainMs`.
+
+**Scaler query.** Give the scaler its own SELECT-only login (plan 05 ships
+`scripts/work-queue-scaler-login.sql`) and scale on claimable **plus** in-flight deliveries:
+
+```sql
+SELECT COUNT(*) AS Backlog
+FROM __mj.WorkQueueDelivery d
+JOIN __mj.WorkQueueSubscription s ON s.ID = d.SubscriptionID
+WHERE s.Name = 'venue-import'
+  AND ((d.Status = 'Pending' AND d.VisibleAt <= SYSDATETIMEOFFSET()) OR d.Status = 'InFlight');
+```
+
+Counting `InFlight` is load-bearing: schedulers subtract running executions from the metric, so a `Pending`-only
+count scales to zero while work is still running and starves the queue (02 §4.4a). On an `Exclusive`/`Ordered`
+subscription this query **over-counts** work queued behind a busy key — cap job parallelism, or scale on
+`WorkQueue.GetBacklog`, whose `claimable` applies the partition rules.
+
+**KEDA `ScaledJob`** (one delivery per job, scale to zero, at most 5 at a time):
+
+```yaml
+apiVersion: keda.sh/v1alpha1
+kind: ScaledJob
+metadata:
+  name: mj-work-queue-venue-import
+spec:
+  jobTargetRef:
+    parallelism: 1
+    completions: 1
+    backoffLimit: 0                     # the queue owns retries; never let the scheduler re-run a job
+    template:
+      spec:
+        terminationGracePeriodSeconds: 60      # >= ShutdownDrainMs so a drain is never cut short
+        containers:
+          - name: worker
+            image: <your mj image>
+            args: ["queue", "work", "--subscription", "venue-import", "--once"]
+  pollingInterval: 10
+  maxReplicaCount: 5
+  successfulJobsHistoryLimit: 3
+  triggers:
+    - type: mssql
+      metadata:
+        targetValue: "1"
+        query: <the scaler query above, on one line>
+      authenticationRef:
+        name: mj-work-queue-scaler-auth       # the SELECT-only login
+```
+
+Azure Container Apps event-driven jobs are the same shape: `replicaTimeout` ≥ the longest handler run,
+`replicaRetryLimit: 0`, and the same query as the scale rule.
+
+**Sizing.** `LeaseSeconds` must cover the job's worst heartbeat outage (a database failover), not just its runtime —
+a lease that expires while the job is healthy causes a second job to claim the same delivery. `ShutdownDrainMs` must
+fit inside the platform's termination grace period.
 
 ### Runbook: an `Ordered` key is blocked
 
@@ -6604,4 +7569,12 @@ Where this plan extends or departs from [03](03-interfaces-and-tables.md) or fro
 | CD8 | 03 §9 lists `413` for bodies over 30 MB | `Settings.BodyLimit` (default `'30mb'`) and `Settings.MaxBatch` (≤ 100) are configurable; `401` added for unauthenticated calls | Deployment control |
 | CD9 | — | New MJServer config section `workQueue` and env kill switch `MJ_DISABLE_WORK_QUEUE_HOST=1` | Mirrors `MJ_DISABLE_TASK_GRAPH_DISPATCHER` for integration runs |
 | CD10 | Host `InstanceID` | Used for logs, health and `ShutdownName` only; lease owners come from the drivers plan 05's engine creates (`TransportDriverDeps.InstanceID` is not set by the host) | The engine owns driver construction; if lease owners should equal the host instance ID, plan 05's `GetDriver` needs an instance-ID input |
+| CD12 | 03 §11 `RunOnce({ MaxDeliveries?, IdleExitMs?, MaxDurationMs? })` | Implemented with a claim budget enforced **before** each `Receive` (a wrapper consumer), `Processed` = deliveries received, default `IdleExitMs` 5,000, and `WorkQueueHostDependencies.RunOnceTickMs` (default 50 ms) as the exit-loop poll seam. `RunOnce` throws on a started host or `MaxDeliveries < 1`, and always drains through `Shutdown()` | A job must never over-claim at `Concurrency > 1`, and the loop needs a test seam |
+| CD13 | 03 §8 `WorkQueue.GetBacklog` | Added as the eighth operation (metadata, types, server class) and `WorkQueueOperatorService.GetBacklog`, delegating to plan 05's `WorkQueueEngine.GetBacklog`. `WorkQueueOperatorEngine` gains `GetBacklog(subscriptionName)` | The autoscaler metric must be reachable over GraphQL and the CLI |
+| CD14 | 03 §8 `DiscardDelivery` output `{ supported; discarded; cancelRequested }` | Implemented; `cancelRequested` comes from `OperatorResult.CancelRequested === true`. An in-flight discard is a **cancel**: the row stays `InFlight` until its lease expires (03 §7), so `discarded: true` here means "the cancel was recorded", not "the row is already `Discarded`" | Callers (and IT94 WR15) need to tell the two paths apart |
+| CD15 | Plan 05 had not yet landed Revision 3 when this plan was first revised | **Reconciled.** Plan 05 landed `WorkQueueEngine.GetBacklog`/`OnDeadLettered`, `ITransportOperator.Discard` returning `CancelRequested`, the `CancelRequestedAt` column and its `ExpireLeases` rule, the delivery-state entity save guards (whose `Save()` failure message must contain "transport driver" — IT94 WR14 asserts that), and the scaler login script at **`scripts/work-queue-scaler-login.sql`** (flat `scripts/`, not `scripts/sql/`) | Names verified against plan 05 |
 | CD11 | 03 §11 `WorkQueueHostEngine` not defined | Host depends on a structural subset including plan 05's `GetDatabaseDriver()` and `OnPublished()` | Testable without the singleton |
+| CD16 | 03 §11 exposes `OnDeadLettered` (subscribe) but no way for a non-driver to **emit** | `WorkQueueHostEngine` gains optional `NotifyDeadLettered?: (event: DeadLetteredEvent) => void`, and the host passes it to `WorkQueueSweeper`. Plan 05's `WorkQueueEngine` must expose that method publicly (it already builds the notifier for `TransportDriverDeps`, ND15); until it does, sweeper-found dead letters raise no event and everything else still works | Lease-expiry dead letters the sweeper finds were never seen by a driver, so they would otherwise never reach `OnDeadLettered` (03 §11) |
+| CD17 | 03 §11 `WorkQueueSweeper(executor, ledger, engine, contextUser, log)` | `WorkQueueSweeperEngine` also needs `Subscriptions` (to name a dead-lettered delivery's subscription), and the constructor takes a 7th argument `notifyDeadLettered?`. `ExpireLeases` is now read with `ExecuteRows<ExpiredDeadLetterRow>` and its reported count is **dead-lettered rows**, not all expired rows (plan 05 ND14) | The statement returns rows now; the count changed meaning |
+| CD18 | 03 §0/§11 base/server split | No call site in this plan changes: every metadata member the host, operator service, CLI and IT94 use is proxied by the server `WorkQueueEngine`, and nothing here imports `@memberjunction/work-queue-base`. Task 11 documents why it needs no manifest entry | Keeps the split invisible to the server tier while leaving base importable by Explorer (09b) |
+| CD19 | 03 §5 `TransportCapabilities` | The fakes in `runtimeFakes.ts` now carry `CancelInFlight` and `Filters: FilterSupport` (03 §4.1), mirroring plan 05's `DATABASE_TRANSPORT_CAPABILITIES` and plan 07's AWS constant | Capability objects must type-check against the current contract |

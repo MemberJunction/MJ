@@ -15,7 +15,8 @@ immediately, static imports only. Remote-operation I/O and REST JSON bodies foll
 |---|---|---|---|
 | `@memberjunction/work-queue-core` | `packages/WorkQueue/core` | **none** (no `@memberjunction/*` at all) | Envelope, validation, filter grammar, backoff, outcomes, errors, transport/consumer/operator contracts, capabilities, `ConsumerRuntime`, `InMemoryTransport`, REST JSON mapping, `WorkQueueApiPublisher`; conformance kit: `./testing` (`CONFORMANCE_CASES`, `RunConformanceChecks`, fixtures — no vitest) and `./testing/vitest` (`RunTransportConformanceSuite`; vitest optional peer) |
 | `@memberjunction/work-queue-aws` | `packages/WorkQueue/aws` | **none** except `work-queue-core` | SNS publish, SQS consumer, SQS dead-letter operator, binding validation, SNS filter-policy translation, shared resource naming (`AwsResourceName`), Lambda adapter (`./lambda`), SNS/SQS fakes (`./testing`) |
-| `@memberjunction/work-queue-engine` | `packages/WorkQueue/engine` | core, global, core-entities, sql-dialect, credentials; + `work-queue-aws`, `@aws-sdk/credential-providers` (plan 07) | SQL executor seam, SQL Server/PostgreSQL SQL builders, Database transport driver + operator, deduplication ledger, `WorkQueueEngine`, `BaseWorkHandler`, handler resolution, `WorkQueueHost`, sweeper, staged consumption for cloud `Ordered`, remote-operation server classes, manifest export/import, transport driver factories |
+| `@memberjunction/work-queue-base` | `packages/WorkQueue/base` | core, global, core-entities (**browser-safe** — no server, no drivers, no SQL) | `WorkQueueEngineBase extends BaseEngine`: cached Transports/Topics/Subscriptions, lookups, policy/binding builders, filter parsing, `IsStagedToDatabase`, `ValidateTopologyRows`. Used by Explorer/dashboards and any client-tier code. |
+| `@memberjunction/work-queue-engine` | `packages/WorkQueue/engine` | `work-queue-base`, core, global, core-entities, sql-dialect, credentials; + `work-queue-aws`, `@aws-sdk/credential-providers` (plan 07) | SQL executor seam, SQL Server/PostgreSQL SQL builders, Database transport driver + operator, deduplication ledger, `WorkQueueEngine`, `BaseWorkHandler`, handler resolution, `WorkQueueHost`, sweeper, staged consumption for cloud `Ordered`, remote-operation server classes, manifest export/import, transport driver factories |
 | `@memberjunction/work-queue-server` | `packages/WorkQueue/server` | engine + server-extensions-core + api-keys | REST publish Server Extension |
 | `@memberjunction/server` (existing) | `packages/MJServer` | — | `workQueue` config section, host start/stop |
 | `@memberjunction/cli` (existing) | `packages/MJCLI` | — | `mj queue …` commands |
@@ -59,7 +60,8 @@ export interface WorkMessage<TPayload extends WorkJson = WorkJson> {
   PartitionKey?: string;
   /** Present only on ExplicitSequence topics. Starts at 1 per PartitionKey. */
   Sequence?: number;
-  /** ≤ 10 entries; keys 1–64 chars [A-Za-z0-9_.-], values ≤ 256 chars. The only fields filters see. */
+  /** ≤ 10 entries; keys 1–64 chars [A-Za-z0-9_-] (no dots — a dotted filter field means MJ's source.field form,
+   *  which filters reject, §4), values ≤ 256 chars. The only fields filters see. */
   Attributes: Record<string, string>;
   Payload?: TPayload;
   PayloadRef?: WorkPayloadRef;
@@ -74,7 +76,7 @@ export interface WorkMessage<TPayload extends WorkJson = WorkJson> {
 | Rule | Error code | Retryable |
 |---|---|---|
 | Serialized envelope ≤ topic `MaxPayloadBytes` (≤ 262,144) | `PayloadTooLarge` | no |
-| ≤ 10 attributes; key/value format above; keys starting `mj.` or `mj_` (case-insensitive) reserved | `InvalidAttributes` | no |
+| ≤ 10 attributes; keys `[A-Za-z0-9_-]{1,64}` (no dots, §4); keys starting `mj` followed by `.`/`_` (case-insensitive) reserved | `InvalidAttributes` | no |
 | Not both `Payload` and `PayloadRef` | `InvalidPayload` | no |
 | `PartitionKey` ≤ 200 chars | `InvalidPartitionKey` | no |
 | `ExplicitSequence` topic: `Sequence` required iff `PartitionKey` present; integer ≥ 1 | `SequenceRequired` / `InvalidSequence` | no |
@@ -286,7 +288,10 @@ export class ConsumerRuntime<TPayload extends WorkJson = WorkJson> {
 }
 ```
 
-Runtime rules: `DeadLetter` reasons are truncated to 100 characters (`DeadLetterReason`); the full handler/error text goes
+Runtime rules: a failed `ExtendLease` caused by a transient transport error is **retried on the next heartbeat tick**;
+only `Lost`, or the lease passing its expiry, aborts the handler. A cancel (§5.2) is delivered the same way: the lease
+token is rotated, so the next heartbeat resolves `false` and the handler's later settle is rejected.
+`DeadLetter` reasons are truncated to 100 characters (`DeadLetterReason`); the full handler/error text goes
 to `LastError`. `FatalWorkError` → `DeadLetterReason` = its message (truncated), `LastError` = `"Name: message"` plus
 stack frames. Heartbeats are coalesced (a call made while an extension is in flight shares its result); after
 `MaxProcessingSeconds`, `Heartbeat` resolves `false`, but a later handler outcome is still settled — the lease token
@@ -299,32 +304,93 @@ aborts the signal and the handler's outcome is discarded; `FatalWorkError` → `
 
 ---
 
-## 4. Filter grammar
+## 4. Filters — MJ `CompositeFilterDescriptor`, restricted
 
-A subscription `Filter` is a JSON object; all top-level keys must hold (AND); array entries are OR. Null or `{}`
-matches everything. Common subset of SNS filter policies (MessageAttributes scope) and Service Bus SQL filters.
+A subscription's `Filter` column stores MJ's standard filter JSON: **`CompositeFilterDescriptor`**
+(`@memberjunction/core`, `MJCore/src/generic/filters/filter.types.ts`) — the same shape user views persist and the
+generic `mj-filter-builder` Angular component (`packages/Angular/Generic/filter-builder`) edits. `field` is an
+**envelope attribute name** (bare names only; the dotted `source.field` multi-record form is rejected). Null or an
+empty filter matches everything.
 
 ```jsonc
-{
-  "eventType": ["click", "open"],              // equals any of
-  "tenant":    [{ "prefix": "acme-" }],        // starts with
-  "priority":  [{ "exists": true }],           // present
-  "source":    [{ "anything-but": ["test"] }]  // present and not equal to any of
+{ "logic": "and", "filters": [
+  { "field": "eventType", "operator": "eq", "value": "click" },
+  { "logic": "or", "filters": [
+      { "field": "tenant", "operator": "eq", "value": "acme" },
+      { "field": "tenant", "operator": "eq", "value": "globex" } ] },
+  { "field": "campaign", "operator": "isnotnull", "value": null }
+] }
+```
+
+### 4.1 Supported operators
+
+| Operator | Meaning over attributes | SNS filter policy | Service Bus (09a) |
+|---|---|---|---|
+| `eq` | equals (case-sensitive) | `["value"]` | `attr = 'value'` |
+| `neq` | present and not equal | `[{"anything-but":["value"]}]` | `attr <> 'value'` |
+| `startswith` | prefix | `[{"prefix":"value"}]` | `startswith(attr,'value')` |
+| `isnotnull` / `isnull` | attribute present / absent | `[{"exists":true|false}]` | `EXISTS(attr)` / `NOT EXISTS(attr)` |
+| OR group of `eq` on one field | any-of | `["a","b"]` | `attr IN ('a','b')` |
+
+**Structure limits (all transports):** top-level `logic` must be `and`; nested groups may only be a one-field OR of
+`eq`; ≤ 5 distinct fields; ≤ 50 values total; depth ≤ 2. **Each field may be constrained only once** (one rule, or one
+OR group): a broker reads a field's value array as OR, so two AND-ed rules on one field would silently widen the filter
+rather than narrow it. A value is required for `eq`/`neq`/`startswith` and forbidden for `isnull`/`isnotnull`. Values are strings (numbers and booleans are compared as
+their string form, because envelope attributes are strings).
+
+Anything outside that set — `contains`, `endswith`, `gt`/`lt`, OR across different fields, deeper nesting — is
+**rejected when the subscription is saved**, by `SubscriptionUnsupportedReason`, naming the operator and field. Each
+driver publishes what it accepts:
+
+```ts
+export interface FilterSupport {
+  Operators: FilterOperator[];      // e.g. ['eq','neq','startswith','isnull','isnotnull']
+  SingleFieldOrGroups: boolean;
+  MaxFields: number;
+  MaxValues: number;
 }
 ```
 
+### 4.2 Core API (no MJ dependency)
+
 ```ts
-export type FilterCondition = string | { prefix: string } | { exists: boolean } | { 'anything-but': string[] };
-export type SubscriptionFilter = Record<string, FilterCondition[]>;
-export function ParseSubscriptionFilter(json: string | null): SubscriptionFilter | null;   // throws WorkQueueConfigurationError
+export type FilterOperator = 'eq' | 'neq' | 'startswith' | 'isnull' | 'isnotnull';
+export interface FilterRule { field: string; operator: FilterOperator; value?: string | number | boolean | null; }
+export interface FilterGroup { logic: 'and' | 'or'; filters: (FilterRule | FilterGroup)[]; }
+export type SubscriptionFilter = FilterGroup;
+
+/** Throws WorkQueueConfigurationError naming the offending field/operator. */
+/** What the Database transport accepts (every operator in §4.1, single-field OR groups, 5 fields, 50 values). */
+export const WORK_QUEUE_FILTER_SUPPORT: FilterSupport;
+export function ParseSubscriptionFilter(json: string | null, support: FilterSupport): SubscriptionFilter | null;
+/** Case-sensitive, string-valued, missing attribute fails every operator except isnull. */
 export function MatchesFilter(filter: SubscriptionFilter | null, attributes: Record<string, string>): boolean;
-export function ToSnsFilterPolicy(filter: SubscriptionFilter): string;                   // aws package
+export function ToSnsFilterPolicy(filter: SubscriptionFilter): string;     // aws package
 ```
 
-Limits: ≤ 5 keys, ≤ 50 total values. **Missing attribute:** every condition on that key fails except
-`{ "exists": false }` (`anything-but` does not match a missing attribute).
+### 4.3 Why the subset, and why not `CompositeFilter` itself
 
----
+We reuse MJ's **shape and its editor**, not its evaluator. Four reasons, each of which also explains a restriction
+above:
+
+1. **`work-queue-core` has zero `@memberjunction` dependencies** (03 §0) so Lambda bundles stay small, and
+   `CompositeFilter` lives in `@memberjunction/core`. Core therefore ships a small evaluator for the subset above.
+   **Drift guard:** a parity test in the engine package (which may import `@memberjunction/core`) asserts our evaluator
+   agrees with `CompositeFilter.Evaluate({ '': attrs })` over a shared case table.
+2. **Brokers cannot express the full grammar.** SNS filter policies are AND-across-attributes with OR only inside a
+   value array, and offer `prefix`, `anything-but` and `exists` — no `contains`, no `endswith`, no comparisons, no
+   cross-field OR. A filter MJ can evaluate but SNS cannot would silently mean "every message is delivered and the
+   consumer sorts it out", which defeats fan-out and wakes Lambdas for nothing. Rejecting at save time is honest.
+3. **Case sensitivity differs.** `CompositeFilter` lowercases both sides (`Str()`), so its matching is
+   case-insensitive; SNS matches exactly. Work-queue filters are **case-sensitive** everywhere, so a filter behaves
+   identically in MJ and in the broker. This is the one deliberate divergence from MJ's filter semantics, and the
+   parity test only covers case-matched fixtures.
+4. **Attributes are a flat string map.** The dotted `source.field` form (for multi-record view filters) has no meaning
+   here, and MJ's SQL generator for this JSON (`MJUserViewEntityExtended.GenerateWhereClause`) is `protected`,
+   entity-bound and unparameterised, so it is not a reuse candidate for the queue's own SQL.
+
+**UI:** the operator dashboard (09b) uses `mj-filter-builder` with `FilterFieldInfo[]` built from the topic's known
+attribute names, `allowGroups` limited to single-field OR, and the operator list above.
 
 ## 5. Transport contracts
 
@@ -359,11 +425,13 @@ export type SettleResult =
   | { Kind: 'Failed'; DeliveryID: string; Error: string };
 
 export interface TransportCapabilities {
+  Filters: FilterSupport;                  // operators/structure this transport accepts (§4.1)
   DetectsMessageIDDuplicates: boolean;     // Database true; AWS false
   PersistsProgress: boolean;               // Database true; AWS false
   SupportsOrdered: boolean;                // Database true; AWS false (engine stages Ordered — §5.1)
   SupportsExternalHosts: boolean;          // Database false; AWS true
   CancelPending: boolean;                  // Database true; AWS false
+  CancelInFlight: boolean;                 // Database true (lease revoke); AWS false
   ListPartitions: boolean;                 // Database true; AWS false
   PeekDeadLetters: 'Full' | 'BestEffort';  // Database Full; AWS BestEffort (≤ 100 scanned)
   ReplaySingleDeadLetter: boolean;         // Database true; AWS true (scan-based)
@@ -459,7 +527,9 @@ export interface PartitionStateRecord {
 
 export interface Page<T> { Items: T[]; NextCursor: string | null; }
 
-export type OperatorResult = { Supported: false } | { Supported: true; Changed: boolean };
+export type OperatorResult =
+  | { Supported: false }
+  | { Supported: true; Changed: boolean; CancelRequested?: boolean };   // CancelRequested: an InFlight delivery was revoked
 
 export interface ITransportOperator {
   GetStats(subscription: SubscriptionBinding): Promise<SubscriptionStats>;
@@ -467,7 +537,8 @@ export interface ITransportOperator {
   /** condition null = all non-Idle keys. Returns null when !ListPartitions. */
   ListPartitions(subscription: SubscriptionBinding, condition: PartitionCondition | null, cursor: string | null, pageSize: number): Promise<Page<PartitionStateRecord> | null>;
   Replay(subscription: SubscriptionBinding, deliveryID: string, actorUserID: string | null, note: string | null): Promise<OperatorResult>;
-  /** Pending (requires CancelPending) or DeadLettered → Discarded. InFlight → Changed false. */
+  /** Pending (requires CancelPending) or DeadLettered → Discarded immediately.
+   *  InFlight (requires CancelInFlight) → lease revoked, `CancelRequested: true` (§7). */
   Discard(subscription: SubscriptionBinding, deliveryID: string, reason: string, actorUserID: string | null): Promise<OperatorResult>;
   SkipSequence(subscription: SubscriptionBinding, partitionKey: string, sequence: number, reason: string, actorUserID: string | null): Promise<OperatorResult>;
 }
@@ -586,6 +657,7 @@ convention; plan 05 records a verification item on insert performance.)
 | DeadLetterReason | nvarchar(100) | yes | | |
 | DeadLetteredAt | datetimeoffset(7) | yes | | |
 | CompletedAt | datetimeoffset(7) | yes | | terminal time for `Completed` **and** `Discarded` |
+| CancelRequestedAt | datetimeoffset(7) | yes | | set when an `InFlight` delivery is cancelled; the lease token is rotated at the same time |
 | ResolvedByUserID | uniqueidentifier | yes | FK → `User.ID` | |
 | ResolutionNote | nvarchar(1000) | yes | | |
 
@@ -595,6 +667,11 @@ Indexes:
 - `IX_WorkQueueDelivery_Claim` (`SubscriptionID`,`Status`,`VisibleAt`) INCLUDE (`PartitionKey`,`OrderKey`,`AttemptCount`)
 - `IX_WorkQueueDelivery_PartitionHead` (`SubscriptionID`,`PartitionKey`,`OrderKey`) INCLUDE (`Status`) WHERE `PartitionKey IS NOT NULL AND Status IN ('Pending','InFlight','DeadLettered')`
 - `IX_WorkQueueDelivery_Lease` (`Status`,`LeaseExpiresAt`) WHERE `Status = 'InFlight'`
+
+**The lease is never a system column.** `__mj_CreatedAt`/`__mj_UpdatedAt` are not liveness signals: liveness is
+`LeaseExpiresAt`/`LastHeartbeatAt`, moved only by guarded single-statement SQL that touches lease columns alone. A
+full-row write (`BaseEntity.Save()`) from a stale snapshot would restore an old `LeaseToken`, `AttemptCount` or
+`CancelRequestedAt` and walk straight past the fence — see §6.8.
 
 Filtered indexes contain no clock function (not allowed on either platform); lease expiry is handled by the
 `ExpireLeases` step, which moves expired rows out of `InFlight` before the next claim.
@@ -633,13 +710,27 @@ Indexes: `UQ_WorkQueueDeduplication_Topic_Key` UNIQUE (`TopicID`,`DeduplicationK
 | Transports, Topics, Subscriptions | 1 | 1 | 0 |
 | Messages, Deliveries, Partition States, Deduplications | **0** | **0** | **1** |
 
+**Delivery state is driver-owned.** For Messages, Deliveries, Partition States and Deduplications, `AllowCreateAPI`,
+`AllowUpdateAPI` and `AllowDeleteAPI` are **0**, and the engine ships server entity subclasses whose `Save()`/`Delete()`
+fail with: *"work-queue delivery state is managed by the transport driver; use the operator API (Replay / Discard /
+SkipSequence)"*. Reads stay open for dashboards and operators. Rationale: MJ's generated update procedure writes every
+column, so a `Save()` from a stale snapshot silently overwrites a newer claim's lease token, attempt count or cancel
+request — the "load, check `Status`, `Save()`" pattern that looks like a compare-and-swap and is not one.
+
 ---
 
 ## 7. Database claim semantics (normative)
 
 `ExpireLeases(now)` runs before each claim cycle and in the sweeper: `InFlight` rows with `LeaseExpiresAt < now` →
 `Pending` (`LastError = 'LeaseExpired'`, lease columns cleared) when `AttemptCount < MaxAttempts`, else
-`DeadLettered` (`DeadLetterReason = 'LeaseExpired'`).
+`DeadLettered` (`DeadLetterReason = 'LeaseExpired'`). An expired row whose `CancelRequestedAt` is set becomes
+`Discarded` instead (it is not retried).
+
+**Cancelling in-flight work.** `Discard` on an `InFlight` delivery does not change `Status`: it sets
+`CancelRequestedAt`, rotates `LeaseToken`, records the reason and actor, and returns `CancelRequested: true`. The
+holder's next heartbeat resolves `false`, its `Signal` aborts and any later settle is rejected by the fence. The row
+stays `InFlight` until its lease expires, so an `Exclusive`/`Ordered` key is not handed to the next item while the old
+handler is still winding down; `ExpireLeases` then makes it `Discarded`. A cancelled delivery is never claimable.
 
 A `Pending` delivery `d` of subscription `s` is **claimable** when all hold:
 
@@ -690,8 +781,9 @@ Each returns `supported: false` without side effects when the transport lacks th
 | `WorkQueue.ListDeadLetters` | `workqueue:read` | `{ subscriptionName: string; cursor?: string; pageSize?: number }` | `{ supported: boolean; items: DeadLetterRecord[]; nextCursor: string \| null }` |
 | `WorkQueue.ListPartitions` | `workqueue:read` | `{ subscriptionName: string; condition?: PartitionCondition; cursor?: string; pageSize?: number }` | `{ supported: boolean; items: PartitionStateRecord[]; nextCursor: string \| null }` |
 | `WorkQueue.ReplayDeadLetter` | `workqueue:operate` | `{ subscriptionName: string; deliveryID: string; note?: string }` | `{ supported: boolean; replayed: boolean }` |
-| `WorkQueue.DiscardDelivery` | `workqueue:operate` | `{ subscriptionName: string; deliveryID: string; reason: string }` | `{ supported: boolean; discarded: boolean }` |
+| `WorkQueue.DiscardDelivery` | `workqueue:operate` | `{ subscriptionName: string; deliveryID: string; reason: string }` | `{ supported: boolean; discarded: boolean; cancelRequested: boolean }` |
 | `WorkQueue.SkipSequence` | `workqueue:operate` | `{ subscriptionName: string; partitionKey: string; sequence: number; reason: string }` | `{ supported: boolean; skipped: boolean }` |
+| `WorkQueue.GetBacklog` | `workqueue:read` | `{ subscriptionName: string }` | `{ supported: boolean; claimable: number; inFlight: number; total: number }` — the autoscaler metric (§11) |
 | `WorkQueue.ValidateBindings` | `workqueue:read` | `{ transportName?: string }` | `{ issues: BindingValidationIssue[] }` |
 
 Dead-letter rows in operation output carry `PayloadJSON: string | null` instead of a recursive `Payload` (CodeGen
@@ -803,15 +895,34 @@ export abstract class BaseTransportDriverFactory {
   abstract Create(transport: TransportRow, deps: TransportDriverDeps): Promise<ITransportDriver>;   // TransportRow: structural view the generated entity satisfies (plan 05)
 }   // @RegisterClass(BaseTransportDriverFactory, 'Database' | 'AWS')
 
-// engine/src/WorkQueueEngine.ts — BaseEngine over Transports, Topics, Subscriptions
-export interface WorkQueuePublishOptions { ContextUser: UserInfo; Provider?: IMetadataProvider; External?: boolean; }
-export class WorkQueueEngine extends BaseEngine<WorkQueueEngine> implements IWorkPublisher {
-  static get Instance(): WorkQueueEngine;
+// base/src/WorkQueueEngineBase.ts — browser-safe metadata tier (mirrors AIEngineBase/AIEngine, packages/AI/BaseAIEngine)
+export class WorkQueueEngineBase extends BaseEngine<WorkQueueEngineBase> {
+  static get Instance(): WorkQueueEngineBase;
   get Transports(): MJWorkQueueTransportEntity[];
   get Topics(): MJWorkQueueTopicEntity[];
   get Subscriptions(): MJWorkQueueSubscriptionEntity[];
   GetTopicByName(name: string): MJWorkQueueTopicEntity | undefined;              // trimmed, case-insensitive
   GetSubscriptionByName(name: string): MJWorkQueueSubscriptionEntity | undefined;
+  SubscriptionsForTopic(topicID: string): MJWorkQueueSubscriptionEntity[];
+  BuildTopicBinding(topic: MJWorkQueueTopicEntity): TopicBinding;
+  BuildSubscriptionBinding(subscription: MJWorkQueueSubscriptionEntity): SubscriptionBinding;
+  BuildSubscriptionPolicy(subscription: MJWorkQueueSubscriptionEntity): SubscriptionPolicy;
+  ParseFilter(subscription: MJWorkQueueSubscriptionEntity, support: FilterSupport): SubscriptionFilter | null;
+  IsStagedToDatabase(subscription: MJWorkQueueSubscriptionEntity): boolean;
+  ValidateTopologyRows(capabilitiesByDriverClass: Record<string, TransportCapabilities>): BindingValidationIssue[];
+}
+
+// engine/src/WorkQueueEngine.ts — server tier. Mirrors AIEngine/AIEngineBase: a separate singleton that DELEGATES
+// metadata to WorkQueueEngineBase.Instance (composition, not inheritance — see packages/AI/Engine/src/AIEngine.ts:240)
+// and adds drivers, publishing, operator, staging and the manifest.
+export interface WorkQueuePublishOptions { ContextUser: UserInfo; Provider?: IMetadataProvider; External?: boolean; }
+export class WorkQueueEngine extends BaseSingleton<WorkQueueEngine> implements IWorkPublisher, IStartupSink {
+  static get Instance(): WorkQueueEngine;
+  /** The metadata tier; Config() delegates to it. Convenience proxies (Topics, Subscriptions, Transports,
+   *  GetTopicByName, GetSubscriptionByName, BuildTopicBinding, BuildSubscriptionBinding, IsStagedToDatabase, …)
+   *  forward to this instance, exactly as AIEngine proxies AIEngineBase. */
+  get Metadata(): WorkQueueEngineBase;
+  Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void>;
   GetDriver(transportID: string): Promise<ITransportDriver>;                     // cached per transport
   GetDatabaseDriver(): Promise<DatabaseTransportDriver>;                          // the Active 'Database' transport's driver
   OnPublished(listener: (topicName: string) => void): () => void;                // host Kick hook; returns unsubscribe
@@ -822,6 +933,11 @@ export class WorkQueueEngine extends BaseEngine<WorkQueueEngine> implements IWor
   ValidateTopology(): Promise<BindingValidationIssue[]>;
   PublishAs<T extends WorkJson>(topic: string, requests: PublishRequest<T>[], options: WorkQueuePublishOptions): Promise<PublishResult[]>;
   Publish<T extends WorkJson>(topic: string, requests: PublishRequest<T>[]): Promise<PublishResult[]>;
+  /** Autoscaler metric: claimable Pending (partition rules applied) + InFlight. Both counts matter — a scaler that
+   *  ignores InFlight starves the queue, because KEDA subtracts running executions from the metric. */
+  GetBacklog(subscriptionName: string): Promise<{ Supported: boolean; Claimable: number; InFlight: number; Total: number }>;
+  /** Fires for Database and staged subscriptions when a delivery is dead-lettered (alerting seam). Returns unsubscribe. */
+  OnDeadLettered(listener: (event: { SubscriptionName: string; DeliveryID: string; Reason: string; PartitionKey: string | null }) => void): () => void;
   ExportManifest(transportName: string): TopologyManifest;
   ImportBindings(bindings: BindingImport, contextUser: UserInfo): Promise<BindingValidationIssue[]>;
 }
@@ -847,6 +963,8 @@ export class WorkQueueHost implements IShutdownable {
   constructor(config: WorkQueueHostConfig, engine: WorkQueueHostEngine, contextUser: UserInfo, executor: WorkQueueExecutorSource,
               log: WorkLogger, dependencies: WorkQueueHostDependencies);
   Start(): Promise<void>;
+  /** One-shot container-job mode: start, claim/run/drain, then resolve. Never returns before in-flight work settles. */
+  RunOnce(options: { MaxDeliveries?: number; IdleExitMs?: number; MaxDurationMs?: number }): Promise<{ Processed: number; Reason: 'MaxDeliveries' | 'Idle' | 'MaxDuration' | 'Shutdown' }>;
   Reconcile(): Promise<void>;
   Shutdown(): Promise<void>;
   Kick(subscriptionName: string): void;

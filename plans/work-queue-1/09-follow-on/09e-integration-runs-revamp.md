@@ -50,7 +50,7 @@ progress mapping.
 | Option | Description | Pros | Cons |
 |---|---|---|---|
 | A. Queue *triggers* the existing run | Handler calls `ExecuteQueuedRun`, which keeps `RunOwnershipService` | smallest change | two leases per unit of work (delivery + run), two liveness/orphan systems, double retry semantics, a cancellation path only on the run side |
-| **B. Queue *owns* execution** | Delivery lease = ownership; `LeaseToken` = fence; `CompanyIntegrationRun` becomes a record written by the handler | one mechanism; cross-instance per-integration exclusivity; retries and dead letters uniform with everything else | touches the engine's boundary checks and cancel path; needs cooperative in-flight cancel (C8) |
+| **B. Queue *owns* execution** | Delivery lease = ownership; `LeaseToken` = fence; `CompanyIntegrationRun` becomes a record written by the handler | one mechanism; cross-instance per-integration exclusivity; retries and dead letters uniform with everything else | touches the engine's boundary checks and cancel path (in-flight cancel is Phase 1, 03 §7) |
 | C. A then B | ship A behind a flag, then collapse to B | de-risks rollout | two migrations of the same code |
 
 **Recommendation: B, with a compatibility flag** (`integrationSync.executionMode: 'LegacyQueue' | 'WorkQueue'`,
@@ -65,11 +65,13 @@ queue exists to remove.
 |---|---|---|---|---|
 | `integration.sync-requested` | Database (default) or AWS | PublishOrder | `{ CompanyIntegrationID, TriggerType, Options: IntegrationSyncOptions, RequestedByUserID }` | `EnqueueSync`, scheduled-job driver, UI |
 | `integration.batch-ready` | Database (default) or AWS (FIFO topic; subscription staged) | **ExplicitSequence** | `{ CompanyIntegrationID, BatchID, RecordCount, Format }` + `PayloadRef` | webhook ingress / staging writers |
+| `integration.sync-completed` | Database (default) or AWS | PublishOrder | `{ CompanyIntegrationRunID, VendorJobID, Outcome }` | vendor webhook (connectors whose sync runs at the vendor) |
 
 | Subscription (all `HostType: MJWorker`) | Topic | PartitionMode (key = CompanyIntegrationID) | Handler | Policy notes |
 |---|---|---|---|---|
 | `integration.sync` | sync-requested | `Exclusive` | `IntegrationSyncWorkHandler` | `HeartbeatMode: Auto`, `LeaseSeconds: 120`, `MaxAttempts: 3` |
 | `integration.apply-batch` | batch-ready | `Ordered` | `IntegrationBatchApplyHandler` | `HeartbeatMode: Manual` (heartbeat per record chunk), `MaxAttempts: 5`, `SequenceGapAlertSeconds: 900` |
+| `integration.sync-completed` | sync-completed | `Exclusive` | `IntegrationSyncCompletionHandler` | `HeartbeatMode: Auto`, `MaxAttempts: 5` — only for vendor-completed connectors |
 
 **Cross-topic exclusivity (open question 1).** A pull sync and a pushed batch for the same integration could
 run at the same time, because single flight is enforced per subscription (the unique in-flight index
@@ -92,7 +94,8 @@ Handle(msg, ctx):
   connector transient error → run keeps 'In Progress' progress → Retry(backoff)
   config/auth error (non-retryable) → run.Status='Failed' → DeadLetter(reason)
   ctx.Signal aborted (lease lost) → stop writing, no settle (runtime ignores)
-  cancel requested (C8) → run.Status='Cancelled' → Complete
+  cancel requested (03 §7: heartbeat false + Signal abort) → run.Status='Cancelled' → stop (the delivery
+                                                              becomes Discarded when the lease expires)
 ```
 
 `RunOwnershipService.CheckBoundary` is replaced by a `BoundaryCheck` callback that the engine calls at the same
@@ -116,6 +119,39 @@ A dead-lettered batch **blocks** that integration's later batches (D7) — the b
 delivery's `DeadLettered` status, and the gap check uses `WorkQueuePartitionState.LastCompletedSequence`
 (03 §7). This is the intended data-safety behavior from use case 2. Operators fix it through the
 `WorkQueue.ReplayDeadLetter`, `WorkQueue.DiscardDelivery` and `WorkQueue.SkipSequence` remote operations.
+
+### Connectors whose sync finishes at the vendor (split-message pattern)
+
+Some connectors do not run the sync in our process at all: we ask the vendor to start a job (HotGlue-style), the job
+runs for minutes or hours on their side, and a webhook tells us it finished. **The queue does not wait for that.** A
+delivery's guarantees end when its handler settles ([02 §1a](../02-implementation-overview.md#1a-where-the-queue-stops)),
+so the work is split across two messages:
+
+```
+integration.sync-requested ─► IntegrationSyncWorkHandler
+      vendor job already active for this integration?  → domain decision (below) → Complete
+      otherwise: POST start-job → store { VendorJobID, StartedAt, Status:'Awaiting' } on CompanyIntegrationRun
+                 → Outcome.Complete()            (lease released; nothing is held open)
+
+vendor webhook ─► IntegrationWebhookExtension
+      verify signature → look up the run by VendorJobID
+      → PublishAs('integration.sync-completed', { PartitionKey: ciId, Payload: { CompanyIntegrationRunID, VendorJobID },
+                  DeduplicationKey: 'vendorjob:' + vendorJobId })      // provider retries converge
+
+integration.sync-completed ─► IntegrationSyncCompletionHandler   (Exclusive by CompanyIntegrationID)
+      load the run, fetch/apply results, mark Success or Failed → Complete
+```
+
+Three things this makes explicit, all of them **the integration's job**:
+
+| Concern | Where it lives |
+|---|---|
+| **Overlap / coalescing.** A second request arriving while a vendor job is active | The `Exclusive` subscription serialises deliveries per `CompanyIntegrationID`, so the handler reads `CompanyIntegrationRun` without a race and decides: skip (`Complete` with a note), merge into the active job, or `Retry(60s)` to queue behind it. MJ Central's priority rules (empty > manual > scheduled) are exactly this kind of policy and stay in the connector |
+| **Stall detection.** A vendor job whose webhook never arrives | The run row knows `StartedAt` and `Status='Awaiting'`; a scheduled job (or the next sync request) sweeps runs older than the connector's timeout and marks them `Failed`, optionally re-requesting. The queue has nothing to time out, because nothing is parked in it |
+| **Idempotency.** Duplicate webhooks, replayed completions | `DeduplicationKey` on the vendor job ID suppresses repeats inside its window; the completion handler is written to be re-runnable against the run row |
+
+An `AwaitExternal` queue state was considered for this and declined — see
+[09i, "Considered and declined"](09i-minor-follow-ons.md#considered-and-declined-revision-3).
 
 ### IntegrationExecutionGuard
 
@@ -167,14 +203,24 @@ provider and the ledger makes the retry converge. A sequence allocated without a
 | MJServer boot `ResumeOrphanedSyncs` (`packages/MJServer/src/index.ts` ~1540) | removed; lease expiry is the orphan mechanism |
 | `IntegrationSyncWorkerService` (index.ts ~1493–1505) | not started; `WorkQueueHost` runs the `integration.*` subscriptions |
 
-### Cancellation (requires C8)
+### Cancellation (Phase 1)
 
 The UI cancel today sets `CancelRequestedAt`, which `spRenewCompanyIntegrationRunLease` returns on each renew.
-After the revamp, for **pending** (unclaimed) deliveries `CancelSync` calls `WorkQueue.DiscardDelivery` with
-reason `Cancelled` — available in Phase 1 (`CancelPending`). For **in-flight** deliveries it calls the proposed
-`ITransportOperator.CancelInFlight(subscription, deliveryID)` (C8): the DB transport sets
-`Delivery.CancelRequestedAt`; the next heartbeat reports it → `ctx.Signal` aborts with reason `'Cancelled'` →
-handler marks the run `Cancelled` and completes.
+After the revamp, `CancelSync` calls `WorkQueue.DiscardDelivery` for both cases — Phase 1 covers them (03 §7,
+capabilities `CancelPending` and `CancelInFlight`; Database and staged subscriptions, which is what the integration
+subscriptions are):
+
+- **Pending (unclaimed):** the delivery becomes `Discarded` immediately; `CancelSync` marks the run `Cancelled`.
+- **In flight:** `CancelRequestedAt` is set and the lease token rotated. The handler's next `ctx.Heartbeat()`
+  resolves `false` and `ctx.Signal` aborts, so it stops work and writes `CompanyIntegrationRun.Status='Cancelled'`
+  on its **own row** (that write is not fenced — only the queue settle is). Its outcome is ignored; the delivery
+  becomes `Discarded` when the lease expires, and the `Exclusive` key is not handed to the next request until then,
+  so a queued sync cannot start on top of a run still winding down.
+
+The handler cannot yet distinguish "cancelled" from "lease lost" on the signal; until
+[09i item 9](09i-minor-follow-ons.md) adds an abort reason, it re-reads its run row (or the delivery's
+`CancelRequestedAt`) when the signal fires. Cancelling a vendor-side job is a connector call the handler makes
+before it stops.
 
 ### Compatibility & migration plan
 
@@ -193,15 +239,19 @@ mirrors `ctx.Heartbeat` progress into it, so the Integration dashboard needs no 
 
 - `CompanyIntegration.LastBatchSequence`, plus `ExecutionOwner`/`ExecutionLeaseExpiresAt` (or repurposed `LockedAt`/`LockedByInstance`).
 - Optional `BaseIntegrationConnector.VerifyWebhook(request)` hook.
-- Contract proposal **C8** (in-flight cancel). C6 is not needed: integration subscriptions are Database or staged, both of which persist checkpoints.
+- No contract proposals are required: in-flight cancel shipped in Phase 1 (03 §7), and C6 is not needed because
+  integration subscriptions are Database or staged, both of which persist checkpoints. The optional nicety is
+  [09i item 9](09i-minor-follow-ons.md) (a cancel reason on the abort signal).
+- `integration.sync-completed` topic + `IntegrationSyncCompletionHandler`, for connectors whose sync finishes at the
+  vendor.
 - Engine refactor: `RunSyncOwned(run, options, boundaryCheck, onProgress)` extracted from `runWithOwnedContext`.
 
 ## Dependencies on Phase 1
 
 Database transport with `Exclusive` and `Ordered` + `ExplicitSequence` (plan 05); staged consumption for AWS topics
 (plan 07); in-transaction publish and the deduplication ledger (plan 05); `WorkQueueHost` (plan 06); remote
-operations `DiscardDelivery`/`SkipSequence`/`ReplayDeadLetter` for stuck batches (plan 06); `Progress.Checkpoint`
-persistence.
+operations `DiscardDelivery` (pending and in-flight cancel) / `SkipSequence` / `ReplayDeadLetter` for stuck batches
+(plan 06); `Progress.Checkpoint` persistence.
 
 ## Testing
 
@@ -221,13 +271,16 @@ persistence.
 | Execution guard + sequence allocator + migration | M |
 | Webhook ingress extension + connector hook | M |
 | Producers (EnqueueSync, scheduled driver, UI) behind flag | M |
-| Cancel: pending via `DiscardDelivery` (Phase 1), in-flight via C8 | M |
+| Cancel: pending and in-flight, both via `DiscardDelivery` (Phase 1) | S |
 | Drain bridge + deprecations | S |
 | Tests | L |
 
 ## Open questions
 
-1. Should the queue gain a **partition group** (shared partition state across subscriptions) so the execution guard isn't needed?
+1. Should the queue gain a **partition group** (shared partition state across subscriptions) so the execution guard
+   isn't needed? Revision 3's boundary rule says no by default — cross-subscription mutual exclusion over a *domain*
+   entity is domain state, and the guard is ~20 lines of conditional UPDATE. Reopen only if several consumers need
+   the same thing.
 2. Batch atomicity: apply a pushed batch all-or-nothing (dead-letter on any poison record), or record per-record errors and complete? A per-integration setting is proposed.
 3. Should pull syncs *emit* batches (`integration.batch-ready`) so both paths share the apply handler, making `integration.sync` a pure fetch stage?
 4. Retention: staged batch objects are deleted by the handler on `Completed`, or kept N days for audit?

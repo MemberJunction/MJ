@@ -21,6 +21,7 @@ with consumers hosted **inside MJ** or as **thin external functions** (Lambda) t
 | 06 | [Native runtime implementation plan](06-native-runtime-implementation-plan.md) | Task-by-task: handlers, host, sweeper, remote operations, MJServer, REST, CLI, integration bundle |
 | 07 | [AWS implementation plan](07-aws-implementation-plan.md) | Task-by-task: `@memberjunction/work-queue-aws`, Lambda adapter, staging, Terraform, deployment governance |
 | 08 | [Legacy queue port plan](08-legacy-queue-port-plan.md) | Task-by-task: repair and route `@memberjunction/queue` |
+| 10 | [Consumer guide](10-consumer-guide.md) | Writing handlers and producers; what stays the consumer's job |
 | 09 | [Follow-on specs](09-follow-on/README.md) | Azure (1a), dashboard, gateway, direct publisher, integration runs, email ingestion, batching, GCP, minor |
 | — | [superseded/](superseded/) | Revision 1 design-detail docs (kept for reference; not normative) |
 
@@ -68,6 +69,24 @@ with consumers hosted **inside MJ** or as **thin external functions** (Lambda) t
 | R7 | Plans written in **task-by-task TDD format** (04–08). |
 | R8 | **No DynamoDB.** AWS `Ordered` subscriptions must be MJ-hosted and are **staged** into Database delivery rows; AWS dead letters live in the SQS dead-letter queue with reason attributes. Strict ordering for external hosts is a follow-on only if a use case appears. |
 | R9 | `work-queue-core` has **zero** `@memberjunction` dependencies; `work-queue-aws` depends only on core + AWS SDK. Enforced by lint + tests. |
+
+### Revision 3 (after review against MJ Central's hand-rolled queues)
+
+MJ Central runs two queues today (a `Run` row whose `Status` doubles as a lock, scaled by KEDA into one-shot container
+jobs; plus a per-connector sync queue). Their experience is [use case 3](01-use-cases.md); it produced one boundary
+decision and five changes.
+
+| # | Decision |
+|---|---|
+| R10 | **The queue's guarantees stop at the handler.** Durable delivery, one valid lease holder while a handler runs, fencing — and nothing else. Duplicate *side effects*, work completed later by a webhook, "one active per key" policy, coalescing, and remote-executor liveness are consumer concerns ([02 §1a](02-implementation-overview.md#1a-where-the-queue-stops), [10](10-consumer-guide.md)). Declined on that basis: an `AwaitExternal` delivery state, a cloud liveness probe before reaping, `UntilResolved` deduplication, and child-process helpers. |
+| R11 | **Delivery state is driver-owned.** Messages, Deliveries, Partition States and Deduplications reject `BaseEntity.Save()`/`Delete()` and disallow create/update/delete through the API; settles happen only through guarded driver SQL. Rationale: a full-row save from a stale snapshot silently overwrites a newer claim (MJ Central's actual failure mode). |
+| R12 | **Cancel revokes the lease.** `Discard` on an `InFlight` delivery sets `CancelRequestedAt` and rotates the lease token; the holder's next heartbeat resolves `false` and its settle is fenced. The row stays `InFlight` until the lease expires, then becomes `Discarded`, so an `Exclusive`/`Ordered` key is not handed on while the old handler is stopping. |
+| R13 | **One-shot worker mode + autoscaler metric.** `WorkQueueHost.RunOnce()` and `mj queue work --once` for container jobs; `WorkQueue.GetBacklog` and a documented SELECT-only scaler query counting claimable `Pending` **plus** `InFlight` (a Pending-only count starves the queue). |
+| R14 | **Transient heartbeat failures are retried within the lease**, and `OnDeadLettered` gives deployments an alerting seam. Liveness stays in dedicated lease columns — never `__mj_UpdatedAt`. |
+
+| R15 | **Filters reuse MJ's `CompositeFilterDescriptor` shape and `mj-filter-builder` UI**, restricted to the operators brokers can express (`eq`, `neq`, `startswith`, `isnull`/`isnotnull`, single-field OR). `work-queue-core` ships its own small evaluator (it may not depend on `@memberjunction/core`), kept honest by a parity test against `CompositeFilter`; matching is **case-sensitive**, unlike MJ's loose compare. Untranslatable filters are rejected when the subscription is saved. |
+| R16 | **`WorkQueueEngineBase` / `WorkQueueEngine` split**, mirroring `AIEngineBase`/`AIEngine`: a browser-safe `@memberjunction/work-queue-base` caches topology metadata for UI and client use; the server engine extends it with drivers, publishing, operator and staging. |
+| R17 | **Azure stays Phase 1a**, deliberately: Phase 1 proves the pluggable contract with one cloud, and the Azure plan follows the same shape as 07. |
 
 ### Found while writing the plans (folded into 03)
 

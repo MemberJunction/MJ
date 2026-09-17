@@ -712,27 +712,37 @@ git commit -m "feat(work-queue-aws): package scaffold, dependency guard, binding
 - Test: `packages/WorkQueue/aws/src/__tests__/filterPolicy.test.ts`
 
 **Interfaces:**
-- Consumes: `SubscriptionFilter`, `FilterCondition`, `WorkQueueConfigurationError` (core, 03 §4).
+- Consumes: `SubscriptionFilter` (= `FilterGroup`), `FilterGroup`, `FilterRule`, `WorkQueueConfigurationError` (core, 03 §4.2).
 - Produces:
   - `SNS_MAX_FILTER_COMBINATIONS = 150`
-  - `ToSnsFilterPolicy(filter: SubscriptionFilter): string` — canonical JSON (keys sorted), throws for an empty filter or too many combinations
+  - `ToSnsFilterPolicy(filter: SubscriptionFilter): string` — canonical JSON (keys sorted), throws for an empty filter, an untranslatable structure or too many combinations
   - `SnsFilterPolicyFor(filter: SubscriptionFilter | null): string | null` — `null` for a null or empty filter (no policy = match everything)
   - `NormalizeSnsFilterPolicy(json: string | null | undefined): string | null` — canonical form for comparing a policy read back from SNS
 
-Mapping (03 §4 → SNS filter policy with `FilterPolicyScope = MessageAttributes`):
+Mapping (03 §4.1 → SNS filter policy with `FilterPolicyScope = MessageAttributes`):
 
-| 03 condition | SNS policy value |
+| Filter node | SNS policy entry |
 | --- | --- |
-| `"click"` | `"click"` |
-| `{ "prefix": "acme-" }` | `{ "prefix": "acme-" }` |
-| `{ "exists": true }` / `{ "exists": false }` | `{ "exists": true }` / `{ "exists": false }` |
-| `{ "anything-but": ["test"] }` | `{ "anything-but": ["test"] }` |
+| `{ field: 'eventType', operator: 'eq', value: 'click' }` | `"eventType": ["click"]` |
+| `{ logic: 'or', filters: [eq 'click', eq 'open'] }` on one field | `"eventType": ["click","open"]` |
+| `{ operator: 'neq', value: 'test' }` | `"source": [{ "anything-but": ["test"] }]` |
+| `{ operator: 'startswith', value: 'acme-' }` | `"tenant": [{ "prefix": "acme-" }]` |
+| `{ operator: 'isnotnull' }` / `{ operator: 'isnull' }` | `[{ "exists": true }]` / `[{ "exists": false }]` |
+
+Values are stringified (`String(value)`) because envelope attributes are strings, and **case is preserved exactly** —
+SNS matches case-sensitively, which is why 03 §4.3 makes the whole queue case-sensitive.
+
+**One entry per field.** SNS treats the values under an attribute as **OR**, so two AND-ed rules on one attribute
+(`tenant startswith 'acme-'` AND `tenant neq 'acme-test'`) cannot be expressed: merging them into one array would
+silently *widen* the filter. Translation therefore rejects a field that is constrained more than once at the top
+level. A nested OR group is the only way one field carries several values, and its members must all be `eq` on that
+same field.
 
 **Missing attributes.** SNS evaluates a policy key only against messages that carry the attribute, except
-`{ "exists": false }` — the same rule 03 §4 states, so no translation is needed (verify against current SNS
-filter-policy documentation during review). **Combinations.** SNS limits the number of value combinations (the
-product of the array lengths across keys) to 150 (verify against current AWS quotas); the 03 limits (≤ 5 keys,
-≤ 50 values) do not bound that product, so translation rejects policies above it with a configuration error.
+`{ "exists": false }` — the same rule 03 §4.2 states for `MatchesFilter`, so no translation is needed (verify against
+current SNS filter-policy documentation during review). **Combinations.** SNS limits the number of value combinations
+(the product of the array lengths across keys) to 150 (verify against current AWS quotas); the 03 §4.1 limits
+(≤ 5 fields, ≤ 50 values) do not bound that product, so translation rejects policies above it.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -740,21 +750,26 @@ product of the array lengths across keys) to 150 (verify against current AWS quo
 
 ```typescript
 import { describe, it, expect } from 'vitest';
-import { WorkQueueConfigurationError, type SubscriptionFilter } from '@memberjunction/work-queue-core';
+import { WorkQueueConfigurationError, type FilterGroup, type FilterRule, type SubscriptionFilter } from '@memberjunction/work-queue-core';
 import { NormalizeSnsFilterPolicy, SnsFilterPolicyFor, ToSnsFilterPolicy } from '../filterPolicy';
 
+const Eq = (field: string, value: string): FilterRule => ({ field, operator: 'eq', value });
+const And = (...filters: (FilterRule | FilterGroup)[]): SubscriptionFilter => ({ logic: 'and', filters });
+const Or = (field: string, ...values: string[]): FilterGroup => ({ logic: 'or', filters: values.map(v => Eq(field, v)) });
+
 describe('ToSnsFilterPolicy', () => {
-    it('translates equals-any string conditions', () => {
-        expect(ToSnsFilterPolicy({ eventType: ['click', 'open'] })).toBe('{"eventType":["click","open"]}');
+    it('translates an eq rule and a single-field OR group', () => {
+        expect(ToSnsFilterPolicy(And(Eq('eventType', 'click')))).toBe('{"eventType":["click"]}');
+        expect(ToSnsFilterPolicy(And(Or('eventType', 'click', 'open')))).toBe('{"eventType":["click","open"]}');
     });
 
-    it('translates prefix, exists and anything-but conditions', () => {
-        const filter: SubscriptionFilter = {
-            tenant: [{ prefix: 'acme-' }],
-            priority: [{ exists: true }],
-            legacy: [{ exists: false }],
-            source: [{ 'anything-but': ['test'] }],
-        };
+    it('translates neq, startswith, isnotnull and isnull', () => {
+        const filter = And(
+            { field: 'source', operator: 'neq', value: 'test' },
+            { field: 'tenant', operator: 'startswith', value: 'acme-' },
+            { field: 'priority', operator: 'isnotnull' },
+            { field: 'legacy', operator: 'isnull' },
+        );
         expect(JSON.parse(ToSnsFilterPolicy(filter))).toEqual({
             legacy: [{ exists: false }],
             priority: [{ exists: true }],
@@ -763,18 +778,35 @@ describe('ToSnsFilterPolicy', () => {
         });
     });
 
-    it('produces the same text regardless of key order', () => {
-        expect(ToSnsFilterPolicy({ b: ['2'], a: ['1'] })).toBe(ToSnsFilterPolicy({ a: ['1'], b: ['2'] }));
-        expect(ToSnsFilterPolicy({ b: ['2'], a: ['1'] })).toBe('{"a":["1"],"b":["2"]}');
+    it('preserves value case, because SNS matches case-sensitively', () => {
+        expect(ToSnsFilterPolicy(And(Eq('tenant', 'ACME')))).toBe('{"tenant":["ACME"]}');
     });
 
-    it('rejects an empty filter and a filter with too many combinations', () => {
-        expect(() => ToSnsFilterPolicy({})).toThrow(WorkQueueConfigurationError);
-        const wide: SubscriptionFilter = {
-            a: ['1', '2', '3', '4', '5', '6'],
-            b: ['1', '2', '3', '4', '5', '6'],
-            c: ['1', '2', '3', '4', '5'],
-        };
+    it('produces the same text regardless of the order fields appear in', () => {
+        expect(ToSnsFilterPolicy(And(Eq('b', '2'), Eq('a', '1')))).toBe(ToSnsFilterPolicy(And(Eq('a', '1'), Eq('b', '2'))));
+        expect(ToSnsFilterPolicy(And(Eq('b', '2'), Eq('a', '1')))).toBe('{"a":["1"],"b":["2"]}');
+    });
+
+    it('rejects an empty filter and a top level that is not AND', () => {
+        expect(() => ToSnsFilterPolicy(And())).toThrow(WorkQueueConfigurationError);
+        expect(() => ToSnsFilterPolicy({ logic: 'or', filters: [Eq('a', '1')] })).toThrow('top level must use AND');
+    });
+
+    it('rejects a field constrained twice, which SNS would widen into OR', () => {
+        const filter = And(
+            { field: 'tenant', operator: 'startswith', value: 'acme-' },
+            { field: 'tenant', operator: 'neq', value: 'acme-test' },
+        );
+        expect(() => ToSnsFilterPolicy(filter)).toThrow("constrains 'tenant' more than once");
+    });
+
+    it('rejects a mixed-field OR group and a rule with no value', () => {
+        expect(() => ToSnsFilterPolicy(And({ logic: 'or', filters: [Eq('a', '1'), Eq('b', '2')] }))).toThrow('single field');
+        expect(() => ToSnsFilterPolicy(And({ field: 'a', operator: 'eq', value: null }))).toThrow('has no value');
+    });
+
+    it('rejects a filter with too many value combinations', () => {
+        const wide = And(Or('a', '1', '2', '3', '4', '5', '6'), Or('b', '1', '2', '3', '4', '5', '6'), Or('c', '1', '2', '3', '4', '5'));
         expect(() => ToSnsFilterPolicy(wide)).toThrow('180 value combinations');
     });
 });
@@ -782,15 +814,17 @@ describe('ToSnsFilterPolicy', () => {
 describe('SnsFilterPolicyFor', () => {
     it('returns null when there is nothing to filter', () => {
         expect(SnsFilterPolicyFor(null)).toBeNull();
-        expect(SnsFilterPolicyFor({})).toBeNull();
-        expect(SnsFilterPolicyFor({ a: ['1'] })).toBe('{"a":["1"]}');
+        expect(SnsFilterPolicyFor(And())).toBeNull();
+        expect(SnsFilterPolicyFor(And(Eq('a', '1')))).toBe('{"a":["1"]}');
     });
 });
 
 describe('NormalizeSnsFilterPolicy', () => {
     it('ignores whitespace and key order, including inside condition objects', () => {
         const fromSns = '{ "tenant": [ { "prefix": "acme-" } ],\n "eventType": ["click"] }';
-        expect(NormalizeSnsFilterPolicy(fromSns)).toBe(ToSnsFilterPolicy({ eventType: ['click'], tenant: [{ prefix: 'acme-' }] }));
+        expect(NormalizeSnsFilterPolicy(fromSns)).toBe(
+            ToSnsFilterPolicy(And(Eq('eventType', 'click'), { field: 'tenant', operator: 'startswith', value: 'acme-' })),
+        );
     });
 
     it('treats null, undefined, blank and an empty object as no policy', () => {
@@ -810,24 +844,69 @@ Expected: FAIL — unresolved import `../filterPolicy`.
 - [ ] **Step 3: Write `src/filterPolicy.ts`**
 
 ```typescript
-import { WorkQueueConfigurationError, type FilterCondition, type SubscriptionFilter } from '@memberjunction/work-queue-core';
+import { WorkQueueConfigurationError, type FilterGroup, type FilterRule, type SubscriptionFilter } from '@memberjunction/work-queue-core';
 
 /** SNS limit on value combinations across a policy's keys. Verify against current AWS quotas. */
 export const SNS_MAX_FILTER_COMBINATIONS = 150;
 
 type PolicyValue = string | { prefix: string } | { exists: boolean } | { 'anything-but': string[] };
 
-function toPolicyValue(condition: FilterCondition): PolicyValue {
-    if (typeof condition === 'string') {
-        return condition;
+interface FieldEntry {
+    Field: string;
+    Values: PolicyValue[];
+}
+
+function isGroup(node: FilterRule | FilterGroup): node is FilterGroup {
+    return (node as FilterGroup).logic !== undefined;
+}
+
+function requiredValue(rule: FilterRule): string {
+    if (rule.value === null || rule.value === undefined) {
+        throw new WorkQueueConfigurationError(`Filter rule on '${rule.field}' with operator '${rule.operator}' has no value`);
     }
-    if ('prefix' in condition) {
-        return { prefix: condition.prefix };
+    return String(rule.value);
+}
+
+/** One rule → the values SNS matches for that attribute (03 §4.1). */
+function ruleEntry(rule: FilterRule): FieldEntry {
+    switch (rule.operator) {
+        case 'eq':
+            return { Field: rule.field, Values: [requiredValue(rule)] };
+        case 'neq':
+            return { Field: rule.field, Values: [{ 'anything-but': [requiredValue(rule)] }] };
+        case 'startswith':
+            return { Field: rule.field, Values: [{ prefix: requiredValue(rule) }] };
+        case 'isnotnull':
+            return { Field: rule.field, Values: [{ exists: true }] };
+        case 'isnull':
+            return { Field: rule.field, Values: [{ exists: false }] };
+        default:
+            throw new WorkQueueConfigurationError(
+                `Operator '${String(rule.operator)}' on '${rule.field}' has no SNS filter-policy form`,
+            );
     }
-    if ('exists' in condition) {
-        return { exists: condition.exists };
+}
+
+/** A nested group is only ever an OR of eq on a single field (03 §4.1). */
+function groupEntry(group: FilterGroup): FieldEntry {
+    if (group.logic !== 'or' || group.filters.length === 0) {
+        throw new WorkQueueConfigurationError('A nested filter group must be a non-empty OR of eq rules on a single field');
     }
-    return { 'anything-but': [...condition['anything-but']] };
+    const values: string[] = [];
+    let field: string | null = null;
+    for (const member of group.filters) {
+        if (isGroup(member) || member.operator !== 'eq') {
+            throw new WorkQueueConfigurationError('A nested filter group must be an OR of eq rules on a single field');
+        }
+        if (field !== null && member.field !== field) {
+            throw new WorkQueueConfigurationError(
+                `An OR group must stay on a single field; '${field}' is mixed with '${member.field}'`,
+            );
+        }
+        field = member.field;
+        values.push(requiredValue(member));
+    }
+    return { Field: field as string, Values: values };
 }
 
 /** JSON with object keys sorted at every level; arrays keep their order. */
@@ -843,25 +922,33 @@ function canonicalJson(value: unknown): string {
 }
 
 export function ToSnsFilterPolicy(filter: SubscriptionFilter): string {
-    const keys = Object.keys(filter);
-    if (keys.length === 0) {
+    if (filter.logic !== 'and') {
+        throw new WorkQueueConfigurationError("A subscription filter's top level must use AND (03 §4.1)");
+    }
+    if (filter.filters.length === 0) {
         throw new WorkQueueConfigurationError('An empty filter has no SNS filter policy; omit the policy instead');
     }
-    const combinations = keys.reduce((product, key) => product * Math.max(1, filter[key].length), 1);
+    const policy: Record<string, PolicyValue[]> = {};
+    for (const node of filter.filters) {
+        const entry = isGroup(node) ? groupEntry(node) : ruleEntry(node);
+        if (policy[entry.Field] !== undefined) {
+            throw new WorkQueueConfigurationError(
+                `Filter constrains '${entry.Field}' more than once; SNS reads an attribute's values as OR, so two AND rules on one attribute cannot be expressed`,
+            );
+        }
+        policy[entry.Field] = entry.Values;
+    }
+    const combinations = Object.values(policy).reduce((product, values) => product * Math.max(1, values.length), 1);
     if (combinations > SNS_MAX_FILTER_COMBINATIONS) {
         throw new WorkQueueConfigurationError(
             `Filter produces ${combinations} value combinations; SNS allows at most ${SNS_MAX_FILTER_COMBINATIONS}`,
         );
     }
-    const policy: Record<string, PolicyValue[]> = {};
-    for (const key of keys) {
-        policy[key] = filter[key].map(toPolicyValue);
-    }
     return canonicalJson(policy);
 }
 
 export function SnsFilterPolicyFor(filter: SubscriptionFilter | null): string | null {
-    return filter === null || Object.keys(filter).length === 0 ? null : ToSnsFilterPolicy(filter);
+    return filter === null || filter.filters.length === 0 ? null : ToSnsFilterPolicy(filter);
 }
 
 export function NormalizeSnsFilterPolicy(json: string | null | undefined): string | null {
@@ -890,7 +977,7 @@ export * from './filterPolicy';
 - [ ] **Step 5: Run the tests and build**
 
 Run: `cd packages/WorkQueue/aws && pnpm test`
-Expected: PASS — dependencyGuard (3), config (8), names (5), envelope (7), filterPolicy (7). Total 30.
+Expected: PASS — dependencyGuard (3), config (8), names (5), envelope (7), filterPolicy (11). Total 34.
 
 Run: `cd packages/WorkQueue/aws && pnpm run build`
 Expected: builds.
@@ -903,7 +990,6 @@ git commit -m "feat(work-queue-aws): translate subscription filters to canonical
 ```
 
 ---
-
 ### Task 3: SNS/SQS gateways, error mapping, client factory and fakes
 
 **Files:**
@@ -1867,7 +1953,7 @@ In `packages/WorkQueue/aws/package.json`, replace the `exports` block with:
 - [ ] **Step 10: Run the tests and build**
 
 Run: `cd packages/WorkQueue/aws && pnpm test`
-Expected: PASS — dependencyGuard (3), config (8), names (5), envelope (7), filterPolicy (7), gatewayErrors (3), SdkSqsGateway (8), SdkSnsGateway (5), clients (2), fakes (4). Total 52.
+Expected: PASS — dependencyGuard (3), config (8), names (5), envelope (7), filterPolicy (11), gatewayErrors (3), SdkSqsGateway (8), SdkSnsGateway (5), clients (2), fakes (4). Total 56.
 
 Run: `cd packages/WorkQueue/aws && pnpm run build`
 Expected: builds; `dist/testing/index.js` exists.
@@ -1892,7 +1978,7 @@ git commit -m "feat(work-queue-aws): SNS/SQS gateways with error mapping, client
 **Interfaces:**
 - Consumes: `TopicBinding`, `SubscriptionBinding`, `SubscriptionPolicy`, `SubscriptionFilter`, `WorkMessage`, `WorkJson`, `HostType`, `PublishResult`, `BindingValidationIssue`, `TransportCapabilities`, `WorkQueueConfigurationError` (core); `ReadAwsTopicConfig`, `ReadAwsSubscriptionConfig`, `SerializeEnvelope`, `MessageGroupIdFor` (Task 1); `SnsFilterPolicyFor`, `NormalizeSnsFilterPolicy` (Task 2); `SnsGateway`, `SqsGateway`, `SnsPublishEntry`, `AwsGatewayError`, `FakeSnsGateway`, `FakeSqsGateway` (Task 3).
 - Produces:
-  - `AWS_TRANSPORT_NAME = 'AWS'`, `AWS_TRANSPORT_CAPABILITIES: TransportCapabilities`
+  - `AWS_TRANSPORT_NAME = 'AWS'`, `AWS_TRANSPORT_CAPABILITIES: TransportCapabilities` (including `Filters` — the operators and structure SNS can express, 03 §4.1)
   - `SNS_BATCH_MAX_ENTRIES = 10`, `SNS_REQUEST_MAX_BYTES = 262144`, `MAX_MESSAGE_ATTRIBUTES = 10`
   - `BuildPublishEntry(message: WorkMessage, index: number, isFifo: boolean): SnsPublishEntry`, `EntryBytes(entry: SnsPublishEntry): number`, `ChunkEntries(entries: SnsPublishEntry[]): SnsPublishEntry[][]`
   - `PublishToSns(gateway: SnsGateway, topic: TopicBinding, messages: WorkMessage[]): Promise<PublishResult[]>`
@@ -1922,6 +2008,11 @@ suppression happens in the engine ledger before the driver is called.
 (03 §5.1). A staging failure (database outage) must not push messages into the dead-letter queue and break order,
 so staged queues use `maxReceiveCount = 1000` (the SQS maximum); every other queue uses `MaxAttempts + 2`.
 
+**Cancel.** Both `CancelPending` and `CancelInFlight` are `false`. SQS cannot delete a named pending message, and an
+in-flight message's lease is its receipt handle — there is no way to revoke it from outside the consumer, so 03 §7's
+lease-revoke cancel has no SQS equivalent. Staged `Ordered` subscriptions are unaffected: their deliveries are
+Database rows served by the Database operator, so cancelling in-flight work there behaves exactly as 03 §7 describes.
+
 - [ ] **Step 1: Write the failing tests**
 
 `packages/WorkQueue/aws/src/__tests__/capabilities.test.ts`:
@@ -1934,11 +2025,13 @@ describe('AWS transport capabilities', () => {
     it('declares exactly the 03 §5 AWS values', () => {
         expect(AWS_TRANSPORT_NAME).toBe('AWS');
         expect(AWS_TRANSPORT_CAPABILITIES).toEqual({
+            Filters: { Operators: ['eq', 'neq', 'startswith', 'isnull', 'isnotnull'], SingleFieldOrGroups: true, MaxFields: 5, MaxValues: 50 },
             DetectsMessageIDDuplicates: false,
             PersistsProgress: false,
             SupportsOrdered: false,
             SupportsExternalHosts: true,
             CancelPending: false,
+            CancelInFlight: false,
             ListPartitions: false,
             PeekDeadLetters: 'BestEffort',
             ReplaySingleDeadLetter: true,
@@ -2074,7 +2167,7 @@ describe('ExpectedMaxReceiveCount and RequiresFifoTopic', () => {
 describe('ValidateAwsBindings', () => {
     it('reports nothing for resources provisioned as expected', async () => {
         const topic = TestTopicBinding(true);
-        const subscription = TestSubscriptionBinding(true, { Filter: { eventType: ['unsubscribe'] } });
+        const subscription = TestSubscriptionBinding(true, { Filter: { logic: 'and', filters: [{ field: 'eventType', operator: 'eq', value: 'unsubscribe' }] } });
         SeedValidAwsResources(sns, sqs, topic, subscription);
         expect(await ValidateAwsBindings(sns, sqs, topic, [subscription])).toEqual([]);
     });
@@ -2138,7 +2231,7 @@ describe('ValidateAwsBindings', () => {
 
     it('reports SNS subscription drift', async () => {
         const topic = TestTopicBinding(true);
-        const subscription = TestSubscriptionBinding(true, { Filter: { eventType: ['unsubscribe'] } });
+        const subscription = TestSubscriptionBinding(true, { Filter: { logic: 'and', filters: [{ field: 'eventType', operator: 'eq', value: 'unsubscribe' }] } });
         const resources = TestAwsResources(true);
         SeedValidAwsResources(sns, sqs, topic, subscription);
         sns.SubscriptionAttributes.set(resources.SnsSubscriptionArn, {
@@ -2178,11 +2271,13 @@ import type { TransportCapabilities } from '@memberjunction/work-queue-core';
 export const AWS_TRANSPORT_NAME = 'AWS';
 
 export const AWS_TRANSPORT_CAPABILITIES: TransportCapabilities = {
+    Filters: { Operators: ['eq', 'neq', 'startswith', 'isnull', 'isnotnull'], SingleFieldOrGroups: true, MaxFields: 5, MaxValues: 50 },
     DetectsMessageIDDuplicates: false,
     PersistsProgress: false,
     SupportsOrdered: false,
     SupportsExternalHosts: true,
     CancelPending: false,
+    CancelInFlight: false,
     ListPartitions: false,
     PeekDeadLetters: 'BestEffort',
     ReplaySingleDeadLetter: true,
@@ -2598,7 +2693,7 @@ export * from './fixtures';
 - [ ] **Step 8: Run the tests and build**
 
 Run: `cd packages/WorkQueue/aws && pnpm test`
-Expected: PASS — previous 52, plus capabilities (1), publish (9), bindingValidation (10). Total 72.
+Expected: PASS — previous 56, plus capabilities (1), publish (9), bindingValidation (10). Total 76.
 
 Run: `cd packages/WorkQueue/aws && pnpm run build`
 Expected: builds.
@@ -2641,6 +2736,12 @@ Settle mapping (03 §5, 02 §4.4):
 | `Retry` | `ChangeMessageVisibility(min(delay, 12 h window left))` | `Settled Pending` / `LeaseLost` / `Failed` |
 | `DeadLetter` | `SendMessage` to the DLQ with `mj_*` attributes, then `DeleteMessage` | `Settled DeadLettered` / `LeaseLost` (a DLQ copy exists; SQS will redeliver, so a second dead letter is possible) / `Failed` (send failed; message untouched) |
 | `Release` | `ChangeMessageVisibility(0)` | `Settled Pending` / `LeaseLost` |
+
+`ExtendLease` is this transport's instance of 03 §3.2's **retry-within-lease** rule: a transient SQS failure
+(throttling, timeout, a 5xx) answers `Held`, so the runtime simply retries on its next heartbeat tick rather than
+aborting a healthy handler. Only three things answer `Lost`: a stale or invalid receipt handle (`ReceiptHandleIsInvalid`
+— the message was already redelivered to someone else), an exhausted 12-hour visibility window, or a non-retryable
+error. The runtime then aborts the handler's `Signal` and fences its settle.
 
 `DeliveryID` is the SQS `MessageId`; `LeaseToken` is the receipt handle; `Attempt` is `ApproximateReceiveCount`
 (a replayed message is a new SQS message, so its attempts restart at 1); `IsReplay` is `mj_replay = '1'`.
@@ -3057,7 +3158,7 @@ export * from './consumer/SqsTransportConsumer';
 - [ ] **Step 6: Run the tests and build**
 
 Run: `cd packages/WorkQueue/aws && pnpm test`
-Expected: PASS — previous 72, plus deadLetter (2), SqsTransportConsumer (12). Total 86.
+Expected: PASS — previous 76, plus deadLetter (2), SqsTransportConsumer (12). Total 90.
 
 Run: `cd packages/WorkQueue/aws && pnpm run build`
 Expected: builds.
@@ -3098,9 +3199,11 @@ the subscription queue with `mj_replay = '1'` (FIFO group = the envelope's group
 `<MessageID>:replay:<epoch ms>` so a recent earlier copy does not suppress it) and deletes it from the dead-letter
 queue. A replayed message goes behind anything already queued in its group, which `Exclusive` allows (no order
 promise). Bulk redrive of a large dead-letter queue is done with SQS's own `StartMessageMoveTask` (see the package
-README, Task 12). Discarding a pending SQS message is not supported (`CancelPending = false`); a discard whose
-`MessageID` is not among the scanned dead letters answers `{ Supported: false }`. `ListPartitions` returns `null`
-and `SkipSequence` answers `{ Supported: false }` — staged `Ordered` subscriptions use the Database operator.
+README, Task 12). Discarding a pending or in-flight SQS message is not supported
+(`CancelPending = false`, `CancelInFlight = false`): a discard whose `MessageID` is not among the scanned dead letters
+answers `{ Supported: false }`, so 03 §7's lease-revoke cancel never applies here. `ListPartitions` returns `null`
+and `SkipSequence` answers `{ Supported: false }`. Staged `Ordered` subscriptions use the **Database** operator for
+every one of these, including cancelling in-flight work.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -3204,7 +3307,7 @@ describe('AwsTransportOperator.Replay', () => {
 });
 
 describe('AwsTransportOperator.Discard and unsupported operations', () => {
-    it('discards a dead letter, and reports a pending message as unsupported', async () => {
+    it('discards a dead letter, and reports a pending or in-flight message as unsupported', async () => {
         await deadLetter(1, runtimeAttributes('Fatal', '1'));
         expect(await operator.Discard(binding, TestMessage(1).MessageID, 'bad data', 'user-1')).toEqual({ Supported: true, Changed: true });
         expect(sqs.Messages(r.DeadLetterQueueUrl)).toHaveLength(0);
@@ -3522,7 +3625,7 @@ export * from './driver/AwsTransportDriver';
 - [ ] **Step 7: Run the tests and build**
 
 Run: `cd packages/WorkQueue/aws && pnpm test`
-Expected: PASS — previous 86, plus AwsTransportOperator (8), AwsTransportDriver (4). Total 98.
+Expected: PASS — previous 90, plus AwsTransportOperator (8), AwsTransportDriver (4). Total 102.
 
 Run: `cd packages/WorkQueue/aws && pnpm run build`
 Expected: builds.
@@ -3545,7 +3648,7 @@ git commit -m "feat(work-queue-aws): best-effort dead-letter operator and the AW
 - Test: `packages/WorkQueue/aws/src/__tests__/bindingEnv.test.ts`, `emf.test.ts`, `CreateSqsLambdaHandler.test.ts`
 
 **Interfaces:**
-- Consumes: `ConsumerRuntime`, `ConsumerRuntimeOptions`, `WorkHandler`, `WorkLogger`, `WorkJson`, `SettleResult`, `SubscriptionBinding`, `SubscriptionPolicy`, `ParseSubscriptionFilter`, `Outcome`, `WorkQueueConfigurationError` (core; `ConsumerRuntime.ProcessBatch(deliveries)` returns one `SettleResult` per delivery and `Stop()` aborts in-flight handlers and releases them — 03 §3.2); `ReadAwsSubscriptionConfig` (Task 1); `SqsGateway`, `SqsReceivedMessage`, `SdkSqsGateway`, `CreateAwsClients` (Task 3); `SqsTransportConsumer` (Task 5); fakes and fixtures (Tasks 3–4).
+- Consumes: `ConsumerRuntime`, `ConsumerRuntimeOptions`, `WorkHandler`, `WorkLogger`, `WorkJson`, `SettleResult`, `SubscriptionBinding`, `SubscriptionPolicy`, `ParseSubscriptionFilter` (now `(json, support)` — 03 §4.2), `Outcome`, `WorkQueueConfigurationError` (core; `ConsumerRuntime.ProcessBatch(deliveries)` returns one `SettleResult` per delivery and `Stop()` aborts in-flight handlers and releases them — 03 §3.2); `ReadAwsSubscriptionConfig` (Task 1); `SqsGateway`, `SqsReceivedMessage`, `SdkSqsGateway`, `CreateAwsClients` (Task 3); `SqsTransportConsumer` (Task 5); fakes and fixtures (Tasks 3–4).
 - Produces (all from `@memberjunction/work-queue-aws/lambda`):
   - `interface SqsLambdaRecord`, `interface SqsLambdaEvent`, `interface SqsBatchResponse`, `interface LambdaContextLike { getRemainingTimeInMillis(): number; awsRequestId?: string }`, `ToSqsReceivedMessage(record: SqsLambdaRecord): SqsReceivedMessage`
   - `SUBSCRIPTION_ENV_VAR = 'MJ_WQ_SUBSCRIPTION'`, `ParseSubscriptionBindingEnv(value: string | undefined): SubscriptionBinding`
@@ -3586,7 +3689,7 @@ import { TestSubscriptionBinding } from '../testing/fixtures';
 
 describe('ParseSubscriptionBindingEnv', () => {
     it('parses a binding produced by the Terraform module', () => {
-        const binding = TestSubscriptionBinding(true, { Filter: { eventType: ['unsubscribe'] } });
+        const binding = TestSubscriptionBinding(true, { Filter: { logic: 'and', filters: [{ field: 'eventType', operator: 'eq', value: 'unsubscribe' }] } });
         expect(ParseSubscriptionBindingEnv(JSON.stringify(binding))).toEqual(binding);
     });
 
@@ -3821,6 +3924,7 @@ import {
     ParseSubscriptionFilter, WorkQueueConfigurationError, type HostType, type SubscriptionBinding, type SubscriptionPolicy, type WorkJson,
 } from '@memberjunction/work-queue-core';
 import { ReadAwsSubscriptionConfig } from '../config';
+import { AWS_TRANSPORT_CAPABILITIES } from '../driver/capabilities';
 
 export const SUBSCRIPTION_ENV_VAR = 'MJ_WQ_SUBSCRIPTION';
 
@@ -3894,7 +3998,10 @@ export function ParseSubscriptionBindingEnv(value: string | undefined): Subscrip
     // Config values are JSON from JSON.parse; ReadAwsSubscriptionConfig validates every field it uses.
     const config = raw['Config'] as Record<string, WorkJson>;
     ReadAwsSubscriptionConfig(config);
-    return { Policy: readPolicy(raw['Policy']), Filter: ParseSubscriptionFilter(filterJson), HostType: hostType, Config: config };
+    // ParseSubscriptionFilter enforces 03 §4.1 against what this transport accepts, so a filter SNS cannot express
+    // fails at cold start rather than silently matching everything.
+    const filter = ParseSubscriptionFilter(filterJson, AWS_TRANSPORT_CAPABILITIES.Filters);
+    return { Policy: readPolicy(raw['Policy']), Filter: filter, HostType: hostType, Config: config };
 }
 ```
 
@@ -4221,7 +4328,7 @@ export const handler = CreateSqsLambdaHandler(() => new UnsubscribeRecorder());
 - [ ] **Step 9: Run the tests, build and check the bundle**
 
 Run: `cd packages/WorkQueue/aws && pnpm test`
-Expected: PASS — previous 98, plus bindingEnv (3), emf (1), CreateSqsLambdaHandler (7). Total 109.
+Expected: PASS — previous 102, plus bindingEnv (3), emf (1), CreateSqsLambdaHandler (7). Total 113.
 
 Run: `cd packages/WorkQueue/core && pnpm run build && cd ../aws && pnpm run build && pnpm run check:lambda-bundle`
 Expected: `work-queue-aws/lambda bundle OK: <n> bytes (budget 153600), <m> input files` with `<n>` under 153,600.
@@ -4506,7 +4613,7 @@ import { SUBSCRIPTION_ROW, TOPIC_ROW, TRANSPORT_ROW } from './fakes';
 
 const AWS_TRANSPORT: TransportRow = { ...TRANSPORT_ROW, ID: 'A0000000-0000-0000-0000-000000000001', Name: 'AWS-test', DriverClass: 'AWS', Configuration: '{"Region":"us-east-1"}' };
 const AWS_TOPIC: TopicRow = { ...TOPIC_ROW, Name: 'email.events', TransportID: AWS_TRANSPORT.ID, IsFifo: true };
-const FILTERED: SubscriptionRow = { ...SUBSCRIPTION_ROW, ID: 'BBBBBBBB-0000-0000-0000-000000000002', Name: 'email.unsubscribe', PartitionMode: 'Exclusive', HostType: 'External', HandlerKey: null, Filter: '{"eventType":["unsubscribe"]}' };
+const FILTERED: SubscriptionRow = { ...SUBSCRIPTION_ROW, ID: 'BBBBBBBB-0000-0000-0000-000000000002', Name: 'email.unsubscribe', PartitionMode: 'Exclusive', HostType: 'External', HandlerKey: null, Filter: '{"logic":"and","filters":[{"field":"eventType","operator":"eq","value":"unsubscribe"}]}' };
 const UNFILTERED: SubscriptionRow = { ...SUBSCRIPTION_ROW, ID: 'BBBBBBBB-0000-0000-0000-000000000003', Name: 'email.archive', PartitionMode: 'None', Filter: null };
 
 function exportFor(transportName: string, subscriptions: SubscriptionRow[]) {
@@ -4528,8 +4635,12 @@ describe('FinalizeTopologyManifest', () => {
     });
 
     it('refuses a filter SNS cannot express', () => {
-        const values = ['1', '2', '3', '4', '5', '6'];
-        const wide: SubscriptionRow = { ...FILTERED, Filter: JSON.stringify({ a: values, b: values, c: values.slice(0, 5) }) };
+        const or = (field: string, count: number) => ({
+            logic: 'or',
+            filters: Array.from({ length: count }, (_, i) => ({ field, operator: 'eq', value: String(i) })),
+        });
+        // 6 × 6 × 5 = 180 value combinations, above the SNS limit of 150 (Task 2).
+        const wide: SubscriptionRow = { ...FILTERED, Filter: JSON.stringify({ logic: 'and', filters: [or('a', 6), or('b', 6), or('c', 5)] }) };
         expect(() => exportFor('AWS-test', [wide])).toThrow(WorkQueueConfigurationError);
     });
 });
@@ -4627,7 +4738,8 @@ function withAwsExtension(subscription: ManifestSubscription): ManifestSubscript
 
 /**
  * Transport-specific manifest rendering, applied after BuildTopologyManifest (plan 05) so infrastructure code never
- * re-translates policy. SnsFilterPolicyFor throws WorkQueueConfigurationError for filters SNS cannot express.
+ * re-translates policy. SnsFilterPolicyFor throws WorkQueueConfigurationError for filters SNS cannot express — more
+than 150 value combinations, a field constrained twice, or a mixed-field OR group (Task 2).
  */
 export function FinalizeTopologyManifest(manifest: TopologyManifest): TopologyManifest {
     if (manifest.Transport.DriverClass !== AWS_DRIVER_CLASS) {
@@ -5287,7 +5399,7 @@ deployed elsewhere).
         },
         {
           "Name": "email.dashboard",
-          "Filter": { "eventType": ["click", "open"] },
+          "Filter": { "logic": "and", "filters": [{ "logic": "or", "filters": [{ "field": "eventType", "operator": "eq", "value": "click" }, { "field": "eventType", "operator": "eq", "value": "open" }] }] },
           "Policy": { "SubscriptionName": "email.dashboard", "TopicName": "email.events", "OrderingMode": "PublishOrder", "PartitionMode": "None", "MaxAttempts": 5, "BackoffBaseSeconds": 10, "BackoffMaxSeconds": 900, "LeaseSeconds": 60, "HeartbeatMode": "Auto" },
           "HostType": "MJWorker",
           "StagedToDatabase": false,
@@ -5296,7 +5408,7 @@ deployed elsewhere).
         },
         {
           "Name": "email.unsubscribe",
-          "Filter": { "eventType": ["unsubscribe"] },
+          "Filter": { "logic": "and", "filters": [{ "field": "eventType", "operator": "eq", "value": "unsubscribe" }] },
           "Policy": { "SubscriptionName": "email.unsubscribe", "TopicName": "email.events", "OrderingMode": "PublishOrder", "PartitionMode": "None", "MaxAttempts": 5, "BackoffBaseSeconds": 10, "BackoffMaxSeconds": 900, "LeaseSeconds": 60, "HeartbeatMode": "Auto" },
           "HostType": "External",
           "StagedToDatabase": false,
@@ -6941,7 +7053,7 @@ Run: `cd packages/WorkQueue/aws && pnpm run test:localstack`
 Expected: PASS for every case the AWS capabilities enable; capability-gated cases are reported as skipped. No failures.
 
 Run: `cd packages/WorkQueue/aws && pnpm test`
-Expected: PASS — 109 tests; the LocalStack suite is not included.
+Expected: PASS — 113 tests; the LocalStack suite is not included.
 
 Run: `cd packages/WorkQueue/aws && docker compose -f localstack/docker-compose.yml down`
 Expected: the container stops.
@@ -7030,15 +7142,43 @@ export const handler = CreateSqsLambdaHandler(() => new ArchiveEmailEvent());
   provides the SDK.
 - Return `Outcome.Retry(reason, delaySeconds)` or throw `TransientWorkError` to retry; return `Outcome.DeadLetter(reason)`
   or throw `FatalWorkError` to dead-letter now. Any other thrown error retries with backoff.
-- Handlers must be idempotent: delivery is at least once.
-- Keep work well under the function timeout. The adapter stops starting records 10 s before the deadline and releases
-  them. Long-running work belongs on an MJ worker.
+
+### Handler rules
+
+The full version is the [consumer guide](../../../plans/work-queue-1/10-consumer-guide.md); the short version:
+
+- **Be idempotent.** Delivery is at least once, and `MessageID` is stable across redeliveries and replays — use it (or
+  your own natural key) as the idempotency key.
+- **Honour `context.Signal`.** It aborts when the lease is lost or the host is shutting down. Stop whatever external
+  work you started; anything you write after that is fenced out anyway.
+- **Keep the item a claim check.** Results, output and history belong on your own domain row, referenced from the
+  payload — not in `Payload` (256 KB cap) and not in `Progress`.
+- **Fit the host.** Lambda's hard ceiling is 15 minutes, and the adapter stops starting records 10 s before the
+  deadline and releases them. Set `MaxProcessingSeconds` below the function timeout; work that can run longer belongs
+  on an MJ worker or a container job, not here.
+- **Publish attributes in the exact case your filters use.** SNS matches attribute values case-sensitively, so the
+  queue's filters are case-sensitive everywhere (03 §4.3); normalise values when you publish.
+- **Own your side effects.** The queue guarantees delivery and one valid lease holder while your handler runs — not
+  that a non-idempotent side effect happens exactly once, and not anything after your handler returns. Work finished
+  later by a webhook uses the split-message pattern (record the job on a domain row, complete, publish a completion
+  message when the callback arrives); overlap and coalescing policy are yours.
 
 **FIFO queues:** records of one message group run in order; after a record retries or fails, the rest of its group
 in that batch is released unprocessed so nothing overtakes it. Different groups run concurrently.
 
 **Metrics:** each invocation writes one CloudWatch Embedded Metric Format line in namespace `MJ/WorkQueue`
 (`Processed`, `Completed`, `Retried`, `DeadLettered`, `Failed`, `NotStarted`, `DurationMs`; dimension `Subscription`).
+
+## What this transport does not do for you
+
+Per 02 §1a, the queue's guarantees stop when your handler settles. On SQS specifically:
+
+| Not provided | Consequence |
+| --- | --- |
+| Cancelling a pending or in-flight message (`CancelPending`/`CancelInFlight` are `false`) | An operator can discard a dead letter, not a running one. Handlers that must be interruptible should poll their own domain flag, or run as a staged `Ordered`/MJ-worker subscription where 03 §7's lease-revoke cancel applies. |
+| Waiting for work that finishes elsewhere | Use the split-message pattern; the queue never parks a message awaiting a webhook. |
+| Suppressing duplicate side effects | Handlers are idempotent, or they hold their own lock. |
+| Knowing whether a consumer is still alive | The visibility timeout is the only liveness signal; size `LeaseSeconds` accordingly. |
 
 ## Calling MemberJunction from a Lambda consumer
 
@@ -7096,7 +7236,7 @@ their own queue, dead-letter queue and log group only.
 - [ ] **Step 6: Build and commit**
 
 Run: `cd packages/WorkQueue/aws && pnpm run build && pnpm test`
-Expected: builds; PASS — 109 tests.
+Expected: builds; PASS — 113 tests.
 
 ```bash
 git add packages/WorkQueue/aws .github/workflows/work-queue-aws.yml
@@ -7107,24 +7247,26 @@ git commit -m "test(work-queue-aws): LocalStack conformance harness, manual CI j
 
 ## Contract deltas
 
-Places where this plan needs something 03 does not state, or states differently. 03 was not edited; reconcile
-there (or in the named sibling plan) before execution.
+Places where this plan needs something 03 does not state, or states differently. **Revision 3 folded most of these
+into 03** — the Status column says which. Only the rows marked *open* still need a decision before execution.
 
-| # | Delta | Owner | Why |
-| --- | --- | --- | --- |
-| D1 | AWS `SubscriptionBinding.Config` adds `SnsSubscriptionArn` to 03 §6.3's field list (`Region, QueueUrl, QueueArn, DeadLetterQueueUrl, DeadLetterQueueArn, IsFifo, SnsSubscriptionArn`). Terraform's `binding_import` emits it. | 03 | Binding validation compares raw delivery, endpoint and filter policy only through the SNS subscription |
-| D2 | Staging uses plan 05 Task 12's `DatabaseTransportDriver.StageDeliveries(request: StageDeliveriesRequest): Promise<StageResult[]>` (`{ TopicID, SubscriptionID, PartitionMode, OrderingMode, Messages }` → `Staged` / `AlreadyStaged` / `Rejected { Code, Message }`; one transaction; a throw rolls back) and `WorkQueueEngine.GetDatabaseDriver()`. Not in 03 §11. `Rejected` messages go to the SQS dead-letter queue with reason = `Code`. | 03 §11 (05 is normative) | 03 §5.1 staging (Task 9) |
-| D3 | `HostLoopContext` (plan 06) carries no driver accessor. The AWS loop factory resolves the AWS driver with `WorkQueueEngine.Instance.GetDriver(context.Transport.ID)` and the staging target with `GetDatabaseDriver()`; the staging identity comes from `context.Subscription` (`ID`, `PartitionMode`) and `context.Topic` (`ID`, `OrderingMode`). | 06 / 03 §11 | Reuses cached, credentialed drivers |
-| D4 | `WorkQueueEngine.ExportManifest` (plan 05 Task 13) is changed by this plan (Task 8) to `FinalizeTopologyManifest(BuildTopologyManifest(...))`, which sets `ManifestSubscription.Aws.SnsFilterPolicy` for `DriverClass = 'AWS'` manifests. The Terraform module refuses a filtered subscription without a rendered policy. | 05 (code touched by 07) | 03 §10 declares the field but plan 05's engine cannot depend on `work-queue-aws` |
-| D5 | `SubscriptionStats.OldestPendingAgeSeconds` is **always `null`** on AWS in Phase 1 (no CloudWatch client, to keep the package dependency rule); backlog age is covered by the Terraform `backlog-age` alarm. 03 §5.2 says "requires CloudWatch read access, else null". | 03 | R9 dependency rule |
-| D6 | New publish error code `TransportRejected` (not retryable) for SNS per-entry failures with `SenderFault = true`. | 03 §1.1 | Distinguishes bad requests from throttling (`TransportUnavailable`) |
-| D7 | Redrive `maxReceiveCount` is `MaxAttempts + 2` **except staged `Ordered` subscriptions, which use 1000**. 02 §3.4 states `MaxAttempts + 2` for all SQS queues. | 02 / 03 | A database outage must not push staged messages into the DLQ and break order |
-| D8 | New dead-letter reason `InvalidEnvelope`; SQS message attributes `mj_dead_letter_reason`, `mj_last_error`, `mj_attempts`, `mj_dead_lettered_at`, `mj_source_queue`, `mj_replay`, `mj_replay_note`, `mj_replayed_by` (reserved by 03 §1.1's `mj_` prefix rule). | 03 §5.2 | Dead-letter records and replay marking without DynamoDB |
-| D9 | AWS operator: `Discard` of a message not found among the scanned dead letters (including any pending message) returns `{ Supported: false }`; `ListDeadLetters.NextCursor` is always `null`; `BlockedKeys` is `null`; dead-letter `Attempts` is `0` for redrive-policy moves. | 03 §5.2 | SQS has no peek, lookup by ID or cancel |
-| D10 | `SqsTransportConsumer.ExtendLease` returns `Held` on a retryable SQS error (the next heartbeat retries) and `Lost` when the 12-hour visibility window is exhausted. | 03 §5 | Throttling must not abort healthy handlers |
-| D11 | `@memberjunction/work-queue-engine` also depends on `@aws-sdk/credential-providers` (assume-role credentials). 03 §0 lists core, global, core-entities, sql-dialect, credentials and `work-queue-aws`. | 03 §0 | `RoleArn` credentials (Task 8) |
-| D12 | `@memberjunction/work-queue-aws` exposes `./lambda` and `./testing` subpath exports; the dependency guard excludes `src/__localstack__/`. | 03 §0 | Thin Lambda entry point; engine tests reuse the SNS/SQS fakes |
-| D13 | AWS resource naming (`AwsResourceName`: `<prefix>-<environment>-<slug>[-dlq][.fifo]`, hashed shortening) is shared by MJ validation messages and the Terraform module. Not in 03. | 03 §10 | Operators see identical names in MJ and AWS |
+| # | Delta | Status | Owner | Why |
+| --- | --- | --- | --- | --- |
+| D1 | AWS `SubscriptionBinding.Config` adds `SnsSubscriptionArn` to 03 §6.3's field list (`Region, QueueUrl, QueueArn, DeadLetterQueueUrl, DeadLetterQueueArn, IsFifo, SnsSubscriptionArn`). Terraform's `binding_import` emits it. | adopted (03 §6.3) | 03 | Binding validation compares raw delivery, endpoint and filter policy only through the SNS subscription |
+| D2 | Staging uses plan 05 Task 12's `DatabaseTransportDriver.StageDeliveries(request: StageDeliveriesRequest): Promise<StageResult[]>` (`{ TopicID, SubscriptionID, PartitionMode, OrderingMode, Messages }` → `Staged` / `AlreadyStaged` / `Rejected { Code, Message }`; one transaction; a throw rolls back) and `WorkQueueEngine.GetDatabaseDriver()`. Not in 03 §11. `Rejected` messages go to the SQS dead-letter queue with reason = `Code`. | adopted (03 §11 `StageDeliveries`) | 03 §11 (05 is normative) | 03 §5.1 staging (Task 9) |
+| D3 | `HostLoopContext` (plan 06) carries no driver accessor. The AWS loop factory resolves the AWS driver with `WorkQueueEngine.Instance.GetDriver(context.Transport.ID)` and the staging target with `GetDatabaseDriver()`; the staging identity comes from `context.Subscription` (`ID`, `PartitionMode`) and `context.Topic` (`ID`, `OrderingMode`). | confirmed — no change needed | 06 / 03 §11 | Reuses cached, credentialed drivers |
+| D4 | `WorkQueueEngine.ExportManifest` (plan 05 Task 13) is changed by this plan (Task 8) to `FinalizeTopologyManifest(BuildTopologyManifest(...))`, which sets `ManifestSubscription.Aws.SnsFilterPolicy` for `DriverClass = 'AWS'` manifests. The Terraform module refuses a filtered subscription without a rendered policy. | **open** — plan-level wiring | 05 (code touched by 07) | 03 §10 declares the field but plan 05's engine cannot depend on `work-queue-aws` |
+| D5 | `SubscriptionStats.OldestPendingAgeSeconds` is **always `null`** on AWS in Phase 1 (no CloudWatch client, to keep the package dependency rule); backlog age is covered by the Terraform `backlog-age` alarm. 03 §5.2 says "requires CloudWatch read access, else null". | adopted (03 §5.2) | 03 | R9 dependency rule |
+| D6 | New publish error code `TransportRejected` (not retryable) for SNS per-entry failures with `SenderFault = true`. | adopted (03 §1.1) | 03 §1.1 | Distinguishes bad requests from throttling (`TransportUnavailable`) |
+| D7 | Redrive `maxReceiveCount` is `MaxAttempts + 2` **except staged `Ordered` subscriptions, which use 1000**. 02 §3.4 states `MaxAttempts + 2` for all SQS queues. | adopted (03 §5.1) | 02 / 03 | A database outage must not push staged messages into the DLQ and break order |
+| D8 | New dead-letter reason `InvalidEnvelope`; SQS message attributes `mj_dead_letter_reason`, `mj_last_error`, `mj_attempts`, `mj_dead_lettered_at`, `mj_source_queue`, `mj_replay`, `mj_replay_note`, `mj_replayed_by` (reserved by 03 §1.1's `mj_` prefix rule). | adopted (03 §5.2) | 03 §5.2 | Dead-letter records and replay marking without DynamoDB |
+| D9 | AWS operator: `Discard` of a message not found among the scanned dead letters (including any pending message) returns `{ Supported: false }`; `ListDeadLetters.NextCursor` is always `null`; `BlockedKeys` is `null`; dead-letter `Attempts` is `0` for redrive-policy moves. | adopted (03 §5.2) | 03 §5.2 | SQS has no peek, lookup by ID or cancel |
+| D10 | `SqsTransportConsumer.ExtendLease` returns `Held` on a retryable SQS error (the next heartbeat retries) and `Lost` when the 12-hour visibility window is exhausted. | adopted (03 §3.2 retry-within-lease, §5.2) | 03 §5 | Throttling must not abort healthy handlers |
+| D11 | `@memberjunction/work-queue-engine` also depends on `@aws-sdk/credential-providers` (assume-role credentials). 03 §0 lists core, global, core-entities, sql-dialect, credentials and `work-queue-aws`. | adopted (03 §0) | 03 §0 | `RoleArn` credentials (Task 8) |
+| D12 | `@memberjunction/work-queue-aws` exposes `./lambda` and `./testing` subpath exports; the dependency guard excludes `src/__localstack__/`. | adopted (03 §0) | 03 §0 | Thin Lambda entry point; engine tests reuse the SNS/SQS fakes |
+| D13 | AWS resource naming (`AwsResourceName`: `<prefix>-<environment>-<slug>[-dlq][.fifo]`, hashed shortening) is shared by MJ validation messages and the Terraform module. Not in 03. | adopted (03 §0) | 03 §10 | Operators see identical names in MJ and AWS |
+| D15 | Filters are MJ `CompositeFilterDescriptor`-shaped (03 §4). Translation adds one rule 03 does not state: **a field may be constrained only once** at the top level, because SNS reads an attribute's value array as OR, so two AND-ed rules on one attribute would silently widen the filter. Mixed-field OR groups and value-less `eq`/`neq`/`startswith` rules are rejected for the same reason. `AWS_TRANSPORT_CAPABILITIES.Filters` publishes the accepted operators. | proposed for 03 §4.1 | 03 §4 | Revision 3 |
+| D14 | AWS capabilities add `CancelInFlight: false` (03 §5). SQS cannot revoke an in-flight message's lease, so 03 §7's cancel applies only to Database and staged subscriptions. | adopted (03 §5) | 03 | Revision 3 |
 
 ## Self-review notes
 
