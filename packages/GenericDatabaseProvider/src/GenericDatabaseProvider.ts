@@ -2395,7 +2395,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 if (sUserSearchSQL.length > 0) sUserSearchSQL += ' OR ';
                 sUserSearchSQL += `(${this.QuoteIdentifier(field.Name)} ${sParam})`;
             }
-            if (sUserSearchSQL.length > 0) sUserSearchSQL = '(' + sUserSearchSQL + ')';
+            if (sUserSearchSQL.length > 0) {
+                sUserSearchSQL = '(' + sUserSearchSQL + ')';
+            } else if (userSearchString && userSearchString.trim().length > 0) {
+                // When a search term was provided but no fields participate in the search (e.g. non-text fields only or denied by FLS),
+                // return an unsatisfiable predicate so the query returns zero rows rather than the entire table unfiltered.
+                sUserSearchSQL = '(1=0)';
+            }
         }
         return sUserSearchSQL;
     }
