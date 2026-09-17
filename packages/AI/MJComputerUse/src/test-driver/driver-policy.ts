@@ -6,7 +6,7 @@
  * policy below unit-testable without standing up a driver, a browser, or a model.
  */
 import type { OracleResult } from '@memberjunction/testing-engine';
-import type { ComputerUseStatus, ComputerUseFailureReason, BrowserDiagnosticEvent } from '@memberjunction/computer-use';
+import type { ComputerUseStatus, ComputerUseFailureReason, BrowserDiagnosticEvent, ReplayHealPolicy } from '@memberjunction/computer-use';
 import { ComputerUseTestConfig } from './types';
 
 // ─── Replay-script policy ──────────────────────────────────
@@ -18,6 +18,16 @@ import { ComputerUseTestConfig } from './types';
  */
 export function usesElementGrounding(config: ComputerUseTestConfig): boolean {
     return config.elementGrounding ?? true;
+}
+
+/**
+ * How far a diverged replay step may be repaired. `'llm'` unless a test says
+ * otherwise, which is the behaviour a script gets while it is still earning
+ * trust. `'off'` makes the recorded step a contract — pair it with
+ * `AllowLLMFallback: false` for a run with no model in it at all.
+ */
+export function resolveReplayHeal(config: ComputerUseTestConfig): ReplayHealPolicy {
+    return config.replayHeal ?? 'llm';
 }
 
 /**

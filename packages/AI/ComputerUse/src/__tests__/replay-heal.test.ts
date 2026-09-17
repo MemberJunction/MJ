@@ -12,6 +12,7 @@ import {
 import { RunComputerUseParams } from '../types/params.js';
 import { AppProfile, SettleConfig } from '../types/app-profile.js';
 import { ComputerUseTrace, TraceStep, TraceTarget, StepPostcondition } from '../types/trace.js';
+import type { ReplayHealPolicy } from '../types/params.js';
 
 /** Fake adapter that can drift a selector and expose a fresh element list for healing. */
 class HealFakeAdapter extends BaseBrowserAdapter {
@@ -135,5 +136,91 @@ describe('ComputerUseEngine.Replay self-heal', () => {
         expect(result.Replay?.Steps[0].Detail).toContain('postcondition');
         // Flow drift is not selector-healable → the click fired exactly once (no re-click).
         expect(adapter.clicked.filter(s => s === '#nav')).toHaveLength(1);
+    });
+});
+
+/** Engine whose LLM heal seam is live, and counts how often it was consulted. */
+class CountingLlmHealEngine extends ComputerUseEngine {
+    public asked = 0;
+    protected async healTargetViaLLM(): Promise<{ index?: number; confidence: number }> {
+        this.asked++;
+        return { index: 1, confidence: 0.95 };
+    }
+}
+
+function paramsWithHeal(policy: ReplayHealPolicy): RunComputerUseParams {
+    const p = params();
+    p.ReplayHeal = policy;
+    return p;
+}
+
+describe('ComputerUseEngine.Replay heal policy', () => {
+    it("'off' diverges on drift the default would have healed, and never clicks the corrected target", async () => {
+        const engine = new ComputerUseEngine();
+        const adapter = new HealFakeAdapter();
+        adapter.visible.set('#new', true);                    // '#old' is gone
+        adapter.elements = [el(0, 'button', 'Save', '#new')];  // unambiguous — 'llm' heals this
+        engine.SetBrowserAdapter(adapter);
+
+        const t = trace([clickStep('button', 'Save', '#old')]);
+        const result = await engine.Replay(t, paramsWithHeal('off'));
+
+        expect(result.Status).toBe('Failed');
+        expect(result.Replay?.Steps[0].Outcome).toBe('diverged');
+        expect(result.Replay?.Healed).toBe(0);
+        expect(adapter.clicked).not.toContain('#new');            // nothing was executed
+        expect(t.Steps[0].Action.Target?.Selector).toBe('#old');  // trace left as recorded
+    });
+
+    it("'deterministic' still heals an unambiguous role+name match", async () => {
+        const engine = new ComputerUseEngine();
+        const adapter = new HealFakeAdapter();
+        adapter.visible.set('#new', true);
+        adapter.elements = [el(0, 'button', 'Save', '#new')];
+        engine.SetBrowserAdapter(adapter);
+
+        const result = await engine.Replay(trace([clickStep('button', 'Save', '#old')]), paramsWithHeal('deterministic'));
+
+        expect(result.Status).toBe('Completed');
+        expect(result.Replay?.Healed).toBe(1);
+        expect(adapter.clicked).toContain('#new');
+    });
+
+    it("'deterministic' does NOT consult the LLM seam on an ambiguous match", async () => {
+        const engine = new CountingLlmHealEngine();
+        const adapter = new HealFakeAdapter();
+        adapter.visible.set('#b', true);
+        adapter.elements = [el(0, 'button', 'Save', '#a'), el(1, 'button', 'Save', '#b')];
+        engine.SetBrowserAdapter(adapter);
+
+        const result = await engine.Replay(trace([clickStep('button', 'Save', '#old')]), paramsWithHeal('deterministic'));
+
+        expect(engine.asked).toBe(0);
+        expect(result.Replay?.Steps[0].Outcome).toBe('diverged');
+    });
+
+    it("the default DOES consult the LLM seam on the same ambiguous match", async () => {
+        const engine = new CountingLlmHealEngine();
+        const adapter = new HealFakeAdapter();
+        adapter.visible.set('#b', true);
+        adapter.elements = [el(0, 'button', 'Save', '#a'), el(1, 'button', 'Save', '#b')];
+        engine.SetBrowserAdapter(adapter);
+
+        const result = await engine.Replay(trace([clickStep('button', 'Save', '#old')]), params());
+
+        expect(engine.asked).toBe(1);
+        expect(result.Replay?.Steps[0].Outcome).toBe('healed');
+        expect(adapter.clicked).toContain('#b');
+    });
+
+    it("'off' skips the seam entirely", async () => {
+        const engine = new CountingLlmHealEngine();
+        const adapter = new HealFakeAdapter();
+        adapter.visible.set('#b', true);
+        adapter.elements = [el(0, 'button', 'Save', '#a'), el(1, 'button', 'Save', '#b')];
+        engine.SetBrowserAdapter(adapter);
+
+        await engine.Replay(trace([clickStep('button', 'Save', '#old')]), paramsWithHeal('off'));
+        expect(engine.asked).toBe(0);
     });
 });

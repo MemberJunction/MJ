@@ -113,6 +113,7 @@ import {
     computeDivergence,
     usesElementGrounding,
     recordsReplayScript,
+    resolveReplayHeal,
     type ConsoleLogLevel,
     type FailureSignals,
     type ArtifactRetentionPolicy,
@@ -650,6 +651,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         // Element-grounded perception: opt-in per test/suite; default off
         // (coordinate mode) until baked in across the suite.
         params.ElementGrounding = usesElementGrounding(config);
+        params.ReplayHeal = resolveReplayHeal(config);
         // Per-test controller generation overrides: determinism knobs.
         if (config.generation) {
             params.ControllerGeneration = config.generation;

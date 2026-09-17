@@ -10,6 +10,7 @@ import {
     mergeComputerUseConfig,
     partitionGatingOracles,
     recordsReplayScript,
+    resolveReplayHeal,
     readSuiteComputerUseConfig,
     resolveConsoleLogLevel,
     shouldCaptureArtifact,
@@ -474,5 +475,21 @@ describe('recordsReplayScript', () => {
     it('is independent of elementGrounding — a grounded run can still refuse to store', () => {
         expect(recordsReplayScript({ elementGrounding: true, recordReplayScript: false })).toBe(false);
         expect(usesElementGrounding({ elementGrounding: true, recordReplayScript: false })).toBe(true);
+    });
+});
+
+describe('resolveReplayHeal', () => {
+    it("defaults to 'llm' — the full ladder while a script is still earning trust", () => {
+        expect(resolveReplayHeal({})).toBe('llm');
+    });
+
+    it('honours each explicit policy', () => {
+        expect(resolveReplayHeal({ replayHeal: 'off' })).toBe('off');
+        expect(resolveReplayHeal({ replayHeal: 'deterministic' })).toBe('deterministic');
+        expect(resolveReplayHeal({ replayHeal: 'llm' })).toBe('llm');
+    });
+
+    it('is independent of the LLM fallback flag, which the framework owns', () => {
+        expect(resolveReplayHeal({ replayHeal: 'off', elementGrounding: true })).toBe('off');
     });
 });

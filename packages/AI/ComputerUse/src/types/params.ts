@@ -50,6 +50,12 @@ export class RunPrelude {
  * its {@link Assertions} and {@link VisualCriteria} pass. See
  * `plans/regression-testing/checkpoint-tours-design.md`.
  */
+/**
+ * How far a diverged replay step may be repaired. See
+ * {@link RunComputerUseParams.ReplayHeal}.
+ */
+export type ReplayHealPolicy = 'llm' | 'deterministic' | 'off';
+
 export class RunCheckpoint {
     /** Stable label for the section, e.g. "agents-list". */
     public Name: string = '';
@@ -181,6 +187,21 @@ export class RunComputerUseParams {
      * off (coordinate/vision mode).
      */
     public ElementGrounding?: boolean;
+
+    /**
+     * How far a diverged replay step may be repaired before the run gives up.
+     *
+     * - `llm` (default) — deterministic role+name re-resolution, escalating an
+     *   ambiguous or failed match to {@link ComputerUseEngine.healTargetViaLLM}.
+     * - `deterministic` — role+name re-resolution only; the model is never asked.
+     * - `off` — no repair at all; the first failed guard diverges.
+     *
+     * `off` is the setting for a script treated as a contract: a step that no
+     * longer matches is the finding, and healing it would hide the UI change the
+     * test exists to catch. Pair it with `AllowLLMFallback: false` for a replay
+     * that can only pass by executing exactly what was recorded.
+     */
+    public ReplayHeal?: ReplayHealPolicy;
 
     /**
      * Max browser actions executed per step before the batch stops (default 4).

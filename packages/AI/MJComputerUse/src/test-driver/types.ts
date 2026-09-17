@@ -69,7 +69,7 @@ export interface ComputerUseOracleConfig {
  * Stored as JSON in TestEntity.Configuration.
  */
 import type { ArtifactRetentionPolicy } from './driver-policy.js';
-import type { ReplayTier } from '@memberjunction/computer-use';
+import type { ReplayTier, ReplayHealPolicy } from '@memberjunction/computer-use';
 
 /**
  * The Computer Use driver's slice of `Test.Configuration`.
@@ -253,6 +253,21 @@ export interface ComputerUseTestConfig {
      * indexed element list the DOM oracles assert over, it simply is not stored.
      */
     recordReplayScript?: boolean;
+
+    /**
+     * How far a diverged replay step may be repaired. Default `'llm'`.
+     *
+     * - `'llm'` — role+name re-resolution, escalating an ambiguous or failed
+     *   match to a focused model call.
+     * - `'deterministic'` — role+name re-resolution only; never calls a model.
+     * - `'off'` — no repair; the first failed guard diverges.
+     *
+     * Use `'off'` once a script is trusted as the contract: any deviation is the
+     * finding, and a heal would hide the UI change the test exists to catch.
+     * With `AllowLLMFallback: false` the run then has no model in it at all — it
+     * passes by executing exactly what was recorded, or it fails.
+     */
+    replayHeal?: ReplayHealPolicy;
 
     /**
      * Failure-artifact trace policy. When enabled, the run records a

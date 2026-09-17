@@ -36,7 +36,7 @@ import { RunContext } from './RunContext.js';
 import { computePerceptualHash, hashesSimilar } from '../utils/perceptual-hash.js';
 import type { ReplayFrame } from './verdict.js';
 
-import { RunComputerUseParams, ModelConfig, RunCheckpoint } from '../types/params.js';
+import { RunComputerUseParams, ModelConfig, RunCheckpoint, ReplayHealPolicy } from '../types/params.js';
 import { ComputerUseResult } from '../types/results.js';
 import { ComputerUseError } from '../types/errors.js';
 import {
@@ -1525,7 +1525,7 @@ export class ComputerUseEngine {
         // recorded selector still points at the recorded element (below), and
         // latching checkpoints whose assertions name elements rather than URLs.
         step.InteractiveElements = await this.safeExtractElements();
-        const repointed = this.repointDriftedSelector(traceStep, step.InteractiveElements, step.StepNumber);
+        const repointed = this.repointDriftedSelector(traceStep, step.InteractiveElements, step.StepNumber, context.Params.ReplayHeal ?? 'llm');
 
         const pre = await this.replayPrecondition(traceStep, volatile);
         if (!pre.pass) {
@@ -1604,6 +1604,9 @@ export class ComputerUseEngine {
      *
      * Flow drift (a failed postcondition) is not selector-healable and returns
      * false, so the run falls back to the LLM tier.
+     *
+     * `ReplayHeal: 'off'` skips all of this — the step diverges as recorded.
+     * `'deterministic'` keeps the role+name re-resolution but never asks a model.
      */
     protected async healReplayStep(
         trace: ComputerUseTrace,
@@ -1612,6 +1615,10 @@ export class ComputerUseEngine {
         step: StepRecord,
         reason: string
     ): Promise<boolean> {
+        if ((context.Params.ReplayHeal ?? 'llm') === 'off') {
+            this.log(`Replay step ${stepIndex + 1} not healed — ReplayHeal is off; the recorded step is the contract`);
+            return false;
+        }
         const traceStep = trace.Steps[stepIndex];
         const recorded = traceStep.Action.Target;
         if (!recorded || !isSelectorHealable(reason)) {
@@ -1666,6 +1673,9 @@ export class ComputerUseEngine {
         const deterministic = reresolveTarget(recorded, elements);
         if (shouldAcceptHeal(deterministic.confidence)) {
             return deterministic;
+        }
+        if ((context.Params.ReplayHeal ?? 'llm') !== 'llm') {
+            return { ...deterministic, reason: `${deterministic.reason} (LLM disambiguation disabled)` };
         }
         const llm = await this.healTargetViaLLM({
             instruction: traceStep.Instruction,
@@ -1823,7 +1833,15 @@ export class ComputerUseEngine {
      * in place; otherwise everything is left exactly as recorded, so this can only
      * correct a drifted step, never destabilise a sound one.
      */
-    private repointDriftedSelector(traceStep: TraceStep, elements: InteractiveElement[], stepNumber: number): boolean {
+    private repointDriftedSelector(
+        traceStep: TraceStep,
+        elements: InteractiveElement[],
+        stepNumber: number,
+        heal: ReplayHealPolicy
+    ): boolean {
+        if (heal === 'off') {
+            return false;   // the recorded selector is the contract; drift is the finding
+        }
         const recorded = traceStep.Action.Target;
         if (!recorded?.Selector || (!recorded.Role && !recorded.Name)) {
             return false;   // nothing recorded to verify against
