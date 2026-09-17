@@ -1,15 +1,14 @@
 /**
- * The reconnection backoff must escalate, and its cap must be reachable (MJ #4222).
+ * The reconnection backoff must escalate, hold at its ceiling, and never stop retrying (MJ #4222).
  *
- * REGRESSION, found in manual testing. `initialize()` used to clear `reconnectionAttempts` as soon
- * as the subscribe call returned. But subscribing SUCCEEDS against a dead socket — graphql-ws
- * accepts the request and hands back an iterator that never yields — so the counter was reset on
- * every cycle. The observable symptom was a console line reading "attempt 1" forever while the
- * gaps between attempts grew; the growth came from the dead subscription's own error latency, not
- * from backoff. Both guards added in Tier 1 were inert: the delay never left its base value and
- * MAX_RECONNECTION_ATTEMPTS could never be reached.
+ * Subscribing SUCCEEDS against a dead socket — graphql-ws accepts the request and hands back an
+ * iterator that never yields — so re-subscribing is no evidence the transport works. Only a
+ * delivered frame proves it, and only a delivered frame clears the backoff. A counter cleared on
+ * re-subscribe instead would reset every cycle and pin the delay at its base value.
  *
- * Only a delivered frame proves the transport works, so only a delivered frame clears the backoff.
+ * Retries continue for the life of the page. Nothing calls `initialize()` outside `ngOnInit`, so a
+ * stream that stopped retrying would stay stopped until a reload, and the 60s ceiling is the only
+ * thing bounding the retry rate.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
