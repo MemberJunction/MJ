@@ -239,10 +239,24 @@ describe('GeminiRealtime', () => {
             expect(config.realtimeInputConfig?.automaticActivityDetection?.disabled).toBe(true);
         });
 
-        it('1:1 call: no realtimeInputConfig when disableAutoResponse is absent (model auto-responds)', async () => {
+        /**
+         * Rewritten with the C4 turn-coverage work. This previously asserted that
+         * `realtimeInputConfig` was ABSENT, using the whole object's absence as a proxy for "automatic
+         * activity detection is not disabled, so the model auto-responds".
+         *
+         * That proxy no longer holds: MJ now always STATES turn coverage, so the object is always
+         * present. The requirement is unchanged, so the assertion now tests it directly — which is the
+         * better test either way, because it names the thing it cares about instead of an incidental
+         * shape that happened to correlate with it.
+         */
+        it('1:1 call: automatic activity detection is NOT disabled when disableAutoResponse is absent (model auto-responds)', async () => {
             await driver.StartSession(makeParams());
-            const config = driver.LastConnectArgs!.Config as { realtimeInputConfig?: unknown };
-            expect(config.realtimeInputConfig).toBeUndefined();
+            const config = driver.LastConnectArgs!.Config as {
+                realtimeInputConfig?: { automaticActivityDetection?: { disabled?: boolean }; turnCoverage?: string };
+            };
+            expect(config.realtimeInputConfig?.automaticActivityDetection).toBeUndefined();
+            // Coverage is stated on every session — that is the C4 guarantee, not a side effect.
+            expect(config.realtimeInputConfig?.turnCoverage).toBe('TURN_INCLUDES_ONLY_ACTIVITY');
         });
 
         it('capability: reports it CANNOT reconfigure turn mode mid-session (activity detection fixed at connect)', async () => {
@@ -331,6 +345,39 @@ describe('GeminiRealtime', () => {
             driver.Fake.Emit({ serverContent: { outputTranscription: { text: 'It is sunny.', finished: true } } } as LiveServerMessage);
 
             expect(transcripts).toEqual([{ Role: 'assistant', Text: 'It is sunny.', IsFinal: true }]);
+        });
+
+        it('extracts thought parts as narration transcripts without emitting audio output', () => {
+            const transcripts: RealtimeTranscript[] = [];
+            const outputs: ArrayBuffer[] = [];
+            session.OnTranscript((t) => transcripts.push(t));
+            session.OnOutput((chunk) => outputs.push(chunk));
+
+            // Emit a thought part and an audio part
+            driver.Fake.Emit({
+                serverContent: {
+                    modelTurn: {
+                        role: 'model',
+                        parts: [
+                            { text: 'Let me think about this step by step.', thought: true },
+                            { inlineData: { data: Buffer.from('spoken audio').toString('base64'), mimeType: 'audio/pcm;rate=24000' } },
+                        ],
+                    },
+                },
+            } as LiveServerMessage);
+
+            expect(transcripts).toEqual([
+                { Role: 'assistant', Text: 'Let me think about this step by step.', IsFinal: false, Kind: 'narration', IsThought: true },
+            ]);
+            expect(outputs).toHaveLength(1);
+
+            // Complete turn finalizes the narration transcript
+            driver.Fake.Emit({ serverContent: { turnComplete: true } } as LiveServerMessage);
+
+            expect(transcripts).toEqual([
+                { Role: 'assistant', Text: 'Let me think about this step by step.', IsFinal: false, Kind: 'narration', IsThought: true },
+                { Role: 'assistant', Text: 'Let me think about this step by step.', IsFinal: true, Kind: 'narration', IsThought: true },
+            ]);
         });
 
         it('translates toolCall.functionCalls to RealtimeToolCalls with JSON-string args', () => {
@@ -799,5 +846,395 @@ describe('C7: agnostic voice → Gemini speechConfig (issue #3721)', () => {
         } finally {
             warn.mockRestore();
         }
+    });
+});
+
+/* ------------------------------------------------------------------ */
+/*  Per-model Live legality (plan §6 tasks C1-C4)                     */
+/*                                                                    */
+/*  Every rule here fails at SESSION MINT when broken — upstream of   */
+/*  all UI code — so each is pinned per model rather than trusted.     */
+/* ------------------------------------------------------------------ */
+describe('per-model Live legality', () => {
+    const connectConfig = (d: TestGeminiRealtime) => (d.LastConnectArgs?.Config ?? {}) as Record<string, unknown>;
+    const realtimeInput = (d: TestGeminiRealtime) =>
+        (connectConfig(d).realtimeInputConfig ?? {}) as Record<string, unknown>;
+    const thinkingOf = (d: TestGeminiRealtime) => connectConfig(d).thinkingConfig as Record<string, unknown> | undefined;
+
+    let warn: ReturnType<typeof vi.spyOn>;
+    beforeEach(() => {
+        warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    });
+
+    describe('C1 — affective dialogue is removed from the 3.8 API', () => {
+        it('drops enableAffectiveDialog for gemini-3.8-live, with a warning', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(makeParams({ Model: 'gemini-3.8-live', Config: { enableAffectiveDialog: true } }));
+            expect(connectConfig(d).enableAffectiveDialog).toBeUndefined();
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining('enableAffectiveDialog'));
+        });
+
+        it('keeps it for the 3.1 preview, where it is still valid', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(
+                makeParams({ Model: 'gemini-3.1-flash-live-preview', Config: { enableAffectiveDialog: true } })
+            );
+            expect(connectConfig(d).enableAffectiveDialog).toBe(true);
+        });
+    });
+
+    describe('C2 — proactive audio is permanently on for 3.8', () => {
+        it('drops proactivity.proactiveAudio:false rather than sending an error', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(
+                makeParams({ Model: 'gemini-3.8-live', Config: { proactivity: { proactiveAudio: false } } })
+            );
+            expect(connectConfig(d).proactivity).toBeUndefined();
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining('proactiveAudio'));
+        });
+
+        it('leaves proactiveAudio:true alone — only the illegal value is removed', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(
+                makeParams({ Model: 'gemini-3.8-live', Config: { proactivity: { proactiveAudio: true } } })
+            );
+            expect(connectConfig(d).proactivity).toEqual({ proactiveAudio: true });
+        });
+    });
+
+    describe('C3 — thinking level per model', () => {
+        it('omits thinkingConfig ENTIRELY for gemini-3.8-live, as its model page instructs', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(
+                makeParams({ Model: 'gemini-3.8-live', Config: { reasoning: { Remote: { Effort: 'high' } } } })
+            );
+            expect(thinkingOf(d)).toBeUndefined();
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining('does not accept'));
+        });
+
+        it('sends low/medium/high for Extended Thinking', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(
+                makeParams({
+                    Model: 'gemini-3.8-live-extended-thinking',
+                    Config: { reasoning: { Remote: { Effort: 'medium' } } },
+                })
+            );
+            expect(thinkingOf(d)?.thinkingLevel).toBe('MEDIUM');
+        });
+
+        it('refuses minimal on Extended Thinking without killing the session, falling back to default medium', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(
+                makeParams({
+                    Model: 'gemini-3.8-live-extended-thinking',
+                    Config: { reasoning: { Remote: { Effort: 'minimal' } } },
+                })
+            );
+            expect(thinkingOf(d)?.thinkingLevel).toBe('MEDIUM');
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining('accepts only'));
+        });
+
+        it('accepts minimal on the 3.1 preview, which allows it', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(
+                makeParams({
+                    Model: 'gemini-3.1-flash-live-preview',
+                    Config: { reasoning: { Remote: { Effort: 'minimal' } } },
+                })
+            );
+            expect(thinkingOf(d)?.thinkingLevel).toBe('MINIMAL');
+        });
+
+        it('honours the flat legacy effortLevel bag key so existing configs keep working', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(
+                makeParams({ Model: 'gemini-3.8-live-extended-thinking', Config: { reasoningEffort: 'low' } })
+            );
+            expect(thinkingOf(d)?.thinkingLevel).toBe('LOW');
+        });
+
+        it('sets includeThoughts only when asked, and only where supported', async () => {
+            const d1 = new TestGeminiRealtime('k');
+            await d1.StartSession(
+                makeParams({
+                    Model: 'gemini-3.8-live-extended-thinking',
+                    Config: { reasoning: { IncludeThoughtSummaries: true } },
+                })
+            );
+            expect(thinkingOf(d1)?.includeThoughts).toBe(true);
+
+            const d2 = new TestGeminiRealtime('k');
+            await d2.StartSession(
+                makeParams({ Model: 'gemini-3.8-live', Config: { reasoning: { IncludeThoughtSummaries: true } } })
+            );
+            expect(thinkingOf(d2)).toBeUndefined();
+        });
+
+        it('defaults to medium thinkingLevel on Extended Thinking when none specified', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(makeParams({ Model: 'gemini-3.8-live-extended-thinking' }));
+            expect(thinkingOf(d)?.thinkingLevel).toBe('MEDIUM');
+        });
+    });
+
+    describe('C4 — turn coverage is stated, never inherited', () => {
+        it('defaults to audio-only, so billed video frames are never inherited', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(makeParams({ Model: 'gemini-3.8-live' }));
+            expect(realtimeInput(d).turnCoverage).toBe('TURN_INCLUDES_ONLY_ACTIVITY');
+        });
+
+        it('includes all video only when the catalog explicitly asks', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(
+                makeParams({
+                    Model: 'gemini-3.8-live',
+                    Config: { turnDetection: { Coverage: 'audioActivityAndAllVideo' } },
+                })
+            );
+            expect(realtimeInput(d).turnCoverage).toBe('TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO');
+        });
+
+        it('states coverage even on the legacy model, so behaviour never depends on a provider default', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(makeParams({ Model: 'gemini-3.1-flash-live-preview' }));
+            expect(realtimeInput(d).turnCoverage).toBe('TURN_INCLUDES_ONLY_ACTIVITY');
+        });
+
+        it('preserves an existing automaticActivityDetection alongside coverage', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(makeParams({ Model: 'gemini-3.8-live', Config: { disableAutoResponse: true } }));
+            const ri = realtimeInput(d);
+            expect(ri.turnCoverage).toBe('TURN_INCLUDES_ONLY_ACTIVITY');
+            expect((ri.automaticActivityDetection as Record<string, unknown>)?.disabled).toBe(true);
+        });
+    });
+
+    describe('C5 — refuse BLOCKING locally for Extended Thinking', () => {
+        const testTools = [
+            {
+                Name: 'search_docs',
+                Description: 'Search documentation',
+                ParametersSchema: { type: 'object', properties: { query: { type: 'string' } } },
+            },
+        ];
+
+        it('defaults tool declarations to behavior: NON_BLOCKING', () => {
+            const decls = GeminiRealtime.MapToolsToFunctionDeclarations(testTools);
+            expect(decls).toHaveLength(1);
+            expect(decls[0].behavior).toBe('NON_BLOCKING');
+        });
+
+        it('permits BLOCKING on gemini-3.8-live where blocking is supported', () => {
+            const decls = GeminiRealtime.MapToolsToFunctionDeclarations(testTools, 'gemini-3.8-live', 'BLOCKING');
+            expect(decls).toHaveLength(1);
+            expect(decls[0].behavior).toBe('BLOCKING');
+        });
+
+        it('permits BLOCKING on legacy 3.1 preview where blocking is supported', () => {
+            const decls = GeminiRealtime.MapToolsToFunctionDeclarations(
+                testTools,
+                'gemini-3.1-flash-live-preview',
+                'BLOCKING'
+            );
+            expect(decls).toHaveLength(1);
+            expect(decls[0].behavior).toBe('BLOCKING');
+        });
+
+        it('forces NON_BLOCKING and warns when BLOCKING is requested on gemini-3.8-live-extended-thinking', () => {
+            const decls = GeminiRealtime.MapToolsToFunctionDeclarations(
+                testTools,
+                'gemini-3.8-live-extended-thinking',
+                'BLOCKING'
+            );
+            expect(decls).toHaveLength(1);
+            expect(decls[0].behavior).toBe('NON_BLOCKING');
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining('blocking tool execution is not supported'));
+        });
+
+        it('refuses BLOCKING in StartSession for Extended Thinking when passed via Config bag', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(
+                makeParams({
+                    Model: 'gemini-3.8-live-extended-thinking',
+                    Tools: testTools,
+                    Config: { tooling: { Behavior: 'BLOCKING' } },
+                })
+            );
+            const tools =
+                (connectConfig(d).tools as Array<{
+                    functionDeclarations?: Array<{ name: string; behavior?: string }>;
+                }>) ?? [];
+            expect(tools[0].functionDeclarations![0].behavior).toBe('NON_BLOCKING');
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining('blocking tool execution is not supported'));
+        });
+
+        it('cleanses any BLOCKING functionDeclaration in applyModelLegality for Extended Thinking', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(
+                makeParams({
+                    Model: 'gemini-3.8-live-extended-thinking',
+                    Config: {
+                        tools: [
+                            {
+                                functionDeclarations: [{ name: 'injected_tool', behavior: 'BLOCKING' }],
+                            },
+                        ],
+                    },
+                })
+            );
+            const tools =
+                (connectConfig(d).tools as Array<{
+                    functionDeclarations?: Array<{ name: string; behavior?: string }>;
+                }>) ?? [];
+            expect(tools[0].functionDeclarations![0].behavior).toBe('NON_BLOCKING');
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining('blocking tool execution is not supported'));
+        });
+    });
+
+    describe('Phase D — D6 function scheduling gating and SessionConfig profile fields', () => {
+        it('stamps idleSignal, supportsScheduling, supportsBlocking in SessionConfig for Extended Thinking', async () => {
+            const driver = new ClientDirectTestable('k');
+            const cfg = await driver.CreateClientSession(makeParams({ Model: 'gemini-3.8-live-extended-thinking' }));
+            const sc = cfg.SessionConfig as Record<string, unknown>;
+            expect(sc['idleSignal']).toBe('interactionStatus');
+            expect(sc['supportsScheduling']).toBe(false);
+            expect(sc['supportsBlocking']).toBe(false);
+        });
+
+        it('stamps idleSignal, supportsScheduling, supportsBlocking in SessionConfig for plain 3.8 Live', async () => {
+            const driver = new ClientDirectTestable('k');
+            const cfg = await driver.CreateClientSession(makeParams({ Model: 'gemini-3.8-live' }));
+            const sc = cfg.SessionConfig as Record<string, unknown>;
+            expect(sc['idleSignal']).toBe('turnComplete');
+            expect(sc['supportsScheduling']).toBe(true);
+            expect(sc['supportsBlocking']).toBe(true);
+        });
+
+        it('attaches scheduling on SendToolResult when model supports scheduling (gemini-3.8-live)', async () => {
+            const d = new TestGeminiRealtime('k');
+            const session = await d.StartSession(makeParams({ Model: 'gemini-3.8-live' }));
+            // Simulate incoming tool call to cache the name
+            d.Fake.Emit({
+                toolCall: { functionCalls: [{ id: 'call-1', name: 'lookup', args: {} }] },
+            } as LiveServerMessage);
+
+            await session.SendToolResult('call-1', JSON.stringify({ result: 'data', scheduling: 'WHEN_IDLE' }));
+            expect(d.Fake.ToolResponses).toHaveLength(1);
+            const resp = d.Fake.ToolResponses[0].functionResponses;
+            const item = Array.isArray(resp) ? resp[0] : resp;
+            expect(item.scheduling).toBe('WHEN_IDLE');
+        });
+
+        it('drops scheduling with a warning when model does NOT support scheduling (Extended Thinking)', async () => {
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+            try {
+                const d = new TestGeminiRealtime('k');
+                const session = await d.StartSession(makeParams({ Model: 'gemini-3.8-live-extended-thinking' }));
+                d.Fake.Emit({
+                    toolCall: { functionCalls: [{ id: 'call-1', name: 'lookup', args: {} }] },
+                } as LiveServerMessage);
+
+                await session.SendToolResult('call-1', JSON.stringify({ result: 'data', scheduling: 'SILENT' }));
+                expect(d.Fake.ToolResponses).toHaveLength(1);
+                const resp = d.Fake.ToolResponses[0].functionResponses;
+                const item = Array.isArray(resp) ? resp[0] : resp;
+                expect(item.scheduling).toBeUndefined();
+                expect(warn).toHaveBeenCalledWith(expect.stringContaining('scheduling is only supported on gemini-3.8-live'));
+            } finally {
+                warn.mockRestore();
+            }
+        });
+
+        it('supports __mj_scheduling, accepts INTERRUPTED, and strips scheduling keys from payload', async () => {
+            const d = new TestGeminiRealtime('k');
+            const session = await d.StartSession(makeParams({ Model: 'gemini-3.8-live' }));
+            d.Fake.Emit({
+                toolCall: { functionCalls: [{ id: 'call-2', name: 'lookup', args: {} }] },
+            } as LiveServerMessage);
+
+            await session.SendToolResult('call-2', JSON.stringify({ result: 'ok', __mj_scheduling: 'INTERRUPTED' }));
+            expect(d.Fake.ToolResponses).toHaveLength(1);
+            const resp = d.Fake.ToolResponses[0].functionResponses;
+            const item = Array.isArray(resp) ? resp[0] : resp;
+            expect(item.scheduling).toBe('INTERRUPT');
+            const payload = item.response as Record<string, unknown>;
+            expect(payload['result']).toBe('ok');
+            expect(payload['__mj_scheduling']).toBeUndefined();
+            expect(payload['scheduling']).toBeUndefined();
+        });
+
+        it('warns on unrecognized scheduling value', async () => {
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+            try {
+                const parsed: Record<string, unknown> = { key: 'val', scheduling: 'INVALID_SCHED' };
+                const res = GeminiRealtime.ExtractAndResolveScheduling(parsed, true, 'testTool');
+                expect(res).toBeUndefined();
+                expect(parsed['key']).toBe('val');
+                expect(parsed['scheduling']).toBeUndefined();
+                expect(warn).toHaveBeenCalledWith(expect.stringContaining('Unrecognized function scheduling value "INVALID_SCHED"'));
+            } finally {
+                warn.mockRestore();
+            }
+        });
+
+        it('states behavior on bag tools without behavior (C5a) and warns on unrecognized behavior (C5b)', async () => {
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+            try {
+                const d = new TestGeminiRealtime('k');
+                await d.StartSession(
+                    makeParams({
+                        Model: 'gemini-3.8-live',
+                        Config: {
+                            tools: [
+                                {
+                                    functionDeclarations: [
+                                        { name: 'bare_tool' },
+                                        { name: 'typo_tool', behavior: 'BLOKING' as Behavior },
+                                    ],
+                                },
+                            ],
+                        },
+                    })
+                );
+                const tools = (connectConfig(d).tools as Array<{
+                    functionDeclarations?: Array<{ name: string; behavior?: string }>;
+                }>) ?? [];
+                const decls = tools[0].functionDeclarations!;
+                expect(decls[0].name).toBe('bare_tool');
+                expect(decls[0].behavior).toBe('NON_BLOCKING');
+                expect(decls[1].name).toBe('typo_tool');
+                expect(decls[1].behavior).toBe('NON_BLOCKING');
+                expect(warn).toHaveBeenCalledWith(expect.stringContaining('Unrecognized behavior value "BLOKING"'));
+            } finally {
+                warn.mockRestore();
+            }
+        });
+
+        it('scrubs tooling, toolBehavior, and functionCallingBehavior from vendor config bag (C5c)', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(
+                makeParams({
+                    Model: 'gemini-3.8-live',
+                    Config: {
+                        tooling: { Behavior: 'NON_BLOCKING' },
+                        toolBehavior: 'BLOCKING',
+                        functionCallingBehavior: 'BLOCKING',
+                    },
+                })
+            );
+            const cfg = connectConfig(d) as Record<string, unknown>;
+            expect(cfg['tooling']).toBeUndefined();
+            expect(cfg['toolBehavior']).toBeUndefined();
+            expect(cfg['functionCallingBehavior']).toBeUndefined();
+        });
+    });
+
+    it('an unknown Live model still mints a working session rather than failing', async () => {
+        const d = new TestGeminiRealtime('k');
+        await d.StartSession(makeParams({ Model: 'gemini-9.9-live-future' }));
+        expect(realtimeInput(d).turnCoverage).toBe('TURN_INCLUDES_ONLY_ACTIVITY');
+        expect(thinkingOf(d)).toBeUndefined();
     });
 });

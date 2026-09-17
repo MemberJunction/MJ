@@ -768,8 +768,16 @@ export class RunViewResolver extends ResolverBase {
       await this.CheckAPIKeyScopeAuthorization('view:run', input.ViewName, userPayload);
       const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
       const rawData = await super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
-      if (rawData === null) 
-        return null;
+      if (rawData === null) {
+        return {
+          Results: [],
+          Success: false,
+          ErrorMessage: `Failed to execute view: ${input.ViewName}`,
+          RowCount: 0,
+          TotalRowCount: 0,
+          ExecutionTime: 0,
+        };
+      }
 
       const viewInfo = super.safeFirstArrayElement<MJUserViewEntityExtended>(await super.findBy<MJUserViewEntityExtended>(provider, "MJ: User Views", { Name: input.ViewName }, userPayload.userRecord));
       const entity = provider.EntityByID(viewInfo.EntityID);
@@ -786,8 +794,16 @@ export class RunViewResolver extends ResolverBase {
       };
     } catch (err) {
       rethrowFieldSecurityDenial(err);
-      console.log(err);
-      return null;
+      LogError(err);
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      return {
+        Results: [],
+        Success: false,
+        ErrorMessage: errorMessage,
+        RowCount: 0,
+        TotalRowCount: 0,
+        ExecutionTime: 0,
+      };
     }
   }
 
@@ -801,8 +817,16 @@ export class RunViewResolver extends ResolverBase {
       await this.CheckAPIKeyScopeAuthorization('view:run', input.ViewID, userPayload);
       const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
       const rawData = await super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
-      if (rawData === null) 
-        return null;
+      if (rawData === null) {
+        return {
+          Results: [],
+          Success: false,
+          ErrorMessage: `Failed to execute view with ID: ${input.ViewID}`,
+          RowCount: 0,
+          TotalRowCount: 0,
+          ExecutionTime: 0,
+        };
+      }
 
       const viewInfo = super.safeFirstArrayElement<MJUserViewEntityExtended>(await super.findBy<MJUserViewEntityExtended>(provider, "MJ: User Views", { ID: input.ViewID }, userPayload.userRecord));
       const entity = provider.EntityByID(viewInfo.EntityID);
@@ -819,8 +843,16 @@ export class RunViewResolver extends ResolverBase {
       };
     } catch (err) {
       rethrowFieldSecurityDenial(err);
-      console.log(err);
-      return null;
+      LogError(err);
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      return {
+        Results: [],
+        Success: false,
+        ErrorMessage: errorMessage,
+        RowCount: 0,
+        TotalRowCount: 0,
+        ExecutionTime: 0,
+      };
     }
   }
 
@@ -834,7 +866,16 @@ export class RunViewResolver extends ResolverBase {
       await this.CheckAPIKeyScopeAuthorization('view:run', input.EntityName, userPayload);
       const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
       const rawData = await super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
-      if (rawData === null) return null;
+      if (rawData === null) {
+        return {
+          Results: [],
+          Success: false,
+          ErrorMessage: `Failed to execute dynamic view for ${input.EntityName}`,
+          RowCount: 0,
+          TotalRowCount: 0,
+          ExecutionTime: 0,
+        };
+      }
 
       const entity = provider.EntityByName(input.EntityName);
       const returnData = this.processRawData(rawData.Results, entity.ID, entity);
@@ -850,8 +891,16 @@ export class RunViewResolver extends ResolverBase {
       };
     } catch (err) {
       rethrowFieldSecurityDenial(err);
-      console.log(err);
-      return null;
+      LogError(err);
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      return {
+        Results: [],
+        Success: false,
+        ErrorMessage: errorMessage,
+        RowCount: 0,
+        TotalRowCount: 0,
+        ExecutionTime: 0,
+      };
     }
   }
 
@@ -867,7 +916,14 @@ export class RunViewResolver extends ResolverBase {
       // Note: RunViewsGeneric returns the core RunViewResult type, not the GraphQL type
       const rawData = await super.RunViewsGeneric(input, provider, userPayload);
       if (!rawData) {
-        return null;
+        return input.map(() => ({
+          Results: [],
+          Success: false,
+          ErrorMessage: 'Failed to execute views',
+          RowCount: 0,
+          TotalRowCount: 0,
+          ExecutionTime: 0,
+        }));
       }
 
       let results: RunViewGenericResult[] = [];
@@ -884,6 +940,7 @@ export class RunViewResolver extends ResolverBase {
           TotalRowCount: data?.TotalRowCount,
           ExecutionTime: data?.ExecutionTime,
           Success: data?.Success,
+          ErrorMessage: data?.ErrorMessage,
           AggregateResults: this.processAggregateResults(data?.AggregateResults),
           AggregateExecutionTime: data?.AggregateExecutionTime,
         });
@@ -893,7 +950,15 @@ export class RunViewResolver extends ResolverBase {
     } catch (err) {
       rethrowFieldSecurityDenial(err);
       LogError(err);
-      return null;
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      return input.map(() => ({
+        Results: [],
+        Success: false,
+        ErrorMessage: errorMessage,
+        RowCount: 0,
+        TotalRowCount: 0,
+        ExecutionTime: 0,
+      }));
     }
   }
 
@@ -1060,7 +1125,14 @@ export class RunViewResolver extends ResolverBase {
       const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
       const rawData = await super.RunViewsGeneric(input, provider, userPayload);
       if (!rawData) {
-        return null;
+        return input.map(() => ({
+          Results: [],
+          Success: false,
+          ErrorMessage: 'Failed to execute views',
+          RowCount: 0,
+          TotalRowCount: 0,
+          ExecutionTime: 0,
+        }));
       }
 
       let results: RunViewGenericResult[] = [];
@@ -1089,7 +1161,15 @@ export class RunViewResolver extends ResolverBase {
     } catch (err) {
       rethrowFieldSecurityDenial(err);
       LogError(err);
-      return null;
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      return input.map(() => ({
+        Results: [],
+        Success: false,
+        ErrorMessage: errorMessage,
+        RowCount: 0,
+        TotalRowCount: 0,
+        ExecutionTime: 0,
+      }));
     }
   }
 

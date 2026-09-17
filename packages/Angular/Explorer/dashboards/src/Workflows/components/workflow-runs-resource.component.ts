@@ -780,7 +780,7 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
             // The edges too, for the what-if preview — same rows the run view reads for the canvas.
             const deps = await RunView.FromMetadataProvider(this.ProviderToUse).RunView<MJTaskDependencyEntity>({
                 EntityName: 'MJ: Task Dependencies',
-                ExtraFilter: `TaskID IN (SELECT ID FROM __mj.Task WHERE ParentID='${parentTaskID}')`,
+                ExtraFilter: `TaskID IN (SELECT ID FROM [__mj].[vwTasks] WHERE ParentID='${parentTaskID}')`,
                 ResultType: 'entity_object',
                 BypassCache: true,
             });
