@@ -559,7 +559,7 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
                 },
                 {
                     EntityName: 'MJ: Task Dependencies',
-                    ExtraFilter: `TaskID IN (SELECT ID FROM __mj.Task WHERE ParentID='${this.parentTaskID}')`,
+                    ExtraFilter: `TaskID IN (SELECT ID FROM [__mj].[vwTasks] WHERE ParentID='${this.parentTaskID}')`,
                     ResultType: 'entity_object',
                     BypassCache: true,
                 },
