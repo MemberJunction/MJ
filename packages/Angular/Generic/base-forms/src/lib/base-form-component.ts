@@ -16,6 +16,9 @@ import { FormEditingCompleteEvent, PendingRecordItem, BaseFormComponentEventCode
 import { MJListEntity } from '@memberjunction/core-entities';
 
 import { BaseRecordComponent } from './base-record-component';
+import type { BaseFormPanel } from './panel-slot/base-form-panel';
+import { MergePanelValidation } from './panel-slot/merge-panel-validation';
+import type { FormCompositionSnapshot } from './chrome/form-composition-snapshot';
 import { BaseFormSectionInfo } from './base-form-section-info';
 import { MjCollapsiblePanelComponent } from './panel/collapsible-panel.component';
 import { FormNavigationEvent } from './types/navigation-events';
@@ -32,7 +35,9 @@ import {
 import { FormStateService } from './form-state.service';
 import { EntityFormConfig } from './types/entity-form-config';
 import { FormToolbarItemConfig, FormToolbarItemKey, FormToolbarItemClickEventArgs } from './types/form-toolbar-item';
-import { CollectFormPanelRegistrations } from './panel-slot/collect-form-panel-registrations';
+import { CollectFormContributionRegistrations } from './panel-slot/collect-form-contribution-registrations';
+import type { FormContributionRegistration } from './panel-slot/form-contribution';
+import { FormContextsEqual } from './base-form-component-internals';
 import { ContributionHiddenSectionKeys } from './panel-slot/form-contribution';
 
 /**
@@ -258,6 +263,28 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
    */
   @Output() RecordReady = new EventEmitter<BaseEntity>();
 
+  /** Layout the container resolved for this form. Set by `<mj-record-form-container>`; read by panel hosts. */
+  public ChromeLayout: 'accordion' | 'left-nav' = 'accordion';
+
+  /**
+   * Last composition snapshot the container published — what is actually on this form:
+   * sections, related grids, contributions and slots. Consumers: agent context (so Skip
+   * can target a real slot and section key) and Form Studio.
+   */
+  public CompositionSnapshot: FormCompositionSnapshot | null = null;
+  @Output() CompositionChanged = new EventEmitter<FormCompositionSnapshot>();
+
+  private readonly _formPanels = new Set<BaseFormPanel>();
+
+  /** Slot hosts register every mounted panel so validation can include panel-owned checks. */
+  public RegisterFormPanel(panel: BaseFormPanel): void {
+    this._formPanels.add(panel);
+  }
+
+  public UnregisterFormPanel(panel: BaseFormPanel): void {
+    this._formPanels.delete(panel);
+  }
+
   // #endregion
 
   /** Subscription to form state changes */
@@ -406,7 +433,34 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
   // #region Core Form Operations
 
+  /**
+   * Record + pending-record validation, merged with whatever panel validity is
+   * already known.
+   *
+   * Synchronous, and therefore blind to a panel validator that has not reported yet —
+   * any path that gates a save must use {@link ValidateAsync}. The signature stays
+   * synchronous because this is published API with external callers.
+   */
   public Validate(): ValidationResult {
+    const valResults = this.validateRecordAndPending();
+    return MergePanelValidation(valResults, [...this._formPanels].map((panel) => panel.lastKnownValidation()));
+  }
+
+  /**
+   * Record + pending-record validation, merged with every mounted panel's validator,
+   * awaited. This is what `Save()` calls.
+   *
+   * A panel's `validate()` may be async — anything checking server state will be — and
+   * reading such a result synchronously yields a Promise, which tests as "no opinion"
+   * and lets an invalid record save with no error and no log.
+   */
+  public async ValidateAsync(): Promise<ValidationResult> {
+    const base = this.validateRecordAndPending();
+    const panelResults = await Promise.all([...this._formPanels].map((panel) => panel.validate()));
+    return MergePanelValidation(base, panelResults);
+  }
+
+  private validateRecordAndPending(): ValidationResult {
     const valResults = (<BaseEntity>this.record).Validate();
     const pendingValResults = this.ValidatePendingRecords();
     for (let i = 0; i < pendingValResults.length; i++) {
@@ -445,7 +499,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
       if (this.record) {
         this.PopulatePendingRecords();
-        const valResults = this.Validate();
+        const valResults = await this.ValidateAsync();
         if (valResults.Success) {
           const result = await this.InternalSaveRecord();
           if (result) {
@@ -949,8 +1003,20 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   /** Validation errors from the most recent failed save attempt */
   private _validationErrors: ValidationErrorInfo[] = [];
 
+  private _formContextMemo: FormContext | null = null;
+
+  /**
+   * Context handed to every field, panel and slot in the form.
+   *
+   * Returns the SAME object while nothing in it has changed. Templates bind this getter in
+   * dozens of places per form, and Angular evaluates each binding on every change-detection
+   * pass — so allocating a fresh object per access handed every child a new reference each
+   * pass, defeating input-identity checks and cascading re-renders through the whole form.
+   * Building the candidate is cheap (the expensive part, hidden section keys, is memoized);
+   * the identity comparison below is what stops the cascade.
+   */
   public get formContext(): FormContext {
-    return {
+    const next: FormContext = {
       sectionFilter: this.searchFilter,
       showEmptyFields: this.showEmptyFields,
       showValidation: this._showValidation,
@@ -962,28 +1028,59 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       visibleSectionKeys: this.Config?.VisibleSectionKeys,
       allowSectionReorder: this.resolveAllowSectionReorder()
     };
+    const prev = this._formContextMemo;
+    if (prev && FormContextsEqual(prev, next)) return prev;
+    this._formContextMemo = next;
+    return next;
   }
 
   /**
    * Config HiddenSectionKeys plus section keys winning contributions asked
    * to hide (related-entity claims and `replacesSectionKey` field panels).
    */
+  private _resolvedHiddenKeysMemo: { claimed: string[]; configured: string[] | undefined; merged: string[] } | null = null;
+
   private resolveHiddenSectionKeys(): string[] | undefined {
     const claimed = this.contributionHiddenSectionKeys();
     const configured = this.Config?.HiddenSectionKeys;
     if (claimed.length === 0) return configured;
-    return [...(configured ?? []), ...claimed];
+    // Memoized on the identity of both inputs: without it this concatenation returns a new
+    // array per access, which alone would make every formContext look changed.
+    const memo = this._resolvedHiddenKeysMemo;
+    if (memo && memo.claimed === claimed && memo.configured === configured) return memo.merged;
+    const merged = [...(configured ?? []), ...claimed];
+    this._resolvedHiddenKeysMemo = { claimed, configured, merged };
+    return merged;
   }
 
+  /** Memo for {@link contributionHiddenSectionKeys} — see the comment there. */
+  private _hiddenKeysMemo: { entity: EntityInfo; regs: readonly FormContributionRegistration[]; keys: string[] } | null = null;
+
+  /**
+   * Section keys hidden because a contribution claimed them.
+   *
+   * Memoized on the identity of the merged registration list, which the collector returns as
+   * a stable reference until something actually changes. That matters because this sits under
+   * the `formContext` getter, which is bound in dozens of places per form and re-evaluated on
+   * every change-detection pass — and `ContributionHiddenSectionKeys` runs the WHOLE composer
+   * (collapse, relationship walk, section-key construction) on each call. Running that per
+   * binding per pass is what made forms lag.
+   */
   private contributionHiddenSectionKeys(): string[] {
     const entity = this.record?.EntityInfo;
     if (!entity) return [];
-    return ContributionHiddenSectionKeys(
+    // Merged: compiled registrations plus the rows that apply to this user.
+    const regs = CollectFormContributionRegistrations(entity, this.ProviderToUse);
+    const memo = this._hiddenKeysMemo;
+    if (memo && memo.entity === entity && memo.regs === regs) return memo.keys;
+    const keys = ContributionHiddenSectionKeys(
       entity.Name,
       entity.RelatedEntities,
       entity.ChildEntities.map((child) => child.ID),
-      CollectFormPanelRegistrations(),
+      regs,
     );
+    this._hiddenKeysMemo = { entity, regs, keys };
+    return keys;
   }
 
   /**

@@ -24,6 +24,9 @@ export * from './curated-form-schema';
 export * from './default-form-scaffold';
 export * from './form-host-props-fixture';
 export * from './form-spec-info';
+export * from './form-contribution-spec';
+export * from './form-panel-host-props';
+export * from './form-panel-events';
 
 import type { ComponentSpec } from '../component-spec';
 

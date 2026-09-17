@@ -11,9 +11,9 @@ interface UserRoleRow {
 }
 
 @RegisterClassEx(BaseFormPanel, {
-    key: 'form-panel:Users:overview',
+    key: 'form-panel:MJ: Users:overview',
     metadata: {
-        entity: 'Users',
+        entity: 'MJ: Users',
         slot: 'before-fields',
         sortKey: 10,
     },

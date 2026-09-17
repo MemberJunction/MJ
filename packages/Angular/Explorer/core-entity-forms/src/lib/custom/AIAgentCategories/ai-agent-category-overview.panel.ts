@@ -13,9 +13,9 @@ interface AgentRow {
 }
 
 @RegisterClassEx(BaseFormPanel, {
-    key: 'form-panel:AI Agent Categories:overview',
+    key: 'form-panel:MJ: AI Agent Categories:overview',
     metadata: {
-        entity: 'AI Agent Categories',
+        entity: 'MJ: AI Agent Categories',
         slot: 'before-fields',
         sortKey: 10,
     },

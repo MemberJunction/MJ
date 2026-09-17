@@ -66,3 +66,38 @@ describe('FormPanelSlotComponent (DOM)', () => {
     expect(query(f, '.fake-slot')).toBeNull();
   });
 });
+
+/**
+ * Strict entity matching (A4/A7). The slot host used to strip an `MJ: ` prefix and
+ * lowercase before comparing, so a panel registered as `'Users'` mounted on the
+ * `'MJ: Users'` form — while the container, which has always compared strictly,
+ * ignored that same panel's inclusion and chrome group. One predicate now serves both.
+ */
+const PREFIXED_ENTITY = 'MJ: ZZZ_SlotStrictEntity';
+
+@RegisterClassEx(BaseFormPanel, { metadata: { entity: 'ZZZ_SlotStrictEntity', slot: 'after-fields' } })
+@Component({ standalone: true, selector: 'test-loose-panel', template: `<div class="loose-slot">loose</div>` })
+class LooseNamedPanel extends BaseFormPanel {}
+
+describe('FormPanelSlotComponent (DOM) — strict entity matching', () => {
+  it('registers the loosely named panel (guard)', () => {
+    expect(LooseNamedPanel).toBeDefined();
+  });
+
+  it('does not mount a registration whose entity name only matches after prefix-stripping', () => {
+    const f = render(PREFIXED_ENTITY);
+    expect(query(f, '.loose-slot')).toBeNull();
+  });
+
+  it('warns once, naming the registration that will not mount', () => {
+    const warnings: string[] = [];
+    const original = console.warn;
+    console.warn = (...args: unknown[]) => { warnings.push(args.map(String).join(' ')); };
+    try {
+      render(PREFIXED_ENTITY);
+    } finally {
+      console.warn = original;
+    }
+    expect(warnings.some(w => w.includes('ZZZ_SlotStrictEntity') && w.includes('will not mount'))).toBe(true);
+  });
+});

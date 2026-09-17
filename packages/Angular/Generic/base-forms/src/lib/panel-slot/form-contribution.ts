@@ -9,6 +9,7 @@
  * (`angular-codegen.ts` `camelCase` + related-entity sectionKey). If they drift,
  * hide-baked and skip-baked miss and the user sees a double grid.
  */
+import type { ClassRegistration } from '@memberjunction/global';
 import { UUIDsEqual } from '@memberjunction/global';
 import { FormPanelRegistrationMetadata, FormPanelSlot } from './base-form-panel';
 
@@ -22,9 +23,37 @@ export interface FormContributionRelationship {
     Sequence?: number | null;
 }
 
+/** Which of the two registration sources produced a contribution. */
+export type FormContributionRegistrationSource = 'class' | 'metadata';
+
 export interface FormContributionRegistration {
+    /**
+     * Rank within a `contributionKey` group, higher wins. For `'class'` registrations this
+     * is the ClassFactory registration priority; for `'metadata'` rows it is the row's
+     * `Precedence` column. Both mean the same thing here — higher wins — which is why one
+     * field carries both.
+     */
     Priority: number;
     Metadata: FormPanelRegistrationMetadata;
+
+    /** Omitted on legacy call sites, which are all compiled registrations. */
+    Source?: FormContributionRegistrationSource;
+
+    /** `MJ: Components.ID` the panel renders — metadata rows only. */
+    ComponentID?: string;
+
+    /** Parsed `Configuration` JSON for metadata rows. */
+    Configuration?: Record<string, unknown>;
+
+    Title?: string;
+    Icon?: string;
+    Presentation?: 'panel' | 'bare';
+
+    /** `MJ: Entity Form Contributions.ID` for metadata rows. */
+    RowID?: string;
+
+    /** The ClassFactory registration for compiled panels — carries the component constructor. */
+    Registration?: ClassRegistration;
 }
 
 export interface ResolveFormContributionsInput {
@@ -52,6 +81,12 @@ export interface FormContributionWinner {
     ReplacesSectionKey?: string;
     BakedSectionKey: string;
     DisplayName: string;
+
+    /** Carried through from the registration so consumers can tell the two sources apart. */
+    Source?: FormContributionRegistrationSource;
+    ComponentID?: string;
+    Title?: string;
+    Presentation?: 'panel' | 'bare';
 }
 
 export interface ResolveFormContributionsResult {
@@ -140,7 +175,15 @@ function visibleRelationships(
     });
 }
 
-function entityMatches(registeredEntity: string, formEntity: string): boolean {
+/**
+ * Strict entity match shared by the composer and the slot host. `'*'` matches every form.
+ *
+ * Exported because the slot host used to run its own prefix-insensitive variant, which
+ * mounted panels the composer then ignored — the two sides disagreed about which panels
+ * existed. One predicate, used by both.
+ */
+export function FormContributionEntityMatches(registeredEntity: string | null | undefined, formEntity: string): boolean {
+    if (!registeredEntity) return false;
     return registeredEntity === '*' || registeredEntity === formEntity;
 }
 
@@ -150,7 +193,7 @@ function applicableRegistrations(
 ): FormContributionRegistration[] {
     return registrations.filter((reg) => {
         const entity = reg.Metadata.entity;
-        if (!entity || !entityMatches(entity, entityName)) return false;
+        if (!entity || !FormContributionEntityMatches(entity, entityName)) return false;
         // A related claim on entity:'*' would hide that grid on every form.
         // Claims must name the form entity.
         // Related / field-section claims on entity:'*' would hide panels on every
@@ -162,11 +205,22 @@ function applicableRegistrations(
     });
 }
 
+function sourceRank(source: FormContributionRegistrationSource | undefined): number {
+    // Compiled registrations win ties. A metadata row replaces an installed piece only
+    // when someone set it strictly higher, which the apply flow does after the user
+    // confirms the replacement.
+    return source === 'metadata' ? 0 : 1;
+}
+
 /**
  * Last-wins collapse by contributionKey (or derived related key).
- * Highest Priority keeps the slot. Registrations without a key never collapse.
+ * Highest Priority keeps the slot; ties go to the compiled registration. Registrations
+ * without a key never collapse.
+ *
+ * The tie-break is an explicit comparator rather than input ordering, so the result does
+ * not depend on which source the caller concatenated first.
  */
-export function CollapseFormPanelRegistrations<T extends { Priority: number; Metadata: FormPanelRegistrationMetadata }>(
+export function CollapseFormPanelRegistrations<T extends { Priority: number; Metadata: FormPanelRegistrationMetadata; Source?: FormContributionRegistrationSource }>(
     registrations: readonly T[],
 ): T[] {
     const winners = new Map<string, T>();
@@ -174,7 +228,10 @@ export function CollapseFormPanelRegistrations<T extends { Priority: number; Met
     for (const reg of registrations) {
         const key = ResolveContributionKey(reg.Metadata) || `__unique:${uniqueIndex++}`;
         const incumbent = winners.get(key);
-        if (!incumbent || reg.Priority > incumbent.Priority) {
+        const beats = !incumbent
+            || reg.Priority > incumbent.Priority
+            || (reg.Priority === incumbent.Priority && sourceRank(reg.Source) > sourceRank(incumbent.Source));
+        if (beats) {
             winners.set(key, reg);
         }
     }
@@ -228,6 +285,10 @@ function registeredWinner(
         ReplacesSectionKey: meta.replacesSectionKey?.trim() || undefined,
         BakedSectionKey: sectionKey,
         DisplayName: displayName,
+        Source: reg.Source,
+        ComponentID: reg.ComponentID,
+        Title: reg.Title,
+        Presentation: reg.Presentation ?? meta.presentation,
     };
 }
 

@@ -1,0 +1,35 @@
+@if (Contribution) {
+  @if (IsBare) {
+    <ng-container *ngTemplateOutlet="body"></ng-container>
+  } @else {
+    <mj-collapsible-panel
+      [SectionKey]="SectionKey"
+      [SectionName]="Title"
+      [Icon]="Icon"
+      [Variant]="Variant"
+      [Form]="FormComponent"
+      [FormContext]="FormContext"
+      [DefaultExpanded]="!IsRelatedClaim">
+      <ng-container *ngTemplateOutlet="body"></ng-container>
+    </mj-collapsible-panel>
+  }
+}
+
+<ng-template #body>
+  @if (loadError) {
+    <mj-alert Variant="error">{{ loadError }}</mj-alert>
+  } @else if (componentSpec && hostProps) {
+    <mj-react-component
+      #reactComponent
+      [component]="componentSpec"
+      [componentProps]="hostProps"
+      (componentEvent)="OnReactComponentEvent($event)"
+      (openEntityRecord)="OnOpenEntityRecord($event)">
+    </mj-react-component>
+  } @else {
+    <div class="mj-loading-state">
+      <i class="fa-solid fa-spinner fa-spin"></i>
+      <span>Loading panel…</span>
+    </div>
+  }
+</ng-template>

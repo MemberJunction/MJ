@@ -35,6 +35,8 @@ import { RestoreVersionEvent, RecordChangesComponent } from '@memberjunction/ng-
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ListManagementResult } from '@memberjunction/ng-list-management';
 import { FormSlotCoordinator } from '../panel-slot/form-slot-coordinator.service';
+import { BuildFormCompositionSnapshot } from '../chrome/form-composition-snapshot';
+import type { FormChromeSpec } from '../chrome/form-chrome';
 import { FormChromeCoordinator } from '../chrome/form-chrome-coordinator.service';
 import { ResolveFormChrome, OrderChromeGroups, OrderMoreSectionKeys, MoveChromeGroupInSectionOrder, OverlayChromeSectionOrder } from '../chrome/resolve-form-chrome';
 import { LoadFormChromeRules } from '../chrome/load-form-chrome-rules';
@@ -53,9 +55,9 @@ import {
   ShouldPersistChromeActiveGroup,
 } from '../chrome/form-chrome-rail-pref';
 import { ApplyClippedTitle } from '../chrome/clipped-title';
-import { CollectFormPanelRegistrations } from '../panel-slot/collect-form-panel-registrations';
+import { CollectFormContributionRegistrations } from '../panel-slot/collect-form-contribution-registrations';
 import type { FormPanelRegistrationMetadata } from '../panel-slot/base-form-panel';
-import { ContributionHiddenSectionKeys, ResolveFormContributions } from '../panel-slot/form-contribution';
+import { ContributionHiddenSectionKeys, ResolveContributionKey, ResolveFormContributions } from '../panel-slot/form-contribution';
 import { IsFormSectionHidden } from '../types/entity-form-config';
 import { FormRecordRefreshCoordinator } from '../form-record-refresh.coordinator';
 
@@ -914,6 +916,69 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       this.expandActiveGroupSections(this.chrome.ActiveGroupKey);
     }
     this.AfterLayoutResolved.emit(new AfterLayoutResolvedEventArgs(result.Spec.Layout));
+
+    if (this.fc) this.fc.ChromeLayout = result.Spec.Layout;
+    this.warnUnmatchedReplaceKeys();
+    this.publishCompositionSnapshot(result.Spec);
+  }
+
+  private warnedReplaceKeys = new Set<string>();
+
+  /**
+   * A `replacesSectionKey` that matches no section on this form hides nothing, and the
+   * contribution mounts beside the section it meant to replace. Section keys are not a
+   * closed set (custom forms invent their own), so this is validated and reported rather
+   * than restricted.
+   */
+  private warnUnmatchedReplaceKeys(): void {
+    const entity = this.EffectiveEntityInfo;
+    if (!entity) return;
+    const present = new Set([
+      ...this.allChromePanels().map((p) => p.SectionKey),
+      ...this.domPanelSnapshots().map((p) => p.SectionKey),
+    ]);
+    for (const reg of CollectFormContributionRegistrations(entity, this.ProviderToUse)) {
+      const key = reg.Metadata?.replacesSectionKey?.trim();
+      if (!key || reg.Metadata.entity !== entity.Name || present.has(key) || this.warnedReplaceKeys.has(key)) continue;
+      this.warnedReplaceKeys.add(key);
+      const id = ResolveContributionKey(reg.Metadata) || reg.RowID || 'unknown';
+      console.warn(
+        `[mj-record-form-container] contribution ${id} replaces section "${key}", but the ` +
+        `${entity.Name} form has no section with that key. Nothing was hidden.`,
+      );
+    }
+  }
+
+  /**
+   * Publish what is actually on this form. The record tab forwards this to agent context,
+   * so an agent proposing a contribution can target a slot and section key that exist
+   * rather than guessing from the schema.
+   */
+  private publishCompositionSnapshot(spec: FormChromeSpec): void {
+    const entity = this.EffectiveEntityInfo;
+    const form = this.fc;
+    if (!entity || !form) return;
+    const hiddenContributionKeys = new Set(
+      this.contributionRegistrations().filter((c) => c.Inclusion === 'None').map((c) => c.Key),
+    );
+    const snapshot = BuildFormCompositionSnapshot({
+      EntityName: entity.Name,
+      RecordPrimaryKey: form.record?.PrimaryKey?.ToString() ?? '',
+      Layout: spec.Layout,
+      Groups: spec.Groups,
+      Panels: this.chromePanelSnapshots(),
+      HiddenSectionKeys: this.hiddenChromeSectionKeys(),
+      RelatedEntities: entity.RelatedEntities ?? [],
+      IsaChildEntityIDs: (entity.ChildEntities ?? []).map((c) => c.ID),
+      BakedSectionKeys: this.BakedRelatedSectionKeys,
+      Registrations: CollectFormContributionRegistrations(entity, this.ProviderToUse),
+      RelatedRoles: spec.RelatedRoles,
+      HiddenContributionKeys: hiddenContributionKeys,
+      SlotsPresent: this.slots.PresentSlots,
+      ChromeRuleCount: this.chromeRules.length,
+    });
+    form.CompositionSnapshot = snapshot;
+    form.CompositionChanged.emit(snapshot);
   }
 
   private expandActiveGroupSections(groupKey: string): void {
@@ -1093,11 +1158,14 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     const entityName = this.EffectiveEntityInfo?.Name;
     if (!entityName) return [];
     const byKey = new Map<string, { Key: string; Inclusion: FormInclusion | null; SortKey: number | null; ChromeGroup: 'details' | 'more' | null; Priority: number }>();
-    const regs = [...CollectFormPanelRegistrations()].sort((a, b) => (a.Priority ?? 0) - (b.Priority ?? 0));
+    const regs = [...CollectFormContributionRegistrations(this.EffectiveEntityInfo, this.ProviderToUse)]
+      .sort((a, b) => (a.Priority ?? 0) - (b.Priority ?? 0));
     for (const reg of regs) {
       const meta = reg.Metadata;
       if (!meta || meta.entity !== entityName) continue;
-      if (meta.contributionKey === 'header') continue;
+      // Heroes are not rail items, whichever source declared them. `presentation` replaces
+      // the old guess that a contribution keyed 'header' must be one.
+      if (meta.presentation === 'bare' || reg.Presentation === 'bare') continue;
       const key = contributionRailKey(meta);
       if (!key) continue;
       byKey.set(key, {
@@ -1119,7 +1187,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       entity.Name,
       entity.RelatedEntities ?? [],
       (entity.ChildEntities ?? []).map((child) => child.ID),
-      CollectFormPanelRegistrations(),
+      CollectFormContributionRegistrations(this.EffectiveEntityInfo, this.ProviderToUse),
     );
     for (const key of claimed) hidden.add(key);
     return hidden;
@@ -1178,7 +1246,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       EntityName: entity.Name,
       RelatedEntities: entity.RelatedEntities ?? [],
       IsaChildEntityIDs: (entity.ChildEntities ?? []).map((child) => child.ID),
-      Registrations: CollectFormPanelRegistrations(),
+      Registrations: CollectFormContributionRegistrations(entity, this.ProviderToUse),
       BakedSectionKeys: this.BakedRelatedSectionKeys,
       ShowRelatedEntities: this.EffectiveShowRelatedEntities,
     });

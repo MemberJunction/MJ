@@ -59,6 +59,11 @@ export class FormSlotCoordinator {
         return this.presentSlots.has(slot);
     }
 
+    /** Slots physically present in this form, in document order. */
+    public get PresentSlots(): FormPanelSlot[] {
+        return FORM_SLOT_CHAIN.filter((slot) => this.presentSlots.has(slot));
+    }
+
     /**
      * Resolve a preferred slot to the slot that should ACTUALLY render the
      * panel. Returns the preferred slot if it's present; otherwise walks

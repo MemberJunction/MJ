@@ -8,6 +8,10 @@
 
 **Spec:** [design.md](design.md) (this plan argues from it; read both).
 
+**Status:** revised 2026-09-16 after the review on [PR #4311](https://github.com/MemberJunction/MJ/pull/4311). The decisions that review forced are recorded in design.md §12 (2a, 6, 7, 8, 9) and §16.
+
+> **The code blocks in this plan are illustrative, not normative.** They exist to make intent reviewable — to show which API is being called and what the failure mode is — and they will drift the moment Phase A starts. The task's prose, its test expectations, and design.md govern. A reviewer of the eventual code PR should diff against the intent, never against these listings.
+
 ## Global Constraints
 
 - **Repos:** `MJ` (`/Users/…/PROJ2/MJ`, branch off `next`), `Skip-Brain`, `Skip-Client-Open-App`. Each repo gets its own feature branch named `skip-form-contributions`, pushed with `git push -u origin skip-form-contributions` and verified with `git branch -vv` (MJ rule 3).
@@ -18,7 +22,7 @@
 - **Migration:** T-SQL only, in `migrations/v6/`, filename `V<date +"%Y%m%d%H%M">__v6.1.x__Entity_Form_Contributions.sql`. No `__mj_*` columns, no indexes CodeGen owns, no EntityField inserts by hand. Run `mj sync push` before `mj codegen`. One database per agent. PG counterpart is release-engineer work; say so in the PR.
 - **Metadata JSON:** new records carry a `primaryKey.ID` from `uuidgen | tr '[:lower:]' '[:upper:]'`; never author `sync` blocks; use `@lookup:` references; JSON-typed columns are nested objects, not strings.
 - **Changeset:** this branch touches a migration and `metadata/`, so the changeset is `minor` (MJ `.claude/rules/changesets.md`).
-- **Definition of done per package:** `pnpm test` green in every touched package; `pnpm run build` clean; at the end of Phase A and Phase B run `pnpm run test:integration` from the MJ root after migrate + codegen.
+- **Definition of done per package:** `pnpm test` green in every touched package; `pnpm run build` clean; at the end of Phase A and Phase B run `pnpm run test:integration` from the MJ root after migrate + codegen — Phase B authors the forms bundle that tier is currently missing (Task B5), so "integration green" means something for this feature rather than only for everything around it.
 - **Design tokens:** no hard-coded colors in any new SCSS/CSS; use `--mj-*` tokens.
 - **Skip shared types:** `@askskip/types` lives in Skip-Client-Open-App and is consumed by Skip-Brain at a pinned version. Phase C4 needs the Phase D2 type change published (or `yalc`-linked per Skip-Brain `USING_YALC.md`) before it compiles.
 
@@ -39,10 +43,11 @@
 - Create `metadata/entity-form-contributions/.mj-sync.json`, `metadata/entity-form-contributions/.entity-form-contributions.json` (empty array).
 - Modify `metadata/.mj-sync.json` — add `entity-form-contributions` after `entity-form-overrides` in `directoryOrder`.
 - Create `metadata/actions/.form-contributions-actions.json`.
+- Create value-list rows under `metadata/entity-field-values/` for `Presentation`, `Inclusion`, and `ChromeGroup`.
 - Generated (by `mj codegen`, do not hand-edit): `packages/MJCoreEntities/src/generated/**`, `packages/MJAPI/src/generated/**`, `packages/GeneratedEntities/**`.
 
 ### MJ — `packages/MJCoreEntities` (`@memberjunction/core-entities`)
-- Modify `src/engines/interactive-forms.ts` — load contributions; `Contributions`, `Contributions$`, `GetApplicableContributions`; widen Components filter.
+- Modify `src/engines/interactive-forms.ts` — load contributions; `Contributions`, `Contributions$`, `GetApplicableContributions`, `ContributionsReady`; reference-scoped Components filter with paired invalidation; kill-switch read.
 - Test `src/__tests__/InteractiveFormsEngine.test.ts`.
 
 ### MJ — `packages/Angular/Generic/base-forms` (`@memberjunction/ng-base-forms`)
@@ -58,7 +63,7 @@
 - Create `src/lib/chrome/form-composition-snapshot.ts` — snapshot types + `BuildFormCompositionSnapshot`.
 - Modify `src/lib/container/record-form-container.component.ts` — merged registrations, `bare` exclusion, snapshot publication, `PresentSlots`.
 - Modify `src/lib/panel-slot/form-slot-coordinator.service.ts` — `PresentSlots` getter.
-- Modify `src/lib/base-form-component.ts` — memoized collector, panel registry, `Validate()` merge, `CompositionSnapshot`, `CompositionChanged`.
+- Modify `src/lib/base-form-component.ts` — memoized collector, panel registry, `Validate()` merge plus `ValidateAsync()`, `CompositionSnapshot`, `CompositionChanged`.
 - Modify `src/lib/panel-slot/form-contributions.component.ts` — merged collector.
 - Modify `src/module.ts`, `src/public-api.ts`.
 - Tests: `src/lib/panel-slot/__tests__/form-contribution.test.ts` (extend), `src/lib/panel-slot/__tests__/collect-form-contribution-registrations.test.ts`, `src/lib/panel-slot/__tests__/merge-panel-validation.test.ts`, `src/lib/chrome/__tests__/form-composition-snapshot.test.ts`, `src/lib/interactive-form/interactive-form-panel.component.dom.test.ts`, `src/lib/panel-slot/form-panel-slot.component.dom.test.ts` (extend).
@@ -80,6 +85,13 @@
 - Modify `explorer-core/src/lib/single-record/single-record.component.ts` + `.html` — `compositionChanged` output.
 - Modify `explorer-core/src/lib/resource-wrappers/record-resource.component.ts` — `SetAgentContext(this, { Form })`.
 
+### MJ — `packages/Angular/Explorer/core-entity-forms`
+- Modify the eleven loosely-named `@RegisterClassEx(BaseFormPanel)` registrations to prefixed entity names (A7).
+- Modify the five `*-header.panel.ts` registrations to `slot: 'before-fields'`, `presentation: 'bare'`, with contribution keys (A11).
+
+### MJ — `packages/TestingFramework/integration-test-suite`
+- Create `src/checks/form-contributions.checks.ts` and register the bundle (B5) — the first forms coverage in the deterministic tier.
+
 ### MJ — docs
 - Modify `guides/FORMS_ARCHITECTURE_GUIDE.md` (§7c addendum), `packages/Angular/Generic/base-forms/PANELS.md`, `packages/Angular/CLAUDE.md`.
 - Create `.changeset/skip-form-contributions.md`.
@@ -96,7 +108,7 @@
 - Modify `metadata/prompts/templates/code-generation/unified-code-generator.md`, `software-architect-v2.md`, `metadata/prompts/templates/requirements-expert-agent.md`.
 - Modify `apps/API/src/services/workflow/WorkflowService.ts` — `applyFormRoleCommitment` panel branch.
 - Create `apps/API/src/services/mentions/FormContextMarker.ts`; modify `apps/API/src/services/workflow/RequestRouter.ts`.
-- Create `packages/component-engine/src/gates/FormPanelNoSaveGate.ts`, `FormPanelUsesHostPropsGate.ts`, `FormPanelNoFixedHeightGate.ts`; modify `FormLintParityGate.ts`, `gate-runner.ts`, `index.ts`.
+- Create `packages/component-engine/src/gates/FormPanelNoSaveGate.ts`, `FormPanelUsesHostPropsGate.ts`, `FormPanelNoFixedHeightGate.ts`, `FormPanelThemeTokensGate.ts`, `FormPanelValidateShapeGate.ts`; modify `FormLintParityGate.ts`, `gate-runner.ts`, `index.ts`.
 - Tests `apps/API/test/unit/services/mentions/FormContextMarker.test.ts`, `apps/API/test/unit/services/workflow/WorkflowService.test.ts` (extend), `packages/component-engine/src/__tests__/form-panel-gates.test.ts`.
 
 ---
@@ -217,7 +229,7 @@ export type ComponentRole = 'form' | 'form-panel' | 'dashboard' | 'widget' | 're
     /**
      * Registration intent for `componentRole: 'form-panel'` — where the panel mounts and
      * what it claims. Consumers (Skip apply flow, Form Builder, `mj sync`) turn this into a
-     * `MJ: Entity Form Contributions` row. Never carries priority; that is a host decision.
+     * `MJ: Entity Form Contributions` row. Never carries precedence; that is a host decision.
      */
     formContribution?: FormContributionSpec;
 ```
@@ -247,7 +259,7 @@ export const FORM_CONTRIBUTION_SLOTS: readonly FormContributionSlot[] =
 
 /**
  * Registration intent carried on `ComponentSpec.formContribution`. Mirrors
- * `MJ: Entity Form Contributions` columns one-to-one, minus scope and priority
+ * `MJ: Entity Form Contributions` columns one-to-one, minus scope and precedence
  * (host decisions) and minus identity (`Name` / `ComponentID`).
  */
 export interface FormContributionSpec {
@@ -421,7 +433,7 @@ git add packages/InteractiveComponents/src/__tests__/form-contribution-spec.test
 - Generated: `packages/MJCoreEntities/src/generated/entities/__mj.ts` and siblings (via `mj codegen`)
 
 **Interfaces:**
-- Produces: table `${schema}.EntityFormContribution`; entity `MJ: Entity Form Contributions`; generated class `MJEntityFormContributionEntity` with properties `ID, EntityID, ComponentID, Name, Description, Slot, SortKey, ContributionKey, RelatedEntityID, RelatedJoinField, ReplacesSectionKey, Inclusion, ChromeGroup, Presentation, Title, Icon, Scope, UserID, RoleID, Priority, Status, Configuration, Notes` plus the view joins `Entity, Component, RelatedEntity, User, Role`.
+- Produces: table `${schema}.EntityFormContribution`; entity `MJ: Entity Form Contributions`; generated class `MJEntityFormContributionEntity` with properties `ID, EntityID, ComponentID, Name, Description, Slot, SortKey, ContributionKey, RelatedEntityID, RelatedJoinField, ReplacesSectionKey, Inclusion, ChromeGroup, Presentation, Title, Icon, Scope, UserID, RoleID, Precedence, Status, Configuration, Notes` plus the view joins `Entity, Component, RelatedEntity, User, Role`.
 
 - [ ] **Step 1: Confirm nobody else is on your database, then write the migration**
 
@@ -462,7 +474,7 @@ CREATE TABLE ${flyway:defaultSchema}.EntityFormContribution (
     Scope              NVARCHAR(20)     NOT NULL DEFAULT 'User',
     UserID             UNIQUEIDENTIFIER NULL,
     RoleID             UNIQUEIDENTIFIER NULL,
-    Priority           INT              NOT NULL DEFAULT 0,
+    Precedence           INT              NOT NULL DEFAULT 0,
     Status             NVARCHAR(20)     NOT NULL DEFAULT 'Pending',
     Configuration      NVARCHAR(MAX)    NULL,
     Notes              NVARCHAR(MAX)    NULL,
@@ -495,12 +507,28 @@ CREATE TABLE ${flyway:defaultSchema}.EntityFormContribution (
             (Scope = 'Global' AND UserID IS NULL     AND RoleID IS NULL)
         ),
     CONSTRAINT CK_EntityFormContribution_Status
-        CHECK (Status IN ('Active', 'Inactive', 'Pending'))
+        CHECK (Status IN ('Active', 'Inactive', 'Pending')),
+    -- A bare hero is never a rail item, so rail metadata on one is contradictory.
+    CONSTRAINT CK_EntityFormContribution_BareNoChrome
+        CHECK (Presentation <> 'bare' OR (Inclusion IS NULL AND ChromeGroup IS NULL)),
+    -- A join field only disambiguates an existing related claim.
+    CONSTRAINT CK_EntityFormContribution_JoinNeedsRelated
+        CHECK (RelatedJoinField IS NULL OR RelatedEntityID IS NOT NULL),
+    -- One contribution claims one thing: a related grid or a baked section, not both.
+    CONSTRAINT CK_EntityFormContribution_OneClaim
+        CHECK (ReplacesSectionKey IS NULL OR RelatedEntityID IS NULL)
 );
 
 CREATE UNIQUE INDEX UQ_EntityFormContribution_Key
     ON ${flyway:defaultSchema}.EntityFormContribution (EntityID, ContributionKey, Scope, UserID, RoleID)
     WHERE ContributionKey IS NOT NULL AND Status = 'Active';
+
+-- Keyless related claims derive `related:<entity>:<join>` at runtime, so the index above
+-- (ContributionKey IS NOT NULL) does not see them. Without this one, two Active rows can
+-- claim the same grid and the winner is decided by row order.
+CREATE UNIQUE INDEX UQ_EntityFormContribution_RelatedClaim
+    ON ${flyway:defaultSchema}.EntityFormContribution (EntityID, RelatedEntityID, RelatedJoinField, Scope, UserID, RoleID)
+    WHERE ContributionKey IS NULL AND RelatedEntityID IS NOT NULL AND Status = 'Active';
 
 EXEC sp_addextendedproperty @name = N'MS_Description',
     @value = N'Metadata-registered form contribution: mounts a form-panel Component on a parent entity''s form at a slot, optionally claiming a related grid or replacing a baked field panel. Peer of compiled BaseFormPanel registrations.',
@@ -534,8 +562,8 @@ EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Font Awesome c
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'EntityFormContribution', @level2type = N'COLUMN', @level2name = N'Icon';
 EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Who sees the contribution: User (UserID), Role (RoleID) or Global.',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'EntityFormContribution', @level2type = N'COLUMN', @level2name = N'Scope';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Last-wins priority against compiled registrations sharing ContributionKey. Ties go to the compiled registration; a row wins only when strictly higher.',
-    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'EntityFormContribution', @level2type = N'COLUMN', @level2name = N'Priority';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Last-wins precedence against compiled registrations sharing ContributionKey. Ties go to the compiled registration; a row wins only when strictly higher.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'EntityFormContribution', @level2type = N'COLUMN', @level2name = N'Precedence';
 EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Active rows render. Pending rows are drafts awaiting activation. Inactive rows are history.',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'EntityFormContribution', @level2type = N'COLUMN', @level2name = N'Status';
 EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON passed to the component as contribution.configuration so one component can serve several rows.',
@@ -583,6 +611,22 @@ EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Free-form auth
 
 In `metadata/.mj-sync.json`, insert `"entity-form-contributions",` on the line after `"entity-form-overrides",` (currently line 74). Components sync before both, so `@lookup:MJ: Components.Name=…` resolves.
 
+**Sync-side clamp.** `mj sync` bypasses the action family, so the identity-entity restriction (design.md §16, helper in B1) has to be enforced here as well: a pushed row with `Scope` of `Global` or `Role` targeting `MJ: Users`, `MJ: Roles`, `MJ: User Roles`, `MJ: Authorizations`, or `MJ: Authorization Roles` fails the push with a named error rather than landing. Implement it as a validation on the entity-form-contributions directory config, and cover it with a push test that asserts the failure message.
+
+- [ ] **Step 2b: Value-list metadata for the three pick-list columns**
+
+`Presentation`, `Inclusion`, and `ChromeGroup` become user-facing dropdowns in Form Studio (Phase E). A CHECK constraint alone gives the UI nothing to read, so each also gets `MJ: Entity Field Values` rows in `metadata/`, and the field's `ValueListType` is set to `List`:
+
+| Column | Values |
+|---|---|
+| `Presentation` | `panel`, `bare` |
+| `Inclusion` | `Primary`, `More`, `None` |
+| `ChromeGroup` | `details`, `more` |
+
+The CHECK constraints stay — they are the database's guarantee; the value lists are the UI's. Author the rows in `metadata/entity-field-values/` with `uuidgen` primary keys and `@lookup:` references to the entity field, per `metadata/CLAUDE.md`.
+
+**Note on the index divergence from design.md §5.1.** Both unique indexes are filtered on `Status='Active'` as well as on the key columns. That is deliberate and now stated in the design: without it, a row's own version history — `Inactive` predecessors sharing the contribution key — would violate uniqueness.
+
 - [ ] **Step 3: Migrate, sync, codegen**
 
 ```bash
@@ -626,7 +670,7 @@ Do **not** stage `packages/GeneratedEntities/**`, `packages/MJAPI/src/generated/
 
 **Interfaces:**
 - Consumes: `MJEntityFormContributionEntity` (Task A2).
-- Produces: `InteractiveFormsEngine.Contributions: MJEntityFormContributionEntity[]`, `Contributions$: Observable<MJEntityFormContributionEntity[]>`, `GetApplicableContributions(entityID: string, userID: string, roleIDs: ReadonlyArray<string>): MJEntityFormContributionEntity[]` (Active + scope match, sorted `Priority` DESC then `SortKey` DESC), `FindComponentByID(id)` (alias of `FindFormByID` now that `Forms` includes widgets).
+- Produces: `InteractiveFormsEngine.Contributions: MJEntityFormContributionEntity[]`, `Contributions$: Observable<MJEntityFormContributionEntity[]>`, `GetApplicableContributions(entityID: string, userID: string, roleIDs: ReadonlyArray<string>): MJEntityFormContributionEntity[]` (Active + scope match, sorted `Precedence` DESC then `SortKey` DESC), `ContributionsReady: boolean`; `FindComponentByID(id)` (alias of `FindFormByID`, now that `Forms` also holds the widgets contributions reference).
 
 - [ ] **Step 1: Write the failing test**
 
@@ -670,21 +714,21 @@ const ENTITY = '33333333-3333-3333-3333-333333333333';
 function row(over: Record<string, unknown>) {
     return {
         ID: 'r', EntityID: ENTITY, Scope: 'Global', UserID: null, RoleID: null,
-        Status: 'Active', Priority: 0, SortKey: 0, ...over,
+        Status: 'Active', Precedence: 0, SortKey: 0, ...over,
     };
 }
 
 describe('InteractiveFormsEngine.GetApplicableContributions', () => {
     beforeEach(() => { backing = {}; });
 
-    it('returns Active rows whose scope matches, highest Priority then SortKey first', () => {
+    it('returns Active rows whose scope matches, highest Precedence then SortKey first', () => {
         backing._contributions = [
-            row({ ID: 'global', Priority: 0, SortKey: 10 }),
-            row({ ID: 'mine', Scope: 'User', UserID: USER, Priority: 5 }),
+            row({ ID: 'global', Precedence: 0, SortKey: 10 }),
+            row({ ID: 'mine', Scope: 'User', UserID: USER, Precedence: 5 }),
             row({ ID: 'other-user', Scope: 'User', UserID: 'someone-else' }),
-            row({ ID: 'role', Scope: 'Role', RoleID: ROLE, Priority: 1 }),
-            row({ ID: 'pending', Status: 'Pending', Priority: 99 }),
-            row({ ID: 'other-entity', EntityID: 'zzz', Priority: 99 }),
+            row({ ID: 'role', Scope: 'Role', RoleID: ROLE, Precedence: 1 }),
+            row({ ID: 'pending', Status: 'Pending', Precedence: 99 }),
+            row({ ID: 'other-entity', EntityID: 'zzz', Precedence: 99 }),
         ];
         const ids = InteractiveFormsEngine.Instance
             .GetApplicableContributions(ENTITY, USER, [ROLE]).map(r => r.ID);
@@ -716,7 +760,7 @@ In `packages/MJCoreEntities/src/engines/interactive-forms.ts`:
 import type { MJComponentEntity, MJEntityFormContributionEntity, MJEntityFormOverrideEntity } from "../generated/entity_subclasses";
 ```
 
-Add the field and config entry, widen the Components filter:
+Add the field and config entry, and scope the Components filter to **referenced** components (design decision 2a):
 
 ```ts
     private _forms: MJComponentEntity[] = [];
@@ -729,8 +773,12 @@ Add the field and config entry, widen the Components filter:
                 Type: 'entity',
                 EntityName: 'MJ: Components',
                 PropertyName: '_forms',
-                // Whole forms are Type='Form'; form-panel contributions are Type='Widget'.
-                Filter: "Type IN ('Form','Widget')",
+                // Whole forms are Type='Form'. Panel components are Type='Widget', but the
+                // filter does NOT widen to all widgets: `Widget` is an open set grown by
+                // registry sync and general authoring, and this cache is written to client
+                // local storage on every boot. Load only the widgets a contribution
+                // references, so the set scales with adoption of this feature.
+                Filter: "Type='Form' OR ID IN (SELECT ComponentID FROM vwEntityFormContributions)",
                 CacheLocal: true,
             },
             { Type: 'entity', EntityName: 'MJ: Entity Form Overrides', PropertyName: '_overrides', CacheLocal: true },
@@ -739,6 +787,42 @@ Add the field and config entry, widen the Components filter:
         await this.Load(c, provider, forceRefresh, contextUser);
     }
 ```
+
+The subquery reaches the server through the GraphQL `ExtraFilter` screen, which parses the fragment and permits `IN (SELECT … FROM <entity BaseView>)` while rejecting base tables and catalog views (PR #4295). `vwEntityFormContributions` is the generated base view from A2, so it qualifies — a filter naming the *table* would be refused.
+
+**The coupling this buys, and its cost.** The component cache is now only correct if a contribution write refreshes it: a new row can reference a component the cache does not hold, and the panel host would report "spec not found". Add an explicit re-load in the contributions subscription:
+
+```ts
+    /**
+     * A contribution write can introduce a component the reference-scoped
+     * Components filter did not previously match, so both caches refresh together.
+     */
+    protected override async OnPropertyInvalidated(propertyName: string): Promise<void> {
+        await super.OnPropertyInvalidated(propertyName);
+        if (propertyName === '_contributions') {
+            await this.RefreshProperty('_forms');
+        }
+    }
+```
+
+Use whatever invalidation hook `BaseEngine` actually exposes for this — check `.claude/rules/data-access.md` and the base class before writing it; the point is that `_forms` refreshes when `_contributions` changes, not the exact method name above.
+
+**Readiness flag** (design decision 9) — the slot host needs to know whether contributions are loaded, so it can wait rather than render a form that visibly rearranges a tick later:
+
+```ts
+    /** True once the contribution cache has completed its first load for this provider. */
+    public get ContributionsReady(): boolean {
+        return this.Loaded && !this.IsPermissionConstrained;
+    }
+```
+
+**Kill switch** (design §16) — before the contribution config entry is added at all, the engine reads the instance flag. When metadata contributions are disabled, `_contributions` stays empty, the Components filter drops the subquery, and every downstream consumer sees exactly today's behavior:
+
+```ts
+    const contributionsEnabled = MJGlobal.Instance.GetConfigValue('Forms.MetadataContributionsEnabled') !== false;
+```
+
+Resolve the real configuration accessor for this repo when implementing (the flag must be readable on both the server and the browser); the requirement is one instance-level switch that turns the whole source off without a migration.
 
 Add accessors next to `Overrides` / `Overrides$`:
 
@@ -756,7 +840,7 @@ Add accessors next to `Overrides` / `Overrides$`:
     /**
      * Active contribution rows that apply to (entity, user, roles): User rows for this
      * user, Role rows for any of the user's roles, and Global rows. Sorted by
-     * `Priority` DESC then `SortKey` DESC. Last-wins collapse against compiled
+     * `Precedence` DESC then `SortKey` DESC. Last-wins collapse against compiled
      * registrations happens in ng-base-forms, not here.
      */
     public GetApplicableContributions(
@@ -775,7 +859,7 @@ Add accessors next to `Overrides` / `Overrides$`:
             ),
         );
         return rows.sort((a, b) => {
-            const p = (b.Priority ?? 0) - (a.Priority ?? 0);
+            const p = (b.Precedence ?? 0) - (a.Precedence ?? 0);
             if (p !== 0) return p;
             return (b.SortKey ?? 0) - (a.SortKey ?? 0);
         });
@@ -787,12 +871,31 @@ Add accessors next to `Overrides` / `Overrides$`:
     }
 ```
 
-Update the class docblock's first paragraph to mention contributions and `Type IN ('Form','Widget')`.
+Update the class docblock's first paragraph to mention contributions and the reference-scoped Components filter — including *why* it is not `Type IN ('Form','Widget')`, since the existing docblock's "threads the needle" paragraph is what makes the narrow filter legible to the next reader.
 
 - [ ] **Step 4: Run tests and build**
 
 Run: `cd packages/MJCoreEntities && pnpm test && pnpm run build`
 Expected: PASS.
+
+- [ ] **Step 5: Measure the load before this merges**
+
+The review's blocking condition on the filter. Against a representative database (not a seeded dev one), record the row count and total `Specification` bytes the filter returns, before and after:
+
+```sql
+SELECT COUNT(*) AS Rows, SUM(DATALENGTH(Specification)) / 1024 AS KB
+FROM ${schema}.vwComponents WHERE Type = 'Form';
+
+SELECT COUNT(*) AS Rows, SUM(DATALENGTH(Specification)) / 1024 AS KB
+FROM ${schema}.vwComponents
+WHERE Type = 'Form' OR ID IN (SELECT ComponentID FROM ${schema}.vwEntityFormContributions);
+
+-- For contrast, what the rejected widening would have loaded:
+SELECT COUNT(*) AS Rows, SUM(DATALENGTH(Specification)) / 1024 AS KB
+FROM ${schema}.vwComponents WHERE Type IN ('Form', 'Widget');
+```
+
+Record all three numbers in the PR. The engine's own docblock puts the `Type='Form'` set at "a few dozen, ~5MB max"; if the reference-scoped number is materially worse than that, lazy `Specification` loading moves from the deferred list into Phase A.
 
 - [ ] **Step 5: Stage for review**
 
@@ -810,7 +913,7 @@ git add packages/MJCoreEntities/src/engines/interactive-forms.ts packages/MJCore
 - Test: `packages/Angular/Generic/base-forms/src/lib/panel-slot/__tests__/form-contribution.test.ts` (append)
 
 **Interfaces:**
-- Produces: `FormPanelRegistrationMetadata.presentation?: 'panel' | 'bare'`; `FormContributionRegistrationSource = 'class' | 'metadata'`; `FormContributionRegistration` gains `Source?`, `ComponentID?`, `Configuration?`, `Title?`, `Icon?`, `Presentation?`, `RowID?`; `CollapseFormPanelRegistrations` prefers `'class'` on equal priority; exported `FormContributionEntityMatches(registeredEntity, formEntity): boolean` (strict, `'*'` wildcard).
+- Produces: `FormPanelRegistrationMetadata.presentation?: 'panel' | 'bare'`; `FormContributionRegistrationSource = 'class' | 'metadata'`; `FormContributionRegistration` gains `Source?`, `ComponentID?`, `Configuration?`, `Title?`, `Icon?`, `Presentation?`, `RowID?`; `CollapseFormPanelRegistrations` prefers `'class'` on equal precedence; exported `FormContributionEntityMatches(registeredEntity, formEntity): boolean` (strict, `'*'` wildcard).
 
 - [ ] **Step 1: Write the failing tests (append to `form-contribution.test.ts`)**
 
@@ -820,22 +923,22 @@ import { FormContributionEntityMatches } from '../form-contribution';
 describe('CollapseFormPanelRegistrations — source tie-break', () => {
     const meta = { entity: PEOPLE, slot: 'before-fields' as FormPanelSlot, contributionKey: 'header' };
 
-    it('keeps the compiled registration when a metadata row ties on priority', () => {
-        const compiled = { Priority: 0, Metadata: meta, Source: 'class' as const };
-        const row = { Priority: 0, Metadata: meta, Source: 'metadata' as const, ComponentID: 'c1' };
+    it('keeps the compiled registration when a metadata row ties on precedence', () => {
+        const compiled = { Precedence: 0, Metadata: meta, Source: 'class' as const };
+        const row = { Precedence: 0, Metadata: meta, Source: 'metadata' as const, ComponentID: 'c1' };
         expect(CollapseFormPanelRegistrations([row, compiled])).toEqual([compiled]);
         expect(CollapseFormPanelRegistrations([compiled, row])).toEqual([compiled]);
     });
 
-    it('lets a metadata row win only with strictly higher priority', () => {
-        const compiled = { Priority: 0, Metadata: meta, Source: 'class' as const };
-        const row = { Priority: 1, Metadata: meta, Source: 'metadata' as const, ComponentID: 'c1' };
+    it('lets a metadata row win only with strictly higher precedence', () => {
+        const compiled = { Precedence: 0, Metadata: meta, Source: 'class' as const };
+        const row = { Precedence: 1, Metadata: meta, Source: 'metadata' as const, ComponentID: 'c1' };
         expect(CollapseFormPanelRegistrations([compiled, row])).toEqual([row]);
     });
 
     it('treats a registration with no Source as compiled', () => {
-        const legacy = { Priority: 0, Metadata: meta };
-        const row = { Priority: 0, Metadata: meta, Source: 'metadata' as const, ComponentID: 'c1' };
+        const legacy = { Precedence: 0, Metadata: meta };
+        const row = { Precedence: 0, Metadata: meta, Source: 'metadata' as const, ComponentID: 'c1' };
         expect(CollapseFormPanelRegistrations([row, legacy])).toEqual([legacy]);
     });
 });
@@ -863,8 +966,13 @@ Expected: FAIL — `FormContributionEntityMatches` is not exported; tie-break te
 ```ts
     /**
      * `'bare'` = a hero strip that draws no collapsible chrome and is never a rail item.
-     * `'panel'` (default) = a normal collapsible section. Replaces the old
-     * `contributionKey === 'header'` convention, which is still honored.
+     * `'panel'` (default) = a normal collapsible section.
+     *
+     * This is how a compiled panel declares hero-ness, replacing the container's
+     * `contributionKey === 'header'` guess. The five panels that previously said
+     * `slot: 'header'` — a slot that does not exist in `FormPanelSlot`, so they never
+     * rendered at all — are migrated to `slot: 'before-fields'` with `presentation:
+     * 'bare'` in Task A11.
      */
     presentation?: 'panel' | 'bare';
 ```
@@ -875,7 +983,7 @@ Expected: FAIL — `FormContributionEntityMatches` is not exported; tie-break te
 export type FormContributionRegistrationSource = 'class' | 'metadata';
 
 export interface FormContributionRegistration {
-    Priority: number;
+    Precedence: number;
     Metadata: FormPanelRegistrationMetadata;
     /** Omitted = compiled (`ClassFactory`). `'metadata'` = a `MJ: Entity Form Contributions` row. */
     Source?: FormContributionRegistrationSource;
@@ -901,7 +1009,7 @@ function sourceRank(source: FormContributionRegistrationSource | undefined): num
     return source === 'metadata' ? 0 : 1;
 }
 
-export function CollapseFormPanelRegistrations<T extends { Priority: number; Metadata: FormPanelRegistrationMetadata; Source?: FormContributionRegistrationSource }>(
+export function CollapseFormPanelRegistrations<T extends { Precedence: number; Metadata: FormPanelRegistrationMetadata; Source?: FormContributionRegistrationSource }>(
     registrations: readonly T[],
 ): T[] {
     const winners = new Map<string, T>();
@@ -910,8 +1018,8 @@ export function CollapseFormPanelRegistrations<T extends { Priority: number; Met
         const key = ResolveContributionKey(reg.Metadata) || `__unique:${uniqueIndex++}`;
         const incumbent = winners.get(key);
         const beats = !incumbent
-            || reg.Priority > incumbent.Priority
-            || (reg.Priority === incumbent.Priority && sourceRank(reg.Source) > sourceRank(incumbent.Source));
+            || reg.Precedence > incumbent.Precedence
+            || (reg.Precedence === incumbent.Precedence && sourceRank(reg.Source) > sourceRank(incumbent.Source));
         if (beats) winners.set(key, reg);
     }
     return [...winners.values()];
@@ -988,7 +1096,7 @@ function row(over: Record<string, unknown>) {
     return {
         ID: 'row-1', Entity: 'MJ_BizApps_Common: People', ComponentID: 'comp-1', Name: 'LTV strip', Title: null, Icon: null,
         Slot: 'before-fields', SortKey: 90, ContributionKey: 'skip:person-ltv', RelatedEntity: null, RelatedJoinField: null,
-        ReplacesSectionKey: null, Inclusion: null, ChromeGroup: null, Presentation: 'bare', Priority: 0,
+        ReplacesSectionKey: null, Inclusion: null, ChromeGroup: null, Presentation: 'bare', Precedence: 0,
         Configuration: '{"metric":"ltv"}', ...over,
     };
 }
@@ -1007,7 +1115,7 @@ describe('MetadataContributionToRegistration', () => {
     it('maps a row onto the compiled metadata shape with Source metadata', () => {
         const reg = MetadataContributionToRegistration(row({}) as never);
         expect(reg).toMatchObject({
-            Priority: 0, Source: 'metadata', ComponentID: 'comp-1', RowID: 'row-1', Title: 'LTV strip',
+            Precedence: 0, Source: 'metadata', ComponentID: 'comp-1', RowID: 'row-1', Title: 'LTV strip',
             Presentation: 'bare', Configuration: { metric: 'ltv' },
             Metadata: { entity: 'MJ_BizApps_Common: People', slot: 'before-fields', sortKey: 90, contributionKey: 'skip:person-ltv', presentation: 'bare' },
         });
@@ -1063,6 +1171,22 @@ describe('CollectFormContributionRegistrations', () => {
         expect(CollectFormContributionRegistrations(null, provider)).toHaveLength(1);
         expect(CollectFormContributionRegistrations(entity, null)).toHaveLength(1);
     });
+
+    it('does not serve one provider the memoized list of another', () => {
+        engine.rows = [row({})];
+        CollectFormContributionRegistrations(entity, provider);
+        const otherProvider = makeProvider({ userID: 'user-1' });   // same entity name, same user
+        CollectFormContributionRegistrations(entity, otherProvider);
+        expect(engine.GetApplicableContributions).toHaveBeenCalledTimes(2);
+    });
+
+    it('reports no rows, and does not log an error, when the engine is permission-constrained', () => {
+        engine.IsPermissionConstrained = true;
+        engine.rows = [row({})];
+        const merged = CollectFormContributionRegistrations(entity, provider);
+        expect(merged.every(r => (r.Source ?? 'class') === 'class')).toBe(true);
+        expect(logError).not.toHaveBeenCalled();
+    });
 });
 ```
 
@@ -1096,7 +1220,7 @@ import type { FormContributionRegistration } from './form-contribution';
  *   - compiled `BaseFormPanel` registrations in the ClassFactory (`Source: 'class'`)
  *   - Active, scope-matching `MJ: Entity Form Contributions` rows (`Source: 'metadata'`)
  *
- * Memoized per (entity, user). The memo key also folds in the ClassFactory
+ * Memoized per (provider, entity, user). The memo key also folds in the ClassFactory
  * registration count (lazy-loaded OpenApp modules register late) and an engine
  * version that bumps on every `Contributions$` emission. The whole-form host
  * awaits the resolver — which Configs the engine — before the form mounts, so
@@ -1126,6 +1250,23 @@ function ensureEngineSubscription(): void {
 /** Test seam and escape hatch — drops every memoized list. */
 export function InvalidateFormContributionRegistrationCache(): void {
     cache.clear();
+    providerKeys = new WeakMap<IMetadataProvider, string>();
+    nextProviderKey = 0;
+}
+
+/**
+ * Stable per-instance identity for a provider, without assuming it exposes a name
+ * or an ID. A WeakMap keeps this from pinning providers in memory.
+ */
+let providerKeys = new WeakMap<IMetadataProvider, string>();
+let nextProviderKey = 0;
+function ProviderCacheKey(provider: IMetadataProvider): string {
+    let k = providerKeys.get(provider);
+    if (!k) {
+        k = `p${++nextProviderKey}`;
+        providerKeys.set(provider, k);
+    }
+    return k;
 }
 
 /** Compiled `BaseFormPanel` registrations that declare an `entity`. */
@@ -1138,7 +1279,7 @@ export function CollectClassFormPanelRegistrations(): FormContributionRegistrati
             return typeof entity === 'string' && entity.length > 0;
         },
     ).map((reg) => ({
-        Priority: reg.Priority,
+        Precedence: reg.Priority,
         Metadata: reg.Metadata as FormPanelRegistrationMetadata,
         Source: 'class' as const,
         Registration: reg,
@@ -1160,7 +1301,7 @@ export function MetadataContributionToRegistration(row: MJEntityFormContribution
     if (row.Inclusion) metadata.inclusion = row.Inclusion;
     if (row.ChromeGroup) metadata.chromeGroup = row.ChromeGroup;
     return {
-        Priority: row.Priority ?? 0,
+        Precedence: row.Precedence ?? 0,
         Metadata: metadata,
         Source: 'metadata',
         ComponentID: row.ComponentID,
@@ -1189,14 +1330,22 @@ export function CollectFormContributionRegistrations(
     const userID = user?.ID ?? '';
     const roleIDs = (user?.UserRoles ?? []).map((r) => r.RoleID).filter((id): id is string => !!id);
     const classCount = MJGlobal.Instance.ClassFactory.GetAllRegistrations(BaseFormPanel).length;
-    const key = `${entity.Name}::${userID}::${classCount}::${engineVersion}`;
+    // The provider is part of the identity: MJ supports per-provider Metadata scoping
+    // (.claude/rules/data-access.md), so the same entity name and user can resolve to
+    // different rows under two providers. Without it, the second provider reads the
+    // first one's memoized list.
+    const key = `${ProviderCacheKey(provider)}::${entity.Name}::${userID}::${classCount}::${engineVersion}`;
     const hit = cache.get(key);
     if (hit) return hit;
 
     let rows: MJEntityFormContributionEntity[] = [];
     try {
         const engine = InteractiveFormsEngine.Instance;
-        if (engine.Loaded) {
+        if (engine.IsPermissionConstrained) {
+            // Expected on deployments where this role has no read on the new entity.
+            // Not an error — the idiom used by FormResolverService and ApplicationManager.
+            rows = [];
+        } else if (engine.Loaded) {
             rows = engine.GetApplicableContributions(entity.ID, userID, roleIDs);
         } else {
             void engine.Config(false, user ?? undefined, provider);
@@ -1293,7 +1442,7 @@ const FORM = { EditMode: false, UserCanEdit: true, UserCanDelete: false, UserCan
 
 function contribution(over: Partial<FormContributionRegistration> = {}): FormContributionRegistration {
   return {
-    Priority: 0, Source: 'metadata', ComponentID: 'comp-1', RowID: 'row-1', Title: 'Lifetime value', Presentation: 'panel',
+    Precedence: 0, Source: 'metadata', ComponentID: 'comp-1', RowID: 'row-1', Title: 'Lifetime value', Presentation: 'panel',
     Metadata: { entity: 'MJ_BizApps_Common: People', slot: 'after-fields', contributionKey: 'skip:person-ltv' },
     ...over,
   };
@@ -1487,7 +1636,18 @@ export class InteractiveFormPanelComponent extends BaseFormPanel implements OnIn
 
     public componentSpec: ComponentSpec | null = null;
     public hostProps: FormPanelHostProps | null = null;
+
+    /**
+     * Load-time failure only: missing ComponentID, component not found, bad Specification
+     * JSON, wrong role. A panel that throws *during render* is a different case and is
+     * already contained — `<mj-react-component>` wraps every spec in the runtime's
+     * error boundary (`createErrorBoundary`, `mj-react-component.component.ts`), so the
+     * throw stays inside this panel's subtree and the rest of the form renders and saves
+     * normally. Bind the boundary's error output to `renderError` so the failure is
+     * visible in the panel rather than silent, and log it once.
+     */
     public loadError: string | null = null;
+    public renderError: string | null = null;
 
     private lastValidation: FormPanelValidateResult | null = null;
     private lastEditMode: boolean | null = null;
@@ -1593,9 +1753,28 @@ export class InteractiveFormPanelComponent extends BaseFormPanel implements OnIn
         this.invokeIfRegistered(FormPanelMethodNames.OnRecordRefreshed);
     }
 
-    /** Surface the panel's last reported validity to the parent form's Save. */
-    public override validate(): ValidationResult {
-        const live = this.invokeIfRegistered<FormPanelValidateResult>(FormPanelMethodNames.Validate);
+    /**
+     * Surface the panel's validity to the parent form's Save.
+     *
+     * The React method may be `async` — any validator that checks something
+     * server-side will be — and `invokeMethod` returns whatever the method
+     * returned. Awaiting is therefore load-bearing: a synchronous `'isValid' in
+     * live` test sees a Promise, fails, silently falls back to the last cached
+     * `ValidationChanged` payload, and the form saves an invalid record with no
+     * error and no log. Resolving a non-Promise is a no-op, so one code path
+     * covers both shapes.
+     */
+    public override async validate(): Promise<ValidationResult> {
+        const returned = this.invokeIfRegistered<FormPanelValidateResult | Promise<FormPanelValidateResult>>(
+            FormPanelMethodNames.Validate,
+        );
+        let live: FormPanelValidateResult | undefined;
+        try {
+            live = await Promise.resolve(returned);
+        } catch (err) {
+            LogError(`InteractiveFormPanelComponent.validate: panel validator threw: ${err instanceof Error ? err.message : String(err)}`);
+            live = undefined;
+        }
         const state = live && typeof live === 'object' && 'isValid' in live ? live : this.lastValidation;
         const result = new ValidationResult();
         result.Success = state ? state.isValid : true;
@@ -1769,7 +1948,7 @@ describe('FormPanelSlotComponent (DOM) — metadata contributions', () => {
     engineState.rows = [{
       ID: 'row-1', Entity: METADATA_ENTITY, ComponentID: 'comp-1', Name: 'Row panel', Title: null, Icon: null,
       Slot: 'after-fields', SortKey: 0, ContributionKey: 'row:one', RelatedEntity: null, RelatedJoinField: null,
-      ReplacesSectionKey: null, Inclusion: null, ChromeGroup: null, Presentation: 'panel', Priority: 0, Configuration: null,
+      ReplacesSectionKey: null, Inclusion: null, ChromeGroup: null, Presentation: 'panel', Precedence: 0, Configuration: null,
     }];
     vi.spyOn(InteractiveFormPanelComponent.prototype as unknown as { ngOnInit: () => Promise<void> }, 'ngOnInit').mockResolvedValue(undefined);
     const f = renderComponentFixture(FormPanelSlotComponent, {
@@ -1814,18 +1993,34 @@ import { InteractiveFormPanelComponent } from '../interactive-form/interactive-f
         const provider = this.FormComponent?.ProviderToUse ?? null;
         const all = CollectFormContributionRegistrations(entity, provider);
         const strict = all.filter((reg) => FormContributionEntityMatches(reg.Metadata.entity, this.Entity));
-        if (strict.length === 0) this.warnIfLooseOnly(all);
+        this.warnOnLooseRegistrations(all, strict);
         return strict;
     }
 
-    /** Diagnostic for the old prefix-insensitive match — a loosely named registration never mounts and never hides its baked grid. */
-    private warnIfLooseOnly(all: readonly FormContributionRegistration[]): void {
+    /**
+     * Diagnostic for the old prefix-insensitive match — a loosely named registration
+     * no longer mounts and never hid its baked grid.
+     *
+     * This runs on every resolve, not only when nothing matched strictly. The earlier
+     * `if (strict.length === 0)` guard missed the case most likely to occur: a form
+     * where some panels are correctly named and one is not, which is exactly the
+     * `MJ: AI Agent Categories` situation. The broken panel would then disappear with
+     * no warning at all.
+     */
+    private warnOnLooseRegistrations(
+        all: readonly FormContributionRegistration[],
+        strict: readonly FormContributionRegistration[],
+    ): void {
         if (this.warnedLooseEntities.has(this.Entity)) return;
         const strip = (s: string) => s.replace(/^mj[:_\s]+/i, '').replace(/[\s_]+/g, '').toLowerCase();
-        const loose = all.filter((reg) => reg.Metadata.entity !== '*' && strip(reg.Metadata.entity) === strip(this.Entity));
+        const loose = all.filter((reg) =>
+            reg.Metadata.entity !== '*'
+            && !strict.includes(reg)
+            && strip(reg.Metadata.entity) === strip(this.Entity));
         if (loose.length > 0) {
             this.warnedLooseEntities.add(this.Entity);
-            console.warn(`[mj-form-panel-slot] ${loose.length} BaseFormPanel registration(s) name "${loose[0].Metadata.entity}" but the form entity is "${this.Entity}". Entity names must match exactly; these panels will not mount.`);
+            const names = [...new Set(loose.map((reg) => reg.Metadata.entity))].join(', ');
+            console.warn(`[mj-form-panel-slot] ${loose.length} BaseFormPanel registration(s) name "${names}" but the form entity is "${this.Entity}". Entity names must match exactly; these panels will not mount.`);
         }
     }
 
@@ -1851,7 +2046,7 @@ and in `remount()`:
             const aSort = a.Metadata.sortKey ?? 0;
             const bSort = b.Metadata.sortKey ?? 0;
             if (aSort !== bSort) return bSort - aSort;
-            return b.Priority - a.Priority;
+            return b.Precedence - a.Precedence;
         });
 
         for (const reg of all) {
@@ -1898,6 +2093,54 @@ and in `remount()`:
 
 Remove the now-unused `MJGlobal` / `ClassRegistration` imports. Until Task A8 adds `RegisterFormPanel` / `UnregisterFormPanel` to `BaseFormComponent`, declare them on a local structural type: `type PanelRegistry = { RegisterFormPanel?(p: BaseFormPanel): void; UnregisterFormPanel?(p: BaseFormPanel): void }` and call through `(this.FormComponent as BaseFormComponent & PanelRegistry)`.
 
+- [ ] **Step 3b: Repair the eleven registrations strict matching would break**
+
+A console warning is a diagnostic, not a remediation. These eleven panels register unprefixed entity names and mount today **only** because of the fuzzy matcher this task removes. They are corrected in this task, not in a follow-up — otherwise this plan ships a regression on six core forms.
+
+| File | `entity:` today | Correct name |
+|---|---|---|
+| `custom/Users/user-header.panel.ts`, `custom/Users/user-overview.panel.ts` | `'Users'` | `'MJ: Users'` |
+| `custom/Companies/company-header.panel.ts`, `custom/Companies/company-overview.panel.ts` | `'Companies'` | `'MJ: Companies'` |
+| `custom/Employees/employee-header.panel.ts`, `custom/Employees/employee-overview.panel.ts` | `'Employees'` | `'MJ: Employees'` |
+| `custom/Conversations/conversation-header.panel.ts`, `custom/Conversations/conversation-overview.panel.ts` | `'Conversations'` | `'MJ: Conversations'` |
+| `custom/AIAgentCategories/ai-agent-category-header.panel.ts`, `custom/AIAgentCategories/ai-agent-category-overview.panel.ts` | `'AI Agent Categories'` | `'MJ: AI Agent Categories'` |
+| `panels/ai-agents/agent-realtime.panel.ts` | `'AI Agents'` | `'MJ: AI Agents'` |
+
+Re-derive this list rather than trusting the table, which will age:
+
+```bash
+grep -rn -A6 "@RegisterClassEx(BaseFormPanel" --include="*.ts" packages/Angular \
+  | grep -E "entity: '" | grep -v "entity: 'MJ:" | grep -v "entity: '\*'"
+```
+
+Every registration's `key` also embeds the entity name (`'form-panel:Users:header'`); update those to match so the two never disagree.
+
+**This repairs a live defect, not just a future one.** `record-form-container.component.ts` already matches entity names strictly, so these eleven panels' `inclusion`, `sortKey`, and `chromeGroup` are ignored by the chrome rail *today* while the slot host still mounts them — a panel appears but has no rail item and no chrome group. After this change both sides agree.
+
+Two of the eleven — `ai-agents/agent-realtime.panel.ts` on `MJ: AI Agents`, and the AI Agent Categories pair — share their form with strictly-registered panels, which is why the diagnostic in step 3 had to stop keying on `strict.length === 0`.
+
+- [ ] **Step 3c: Wait for contribution readiness before the first mount**
+
+Design decision 9. On a cold engine the slot would otherwise mount class contributions, then re-resolve a tick later when rows arrive — visible as a pane appearing, and for a `bare` hero with `replacesSectionKey` as the baked Details panel rendering and then vanishing. Explorer's `FormResolverService` awaits `InteractiveFormsEngine.Config` before the form is created, but dialogs, slide-ins, and dashboard quick-edit do not all go through the resolver.
+
+In `remount()`, when the engine is not ready, defer the first mount rather than rendering a partial set:
+
+```ts
+    /** Bounded: a slow or unreachable engine must not leave the form blank. */
+    private static readonly READINESS_TIMEOUT_MS = 1500;
+
+    private async awaitContributions(): Promise<void> {
+        const engine = InteractiveFormsEngine.Instance;
+        if (engine.ContributionsReady || engine.IsPermissionConstrained) return;
+        await Promise.race([
+            firstValueFrom(engine.Contributions$),
+            new Promise<void>((resolve) => setTimeout(resolve, FormPanelSlotComponent.READINESS_TIMEOUT_MS)),
+        ]);
+    }
+```
+
+On timeout the slot mounts class contributions only and logs once — today's behavior, degraded honestly rather than silently. Add a DOM test for both paths: ready engine mounts everything in one pass; timed-out engine mounts class panels and logs.
+
 - [ ] **Step 4: Run tests**
 
 Run: `cd packages/Angular/Generic/base-forms && pnpm test`
@@ -1907,6 +2150,7 @@ Expected: PASS, including the pre-existing slot tests (exact entity names).
 
 ```bash
 git add packages/Angular/Generic/base-forms/src/lib/panel-slot/form-panel-slot.component.ts packages/Angular/Generic/base-forms/src/lib/panel-slot/form-panel-slot.component.dom.test.ts
+git add packages/Angular/Explorer/core-entity-forms/src/lib/custom packages/Angular/Explorer/core-entity-forms/src/lib/panels/ai-agents
 ```
 
 ---
@@ -1973,6 +2217,7 @@ import { ValidationResult } from '@memberjunction/global';
  * Base errors stay first so field-level messages keep their position.
  */
 export function MergePanelValidation(base: ValidationResult, panels: readonly ValidationResult[]): ValidationResult {
+    // Callers pass already-resolved results; awaiting happens in ValidateAsync().
     if (panels.length === 0) return base;
     const merged = new ValidationResult();
     merged.Success = base.Success && panels.every((p) => p.Success);
@@ -2016,15 +2261,31 @@ Remove the `CollectFormPanelRegistrations` import. New members (place after the 
   }
 ```
 
-`Validate()` (currently `const valResults = (<BaseEntity>this.record).Validate();` … ) becomes:
+**Validation, sync and async.** A panel's `validate()` may return a Promise (design decision 8), but `BaseFormComponent.Validate()` is public API of a published package and at least one external caller may rely on its synchronous signature. So the signature does not change; an async sibling is added and `Save()` uses it. `Save()` is already `async` and already `await`s `InternalSaveRecord`, so this is a local change at `base-form-component.ts:448`:
 
 ```ts
+  /**
+   * Record validation merged with whatever panel validity is already known.
+   * Synchronous, and therefore blind to a panel validator that has not yet
+   * reported — use `ValidateAsync()` on any path that gates a save.
+   */
   public Validate(): ValidationResult {
     const base = (<BaseEntity>this.record).Validate();
-    const panelResults = [...this._formPanels].map((panel) => panel.validate());
-    const valResults = MergePanelValidation(base, panelResults);
-    // ...existing handling of valResults continues unchanged...
+    const cached = [...this._formPanels].map((panel) => panel.lastKnownValidation());
+    return MergePanelValidation(base, cached);
+  }
+
+  /** Record validation merged with every mounted panel's validator, awaited. */
+  public async ValidateAsync(): Promise<ValidationResult> {
+    const base = (<BaseEntity>this.record).Validate();
+    const panelResults = await Promise.all([...this._formPanels].map((panel) => panel.validate()));
+    return MergePanelValidation(base, panelResults);
+  }
 ```
+
+Then at the Save() call site, `const valResults = this.Validate();` becomes `const valResults = await this.ValidateAsync();` and the existing handling of `valResults` continues unchanged.
+
+`BaseFormPanel` gains the matching pair: `validate(): ValidationResult | Promise<ValidationResult>` (default returns success, as today) and `lastKnownValidation(): ValidationResult`, which the panel host answers from its cached `ValidationChanged` payload. A compiled panel that does not override either is unaffected.
 
 `contributionHiddenSectionKeys()` becomes:
 
@@ -2089,8 +2350,8 @@ const tickets = rel(TICKETS, 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'PersonID',
 const addresses = rel(ADDR, 'cccccccc-cccc-cccc-cccc-cccccccccccc', 'RecordID', 2);
 
 const regs: FormContributionRegistration[] = [
-    { Priority: 0, Source: 'class', Metadata: { entity: PEOPLE, slot: 'before-fields', contributionKey: 'header', presentation: 'bare' } },
-    { Priority: 0, Source: 'metadata', ComponentID: 'c1', Title: 'Tickets as cards', Presentation: 'panel',
+    { Precedence: 0, Source: 'class', Metadata: { entity: PEOPLE, slot: 'before-fields', contributionKey: 'header', presentation: 'bare' } },
+    { Precedence: 0, Source: 'metadata', ComponentID: 'c1', Title: 'Tickets as cards', Presentation: 'panel',
       Metadata: { entity: PEOPLE, slot: 'after-related', relatedEntity: TICKETS, relatedJoinField: 'PersonID' } },
 ];
 
@@ -2132,8 +2393,8 @@ describe('BuildFormCompositionSnapshot', () => {
 
     it('lists collapsed contributions with source and presentation', () => {
         expect(snapshot.Contributions).toEqual([
-            { Key: 'header', Slot: 'before-fields', Source: 'class', Title: 'header', Presentation: 'bare', Hidden: false, Priority: 0 },
-            { Key: `related:${TICKETS}:PersonID`, Slot: 'after-related', Source: 'metadata', Title: 'Tickets as cards', Presentation: 'panel', Hidden: false, Priority: 0 },
+            { Key: 'header', Slot: 'before-fields', Source: 'class', Title: 'header', Presentation: 'bare', Hidden: false, Precedence: 0 },
+            { Key: `related:${TICKETS}:PersonID`, Slot: 'after-related', Source: 'metadata', Title: 'Tickets as cards', Presentation: 'panel', Hidden: false, Precedence: 0 },
         ]);
     });
 
@@ -2199,11 +2460,18 @@ export interface FormCompositionContribution {
     /** Suppressed by an L3 rule or inclusion None. */
     Hidden: boolean;
     /** Last-wins rank; the apply flow uses incumbent + 1 to replace a compiled piece. */
-    Priority: number;
+    Precedence: number;
 }
 
 export interface FormCompositionSnapshot {
     Entity: string;
+    /**
+     * The record this composition was built for, as `PrimaryKey.ToString()`.
+     * `AdditionalContext` is app-global and replaced wholesale by whichever surface
+     * published last, so a consumer needs to be able to tell which record a snapshot
+     * describes rather than assuming it matches the conversation.
+     */
+    RecordPrimaryKey: string;
     Layout: 'accordion' | 'left-nav';
     Sections: FormCompositionSection[];
     Related: FormCompositionRelated[];
@@ -2214,6 +2482,7 @@ export interface FormCompositionSnapshot {
 
 export interface BuildFormCompositionSnapshotInput {
     EntityName: string;
+    RecordPrimaryKey: string;
     Layout: 'accordion' | 'left-nav';
     Groups: readonly FormChromeGroup[];
     Panels: readonly FormChromePanelSnapshot[];
@@ -2234,7 +2503,10 @@ function groupOf(groups: readonly FormChromeGroup[], sectionKey: string): string
 }
 
 function presentationOf(reg: FormContributionRegistration): 'panel' | 'bare' {
-    return reg.Presentation ?? reg.Metadata.presentation ?? (reg.Metadata.contributionKey === 'header' ? 'bare' : 'panel');
+    // No `contributionKey === 'header'` fallback: `presentation` is now the only
+    // statement of hero-ness, on both sources. A11 migrates the panels that relied
+    // on the old convention — and none of them actually rendered, so nothing regresses.
+    return reg.Presentation ?? reg.Metadata.presentation ?? 'panel';
 }
 
 export function BuildFormCompositionSnapshot(input: BuildFormCompositionSnapshotInput): FormCompositionSnapshot {
@@ -2281,7 +2553,7 @@ export function BuildFormCompositionSnapshot(input: BuildFormCompositionSnapshot
             Title: reg.Title ?? reg.Metadata.contributionKey ?? key,
             Presentation: presentationOf(reg),
             Hidden: input.HiddenContributionKeys.has(key),
-            Priority: reg.Priority,
+            Precedence: reg.Priority,
         };
     });
 
@@ -2320,12 +2592,12 @@ Imports: replace `CollectFormPanelRegistrations` with `CollectFormContributionRe
 
 ```ts
     const regs = [...CollectFormContributionRegistrations(this.EffectiveEntityInfo, this.ProviderToUse)]
-      .sort((a, b) => (a.Priority ?? 0) - (b.Priority ?? 0));
+      .sort((a, b) => (a.Precedence ?? 0) - (b.Precedence ?? 0));
     for (const reg of regs) {
       const meta = reg.Metadata;
       if (!meta || meta.entity !== entityName) continue;
-      // Heroes are not rail sections. `presentation: 'bare'` is the contract; 'header' is the legacy convention.
-      if (meta.contributionKey === 'header' || meta.presentation === 'bare' || reg.Presentation === 'bare') continue;
+      // Heroes are not rail sections, whichever source declared them.
+      if (meta.presentation === 'bare' || reg.Presentation === 'bare') continue;
 ```
 
 `contributionHiddenSectionKeys()` and `hiddenChromeSectionKeys()` — pass `CollectFormContributionRegistrations(entity, this.ProviderToUse)` instead of `CollectFormPanelRegistrations()`.
@@ -2510,6 +2782,61 @@ git add packages/Angular/Generic/base-forms/src/lib/interactive-form/interactive
 
 ---
 
+### Task A11: Revive the five `slot: 'header'` panels as bare heroes
+
+**Files:**
+- Modify: `packages/Angular/Explorer/core-entity-forms/src/lib/custom/Users/user-header.panel.ts`, `custom/Companies/company-header.panel.ts`, `custom/Employees/employee-header.panel.ts`, `custom/Conversations/conversation-header.panel.ts`, `custom/AIAgentCategories/ai-agent-category-header.panel.ts`
+- Test: `packages/Angular/Generic/base-forms/src/lib/panel-slot/form-panel-slot.component.dom.test.ts` (one case), plus a manual check per form
+
+**Interfaces:**
+- Consumes: `FormPanelRegistrationMetadata.presentation` (A4), strict entity matching (A7).
+- Produces: five previously dead registrations that mount as bare heroes.
+
+**Why this task exists.** `'header'` is not a member of `FormPanelSlot`. `FormSlotCoordinator.resolveSlot('header')` does `FORM_SLOT_CHAIN.indexOf('header')` → `-1` → returns `null`, and no `Slot="header"` host is emitted anywhere in the repo. All five `*-header.panel.ts` panels have therefore never rendered — in any form, for any user. The audit behind design.md §14 described this as the `contributionKey === 'header'` magic string; those are two different things, and the second one never fires for these five because they set no contribution key at all.
+
+Since `presentation` (A4) is what now expresses hero-ness, these five are the first compiled consumers of it.
+
+- [ ] **Step 1: Confirm they are dead before changing them**
+
+```bash
+grep -rn "Slot=\"header\"" --include="*.html" --include="*.ts" packages | grep -v node_modules   # expect: no output
+grep -rn "slot: 'header'" --include="*.ts" packages | grep -v node_modules                       # expect: the five files
+```
+
+If either expectation fails, stop — the premise of this task is wrong and the panels must be treated as live UI instead.
+
+- [ ] **Step 2: Retarget each registration**
+
+```ts
+@RegisterClassEx(BaseFormPanel, {
+    key: 'form-panel:MJ: Users:header',
+    metadata: {
+        entity: 'MJ: Users',            // prefixed — A7 makes matching strict
+        slot: 'before-fields',          // 'header' is not a slot; this is where heroes go
+        presentation: 'bare',           // no collapsible chrome, no rail item
+        contributionKey: 'users:header',// gives L3 chrome rules and last-wins something to key on
+        sortKey: 10,
+    },
+})
+```
+
+Per-file values: `companies:header`, `employees:header`, `conversations:header`, `ai-agent-categories:header`. Keep `sortKey: 10` so a later hero can outrank one deliberately.
+
+- [ ] **Step 3: Look at each of the five forms**
+
+This is the one task in Phase A with a visible, unrequested UI change: five panels that render nothing today begin to appear on Users, Companies, Employees, Conversations, and AI Agent Categories. The code was written to render a header strip, but no one has seen it in a deployed build.
+
+For each form, open the record in Explorer and check: the hero renders above the field panels, it does not duplicate what the CodeGen `top-area` section already shows, it has no rail item, and the collapsed-state setting each panel reads (`mj.form.<entity>.headerCollapsed`) still behaves. A panel that looks wrong is deleted in this task rather than shipped — the honest options are "revive it" or "remove it", not "leave it dead".
+
+- [ ] **Step 4: Run tests and stage**
+
+```bash
+cd packages/Angular/Explorer/core-entity-forms && pnpm test && pnpm run build
+git add packages/Angular/Explorer/core-entity-forms/src/lib/custom
+```
+
+---
+
 # Phase B — Apply path (MJ)
 
 ### Task B1: Shared helpers and `Create Form Contribution`
@@ -2522,7 +2849,7 @@ git add packages/Angular/Generic/base-forms/src/lib/interactive-form/interactive
 
 **Interfaces:**
 - Consumes: `isFormPanelRole`, `getDeclaredFormContribution`, `FormContributionSpec` (A1); `MJEntityFormContributionEntity` (A2).
-- Produces in `_shared.ts`: `lintFormPanelSpec(spec, user)`, `loadContribution(provider, user, id)`, `insertContribution(opts)`, `checkScopedOwnership(row, user, label)`; `insertComponent` gains `componentType?: 'Form' | 'Widget'`. Action `Create Form Contribution` (`__CreateFormContribution`): inputs `EntityName`, `Name`, `Spec`, `Description?`, `Notes?`, `Priority?`; outputs `ContributionID`, `ComponentID`, `Version`; result codes `SUCCESS`, `MISSING_PARAMETER`, `ENTITY_NOT_FOUND`, `RELATED_ENTITY_NOT_FOUND`, `LINT_FAILED`, `ALREADY_EXISTS`, `PERSIST_FAILED`, `NO_PROVIDER`, `NO_USER`, `UNEXPECTED_ERROR`.
+- Produces in `_shared.ts`: `lintFormPanelSpec(spec, user)`, `loadContribution(provider, user, id)`, `insertContribution(opts)`, `checkScopedOwnership(row, user, label)`; `insertComponent` gains `componentType?: 'Form' | 'Widget'`. Action `Create Form Contribution` (`__CreateFormContribution`): inputs `EntityName`, `Name`, `Spec`, `Description?`, `Notes?`, `Precedence?`; outputs `ContributionID`, `ComponentID`, `Version`; result codes `SUCCESS`, `MISSING_PARAMETER`, `ENTITY_NOT_FOUND`, `RELATED_ENTITY_NOT_FOUND`, `LINT_FAILED`, `ALREADY_EXISTS`, `INVALID_CONTRIBUTION_KEY`, `RESTRICTED_ENTITY`, `PERSIST_FAILED`, `NO_PROVIDER`, `NO_USER`, `UNEXPECTED_ERROR`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -2605,7 +2932,7 @@ describe('CreateFormContributionAction', () => {
         expect(component.fields).toMatchObject({ Type: 'Widget', Status: 'Draft', Version: '1.0.0', Name: 'PersonLtvStrip' });
         expect(row.fields).toMatchObject({
             EntityID: 'ENT-PEOPLE', ComponentID: component.ID, Name: 'LTV strip', Slot: 'before-fields', Presentation: 'bare',
-            ContributionKey: 'skip:person-ltv', Scope: 'User', UserID: 'USER-1', RoleID: null, Priority: 0, Status: 'Pending',
+            ContributionKey: 'skip:person-ltv', Scope: 'User', UserID: 'USER-1', RoleID: null, Precedence: 0, Status: 'Pending',
             Configuration: JSON.stringify({ metric: 'ltv' }), Title: 'Lifetime value',
         });
         expect(JSON.parse(result.Message ?? '{}')).toMatchObject({ ContributionID: row.ID, ComponentID: component.ID, Version: '1.0.0' });
@@ -2623,9 +2950,9 @@ describe('CreateFormContributionAction', () => {
         expect((await run(params({ Spec: spec }))).ResultCode).toBe('RELATED_ENTITY_NOT_FOUND');
     });
 
-    it('honors an explicit Priority', async () => {
-        await run(params({ Priority: '7' }));
-        expect(hoisted.entities.find(e => e.entityName === 'MJ: Entity Form Contributions')!.fields.Priority).toBe(7);
+    it('honors an explicit Precedence', async () => {
+        await run(params({ Precedence: '7' }));
+        expect(hoisted.entities.find(e => e.entityName === 'MJ: Entity Form Contributions')!.fields.Precedence).toBe(7);
     });
 
     it('refuses a spec that is not a form panel', async () => {
@@ -2758,6 +3085,53 @@ export async function insertComponent(opts: {
     component.Type = opts.componentType ?? "Form";
 ```
 
+Add the key helpers and the identity-entity clamp:
+
+```ts
+/**
+ * Contribution keys are compared in SQL filters and matched by MJ: Form Chrome Rules,
+ * and they arrive from an LLM. Constrain the character set instead of escaping quotes
+ * at each call site: a key that cannot contain a quote cannot break a filter, and a
+ * rejected key is a clear action failure rather than a subtly malformed query.
+ */
+export const CONTRIBUTION_KEY_PATTERN = /^[A-Za-z0-9:._-]{1,256}$/;
+
+/**
+ * The key a row will actually carry. A related-grid claim with no author-supplied key
+ * gets the same `related:<entity>:<join>` value the renderer would derive, so the
+ * unique index sees it.
+ */
+export function ResolveWriteContributionKey(
+    contribution: FormContributionSpec,
+    relatedEntityName: string | null,
+): string | null {
+    if (contribution.contributionKey) return contribution.contributionKey;
+    if (!relatedEntityName) return null;
+    return `related:${relatedEntityName}:${contribution.relatedJoinField ?? ''}`;
+}
+
+/**
+ * Entities whose forms may not carry a Global or Role contribution from any write path
+ * — action family or `mj sync`. A metadata row places a runtime-interpreted React spec
+ * on a form for every user; the identity and authorization surfaces are where that
+ * matters most, and nothing legitimate needs it (design.md §16). A user may still place
+ * a User-scope contribution on their own form.
+ */
+export const CONTRIBUTION_RESTRICTED_ENTITIES: ReadonlySet<string> = new Set([
+    'MJ: Users', 'MJ: Roles', 'MJ: User Roles', 'MJ: Authorizations', 'MJ: Authorization Roles',
+]);
+
+export function checkContributionTarget(entityName: string, scope: 'User' | 'Role' | 'Global'): ActionResultSimple | null {
+    if (scope !== 'User' && CONTRIBUTION_RESTRICTED_ENTITIES.has(entityName)) {
+        return { Success: false, ResultCode: 'RESTRICTED_ENTITY',
+            Message: `'${entityName}' does not accept ${scope}-scope form contributions.` };
+    }
+    return null;
+}
+```
+
+`mj sync` enforces the same set — see the sync-side check in Task A2's directory config; an action-only clamp is the gap the review named, since `mj sync` bypasses actions entirely.
+
 Add the contribution insert:
 
 ```ts
@@ -2772,9 +3146,9 @@ export async function insertContribution(opts: {
     contribution: FormContributionSpec;
     relatedEntityID: string | null;
     status: 'Active' | 'Pending';
-    priority: number;
+    precedence: number;
 }): Promise<{ id: string } | { error: ActionResultSimple }> {
-    const { provider, user, entityID, componentID, name, description, notes, contribution, relatedEntityID, status, priority } = opts;
+    const { provider, user, entityID, componentID, name, description, notes, contribution, relatedEntityID, status, precedence } = opts;
     const row = await provider.GetEntityObject<MJEntityFormContributionEntity>("MJ: Entity Form Contributions", user);
     row.NewRecord();
     row.EntityID = entityID;
@@ -2784,7 +3158,12 @@ export async function insertContribution(opts: {
     row.Notes = notes ?? null;
     row.Slot = contribution.slot;
     row.SortKey = contribution.sortKey ?? 0;
-    row.ContributionKey = contribution.contributionKey ?? null;
+    // Derive and persist. A related claim with no author-supplied key resolves to
+    // `related:<entity>:<join>` at render time, but a NULL column is invisible to the
+    // ContributionKey unique index, so two Active rows could otherwise claim the same
+    // grid and the winner would be decided by row order. Persisting the derived key
+    // closes that with the index rather than relying on the action layer alone.
+    row.ContributionKey = ResolveWriteContributionKey(contribution, relatedEntityName);
     row.RelatedEntityID = relatedEntityID;
     row.RelatedJoinField = contribution.relatedJoinField ?? null;
     row.ReplacesSectionKey = contribution.replacesSectionKey ?? null;
@@ -2799,7 +3178,7 @@ export async function insertContribution(opts: {
     row.Scope = "User";
     row.UserID = user.ID;
     row.RoleID = null;
-    row.Priority = priority;
+    row.Precedence = precedence;
     row.Status = status;
     const saved = await row.Save();
     if (!saved) {
@@ -2833,7 +3212,7 @@ import {
  * Activation is a separate step (`Activate Form Contribution Version`), which the
  * "Add to my form" apply flow runs immediately after Create.
  *
- * `Priority` is honored when supplied (the apply flow passes `incumbent + 1` after
+ * `Precedence` is honored when supplied (the apply flow passes `incumbent + 1` after
  * the user confirms replacing a compiled contribution). It only ever affects the
  * calling user's own form, so it is not clamped.
  */
@@ -2867,17 +3246,25 @@ export class CreateFormContributionAction extends BaseAction {
                 contribution.relatedEntity = related.Name;
             }
 
-            if (contribution.contributionKey) {
+            // Derive the key the row will actually carry, so the duplicate check covers
+            // keyless related claims too — the old `if (contribution.contributionKey)`
+            // guard skipped exactly the case with no index behind it.
+            const writeKey = ResolveWriteContributionKey(contribution, contribution.relatedEntity ?? null);
+            if (writeKey) {
+                if (!CONTRIBUTION_KEY_PATTERN.test(writeKey)) {
+                    return failure("INVALID_CONTRIBUTION_KEY",
+                        `Contribution key '${writeKey}' must match ${CONTRIBUTION_KEY_PATTERN.source}.`);
+                }
                 const rv = RunView.FromMetadataProvider(provider);
                 const dup = await rv.RunView<{ ID: string; Status: string }>({
                     EntityName: "MJ: Entity Form Contributions",
-                    ExtraFilter: `EntityID='${entityInfo.ID}' AND Scope='User' AND UserID='${user.ID}' AND ContributionKey='${contribution.contributionKey.replace(/'/g, "''")}' AND Status IN ('Active','Pending')`,
+                    ExtraFilter: `EntityID='${entityInfo.ID}' AND Scope='User' AND UserID='${user.ID}' AND ContributionKey='${writeKey}' AND Status IN ('Active','Pending')`,
                     Fields: ['ID', 'Status'], ResultType: 'simple', MaxRows: 1,
                 }, user);
                 if (dup.Success && (dup.Results ?? []).length > 0) {
                     const existing = dup.Results![0];
                     return failure("ALREADY_EXISTS",
-                        `A ${existing.Status} User-scope contribution '${contribution.contributionKey}' already exists on '${inputs.EntityName}' (ContributionID=${existing.ID}). Use 'Modify Form Contribution' on it.`);
+                        `A ${existing.Status} User-scope contribution '${writeKey}' already exists on '${inputs.EntityName}' (ContributionID=${existing.ID}). Use 'Modify Form Contribution' on it.`);
                 }
             }
 
@@ -2890,7 +3277,7 @@ export class CreateFormContributionAction extends BaseAction {
             const rowInsert = await insertContribution({
                 provider, user, entityID: entityInfo.ID, componentID: componentInsert.id,
                 name: inputs.Name, description: inputs.Description, notes: inputs.Notes,
-                contribution, relatedEntityID, status: 'Pending', priority: inputs.Priority,
+                contribution, relatedEntityID, status: 'Pending', precedence: inputs.Precedence,
             });
             if ('error' in rowInsert) {
                 return failure("PERSIST_FAILED", `${rowInsert.error.Message} (Component ${componentInsert.id} was persisted but has no contribution row yet.)`);
@@ -2915,7 +3302,7 @@ export class CreateFormContributionAction extends BaseAction {
     }
 
     private extractInputs(params: RunActionParams):
-        | { EntityName: string; Spec: ComponentSpec; Name: string; Description: string | null; Notes: string | null; Priority: number }
+        | { EntityName: string; Spec: ComponentSpec; Name: string; Description: string | null; Notes: string | null; Precedence: number }
         | { error: ActionResultSimple }
     {
         const entityName = getStringParam(params, "EntityName");
@@ -2926,11 +3313,11 @@ export class CreateFormContributionAction extends BaseAction {
         if (specRaw == null) return { error: failure("MISSING_PARAMETER", "Parameter 'Spec' is required.") };
         const parsed = parseSpecParam(specRaw);
         if ('error' in parsed) return { error: failure("LINT_FAILED", `Spec is not valid JSON: ${parsed.error}`) };
-        const priority = getNumberParam(params, "Priority");
+        const precedence = getNumberParam(params, "Precedence");
         return {
             EntityName: entityName, Spec: parsed, Name: name,
             Description: getStringParam(params, "Description"), Notes: getStringParam(params, "Notes"),
-            Priority: priority != null && priority >= 0 ? Math.floor(priority) : 0,
+            Precedence: precedence != null && precedence >= 0 ? Math.floor(precedence) : 0,
         };
     }
 }
@@ -3052,7 +3439,7 @@ beforeEach(() => {
     hoisted.created = [];
     loadedRow = loadedEntity('MJ: Entity Form Contributions', { ID: 'ROW-1', EntityID: 'ENT-PEOPLE', ComponentID: 'COMP-1', Name: 'LTV strip', Description: null, Notes: null,
         Slot: 'before-fields', SortKey: 0, ContributionKey: 'skip:person-ltv', RelatedEntityID: null, RelatedJoinField: null, ReplacesSectionKey: null,
-        Inclusion: null, ChromeGroup: null, Presentation: 'bare', Title: 'LTV', Icon: null, Scope: 'User', UserID: 'USER-1', RoleID: null, Priority: 0, Status: 'Pending', Configuration: null });
+        Inclusion: null, ChromeGroup: null, Presentation: 'bare', Title: 'LTV', Icon: null, Scope: 'User', UserID: 'USER-1', RoleID: null, Precedence: 0, Status: 'Pending', Configuration: null });
     loadedComponent = loadedEntity('MJ: Components', { ID: 'COMP-1', Name: 'PersonLtvStrip', Version: '1.0.0', VersionSequence: 1, Status: 'Draft', Specification: '{}' });
 });
 
@@ -3074,7 +3461,7 @@ describe('ModifyFormContributionAction', () => {
         const newComponent = hoisted.created.find(c => c.entityName === 'MJ: Components')!;
         const newRow = hoisted.created.find(c => c.entityName === 'MJ: Entity Form Contributions')!;
         expect(newComponent.fields).toMatchObject({ Type: 'Widget', Version: '1.1.0', VersionSequence: 2, Status: 'Draft' });
-        expect(newRow.fields).toMatchObject({ Status: 'Pending', Scope: 'User', UserID: 'USER-1', ContributionKey: 'skip:person-ltv', Priority: 0 });
+        expect(newRow.fields).toMatchObject({ Status: 'Pending', Scope: 'User', UserID: 'USER-1', ContributionKey: 'skip:person-ltv', Precedence: 0 });
         expect(loadedRow.saved).toBe(false);
     });
 
@@ -3199,7 +3586,7 @@ export class ModifyFormContributionAction extends BaseAction {
             row.Scope = "User";
             row.UserID = user.ID;
             row.RoleID = null;
-            row.Priority = source.Priority ?? 0;
+            row.Precedence = source.Precedence ?? 0;
             row.Status = 'Pending';
             if (!(await row.Save())) {
                 return failure("PERSIST_FAILED", `Contribution insert failed: ${row.LatestResult?.CompleteMessage ?? 'unknown error'} (Component ${componentInsert.id} persisted).`);
@@ -3293,13 +3680,19 @@ export class ActivateFormContributionVersionAction extends BaseAction {
 
             let priors: Array<{ ID: string; ComponentID: string }> = [];
             if (target.ContributionKey) {
+                // Keys are constrained on write (CONTRIBUTION_KEY_PATTERN), so a stored key
+                // cannot contain a quote. Re-assert it here rather than escaping: a row that
+                // predates the constraint should fail loudly, not build a filter.
+                if (!CONTRIBUTION_KEY_PATTERN.test(target.ContributionKey)) {
+                    return failure("INVALID_CONTRIBUTION_KEY", `Stored contribution key '${target.ContributionKey}' is not a legal key.`);
+                }
                 const scopeClause = target.Scope === 'User' ? `Scope='User' AND UserID='${target.UserID}'`
                     : target.Scope === 'Role' ? `Scope='Role' AND RoleID='${target.RoleID}'`
                     : `Scope='Global' AND UserID IS NULL AND RoleID IS NULL`;
                 const rv = RunView.FromMetadataProvider(provider);
                 const result = await rv.RunView<{ ID: string; ComponentID: string }>({
                     EntityName: "MJ: Entity Form Contributions",
-                    ExtraFilter: `EntityID='${target.EntityID}' AND ContributionKey='${target.ContributionKey.replace(/'/g, "''")}' AND ${scopeClause} AND Status='Active' AND ID <> '${target.ID}'`,
+                    ExtraFilter: `EntityID='${target.EntityID}' AND ContributionKey='${target.ContributionKey}' AND ${scopeClause} AND Status='Active' AND ID <> '${target.ID}'`,
                     Fields: ['ID', 'ComponentID'], ResultType: 'simple',
                 }, user);
                 if (!result.Success) return failure("QUERY_FAILED", `Prior-active lookup failed: ${result.ErrorMessage ?? 'unknown error'}`);
@@ -3362,7 +3755,7 @@ git add packages/Actions/CoreActions/src/custom/interactive-forms/modify-form-co
 - Create: `metadata/actions/.form-contributions-actions.json`
 
 **Interfaces:**
-- Produces: `Get Form Contributions For Entity` (`__GetFormContributionsForEntity`): input `EntityName`; output `Result` JSON `{ EntityName, Contributions: Array<{ ContributionID, ComponentID, ComponentName, ComponentVersion, Name, Scope, Status, Priority, Slot, ContributionKey, RelatedEntity, RelatedJoinField, ReplacesSectionKey, Inclusion, Presentation, Title }> }` — every row applicable to the caller (User/Role/Global) in every status, sorted Active first then Pending then Inactive, then Priority DESC. Metadata rows for all four B-phase actions plus the D3 action.
+- Produces: `Get Form Contributions For Entity` (`__GetFormContributionsForEntity`): input `EntityName`; output `Result` JSON `{ EntityName, Contributions: Array<{ ContributionID, ComponentID, ComponentName, ComponentVersion, Name, Scope, Status, Precedence, Slot, ContributionKey, RelatedEntity, RelatedJoinField, ReplacesSectionKey, Inclusion, Presentation, Title }> }` — every row applicable to the caller (User/Role/Global) in every status, sorted Active first then Pending then Inactive, then Precedence DESC. Metadata rows for all four B-phase actions plus the D3 action.
 
 - [ ] **Step 1: Create the action**
 
@@ -3377,7 +3770,7 @@ import { addOutput, failure, getStringParam } from "./_shared";
 
 export interface FormContributionSummary {
     ContributionID: string; ComponentID: string; ComponentName: string | null; ComponentVersion: string | null;
-    Name: string; Scope: string; Status: string; Priority: number; Slot: string; ContributionKey: string | null;
+    Name: string; Scope: string; Status: string; Precedence: number; Slot: string; ContributionKey: string | null;
     RelatedEntity: string | null; RelatedJoinField: string | null; ReplacesSectionKey: string | null;
     Inclusion: string | null; Presentation: string; Title: string | null;
 }
@@ -3407,7 +3800,7 @@ export class GetFormContributionsForEntityAction extends BaseAction {
             const rows = await rv.RunView<MJEntityFormContributionEntity>({
                 EntityName: "MJ: Entity Form Contributions",
                 ExtraFilter: `EntityID='${entity.ID}' AND ((Scope='User' AND UserID='${user.ID}') OR ${roleClause} OR Scope='Global')`,
-                OrderBy: "Priority DESC, SortKey DESC",
+                OrderBy: "Precedence DESC, SortKey DESC",
                 ResultType: 'entity_object',
             }, user);
             if (!rows.Success) return failure("QUERY_FAILED", rows.ErrorMessage ?? 'Contribution lookup failed.');
@@ -3425,12 +3818,12 @@ export class GetFormContributionsForEntityAction extends BaseAction {
 
             const statusRank = (s: string) => (s === 'Active' ? 0 : s === 'Pending' ? 1 : 2);
             const summaries: FormContributionSummary[] = (rows.Results ?? [])
-                .sort((a, b) => statusRank(a.Status) - statusRank(b.Status) || (b.Priority ?? 0) - (a.Priority ?? 0))
+                .sort((a, b) => statusRank(a.Status) - statusRank(b.Status) || (b.Precedence ?? 0) - (a.Precedence ?? 0))
                 .map(r => ({
                     ContributionID: r.ID, ComponentID: r.ComponentID,
                     ComponentName: components.get(r.ComponentID.toLowerCase())?.Name ?? null,
                     ComponentVersion: components.get(r.ComponentID.toLowerCase())?.Version ?? null,
-                    Name: r.Name, Scope: r.Scope, Status: r.Status, Priority: r.Priority ?? 0, Slot: r.Slot,
+                    Name: r.Name, Scope: r.Scope, Status: r.Status, Precedence: r.Precedence ?? 0, Slot: r.Slot,
                     ContributionKey: r.ContributionKey, RelatedEntity: r.RelatedEntity ?? null, RelatedJoinField: r.RelatedJoinField,
                     ReplacesSectionKey: r.ReplacesSectionKey, Inclusion: r.Inclusion, Presentation: r.Presentation, Title: r.Title,
                 }));
@@ -3476,7 +3869,7 @@ Generate one UUID per record with `uuidgen | tr '[:lower:]' '[:upper:]'` and rep
         { "fields": { "ActionID": "@parent:ID", "Name": "Spec", "Type": "Input", "ValueType": "Other", "IsArray": false, "Description": "ComponentSpec with componentRole='form-panel', location='embedded', code, and a formContribution block { slot, presentation, title, contributionKey?, relatedEntity?, relatedJoinField?, replacesSectionKey?, inclusion?, chromeGroup?, sortKey?, icon?, configuration? }.", "IsRequired": true }, "primaryKey": { "ID": "<uuidgen>" } },
         { "fields": { "ActionID": "@parent:ID", "Name": "Description", "Type": "Input", "ValueType": "Scalar", "IsArray": false, "Description": "Optional description.", "IsRequired": false }, "primaryKey": { "ID": "<uuidgen>" } },
         { "fields": { "ActionID": "@parent:ID", "Name": "Notes", "Type": "Input", "ValueType": "Scalar", "IsArray": false, "Description": "Optional authoring notes.", "IsRequired": false }, "primaryKey": { "ID": "<uuidgen>" } },
-        { "fields": { "ActionID": "@parent:ID", "Name": "Priority", "Type": "Input", "ValueType": "Scalar", "IsArray": false, "Description": "Optional last-wins priority against a compiled contribution with the same key. The apply flow passes incumbent + 1 after the user confirms. Default 0.", "IsRequired": false }, "primaryKey": { "ID": "<uuidgen>" } },
+        { "fields": { "ActionID": "@parent:ID", "Name": "Precedence", "Type": "Input", "ValueType": "Scalar", "IsArray": false, "Description": "Optional last-wins precedence against a compiled contribution with the same key. The apply flow passes incumbent + 1 after the user confirms. Default 0.", "IsRequired": false }, "primaryKey": { "ID": "<uuidgen>" } },
         { "fields": { "ActionID": "@parent:ID", "Name": "ContributionID", "Type": "Output", "ValueType": "Scalar", "IsArray": false, "Description": "New MJ: Entity Form Contributions row ID.", "IsRequired": false }, "primaryKey": { "ID": "<uuidgen>" } },
         { "fields": { "ActionID": "@parent:ID", "Name": "ComponentID", "Type": "Output", "ValueType": "Scalar", "IsArray": false, "Description": "New MJ: Components row ID.", "IsRequired": false }, "primaryKey": { "ID": "<uuidgen>" } },
         { "fields": { "ActionID": "@parent:ID", "Name": "Version", "Type": "Output", "ValueType": "Scalar", "IsArray": false, "Description": "Always 1.0.0 for Create.", "IsRequired": false }, "primaryKey": { "ID": "<uuidgen>" } }
@@ -3488,6 +3881,8 @@ Generate one UUID per record with `uuidgen | tr '[:lower:]' '[:upper:]'` and rep
         { "fields": { "ActionID": "@parent:ID", "ResultCode": "RELATED_ENTITY_NOT_FOUND", "Description": "formContribution.relatedEntity is not registered." }, "primaryKey": { "ID": "<uuidgen>" } },
         { "fields": { "ActionID": "@parent:ID", "ResultCode": "LINT_FAILED", "Description": "Spec is not a form panel or its code failed linting; message carries the violations." }, "primaryKey": { "ID": "<uuidgen>" } },
         { "fields": { "ActionID": "@parent:ID", "ResultCode": "ALREADY_EXISTS", "Description": "An Active or Pending User-scope row with this ContributionKey exists; use Modify." }, "primaryKey": { "ID": "<uuidgen>" } },
+        { "fields": { "ActionID": "@parent:ID", "ResultCode": "INVALID_CONTRIBUTION_KEY", "Description": "The contribution key contains characters outside [A-Za-z0-9:._-] or exceeds 256 characters." }, "primaryKey": { "ID": "<uuidgen>" } },
+        { "fields": { "ActionID": "@parent:ID", "ResultCode": "RESTRICTED_ENTITY", "Description": "The target entity does not accept Global or Role scope contributions (identity and authorization surfaces)." }, "primaryKey": { "ID": "<uuidgen>" } },
         { "fields": { "ActionID": "@parent:ID", "ResultCode": "PERSIST_FAILED", "Description": "Component or contribution insert failed." }, "primaryKey": { "ID": "<uuidgen>" } },
         { "fields": { "ActionID": "@parent:ID", "ResultCode": "NO_PROVIDER", "Description": "No metadata provider configured." }, "primaryKey": { "ID": "<uuidgen>" } },
         { "fields": { "ActionID": "@parent:ID", "ResultCode": "NO_USER", "Description": "No ContextUser." }, "primaryKey": { "ID": "<uuidgen>" } },
@@ -3581,7 +3976,7 @@ Generate one UUID per record with `uuidgen | tr '[:lower:]' '[:upper:]'` and rep
     "relatedEntities": {
       "MJ: Action Params": [
         { "fields": { "ActionID": "@parent:ID", "Name": "EntityName", "Type": "Input", "ValueType": "Scalar", "IsArray": false, "Description": "Parent form entity.", "IsRequired": true }, "primaryKey": { "ID": "<uuidgen>" } },
-        { "fields": { "ActionID": "@parent:ID", "Name": "Result", "Type": "Output", "ValueType": "Other", "IsArray": false, "Description": "{ EntityName, Contributions: [{ ContributionID, ComponentID, ComponentName, ComponentVersion, Name, Scope, Status, Priority, Slot, ContributionKey, RelatedEntity, RelatedJoinField, ReplacesSectionKey, Inclusion, Presentation, Title }] }", "IsRequired": false }, "primaryKey": { "ID": "<uuidgen>" } }
+        { "fields": { "ActionID": "@parent:ID", "Name": "Result", "Type": "Output", "ValueType": "Other", "IsArray": false, "Description": "{ EntityName, Contributions: [{ ContributionID, ComponentID, ComponentName, ComponentVersion, Name, Scope, Status, Precedence, Slot, ContributionKey, RelatedEntity, RelatedJoinField, ReplacesSectionKey, Inclusion, Presentation, Title }] }", "IsRequired": false }, "primaryKey": { "ID": "<uuidgen>" } }
       ],
       "MJ: Action Result Codes": [
         { "fields": { "ActionID": "@parent:ID", "ResultCode": "SUCCESS", "Description": "Rows returned (possibly empty)." }, "primaryKey": { "ID": "<uuidgen>" } },
@@ -3655,14 +4050,14 @@ describe('ConfirmAndApply — form-panel specs', () => {
         expect(hoisted.actionCalls.map(c => c.id)).toEqual(['Get Form Contributions For Entity', 'Create Form Contribution', 'Activate Form Contribution Version']);
     });
 
-    it('passes incumbent + 1 as Priority when the snapshot shows a compiled contribution with the same key', async () => {
+    it('passes incumbent + 1 as Precedence when the snapshot shows a compiled contribution with the same key', async () => {
         const snapshot = { Entity: 'MJ_BizApps_Common: People', Layout: 'accordion', Sections: [{ Key: 'details', Title: 'Details', Variant: 'default', Group: null, Hidden: false }],
-            Related: [], Contributions: [{ Key: 'header', Slot: 'before-fields', Source: 'class', Title: 'Header', Presentation: 'bare', Hidden: false, Priority: 3 }],
+            Related: [], Contributions: [{ Key: 'header', Slot: 'before-fields', Source: 'class', Title: 'Header', Presentation: 'bare', Hidden: false, Precedence: 3 }],
             SlotsPresent: ['before-fields'], ChromeRuleCount: 0 };
         await service.ConfirmAndApply(panelSpec, 'MJ_BizApps_Common: People', provider, snapshot as never);
         const create = hoisted.actionCalls.find(c => c.id === 'Create Form Contribution')!;
-        const priority = (create.params as Array<{ Name: string; Value: string }>).find(p => p.Name === 'Priority');
-        expect(priority?.Value).toBe('4');
+        const precedence = (create.params as Array<{ Name: string; Value: string }>).find(p => p.Name === 'Precedence');
+        expect(precedence?.Value).toBe('4');
     });
 
     it('drops replacesSectionKey when the snapshot has no such section and the user picks the extra-pane fallback', async () => {
@@ -3684,7 +4079,7 @@ describe('ConfirmAndApply — form-panel specs', () => {
 });
 ```
 
-The existing test file's mock dialog always answers the primary action; that is the path exercised here (primary = "Add" / "Replace" / "Add as extra pane"). The snapshot fixture's `Priority` field comes from `FormCompositionContribution` (A9).
+The existing test file's mock dialog always answers the primary action; that is the path exercised here (primary = "Add" / "Replace" / "Add as extra pane"). The snapshot fixture's `Precedence` field comes from `FormCompositionContribution` (A9).
 
 - [ ] **Step 2: Run to verify failure**
 
@@ -3699,7 +4094,7 @@ import type { FormContributionSpec } from '@memberjunction/interactive-component
 /** A registration for a spec that has not been persisted yet (artifact preview). */
 export function ContributionSpecToRegistration(entityName: string, contribution: FormContributionSpec, componentID?: string): FormContributionRegistration {
     return {
-        Priority: 0,
+        Precedence: 0,
         Source: 'metadata',
         ComponentID: componentID,
         Title: contribution.title,
@@ -3858,7 +4253,7 @@ New private method:
         // Decision 1: compiled wins ties; replacing a compiled contribution is an explicit choice.
         const key = contribution.contributionKey
             ?? (contribution.relatedEntity ? `related:${contribution.relatedEntity}:${contribution.relatedJoinField ?? ''}` : null);
-        let priority = 0;
+        let precedence = 0;
         const incumbent = key ? sameEntity?.Contributions.find(c => c.Key === key && c.Source === 'class') : undefined;
         if (incumbent) {
             const replace = await this.ask(
@@ -3867,7 +4262,7 @@ New private method:
                 'Replace',
             );
             if (!replace) return { Success: false, Kind: 'contribution', Message: 'Cancelled by user.' };
-            priority = incumbent.Priority + 1;
+            precedence = incumbent.Precedence + 1;
         }
 
         const existingResult = await this.runActionByName(client, 'Get Form Contributions For Entity', [
@@ -3903,7 +4298,7 @@ New private method:
                 { Name: 'EntityName', Value: entityName, Type: 'Input' },
                 { Name: 'Name', Value: contribution.title, Type: 'Input' },
                 { Name: 'Spec', Value: JSON.stringify(specToSend), Type: 'Input' },
-                { Name: 'Priority', Value: String(priority), Type: 'Input' },
+                { Name: 'Precedence', Value: String(precedence), Type: 'Input' },
             ], provider);
             mode = 'create';
         }
@@ -3993,7 +4388,41 @@ Expected: PASS; builds clean. Manual check: in a conversation, ask Skip (or past
 git add packages/Angular/Generic/base-forms/src/lib/interactive-form/form-panel-host-props.builder.ts packages/Angular/Generic/artifacts/src/lib/components/plugins/component-artifact-viewer.component.ts packages/Angular/Generic/artifacts/src/lib/components/plugins/component-artifact-viewer.component.html packages/Angular/Generic/artifacts/src/lib/services/interactive-form-apply.service.ts packages/Angular/Generic/artifacts/src/lib/__tests__/interactive-form-apply.service.test.ts packages/Angular/Generic/conversations/src/lib/components/conversation/conversation-chat-area.component.ts packages/Angular/Explorer/explorer-core/src/lib/resource-wrappers/artifact-resource.component.ts
 ```
 
-Phase B done-when: `pnpm run test:integration` green from the MJ root after migrate + codegen; a form-panel artifact applies, activates, and mounts on the next open of the record.
+---
+
+### Task B5: Integration bundle — `form-contributions.checks.ts`
+
+**Files:**
+- Create: `packages/TestingFramework/integration-test-suite/src/checks/form-contributions.checks.ts`
+- Modify: the suite's bundle registration (follow `ai-skills.checks.ts` / `entity-actions.checks.ts` for the pattern)
+
+**Why this task exists.** The earlier draft said "run `pnpm run test:integration`" and authored no bundle. Across the suite's 89 check files there is **zero** coverage of `BaseFormPanel`, `FormPanel`, `EntityFormOverride`, or `InteractiveForm` — forms have no deterministic-tier coverage at all today. That reframes the omission: it is not that this plan skips an established practice, it is that **nothing in the deterministic tier would catch any finding in the PR review** — not the unmounted panels, not a composition regression, not a precedence inversion. This feature is almost entirely cross-package seams (engine load → merged collector → slot host → action family → cross-repo transport), which is exactly what MJ's `CLAUDE.md` means by "unit tests passing is necessary but not sufficient".
+
+`ai-skills.checks.ts` (IT12) is the precedent for a new action family; `entity-actions.checks.ts` for entity plus action metadata. Read `guides/INTEGRATION_TESTING_QUICKSTART.md` first — in particular the client-first transport doctrine, which decides whether a check drives the action through the client or the server.
+
+**Checks to author:**
+
+| # | Check | Catches |
+|---|---|---|
+| 1 | Entity `MJ: Entity Form Contributions` exists with every column from A2, the two filtered indexes, and the three CHECK constraints | A migration that lands partially, or a CodeGen run that drops a column |
+| 2 | `Create Form Contribution` with a valid spec produces a `Type='Widget'` component and a `Pending`, `User`-scope row whose `ContributionKey` is persisted (including the derived `related:…` form) | The keyless-claim hole |
+| 3 | A second `Create` for the same key returns `ALREADY_EXISTS`; a second keyless claim on the same relationship is refused by the index | Duplicate claims decided by row order |
+| 4 | `Create` against `MJ: Users` at `Global` scope returns `RESTRICTED_ENTITY`; the same at `User` scope succeeds | The §16 clamp, on the action path |
+| 5 | `Activate Form Contribution Version` deactivates the prior Active row sharing the key | Two Active winners |
+| 6 | `Get Form Composition For Entity` returns the metadata-derivable subset and states that it cannot see compiled panels | The D3 fallback silently claiming completeness |
+| 7 | `InteractiveFormsEngine.Config` loads a contribution's component through the reference-scoped filter, and re-loads it when a new row references a component the cache did not hold | Decision 2a's invalidation coupling — the one failure mode the narrow filter introduces |
+| 8 | With the kill switch off, the engine loads no contributions and the collector returns class registrations only | The rollback path actually rolling back |
+
+Checks 1–6 are Phase B work. Check 7 exercises A3 and check 8 exercises §16; both belong here because the bundle is the first place they can run against a real database.
+
+```bash
+pnpm mj test run "IT — Form Contributions"
+pnpm run test:integration
+```
+
+Expected: the new bundle green, and the whole deterministic tier still green.
+
+Phase B done-when: `pnpm run test:integration` green from the MJ root after migrate + codegen, **including the new bundle**; a form-panel artifact applies, activates, and mounts on the next open of the record.
 
 ---
 
@@ -4087,7 +4516,7 @@ Apply this section **only when building a form panel** — the PRD/spec `type` i
 - `relatedEntity` (+ `relatedJoinField` when two FKs point at the same entity) — claims the related-record grid for that relationship; the stock grid hides and your panel is that section. The host passes `related.viewParams` and `related.newRecordValues`; use them.
 - `replacesSectionKey` — hides one baked field section (e.g. `details`, `personalIdentity`). **Use only a key that appears in `[FORM CONTEXT]`.** Never invent one.
 - `inclusion` — `Primary` for an own rail item, `More` to park it in the More folder, omit for the default.
-- Never set a priority. The host decides that.
+- Never set a precedence. The host decides that.
 
 ### Props the host passes
 
@@ -4114,9 +4543,12 @@ function PersonLtvStrip({
 5. **No fixed heights on the root.** Render `display: block; width: 100%`; in `layout === 'left-nav'` the host gives you the leftover column height. No `height: 600px`, no `100vh`.
 6. **No header of your own when `presentation === 'panel'`.** The collapsible section already shows `contribution.title`.
 7. **Make related rows drillable** with `callbacks.OpenEntityRecord(relatedEntityName, keyPairs)` using the related row's full primary key.
-8. **Optional methods** — register with `callbacks.RegisterMethod` once in a `useEffect([])`: `'OnRecordRefreshed'` (reload your related data), `'SetEditMode'` (`{ mode }`), `'Validate'` (return `{ isValid, errors: string[] }` if you gate the parent save).
+8. **Optional methods** — register with `callbacks.RegisterMethod` once in a `useEffect([])`: `'OnRecordRefreshed'` (reload your related data), `'SetEditMode'` (`{ mode }`), `'Validate'` (return `{ isValid, errors: string[] }`, or a Promise of it, if you gate the parent save). Return exactly that shape — the host awaits it, and anything else is treated as "no opinion", which lets an invalid record save.
 9. All standard JSX rules apply: no top-level imports, `React` is a global, `MaxRows` not `Limit`, only fields that exist on the entity, no `window.*`.
 10. **Use `[FORM CONTEXT]` when present.** It lists the form's sections, related grids, existing contributions, and slots. Pick a `slot` that exists, a `replacesSectionKey` that exists, and a `contributionKey` that does not collide with an existing `class` contribution unless the user asked to replace it.
+11. **Style from `styles`, never from literals.** Every color, background, border, radius, spacing, and font comes from the `styles` prop the host passes. A hardcoded `#fff` or `background: white` inside themed form chrome is a dark-mode defect — the form around you is themed and your panel will not be. SCSS in this repo is gated by `npm run check:ui`; React specs have no such gate, so this rule is the gate.
+12. **Be reachable without a mouse.** Interactive elements are real `<button>` / `<a>` / form controls with accessible names, not click-handled `<div>`s. Focus order follows visual order. The panel title is a heading, and when `presentation === 'bare'` — where you sit outside the form's rail, and so outside its keyboard path — wrap your content in a labelled `<section>` so it is findable.
+13. **Choose a slot that the form actually emits:** `before-fields`, `after-fields`, `after-related`, `after-everything`. `top-area` exists in the type but no form emits it as a panel slot; CodeGen emits a *section* by that name, which is a different thing. A `top-area` panel is rescued by the fallback chain, but it will not land where the name suggests.
 
 ### Canonical pattern
 
@@ -4142,14 +4574,30 @@ function PersonLtvStrip({ record, primaryKey, contribution, related, isExpanded,
     callbacks?.RegisterMethod?.('OnRecordRefreshed', () => setLoaded(false));
   }, []);
 
+  // Every visual value comes from `styles` — rule 11. A literal color here is a
+  // dark-mode defect, because the chrome around this panel is themed and this is not.
   return (
-    <div style={{ display: 'block', width: '100%' }}>
+    <section
+      aria-label={contribution.title}
+      style={{ display: 'block', width: '100%', color: styles.colors.text, fontFamily: styles.typography.fontFamily }}
+    >
       {rows.map((r) => (
-        <div key={r.ID} style={{ cursor: 'pointer' }} onClick={() => callbacks?.OpenEntityRecord?.(related.entityName, [{ FieldName: 'ID', Value: r.ID }])}>
+        <button
+          key={r.ID}
+          type="button"
+          onClick={() => callbacks?.OpenEntityRecord?.(related.entityName, [{ FieldName: 'ID', Value: r.ID }])}
+          style={{
+            display: 'block', width: '100%', textAlign: 'left', cursor: 'pointer',
+            background: 'transparent', border: 'none',
+            padding: styles.spacing.sm,
+            borderBottom: `1px solid ${styles.colors.border}`,
+            color: styles.colors.text, font: 'inherit',
+          }}
+        >
           {r.Name}
-        </div>
+        </button>
       ))}
-    </div>
+    </section>
   );
 }
 ```
@@ -4308,14 +4756,14 @@ git add apps/API/src/services/workflow/WorkflowService.ts apps/API/test/unit/ser
 ### Task C3: Panel gates
 
 **Files:**
-- Create: `packages/component-engine/src/gates/FormPanelNoSaveGate.ts`, `FormPanelUsesHostPropsGate.ts`, `FormPanelNoFixedHeightGate.ts`
+- Create: `packages/component-engine/src/gates/FormPanelNoSaveGate.ts`, `FormPanelUsesHostPropsGate.ts`, `FormPanelNoFixedHeightGate.ts`, `FormPanelThemeTokensGate.ts`, `FormPanelValidateShapeGate.ts`
 - Modify: `packages/component-engine/src/gates/FormLintParityGate.ts` (`appliesTo`)
 - Modify: `packages/component-engine/src/gates/gate-runner.ts` (add `isFormPanelRoleSpec`)
 - Modify: `packages/component-engine/src/gates/index.ts`
 - Test: `packages/component-engine/src/__tests__/form-panel-gates.test.ts`
 
 **Interfaces:**
-- Produces: gates registered as `form-panel-no-save`, `form-panel-uses-host-props`, `form-panel-no-fixed-height`; `isFormPanelRoleSpec(spec): boolean`. Form-only gates (`form-not-editable`, `form-edit-lifecycle`, `form-must-use-mjformfields`, `form-view-not-input-like`) keep `appliesTo = ['form']` and never run for panels.
+- Produces: gates registered as `form-panel-no-save`, `form-panel-uses-host-props`, `form-panel-no-fixed-height`, `form-panel-theme-tokens`, `form-panel-validate-shape`; `isFormPanelRoleSpec(spec): boolean`. Form-only gates (`form-not-editable`, `form-edit-lifecycle`, `form-must-use-mjformfields`, `form-view-not-input-like`) keep `appliesTo = ['form']` and never run for panels.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -4368,6 +4816,62 @@ describe('FormPanelNoFixedHeightGate', () => {
         const v = await new FormPanelNoFixedHeightGate().Validate(spec(GOOD.replace("width: '100%'", "height: '600px', minHeight: '100vh'")), ctx);
         expect(v).toHaveLength(1);
         expect(v[0].message).toMatch(/600px/);
+    });
+});
+
+describe('FormPanelThemeTokensGate', () => {
+    it('passes a panel that styles from the styles prop', async () => {
+        const good = `function P({ record, contribution, styles }) {
+  return <div style={{ color: styles.colors.text, background: styles.colors.surface }}>{record?.Name}</div>;
+}`;
+        expect(await new FormPanelThemeTokensGate().Validate(spec(good), ctx)).toEqual([]);
+    });
+    it('flags hardcoded colors', async () => {
+        const bad = `function P({ record, contribution, styles }) {
+  return <div style={{ color: '#333', background: 'white', borderColor: 'rgb(200,200,200)' }}>{record?.Name}</div>;
+}`;
+        const v = await new FormPanelThemeTokensGate().Validate(spec(bad), ctx);
+        expect(v).toHaveLength(1);
+        expect(v[0].message).toMatch(/#333/);
+    });
+    it('does not flag transparent, inherit, currentColor, or none', async () => {
+        const ok = `function P({ record, contribution, styles }) {
+  return <button style={{ background: 'transparent', border: 'none', color: 'inherit' }}>{record?.Name}</button>;
+}`;
+        expect(await new FormPanelThemeTokensGate().Validate(spec(ok), ctx)).toEqual([]);
+    });
+});
+
+describe('FormPanelValidateShapeGate', () => {
+    it('passes a Validate that returns the documented shape', async () => {
+        const good = `function P({ record, contribution, callbacks }) {
+  React.useEffect(() => {
+    callbacks.RegisterMethod('Validate', () => ({ isValid: !!record?.Name, errors: record?.Name ? [] : ['Name is required'] }));
+  }, []);
+  return <div/>;
+}`;
+        expect(await new FormPanelValidateShapeGate().Validate(spec(good), ctx)).toEqual([]);
+    });
+    it('passes an async Validate returning the same shape', async () => {
+        const good = `function P({ record, contribution, callbacks, utilities }) {
+  React.useEffect(() => {
+    callbacks.RegisterMethod('Validate', async () => {
+      const res = await utilities.rv.RunView({ EntityName: 'MJ: Users', MaxRows: 1 });
+      return { isValid: res.Success, errors: res.Success ? [] : ['lookup failed'] };
+    });
+  }, []);
+  return <div/>;
+}`;
+        expect(await new FormPanelValidateShapeGate().Validate(spec(good), ctx)).toEqual([]);
+    });
+    it('flags a Validate that returns a bare boolean', async () => {
+        const bad = `function P({ record, contribution, callbacks }) {
+  React.useEffect(() => { callbacks.RegisterMethod('Validate', () => !!record?.Name); }, []);
+  return <div/>;
+}`;
+        const v = await new FormPanelValidateShapeGate().Validate(spec(bad), ctx);
+        expect(v).toHaveLength(1);
+        expect(v[0].message).toMatch(/isValid/);
     });
 });
 
@@ -4482,6 +4986,72 @@ export class FormPanelNoFixedHeightGate extends BaseValidationGate {
 }
 ```
 
+```ts
+// packages/component-engine/src/gates/FormPanelThemeTokensGate.ts
+import { RegisterClass } from '@memberjunction/global';
+import { ComponentSpec } from '@memberjunction/interactive-component-types';
+import { Violation } from '@memberjunction/react-linter';
+import { BaseValidationGate, ValidationGateContext } from './BaseValidationGate.js';
+
+/**
+ * A panel renders inside themed form chrome. A hardcoded color is invisible in light
+ * mode and wrong in dark mode, and no other gate catches it: SCSS in this repo is
+ * checked by `npm run check:ui`, but a React spec is a string in a database row.
+ */
+@RegisterClass(BaseValidationGate, 'form-panel-theme-tokens')
+export class FormPanelThemeTokensGate extends BaseValidationGate {
+    readonly appliesTo = ['form-panel'];
+    readonly name = 'form-panel-theme-tokens';
+    readonly description = 'Form panel must take colors from the styles prop, not from literals';
+
+    async Validate(spec: ComponentSpec, _context: ValidationGateContext): Promise<Violation[]> {
+        if (typeof spec.code !== 'string' || spec.code.trim().length === 0) return [];
+        // Hex, rgb()/rgba(), hsl()/hsla(), and named colors in a color-ish property.
+        const literal = /\b(?:background|backgroundColor|color|borderColor|border|outlineColor|fill|stroke)\s*:\s*['"`]?(#[0-9a-fA-F]{3,8}|rgba?\([^)]*\)|hsla?\([^)]*\)|white|black|red|blue|green|gray|grey|silver)\b/g;
+        const hits = [...spec.code.matchAll(literal)].map((m) => m[1]);
+        if (hits.length === 0) return [];
+        return [{
+            rule: 'form-panel-theme-tokens', severity: 'high', line: 0, column: 0,
+            message: `Form panel hardcodes colors (${[...new Set(hits)].slice(0, 5).join(', ')}). Take every color from the \`styles\` prop the host passes — the form around the panel is themed, and a literal breaks dark mode. \`transparent\`, \`inherit\`, \`currentColor\` and \`none\` are fine.`,
+        }];
+    }
+}
+```
+
+```ts
+// packages/component-engine/src/gates/FormPanelValidateShapeGate.ts
+import { RegisterClass } from '@memberjunction/global';
+import { ComponentSpec } from '@memberjunction/interactive-component-types';
+import { Violation } from '@memberjunction/react-linter';
+import { BaseValidationGate, ValidationGateContext } from './BaseValidationGate.js';
+
+/**
+ * A registered `Validate` gates the parent form's Save. The host awaits it and reads
+ * `{ isValid, errors }`; anything else is treated as "no opinion" and the record saves.
+ * That failure is silent — no error, no log — so it is worth a gate. Async is fine:
+ * the host resolves the value before testing its shape.
+ */
+@RegisterClass(BaseValidationGate, 'form-panel-validate-shape')
+export class FormPanelValidateShapeGate extends BaseValidationGate {
+    readonly appliesTo = ['form-panel'];
+    readonly name = 'form-panel-validate-shape';
+    readonly description = 'A registered Validate method must return { isValid, errors }';
+
+    async Validate(spec: ComponentSpec, _context: ValidationGateContext): Promise<Violation[]> {
+        if (typeof spec.code !== 'string' || spec.code.trim().length === 0) return [];
+        const registers = /RegisterMethod\s*(?:\?\.)?\s*\(\s*['"`]Validate['"`]/.test(spec.code);
+        if (!registers) return [];
+        // The body after the registration must mention isValid somewhere.
+        const after = spec.code.slice(spec.code.search(/RegisterMethod\s*(?:\?\.)?\s*\(\s*['"`]Validate['"`]/));
+        if (/isValid/.test(after)) return [];
+        return [{
+            rule: 'form-panel-validate-shape', severity: 'high', line: 0, column: 0,
+            message: `This panel registers 'Validate' but never returns an object with \`isValid\`. Return { isValid: boolean, errors: string[] } (a Promise of it is fine). Any other shape is ignored by the host and the record saves as if valid.`,
+        }];
+    }
+}
+```
+
 `FormLintParityGate.ts`: `readonly appliesTo = ['form', 'form-panel'];` and widen the description to "Form or form panel…".
 
 `gate-runner.ts` — add beside `isFormRoleSpec`:
@@ -4494,7 +5064,7 @@ export function isFormPanelRoleSpec(spec: ComponentSpec): boolean {
 }
 ```
 
-`index.ts` — export the three gates and `isFormPanelRoleSpec`.
+`index.ts` — export the five gates and `isFormPanelRoleSpec`.
 
 - [ ] **Step 4: Run tests and build**
 
@@ -4535,7 +5105,7 @@ const ctx: SkipFormContext = {
         { Key: 'personalIdentity', Title: 'Personal Identity', Variant: 'default', Group: 'details', Hidden: true },
     ],
     Related: [{ Entity: 'MJ_BizApps_Orders: Order Headers', JoinField: 'BillToPersonID', SectionKey: 'orders', Inclusion: 'Primary', Source: 'baked' }],
-    Contributions: [{ Key: 'header', Slot: 'before-fields', Source: 'class', Title: 'Person header', Presentation: 'bare', Hidden: false, Priority: 0 }],
+    Contributions: [{ Key: 'header', Slot: 'before-fields', Source: 'class', Title: 'Person header', Presentation: 'bare', Hidden: false, Precedence: 0 }],
     SlotsPresent: ['before-fields', 'after-fields', 'after-everything'],
     ChromeRuleCount: 1,
 };
@@ -4608,7 +5178,7 @@ export class FormContextMarker {
         const related = ctx.Related.map(r => `${r.Entity} via ${r.JoinField} → ${r.SectionKey} [${r.Inclusion}, ${r.Source}]`).join('; ');
         const contributions = ctx.Contributions.map(c => `${c.Key} @${c.Slot} (${c.Source}, ${c.Presentation})${c.Hidden ? ' [hidden]' : ''}`).join('; ');
         return [
-            `${this.MARKER_PREFIX} The user is looking at the "${ctx.Entity}" form (${ctx.Layout} layout).`,
+            `${this.MARKER_PREFIX} The user is looking at the "${ctx.Entity}" form for record ${ctx.RecordPrimaryKey} (${ctx.Layout} layout).`,
             `Sections: ${sections || 'none'}.`,
             `Related grids: ${related || 'none'}.`,
             `Existing contributions: ${contributions || 'none'}.`,
@@ -4749,6 +5319,15 @@ import type { FormCompositionSnapshot } from '@memberjunction/ng-base-forms';
      * Publish the form's composition to the agent context. The shell folds this into
      * `AppContextSnapshot.AdditionalContext`, which reaches async agents as
      * `params.data.appContext` — the Skip proxy forwards `AdditionalContext.Form`.
+     *
+     * The shell assigns `AdditionalContext` wholesale (`explorer-app.component.ts:641`),
+     * so the last publisher wins app-wide. That fails safe — another surface's publish
+     * drops the Form key and Skip simply has no form context — but two record tabs could
+     * otherwise leave the inactive one's composition standing. `ComponentCacheManager`
+     * already caches each component's reported `AgentContext` and restores it when the
+     * component becomes active again, so a tab switch re-publishes this snapshot without
+     * new plumbing. Verify that restore path while implementing; if it does not fire for
+     * record tabs, republish explicitly on activation.
      */
     public OnCompositionChanged(snapshot: FormCompositionSnapshot): void {
         this.navigationService.SetAgentContext(this, { Form: snapshot });
@@ -4829,10 +5408,12 @@ export interface SkipFormContextRelated {
 }
 export interface SkipFormContextContribution {
     Key: string; Slot: SkipFormContextSlot; Source: 'class' | 'metadata'; Title: string;
-    Presentation: 'panel' | 'bare'; Hidden: boolean; Priority: number;
+    Presentation: 'panel' | 'bare'; Hidden: boolean; Precedence: number;
 }
 export interface SkipFormContext {
     Entity: string;
+    /** Mirrors FormCompositionSnapshot.RecordPrimaryKey — which record the composition describes. */
+    RecordPrimaryKey: string;
     Layout: 'accordion' | 'left-nav';
     Sections: SkipFormContextSection[];
     Related: SkipFormContextRelated[];
@@ -4943,7 +5524,7 @@ const entity = {
 const provider = { EntityByName: (n: string) => (n === entity.Name ? entity : undefined) };
 const runViewResults: Record<string, unknown[]> = {
     'MJ: Form Chrome Rules': [{ ID: 'r1' }],
-    'MJ: Entity Form Contributions': [{ ID: 'c1', ContributionKey: 'skip:ltv', Slot: 'before-fields', Title: 'LTV', Presentation: 'bare', Priority: 0, Inclusion: null }],
+    'MJ: Entity Form Contributions': [{ ID: 'c1', ContributionKey: 'skip:ltv', Slot: 'before-fields', Title: 'LTV', Presentation: 'bare', Precedence: 0, Inclusion: null }],
 };
 vi.mock('@memberjunction/core', async () => {
     const actual = await vi.importActual<Record<string, unknown>>('@memberjunction/core');
@@ -4975,7 +5556,7 @@ describe('GetFormCompositionForEntityAction', () => {
             { Entity: 'MJ_BizApps_Orders: Order Headers', JoinField: 'BillToPersonID', SectionKey: 'mJBizAppsOrdersOrderHeaders', Inclusion: 'Primary', Source: 'baked' },
             { Entity: 'MJ_BizApps_Tasks: Task Comments', JoinField: 'PersonID', SectionKey: 'mJBizAppsTasksTaskComments', Inclusion: 'Auto', Source: 'baked' },
         ]);
-        expect(payload.Contributions).toEqual([{ Key: 'skip:ltv', Slot: 'before-fields', Source: 'metadata', Title: 'LTV', Presentation: 'bare', Hidden: false, Priority: 0 }]);
+        expect(payload.Contributions).toEqual([{ Key: 'skip:ltv', Slot: 'before-fields', Source: 'metadata', Title: 'LTV', Presentation: 'bare', Hidden: false, Precedence: 0 }]);
         expect(payload.ChromeRuleCount).toBe(1);
         expect(payload.Note).toMatch(/compiled/i);
     });
@@ -5036,10 +5617,10 @@ export class GetFormCompositionForEntityAction extends BaseAction {
 
             const [rules, rows] = await Promise.all([
                 rv.RunView<{ ID: string }>({ EntityName: "MJ: Form Chrome Rules", ExtraFilter: `EntityID='${entity.ID}'`, Fields: ['ID'], ResultType: 'simple' }, user),
-                rv.RunView<{ ID: string; ContributionKey: string | null; Slot: string; Title: string | null; Name?: string; Presentation: string; Priority: number; Inclusion: string | null }>({
+                rv.RunView<{ ID: string; ContributionKey: string | null; Slot: string; Title: string | null; Name?: string; Presentation: string; Precedence: number; Inclusion: string | null }>({
                     EntityName: "MJ: Entity Form Contributions",
                     ExtraFilter: `EntityID='${entity.ID}' AND Status='Active' AND ((Scope='User' AND UserID='${user.ID}') OR ${roleClause} OR Scope='Global')`,
-                    Fields: ['ID', 'ContributionKey', 'Slot', 'Title', 'Name', 'Presentation', 'Priority', 'Inclusion'], ResultType: 'simple',
+                    Fields: ['ID', 'ContributionKey', 'Slot', 'Title', 'Name', 'Presentation', 'Precedence', 'Inclusion'], ResultType: 'simple',
                 }, user),
             ]);
 
@@ -5050,7 +5631,7 @@ export class GetFormCompositionForEntityAction extends BaseAction {
                 Related: this.deriveRelated(entity),
                 Contributions: (rows.Results ?? []).map(r => ({
                     Key: r.ContributionKey ?? `contribution:${r.ID}`, Slot: r.Slot, Source: 'metadata', Title: r.Title ?? r.Name ?? r.ID,
-                    Presentation: r.Presentation, Hidden: r.Inclusion === 'None', Priority: r.Priority ?? 0,
+                    Presentation: r.Presentation, Hidden: r.Inclusion === 'None', Precedence: r.Precedence ?? 0,
                 })),
                 SlotsPresent: ['top-area', 'before-fields', 'after-fields', 'after-related', 'after-everything'],
                 ChromeRuleCount: (rules.Results ?? []).length,
@@ -5167,6 +5748,7 @@ Form Builder `Intent.Kind: 'form' | 'form-panel'`, a Form Studio contributions l
 
 **Files:**
 - Modify: `guides/FORMS_ARCHITECTURE_GUIDE.md` (after Scenario H in §7c)
+- Modify: the deployment/configuration guide that documents instance flags — add `Forms.MetadataContributionsEnabled` (default on) with what turning it off does and when to reach for it
 - Modify: `packages/Angular/Generic/base-forms/PANELS.md` (after "Form contributions")
 - Modify: `packages/Angular/CLAUDE.md` (Pattern 1 paragraph, line ~609)
 - Create: `.changeset/skip-form-contributions.md`
@@ -5192,8 +5774,8 @@ applies `FieldChanged` to the parent record, and surfaces `Validate` through
 `BaseFormPanel.validate()`.
 
 **Precedence.** Rows and compiled registrations collapse on `contributionKey`. Highest
-`Priority` wins; **on a tie the compiled registration wins**. The "Add to my form" apply flow
-sets `Priority = incumbent + 1` only after the user confirms replacing an installed piece.
+`Precedence` wins; **on a tie the compiled registration wins**. The "Add to my form" apply flow
+sets `Precedence = incumbent + 1` only after the user confirms replacing an installed piece.
 
 **Authoring.** Skip returns a `componentRole: 'form-panel'` spec with a `formContribution`
 block; the artifact viewer's **Add to my form** runs `Create` / `Modify Form Contribution` and
@@ -5223,10 +5805,10 @@ The generic host `InteractiveFormPanelComponent` mounts them; you never write An
 | `Slot`, `SortKey`, `ContributionKey`, `RelatedEntityID` + `RelatedJoinField`, `ReplacesSectionKey`, `Inclusion`, `ChromeGroup` | `slot`, `sortKey`, `contributionKey`, `relatedEntity` + `relatedJoinField`, `replacesSectionKey`, `inclusion`, `chromeGroup` |
 | `Presentation` (`panel` / `bare`) | `presentation` (new; `bare` = hero, never a rail item) |
 | `Title`, `Icon`, `Configuration` | Section header, icon, and `contribution.configuration` passed to the component |
-| `Scope` / `UserID` / `RoleID`, `Priority`, `Status` | Who sees it, last-wins rank, `Active` / `Pending` / `Inactive` |
+| `Scope` / `UserID` / `RoleID`, `Precedence`, `Status` | Who sees it, last-wins rank, `Active` / `Pending` / `Inactive` |
 
 **Ties go to compiled registrations.** A row replaces a `BaseFormPanel` with the same key only
-with strictly higher `Priority`.
+with strictly higher `Precedence`.
 
 **Contract for the React side:** `FormPanelHostProps` from
 `@memberjunction/interactive-component-types/forms` — the whole-form props plus
@@ -5237,11 +5819,24 @@ with strictly higher `Priority`.
 **Authoring paths:** Skip / Form Builder agent → `Create Form Contribution` action; OpenApp →
 `metadata/entity-form-contributions/*.json` via `mj sync push`. Design and plan:
 [`plans/skip-form-contributions/`](../../../../plans/skip-form-contributions/design.md).
+
+**Scope, and what it is trusted to do.** An agent writes `User` scope only. `Role` and `Global`
+are human acts through Form Studio, or an OpenApp shipping rows in its package — the same trust
+decision as installing that package's compiled panels. No write path, action or `mj sync`,
+accepts a `Global` or `Role` contribution on an identity or authorization entity. An
+instance-level flag (`Forms.MetadataContributionsEnabled`) turns the whole source off: the
+collector returns class registrations only and forms render exactly as they did before.
+
+**Accessibility and theming are contract terms, not suggestions.** A panel takes every color
+from the `styles` prop (a literal breaks dark mode inside themed chrome), uses real controls
+with accessible names, and — when `Presentation='bare'`, which puts it outside the rail and so
+outside the rail's keyboard path — carries its own labelled landmark. Two gates enforce the
+first; review enforces the second.
 ```
 
 - [ ] **Step 3: Angular/CLAUDE.md — extend Pattern 1**
 
-Append to the Pattern 1 paragraph: "A contribution can also be a **row** — `MJ: Entity Form Contributions` pointing at a `componentRole: 'form-panel'` React component — mounted by `InteractiveFormPanelComponent` through the same slots and chrome. Compiled registrations win priority ties. See [PANELS.md → Metadata contributions](Generic/base-forms/PANELS.md#metadata-contributions-react-form-panels)."
+Append to the Pattern 1 paragraph: "A contribution can also be a **row** — `MJ: Entity Form Contributions` pointing at a `componentRole: 'form-panel'` React component — mounted by `InteractiveFormPanelComponent` through the same slots and chrome. Compiled registrations win precedence ties. See [PANELS.md → Metadata contributions](Generic/base-forms/PANELS.md#metadata-contributions-react-form-panels)."
 
 - [ ] **Step 4: Changeset**
 
@@ -5267,12 +5862,16 @@ Use the exact package names from each `package.json` (`grep '"name"' packages/Ac
 git add guides/FORMS_ARCHITECTURE_GUIDE.md packages/Angular/Generic/base-forms/PANELS.md packages/Angular/CLAUDE.md .changeset/skip-form-contributions.md
 ```
 
+Also confirm the changeset covers the testing-framework package if B5's bundle lives in one that publishes. The gates are Skip-Brain's `packages/component-engine` and are versioned in that repo, not here.
+
 ---
 
 ## Self-review
 
-**Spec coverage** (design.md → tasks): §5 data model → A2; §5.2 component type → A2/A3/B1; §6 runtime rows → A3 (engine), A5 (collector), A7 (slot host), A6 (panel host), A9 (container), A8 (form), A10 (interactive slots); §7 contract → A1; §8 rules 1–2 → A3/A4, rule 3 → A9, rule 4 → B4 (apply-time) + A9 (render-time diagnostic) + C1 (prompt); §9.1 → C1–C4; §9.2 actions → B1–B3 + D3, artifact viewer → B4, `mj sync` → A2, parity → Phase E (deferred by design); §10 snapshot → A9, publication → D1, transport → D2, intake → C4, fallback → D3; §11 scenarios exercised by A9/B4 tests; §14 folded cleanups → A4 (strict matching), A5 (memo), A8 (validate), A9 (`bare` replaces `'header'`), A10 (slots). Form Studio "not found" badge (decision 4) is UI in the Form Builder dashboard and belongs to Phase E; the console diagnostic in A9 is the shipped half.
+**Spec coverage** (design.md → tasks): §5 data model → A2; §5.2 component load → A3; §6 runtime rows → A3 (engine), A5 (collector), A7 (slot host), A6 (panel host), A9 (container), A8 (form), A10 (interactive slots), A11 (compiled heroes); §7 contract → A1 + C1 (theming, accessibility, async `Validate`, slot guidance); §8 rules 1–2 → A3/A4, rule 3 → A9, rule 4 → B4 (apply-time) + A9 (render-time diagnostic) + C1 (prompt); §9.1 → C1–C4; §9.2 actions → B1–B3 + D3, artifact viewer → B4, `mj sync` → A2, parity → Phase E (deferred by design); §10 snapshot → A9, publication → D1, transport → D2, intake → C4, fallback → D3; §11 scenarios exercised by A9/B4 tests; §14 folded cleanups → A4 (strict matching), A5 (memo + provider key), A7 (the eleven repairs), A8 (validate), A9 (`presentation` replaces the `'header'` guess), A10 (slots), A11 (the five dead header panels); §16 security → B1 (clamp) + A2 (sync-side clamp) + A3 (kill switch) + B5 (checks 4 and 8). Form Studio "not found" badge (decision 4) is UI in the Form Builder dashboard and belongs to Phase E; the console diagnostic in A9 is the shipped half.
+
+**Review coverage** (PR #4311 → tasks): #1 component filter → A3 (reference-scoped filter, invalidation coupling, the measurement in step 5); #2 the eleven registrations → A7 step 3b plus the per-registration diagnostic in step 3; #3 `Priority` semantics → A2 (`Precedence` column) and every downstream field; #4 the `'header'` convention → A4 (`presentation` on the compiled bag), A9 (guess removed), A11 (five panels migrated), and the `top-area` collision in C1 rule 13; #5 async `Validate` → A6 (host awaits), A8 (`ValidateAsync`), C1 rule 8, C3 (`form-panel-validate-shape`); #6 memo cache → A5 (provider in the key, `IsPermissionConstrained` guard); #7 layout shift → A7 step 3c; #8 uniqueness → A2 (second filtered index, three CHECK constraints) and B1 (derive-and-persist, key charset); integration coverage → B5; security → design §16 with B1/A2/A3 mechanism; accessibility and theming → C1 rules 11–12 and C3 (`form-panel-theme-tokens`); rollback → A3 kill switch and Task F docs; wildcard asymmetry → design §3 non-goals; transport overstatement → design §10 and D1; illustrative-code caveat → the note under this plan's header; pick-list value metadata → A2 step 2b.
 
 **Placeholder scan:** the only intentional fill-ins are `<uuidgen>` in metadata JSON (must be generated at execution time per `metadata/CLAUDE.md`) and `V<ts>` in the migration filename (must be `date +"%Y%m%d%H%M"` at execution time).
 
-**Type consistency:** `FormContributionRegistration` fields `Source`, `ComponentID`, `Configuration`, `Title`, `Icon`, `Presentation`, `RowID`, `Registration` are introduced in A4/A5 and read in A6, A7, A9, B4. `FormCompositionContribution.Priority` is introduced in A9 and read in B4 and mirrored in D2 (`SkipFormContextContribution.Priority`). `BaseFormComponent.ChromeLayout`, `RegisterFormPanel`, `UnregisterFormPanel`, `CompositionSnapshot`, `CompositionChanged` are introduced in A8 and read in A6, A7, A9, D1. `FormPanelHostProps` field names match between A1 and the prompt include in C1.
+**Type consistency:** `FormContributionRegistration` fields `Source`, `ComponentID`, `Configuration`, `Title`, `Icon`, `Presentation`, `RowID`, `Registration` are introduced in A4/A5 and read in A6, A7, A9, B4. `FormCompositionContribution.Precedence` is introduced in A9 and read in B4 and mirrored in D2 (`SkipFormContextContribution.Precedence`). `BaseFormComponent.ChromeLayout`, `RegisterFormPanel`, `UnregisterFormPanel`, `CompositionSnapshot`, `CompositionChanged` are introduced in A8 and read in A6, A7, A9, D1. `FormPanelHostProps` field names match between A1 and the prompt include in C1.

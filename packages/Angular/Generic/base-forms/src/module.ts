@@ -25,6 +25,7 @@ import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 import { MJSafeRichHtmlPipe, SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { MJEmptyStateComponent, MJAlertComponent } from '@memberjunction/ng-ui-components';
 import { InteractiveFormComponent } from './lib/interactive-form/interactive-form.component';
+import { InteractiveFormPanelComponent } from './lib/interactive-form/interactive-form-panel.component';
 import { MjEntityFormHostComponent } from './lib/host/entity-form-host.component';
 
 /**
@@ -61,6 +62,7 @@ import { MjEntityFormHostComponent } from './lib/host/entity-form-host.component
     FormContributionsComponent,
     RelatedEntityGridPanelComponent,
     InteractiveFormComponent,
+    InteractiveFormPanelComponent,
     MjEntityFormHostComponent
   ],
   imports: [
@@ -93,6 +95,7 @@ import { MjEntityFormHostComponent } from './lib/host/entity-form-host.component
     FormContributionsComponent,
     RelatedEntityGridPanelComponent,
     InteractiveFormComponent,
+    InteractiveFormPanelComponent,
     MjEntityFormHostComponent
   ]
 })

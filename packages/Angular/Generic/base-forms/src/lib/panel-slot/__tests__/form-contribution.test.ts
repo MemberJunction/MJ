@@ -3,6 +3,7 @@ import type { FormPanelRegistrationMetadata, FormPanelSlot } from '../base-form-
 import {
     CollapseFormPanelRegistrations,
     ContributionHiddenSectionKeys,
+    FormContributionEntityMatches,
     FormSectionCamelCase,
     RelatedContributionKey,
     RelatedEntitySectionKey,
@@ -397,5 +398,49 @@ describe('StripJoinFieldBrackets', () => {
     it('trims and unwraps', () => {
         expect(StripJoinFieldBrackets(' [PersonID] ')).toBe('PersonID');
         expect(StripJoinFieldBrackets(undefined)).toBe('');
+    });
+});
+
+describe('CollapseFormPanelRegistrations — source tie-break', () => {
+    const meta: FormPanelRegistrationMetadata = {
+        entity: PEOPLE,
+        slot: 'before-fields' as FormPanelSlot,
+        contributionKey: 'header',
+    };
+
+    it('keeps the compiled registration when a metadata row ties on precedence', () => {
+        const compiled = { Priority: 0, Metadata: meta, Source: 'class' as const };
+        const row = { Priority: 0, Metadata: meta, Source: 'metadata' as const, ComponentID: 'c1' };
+        expect(CollapseFormPanelRegistrations([row, compiled])).toEqual([compiled]);
+        expect(CollapseFormPanelRegistrations([compiled, row])).toEqual([compiled]);
+    });
+
+    it('lets a metadata row win only with strictly higher precedence', () => {
+        const compiled = { Priority: 0, Metadata: meta, Source: 'class' as const };
+        const row = { Priority: 1, Metadata: meta, Source: 'metadata' as const, ComponentID: 'c1' };
+        expect(CollapseFormPanelRegistrations([compiled, row])).toEqual([row]);
+    });
+
+    it('treats a registration with no Source as compiled', () => {
+        const legacy = { Priority: 0, Metadata: meta };
+        const row = { Priority: 0, Metadata: meta, Source: 'metadata' as const, ComponentID: 'c1' };
+        expect(CollapseFormPanelRegistrations([row, legacy])).toEqual([legacy]);
+    });
+});
+
+describe('FormContributionEntityMatches', () => {
+    it('is exact, case-sensitive equality or the wildcard', () => {
+        expect(FormContributionEntityMatches(PEOPLE, PEOPLE)).toBe(true);
+        expect(FormContributionEntityMatches('*', PEOPLE)).toBe(true);
+        expect(FormContributionEntityMatches('People', PEOPLE)).toBe(false);
+        expect(FormContributionEntityMatches('mj_bizapps_common: people', PEOPLE)).toBe(false);
+        expect(FormContributionEntityMatches(null, PEOPLE)).toBe(false);
+        expect(FormContributionEntityMatches(undefined, PEOPLE)).toBe(false);
+        expect(FormContributionEntityMatches('', PEOPLE)).toBe(false);
+    });
+
+    it('does not strip the MJ: prefix — that fuzzy match is what this replaces', () => {
+        expect(FormContributionEntityMatches('Users', 'MJ: Users')).toBe(false);
+        expect(FormContributionEntityMatches('MJ: Users', 'MJ: Users')).toBe(true);
     });
 });

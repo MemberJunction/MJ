@@ -28,6 +28,11 @@
     (HistoryRequested)="OnHistoryRequested()"
     (ListManagementRequested)="OnListManagementRequested()">
 
+    <!-- The same CodeGen slots a generated form emits, so compiled and metadata
+         contributions land in position instead of falling through to after-everything. -->
+    <mj-form-panel-slot [Entity]="record.EntityInfo.Name" Slot="top-area" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
+    <mj-form-panel-slot [Entity]="record.EntityInfo.Name" Slot="before-fields" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
+
     @if (loadError) {
         <mj-alert Variant="error">{{ loadError }}</mj-alert>
     } @else if (componentSpec && formHostProps) {
@@ -44,6 +49,9 @@
             <span>Loading form…</span>
         </div>
     }
+
+    <mj-form-panel-slot [Entity]="record.EntityInfo.Name" Slot="after-fields" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
+    <mj-form-panel-slot [Entity]="record.EntityInfo.Name" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 
 </mj-record-form-container>
 }

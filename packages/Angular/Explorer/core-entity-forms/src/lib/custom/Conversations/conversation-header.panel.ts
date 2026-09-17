@@ -7,10 +7,14 @@ import { MJConversationEntity, UserInfoEngine } from '@memberjunction/core-entit
 const SETTING_KEY = 'mj.form.conversations.headerCollapsed';
 
 @RegisterClassEx(BaseFormPanel, {
-    key: 'form-panel:Conversations:header',
+    key: 'form-panel:MJ: Conversations:header',
     metadata: {
-        entity: 'Conversations',
-        slot: 'header',
+        entity: 'MJ: Conversations',
+        // 'header' was never a member of FormPanelSlot, so this panel never mounted.
+        // Heroes live in before-fields and declare themselves with presentation.
+        slot: 'before-fields',
+        presentation: 'bare',
+        contributionKey: 'conversations:header',
         sortKey: 10,
     },
 })

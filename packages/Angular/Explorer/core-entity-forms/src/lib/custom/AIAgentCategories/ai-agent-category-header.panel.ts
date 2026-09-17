@@ -7,10 +7,14 @@ import { MJAIAgentCategoryEntity, UserInfoEngine } from '@memberjunction/core-en
 const SETTING_KEY = 'mj.form.aiAgentCategories.headerCollapsed';
 
 @RegisterClassEx(BaseFormPanel, {
-    key: 'form-panel:AI Agent Categories:header',
+    key: 'form-panel:MJ: AI Agent Categories:header',
     metadata: {
-        entity: 'AI Agent Categories',
-        slot: 'header',
+        entity: 'MJ: AI Agent Categories',
+        // 'header' was never a member of FormPanelSlot, so this panel never mounted.
+        // Heroes live in before-fields and declare themselves with presentation.
+        slot: 'before-fields',
+        presentation: 'bare',
+        contributionKey: 'ai-agent-categories:header',
         sortKey: 10,
     },
 })

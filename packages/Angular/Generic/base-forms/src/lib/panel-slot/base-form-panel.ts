@@ -98,6 +98,16 @@ export interface FormPanelRegistrationMetadata extends Record<string, unknown> {
      * L3 `MJ: Form Chrome Rules` still wins. `chromeGroup` still merges.
      */
     inclusion?: FormInclusion;
+
+    /**
+     * `'bare'` = a hero strip that draws no collapsible chrome and is never a rail item.
+     * `'panel'` (default) = a normal collapsible section.
+     *
+     * This is how a compiled panel declares hero-ness, and it is the same field a
+     * `MJ: Entity Form Contributions` row carries, so the container treats both sources
+     * identically instead of guessing from a contribution key.
+     */
+    presentation?: 'panel' | 'bare';
 }
 
 /**
@@ -151,10 +161,28 @@ export abstract class BaseFormPanel<TRecord extends BaseEntity = BaseEntity> {
      * `ValidationErrorInfo` entries to surface field-level errors. The default
      * implementation reports valid (panels that don't need extra validation
      * can leave this method off).
+     *
+     * May return a Promise: a panel that validates against the server has no
+     * synchronous answer. `BaseFormComponent.ValidateAsync()` awaits it, which is
+     * what Save() calls.
      */
-    public validate(): ValidationResult {
+    public validate(): ValidationResult | Promise<ValidationResult> {
         // Inline construction — ValidationResult is a class in @memberjunction/core,
         // not a plain interface, so callers can construct via `new`.
+        const result = new ValidationResult();
+        result.Success = true;
+        return result;
+    }
+
+    /**
+     * The panel's validity as already known, with no awaiting and no work.
+     *
+     * Synchronous callers (`BaseFormComponent.Validate()`) use this; it reports valid
+     * unless the panel has cached a failing result from an earlier validation. A panel
+     * whose `validate()` is asynchronous should override this to return its last
+     * reported state so synchronous callers are not simply blind to it.
+     */
+    public lastKnownValidation(): ValidationResult {
         const result = new ValidationResult();
         result.Success = true;
         return result;
