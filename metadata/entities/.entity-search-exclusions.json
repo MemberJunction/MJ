@@ -1,0 +1,182 @@
+[
+  {
+    "fields": {
+      "Name": "MJ: Tags",
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Tags"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MJ: Tagged Items",
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Tagged Items"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MJ: Tag Synonyms",
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Tag Synonyms"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MJ: Tag Scopes",
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Tag Scopes"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MJ: Tag Co Occurrences",
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Tag Co Occurrences"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MJ: Content Items",
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Content Items"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MJ: Magic Link Invites",
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Magic Link Invites"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MJ: Magic Link Invite Allowed Domains",
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Magic Link Invite Allowed Domains"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MJ: Magic Link Invite Allowed Paths",
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Magic Link Invite Allowed Paths"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MJ: Magic Link Invite Applications",
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Magic Link Invite Applications"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MJ: Magic Link Invite Roles",
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Magic Link Invite Roles"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MJ: Magic Link Redemptions",
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Magic Link Redemptions"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MJ: Materialized Results",
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Materialized Results"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MJ: Materialized Result Queries",
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Materialized Result Queries"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MJ: RSU Pending Works",
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: RSU Pending Works"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MJ: AI Skill Search Scopes",
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Skill Search Scopes"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MJ: Cluster Analysis Clusters",
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Cluster Analysis Clusters"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MJ: Employees",
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Employees"
+    }
+  }
+]
