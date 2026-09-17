@@ -4,8 +4,8 @@ import 'reflect-metadata';
 import { describe, it, expect } from 'vitest';
 import type { DatabaseProviderBase, IMetadataProvider, RunViewParams, RunViewResult, UserInfo } from '@memberjunction/core';
 import { ResolverBase } from '../generic/ResolverBase.js';
-import type { UserPayload } from '../types.js';
-import type { RunDynamicViewInput, RunViewByNameInput } from '../generic/RunViewResolver.js';
+import type { UserPayload, AppContext } from '../types.js';
+import { RunViewResolver, type RunDynamicViewInput, type RunViewByNameInput } from '../generic/RunViewResolver.js';
 import type { PubSubEngine } from 'type-graphql';
 
 /**
@@ -330,5 +330,33 @@ describe('ResolverBase.RunViewByNameGeneric — view-name escaping', () => {
         expect(result).toBeNull();
         expect(captured.params?.EntityName).toBe('MJ: User Views');
         expect(captured.params?.ExtraFilter).toBe("Name='My View'' OR ''1''=''1'");
+    });
+});
+
+describe('RunViewResolver.RunViews — returns failure results instead of null on error', () => {
+    it('returns an array with Success: false and ErrorMessage when an ExtraFilter violates the base view screen', async () => {
+        const captured: Captured = { params: null };
+        const provider = fakeProvider(captured);
+        const resolver = new RunViewResolver();
+
+        const input = [
+            {
+                EntityName: ENTITY_NAME,
+                ExtraFilter: `EXISTS (SELECT 1 FROM __mj.[User] WHERE Type='Owner')`,
+            } as RunDynamicViewInput,
+        ];
+
+        const results = await resolver.RunViews(
+            input,
+            { providers: [{ type: 'Read-Only', provider }] as unknown as AppContext['providers'], userPayload: fakePayload() } as AppContext,
+            undefined as unknown as PubSubEngine
+        );
+
+        expect(results).not.toBeNull();
+        expect(Array.isArray(results)).toBe(true);
+        expect(results).toHaveLength(1);
+        expect(results![0].Success).toBe(false);
+        expect(results![0].ErrorMessage).toMatch(/entity base view/);
+        expect(results![0].Results).toEqual([]);
     });
 });

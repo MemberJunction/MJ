@@ -216,6 +216,26 @@ describe('EntitySearchProvider', () => {
             expect(twoFieldResults[0].Score).toBeGreaterThan(oneFieldResults[0].Score);
         });
 
+        it('should drop records where zero searchable fields matched the query (no 0.15 zombie leak)', async () => {
+            mockEntities.push({
+                Name: 'People',
+                AllowUserSearchAPI: true,
+                Fields: [
+                    { Name: 'Name', IncludeInUserSearchAPI: true, IsNameField: true, Sequence: 1 },
+                ],
+                NameField: { Name: 'Name' },
+            });
+
+            // RunView returns a row that did not actually match the query
+            mockRunViewFn.mockResolvedValueOnce({
+                Success: true,
+                Results: [{ ID: 'rec-1', Name: 'completely unrelated' }],
+            });
+
+            const results = await provider.Search('needle', 10, undefined, contextUser);
+            expect(results).toHaveLength(0);
+        });
+
         it('should filter by EntityNames when provided', async () => {
             mockEntities.push(
                 {
