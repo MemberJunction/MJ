@@ -154,7 +154,7 @@ export class PGConnectionManager {
      *
      * Race-safe: clears `_pool` *before* awaiting `pool.end()` so concurrent
      * callers (e.g. parallel `Refresh()` → `Config()` → `Initialize()` paths
-     * during `mj sync push --parallel-batch-size > 1`) can't both observe a
+     * during a parallel `mj sync push --no-atomic`) can't both observe a
      * non-null `_pool` and both invoke `pool.end()` on the same pool, which
      * `pg-pool` rejects with `Called end on pool more than once`. The local
      * `pool` reference keeps the awaited end() bound to the correct instance.
