@@ -29,6 +29,8 @@ The model then acts by index — *click element 1* — and the recorder can writ
 
 The probe (`browser/element-extraction.ts`) is deliberately app-agnostic: standard interactive tags, ARIA roles, and click affordances only. No app-specific selectors. It skips hidden and zero-size elements and stays within (or near) the viewport.
 
+Grounding is **on by default** (`elementGrounding`, default `true`). It is the precondition for everything below: without an element list a recorded click has no durable identity, so `isRecordableRun` refuses the trace and the test never leaves the `llm` tier. Set it `false` only to fall back to coordinate/vision mode deliberately.
+
 > **It never throws.** A probe failure, an absent page, or a renderer that stops answering all yield an empty list, and grounding degrades to coordinates. The call is bounded by a timeout because `page.evaluate()` is the one Playwright call that ignores `setDefaultTimeout()` — a silent renderer would otherwise hang the run forever.
 
 ---
@@ -76,7 +78,7 @@ If a replay diverges, the run **falls back to the model within the same attempt*
 
 1. The fallback **restarts clean** rather than inheriting the failed replay's memo. Priming a fresh run with another run's partial progress made the agent behave as though work had been done that its context never performed.
 2. A replay is **never re-recorded** — that would launder healed selectors into storage without re-deriving them.
-3. A test can refuse the fallback with `AllowLLMFallback: false`, taking the divergence as the result. Default is `true`. Turn it off wherever a silent re-derivation would paper over the very regression the test exists to catch.
+3. A test can refuse the fallback with `AllowLLMFallback: false`, taking the divergence as the result. Default is `true`. Turn it off wherever a silent re-derivation would paper over the very regression the test exists to catch. That governs re-deriving the *whole goal*; to stop a *single step* being repaired during replay, see `replayHeal` in Part 4.
 
 ---
 
@@ -100,6 +102,43 @@ Role + name is not always a unique identity. The app launcher lists each applica
 
 `Scope` records the nearest labelled ancestor region (`group:All applications`), which tells the twins apart. It's absent on recordings made before regions were captured, so it degrades rather than breaks — and a script has to be re-recorded to gain one.
 
+### Turning the ladder down, or off
+
+> Named `replayHeal` on a test's `Configuration` (the driver layer) and `ReplayHeal` on `RunComputerUseParams` (the engine layer). The driver reads the first and sets the second; calling `Replay()` directly, you set `ReplayHeal` yourself.
+
+Healing is what makes a script survive ordinary UI churn. It is also, for a script you have decided to trust, exactly the wrong behaviour: a repaired step passes, so the UI change that moved it never shows up as a failure. `replayHeal` chooses which of those you want.
+
+| `replayHeal` | Deterministic re-resolution | Model call | A drifted selector… |
+|---|---|---|---|
+| `'llm'` *(default)* | yes | on an ambiguous or failed match | is repaired, and the step reports `healed` |
+| `'deterministic'` | yes | never | is repaired only when role + name pick out exactly one element |
+| `'off'` | no | never | diverges; the step fails |
+
+Healing runs on **two legs**, and `'off'` disables both:
+
+- **Proactive** (`repointDriftedSelector`) — before the precondition runs, the recorded selector is checked against the live element list and silently re-pointed if its identity no longer holds.
+- **Reactive** (`healReplayStep`) — after a guard fails, the target is re-resolved and the corrected action executed.
+
+The proactive leg is the surprising one: it repairs drift *before anything has failed*, so a script with `'off'` unset can pass without the selector it recorded ever matching.
+
+#### The fully pinned test
+
+```jsonc
+{
+  "replayHeal": "off",        // no step-level repair
+  "AllowLLMFallback": false   // no goal-level re-derivation
+}
+```
+
+The two flags govern different scopes and compose:
+
+| | Scope | When it acts |
+|---|---|---|
+| `replayHeal` | one step | during replay, on drift |
+| `AllowLLMFallback` | the whole goal | after replay has given up |
+
+With both off, a replayed run contains no model call anywhere. It passes by executing exactly what was recorded, or it fails naming the step that diverged — which is the point of pinning a generated script in the first place.
+
 ---
 
 ## Part 5 — Where scripts live
@@ -118,6 +157,8 @@ Writes land in one of **two slots**, and the difference matters:
 In the repo, a script is externalised to its own file — each test carries `"ReplayScript": "@file:regression/scripts/t042-….json"` — because a 700-line trace inlined into `Configuration` makes the test unreadable and every re-record a giant one-line diff. The database still stores it in the test row; only the repo representation is split.
 
 > `mj sync push` resets both slots. That's deliberate — a script is a regenerable cache — but it does mean the run right after a metadata push pays full model price across the suite.
+
+**Recording can be turned off per test** with `recordReplayScript: false`. The run executes exactly as it would otherwise; it simply never writes a script back. That's the setting for a test still being authored, or one whose trajectory should not become the baseline other runs replay.
 
 ---
 

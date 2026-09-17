@@ -807,6 +807,33 @@ const params = new RunComputerUseParams();
 params.BrowserAdapter = new SeleniumBrowserAdapter();
 ```
 
+### Replaying a Recorded Script
+
+`Replay()` executes a script through the same browser adapter as a live run — no screenshots, no model calls. It is scored against the script's own goal postconditions rather than a judge.
+
+```typescript
+import { ComputerUseEngine, RunComputerUseParams } from '@memberjunction/computer-use';
+
+const params = new RunComputerUseParams();
+params.Goal = 'Open the Data Explorer and run a saved query';
+params.ReplayHeal = 'off';        // see below; default is 'llm'
+
+const result = await engine.Replay(script, params);
+console.log(result.Replay?.Healed, result.Replay?.Diverged);
+```
+
+**`ReplayHeal`** decides how far a diverged step may be repaired:
+
+| Value | Deterministic re-resolution | Model call |
+|---|---|---|
+| `'llm'` *(default)* | yes | on an ambiguous or failed match |
+| `'deterministic'` | yes | never |
+| `'off'` | no | never |
+
+`'off'` treats the script as a contract — the first step whose target no longer matches fails the run instead of being silently re-pointed. Repair runs on two legs (a proactive selector re-point before the precondition, and a reactive heal after a guard fails); `'off'` disables both.
+
+Full design, including the two script slots and the review gate: **[DOM Selection and Replay](docs/DOM_SELECTION_AND_REPLAY.md)**.
+
 ### Cooperative Cancellation
 
 For long-running tasks, support graceful cancellation:
