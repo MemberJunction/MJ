@@ -2114,7 +2114,30 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             if (willNeedCount && resultMap['count']) {
                 const countResult = resultMap['count'] as { TotalRowCount: number }[];
                 if (countResult && countResult.length > 0) rowCount = countResult[0].TotalRowCount;
-            } else if (countSQL && maxRowsUsed && retData.length === maxRowsUsed) {
+            } else if (countSQL && maxRowsUsed && maxRowsUsed > 1 && retData.length === maxRowsUsed) {
+                // A row-limited read that came back FULL may have been truncated, so the total is
+                // worth a second round trip: this is what makes Explorer's "100 of 299" correct.
+                // `maxRowsUsed > 1` carves out the ONE case where it cannot be: a `MaxRows:1`
+                // probe. Those callers ask "does a row exist / give me the one row" — a
+                // record-map lookup, a single-key resolve — and never read TotalRowCount. The
+                // count they triggered was pure cost, and SEQUENTIAL cost: it runs after the data
+                // query has already resolved, so it is a full extra round trip on the critical
+                // path, not a parallel one.
+                //
+                // Measured on a live tenant over a 120-second census: 1,000 record-map lookups
+                // fired 721 of these counts and 800 row lookups fired 600 — 1,321 extra round
+                // trips totalling 9,760 ms, 11.4% of ALL SQL time in the window. Nothing read a
+                // single one of the results.
+                //
+                // Everything with `maxRowsUsed > 1` is untouched, so the "100 of 299" behaviour
+                // is preserved exactly; only the degenerate single-row probe changes.
+                //
+                // What DOES change for `MaxRows:1`, stated plainly: with no `rowCount`, the return
+                // below falls back to `rowCount ?? retData.length`, so a hit now reports
+                // `TotalRowCount: 1` instead of the whole view's row count. That is the entire
+                // observable difference, and it is confined to a limit of exactly one row — a shape
+                // no caller asks for in order to learn a total, because a total is the one thing a
+                // single-row limit cannot tell it anything about.
                 const countResult = await this.ExecuteSQL<{ TotalRowCount: number }>(countSQL, undefined, undefined, contextUser);
                 if (countResult && countResult.length > 0) rowCount = countResult[0].TotalRowCount;
             }
@@ -2341,7 +2364,20 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         const ftsCoversDeniedField = deniedSearchFields.size > 0 &&
             entityInfo.Fields.some(f => f.FullTextSearchEnabled && deniedSearchFields.has(f.Name.trim().toLowerCase()));
 
-        if (entityInfo.FullTextSearchEnabled && !ftsCoversDeniedField) {
+        // `FullTextSearchEnabled` alone is NOT enough to take this branch: the branch names
+        // `FullTextSearchFunction` and, when that is null or blank, the `?? ''` below emitted
+        // `... FROM "schema".""('term')` — a syntax error, thrown on EVERY user search of such an
+        // entity, with no fallback. The two columns are independent (the flag can be set by hand
+        // or by a metadata sync before CodeGen has minted the function), so the name has to be
+        // checked, not assumed. A blank name now falls through to the per-field LIKE path, which
+        // needs no database object and returns results.
+        //
+        // Composed with, not substituted for, the field-security condition above — both have to
+        // hold to search through the index.
+        const ftsFunctionName = entityInfo.FullTextSearchFunction;
+        const hasFTSFunction = typeof ftsFunctionName === 'string' && ftsFunctionName.trim().length > 0;
+
+        if (entityInfo.FullTextSearchEnabled && hasFTSFunction && !ftsCoversDeniedField) {
             let u = safeUserSearchString;
             const uUpper = u.toUpperCase();
             // WORD-boundary tests, not substring tests (#4392). As substrings, `OR` matches

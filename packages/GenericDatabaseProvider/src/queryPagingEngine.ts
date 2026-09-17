@@ -22,8 +22,10 @@ export interface PagingWrappedSQL {
  *
  * **Data SQL** — appends OFFSET/FETCH (SQL Server) or LIMIT/OFFSET (PostgreSQL)
  * directly to the original SQL. The query is not wrapped in a CTE, so all column
- * scopes, ORDER BY references, and table aliases remain valid. TOP is stripped on
- * SQL Server since it conflicts with OFFSET.
+ * scopes, ORDER BY references, and table aliases remain valid. An outer row cap the
+ * query already carries is stripped first, since it conflicts with the appended paging
+ * clause — `TOP` on SQL Server, a statement-closing `LIMIT` on PostgreSQL — and the
+ * tighter of (that cap, the page size) is what gets applied.
  *
  * **Count SQL** — wraps the original SQL (minus ORDER BY) in a CTE and produces
  * `SELECT COUNT(*) AS TotalRowCount FROM [__count]`. ORDER BY is irrelevant for
@@ -283,10 +285,26 @@ export class QueryPagingEngine {
         dialect: SQLDialect,
     ): string {
         let dataSQL = sql;
+        let effectiveMaxRows = maxRows;
 
         // Strip TOP clause on SQL Server — it conflicts with OFFSET/FETCH.
         if (dialect.PlatformKey === 'sqlserver') {
             dataSQL = QueryPagingEngine.stripTopFromMainSelect(dataSQL, dialect);
+        } else if (dialect.PlatformKey === 'postgresql') {
+            // The PostgreSQL mirror of the SQL Server strip above, which had no counterpart. A
+            // query that already carries its own `LIMIT` was handed a SECOND one — the trailing
+            // `LIMIT n OFFSET m` is appended unconditionally below — producing
+            // `… LIMIT 20 LIMIT 100 OFFSET 0`, which PostgreSQL rejects as a parse error. Agent
+            // and Skip queries routinely ship with their own `LIMIT`, so those queries could not
+            // be paged at all.
+            const stripped = QueryPagingEngine.stripOuterLimitOffset(dataSQL);
+            dataSQL = stripped.sql;
+            // Keep the TIGHTER of the two caps. The query's own LIMIT is an author-stated ceiling
+            // on the result set, so a page size larger than it must not widen it. `LIMIT ALL`
+            // states no numeric ceiling, so it comes back null and the page size stands.
+            if (stripped.limitRemoved !== null) {
+                effectiveMaxRows = Math.min(stripped.limitRemoved, maxRows);
+            }
         }
 
         // Ensure there's an ORDER BY — required for OFFSET/FETCH on SQL Server,
@@ -297,8 +315,47 @@ export class QueryPagingEngine {
         }
 
         // Append paging clause via dialect
-        const limitResult = dialect.LimitClause(maxRows, startRow);
+        const limitResult = dialect.LimitClause(effectiveMaxRows, startRow);
         return `${dataSQL}\n${limitResult.suffix}`;
+    }
+
+    /**
+     * Matches a `LIMIT` (with its optional `OFFSET`) that closes the STATEMENT — end-anchored,
+     * and that anchoring is the whole safety argument. A `LIMIT` inside a CTE body or a subquery
+     * is part of that subquery's meaning, not an outer row cap, and removing it would silently
+     * change which rows the query returns; end-of-statement is the one position where a `LIMIT`
+     * is provably the outer cap this method is entitled to replace.
+     *
+     * `LIMIT ALL` is matched too: it is equally illegal to follow with a second `LIMIT`, and it
+     * states no numeric ceiling, so it is stripped and reported as no cap.
+     *
+     * Deliberately narrow. A trailing `FOR UPDATE` / `FETCH` after the `LIMIT` blocks the match,
+     * so this abstains and the pre-existing behaviour stands — abstaining is always safe here,
+     * because it is exactly what shipped before.
+     */
+    private static readonly OUTER_LIMIT_OFFSET = /\s+LIMIT\s+(ALL|\d+)(?:\s+OFFSET\s+\d+)?\s*$/i;
+
+    /**
+     * Removes a statement-closing `LIMIT [OFFSET]` so a paging clause can be appended without
+     * colliding with it.
+     *
+     * Returns the SQL with that clause removed and the numeric limit that was removed, or `null`
+     * for `limitRemoved` when nothing matched or the removed clause was `LIMIT ALL` (no numeric
+     * ceiling). Any `LIMIT` that is not at end-of-statement — in a CTE, in a subquery — is left
+     * exactly where it is; see {@link OUTER_LIMIT_OFFSET}.
+     *
+     * The query's own `OFFSET` goes with its `LIMIT` rather than being composed with the caller's:
+     * a paging request states the window it wants, and the same is already true of the SQL Server
+     * `TOP` strip above and of `stripCountBody`'s `ClearOuterCap`.
+     */
+    static stripOuterLimitOffset(sql: string): { sql: string; limitRemoved: number | null } {
+        const match = sql.match(QueryPagingEngine.OUTER_LIMIT_OFFSET);
+        if (!match) return { sql, limitRemoved: null };
+
+        const strippedSQL = sql.substring(0, sql.length - match[0].length);
+        const limitToken = match[1];
+        const limitRemoved = /^\d+$/.test(limitToken) ? Number(limitToken) : null;
+        return { sql: strippedSQL, limitRemoved };
     }
 
     /**
