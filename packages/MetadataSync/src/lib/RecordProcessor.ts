@@ -6,7 +6,7 @@ import { JsonWriteHelper } from './json-write-helper';
 import { EntityPropertyExtractor } from './EntityPropertyExtractor';
 import { FieldExternalizer } from './FieldExternalizer';
 import { RelatedEntityHandler } from './RelatedEntityHandler';
-import { METADATA_KEYWORDS, createKeywordReference } from '../constants/metadata-keywords';
+import { METADATA_KEYWORDS, CreateKeywordReference } from '../constants/metadata-keywords';
 import { RelatedEntityConfig } from '../config';
 
 /**
@@ -30,7 +30,7 @@ export class RecordProcessor {
    * Batch pre-fetch related entities for a set of parent records.
    * Public facade so callers don't need direct access to relatedEntityHandler.
    */
-  async batchPrefetchRelatedEntities(
+  async BatchPrefetchRelatedEntities(
     parentPrimaryKeys: string[],
     relationConfig: RelatedEntityConfig,
     verbose?: boolean
@@ -38,10 +38,19 @@ export class RecordProcessor {
     return this.relatedEntityHandler.batchQueryRelatedEntities(parentPrimaryKeys, relationConfig, verbose);
   }
 
+  /** @deprecated Use {@link BatchPrefetchRelatedEntities}. */
+  async batchPrefetchRelatedEntities(
+    parentPrimaryKeys: string[],
+    relationConfig: RelatedEntityConfig,
+    verbose?: boolean
+  ): Promise<Map<string, BaseEntity[]>> {
+    return this.BatchPrefetchRelatedEntities(parentPrimaryKeys, relationConfig, verbose);
+  }
+
   /**
    * Processes a record into the standardized RecordData format
    */
-  async processRecord(
+  async ProcessRecord(
     record: BaseEntity,
     primaryKey: Record<string, any>,
     targetDir: string,
@@ -93,6 +102,23 @@ export class RecordProcessor {
       embeds,
       extension
     );
+  }
+
+  /** @deprecated Use {@link ProcessRecord}. */
+  async processRecord(
+    record: BaseEntity,
+    primaryKey: Record<string, any>,
+    targetDir: string,
+    entityConfig: EntityConfig,
+    verbose?: boolean,
+    isNewRecord: boolean = true,
+    existingRecordData?: RecordData,
+    currentDepth: number = 0,
+    ancestryPath: Set<string> = new Set(),
+    fieldOverrides?: Record<string, any>,
+    batchedRelatedData?: Map<string, Map<string, BaseEntity[]>>
+  ): Promise<RecordData> {
+    return this.ProcessRecord(record, primaryKey, targetDir, entityConfig, verbose, isNewRecord, existingRecordData, currentDepth, ancestryPath, fieldOverrides, batchedRelatedData);
   }
 
   /**
@@ -425,7 +451,7 @@ export class RecordProcessor {
     if (externalizeConfig.length > 0 && typeof externalizeConfig[0] === 'string') {
       // Simple string array format
       if ((externalizeConfig as string[]).includes(fieldName)) {
-        return createKeywordReference('file', `{Name}.${fieldName.toLowerCase()}.md`);
+        return CreateKeywordReference('file', `{Name}.${fieldName.toLowerCase()}.md`);
       }
     } else {
       // Array of objects format
@@ -448,7 +474,7 @@ export class RecordProcessor {
     const fieldConfig = externalizeConfig[fieldName];
     if (fieldConfig) {
       const extension = fieldConfig.extension || '.md';
-      return createKeywordReference('file', `{Name}.${fieldName.toLowerCase()}${extension}`);
+      return CreateKeywordReference('file', `{Name}.${fieldName.toLowerCase()}${extension}`);
     }
     return null;
   }
@@ -490,7 +516,7 @@ export class RecordProcessor {
             relationConfig,
             entityConfig,
             existingRelated,
-            this.processRecord.bind(this),
+            this.ProcessRecord.bind(this),
             currentDepth,
             ancestryPath,
             batchedRelatedData.get(relationKey)!,
@@ -503,7 +529,7 @@ export class RecordProcessor {
             relationConfig,
             entityConfig,
             existingRelated,
-            this.processRecord.bind(this),
+            this.ProcessRecord.bind(this),
             currentDepth,
             ancestryPath,
             verbose
@@ -663,7 +689,7 @@ export class RecordProcessor {
             childPK[pk.Name] = child.Get(pk.Name);
           }
 
-          const childData = await this.processRecord(
+          const childData = await this.ProcessRecord(
             child,
             childPK,
             targetDir,
@@ -795,7 +821,7 @@ export class RecordProcessor {
         const lookupValue = targetRecord[lookupConfig.field];
         
         if (lookupValue != null) {
-          return createKeywordReference('lookup', `${lookupConfig.entity}.${lookupConfig.field}=${lookupValue}`);
+          return CreateKeywordReference('lookup', `${lookupConfig.entity}.${lookupConfig.field}=${lookupValue}`);
         }
       }
 

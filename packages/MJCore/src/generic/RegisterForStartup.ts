@@ -430,8 +430,8 @@ export class StartupManager extends BaseSingleton<StartupManager> {
      */
     public GetRegistrations(): StartupRegistration[] {
         return [...this._registrations].sort((a, b) => {
-            const priorityA = this.ResolvePriority(a.options);
-            const priorityB = this.ResolvePriority(b.options);
+            const priorityA = this.resolvePriority(a.options);
+            const priorityB = this.resolvePriority(b.options);
             return priorityA - priorityB;
         });
     }
@@ -486,7 +486,7 @@ export class StartupManager extends BaseSingleton<StartupManager> {
         }
 
         // Start loading and store the promise so other callers can await it
-        this._loadPromise = this.ExecuteLoad(contextUser, provider, options);
+        this._loadPromise = this.executeLoad(contextUser, provider, options);
 
         try {
             this._lastResult = await this._loadPromise;
@@ -500,7 +500,7 @@ export class StartupManager extends BaseSingleton<StartupManager> {
     /**
      * Internal method that performs the actual startup loading work.
      */
-    private async ExecuteLoad(contextUser?: UserInfo, provider?: IMetadataProvider, options?: StartupOptions): Promise<LoadAllResult> {
+    private async executeLoad(contextUser?: UserInfo, provider?: IMetadataProvider, options?: StartupOptions): Promise<LoadAllResult> {
         // first, init the LocalCacheManager and await its completion — this is
         // provider infrastructure and runs in BOTH startup modes
         // Get the storage provider from the metadata provider (uses IndexedDB)
@@ -516,7 +516,7 @@ export class StartupManager extends BaseSingleton<StartupManager> {
 
         const mode: StartupMode = options?.mode ?? 'full';
         if (mode === 'task') {
-            return this.CompleteTaskModeLoad(allRegistrations, startTime);
+            return this.completeTaskModeLoad(allRegistrations, startTime);
         }
 
         const activeRegistrations = options?.engineFilter
@@ -531,7 +531,7 @@ export class StartupManager extends BaseSingleton<StartupManager> {
         const syncRegistrations = activeRegistrations.filter(r => !r.options.deferred);
         const deferredRegistrations = activeRegistrations.filter(r => r.options.deferred);
 
-        const groups = this.GroupByPriority(syncRegistrations);
+        const groups = this.groupByPriority(syncRegistrations);
         const results: LoadResult[] = [];
 
         for (const group of groups) {
@@ -604,7 +604,7 @@ export class StartupManager extends BaseSingleton<StartupManager> {
         // its own .EnsureLoaded() call which dedupes against the in-flight load
         // (BaseEngine._loadingSubject handles concurrent callers).
         if (deferredRegistrations.length > 0) {
-            this.KickOffDeferredEngines(deferredRegistrations, contextUser, provider);
+            this.kickOffDeferredEngines(deferredRegistrations, contextUser, provider);
         }
 
         return {
@@ -620,7 +620,7 @@ export class StartupManager extends BaseSingleton<StartupManager> {
      * Marks startup completed so idempotency semantics match 'full' mode — the
      * result is cached and repeat Startup() calls return it without re-running.
      */
-    private CompleteTaskModeLoad(registrations: StartupRegistration[], startTime: number): LoadAllResult {
+    private completeTaskModeLoad(registrations: StartupRegistration[], startTime: number): LoadAllResult {
         this._loadCompleted = true;
 
         // One non-verbose line so a slow first AI call is never a debugging mystery
@@ -644,7 +644,7 @@ export class StartupManager extends BaseSingleton<StartupManager> {
      * configured severity but never propagate — the app boot has already
      * returned by the time this runs.
      */
-    private KickOffDeferredEngines(
+    private kickOffDeferredEngines(
         registrations: StartupRegistration[],
         contextUser?: UserInfo,
         provider?: IMetadataProvider
@@ -684,18 +684,18 @@ export class StartupManager extends BaseSingleton<StartupManager> {
     /**
      * Resolve the priority from options, defaulting to 100 if not specified.
      */
-    private ResolvePriority(options: RegisterForStartupOptions): number {
+    private resolvePriority(options: RegisterForStartupOptions): number {
         return options.priority ?? 100;
     }
 
     /**
      * Group registrations by their priority for parallel loading within priority levels.
      */
-    private GroupByPriority(registrations: StartupRegistration[]): StartupRegistration[][] {
+    private groupByPriority(registrations: StartupRegistration[]): StartupRegistration[][] {
         const groups = new Map<number, StartupRegistration[]>();
 
         for (const reg of registrations) {
-            const priority = this.ResolvePriority(reg.options);
+            const priority = this.resolvePriority(reg.options);
             if (!groups.has(priority)) {
                 groups.set(priority, []);
             }

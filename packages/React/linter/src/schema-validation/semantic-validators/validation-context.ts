@@ -33,7 +33,7 @@ export interface ValidationContext {
    * This is typically the JSXAttribute node, but validators can traverse
    * to child nodes for more specific location information.
    */
-  node: t.Node;
+  Node: t.Node;
 
   /**
    * Babel traversal path for the node
@@ -41,7 +41,7 @@ export interface ValidationContext {
    * Provides access to parent nodes, scope information, and AST manipulation.
    * Validators should not modify the AST - this is read-only validation.
    */
-  path: NodePath<any>;
+  Path: NodePath<any>;
 
   // ============================================================================
   // Component Context
@@ -52,7 +52,7 @@ export interface ValidationContext {
    *
    * Example: "DataGrid", "EntityDataGrid", "SimpleChart"
    */
-  componentName: string;
+  ComponentName: string;
 
   /**
    * Full component specification
@@ -63,7 +63,7 @@ export interface ValidationContext {
    * - Other properties (for cross-property validation)
    * - Dependency specs (for validating nested components)
    */
-  componentSpec: ComponentSpec;
+  ComponentSpec: ComponentSpec;
 
   // ============================================================================
   // Property Context
@@ -74,7 +74,7 @@ export interface ValidationContext {
    *
    * Example: "fields", "columns", "entityName", "extraFilter"
    */
-  propertyName: string;
+  propertyName: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 
   /**
    * Extracted value of the property
@@ -88,7 +88,7 @@ export interface ValidationContext {
    * If the value is a DynamicValue, validators should typically skip validation
    * and return an empty violations array (the linter will warn the user).
    */
-  propertyValue: ExtractedValue;
+  propertyValue: ExtractedValue;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 
   /**
    * Map of sibling props on the same JSX element
@@ -103,7 +103,7 @@ export interface ValidationContext {
    * siblingProps.get('fields') // => ['FirstName', 'LastName']
    * ```
    */
-  siblingProps: Map<string, ExtractedValue>;
+  siblingProps: Map<string, ExtractedValue>;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 
   // ============================================================================
   // Data Requirements Context
@@ -121,7 +121,7 @@ export interface ValidationContext {
    * const fields = memberEntity.fields; // Array of EntityFieldInfo
    * ```
    */
-  entities: Map<string, EntityMetadata>;
+  Entities: Map<string, EntityMetadata>;
 
   /**
    * Map of query name to query metadata
@@ -135,7 +135,7 @@ export interface ValidationContext {
    * const params = query.parameters; // Array of QueryParameter
    * ```
    */
-  queries: Map<string, QueryMetadata>;
+  Queries: Map<string, QueryMetadata>;
 
   // ============================================================================
   // Validation Utilities
@@ -147,7 +147,7 @@ export interface ValidationContext {
    * Used for advanced type checking beyond what PropValueExtractor provides.
    * Can infer types of variables, function calls, etc.
    */
-  typeEngine: TypeInferenceEngine;
+  TypeEngine: TypeInferenceEngine;
 
   /**
    * SQL dialect for WHERE clause parsing and validation.
@@ -156,7 +156,7 @@ export interface ValidationContext {
    * for the target database platform (SQL Server, PostgreSQL, etc.).
    * If not provided, the validator falls back to SQL Server dialect.
    */
-  dialect?: SQLParserDialect;
+  Dialect?: SQLParserDialect;
 
   // ============================================================================
   // Helper Methods
@@ -174,7 +174,7 @@ export interface ValidationContext {
    * const fieldNames = fields.map(f => f.name);
    * ```
    */
-  getEntityFields(entityName: string): EntityFieldInfo[];
+  getEntityFields(entityName: string): EntityFieldInfo[];  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 
   /**
    * Get the data type of a specific field on an entity
@@ -189,7 +189,7 @@ export interface ValidationContext {
    * // => 'date'
    * ```
    */
-  getEntityFieldType(entityName: string, fieldName: string): string | null;
+  getEntityFieldType(entityName: string, fieldName: string): string | null;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 
   /**
    * Find field names similar to the given field name (for suggestions)
@@ -208,7 +208,7 @@ export interface ValidationContext {
    * // => ['FirstName', 'FirstNameNormalized', 'FirstNameMasked']
    * ```
    */
-  findSimilarFieldNames(fieldName: string, entityName: string, maxResults?: number): string[];
+  findSimilarFieldNames(fieldName: string, entityName: string, maxResults?: number): string[];  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 
   /**
    * Get parameter metadata for a query
@@ -222,7 +222,7 @@ export interface ValidationContext {
    * const requiredParams = params.filter(p => p.required);
    * ```
    */
-  getQueryParameters(queryName: string): QueryParameter[];
+  getQueryParameters(queryName: string): QueryParameter[];  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 
   /**
    * Check if a query exists in the component's data requirements
@@ -238,7 +238,7 @@ export interface ValidationContext {
    * }
    * ```
    */
-  hasQuery(queryName: string, categoryPath?: string): boolean;
+  hasQuery(queryName: string, categoryPath?: string): boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 
   /**
    * Check if an entity exists in the component's data requirements
@@ -253,7 +253,7 @@ export interface ValidationContext {
    * }
    * ```
    */
-  hasEntity(entityName: string): boolean;
+  hasEntity(entityName: string): boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 /**
@@ -263,22 +263,22 @@ export interface EntityMetadata {
   /**
    * Entity name
    */
-  name: string;
+  name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 
   /**
    * Entity description (if available)
    */
-  description?: string;
+  description?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 
   /**
    * Array of field metadata for this entity
    */
-  fields: EntityFieldInfo[];
+  fields: EntityFieldInfo[];  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 
   /**
    * Primary key field name(s)
    */
-  primaryKeys?: string[];
+  PrimaryKeys?: string[];
 }
 
 /**
@@ -288,42 +288,42 @@ export interface EntityFieldInfo {
   /**
    * Field name
    */
-  name: string;
+  name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 
   /**
    * Data type (e.g., 'string', 'number', 'date', 'boolean')
    */
-  type: string;
+  type: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 
   /**
    * SQL data type (e.g., 'nvarchar', 'int', 'datetime', 'bit')
    */
-  sqlType?: string;
+  SqlType?: string;
 
   /**
    * Whether this field is required (NOT NULL)
    */
-  required?: boolean;
+  Required?: boolean;
 
   /**
    * Field description (if available)
    */
-  description?: string;
+  description?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 
   /**
    * Whether this is a primary key field
    */
-  isPrimaryKey?: boolean;
+  isPrimaryKey?: boolean;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 
   /**
    * If this is a foreign key, the related entity name
    */
-  relatedEntity?: string;
+  RelatedEntity?: string;
 
   /**
    * Maximum length for string fields
    */
-  maxLength?: number;
+  MaxLength?: number;
 }
 
 /**
@@ -333,27 +333,27 @@ export interface QueryMetadata {
   /**
    * Query name
    */
-  name: string;
+  name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 
   /**
    * Query description (if available)
    */
-  description?: string;
+  description?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 
   /**
    * Category path for disambiguation
    */
-  categoryPath?: string;
+  CategoryPath?: string;
 
   /**
    * Array of parameter metadata for this query
    */
-  parameters: QueryParameter[];
+  Parameters: QueryParameter[];
 
   /**
    * Expected result fields (if specified)
    */
-  resultFields?: Array<{ name: string; type: string }>;
+  ResultFields?: Array<{ name: string; type: string }>;
 }
 
 /**
@@ -363,35 +363,35 @@ export interface QueryParameter {
   /**
    * Parameter name
    */
-  name: string;
+  name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 
   /**
    * Parameter data type
    */
-  type: string;
+  type: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 
   /**
    * SQL data type
    */
-  sqlType?: string;
+  SqlType?: string;
 
   /**
    * Whether this parameter is required
    */
-  required?: boolean;
+  Required?: boolean;
 
   /**
    * Default value if not provided
    */
-  defaultValue?: any;
+  DefaultValue?: any;
 
   /**
    * Example/test value for documentation
    */
-  testValue?: any;
+  TestValue?: any;
 
   /**
    * Parameter description (if available)
    */
-  description?: string;
+  description?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }

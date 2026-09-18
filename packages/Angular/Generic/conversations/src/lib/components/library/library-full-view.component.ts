@@ -279,29 +279,92 @@ import { MJCollectionEntity } from '@memberjunction/core-entities';
   `]
 })
 export class LibraryFullViewComponent extends BaseAngularComponent implements OnInit  {
-  @Input() environmentId!: string;
-  @Input() currentUser!: UserInfo;
+  @Input() EnvironmentId!: string;
 
-  public collections: MJCollectionEntity[] = [];
-  public filteredCollections: MJCollectionEntity[] = [];
-  public searchQuery: string = '';
+  /** @deprecated Use {@link EnvironmentId}. */
+  @Input() set environmentId(value: string) {
+    this.EnvironmentId = value;
+  }
+  /** @deprecated Use {@link EnvironmentId}. */
+  get environmentId(): string {
+    return this.EnvironmentId;
+  }
+  @Input() CurrentUser!: UserInfo;
+
+  /** @deprecated Use {@link CurrentUser}. */
+  @Input() set currentUser(value: UserInfo) {
+    this.CurrentUser = value;
+  }
+  /** @deprecated Use {@link CurrentUser}. */
+  get currentUser(): UserInfo {
+    return this.CurrentUser;
+  }
+
+  public Collections: MJCollectionEntity[] = [];
+
+  /** @deprecated Use {@link Collections}. */
+  public get collections(): MJCollectionEntity[] {
+    return this.Collections;
+  }
+  /** @deprecated Use {@link Collections}. */
+  public set collections(value: MJCollectionEntity[]) {
+    this.Collections = value;
+  }
+  public FilteredCollections: MJCollectionEntity[] = [];
+
+  /** @deprecated Use {@link FilteredCollections}. */
+  public get filteredCollections(): MJCollectionEntity[] {
+    return this.FilteredCollections;
+  }
+  /** @deprecated Use {@link FilteredCollections}. */
+  public set filteredCollections(value: MJCollectionEntity[]) {
+    this.FilteredCollections = value;
+  }
+  public SearchQuery: string = '';
+
+  /** @deprecated Use {@link SearchQuery}. */
+  public get searchQuery(): string {
+    return this.SearchQuery;
+  }
+  /** @deprecated Use {@link SearchQuery}. */
+  public set searchQuery(value: string) {
+    this.SearchQuery = value;
+  }
   public isLoading: boolean = false;
-  public breadcrumbs: Array<{ id: string; name: string }> = [];
-  public currentCollectionId: string | null = null;
+  public Breadcrumbs: Array<{ id: string; name: string }> = [];
+
+  /** @deprecated Use {@link Breadcrumbs}. */
+  public get breadcrumbs(): Array<{ id: string; name: string }> {
+    return this.Breadcrumbs;
+  }
+  /** @deprecated Use {@link Breadcrumbs}. */
+  public set breadcrumbs(value: Array<{ id: string; name: string }>) {
+    this.Breadcrumbs = value;
+  }
+  public CurrentCollectionId: string | null = null;
+
+  /** @deprecated Use {@link CurrentCollectionId}. */
+  public get currentCollectionId(): string | null {
+    return this.CurrentCollectionId;
+  }
+  /** @deprecated Use {@link CurrentCollectionId}. */
+  public set currentCollectionId(value: string | null) {
+    this.CurrentCollectionId = value;
+  }
 
   constructor() {
   super();}
 
   ngOnInit() {
-    this.loadCollections();
+    this.LoadCollections();
   }
 
-  async loadCollections(): Promise<void> {
+  async LoadCollections(): Promise<void> {
     this.isLoading = true;
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-      const filter = `EnvironmentID='${this.environmentId}'` +
-                     (this.currentCollectionId ? ` AND ParentID='${this.currentCollectionId}'` : ' AND ParentID IS NULL');
+      const filter = `EnvironmentID='${this.EnvironmentId}'` +
+                     (this.CurrentCollectionId ? ` AND ParentID='${this.CurrentCollectionId}'` : ' AND ParentID IS NULL');
 
       const result = await rv.RunView<MJCollectionEntity>(
         {
@@ -311,11 +374,11 @@ export class LibraryFullViewComponent extends BaseAngularComponent implements On
           MaxRows: 1000,
           ResultType: 'entity_object'
         },
-        this.currentUser
+        this.CurrentUser
       );
 
       if (result.Success) {
-        this.collections = result.Results || [];
+        this.Collections = result.Results || [];
         this.applySearch();
       }
     } catch (error) {
@@ -325,47 +388,77 @@ export class LibraryFullViewComponent extends BaseAngularComponent implements On
     }
   }
 
-  onSearchChange(query: string): void {
+  /** @deprecated Use {@link LoadCollections}. */
+  async loadCollections(): Promise<void> {
+    return this.LoadCollections();
+  }
+
+  OnSearchChange(query: string): void {
     this.applySearch();
   }
 
+  /** @deprecated Use {@link OnSearchChange}. */
+  onSearchChange(query: string): void {
+    return this.OnSearchChange(query);
+  }
+
   private applySearch(): void {
-    if (!this.searchQuery.trim()) {
-      this.filteredCollections = [...this.collections];
+    if (!this.SearchQuery.trim()) {
+      this.FilteredCollections = [...this.Collections];
     } else {
-      const query = this.searchQuery.toLowerCase();
-      this.filteredCollections = this.collections.filter(c =>
+      const query = this.SearchQuery.toLowerCase();
+      this.FilteredCollections = this.Collections.filter(c =>
         c.Name.toLowerCase().includes(query) ||
         (c.Description && c.Description.toLowerCase().includes(query))
       );
     }
   }
 
-  openCollection(collection: MJCollectionEntity): void {
-    this.breadcrumbs.push({ id: collection.ID, name: collection.Name });
-    this.currentCollectionId = collection.ID;
-    this.searchQuery = '';
-    this.loadCollections();
+  OpenCollection(collection: MJCollectionEntity): void {
+    this.Breadcrumbs.push({ id: collection.ID, name: collection.Name });
+    this.CurrentCollectionId = collection.ID;
+    this.SearchQuery = '';
+    this.LoadCollections();
   }
 
-  navigateTo(crumb: { id: string; name: string }): void {
-    const index = this.breadcrumbs.findIndex(b => b.id === crumb.id);
+  /** @deprecated Use {@link OpenCollection}. */
+  openCollection(collection: MJCollectionEntity): void {
+    return this.OpenCollection(collection);
+  }
+
+  NavigateTo(crumb: { id: string; name: string }): void {
+    const index = this.Breadcrumbs.findIndex(b => b.id === crumb.id);
     if (index !== -1) {
-      this.breadcrumbs = this.breadcrumbs.slice(0, index + 1);
-      this.currentCollectionId = crumb.id;
-      this.searchQuery = '';
-      this.loadCollections();
+      this.Breadcrumbs = this.Breadcrumbs.slice(0, index + 1);
+      this.CurrentCollectionId = crumb.id;
+      this.SearchQuery = '';
+      this.LoadCollections();
     }
   }
 
-  navigateToRoot(): void {
-    this.breadcrumbs = [];
-    this.currentCollectionId = null;
-    this.searchQuery = '';
-    this.loadCollections();
+  /** @deprecated Use {@link NavigateTo}. */
+  navigateTo(crumb: { id: string; name: string }): void {
+    return this.NavigateTo(crumb);
   }
 
+  NavigateToRoot(): void {
+    this.Breadcrumbs = [];
+    this.CurrentCollectionId = null;
+    this.SearchQuery = '';
+    this.LoadCollections();
+  }
+
+  /** @deprecated Use {@link NavigateToRoot}. */
+  navigateToRoot(): void {
+    return this.NavigateToRoot();
+  }
+
+  Refresh(): void {
+    this.LoadCollections();
+  }
+
+  /** @deprecated Use {@link Refresh}. */
   refresh(): void {
-    this.loadCollections();
+    return this.Refresh();
   }
 }

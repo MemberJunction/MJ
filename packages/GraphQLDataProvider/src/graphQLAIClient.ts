@@ -1490,11 +1490,11 @@ export interface VectorizeEntityResult {
 /** Parameters for FetchEntityVectors */
 export interface FetchEntityVectorsParams {
     /** The ID of the EntityDocument whose vectors to fetch */
-    entityDocumentID: string;
+    entityDocumentID: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Maximum number of vectors to return (default 1000) */
-    maxRecords?: number;
+    maxRecords?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Optional additional filter string */
-    filter?: string;
+    filter?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /** A single vector record with its embedding and metadata */

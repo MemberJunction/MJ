@@ -75,8 +75,8 @@ import { BaseBrowserAdapter } from '@memberjunction/computer-use';
 
 import { MJComputerUseEngine } from '../engine/MJComputerUseEngine.js';
 import { MJRunComputerUseParams, PromptEntityRef, ActionRef } from '../types/mj-params.js';
-import { parseJudgeFrequency } from '../utils/judge-frequency-parser.js';
-import { buildVariableValuesFromContext, substituteVariables, composeApplicationContext } from '../utils/variable-substitution.js';
+import { ParseJudgeFrequency } from '../utils/judge-frequency-parser.js';
+import { BuildVariableValuesFromContext, SubstituteVariables, ComposeApplicationContext } from '../utils/variable-substitution.js';
 
 import type {
     ComputerUseTestConfig,
@@ -145,11 +145,11 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             //  "http://byo-app:3000" for a remote-target profile pointing at the BYO app).
             // Values come from the variable resolver (schema-validated) PLUS env vars
             // prefixed with MJ_TEST_VAR_ as an ad-hoc fallback when no schema is defined.
-            const variableValues = buildVariableValuesFromContext(context);
+            const variableValues = BuildVariableValuesFromContext(context);
             if (Object.keys(variableValues).length > 0) {
-                config = substituteVariables(config, variableValues);
-                input = substituteVariables(input, variableValues);
-                expected = substituteVariables(expected, variableValues);
+                config = SubstituteVariables(config, variableValues);
+                input = SubstituteVariables(input, variableValues);
+                expected = SubstituteVariables(expected, variableValues);
             }
 
             // 1c. Resolve application context (suite-level + per-test). Suite context
@@ -331,7 +331,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         const suiteLevel = typeof context.suiteContext?.applicationContext === 'string'
             ? context.suiteContext.applicationContext
             : undefined;
-        return composeApplicationContext(suiteLevel, input.applicationContext, variableValues);
+        return ComposeApplicationContext(suiteLevel, input.applicationContext, variableValues);
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -404,7 +404,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
 
         // Judge frequency
         if (config.judgeFrequency) {
-            params.JudgeFrequency = parseJudgeFrequency(config.judgeFrequency);
+            params.JudgeFrequency = ParseJudgeFrequency(config.judgeFrequency);
         }
 
         // Auth bindings from InputDefinition

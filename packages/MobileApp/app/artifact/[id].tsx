@@ -50,9 +50,9 @@ export default function ArtifactDetailScreen() {
                     <Icons.ChevronLeft size={22} color={Colors.ink} strokeWidth={2.2} />
                 </Pressable>
                 <View style={styles.headerCenter}>
-                    <Text numberOfLines={1} style={styles.headerTitle}>{artifact?.name ?? 'Artifact'}</Text>
+                    <Text numberOfLines={1} style={styles.headerTitle}>{artifact?.Name ?? 'Artifact'}</Text>
                     <Text style={styles.headerSub}>
-                        {artifact ? `${artifact.typeName} · v${artifact.version}${artifact.versionCount > 1 ? ` of ${artifact.versionCount}` : ''}` : 'Loading…'}
+                        {artifact ? `${artifact.TypeName} · v${artifact.Version}${artifact.VersionCount > 1 ? ` of ${artifact.VersionCount}` : ''}` : 'Loading…'}
                     </Text>
                 </View>
                 <View style={styles.iconBtn} />
@@ -66,7 +66,7 @@ export default function ArtifactDetailScreen() {
                 <View style={styles.loadingBlock}><Text style={styles.errorText}>Artifact not found.</Text></View>
             ) : (
                 <ScrollView contentContainerStyle={styles.body}>
-                    {artifact.description ? <Text style={styles.description}>{artifact.description}</Text> : null}
+                    {artifact.Description ? <Text style={styles.description}>{artifact.Description}</Text> : null}
                     <ArtifactContent artifact={artifact} />
                 </ScrollView>
             )}
@@ -91,11 +91,11 @@ function ArtifactContent({ artifact }: { artifact: LoadedArtifact }) {
     const { width } = useWindowDimensions();
     const contentWidth = width - BODY_PADDING * 2;
 
-    switch (artifact.kind) {
+    switch (artifact.Kind) {
         case 'json-table':
             return (
                 <View style={styles.cards}>
-                    {(artifact.rows ?? []).slice(0, 100).map((row, idx) => {
+                    {(artifact.Rows ?? []).slice(0, 100).map((row, idx) => {
                         const keys = Object.keys(row).slice(0, 6);
                         return (
                             <View key={idx} style={styles.recordCard}>
@@ -113,22 +113,22 @@ function ArtifactContent({ artifact }: { artifact: LoadedArtifact }) {
                 </View>
             );
         case 'json':
-            return <Text style={styles.code}>{JSON.stringify(artifact.json, null, 2)}</Text>;
+            return <Text style={styles.code}>{JSON.stringify(artifact.Json, null, 2)}</Text>;
         case 'chart':
             return artifact.chart
-                ? <View style={styles.chartCard}><Chart spec={artifact.chart} width={contentWidth - 28} /></View>
-                : <Text style={styles.code}>{JSON.stringify(artifact.json, null, 2)}</Text>;
+                ? <View style={styles.chartCard}><Chart Spec={artifact.chart} Width={contentWidth - 28} /></View>
+                : <Text style={styles.code}>{JSON.stringify(artifact.Json, null, 2)}</Text>;
         case 'interactive':
             return <InteractiveArtifact artifact={artifact} />;
         case 'html':
-            return <HtmlRenderer html={artifact.content} />;
+            return <HtmlRenderer html={artifact.Content} />;
         case 'code':
-            return <CodeView code={artifact.content} language={artifact.language} />;
+            return <CodeView code={artifact.Content} language={artifact.Language} />;
         case 'markdown':
-            return <MarkdownView source={artifact.content} />;
+            return <MarkdownView source={artifact.Content} />;
         case 'text':
         default:
-            return <Text style={styles.text}>{artifact.content}</Text>;
+            return <Text style={styles.text}>{artifact.Content}</Text>;
     }
 }
 
@@ -138,11 +138,11 @@ function ArtifactContent({ artifact }: { artifact: LoadedArtifact }) {
  * otherwise shows the "view on desktop" fallback with the specific reason.
  */
 function InteractiveArtifact({ artifact }: { artifact: LoadedArtifact }) {
-    const assessment = assessSpec(artifact.spec);
-    if (artifact.spec && assessment.renderable) {
-        return <InteractiveComponentRenderer spec={artifact.spec} />;
+    const assessment = assessSpec(artifact.Spec);
+    if (artifact.Spec && assessment.Renderable) {
+        return <InteractiveComponentRenderer spec={artifact.Spec} />;
     }
-    return <DesktopFallback reason={assessment.reason} />;
+    return <DesktopFallback reason={assessment.Reason} />;
 }
 
 /**
@@ -154,7 +154,7 @@ function CodeView({ code, language }: { code: string; language?: string }) {
         <ScrollView horizontal directionalLockEnabled nestedScrollEnabled showsHorizontalScrollIndicator={false} style={styles.codeScroll}>
             <Text style={styles.code}>
                 {highlightCode(code, language).map((run, i) => (
-                    <Text key={i} style={{ color: run.color }}>{run.text}</Text>
+                    <Text key={i} style={{ color: run.Color }}>{run.Text}</Text>
                 ))}
             </Text>
         </ScrollView>

@@ -7,7 +7,7 @@
 import { EntityInfo, IMetadataProvider, Metadata, UserInfo } from '@memberjunction/core';
 import { IRecordSetSource, SourceDescriptor } from '../interfaces';
 import { ProcessCursor, RecordBatch } from '../types';
-import { pageEntityByFilter } from './sourceUtil';
+import { PageEntityByFilter } from './sourceUtil';
 
 /** A source backed by an entity + ad-hoc filter. */
 export class FilterSource implements IRecordSetSource {
@@ -38,6 +38,6 @@ export class FilterSource implements IRecordSetSource {
 
     public async NextBatch(cursor: ProcessCursor | undefined, batchSize: number, contextUser: UserInfo, provider?: IMetadataProvider): Promise<RecordBatch> {
         const entity = this.resolveEntity(provider);
-        return pageEntityByFilter({ entity, filter: this.filter, cursor, batchSize, contextUser, preferKeyset: true });
+        return PageEntityByFilter({ entity, filter: this.filter, cursor, batchSize, contextUser, preferKeyset: true });
     }
 }

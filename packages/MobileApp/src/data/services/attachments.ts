@@ -49,15 +49,15 @@ export type AttachmentKind = 'image' | 'document';
  */
 export type CapturedAttachment = {
     /** Local `file://` (or content) URI where the picked bytes live on device. */
-    uri: string;
+    Uri: string;
     /** Display filename, e.g. `IMG_0421.HEIC` or `Q3-report.pdf`. */
-    name: string;
+    Name: string;
     /** MIME type, e.g. `image/jpeg`, `application/pdf`. */
-    mimeType: string;
+    MimeType: string;
     /** Size in bytes, when the picker reported it (some sources omit it). */
-    size?: number;
+    size?: number;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
     /** Coarse classification driving preview UI (thumbnail vs. filename chip). */
-    kind: AttachmentKind;
+    Kind: AttachmentKind;
 };
 
 /** Minimal shape shared by every Expo permission response we consult. */
@@ -108,11 +108,11 @@ function imageResultToAttachment(result: ImagePicker.ImagePickerResult): Capture
     if (result.canceled || !result.assets || result.assets.length === 0) return null;
     const asset = result.assets[0];
     return {
-        uri: asset.uri,
-        name: asset.fileName ?? deriveName(asset.uri, 'image'),
-        mimeType: asset.mimeType ?? 'image/jpeg',
+        Uri: asset.uri,
+        Name: asset.fileName ?? deriveName(asset.uri, 'image'),
+        MimeType: asset.mimeType ?? 'image/jpeg',
         size: asset.fileSize,
-        kind: 'image',
+        Kind: 'image',
     };
 }
 
@@ -122,7 +122,7 @@ function imageResultToAttachment(result: ImagePicker.ImagePickerResult): Capture
  * @returns The chosen image as a {@link CapturedAttachment}, or `null` when the
  *   user cancels, denies library access, or a native error occurs.
  */
-export async function pickImageFromLibrary(): Promise<CapturedAttachment | null> {
+export async function PickImageFromLibrary(): Promise<CapturedAttachment | null> {
     const allowed = await ensurePermission(
         () => ImagePicker.getMediaLibraryPermissionsAsync(),
         () => ImagePicker.requestMediaLibraryPermissionsAsync(),
@@ -139,6 +139,11 @@ export async function pickImageFromLibrary(): Promise<CapturedAttachment | null>
     }
 }
 
+/** @deprecated Use {@link PickImageFromLibrary}. */
+export async function pickImageFromLibrary(): Promise<CapturedAttachment | null> {
+    return PickImageFromLibrary();
+}
+
 /**
  * Capture a new photo with the camera.
  *
@@ -148,7 +153,7 @@ export async function pickImageFromLibrary(): Promise<CapturedAttachment | null>
  *
  * @returns The captured photo as a {@link CapturedAttachment}, or `null`.
  */
-export async function capturePhoto(): Promise<CapturedAttachment | null> {
+export async function CapturePhoto(): Promise<CapturedAttachment | null> {
     const allowed = await ensurePermission(
         () => ImagePicker.getCameraPermissionsAsync(),
         () => ImagePicker.requestCameraPermissionsAsync(),
@@ -163,6 +168,11 @@ export async function capturePhoto(): Promise<CapturedAttachment | null> {
     }
 }
 
+/** @deprecated Use {@link CapturePhoto}. */
+export async function capturePhoto(): Promise<CapturedAttachment | null> {
+    return CapturePhoto();
+}
+
 /**
  * Pick an arbitrary document (PDF, spreadsheet, etc.) via the system Files UI.
  * No runtime permission is required for the document picker.
@@ -170,22 +180,27 @@ export async function capturePhoto(): Promise<CapturedAttachment | null> {
  * @returns The chosen document as a {@link CapturedAttachment}, or `null` on
  *   cancel / native error.
  */
-export async function pickDocument(): Promise<CapturedAttachment | null> {
+export async function PickDocument(): Promise<CapturedAttachment | null> {
     try {
         // copyToCacheDirectory guarantees a readable local URI for base64 inlining.
         const result = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true });
         if (result.canceled || !result.assets || result.assets.length === 0) return null;
         const asset = result.assets[0];
         return {
-            uri: asset.uri,
-            name: asset.name ?? deriveName(asset.uri, 'document'),
-            mimeType: asset.mimeType ?? 'application/octet-stream',
+            Uri: asset.uri,
+            Name: asset.name ?? deriveName(asset.uri, 'document'),
+            MimeType: asset.mimeType ?? 'application/octet-stream',
             size: asset.size,
-            kind: 'document',
+            Kind: 'document',
         };
     } catch {
         return null;
     }
+}
+
+/** @deprecated Use {@link PickDocument}. */
+export async function pickDocument(): Promise<CapturedAttachment | null> {
+    return PickDocument();
 }
 
 /**
@@ -196,12 +211,17 @@ export async function pickDocument(): Promise<CapturedAttachment | null> {
  * @param att The attachment whose bytes to read.
  * @returns The base64-encoded contents, or `null` if the file can't be read.
  */
-export async function readAttachmentBase64(att: CapturedAttachment): Promise<string | null> {
+export async function ReadAttachmentBase64(att: CapturedAttachment): Promise<string | null> {
     try {
-        return await new File(att.uri).base64();
+        return await new File(att.Uri).base64();
     } catch {
         return null;
     }
+}
+
+/** @deprecated Use {@link ReadAttachmentBase64}. */
+export async function readAttachmentBase64(att: CapturedAttachment): Promise<string | null> {
+    return ReadAttachmentBase64(att);
 }
 
 /** Human-readable byte size, e.g. `842 B`, `12 KB`, `3.4 MB`. */
@@ -218,10 +238,15 @@ function formatBytes(bytes: number): string {
  *
  * @example `[Attached image: IMG_0421.jpg (image/jpeg, 245 KB)]`
  */
-export function describeAttachment(att: CapturedAttachment): string {
+export function DescribeAttachment(att: CapturedAttachment): string {
     const size = att.size != null ? `, ${formatBytes(att.size)}` : '';
-    const label = att.kind === 'image' ? 'image' : 'file';
-    return `[Attached ${label}: ${att.name} (${att.mimeType}${size})]`;
+    const label = att.Kind === 'image' ? 'image' : 'file';
+    return `[Attached ${label}: ${att.Name} (${att.MimeType}${size})]`;
+}
+
+/** @deprecated Use {@link DescribeAttachment}. */
+export function describeAttachment(att: CapturedAttachment): string {
+    return DescribeAttachment(att);
 }
 
 /**
@@ -234,11 +259,16 @@ export function describeAttachment(att: CapturedAttachment): string {
  * @param att The chosen attachment, or `null`.
  * @returns The message text to actually send (never empty when an attachment is set).
  */
-export function composeMessageWithAttachment(text: string, att: CapturedAttachment | null): string {
+export function ComposeMessageWithAttachment(text: string, att: CapturedAttachment | null): string {
     const trimmed = text.trim();
     if (!att) return trimmed;
-    const note = describeAttachment(att);
+    const note = DescribeAttachment(att);
     return trimmed.length > 0 ? `${trimmed}\n\n${note}` : note;
+}
+
+/** @deprecated Use {@link ComposeMessageWithAttachment}. */
+export function composeMessageWithAttachment(text: string, att: CapturedAttachment | null): string {
+    return ComposeMessageWithAttachment(text, att);
 }
 
 /**
@@ -279,7 +309,7 @@ async function resolveActiveStorageProviderId(contextUser?: UserInfo): Promise<s
  * @param contextUser Optional acting user (falls back to the current user).
  * @returns `{ id }` of the created File record, or `null` on failure.
  */
-export async function persistAttachment(
+export async function PersistAttachment(
     att: CapturedAttachment,
     contextUser?: UserInfo,
 ): Promise<{ id: string } | null> {
@@ -291,13 +321,21 @@ export async function persistAttachment(
 
     const file = await md.GetEntityObject<MJFileEntity>('MJ: Files', currentUser);
     file.NewRecord();
-    file.Name = att.name;
+    file.Name = att.Name;
     file.ProviderID = providerId;
-    file.ContentType = att.mimeType;
+    file.ContentType = att.MimeType;
     // 'Pending' == catalog row created, bytes not yet uploaded (see header TODO).
     file.Status = 'Pending';
 
     const saved = await file.Save();
     if (!saved) return null;
     return { id: file.ID };
+}
+
+/** @deprecated Use {@link PersistAttachment}. */
+export async function persistAttachment(
+    att: CapturedAttachment,
+    contextUser?: UserInfo,
+): Promise<{ id: string } | null> {
+    return PersistAttachment(att, contextUser);
 }

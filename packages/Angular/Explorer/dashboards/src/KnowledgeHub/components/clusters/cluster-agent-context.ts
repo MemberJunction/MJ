@@ -22,8 +22,13 @@
 export const CLUSTER_CONTEXT_LIST_CAP = 25;
 
 /** Cap an array to {@link CLUSTER_CONTEXT_LIST_CAP} entries. Pure; never mutates input. */
-export function capClusterList<T>(items: readonly T[]): T[] {
+export function CapClusterList<T>(items: readonly T[]): T[] {
     return items.slice(0, CLUSTER_CONTEXT_LIST_CAP);
+}
+
+/** @deprecated Use {@link CapClusterList}. */
+export function capClusterList<T>(items: readonly T[]): T[] {
+    return CapClusterList(items);
 }
 
 /**
@@ -49,7 +54,7 @@ export interface SavedVisualizationCandidate {
  * @param input - whatever the agent passed (an id or the on-screen name)
  * @param candidates - the saved visualizations currently in the sidebar
  */
-export function resolveSavedVisualization<T extends SavedVisualizationCandidate>(
+export function ResolveSavedVisualization<T extends SavedVisualizationCandidate>(
     input: string,
     candidates: readonly T[],
 ): T | null {
@@ -68,6 +73,14 @@ export function resolveSavedVisualization<T extends SavedVisualizationCandidate>
     return candidates.find(c => c.Name.toLowerCase().includes(needle)) ?? null;
 }
 
+/** @deprecated Use {@link ResolveSavedVisualization}. */
+export function resolveSavedVisualization<T extends SavedVisualizationCandidate>(
+    input: string,
+    candidates: readonly T[],
+): T | null {
+    return ResolveSavedVisualization(input, candidates);
+}
+
 /**
  * A "no match" error result for an id/name lookup. Lists the available names
  * (bounded) so the agent can retry with a valid one. Tolerant — never throws.
@@ -76,18 +89,27 @@ export function resolveSavedVisualization<T extends SavedVisualizationCandidate>
  * @param availableNames - the display names the agent could have chosen
  * @param noun - what kind of item was being looked up (for the message)
  */
-export function buildClusterNotFoundError(
+export function BuildClusterNotFoundError(
     input: string,
     availableNames: readonly string[],
     noun: string,
 ): { Success: false; ErrorMessage: string } {
-    const sample = capClusterList(availableNames);
+    const sample = CapClusterList(availableNames);
     const listed = sample.length > 0 ? sample.join(', ') : '(none available)';
     const more = availableNames.length > sample.length ? `, … (${availableNames.length} total)` : '';
     return {
         Success: false,
         ErrorMessage: `No ${noun} matches "${input}". Available ${noun}s: ${listed}${more}.`,
     };
+}
+
+/** @deprecated Use {@link BuildClusterNotFoundError}. */
+export function buildClusterNotFoundError(
+    input: string,
+    availableNames: readonly string[],
+    noun: string,
+): { Success: false; ErrorMessage: string } {
+    return BuildClusterNotFoundError(input, availableNames, noun);
 }
 
 /**
@@ -152,7 +174,7 @@ export interface ClusterAgentContextInput {
  * @param input - the component's current state snapshot
  * @returns a flat key-value object suitable for `SetAgentContext`
  */
-export function buildClusterAgentContext(input: ClusterAgentContextInput): Record<string, unknown> {
+export function BuildClusterAgentContext(input: ClusterAgentContextInput): Record<string, unknown> {
     const context: Record<string, unknown> = {
         IsVisualizationLoaded: input.IsVisualizationLoaded,
         VisualizationTitle: input.VisualizationTitle,
@@ -178,7 +200,7 @@ export function buildClusterAgentContext(input: ClusterAgentContextInput): Recor
     // Per-cluster summaries — so the agent knows what groups are plotted and can
     // refer to a cluster by its (LLM-generated or user-edited) label.
     if (input.Clusters.length > 0) {
-        context['Clusters'] = capClusterList(input.Clusters);
+        context['Clusters'] = CapClusterList(input.Clusters);
         if (input.Clusters.length > CLUSTER_CONTEXT_LIST_CAP) {
             context['ClusterSummaryCount'] = input.Clusters.length;
         }
@@ -186,7 +208,7 @@ export function buildClusterAgentContext(input: ClusterAgentContextInput): Recor
 
     // The source entities the agent could request a fresh analysis against.
     if (input.AvailableEntityNames.length > 0) {
-        context['AvailableEntities'] = capClusterList(input.AvailableEntityNames);
+        context['AvailableEntities'] = CapClusterList(input.AvailableEntityNames);
         if (input.AvailableEntityNames.length > CLUSTER_CONTEXT_LIST_CAP) {
             context['AvailableEntityCount'] = input.AvailableEntityNames.length;
         }
@@ -194,11 +216,16 @@ export function buildClusterAgentContext(input: ClusterAgentContextInput): Recor
 
     // The saved visualizations the agent can open via OpenSavedVisualization.
     if (input.SavedVisualizationNames.length > 0) {
-        context['SavedVisualizations'] = capClusterList(input.SavedVisualizationNames);
+        context['SavedVisualizations'] = CapClusterList(input.SavedVisualizationNames);
         if (input.SavedVisualizationNames.length > CLUSTER_CONTEXT_LIST_CAP) {
             context['SavedVisualizationListCount'] = input.SavedVisualizationNames.length;
         }
     }
 
     return context;
+}
+
+/** @deprecated Use {@link BuildClusterAgentContext}. */
+export function buildClusterAgentContext(input: ClusterAgentContextInput): Record<string, unknown> {
+    return BuildClusterAgentContext(input);
 }

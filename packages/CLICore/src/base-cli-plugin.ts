@@ -114,7 +114,7 @@ export abstract class BaseCLIPlugin extends Command {
       this.Host.AnnounceRuntime(ctor.Usage);
     }
 
-    const result = await this.RunExecute(ctor);
+    const result = await this.runExecute(ctor);
     this.Host.Emit(result);
 
     // Optional cleanup hook (e.g. close DB pools, reset singletons). Runs after
@@ -135,7 +135,7 @@ export abstract class BaseCLIPlugin extends Command {
    * `{code:'E_NON_INTERACTIVE', suggestion:'Pass --entity …'}` than from a stack trace.
    * Every other error keeps propagating to oclif untouched.
    */
-  private async RunExecute(ctor: typeof BaseCLIPlugin): Promise<MJCLIResult> {
+  private async runExecute(ctor: typeof BaseCLIPlugin): Promise<MJCLIResult> {
     try {
       return await this.Execute();
     } catch (e) {

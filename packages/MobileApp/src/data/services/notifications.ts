@@ -26,13 +26,13 @@ export const PUSH_TOKEN_SETTING_KEY = 'mobile.pushDeviceToken';
 /** Outcome of {@link registerForPushNotifications}. */
 export type PushRegistrationResult = {
     /** Whether the OS granted notification permission (or provisional on iOS). */
-    granted: boolean;
+    Granted: boolean;
     /** The acquired Expo push token, or `null` when one couldn't be minted (simulator). */
-    token: string | null;
+    Token: string | null;
     /** Whether the token was successfully written to the backend. */
-    persisted: boolean;
+    Persisted: boolean;
     /** Human-readable explanation when `token`/`persisted` is falsy. */
-    reason?: string;
+    Reason?: string;
 };
 
 /** Shape persisted as the JSON `Value` of the push-token user setting. */
@@ -47,7 +47,7 @@ type StoredPushToken = {
  * banner + list entry but stay quiet (no sound/badge). Safe to call more than
  * once — the last handler wins.
  */
-export function configureNotificationHandler(): void {
+export function ConfigureNotificationHandler(): void {
     Notifications.setNotificationHandler({
         handleNotification: async () => ({
             shouldShowBanner: true,
@@ -58,13 +58,18 @@ export function configureNotificationHandler(): void {
     });
 }
 
+/** @deprecated Use {@link ConfigureNotificationHandler}. */
+export function configureNotificationHandler(): void {
+    return ConfigureNotificationHandler();
+}
+
 /**
  * Ensure notification permission, prompting the user if it hasn't been decided.
  * iOS "provisional" authorization counts as granted (quiet notifications).
  *
  * @returns `true` if notifications are permitted; `false` on denial or error.
  */
-export async function requestNotificationPermission(): Promise<boolean> {
+export async function RequestNotificationPermission(): Promise<boolean> {
     try {
         const current = await Notifications.getPermissionsAsync();
         if (isGranted(current)) return true;
@@ -76,6 +81,11 @@ export async function requestNotificationPermission(): Promise<boolean> {
         console.warn('[notifications] permission request failed:', errText(e));
         return false;
     }
+}
+
+/** @deprecated Use {@link RequestNotificationPermission}. */
+export async function requestNotificationPermission(): Promise<boolean> {
+    return RequestNotificationPermission();
 }
 
 /** Treat both a full grant and iOS provisional authorization as "granted". */
@@ -90,7 +100,7 @@ function isGranted(status: Notifications.NotificationPermissionsStatus): boolean
  *
  * @returns The Expo push token string, or `null` when unavailable.
  */
-export async function getExpoPushToken(): Promise<string | null> {
+export async function GetExpoPushToken(): Promise<string | null> {
     try {
         // projectId defaults from Constants.expoConfig.extra.eas.projectId.
         const result = await Notifications.getExpoPushTokenAsync();
@@ -100,6 +110,11 @@ export async function getExpoPushToken(): Promise<string | null> {
         console.log('[notifications] Expo push token unavailable (simulator/no APNs):', errText(e));
         return null;
     }
+}
+
+/** @deprecated Use {@link GetExpoPushToken}. */
+export async function getExpoPushToken(): Promise<string | null> {
+    return GetExpoPushToken();
 }
 
 /**
@@ -114,7 +129,7 @@ export async function getExpoPushToken(): Promise<string | null> {
  * @param contextUser Optional server context user (defaults to the current user).
  * @returns `true` when the token was saved.
  */
-export async function registerDeviceToken(token: string, contextUser?: UserInfo): Promise<boolean> {
+export async function RegisterDeviceToken(token: string, contextUser?: UserInfo): Promise<boolean> {
     const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
     const currentUser = contextUser ?? md.CurrentUser;
     if (!currentUser?.ID) {
@@ -131,6 +146,11 @@ export async function registerDeviceToken(token: string, contextUser?: UserInfo)
     return saved;
 }
 
+/** @deprecated Use {@link RegisterDeviceToken}. */
+export async function registerDeviceToken(token: string, contextUser?: UserInfo): Promise<boolean> {
+    return RegisterDeviceToken(token, contextUser);
+}
+
 /**
  * Remove this device's stored push token from the backend and stop the OS from
  * delivering pushes. Used when the user turns push notifications off. All steps
@@ -139,7 +159,7 @@ export async function registerDeviceToken(token: string, contextUser?: UserInfo)
  * @param contextUser Optional server context user (defaults to the current user).
  * @returns `true` when the stored token was deleted (or there was nothing to delete).
  */
-export async function unregisterDeviceToken(contextUser?: UserInfo): Promise<boolean> {
+export async function UnregisterDeviceToken(contextUser?: UserInfo): Promise<boolean> {
     try {
         await Notifications.unregisterForNotificationsAsync();
     } catch (e) {
@@ -157,6 +177,11 @@ export async function unregisterDeviceToken(contextUser?: UserInfo): Promise<boo
     return deleted;
 }
 
+/** @deprecated Use {@link UnregisterDeviceToken}. */
+export async function unregisterDeviceToken(contextUser?: UserInfo): Promise<boolean> {
+    return UnregisterDeviceToken(contextUser);
+}
+
 /**
  * Full client-side registration flow: install the foreground handler, ensure
  * permission, mint the Expo push token, and persist it to the backend. Every
@@ -166,21 +191,26 @@ export async function unregisterDeviceToken(contextUser?: UserInfo): Promise<boo
  * @param contextUser Optional server context user (defaults to the current user).
  * @returns A {@link PushRegistrationResult} describing what succeeded.
  */
-export async function registerForPushNotifications(contextUser?: UserInfo): Promise<PushRegistrationResult> {
-    configureNotificationHandler();
+export async function RegisterForPushNotifications(contextUser?: UserInfo): Promise<PushRegistrationResult> {
+    ConfigureNotificationHandler();
 
-    const granted = await requestNotificationPermission();
+    const granted = await RequestNotificationPermission();
     if (!granted) {
-        return { granted: false, token: null, persisted: false, reason: 'Notification permission not granted.' };
+        return { Granted: false, Token: null, Persisted: false, Reason: 'Notification permission not granted.' };
     }
 
-    const token = await getExpoPushToken();
+    const token = await GetExpoPushToken();
     if (!token) {
-        return { granted: true, token: null, persisted: false, reason: 'No Expo push token (simulator or APNs unavailable).' };
+        return { Granted: true, Token: null, Persisted: false, Reason: 'No Expo push token (simulator or APNs unavailable).' };
     }
 
-    const persisted = await registerDeviceToken(token, contextUser);
-    return { granted: true, token, persisted, reason: persisted ? undefined : 'Token acquired but backend persistence failed.' };
+    const persisted = await RegisterDeviceToken(token, contextUser);
+    return { Granted: true, Token: token, Persisted: persisted, Reason: persisted ? undefined : 'Token acquired but backend persistence failed.' };
+}
+
+/** @deprecated Use {@link RegisterForPushNotifications}. */
+export async function registerForPushNotifications(contextUser?: UserInfo): Promise<PushRegistrationResult> {
+    return RegisterForPushNotifications(contextUser);
 }
 
 /** Load the existing push-token setting row for a user, or `null` if none. */

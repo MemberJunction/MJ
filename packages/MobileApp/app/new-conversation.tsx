@@ -109,7 +109,7 @@ export default function NewConversationScreen() {
                         />
                         {attachment ? (
                             <View style={styles.attachRow}>
-                                <AttachmentChip attachment={attachment} onRemove={() => setAttachment(null)} />
+                                <AttachmentChip Attachment={attachment} OnRemove={() => setAttachment(null)} />
                             </View>
                         ) : null}
                         <View style={styles.composerFoot}>
@@ -175,9 +175,9 @@ export default function NewConversationScreen() {
                     <View style={{ height: Spacing.xxxl }} />
                 </ScrollView>
                 <AttachmentPicker
-                    visible={pickerVisible}
-                    onClose={() => setPickerVisible(false)}
-                    onPicked={(a) => setAttachment(a)}
+                    Visible={pickerVisible}
+                    OnClose={() => setPickerVisible(false)}
+                    OnPicked={(a) => setAttachment(a)}
                 />
             </KeyboardAvoidingView>
         </SafeAreaView>

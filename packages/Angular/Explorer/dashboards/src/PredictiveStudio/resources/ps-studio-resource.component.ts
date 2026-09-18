@@ -9,14 +9,14 @@ import { PSPanelKey } from '../predictive-studio.types';
 import {
   STUDIO_SECTIONS,
   PSSection,
-  sectionGroups,
-  sectionsInGroup,
-  sectionLabel,
-  hasSection,
-  routeHomeNavigate,
+  SectionGroups,
+  SectionsInGroup,
+  SectionLabel,
+  HasSection,
+  RouteHomeNavigate,
 } from '../predictive-studio.nav';
-import { buildStudioAgentContext, resolvePSRecord, buildPSNotFoundError } from '../predictive-studio-agent-context';
-import { validateStringParam } from '../../shared/agent-tool-validation';
+import { BuildStudioAgentContext, ResolvePSRecord, BuildPSNotFoundError } from '../predictive-studio-agent-context';
+import { ValidateStringParam } from '../../shared/agent-tool-validation';
 
 /** Predictive Studio application ID (from `metadata/applications/.predictive-studio-application.json`). */
 const PREDICTIVE_STUDIO_APP_ID = '299C9272-8D38-40CA-85D4-0980F2C9FAD1';
@@ -146,38 +146,92 @@ export class PSStudioResourceComponent extends PSResourceBase {
   private readonly cdrLocal = inject(ChangeDetectorRef);
 
   /** The active workbench section (which panel renders). Round-trips through the `section` query param. */
-  public activeSection: PSPanelKey = 'home';
+  public ActiveSection: PSPanelKey = 'home';
+
+  /** @deprecated Use {@link ActiveSection}. */
+  public get activeSection(): PSPanelKey {
+    return this.ActiveSection;
+  }
+  /** @deprecated Use {@link ActiveSection}. */
+  public set activeSection(value: PSPanelKey) {
+    this.ActiveSection = value;
+  }
   public readonly sections: readonly PSSection[] = STUDIO_SECTIONS;
 
   // ── docked Model Dev Agent copilot ───────────────────────────────
-  public chatOpen = false;
-  public pendingPrompt: string | null = null;
+  public ChatOpen = false;
+
+  /** @deprecated Use {@link ChatOpen}. */
+  public get chatOpen() {
+    return this.ChatOpen;
+  }
+  /** @deprecated Use {@link ChatOpen}. */
+  public set chatOpen(value) {
+    this.ChatOpen = value;
+  }
+  public PendingPrompt: string | null = null;
+
+  /** @deprecated Use {@link PendingPrompt}. */
+  public get pendingPrompt(): string | null {
+    return this.PendingPrompt;
+  }
+  /** @deprecated Use {@link PendingPrompt}. */
+  public set pendingPrompt(value: string | null) {
+    this.PendingPrompt = value;
+  }
   private _modelDevAgentId: string | null = null;
   /** Conversation lifecycle (see {@link onChatConversationCreated}) — without it the first send no-ops. */
-  public chatConversation: MJConversationEntity | null = null;
-  public chatConversationId: string | null = null;
-  public chatIsNewConversation = true;
+  public ChatConversation: MJConversationEntity | null = null;
+
+  /** @deprecated Use {@link ChatConversation}. */
+  public get chatConversation(): MJConversationEntity | null {
+    return this.ChatConversation;
+  }
+  /** @deprecated Use {@link ChatConversation}. */
+  public set chatConversation(value: MJConversationEntity | null) {
+    this.ChatConversation = value;
+  }
+  public ChatConversationId: string | null = null;
+
+  /** @deprecated Use {@link ChatConversationId}. */
+  public get chatConversationId(): string | null {
+    return this.ChatConversationId;
+  }
+  /** @deprecated Use {@link ChatConversationId}. */
+  public set chatConversationId(value: string | null) {
+    this.ChatConversationId = value;
+  }
+  public ChatIsNewConversation = true;
+
+  /** @deprecated Use {@link ChatIsNewConversation}. */
+  public get chatIsNewConversation() {
+    return this.ChatIsNewConversation;
+  }
+  /** @deprecated Use {@link ChatIsNewConversation}. */
+  public set chatIsNewConversation(value) {
+    this.ChatIsNewConversation = value;
+  }
 
   override ngOnInit(): void {
     super.ngOnInit();
     const initial = this.GetQueryParams()['section'] as PSPanelKey | undefined;
-    if (initial && hasSection(this.sections, initial)) this.activeSection = initial;
+    if (initial && HasSection(this.sections, initial)) this.ActiveSection = initial;
   }
 
   /** React to deep-link / back-forward `section` changes after the initial mount. */
   protected override OnQueryParamsChanged(params: Record<string, string>, _source: 'popstate' | 'deeplink'): void {
     const next = params['section'] as PSPanelKey | undefined;
-    if (next && next !== this.activeSection && hasSection(this.sections, next)) {
-      this.activeSection = next;
+    if (next && next !== this.ActiveSection && HasSection(this.sections, next)) {
+      this.ActiveSection = next;
       this.cdrLocal.detectChanges();
     }
   }
 
   /** Deep agent context for the Studio door (build/run workbench counts + active section). */
   protected override extraAgentContext(): Record<string, unknown> {
-    return buildStudioAgentContext({
-      ActiveSection: this.activeSection,
-      ActiveSectionLabel: this.activeLabel,
+    return BuildStudioAgentContext({
+      ActiveSection: this.ActiveSection,
+      ActiveSectionLabel: this.ActiveLabel,
       SectionLabels: this.sections.map((s) => s.label),
       PublishedModelCount: this.engine.PublishedModels.length,
       RunningSessionCount: this.engine.RunningSessions.length,
@@ -185,7 +239,7 @@ export class PSStudioResourceComponent extends PSResourceBase {
       AlgorithmCount: this.engine.Algorithms.length,
       ExperimentCount: this.engine.Experiments.length,
       TrainingRunCount: this.engine.TrainingRuns.length,
-      ChatOpen: this.chatOpen,
+      ChatOpen: this.ChatOpen,
     });
   }
 
@@ -202,11 +256,11 @@ export class PSStudioResourceComponent extends PSResourceBase {
           'Switch the Studio workbench to a section. Pass the section key or label (see SectionLabels): Overview, Training Pipelines, Algorithm Catalog, Experiments, or Compare Runs.',
         ParameterSchema: { type: 'object', properties: { section: { type: 'string', description: 'The section key or label to switch to' } } },
         Handler: async (params: Record<string, unknown>) => {
-          const check = validateStringParam(params['section'], 'section');
+          const check = ValidateStringParam(params['section'], 'section');
           if (!check.ok) return check.result;
           const candidates = this.sections.map((s) => ({ ID: s.key, Name: s.label }));
-          const match = resolvePSRecord(check.value, candidates);
-          if (!match) return { Success: false, ErrorMessage: buildPSNotFoundError(check.value, candidates, 'section') };
+          const match = ResolvePSRecord(check.value, candidates);
+          if (!match) return { Success: false, ErrorMessage: BuildPSNotFoundError(check.value, candidates, 'section') };
           this.selectSection(match.ID as PSPanelKey);
           return { Success: true, Data: { activeSection: match.Name } };
         },
@@ -217,7 +271,7 @@ export class PSStudioResourceComponent extends PSResourceBase {
           'Open the docked Model Development Agent co-pilot in the Studio (does not send a message — the user drives the conversation). Use when the user wants to design/build a new prediction.',
         ParameterSchema: { type: 'object', properties: {} },
         Handler: async () => {
-          this.openCopilot();
+          this.OpenCopilot();
           return { Success: true, Data: { chatOpen: true } };
         },
       },
@@ -225,12 +279,27 @@ export class PSStudioResourceComponent extends PSResourceBase {
   }
 
   // ── left-nav ─────────────────────────────────────────────────────
-  public get groups(): string[] { return sectionGroups(this.sections); }
-  public itemsForGroup(group: string): PSSection[] { return sectionsInGroup(this.sections, group); }
-  public get activeLabel(): string { return sectionLabel(this.sections, this.activeSection); }
+  public get Groups(): string[] { return SectionGroups(this.sections); }
+
+  /** @deprecated Use {@link Groups}. */
+  public get groups(): string[] {
+    return this.Groups;
+  }
+  public ItemsForGroup(group: string): PSSection[] { return SectionsInGroup(this.sections, group); }
+
+  /** @deprecated Use {@link ItemsForGroup}. */
+  public itemsForGroup(group: string): PSSection[] {
+    return this.ItemsForGroup(group);
+  }
+  public get ActiveLabel(): string { return SectionLabel(this.sections, this.ActiveSection); }
+
+  /** @deprecated Use {@link ActiveLabel}. */
+  public get activeLabel(): string {
+    return this.ActiveLabel;
+  }
 
   /** Section-specific subtitle for the interior header (so every section doesn't repeat one generic line). */
-  public get activeSubtitle(): string {
+  public get ActiveSubtitle(): string {
     const map: Record<string, string> = {
       home: 'Start a new prediction from your data, a template, or the agent.',
       pipelines: 'Assemble features and train from the algorithm catalog.',
@@ -238,76 +307,136 @@ export class PSStudioResourceComponent extends PSResourceBase {
       experiments: 'Run and track model experiments.',
       compare: 'Compare runs on the honest holdout score.',
     };
-    return map[this.activeSection] ?? '';
+    return map[this.ActiveSection] ?? '';
+  }
+
+  /** @deprecated Use {@link ActiveSubtitle}. */
+  public get activeSubtitle(): string {
+    return this.ActiveSubtitle;
   }
 
   public selectSection(key: PSPanelKey): void {
-    if (this.activeSection === key) return;
-    this.activeSection = key;
+    if (this.ActiveSection === key) return;
+    this.ActiveSection = key;
     this.UpdateQueryParams({ section: key });
     this.publishAgentContext();
     this.cdrLocal.detectChanges();
   }
 
   /** The Overview panel's in-app navigation: switch section in-place, or cross to the Models door. */
-  public mapNavigate(key: PSPanelKey): void {
-    const target = routeHomeNavigate(key);
-    if (target.kind === 'section') {
-      this.selectSection(target.key);
-    } else if (target.kind === 'app') {
-      void this.navigationService.SwitchToApp(PREDICTIVE_STUDIO_APP_ID, target.navLabel, { section: target.section });
+  public MapNavigate(key: PSPanelKey): void {
+    const target = RouteHomeNavigate(key);
+    if (target.Kind === 'section') {
+      this.selectSection(target.Key);
+    } else if (target.Kind === 'app') {
+      void this.navigationService.SwitchToApp(PREDICTIVE_STUDIO_APP_ID, target.NavLabel, { section: target.Section });
     }
   }
 
-  // ── copilot ──────────────────────────────────────────────────────
-  public get currentUser(): UserInfo | null { return this.ProviderToUse.CurrentUser ?? null; }
+  /** @deprecated Use {@link MapNavigate}. */
+  public mapNavigate(key: PSPanelKey): void {
+    return this.MapNavigate(key);
+  }
 
-  public get chatEnvironmentId(): string {
+  // ── copilot ──────────────────────────────────────────────────────
+  public get CurrentUser(): UserInfo | null { return this.ProviderToUse.CurrentUser ?? null; }
+
+  /** @deprecated Use {@link CurrentUser}. */
+  public get currentUser(): UserInfo | null {
+    return this.CurrentUser;
+  }
+
+  public get ChatEnvironmentId(): string {
     return (this.Data?.Configuration?.['environmentId'] as string | undefined) || MJEnvironmentEntityExtended.DefaultEnvironmentID;
   }
-  public get applicationId(): string | null { return (this.Data?.Configuration?.['applicationId'] as string | undefined) ?? null; }
-  public get modelDevAgentId(): string | null { return this._modelDevAgentId; }
-  public get chatAppContext(): Record<string, unknown> {
-    return { app: 'Predictive Studio', section: this.activeSection, publishedModels: this.engine.Models.filter((m) => m.Status === 'Published').length };
+
+  /** @deprecated Use {@link ChatEnvironmentId}. */
+  public get chatEnvironmentId(): string {
+    return this.ChatEnvironmentId;
+  }
+  public get ApplicationId(): string | null { return (this.Data?.Configuration?.['applicationId'] as string | undefined) ?? null; }
+
+  /** @deprecated Use {@link ApplicationId}. */
+  public get applicationId(): string | null {
+    return this.ApplicationId;
+  }
+  public get ModelDevAgentId(): string | null { return this._modelDevAgentId; }
+
+  /** @deprecated Use {@link ModelDevAgentId}. */
+  public get modelDevAgentId(): string | null {
+    return this.ModelDevAgentId;
+  }
+  public get ChatAppContext(): Record<string, unknown> {
+    return { app: 'Predictive Studio', section: this.ActiveSection, publishedModels: this.engine.Models.filter((m) => m.Status === 'Published').length };
   }
 
-  public onAskAgent(starterPrompt: string): void {
-    this.pendingPrompt = starterPrompt;
-    this.chatOpen = true;
+  /** @deprecated Use {@link ChatAppContext}. */
+  public get chatAppContext(): Record<string, unknown> {
+    return this.ChatAppContext;
+  }
+
+  public OnAskAgent(starterPrompt: string): void {
+    this.PendingPrompt = starterPrompt;
+    this.ChatOpen = true;
     void this.ensureModelDevAgentResolved();
     this.publishAgentContext();
     this.cdrLocal.detectChanges();
+  }
+
+  /** @deprecated Use {@link OnAskAgent}. */
+  public onAskAgent(starterPrompt: string): void {
+    return this.OnAskAgent(starterPrompt);
   }
 
   /** Open the docked co-pilot (clean chat) — used by the read-only `OpenModelDevAgentCopilot` agent tool. */
-  public openCopilot(): void {
-    this.pendingPrompt = null;
-    this.chatOpen = true;
+  public OpenCopilot(): void {
+    this.PendingPrompt = null;
+    this.ChatOpen = true;
     void this.ensureModelDevAgentResolved();
     this.publishAgentContext();
     this.cdrLocal.detectChanges();
   }
 
-  public closeChat(): void {
-    this.chatOpen = false;
-    this.pendingPrompt = null;
+  /** @deprecated Use {@link OpenCopilot}. */
+  public openCopilot(): void {
+    return this.OpenCopilot();
+  }
+
+  public CloseChat(): void {
+    this.ChatOpen = false;
+    this.PendingPrompt = null;
     this.publishAgentContext();
     this.cdrLocal.detectChanges();
   }
 
+  /** @deprecated Use {@link CloseChat}. */
+  public closeChat(): void {
+    return this.CloseChat();
+  }
+
   /** Chat-area created its backing conversation on the first send — capture it + leave new-mode so the thread renders. */
-  public onChatConversationCreated(event: { conversation: MJConversationEntity; pendingMessage?: string }): void {
-    this.pendingPrompt = event.pendingMessage ?? null;
-    this.chatConversation = event.conversation;
-    this.chatConversationId = event.conversation.ID;
-    this.chatIsNewConversation = false;
+  public OnChatConversationCreated(event: { conversation: MJConversationEntity; pendingMessage?: string }): void {
+    this.PendingPrompt = event.pendingMessage ?? null;
+    this.ChatConversation = event.conversation;
+    this.ChatConversationId = event.conversation.ID;
+    this.ChatIsNewConversation = false;
     this.cdrLocal.detectChanges();
   }
 
+  /** @deprecated Use {@link OnChatConversationCreated}. */
+  public onChatConversationCreated(event: { conversation: MJConversationEntity; pendingMessage?: string }): void {
+    return this.OnChatConversationCreated(event);
+  }
+
   /** Chat-area delivered the seeded prompt — clear the buffer so a re-render doesn't resend it. */
-  public onChatPendingMessageConsumed(): void {
-    this.pendingPrompt = null;
+  public OnChatPendingMessageConsumed(): void {
+    this.PendingPrompt = null;
     this.cdrLocal.detectChanges();
+  }
+
+  /** @deprecated Use {@link OnChatPendingMessageConsumed}. */
+  public onChatPendingMessageConsumed(): void {
+    return this.OnChatPendingMessageConsumed();
   }
 
   private async ensureModelDevAgentResolved(): Promise<void> {

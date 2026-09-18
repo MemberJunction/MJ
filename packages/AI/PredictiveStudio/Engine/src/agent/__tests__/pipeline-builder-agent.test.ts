@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { summarizeBuildResult, buildOutcomeMessage } from '../pipeline-builder-agent';
+import { SummarizeBuildResult, BuildOutcomeMessage } from '../pipeline-builder-agent';
 import type { BuildPredictionResult } from '../pipeline-builder';
 
 /**
@@ -20,23 +20,23 @@ const failed: BuildPredictionResult = { success: false, published: false, leakag
 
 describe('summarizeBuildResult', () => {
   it('projects a published result', () => {
-    expect(summarizeBuildResult(published)).toMatchObject({ success: true, pipelineId: 'p1', modelId: 'm1', trustGrade: 'Good', published: true, heldReason: null, errorMessage: null });
+    expect(SummarizeBuildResult(published)).toMatchObject({ success: true, pipelineId: 'p1', modelId: 'm1', trustGrade: 'Good', published: true, heldReason: null, errorMessage: null });
   });
   it('projects a HELD result, carrying the plain reason (the safety gate)', () => {
-    const o = summarizeBuildResult(held);
+    const o = SummarizeBuildResult(held);
     expect(o.published).toBe(false);
     expect(o.trustGrade).toBe('Poor');
     expect(o.heldReason).toMatch(/guessing/i);
   });
   it('projects a failed build', () => {
-    expect(summarizeBuildResult(failed)).toMatchObject({ success: false, published: false, errorMessage: 'Algorithm not found' });
+    expect(SummarizeBuildResult(failed)).toMatchObject({ success: false, published: false, errorMessage: 'Algorithm not found' });
   });
 });
 
 describe('buildOutcomeMessage', () => {
   it('describes published / held / failed in plain language', () => {
-    expect(buildOutcomeMessage(summarizeBuildResult(published))).toMatch(/built and published/i);
-    expect(buildOutcomeMessage(summarizeBuildResult(held))).toMatch(/holding it back/i);
-    expect(buildOutcomeMessage(summarizeBuildResult(failed))).toMatch(/couldn't build/i);
+    expect(BuildOutcomeMessage(SummarizeBuildResult(published))).toMatch(/built and published/i);
+    expect(BuildOutcomeMessage(SummarizeBuildResult(held))).toMatch(/holding it back/i);
+    expect(BuildOutcomeMessage(SummarizeBuildResult(failed))).toMatch(/couldn't build/i);
   });
 });

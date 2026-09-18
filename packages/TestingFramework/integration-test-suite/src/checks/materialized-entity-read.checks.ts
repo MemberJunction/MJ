@@ -50,7 +50,7 @@ function requireFixtures(): EntityReadFixtures {
     return fixtures;
 }
 
-export async function createEntityReadFixtures(ctx: IntegrationCheckContext): Promise<void> {
+export async function CreateEntityReadFixtures(ctx: IntegrationCheckContext): Promise<void> {
     if (!ctx.Pool) {
         console.log(`      → materialized-entity-read SKIPPED (no assertions will run): no mssql pool on this run path — snapshot fabrication is T-SQL only`);
         return;
@@ -91,7 +91,12 @@ export async function createEntityReadFixtures(ctx: IntegrationCheckContext): Pr
     fixtures.MaterializedResult = mr;
 }
 
-export async function teardownEntityReadFixtures(ctx: IntegrationCheckContext): Promise<void> {
+/** @deprecated Use {@link CreateEntityReadFixtures}. */
+export async function createEntityReadFixtures(ctx: IntegrationCheckContext): Promise<void> {
+    return CreateEntityReadFixtures(ctx);
+}
+
+export async function TeardownEntityReadFixtures(ctx: IntegrationCheckContext): Promise<void> {
     try {
         if (fixtures && ctx.Pool) {
             await ctx.Pool.request().query(`IF OBJECT_ID('[${fixtures.Schema}].[${fixtures.MatObject}]', 'U') IS NOT NULL DROP TABLE [${fixtures.Schema}].[${fixtures.MatObject}];`);
@@ -102,6 +107,11 @@ export async function teardownEntityReadFixtures(ctx: IntegrationCheckContext): 
     } finally {
         fixtures = undefined;
     }
+}
+
+/** @deprecated Use {@link TeardownEntityReadFixtures}. */
+export async function teardownEntityReadFixtures(ctx: IntegrationCheckContext): Promise<void> {
+    return TeardownEntityReadFixtures(ctx);
 }
 
 /** Read the target entity with the given DataSource, filtered to the sentinel row. */
@@ -150,6 +160,6 @@ for (const check of MaterializedEntityReadChecks) {
 }
 
 IntegrationCheckRegistry.Instance.RegisterLifecycle('materialized-entity-read', {
-    Setup: async (ctx) => { await createEntityReadFixtures(ctx); },
-    Teardown: async (ctx) => { await teardownEntityReadFixtures(ctx); },
+    Setup: async (ctx) => { await CreateEntityReadFixtures(ctx); },
+    Teardown: async (ctx) => { await TeardownEntityReadFixtures(ctx); },
 });

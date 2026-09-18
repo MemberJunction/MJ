@@ -1,7 +1,7 @@
 import { Command, Flags } from '@oclif/core';
 import { CLIPluginRegistry, ResolveOutputFormat } from '@memberjunction/cli-core';
-import { loadAllCliPlugins } from '../lib/cli-plugins.js';
-import { emitUsage, renderDomainMap } from '../lib/usage-render.js';
+import { LoadAllCliPlugins } from '../lib/cli-plugins.js';
+import { EmitUsage, RenderDomainMap } from '../lib/usage-render.js';
 import type { OclifCommandShape } from '../lib/derived-usage.js';
 
 /**
@@ -29,10 +29,10 @@ export default class Usage extends Command {
 
   async run(): Promise<void> {
     const { flags } = await this.parse(Usage);
-    await loadAllCliPlugins(process.cwd(), this.config.commands as unknown as OclifCommandShape[]);
+    await LoadAllCliPlugins(process.cwd(), this.config.commands as unknown as OclifCommandShape[]);
     const map = CLIPluginRegistry.BuildDomainMap();
     const result = CLIPluginRegistry.AsResult('usage', { guidance: map.guidance, domains: map.domains });
     const { format } = ResolveOutputFormat({ formatFlag: flags.format });
-    emitUsage((m) => this.log(m), format, result, renderDomainMap(map));
+    EmitUsage((m) => this.log(m), format, result, RenderDomainMap(map));
   }
 }

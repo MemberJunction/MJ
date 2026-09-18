@@ -86,7 +86,7 @@ export default function ProfileScreen() {
             return;
         }
         const result = await registerForPushNotifications();
-        setPushOn(result.granted);
+        setPushOn(result.Granted);
     };
 
     const user = useMemo(() => {

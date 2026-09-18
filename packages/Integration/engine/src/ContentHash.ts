@@ -33,9 +33,14 @@ export const CONTENT_HASH_COLUMN = '__mj_integration_ContentHash';
  * record's IDENTITY (ExternalID / PK), never its position — an insert changes only its own
  * row; every other row's hash, and therefore its skip-write, is unaffected.
  */
-export function computeContentHash(fields: Record<string, unknown>): string {
+export function ComputeContentHash(fields: Record<string, unknown>): string {
     const canonical = canonicalize(fields);
     return createHash('sha256').update(canonical).digest('hex');
+}
+
+/** @deprecated Use {@link ComputeContentHash}. */
+export function computeContentHash(fields: Record<string, unknown>): string {
+    return ComputeContentHash(fields);
 }
 
 /**
@@ -60,7 +65,7 @@ const OVERFLOW_HASH_KEY = '__mj_integration_overflow';
  * against the mapped-only basis, rewrite, and converge — a one-time bounded rewrite wave for
  * overflow-carrying rows only (customs-free rows are byte-identical under both bases).
  */
-export function contentHashBasis(
+export function ContentHashBasis(
     mappedFields: Record<string, unknown>,
     unmappedFields?: Record<string, unknown> | null,
 ): Record<string, unknown> {
@@ -70,16 +75,32 @@ export function contentHashBasis(
     return { ...mappedFields, [OVERFLOW_HASH_KEY]: unmappedFields };
 }
 
+/** @deprecated Use {@link ContentHashBasis}. */
+export function contentHashBasis(
+    mappedFields: Record<string, unknown>,
+    unmappedFields?: Record<string, unknown> | null,
+): Record<string, unknown> {
+    return ContentHashBasis(mappedFields, unmappedFields);
+}
+
 /**
  * LEGACY hash over MAPPED fields PLUS captured (overflow) fields. No longer used by the
  * engine's change detection — see {@link contentHashBasis} for the change-detection policy and the
  * one-time migration behavior. Kept exported for back-compat.
  */
+export function ComputeContentHashWithOverflow(
+    mappedFields: Record<string, unknown>,
+    unmappedFields?: Record<string, unknown> | null,
+): string {
+    return ComputeContentHash(ContentHashBasis(mappedFields, unmappedFields));
+}
+
+/** @deprecated Use {@link ComputeContentHashWithOverflow}. */
 export function computeContentHashWithOverflow(
     mappedFields: Record<string, unknown>,
     unmappedFields?: Record<string, unknown> | null,
 ): string {
-    return computeContentHash(contentHashBasis(mappedFields, unmappedFields));
+    return ComputeContentHashWithOverflow(mappedFields, unmappedFields);
 }
 
 /**

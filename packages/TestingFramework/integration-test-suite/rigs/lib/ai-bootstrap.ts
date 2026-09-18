@@ -25,14 +25,14 @@ import { AIEngine } from '@memberjunction/aiengine';
 import '@memberjunction/server-bootstrap-lite';
 
 export interface AICtx {
-    pool: sql.ConnectionPool;
-    user: UserInfo;
+    pool: sql.ConnectionPool;  // case-violation-ok-legacy-back-compat: the file is outside the package compiled program, so no type-checked rename is possible
+    user: UserInfo;  // case-violation-ok-legacy-back-compat: the file is outside the package compiled program, so no type-checked rename is possible
     /** The bootstrapped provider — use this for entity access in suites rather than `new Metadata()`. */
-    provider: SQLServerDataProvider;
+    provider: SQLServerDataProvider;  // case-violation-ok-legacy-back-compat: the file is outside the package compiled program, so no type-checked rename is possible
 }
 
 /** Bootstraps the live provider stack + AIEngine. Reuses the DB resolution the cache suites use. */
-export async function bootstrapAI(): Promise<AICtx> {
+export async function BootstrapAI(): Promise<AICtx> {
     LoadEnv();
     const db = await LoadDbConfig();
     const pool = await new sql.ConnectionPool({
@@ -60,6 +60,11 @@ export async function bootstrapAI(): Promise<AICtx> {
     return { pool, user, provider };
 }
 
+/** @deprecated Use {@link BootstrapAI}. */
+export async function bootstrapAI(): Promise<AICtx> {
+    return BootstrapAI();
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // Persisted-record fetch + assertions ("verify the run output is correct")
 // ────────────────────────────────────────────────────────────────────────────
@@ -73,7 +78,10 @@ const SUSPENDED = new Set(['AwaitingFeedback', 'Paused']);
 const RAN_OK = new Set(['Completed', 'AwaitingFeedback', 'Paused']);
 
 /** Sleep — used to let fire-and-forget run/step/log saves land before we read them back. */
-export const settle = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+export const Settle = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+/** @deprecated Use {@link Settle}. */
+export const settle = Settle;
 
 /** Fetches a single row by ID via the real RunView pipeline (BypassCache = true DB state), asserting one match. */
 async function fetchById(entity: string, id: string, user: UserInfo): Promise<Row> {
@@ -87,7 +95,7 @@ async function fetchById(entity: string, id: string, user: UserInfo): Promise<Ro
  * Verifies an `MJ: AI Prompt Runs` row finalized correctly: terminal Status, **CompletedAt set** (the
  * "stuck at Running" guard the save queue prevents), and on success a non-empty Result + recorded timing.
  */
-export async function verifyPromptRun(promptRunID: string, user: UserInfo): Promise<Row> {
+export async function VerifyPromptRun(promptRunID: string, user: UserInfo): Promise<Row> {
     const row = await fetchById('MJ: AI Prompt Runs', promptRunID, user);
     Assert(TERMINAL.has(String(row.Status)), `Prompt run ${promptRunID}: non-terminal Status '${row.Status}' (stuck at Running?)`);
     Assert(row.CompletedAt != null, `Prompt run ${promptRunID}: CompletedAt is null while Status='${row.Status}' (finalize save lost)`);
@@ -98,20 +106,30 @@ export async function verifyPromptRun(promptRunID: string, user: UserInfo): Prom
     return row;
 }
 
+/** @deprecated Use {@link VerifyPromptRun}. */
+export async function verifyPromptRun(promptRunID: string, user: UserInfo): Promise<Row> {
+    return VerifyPromptRun(promptRunID, user);
+}
+
 /** Verifies an `MJ: Action Execution Logs` row finalized: **EndedAt set** + a ResultCode recorded. */
-export async function verifyActionLog(logID: string, user: UserInfo): Promise<Row> {
+export async function VerifyActionLog(logID: string, user: UserInfo): Promise<Row> {
     const row = await fetchById('MJ: Action Execution Logs', logID, user);
     Assert(row.EndedAt != null, `Action log ${logID}: EndedAt is null (stuck 'Running' — the action-log finalize bug class)`);
     Assert(row.ResultCode != null && String(row.ResultCode).length > 0, `Action log ${logID}: no ResultCode recorded`);
     return row;
 }
 
+/** @deprecated Use {@link VerifyActionLog}. */
+export async function verifyActionLog(logID: string, user: UserInfo): Promise<Row> {
+    return VerifyActionLog(logID, user);
+}
+
 export interface AgentRunVerification {
-    run: Row;
-    stepCount: number;
-    promptRunsVerified: number;
-    actionLogsVerified: number;
-    subAgentRunsVerified: number;
+    run: Row;  // case-violation-ok-legacy-back-compat: the file is outside the package compiled program, so no type-checked rename is possible
+    stepCount: number;  // case-violation-ok-legacy-back-compat: the file is outside the package compiled program, so no type-checked rename is possible
+    promptRunsVerified: number;  // case-violation-ok-legacy-back-compat: the file is outside the package compiled program, so no type-checked rename is possible
+    actionLogsVerified: number;  // case-violation-ok-legacy-back-compat: the file is outside the package compiled program, so no type-checked rename is possible
+    subAgentRunsVerified: number;  // case-violation-ok-legacy-back-compat: the file is outside the package compiled program, so no type-checked rename is possible
 }
 
 /**
@@ -120,7 +138,7 @@ export interface AgentRunVerification {
  * TargetLogID — Prompt steps → AI Prompt Runs, Actions/Tool steps → Action Execution Logs, Sub-Agent steps
  * → child AI Agent Runs (recursively). `expectSuccess` asserts the run reached 'Completed'.
  */
-export async function verifyAgentRun(agentRunID: string, user: UserInfo, expectSuccess = true): Promise<AgentRunVerification> {
+export async function VerifyAgentRun(agentRunID: string, user: UserInfo, expectSuccess = true): Promise<AgentRunVerification> {
     const run = await fetchById('MJ: AI Agent Runs', agentRunID, user);
     const status = String(run.Status);
     // The actual "stuck at Running" guard: a finalized run is anything except still-Running.
@@ -157,16 +175,21 @@ export async function verifyAgentRun(agentRunID: string, user: UserInfo, expectS
             continue;
         }
         if (step.StepType === 'Prompt') {
-            await verifyPromptRun(target, user);
+            await VerifyPromptRun(target, user);
             promptRunsVerified++;
         } else if (step.StepType === 'Actions' || step.StepType === 'Tool') {
-            await verifyActionLog(target, user);
+            await VerifyActionLog(target, user);
             actionLogsVerified++;
         } else if (step.StepType === 'Sub-Agent') {
-            await verifyAgentRun(target, user, false); // child success is the child's own concern
+            await VerifyAgentRun(target, user, false); // child success is the child's own concern
             subAgentRunsVerified++;
         }
     }
 
     return { run, stepCount: steps.length, promptRunsVerified, actionLogsVerified, subAgentRunsVerified };
+}
+
+/** @deprecated Use {@link VerifyAgentRun}. */
+export async function verifyAgentRun(agentRunID: string, user: UserInfo, expectSuccess = true): Promise<AgentRunVerification> {
+    return VerifyAgentRun(agentRunID, user, expectSuccess);
 }

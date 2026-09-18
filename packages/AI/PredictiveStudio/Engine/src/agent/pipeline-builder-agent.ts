@@ -48,7 +48,7 @@ export interface PredictiveStudioBuilderPayload extends ModelingPlanSpec {
 }
 
 /** Project the rich {@link BuildPredictionResult} into the compact, payload-safe outcome (pure → testable). */
-export function summarizeBuildResult(result: BuildPredictionResult): PredictiveStudioBuildOutcome {
+export function SummarizeBuildResult(result: BuildPredictionResult): PredictiveStudioBuildOutcome {
   return {
     success: result.success,
     pipelineId: result.pipelineId,
@@ -61,11 +61,21 @@ export function summarizeBuildResult(result: BuildPredictionResult): PredictiveS
   };
 }
 
+/** @deprecated Use {@link SummarizeBuildResult}. */
+export function summarizeBuildResult(result: BuildPredictionResult): PredictiveStudioBuildOutcome {
+  return SummarizeBuildResult(result);
+}
+
 /** A plain, user-facing sentence describing what the build did (for the agent's reasoning/message). */
-export function buildOutcomeMessage(o: PredictiveStudioBuildOutcome): string {
+export function BuildOutcomeMessage(o: PredictiveStudioBuildOutcome): string {
   if (!o.success) return `I couldn't build the prediction: ${o.errorMessage ?? 'unknown error'}.`;
   if (o.published) return `Done — I built and published your prediction (trust: ${o.trustGrade}). It's now in your Predictions.`;
   return `I built and trained the prediction, but I'm holding it back: ${o.heldReason ?? 'it needs review before it can be published.'}`;
+}
+
+/** @deprecated Use {@link BuildOutcomeMessage}. */
+export function buildOutcomeMessage(o: PredictiveStudioBuildOutcome): string {
+  return BuildOutcomeMessage(o);
 }
 
 @RegisterClass(BaseAgent, 'PredictiveStudioPipelineBuilderAgent')
@@ -99,9 +109,9 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
       result = { success: false, published: false, leakageFlagged: false, heldReason: null, errorMessage };
     }
 
-    const outcome = summarizeBuildResult(result);
+    const outcome = SummarizeBuildResult(result);
     const newPayload = { ...payload, BuildResult: outcome } as unknown as P;
-    const message = buildOutcomeMessage(outcome);
+    const message = BuildOutcomeMessage(outcome);
     // The deterministic builder RAN to a definite outcome — published, held (trust gate / leakage), OR
     // could-not-build (invalid plan / train error). All three are a successful *run* of this sub-agent:
     // the outcome (including any error) is recorded on the payload as `BuildResult`. Returning Success

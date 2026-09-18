@@ -279,16 +279,16 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
 
   ngDoCheck(): void {
     if (this._formRef) {
-      this.SyncFromFormRef();
+      this.syncFromFormRef();
     }
-    this.CheckDescendantChains();
+    this.checkDescendantChains();
   }
 
   /**
    * Sync toolbar state from the legacy form reference.
    * Only active when [Form] is set (backward-compat mode).
    */
-  private SyncFromFormRef(): void {
+  private syncFromFormRef(): void {
     const ref = this._formRef as Record<string, unknown>;
     const rec = ref['record'] as BaseEntity | undefined;
     let changed = false;
@@ -441,7 +441,7 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
    */
   public InvalidateHierarchy(): void {
     this._lastRecordForChains = null;
-    this.ComputeDescendantChains();
+    this.computeDescendantChains();
     this.cdr.markForCheck();
   }
 
@@ -449,7 +449,7 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
    * Check if descendant chains need recomputation (called from DoCheck).
    * Only triggers async computation when the record identity changes.
    */
-  private CheckDescendantChains(): void {
+  private checkDescendantChains(): void {
     if (!this.Record) {
       if (this.DescendantTree.length > 0) {
         this.DescendantTree = [];
@@ -459,7 +459,7 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
       return;
     }
     if (this.Record !== this._lastRecordForChains && !this._chainsLoading) {
-      this.ComputeDescendantChains();
+      this.computeDescendantChains();
     }
   }
 
@@ -467,7 +467,7 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
    * Asynchronously discover all IS-A descendants and convert to chains
    * for breadcrumb display. Each chain is a root-to-leaf path of entity names.
    */
-  private ComputeDescendantChains(): void {
+  private computeDescendantChains(): void {
     this._lastRecordForChains = this.Record;
 
     if (!this.Record?.EntityInfo?.IsParentType) {
@@ -504,7 +504,7 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
   // ---- Actions ----
 
   OnEdit(): void {
-    if (this.DispatchToFormRef('StartEditMode')) return;
+    if (this.dispatchToFormRef('StartEditMode')) return;
     this.EditModeChange.emit(true);
   }
 
@@ -516,7 +516,7 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
       this.BeforeSave.emit(beforeEvent);
       if (beforeEvent.Cancel) return;
 
-      if (this.DispatchToFormRef('SaveRecord', true)) return;
+      if (this.dispatchToFormRef('SaveRecord', true)) return;
       this.SaveRequested.emit();
     });
   }
@@ -529,12 +529,12 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
       return;
     }
     // No changes - cancel immediately
-    this.EmitCancel();
+    this.emitCancel();
   }
 
   OnDiscardConfirm(): void {
     this.ShowDiscardDialog = false;
-    this.EmitCancel();
+    this.emitCancel();
     this.cdr.markForCheck();
   }
 
@@ -543,13 +543,13 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
     this.cdr.markForCheck();
   }
 
-  private EmitCancel(): void {
+  private emitCancel(): void {
     // Emit Before event - handler can cancel by setting event.Cancel = true
     const beforeEvent = new BeforeCancelEventArgs();
     this.BeforeCancel.emit(beforeEvent);
     if (beforeEvent.Cancel) return;
 
-    if (this.DispatchToFormRef('CancelEdit')) return;
+    if (this.dispatchToFormRef('CancelEdit')) return;
     this.CancelRequested.emit();
   }
 
@@ -569,7 +569,7 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
       return;
     }
 
-    if (this.DispatchToFormRef('OnDeleteRequested')) {
+    if (this.dispatchToFormRef('OnDeleteRequested')) {
       this.cdr.markForCheck();
       return;
     }
@@ -590,12 +590,12 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
     this.BeforeRefresh.emit(beforeEvent);
     if (beforeEvent.Cancel) return;
 
-    if (this.DispatchToFormRef('RefreshRecord')) return;
+    if (this.dispatchToFormRef('RefreshRecord')) return;
     this.RefreshRequested.emit();
   }
 
   OnFavoriteToggle(): void {
-    if (this.DispatchToFormRef('OnFavoriteToggled')) return;
+    if (this.dispatchToFormRef('OnFavoriteToggled')) return;
     this.FavoriteToggled.emit();
   }
 
@@ -605,7 +605,7 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
     this.BeforeHistoryView.emit(beforeEvent);
     if (beforeEvent.Cancel) return;
 
-    if (this.DispatchToFormRef('OnHistoryRequested')) return;
+    if (this.dispatchToFormRef('OnHistoryRequested')) return;
     this.HistoryRequested.emit();
   }
 
@@ -615,17 +615,17 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
     this.BeforeListManagement.emit(beforeEvent);
     if (beforeEvent.Cancel) return;
 
-    if (this.DispatchToFormRef('OnListManagementRequested')) return;
+    if (this.dispatchToFormRef('OnListManagementRequested')) return;
     this.ListManagementRequested.emit();
   }
 
   OnTagsPanel(): void {
-    if (this.DispatchToFormRef('HandleTagsPanel')) return;
+    if (this.dispatchToFormRef('HandleTagsPanel')) return;
     this.TagsPanelToggled.emit();
   }
 
   OnAttachmentsPanel(): void {
-    if (this.DispatchToFormRef('HandleAttachmentsPanel')) return;
+    if (this.dispatchToFormRef('HandleAttachmentsPanel')) return;
     this.AttachmentsPanelToggled.emit();
   }
 
@@ -965,7 +965,7 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
   }
 
   OnShowChanges(): void {
-    if (this.DispatchToFormRef('ShowChanges')) return;
+    if (this.dispatchToFormRef('ShowChanges')) return;
     this.ShowChangesRequested.emit();
   }
 
@@ -1031,7 +1031,7 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
    * Try to call a method on the legacy form reference.
    * Returns true if the method was found and called, false otherwise.
    */
-  private DispatchToFormRef(methodName: string, ...args: unknown[]): boolean {
+  private dispatchToFormRef(methodName: string, ...args: unknown[]): boolean {
     if (!this._formRef) return false;
     const ref = this._formRef as Record<string, unknown>;
     const method = ref[methodName];

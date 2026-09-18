@@ -7,8 +7,8 @@ import { Metadata, RunView } from '@memberjunction/core';
 import { Subject } from 'rxjs';
 import { TabService } from '@memberjunction/ng-base-application';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { validateEnumParam, validateStringParam } from '../../shared/agent-tool-validation';
-import { buildListBrowseAgentContext, resolveNamedRecord, buildNotFoundError } from '../lists-agent-context';
+import { ValidateEnumParam, ValidateStringParam } from '../../shared/agent-tool-validation';
+import { BuildListBrowseAgentContext, ResolveNamedRecord, BuildNotFoundError } from '../lists-agent-context';
 interface ListViewModel {
   list: MJListEntity;
   itemCount: number;
@@ -1060,22 +1060,139 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
   protected override destroy$ = new Subject<void>();
 
   isLoading = true;
-  searchTerm = '';
-  viewMode: 'grid' | 'list' = 'grid';
+  SearchTerm = '';
 
-  allLists: ListViewModel[] = [];
-  filteredLists: ListViewModel[] = [];
-  categories: MJListCategoryEntity[] = [];
-  categoryTree: CategoryNode[] = [];
-  flatCategories: Array<{ ID: string | null; displayName: string }> = [];
-  availableEntities: Array<{ ID: string; Name: string }> = [];
-  filteredEntities: Array<{ ID: string; Name: string }> = [];
+  /** @deprecated Use {@link SearchTerm}. */
+  get searchTerm() {
+    return this.SearchTerm;
+  }
+  /** @deprecated Use {@link SearchTerm}. */
+  set searchTerm(value) {
+    this.SearchTerm = value;
+  }
+  ViewMode: 'grid' | 'list' = 'grid';
+
+  /** @deprecated Use {@link ViewMode}. */
+  get viewMode(): 'grid' | 'list' {
+    return this.ViewMode;
+  }
+  /** @deprecated Use {@link ViewMode}. */
+  set viewMode(value: 'grid' | 'list') {
+    this.ViewMode = value;
+  }
+
+  AllLists: ListViewModel[] = [];
+
+  /** @deprecated Use {@link AllLists}. */
+  get allLists(): ListViewModel[] {
+    return this.AllLists;
+  }
+  /** @deprecated Use {@link AllLists}. */
+  set allLists(value: ListViewModel[]) {
+    this.AllLists = value;
+  }
+  FilteredLists: ListViewModel[] = [];
+
+  /** @deprecated Use {@link FilteredLists}. */
+  get filteredLists(): ListViewModel[] {
+    return this.FilteredLists;
+  }
+  /** @deprecated Use {@link FilteredLists}. */
+  set filteredLists(value: ListViewModel[]) {
+    this.FilteredLists = value;
+  }
+  Categories: MJListCategoryEntity[] = [];
+
+  /** @deprecated Use {@link Categories}. */
+  get categories(): MJListCategoryEntity[] {
+    return this.Categories;
+  }
+  /** @deprecated Use {@link Categories}. */
+  set categories(value: MJListCategoryEntity[]) {
+    this.Categories = value;
+  }
+  CategoryTree: CategoryNode[] = [];
+
+  /** @deprecated Use {@link CategoryTree}. */
+  get categoryTree(): CategoryNode[] {
+    return this.CategoryTree;
+  }
+  /** @deprecated Use {@link CategoryTree}. */
+  set categoryTree(value: CategoryNode[]) {
+    this.CategoryTree = value;
+  }
+  FlatCategories: Array<{ ID: string | null; displayName: string }> = [];
+
+  /** @deprecated Use {@link FlatCategories}. */
+  get flatCategories(): Array<{ ID: string | null; displayName: string }> {
+    return this.FlatCategories;
+  }
+  /** @deprecated Use {@link FlatCategories}. */
+  set flatCategories(value: Array<{ ID: string | null; displayName: string }>) {
+    this.FlatCategories = value;
+  }
+  AvailableEntities: Array<{ ID: string; Name: string }> = [];
+
+  /** @deprecated Use {@link AvailableEntities}. */
+  get availableEntities(): Array<{ ID: string; Name: string }> {
+    return this.AvailableEntities;
+  }
+  /** @deprecated Use {@link AvailableEntities}. */
+  set availableEntities(value: Array<{ ID: string; Name: string }>) {
+    this.AvailableEntities = value;
+  }
+  FilteredEntities: Array<{ ID: string; Name: string }> = [];
+
+  /** @deprecated Use {@link FilteredEntities}. */
+  get filteredEntities(): Array<{ ID: string; Name: string }> {
+    return this.FilteredEntities;
+  }
+  /** @deprecated Use {@link FilteredEntities}. */
+  set filteredEntities(value: Array<{ ID: string; Name: string }>) {
+    this.FilteredEntities = value;
+  }
 
   // Context menu
-  showContextMenu = false;
-  contextMenuX = 0;
-  contextMenuY = 0;
-  selectedContextList: MJListEntity | null = null;
+  ShowContextMenu = false;
+
+  /** @deprecated Use {@link ShowContextMenu}. */
+  get showContextMenu() {
+    return this.ShowContextMenu;
+  }
+  /** @deprecated Use {@link ShowContextMenu}. */
+  set showContextMenu(value) {
+    this.ShowContextMenu = value;
+  }
+  ContextMenuX = 0;
+
+  /** @deprecated Use {@link ContextMenuX}. */
+  get contextMenuX() {
+    return this.ContextMenuX;
+  }
+  /** @deprecated Use {@link ContextMenuX}. */
+  set contextMenuX(value) {
+    this.ContextMenuX = value;
+  }
+  ContextMenuY = 0;
+
+  /** @deprecated Use {@link ContextMenuY}. */
+  get contextMenuY() {
+    return this.ContextMenuY;
+  }
+  /** @deprecated Use {@link ContextMenuY}. */
+  set contextMenuY(value) {
+    this.ContextMenuY = value;
+  }
+  SelectedContextList: MJListEntity | null = null;
+
+  /** @deprecated Use {@link SelectedContextList}. */
+  get selectedContextList(): MJListEntity | null {
+    return this.SelectedContextList;
+  }
+  /** @deprecated Use {@link SelectedContextList}. */
+  set selectedContextList(value: MJListEntity | null) {
+    this.SelectedContextList = value;
+  }
 
   /**
    * Whether the current user may DELETE the context-menu's list — the same shared ownership rule
@@ -1084,7 +1201,7 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
    * correct-by-construction (and consistent with the Browse view) rather than an unconditional button.
    */
   public get CanDeleteSelectedList(): boolean {
-    const list = this.selectedContextList;
+    const list = this.SelectedContextList;
     if (!list) {
       return false;
     }
@@ -1093,23 +1210,140 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
 
   // Create/Edit dialog
   showCreateDialog = false;
-  editingList: MJListEntity | null = null;
-  newListName = '';
-  newListDescription = '';
-  selectedEntityId = '';
-  selectedCategoryId: string | null = null;
-  entitySearchTerm = '';
-  showEntityDropdown = false;
-  entityDropdownPosition = { top: 0, left: 0, width: 0, openAbove: false };
+  EditingList: MJListEntity | null = null;
+
+  /** @deprecated Use {@link EditingList}. */
+  get editingList(): MJListEntity | null {
+    return this.EditingList;
+  }
+  /** @deprecated Use {@link EditingList}. */
+  set editingList(value: MJListEntity | null) {
+    this.EditingList = value;
+  }
+  NewListName = '';
+
+  /** @deprecated Use {@link NewListName}. */
+  get newListName() {
+    return this.NewListName;
+  }
+  /** @deprecated Use {@link NewListName}. */
+  set newListName(value) {
+    this.NewListName = value;
+  }
+  NewListDescription = '';
+
+  /** @deprecated Use {@link NewListDescription}. */
+  get newListDescription() {
+    return this.NewListDescription;
+  }
+  /** @deprecated Use {@link NewListDescription}. */
+  set newListDescription(value) {
+    this.NewListDescription = value;
+  }
+  SelectedEntityId = '';
+
+  /** @deprecated Use {@link SelectedEntityId}. */
+  get selectedEntityId() {
+    return this.SelectedEntityId;
+  }
+  /** @deprecated Use {@link SelectedEntityId}. */
+  set selectedEntityId(value) {
+    this.SelectedEntityId = value;
+  }
+  SelectedCategoryId: string | null = null;
+
+  /** @deprecated Use {@link SelectedCategoryId}. */
+  get selectedCategoryId(): string | null {
+    return this.SelectedCategoryId;
+  }
+  /** @deprecated Use {@link SelectedCategoryId}. */
+  set selectedCategoryId(value: string | null) {
+    this.SelectedCategoryId = value;
+  }
+  EntitySearchTerm = '';
+
+  /** @deprecated Use {@link EntitySearchTerm}. */
+  get entitySearchTerm() {
+    return this.EntitySearchTerm;
+  }
+  /** @deprecated Use {@link EntitySearchTerm}. */
+  set entitySearchTerm(value) {
+    this.EntitySearchTerm = value;
+  }
+  ShowEntityDropdown = false;
+
+  /** @deprecated Use {@link ShowEntityDropdown}. */
+  get showEntityDropdown() {
+    return this.ShowEntityDropdown;
+  }
+  /** @deprecated Use {@link ShowEntityDropdown}. */
+  set showEntityDropdown(value) {
+    this.ShowEntityDropdown = value;
+  }
+  EntityDropdownPosition = { top: 0, left: 0, width: 0, openAbove: false };
+
+  /** @deprecated Use {@link EntityDropdownPosition}. */
+  get entityDropdownPosition() {
+    return this.EntityDropdownPosition;
+  }
+  /** @deprecated Use {@link EntityDropdownPosition}. */
+  set entityDropdownPosition(value) {
+    this.EntityDropdownPosition = value;
+  }
 
   // Delete confirmation
-  showDeleteConfirm = false;
-  deleteListName = '';
-  listToDelete: MJListEntity | null = null;
+  ShowDeleteConfirm = false;
+
+  /** @deprecated Use {@link ShowDeleteConfirm}. */
+  get showDeleteConfirm() {
+    return this.ShowDeleteConfirm;
+  }
+  /** @deprecated Use {@link ShowDeleteConfirm}. */
+  set showDeleteConfirm(value) {
+    this.ShowDeleteConfirm = value;
+  }
+  DeleteListName = '';
+
+  /** @deprecated Use {@link DeleteListName}. */
+  get deleteListName() {
+    return this.DeleteListName;
+  }
+  /** @deprecated Use {@link DeleteListName}. */
+  set deleteListName(value) {
+    this.DeleteListName = value;
+  }
+  ListToDelete: MJListEntity | null = null;
+
+  /** @deprecated Use {@link ListToDelete}. */
+  get listToDelete(): MJListEntity | null {
+    return this.ListToDelete;
+  }
+  /** @deprecated Use {@link ListToDelete}. */
+  set listToDelete(value: MJListEntity | null) {
+    this.ListToDelete = value;
+  }
 
   // Operation states
-  isSaving = false;
-  isDeleting = false;
+  IsSaving = false;
+
+  /** @deprecated Use {@link IsSaving}. */
+  get isSaving() {
+    return this.IsSaving;
+  }
+  /** @deprecated Use {@link IsSaving}. */
+  set isSaving(value) {
+    this.IsSaving = value;
+  }
+  IsDeleting = false;
+
+  /** @deprecated Use {@link IsDeleting}. */
+  get isDeleting() {
+    return this.IsDeleting;
+  }
+  /** @deprecated Use {@link IsDeleting}. */
+  set isDeleting(value) {
+    this.IsDeleting = value;
+  }
 
   private categoryMap: Map<string, MJListCategoryEntity> = new Map();
   private entityColorMap: Map<string, string> = new Map();
@@ -1127,24 +1361,24 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
   @HostListener('document:click', ['$event'])
   onDocumentClick(event: MouseEvent) {
     // Close entity dropdown when clicking outside the input or dropdown
-    if (this.showEntityDropdown) {
+    if (this.ShowEntityDropdown) {
       const target = event.target as HTMLElement;
       if (!target.closest('.custom-select-wrapper') && !target.closest('.entity-dropdown-portal')) {
-        this.showEntityDropdown = false;
+        this.ShowEntityDropdown = false;
       }
     }
   }
 
   @HostListener('document:keydown.escape')
   onEscapeKey() {
-    if (this.showContextMenu) {
-      this.closeContextMenu();
+    if (this.ShowContextMenu) {
+      this.CloseContextMenu();
     }
     if (this.showCreateDialog) {
-      this.closeCreateDialog();
+      this.CloseCreateDialog();
     }
-    if (this.showDeleteConfirm) {
-      this.cancelDelete();
+    if (this.ShowDeleteConfirm) {
+      this.CancelDelete();
     }
   }
 
@@ -1174,14 +1408,14 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
 
   /** Report the My-Lists surface's salient state to the AI agent. */
   private publishAgentContext(): void {
-    this.navigationService.SetAgentContext(this, buildListBrowseAgentContext({
-      SearchTerm: this.searchTerm,
-      ViewMode: this.viewMode,
-      AllListCount: this.allLists.length,
-      FilteredListCount: this.filteredLists.length,
+    this.navigationService.SetAgentContext(this, BuildListBrowseAgentContext({
+      SearchTerm: this.SearchTerm,
+      ViewMode: this.ViewMode,
+      AllListCount: this.AllLists.length,
+      FilteredListCount: this.FilteredLists.length,
       // Deep context: the NAMES of the user's currently-visible lists (bounded),
       // so the agent can open them by name rather than an opaque GUID.
-      VisibleListNames: this.filteredLists.map(i => i.list.Name),
+      VisibleListNames: this.FilteredLists.map(i => i.list.Name),
     }));
   }
 
@@ -1190,11 +1424,11 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
    * one of the user's loaded lists via the pure {@link resolveNamedRecord} helper.
    */
   private resolveMyListItem(input: string): ListViewModel | null {
-    const match = resolveNamedRecord(input, this.allLists.map(i => ({ ID: i.list.ID, Name: i.list.Name })));
+    const match = ResolveNamedRecord(input, this.AllLists.map(i => ({ ID: i.list.ID, Name: i.list.Name })));
     if (!match) {
       return null;
     }
-    return this.allLists.find(i => UUIDsEqual(i.list.ID, match.ID)) ?? null;
+    return this.AllLists.find(i => UUIDsEqual(i.list.ID, match.ID)) ?? null;
   }
 
   /** Register the My-Lists surface's agent-actionable tools. */
@@ -1205,11 +1439,11 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
         Description: 'Open one of my lists in a new tab by its ID or name. Pass the list name the user says (see VisibleListNames) — the tool resolves an exact ID, an exact name, or a partial name match.',
         ParameterSchema: { type: 'object', properties: { list: { type: 'string', description: 'The list ID or name to open' }, listId: { type: 'string', description: 'Deprecated alias for "list".' } } },
         Handler: async (params: Record<string, unknown>) => {
-          const check = validateStringParam(params['list'] ?? params['listId'], 'list');
+          const check = ValidateStringParam(params['list'] ?? params['listId'], 'list');
           if (!check.ok) return check.result;
           const item = this.resolveMyListItem(check.value);
-          if (!item) return { Success: false, ErrorMessage: buildNotFoundError(check.value, this.allLists.map(i => ({ ID: i.list.ID, Name: i.list.Name })), 'list') };
-          this.openList(item.list);
+          if (!item) return { Success: false, ErrorMessage: BuildNotFoundError(check.value, this.AllLists.map(i => ({ ID: i.list.ID, Name: i.list.Name })), 'list') };
+          this.OpenList(item.list);
           return { Success: true, Data: { listName: item.list.Name } };
         },
       },
@@ -1218,12 +1452,12 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
         Description: 'Set the search term that filters my lists.',
         ParameterSchema: { type: 'object', properties: { searchTerm: { type: 'string' } }, required: ['searchTerm'] },
         Handler: async (params: Record<string, unknown>) => {
-          const check = validateStringParam(params['searchTerm'], 'searchTerm');
+          const check = ValidateStringParam(params['searchTerm'], 'searchTerm');
           if (!check.ok) return check.result;
-          this.searchTerm = check.value;
-          this.onSearchChange(check.value);
+          this.SearchTerm = check.value;
+          this.OnSearchChange(check.value);
           this.publishAgentContext();
-          return { Success: true, Data: { resultCount: this.filteredLists.length } };
+          return { Success: true, Data: { resultCount: this.FilteredLists.length } };
         },
       },
       {
@@ -1231,9 +1465,9 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
         Description: 'Set the view mode: "grid" or "list".',
         ParameterSchema: { type: 'object', properties: { mode: { type: 'string', enum: ['grid', 'list'] } }, required: ['mode'] },
         Handler: async (params: Record<string, unknown>) => {
-          const check = validateEnumParam(params['mode'], ['grid', 'list'] as const, 'mode');
+          const check = ValidateEnumParam(params['mode'], ['grid', 'list'] as const, 'mode');
           if (!check.ok) return check.result;
-          this.setViewMode(check.value);
+          this.SetViewMode(check.value);
           return { Success: true };
         },
       },
@@ -1243,7 +1477,7 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
         Description: 'Open the "Create New List" dialog. Nothing is saved until the user confirms the name and entity.',
         ParameterSchema: { type: 'object', properties: {} },
         Handler: async () => {
-          this.createNewList();
+          this.CreateNewList();
           return { Success: true };
         },
       },
@@ -1286,11 +1520,11 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
       }
 
       const lists = listsResult.Results as MJListEntity[];
-      this.categories = categoriesResult.Results as MJListCategoryEntity[];
+      this.Categories = categoriesResult.Results as MJListCategoryEntity[];
 
       // Build category map
       this.categoryMap.clear();
-      for (const cat of this.categories) {
+      for (const cat of this.Categories) {
         this.categoryMap.set(cat.ID, cat);
       }
 
@@ -1315,21 +1549,21 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
       }
 
       // Build list view models
-      this.allLists = lists.map(list => ({
+      this.AllLists = lists.map(list => ({
         list,
         itemCount: itemCounts.get(list.ID) || 0,
         entityName: list.Entity || 'Unknown'
       }));
 
       // Build available entities for dropdown
-      this.availableEntities = entities
+      this.AvailableEntities = entities
         .filter(e => e.IncludeInAPI)
         .map(e => ({ ID: e.ID, Name: e.Name }))
         .sort((a, b) => a.Name.localeCompare(b.Name));
-      this.filteredEntities = [...this.availableEntities];
+      this.FilteredEntities = [...this.AvailableEntities];
 
       // Build flat categories for dropdown
-      this.flatCategories = this.buildFlatCategories(this.categories);
+      this.FlatCategories = this.buildFlatCategories(this.Categories);
 
       this.applyFilter();
       this.buildCategoryTree();
@@ -1367,7 +1601,7 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
     const categoryNodes = new Map<string, CategoryNode>();
 
     // Create nodes for all categories
-    for (const cat of this.categories) {
+    for (const cat of this.Categories) {
       categoryNodes.set(cat.ID, {
         category: cat,
         lists: [],
@@ -1377,7 +1611,7 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
     }
 
     // Build tree structure
-    for (const cat of this.categories) {
+    for (const cat of this.Categories) {
       const node = categoryNodes.get(cat.ID)!;
       if (cat.ParentID && categoryNodes.has(cat.ParentID)) {
         categoryNodes.get(cat.ParentID)!.children.push(node);
@@ -1388,7 +1622,7 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
 
     // Assign lists to categories
     const uncategorizedLists: ListViewModel[] = [];
-    for (const item of this.filteredLists) {
+    for (const item of this.FilteredLists) {
       if (item.list.CategoryID && categoryNodes.has(item.list.CategoryID)) {
         categoryNodes.get(item.list.CategoryID)!.lists.push(item);
       } else {
@@ -1406,38 +1640,53 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
       });
     }
 
-    this.categoryTree = rootNodes;
+    this.CategoryTree = rootNodes;
   }
 
-  onSearchChange(_term: string) {
+  OnSearchChange(_term: string) {
     this.applyFilter();
     this.buildCategoryTree();
     this.publishAgentContext();
+  }
+
+  /** @deprecated Use {@link OnSearchChange}. */
+  onSearchChange(_term: string) {
+    return this.OnSearchChange(_term);
   }
 
   /** Set the grid/list view mode and refresh agent context. */
-  setViewMode(mode: 'grid' | 'list') {
-    this.viewMode = mode;
+  SetViewMode(mode: 'grid' | 'list') {
+    this.ViewMode = mode;
     this.publishAgentContext();
   }
 
-  clearSearch() {
-    this.searchTerm = '';
+  /** @deprecated Use {@link SetViewMode}. */
+  setViewMode(mode: 'grid' | 'list') {
+    return this.SetViewMode(mode);
+  }
+
+  ClearSearch() {
+    this.SearchTerm = '';
     this.applyFilter();
     this.buildCategoryTree();
+  }
+
+  /** @deprecated Use {@link ClearSearch}. */
+  clearSearch() {
+    return this.ClearSearch();
   }
 
   /** Message for the no-results empty state, echoing the active search term. */
   public get NoResultsMessage(): string {
-    return `No lists match "${this.searchTerm}". Try a different search term or clear your search.`;
+    return `No lists match "${this.SearchTerm}". Try a different search term or clear your search.`;
   }
 
   private applyFilter() {
-    if (!this.searchTerm) {
-      this.filteredLists = [...this.allLists];
+    if (!this.SearchTerm) {
+      this.FilteredLists = [...this.AllLists];
     } else {
-      const term = this.searchTerm.toLowerCase();
-      this.filteredLists = this.allLists.filter(item =>
+      const term = this.SearchTerm.toLowerCase();
+      this.FilteredLists = this.AllLists.filter(item =>
         item.list.Name.toLowerCase().includes(term) ||
         (item.list.Description && item.list.Description.toLowerCase().includes(term)) ||
         item.entityName.toLowerCase().includes(term)
@@ -1445,28 +1694,53 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
     }
   }
 
-  toggleCategory(node: CategoryNode) {
+  ToggleCategory(node: CategoryNode) {
     node.isExpanded = !node.isExpanded;
   }
 
-  getListCountInCategory(node: CategoryNode): number {
+  /** @deprecated Use {@link ToggleCategory}. */
+  toggleCategory(node: CategoryNode) {
+    return this.ToggleCategory(node);
+  }
+
+  GetListCountInCategory(node: CategoryNode): number {
     let count = node.lists.length;
     for (const child of node.children) {
-      count += this.getListCountInCategory(child);
+      count += this.GetListCountInCategory(child);
     }
     return count;
   }
 
-  getCategoryName(categoryId: string): string {
+  /** @deprecated Use {@link GetListCountInCategory}. */
+  getListCountInCategory(node: CategoryNode): number {
+    return this.GetListCountInCategory(node);
+  }
+
+  GetCategoryName(categoryId: string): string {
     return this.categoryMap.get(categoryId)?.Name || 'Unknown';
   }
 
-  getEntityColor(entityName: string): string {
+  /** @deprecated Use {@link GetCategoryName}. */
+  getCategoryName(categoryId: string): string {
+    return this.GetCategoryName(categoryId);
+  }
+
+  GetEntityColor(entityName: string): string {
     return this.entityColorMap.get(entityName) || '#607D8B';
   }
 
-  getEntityIcon(entityName: string): string {
+  /** @deprecated Use {@link GetEntityColor}. */
+  getEntityColor(entityName: string): string {
+    return this.GetEntityColor(entityName);
+  }
+
+  GetEntityIcon(entityName: string): string {
     return this.entityIconMap.get(entityName) || 'fa-solid fa-table';
+  }
+
+  /** @deprecated Use {@link GetEntityIcon}. */
+  getEntityIcon(entityName: string): string {
+    return this.GetEntityIcon(entityName);
   }
 
   private generateEntityColor(entityName: string): string {
@@ -1495,94 +1769,139 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
     return d.toLocaleDateString();
   }
 
-  openList(list: MJListEntity) {
+  OpenList(list: MJListEntity) {
     const appId = this.Data?.Configuration?.applicationId || '';
     this.tabService.OpenList(list.ID, list.Name, appId);
   }
 
-  openListMenu(event: Event, list: MJListEntity) {
+  /** @deprecated Use {@link OpenList}. */
+  openList(list: MJListEntity) {
+    return this.OpenList(list);
+  }
+
+  OpenListMenu(event: Event, list: MJListEntity) {
     event.stopPropagation();
     const mouseEvent = event as MouseEvent;
-    this.selectedContextList = list;
-    this.contextMenuX = mouseEvent.clientX;
-    this.contextMenuY = mouseEvent.clientY;
-    this.showContextMenu = true;
+    this.SelectedContextList = list;
+    this.ContextMenuX = mouseEvent.clientX;
+    this.ContextMenuY = mouseEvent.clientY;
+    this.ShowContextMenu = true;
   }
 
+  /** @deprecated Use {@link OpenListMenu}. */
+  openListMenu(event: Event, list: MJListEntity) {
+    return this.OpenListMenu(event, list);
+  }
+
+  CloseContextMenu() {
+    this.ShowContextMenu = false;
+    this.SelectedContextList = null;
+  }
+
+  /** @deprecated Use {@link CloseContextMenu}. */
   closeContextMenu() {
-    this.showContextMenu = false;
-    this.selectedContextList = null;
+    return this.CloseContextMenu();
   }
 
+  CreateNewList() {
+    this.EditingList = null;
+    this.NewListName = '';
+    this.NewListDescription = '';
+    this.SelectedEntityId = '';
+    this.EntitySearchTerm = '';
+    this.SelectedCategoryId = null;
+    this.ShowEntityDropdown = false;
+    this.showCreateDialog = true;
+  }
+
+  /** @deprecated Use {@link CreateNewList}. */
   createNewList() {
-    this.editingList = null;
-    this.newListName = '';
-    this.newListDescription = '';
-    this.selectedEntityId = '';
-    this.entitySearchTerm = '';
-    this.selectedCategoryId = null;
-    this.showEntityDropdown = false;
-    this.showCreateDialog = true;
+    return this.CreateNewList();
   }
 
+  EditList() {
+    if (!this.SelectedContextList) return;
+
+    this.EditingList = this.SelectedContextList;
+    this.NewListName = this.SelectedContextList.Name;
+    this.NewListDescription = this.SelectedContextList.Description || '';
+    this.SelectedEntityId = this.SelectedContextList.EntityID;
+    this.EntitySearchTerm = this.SelectedContextList.Entity || '';
+    this.SelectedCategoryId = this.SelectedContextList.CategoryID || null;
+    this.showCreateDialog = true;
+    this.CloseContextMenu();
+  }
+
+  /** @deprecated Use {@link EditList}. */
   editList() {
-    if (!this.selectedContextList) return;
-
-    this.editingList = this.selectedContextList;
-    this.newListName = this.selectedContextList.Name;
-    this.newListDescription = this.selectedContextList.Description || '';
-    this.selectedEntityId = this.selectedContextList.EntityID;
-    this.entitySearchTerm = this.selectedContextList.Entity || '';
-    this.selectedCategoryId = this.selectedContextList.CategoryID || null;
-    this.showCreateDialog = true;
-    this.closeContextMenu();
+    return this.EditList();
   }
 
+  SelectEntity(entity: { ID: string; Name: string }) {
+    this.SelectedEntityId = entity.ID;
+    this.EntitySearchTerm = entity.Name;
+    this.ShowEntityDropdown = false;
+  }
+
+  /** @deprecated Use {@link SelectEntity}. */
   selectEntity(entity: { ID: string; Name: string }) {
-    this.selectedEntityId = entity.ID;
-    this.entitySearchTerm = entity.Name;
-    this.showEntityDropdown = false;
+    return this.SelectEntity(entity);
   }
 
-  filterEntities(term: string) {
+  FilterEntities(term: string) {
     const lowerTerm = term.toLowerCase();
-    this.filteredEntities = this.availableEntities.filter(e =>
+    this.FilteredEntities = this.AvailableEntities.filter(e =>
       e.Name.toLowerCase().includes(lowerTerm)
     );
     // Ensure dropdown is visible while typing
-    if (!this.showEntityDropdown && term) {
-      this.showEntityDropdown = true;
+    if (!this.ShowEntityDropdown && term) {
+      this.ShowEntityDropdown = true;
     }
     // Clear selection when user modifies the search text
-    this.selectedEntityId = '';
+    this.SelectedEntityId = '';
   }
 
-  openEntityDropdown(inputElement: HTMLInputElement) {
+  /** @deprecated Use {@link FilterEntities}. */
+  filterEntities(term: string) {
+    return this.FilterEntities(term);
+  }
+
+  OpenEntityDropdown(inputElement: HTMLInputElement) {
     const rect = inputElement.getBoundingClientRect();
     const viewportHeight = window.innerHeight;
     const dropdownHeight = 200; // estimated max height
     const spaceBelow = viewportHeight - rect.bottom;
     const openAbove = spaceBelow < dropdownHeight && rect.top > dropdownHeight;
 
-    this.entityDropdownPosition = {
+    this.EntityDropdownPosition = {
       top: openAbove ? rect.top - dropdownHeight : rect.bottom,
       left: rect.left,
       width: rect.width,
       openAbove
     };
-    this.showEntityDropdown = true;
-    this.filteredEntities = [...this.availableEntities];
+    this.ShowEntityDropdown = true;
+    this.FilteredEntities = [...this.AvailableEntities];
   }
 
+  /** @deprecated Use {@link OpenEntityDropdown}. */
+  openEntityDropdown(inputElement: HTMLInputElement) {
+    return this.OpenEntityDropdown(inputElement);
+  }
+
+  CloseEntityDropdown() {
+    this.ShowEntityDropdown = false;
+  }
+
+  /** @deprecated Use {@link CloseEntityDropdown}. */
   closeEntityDropdown() {
-    this.showEntityDropdown = false;
+    return this.CloseEntityDropdown();
   }
 
-  async duplicateList() {
-    if (!this.selectedContextList) return;
+  async DuplicateList() {
+    if (!this.SelectedContextList) return;
 
-    const listToDuplicate = this.selectedContextList;
-    this.closeContextMenu();
+    const listToDuplicate = this.SelectedContextList;
+    this.CloseContextMenu();
 
     this.isLoading = true;
     this.cdr.detectChanges();
@@ -1639,24 +1958,39 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
     }
   }
 
+  /** @deprecated Use {@link DuplicateList}. */
+  async duplicateList() {
+    return this.DuplicateList();
+  }
+
+  ConfirmDeleteList() {
+    if (!this.SelectedContextList) return;
+    this.ListToDelete = this.SelectedContextList;
+    this.DeleteListName = this.SelectedContextList.Name;
+    this.ShowDeleteConfirm = true;
+    this.CloseContextMenu();
+  }
+
+  /** @deprecated Use {@link ConfirmDeleteList}. */
   confirmDeleteList() {
-    if (!this.selectedContextList) return;
-    this.listToDelete = this.selectedContextList;
-    this.deleteListName = this.selectedContextList.Name;
-    this.showDeleteConfirm = true;
-    this.closeContextMenu();
+    return this.ConfirmDeleteList();
   }
 
+  CancelDelete() {
+    this.ShowDeleteConfirm = false;
+    this.ListToDelete = null;
+    this.DeleteListName = '';
+  }
+
+  /** @deprecated Use {@link CancelDelete}. */
   cancelDelete() {
-    this.showDeleteConfirm = false;
-    this.listToDelete = null;
-    this.deleteListName = '';
+    return this.CancelDelete();
   }
 
-  async deleteList() {
-    if (!this.listToDelete) return;
+  async DeleteList() {
+    if (!this.ListToDelete) return;
 
-    const listToDelete = this.listToDelete;
+    const listToDelete = this.ListToDelete;
     const listName = listToDelete.Name;
 
     // Defense-in-depth: re-check the shared ownership rule before deleting (the server is the true
@@ -1668,7 +2002,7 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
       return;
     }
 
-    this.isDeleting = true;
+    this.IsDeleting = true;
     this.cdr.detectChanges();
 
     try {
@@ -1681,46 +2015,56 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
         console.error('Failed to delete list:', listToDelete.LatestResult);
         this.notificationService.CreateSimpleNotification(`Failed to delete list: ${errorMessage}`, 'error', 6000);
       }
-      this.cancelDelete();
+      this.CancelDelete();
       await this.loadData();
     } catch (error) {
       console.error('Error deleting list:', error);
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.notificationService.CreateSimpleNotification(`Error deleting list: ${errorMessage}`, 'error', 6000);
     } finally {
-      this.isDeleting = false;
+      this.IsDeleting = false;
       this.cdr.detectChanges();
     }
   }
 
-  closeCreateDialog() {
-    this.showCreateDialog = false;
-    this.editingList = null;
-    this.showEntityDropdown = false;
+  /** @deprecated Use {@link DeleteList}. */
+  async deleteList() {
+    return this.DeleteList();
   }
 
-  async saveList() {
-    this.isSaving = true;
+  CloseCreateDialog() {
+    this.showCreateDialog = false;
+    this.EditingList = null;
+    this.ShowEntityDropdown = false;
+  }
+
+  /** @deprecated Use {@link CloseCreateDialog}. */
+  closeCreateDialog() {
+    return this.CloseCreateDialog();
+  }
+
+  async SaveList() {
+    this.IsSaving = true;
     this.cdr.detectChanges();
 
-    const isEditing = !!this.editingList;
-    const listName = this.newListName;
+    const isEditing = !!this.EditingList;
+    const listName = this.NewListName;
 
     try {
       const md = this.ProviderToUse;
       let list: MJListEntity;
 
-      if (this.editingList) {
-        list = this.editingList;
+      if (this.EditingList) {
+        list = this.EditingList;
       } else {
         list = await md.GetEntityObject<MJListEntity>('MJ: Lists');
         list.UserID = md.CurrentUser!.ID;
-        list.EntityID = this.selectedEntityId;
+        list.EntityID = this.SelectedEntityId;
       }
 
-      list.Name = this.newListName;
-      list.Description = this.newListDescription || null;
-      list.CategoryID = this.selectedCategoryId || null;
+      list.Name = this.NewListName;
+      list.Description = this.NewListDescription || null;
+      list.CategoryID = this.SelectedCategoryId || null;
 
       const saved = await list.Save();
       if (saved) {
@@ -1729,7 +2073,7 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
           'success',
           3000
         );
-        this.closeCreateDialog();
+        this.CloseCreateDialog();
         await this.loadData();
       } else {
         // Get the detailed error message from LatestResult
@@ -1747,9 +2091,14 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.notificationService.CreateSimpleNotification(`Error saving list: ${errorMessage}`, 'error', 6000);
     } finally {
-      this.isSaving = false;
+      this.IsSaving = false;
       this.cdr.detectChanges();
     }
+  }
+
+  /** @deprecated Use {@link SaveList}. */
+  async saveList() {
+    return this.SaveList();
   }
 
   async GetResourceDisplayName(_data: ResourceData): Promise<string> {

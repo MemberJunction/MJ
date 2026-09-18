@@ -21,8 +21,8 @@
  *   END $$;
  */
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
-import { resolveType } from './TypeResolver.js';
-import { removeNPrefix } from './ExpressionHelpers.js';
+import { ResolveType } from './TypeResolver.js';
+import { RemoveNPrefix } from './ExpressionHelpers.js';
 import { POSTGRESQL_PROCEDURE_PARAM_LIMIT } from './ProcedureToFunctionRule.js';
 
 interface DeclaredVar {
@@ -220,7 +220,7 @@ export class ExecBlockRule implements IConversionRule {
     const tsqlType = m[2].trim();
     return {
       name: `p_${m[1]}`,
-      pgType: resolveType(tsqlType),
+      pgType: ResolveType(tsqlType),
     };
   }
 
@@ -435,7 +435,7 @@ export class ExecBlockRule implements IConversionRule {
     let result = value;
 
     // Remove N prefix from string literals
-    result = removeNPrefix(result);
+    result = RemoveNPrefix(result);
 
     // Convert CAST types: CAST(x AS NVARCHAR(MAX)) → CAST(x AS TEXT)
     result = result.replace(/\bAS\s+NVARCHAR\s*\(\s*MAX\s*\)/gi, 'AS TEXT');

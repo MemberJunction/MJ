@@ -14,9 +14,9 @@ import type { ComponentSpec } from '@memberjunction/react-runtime';
 /** Verdict from {@link assessSpec}: whether the spec can render on-device. */
 export interface SpecAssessment {
     /** True when the spec is safe to compile + render in the RN runtime. */
-    renderable: boolean;
+    Renderable: boolean;
     /** Human-readable reason shown in the desktop fallback when not renderable. */
-    reason?: string;
+    Reason?: string;
 }
 
 /** True when the spec has a non-empty name and a real code body. */
@@ -35,15 +35,20 @@ function hasRenderableCode(spec: ComponentSpec): boolean {
  * @param spec The parsed interactive component spec.
  * @returns A {@link SpecAssessment} describing the decision and, if negative, why.
  */
-export function assessSpec(spec: ComponentSpec | null | undefined): SpecAssessment {
+export function AssessSpec(spec: ComponentSpec | null | undefined): SpecAssessment {
     if (!spec || !hasRenderableCode(spec)) {
-        return { renderable: false, reason: 'This artifact does not contain a renderable component.' };
+        return { Renderable: false, Reason: 'This artifact does not contain a renderable component.' };
     }
     if (spec.libraries && spec.libraries.length > 0) {
-        return { renderable: false, reason: 'This component uses external libraries that only run on desktop.' };
+        return { Renderable: false, Reason: 'This component uses external libraries that only run on desktop.' };
     }
     if (spec.dependencies && spec.dependencies.length > 0) {
-        return { renderable: false, reason: 'This component depends on other components not available on mobile.' };
+        return { Renderable: false, Reason: 'This component depends on other components not available on mobile.' };
     }
-    return { renderable: true };
+    return { Renderable: true };
+}
+
+/** @deprecated Use {@link AssessSpec}. */
+export function assessSpec(spec: ComponentSpec | null | undefined): SpecAssessment {
+    return AssessSpec(spec);
 }

@@ -248,7 +248,7 @@ export class DuplicateRecordDetector extends VectorBase {
             }
 
             const batchIDs = recordIDs.slice(offset, offset + batchSize);
-            const batchResults = await this.ProcessBatch(
+            const batchResults = await this.processBatch(
                 batchIDs, entityInfo, entityDocument, templateParser, duplicateRun.ID,
                 topK, concurrency, options, startTime, recordIDs.length, offset, totalMatchesFound, contextUser
             );
@@ -371,7 +371,7 @@ export class DuplicateRecordDetector extends VectorBase {
      * @param contextUser - The user context for entity operations
      * @returns Combined results and match count for this batch
      */
-    private async ProcessBatch(
+    private async processBatch(
         batchIDs: string[],
         entityInfo: EntityInfo,
         entityDocument: MJEntityDocumentEntity,

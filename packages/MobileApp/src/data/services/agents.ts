@@ -16,16 +16,16 @@ const DEFAULT_ENVIRONMENT_ID = 'F51358F3-9447-4176-B313-BF8025FD8D09';
 
 /** A selectable agent (from the `MJ: AI Agents` entity) the user can address. */
 export type AgentOption = {
-    id: string;
-    name: string;
-    description: string | null;
+    id: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    description: string | null;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 };
 
 /**
  * Load active, top-level agents the user can talk to. Top-level = no ParentID
  * (sub-agents are orchestrated internally and shouldn't be addressed directly).
  */
-export async function loadAgents(contextUser?: UserInfo): Promise<AgentOption[]> {
+export async function LoadAgents(contextUser?: UserInfo): Promise<AgentOption[]> {
     const rv = new RunView();
     const result = await rv.RunView<MJAIAgentEntity>(
         {
@@ -47,17 +47,22 @@ export async function loadAgents(contextUser?: UserInfo): Promise<AgentOption[]>
     }));
 }
 
+/** @deprecated Use {@link LoadAgents}. */
+export async function loadAgents(contextUser?: UserInfo): Promise<AgentOption[]> {
+    return LoadAgents(contextUser);
+}
+
 /**
  * Resolve the agent to address for a message:
  *   1. If the message contains `@name`, match it against the agent list.
  *   2. Else prefer an agent named like "Skip".
  *   3. Else the first active agent.
  */
-export async function resolveTargetAgent(
+export async function ResolveTargetAgent(
     messageText: string,
     contextUser?: UserInfo,
 ): Promise<AgentOption | null> {
-    const agents = await loadAgents(contextUser);
+    const agents = await LoadAgents(contextUser);
     if (agents.length === 0) return null;
 
     const mentionMatch = messageText.match(/@([\w-]+)/);
@@ -70,23 +75,31 @@ export async function resolveTargetAgent(
     return skip ?? agents[0];
 }
 
+/** @deprecated Use {@link ResolveTargetAgent}. */
+export async function resolveTargetAgent(
+    messageText: string,
+    contextUser?: UserInfo,
+): Promise<AgentOption | null> {
+    return ResolveTargetAgent(messageText, contextUser);
+}
+
 /** Progress update emitted while an agent run is in flight (via the push channel). */
 export type SendProgress = {
-    currentStep: string;
-    percentage?: number;
-    message: string;
+    CurrentStep: string;
+    Percentage?: number;
+    Message: string;
 };
 
 /** Outcome of {@link sendMessage}: the saved user message id, the placeholder AI reply id, and whether completion must be polled. */
 export type SendResult = {
-    success: boolean;
-    errorMessage?: string;
+    Success: boolean;
+    ErrorMessage?: string;
     /** The user message we created (already saved). */
-    userMessageId: string;
+    UserMessageId: string;
     /** The in-progress AI response detail we created (server fills it). */
-    aiMessageId?: string;
+    AiMessageId?: string;
     /** True when the run was accepted but completion will arrive async (poll/reload). */
-    pendingViaPoll?: boolean;
+    PendingViaPoll?: boolean;
 };
 
 /**
@@ -99,7 +112,7 @@ export type SendResult = {
  *      subscribes to push updates internally and resolves on completion.
  *   4. Caller reloads the conversation to render the new AI message.
  */
-export async function sendMessage(args: {
+export async function SendMessage(args: {
     conversationId: string;
     text: string;
     agentId?: string;
@@ -123,9 +136,9 @@ export async function sendMessage(args: {
     const saved = await detail.Save();
     if (!saved) {
         return {
-            success: false,
-            errorMessage: detail.LatestResult?.CompleteMessage ?? 'Failed to save message.',
-            userMessageId: '',
+            Success: false,
+            ErrorMessage: detail.LatestResult?.CompleteMessage ?? 'Failed to save message.',
+            UserMessageId: '',
         };
     }
 
@@ -133,15 +146,15 @@ export async function sendMessage(args: {
     //    @memberjunction/ng-conversations (conversation-agent.service): the ambient
     //    "Sage" orchestrator runs by default and routes to the other top-level agents,
     //    which are passed to it via the Data payload's ALL_AVAILABLE_AGENTS list.
-    const agents = await loadAgents(currentUser);
+    const agents = await LoadAgents(currentUser);
     const sage = agents.find((a) => a.name === 'Sage');
     const availableAgents = agents.filter((a) => a.name !== 'Sage');
 
     let targetAgentId = agentId;
     if (!targetAgentId) {
-        const resolved = sage ?? (await resolveTargetAgent(text, currentUser));
+        const resolved = sage ?? (await ResolveTargetAgent(text, currentUser));
         if (!resolved) {
-            return { success: false, errorMessage: 'No active agents available to respond.', userMessageId: detail.ID };
+            return { Success: false, ErrorMessage: 'No active agents available to respond.', UserMessageId: detail.ID };
         }
         targetAgentId = resolved.id;
     }
@@ -169,7 +182,7 @@ export async function sendMessage(args: {
     //    to pick up the finalized response.
     const provider = GraphQLDataProvider.Instance;
     if (!provider) {
-        return { success: false, errorMessage: 'GraphQL provider not initialized.', userMessageId: detail.ID, aiMessageId: aiDetail.ID };
+        return { Success: false, ErrorMessage: 'GraphQL provider not initialized.', UserMessageId: detail.ID, AiMessageId: aiDetail.ID };
     }
 
     try {
@@ -193,26 +206,37 @@ export async function sendMessage(args: {
                 })),
             },
             onProgress: onProgress
-                ? (p) => onProgress({ currentStep: p.currentStep, percentage: p.percentage, message: p.message })
+                ? (p) => onProgress({ CurrentStep: p.currentStep, Percentage: p.percentage, Message: p.message })
                 : undefined,
         });
         // result.success can be false purely because the push WebSocket is unavailable
         // on this client — the run still executes server-side and fills the AI detail.
         // Report "submitted" and let the caller poll the AI detail for the real outcome.
-        return { success: true, userMessageId: detail.ID, aiMessageId: aiDetail.ID, pendingViaPoll: !result.success };
+        return { Success: true, UserMessageId: detail.ID, AiMessageId: aiDetail.ID, PendingViaPoll: !result.success };
     } catch (e) {
         // WS wait failed (push subscription unavailable). The run was accepted and
         // completes server-side; report submitted and let the caller poll for the reply.
         console.warn('[sendMessage] agent run WS wait did not complete (will poll):', e instanceof Error ? e.message : String(e));
-        return { success: true, userMessageId: detail.ID, aiMessageId: aiDetail.ID, pendingViaPoll: true };
+        return { Success: true, UserMessageId: detail.ID, AiMessageId: aiDetail.ID, PendingViaPoll: true };
     }
+}
+
+/** @deprecated Use {@link SendMessage}. */
+export async function sendMessage(args: {
+    conversationId: string;
+    text: string;
+    agentId?: string;
+    onProgress?: (p: SendProgress) => void;
+    contextUser?: UserInfo;
+}): Promise<SendResult> {
+    return SendMessage(args);
 }
 
 /**
  * Lightweight status check for a conversation detail — used to poll for an
  * agent reply finalizing when the push WebSocket isn't delivering completion.
  */
-export async function getConversationDetailStatus(detailId: string, contextUser?: UserInfo): Promise<string | null> {
+export async function GetConversationDetailStatus(detailId: string, contextUser?: UserInfo): Promise<string | null> {
     const rv = new RunView();
     const result = await rv.RunView<{ ID: string; Status: string }>(
         {
@@ -228,11 +252,16 @@ export async function getConversationDetailStatus(detailId: string, contextUser?
     return result.Results[0].Status ?? null;
 }
 
+/** @deprecated Use {@link GetConversationDetailStatus}. */
+export async function getConversationDetailStatus(detailId: string, contextUser?: UserInfo): Promise<string | null> {
+    return GetConversationDetailStatus(detailId, contextUser);
+}
+
 /**
  * Create a new conversation and return its entity. Used by the
  * "new conversation" flow before sending the first message.
  */
-export async function createConversation(
+export async function CreateConversation(
     name: string,
     contextUser?: UserInfo,
 ): Promise<{ id: string } | null> {
@@ -250,4 +279,12 @@ export async function createConversation(
     const saved = await conv.Save();
     if (!saved) return null;
     return { id: conv.ID };
+}
+
+/** @deprecated Use {@link CreateConversation}. */
+export async function createConversation(
+    name: string,
+    contextUser?: UserInfo,
+): Promise<{ id: string } | null> {
+    return CreateConversation(name, contextUser);
 }

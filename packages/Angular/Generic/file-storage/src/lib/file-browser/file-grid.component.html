@@ -144,7 +144,7 @@
       </div>
 
       <div class="selection-bar-right">
-        @if (selectedItems.length === 1 && getSelectedItem()?.type === 'file') {
+        @if (selectedItems.length === 1 && getSelectedItem()?.Type === 'file') {
           <button
             type="button"
             class="sel-action-btn"
@@ -284,10 +284,10 @@
         <div class="multi-search-results search-results-container">
           <div class="results-meta-bar search-results-summary">
             <span class="meta-count result-count">
-              <strong>{{ multiProviderSearchResults.totalResultsReturned }}</strong> result{{ multiProviderSearchResults.totalResultsReturned === 1 ? '' : 's' }} found
+              <strong>{{ multiProviderSearchResults.TotalResultsReturned }}</strong> result{{ multiProviderSearchResults.TotalResultsReturned === 1 ? '' : 's' }} found
             </span>
             <span class="meta-stats provider-stats">
-              ({{ multiProviderSearchResults.successfulAccounts }} account{{ multiProviderSearchResults.successfulAccounts === 1 ? '' : 's' }} searched)
+              ({{ multiProviderSearchResults.SuccessfulAccounts }} account{{ multiProviderSearchResults.SuccessfulAccounts === 1 ? '' : 's' }} searched)
             </span>
             <button
               type="button"
@@ -298,7 +298,7 @@
           </div>
 
           <div class="results-groups provider-results-list">
-            @for (accountResult of multiProviderSearchResults.accountResults; track accountResult.accountID) {
+            @for (accountResult of multiProviderSearchResults.AccountResults; track accountResult.accountID) {
               <div class="result-group provider-result-group" [class.failed]="!accountResult.success">
                 <div class="result-group-head provider-result-header">
                   <i class="fa-solid fa-cloud-bolt group-icon"></i>
@@ -359,10 +359,10 @@
   <!-- Grid View -->
   @if (!isLoading && !errorMessage && filteredItems.length > 0 && viewMode === 'grid') {
     <div class="file-cards-grid file-grid file-grid-wrapper">
-      @for (item of filteredItems; track item.key) {
+      @for (item of filteredItems; track item.Key) {
         <div
           class="file-card grid-item"
-          [class.selected]="selectedItems.includes(item.key)"
+          [class.selected]="selectedItems.includes(item.Key)"
           (click)="onTileClick(item, $event)"
           (dblclick)="onItemDoubleClick(item)"
           [title]="item.name">
@@ -372,11 +372,11 @@
             <label class="file-card-checkbox" (click)="$event.stopPropagation()">
               <input
                 type="checkbox"
-                [checked]="selectedItems.includes(item.key)"
+                [checked]="selectedItems.includes(item.Key)"
                 (change)="toggleItemSelection(item, $event)" />
             </label>
             <div class="file-card-quick-actions" (click)="$event.stopPropagation()">
-              @if (item.type === 'file') {
+              @if (item.Type === 'file') {
                 <button
                   type="button"
                   class="quick-action-btn"
@@ -404,8 +404,8 @@
           <div class="file-card-body">
             <span class="file-card-name grid-name">{{ item.name }}</span>
             <div class="file-card-meta grid-meta">
-              <span class="meta-size">{{ item.type === 'folder' ? 'Folder' : formatFileSize(item.size) }}</span>
-              <span class="meta-date">{{ formatDate(item.lastModified) }}</span>
+              <span class="meta-size">{{ item.Type === 'folder' ? 'Folder' : formatFileSize(item.Size) }}</span>
+              <span class="meta-date">{{ formatDate(item.LastModified) }}</span>
             </div>
           </div>
         </div>
@@ -451,16 +451,16 @@
           </tr>
         </thead>
         <tbody>
-          @for (item of filteredItems; track item.key) {
+          @for (item of filteredItems; track item.Key) {
             <tr
               class="file-table-row file-row"
-              [class.selected]="selectedItems.includes(item.key)"
+              [class.selected]="selectedItems.includes(item.Key)"
               (click)="onTileClick(item, $event)"
               (dblclick)="onItemDoubleClick(item)">
               <td class="td-check" (click)="$event.stopPropagation()">
                 <input
                   type="checkbox"
-                  [checked]="selectedItems.includes(item.key)"
+                  [checked]="selectedItems.includes(item.Key)"
                   (change)="toggleItemSelection(item, $event)" />
               </td>
               <td class="td-name col-name">
@@ -475,14 +475,14 @@
                 <span class="type-badge item-type">{{ getFileType(item) }}</span>
               </td>
               <td class="td-size col-size">
-                <span class="size-text item-size">{{ item.type === 'folder' ? '—' : formatFileSize(item.size) }}</span>
+                <span class="size-text item-size">{{ item.Type === 'folder' ? '—' : formatFileSize(item.Size) }}</span>
               </td>
               <td class="td-date col-modified">
-                <span class="date-text item-date">{{ formatDate(item.lastModified) }}</span>
+                <span class="date-text item-date">{{ formatDate(item.LastModified) }}</span>
               </td>
               <td class="td-actions" (click)="$event.stopPropagation()">
                 <div class="row-action-buttons">
-                  @if (item.type === 'file') {
+                  @if (item.Type === 'file') {
                     <button
                       type="button"
                       class="row-act-btn"
@@ -576,7 +576,7 @@
           </div>
           <div>
             <h3 class="modal-title">{{ previewItem.name }}</h3>
-            <span class="modal-subtitle">{{ formatFileSize(previewItem.size) }} &bull; {{ formatDate(previewItem.lastModified) }}</span>
+            <span class="modal-subtitle">{{ formatFileSize(previewItem.Size) }} &bull; {{ formatDate(previewItem.LastModified) }}</span>
           </div>
         </div>
         <div class="modal-header-actions">
@@ -709,7 +709,7 @@
   <div class="mj-modal-backdrop modal-overlay" (click)="onCancelDelete()">
     <div class="mj-modal-window modal-compact modal-dialog" (click)="$event.stopPropagation()">
       <div class="mj-modal-header modal-header">
-        <h3 class="modal-title">Delete {{ itemToDelete.type === 'folder' ? 'Folder' : 'File' }}?</h3>
+        <h3 class="modal-title">Delete {{ itemToDelete.Type === 'folder' ? 'Folder' : 'File' }}?</h3>
         <button type="button" class="modal-close-btn modal-close" (click)="onCancelDelete()">
           <i class="fa-solid fa-xmark"></i>
         </button>
@@ -718,7 +718,7 @@
         <p class="modal-body-text">
           Are you sure you want to delete <strong>{{ itemToDelete.name }}</strong>?
         </p>
-        @if (itemToDelete.type === 'folder') {
+        @if (itemToDelete.Type === 'folder') {
           <div class="modal-warning-banner warning">
             <i class="fa-solid fa-triangle-exclamation"></i>
             <span>This will delete the folder and all its contents.</span>
@@ -753,7 +753,7 @@
   <div class="mj-modal-backdrop modal-overlay" (click)="onCancelRename()">
     <div class="mj-modal-window modal-compact modal-dialog" (click)="$event.stopPropagation()">
       <div class="mj-modal-header modal-header">
-        <h3 class="modal-title">Rename {{ itemToRename.type === 'folder' ? 'Folder' : 'File' }}</h3>
+        <h3 class="modal-title">Rename {{ itemToRename.Type === 'folder' ? 'Folder' : 'File' }}</h3>
         <button type="button" class="modal-close-btn modal-close" (click)="onCancelRename()">
           <i class="fa-solid fa-xmark"></i>
         </button>
@@ -797,7 +797,7 @@
   <div class="mj-modal-backdrop" (click)="onCancelCopy()">
     <div class="mj-modal-window modal-compact" (click)="$event.stopPropagation()">
       <div class="mj-modal-header">
-        <h3 class="modal-title">Copy {{ itemToCopy.type === 'folder' ? 'Folder' : 'File' }}</h3>
+        <h3 class="modal-title">Copy {{ itemToCopy.Type === 'folder' ? 'Folder' : 'File' }}</h3>
         <button type="button" class="modal-close-btn" (click)="onCancelCopy()">
           <i class="fa-solid fa-xmark"></i>
         </button>
@@ -841,7 +841,7 @@
   <div class="mj-modal-backdrop" (click)="onCancelMove()">
     <div class="mj-modal-window modal-compact" (click)="$event.stopPropagation()">
       <div class="mj-modal-header">
-        <h3 class="modal-title">Move {{ itemToMove.type === 'folder' ? 'Folder' : 'File' }}</h3>
+        <h3 class="modal-title">Move {{ itemToMove.Type === 'folder' ? 'Folder' : 'File' }}</h3>
         <button type="button" class="modal-close-btn" (click)="onCancelMove()">
           <i class="fa-solid fa-xmark"></i>
         </button>

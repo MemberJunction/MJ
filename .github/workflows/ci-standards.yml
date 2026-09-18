@@ -47,8 +47,38 @@ jobs:
       # What runs is decided by .mj-standards.json, not by this file. packages/Angular is listed
       # under requireDeclaredIn, so a NEW Angular package that never declares mjUILayer fails here
       # — that, not the one-time cleanup, is what stops drift returning.
+      #
+      # `set -o pipefail` so the gate's exit code survives the pipe into tee. Without it the step
+      # would report the exit code of `tee`, which is always 0, and the gate would never fail.
       - name: Check adopted standards
-        run: node packages/Standards/bin/run.js check
+        run: |
+          set -o pipefail
+          node packages/Standards/bin/run.js check --json standards-findings.json 2>&1 | tee /tmp/mj-standards.log
+
+      # The terminal view is capped, so put it in the Checks summary where an author reads it
+      # without expanding a log. The per-package table is the part that matters: it says where to
+      # start, which a total never does.
+      - name: Publish result to job summary
+        if: always()
+        run: |
+          {
+            echo '## MJ standards'
+            echo ''
+            echo '```'
+            cat /tmp/mj-standards.log 2>/dev/null || echo 'The gate produced no output.'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # The complete finding list, which the log deliberately truncates. This is the worklist the
+      # naming cleanup burns down, so it has to outlive the job.
+      - name: Upload the full finding list
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: standards-findings
+          path: standards-findings.json
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Test the standards package
         run: npx turbo run test --filter=@memberjunction/standards

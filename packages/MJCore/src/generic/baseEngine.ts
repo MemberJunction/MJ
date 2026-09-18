@@ -1923,7 +1923,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             this.NotifyDataChange(config, result.Results);
 
             if (config.Expiration) {
-                this.SetExpirationTimer(config.PropertyName, config.Expiration);
+                this.setExpirationTimer(config.PropertyName, config.Expiration);
             }
         } else if (!this.ContextUserCanReadConfigEntity(config.EntityName, contextUser)) {
             // PERMANENT failure: the user lacks Read on this entity, so a retry will
@@ -2100,7 +2100,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             this._dataMap.set(config.PropertyName, { datasetName: config.DatasetName, data: result.Results, loadedSuccessfully: true });
 
             if (config.Expiration) {
-                this.SetExpirationTimer(config.PropertyName, config.Expiration);
+                this.setExpirationTimer(config.PropertyName, config.Expiration);
             }
         }
     }
@@ -2248,7 +2248,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * @param propertyName - The name of the property
      * @param expiration - The expiration time in milliseconds
      */
-    private SetExpirationTimer(propertyName: string, expiration: number): void {
+    private setExpirationTimer(propertyName: string, expiration: number): void {
         if (this._expirationTimers.has(propertyName)) {
             clearTimeout(this._expirationTimers.get(propertyName));
         }

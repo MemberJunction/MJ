@@ -9,9 +9,9 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-    buildVersionHistoryRestoreAgentContext,
-    isValidRestoreStatusFilter,
-    resolveRestore,
+    BuildVersionHistoryRestoreAgentContext,
+    IsValidRestoreStatusFilter,
+    ResolveRestore,
     RESTORE_STATUS_FILTERS,
     RESTORE_LIST_CAP,
     RestoreSnapshot,
@@ -19,8 +19,8 @@ import {
     VersionHistoryRestoreAgentContextInput,
 } from '../VersionHistory/version-history-restore-agent-context';
 import {
-    buildVersionHistoryGraphAgentContext,
-    resolveGraphEntity,
+    BuildVersionHistoryGraphAgentContext,
+    ResolveGraphEntity,
     VERSION_HISTORY_GRAPH_NAME_LIST_CAP,
     VersionHistoryGraphAgentContextInput,
     VersionHistoryGraphSelectedEntitySummary,
@@ -84,26 +84,26 @@ function makeSelectedSummary(
 describe('isValidRestoreStatusFilter', () => {
     it('accepts every known status value', () => {
         for (const s of RESTORE_STATUS_FILTERS) {
-            expect(isValidRestoreStatusFilter(s)).toBe(true);
+            expect(IsValidRestoreStatusFilter(s)).toBe(true);
         }
     });
 
     it('accepts the empty string (clear filter)', () => {
-        expect(isValidRestoreStatusFilter('')).toBe(true);
+        expect(IsValidRestoreStatusFilter('')).toBe(true);
     });
 
     it('rejects unknown / non-string values', () => {
-        expect(isValidRestoreStatusFilter('Bogus')).toBe(false);
-        expect(isValidRestoreStatusFilter('complete')).toBe(false); // case-sensitive
-        expect(isValidRestoreStatusFilter(undefined)).toBe(false);
-        expect(isValidRestoreStatusFilter(42)).toBe(false);
-        expect(isValidRestoreStatusFilter(null)).toBe(false);
+        expect(IsValidRestoreStatusFilter('Bogus')).toBe(false);
+        expect(IsValidRestoreStatusFilter('complete')).toBe(false); // case-sensitive
+        expect(IsValidRestoreStatusFilter(undefined)).toBe(false);
+        expect(IsValidRestoreStatusFilter(42)).toBe(false);
+        expect(IsValidRestoreStatusFilter(null)).toBe(false);
     });
 });
 
 describe('buildVersionHistoryRestoreAgentContext', () => {
     it('maps every stat field straight through', () => {
-        const ctx = buildVersionHistoryRestoreAgentContext(
+        const ctx = BuildVersionHistoryRestoreAgentContext(
             makeRestoreInput({
                 TotalRestores: 12,
                 SuccessfulRestores: 8,
@@ -126,7 +126,7 @@ describe('buildVersionHistoryRestoreAgentContext', () => {
     });
 
     it('reflects the no-filter state with FilteredRestoreCount === TotalRestores', () => {
-        const ctx = buildVersionHistoryRestoreAgentContext(makeRestoreInput());
+        const ctx = BuildVersionHistoryRestoreAgentContext(makeRestoreInput());
         expect(ctx['StatusFilter']).toBe('');
         expect(ctx['FilteredRestoreCount']).toBe(ctx['TotalRestores']);
     });
@@ -134,7 +134,7 @@ describe('buildVersionHistoryRestoreAgentContext', () => {
 
 describe('buildVersionHistoryGraphAgentContext', () => {
     it('reports the home (no-selection) state with null SelectedEntityName', () => {
-        const ctx = buildVersionHistoryGraphAgentContext(makeGraphInput());
+        const ctx = BuildVersionHistoryGraphAgentContext(makeGraphInput());
         expect(ctx['SelectedEntityName']).toBeNull();
         expect(ctx['TotalEntities']).toBe(100);
         expect(ctx['EntitiesWithDependents']).toBe(40);
@@ -143,7 +143,7 @@ describe('buildVersionHistoryGraphAgentContext', () => {
     });
 
     it('reports the selected entity and active filters', () => {
-        const ctx = buildVersionHistoryGraphAgentContext(
+        const ctx = BuildVersionHistoryGraphAgentContext(
             makeGraphInput({
                 SelectedEntityName: 'Users',
                 SearchText: 'use',
@@ -161,7 +161,7 @@ describe('buildVersionHistoryGraphAgentContext', () => {
 
     it('caps the visible-entity name list and surfaces the true total', () => {
         const names = Array.from({ length: VERSION_HISTORY_GRAPH_NAME_LIST_CAP + 5 }, (_, i) => `Entity${i}`);
-        const ctx = buildVersionHistoryGraphAgentContext(
+        const ctx = BuildVersionHistoryGraphAgentContext(
             makeGraphInput({ VisibleEntityNames: names, VisibleEntityCount: names.length }),
         );
         expect((ctx['VisibleEntities'] as string[]).length).toBe(VERSION_HISTORY_GRAPH_NAME_LIST_CAP);
@@ -169,7 +169,7 @@ describe('buildVersionHistoryGraphAgentContext', () => {
     });
 
     it('omits the truncation-count field when the list fits under the cap', () => {
-        const ctx = buildVersionHistoryGraphAgentContext(
+        const ctx = BuildVersionHistoryGraphAgentContext(
             makeGraphInput({ VisibleEntityNames: ['A', 'B'], VisibleEntityCount: 2 }),
         );
         expect(ctx['VisibleEntityNameCount']).toBeUndefined();
@@ -177,13 +177,13 @@ describe('buildVersionHistoryGraphAgentContext', () => {
     });
 
     it('omits SelectedEntity when no entity is selected (never fabricated zeros)', () => {
-        const ctx = buildVersionHistoryGraphAgentContext(makeGraphInput());
+        const ctx = BuildVersionHistoryGraphAgentContext(makeGraphInput());
         expect(ctx).not.toHaveProperty('SelectedEntity');
         expect(ctx['SelectedEntityId']).toBeNull();
     });
 
     it('publishes the selected entity dependency summary when selected', () => {
-        const ctx = buildVersionHistoryGraphAgentContext(
+        const ctx = BuildVersionHistoryGraphAgentContext(
             makeGraphInput({
                 SelectedEntityName: 'Users',
                 SelectedEntityId: 'e-1',
@@ -200,7 +200,7 @@ describe('buildVersionHistoryGraphAgentContext', () => {
 
     it('caps the selected entity neighbour lists and surfaces the true total', () => {
         const refs = Array.from({ length: VERSION_HISTORY_GRAPH_NAME_LIST_CAP + 3 }, (_, i) => `Ref${i}`);
-        const ctx = buildVersionHistoryGraphAgentContext(
+        const ctx = BuildVersionHistoryGraphAgentContext(
             makeGraphInput({
                 SelectedEntityName: 'Users',
                 SelectedEntityId: 'e-1',
@@ -217,13 +217,13 @@ describe('resolveRestore', () => {
     const restores = [restore('r-1', 'Nightly rollback', 'Complete'), restore('r-2', 'Q1 audit fix', 'Error')];
 
     it('matches by exact ID, exact name, then contains', () => {
-        expect((resolveRestore('R-1', restores) as { ok: true; restore: RestoreSnapshot }).restore.Name).toBe('Nightly rollback');
-        expect((resolveRestore('q1 audit fix', restores) as { ok: true; restore: RestoreSnapshot }).restore.ID).toBe('r-2');
-        expect((resolveRestore('rollback', restores) as { ok: true; restore: RestoreSnapshot }).restore.ID).toBe('r-1');
+        expect((ResolveRestore('R-1', restores) as { ok: true; restore: RestoreSnapshot }).restore.Name).toBe('Nightly rollback');
+        expect((ResolveRestore('q1 audit fix', restores) as { ok: true; restore: RestoreSnapshot }).restore.ID).toBe('r-2');
+        expect((ResolveRestore('rollback', restores) as { ok: true; restore: RestoreSnapshot }).restore.ID).toBe('r-1');
     });
 
     it('returns a tolerant error listing available restores on a miss', () => {
-        const r = resolveRestore('nope', restores);
+        const r = ResolveRestore('nope', restores);
         expect(r.ok).toBe(false);
         if (!r.ok) {
             expect(r.error).toContain('Nightly rollback');
@@ -231,8 +231,8 @@ describe('resolveRestore', () => {
     });
 
     it('errors on empty input and empty restore list', () => {
-        expect(resolveRestore('  ', restores).ok).toBe(false);
-        expect(resolveRestore('x', []).ok).toBe(false);
+        expect(ResolveRestore('  ', restores).ok).toBe(false);
+        expect(ResolveRestore('x', []).ok).toBe(false);
     });
 });
 
@@ -242,7 +242,7 @@ describe('buildVersionHistoryRestoreAgentContext — deep fields', () => {
             { ID: 'r-1', Name: 'Nightly', Status: 'Complete' },
             { ID: 'r-2', Name: 'Audit', Status: 'Error' },
         ];
-        const ctx = buildVersionHistoryRestoreAgentContext(
+        const ctx = BuildVersionHistoryRestoreAgentContext(
             makeRestoreInput({ RecentRestores: recent, SelectedRestoreId: 'r-1', SelectedRestoreName: 'Nightly' }),
         );
         expect(ctx['SelectedRestoreId']).toBe('r-1');
@@ -252,7 +252,7 @@ describe('buildVersionHistoryRestoreAgentContext — deep fields', () => {
     });
 
     it('omits RecentRestores when empty and counts when truncated', () => {
-        const empty = buildVersionHistoryRestoreAgentContext(makeRestoreInput());
+        const empty = BuildVersionHistoryRestoreAgentContext(makeRestoreInput());
         expect(empty).not.toHaveProperty('RecentRestores');
 
         const many: RestoreSummaryItem[] = Array.from({ length: RESTORE_LIST_CAP + 2 }, (_, i) => ({
@@ -260,7 +260,7 @@ describe('buildVersionHistoryRestoreAgentContext — deep fields', () => {
             Name: `R${i}`,
             Status: 'Complete',
         }));
-        const ctx = buildVersionHistoryRestoreAgentContext(makeRestoreInput({ RecentRestores: many }));
+        const ctx = BuildVersionHistoryRestoreAgentContext(makeRestoreInput({ RecentRestores: many }));
         expect((ctx['RecentRestores'] as unknown[]).length).toBe(RESTORE_LIST_CAP);
         expect(ctx['RecentRestoreCount']).toBe(many.length);
     });
@@ -273,14 +273,14 @@ describe('resolveGraphEntity', () => {
     ];
 
     it('matches by exact ID, exact name, then contains', () => {
-        expect((resolveGraphEntity('E-1', candidates) as { ok: true; entity: { Name: string } }).entity.Name).toBe('Users');
-        expect((resolveGraphEntity('user roles', candidates) as { ok: true; entity: { ID: string } }).entity.ID).toBe('e-2');
+        expect((ResolveGraphEntity('E-1', candidates) as { ok: true; entity: { Name: string } }).entity.Name).toBe('Users');
+        expect((ResolveGraphEntity('user roles', candidates) as { ok: true; entity: { ID: string } }).entity.ID).toBe('e-2');
         // 'user' contains-matches the first candidate by ordering
-        expect((resolveGraphEntity('user', candidates) as { ok: true; entity: { ID: string } }).entity.ID).toBe('e-1');
+        expect((ResolveGraphEntity('user', candidates) as { ok: true; entity: { ID: string } }).entity.ID).toBe('e-1');
     });
 
     it('returns a tolerant error listing available entities on a miss', () => {
-        const r = resolveGraphEntity('Widgets', candidates);
+        const r = ResolveGraphEntity('Widgets', candidates);
         expect(r.ok).toBe(false);
         if (!r.ok) {
             expect(r.error).toContain('Users');
@@ -288,6 +288,6 @@ describe('resolveGraphEntity', () => {
     });
 
     it('errors on empty input', () => {
-        expect(resolveGraphEntity('   ', candidates).ok).toBe(false);
+        expect(ResolveGraphEntity('   ', candidates).ok).toBe(false);
     });
 });

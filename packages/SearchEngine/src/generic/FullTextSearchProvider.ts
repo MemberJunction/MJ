@@ -14,7 +14,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseSearchProvider, SearchProviderConfig } from './ISearchProvider';
 import { SearchSource, SearchFilters, SearchResultItem, SearchResultType, ScopeConstraints } from './search.types';
 import { SearchEnricher } from './SearchEnricher';
-import { envIntOverride } from './env-config';
+import { EnvIntOverride } from './env-config';
 
 /**
  * Provides full-text search using the MJ Metadata.FullTextSearch() method.
@@ -39,7 +39,7 @@ export class FullTextSearchProvider extends BaseSearchProvider {
      * start via the `MJ_SEARCH_FULLTEXT_PER_ENTITY_FETCH_DEPTH` environment variable. Mirrors
      * EntitySearchProvider.
      */
-    public static PerEntityFetchDepth = envIntOverride('MJ_SEARCH_FULLTEXT_PER_ENTITY_FETCH_DEPTH', 15);
+    public static PerEntityFetchDepth = EnvIntOverride('MJ_SEARCH_FULLTEXT_PER_ENTITY_FETCH_DEPTH', 15);
 
     private enricher: SearchEnricher | null = null;
 

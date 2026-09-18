@@ -19,7 +19,7 @@ import {
  *    the user cancels/errors, or no code/verifier is present.
  *  - `ready`: `true` once the underlying auth request has initialized.
  */
-export function useAuth0Auth() {
+export function UseAuth0Auth() {
     const discovery = getAuth0Discovery();
     const [request, , promptAsync] = useAuthRequest(
         {
@@ -49,4 +49,9 @@ export function useAuth0Auth() {
     }, [request, promptAsync]);
 
     return { signIn, ready: !!request };
+}
+
+/** @deprecated Use {@link UseAuth0Auth}. */
+export function useAuth0Auth() {
+    return UseAuth0Auth();
 }

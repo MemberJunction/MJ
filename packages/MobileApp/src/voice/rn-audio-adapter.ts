@@ -68,8 +68,13 @@ let pcmAudioSupported = false;
  * reports `false` and realtime voice degrades to an "unavailable" state rather than opening a
  * session that cannot carry audio.
  */
-export function enableRealtimePcmAudio(): void {
+export function EnableRealtimePcmAudio(): void {
     pcmAudioSupported = true;
+}
+
+/** @deprecated Use {@link EnableRealtimePcmAudio}. */
+export function enableRealtimePcmAudio(): void {
+    return EnableRealtimePcmAudio();
 }
 
 /**
@@ -77,8 +82,13 @@ export function enableRealtimePcmAudio(): void {
  * build (the file-based recorder/player cannot stream raw PCM — see the file header); `true` once
  * a native audio module has called {@link enableRealtimePcmAudio}.
  */
-export function isRealtimePcmAudioSupported(): boolean {
+export function IsRealtimePcmAudioSupported(): boolean {
     return pcmAudioSupported;
+}
+
+/** @deprecated Use {@link IsRealtimePcmAudioSupported}. */
+export function isRealtimePcmAudioSupported(): boolean {
+    return IsRealtimePcmAudioSupported();
 }
 
 // ── Microphone permission + audio session (real `expo-audio` usage) ────────────
@@ -89,7 +99,7 @@ export function isRealtimePcmAudioSupported(): boolean {
  * never re-prompted. Never throws — any module error resolves to `false` (treated as "denied") so
  * the caller can surface a clear permission message instead of crashing.
  */
-export async function requestMicrophonePermission(): Promise<boolean> {
+export async function RequestMicrophonePermission(): Promise<boolean> {
     try {
         const current = await getRecordingPermissionsAsync();
         if (current.granted) {
@@ -105,12 +115,17 @@ export async function requestMicrophonePermission(): Promise<boolean> {
     }
 }
 
+/** @deprecated Use {@link RequestMicrophonePermission}. */
+export async function requestMicrophonePermission(): Promise<boolean> {
+    return RequestMicrophonePermission();
+}
+
 /**
  * Puts the device audio session into a record-and-playback mode suitable for a live voice call:
  * recording enabled and audio audible even with the ringer on silent. Best-effort — a failure is
  * swallowed (the session can still proceed; iOS simply keeps its prior category).
  */
-export async function configureVoiceAudioSession(): Promise<void> {
+export async function ConfigureVoiceAudioSession(): Promise<void> {
     try {
         await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
     } catch {
@@ -118,15 +133,25 @@ export async function configureVoiceAudioSession(): Promise<void> {
     }
 }
 
+/** @deprecated Use {@link ConfigureVoiceAudioSession}. */
+export async function configureVoiceAudioSession(): Promise<void> {
+    return ConfigureVoiceAudioSession();
+}
+
 /**
  * Reverts the audio session out of record mode at session end. Best-effort and never throws.
  */
-export async function resetVoiceAudioSession(): Promise<void> {
+export async function ResetVoiceAudioSession(): Promise<void> {
     try {
         await setAudioModeAsync({ allowsRecording: false });
     } catch {
         /* non-fatal */
     }
+}
+
+/** @deprecated Use {@link ResetVoiceAudioSession}. */
+export async function resetVoiceAudioSession(): Promise<void> {
+    return ResetVoiceAudioSession();
 }
 
 // ── RN implementations of the driver audio seams ───────────────────────────────
@@ -222,7 +247,7 @@ export class RnPcmPlayback implements IRealtimePcmPlayback {
  *
  * @returns A `MediaStream`-typed shim exposing empty track lists.
  */
-export function acquireVoiceInputStream(): MediaStream {
+export function AcquireVoiceInputStream(): MediaStream {
     const shim: Pick<MediaStream, 'getTracks' | 'getAudioTracks' | 'getVideoTracks'> = {
         getTracks: () => [],
         getAudioTracks: () => [],
@@ -230,6 +255,11 @@ export function acquireVoiceInputStream(): MediaStream {
     };
     // Platform boundary: RN has no `MediaStream`; the driver only invokes the three methods above.
     return shim as unknown as MediaStream;
+}
+
+/** @deprecated Use {@link AcquireVoiceInputStream}. */
+export function acquireVoiceInputStream(): MediaStream {
+    return AcquireVoiceInputStream();
 }
 
 // ── RN ElevenLabs driver (injects the seams above) ─────────────────────────────

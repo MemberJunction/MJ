@@ -50,8 +50,26 @@ export class AgentRequestPanelComponent extends BaseAngularComponent implements 
 
     @Output() Close = new EventEmitter<AgentRequestPanelResult>();
 
-    @ViewChild('dynamicForm') dynamicForm: DynamicFormComponent | undefined;
-    @ViewChild('panelElement') panelElement: ElementRef<HTMLDivElement> | undefined;
+    @ViewChild('dynamicForm') DynamicForm: DynamicFormComponent | undefined;
+
+    /** @deprecated Use {@link DynamicForm}. */
+    get dynamicForm(): DynamicFormComponent | undefined {
+        return this.DynamicForm;
+    }
+    /** @deprecated Use {@link DynamicForm}. */
+    set dynamicForm(value: DynamicFormComponent | undefined) {
+        this.DynamicForm = value;
+    }
+    @ViewChild('panelElement') PanelElement: ElementRef<HTMLDivElement> | undefined;
+
+    /** @deprecated Use {@link PanelElement}. */
+    get panelElement(): ElementRef<HTMLDivElement> | undefined {
+        return this.PanelElement;
+    }
+    /** @deprecated Use {@link PanelElement}. */
+    set panelElement(value: ElementRef<HTMLDivElement> | undefined) {
+        this.PanelElement = value;
+    }
 
     public IsLoading = false;
     public IsSaving = false;
@@ -401,8 +419,8 @@ export class AgentRequestPanelComponent extends BaseAngularComponent implements 
      * internal submit button before clicking the panel's action buttons.
      */
     private collectFormData(): Record<string, unknown> | null {
-        if (!this.dynamicForm?.FormGroup) return null;
-        const values = this.dynamicForm.FormGroup.value;
+        if (!this.DynamicForm?.FormGroup) return null;
+        const values = this.DynamicForm.FormGroup.value;
         if (values && Object.keys(values).length > 0) {
             return values;
         }

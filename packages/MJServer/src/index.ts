@@ -8,9 +8,9 @@ import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManag
 import { UserCache, resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
 import { MJGlobal, MJEventType, UUIDsEqual, ShutdownRegistry } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
-import { extendConnectionPoolWithQuery } from './util.js';
-import { registerIntegrationCustomColumnPromoter, IntegrationCustomColumnPromoter } from './integration/CustomColumnPromoter.js';
-import { DisableUnselectedEntityMaps, ReenableFieldMapsForEntityMap, selectFieldsToMap } from './integration/EntityMapLifecycle.js';
+import { ExtendConnectionPoolWithQuery } from './util.js';
+import { RegisterIntegrationCustomColumnPromoter, IntegrationCustomColumnPromoter } from './integration/CustomColumnPromoter.js';
+import { DisableUnselectedEntityMaps, ReenableFieldMapsForEntityMap, SelectFieldsToMap } from './integration/EntityMapLifecycle.js';
 import { default as BodyParser } from 'body-parser';
 import compression from 'compression'; // Add compression middleware
 import cors from 'cors';
@@ -32,31 +32,31 @@ import { RealtimeProxyServer } from './realtimeProxy/RealtimeProxyServer.js';
 import buildApolloServer from './apolloServer/index.js';
 import { configInfo, configFilePath, dbDatabase, dbHost, dbPort, dbUsername, graphqlPort, graphqlRootPath, mj_core_schema, websiteRunFromPackage, RESTApiOptions } from './config.js';
 import { default as jwt } from 'jsonwebtoken';
-import { contextFunction, createUnifiedAuthMiddleware, getUserPayload } from './context.js';
+import { ContextFunction, CreateUnifiedAuthMiddleware, GetUserPayload } from './context.js';
 import { UserPayload } from './types.js';
 import { requireSystemUserDirective, publicDirective } from './directives/index.js';
-import { variablesLoggingMiddleware } from './logging/variablesLoggingMiddleware.js';
-import { auditResolversForUndecoratedArgs } from './logging/bootAudit.js';
+import { VariablesLoggingMiddleware } from './logging/variablesLoggingMiddleware.js';
+import { AuditResolversForUndecoratedArgs } from './logging/bootAudit.js';
 import { StartupLogger } from './logging/StartupLogger.js';
 import { AuthProviderFactory } from '@memberjunction/auth-providers';
 import createMSSQLConfig from './orm.js';
-import { setupRESTEndpoints } from './rest/setupRESTEndpoints.js';
-import { createOAuthCallbackHandler } from './rest/OAuthCallbackHandler.js';
-import { createSignatureWebhookHandler } from './rest/SignatureWebhookHandler.js';
-import { createMediaStreamRouter } from './rest/MediaStreamHandler.js';
-import { createRealtimeSdpBrokerRouter } from './rest/RealtimeSdpBrokerHandler.js';
+import { SetupRESTEndpoints } from './rest/setupRESTEndpoints.js';
+import { CreateOAuthCallbackHandler } from './rest/OAuthCallbackHandler.js';
+import { CreateSignatureWebhookHandler } from './rest/SignatureWebhookHandler.js';
+import { CreateMediaStreamRouter } from './rest/MediaStreamHandler.js';
+import { CreateRealtimeSdpBrokerRouter } from './rest/RealtimeSdpBrokerHandler.js';
 import { REALTIME_SDP_EXCHANGE_PATH } from '@memberjunction/ai';
 import { createMagicLinkHandler, createMagicLinkJwksRouter, registerMagicLinkAuthProvider, MAGIC_LINK_MOUNT_PATH } from './auth/magicLink/index.js';
 import { createWidgetHandler, WIDGET_MOUNT_PATH } from './realtimeWidget/index.js';
 import { resolve } from 'node:path';
-import { DataSourceInfo, raiseEvent } from './types.js';
+import { DataSourceInfo, RaiseEvent } from './types.js';
 
 import { ExternalChangeDetectorEngine } from '@memberjunction/external-change-detection';
 import { ScheduledJobsService } from './services/ScheduledJobsService.js';
 import { IntegrationSyncWorkerService } from './services/IntegrationSyncWorkerService.js';
 import { LocalCacheManager, StartupManager, TelemetryManager, TelemetryLevel, LogStatus, LogError, SetVerboseLogging } from '@memberjunction/core';
 import { getSystemUser, validateAuthProvidersRegistered } from './auth/index.js';
-import { createAuthProviderCatalogRouter, AUTH_CATALOG_MOUNT_PATH } from './auth/AuthProviderCatalogRouter.js';
+import { CreateAuthProviderCatalogRouter, AUTH_CATALOG_MOUNT_PATH } from './auth/AuthProviderCatalogRouter.js';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 import { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
 import { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
@@ -78,7 +78,7 @@ import {
   MJScheduledJobEntity,
 } from '@memberjunction/core-entities';
 import { ServerExtensionLoader, ServerExtensionConfig, mergeServerExtensionConfigs, prepareServerExtensionConfigs, describeServerExtensionMount, InstallMediaUpgradeDispatcher, IsGraphQLWsPath } from '@memberjunction/server-extensions-core';
-import { coreReservedServerExtensionRoots } from './serverExtensionReservedRoots.js';
+import { CoreReservedServerExtensionRoots } from './serverExtensionReservedRoots.js';
 import { MetadataCacheRefreshIntervalSeconds } from './providerConfigUnits.js';
 
 const cacheRefreshInterval = configInfo.databaseSettings.metadataCacheRefreshInterval;
@@ -97,8 +97,13 @@ export { MetadataCacheRefreshIntervalSeconds } from './providerConfigUnits.js';
  * CodeGenLib). This wrapper keeps the public `getDbType()` symbol that
  * MJServer consumers (and the broader stack) already import.
  */
-export function getDbType(): DatabasePlatform {
+export function GetDbType(): DatabasePlatform {
     return resolveDbPlatformFromEnv() ?? 'sqlserver';
+}
+
+/** @deprecated Use {@link GetDbType}. */
+export function getDbType(): DatabasePlatform {
+  return GetDbType();
 }
 
 export { MaxLength } from 'class-validator';
@@ -120,14 +125,14 @@ export type {
     LoadExtensionsOptions,
 } from '@memberjunction/server-extensions-core';
 export * from './directives/index.js';
-export { NoLog, hasNoLogParameter, getNoLogFields } from './logging/NoLog.js';
+export { NoLog, HasNoLogParameter, hasNoLogParameter, GetNoLogFields, getNoLogFields } from './logging/NoLog.js';
 export * from './entitySubclasses/MJEntityPermissionEntityServer.server.js';
 export * from './types.js';
 export {
-    getSystemUser,
-    getSigningKeys,
-    extractUserInfoFromPayload,
-    verifyUserRecord,
+    GetSystemUser, getSystemUser,
+    GetSigningKeys, getSigningKeys,
+    ExtractUserInfoFromPayload, extractUserInfoFromPayload,
+    VerifyUserRecord, verifyUserRecord,
 } from './auth/index.js';
 export * from './auth/APIKeyScopeAuth.js';
 export * from './auth/actingContextResolver.js';
@@ -137,7 +142,7 @@ export * from './auth/actingContextResolver.js';
 // `ReportedMisconfigurationCount` / `MAX_REPORTED_MISCONFIGURATIONS` are deliberately NOT here:
 // they exist so the LRU's bound is assertable, the tests import them from the module directly, and
 // a published export is a maintenance commitment no caller asked for.
-export { ResolveConfiguredPrincipal, resolvePrincipalFrom } from './auth/principals.js';
+export { ResolveConfiguredPrincipal, ResolvePrincipalFrom, resolvePrincipalFrom } from './auth/principals.js';
 export type { ResolvablePrincipal, PrincipalResolution, PrincipalResolutionReason } from './auth/principals.js';
 export { CloneUserForSessionContext } from './auth/sessionUserClone.js';
 
@@ -261,7 +266,10 @@ const localPath = (p: string) => {
   return resolvedPath;
 };
 
-export const createApp = (): Application => express();
+export const CreateApp = (): Application => express();
+
+/** @deprecated Use {@link CreateApp}. */
+export const createApp = CreateApp;
 
 /**
  * Resolves the MJServer package version for the startup summary header.
@@ -281,7 +289,7 @@ function resolveServerVersion(): string | undefined {
   }
 }
 
-export const serve = async (resolverPaths: Array<string>, app: Application = createApp(), options?: MJServerOptions): Promise<void> => {
+export const Serve = async (resolverPaths: Array<string>, app: Application = CreateApp(), options?: MJServerOptions): Promise<void> => {
   const t0 = performance.now();
   // Level-gated startup logger. Resolves verbosity from telemetry.level (single
   // operator knob). At `standard` (default), per-phase timings are collapsed into
@@ -308,7 +316,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   }
 
   const setupComplete$ = new ReplaySubject(1);
-  const dbType = getDbType();
+  const dbType = GetDbType();
   const dataSources: DataSourceInfo[] = [];
 
   if (dbType === 'postgresql') {
@@ -640,7 +648,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   // Register the post-sync custom-column promotion hook (gaps.md §2). Safe to call regardless of
   // RSU config: the hook self-gates on captured overflow data and uses RSU only at fire time.
   try {
-    registerIntegrationCustomColumnPromoter();
+    RegisterIntegrationCustomColumnPromoter();
   } catch (err) {
     console.warn(`Custom-column promoter registration failed (post-sync promotion disabled): ${(err as Error).message}`);
   }
@@ -735,7 +743,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   GetAPIKeyEngine();
 
   setupComplete$.next(true);
-  raiseEvent('setupComplete', dataSources, null,  this);
+  RaiseEvent('setupComplete', dataSources, null,  this);
 
   /******TEST HARNESS FOR CHANGE DETECTION */
   /******TEST HARNESS FOR CHANGE DETECTION */
@@ -961,7 +969,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     scalarsMap: [{ type: Date, scalar: GraphQLTimestamp }],
     emitSchemaFile: websiteRunFromPackage !== 1,
     pubSub,
-    globalMiddlewares: [variablesLoggingMiddleware],
+    globalMiddlewares: [VariablesLoggingMiddleware],
   });
   const buildMs = performance.now() - tBuild;
 
@@ -985,7 +993,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
 
   // Verbose-mode-only diagnostic: name custom-resolver args that aren't metadata-bound
   // and aren't @NoLog-marked. No-op in default config (logVariables=false).
-  auditResolversForUndecoratedArgs();
+  AuditResolversForUndecoratedArgs();
 
   const tTransform = performance.now();
   schema = requireSystemUserDirective.transformer(schema);
@@ -1061,7 +1069,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
           // (validated the same way as the HTTP x-mj-api-key / x-mj-user-api-key headers).
           const systemApiKey = ctx.connectionParams?.['x-mj-api-key'] ? String(ctx.connectionParams['x-mj-api-key']) : undefined;
           const userApiKey = ctx.connectionParams?.['x-mj-user-api-key'] ? String(ctx.connectionParams['x-mj-user-api-key']) : undefined;
-          const userPayload = await getUserPayload(token, undefined, dataSources, undefined, systemApiKey, userApiKey);
+          const userPayload = await GetUserPayload(token, undefined, dataSources, undefined, systemApiKey, userApiKey);
 
           // Store validated payload on the connection for use in context()
           ctx.extra.userPayload = userPayload;
@@ -1163,9 +1171,9 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   const oauthPublicUrl = configInfo.publicUrl || `${configInfo.baseUrl}:${configInfo.graphqlPort}${configInfo.graphqlRootPath || ''}`;
   startupLog.LogIf('verbose', `[OAuth] publicUrl: ${oauthPublicUrl}`);
 
-  let oauthAuthenticatedRouter: ReturnType<typeof createOAuthCallbackHandler>['authenticatedRouter'] | undefined;
+  let oauthAuthenticatedRouter: ReturnType<typeof CreateOAuthCallbackHandler>['authenticatedRouter'] | undefined;
   if (oauthPublicUrl) {
-    const { callbackRouter, authenticatedRouter } = createOAuthCallbackHandler({
+    const { callbackRouter, authenticatedRouter } = CreateOAuthCallbackHandler({
       publicUrl: oauthPublicUrl,
       successRedirectUrl: `${oauthPublicUrl}/oauth/success`,
       errorRedirectUrl: `${oauthPublicUrl}/oauth/error`,
@@ -1193,19 +1201,19 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   // ─── eSignature webhook (unauthenticated, registered BEFORE auth) ─────
   // Called by external signature providers (DocuSign Connect, etc.) without an MJ bearer token.
   // The provider DRIVER verifies the payload signature/HMAC; MJ auth does not apply here.
-  app.use('/esignature', cors<cors.CorsRequest>(), createSignatureWebhookHandler());
+  app.use('/esignature', cors<cors.CorsRequest>(), CreateSignatureWebhookHandler());
   startupLog.LogIf('verbose', '[eSignature] Webhook route registered at /esignature/webhook/:driverKey');
 
   // ─── Authenticated media streaming (token-gated, registered BEFORE auth) ─────
   // The `?token=` query param (minted by CreateMediaAccessToken after a per-user permission
   // check) is the capability — the route verifies it itself, so it does NOT use the MJ bearer
   // auth middleware (an <audio>/<video> element can't send Authorization headers).
-  app.use('/media', cors<cors.CorsRequest>(), createMediaStreamRouter());
+  app.use('/media', cors<cors.CorsRequest>(), CreateMediaStreamRouter());
   startupLog.LogIf('verbose', '[Media] Streaming route registered at /media/:fileId');
 
   // ─── Realtime WebRTC SDP broker (ticket-gated, registered BEFORE auth) ───────
   if (configInfo.realtime?.enabled) {
-    app.use(REALTIME_SDP_EXCHANGE_PATH, cors<cors.CorsRequest>(), createRealtimeSdpBrokerRouter());
+    app.use(REALTIME_SDP_EXCHANGE_PATH, cors<cors.CorsRequest>(), CreateRealtimeSdpBrokerRouter());
     startupLog.LogIf('verbose', `[Realtime] WebRTC SDP broker registered at ${REALTIME_SDP_EXCHANGE_PATH}`);
   }
 
@@ -1304,7 +1312,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     {
       onInvalid: (message) => LogError(message),
       onOverlap: (message) => LogStatus(message),
-      extraReservedRoots: coreReservedServerExtensionRoots(graphqlRootPath),
+      extraReservedRoots: CoreReservedServerExtensionRoots(graphqlRootPath),
     },
   );
   for (const cfg of extensionConfigs) {
@@ -1361,11 +1369,11 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   // unauthenticated and must mount ahead of the auth middleware. It publishes only the
   // non-secret allow-list (see AuthProviderEngine.GetPublicCatalog) — the same values a
   // single-provider SPA already compiled into its bundle.
-  app.use(AUTH_CATALOG_MOUNT_PATH, cors<cors.CorsRequest>(), createAuthProviderCatalogRouter());
+  app.use(AUTH_CATALOG_MOUNT_PATH, cors<cors.CorsRequest>(), CreateAuthProviderCatalogRouter());
   startupLog.LogIf('verbose', `[Auth] Public provider catalog registered at ${AUTH_CATALOG_MOUNT_PATH}/providers`);
 
   // ─── Unified auth middleware (replaces both REST authMiddleware and contextFunction auth) ─────
-  app.use(createUnifiedAuthMiddleware(dataSources));
+  app.use(CreateUnifiedAuthMiddleware(dataSources));
 
   // ─── Post-auth middleware from BaseServerMiddleware plugins ─────
   // Middleware here has access to the authenticated user via req.userPayload.
@@ -1453,7 +1461,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   }
 
   // No per-route authMiddleware needed — unified auth middleware already ran
-  setupRESTEndpoints(app, restApiConfig);
+  SetupRESTEndpoints(app, restApiConfig);
 
   // ─── GraphQL middleware (contextFunction reads req.userPayload, no re-auth) ─────
   app.use(
@@ -1464,9 +1472,9 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     // Apollo Server's expressMiddleware requires req.body to be defined.
     (req, _res, next) => { if (req.body === undefined) req.body = {}; next(); },
     expressMiddleware(apolloServer, {
-      context: contextFunction({
+      context: ContextFunction({
                                  setupComplete$,
-                                 dataSource: extendConnectionPoolWithQuery(dataSources[0].dataSource), // default read-write data source
+                                 dataSource: ExtendConnectionPoolWithQuery(dataSources[0].dataSource), // default read-write data source
                                  dataSources // all data source
                                }),
     })
@@ -1663,6 +1671,9 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     // This is critical for server stability when downstream dependencies fail
   });
 };
+
+/** @deprecated Use {@link Serve}. */
+export const serve = Serve;
 
 /**
  * Age at which an unprocessed `MJ: RSU Pending Works` row is reported as stranded.
@@ -1878,7 +1889,7 @@ async function processRSUPendingWork(): Promise<void> {
           const selectedFields = sourceObjectFields[objName]; // null = all, string[] = specific
           // Always maps the PRIMARY KEY, selected or not — see selectFieldsToMap for why identity
           // cannot be left to the selection.
-          const fieldsToMap = selectFieldsToMap(sourceObj?.Fields ?? [], selectedFields);
+          const fieldsToMap = SelectFieldsToMap(sourceObj?.Fields ?? [], selectedFields);
 
           // Load existing field maps to avoid duplicates
           const existingFieldMaps = await rvPending.RunView<MJCompanyIntegrationFieldMapEntity>({

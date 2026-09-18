@@ -86,14 +86,14 @@ function useCompiledComponent(spec: ComponentSpec): LoadState {
 async function compileSpec(spec: ComponentSpec): Promise<LoadState> {
     try {
         const runtime = await getInteractiveRuntime();
-        const result = await runtime.manager.loadComponent(spec);
+        const result = await runtime.Manager.loadComponent(spec);
         const compiled = result.component?.component;
         if (!result.success || typeof compiled !== 'function') {
             return { status: 'failed', reason: describeErrors(result.errors) };
         }
         const Compiled = compiled as CompiledComponent;
-        const props = runtime.buildComponentProps({}, {}, {}, buildCallbacks(), {}, undefined);
-        const Boundary = runtime.createErrorBoundary(ShimReact, {
+        const props = runtime.BuildComponentProps({}, {}, {}, buildCallbacks(), {}, undefined);
+        const Boundary = runtime.CreateErrorBoundary(ShimReact, {
             fallback: <DesktopFallback reason="This interactive component ran into an error on mobile." />,
         }) as BoundaryComponent;
         return { status: 'ready', Compiled, Boundary, props };
@@ -130,7 +130,7 @@ function buildCallbacks(): Parameters<InteractiveRuntimeBuildProps>[3] {
 }
 
 /** Alias to derive the exact `buildComponentProps` callbacks parameter type. */
-type InteractiveRuntimeBuildProps = Awaited<ReturnType<typeof getInteractiveRuntime>>['buildComponentProps'];
+type InteractiveRuntimeBuildProps = Awaited<ReturnType<typeof getInteractiveRuntime>>['BuildComponentProps'];
 
 /**
  * Fallback card shown when a component can't or shouldn't render on-device.

@@ -313,80 +313,277 @@ const PS_PIPELINES_STARTER_PROMPT =
 export class PSPipelinesComponent implements OnInit {
   @Input() engine!: PredictiveStudioEngine;
   @Input() provider: IMetadataProvider | null = null;
-  @Input() currentUser: UserInfo | null = null;
+  @Input() CurrentUser: UserInfo | null = null;
 
-  @Output() askAgent = new EventEmitter<string>();
+  /** @deprecated Use {@link CurrentUser}. */
+  @Input() set currentUser(value: UserInfo | null) {
+    this.CurrentUser = value;
+  }
+  /** @deprecated Use {@link CurrentUser}. */
+  get currentUser(): UserInfo | null {
+    return this.CurrentUser;
+  }
+
+  @Output() AskAgent = new EventEmitter<string>();
+
+  /**
+   * @deprecated Use {@link AskAgent}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (askAgent) keeps working. Must stay AFTER AskAgent: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() askAgent = this.AskAgent;
 
   private cdr = inject(ChangeDetectorRef);
   private notifications = inject(MJNotificationService);
 
-  public readonly starterPrompt = PS_PIPELINES_STARTER_PROMPT;
-  public readonly sourceKinds = SOURCE_KINDS;
-  public readonly stepKinds = STEP_KINDS;
-  public readonly problemTypes = PROBLEM_TYPES;
-  public readonly imputeStrategies = IMPUTE_STRATEGIES;
+  public readonly StarterPrompt = PS_PIPELINES_STARTER_PROMPT;
 
-  public pipelines: MJMLTrainingPipelineEntity[] = [];
-  public selectedPipelineId = '';
+  /** @deprecated Use {@link StarterPrompt}. */
+  public get starterPrompt() {
+    return this.StarterPrompt;
+  }
+  public readonly SourceKinds = SOURCE_KINDS;
+
+  /** @deprecated Use {@link SourceKinds}. */
+  public get sourceKinds() {
+    return this.SourceKinds;
+  }
+  public readonly StepKinds = STEP_KINDS;
+
+  /** @deprecated Use {@link StepKinds}. */
+  public get stepKinds() {
+    return this.StepKinds;
+  }
+  public readonly ProblemTypes = PROBLEM_TYPES;
+
+  /** @deprecated Use {@link ProblemTypes}. */
+  public get problemTypes() {
+    return this.ProblemTypes;
+  }
+  public readonly ImputeStrategies = IMPUTE_STRATEGIES;
+
+  /** @deprecated Use {@link ImputeStrategies}. */
+  public get imputeStrategies() {
+    return this.ImputeStrategies;
+  }
+
+  public Pipelines: MJMLTrainingPipelineEntity[] = [];
+
+  /** @deprecated Use {@link Pipelines}. */
+  public get pipelines(): MJMLTrainingPipelineEntity[] {
+    return this.Pipelines;
+  }
+  /** @deprecated Use {@link Pipelines}. */
+  public set pipelines(value: MJMLTrainingPipelineEntity[]) {
+    this.Pipelines = value;
+  }
+  public SelectedPipelineId = '';
+
+  /** @deprecated Use {@link SelectedPipelineId}. */
+  public get selectedPipelineId() {
+    return this.SelectedPipelineId;
+  }
+  /** @deprecated Use {@link SelectedPipelineId}. */
+  public set selectedPipelineId(value) {
+    this.SelectedPipelineId = value;
+  }
 
   // Editable spec state (the source of truth; nodes/edges are derived).
   private editSources: SourceBinding[] = [];
   private editSteps: FeatureStep[] = [];
-  public editTargetVariable = '';
-  public editProblemType: ProblemType = 'classification';
-  public editAlgorithmId = '';
-  public editHyperparams = '{}';
-  public editLeakage: LeakageGuard = { DenyFields: [], SingleFeatureDominanceThreshold: DOMINANCE_THRESHOLD_DEFAULT };
-  public editAsOf: AsOfStrategy = { Mode: 'none' };
-  public editValidation: ValidationStrategy = { Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.15 };
+  public EditTargetVariable = '';
 
-  public nodes: DagNode[] = [];
-  public edges: DagEdge[] = [];
-  public selectedId = '';
-  public canvasW = 800;
-  public canvasH = 460;
-  public dirty = false;
-  public busy = false;
+  /** @deprecated Use {@link EditTargetVariable}. */
+  public get editTargetVariable() {
+    return this.EditTargetVariable;
+  }
+  /** @deprecated Use {@link EditTargetVariable}. */
+  public set editTargetVariable(value) {
+    this.EditTargetVariable = value;
+  }
+  public EditProblemType: ProblemType = 'classification';
+
+  /** @deprecated Use {@link EditProblemType}. */
+  public get editProblemType(): ProblemType {
+    return this.EditProblemType;
+  }
+  /** @deprecated Use {@link EditProblemType}. */
+  public set editProblemType(value: ProblemType) {
+    this.EditProblemType = value;
+  }
+  public EditAlgorithmId = '';
+
+  /** @deprecated Use {@link EditAlgorithmId}. */
+  public get editAlgorithmId() {
+    return this.EditAlgorithmId;
+  }
+  /** @deprecated Use {@link EditAlgorithmId}. */
+  public set editAlgorithmId(value) {
+    this.EditAlgorithmId = value;
+  }
+  public EditHyperparams = '{}';
+
+  /** @deprecated Use {@link EditHyperparams}. */
+  public get editHyperparams() {
+    return this.EditHyperparams;
+  }
+  /** @deprecated Use {@link EditHyperparams}. */
+  public set editHyperparams(value) {
+    this.EditHyperparams = value;
+  }
+  public EditLeakage: LeakageGuard = { DenyFields: [], SingleFeatureDominanceThreshold: DOMINANCE_THRESHOLD_DEFAULT };
+
+  /** @deprecated Use {@link EditLeakage}. */
+  public get editLeakage(): LeakageGuard {
+    return this.EditLeakage;
+  }
+  /** @deprecated Use {@link EditLeakage}. */
+  public set editLeakage(value: LeakageGuard) {
+    this.EditLeakage = value;
+  }
+  public EditAsOf: AsOfStrategy = { Mode: 'none' };
+
+  /** @deprecated Use {@link EditAsOf}. */
+  public get editAsOf(): AsOfStrategy {
+    return this.EditAsOf;
+  }
+  /** @deprecated Use {@link EditAsOf}. */
+  public set editAsOf(value: AsOfStrategy) {
+    this.EditAsOf = value;
+  }
+  public EditValidation: ValidationStrategy = { Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.15 };
+
+  /** @deprecated Use {@link EditValidation}. */
+  public get editValidation(): ValidationStrategy {
+    return this.EditValidation;
+  }
+  /** @deprecated Use {@link EditValidation}. */
+  public set editValidation(value: ValidationStrategy) {
+    this.EditValidation = value;
+  }
+
+  public Nodes: DagNode[] = [];
+
+  /** @deprecated Use {@link Nodes}. */
+  public get nodes(): DagNode[] {
+    return this.Nodes;
+  }
+  /** @deprecated Use {@link Nodes}. */
+  public set nodes(value: DagNode[]) {
+    this.Nodes = value;
+  }
+  public Edges: DagEdge[] = [];
+
+  /** @deprecated Use {@link Edges}. */
+  public get edges(): DagEdge[] {
+    return this.Edges;
+  }
+  /** @deprecated Use {@link Edges}. */
+  public set edges(value: DagEdge[]) {
+    this.Edges = value;
+  }
+  public SelectedId = '';
+
+  /** @deprecated Use {@link SelectedId}. */
+  public get selectedId() {
+    return this.SelectedId;
+  }
+  /** @deprecated Use {@link SelectedId}. */
+  public set selectedId(value) {
+    this.SelectedId = value;
+  }
+  public CanvasW = 800;
+
+  /** @deprecated Use {@link CanvasW}. */
+  public get canvasW() {
+    return this.CanvasW;
+  }
+  /** @deprecated Use {@link CanvasW}. */
+  public set canvasW(value) {
+    this.CanvasW = value;
+  }
+  public CanvasH = 460;
+
+  /** @deprecated Use {@link CanvasH}. */
+  public get canvasH() {
+    return this.CanvasH;
+  }
+  /** @deprecated Use {@link CanvasH}. */
+  public set canvasH(value) {
+    this.CanvasH = value;
+  }
+  public Dirty = false;
+
+  /** @deprecated Use {@link Dirty}. */
+  public get dirty() {
+    return this.Dirty;
+  }
+  /** @deprecated Use {@link Dirty}. */
+  public set dirty(value) {
+    this.Dirty = value;
+  }
+  public Busy = false;
+
+  /** @deprecated Use {@link Busy}. */
+  public get busy() {
+    return this.Busy;
+  }
+  /** @deprecated Use {@link Busy}. */
+  public set busy(value) {
+    this.Busy = value;
+  }
 
   private nodeById = new Map<string, DagNode>();
   private stepSeq = 0;
 
   ngOnInit(): void {
-    this.pipelines = this.engine?.Pipelines ?? [];
-    if (this.pipelines.length > 0) {
-      this.selectPipeline(this.pipelines[0].ID);
+    this.Pipelines = this.engine?.Pipelines ?? [];
+    if (this.Pipelines.length > 0) {
+      this.SelectPipeline(this.Pipelines[0].ID);
     }
   }
 
   // ---- pipeline selection: entity JSON → editable state ----
 
-  public selectPipeline(id: string): void {
-    this.selectedPipelineId = id;
-    const p = this.pipelines.find((x) => UUIDsEqual(x.ID, id));
+  public SelectPipeline(id: string): void {
+    this.SelectedPipelineId = id;
+    const p = this.Pipelines.find((x) => UUIDsEqual(x.ID, id));
     if (!p) {
       return;
     }
     this.editSources = this.parse<SourceBinding[]>(p.SourceBindings, []);
     this.editSteps = this.parse<FeatureStepGraph>(p.FeatureSteps, { Steps: [] }).Steps ?? [];
-    this.editTargetVariable = p.TargetVariable ?? '';
-    this.editProblemType = (p.ProblemType as ProblemType) ?? 'classification';
-    this.editAlgorithmId = p.AlgorithmID ?? '';
-    this.editHyperparams = p.Hyperparameters ?? '{}';
-    this.editLeakage = this.parse<LeakageGuard>(p.LeakageGuard, { DenyFields: [], SingleFeatureDominanceThreshold: DOMINANCE_THRESHOLD_DEFAULT });
-    this.editAsOf = this.parse<AsOfStrategy>(p.AsOfStrategy, { Mode: 'none' });
-    this.editValidation = this.parse<ValidationStrategy>(p.ValidationStrategy, { Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.15 });
+    this.EditTargetVariable = p.TargetVariable ?? '';
+    this.EditProblemType = (p.ProblemType as ProblemType) ?? 'classification';
+    this.EditAlgorithmId = p.AlgorithmID ?? '';
+    this.EditHyperparams = p.Hyperparameters ?? '{}';
+    this.EditLeakage = this.parse<LeakageGuard>(p.LeakageGuard, { DenyFields: [], SingleFeatureDominanceThreshold: DOMINANCE_THRESHOLD_DEFAULT });
+    this.EditAsOf = this.parse<AsOfStrategy>(p.AsOfStrategy, { Mode: 'none' });
+    this.EditValidation = this.parse<ValidationStrategy>(p.ValidationStrategy, { Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.15 });
     this.stepSeq = this.editSteps.length;
-    this.dirty = false;
+    this.Dirty = false;
     this.rebuild();
-    this.selectedId = this.nodes[0]?.id ?? '';
+    this.SelectedId = this.Nodes[0]?.id ?? '';
+  }
+
+  /** @deprecated Use {@link SelectPipeline}. */
+  public selectPipeline(id: string): void {
+    return this.SelectPipeline(id);
   }
 
   private get selectedPipeline(): MJMLTrainingPipelineEntity | undefined {
-    return this.pipelines.find((p) => UUIDsEqual(p.ID, this.selectedPipelineId));
+    return this.Pipelines.find((p) => UUIDsEqual(p.ID, this.SelectedPipelineId));
   }
 
+  public IsSelectedPipeline(p: MJMLTrainingPipelineEntity): boolean {
+    return UUIDsEqual(p.ID, this.SelectedPipelineId);
+  }
+
+  /** @deprecated Use {@link IsSelectedPipeline}. */
   public isSelectedPipeline(p: MJMLTrainingPipelineEntity): boolean {
-    return UUIDsEqual(p.ID, this.selectedPipelineId);
+    return this.IsSelectedPipeline(p);
   }
 
   private parse<T>(raw: string | null | undefined, fallback: T): T {
@@ -402,7 +599,7 @@ export class PSPipelinesComponent implements OnInit {
   }
 
   private markDirty(): void {
-    this.dirty = true;
+    this.Dirty = true;
     this.rebuild();
   }
 
@@ -447,8 +644,8 @@ export class PSPipelinesComponent implements OnInit {
     edges.push({ from: '__target', to: '__algo' });
     edges.push({ from: '__algo', to: '__output' });
 
-    this.nodes = nodes;
-    this.edges = edges;
+    this.Nodes = nodes;
+    this.Edges = edges;
     this.markPorts();
     this.layoutDag();
   }
@@ -481,21 +678,21 @@ export class PSPipelinesComponent implements OnInit {
   }
 
   private targetNode(): DagNode {
-    return { id: '__target', type: 'target', title: `Target: ${this.editTargetVariable || '—'}`, icon: 'fa-solid fa-bullseye', rows: [{ k: 'variable', v: this.editTargetVariable || '—' }, { k: 'type', v: this.editProblemType }], x: 0, y: 0, hasIn: false, hasOut: true };
+    return { id: '__target', type: 'target', title: `Target: ${this.EditTargetVariable || '—'}`, icon: 'fa-solid fa-bullseye', rows: [{ k: 'variable', v: this.EditTargetVariable || '—' }, { k: 'type', v: this.EditProblemType }], x: 0, y: 0, hasIn: false, hasOut: true };
   }
 
   private algoNode(): DagNode {
-    const name = this.engine.AlgorithmName(this.editAlgorithmId);
+    const name = this.engine.AlgorithmName(this.EditAlgorithmId);
     const rows = [{ k: 'algorithm', v: name }];
-    const hp = this.parse<Record<string, unknown>>(this.editHyperparams, {});
+    const hp = this.parse<Record<string, unknown>>(this.EditHyperparams, {});
     Object.entries(hp).slice(0, 2).forEach(([k, v]) => rows.push({ k, v: String(v) }));
     return { id: '__algo', type: 'algo', title: name, icon: 'fa-solid fa-shapes', rows, x: 0, y: 0, hasIn: true, hasOut: true };
   }
 
   private markPorts(): void {
-    const hasIn = new Set(this.edges.map((e) => e.to));
-    const hasOut = new Set(this.edges.map((e) => e.from));
-    for (const n of this.nodes) {
+    const hasIn = new Set(this.Edges.map((e) => e.to));
+    const hasOut = new Set(this.Edges.map((e) => e.from));
+    for (const n of this.Nodes) {
       n.hasIn = hasIn.has(n.id);
       n.hasOut = hasOut.has(n.id);
     }
@@ -503,73 +700,153 @@ export class PSPipelinesComponent implements OnInit {
 
   // ---- selection ----
 
+  public SelectNode(id: string): void {
+    this.SelectedId = id;
+  }
+
+  /** @deprecated Use {@link SelectNode}. */
   public selectNode(id: string): void {
-    this.selectedId = id;
+    return this.SelectNode(id);
   }
 
+  public get SelectedNode(): DagNode {
+    return this.nodeById.get(this.SelectedId) ?? this.Nodes[0] ?? { id: '', type: 'feat', title: '—', icon: 'fa-solid fa-sliders', rows: [], x: 0, y: 0, hasIn: false, hasOut: false };
+  }
+
+  /** @deprecated Use {@link SelectedNode}. */
   public get selectedNode(): DagNode {
-    return this.nodeById.get(this.selectedId) ?? this.nodes[0] ?? { id: '', type: 'feat', title: '—', icon: 'fa-solid fa-sliders', rows: [], x: 0, y: 0, hasIn: false, hasOut: false };
+    return this.SelectedNode;
   }
 
-  public get selectedSourceIndex(): number {
-    return this.selectedId.startsWith('src:') ? Number(this.selectedId.slice(4)) : -1;
+  public get SelectedSourceIndex(): number {
+    return this.SelectedId.startsWith('src:') ? Number(this.SelectedId.slice(4)) : -1;
   }
-  public get selectedSource(): SourceBinding | null {
-    const i = this.selectedSourceIndex;
+
+  /** @deprecated Use {@link SelectedSourceIndex}. */
+  public get selectedSourceIndex(): number {
+    return this.SelectedSourceIndex;
+  }
+  public get SelectedSource(): SourceBinding | null {
+    const i = this.SelectedSourceIndex;
     return i >= 0 ? this.editSources[i] ?? null : null;
   }
+
+  /** @deprecated Use {@link SelectedSource}. */
+  public get selectedSource(): SourceBinding | null {
+    return this.SelectedSource;
+  }
+  public get SelectedStep(): FeatureStep | null {
+    return this.editSteps.find((s) => s.Id === this.SelectedId) ?? null;
+  }
+
+  /** @deprecated Use {@link SelectedStep}. */
   public get selectedStep(): FeatureStep | null {
-    return this.editSteps.find((s) => s.Id === this.selectedId) ?? null;
+    return this.SelectedStep;
   }
+  public get OtherSteps(): FeatureStep[] {
+    return this.editSteps.filter((s) => s.Id !== this.SelectedId);
+  }
+
+  /** @deprecated Use {@link OtherSteps}. */
   public get otherSteps(): FeatureStep[] {
-    return this.editSteps.filter((s) => s.Id !== this.selectedId);
+    return this.OtherSteps;
   }
-  public get algorithms() {
+  public get Algorithms() {
     return this.engine?.Algorithms ?? [];
+  }
+
+  /** @deprecated Use {@link Algorithms}. */
+  public get algorithms() {
+    return this.Algorithms;
   }
 
   // ---- source editing ----
 
-  public setSourceKind(kind: string): void { const s = this.selectedSource; if (s) { s.Kind = kind as SourceBinding['Kind']; this.markDirty(); } }
-  public setSourceRef(ref: string): void { const s = this.selectedSource; if (s) { s.Ref = ref; this.markDirty(); } }
-  public setSourceAlias(alias: string): void { const s = this.selectedSource; if (s) { s.Alias = alias || undefined; this.markDirty(); } }
+  public SetSourceKind(kind: string): void { const s = this.SelectedSource; if (s) { s.Kind = kind as SourceBinding['Kind']; this.markDirty(); } }
+
+  /** @deprecated Use {@link SetSourceKind}. */
+  public setSourceKind(kind: string): void {
+    return this.SetSourceKind(kind);
+  }
+  public SetSourceRef(ref: string): void { const s = this.SelectedSource; if (s) { s.Ref = ref; this.markDirty(); } }
+
+  /** @deprecated Use {@link SetSourceRef}. */
+  public setSourceRef(ref: string): void {
+    return this.SetSourceRef(ref);
+  }
+  public SetSourceAlias(alias: string): void { const s = this.SelectedSource; if (s) { s.Alias = alias || undefined; this.markDirty(); } }
+
+  /** @deprecated Use {@link SetSourceAlias}. */
+  public setSourceAlias(alias: string): void {
+    return this.SetSourceAlias(alias);
+  }
 
   // ---- step editing ----
 
-  public get columnsText(): string {
-    const s = this.selectedStep;
+  public get ColumnsText(): string {
+    const s = this.SelectedStep;
     if (s && (s.Kind === 'select' || s.Kind === 'standardize')) {
       return s.Columns.join(', ');
     }
     return '';
   }
-  public setColumns(text: string): void {
-    const s = this.selectedStep;
+
+  /** @deprecated Use {@link ColumnsText}. */
+  public get columnsText(): string {
+    return this.ColumnsText;
+  }
+  public SetColumns(text: string): void {
+    const s = this.SelectedStep;
     if (s && (s.Kind === 'select' || s.Kind === 'standardize')) {
       s.Columns = text.split(',').map((c) => c.trim()).filter(Boolean);
       this.markDirty();
     }
   }
+
+  /** @deprecated Use {@link SetColumns}. */
+  public setColumns(text: string): void {
+    return this.SetColumns(text);
+  }
   /** Read an arbitrary field off the selected step for display (narrowed by template @switch). */
-  public stepField(field: string): string {
-    const s = this.selectedStep as unknown as Record<string, unknown> | null;
+  public StepField(field: string): string {
+    const s = this.SelectedStep as unknown as Record<string, unknown> | null;
     const v = s?.[field];
     return v == null ? '' : String(v);
   }
-  public setStepStr(field: string, value: string): void {
-    const s = this.selectedStep as unknown as Record<string, unknown> | null;
+
+  /** @deprecated Use {@link StepField}. */
+  public stepField(field: string): string {
+    return this.StepField(field);
+  }
+  public SetStepStr(field: string, value: string): void {
+    const s = this.SelectedStep as unknown as Record<string, unknown> | null;
     if (s) { s[field] = value; this.markDirty(); }
   }
-  public setStepNum(field: string, value: string): void {
-    const s = this.selectedStep as unknown as Record<string, unknown> | null;
+
+  /** @deprecated Use {@link SetStepStr}. */
+  public setStepStr(field: string, value: string): void {
+    return this.SetStepStr(field, value);
+  }
+  public SetStepNum(field: string, value: string): void {
+    const s = this.SelectedStep as unknown as Record<string, unknown> | null;
     const n = Number(value);
     if (s && !Number.isNaN(n)) { s[field] = n; this.markDirty(); }
   }
-  public setStepLabel(label: string): void { const s = this.selectedStep; if (s) { s.Label = label || undefined; this.markDirty(); } }
+
+  /** @deprecated Use {@link SetStepNum}. */
+  public setStepNum(field: string, value: string): void {
+    return this.SetStepNum(field, value);
+  }
+  public SetStepLabel(label: string): void { const s = this.SelectedStep; if (s) { s.Label = label || undefined; this.markDirty(); } }
+
+  /** @deprecated Use {@link SetStepLabel}. */
+  public setStepLabel(label: string): void {
+    return this.SetStepLabel(label);
+  }
 
   /** Change a step's Kind, resetting its config to that Kind's defaults (preserving Id/Label/Inputs). */
-  public setStepKind(kind: string): void {
-    const idx = this.editSteps.findIndex((s) => s.Id === this.selectedId);
+  public SetStepKind(kind: string): void {
+    const idx = this.editSteps.findIndex((s) => s.Id === this.SelectedId);
     if (idx < 0) {
       return;
     }
@@ -578,12 +855,22 @@ export class PSPipelinesComponent implements OnInit {
     this.markDirty();
   }
 
+  /** @deprecated Use {@link SetStepKind}. */
+  public setStepKind(kind: string): void {
+    return this.SetStepKind(kind);
+  }
+
+  public HasInput(stepId: string): boolean {
+    return (this.SelectedStep?.Inputs ?? []).includes(stepId);
+  }
+
+  /** @deprecated Use {@link HasInput}. */
   public hasInput(stepId: string): boolean {
-    return (this.selectedStep?.Inputs ?? []).includes(stepId);
+    return this.HasInput(stepId);
   }
   /** Toggle an upstream step input, preventing cycles. */
-  public toggleInput(stepId: string): void {
-    const s = this.selectedStep;
+  public ToggleInput(stepId: string): void {
+    const s = this.SelectedStep;
     if (!s) {
       return;
     }
@@ -597,6 +884,11 @@ export class PSPipelinesComponent implements OnInit {
       return;
     }
     this.markDirty();
+  }
+
+  /** @deprecated Use {@link ToggleInput}. */
+  public toggleInput(stepId: string): void {
+    return this.ToggleInput(stepId);
   }
   /** True if making `target` depend on `from` would create a cycle (from is downstream of target). */
   private createsCycle(from: string, target: string): boolean {
@@ -619,52 +911,132 @@ export class PSPipelinesComponent implements OnInit {
 
   // ---- target / algorithm editing ----
 
-  public setTargetVariable(v: string): void { this.editTargetVariable = v; this.markDirty(); }
-  public setProblemType(v: string): void { this.editProblemType = v as ProblemType; this.markDirty(); }
-  public setAlgorithm(id: string): void { this.editAlgorithmId = id; this.markDirty(); }
-  public setHyperparams(v: string): void { this.editHyperparams = v; this.markDirty(); }
+  public SetTargetVariable(v: string): void { this.EditTargetVariable = v; this.markDirty(); }
+
+  /** @deprecated Use {@link SetTargetVariable}. */
+  public setTargetVariable(v: string): void {
+    return this.SetTargetVariable(v);
+  }
+  public SetProblemType(v: string): void { this.EditProblemType = v as ProblemType; this.markDirty(); }
+
+  /** @deprecated Use {@link SetProblemType}. */
+  public setProblemType(v: string): void {
+    return this.SetProblemType(v);
+  }
+  public SetAlgorithm(id: string): void { this.EditAlgorithmId = id; this.markDirty(); }
+
+  /** @deprecated Use {@link SetAlgorithm}. */
+  public setAlgorithm(id: string): void {
+    return this.SetAlgorithm(id);
+  }
+  public SetHyperparams(v: string): void { this.EditHyperparams = v; this.markDirty(); }
+
+  /** @deprecated Use {@link SetHyperparams}. */
+  public setHyperparams(v: string): void {
+    return this.SetHyperparams(v);
+  }
 
   // ---- leakage / as-of / validation editing ----
 
-  public get denyText(): string { return this.editLeakage.DenyFields.join(', '); }
+  public get DenyText(): string { return this.EditLeakage.DenyFields.join(', '); }
+
+  /** @deprecated Use {@link DenyText}. */
+  public get denyText(): string {
+    return this.DenyText;
+  }
   /**
    * Parse the deny-field input. Uses the shared `parseDenyList` so a pasted
    * bracketed list ("[CheckInTime, Status]") yields clean column names rather than
    * "[CheckInTime" / "Status]" — entries which match no column and therefore leave
    * the most dangerous columns silently unguarded. The server re-validates on save.
    */
-  public setDeny(text: string): void { this.editLeakage.DenyFields = parseDenyList(text); this.dirty = true; }
-  public setThreshold(v: string): void { const n = Number(v); if (!Number.isNaN(n)) { this.editLeakage.SingleFeatureDominanceThreshold = n; this.dirty = true; } }
-  public setAsOfMode(v: string): void { this.editAsOf = { ...this.editAsOf, Mode: v as AsOfStrategy['Mode'] }; this.dirty = true; }
-  public setAsOfColumn(v: string): void { this.editAsOf.Column = v; this.dirty = true; }
-  public setAsOfOffset(v: string): void { const n = Number(v); if (!Number.isNaN(n)) { this.editAsOf.OffsetDays = n; this.dirty = true; } }
-  public setValStrategy(v: string): void { this.editValidation = { ...this.editValidation, Strategy: v as ValidationStrategy['Strategy'] }; this.dirty = true; }
-  public setTestSize(v: string): void { const n = Number(v); if (!Number.isNaN(n)) { this.editValidation.TestSize = n; this.dirty = true; } }
-  public setK(v: string): void { const n = Number(v); if (!Number.isNaN(n)) { this.editValidation.K = n; this.dirty = true; } }
-  public setHoldout(v: string): void { const n = Number(v); if (!Number.isNaN(n)) { this.editValidation.LockedHoldoutFraction = n; this.dirty = true; } }
+  public SetDeny(text: string): void { this.EditLeakage.DenyFields = parseDenyList(text); this.Dirty = true; }
+
+  /** @deprecated Use {@link SetDeny}. */
+  public setDeny(text: string): void {
+    return this.SetDeny(text);
+  }
+  public SetThreshold(v: string): void { const n = Number(v); if (!Number.isNaN(n)) { this.EditLeakage.SingleFeatureDominanceThreshold = n; this.Dirty = true; } }
+
+  /** @deprecated Use {@link SetThreshold}. */
+  public setThreshold(v: string): void {
+    return this.SetThreshold(v);
+  }
+  public SetAsOfMode(v: string): void { this.EditAsOf = { ...this.EditAsOf, Mode: v as AsOfStrategy['Mode'] }; this.Dirty = true; }
+
+  /** @deprecated Use {@link SetAsOfMode}. */
+  public setAsOfMode(v: string): void {
+    return this.SetAsOfMode(v);
+  }
+  public SetAsOfColumn(v: string): void { this.EditAsOf.Column = v; this.Dirty = true; }
+
+  /** @deprecated Use {@link SetAsOfColumn}. */
+  public setAsOfColumn(v: string): void {
+    return this.SetAsOfColumn(v);
+  }
+  public SetAsOfOffset(v: string): void { const n = Number(v); if (!Number.isNaN(n)) { this.EditAsOf.OffsetDays = n; this.Dirty = true; } }
+
+  /** @deprecated Use {@link SetAsOfOffset}. */
+  public setAsOfOffset(v: string): void {
+    return this.SetAsOfOffset(v);
+  }
+  public SetValStrategy(v: string): void { this.EditValidation = { ...this.EditValidation, Strategy: v as ValidationStrategy['Strategy'] }; this.Dirty = true; }
+
+  /** @deprecated Use {@link SetValStrategy}. */
+  public setValStrategy(v: string): void {
+    return this.SetValStrategy(v);
+  }
+  public SetTestSize(v: string): void { const n = Number(v); if (!Number.isNaN(n)) { this.EditValidation.TestSize = n; this.Dirty = true; } }
+
+  /** @deprecated Use {@link SetTestSize}. */
+  public setTestSize(v: string): void {
+    return this.SetTestSize(v);
+  }
+  public SetK(v: string): void { const n = Number(v); if (!Number.isNaN(n)) { this.EditValidation.K = n; this.Dirty = true; } }
+
+  /** @deprecated Use {@link SetK}. */
+  public setK(v: string): void {
+    return this.SetK(v);
+  }
+  public SetHoldout(v: string): void { const n = Number(v); if (!Number.isNaN(n)) { this.EditValidation.LockedHoldoutFraction = n; this.Dirty = true; } }
+
+  /** @deprecated Use {@link SetHoldout}. */
+  public setHoldout(v: string): void {
+    return this.SetHoldout(v);
+  }
 
   // ---- add / delete nodes ----
 
-  public addSource(): void {
+  public AddSource(): void {
     this.editSources = [...this.editSources, { Kind: 'Entity', Ref: '' }];
     this.markDirty();
-    this.selectedId = `src:${this.editSources.length - 1}`;
+    this.SelectedId = `src:${this.editSources.length - 1}`;
   }
-  public addStep(): void {
+
+  /** @deprecated Use {@link AddSource}. */
+  public addSource(): void {
+    return this.AddSource();
+  }
+  public AddStep(): void {
     const id = `step_${++this.stepSeq}`;
     this.editSteps = [...this.editSteps, this.defaultStep('select', id)];
     this.markDirty();
-    this.selectedId = id;
+    this.SelectedId = id;
   }
-  public deleteSelected(): void {
-    const si = this.selectedSourceIndex;
+
+  /** @deprecated Use {@link AddStep}. */
+  public addStep(): void {
+    return this.AddStep();
+  }
+  public DeleteSelected(): void {
+    const si = this.SelectedSourceIndex;
     if (si >= 0) {
       this.editSources = this.editSources.filter((_s, i) => i !== si);
       this.markDirty();
-      this.selectedId = this.nodes[0]?.id ?? '';
+      this.SelectedId = this.Nodes[0]?.id ?? '';
       return;
     }
-    const step = this.selectedStep;
+    const step = this.SelectedStep;
     if (step) {
       this.editSteps = this.editSteps.filter((s) => s.Id !== step.Id);
       // Drop the deleted id from any downstream Inputs.
@@ -674,8 +1046,13 @@ export class PSPipelinesComponent implements OnInit {
         }
       }
       this.markDirty();
-      this.selectedId = this.nodes[0]?.id ?? '';
+      this.SelectedId = this.Nodes[0]?.id ?? '';
     }
+  }
+
+  /** @deprecated Use {@link DeleteSelected}. */
+  public deleteSelected(): void {
+    return this.DeleteSelected();
   }
 
   private defaultStep(kind: FeatureStepKind, id: string, label?: string, inputs?: string[]): FeatureStep {
@@ -698,29 +1075,29 @@ export class PSPipelinesComponent implements OnInit {
   /** Serialize the editable state back onto the pipeline entity and Save(). */
   public async save(): Promise<void> {
     const p = this.selectedPipeline;
-    if (!p || this.busy) {
+    if (!p || this.Busy) {
       return;
     }
-    this.busy = true;
+    this.Busy = true;
     try {
       p.SourceBindings = JSON.stringify(this.editSources);
       p.FeatureSteps = JSON.stringify({ Steps: this.editSteps });
-      p.TargetVariable = this.editTargetVariable;
-      p.ProblemType = this.editProblemType;
-      p.AlgorithmID = this.editAlgorithmId;
-      p.Hyperparameters = this.editHyperparams || null;
-      p.LeakageGuard = JSON.stringify(this.editLeakage);
-      p.AsOfStrategy = JSON.stringify(this.editAsOf);
-      p.ValidationStrategy = JSON.stringify(this.editValidation);
+      p.TargetVariable = this.EditTargetVariable;
+      p.ProblemType = this.EditProblemType;
+      p.AlgorithmID = this.EditAlgorithmId;
+      p.Hyperparameters = this.EditHyperparams || null;
+      p.LeakageGuard = JSON.stringify(this.EditLeakage);
+      p.AsOfStrategy = JSON.stringify(this.EditAsOf);
+      p.ValidationStrategy = JSON.stringify(this.EditValidation);
       const ok = await p.Save();
       if (ok) {
-        this.dirty = false;
+        this.Dirty = false;
         this.notifications.CreateSimpleNotification(`Saved "${p.Name}".`, 'success', 3000);
       } else {
         this.notifications.CreateSimpleNotification(`Save failed: ${p.LatestResult?.CompleteMessage ?? 'unknown error'}`, 'error', 5000);
       }
     } finally {
-      this.busy = false;
+      this.Busy = false;
       this.cdr.detectChanges();
     }
   }
@@ -731,14 +1108,14 @@ export class PSPipelinesComponent implements OnInit {
     if (this.editSources.length === 0) {
       issues.push('at least one source');
     }
-    if (!this.editTargetVariable) {
+    if (!this.EditTargetVariable) {
       issues.push('a target variable');
     }
-    if (!this.editAlgorithmId) {
+    if (!this.EditAlgorithmId) {
       issues.push('an algorithm');
     }
     try {
-      JSON.parse(this.editHyperparams || '{}');
+      JSON.parse(this.EditHyperparams || '{}');
     } catch {
       issues.push('valid hyperparameters JSON');
     }
@@ -752,40 +1129,45 @@ export class PSPipelinesComponent implements OnInit {
   /** Run the pipeline via the Train Remote Op, then refresh the engine. */
   public async train(): Promise<void> {
     const p = this.selectedPipeline;
-    if (!p || this.busy || this.dirty) {
+    if (!p || this.Busy || this.Dirty) {
       return;
     }
-    this.busy = true;
+    this.Busy = true;
     this.notifications.CreateSimpleNotification(`Training "${p.Name}"…`, 'info', 2500);
     try {
       const op = new PredictiveStudioTrainModelOperation();
-      const result = await op.Execute({ pipelineId: p.ID }, { provider: this.provider ?? undefined, user: this.currentUser ?? undefined });
+      const result = await op.Execute({ pipelineId: p.ID }, { provider: this.provider ?? undefined, user: this.CurrentUser ?? undefined });
       if (result.Success && result.Output) {
         const flagged = result.Output.leakageFlagged ? ' (leakage flag raised — needs sign-off)' : '';
         this.notifications.CreateSimpleNotification(`Trained ${p.Name} v${result.Output.version}${flagged}. See Registry.`, 'success', 5000);
-        await this.engine.Config(true, this.currentUser ?? undefined, this.provider ?? undefined);
+        await this.engine.Config(true, this.CurrentUser ?? undefined, this.provider ?? undefined);
       } else {
         this.notifications.CreateSimpleNotification(result.ErrorMessage || 'Training failed.', 'error', 6000);
       }
     } catch (e) {
       this.notifications.CreateSimpleNotification(`Training error: ${e instanceof Error ? e.message : String(e)}`, 'error', 6000);
     } finally {
-      this.busy = false;
+      this.Busy = false;
       this.cdr.detectChanges();
     }
   }
 
-  public refine(): void {
+  public Refine(): void {
     const p = this.selectedPipeline;
     if (!p) {
-      this.askAgent.emit(this.starterPrompt);
+      this.AskAgent.emit(this.StarterPrompt);
       return;
     }
     const predicts = p.TargetVariable ? ` (predicts ${p.TargetVariable})` : '';
-    this.askAgent.emit(`Help me refine the "${p.Name}" training pipeline${predicts}. Suggest improvements to the features or algorithm to raise holdout performance.`);
+    this.AskAgent.emit(`Help me refine the "${p.Name}" training pipeline${predicts}. Suggest improvements to the features or algorithm to raise holdout performance.`);
   }
 
-  public statusClass(status: string | null): string {
+  /** @deprecated Use {@link Refine}. */
+  public refine(): void {
+    return this.Refine();
+  }
+
+  public StatusClass(status: string | null): string {
     switch (status) {
       case 'Active': return 'green';
       case 'Draft': return 'amber';
@@ -794,7 +1176,12 @@ export class PSPipelinesComponent implements OnInit {
     }
   }
 
-  public nodeTypeLabel(type: NodeType): string {
+  /** @deprecated Use {@link StatusClass}. */
+  public statusClass(status: string | null): string {
+    return this.StatusClass(status);
+  }
+
+  public NodeTypeLabel(type: NodeType): string {
     switch (type) {
       case 'src': return 'Source';
       case 'feat': return 'Feature step';
@@ -805,17 +1192,22 @@ export class PSPipelinesComponent implements OnInit {
     }
   }
 
+  /** @deprecated Use {@link NodeTypeLabel}. */
+  public nodeTypeLabel(type: NodeType): string {
+    return this.NodeTypeLabel(type);
+  }
+
   // ---- layered layout (deterministic, topology-driven) ----
 
   private layoutDag(): void {
-    this.nodeById = new Map(this.nodes.map((n) => [n.id, n]));
+    this.nodeById = new Map(this.Nodes.map((n) => [n.id, n]));
     const incoming = new Map<string, string[]>();
     const outgoing = new Map<string, string[]>();
-    for (const n of this.nodes) {
+    for (const n of this.Nodes) {
       incoming.set(n.id, []);
       outgoing.set(n.id, []);
     }
-    for (const e of this.edges) {
+    for (const e of this.Edges) {
       if (this.nodeById.has(e.from) && this.nodeById.has(e.to)) {
         outgoing.get(e.from)!.push(e.to);
         incoming.get(e.to)!.push(e.from);
@@ -824,16 +1216,16 @@ export class PSPipelinesComponent implements OnInit {
     const depth = this.computeLayers(incoming, outgoing);
     const maxDepth = Math.max(0, ...depth.values());
     const columns: DagNode[][] = Array.from({ length: maxDepth + 1 }, () => []);
-    for (const n of this.nodes) {
+    for (const n of this.Nodes) {
       columns[depth.get(n.id) ?? 0].push(n);
     }
     this.positionColumns(columns);
   }
 
   private computeLayers(incoming: Map<string, string[]>, outgoing: Map<string, string[]>): Map<string, number> {
-    const depth = new Map<string, number>(this.nodes.map((n) => [n.id, 0]));
-    const indeg = new Map<string, number>(this.nodes.map((n) => [n.id, incoming.get(n.id)!.length]));
-    const queue = this.nodes.filter((n) => indeg.get(n.id) === 0).map((n) => n.id);
+    const depth = new Map<string, number>(this.Nodes.map((n) => [n.id, 0]));
+    const indeg = new Map<string, number>(this.Nodes.map((n) => [n.id, incoming.get(n.id)!.length]));
+    const queue = this.Nodes.filter((n) => indeg.get(n.id) === 0).map((n) => n.id);
     while (queue.length) {
       const id = queue.shift()!;
       const d = depth.get(id)!;
@@ -862,11 +1254,11 @@ export class PSPipelinesComponent implements OnInit {
         node.y = yStart + ri * rowStep;
       });
     });
-    this.canvasW = PAD_X * 2 + columns.length * NODE_W + (columns.length - 1) * COL_GAP;
-    this.canvasH = PAD_Y * 2 + contentH;
+    this.CanvasW = PAD_X * 2 + columns.length * NODE_W + (columns.length - 1) * COL_GAP;
+    this.CanvasH = PAD_Y * 2 + contentH;
   }
 
-  public edgePath(edge: DagEdge): string {
+  public EdgePath(edge: DagEdge): string {
     const from = this.nodeById.get(edge.from);
     const to = this.nodeById.get(edge.to);
     if (!from || !to) {
@@ -880,5 +1272,10 @@ export class PSPipelinesComponent implements OnInit {
     const c1x = sx + dx * 0.5;
     const c2x = tx - dx * 0.5;
     return `M ${sx} ${sy} C ${c1x} ${sy}, ${c2x} ${ty}, ${tx} ${ty}`;
+  }
+
+  /** @deprecated Use {@link EdgePath}. */
+  public edgePath(edge: DagEdge): string {
+    return this.EdgePath(edge);
   }
 }

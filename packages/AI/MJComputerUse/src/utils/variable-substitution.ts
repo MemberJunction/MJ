@@ -50,7 +50,7 @@ function maybeParseJsonScalar(raw: string): unknown {
  *
  * Accepts a loose shape so tests don't need the full DriverExecutionContext type.
  */
-export function buildVariableValuesFromContext(
+export function BuildVariableValuesFromContext(
     context: { resolvedVariables?: { values?: Record<string, unknown> } } | null | undefined,
     env: NodeJS.ProcessEnv = process.env
 ): Record<string, unknown> {
@@ -74,6 +74,14 @@ export function buildVariableValuesFromContext(
     return values;
 }
 
+/** @deprecated Use {@link BuildVariableValuesFromContext}. */
+export function buildVariableValuesFromContext(
+    context: { resolvedVariables?: { values?: Record<string, unknown> } } | null | undefined,
+    env: NodeJS.ProcessEnv = process.env
+): Record<string, unknown> {
+    return BuildVariableValuesFromContext(context, env);
+}
+
 /**
  * Compose suite-level + per-test application-context layers into a single
  * markdown string for the controller prompt, applying `{{var}}` substitution
@@ -86,13 +94,13 @@ export function buildVariableValuesFromContext(
  * setting `params.ApplicationContext` in that case so the engine doesn't
  * render an empty heading.
  */
-export function composeApplicationContext(
+export function ComposeApplicationContext(
     suiteLevel: string | undefined,
     perTest: string | undefined,
     values: Record<string, unknown>
 ): string | undefined {
     const layers: string[] = [];
-    const substitute = (s: string) => Object.keys(values).length === 0 ? s : substituteVariables(s, values);
+    const substitute = (s: string) => Object.keys(values).length === 0 ? s : SubstituteVariables(s, values);
 
     if (typeof suiteLevel === 'string' && suiteLevel.trim()) {
         layers.push(substitute(suiteLevel));
@@ -101,6 +109,15 @@ export function composeApplicationContext(
         layers.push(`## Test-specific Notes\n\n${substitute(perTest)}`);
     }
     return layers.length === 0 ? undefined : layers.join('\n\n');
+}
+
+/** @deprecated Use {@link ComposeApplicationContext}. */
+export function composeApplicationContext(
+    suiteLevel: string | undefined,
+    perTest: string | undefined,
+    values: Record<string, unknown>
+): string | undefined {
+    return ComposeApplicationContext(suiteLevel, perTest, values);
 }
 
 /**
@@ -116,7 +133,7 @@ export function composeApplicationContext(
  *
  * Returns a NEW object — the input is not mutated.
  */
-export function substituteVariables<T>(obj: T, values: Record<string, unknown>): T {
+export function SubstituteVariables<T>(obj: T, values: Record<string, unknown>): T {
     if (Object.keys(values).length === 0) {
         return obj;
     }
@@ -145,4 +162,9 @@ export function substituteVariables<T>(obj: T, values: Record<string, unknown>):
     };
 
     return walk(obj) as T;
+}
+
+/** @deprecated Use {@link SubstituteVariables}. */
+export function substituteVariables<T>(obj: T, values: Record<string, unknown>): T {
+    return SubstituteVariables(obj, values);
 }

@@ -8,19 +8,19 @@
  * Both T-SQL and PostgreSQL variants are tested side-by-side to verify cross-dialect parity.
  */
 import { describe, it, expect } from 'vitest';
-import { parseQuerySQL } from '../custom/query-extraction/parse';
+import { ParseQuerySQL } from '../custom/query-extraction/parse';
 import { BuildFieldsFromSelectColumns } from '../custom/query-extraction/resolve';
 import type { DatabasePlatform } from '@memberjunction/core';
 
 // Helper: run the full deterministic extraction pipeline (parse + field build)
 function extractFields(sql: string, platform: DatabasePlatform = 'sqlserver') {
-    const parseResult = parseQuerySQL(sql, platform);
+    const parseResult = ParseQuerySQL(sql, platform);
     return {
-        fields: BuildFieldsFromSelectColumns(parseResult.selectColumns),
-        params: parseResult.deterministicParams,
-        tables: parseResult.tableRefs,
-        selectColumns: parseResult.selectColumns,
-        analysis: parseResult.analysis,
+        fields: BuildFieldsFromSelectColumns(parseResult.SelectColumns),
+        params: parseResult.DeterministicParams,
+        tables: parseResult.TableRefs,
+        selectColumns: parseResult.SelectColumns,
+        analysis: parseResult.Analysis,
     };
 }
 

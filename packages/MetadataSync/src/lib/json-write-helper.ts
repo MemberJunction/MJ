@@ -12,13 +12,18 @@ export class JsonWriteHelper {
    * @param filePath - Path to the JSON file to write
    * @param data - RecordData object or array of RecordData objects
    */
-  static async writeOrderedRecordData(filePath: string, data: RecordData | RecordData[]): Promise<void> {
+  static async WriteOrderedRecordData(filePath: string, data: RecordData | RecordData[]): Promise<void> {
     // Pre-process the data to ensure correct ordering before JSON.stringify
     const normalizedData = this.preserveAndRecurseRecordData(data);
     
     // Use JSON.stringify with proper spacing
     const jsonString = JSON.stringify(normalizedData, null, 2);
     await fs.writeFile(filePath, jsonString, 'utf8');
+  }
+
+  /** @deprecated Use {@link WriteOrderedRecordData}. */
+  static async writeOrderedRecordData(filePath: string, data: RecordData | RecordData[]): Promise<void> {
+    return this.WriteOrderedRecordData(filePath, data);
   }
 
   /**
@@ -87,7 +92,7 @@ export class JsonWriteHelper {
    * @param schema - Optional $schema URI
    * @returns RecordData object with guaranteed property order
    */
-  static createOrderedRecordData(
+  static CreateOrderedRecordData(
     fields: Record<string, unknown>,
     relatedEntities: Record<string, RecordData[]>,
     primaryKey: Record<string, unknown>,
@@ -141,17 +146,36 @@ export class JsonWriteHelper {
     return recordData;
   }
 
+  /** @deprecated Use {@link CreateOrderedRecordData}. */
+  static createOrderedRecordData(
+    fields: Record<string, unknown>,
+    relatedEntities: Record<string, RecordData[]>,
+    primaryKey: Record<string, unknown>,
+    sync: { lastModified: string; checksum: string },
+    collections?: Record<string, RecordData[]>,
+    embeds?: Record<string, RecordData>,
+    extension?: RecordData['extension'],
+    schema?: string
+  ): RecordData {
+    return this.CreateOrderedRecordData(fields, relatedEntities, primaryKey, sync, collections, embeds, extension, schema);
+  }
+
   /**
    * Write regular JSON data (non-RecordData) with standard formatting
    * @param filePath - Path to the JSON file to write
    * @param data - Any JSON-serializable data
    * @param options - Optional JSON write options
    */
-  static async writeJson(filePath: string, data: unknown, options?: JsonWriteOptions): Promise<void> {
+  static async WriteJson(filePath: string, data: unknown, options?: JsonWriteOptions): Promise<void> {
     const defaultOptions = { spaces: 2 };
     const writeOptions = typeof options === 'object' && options !== null 
       ? { ...defaultOptions, ...options }
       : defaultOptions;
     await fs.writeJson(filePath, data, writeOptions);
+  }
+
+  /** @deprecated Use {@link WriteJson}. */
+  static async writeJson(filePath: string, data: unknown, options?: JsonWriteOptions): Promise<void> {
+    return this.WriteJson(filePath, data, options);
   }
 }

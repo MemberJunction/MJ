@@ -21,26 +21,26 @@ export type ArtifactRenderKind = 'json-table' | 'json' | 'markdown' | 'code' | '
 
 /** A fully-loaded artifact: metadata, latest-version content, and any parsed payload the chosen renderer needs. */
 export type LoadedArtifact = {
-    id: string;
-    name: string;
-    description: string | null;
-    typeName: string;
-    version: number;
-    versionCount: number;
+    Id: string;
+    Name: string;
+    Description: string | null;
+    TypeName: string;
+    Version: number;
+    VersionCount: number;
     /** Raw version content. */
-    content: string;
+    Content: string;
     /** How the UI should render `content`. */
-    kind: ArtifactRenderKind;
+    Kind: ArtifactRenderKind;
     /** When kind is json-table, parsed rows. */
-    rows?: Record<string, unknown>[];
+    Rows?: Record<string, unknown>[];
     /** When kind is json (object), parsed object. */
-    json?: unknown;
+    Json?: unknown;
     /** When kind is chart, the normalized chart spec. */
-    chart?: ChartSpec;
+    chart?: ChartSpec;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
     /** When kind is interactive, the parsed react-runtime component spec. */
-    spec?: ComponentSpec;
+    Spec?: ComponentSpec;
     /** When kind is code, a best-effort source language hint for highlighting. */
-    language?: string;
+    Language?: string;
 };
 
 /** Classified content: the render kind plus any parsed payload the UI needs. */
@@ -120,7 +120,7 @@ function classify(typeName: string, content: string): Classification {
  * @param contextUser Optional acting user (server-side scoping); defaults to `Metadata.CurrentUser`.
  * @returns A {@link LoadedArtifact}, or `null` if the artifact can't be loaded.
  */
-export async function loadArtifact(artifactId: string, contextUser?: UserInfo): Promise<LoadedArtifact | null> {
+export async function LoadArtifact(artifactId: string, contextUser?: UserInfo): Promise<LoadedArtifact | null> {
     const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
     const currentUser = contextUser ?? md.CurrentUser;
 
@@ -146,20 +146,25 @@ export async function loadArtifact(artifactId: string, contextUser?: UserInfo): 
     const { kind, rows, json, chart, spec, language } = classify(artifact.ArtifactType ?? '', content);
 
     return {
-        id: artifact.ID,
-        name: artifact.Name,
-        description: artifact.Description,
-        typeName: artifact.ArtifactType ?? 'Artifact',
-        version: latest?.Version ?? 1,
-        versionCount: versions.length,
-        content,
-        kind,
-        rows,
-        json,
+        Id: artifact.ID,
+        Name: artifact.Name,
+        Description: artifact.Description,
+        TypeName: artifact.ArtifactType ?? 'Artifact',
+        Version: latest?.Version ?? 1,
+        VersionCount: versions.length,
+        Content: content,
+        Kind: kind,
+        Rows: rows,
+        Json: json,
         chart,
-        spec,
-        language,
+        Spec: spec,
+        Language: language,
     };
+}
+
+/** @deprecated Use {@link LoadArtifact}. */
+export async function loadArtifact(artifactId: string, contextUser?: UserInfo): Promise<LoadedArtifact | null> {
+    return LoadArtifact(artifactId, contextUser);
 }
 
 // ---------------------------------------------------------------------------
@@ -171,18 +176,18 @@ export type ArtifactTypeCategory = 'table' | 'chart' | 'document';
 
 /** Lightweight artifact summary for the conversation artifact dock. */
 export type ArtifactSummary = {
-    id: string;
-    name: string;
-    description: string | null;
-    typeName: string;
+    Id: string;
+    Name: string;
+    Description: string | null;
+    TypeName: string;
     /** Bucket for the Tables / Charts / Documents filter chips. */
-    category: ArtifactTypeCategory;
+    Category: ArtifactTypeCategory;
     /** Short preview snippet (from description, else the content head). */
-    preview: string;
+    Preview: string;
     /** Attributed agent id (the agent whose message produced the version), if known. */
-    agentId: string | null;
+    AgentId: string | null;
     /** Attributed agent display name, if known. */
-    agentName: string | null;
+    AgentName: string | null;
 };
 
 /** Bucket an artifact into a dock category using its type + latest content. */
@@ -219,7 +224,7 @@ function quotedIdList(ids: string[]): string {
  * @param conversationId The conversation whose artifacts to load.
  * @param contextUser    Optional acting user (server-side scoping).
  */
-export async function loadConversationArtifacts(conversationId: string, contextUser?: UserInfo): Promise<ArtifactSummary[]> {
+export async function LoadConversationArtifacts(conversationId: string, contextUser?: UserInfo): Promise<ArtifactSummary[]> {
     const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
     const currentUser = contextUser ?? md.CurrentUser;
     const rv = new RunView();
@@ -246,16 +251,21 @@ export async function loadConversationArtifacts(conversationId: string, contextU
         const agentId = agentByArtifact.get(artifact.ID) ?? null;
         const typeName = artifact.ArtifactType ?? 'Artifact';
         return {
-            id: artifact.ID,
-            name: artifact.Name,
-            description: artifact.Description,
-            typeName,
-            category: categorize(typeName, content),
-            preview: previewOf(artifact.Description, content),
-            agentId,
-            agentName: agentId ? (agentNameById.get(agentId) ?? null) : null,
+            Id: artifact.ID,
+            Name: artifact.Name,
+            Description: artifact.Description,
+            TypeName: typeName,
+            Category: categorize(typeName, content),
+            Preview: previewOf(artifact.Description, content),
+            AgentId: agentId,
+            AgentName: agentId ? (agentNameById.get(agentId) ?? null) : null,
         } satisfies ArtifactSummary;
     });
+}
+
+/** @deprecated Use {@link LoadConversationArtifacts}. */
+export async function loadConversationArtifacts(conversationId: string, contextUser?: UserInfo): Promise<ArtifactSummary[]> {
+    return LoadConversationArtifacts(conversationId, contextUser);
 }
 
 /** Load the latest version content for each artifact id. */

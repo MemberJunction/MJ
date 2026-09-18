@@ -4,9 +4,9 @@ import { Metadata, LogError } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
 import type { ComponentSpec } from "@memberjunction/interactive-component-types";
 import {
-    addOutput, bumpVersion, checkOverrideOwnership, failure, getStringParam,
-    insertComponent, insertOverride, lintFormSpec, loadComponent, loadOverride,
-    mapToComponentStatus, parseSpecParam, parseVersionBumpKind,
+    AddOutput, BumpVersion, CheckOverrideOwnership, Failure, GetStringParam,
+    InsertComponent, InsertOverride, LintFormSpec, LoadComponent, LoadOverride,
+    MapToComponentStatus, ParseSpecParam, ParseVersionBumpKind,
     type VersionBumpKind,
 } from "./_shared";
 
@@ -60,36 +60,36 @@ export class ModifyInteractiveFormAction extends BaseAction {
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
-            const overrideID = getStringParam(params, "OverrideID");
+            const overrideID = GetStringParam(params, "OverrideID");
             if (!overrideID) {
-                return failure("MISSING_PARAMETER", "Parameter 'OverrideID' is required.");
+                return Failure("MISSING_PARAMETER", "Parameter 'OverrideID' is required.");
             }
             const specRaw = this.findParam(params, "Spec");
             if (specRaw == null) {
-                return failure("MISSING_PARAMETER", "Parameter 'Spec' is required.");
+                return Failure("MISSING_PARAMETER", "Parameter 'Spec' is required.");
             }
-            const parsed = parseSpecParam(specRaw);
+            const parsed = ParseSpecParam(specRaw);
             if ('error' in parsed) {
-                return failure("LINT_FAILED", `Spec is not valid JSON: ${parsed.error}`);
+                return Failure("LINT_FAILED", `Spec is not valid JSON: ${parsed.error}`);
             }
             const spec: ComponentSpec = parsed;
-            const notes = getStringParam(params, "Notes");
+            const notes = GetStringParam(params, "Notes");
 
             const provider = params.Provider ?? Metadata.Provider;
-            if (!provider) return failure("NO_PROVIDER", "No metadata provider available.");
+            if (!provider) return Failure("NO_PROVIDER", "No metadata provider available.");
             const user = params.ContextUser;
-            if (!user) return failure("NO_USER", "Action requires a ContextUser.");
+            if (!user) return Failure("NO_USER", "Action requires a ContextUser.");
 
-            const override = await loadOverride(provider, user, overrideID);
+            const override = await LoadOverride(provider, user, overrideID);
             if (!override) {
-                return failure("OVERRIDE_NOT_FOUND", `EntityFormOverride '${overrideID}' not found.`);
+                return Failure("OVERRIDE_NOT_FOUND", `EntityFormOverride '${overrideID}' not found.`);
             }
             // Defense-in-depth ownership check — see _shared.ts.
-            const ownershipFail = checkOverrideOwnership(override, user);
+            const ownershipFail = CheckOverrideOwnership(override, user);
             if (ownershipFail) return ownershipFail;
-            const existingComponent = await loadComponent(provider, user, override.ComponentID);
+            const existingComponent = await LoadComponent(provider, user, override.ComponentID);
             if (!existingComponent) {
-                return failure("COMPONENT_NOT_FOUND",
+                return Failure("COMPONENT_NOT_FOUND",
                     `Override ${overrideID} points at Component ${override.ComponentID} which no longer exists.`);
             }
 
@@ -106,7 +106,7 @@ export class ModifyInteractiveFormAction extends BaseAction {
             // existing Component.Name and sanitize the function name to
             // match, never the other way around.
             if (spec.name && spec.name !== existingComponent.Name) {
-                return failure("LINEAGE_NAME_MISMATCH",
+                return Failure("LINEAGE_NAME_MISMATCH",
                     `Modify requires spec.name to match the existing Component name '${existingComponent.Name}', got '${spec.name}'. Modify operates on a Component lineage — its identity is the Name and cannot change between versions. Update spec.name and the function declaration in spec.code to '${existingComponent.Name}' and retry. (If the user wants a renamed form, that's a Create on the new entity or a manual rename in Form Builder, not a Modify.)`);
             }
             // Pin Name and Title to the existing row regardless — covers
@@ -116,7 +116,7 @@ export class ModifyInteractiveFormAction extends BaseAction {
 
             // Lint AFTER the lineage guard so any name/title pinning is
             // visible to the linter (function-name match, etc.).
-            const lintFail = await lintFormSpec(spec, user);
+            const lintFail = await LintFormSpec(spec, user);
             if (lintFail) return lintFail;
 
             // Resolve VersionBumpKind: explicit param wins; otherwise default
@@ -133,12 +133,12 @@ export class ModifyInteractiveFormAction extends BaseAction {
                 overrideStatus === 'Active' ? 'Active' :
                 overrideStatus === 'Pending' ? 'Pending' : 'Inactive';
             const isPendingSource = sourceStatus === 'Pending';
-            const rawKind = getStringParam(params, "VersionBumpKind");
+            const rawKind = GetStringParam(params, "VersionBumpKind");
             let bumpKind: VersionBumpKind;
             if (rawKind) {
-                const parsed = parseVersionBumpKind(rawKind);
+                const parsed = ParseVersionBumpKind(rawKind);
                 if (!parsed) {
-                    return failure("INVALID_BUMP_KIND",
+                    return Failure("INVALID_BUMP_KIND",
                         `Unknown VersionBumpKind '${rawKind}'. Expected one of: 'in-place', 'patch', 'minor', 'major'.`);
                 }
                 bumpKind = parsed;
@@ -155,7 +155,7 @@ export class ModifyInteractiveFormAction extends BaseAction {
             // row achieves nothing — won't re-activate it; use Revert for
             // that) we reject loudly so the caller corrects intent.
             if (bumpKind === 'in-place' && !isPendingSource) {
-                return failure("INVALID_BUMP_FOR_STATUS",
+                return Failure("INVALID_BUMP_FOR_STATUS",
                     `'in-place' is only valid against a Pending Override (got Status='${overrideStatus}'). Use 'patch', 'minor', or 'major' to snapshot a new Pending version from this source; use 'Revert Interactive Form' to re-activate an Inactive historical version.`);
             }
 
@@ -167,7 +167,7 @@ export class ModifyInteractiveFormAction extends BaseAction {
                 if (spec.description) existingComponent.Description = spec.description;
                 const saved = await existingComponent.Save();
                 if (!saved) {
-                    return failure("PERSIST_FAILED",
+                    return Failure("PERSIST_FAILED",
                         `Component in-place update failed: ${existingComponent.LatestResult?.CompleteMessage ?? 'unknown error'}`);
                 }
                 if (notes) {
@@ -179,10 +179,10 @@ export class ModifyInteractiveFormAction extends BaseAction {
                         : notes;
                     await override.Save();
                 }
-                addOutput(params, "ComponentID", existingComponent.ID);
-                addOutput(params, "OverrideID", override.ID);
-                addOutput(params, "Mode", "in-place");
-                addOutput(params, "Version", existingComponent.Version);
+                AddOutput(params, "ComponentID", existingComponent.ID);
+                AddOutput(params, "OverrideID", override.ID);
+                AddOutput(params, "Mode", "in-place");
+                AddOutput(params, "Version", existingComponent.Version);
                 return {
                     Success: true, ResultCode: "SUCCESS",
                     Message: JSON.stringify({
@@ -201,9 +201,9 @@ export class ModifyInteractiveFormAction extends BaseAction {
             // two concurrent Pendings), and Inactive sources (branch-from-
             // historical — no demote needed since source is already Inactive,
             // and the user explicitly opened it to fork from there).
-            const newVersion = bumpVersion(existingComponent.Version, bumpKind);
+            const newVersion = BumpVersion(existingComponent.Version, bumpKind);
             const newSequence = (existingComponent.VersionSequence ?? 0) + 1;
-            const componentInsert = await insertComponent({
+            const componentInsert = await InsertComponent({
                 provider, user, spec,
                 fallbackName: existingComponent.Name,
                 description: existingComponent.Description,
@@ -218,7 +218,7 @@ export class ModifyInteractiveFormAction extends BaseAction {
             // do not widen scope: if existing is User-scoped, new is too. If
             // somehow existing is Role/Global (manual promotion), we still
             // honor that — Modify is a content change, not a scope change.
-            const overrideInsert = await insertOverride({
+            const overrideInsert = await InsertOverride({
                 provider, user,
                 entityID: override.EntityID,
                 componentID: newComponentID,
@@ -229,7 +229,7 @@ export class ModifyInteractiveFormAction extends BaseAction {
                 priority: override.Priority,
             });
             if ('error' in overrideInsert) {
-                return failure("PERSIST_FAILED",
+                return Failure("PERSIST_FAILED",
                     `${overrideInsert.error.Message} (Component ${newComponentID} was persisted; its sibling override row failed to write.)`);
             }
 
@@ -246,7 +246,7 @@ export class ModifyInteractiveFormAction extends BaseAction {
                 // Component table uses 'Draft'/'Published'/'Deprecated' —
                 // map our 'Inactive' lifecycle to the table's 'Deprecated'.
                 try {
-                    existingComponent.Status = mapToComponentStatus('Inactive');
+                    existingComponent.Status = MapToComponentStatus('Inactive');
                     const ok = await existingComponent.Save();
                     if (ok) demotedComponentID = existingComponent.ID;
                     else LogError(`ModifyInteractiveFormAction: failed to demote prior Pending Component ${existingComponent.ID}: ${existingComponent.LatestResult?.CompleteMessage ?? 'unknown error'}`);
@@ -263,10 +263,10 @@ export class ModifyInteractiveFormAction extends BaseAction {
                 }
             }
 
-            addOutput(params, "ComponentID", newComponentID);
-            addOutput(params, "OverrideID", overrideInsert.id);
-            addOutput(params, "Mode", "new-version");
-            addOutput(params, "Version", newVersion);
+            AddOutput(params, "ComponentID", newComponentID);
+            AddOutput(params, "OverrideID", overrideInsert.id);
+            AddOutput(params, "Mode", "new-version");
+            AddOutput(params, "Version", newVersion);
             return {
                 Success: true, ResultCode: "SUCCESS",
                 Message: JSON.stringify({
@@ -285,7 +285,7 @@ export class ModifyInteractiveFormAction extends BaseAction {
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
             LogError(`ModifyInteractiveFormAction: ${message}`);
-            return failure("UNEXPECTED_ERROR", message);
+            return Failure("UNEXPECTED_ERROR", message);
         }
     }
 

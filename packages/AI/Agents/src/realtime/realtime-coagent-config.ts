@@ -593,7 +593,7 @@ export function ResolveEffectiveRealtimeConfig(
 
     // allowedAgents: union-accumulate across all layers (+ dynamic), since DeepMergeConfigs
     // array-replaces. Later layers win per-entry fields; deduped by agentId.
-    const allowed = accumulateAllowedAgents(
+    const allowed = AccumulateAllowedAgents(
         [typeLayer, agentLayer, targetLayer, appLayer, overrideLayer],
         dynamicAllowedAgents
     );
@@ -758,7 +758,7 @@ function normalizeAllowedAgent(raw: unknown): RealtimeAllowedAgent | null {
  * @param dynamic Optional runtime/channel-registered targets, accumulated last (highest precedence).
  * @returns The deduped, accumulated allowed-agent list (empty when none configured).
  */
-export function accumulateAllowedAgents(
+export function AccumulateAllowedAgents(
     layers: Array<JSONObjectLike | null | undefined>,
     dynamic?: RealtimeAllowedAgent[]
 ): RealtimeAllowedAgent[] {
@@ -787,6 +787,14 @@ export function accumulateAllowedAgents(
     }
     ingest(dynamic);
     return Array.from(map.values());
+}
+
+/** @deprecated Use {@link AccumulateAllowedAgents}. */
+export function accumulateAllowedAgents(
+    layers: Array<JSONObjectLike | null | undefined>,
+    dynamic?: RealtimeAllowedAgent[]
+): RealtimeAllowedAgent[] {
+    return AccumulateAllowedAgents(layers, dynamic);
 }
 
 /**

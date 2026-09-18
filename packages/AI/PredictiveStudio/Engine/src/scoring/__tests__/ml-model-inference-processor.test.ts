@@ -16,7 +16,7 @@ import type {
 
 import {
   MLModelInferenceProcessor,
-  matrixToFeatureRows,
+  MatrixToFeatureRows,
   type MLInferenceResultPayload,
 } from '../ml-model-inference-processor';
 import { InMemoryArtifactLoader } from '../artifact-loader';
@@ -236,7 +236,7 @@ describe('matrixToFeatureRows — frozen-schema mapping', () => {
       { Name: 'events_at_signup', Kind: 'numeric' }, // missing from matrix → null
       { Name: 'city', Kind: 'categorical' },
     ];
-    const rows = matrixToFeatureRows(matrix, schema);
+    const rows = MatrixToFeatureRows(matrix, schema);
     expect(rows).toEqual([{ tenure: 12, events_at_signup: null, city: 'NYC' }]);
     // 'extra' (not in schema) is dropped.
     expect(Object.keys(rows[0])).not.toContain('extra');

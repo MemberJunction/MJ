@@ -22,11 +22,11 @@ type ComponentManager = ReturnType<RuntimeModule['createReactRuntime']>['manager
 /** The initialized runtime surface the renderer needs. */
 export interface InteractiveRuntime {
     /** Compiles + registers component specs and returns executable components. */
-    manager: ComponentManager;
+    Manager: ComponentManager;
     /** Builds the standard `{ data, callbacks, utilities, styles, … }` prop bag. */
-    buildComponentProps: RuntimeModule['buildComponentProps'];
+    BuildComponentProps: RuntimeModule['buildComponentProps'];
     /** Wraps a compiled component in a React error boundary. */
-    createErrorBoundary: RuntimeModule['createErrorBoundary'];
+    CreateErrorBoundary: RuntimeModule['createErrorBoundary'];
 }
 
 /** Memoized initialization promise — created on first call, reused thereafter. */
@@ -49,9 +49,9 @@ async function initializeRuntime(): Promise<InteractiveRuntime> {
     const instance = runtime.createReactRuntime(babel, undefined, { React: ShimReact });
 
     return {
-        manager: instance.manager,
-        buildComponentProps: runtime.buildComponentProps,
-        createErrorBoundary: runtime.createErrorBoundary,
+        Manager: instance.manager,
+        BuildComponentProps: runtime.buildComponentProps,
+        CreateErrorBoundary: runtime.createErrorBoundary,
     };
 }
 
@@ -62,9 +62,14 @@ async function initializeRuntime(): Promise<InteractiveRuntime> {
  *   same promise is returned on every call, so the 3 MB Babel bundle is fetched
  *   and initialized only once.
  */
-export function getInteractiveRuntime(): Promise<InteractiveRuntime> {
+export function GetInteractiveRuntime(): Promise<InteractiveRuntime> {
     if (!runtimePromise) {
         runtimePromise = initializeRuntime();
     }
     return runtimePromise;
+}
+
+/** @deprecated Use {@link GetInteractiveRuntime}. */
+export function getInteractiveRuntime(): Promise<InteractiveRuntime> {
+    return GetInteractiveRuntime();
 }

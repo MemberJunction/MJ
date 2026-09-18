@@ -74,8 +74,8 @@ export class RecordProcessExecutor {
     public async Run(rp: MJRecordProcessEntity, options: RunRecordProcessOptions): Promise<ProcessRunResult> {
         const provider = options.provider ?? Metadata.Provider;
         return RecordSetProcessor.Instance.Process({
-            source: this.buildSource(rp, provider, options.singleRecordID, options.scope),
-            processor: this.buildProcessor(rp, options.dryRun),
+            source: this.BuildSource(rp, provider, options.singleRecordID, options.scope),
+            processor: this.BuildProcessor(rp, options.dryRun),
             contextUser: options.contextUser,
             provider,
             dryRun: options.dryRun,
@@ -91,7 +91,7 @@ export class RecordProcessExecutor {
     }
 
     /** Builds the record-set source from a single-record override, a runtime scope override, or the process's stored Scope. */
-    public buildSource(rp: MJRecordProcessEntity, provider: IMetadataProvider, singleRecordID?: string, scope?: RecordProcessScopeOverride): IRecordSetSource {
+    public BuildSource(rp: MJRecordProcessEntity, provider: IMetadataProvider, singleRecordID?: string, scope?: RecordProcessScopeOverride): IRecordSetSource {
         if (singleRecordID) {
             return new ArraySource([{ EntityID: rp.EntityID, RecordID: singleRecordID }], rp.EntityID, 'SingleRecord');
         }
@@ -123,6 +123,11 @@ export class RecordProcessExecutor {
         }
     }
 
+    /** @deprecated Use {@link BuildSource}. */
+    public buildSource(rp: MJRecordProcessEntity, provider: IMetadataProvider, singleRecordID?: string, scope?: RecordProcessScopeOverride): IRecordSetSource {
+        return this.BuildSource(rp, provider, singleRecordID, scope);
+    }
+
     /** Resolves a runtime scope override (UI invocation: selection / view / list / filter) to a source. */
     private buildSourceFromScope(rp: MJRecordProcessEntity, provider: IMetadataProvider, scope: RecordProcessScopeOverride): IRecordSetSource {
         switch (scope.Kind) {
@@ -149,7 +154,7 @@ export class RecordProcessExecutor {
      * dry-run the inner work runs but the mapping only previews (nothing is saved), so EVERY work type's
      * dry-run is side-effect-free, not just FieldRules.
      */
-    public buildProcessor(rp: MJRecordProcessEntity, dryRun?: boolean): IRecordProcessor {
+    public BuildProcessor(rp: MJRecordProcessEntity, dryRun?: boolean): IRecordProcessor {
         if (rp.WorkType === 'FieldRules') {
             const ruleSet = rp.Configuration ? SafeJSONParse<FieldRuleSet>(rp.Configuration) : undefined;
             if (!ruleSet || !Array.isArray(ruleSet.Rules)) {
@@ -188,6 +193,11 @@ export class RecordProcessExecutor {
             return new WriteBackProcessor(base, outputMapping, dryRun);
         }
         return base;
+    }
+
+    /** @deprecated Use {@link BuildProcessor}. */
+    public buildProcessor(rp: MJRecordProcessEntity, dryRun?: boolean): IRecordProcessor {
+        return this.BuildProcessor(rp, dryRun);
     }
 
     /**

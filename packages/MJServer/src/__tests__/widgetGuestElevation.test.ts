@@ -13,8 +13,8 @@ vi.mock('@memberjunction/generic-database-provider', () => ({
 }));
 
 import {
-  resolveWidgetGuestRunContext,
-  elevateUserPayload,
+  ResolveWidgetGuestRunContext,
+  ElevateUserPayload,
   ResolveScopedAnonymousRunUser,
 } from '../realtimeWidget/widgetGuestElevation.js';
 import type { UserPayload } from '../types.js';
@@ -29,12 +29,12 @@ function payloadWith(userRecord: Partial<UserInfo>): UserPayload {
 
 describe('widgetGuestElevation — resolveWidgetGuestRunContext (guard paths, no DB)', () => {
   it('returns null for a normal authenticated user (not anonymous)', async () => {
-    const result = await resolveWidgetGuestRunContext(payloadWith({ IsMagicLinkAnonymous: false }), providerStub);
+    const result = await ResolveWidgetGuestRunContext(payloadWith({ IsMagicLinkAnonymous: false }), providerStub);
     expect(result).toBeNull();
   });
 
   it('returns null for an anonymous magic-link session that is NOT a widget guest (no WidgetGuestContext)', async () => {
-    const result = await resolveWidgetGuestRunContext(
+    const result = await ResolveWidgetGuestRunContext(
       payloadWith({ IsMagicLinkAnonymous: true, WidgetGuestContext: undefined }),
       providerStub,
     );
@@ -42,7 +42,7 @@ describe('widgetGuestElevation — resolveWidgetGuestRunContext (guard paths, no
   });
 
   it('returns null when userRecord is absent', async () => {
-    const result = await resolveWidgetGuestRunContext({ email: '', userRecord: undefined, sessionId: 's' }, providerStub);
+    const result = await ResolveWidgetGuestRunContext({ email: '', userRecord: undefined, sessionId: 's' }, providerStub);
     expect(result).toBeNull();
   });
 });
@@ -104,7 +104,7 @@ describe('widgetGuestElevation — elevateUserPayload', () => {
     const guestPayload = payloadWith({ IsMagicLinkAnonymous: true });
     const systemUser = { Email: 'system@system.org' } as UserInfo;
 
-    const elevated = elevateUserPayload(guestPayload, systemUser);
+    const elevated = ElevateUserPayload(guestPayload, systemUser);
 
     expect(elevated.userRecord).toBe(systemUser);
     expect(elevated.email).toBe('system@system.org');
@@ -117,7 +117,7 @@ describe('widgetGuestElevation — elevateUserPayload', () => {
     const guestPayload = payloadWith({ IsMagicLinkAnonymous: true });
     const systemUser = { Email: 'system@system.org' } as UserInfo;
 
-    elevateUserPayload(guestPayload, systemUser);
+    ElevateUserPayload(guestPayload, systemUser);
 
     expect(guestPayload.isSystemUser).toBeUndefined();
     expect(guestPayload.email).toBe('anonymous@magic-link.local');

@@ -57,12 +57,12 @@ function relativeTimeLabel(when: Date, now: Date = new Date()): string {
  * @param item The loaded conversation list item from the conversations service.
  * @returns The UI-shaped conversation summary for the list.
  */
-export function adaptConversationToSummary(item: ConversationListItem): ConversationSummary {
-    const conv = item.entity;
-    const agents: ConversationParticipantAgent[] = item.agentIds.length === 0
+export function AdaptConversationToSummary(item: ConversationListItem): ConversationSummary {
+    const conv = item.Entity;
+    const agents: ConversationParticipantAgent[] = item.AgentIds.length === 0
         ? [{ id: 'unknown', name: 'Skip', color: Colors.agentFallback, initial: 'A' }]
-        : item.agentIds.map((id, idx) => {
-            const name = item.agentNames[idx] ?? 'Agent';
+        : item.AgentIds.map((id, idx) => {
+            const name = item.AgentNames[idx] ?? 'Agent';
             return {
                 id,
                 name,
@@ -71,15 +71,20 @@ export function adaptConversationToSummary(item: ConversationListItem): Conversa
             };
         });
     return {
-        id: conv.ID,
-        title: conv.Name ?? '(untitled)',
-        snippet: item.latestSnippet ?? '(no messages yet)',
-        timestamp: relativeTimeLabel(item.latestAt),
-        agents,
-        messageCount: item.messageCount,
-        live: item.live,
-        pinned: conv.IsPinned ?? false,
+        Id: conv.ID,
+        Title: conv.Name ?? '(untitled)',
+        Snippet: item.LatestSnippet ?? '(no messages yet)',
+        Timestamp: relativeTimeLabel(item.LatestAt),
+        Agents: agents,
+        MessageCount: item.MessageCount,
+        Live: item.Live,
+        Pinned: conv.IsPinned ?? false,
     };
+}
+
+/** @deprecated Use {@link AdaptConversationToSummary}. */
+export function adaptConversationToSummary(item: ConversationListItem): ConversationSummary {
+    return AdaptConversationToSummary(item);
 }
 
 /**
@@ -87,10 +92,10 @@ export function adaptConversationToSummary(item: ConversationListItem): Conversa
  * matching the visual structure of the mockup.
  */
 export type GroupedConversations = {
-    pinned: ConversationSummary[];
-    today: ConversationSummary[];
-    yesterday: ConversationSummary[];
-    earlier: ConversationSummary[];
+    Pinned: ConversationSummary[];
+    Today: ConversationSummary[];
+    Yesterday: ConversationSummary[];
+    Earlier: ConversationSummary[];
 };
 
 /**
@@ -101,8 +106,8 @@ export type GroupedConversations = {
  * @param items The loaded conversation list items.
  * @returns The four grouped, UI-shaped summary buckets.
  */
-export function groupConversations(items: ConversationListItem[]): GroupedConversations {
-    const out: GroupedConversations = { pinned: [], today: [], yesterday: [], earlier: [] };
+export function GroupConversations(items: ConversationListItem[]): GroupedConversations {
+    const out: GroupedConversations = { Pinned: [], Today: [], Yesterday: [], Earlier: [] };
     const now = new Date();
     const todayStr = now.toDateString();
     const yesterday = new Date(now);
@@ -110,25 +115,30 @@ export function groupConversations(items: ConversationListItem[]): GroupedConver
     const yesterdayStr = yesterday.toDateString();
 
     for (const item of items) {
-        const summary = adaptConversationToSummary(item);
-        if (summary.pinned) {
-            out.pinned.push(summary);
+        const summary = AdaptConversationToSummary(item);
+        if (summary.Pinned) {
+            out.Pinned.push(summary);
             continue;
         }
-        const when = item.latestAt.toDateString();
-        if (when === todayStr) out.today.push(summary);
-        else if (when === yesterdayStr) out.yesterday.push(summary);
-        else out.earlier.push(summary);
+        const when = item.LatestAt.toDateString();
+        if (when === todayStr) out.Today.push(summary);
+        else if (when === yesterdayStr) out.Yesterday.push(summary);
+        else out.Earlier.push(summary);
     }
     return out;
 }
 
+/** @deprecated Use {@link GroupConversations}. */
+export function groupConversations(items: ConversationListItem[]): GroupedConversations {
+    return GroupConversations(items);
+}
+
 /** UI reference to an agent (id + name + derived avatar color/initial). */
 export type AdaptedAgentRef = {
-    id: string;
-    name: string;
-    color: string;
-    initial: string;
+    id: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    color: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    initial: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 };
 
 /**
@@ -140,7 +150,7 @@ export type AdaptedAgentRef = {
  * @param name Agent display name; null/undefined becomes `'Agent'`.
  * @returns The UI-ready agent reference.
  */
-export function adaptAgentRef(id: string | null | undefined, name: string | null | undefined): AdaptedAgentRef {
+export function AdaptAgentRef(id: string | null | undefined, name: string | null | undefined): AdaptedAgentRef {
     const safeName = name ?? 'Agent';
     return {
         id: id ?? 'unknown',
@@ -150,22 +160,27 @@ export function adaptAgentRef(id: string | null | undefined, name: string | null
     };
 }
 
+/** @deprecated Use {@link AdaptAgentRef}. */
+export function adaptAgentRef(id: string | null | undefined, name: string | null | undefined): AdaptedAgentRef {
+    return AdaptAgentRef(id, name);
+}
+
 /**
  * A conversation message in UI shape — a discriminated union on `kind`.
  * `user` messages carry just their text; `agent` messages additionally carry the
  * agent reference, run status, suggested follow-up responses, and completion time.
  */
 export type AdaptedMessage =
-    | { kind: 'user'; id: string; text: string; createdAt: Date }
+    | { Kind: 'user'; Id: string; Text: string; CreatedAt: Date }
     | {
-        kind: 'agent';
-        id: string;
-        agent: AdaptedAgentRef;
-        body: string;
-        createdAt: Date;
-        status: 'Complete' | 'In-Progress' | 'Error';
-        suggestedResponses: string[];
-        completionMs: number | null;
+        Kind: 'agent';
+        Id: string;
+        Agent: AdaptedAgentRef;
+        Body: string;
+        CreatedAt: Date;
+        Status: 'Complete' | 'In-Progress' | 'Error';
+        SuggestedResponses: string[];
+        CompletionMs: number | null;
     };
 
 /**
@@ -178,16 +193,16 @@ export type AdaptedMessage =
  * @param msg The service-layer conversation message.
  * @returns The UI-shaped message union member.
  */
-export function adaptMessage(msg: ConversationMessage): AdaptedMessage {
+export function AdaptMessage(msg: ConversationMessage): AdaptedMessage {
     const d = msg.detail;
     const createdAt = (d as unknown as { __mj_CreatedAt?: Date | string }).__mj_CreatedAt;
     const date = createdAt ? new Date(createdAt) : new Date();
     if (d.Role === 'User') {
         return {
-            kind: 'user',
-            id: d.ID,
-            text: d.Message ?? '',
-            createdAt: date,
+            Kind: 'user',
+            Id: d.ID,
+            Text: d.Message ?? '',
+            CreatedAt: date,
         };
     }
     // Treat both 'AI' and 'Error' as agent rows
@@ -203,15 +218,20 @@ export function adaptMessage(msg: ConversationMessage): AdaptedMessage {
         }
     }
     return {
-        kind: 'agent',
-        id: d.ID,
-        agent: adaptAgentRef(d.AgentID, msg.agentName),
-        body: d.Message ?? (d.Error ?? ''),
-        createdAt: date,
-        status: d.Status ?? 'Complete',
-        suggestedResponses,
-        completionMs: d.CompletionTime ?? null,
+        Kind: 'agent',
+        Id: d.ID,
+        Agent: AdaptAgentRef(d.AgentID, msg.agentName),
+        Body: d.Message ?? (d.Error ?? ''),
+        CreatedAt: date,
+        Status: d.Status ?? 'Complete',
+        SuggestedResponses: suggestedResponses,
+        CompletionMs: d.CompletionTime ?? null,
     };
+}
+
+/** @deprecated Use {@link AdaptMessage}. */
+export function adaptMessage(msg: ConversationMessage): AdaptedMessage {
+    return AdaptMessage(msg);
 }
 
 /**
@@ -224,21 +244,26 @@ export function adaptMessage(msg: ConversationMessage): AdaptedMessage {
  * @returns A UI-shaped object with `id`, `title`, `participants`, `messageCount`,
  *          `live`, `messages`, and `artifacts`.
  */
-export function adaptConversation(load: ConversationDetailLoad) {
+export function AdaptConversation(load: ConversationDetailLoad) {
     const participants = new Map<string, AdaptedAgentRef>();
-    for (const msg of load.messages) {
+    for (const msg of load.Messages) {
         if (msg.detail.AgentID) {
-            const ref = adaptAgentRef(msg.detail.AgentID, msg.agentName);
+            const ref = AdaptAgentRef(msg.detail.AgentID, msg.agentName);
             if (!participants.has(ref.id)) participants.set(ref.id, ref);
         }
     }
     return {
-        id: load.conversation.ID,
-        title: load.conversation.Name ?? '(untitled)',
+        id: load.Conversation.ID,
+        title: load.Conversation.Name ?? '(untitled)',
         participants: Array.from(participants.values()),
-        messageCount: load.messages.length,
-        live: load.messages.some((m) => m.detail.Status === 'In-Progress'),
-        messages: load.messages.map(adaptMessage),
-        artifacts: load.artifacts,
+        messageCount: load.Messages.length,
+        live: load.Messages.some((m) => m.detail.Status === 'In-Progress'),
+        messages: load.Messages.map(AdaptMessage),
+        artifacts: load.Artifacts,
     };
+}
+
+/** @deprecated Use {@link AdaptConversation}. */
+export function adaptConversation(load: ConversationDetailLoad) {
+    return AdaptConversation(load);
 }

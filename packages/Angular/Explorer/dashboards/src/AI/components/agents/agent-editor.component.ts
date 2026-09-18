@@ -31,28 +31,145 @@ interface AgentPrompt {
   styleUrls: ['./agent-editor.component.css']
 })
 export class AgentEditorComponent extends BaseAngularComponent implements OnInit, OnDestroy, AfterViewInit {
-  @Input() agentId: string | null = null;
-  @Output() close = new EventEmitter<void>();
-  @Output() openAgent = new EventEmitter<string>();
-  @Output() openEntityRecord = new EventEmitter<{entityName: string, recordId: string}>();
+  @Input() AgentId: string | null = null;
 
-  @ViewChild('hierarchyChart', { static: false }) hierarchyChartRef!: ElementRef;
+  /** @deprecated Use {@link AgentId}. */
+  @Input() set agentId(value: string | null) {
+    this.AgentId = value;
+  }
+  /** @deprecated Use {@link AgentId}. */
+  get agentId(): string | null {
+    return this.AgentId;
+  }
+  @Output() close = new EventEmitter<void>();
+  @Output() OpenAgent = new EventEmitter<string>();
+
+  /**
+   * @deprecated Use {@link OpenAgent}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (openAgent) keeps working. Must stay AFTER OpenAgent: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() openAgent = this.OpenAgent;
+  @Output() OpenEntityRecord = new EventEmitter<{entityName: string, recordId: string}>();
+
+  /**
+   * @deprecated Use {@link OpenEntityRecord}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (openEntityRecord) keeps working. Must stay AFTER OpenEntityRecord: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() openEntityRecord = this.OpenEntityRecord;
+
+  @ViewChild('hierarchyChart', { static: false }) HierarchyChartRef!: ElementRef;
+
+  /** @deprecated Use {@link HierarchyChartRef}. */
+  get hierarchyChartRef(): ElementRef {
+    return this.HierarchyChartRef;
+  }
+  /** @deprecated Use {@link HierarchyChartRef}. */
+  set hierarchyChartRef(value: ElementRef) {
+    this.HierarchyChartRef = value;
+  }
 
   public isLoading = false;
   public error: string | null = null;
-  public currentAgent: MJAIAgentEntityExtended | null = null;
-  public allAgents: MJAIAgentEntityExtended[] = [];
-  public hierarchyData: AgentHierarchyNode | null = null;
-  public selectedNode: AgentHierarchyNode | null = null;
-  public agentPrompts: AgentPrompt[] = [];
+  public CurrentAgent: MJAIAgentEntityExtended | null = null;
+
+  /** @deprecated Use {@link CurrentAgent}. */
+  public get currentAgent(): MJAIAgentEntityExtended | null {
+    return this.CurrentAgent;
+  }
+  /** @deprecated Use {@link CurrentAgent}. */
+  public set currentAgent(value: MJAIAgentEntityExtended | null) {
+    this.CurrentAgent = value;
+  }
+  public AllAgents: MJAIAgentEntityExtended[] = [];
+
+  /** @deprecated Use {@link AllAgents}. */
+  public get allAgents(): MJAIAgentEntityExtended[] {
+    return this.AllAgents;
+  }
+  /** @deprecated Use {@link AllAgents}. */
+  public set allAgents(value: MJAIAgentEntityExtended[]) {
+    this.AllAgents = value;
+  }
+  public HierarchyData: AgentHierarchyNode | null = null;
+
+  /** @deprecated Use {@link HierarchyData}. */
+  public get hierarchyData(): AgentHierarchyNode | null {
+    return this.HierarchyData;
+  }
+  /** @deprecated Use {@link HierarchyData}. */
+  public set hierarchyData(value: AgentHierarchyNode | null) {
+    this.HierarchyData = value;
+  }
+  public SelectedNode: AgentHierarchyNode | null = null;
+
+  /** @deprecated Use {@link SelectedNode}. */
+  public get selectedNode(): AgentHierarchyNode | null {
+    return this.SelectedNode;
+  }
+  /** @deprecated Use {@link SelectedNode}. */
+  public set selectedNode(value: AgentHierarchyNode | null) {
+    this.SelectedNode = value;
+  }
+  public AgentPrompts: AgentPrompt[] = [];
+
+  /** @deprecated Use {@link AgentPrompts}. */
+  public get agentPrompts(): AgentPrompt[] {
+    return this.AgentPrompts;
+  }
+  /** @deprecated Use {@link AgentPrompts}. */
+  public set agentPrompts(value: AgentPrompt[]) {
+    this.AgentPrompts = value;
+  }
 
   // Tab settings
-  public activeTab: 'hierarchy' | 'prompts' | 'properties' = 'hierarchy';
+  public ActiveTab: 'hierarchy' | 'prompts' | 'properties' = 'hierarchy';
+
+  /** @deprecated Use {@link ActiveTab}. */
+  public get activeTab(): 'hierarchy' | 'prompts' | 'properties' {
+    return this.ActiveTab;
+  }
+  /** @deprecated Use {@link ActiveTab}. */
+  public set activeTab(value: 'hierarchy' | 'prompts' | 'properties') {
+    this.ActiveTab = value;
+  }
   
   // Legacy layout settings (keeping for compatibility)
-  public showHierarchy = true;
-  public showPrompts = true;
-  public showProperties = true;
+  public ShowHierarchy = true;
+
+  /** @deprecated Use {@link ShowHierarchy}. */
+  public get showHierarchy() {
+    return this.ShowHierarchy;
+  }
+  /** @deprecated Use {@link ShowHierarchy}. */
+  public set showHierarchy(value) {
+    this.ShowHierarchy = value;
+  }
+  public ShowPrompts = true;
+
+  /** @deprecated Use {@link ShowPrompts}. */
+  public get showPrompts() {
+    return this.ShowPrompts;
+  }
+  /** @deprecated Use {@link ShowPrompts}. */
+  public set showPrompts(value) {
+    this.ShowPrompts = value;
+  }
+  public ShowProperties = true;
+
+  /** @deprecated Use {@link ShowProperties}. */
+  public get showProperties() {
+    return this.ShowProperties;
+  }
+  /** @deprecated Use {@link ShowProperties}. */
+  public set showProperties(value) {
+    this.ShowProperties = value;
+  }
   
   // D3 variables
   private svg: any;
@@ -66,8 +183,8 @@ export class AgentEditorComponent extends BaseAngularComponent implements OnInit
     private createAgentService: CreateAgentService) { super(); }
 
   ngOnInit(): void {
-    if (this.agentId) {
-      this.loadAgentData();
+    if (this.AgentId) {
+      this.LoadAgentData();
     }
   }
 
@@ -82,7 +199,7 @@ export class AgentEditorComponent extends BaseAngularComponent implements OnInit
     }
   }
 
-  public async loadAgentData(): Promise<void> {
+  public async LoadAgentData(): Promise<void> {
     try {
       this.isLoading = true;
       this.error = null;
@@ -96,16 +213,16 @@ export class AgentEditorComponent extends BaseAngularComponent implements OnInit
         MaxRows: 1000
       });
 
-      this.allAgents = result.Results as MJAIAgentEntityExtended[];
-      this.currentAgent = this.allAgents.find(a => UUIDsEqual(a.ID, this.agentId)) || null;
+      this.AllAgents = result.Results as MJAIAgentEntityExtended[];
+      this.CurrentAgent = this.AllAgents.find(a => UUIDsEqual(a.ID, this.AgentId)) || null;
 
-      if (this.currentAgent) {
+      if (this.CurrentAgent) {
         this.buildHierarchy();
         this.loadAgentPrompts();
         
         // Initialize chart after data is loaded
         setTimeout(() => {
-          if (this.hierarchyChartRef) {
+          if (this.HierarchyChartRef) {
             this.initializeChart();
           }
         }, 100);
@@ -118,20 +235,25 @@ export class AgentEditorComponent extends BaseAngularComponent implements OnInit
     }
   }
 
+  /** @deprecated Use {@link LoadAgentData}. */
+  public async loadAgentData(): Promise<void> {
+    return this.LoadAgentData();
+  }
+
   private buildHierarchy(): void {
-    if (!this.currentAgent) return;
+    if (!this.CurrentAgent) return;
 
     // Find the root of the hierarchy that contains our current agent
-    const rootAgent = this.findRootAgent(this.currentAgent);
+    const rootAgent = this.findRootAgent(this.CurrentAgent);
     
-    this.hierarchyData = this.buildHierarchyTree(rootAgent);
-    this.selectedNode = this.findNodeInHierarchy(this.hierarchyData, this.currentAgent.ID);
+    this.HierarchyData = this.buildHierarchyTree(rootAgent);
+    this.SelectedNode = this.findNodeInHierarchy(this.HierarchyData, this.CurrentAgent.ID);
   }
 
   private findRootAgent(agent: MJAIAgentEntityExtended): MJAIAgentEntityExtended {
     let current = agent;
     while (current.ParentID) {
-      const parent = this.allAgents.find(a => UUIDsEqual(a.ID, current.ParentID));
+      const parent = this.AllAgents.find(a => UUIDsEqual(a.ID, current.ParentID));
       if (!parent) break;
       current = parent;
     }
@@ -139,7 +261,7 @@ export class AgentEditorComponent extends BaseAngularComponent implements OnInit
   }
 
   private buildHierarchyTree(agent: MJAIAgentEntityExtended): AgentHierarchyNode {
-    const children = this.allAgents
+    const children = this.AllAgents
       .filter(a => UUIDsEqual(a.ParentID, agent.ID))
       .map(child => this.buildHierarchyTree(child));
 
@@ -172,12 +294,12 @@ export class AgentEditorComponent extends BaseAngularComponent implements OnInit
   }
 
   private async loadAgentPrompts(): Promise<void> {
-    if (!this.currentAgent) return;
+    if (!this.CurrentAgent) return;
     
     try {
       // This would load prompts associated with the agent
       // For now, using mock data structure
-      this.agentPrompts = [
+      this.AgentPrompts = [
         { id: '1', name: 'System Prompt', content: 'Default system instructions...', type: 'system' },
         { id: '2', name: 'User Prompt', content: 'User interaction template...', type: 'user' }
       ];
@@ -187,11 +309,11 @@ export class AgentEditorComponent extends BaseAngularComponent implements OnInit
   }
 
   private initializeChart(): void {
-    if (!this.hierarchyChartRef?.nativeElement) {
+    if (!this.HierarchyChartRef?.nativeElement) {
       return;
     }
 
-    const container = this.hierarchyChartRef.nativeElement;
+    const container = this.HierarchyChartRef.nativeElement;
     const width = container.clientWidth || 800;
     const height = container.clientHeight || 600;
 
@@ -229,19 +351,19 @@ export class AgentEditorComponent extends BaseAngularComponent implements OnInit
   }
 
   private renderHierarchy(): void {
-    if (!this.hierarchyData || !this.g || !this.tree) {
+    if (!this.HierarchyData || !this.g || !this.tree) {
       return;
     }
 
     // Create hierarchy
-    this.root = d3.hierarchy(this.hierarchyData);
+    this.root = d3.hierarchy(this.HierarchyData);
     this.tree(this.root);
 
     // Clear previous render
     this.g.selectAll('*').remove();
 
     // Get container dimensions
-    const container = this.hierarchyChartRef.nativeElement;
+    const container = this.HierarchyChartRef.nativeElement;
     const containerWidth = container.clientWidth || 800;
     
     // Calculate the tree bounds after layout
@@ -274,7 +396,7 @@ export class AgentEditorComponent extends BaseAngularComponent implements OnInit
       .attr('class', 'node')
       .attr('transform', (d: any) => `translate(${d.x}, ${d.y})`)
       .style('cursor', 'pointer')
-      .on('click', (_event: any, d: any) => this.onNodeClick(d.data));
+      .on('click', (_event: any, d: any) => this.OnNodeClick(d.data));
 
     // Add rectangles for nodes
     const nodeWidth = 120;
@@ -289,7 +411,7 @@ export class AgentEditorComponent extends BaseAngularComponent implements OnInit
       .attr('ry', 6)
       .style('fill', (d: any) => this.getNodeColor(d))
       .style('stroke', (d: any) => this.getNodeStrokeColor(d))
-      .style('stroke-width', (d: any) => d.data.id === this.currentAgent?.ID ? '3px' : '2px')
+      .style('stroke-width', (d: any) => d.data.id === this.CurrentAgent?.ID ? '3px' : '2px')
       .style('opacity', 0.9);
 
     // Add node labels (agent names)
@@ -297,7 +419,7 @@ export class AgentEditorComponent extends BaseAngularComponent implements OnInit
       .attr('dy', -2)
       .attr('text-anchor', 'middle')
       .style('font-size', '11px')
-      .style('font-weight', (d: any) => d.data.id === this.currentAgent?.ID ? 'bold' : '500')
+      .style('font-weight', (d: any) => d.data.id === this.CurrentAgent?.ID ? 'bold' : '500')
       .style('fill', '#333')
       .style('pointer-events', 'none')
       .text((d: any) => {
@@ -349,7 +471,7 @@ export class AgentEditorComponent extends BaseAngularComponent implements OnInit
 
   private getNodeColor(d: any): string {
     const level = d.depth;
-    const isCurrentAgent = d.data.id === this.currentAgent?.ID;
+    const isCurrentAgent = d.data.id === this.CurrentAgent?.ID;
     
     // Level-based color scheme
     const levelColors = [
@@ -373,7 +495,7 @@ export class AgentEditorComponent extends BaseAngularComponent implements OnInit
   }
 
   private getNodeStrokeColor(d: any): string {
-    const isCurrentAgent = d.data.id === this.currentAgent?.ID;
+    const isCurrentAgent = d.data.id === this.CurrentAgent?.ID;
     if (isCurrentAgent) {
       return '#000';
     }
@@ -394,13 +516,18 @@ export class AgentEditorComponent extends BaseAngularComponent implements OnInit
     return `rgb(${newR}, ${newG}, ${newB})`;
   }
 
-  public onNodeClick(node: AgentHierarchyNode): void {
-    if (node.id !== this.currentAgent?.ID) {
-      this.openAgent.emit(node.id);
+  public OnNodeClick(node: AgentHierarchyNode): void {
+    if (node.id !== this.CurrentAgent?.ID) {
+      this.OpenAgent.emit(node.id);
     }
   }
 
-  public zoomIn(): void {
+  /** @deprecated Use {@link OnNodeClick}. */
+  public onNodeClick(node: AgentHierarchyNode): void {
+    return this.OnNodeClick(node);
+  }
+
+  public ZoomIn(): void {
     if (this.svg && this.zoom) {
       this.svg.transition().call(
         this.zoom.scaleBy, 1.5
@@ -408,7 +535,12 @@ export class AgentEditorComponent extends BaseAngularComponent implements OnInit
     }
   }
 
-  public zoomOut(): void {
+  /** @deprecated Use {@link ZoomIn}. */
+  public zoomIn(): void {
+    return this.ZoomIn();
+  }
+
+  public ZoomOut(): void {
     if (this.svg && this.zoom) {
       this.svg.transition().call(
         this.zoom.scaleBy, 1 / 1.5
@@ -416,7 +548,12 @@ export class AgentEditorComponent extends BaseAngularComponent implements OnInit
     }
   }
 
-  public resetZoom(): void {
+  /** @deprecated Use {@link ZoomOut}. */
+  public zoomOut(): void {
+    return this.ZoomOut();
+  }
+
+  public ResetZoom(): void {
     if (this.svg && this.zoom) {
       // Reset to initial centered position
       this.svg.transition().call(
@@ -426,38 +563,68 @@ export class AgentEditorComponent extends BaseAngularComponent implements OnInit
     }
   }
 
-  public navigateToAgent(agentId: string): void {
-    this.openAgent.emit(agentId);
+  /** @deprecated Use {@link ResetZoom}. */
+  public resetZoom(): void {
+    return this.ResetZoom();
   }
 
-  public closeEditor(): void {
+  public NavigateToAgent(agentId: string): void {
+    this.OpenAgent.emit(agentId);
+  }
+
+  /** @deprecated Use {@link NavigateToAgent}. */
+  public navigateToAgent(agentId: string): void {
+    return this.NavigateToAgent(agentId);
+  }
+
+  public CloseEditor(): void {
     this.close.emit();
   }
 
-  public setActiveTab(tab: 'hierarchy' | 'prompts' | 'properties'): void {
-    this.activeTab = tab;
+  /** @deprecated Use {@link CloseEditor}. */
+  public closeEditor(): void {
+    return this.CloseEditor();
   }
 
-  public getExecutionModeColor(mode: string): string {
+  public SetActiveTab(tab: 'hierarchy' | 'prompts' | 'properties'): void {
+    this.ActiveTab = tab;
+  }
+
+  /** @deprecated Use {@link SetActiveTab}. */
+  public setActiveTab(tab: 'hierarchy' | 'prompts' | 'properties'): void {
+    return this.SetActiveTab(tab);
+  }
+
+  public GetExecutionModeColor(mode: string): string {
     return mode === 'Sequential' ? '#2196f3' : '#4caf50';
   }
 
-  public getExecutionModeIcon(mode: string): string {
+  /** @deprecated Use {@link GetExecutionModeColor}. */
+  public getExecutionModeColor(mode: string): string {
+    return this.GetExecutionModeColor(mode);
+  }
+
+  public GetExecutionModeIcon(mode: string): string {
     return mode === 'Sequential' ? 'fa-solid fa-list-ol' : 'fa-solid fa-layer-group';
+  }
+
+  /** @deprecated Use {@link GetExecutionModeIcon}. */
+  public getExecutionModeIcon(mode: string): string {
+    return this.GetExecutionModeIcon(mode);
   }
 
   /**
    * Opens the create sub-agent slide-in panel using the new CreateAgentService.
    * After successful creation, saves the agent and navigates to it.
    */
-  public openCreateSubAgent(): void {
-    if (!this.currentAgent) return;
+  public OpenCreateSubAgent(): void {
+    if (!this.CurrentAgent) return;
 
     this.error = null;
 
     this.createAgentService.OpenSubAgentSlideIn(
-      this.currentAgent.ID,
-      this.currentAgent.Name || 'Agent'
+      this.CurrentAgent.ID,
+      this.CurrentAgent.Name || 'Agent'
     ).subscribe({
       next: async (dialogResult) => {
         if (!dialogResult.Cancelled && dialogResult.Result) {
@@ -469,6 +636,11 @@ export class AgentEditorComponent extends BaseAngularComponent implements OnInit
         this.error = 'Failed to open create sub-agent panel';
       }
     });
+  }
+
+  /** @deprecated Use {@link OpenCreateSubAgent}. */
+  public openCreateSubAgent(): void {
+    return this.OpenCreateSubAgent();
   }
 
   /**
@@ -510,7 +682,7 @@ export class AgentEditorComponent extends BaseAngularComponent implements OnInit
         LogStatus('Sub-agent created successfully');
 
         // Reload agent data to show the new hierarchy
-        await this.loadAgentData();
+        await this.LoadAgentData();
 
         // Navigate to the newly created agent record
         this.navigationService.OpenEntityRecord('MJ: AI Agents', agent.PrimaryKey);
@@ -528,21 +700,41 @@ export class AgentEditorComponent extends BaseAngularComponent implements OnInit
     }
   }
 
+  public HasChildren(): boolean {
+    return this.SelectedNode?.children && this.SelectedNode.children.length > 0 || false;
+  }
+
+  /** @deprecated Use {@link HasChildren}. */
   public hasChildren(): boolean {
-    return this.selectedNode?.children && this.selectedNode.children.length > 0 || false;
+    return this.HasChildren();
   }
 
+  public HasParent(): boolean {
+    return this.SelectedNode?.parent !== undefined;
+  }
+
+  /** @deprecated Use {@link HasParent}. */
   public hasParent(): boolean {
-    return this.selectedNode?.parent !== undefined;
+    return this.HasParent();
   }
 
+  public GetChildCount(): number {
+    return this.SelectedNode?.children?.length || 0;
+  }
+
+  /** @deprecated Use {@link GetChildCount}. */
   public getChildCount(): number {
-    return this.selectedNode?.children?.length || 0;
+    return this.GetChildCount();
   }
 
-  public openCurrentAgentRecord(): void {
-    if (this.currentAgent) {
-      this.openEntityRecord.emit({ entityName: 'MJ: AI Agents', recordId: this.currentAgent.ID });
+  public OpenCurrentAgentRecord(): void {
+    if (this.CurrentAgent) {
+      this.OpenEntityRecord.emit({ entityName: 'MJ: AI Agents', recordId: this.CurrentAgent.ID });
     }
+  }
+
+  /** @deprecated Use {@link OpenCurrentAgentRecord}. */
+  public openCurrentAgentRecord(): void {
+    return this.OpenCurrentAgentRecord();
   }
 }

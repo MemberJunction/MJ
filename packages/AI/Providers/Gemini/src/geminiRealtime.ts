@@ -862,7 +862,7 @@ class GeminiRealtimeSession implements IRealtimeSession {
      * {@link RegisterTools} compares against it to no-op identical re-registrations.
      * Defaults to the empty set's fingerprint for sessions started without tools.
      */
-    private connectTimeToolsFingerprint = GeminiRealtimeSession.ToolSetFingerprint([]);
+    private connectTimeToolsFingerprint = GeminiRealtimeSession.toolSetFingerprint([]);
 
     /**
      * Whether a model turn is currently being generated. Minimal turn tracking mirroring the
@@ -958,7 +958,7 @@ class GeminiRealtimeSession implements IRealtimeSession {
             RealtimeDiagLog('[GeminiRealtime][diag] meeting: activityStart — opened input window on first audio (now accumulating room audio)');
         }
         const audio: GeminiBlob = {
-            data: GeminiRealtimeSession.ArrayBufferToBase64(chunk),
+            data: GeminiRealtimeSession.arrayBufferToBase64(chunk),
             mimeType: GEMINI_INPUT_AUDIO_MIME_TYPE,
         };
         live.sendRealtimeInput({ audio });
@@ -977,7 +977,7 @@ class GeminiRealtimeSession implements IRealtimeSession {
      *   without making the tools callable).
      */
     public async RegisterTools(tools: RealtimeToolDefinition[]): Promise<void> {
-        if (GeminiRealtimeSession.ToolSetFingerprint(tools) === this.connectTimeToolsFingerprint) {
+        if (GeminiRealtimeSession.toolSetFingerprint(tools) === this.connectTimeToolsFingerprint) {
             return; // identical to the connect-time set — silent no-op
         }
         console.warn(
@@ -992,11 +992,11 @@ class GeminiRealtimeSession implements IRealtimeSession {
      * apply the contract's idempotency rule. Called by {@link GeminiRealtime.StartSession}.
      */
     public SetConnectTimeTools(tools: RealtimeToolDefinition[]): void {
-        this.connectTimeToolsFingerprint = GeminiRealtimeSession.ToolSetFingerprint(tools);
+        this.connectTimeToolsFingerprint = GeminiRealtimeSession.toolSetFingerprint(tools);
     }
 
     /** Canonical, order-insensitive fingerprint of a tool set for identity comparison. */
-    private static ToolSetFingerprint(tools: RealtimeToolDefinition[]): string {
+    private static toolSetFingerprint(tools: RealtimeToolDefinition[]): string {
         return JSON.stringify(
             [...tools]
                 .sort((a, b) => a.Name.localeCompare(b.Name))
@@ -1314,7 +1314,7 @@ class GeminiRealtimeSession implements IRealtimeSession {
             }
             const data = part.inlineData?.data;
             if (data) {
-                this.outputHandler(GeminiRealtimeSession.Base64ToArrayBuffer(data));
+                this.outputHandler(GeminiRealtimeSession.base64ToArrayBuffer(data));
             }
         }
     }
@@ -1441,12 +1441,12 @@ class GeminiRealtimeSession implements IRealtimeSession {
     }
 
     /** Encodes an `ArrayBuffer` of raw bytes to a base64 string for Gemini's `Blob.data`. */
-    private static ArrayBufferToBase64(buffer: ArrayBuffer): string {
+    private static arrayBufferToBase64(buffer: ArrayBuffer): string {
         return Buffer.from(new Uint8Array(buffer)).toString('base64');
     }
 
     /** Decodes a base64 `Blob.data` string from Gemini into a raw `ArrayBuffer`. */
-    private static Base64ToArrayBuffer(base64: string): ArrayBuffer {
+    private static base64ToArrayBuffer(base64: string): ArrayBuffer {
         const bytes = Buffer.from(base64, 'base64');
         // Copy into a freshly-allocated ArrayBuffer so we never leak the surrounding Node pool buffer
         // (and so the result is a plain ArrayBuffer, not ArrayBufferLike).

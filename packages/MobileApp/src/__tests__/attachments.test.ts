@@ -108,11 +108,11 @@ describe('pickImageFromLibrary', () => {
     it('maps a picked asset to a CapturedAttachment', async () => {
         const att = await pickImageFromLibrary();
         expect(att).toEqual<CapturedAttachment>({
-            uri: 'file:///lib/IMG.jpg',
-            name: 'IMG.jpg',
-            mimeType: 'image/jpeg',
+            Uri: 'file:///lib/IMG.jpg',
+            Name: 'IMG.jpg',
+            MimeType: 'image/jpeg',
             size: 2048,
-            kind: 'image',
+            Kind: 'image',
         });
     });
 
@@ -130,20 +130,20 @@ describe('pickImageFromLibrary', () => {
         state.libraryPerm = { granted: false, canAskAgain: true };
         state.requestResult = { granted: true };
         const att = await pickImageFromLibrary();
-        expect(att?.name).toBe('IMG.jpg');
+        expect(att?.Name).toBe('IMG.jpg');
     });
 
     it('falls back to a derived name + default mime when the asset omits them', async () => {
         state.imageResult = { canceled: false, assets: [{ uri: 'file:///lib/snap.png' }] };
         const att = await pickImageFromLibrary();
-        expect(att).toMatchObject({ name: 'snap.png', mimeType: 'image/jpeg', kind: 'image' });
+        expect(att).toMatchObject({ Name: 'snap.png', MimeType: 'image/jpeg', Kind: 'image' });
     });
 });
 
 describe('capturePhoto', () => {
     it('maps a captured photo to a CapturedAttachment', async () => {
         const att = await capturePhoto();
-        expect(att).toMatchObject({ kind: 'image', mimeType: 'image/jpeg' });
+        expect(att).toMatchObject({ Kind: 'image', MimeType: 'image/jpeg' });
     });
 
     it('returns null when camera permission is denied', async () => {
@@ -161,11 +161,11 @@ describe('pickDocument', () => {
     it('maps a picked document to a CapturedAttachment', async () => {
         const att = await pickDocument();
         expect(att).toEqual<CapturedAttachment>({
-            uri: 'file:///docs/report.pdf',
-            name: 'report.pdf',
-            mimeType: 'application/pdf',
+            Uri: 'file:///docs/report.pdf',
+            Name: 'report.pdf',
+            MimeType: 'application/pdf',
             size: 4096,
-            kind: 'document',
+            Kind: 'document',
         });
     });
 
@@ -177,12 +177,12 @@ describe('pickDocument', () => {
     it('falls back to octet-stream when mimeType is missing', async () => {
         state.docResult = { canceled: false, assets: [{ uri: 'file:///docs/data.bin', name: 'data.bin' }] };
         const att = await pickDocument();
-        expect(att?.mimeType).toBe('application/octet-stream');
+        expect(att?.MimeType).toBe('application/octet-stream');
     });
 });
 
 describe('readAttachmentBase64', () => {
-    const att: CapturedAttachment = { uri: 'file:///lib/IMG.jpg', name: 'IMG.jpg', mimeType: 'image/jpeg', kind: 'image' };
+    const att: CapturedAttachment = { Uri: 'file:///lib/IMG.jpg', Name: 'IMG.jpg', MimeType: 'image/jpeg', Kind: 'image' };
 
     it('returns the base64 contents', async () => {
         expect(await readAttachmentBase64(att)).toBe('Zm9vYmFy');
@@ -195,8 +195,8 @@ describe('readAttachmentBase64', () => {
 });
 
 describe('describeAttachment / composeMessageWithAttachment', () => {
-    const image: CapturedAttachment = { uri: 'u', name: 'IMG.jpg', mimeType: 'image/jpeg', size: 2048, kind: 'image' };
-    const doc: CapturedAttachment = { uri: 'u', name: 'report.pdf', mimeType: 'application/pdf', kind: 'document' };
+    const image: CapturedAttachment = { Uri: 'u', Name: 'IMG.jpg', MimeType: 'image/jpeg', size: 2048, Kind: 'image' };
+    const doc: CapturedAttachment = { Uri: 'u', Name: 'report.pdf', MimeType: 'application/pdf', Kind: 'document' };
 
     it('describes an image with a formatted size', () => {
         expect(describeAttachment(image)).toBe('[Attached image: IMG.jpg (image/jpeg, 2 KB)]');
@@ -220,7 +220,7 @@ describe('describeAttachment / composeMessageWithAttachment', () => {
 });
 
 describe('persistAttachment', () => {
-    const att: CapturedAttachment = { uri: 'u', name: 'report.pdf', mimeType: 'application/pdf', kind: 'document' };
+    const att: CapturedAttachment = { Uri: 'u', Name: 'report.pdf', MimeType: 'application/pdf', Kind: 'document' };
 
     it('creates an MJ: Files catalog record and returns its id', async () => {
         const result = await persistAttachment(att);

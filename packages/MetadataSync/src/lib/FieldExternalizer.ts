@@ -1,7 +1,7 @@
 import fs from 'fs-extra';
 import path from 'path';
 import { BaseEntity } from '@memberjunction/core';
-import { METADATA_KEYWORDS, extractKeywordValue, createKeywordReference } from '../constants/metadata-keywords';
+import { METADATA_KEYWORDS, ExtractKeywordValue, CreateKeywordReference } from '../constants/metadata-keywords';
 
 /**
  * Handles externalization of field values to separate files with @file: references
@@ -10,7 +10,7 @@ export class FieldExternalizer {
   /**
    * Externalize a field value to a separate file and return @file: reference
    */
-  async externalizeField(
+  async ExternalizeField(
     fieldName: string,
     fieldValue: any,
     pattern: string,
@@ -39,6 +39,20 @@ export class FieldExternalizer {
     }
     
     return fileReference;
+  }
+
+  /** @deprecated Use {@link ExternalizeField}. */
+  async externalizeField(
+    fieldName: string,
+    fieldValue: any,
+    pattern: string,
+    recordData: BaseEntity,
+    targetDir: string,
+    existingFileReference?: string,
+    mergeStrategy: string = 'merge',
+    verbose?: boolean
+  ): Promise<string> {
+    return this.ExternalizeField(fieldName, fieldValue, pattern, recordData, targetDir, existingFileReference, mergeStrategy, verbose);
   }
 
   /**
@@ -78,7 +92,7 @@ export class FieldExternalizer {
     targetDir: string,
     verbose?: boolean
   ): { finalFilePath: string; fileReference: string } {
-    const existingPath = extractKeywordValue(existingFileReference) as string;
+    const existingPath = ExtractKeywordValue(existingFileReference) as string;
     const finalFilePath = path.resolve(targetDir, existingPath);
     
     if (verbose) {
@@ -101,7 +115,7 @@ export class FieldExternalizer {
     const processedPattern = this.processPattern(pattern, recordData, fieldName);
     const cleanPattern = this.removeFilePrefix(processedPattern);
     const finalFilePath = path.resolve(targetDir, cleanPattern);
-    const fileReference = createKeywordReference('file', cleanPattern);
+    const fileReference = CreateKeywordReference('file', cleanPattern);
     
     if (verbose) {
       console.log(`Creating new external file: ${finalFilePath}`);
@@ -158,7 +172,7 @@ export class FieldExternalizer {
    * Removes @file: prefix if present
    */
   private removeFilePrefix(pattern: string): string {
-    return pattern.startsWith(METADATA_KEYWORDS.FILE) ? (extractKeywordValue(pattern) as string) : pattern;
+    return pattern.startsWith(METADATA_KEYWORDS.FILE) ? (ExtractKeywordValue(pattern) as string) : pattern;
   }
 
   /**

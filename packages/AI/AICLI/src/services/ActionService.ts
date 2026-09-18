@@ -2,24 +2,24 @@ import { ActionEngineServer } from '@memberjunction/actions';
 import { UserInfo, Metadata, RunView } from '@memberjunction/core';
 import { MJActionEntity, MJActionParamEntity } from '@memberjunction/core-entities';
 import { ExecutionLogger } from '../lib/execution-logger';
-import { initializeMJProvider } from '../lib/mj-provider';
+import { InitializeMJProvider } from '../lib/mj-provider';
 import { ActionInfo, ExecutionResult } from '../lib/output-formatter';
 
 export interface ActionExecutionOptions {
-  verbose?: boolean;
-  timeout?: number;
-  parameters?: Record<string, any>;
+  verbose?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  timeout?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  parameters?: Record<string, any>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export class ActionService {
   private initialized = false;
   private contextUser?: UserInfo;
 
-  async initialize(): Promise<void> {
+  async Initialize(): Promise<void> {
     if (this.initialized) return;
 
     try {
-      await initializeMJProvider();
+      await InitializeMJProvider();
       this.contextUser = await this.getContextUser();
       this.initialized = true;
     } catch (error: any) {
@@ -27,7 +27,12 @@ export class ActionService {
     }
   }
 
-  async listActions(): Promise<ActionInfo[]> {
+  /** @deprecated Use {@link Initialize}. */
+  async initialize(): Promise<void> {
+    return this.Initialize();
+  }
+
+  async ListActions(): Promise<ActionInfo[]> {
     await this.ensureInitialized();
 
     try {
@@ -76,7 +81,12 @@ For help with action configuration, see the MJ documentation.`);
     }
   }
 
-  async findAction(actionName: string): Promise<MJActionEntity | null> {
+  /** @deprecated Use {@link ListActions}. */
+  async listActions(): Promise<ActionInfo[]> {
+    return this.ListActions();
+  }
+
+  async FindAction(actionName: string): Promise<MJActionEntity | null> {
     await this.ensureInitialized();
 
     try {
@@ -98,7 +108,12 @@ For help with action configuration, see the MJ documentation.`);
     }
   }
 
-  async executeAction(
+  /** @deprecated Use {@link FindAction}. */
+  async findAction(actionName: string): Promise<MJActionEntity | null> {
+    return this.FindAction(actionName);
+  }
+
+  async ExecuteAction(
     actionName: string,
     options: ActionExecutionOptions = {}
   ): Promise<ExecutionResult> {
@@ -110,7 +125,7 @@ For help with action configuration, see the MJ documentation.`);
     try {
       // Find the action
       logger.logStep('INFO', 'SYSTEM', 'Finding action', { actionName });
-      const action = await this.findAction(actionName);
+      const action = await this.FindAction(actionName);
       
       if (!action) {
         const suggestions = await this.getSimilarActionNames(actionName);
@@ -237,6 +252,14 @@ Log file: ${logger.getLogFilePath()}`);
     }
   }
 
+  /** @deprecated Use {@link ExecuteAction}. */
+  async executeAction(
+    actionName: string,
+    options: ActionExecutionOptions = {}
+  ): Promise<ExecutionResult> {
+    return this.ExecuteAction(actionName, options);
+  }
+
   private async getActionParameters(actionId: string): Promise<Array<{
     name: string;
     type: string;
@@ -352,7 +375,7 @@ ${actionParams.filter(p => p.required).map(p => `  - ${p.name} (${p.type}): ${p.
 
   private async getSimilarActionNames(searchName: string): Promise<string[]> {
     try {
-      const actions = await this.listActions();
+      const actions = await this.ListActions();
       const searchLower = searchName.toLowerCase();
       
       return actions
@@ -440,7 +463,7 @@ This is typically a configuration or database setup issue.`);
 
   private async ensureInitialized(): Promise<void> {
     if (!this.initialized) {
-      await this.initialize();
+      await this.Initialize();
     }
   }
 }

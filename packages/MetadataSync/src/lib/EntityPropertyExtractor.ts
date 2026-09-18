@@ -12,7 +12,7 @@ export class EntityPropertyExtractor {
    * @param record The BaseEntity object to get properties from
    * @param fieldOverrides Optional field value overrides (e.g., for @parent:ID syntax)
    */
-  extractAllProperties(record: BaseEntity, fieldOverrides?: Record<string, any>): Record<string, any> {
+  ExtractAllProperties(record: BaseEntity, fieldOverrides?: Record<string, any>): Record<string, any> {
     const allProperties: Record<string, any> = {};
     
     // 1. Get database fields using GetAll()
@@ -25,6 +25,11 @@ export class EntityPropertyExtractor {
     this.extractVirtualProperties(record, allProperties, fieldOverrides);
     
     return allProperties;
+  }
+
+  /** @deprecated Use {@link ExtractAllProperties}. */
+  extractAllProperties(record: BaseEntity, fieldOverrides?: Record<string, any>): Record<string, any> {
+    return this.ExtractAllProperties(record, fieldOverrides);
   }
 
   /**

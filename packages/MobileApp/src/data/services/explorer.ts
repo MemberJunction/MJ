@@ -13,17 +13,17 @@ import type { MJDashboardEntity } from '@memberjunction/core-entities';
 
 /** A browsable entity row (from MJ's `Metadata.Entities`) shown in the explorer's entity list. */
 export type EntityListItem = {
-    name: string;
-    displayName: string;
-    schemaName: string;
-    description: string | null;
+    name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    displayName: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    schemaName: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    description: string | null;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 };
 
 /**
  * Entities the user can browse. We surface entities that are not system/
  * internal and that the current user can read. Sorted by display name.
  */
-export function loadEntities(): EntityListItem[] {
+export function LoadEntities(): EntityListItem[] {
     const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
     return md.Entities
         .filter((e) => e.AllowUserSearchAPI !== false && !e.Name.startsWith('__'))
@@ -36,9 +36,19 @@ export function loadEntities(): EntityListItem[] {
         .sort((a, b) => a.displayName.localeCompare(b.displayName));
 }
 
+/** @deprecated Use {@link LoadEntities}. */
+export function loadEntities(): EntityListItem[] {
+    return LoadEntities();
+}
+
 /** Total number of entities known to the metadata (all, unfiltered). */
-export function entityCount(): number {
+export function EntityCount(): number {
     return new Metadata().Entities.length;  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
+}
+
+/** @deprecated Use {@link EntityCount}. */
+export function entityCount(): number {
+    return EntityCount();
 }
 
 /**
@@ -70,25 +80,25 @@ function displayCellValue(v: unknown): string {
 /** One entity record projected to a card: id, title, subtitle, and the raw field bag. */
 export type EntityRecordRow = {
     /** Composite PK serialized (entity record id). */
-    id: string;
-    title: string;
+    id: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    title: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** A couple of secondary fields for the card subtitle. */
-    subtitle: string;
-    raw: Record<string, unknown>;
+    subtitle: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    raw: Record<string, unknown>;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 };
 
 /** Result of {@link loadEntityRecords}: the entity metadata, the card rows, and how many were returned. */
 export type EntityRecordsLoad = {
-    entity: EntityInfo;
-    rows: EntityRecordRow[];
-    totalShown: number;
+    Entity: EntityInfo;
+    Rows: EntityRecordRow[];
+    TotalShown: number;
 };
 
 /**
  * Load records for an entity (read-only, card view). Uses `simple` ResultType
  * with a narrowed field set for performance (CLAUDE.md RunView guidance).
  */
-export async function loadEntityRecords(
+export async function LoadEntityRecords(
     entityName: string,
     contextUser?: UserInfo,
     maxRows = 100,
@@ -139,24 +149,33 @@ export async function loadEntityRecords(
         return { id: idVal, title, subtitle, raw: r };
     });
 
-    return { entity, rows, totalShown: rows.length };
+    return { Entity: entity, Rows: rows, TotalShown: rows.length };
+}
+
+/** @deprecated Use {@link LoadEntityRecords}. */
+export async function loadEntityRecords(
+    entityName: string,
+    contextUser?: UserInfo,
+    maxRows = 100,
+): Promise<EntityRecordsLoad | null> {
+    return LoadEntityRecords(entityName, contextUser, maxRows);
 }
 
 /** A single displayable field of a record: its key, label, and stringified value. */
-export type RecordFieldRow = { key: string; label: string; value: string };
+export type RecordFieldRow = { key: string; label: string; value: string };  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 
 /** Result of {@link loadRecordDetail}: the entity metadata, a title, and the projected field rows. */
 export type RecordDetailLoad = {
-    entity: EntityInfo;
-    title: string;
-    fields: RecordFieldRow[];
+    Entity: EntityInfo;
+    Title: string;
+    Fields: RecordFieldRow[];
 };
 
 /**
  * Load a single record's fields (read-only). Uses GetEntityObject + Load so
  * we get the full strongly-typed entity, then projects displayable fields.
  */
-export async function loadRecordDetail(
+export async function LoadRecordDetail(
     entityName: string,
     recordId: string,
     contextUser?: UserInfo,
@@ -186,7 +205,16 @@ export async function loadRecordDetail(
             };
         });
 
-    return { entity: entityInfo, title, fields };
+    return { Entity: entityInfo, Title: title, Fields: fields };
+}
+
+/** @deprecated Use {@link LoadRecordDetail}. */
+export async function loadRecordDetail(
+    entityName: string,
+    recordId: string,
+    contextUser?: UserInfo,
+): Promise<RecordDetailLoad | null> {
+    return LoadRecordDetail(entityName, recordId, contextUser);
 }
 
 // ---------------------------------------------------------------------------
@@ -195,10 +223,10 @@ export async function loadRecordDetail(
 
 /** A saved query (from MJ's `Metadata.Queries`) shown in the explorer's query list. */
 export type QueryListItem = {
-    id: string;
-    name: string;
-    description: string | null;
-    category: string | null;
+    id: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    description: string | null;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    category: string | null;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 };
 
 /**
@@ -207,7 +235,7 @@ export type QueryListItem = {
  *
  * @returns The approved queries as {@link QueryListItem}s.
  */
-export function loadQueries(): QueryListItem[] {
+export function LoadQueries(): QueryListItem[] {
     const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
     return md.Queries
         .filter((q) => q.Status === 'Approved')
@@ -220,18 +248,28 @@ export function loadQueries(): QueryListItem[] {
         .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/** @deprecated Use {@link LoadQueries}. */
+export function loadQueries(): QueryListItem[] {
+    return LoadQueries();
+}
+
 /** Count of approved saved queries in metadata. */
-export function queryCount(): number {
+export function QueryCount(): number {
     return new Metadata().Queries.filter((q) => q.Status === 'Approved').length;  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
+}
+
+/** @deprecated Use {@link QueryCount}. */
+export function queryCount(): number {
+    return QueryCount();
 }
 
 /** Result of running a saved query: column names, row objects, count, and success/error. */
 export type QueryRunResult = {
-    columns: string[];
-    rows: Record<string, unknown>[];
-    rowCount: number;
-    success: boolean;
-    errorMessage?: string;
+    Columns: string[];
+    Rows: Record<string, unknown>[];
+    RowCount: number;
+    Success: boolean;
+    ErrorMessage?: string;
 };
 
 /**
@@ -245,7 +283,7 @@ export type QueryRunResult = {
  * @param maxRows     Row cap (default 200).
  * @returns A {@link QueryRunResult} with columns, rows, count, and status.
  */
-export async function runQuery(
+export async function runQuery(  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
     queryId: string,
     parameters?: Record<string, unknown>,
     contextUser?: UserInfo,
@@ -259,11 +297,11 @@ export async function runQuery(
     const rows = (result.Results ?? []) as Record<string, unknown>[];
     const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
     return {
-        columns,
-        rows,
-        rowCount: result.RowCount ?? rows.length,
-        success: result.Success,
-        errorMessage: result.Success ? undefined : (result.ErrorMessage ?? 'Query failed.'),
+        Columns: columns,
+        Rows: rows,
+        RowCount: result.RowCount ?? rows.length,
+        Success: result.Success,
+        ErrorMessage: result.Success ? undefined : (result.ErrorMessage ?? 'Query failed.'),
     };
 }
 
@@ -273,9 +311,9 @@ export async function runQuery(
 
 /** A dashboard row shown in the explorer's dashboard list. */
 export type DashboardListItem = {
-    id: string;
-    name: string;
-    description: string | null;
+    id: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    description: string | null;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 };
 
 /**
@@ -286,7 +324,7 @@ export type DashboardListItem = {
  * @param contextUser Optional acting user (server-side scoping).
  * @returns The dashboards as {@link DashboardListItem}s.
  */
-export async function loadDashboards(contextUser?: UserInfo): Promise<DashboardListItem[]> {
+export async function LoadDashboards(contextUser?: UserInfo): Promise<DashboardListItem[]> {
     const rv = new RunView();
     const result = await rv.RunView<{ ID: string; Name: string; Description: string | null }>(
         {
@@ -302,32 +340,37 @@ export async function loadDashboards(contextUser?: UserInfo): Promise<DashboardL
     return (result.Results ?? []).map((d) => ({ id: d.ID, name: d.Name, description: d.Description }));
 }
 
+/** @deprecated Use {@link LoadDashboards}. */
+export async function loadDashboards(contextUser?: UserInfo): Promise<DashboardListItem[]> {
+    return LoadDashboards(contextUser);
+}
+
 /** Renderable dashboard part kinds (mirrors MJ's Dashboard Part Types). */
 export type DashboardPartKind = 'view' | 'query' | 'artifact' | 'weburl' | 'unknown';
 
 /** A single parsed dashboard panel. */
 export type DashboardPart = {
     /** Panel id from the layout. */
-    id: string;
+    id: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Panel display title. */
-    title: string;
+    title: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Normalized renderer kind. */
-    kind: DashboardPartKind;
+    kind: DashboardPartKind;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Resolved Dashboard Part Type name. */
-    typeName: string;
+    typeName: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** Raw, type-specific panel config (viewId/queryId/artifactId/url/…). */
-    config: Record<string, unknown>;
+    config: Record<string, unknown>;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 };
 
 /** A dashboard resolved into its renderable parts. */
 export type DashboardLoad = {
-    id: string;
-    name: string;
-    description: string | null;
-    updatedAt: Date | null;
-    parts: DashboardPart[];
+    Id: string;
+    Name: string;
+    Description: string | null;
+    UpdatedAt: Date | null;
+    Parts: DashboardPart[];
     /** Count of parts that can't render natively on mobile (desktop-only). */
-    desktopOnlyCount: number;
+    DesktopOnlyCount: number;
 };
 
 /** A node in the Golden Layout tree stored in `Dashboard.UIConfigDetails`. */
@@ -403,7 +446,7 @@ function parsePanels(uiConfigDetails: string): RawPanel[] {
  * @param dashboardId The dashboard to load.
  * @param contextUser Optional acting user (server-side scoping).
  */
-export async function loadDashboard(dashboardId: string, contextUser?: UserInfo): Promise<DashboardLoad | null> {
+export async function LoadDashboard(dashboardId: string, contextUser?: UserInfo): Promise<DashboardLoad | null> {
     const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
     const currentUser = contextUser ?? md.CurrentUser;
 
@@ -430,13 +473,18 @@ export async function loadDashboard(dashboardId: string, contextUser?: UserInfo)
 
     const updatedAtRaw = (dashboard as unknown as { __mj_UpdatedAt?: Date }).__mj_UpdatedAt;
     return {
-        id: dashboard.ID,
-        name: dashboard.Name,
-        description: dashboard.Description,
-        updatedAt: updatedAtRaw ? new Date(updatedAtRaw) : null,
-        parts,
-        desktopOnlyCount: parts.filter((p) => p.kind === 'unknown' || p.kind === 'weburl' || p.kind === 'view').length,
+        Id: dashboard.ID,
+        Name: dashboard.Name,
+        Description: dashboard.Description,
+        UpdatedAt: updatedAtRaw ? new Date(updatedAtRaw) : null,
+        Parts: parts,
+        DesktopOnlyCount: parts.filter((p) => p.kind === 'unknown' || p.kind === 'weburl' || p.kind === 'view').length,
     };
+}
+
+/** @deprecated Use {@link LoadDashboard}. */
+export async function loadDashboard(dashboardId: string, contextUser?: UserInfo): Promise<DashboardLoad | null> {
+    return LoadDashboard(dashboardId, contextUser);
 }
 
 /** Map Dashboard Part Type id → name (small lookup table). */

@@ -31,11 +31,11 @@ export default function EntityRecordsScreen() {
     const filtered = useMemo(() => {
         if (!data) return [];
         const q = search.trim().toLowerCase();
-        if (!q) return data.rows;
-        return data.rows.filter((r) => r.title.toLowerCase().includes(q) || r.subtitle.toLowerCase().includes(q));
+        if (!q) return data.Rows;
+        return data.Rows.filter((r) => r.title.toLowerCase().includes(q) || r.subtitle.toLowerCase().includes(q));
     }, [data, search]);
 
-    const displayName = data?.entity.DisplayName || entityName;
+    const displayName = data?.Entity.DisplayName || entityName;
 
     return (
         <SafeAreaView style={styles.safe} edges={['top']}>
@@ -45,7 +45,7 @@ export default function EntityRecordsScreen() {
                 </Pressable>
                 <View style={styles.headerCenter}>
                     <Text style={styles.headerTitle} numberOfLines={1}>{displayName}</Text>
-                    <Text style={styles.headerSub}>{data ? `${data.totalShown} shown` : 'Loading…'}</Text>
+                    <Text style={styles.headerSub}>{data ? `${data.TotalShown} shown` : 'Loading…'}</Text>
                 </View>
                 <View style={styles.iconBtn} />
             </View>

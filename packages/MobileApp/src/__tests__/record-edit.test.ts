@@ -29,13 +29,13 @@ function meta(overrides: Partial<FieldMeta>): FieldMeta {
     return {
         name: 'Field',
         label: 'Field',
-        tsType: 'string',
-        readOnly: false,
-        isVirtual: false,
-        allowsNull: true,
-        maxLength: 100,
-        valueListType: 'None',
-        options: [],
+        TsType: 'string',
+        ReadOnly: false,
+        IsVirtual: false,
+        AllowsNull: true,
+        MaxLength: 100,
+        ValueListType: 'None',
+        Options: [],
         status: 'Active',
         ...overrides,
     };
@@ -46,36 +46,36 @@ describe('isEditableField', () => {
         expect(isEditableField(meta({}))).toBe(true);
     });
     it('rejects read-only, virtual, and non-active fields', () => {
-        expect(isEditableField(meta({ readOnly: true }))).toBe(false);
-        expect(isEditableField(meta({ isVirtual: true }))).toBe(false);
+        expect(isEditableField(meta({ ReadOnly: true }))).toBe(false);
+        expect(isEditableField(meta({ IsVirtual: true }))).toBe(false);
         expect(isEditableField(meta({ status: 'Deprecated' }))).toBe(false);
     });
 });
 
 describe('editorKindForField', () => {
     it('maps a value list to a dropdown', () => {
-        expect(editorKindForField(meta({ valueListType: 'List', options: [{ value: 'A', label: 'A' }] }))).toBe('dropdown');
+        expect(editorKindForField(meta({ ValueListType: 'List', Options: [{ value: 'A', label: 'A' }] }))).toBe('dropdown');
     });
     it('maps scalar TS types', () => {
-        expect(editorKindForField(meta({ tsType: 'boolean' }))).toBe('boolean');
-        expect(editorKindForField(meta({ tsType: 'number' }))).toBe('number');
-        expect(editorKindForField(meta({ tsType: 'Date' }))).toBe('date');
-        expect(editorKindForField(meta({ tsType: 'string', maxLength: 50 }))).toBe('text');
+        expect(editorKindForField(meta({ TsType: 'boolean' }))).toBe('boolean');
+        expect(editorKindForField(meta({ TsType: 'number' }))).toBe('number');
+        expect(editorKindForField(meta({ TsType: 'Date' }))).toBe('date');
+        expect(editorKindForField(meta({ TsType: 'string', MaxLength: 50 }))).toBe('text');
     });
     it('treats unbounded or long strings as longtext', () => {
-        expect(editorKindForField(meta({ tsType: 'string', maxLength: 0 }))).toBe('longtext');
-        expect(editorKindForField(meta({ tsType: 'string', maxLength: 800 }))).toBe('longtext');
+        expect(editorKindForField(meta({ TsType: 'string', MaxLength: 0 }))).toBe('longtext');
+        expect(editorKindForField(meta({ TsType: 'string', MaxLength: 800 }))).toBe('longtext');
     });
 });
 
 describe('buildDescriptor', () => {
     it('marks non-nullable fields required and only attaches options to dropdowns', () => {
-        const d = buildDescriptor(meta({ name: 'Status', label: 'Status', allowsNull: false, valueListType: 'List', options: [{ value: 'X', label: 'X' }] }));
+        const d = buildDescriptor(meta({ name: 'Status', label: 'Status', AllowsNull: false, ValueListType: 'List', Options: [{ value: 'X', label: 'X' }] }));
         expect(d).toMatchObject({ key: 'Status', label: 'Status', kind: 'dropdown', required: true });
-        expect(d.options).toHaveLength(1);
+        expect(d.Options).toHaveLength(1);
     });
     it('leaves options empty for non-dropdown kinds', () => {
-        expect(buildDescriptor(meta({ tsType: 'number' })).options).toEqual([]);
+        expect(buildDescriptor(meta({ TsType: 'number' })).Options).toEqual([]);
     });
 });
 
@@ -105,9 +105,9 @@ describe('entityValueFromForm', () => {
 
 describe('validateRequired', () => {
     const descriptors: FieldEditorDescriptor[] = [
-        { key: 'Name', label: 'Name', kind: 'text', required: true, maxLength: 100, options: [] },
-        { key: 'Age', label: 'Age', kind: 'number', required: false, maxLength: 0, options: [] },
-        { key: 'Active', label: 'Active', kind: 'boolean', required: true, maxLength: 0, options: [] },
+        { key: 'Name', label: 'Name', kind: 'text', required: true, MaxLength: 100, Options: [] },
+        { key: 'Age', label: 'Age', kind: 'number', required: false, MaxLength: 0, Options: [] },
+        { key: 'Active', label: 'Active', kind: 'boolean', required: true, MaxLength: 0, Options: [] },
     ];
     it('flags empty required non-boolean fields and bad numbers', () => {
         const values: Record<string, FieldValue> = { Name: '', Age: 'abc', Active: false };

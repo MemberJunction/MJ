@@ -128,6 +128,7 @@
     "test:integration": "MJ_INTEGRATION_TEST=1 node packages/MJCLI/bin/run.js test suite \"Integration Tests \u2014 Deterministic\"",
     "test:e2e": "playwright test --config e2e/playwright.config.ts",
     "check:standards": "node packages/MJCLI/bin/run.js standards check",
+    "check:naming": "node packages/MJCLI/bin/run.js standards check --check naming-conventions",
     "check:changeset": "node .github/scripts/check-changeset-bump.mjs",
     "check:changeset:test": "vitest run --config .github/scripts/vitest.config.mts __tests__/check-changeset-bump"
   },

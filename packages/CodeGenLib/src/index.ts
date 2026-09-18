@@ -38,7 +38,7 @@
  */
 
 // Configuration exports
-export { initializeConfig } from './Config/config'
+export { InitializeConfig, initializeConfig } from './Config/config'
 export * from './Config/config'
 export * from './Config/db-connection'
 

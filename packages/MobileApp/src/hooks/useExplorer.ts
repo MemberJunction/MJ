@@ -29,7 +29,7 @@ import {
  *
  * @returns `{ entities, queries, dashboards }` counts, or `null` until loaded.
  */
-export function useExplorerCounts() {
+export function UseExplorerCounts() {
     const { status } = useMJ();
     const [counts, setCounts] = useState<{ entities: number; queries: number; dashboards: number } | null>(null);
 
@@ -47,12 +47,17 @@ export function useExplorerCounts() {
     return counts;
 }
 
+/** @deprecated Use {@link UseExplorerCounts}. */
+export function useExplorerCounts() {
+    return UseExplorerCounts();
+}
+
 /**
  * Lists all entities from in-memory Metadata via `loadEntities` (synchronous).
  * @returns The {@link EntityListItem}[] once MJ is `ready`, else `null`; on any
  *   error resolves to an empty array.
  */
-export function useEntities() {
+export function UseEntities() {
     const { status } = useMJ();
     const [entities, setEntities] = useState<EntityListItem[] | null>(null);
     useEffect(() => {
@@ -62,13 +67,18 @@ export function useEntities() {
     return entities;
 }
 
+/** @deprecated Use {@link UseEntities}. */
+export function useEntities() {
+    return UseEntities();
+}
+
 /**
  * Loads a page of records for a named entity via `loadEntityRecords` (RunView).
  * @param entityName The entity to query; `undefined` keeps the hook idle.
  * @returns `{ data, loading, error, refresh }` — the {@link EntityRecordsLoad}
  *   (or `null`), in-flight flag, last error, and a manual `refresh` handler.
  */
-export function useEntityRecords(entityName: string | undefined) {
+export function UseEntityRecords(entityName: string | undefined) {
     const { status } = useMJ();
     const [data, setData] = useState<EntityRecordsLoad | null>(null);
     const [loading, setLoading] = useState(false);
@@ -96,6 +106,11 @@ export function useEntityRecords(entityName: string | undefined) {
     return { data, loading, error, refresh };
 }
 
+/** @deprecated Use {@link UseEntityRecords}. */
+export function useEntityRecords(entityName: string | undefined) {
+    return UseEntityRecords(entityName);
+}
+
 /**
  * Loads the full field detail for a single record via `loadRecordDetail`
  * (RunView). Cancellation-guarded against id changes / unmount.
@@ -105,7 +120,7 @@ export function useEntityRecords(entityName: string | undefined) {
  * @returns `{ data, loading, error }` — the {@link RecordDetailLoad} (or
  *   `null`), in-flight flag, and last error.
  */
-export function useRecordDetail(entityName: string | undefined, recordId: string | undefined) {
+export function UseRecordDetail(entityName: string | undefined, recordId: string | undefined) {
     const { status } = useMJ();
     const [data, setData] = useState<RecordDetailLoad | null>(null);
     const [loading, setLoading] = useState(false);
@@ -139,6 +154,11 @@ export function useRecordDetail(entityName: string | undefined, recordId: string
     return { data, loading, error, refresh };
 }
 
+/** @deprecated Use {@link UseRecordDetail}. */
+export function useRecordDetail(entityName: string | undefined, recordId: string | undefined) {
+    return UseRecordDetail(entityName, recordId);
+}
+
 /**
  * Edit-mode companion to {@link useRecordDetail}. Loads a record into an editable
  * form model via `loadRecordForEdit`, owns the mutable `values` bag + inline
@@ -150,7 +170,7 @@ export function useRecordDetail(entityName: string | undefined, recordId: string
  * @param recordId The primary key of the record; both args must be defined to load.
  * @returns `{ load, values, errors, loading, saving, error, canUpdate, setValue, save }`.
  */
-export function useRecordEditor(entityName: string | undefined, recordId: string | undefined) {
+export function UseRecordEditor(entityName: string | undefined, recordId: string | undefined) {
     const { status } = useMJ();
     const [load, setLoad] = useState<RecordEditLoad | null>(null);
     const [values, setValues] = useState<Record<string, FieldValue>>({});
@@ -193,14 +213,19 @@ export function useRecordEditor(entityName: string | undefined, recordId: string
         setErrors([]);
         try {
             const result = await saveRecord(load, values);
-            if (!result.success && result.validationErrors) setErrors(result.validationErrors);
+            if (!result.success && result.ValidationErrors) setErrors(result.ValidationErrors);
             return result;
         } finally {
             setSaving(false);
         }
     }, [load, values]);
 
-    return { load, values, errors, loading, saving, error, canUpdate: load?.canUpdate ?? false, setValue, save };
+    return { load, values, errors, loading, saving, error, canUpdate: load?.CanUpdate ?? false, setValue, save };
+}
+
+/** @deprecated Use {@link UseRecordEditor}. */
+export function useRecordEditor(entityName: string | undefined, recordId: string | undefined) {
+    return UseRecordEditor(entityName, recordId);
 }
 
 /**
@@ -208,7 +233,7 @@ export function useRecordEditor(entityName: string | undefined, recordId: string
  * @returns The {@link QueryListItem}[] once MJ is `ready`, else `null`; on any
  *   error resolves to an empty array.
  */
-export function useQueries() {
+export function UseQueries() {
     const { status } = useMJ();
     const [queries, setQueries] = useState<QueryListItem[] | null>(null);
     useEffect(() => {
@@ -216,6 +241,11 @@ export function useQueries() {
         try { setQueries(loadQueries()); } catch { setQueries([]); }
     }, [status]);
     return queries;
+}
+
+/** @deprecated Use {@link UseQueries}. */
+export function useQueries() {
+    return UseQueries();
 }
 
 /**
@@ -228,7 +258,7 @@ export function useQueries() {
  * @returns `{ result, loading, run }` — the {@link QueryRunResult} (or `null`),
  *   in-flight flag, and a `run(parameters?)` handler.
  */
-export function useQueryRun(queryId: string | undefined) {
+export function UseQueryRun(queryId: string | undefined) {
     const { status } = useMJ();
     const [result, setResult] = useState<QueryRunResult | null>(null);
     const [loading, setLoading] = useState(false);
@@ -238,7 +268,7 @@ export function useQueryRun(queryId: string | undefined) {
         if (status !== 'ready' || !queryId) return;
         setLoading(true);
         try { setResult(await runQuery(queryId, parameters)); }
-        catch (e) { setResult({ columns: [], rows: [], rowCount: 0, success: false, errorMessage: e instanceof Error ? e.message : String(e) }); }
+        catch (e) { setResult({ Columns: [], Rows: [], RowCount: 0, Success: false, ErrorMessage: e instanceof Error ? e.message : String(e) }); }
         finally { setLoading(false); }
     }, [status, queryId]);
 
@@ -246,12 +276,17 @@ export function useQueryRun(queryId: string | undefined) {
     return { result, loading, run };
 }
 
+/** @deprecated Use {@link UseQueryRun}. */
+export function useQueryRun(queryId: string | undefined) {
+    return UseQueryRun(queryId);
+}
+
 /**
  * Loads the list of dashboards via `loadDashboards` (async). Cancellation-
  * guarded; errors coalesce to an empty list.
  * @returns The {@link DashboardListItem}[] once loaded, else `null`.
  */
-export function useDashboards() {
+export function UseDashboards() {
     const { status } = useMJ();
     const [dashboards, setDashboards] = useState<DashboardListItem[] | null>(null);
     useEffect(() => {
@@ -263,6 +298,11 @@ export function useDashboards() {
     return dashboards;
 }
 
+/** @deprecated Use {@link UseDashboards}. */
+export function useDashboards() {
+    return UseDashboards();
+}
+
 /**
  * Loads a single dashboard resolved into renderable parts via `loadDashboard`.
  * Cancellation-guarded against id changes / unmount.
@@ -270,7 +310,7 @@ export function useDashboards() {
  * @returns `{ dashboard, loading, error }` — the {@link DashboardLoad} (or
  *   `null`), in-flight flag, and last error.
  */
-export function useDashboard(dashboardId: string | undefined) {
+export function UseDashboard(dashboardId: string | undefined) {
     const { status } = useMJ();
     const [dashboard, setDashboard] = useState<DashboardLoad | null>(null);
     const [loading, setLoading] = useState(false);
@@ -295,4 +335,9 @@ export function useDashboard(dashboardId: string | undefined) {
     }, [status, dashboardId]);
 
     return { dashboard, loading, error };
+}
+
+/** @deprecated Use {@link UseDashboard}. */
+export function useDashboard(dashboardId: string | undefined) {
+    return UseDashboard(dashboardId);
 }

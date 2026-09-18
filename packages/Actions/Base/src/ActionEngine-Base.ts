@@ -373,12 +373,12 @@ export class ActionEngineBase extends BaseEngine<ActionEngineBase> {
       return super.getInstance<ActionEngineBase>("ActionEngineBase");
    }
 
-    private _Actions: MJActionEntityExtended[];
-    private _ActionCategories: MJActionCategoryEntity[];
-    private _Filters: MJActionFilterEntity[];
-    private _Params: MJActionParamEntity[];
-    private _ActionResultCodes: MJActionResultCodeEntity[];
-    private _ActionLibraries: MJActionLibraryEntity[] = [];
+    private _Actions: MJActionEntityExtended[];  // case-violation-ok-legacy-back-compat: the name is also a string literal that resolves this member at runtime, so renaming it breaks the lookup
+    private _ActionCategories: MJActionCategoryEntity[];  // case-violation-ok-legacy-back-compat: the name is also a string literal that resolves this member at runtime, so renaming it breaks the lookup
+    private _Filters: MJActionFilterEntity[];  // case-violation-ok-legacy-back-compat: the name is also a string literal that resolves this member at runtime, so renaming it breaks the lookup
+    private _Params: MJActionParamEntity[];  // case-violation-ok-legacy-back-compat: the name is also a string literal that resolves this member at runtime, so renaming it breaks the lookup
+    private _ActionResultCodes: MJActionResultCodeEntity[];  // case-violation-ok-legacy-back-compat: the name is also a string literal that resolves this member at runtime, so renaming it breaks the lookup
+    private _ActionLibraries: MJActionLibraryEntity[] = [];  // case-violation-ok-legacy-back-compat: the name is also a string literal that resolves this member at runtime, so renaming it breaks the lookup
 
    /**
     * This method is called to configure the ActionEngine. It loads the metadata for the actions, filters, and result codes and caches them in the GlobalObjectStore. You must call this method before running any actions.

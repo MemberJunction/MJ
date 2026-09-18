@@ -136,12 +136,17 @@ function asRecord(value: unknown): Record<string, unknown> | null {
  * exact metric this harness exists to measure honestly — and MJ's own loop parser tolerates it, so
  * scoring it as a failure would also diverge from what production actually does.
  */
-export function stripJsonFence(text: string): string {
+export function StripJsonFence(text: string): string {
     const trimmed = text.trim();
     if (!trimmed.startsWith('```')) {
         return trimmed;
     }
     return trimmed.replace(/^```[a-zA-Z]*\s*\n?/, '').replace(/\n?```\s*$/, '').trim();
+}
+
+/** @deprecated Use {@link StripJsonFence}. */
+export function stripJsonFence(text: string): string {
+    return StripJsonFence(text);
 }
 
 function readActions(nextStep: Record<string, unknown> | null): ObservedAction[] {
@@ -223,7 +228,7 @@ function classifyEnvelope(
  * "two envelopes back to back" shape. String-aware brace counting; returns 0 unless at least two
  * objects were found, so a single malformed object is left to the ordinary diagnostic.
  */
-export function countConcatenatedObjects(text: string): number {
+export function CountConcatenatedObjects(text: string): number {
     let depth = 0, inString = false, escaped = false, objects = 0;
     for (const ch of text) {
         if (inString) {
@@ -239,6 +244,11 @@ export function countConcatenatedObjects(text: string): number {
     return objects >= 2 ? objects : 0;
 }
 
+/** @deprecated Use {@link CountConcatenatedObjects}. */
+export function countConcatenatedObjects(text: string): number {
+    return CountConcatenatedObjects(text);
+}
+
 /** Reads an envelope out of raw text. Never throws — unparseable output is an observation. */
 function normalizeEnvelope(text: string): ObservedDecision {
     const base = { encoding: 'envelope' as const, actions: [], subAgents: [], taskComplete: false, envelopeParsed: false };
@@ -247,9 +257,9 @@ function normalizeEnvelope(text: string): ObservedDecision {
     }
     let parsed: unknown;
     try {
-        parsed = JSON.parse(stripJsonFence(text));
+        parsed = JSON.parse(StripJsonFence(text));
     } catch (error) {
-        const concatenated = countConcatenatedObjects(stripJsonFence(text));
+        const concatenated = CountConcatenatedObjects(StripJsonFence(text));
         return {
             ...base,
             kind: 'unparseable',
@@ -291,7 +301,7 @@ const PLACEHOLDER_PHRASES = /none needed|just checking/i;
  * Spec §8.2: prose accompanied the call(s) and every call has empty arguments, or every string
  * argument is a placeholder token. The Sonnet 5 pattern of results §13.3, made countable.
  */
-export function isPlaceholderCall(calls: NonNullable<RawTurn['toolCalls']>, text: string | null | undefined): boolean {
+export function IsPlaceholderCall(calls: NonNullable<RawTurn['toolCalls']>, text: string | null | undefined): boolean {
     if (!text?.trim() || calls.length === 0) return false;
     return calls.every((c) => {
         const values = Object.values(c.arguments ?? {});
@@ -299,6 +309,11 @@ export function isPlaceholderCall(calls: NonNullable<RawTurn['toolCalls']>, text
         const strings = values.filter((v): v is string => typeof v === 'string');
         return strings.length === values.length && strings.every((v) => PLACEHOLDER_VALUES.test(v.trim()) || PLACEHOLDER_PHRASES.test(v));
     });
+}
+
+/** @deprecated Use {@link IsPlaceholderCall}. */
+export function isPlaceholderCall(calls: NonNullable<RawTurn['toolCalls']>, text: string | null | undefined): boolean {
+    return IsPlaceholderCall(calls, text);
 }
 
 /** Native-turn classification: control tools first (spec §8.1), then Actions, then payload-only. */
@@ -317,7 +332,7 @@ function normalizeNativeTurn(turn: RawTurn, calls: NonNullable<RawTurn['toolCall
         dualChannel,
         ...(dualChannel ? { shadowEnvelopeKind: shadow!.kind } : {}),
         narrationWithCalls: !!text && !dualChannel,
-        placeholderCall: isPlaceholderCall(calls, text)
+        placeholderCall: IsPlaceholderCall(calls, text)
     };
     const ask = calls.find((c) => role(c.name)?.kind === 'chat');
     if (ask) {
@@ -349,7 +364,7 @@ function normalizeNativeTurn(turn: RawTurn, calls: NonNullable<RawTurn['toolCall
  * Under the implicit protocol, plain text with no call is the terminal form: it reads as
  * task completion unless it parses as an envelope, in which case the envelope is honoured (§2.1).
  */
-export function normalizeDecision(turn: RawTurn): ObservedDecision {
+export function NormalizeDecision(turn: RawTurn): ObservedDecision {
     const calls = turn.toolCalls ?? [];
     const text = turn.text?.trim() ? turn.text : undefined;
     if (calls.length > 0) {
@@ -361,4 +376,9 @@ export function normalizeDecision(turn: RawTurn): ObservedDecision {
         return { kind: 'taskComplete', encoding: 'text', actions: [], subAgents: [], message: text.trim(), taskComplete: true, envelopeParsed: null };
     }
     return normalizeEnvelope(turn.text ?? '');
+}
+
+/** @deprecated Use {@link NormalizeDecision}. */
+export function normalizeDecision(turn: RawTurn): ObservedDecision {
+    return NormalizeDecision(turn);
 }
