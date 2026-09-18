@@ -224,7 +224,7 @@ export async function typeIntoInteractiveElement(
  * scrollable/disabled/value flags. Kept as a single self-contained function so
  * it captures no Node closure state.
  */
-const INTERACTIVITY_PROBE = (): RawInteractiveElement[] => {
+export const INTERACTIVITY_PROBE = (): RawInteractiveElement[] => {
     const INTERACTIVE_SELECTOR = [
         'a[href]', 'button', 'input', 'select', 'textarea', 'summary',
         '[role="button"]', '[role="link"]', '[role="checkbox"]', '[role="radio"]',
@@ -237,6 +237,13 @@ const INTERACTIVITY_PROBE = (): RawInteractiveElement[] => {
         '[role="separator"]',
         '[onclick]', '[tabindex]',
     ].join(',');
+
+    // The same list minus the two catch-alls, so the probe can ask "did this match
+    // because it IS interactive, or only because it carries a tabindex?".
+    const INTERACTIVE_WITHOUT_TABINDEX = INTERACTIVE_SELECTOR
+        .split(',')
+        .filter(sel => sel !== '[tabindex]' && sel !== '[onclick]')
+        .join(',');
 
     const xpathOf = (node: Element): string => {
         const segments: string[] = [];
@@ -359,8 +366,15 @@ const INTERACTIVITY_PROBE = (): RawInteractiveElement[] => {
         if (seen.has(el)) return;
         seen.add(el);
 
-        // tabindex="-1" is programmatic-focus-only, not user-interactive.
-        if (el.getAttribute('tabindex') === '-1' && !el.hasAttribute('onclick')) return;
+        // tabindex="-1" is programmatic-focus-only — but ONLY when that is the sole
+        // reason the element matched. A roving-tabindex composite (Kendo/Material
+        // tabs, toolbars, listboxes, menus) puts -1 on every inactive item, so
+        // dropping them removed every unselected tab and option from the list and
+        // the model fell back to coordinates — which isRecordableRun then refuses,
+        // making the whole test unrecordable.
+        if (el.getAttribute('tabindex') === '-1'
+            && !el.hasAttribute('onclick')
+            && !el.matches(INTERACTIVE_WITHOUT_TABINDEX)) return;
 
         const style = window.getComputedStyle(el);
 
