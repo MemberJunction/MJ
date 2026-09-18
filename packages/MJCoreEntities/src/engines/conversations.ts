@@ -2389,7 +2389,13 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             // back. Handlers below stay synchronous and simply receive the row — passing it down
             // rather than letting each fetch its own keeps this to one read per event and avoids
             // turning five handlers async for a value the dispatcher can obtain once.
-            const row = await ResolveEntityEventRow(event, this.ProviderToUse, this.ContextUser);
+            // ...and only when something below will actually use it — see eventNeedsRow. On a
+            // remote event without `recordData`, hydrating means a read through the provider, and
+            // this dispatcher runs in EVERY connected browser for every save of these entities
+            // anywhere in the system, whether or not this session has any claim to the record.
+            const row = this.eventNeedsRow(event, normalizedName, effectiveType)
+                ? await ResolveEntityEventRow(event, this.ProviderToUse, this.ContextUser)
+                : null;
 
             if (normalizedName === 'mj: conversations') {
                 return this.handleConversationEntityEvent(event, effectiveType, row);
@@ -2408,6 +2414,49 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
 
         // Not a conversation entity — let BaseEngine handle it
         return await super.HandleIndividualBaseEntityEvent(event);
+    }
+
+    /**
+     * Will anything below actually use the row, or does the primary key suffice?
+     *
+     * Asked BEFORE hydrating, because for a remote event whose entity is not on the server's
+     * broadcast allowlist, hydrating costs a read through the provider. This dispatcher runs in
+     * every connected browser, for every save of these entities anywhere in the system — and
+     * conversation details are the hottest write path in the product, so an unconditional read
+     * here is one round trip per connected client per message, nearly all of them refused for a
+     * session with no claim to the record.
+     *
+     * Every `false` below is a case where the handler already returns early without touching the
+     * row, so skipping the read changes nothing a caller can observe.
+     */
+    private eventNeedsRow(event: BaseEntityEvent, normalizedName: string, effectiveType: string): boolean {
+        // Local event: the row IS the live entity, already in hand. Nothing to save by skipping.
+        if (event.baseEntity) {
+            return true;
+        }
+
+        // Projects are keyed by ID for both save and delete, and ID is the primary key.
+        if (normalizedName === 'mj: projects') {
+            return false;
+        }
+
+        if (normalizedName === 'mj: conversations') {
+            // A delete needs only the id. A save merges fields onto a conversation we already
+            // hold — and when we do not hold it, the remote branch of the handler does nothing,
+            // so the row would be fetched only to be discarded.
+            if (effectiveType !== 'save') {
+                return false;
+            }
+            const id = this.eventRecordID(event, null);
+            return !!id && !!this.GetConversation(id);
+        }
+
+        // Details, agent runs and the junction entities all resolve through the detail cache and
+        // return early when the conversation they name is not in it. With the cache empty — any
+        // session that has not opened a conversation — none of them can do anything, whatever the
+        // row says. (A non-empty cache still needs the read: ConversationID is a foreign key, so
+        // the primary key cannot tell us whether this detail belongs to a conversation we hold.)
+        return this._detailCache.size > 0;
     }
 
     /**
