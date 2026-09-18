@@ -121,7 +121,7 @@ export class FileBackupManager {
   /**
    * Stop tracking a file so {@link rollback} leaves it as it is now.
    *
-   * Used by a non-atomic push for files whose records were already committed: restoring the
+   * Used for files in an isolated directory whose records were already committed: restoring the
    * old file would drop the primary keys and sync blocks of rows that stay in the database.
    *
    * @param filePath - Absolute path of a file previously passed to {@link backupFile}

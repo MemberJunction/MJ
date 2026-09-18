@@ -6,7 +6,7 @@
 import path from 'path';
 import type { PushWriteMode } from './push-write-mode';
 
-/** A create or update that was committed outside the push transaction (non-atomic mode only). */
+/** A create or update committed outside the push transaction (an isolated directory only). */
 export interface CommittedWrite {
   /** Absolute path of the metadata file the record came from. */
   filePath: string;
@@ -16,12 +16,28 @@ export interface CommittedWrite {
   status: 'created' | 'updated';
 }
 
+/** What a push had done when it failed. Same shape as the successful result's counts. */
+export interface PushPartialTotals {
+  created: number;
+  updated: number;
+  unchanged: number;
+  deleted: number;
+  skipped: number;
+  deferred: number;
+  errors: number;
+}
+
 export interface PushAbortedDetails {
-  mode: PushWriteMode;
+  /** The write modes the directories processed so far were using. */
+  modes: PushWriteMode[];
   /** Whether the push transaction was rolled back (or was never opened, as in a dry run). */
   rolledBack: boolean;
   /** Rows that are still in the database even though the push failed. */
   committedWrites: CommittedWrite[];
+  /** Counts as far as the push got. Reported so a failed run is still machine-readable. */
+  totals: PushPartialTotals;
+  /** The SQL log for this run, when one was being written. Most wanted on a failure. */
+  sqlLogPath?: string;
   cause: unknown;
 }
 
@@ -31,16 +47,21 @@ export interface PushAbortedDetails {
  * the extra fields let a caller say exactly what is and is not in the database.
  */
 export class PushAbortedError extends Error {
-  readonly mode: PushWriteMode;
+  /** The write modes in play when the push failed, e.g. `['shared']` or `['shared','isolated']`. */
+  readonly modes: PushWriteMode[];
   readonly rolledBack: boolean;
   readonly committedWrites: CommittedWrite[];
+  readonly totals: PushPartialTotals;
+  readonly sqlLogPath?: string;
 
   constructor(details: PushAbortedDetails) {
     super(messageOf(details.cause), { cause: details.cause });
     this.name = 'PushAbortedError';
-    this.mode = details.mode;
+    this.modes = details.modes;
     this.rolledBack = details.rolledBack;
     this.committedWrites = details.committedWrites;
+    this.totals = details.totals;
+    this.sqlLogPath = details.sqlLogPath;
   }
 
   /** True only when nothing from this push is left in the database. */
@@ -69,8 +90,9 @@ export function describeRollbackOutcome(rolledBack: boolean, committedWrites: Co
     return ['✓ Database transaction rolled back successfully. Nothing from this push was saved.'];
   }
   return [
-    `⚠️  The push transaction was rolled back, but this was a non-atomic push: ${committedWrites.length} ` +
-      `created or updated record${committedWrites.length === 1 ? ' was' : 's were'} already committed and ` +
+    `⚠️  The push transaction was rolled back, but ${committedWrites.length} created or updated ` +
+      `record${committedWrites.length === 1 ? '' : 's'} in directories using isolated transactions ` +
+      `${committedWrites.length === 1 ? 'was' : 'were'} already committed and ` +
       `${committedWrites.length === 1 ? 'is' : 'are'} still in the database. Their files keep the pushed contents.`,
     ...describeCommittedWrites(committedWrites, cwd),
   ];
