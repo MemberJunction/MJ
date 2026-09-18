@@ -647,4 +647,35 @@ describe('PreflightPhase', () => {
       expect(progressEvents.length).toBeGreaterThan(0);
     });
   });
+
+  describe('target directory that does not exist yet', () => {
+    it('creates the target directory before probing package manager versions', async () => {
+      // Regression guard: `mj install --dir <new-dir>` failed preflight with
+      // "pnpm not found on PATH" because probeVersion spawned `<pm> --version`
+      // with cwd set to a directory nothing had created yet. Found reproducing #4562.
+      const order: string[] = [];
+      mockFs.CreateDirectory.mockImplementation(async () => { order.push('mkdir'); });
+      mockProcess.RunSimple.mockImplementation(async () => { order.push('probe'); return '10.9.0'; });
+
+      await phase.Run(makeContext({ TargetDir: '/test/does-not-exist-yet' }));
+
+      expect(mockFs.CreateDirectory).toHaveBeenCalledWith('/test/does-not-exist-yet');
+      expect(order.indexOf('mkdir')).toBeGreaterThan(-1);
+      expect(order.indexOf('mkdir')).toBeLessThan(order.indexOf('probe'));
+    });
+
+    it('reports the real reason when a version probe fails', async () => {
+      // A bare `catch { return 'not found' }` told users pnpm was missing on
+      // machines where it was installed and working.
+      mockProcess.RunSimple.mockRejectedValue(new Error('spawn pnpm ENOENT'));
+
+      const result = await phase.Run(makeContext());
+
+      expect(result.Passed).toBe(false);
+      const pmCheck = result.Diagnostics.Checks.find((c) => c.Name === 'Package manager');
+      expect(pmCheck).toBeDefined();
+      expect(pmCheck!.Status).toBe('fail');
+      expect(pmCheck!.Message).toContain('spawn pnpm ENOENT');
+    });
+  });
 });
