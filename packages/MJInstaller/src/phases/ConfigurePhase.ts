@@ -20,7 +20,9 @@
  *
  * @module phases/ConfigurePhase
  * @see InstallConfig — the full configuration interface.
- * @see InstallConfigDefaults — default values for auto-mode.
+ * @see InstallConfigDefaults — pre-`configure` defaults read by earlier
+ *   phases; most fields prompted for here are not in that set, and in
+ *   `--yes` mode each prompt resolves to its own default instead.
  */
 
 import path from 'node:path';
