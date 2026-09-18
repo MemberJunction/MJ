@@ -121,7 +121,18 @@ export class PreflightPhase {
     // as a flatly wrong "pnpm not found on PATH" (#4562). Create it first — the
     // install creates it moments later anyway, and `CanWrite` already relied on
     // doing so as a side effect, just too late to help this probe.
-    await this.fileSystem.CreateDirectory(context.TargetDir);
+    //
+    // Deliberately swallow a failure here rather than letting it reject `Run`:
+    // an unwritable parent or a target path that already exists as a file would
+    // otherwise surface as a generic UNEXPECTED_ERROR before any diagnostic ran,
+    // losing checkWritePermissions' own message and SuggestedFix. Leave it to
+    // that check, further down, to report the same failure properly.
+    try {
+      await this.fileSystem.CreateDirectory(context.TargetDir);
+    } catch {
+      // Intentionally ignored — checkWritePermissions (below) re-probes this
+      // directory and reports a clean diagnostic with a SuggestedFix.
+    }
     const environment = await this.gatherEnvironment(packageManager, context.TargetDir);
     const diagnostics = new Diagnostics(environment);
     const detectedOS = this.detectOS();
