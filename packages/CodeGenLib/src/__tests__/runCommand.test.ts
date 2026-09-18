@@ -270,7 +270,12 @@ describe('RunCommandsBase', () => {
                 expect(result.success).toBe(true);
                 // Give the child's close event time to arrive after treeKill.
                 await new Promise((r) => setTimeout(r, 500));
-                expect(errors.join('\n')).not.toMatch(/Daemon exited/i);
+                // Assert on FAILED, not just the daemon wording: skipping the daemon
+                // branch still fell through to the generic non-zero path, which printed
+                // `FAILED: … (Process exited with code null)` directly under the
+                // STAYED UP line. A narrower assertion passes while the log still
+                // says pass and fail back to back.
+                expect(errors.join('\n')).not.toMatch(/FAILED/i);
             } finally {
                 spy.mockRestore();
             }
