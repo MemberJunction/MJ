@@ -45,17 +45,16 @@ export function CreateErrorBoundary(React: any, options: ErrorBoundaryOptions = 
       };
     }
 
-    static GetDerivedStateFromError(error: Error): any {
+    // React reads this static into a local and calls it UNBOUND
+    // (`var f = fiber.type.getDerivedStateFromError; f(error)`), so a stub that
+    // forwards through `this` throws while handling the child's error and unmounts
+    // the whole tree. The name has to stay on the real declaration.
+    static getDerivedStateFromError(error: Error): any {
       // Update state to trigger fallback UI
       return { hasError: true, error };
     }
 
-    /** @deprecated Use {@link GetDerivedStateFromError}. */
-    static getDerivedStateFromError(error: Error): any {
-      return this.GetDerivedStateFromError(error);
-    }
-
-    ComponentDidCatch(error: Error, errorInfo: any) {
+    componentDidCatch(error: Error, errorInfo: any) {
       // Log error if enabled
       if (logErrors) {
         console.error('React Error Boundary caught error:', error);
@@ -73,11 +72,6 @@ export function CreateErrorBoundary(React: any, options: ErrorBoundaryOptions = 
 
       // Update state with error details
       this.setState({ errorInfo });
-    }
-
-    /** @deprecated Use {@link ComponentDidCatch}. */
-    componentDidCatch(error: Error, errorInfo: any) {
-      return this.ComponentDidCatch(error, errorInfo);
     }
 
     HandleRetry = () => {

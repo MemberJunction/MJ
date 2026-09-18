@@ -208,6 +208,22 @@ describe('built-in exemptions', () => {
         expect((await run()).Violations).toEqual([]);
     });
 
+    it('exempts React lifecycle members, including on a class with no typed base', async () => {
+        // A boundary built against an injected React (`extends (React as any).Component`) has
+        // no base class the contract index can see, so these have to be exempt by name.
+        writePackage('a', {
+            'a.ts':
+                'export class A extends (React as any).Component {\n' +
+                '    static getDerivedStateFromError(e: Error) { return { hasError: true }; }\n' +
+                '    static getDerivedStateFromProps(p: unknown) { return null; }\n' +
+                '    componentDidCatch(e: Error, info: unknown) {}\n' +
+                '    componentDidMount() {}\n' +
+                '    shouldComponentUpdate() { return true; }\n' +
+                '}',
+        });
+        expect((await run()).Violations).toEqual([]);
+    });
+
     it('exempts a computed or Symbol-keyed member, whose name is not a style choice', async () => {
         writePackage('a', { 'a.ts': 'export class A {\n    public [Symbol.iterator]() { return null; }\n}' });
         expect((await run()).Violations).toEqual([]);

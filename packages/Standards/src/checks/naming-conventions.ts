@@ -181,6 +181,29 @@ const PLATFORM_CONTRACT = new Set([
     'dispose',
 ]);
 
+/**
+ * React calls these by exact name. The two statics are the dangerous ones: React reads them
+ * into a local and calls them UNBOUND (`var f = fiber.type.getDerivedStateFromError; f(error)`),
+ * so a `@deprecated` stub forwarding through `this` throws instead of delegating — and for
+ * `getDerivedStateFromError` it throws while handling a child's error, unmounting the tree.
+ *
+ * These are exempt unconditionally rather than behind a `React.Component` heritage test, because
+ * a boundary built against an injected React (`extends (React as any).Component`) has no typed
+ * base class for the contract index to see.
+ */
+const REACT_LIFECYCLE = new Set([
+    // Statics — invoked unbound, so a delegating stub cannot work at all
+    'getDerivedStateFromError', 'getDerivedStateFromProps',
+    // Instance lifecycle
+    'componentDidCatch', 'componentDidMount', 'componentDidUpdate', 'componentWillUnmount',
+    'shouldComponentUpdate', 'getSnapshotBeforeUpdate',
+    // Legacy lifecycle, still honoured by React
+    'componentWillMount', 'componentWillReceiveProps', 'componentWillUpdate',
+    'UNSAFE_componentWillMount', 'UNSAFE_componentWillReceiveProps', 'UNSAFE_componentWillUpdate',
+    // Statics React reads off the class
+    'defaultProps', 'displayName', 'contextType', 'contextTypes', 'propTypes',
+]);
+
 /** oclif reads these off a `Command` subclass, and calls `run()` by name. */
 const OCLIF_MEMBERS = new Set([
     'run', 'flags', 'args', 'description', 'examples', 'topic', 'aliases',
@@ -421,6 +444,7 @@ function isContractName(
     const { Ts: ts, Source: source } = context;
     if (ANGULAR_LIFECYCLE.test(name)) return true;
     if (PLATFORM_CONTRACT.has(name)) return true;
+    if (REACT_LIFECYCLE.has(name)) return true;
     if (name.startsWith(MJ_SYSTEM_PREFIX)) return true;
     if (classContext.IsOclifCommand && OCLIF_MEMBERS.has(name)) return true;
     if (classContext.IsErrorSubclass && ERROR_MEMBERS.has(name)) return true;

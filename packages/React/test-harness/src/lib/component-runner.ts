@@ -969,7 +969,11 @@ export class ComponentRunner {
               this.state = { hasError: false, error: null };
             }
             
-            static GetDerivedStateFromError(error: any) {
+            // React reads this static into a local and calls it UNBOUND
+            // (`var f = fiber.type.getDerivedStateFromError; f(error)`), so a stub
+            // that forwards through `this` throws before the capture below can run —
+            // the harness would then miss the user component's error entirely.
+            static getDerivedStateFromError(error: any) {
               // Capture the actual error message IMMEDIATELY
               (window as any).__testHarnessRuntimeErrors = (window as any).__testHarnessRuntimeErrors || [];
               
@@ -995,13 +999,8 @@ export class ComponentRunner {
               (window as any).__testHarnessTestFailed = true;
               return { hasError: true, error };
             }
-
-            /** @deprecated Use {@link GetDerivedStateFromError}. */
-            static getDerivedStateFromError(error: any) {
-              return this.GetDerivedStateFromError(error);
-            }
             
-            ComponentDidCatch(error: any, errorInfo: any) {
+            componentDidCatch(error: any, errorInfo: any) {
               // Don't log here - it creates duplicate messages
               // Just update the last error with component stack info
               const errors = (window as any).__testHarnessRuntimeErrors || [];
@@ -1011,11 +1010,6 @@ export class ComponentRunner {
                   lastError.componentStack = errorInfo.componentStack;
                 }
               }
-            }
-
-            /** @deprecated Use {@link ComponentDidCatch}. */
-            componentDidCatch(error: any, errorInfo: any) {
-              return this.ComponentDidCatch(error, errorInfo);
             }
             
             render() {
