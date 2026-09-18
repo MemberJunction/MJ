@@ -495,9 +495,10 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             // Trim to caller's requested topK (we overfetched earlier)
             if (results.length > topK) results = results.slice(0, topK);
 
-            if (!isPreview) {
-                await this._enricher.Enrich(results, contextUser);
-            }
+            // Always run enrichment (entity icons, entity display names, record names) on the final topK results,
+            // including preview searches (where topK <= 8, resolving names in a single fast batched query).
+            this._enricher.Provider = this.ProviderToUse;
+            await this._enricher.Enrich(results, contextUser);
 
             LogStatus(`SearchEngine: Search complete in ${Date.now() - startTime}ms - ${results.length} result(s)${resolvedScopes.length ? ` across ${resolvedScopes.length} scope(s)` : ''}`);
 
