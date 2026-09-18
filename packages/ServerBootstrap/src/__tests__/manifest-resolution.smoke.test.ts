@@ -65,9 +65,9 @@ describe('class-registration manifest (real generated module)', () => {
         ).toEqual([]);
     });
 
-    it('SupportsDynamicToolSet is falsy for ElevenLabs, Gemini, Inworld, AssemblyAI and HuggingFace', () => {
+    it('SupportsDynamicToolSet is true for Gemini and falsy for static/fixed-tool drivers', () => {
+        expect(GeminiRealtime.SupportsDynamicToolSet).toBe(true);
         expect(ElevenLabsRealtime.SupportsDynamicToolSet).toBeFalsy();
-        expect(GeminiRealtime.SupportsDynamicToolSet).toBeFalsy();
         expect(InworldRealtime.SupportsDynamicToolSet).toBeFalsy();
         expect(AssemblyAIRealtime.SupportsDynamicToolSet).toBeFalsy();
         expect(HuggingFaceRealtime.SupportsDynamicToolSet).toBeFalsy();
