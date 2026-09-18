@@ -174,5 +174,61 @@ describe('RunCommandsBase', () => {
                 expect(error).toBeDefined();
             }
         });
+
+        it('treats a daemon that stays up for its whole timeout as success', async () => {
+            // `npm start` in MJAPI is a server: it cannot exit on its own, so the
+            // timeout is the only way it can ever end. Before isDaemon existed the
+            // timeout path hardcoded success:false, so a fully working install
+            // reported "Installation failed". See #4562.
+            const result = await runner.runCommand({
+                command: 'sleep 5',
+                args: [],
+                workingDirectory: '/tmp',
+                when: 'test',
+                timeout: 300,
+                isDaemon: true,
+            });
+            expect(result.success).toBe(true);
+            expect(result.elapsedTime).toBeGreaterThanOrEqual(250);
+        });
+
+        it('still fails a non-daemon command that times out', async () => {
+            const result = await runner.runCommand({
+                command: 'sleep 5',
+                args: [],
+                workingDirectory: '/tmp',
+                when: 'test',
+                timeout: 300,
+            });
+            expect(result.success).toBe(false);
+            expect(result.error).toMatch(/timed out/i);
+        });
+
+        it('fails a daemon that exits before its timeout', async () => {
+            // A service that comes down on its own crashed; the timeout never fires.
+            const result = await runner.runCommand({
+                command: 'printf "%s\\n" "EADDRINUSE: port 4000 already in use" >&2; exit 1',
+                args: [],
+                workingDirectory: '/tmp',
+                when: 'test',
+                timeout: 5000,
+                isDaemon: true,
+            });
+            expect(result.success).toBe(false);
+            expect(result.output).toMatch(/EADDRINUSE/);
+        });
+
+        it('rejects a daemon with no timeout instead of waiting forever', async () => {
+            const result = await runner.runCommand({
+                command: 'sleep 30',
+                args: [],
+                workingDirectory: '/tmp',
+                when: 'test',
+                isDaemon: true,
+            });
+            expect(result.success).toBe(false);
+            expect(result.error).toMatch(/isDaemon/i);
+            expect(result.error).toMatch(/timeout/i);
+        });
     });
 });
