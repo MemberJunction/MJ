@@ -4,11 +4,11 @@
 
 **Goal:** Build `@memberjunction/work-queue-core` — the transport-neutral contracts, publish validation, filters, backoff, consumer runtime, in-memory reference transport, transport conformance kit and REST publisher client — with **zero** `@memberjunction/*` dependencies, so Lambda consumers stay lightweight.
 
-**Architecture:** Every other work-queue package builds on this one. Contract types mirror spec 03 §1–§5 and §10 exactly. Pure helpers (`ValidatePublishRequest`, `MatchesFilter`, `ComputeBackoffSeconds`, `SubscriptionUnsupportedReason`) are shared by every publish and consume path. `ConsumerRuntime` drives any `ITransportConsumer`: it receives deliveries, runs handlers through `DeliveryExecution` (lease heartbeats, processing caps, abort signals, outcome mapping) and settles them. `InMemoryTransport` implements the full Database-transport semantics in memory and is the reference the conformance kit (`@memberjunction/work-queue-core/testing`) is proven against. `WorkQueueApiPublisher` is the `fetch`-based client for the REST publish endpoint.
+**Architecture:** Every other work-queue package builds on this one. Contract types mirror spec 03 §1–§5 and §10 exactly. Pure helpers (`ValidatePublishRequest`, `MatchesFilter`, `ComputeBackoffSeconds`, `SubscriptionUnsupportedReason`) are shared by every publish and consume path. `ConsumerRuntime` drives any `ITransportConsumer`: it receives deliveries, runs handlers through `DeliveryExecution` (heartbeats every `min(LeaseSeconds / 3, 30 s)`, an independent lease-horizon timer, processing caps, abort reasons, cancel acknowledgement, outcome mapping) and settles them. `InMemoryTransport` implements the full Database-transport semantics in memory and is the reference the conformance kit (`@memberjunction/work-queue-core/testing`) is proven against. `WorkQueueApiPublisher` is the `fetch`-based client for the REST publish endpoint.
 
 **Tech Stack:** TypeScript 5.9 (ESM, `strict`), Vitest 4, Node 22 globals (`fetch`, `AbortController`, `crypto.randomUUID`, `structuredClone`, `TextEncoder`). No runtime dependencies.
 
-**Spec:** [`plans/work-queue-1/03-interfaces-and-tables.md`](03-interfaces-and-tables.md) (normative contract) and [`plans/work-queue-1/02-implementation-overview.md`](02-implementation-overview.md). Read both before starting. Where this plan and 03 disagree, 03 wins — except the items listed in [Contract deltas](#contract-deltas), which must be folded into 03.
+**Spec:** [`plans/work-queue-1/03-interfaces-and-tables.md`](03-interfaces-and-tables.md) (normative contract, **Revision 4**), [`plans/work-queue-1/02-implementation-overview.md`](02-implementation-overview.md) and [`plans/work-queue-1/11-revision-4-review.md`](11-revision-4-review.md) (what Revision 4 cut and fixed, and why). Read all three before starting. There are **no producer-supplied ordering numbers and no cloud-side `Ordered` staging** in this design (11 S1, S2): do not add them. Where this plan and 03 disagree, 03 wins — except the items listed in [Contract deltas](#contract-deltas), which must be folded into 03.
 
 ## Global Constraints
 
@@ -29,13 +29,13 @@
 | # | Task | Deliverable |
 | --- | --- | --- |
 | 1 | Scaffold, workspace glob, dependency guard, contract types, errors, outcomes | Package builds; guard, error and outcome tests pass |
-| 2 | Publish validation and envelope building | `ValidatePublishRequest`, `BuildWorkMessage`, `SerializedEnvelopeBytes` tested |
+| 2 | Publish validation and envelope building | `ValidatePublishRequest`, `BuildWorkMessage`, `SerializedEnvelopeBytes`, `CanonicalEnvelope` tested |
 | 3 | Filters (`CompositeFilterDescriptor`, restricted) | `ParseSubscriptionFilter`, `MatchesFilter`, `FilterFields` tested |
-| 4 | Backoff and subscription compatibility | `ComputeBackoffSeconds`, `SubscriptionUnsupportedReason` tested |
-| 5 | Outcome mapping and `DeliveryExecution` | Handler outcomes, heartbeat retry, caps, lease loss and cancel tested with fake timers |
+| 4 | Backoff, heartbeat cadence and subscription compatibility | `ComputeBackoffSeconds`, `HeartbeatIntervalSeconds`, `SubscriptionUnsupportedReason` tested |
+| 5 | Outcome mapping and `DeliveryExecution` | Handler outcomes, heartbeat cadence and retry, the independent lease-horizon timer (hung heartbeat, Manual mode), caps, lease loss and cancel-then-acknowledge tested with fake timers |
 | 6 | `ConsumerRuntime` | Receive loop, concurrency, idle polling, `Kick`, `Stop`, `ProcessBatch` tested |
-| 7 | `InMemoryTransport` | Full Database-like semantics in memory, including in-flight cancel, tested |
-| 8 | Conformance kit (`./testing`, `./testing/vitest`) | 27 runner-agnostic cases pass against `InMemoryTransport` via `RunConformanceChecks` and the vitest wrapper |
+| 7 | `InMemoryTransport` | Full Database-like semantics in memory, including the cancel flag and `AcknowledgeCancel`, tested |
+| 8 | Conformance kit (`./testing`, `./testing/vitest`) | 26 runner-agnostic cases pass against `InMemoryTransport` via `RunConformanceChecks` and the vitest wrapper |
 | 9 | REST contract mapping and `WorkQueueApiPublisher` | Mapping and HTTP client tested with a fake `fetch` |
 | 10 | Exports, README, changeset, full verification | Build, tests, ESM guard and changeset check green |
 
@@ -62,7 +62,7 @@ package.json                                                  Task 1 (add "packa
 .changeset/work-queue-core-package.md                         Task 10
 
 packages/WorkQueue/core/
-  package.json · tsconfig.json · vitest.config.ts             Task 1 (exports extended in Task 8)
+  package.json · tsconfig.json · tsconfig.test.json · vitest.config.ts   Task 1 (exports extended in Task 8)
   README.md                                                   Task 10
   src/index.ts                                                Task 1, extended by Tasks 2–7, 9
   src/envelope.ts · src/publishing.ts · src/policy.ts         Task 1
@@ -99,7 +99,7 @@ packages/WorkQueue/core/
 
 **Files:**
 - Modify: `pnpm-workspace.yaml` (append `'packages/WorkQueue/*'` after `'packages/eSignature/Providers/*'`), `package.json` (append `"packages/WorkQueue/*"` after `"packages/eSignature/Providers/*"` in `workspaces`)
-- Create: `packages/WorkQueue/core/package.json`, `tsconfig.json`, `vitest.config.ts`
+- Create: `packages/WorkQueue/core/package.json`, `tsconfig.json`, `tsconfig.test.json`, `vitest.config.ts`
 - Create: `packages/WorkQueue/core/src/envelope.ts`, `publishing.ts`, `policy.ts`, `filterTypes.ts`, `handler.ts`, `errors.ts`, `transport.ts`, `operator.ts`, `manifest.ts`, `index.ts`
 - Test: `packages/WorkQueue/core/src/__tests__/dependencyGuard.test.ts`, `errors.test.ts`, `publishing.test.ts`
 
@@ -108,10 +108,10 @@ packages/WorkQueue/core/
 - Produces (all exported from `@memberjunction/work-queue-core`):
   - Spec 03 §1: `WorkJson`, `WorkPayloadRef`, `WorkMessage<TPayload>`
   - Spec 03 §2: `PublishRequest<TPayload>`, `PublishStatus`, `PublishError`, `PublishResult`, `IWorkPublisher`; plus `PublishErrorCodes` (const object of every code string), `PublishErrorCode`, `IsRetryablePublishErrorCode(code: string): boolean`, `CreatePublishError(code: string, message: string): PublishError`, `RejectedPublishResult(messageID: string, code: string, message: string): PublishResult`
-  - Spec 03 §3: `WorkProgress`, `WorkLogger`, `WorkContext`, `WorkOutcome`, `Outcome`, `WorkHandler<TPayload>`, `FatalWorkError`, `TransientWorkError`, `WorkQueueConfigurationError`; plus `NULL_WORK_LOGGER: WorkLogger`
-  - Spec 03 §3.1: `PartitionMode`, `OrderingMode`, `HeartbeatMode`, `HostType`, `DeliveryStatus`, `SubscriptionPolicy`; plus `SUBSCRIPTION_POLICY_DEFAULTS`
+  - Spec 03 §3: `WorkProgress`, `WorkLogger`, `WorkAbortReason`, `WorkContext`, `WorkOutcome`, `Outcome`, `WorkHandler<TPayload>`, `FatalWorkError`, `TransientWorkError`, `WorkQueueConfigurationError`; plus `NULL_WORK_LOGGER: WorkLogger`
+  - Spec 03 §3.1: `PartitionMode`, `HeartbeatMode`, `HostType`, `DeliveryStatus`, `SubscriptionPolicy`; plus `SUBSCRIPTION_POLICY_DEFAULTS`
   - Spec 03 §4 types: `FilterOperator`, `FilterRule`, `FilterGroup`, `SubscriptionFilter`, `FilterSupport`
-  - Spec 03 §5: `TopicBinding`, `SubscriptionBinding`, `ReceivedDelivery<TPayload>`, `SettleResult`, `TransportCapabilities`, `ITransportDriver`, `DatabasePublishOptions`, `ITransportConsumer<TPayload>`, `BindingValidationIssue`
+  - Spec 03 §5: `TopicBinding`, `SubscriptionBinding`, `ReceivedDelivery<TPayload>`, `SettleResult`, `LeaseExtension`, `TransportCapabilities`, `ITransportDriver`, `DatabasePublishOptions`, `ITransportConsumer<TPayload>`, `BindingValidationIssue`
   - Spec 03 §5.2: `SubscriptionStats`, `DeadLetterRecord`, `PartitionCondition`, `PartitionStateRecord`, `Page<T>`, `OperatorResult`, `ITransportOperator`
   - Spec 03 §10: `TopologyManifest`, `ManifestTopic`, `ManifestSubscription`, `BindingImport`
 
@@ -156,7 +156,8 @@ The comment at the top of `pnpm-workspace.yaml` requires the two lists to stay i
     "build": "tsc && tsc-alias -f",
     "watch": "tsc --watch",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "typecheck:tests": "tsc -p tsconfig.test.json"
   },
   "author": "MemberJunction.com",
   "license": "BUSL-1.1",
@@ -185,6 +186,19 @@ The comment at the top of `pnpm-workspace.yaml` requires the two lists to stay i
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "src/__tests__/**", "src/**/*.test.ts"]
+}
+```
+
+`packages/WorkQueue/core/tsconfig.test.json` — the build excludes `src/__tests__`, and vitest does not type-check, so the typed fakes and test doubles this plan leans on would otherwise never meet the compiler:
+
+```json
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
 }
 ```
 
@@ -220,11 +234,16 @@ import { fileURLToPath } from 'node:url';
 const PACKAGE_ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const INTERNAL_SCOPE = '@memberjunction/';
 const DEPENDENCY_FIELDS = ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies'];
+/** `from '…'`, side-effect `import '…'`, dynamic `import('…')` and `require('…')`, in either quote style. */
 const INTERNAL_IMPORT_PATTERNS = [
-    /from\s+['"]@memberjunction\//,
-    /import\s*\(\s*['"]@memberjunction\//,
-    /require\s*\(\s*['"]@memberjunction\//,
+    /from\s+['"`]@memberjunction\//,
+    /import\s+['"`]@memberjunction\//,
+    /import\s*\(\s*['"`]@memberjunction\//,
+    /require\s*\(\s*['"`]@memberjunction\//,
 ];
+
+/** The guard's own pattern literals mention the scope; every other file must not. */
+const SELF = 'dependencyGuard.test.ts';
 
 function readManifest(): object {
     const parsed: unknown = JSON.parse(readFileSync(join(PACKAGE_ROOT, 'package.json'), 'utf8'));
@@ -267,10 +286,27 @@ describe('work-queue-core dependency guard', () => {
 
     it('imports no @memberjunction module anywhere under src', () => {
         const offenders = listSourceFiles(join(PACKAGE_ROOT, 'src')).filter((file) => {
+            if (file.endsWith(SELF)) {
+                return false;
+            }
             const text = readFileSync(file, 'utf8');
             return INTERNAL_IMPORT_PATTERNS.some((pattern) => pattern.test(text));
         });
         expect(offenders).toEqual([]);
+    });
+
+    it('recognises every import form, so nothing slips past the scan', () => {
+        const forms = [
+            "import { X } from '@memberjunction/core';",
+            'import { X } from "@memberjunction/core";',
+            "import '@memberjunction/core';",
+            "const x = await import('@memberjunction/core');",
+            "const x = require('@memberjunction/core');",
+        ];
+        for (const form of forms) {
+            expect(INTERNAL_IMPORT_PATTERNS.some((pattern) => pattern.test(form))).toBe(true);
+        }
+        expect(INTERNAL_IMPORT_PATTERNS.some((pattern) => pattern.test("import { X } from './local';"))).toBe(false);
     });
 });
 ```
@@ -332,6 +368,8 @@ describe('publish error helpers', () => {
         expect(IsRetryablePublishErrorCode(PublishErrorCodes.TopicUnbound)).toBe(true);
         expect(IsRetryablePublishErrorCode(PublishErrorCodes.TransportUnavailable)).toBe(true);
         expect(IsRetryablePublishErrorCode(PublishErrorCodes.InvalidResponse)).toBe(true);
+        expect(IsRetryablePublishErrorCode(PublishErrorCodes.DeduplicationPending)).toBe(true);
+        expect(IsRetryablePublishErrorCode(PublishErrorCodes.TransportRejected)).toBe(false);
         expect(IsRetryablePublishErrorCode(PublishErrorCodes.PayloadTooLarge)).toBe(false);
         expect(IsRetryablePublishErrorCode('SomethingElse')).toBe(false);
     });
@@ -350,7 +388,7 @@ describe('publish error helpers', () => {
 - [ ] **Step 4: Run the tests to verify they fail**
 
 Run: `cd packages/WorkQueue/core && pnpm test`
-Expected: FAIL — `dependencyGuard` passes (3), but `errors.test.ts` and `publishing.test.ts` fail with unresolved imports `../errors`, `../handler`, `../publishing`.
+Expected: FAIL — `dependencyGuard` passes (4), but `errors.test.ts` and `publishing.test.ts` fail with unresolved imports `../errors`, `../handler`, `../publishing`.
 
 - [ ] **Step 5: Write `src/envelope.ts`**
 
@@ -376,16 +414,15 @@ export interface WorkPayloadRef {
 
 /** The message as delivered to a handler. Identical on every transport. */
 export interface WorkMessage<TPayload extends WorkJson = WorkJson> {
-    /** UUID. Stable across redeliveries and replays. Producer-supplied or generated at publish. */
+    /** UUID, globally unique (spec 03 §2.1). Stable across redeliveries and replays. Producer-supplied or generated at publish. */
     MessageID: string;
     Topic: string;
+    /** Ordering is publish order per key; there is no producer-supplied ordering number (spec 03 §1). */
     PartitionKey?: string;
-    /** Present only on ExplicitSequence topics. Starts at 1 per PartitionKey. */
-    Sequence?: number;
     /**
      * ≤ 10 entries; keys 1–64 chars [A-Za-z0-9_-] (no dots: a dotted name is MJ's `source.field` filter form,
-     * which filters reject, so a dotted attribute would be unfilterable); values ≤ 256 chars.
-     * The only fields filters see.
+     * which filters reject, so a dotted attribute would be unfilterable); values 1–256 chars (brokers refuse
+     * empty values). The only fields filters see.
      */
     Attributes: Record<string, string>;
     Payload?: TPayload;
@@ -404,7 +441,6 @@ import type { WorkJson, WorkPayloadRef } from './envelope';
 export interface PublishRequest<TPayload extends WorkJson = WorkJson> {
     MessageID?: string;
     PartitionKey?: string;
-    Sequence?: number;
     Attributes?: Record<string, string>;
     Payload?: TPayload;
     PayloadRef?: WorkPayloadRef;
@@ -444,9 +480,6 @@ export const PublishErrorCodes = {
     InvalidAttributes: 'InvalidAttributes',
     InvalidPayload: 'InvalidPayload',
     InvalidPartitionKey: 'InvalidPartitionKey',
-    SequenceRequired: 'SequenceRequired',
-    InvalidSequence: 'InvalidSequence',
-    SequenceNotAllowed: 'SequenceNotAllowed',
     InvalidMessageID: 'InvalidMessageID',
     InvalidDeduplication: 'InvalidDeduplication',
     TopicNotFound: 'TopicNotFound',
@@ -455,8 +488,9 @@ export const PublishErrorCodes = {
     Forbidden: 'Forbidden',
     TopicUnbound: 'TopicUnbound',
     MessageIDConflict: 'MessageIDConflict',
-    DuplicateSequence: 'DuplicateSequence',
+    DeduplicationPending: 'DeduplicationPending',
     TransportUnavailable: 'TransportUnavailable',
+    TransportRejected: 'TransportRejected',
     BadRequest: 'BadRequest',
     Unauthorized: 'Unauthorized',
     InvalidResponse: 'InvalidResponse',
@@ -466,6 +500,7 @@ export type PublishErrorCode = (typeof PublishErrorCodes)[keyof typeof PublishEr
 
 const RETRYABLE_PUBLISH_ERROR_CODES: ReadonlySet<string> = new Set<string>([
     PublishErrorCodes.TopicUnbound,
+    PublishErrorCodes.DeduplicationPending,
     PublishErrorCodes.TransportUnavailable,
     PublishErrorCodes.InvalidResponse,
 ]);
@@ -488,8 +523,8 @@ export function RejectedPublishResult(messageID: string, code: string, message: 
 `src/policy.ts`:
 
 ```typescript
+/** `Ordered` is supported by the Database transport only (spec 03 §3.1). */
 export type PartitionMode = 'None' | 'Exclusive' | 'Ordered';
-export type OrderingMode = 'PublishOrder' | 'ExplicitSequence';
 export type HeartbeatMode = 'Auto' | 'Manual';
 export type HostType = 'MJWorker' | 'External';
 export type DeliveryStatus = 'Pending' | 'InFlight' | 'Completed' | 'DeadLettered' | 'Discarded';
@@ -497,7 +532,6 @@ export type DeliveryStatus = 'Pending' | 'InFlight' | 'Completed' | 'DeadLettere
 export interface SubscriptionPolicy {
     SubscriptionName: string;
     TopicName: string;
-    OrderingMode: OrderingMode;
     PartitionMode: PartitionMode;
     /** default 5 */
     MaxAttempts: number;
@@ -510,7 +544,6 @@ export interface SubscriptionPolicy {
     /** default 'Auto' */
     HeartbeatMode: HeartbeatMode;
     MaxProcessingSeconds?: number;
-    SequenceGapAlertSeconds?: number;
 }
 
 /** Column defaults from spec 03 §6.3, for callers that build policies outside the database. */
@@ -581,20 +614,23 @@ export interface WorkLogger {
     Error(message: string, error?: Error, data?: Record<string, WorkJson>): void;
 }
 
+/** Why a handler was asked to stop; the value of `WorkContext.Signal.reason` once aborted. */
+export type WorkAbortReason = 'Cancelled' | 'LeaseLost' | 'MaxProcessingSeconds' | 'Shutdown';
+
 export interface WorkContext {
     readonly SubscriptionName: string;
-    /** Database/staged: WorkQueueDelivery.ID; SQS: SQS MessageId */
+    /** Database: WorkQueueDelivery.ID; SQS: SQS MessageId */
     readonly DeliveryID: string;
     /** 1-based */
     readonly Attempt: number;
     readonly MaxAttempts: number;
     readonly IsReplay: boolean;
-    /** Aborted on lease loss (including operator cancel), MaxProcessingSeconds, or host shutdown. */
+    /** Aborted with a `WorkAbortReason` when an operator cancels, the lease is lost, the cap is hit, or the host stops. */
     readonly Signal: AbortSignal;
     /**
-     * Renews the lease and records progress. Resolves false once the lease is lost — either taken over after
-     * expiry, or revoked by an operator cancel (spec 03 §7) — and the handler must stop. A transient transport
-     * failure does not resolve false: it is retried on the next tick while the lease is still valid.
+     * Renews the lease and records progress. Resolves false once the lease is lost or the delivery is cancelled
+     * (spec 03 §7); the handler must stop. A transient transport failure does not resolve false: it is retried on
+     * the next tick while the lease horizon has not passed.
      */
     Heartbeat(progress?: WorkProgress): Promise<boolean>;
     readonly Log: WorkLogger;
@@ -677,12 +713,11 @@ import type { WorkJson, WorkMessage } from './envelope';
 import type { FilterSupport, SubscriptionFilter } from './filterTypes';
 import type { WorkProgress } from './handler';
 import type { ITransportOperator } from './operator';
-import type { DeliveryStatus, HostType, OrderingMode, SubscriptionPolicy } from './policy';
+import type { DeliveryStatus, HostType, SubscriptionPolicy } from './policy';
 import type { PublishResult } from './publishing';
 
 export interface TopicBinding {
     TopicName: string;
-    OrderingMode: OrderingMode;
     IsFifo: boolean;
     MaxPayloadBytes: number;
     /** e.g. { SnsTopicArn } */
@@ -693,7 +728,7 @@ export interface SubscriptionBinding {
     Policy: SubscriptionPolicy;
     Filter: SubscriptionFilter | null;
     HostType: HostType;
-    /** e.g. { Region, QueueUrl, QueueArn, DeadLetterQueueUrl, DeadLetterQueueArn, IsFifo } */
+    /** e.g. { Region, QueueUrl, QueueArn, DeadLetterQueueUrl, DeadLetterQueueArn, SnsSubscriptionArn, IsFifo } */
     Config: Record<string, WorkJson>;
 }
 
@@ -709,8 +744,11 @@ export interface ReceivedDelivery<TPayload extends WorkJson = WorkJson> {
 
 export type SettleResult =
     | { Kind: 'Settled'; DeliveryID: string; Status: DeliveryStatus }
+    /** The guarded write changed no row: taken over, expired or cancelled. */
     | { Kind: 'LeaseLost'; DeliveryID: string }
     | { Kind: 'Failed'; DeliveryID: string; Error: string };
+
+export type LeaseExtension = 'Held' | 'Lost' | 'Cancelled';
 
 export interface TransportCapabilities {
     /** Filter operators and structure this transport accepts (spec 03 §4.1). */
@@ -719,13 +757,13 @@ export interface TransportCapabilities {
     DetectsMessageIDDuplicates: boolean;
     /** Database true; AWS false */
     PersistsProgress: boolean;
-    /** Database true; AWS false (engine stages Ordered — spec 03 §5.1) */
+    /** Database true; AWS false — Ordered requires the Database transport */
     SupportsOrdered: boolean;
     /** Database false; AWS true */
     SupportsExternalHosts: boolean;
     /** Database true; AWS false */
     CancelPending: boolean;
-    /** Cancel an InFlight delivery by revoking its lease (spec 03 §7). Database true; AWS false. */
+    /** Cancel an InFlight delivery with the cancel flag + AcknowledgeCancel (spec 03 §7). Database true; AWS false. */
     CancelInFlight: boolean;
     /** Database true; AWS false */
     ListPartitions: boolean;
@@ -759,13 +797,21 @@ export interface ITransportDriver {
 }
 
 export interface ITransportConsumer<TPayload extends WorkJson = WorkJson> {
+    /** Never returns two deliveries of one partition key for a partitioned subscription (spec 03 §7). */
     Receive(max: number, waitSeconds: number, signal: AbortSignal): Promise<ReceivedDelivery<TPayload>[]>;
-    ExtendLease(delivery: ReceivedDelivery<TPayload>, leaseSeconds: number, progress?: WorkProgress): Promise<'Held' | 'Lost'>;
+    /** A thrown error is transient (the runtime retries next tick). 'Cancelled' only where CancelInFlight. */
+    ExtendLease(delivery: ReceivedDelivery<TPayload>, leaseSeconds: number, progress?: WorkProgress): Promise<LeaseExtension>;
     Complete(delivery: ReceivedDelivery<TPayload>): Promise<SettleResult>;
     Retry(delivery: ReceivedDelivery<TPayload>, delaySeconds: number, error: string): Promise<SettleResult>;
     DeadLetter(delivery: ReceivedDelivery<TPayload>, reason: string, error: string | null): Promise<SettleResult>;
-    /** Database: no attempt consumed. SQS: receive already counted; absorbed by the MaxAttempts + 2 redrive margin. */
+    /** Database: no attempt consumed. SQS: the receive is already counted (spec 03 §5.1). */
     Release(delivery: ReceivedDelivery<TPayload>): Promise<SettleResult>;
+    /**
+     * Token-fenced: a cancelled InFlight delivery held by this token → Discarded now, freeing its key (spec 03 §7).
+     * Anything else → LeaseLost with no change. Transports without CancelInFlight always return LeaseLost.
+     */
+    AcknowledgeCancel(delivery: ReceivedDelivery<TPayload>): Promise<SettleResult>;
+    /** Releases the consumer's independent executor / clients (spec 03 §11). */
     Close(): Promise<void>;
 }
 
@@ -789,7 +835,7 @@ export interface SubscriptionStats {
     DeadLettered: number;
     /** null when not applicable/unsupported */
     BlockedKeys: number | null;
-    /** AWS: requires cloudwatch:GetMetricData, else null */
+    /** AWS: always null in Phase 1 (no CloudWatch client; use the CloudWatch alarm) */
     OldestPendingAgeSeconds: number | null;
     /** null unless CompletedCounts */
     CompletedLastHour: number | null;
@@ -797,26 +843,26 @@ export interface SubscriptionStats {
 }
 
 export interface DeadLetterRecord {
-    /** Database/staged: Delivery.ID; AWS: envelope MessageID */
+    /** Database: Delivery.ID; AWS: envelope MessageID */
     DeliveryID: string;
     Message: WorkMessage;
     PartitionKey: string | null;
     Attempts: number;
-    /** handler reason, 'MaxAttemptsExceeded', 'LeaseExpired', 'HandlerNotRegistered', 'RedrivePolicy', … */
+    /** handler reason, 'MaxAttemptsExceeded', 'LeaseExpired', 'HandlerNotRegistered', 'RedrivePolicy', 'InvalidEnvelope', … */
     Reason: string;
     LastError: string | null;
     DeadLetteredAt: string | null;
+    /** Ordered head on the Database transport */
     BlocksKey: boolean;
 }
 
-export type PartitionCondition = 'Idle' | 'InFlight' | 'Blocked' | 'AwaitingSequence' | 'GapStalled';
+/** Derived from the delivery rows; nothing about a partition is stored elsewhere (spec 03 §7). */
+export type PartitionCondition = 'Idle' | 'InFlight' | 'Blocked';
 
 export interface PartitionStateRecord {
     PartitionKey: string;
     Condition: PartitionCondition;
     HeadDeliveryID: string | null;
-    LastCompletedSequence: number | null;
-    AwaitingSequenceSince: string | null;
     WaitingItems: number;
 }
 
@@ -827,7 +873,7 @@ export interface Page<T> {
 
 export type OperatorResult =
     | { Supported: false }
-    /** CancelRequested: an InFlight delivery was revoked (lease token rotated); it settles as Discarded when its lease expires. */
+    /** CancelRequested: present (true) only when an InFlight delivery was asked to stop (spec 03 §7). */
     | { Supported: true; Changed: boolean; CancelRequested?: boolean };
 
 export interface ITransportOperator {
@@ -842,15 +888,8 @@ export interface ITransportOperator {
     ): Promise<Page<PartitionStateRecord> | null>;
     Replay(subscription: SubscriptionBinding, deliveryID: string, actorUserID: string | null, note: string | null): Promise<OperatorResult>;
     /** Pending (requires CancelPending) or DeadLettered → Discarded immediately.
-     *  InFlight (requires CancelInFlight) → lease revoked, `CancelRequested: true` (spec 03 §7). */
+     *  InFlight (requires CancelInFlight) → CancelRequestedAt set, `CancelRequested: true` (spec 03 §7). */
     Discard(subscription: SubscriptionBinding, deliveryID: string, reason: string, actorUserID: string | null): Promise<OperatorResult>;
-    SkipSequence(
-        subscription: SubscriptionBinding,
-        partitionKey: string,
-        sequence: number,
-        reason: string,
-        actorUserID: string | null,
-    ): Promise<OperatorResult>;
 }
 ```
 
@@ -859,7 +898,7 @@ export interface ITransportOperator {
 ```typescript
 import type { WorkJson } from './envelope';
 import type { SubscriptionFilter } from './filterTypes';
-import type { HostType, OrderingMode, SubscriptionPolicy } from './policy';
+import type { HostType, SubscriptionPolicy } from './policy';
 
 export interface TopologyManifest {
     ManifestVersion: 1;
@@ -870,7 +909,6 @@ export interface TopologyManifest {
 
 export interface ManifestTopic {
     Name: string;
-    OrderingMode: OrderingMode;
     IsFifo: boolean;
     MaxPayloadBytes: number;
     Subscriptions: ManifestSubscription[];
@@ -881,8 +919,10 @@ export interface ManifestSubscription {
     Filter: SubscriptionFilter | null;
     Policy: SubscriptionPolicy;
     HostType: HostType;
-    StagedToDatabase: boolean;
+    /** Terraform maps Paused/Disabled to the Lambda event source's `enabled = false`. */
+    Status: 'Active' | 'Paused' | 'Disabled';
     ExternalRef: string | null;
+    /** Rendered by the engine's ./aws entry so IaC never re-translates filters. */
     Aws?: { SnsFilterPolicy: string | null };
 }
 
@@ -910,7 +950,7 @@ export * from './manifest';
 - [ ] **Step 11: Run the tests and build**
 
 Run: `cd packages/WorkQueue/core && pnpm test`
-Expected: PASS — dependencyGuard (3), errors (6), publishing (2): **11 tests**.
+Expected: PASS — dependencyGuard (4), errors (6), publishing (2): **12 tests**.
 
 Run: `cd packages/WorkQueue/core && pnpm run build`
 Expected: builds with no errors; `dist/index.js` and `dist/index.d.ts` exist.
@@ -939,22 +979,20 @@ git commit -m "feat(work-queue-core): scaffold package with dependency guard and
   - `ValidatePublishRequest(topic: TopicBinding, request: PublishRequest): PublishError | null`
   - `BuildWorkMessage<TPayload extends WorkJson = WorkJson>(topicName: string, request: PublishRequest<TPayload>, publishedAt: Date, newId: () => string): WorkMessage<TPayload>`
   - `SerializedEnvelopeBytes(message: WorkMessage): number`
+  - `CanonicalEnvelope(message: WorkMessage): string` — sorted-key JSON of `{ PartitionKey, Attributes, Payload, PayloadRef, CorrelationID }`, never `PublishedAt`; what the Database driver (plan 05) and `InMemoryTransport` (Task 7) compare when a `MessageID` is reused (spec 03 §2.1, F10)
 
 Rules (spec 03 §1.1). Core checks every rule that needs no MJ state, in this order, returning the first failure:
 
 | Order | Rule | Code |
 | --- | --- | --- |
 | 1 | `MessageID`, if supplied, is a UUID (any case) | `InvalidMessageID` |
-| 2 | ≤ 10 attributes; key matches `^[A-Za-z0-9_-]{1,64}$` (no dots — spec 03 §1.1); key does not start with `mj` followed by `.` or `_` (case-insensitive); value is a string ≤ 256 chars | `InvalidAttributes` |
+| 2 | ≤ 10 attributes; key matches `^[A-Za-z0-9_-]{1,64}$` (no dots — spec 03 §1.1); key does not start with `mj` followed by `.` or `_` (case-insensitive); value is a string of **1**–256 chars (empty values are rejected: brokers refuse them, and one bad entry fails a whole batch call) | `InvalidAttributes` |
 | 3 | Not both `Payload` and `PayloadRef`; `PayloadRef.Uri` non-empty | `InvalidPayload` |
 | 4 | `PartitionKey`, if supplied, is 1–200 chars | `InvalidPartitionKey` |
-| 5 | `PublishOrder` topic: no `Sequence` | `SequenceNotAllowed` |
-| 5 | `ExplicitSequence` topic: `PartitionKey` without `Sequence` | `SequenceRequired` |
-| 5 | `ExplicitSequence` topic: `Sequence` without `PartitionKey`, or not a safe integer ≥ 1 | `InvalidSequence` |
-| 6 | `DeduplicationKey` 1–200 chars; `DeduplicationTTLSeconds` an integer 60–2,592,000 and only with a key | `InvalidDeduplication` |
-| 7 | Serialized envelope ≤ `min(topic.MaxPayloadBytes, 262144)` UTF-8 bytes; payload serializable | `PayloadTooLarge` / `InvalidPayload` |
+| 5 | `DeduplicationKey` 1–200 chars; `DeduplicationTTLSeconds` an integer 60–2,592,000 and only with a key | `InvalidDeduplication` |
+| 6 | Serialized envelope ≤ `min(topic.MaxPayloadBytes, 262144)` UTF-8 bytes; payload serializable | `PayloadTooLarge` / `InvalidPayload` |
 
-Codes **not** produced by core: `TopicNotFound`, `TopicDisabled`, `TopicNotExternallyPublishable`, `Forbidden` (engine and REST extension, plans 05–06); `TopicUnbound` (engine, plan 07); `MessageIDConflict`, `DuplicateSequence` (Database driver, plan 05; `InMemoryTransport`, Task 7); `TransportUnavailable` (drivers, `WorkQueueApiPublisher`).
+Codes **not** produced by core: `TopicNotFound`, `TopicDisabled`, `TopicNotExternallyPublishable`, `Forbidden` (engine and REST extension, plans 05–06); `TopicUnbound` (engine, plan 07); `MessageIDConflict` (Database driver, plan 05; `InMemoryTransport`, Task 7); `DeduplicationPending` (the engine's publish coordinator, plan 05); `TransportUnavailable` (drivers, `WorkQueueApiPublisher`); `TransportRejected` (AWS driver, plan 07).
 
 Size is measured on a provisional message that uses a 36-character placeholder `MessageID` (when none is supplied) and a fixed placeholder `PublishedAt`, so the byte count equals the real envelope's.
 
@@ -966,6 +1004,7 @@ Size is measured on a provisional message that uses a 36-character placeholder `
 import { describe, it, expect } from 'vitest';
 import {
     BuildWorkMessage,
+    CanonicalEnvelope,
     IsReservedAttributeKey,
     IsWorkQueueUuid,
     SerializedEnvelopeBytes,
@@ -978,7 +1017,7 @@ import type { WorkJson } from '../envelope';
 const UUID = '6f1c2a4e-9b3d-4c5e-8f7a-1b2c3d4e5f60';
 
 function topic(overrides: Partial<TopicBinding> = {}): TopicBinding {
-    return { TopicName: 'email.events', OrderingMode: 'PublishOrder', IsFifo: false, MaxPayloadBytes: 262144, Config: {}, ...overrides };
+    return { TopicName: 'email.events', IsFifo: false, MaxPayloadBytes: 262144, Config: {}, ...overrides };
 }
 
 function codeOf(binding: TopicBinding, request: PublishRequest): string | null {
@@ -990,7 +1029,7 @@ describe('ValidatePublishRequest', () => {
         expect(ValidatePublishRequest(topic(), {})).toBeNull();
         expect(ValidatePublishRequest(topic(), {
             MessageID: UUID,
-            Attributes: { eventType: 'click', 'tenant.id': 'acme-1' },
+            Attributes: { eventType: 'click', tenant_id: 'acme-1' },
             Payload: { url: 'https://example.com', count: 2 },
             CorrelationID: 'corr-1',
             DeduplicationKey: 'sg:abc',
@@ -1024,13 +1063,19 @@ describe('ValidatePublishRequest', () => {
 
     it('rejects reserved attribute prefixes regardless of case', () => {
         expect(codeOf(topic(), { Attributes: { 'mj.partition': 'v' } })).toBe('InvalidAttributes');
-        expect(codeOf(topic(), { Attributes: { MJ_Sequence: 'v' } })).toBe('InvalidAttributes');
+        expect(codeOf(topic(), { Attributes: { MJ_Partition: 'v' } })).toBe('InvalidAttributes');
         expect(codeOf(topic(), { Attributes: { mjolnir: 'v' } })).toBeNull();
     });
 
     it('rejects attribute values longer than 256 characters', () => {
         expect(codeOf(topic(), { Attributes: { k: 'v'.repeat(257) } })).toBe('InvalidAttributes');
         expect(codeOf(topic(), { Attributes: { k: 'v'.repeat(256) } })).toBeNull();
+    });
+
+    it('rejects empty attribute values (brokers refuse them and fail the whole batch call)', () => {
+        const error = ValidatePublishRequest(topic(), { Attributes: { campaign: '' } });
+        expect(error?.Code).toBe('InvalidAttributes');
+        expect(error?.Message).toContain("'campaign'");
     });
 
     it('rejects Payload and PayloadRef together, and an empty PayloadRef Uri', () => {
@@ -1043,31 +1088,6 @@ describe('ValidatePublishRequest', () => {
         expect(codeOf(topic(), { PartitionKey: '' })).toBe('InvalidPartitionKey');
         expect(codeOf(topic(), { PartitionKey: 'p'.repeat(201) })).toBe('InvalidPartitionKey');
         expect(codeOf(topic(), { PartitionKey: 'p'.repeat(200) })).toBeNull();
-    });
-
-    it('rejects Sequence on a PublishOrder topic', () => {
-        expect(codeOf(topic(), { PartitionKey: 'k', Sequence: 1 })).toBe('SequenceNotAllowed');
-    });
-
-    it('requires Sequence with a PartitionKey on an ExplicitSequence topic', () => {
-        expect(codeOf(topic({ OrderingMode: 'ExplicitSequence' }), { PartitionKey: 'k' })).toBe('SequenceRequired');
-    });
-
-    it('rejects Sequence without a PartitionKey on an ExplicitSequence topic', () => {
-        expect(codeOf(topic({ OrderingMode: 'ExplicitSequence' }), { Sequence: 1 })).toBe('InvalidSequence');
-    });
-
-    it('rejects non-positive and non-integer sequences', () => {
-        const explicit = topic({ OrderingMode: 'ExplicitSequence' });
-        expect(codeOf(explicit, { PartitionKey: 'k', Sequence: 0 })).toBe('InvalidSequence');
-        expect(codeOf(explicit, { PartitionKey: 'k', Sequence: 1.5 })).toBe('InvalidSequence');
-        expect(codeOf(explicit, { PartitionKey: 'k', Sequence: Number.MAX_SAFE_INTEGER + 1 })).toBe('InvalidSequence');
-    });
-
-    it('accepts a key and sequence on an ExplicitSequence topic, and no key at all', () => {
-        const explicit = topic({ OrderingMode: 'ExplicitSequence' });
-        expect(codeOf(explicit, { PartitionKey: 'integration-42', Sequence: 7 })).toBeNull();
-        expect(codeOf(explicit, {})).toBeNull();
     });
 
     it('rejects empty and over-long deduplication keys', () => {
@@ -1122,16 +1142,41 @@ describe('BuildWorkMessage', () => {
     it('carries every supplied field', () => {
         const message = BuildWorkMessage('integration.batch-ready', {
             PartitionKey: 'integration-42',
-            Sequence: 3,
             Attributes: {},
             PayloadRef: { Uri: 's3://b/k' },
             CorrelationID: 'c-1',
         }, publishedAt, () => UUID);
         expect(message.PartitionKey).toBe('integration-42');
-        expect(message.Sequence).toBe(3);
         expect(message.PayloadRef).toEqual({ Uri: 's3://b/k' });
         expect(message.CorrelationID).toBe('c-1');
         expect(message.Payload).toBeUndefined();
+    });
+});
+
+describe('CanonicalEnvelope', () => {
+    const at = new Date('2026-09-16T12:00:00.000Z');
+
+    it('is insensitive to key order, PublishedAt, MessageID and Topic', () => {
+        const first = BuildWorkMessage('t', {
+            PartitionKey: 'k', Attributes: { b: '2', a: '1' }, Payload: { y: [1, { q: 1, p: 2 }], x: 'v' }, CorrelationID: 'c',
+        }, at, () => UUID);
+        const retry = BuildWorkMessage('other', {
+            CorrelationID: 'c', Payload: { x: 'v', y: [1, { p: 2, q: 1 }] }, Attributes: { a: '1', b: '2' }, PartitionKey: 'k',
+        }, new Date('2026-09-16T12:05:00.000Z'), () => 'another-id');
+        expect(CanonicalEnvelope(retry)).toBe(CanonicalEnvelope(first));
+        expect(CanonicalEnvelope(first)).toBe(
+            '{"Attributes":{"a":"1","b":"2"},"CorrelationID":"c","PartitionKey":"k","Payload":{"x":"v","y":[1,{"p":2,"q":1}]}}',
+        );
+    });
+
+    it('differs when any compared field differs, and keeps array order', () => {
+        const base = BuildWorkMessage('t', { Attributes: { a: '1' }, Payload: [1, 2] }, at, () => UUID);
+        const differentValue = BuildWorkMessage('t', { Attributes: { a: '2' }, Payload: [1, 2] }, at, () => UUID);
+        const reordered = BuildWorkMessage('t', { Attributes: { a: '1' }, Payload: [2, 1] }, at, () => UUID);
+        const withRef = BuildWorkMessage('t', { Attributes: { a: '1' }, PayloadRef: { Uri: 's3://b/k' } }, at, () => UUID);
+        expect(CanonicalEnvelope(differentValue)).not.toBe(CanonicalEnvelope(base));
+        expect(CanonicalEnvelope(reordered)).not.toBe(CanonicalEnvelope(base));
+        expect(CanonicalEnvelope(withRef)).not.toBe(CanonicalEnvelope(base));
     });
 });
 
@@ -1160,7 +1205,7 @@ Expected: FAIL — unresolved import `../validation`.
 - [ ] **Step 3: Write `src/validation.ts`**
 
 ```typescript
-import type { WorkJson, WorkMessage } from './envelope';
+import type { WorkJson, WorkMessage, WorkPayloadRef } from './envelope';
 import type { PublishError, PublishRequest } from './publishing';
 import { CreatePublishError, PublishErrorCodes } from './publishing';
 import type { TopicBinding } from './transport';
@@ -1198,7 +1243,6 @@ export function ValidatePublishRequest(topic: TopicBinding, request: PublishRequ
         validateAttributes(request) ??
         validatePayloadShape(request) ??
         validatePartitionKey(request) ??
-        validateSequence(topic, request) ??
         validateDeduplication(request) ??
         validateSize(topic, request)
     );
@@ -1214,7 +1258,6 @@ export function BuildWorkMessage<TPayload extends WorkJson = WorkJson>(
         MessageID: request.MessageID ?? newId(),
         Topic: topicName,
         ...(request.PartitionKey !== undefined ? { PartitionKey: request.PartitionKey } : {}),
-        ...(request.Sequence !== undefined ? { Sequence: request.Sequence } : {}),
         Attributes: { ...(request.Attributes ?? {}) },
         ...(request.Payload !== undefined ? { Payload: request.Payload } : {}),
         ...(request.PayloadRef !== undefined ? { PayloadRef: { ...request.PayloadRef } } : {}),
@@ -1225,6 +1268,59 @@ export function BuildWorkMessage<TPayload extends WorkJson = WorkJson>(
 
 export function SerializedEnvelopeBytes(message: WorkMessage): number {
     return utf8.encode(JSON.stringify(message)).length;
+}
+
+/**
+ * Sorted-key JSON of the fields that identify a publish — never MessageID, Topic or PublishedAt (spec 03 §2.1).
+ * Two publishes that reuse a MessageID are the same publish exactly when their canonical envelopes are equal,
+ * however the producer ordered its object keys.
+ */
+export function CanonicalEnvelope(message: WorkMessage): string {
+    const compared: { [key: string]: WorkJson } = {};
+    if (message.PartitionKey !== undefined) {
+        compared.PartitionKey = message.PartitionKey;
+    }
+    compared.Attributes = { ...message.Attributes };
+    if (message.Payload !== undefined) {
+        compared.Payload = message.Payload;
+    }
+    if (message.PayloadRef !== undefined) {
+        compared.PayloadRef = payloadRefJson(message.PayloadRef);
+    }
+    if (message.CorrelationID !== undefined) {
+        compared.CorrelationID = message.CorrelationID;
+    }
+    return JSON.stringify(sortKeys(compared));
+}
+
+/** Only the fields that are present: an optional property typed `undefined` is not a WorkJson value. */
+function payloadRefJson(ref: WorkPayloadRef): { [key: string]: WorkJson } {
+    const json: { [key: string]: WorkJson } = { Uri: ref.Uri };
+    if (ref.ContentType !== undefined) {
+        json.ContentType = ref.ContentType;
+    }
+    if (ref.SizeBytes !== undefined) {
+        json.SizeBytes = ref.SizeBytes;
+    }
+    if (ref.Checksum !== undefined) {
+        json.Checksum = ref.Checksum;
+    }
+    return json;
+}
+
+/** Object keys sorted recursively; array order is significant and kept. */
+function sortKeys(value: WorkJson): WorkJson {
+    if (Array.isArray(value)) {
+        return value.map(sortKeys);
+    }
+    if (typeof value !== 'object' || value === null) {
+        return value;
+    }
+    const sorted: { [key: string]: WorkJson } = {};
+    for (const key of Object.keys(value).sort()) {
+        sorted[key] = sortKeys(value[key]);
+    }
+    return sorted;
 }
 
 function validateMessageID(request: PublishRequest): PublishError | null {
@@ -1244,13 +1340,13 @@ function validateAttributes(request: PublishRequest): PublishError | null {
     }
     for (const [key, value] of entries) {
         if (!ATTRIBUTE_KEY_PATTERN.test(key)) {
-            return invalidAttributes(`Attribute key '${key}' must be 1-${MAX_ATTRIBUTE_KEY_LENGTH} characters of A-Z a-z 0-9 _ . -`);
+            return invalidAttributes(`Attribute key '${key}' must be 1-${MAX_ATTRIBUTE_KEY_LENGTH} characters of A-Z a-z 0-9 _ - (no dots)`);
         }
         if (IsReservedAttributeKey(key)) {
             return invalidAttributes(`Attribute key '${key}' uses a reserved prefix (mj. or mj_)`);
         }
-        if (typeof value !== 'string' || value.length > MAX_ATTRIBUTE_VALUE_LENGTH) {
-            return invalidAttributes(`Attribute '${key}' must be a string of at most ${MAX_ATTRIBUTE_VALUE_LENGTH} characters`);
+        if (typeof value !== 'string' || value.length === 0 || value.length > MAX_ATTRIBUTE_VALUE_LENGTH) {
+            return invalidAttributes(`Attribute '${key}' must be a string of 1-${MAX_ATTRIBUTE_VALUE_LENGTH} characters`);
         }
     }
     return null;
@@ -1272,26 +1368,6 @@ function validatePartitionKey(request: PublishRequest): PublishError | null {
         return null;
     }
     return CreatePublishError(PublishErrorCodes.InvalidPartitionKey, `PartitionKey must be 1-${MAX_PARTITION_KEY_LENGTH} characters`);
-}
-
-function validateSequence(topic: TopicBinding, request: PublishRequest): PublishError | null {
-    const hasKey = request.PartitionKey !== undefined;
-    const sequence = request.Sequence;
-    if (topic.OrderingMode === 'PublishOrder') {
-        return sequence === undefined
-            ? null
-            : CreatePublishError(PublishErrorCodes.SequenceNotAllowed, `Topic '${topic.TopicName}' uses PublishOrder; Sequence is not allowed`);
-    }
-    if (hasKey && sequence === undefined) {
-        return CreatePublishError(PublishErrorCodes.SequenceRequired, `Topic '${topic.TopicName}' requires Sequence when PartitionKey is set`);
-    }
-    if (!hasKey && sequence !== undefined) {
-        return CreatePublishError(PublishErrorCodes.InvalidSequence, 'Sequence requires a PartitionKey');
-    }
-    if (sequence !== undefined && (!Number.isSafeInteger(sequence) || sequence < 1)) {
-        return CreatePublishError(PublishErrorCodes.InvalidSequence, 'Sequence must be an integer of at least 1');
-    }
-    return null;
 }
 
 function validateDeduplication(request: PublishRequest): PublishError | null {
@@ -1347,7 +1423,7 @@ export * from './validation';
 - [ ] **Step 5: Run the tests and build**
 
 Run: `cd packages/WorkQueue/core && pnpm test`
-Expected: PASS — dependencyGuard (3), errors (6), publishing (2), validation (25): **36 tests**.
+Expected: PASS — dependencyGuard (4), errors (6), publishing (2), validation (23): **35 tests**.
 
 Run: `cd packages/WorkQueue/core && pnpm run build`
 Expected: builds.
@@ -1876,7 +1952,7 @@ export * from './filter';
 - [ ] **Step 5: Run the tests and build**
 
 Run: `cd packages/WorkQueue/core && pnpm test`
-Expected: PASS — previous 36 plus filter (23): **59 tests**.
+Expected: PASS — previous 35 plus filter (23): **58 tests**.
 
 Run: `cd packages/WorkQueue/core && pnpm run build`
 Expected: builds.
@@ -1890,7 +1966,7 @@ git commit -m "feat(work-queue-core): CompositeFilterDescriptor subscription fil
 
 ---
 
-### Task 4: Backoff and subscription compatibility
+### Task 4: Backoff, heartbeat cadence and subscription compatibility
 
 **Files:**
 - Create: `packages/WorkQueue/core/src/backoff.ts`, `packages/WorkQueue/core/src/compatibility.ts`
@@ -1901,7 +1977,8 @@ git commit -m "feat(work-queue-core): CompositeFilterDescriptor subscription fil
 - Consumes: `SubscriptionPolicy` (policy.ts), `SubscriptionBinding`, `TransportCapabilities` (transport.ts) — Task 1; `ValidateSubscriptionFilter` (filter.ts) — Task 3.
 - Produces:
   - `ComputeBackoffSeconds(policy: SubscriptionPolicy, attempt: number, handlerDelaySeconds?: number, random?: () => number): number` — a handler-supplied finite delay wins (rounded up, clamped to `[0, BackoffMaxSeconds]`); otherwise full jitter `round(random() × min(BackoffMaxSeconds, BackoffBaseSeconds × 2^(attempt−1)))`, exponent capped at 30
-  - `SubscriptionUnsupportedReason(binding: SubscriptionBinding, capabilities: TransportCapabilities, stagedToDatabase: boolean): string | null` — rules in the order of spec 03 §5, ending with the filter check
+  - `HEARTBEAT_INTERVAL_MAX_SECONDS = 30`, `HeartbeatIntervalSeconds(policy: SubscriptionPolicy): number` — `min(LeaseSeconds / 3, 30)` (spec 03 §3.1, F3): the cadence is decoupled from lease length so a cancel or a lost lease is noticed within 30 s however long the lease
+  - `SubscriptionUnsupportedReason(binding: SubscriptionBinding, capabilities: TransportCapabilities): string | null` — the four rules of spec 03 §5 in order: External host, `Ordered` without `SupportsOrdered` ("Ordered requires the Database transport"), backoff above the transport limit, then the filter check
   - `FilterUnsupportedReason(filter: SubscriptionFilter | null, capabilities: TransportCapabilities): string | null` — re-validates the parsed filter against `capabilities.Filters` (spec 03 §4.1) and returns the thrown message
 
 Warnings for `MaxProcessingSeconds` above a host ceiling are the engine's job (plan 05), not core's.
@@ -1912,13 +1989,12 @@ Warnings for `MaxProcessingSeconds` above a host ceiling are the engine's job (p
 
 ```typescript
 import { describe, it, expect } from 'vitest';
-import { ComputeBackoffSeconds } from '../backoff';
+import { ComputeBackoffSeconds, HeartbeatIntervalSeconds } from '../backoff';
 import type { SubscriptionPolicy } from '../policy';
 
 const POLICY: SubscriptionPolicy = {
     SubscriptionName: 'email.unsubscribe',
     TopicName: 'email.events',
-    OrderingMode: 'PublishOrder',
     PartitionMode: 'Exclusive',
     MaxAttempts: 5,
     BackoffBaseSeconds: 10,
@@ -1969,6 +2045,18 @@ describe('ComputeBackoffSeconds', () => {
         expect(Number.isFinite(result)).toBe(true);
     });
 });
+
+describe('HeartbeatIntervalSeconds', () => {
+    it('is a third of a short lease', () => {
+        expect(HeartbeatIntervalSeconds({ ...POLICY, LeaseSeconds: 60 })).toBe(20);
+        expect(HeartbeatIntervalSeconds({ ...POLICY, LeaseSeconds: 15 })).toBe(5);
+    });
+
+    it('never exceeds 30 seconds, so a 20-minute lease still notices a cancel within 30 s', () => {
+        expect(HeartbeatIntervalSeconds({ ...POLICY, LeaseSeconds: 90 })).toBe(30);
+        expect(HeartbeatIntervalSeconds({ ...POLICY, LeaseSeconds: 1200 })).toBe(30);
+    });
+});
 ```
 
 `packages/WorkQueue/core/src/__tests__/compatibility.test.ts`:
@@ -2015,7 +2103,6 @@ function binding(hostType: HostType, partitionMode: PartitionMode, backoffMaxSec
         Policy: {
             SubscriptionName: 'integration.apply',
             TopicName: 'integration.batch-ready',
-            OrderingMode: 'ExplicitSequence',
             PartitionMode: partitionMode,
             MaxAttempts: 5,
             BackoffBaseSeconds: 10,
@@ -2031,32 +2118,25 @@ function binding(hostType: HostType, partitionMode: PartitionMode, backoffMaxSec
 
 describe('SubscriptionUnsupportedReason', () => {
     it('accepts supported combinations', () => {
-        expect(SubscriptionUnsupportedReason(binding('MJWorker', 'Ordered'), DATABASE_LIKE, false)).toBeNull();
-        expect(SubscriptionUnsupportedReason(binding('External', 'Exclusive'), CLOUD_LIKE, false)).toBeNull();
+        expect(SubscriptionUnsupportedReason(binding('MJWorker', 'Ordered'), DATABASE_LIKE)).toBeNull();
+        expect(SubscriptionUnsupportedReason(binding('External', 'Exclusive'), CLOUD_LIKE)).toBeNull();
     });
 
     it('rejects External hosts on a transport that cannot host them', () => {
-        expect(SubscriptionUnsupportedReason(binding('External', 'None'), DATABASE_LIKE, false)).toContain('HostType External');
+        expect(SubscriptionUnsupportedReason(binding('External', 'None'), DATABASE_LIKE)).toContain('HostType External');
     });
 
-    it('rejects Ordered on a transport without ordering when not staged', () => {
-        expect(SubscriptionUnsupportedReason(binding('MJWorker', 'Ordered'), CLOUD_LIKE, false)).toContain('staging to the database');
-    });
-
-    it('accepts Ordered on a cloud transport when an MJ worker stages it', () => {
-        expect(SubscriptionUnsupportedReason(binding('MJWorker', 'Ordered'), CLOUD_LIKE, true)).toBeNull();
-    });
-
-    it('rejects Ordered with an External host on a cloud transport even when marked staged', () => {
-        expect(SubscriptionUnsupportedReason(binding('External', 'Ordered'), CLOUD_LIKE, true)).toContain('requires HostType MJWorker');
+    it('rejects Ordered on a transport without ordering, whatever the host', () => {
+        expect(SubscriptionUnsupportedReason(binding('MJWorker', 'Ordered'), CLOUD_LIKE)).toContain('Ordered requires the Database transport');
+        expect(SubscriptionUnsupportedReason(binding('External', 'Ordered'), CLOUD_LIKE)).toContain('Ordered requires the Database transport');
     });
 
     it('rejects a maximum backoff above the transport limit', () => {
-        expect(SubscriptionUnsupportedReason(binding('MJWorker', 'None', 86400), CLOUD_LIKE, false)).toContain('BackoffMaxSeconds 86400');
+        expect(SubscriptionUnsupportedReason(binding('MJWorker', 'None', 86400), CLOUD_LIKE)).toContain('BackoffMaxSeconds 86400');
     });
 
     it('reports the first failing rule', () => {
-        const reason = SubscriptionUnsupportedReason(binding('External', 'Ordered', 999999), DATABASE_LIKE, false);
+        const reason = SubscriptionUnsupportedReason(binding('External', 'Ordered', 999999), DATABASE_LIKE);
         expect(reason).toContain('HostType External');
     });
 
@@ -2066,10 +2146,10 @@ describe('SubscriptionUnsupportedReason', () => {
             Filter: { logic: 'and' as const, filters: [{ field: 'tenant', operator: 'startswith' as const, value: 'acme' }] },
         };
         const eqOnly: TransportCapabilities = { ...CLOUD_LIKE, Filters: { ...WORK_QUEUE_FILTER_SUPPORT, Operators: ['eq'] } };
-        const reason = SubscriptionUnsupportedReason(withFilter, eqOnly, false);
+        const reason = SubscriptionUnsupportedReason(withFilter, eqOnly);
         expect(reason).toContain("integration.apply");
         expect(reason).toContain("operator 'startswith' on field 'tenant'");
-        expect(SubscriptionUnsupportedReason(withFilter, DATABASE_LIKE, false)).toBeNull();
+        expect(SubscriptionUnsupportedReason(withFilter, DATABASE_LIKE)).toBeNull();
     });
 });
 
@@ -2120,6 +2200,18 @@ export function ComputeBackoffSeconds(
     return clamp(Math.round(clamp(random(), 0, 1) * ceiling), 0, ceiling);
 }
 
+/** Upper bound on the heartbeat interval, whatever the lease length (spec 03 §3.2, F3). */
+export const HEARTBEAT_INTERVAL_MAX_SECONDS = 30;
+
+/**
+ * min(LeaseSeconds / 3, 30) seconds. The cadence is decoupled from lease length: a consumer guide lease of 15-20
+ * minutes must not mean a cancel or a lost lease goes unnoticed for 5-7 minutes. Each extension still grants a
+ * full LeaseSeconds.
+ */
+export function HeartbeatIntervalSeconds(policy: SubscriptionPolicy): number {
+    return Math.min(Math.max(0, policy.LeaseSeconds) / 3, HEARTBEAT_INTERVAL_MAX_SECONDS);
+}
+
 function clamp(value: number, min: number, max: number): number {
     return Math.min(Math.max(value, min), max);
 }
@@ -2159,18 +2251,14 @@ export function FilterUnsupportedReason(
 export function SubscriptionUnsupportedReason(
     binding: SubscriptionBinding,
     capabilities: TransportCapabilities,
-    stagedToDatabase: boolean,
 ): string | null {
     const policy = binding.Policy;
     const name = policy.SubscriptionName;
     if (binding.HostType === 'External' && !capabilities.SupportsExternalHosts) {
         return `Subscription '${name}' uses HostType External, which this transport cannot host`;
     }
-    if (policy.PartitionMode === 'Ordered' && !capabilities.SupportsOrdered && !stagedToDatabase) {
-        return `Subscription '${name}' is Ordered, which this transport cannot honour without staging to the database`;
-    }
-    if (policy.PartitionMode === 'Ordered' && binding.HostType === 'External' && !capabilities.SupportsOrdered) {
-        return `Subscription '${name}': Ordered on a cloud transport requires HostType MJWorker`;
+    if (policy.PartitionMode === 'Ordered' && !capabilities.SupportsOrdered) {
+        return `Subscription '${name}': Ordered requires the Database transport`;
     }
     if (policy.BackoffMaxSeconds > capabilities.MaxRetryDelaySeconds) {
         return `Subscription '${name}' has BackoffMaxSeconds ${policy.BackoffMaxSeconds}, above this transport's limit of ${capabilities.MaxRetryDelaySeconds}`;
@@ -2195,7 +2283,7 @@ export * from './compatibility';
 - [ ] **Step 6: Run the tests and build**
 
 Run: `cd packages/WorkQueue/core && pnpm test`
-Expected: PASS — previous 59 plus backoff (8) and compatibility (9): **76 tests**.
+Expected: PASS — previous 58 plus backoff (10) and compatibility (7): **75 tests**.
 
 Run: `cd packages/WorkQueue/core && pnpm run build`
 Expected: builds.
@@ -2204,7 +2292,7 @@ Expected: builds.
 
 ```bash
 git add packages/WorkQueue/core/src
-git commit -m "feat(work-queue-core): jittered backoff and subscription capability gating"
+git commit -m "feat(work-queue-core): jittered backoff, heartbeat cadence and subscription capability gating"
 ```
 
 ---
@@ -2218,11 +2306,11 @@ git commit -m "feat(work-queue-core): jittered backoff and subscription capabili
 - Test: `packages/WorkQueue/core/src/__tests__/outcomes.test.ts`, `src/__tests__/DeliveryExecution.test.ts`
 
 **Interfaces:**
-- Consumes: `WorkJson`, `WorkMessage`; `WorkContext`, `WorkHandler`, `WorkLogger`, `WorkOutcome`, `WorkProgress`, `Outcome`; `FatalWorkError`, `TransientWorkError`; `SubscriptionPolicy`, `DeliveryStatus`; `ITransportConsumer`, `ReceivedDelivery`, `SettleResult` (Task 1); `ComputeBackoffSeconds` (Task 4).
+- Consumes: `WorkJson`, `WorkMessage`; `WorkAbortReason`, `WorkContext`, `WorkHandler`, `WorkLogger`, `WorkOutcome`, `WorkProgress`, `Outcome`; `FatalWorkError`, `TransientWorkError`; `SubscriptionPolicy`, `DeliveryStatus`; `ITransportConsumer`, `LeaseExtension`, `ReceivedDelivery`, `SettleResult` (Task 1); `ComputeBackoffSeconds`, `HeartbeatIntervalSeconds` (Task 4).
 - Produces:
-  - `runtime/types.ts`: `ConsumerRuntimeOptions` (spec 03 §3.2 plus optional `ReceiveWaitSeconds`), `ExecutionStopReason = 'LeaseLost' | 'LeaseExpired' | 'MaxProcessingSeconds' | 'Shutdown'`
+  - `runtime/types.ts`: `ConsumerRuntimeOptions` (spec 03 §3.2, including optional `ReceiveWaitSeconds` and `LeaseExpiryGraceMs`)
   - `runtime/outcomes.ts`: `MAX_ATTEMPTS_EXCEEDED_REASON = 'MaxAttemptsExceeded'`, `MAX_DEAD_LETTER_REASON_LENGTH = 100`, `interface HandlerResult { Outcome: WorkOutcome; ErrorText: string | null }`, `type SettleAction = { Kind: 'Complete' } | { Kind: 'Retry'; DelaySeconds: number; Error: string } | { Kind: 'DeadLetter'; Reason: string; Error: string | null }`, `IsWorkOutcome(value: unknown): value is WorkOutcome`, `MapHandlerReturn(value: unknown): HandlerResult`, `MapThrownError(error: unknown): HandlerResult`, `DescribeError(error: unknown): string`, `ErrorMessageOf(error: unknown): string`, `ResolveSettleAction(result: HandlerResult, attempt: number, policy: SubscriptionPolicy, random?: () => number): SettleAction`
-  - `runtime/DeliveryExecution.ts`: `MIN_AUTO_HEARTBEAT_INTERVAL_MS = 1000`, `LEASE_EXPIRY_GRACE_MS = 5000`, `interface DeliveryExecutionOptions<TPayload>` (adds optional `LeaseExpiryGraceMs`), `class DeliveryExecution<TPayload>` with `Run(): Promise<SettleResult>`, `Abort(reason: ExecutionStopReason): void`, getters `DeliveryID`, `StopReason`
+  - `runtime/DeliveryExecution.ts`: `MIN_AUTO_HEARTBEAT_INTERVAL_MS = 1000`, `LEASE_EXPIRY_GRACE_MS = 5000`, `DEFAULT_CANCEL_DRAIN_MS = 30000`, `MAX_TIMER_DELAY_MS = 2147483647`, `ExecutionKeyOf(delivery: ReceivedDelivery): string` (`DeliveryID` + `LeaseToken`), `interface DeliveryExecutionOptions<TPayload>` (optional `LeaseExpiryGraceMs`, `CancelDrainMs`), `class DeliveryExecution<TPayload>` with `Run(): Promise<SettleResult>`, `Abort(reason: WorkAbortReason): void`, getters `DeliveryID`, `ExecutionKey`, `StopReason: WorkAbortReason | null`
 
 Behaviour (spec 03 §3, §3.2):
 
@@ -2232,18 +2320,25 @@ Behaviour (spec 03 §3, §3.2):
 | `Retry` / `TransientWorkError` / any other throw / invalid return / handler factory throws, attempts remain | `consumer.Retry(delivery, ComputeBackoffSeconds(...), error)`; a `TransientWorkError.RetryAfterSeconds` or `Retry.DelaySeconds` is the handler delay |
 | same, `Attempt ≥ MaxAttempts` | `consumer.DeadLetter(delivery, 'MaxAttemptsExceeded', error)` |
 | `DeadLetter` / `FatalWorkError` | `consumer.DeadLetter(delivery, reason ≤ 100 chars, error)` |
-| `HeartbeatMode = 'Auto'` | `ExtendLease` every `max(1000 ms, LeaseSeconds × 1000 / 3)` while the handler runs |
+| `HeartbeatMode = 'Auto'` | `ExtendLease` every `HeartbeatIntervalSeconds(policy)` = `min(LeaseSeconds / 3, 30 s)` (never below 1000 ms) while the handler runs. Each extension still grants a full `LeaseSeconds` |
 | `HeartbeatMode = 'Manual'` | `ExtendLease` only when the handler calls `context.Heartbeat(progress?)` |
-| `ExtendLease` → `Lost` (taken over after expiry, **or revoked by an operator cancel** — spec 03 §7) | signal aborted with reason `'LeaseLost'`; `Heartbeat` resolves `false`; outcome discarded; `Run` returns `{ Kind: 'LeaseLost' }` |
-| `ExtendLease` throws, lease still valid | logged as a warning; `Heartbeat` resolves `true`; the next tick retries (spec 03 §3.2: a transient transport failure never aborts a handler) |
-| `ExtendLease` throws and `now ≥ LeaseExpiresAt + LEASE_EXPIRY_GRACE_MS` | the lease can no longer be held: signal aborted with reason `'LeaseExpired'`; `Heartbeat` resolves `false`; outcome discarded; `Run` returns `{ Kind: 'LeaseLost' }` |
-| `MaxProcessingSeconds` elapsed | signal aborted with reason `'MaxProcessingSeconds'`; automatic renewal stops; `Heartbeat` resolves `false`; a later outcome is still settled (the transport fences it if the lease expired) |
-| `Abort('Shutdown')` and the outcome is not `Complete` | `consumer.Release` (no attempt consumed on the Database transport) |
+| `ExtendLease` → `Held` | the **lease horizon** moves to `now + LeaseSeconds` and its timer is re-armed |
+| `ExtendLease` → `Lost` | signal aborted with `'LeaseLost'`; `Heartbeat` resolves `false`; outcome discarded; `Run` returns `{ Kind: 'LeaseLost' }` |
+| `ExtendLease` → `Cancelled` (operator cancel, spec 03 §7) | signal aborted with `'Cancelled'`; `Heartbeat` resolves `false`; when the handler returns — or after `CancelDrainMs` if it ignores the abort — the outcome is discarded and `consumer.AcknowledgeCancel` settles the delivery as `Discarded`, freeing its key at once |
+| `ExtendLease` throws | transient: logged as a warning; `Heartbeat` resolves `true`; the next tick retries. It aborts nothing by itself |
+| the lease horizon + `LeaseExpiryGraceMs` passes without a `Held` — in `Auto` **and** `Manual` mode, and whether or not an `ExtendLease` call is still in flight | signal aborted with `'LeaseLost'`; `Heartbeat` resolves `false`; outcome discarded; `Run` returns `{ Kind: 'LeaseLost' }` |
+| `MaxProcessingSeconds` elapsed | signal aborted with `'MaxProcessingSeconds'`; automatic renewal stops; `Heartbeat` resolves `false` and never renews again; a later outcome is still settled while the horizon has not passed (after that the fence would reject it anyway) |
+| `Abort('Shutdown')` and the outcome is not `Complete` — **also after the cap was hit** | `consumer.Release` (no attempt consumed on the Database transport) |
+| a settle (`Complete`/`Retry`/`DeadLetter`/`Release`) returns `LeaseLost` | one `consumer.AcknowledgeCancel` attempt: a cancel that landed between the last heartbeat and the settle still frees the key immediately. `Settled` from it wins; otherwise `Run` returns the original `LeaseLost` |
 | settle call throws | `Run` returns `{ Kind: 'Failed', Error }` |
 
 Concurrent heartbeats are coalesced: a `Heartbeat` call made while another `ExtendLease` is in flight shares its result (its progress is not sent).
 
-**Lease horizon.** The execution tracks the lease's wall-clock expiry: it starts at `Delivery.LeaseExpiresAt` and moves to `now + LeaseSeconds` on every `ExtendLease` that returns `Held`. Only that horizon (plus `LEASE_EXPIRY_GRACE_MS`, to absorb clock skew between this host and the transport) ends a run whose heartbeats are failing — never a single failed call. An operator cancel needs no separate channel: it rotates the delivery's lease token, so the next `ExtendLease` returns `Lost` (spec 03 §7).
+**Lease horizon (F4).** The execution tracks the lease's wall-clock expiry: it starts at `Delivery.LeaseExpiresAt` and moves to `now + LeaseSeconds` on every `Held`. The horizon is enforced by **its own timer**, re-armed on every `Held`, in both heartbeat modes, and independent of any in-flight `ExtendLease` call — so neither a hung transport call nor a `Manual` handler that stops heartbeating can run past its lease unnoticed. When the handler finishes, `Run` **races** a still-pending heartbeat against the horizon instead of awaiting it unboundedly. `LeaseExpiryGraceMs` (default `LEASE_EXPIRY_GRACE_MS`) is the allowance for skew between this host's clock and the transport's.
+
+**Separate conditions (reviewer M6).** Lease loss, cancel, cap and shutdown are four independent flags; only `Signal.reason` / `StopReason` is "first reason wins". A shutdown that arrives after the cap still releases, and a cap that fires after a shutdown still stops manual renewals.
+
+**Timer delays** are clamped to `MAX_TIMER_DELAY_MS` and re-armed when they fire early, because Node fires a `setTimeout` above 2³¹−1 ms immediately.
 
 - [ ] **Step 1: Write the shared test doubles**
 
@@ -2253,7 +2348,7 @@ Concurrent heartbeats are coalesced: a `Heartbeat` call made while another `Exte
 import type { WorkJson, WorkMessage } from '../envelope';
 import type { WorkContext, WorkHandler, WorkLogger, WorkOutcome, WorkProgress } from '../handler';
 import type { DeliveryStatus, SubscriptionPolicy } from '../policy';
-import type { ITransportConsumer, ReceivedDelivery, SettleResult } from '../transport';
+import type { ITransportConsumer, LeaseExtension, ReceivedDelivery, SettleResult } from '../transport';
 
 export type ConsumerCall =
     | { Op: 'Receive'; Max: number; WaitSeconds: number }
@@ -2262,6 +2357,7 @@ export type ConsumerCall =
     | { Op: 'Retry'; DeliveryID: string; DelaySeconds: number; Error: string }
     | { Op: 'DeadLetter'; DeliveryID: string; Reason: string; Error: string | null }
     | { Op: 'Release'; DeliveryID: string }
+    | { Op: 'AcknowledgeCancel'; DeliveryID: string }
     | { Op: 'Close' };
 
 /** An ITransportConsumer that returns scripted batches and records every call. */
@@ -2270,10 +2366,16 @@ export class ScriptedConsumer implements ITransportConsumer {
     public readonly Batches: ReceivedDelivery[][] = [];
     public ReceiveImpl: ((max: number) => Promise<ReceivedDelivery[]>) | null = null;
     public ReceiveError: Error | null = null;
-    public ExtendLeaseResult: 'Held' | 'Lost' | Error = 'Held';
+    public ExtendLeaseResult: LeaseExtension | Error = 'Held';
     /** Consumed in order before falling back to ExtendLeaseResult; lets a test script "fail, then succeed". */
-    public ExtendLeaseSequence: ('Held' | 'Lost' | Error)[] = [];
+    public ExtendLeaseSequence: (LeaseExtension | Error)[] = [];
+    /** Overrides the scripted results entirely; lets a test return a promise it controls (or one that never settles). */
+    public ExtendLeaseImpl: (() => Promise<LeaseExtension>) | null = null;
     public SettleError: Error | null = null;
+    /** When true, Complete/Retry/DeadLetter/Release report LeaseLost (the fenced write changed no row). */
+    public SettleLeaseLost = false;
+    /** What AcknowledgeCancel reports: 'Discarded' = the delivery was cancelled and is now settled. */
+    public AcknowledgeCancelStatus: 'Discarded' | 'LeaseLost' = 'LeaseLost';
 
     public async Receive(max: number, waitSeconds: number, _signal: AbortSignal): Promise<ReceivedDelivery[]> {
         this.Calls.push({ Op: 'Receive', Max: max, WaitSeconds: waitSeconds });
@@ -2291,8 +2393,11 @@ export class ScriptedConsumer implements ITransportConsumer {
         return batch;
     }
 
-    public async ExtendLease(delivery: ReceivedDelivery, leaseSeconds: number, progress?: WorkProgress): Promise<'Held' | 'Lost'> {
+    public async ExtendLease(delivery: ReceivedDelivery, leaseSeconds: number, progress?: WorkProgress): Promise<LeaseExtension> {
         this.Calls.push({ Op: 'ExtendLease', DeliveryID: delivery.DeliveryID, LeaseSeconds: leaseSeconds, Progress: progress });
+        if (this.ExtendLeaseImpl !== null) {
+            return this.ExtendLeaseImpl();
+        }
         const result = this.ExtendLeaseSequence.length > 0 ? this.ExtendLeaseSequence.shift() ?? this.ExtendLeaseResult : this.ExtendLeaseResult;
         if (result instanceof Error) {
             throw result;
@@ -2320,6 +2425,14 @@ export class ScriptedConsumer implements ITransportConsumer {
         return this.settled(delivery, 'Pending');
     }
 
+    public async AcknowledgeCancel(delivery: ReceivedDelivery): Promise<SettleResult> {
+        this.Calls.push({ Op: 'AcknowledgeCancel', DeliveryID: delivery.DeliveryID });
+        if (this.AcknowledgeCancelStatus === 'Discarded') {
+            return { Kind: 'Settled', DeliveryID: delivery.DeliveryID, Status: 'Discarded' };
+        }
+        return { Kind: 'LeaseLost', DeliveryID: delivery.DeliveryID };
+    }
+
     public async Close(): Promise<void> {
         this.Calls.push({ Op: 'Close' });
     }
@@ -2335,6 +2448,9 @@ export class ScriptedConsumer implements ITransportConsumer {
     private settled(delivery: ReceivedDelivery, status: DeliveryStatus): SettleResult {
         if (this.SettleError !== null) {
             throw this.SettleError;
+        }
+        if (this.SettleLeaseLost) {
+            return { Kind: 'LeaseLost', DeliveryID: delivery.DeliveryID };
         }
         return { Kind: 'Settled', DeliveryID: delivery.DeliveryID, Status: status };
     }
@@ -2386,7 +2502,6 @@ export function MakePolicy(overrides: Partial<SubscriptionPolicy> = {}): Subscri
     return {
         SubscriptionName: 'test.subscription',
         TopicName: 'test.topic',
-        OrderingMode: 'PublishOrder',
         PartitionMode: 'None',
         MaxAttempts: 5,
         BackoffBaseSeconds: 10,
@@ -2404,7 +2519,8 @@ export function MakeDelivery(id: string, overrides: Partial<ReceivedDelivery> = 
         LeaseToken: `token-${id}`,
         Attempt: 1,
         IsReplay: false,
-        LeaseExpiresAt: new Date('2026-01-01T00:01:00.000Z'),
+        // Relative to the (possibly faked) clock: DeliveryExecution enforces the lease horizon on a real timer.
+        LeaseExpiresAt: new Date(Date.now() + 60_000),
         ...overrides,
     };
 }
@@ -2517,13 +2633,14 @@ describe('ResolveSettleAction', () => {
 
 ```typescript
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { DeliveryExecution } from '../runtime/DeliveryExecution';
+import { DeliveryExecution, ExecutionKeyOf } from '../runtime/DeliveryExecution';
+import type { DeliveryExecutionOptions } from '../runtime/DeliveryExecution';
 import { FatalWorkError, TransientWorkError } from '../errors';
 import { Outcome } from '../handler';
 import type { WorkContext, WorkOutcome } from '../handler';
 import type { WorkMessage } from '../envelope';
 import type { SubscriptionPolicy } from '../policy';
-import type { ReceivedDelivery } from '../transport';
+import type { LeaseExtension, ReceivedDelivery } from '../transport';
 import { CreateDeferred, HandlerFrom, MakeDelivery, MakePolicy, RecordingLogger, ScriptedConsumer } from './fakes';
 
 interface Setup {
@@ -2536,6 +2653,7 @@ function setup(
     handle: (message: WorkMessage, context: WorkContext) => Promise<WorkOutcome>,
     policy: Partial<SubscriptionPolicy> = {},
     delivery: ReceivedDelivery = MakeDelivery('d1'),
+    extra: Partial<DeliveryExecutionOptions> = {},
 ): Setup {
     const consumer = new ScriptedConsumer();
     const logger = new RecordingLogger();
@@ -2546,6 +2664,7 @@ function setup(
         Policy: MakePolicy(policy),
         Log: logger,
         Random: () => 1,
+        ...extra,
     });
     return { Execution: execution, Consumer: consumer, Logger: logger };
 }
@@ -2637,11 +2756,25 @@ describe('DeliveryExecution outcomes', () => {
         Consumer.SettleError = new Error('db down');
         expect(await Execution.Run()).toEqual({ Kind: 'Failed', DeliveryID: 'd1', Error: 'db down' });
     });
+
+    it('identifies an execution by delivery and lease token, because a DeliveryID is reused across attempts', () => {
+        const first = MakeDelivery('d1', { LeaseToken: 'token-a' });
+        const second = MakeDelivery('d1', { LeaseToken: 'token-b' });
+        expect(ExecutionKeyOf(first)).not.toBe(ExecutionKeyOf(second));
+        expect(setup(async () => Outcome.Complete(), {}, first).Execution.ExecutionKey).toBe(ExecutionKeyOf(first));
+    });
 });
+
+/** Resolves when the handler's signal aborts; used by handlers that cooperate with an abort. */
+function aborted(context: WorkContext): Promise<void> {
+    return new Promise<void>((resolve) => context.Signal.addEventListener('abort', () => resolve()));
+}
 
 describe('DeliveryExecution leases', () => {
     beforeEach(() => {
         vi.useFakeTimers();
+        // MakeDelivery leases run to now + 60 s, so the default horizon is 00:01:00 (+ 5 s grace).
+        vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
     });
 
     afterEach(() => {
@@ -2661,6 +2794,17 @@ describe('DeliveryExecution leases', () => {
         expect(Consumer.CallsOf('ExtendLease')).toHaveLength(2);
     });
 
+    it('Auto mode never waits longer than 30 s between heartbeats, however long the lease', async () => {
+        const gate = CreateDeferred<WorkOutcome>();
+        const { Execution, Consumer } = setup(async () => gate.Promise, { HeartbeatMode: 'Auto', LeaseSeconds: 1200 });
+        const run = Execution.Run();
+        await vi.advanceTimersByTimeAsync(65_000);
+        expect(Consumer.CallsOf('ExtendLease')).toHaveLength(2);
+        expect(Consumer.CallsOf('ExtendLease')[0]).toMatchObject({ LeaseSeconds: 1200 });
+        gate.Resolve(Outcome.Complete());
+        await run;
+    });
+
     it('Manual mode heartbeats only when the handler asks', async () => {
         const gate = CreateDeferred<WorkOutcome>();
         const held: boolean[] = [];
@@ -2672,7 +2816,7 @@ describe('DeliveryExecution leases', () => {
             { HeartbeatMode: 'Manual', LeaseSeconds: 30 },
         );
         const run = Execution.Run();
-        await vi.advanceTimersByTimeAsync(60_000);
+        await vi.advanceTimersByTimeAsync(20_000);
         expect(Consumer.CallsOf('ExtendLease')).toEqual([
             { Op: 'ExtendLease', DeliveryID: 'd1', LeaseSeconds: 30, Progress: { Percent: 50, Message: 'halfway' } },
         ]);
@@ -2694,6 +2838,7 @@ describe('DeliveryExecution leases', () => {
         expect(await Execution.Run()).toEqual({ Kind: 'LeaseLost', DeliveryID: 'd1' });
         expect(seen).toEqual([false, true, 'LeaseLost']);
         expect(Consumer.Count('Complete')).toBe(0);
+        expect(Consumer.Count('AcknowledgeCancel')).toBe(0);
         expect(Execution.StopReason).toBe('LeaseLost');
     });
 
@@ -2713,10 +2858,8 @@ describe('DeliveryExecution leases', () => {
     });
 
     it('retries a failed heartbeat on the next tick and keeps the handler running', async () => {
-        vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
         const gate = CreateDeferred<WorkOutcome>();
         const { Execution, Consumer, Logger } = setup(async () => gate.Promise, { HeartbeatMode: 'Auto', LeaseSeconds: 30 });
-        // The delivery's lease runs to 00:01:00, so the first failure is well inside the horizon.
         Consumer.ExtendLeaseSequence = [new Error('network blip')];
         const run = Execution.Run();
         await vi.advanceTimersByTimeAsync(10_000);
@@ -2730,8 +2873,7 @@ describe('DeliveryExecution leases', () => {
         expect(Consumer.Count('Complete')).toBe(1);
     });
 
-    it('aborts once heartbeats have failed past the lease horizon', async () => {
-        vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+    it('aborts with LeaseLost once the lease horizon passes while every heartbeat fails', async () => {
         const contexts: WorkContext[] = [];
         const gate = CreateDeferred<WorkOutcome>();
         const { Execution, Consumer, Logger } = setup(
@@ -2741,37 +2883,169 @@ describe('DeliveryExecution leases', () => {
             },
             { HeartbeatMode: 'Auto', LeaseSeconds: 30 },
         );
-        // Lease horizon is 00:01:00 (MakeDelivery) + 5 s grace; every renewal fails.
         Consumer.ExtendLeaseResult = new Error('database unreachable');
         const run = Execution.Run();
-        await vi.advanceTimersByTimeAsync(50_000);
+        await vi.advanceTimersByTimeAsync(64_000);
         expect(contexts[0].Signal.aborted).toBe(false);
-        await vi.advanceTimersByTimeAsync(20_000);
+        await vi.advanceTimersByTimeAsync(2_000);
         expect(contexts[0].Signal.aborted).toBe(true);
-        expect(String(contexts[0].Signal.reason)).toBe('LeaseExpired');
-        expect(Execution.StopReason).toBe('LeaseExpired');
-        expect(Logger.Has('Warn', 'Heartbeats kept failing')).toBe(true);
+        expect(String(contexts[0].Signal.reason)).toBe('LeaseLost');
+        expect(Execution.StopReason).toBe('LeaseLost');
+        expect(Logger.Has('Warn', 'Lease horizon passed')).toBe(true);
         gate.Resolve(Outcome.Complete());
         expect(await run).toEqual({ Kind: 'LeaseLost', DeliveryID: 'd1' });
         expect(Consumer.Count('Complete')).toBe(0);
     });
 
-    it('treats an operator cancel (rotated lease token) as a lost lease and discards the outcome', async () => {
-        // Spec 03 §7: Discard on an InFlight delivery rotates LeaseToken, so the next ExtendLease reports Lost.
-        const seen: boolean[] = [];
+    it('a hung ExtendLease cannot wedge the delivery: the horizon still aborts and Run still returns', async () => {
+        const contexts: WorkContext[] = [];
         const { Execution, Consumer } = setup(
             async (_message, context) => {
-                seen.push(await context.Heartbeat());
-                // A handler that ignores the signal still cannot settle: the fence rejects it.
+                contexts.push(context);
+                await aborted(context);
+                return Outcome.Complete();
+            },
+            { HeartbeatMode: 'Auto', LeaseSeconds: 30 },
+        );
+        // A stalled socket or an exhausted pool: the call neither resolves nor rejects.
+        Consumer.ExtendLeaseImpl = () => new Promise<LeaseExtension>(() => undefined);
+        const run = Execution.Run();
+        await vi.advanceTimersByTimeAsync(64_000);
+        expect(contexts[0].Signal.aborted).toBe(false);
+        await vi.advanceTimersByTimeAsync(2_000);
+        expect(String(contexts[0].Signal.reason)).toBe('LeaseLost');
+        expect(await run).toEqual({ Kind: 'LeaseLost', DeliveryID: 'd1' });
+        expect(Consumer.Count('ExtendLease')).toBe(1);
+        expect(Consumer.Count('Complete')).toBe(0);
+    });
+
+    it('Manual mode enforces the lease horizon when the handler stops heartbeating', async () => {
+        const contexts: WorkContext[] = [];
+        const { Execution, Consumer } = setup(
+            async (_message, context) => {
+                contexts.push(context);
+                await aborted(context);
+                return Outcome.Complete();
+            },
+            { HeartbeatMode: 'Manual', LeaseSeconds: 30 },
+        );
+        const run = Execution.Run();
+        await vi.advanceTimersByTimeAsync(66_000);
+        expect(String(contexts[0].Signal.reason)).toBe('LeaseLost');
+        expect(await run).toEqual({ Kind: 'LeaseLost', DeliveryID: 'd1' });
+        expect(Consumer.Count('ExtendLease')).toBe(0);
+        expect(Consumer.Count('Complete')).toBe(0);
+    });
+
+    it('re-arms the lease horizon on every Held', async () => {
+        const contexts: WorkContext[] = [];
+        const gate = CreateDeferred<WorkOutcome>();
+        const { Execution } = setup(
+            async (_message, context) => {
+                contexts.push(context);
+                return gate.Promise;
+            },
+            { HeartbeatMode: 'Manual', LeaseSeconds: 30 },
+        );
+        const run = Execution.Run();
+        await vi.advanceTimersByTimeAsync(50_000);
+        expect(await contexts[0].Heartbeat()).toBe(true);
+        // Horizon is now 00:01:20 (+ 5 s): the original 00:01:05 deadline must not fire.
+        await vi.advanceTimersByTimeAsync(20_000);
+        expect(contexts[0].Signal.aborted).toBe(false);
+        await vi.advanceTimersByTimeAsync(16_000);
+        expect(String(contexts[0].Signal.reason)).toBe('LeaseLost');
+        gate.Resolve(Outcome.Complete());
+        expect(await run).toEqual({ Kind: 'LeaseLost', DeliveryID: 'd1' });
+    });
+
+    it('an operator cancel aborts with Cancelled, discards the outcome and acknowledges so the key frees at once', async () => {
+        const seen: unknown[] = [];
+        const { Execution, Consumer } = setup(
+            async (_message, context) => {
+                seen.push(await context.Heartbeat(), context.Signal.aborted, String(context.Signal.reason));
+                // Ignored: a cancelled delivery is never completed, retried or dead-lettered.
                 return Outcome.Complete();
             },
             { HeartbeatMode: 'Manual' },
         );
-        Consumer.ExtendLeaseResult = 'Lost';
-        expect(await Execution.Run()).toEqual({ Kind: 'LeaseLost', DeliveryID: 'd1' });
-        expect(seen).toEqual([false]);
+        Consumer.ExtendLeaseResult = 'Cancelled';
+        Consumer.AcknowledgeCancelStatus = 'Discarded';
+        expect(await Execution.Run()).toEqual({ Kind: 'Settled', DeliveryID: 'd1', Status: 'Discarded' });
+        expect(seen).toEqual([false, true, 'Cancelled']);
         expect(Consumer.Count('Complete')).toBe(0);
-        expect(Execution.StopReason).toBe('LeaseLost');
+        expect(Consumer.Count('AcknowledgeCancel')).toBe(1);
+        expect(Execution.StopReason).toBe('Cancelled');
+    });
+
+    it('acknowledges a cancel after CancelDrainMs when the handler ignores the abort', async () => {
+        const { Execution, Consumer, Logger } = setup(
+            async () => new Promise<WorkOutcome>(() => undefined),
+            { HeartbeatMode: 'Auto', LeaseSeconds: 30 },
+            MakeDelivery('d1'),
+            { CancelDrainMs: 5_000 },
+        );
+        Consumer.ExtendLeaseResult = 'Cancelled';
+        Consumer.AcknowledgeCancelStatus = 'Discarded';
+        const run = Execution.Run();
+        await vi.advanceTimersByTimeAsync(10_000);
+        expect(Consumer.Count('AcknowledgeCancel')).toBe(0);
+        await vi.advanceTimersByTimeAsync(5_000);
+        expect(await run).toEqual({ Kind: 'Settled', DeliveryID: 'd1', Status: 'Discarded' });
+        expect(Logger.Has('Warn', 'did not stop')).toBe(true);
+    });
+
+    it('acknowledges once when a settle reports LeaseLost, so a late cancel still frees the key', async () => {
+        const cancelled = setup(async () => Outcome.Complete(), { HeartbeatMode: 'Manual' });
+        cancelled.Consumer.SettleLeaseLost = true;
+        cancelled.Consumer.AcknowledgeCancelStatus = 'Discarded';
+        expect(await cancelled.Execution.Run()).toEqual({ Kind: 'Settled', DeliveryID: 'd1', Status: 'Discarded' });
+        expect(cancelled.Consumer.Count('Complete')).toBe(1);
+        expect(cancelled.Consumer.Count('AcknowledgeCancel')).toBe(1);
+
+        const takenOver = setup(async () => Outcome.Complete(), { HeartbeatMode: 'Manual' });
+        takenOver.Consumer.SettleLeaseLost = true;
+        expect(await takenOver.Execution.Run()).toEqual({ Kind: 'LeaseLost', DeliveryID: 'd1' });
+        expect(takenOver.Consumer.Count('AcknowledgeCancel')).toBe(1);
+    });
+
+    it('coalesces concurrent heartbeats onto one ExtendLease call', async () => {
+        const extension = CreateDeferred<LeaseExtension>();
+        const results: boolean[] = [];
+        const { Execution, Consumer } = setup(
+            async (_message, context) => {
+                const first = context.Heartbeat({ Percent: 10 });
+                const second = context.Heartbeat({ Percent: 20 });
+                extension.Resolve('Held');
+                results.push(await first, await second);
+                return Outcome.Complete();
+            },
+            { HeartbeatMode: 'Manual' },
+        );
+        Consumer.ExtendLeaseImpl = () => extension.Promise;
+        await Execution.Run();
+        expect(results).toEqual([true, true]);
+        expect(Consumer.CallsOf('ExtendLease')).toEqual([
+            { Op: 'ExtendLease', DeliveryID: 'd1', LeaseSeconds: 60, Progress: { Percent: 10 } },
+        ]);
+    });
+
+    it('waits for a heartbeat still in flight when the handler returns, and honours its result', async () => {
+        const extension = CreateDeferred<LeaseExtension>();
+        const { Execution, Consumer } = setup(
+            async (_message, context) => {
+                void context.Heartbeat();
+                return Outcome.Complete();
+            },
+            { HeartbeatMode: 'Manual' },
+        );
+        Consumer.ExtendLeaseImpl = () => extension.Promise;
+        const run = Execution.Run();
+        await vi.advanceTimersByTimeAsync(0);
+        expect(Consumer.Count('Complete')).toBe(0);
+        extension.Resolve('Lost');
+        expect(await run).toEqual({ Kind: 'LeaseLost', DeliveryID: 'd1' });
+        expect(Consumer.Count('Complete')).toBe(0);
     });
 
     it('MaxProcessingSeconds aborts the handler and stops renewing', async () => {
@@ -2798,10 +3072,61 @@ describe('DeliveryExecution leases', () => {
         expect(await run).toMatchObject({ Kind: 'Settled', Status: 'Completed' });
     });
 
+    it('a shutdown that arrives after the cap still releases instead of retrying', async () => {
+        const gate = CreateDeferred<WorkOutcome>();
+        const { Execution, Consumer } = setup(async () => gate.Promise, { HeartbeatMode: 'Manual', MaxProcessingSeconds: 15 });
+        const run = Execution.Run();
+        await vi.advanceTimersByTimeAsync(15_000);
+        expect(Execution.StopReason).toBe('MaxProcessingSeconds');
+        Execution.Abort('Shutdown');
+        gate.Resolve(Outcome.Retry('interrupted'));
+        expect(await run).toEqual({ Kind: 'Settled', DeliveryID: 'd1', Status: 'Pending' });
+        expect(Consumer.Count('Release')).toBe(1);
+        expect(Consumer.Count('Retry')).toBe(0);
+        expect(Execution.StopReason).toBe('MaxProcessingSeconds');
+    });
+
+    it('a cap that fires after a shutdown still stops manual renewals', async () => {
+        const gate = CreateDeferred<WorkOutcome>();
+        const contexts: WorkContext[] = [];
+        const { Execution, Consumer } = setup(
+            async (_message, context) => {
+                contexts.push(context);
+                return gate.Promise;
+            },
+            { HeartbeatMode: 'Manual', MaxProcessingSeconds: 15 },
+        );
+        const run = Execution.Run();
+        Execution.Abort('Shutdown');
+        expect(await contexts[0].Heartbeat()).toBe(true);
+        await vi.advanceTimersByTimeAsync(15_000);
+        expect(await contexts[0].Heartbeat()).toBe(false);
+        expect(Consumer.Count('ExtendLease')).toBe(1);
+        gate.Resolve(Outcome.Complete());
+        await run;
+    });
+
+    it('clamps a MaxProcessingSeconds beyond the timer limit instead of firing at once', async () => {
+        const gate = CreateDeferred<WorkOutcome>();
+        const contexts: WorkContext[] = [];
+        const { Execution } = setup(
+            async (_message, context) => {
+                contexts.push(context);
+                return gate.Promise;
+            },
+            { HeartbeatMode: 'Manual', MaxProcessingSeconds: 3_000_000 },
+        );
+        const run = Execution.Run();
+        await vi.advanceTimersByTimeAsync(1_000);
+        expect(contexts[0].Signal.aborted).toBe(false);
+        gate.Resolve(Outcome.Complete());
+        expect(await run).toMatchObject({ Kind: 'Settled', Status: 'Completed' });
+    });
+
     it('releases a delivery that did not complete after a shutdown abort', async () => {
         const { Execution, Consumer } = setup(
             async (_message, context) => {
-                await new Promise<void>((resolve) => context.Signal.addEventListener('abort', () => resolve()));
+                await aborted(context);
                 throw new Error('interrupted');
             },
             { HeartbeatMode: 'Manual' },
@@ -2838,19 +3163,18 @@ export interface ConsumerRuntimeOptions {
     /** Maximum handlers in flight for this subscription on this host. */
     Concurrency: number;
     ReceiveBatchSize: number;
-    IdlePollMinMs: number;
-    IdlePollMaxMs: number;
-    ShutdownDrainMs: number;
     /** Long-poll wait passed to ITransportConsumer.Receive (SQS: up to 20). Default 0. */
     ReceiveWaitSeconds?: number;
+    IdlePollMinMs: number;
+    IdlePollMaxMs: number;
+    /** How long Stop() waits for handlers; also how long a cancelled handler gets before its cancel is acknowledged anyway. */
+    ShutdownDrainMs: number;
+    /** Local-clock allowance when enforcing the lease horizon. Default 5000. */
+    LeaseExpiryGraceMs?: number;
 }
-
-/**
- * Why a run stopped early. 'LeaseLost' = the transport reported the lease gone (taken over, or revoked by an
- * operator cancel); 'LeaseExpired' = heartbeats kept failing until the lease's wall-clock horizon passed.
- */
-export type ExecutionStopReason = 'LeaseLost' | 'LeaseExpired' | 'MaxProcessingSeconds' | 'Shutdown';
 ```
+
+Why a run stopped early is a `WorkAbortReason` (`handler.ts`, spec 03 §3) — the same value the handler sees as `Signal.reason`.
 
 - [ ] **Step 5: Write `src/runtime/outcomes.ts`**
 
@@ -2950,18 +3274,29 @@ function truncate(text: string, maxLength: number): string {
 - [ ] **Step 6: Write `src/runtime/DeliveryExecution.ts`**
 
 ```typescript
+import { HeartbeatIntervalSeconds } from '../backoff';
 import type { WorkJson } from '../envelope';
-import type { WorkContext, WorkHandler, WorkLogger, WorkProgress } from '../handler';
+import type { WorkAbortReason, WorkContext, WorkHandler, WorkLogger, WorkProgress } from '../handler';
 import type { SubscriptionPolicy } from '../policy';
 import type { ITransportConsumer, ReceivedDelivery, SettleResult } from '../transport';
 import { ErrorMessageOf, MapHandlerReturn, MapThrownError, ResolveSettleAction } from './outcomes';
 import type { HandlerResult, SettleAction } from './outcomes';
-import type { ExecutionStopReason } from './types';
 
 export const MIN_AUTO_HEARTBEAT_INTERVAL_MS = 1000;
 
-/** Clock-skew allowance added to the lease horizon before a run whose heartbeats keep failing is abandoned. */
+/** Clock-skew allowance added to the lease horizon before the run is abandoned (spec 03 §3.2). */
 export const LEASE_EXPIRY_GRACE_MS = 5000;
+
+/** How long a cancelled handler gets to stop before its cancel is acknowledged anyway. */
+export const DEFAULT_CANCEL_DRAIN_MS = 30_000;
+
+/** Node fires a setTimeout above 2^31 - 1 ms immediately, so long delays are clamped and re-armed. */
+export const MAX_TIMER_DELAY_MS = 2_147_483_647;
+
+/** A Database DeliveryID is stable across attempts; only DeliveryID + LeaseToken identifies one execution. */
+export function ExecutionKeyOf(delivery: ReceivedDelivery): string {
+    return `${delivery.DeliveryID}\u0000${delivery.LeaseToken}`;
+}
 
 export interface DeliveryExecutionOptions<TPayload extends WorkJson = WorkJson> {
     Delivery: ReceivedDelivery<TPayload>;
@@ -2973,21 +3308,45 @@ export interface DeliveryExecutionOptions<TPayload extends WorkJson = WorkJson> 
     Random?: () => number;
     /** Defaults to LEASE_EXPIRY_GRACE_MS. */
     LeaseExpiryGraceMs?: number;
+    /** Defaults to DEFAULT_CANCEL_DRAIN_MS; ConsumerRuntime passes its ShutdownDrainMs. */
+    CancelDrainMs?: number;
 }
 
-/** Runs one handler for one delivery: context, lease heartbeats, processing cap, outcome, settle. */
+interface Latch {
+    Promise: Promise<null>;
+    Open(): void;
+}
+
+function createLatch(): Latch {
+    let open: () => void = () => undefined;
+    const promise = new Promise<null>((resolve) => {
+        open = () => resolve(null);
+    });
+    return { Promise: promise, Open: open };
+}
+
+/** Runs one handler for one delivery: context, lease heartbeats, lease horizon, processing cap, outcome, settle. */
 export class DeliveryExecution<TPayload extends WorkJson = WorkJson> {
     private readonly controller = new AbortController();
-    private stopReason: ExecutionStopReason | null = null;
+    /** First abort reason; what the handler sees as Signal.reason. The flags below are independent of it. */
+    private abortReason: WorkAbortReason | null = null;
     private leaseLost = false;
+    private cancelled = false;
+    private capReached = false;
+    private shutdownRequested = false;
     private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
     private capTimer: ReturnType<typeof setTimeout> | null = null;
+    private horizonTimer: ReturnType<typeof setTimeout> | null = null;
+    private cancelDrainTimer: ReturnType<typeof setTimeout> | null = null;
     private pendingHeartbeat: Promise<boolean> | null = null;
     /** Wall-clock instant this lease is good until; moves forward on every ExtendLease that returns Held. */
-    private leaseExpiresAtMs: number;
+    private leaseHorizonMs: number;
+    private capDeadlineMs = 0;
+    private readonly horizonPassed = createLatch();
+    private readonly cancelDrainElapsed = createLatch();
 
     constructor(private readonly options: DeliveryExecutionOptions<TPayload>) {
-        this.leaseExpiresAtMs = options.Delivery.LeaseExpiresAt.getTime();
+        this.leaseHorizonMs = options.Delivery.LeaseExpiresAt.getTime();
     }
 
     private now(): number {
@@ -2998,14 +3357,22 @@ export class DeliveryExecution<TPayload extends WorkJson = WorkJson> {
         return this.options.Delivery.DeliveryID;
     }
 
-    public get StopReason(): ExecutionStopReason | null {
-        return this.stopReason;
+    public get ExecutionKey(): string {
+        return ExecutionKeyOf(this.options.Delivery);
     }
 
-    /** Requests the handler to stop. The first reason wins. */
-    public Abort(reason: ExecutionStopReason): void {
-        if (this.stopReason === null) {
-            this.stopReason = reason;
+    /** The first reason the handler was asked to stop, or null. */
+    public get StopReason(): WorkAbortReason | null {
+        return this.abortReason;
+    }
+
+    /** Requests the handler to stop. The signal keeps its first reason; a shutdown is remembered regardless. */
+    public Abort(reason: WorkAbortReason): void {
+        if (reason === 'Shutdown') {
+            this.shutdownRequested = true;
+        }
+        if (this.abortReason === null) {
+            this.abortReason = reason;
         }
         if (!this.controller.signal.aborted) {
             this.controller.abort(reason);
@@ -3015,20 +3382,23 @@ export class DeliveryExecution<TPayload extends WorkJson = WorkJson> {
     public async Run(): Promise<SettleResult> {
         const startedAt = this.now();
         this.startTimers();
-        let result: HandlerResult;
+        let result: HandlerResult | null;
         try {
-            result = await this.invokeHandler();
+            // cancelDrainElapsed opens only after a cancel whose handler ignored the abort for CancelDrainMs.
+            result = await Promise.race([this.invokeHandler(), this.cancelDrainElapsed.Promise]);
         } finally {
-            this.stopTimers();
+            this.stopWorkTimers();
         }
-        if (this.pendingHeartbeat !== null) {
-            await this.pendingHeartbeat;
+        await this.awaitPendingHeartbeat();
+        this.clearHorizonTimer();
+        if (this.cancelled) {
+            return this.acknowledgeCancel(result === null);
         }
-        if (this.leaseLost) {
-            this.options.Log.Warn('Lease lost before settle; handler outcome discarded', this.logData({ DurationMs: this.now() - startedAt, StopReason: this.stopReason }));
+        if (this.leaseLost || result === null) {
+            this.options.Log.Warn('Lease lost before settle; handler outcome discarded', this.logData({ DurationMs: this.now() - startedAt, StopReason: this.abortReason }));
             return { Kind: 'LeaseLost', DeliveryID: this.DeliveryID };
         }
-        if (this.stopReason === 'Shutdown' && result.Outcome.Kind !== 'Complete') {
+        if (this.shutdownRequested && result.Outcome.Kind !== 'Complete') {
             return this.settleSafely(() => this.options.Consumer.Release(this.options.Delivery));
         }
         return this.settle(ResolveSettleAction(result, this.options.Delivery.Attempt, this.options.Policy, this.options.Random));
@@ -3058,8 +3428,15 @@ export class DeliveryExecution<TPayload extends WorkJson = WorkJson> {
         };
     }
 
+    /** A heartbeat still in flight decides whether we may settle, but never for longer than the lease itself. */
+    private async awaitPendingHeartbeat(): Promise<void> {
+        if (this.pendingHeartbeat !== null) {
+            await Promise.race([this.pendingHeartbeat, this.horizonPassed.Promise]);
+        }
+    }
+
     private async heartbeat(progress?: WorkProgress): Promise<boolean> {
-        if (this.leaseLost || this.stopReason === 'MaxProcessingSeconds') {
+        if (this.leaseLost || this.cancelled || this.capReached) {
             return false;
         }
         if (this.pendingHeartbeat !== null) {
@@ -3077,54 +3454,109 @@ export class DeliveryExecution<TPayload extends WorkJson = WorkJson> {
         const { Consumer, Delivery, Policy, Log } = this.options;
         try {
             const status = await Consumer.ExtendLease(Delivery, Policy.LeaseSeconds, progress);
-            if (status === 'Lost') {
-                // Taken over after expiry, or revoked by an operator cancel (spec 03 §7).
-                this.leaseLost = true;
-                this.Abort('LeaseLost');
-                Log.Warn('Lease lost; aborting handler', this.logData({}));
+            if (status === 'Held') {
+                this.leaseHorizonMs = this.now() + Policy.LeaseSeconds * 1000;
+                this.armHorizonTimer();
+                return !this.leaseLost;
+            }
+            if (status === 'Cancelled') {
+                this.onCancelled();
                 return false;
             }
-            this.leaseExpiresAtMs = this.now() + Policy.LeaseSeconds * 1000;
-            return true;
+            this.leaseLost = true;
+            this.Abort('LeaseLost');
+            Log.Warn('Lease lost; aborting handler', this.logData({}));
+            return false;
         } catch (error) {
-            // A transient transport failure must not abort a healthy handler: keep going until the lease
-            // horizon itself has passed, then give up (spec 03 §3.2).
-            const graceMs = this.options.LeaseExpiryGraceMs ?? LEASE_EXPIRY_GRACE_MS;
-            if (this.now() >= this.leaseExpiresAtMs + graceMs) {
-                this.leaseLost = true;
-                this.Abort('LeaseExpired');
-                Log.Warn('Heartbeats kept failing until the lease expired; aborting handler', this.logData({ Error: ErrorMessageOf(error) }));
-                return false;
-            }
+            // Transient by contract (spec 03 §5): the next tick retries. Only the horizon timer ends the run.
             Log.Warn('Heartbeat failed; the next heartbeat will retry', this.logData({ Error: ErrorMessageOf(error) }));
-            return true;
+            return !this.leaseLost;
         }
+    }
+
+    private onCancelled(): void {
+        if (this.cancelled) {
+            return;
+        }
+        this.cancelled = true;
+        this.clearHeartbeatTimer();
+        this.Abort('Cancelled');
+        this.options.Log.Warn('Delivery cancelled by an operator; aborting handler', this.logData({}));
+        const drainMs = Math.min(Math.max(0, this.options.CancelDrainMs ?? DEFAULT_CANCEL_DRAIN_MS), MAX_TIMER_DELAY_MS);
+        this.cancelDrainTimer = setTimeout(() => this.cancelDrainElapsed.Open(), drainMs);
+    }
+
+    private async acknowledgeCancel(handlerStillRunning: boolean): Promise<SettleResult> {
+        const message = handlerStillRunning
+            ? 'Cancelled handler did not stop within the drain window; acknowledging the cancel anyway'
+            : 'Delivery cancelled; handler outcome discarded';
+        this.options.Log.Warn(message, this.logData({}));
+        return this.settleSafely(() => this.options.Consumer.AcknowledgeCancel(this.options.Delivery), false);
     }
 
     private startTimers(): void {
         const policy = this.options.Policy;
+        this.armHorizonTimer();
         if (policy.HeartbeatMode === 'Auto') {
-            const intervalMs = Math.max(MIN_AUTO_HEARTBEAT_INTERVAL_MS, Math.floor((policy.LeaseSeconds * 1000) / 3));
+            const intervalMs = Math.max(MIN_AUTO_HEARTBEAT_INTERVAL_MS, Math.floor(HeartbeatIntervalSeconds(policy) * 1000));
             this.heartbeatTimer = setInterval(() => {
                 void this.heartbeat();
             }, intervalMs);
         }
         if (policy.MaxProcessingSeconds !== undefined && policy.MaxProcessingSeconds > 0) {
-            this.capTimer = setTimeout(() => this.onProcessingCap(), policy.MaxProcessingSeconds * 1000);
+            this.capDeadlineMs = this.now() + policy.MaxProcessingSeconds * 1000;
+            this.armCapTimer();
         }
     }
 
+    /** Independent of heartbeats: fires when the lease (plus the skew allowance) runs out without a Held. */
+    private armHorizonTimer(): void {
+        this.clearHorizonTimer();
+        const graceMs = this.options.LeaseExpiryGraceMs ?? LEASE_EXPIRY_GRACE_MS;
+        const delayMs = Math.min(Math.max(0, this.leaseHorizonMs + graceMs - this.now()), MAX_TIMER_DELAY_MS);
+        this.horizonTimer = setTimeout(() => this.onHorizon(graceMs), delayMs);
+    }
+
+    private onHorizon(graceMs: number): void {
+        this.horizonTimer = null;
+        if (this.now() < this.leaseHorizonMs + graceMs) {
+            this.armHorizonTimer();
+            return;
+        }
+        this.leaseLost = true;
+        this.clearHeartbeatTimer();
+        this.Abort('LeaseLost');
+        this.options.Log.Warn('Lease horizon passed without a successful heartbeat; aborting handler', this.logData({}));
+        this.horizonPassed.Open();
+    }
+
+    private armCapTimer(): void {
+        const delayMs = Math.min(Math.max(0, this.capDeadlineMs - this.now()), MAX_TIMER_DELAY_MS);
+        this.capTimer = setTimeout(() => this.onProcessingCap(), delayMs);
+    }
+
     private onProcessingCap(): void {
+        this.capTimer = null;
+        if (this.now() < this.capDeadlineMs) {
+            this.armCapTimer();
+            return;
+        }
+        this.capReached = true;
         this.clearHeartbeatTimer();
         this.options.Log.Warn('MaxProcessingSeconds reached; aborting handler and no longer renewing the lease', this.logData({}));
         this.Abort('MaxProcessingSeconds');
     }
 
-    private stopTimers(): void {
+    /** Stops everything except the horizon timer, which must outlive a heartbeat that is still in flight. */
+    private stopWorkTimers(): void {
         this.clearHeartbeatTimer();
         if (this.capTimer !== null) {
             clearTimeout(this.capTimer);
             this.capTimer = null;
+        }
+        if (this.cancelDrainTimer !== null) {
+            clearTimeout(this.cancelDrainTimer);
+            this.cancelDrainTimer = null;
         }
     }
 
@@ -3132,6 +3564,13 @@ export class DeliveryExecution<TPayload extends WorkJson = WorkJson> {
         if (this.heartbeatTimer !== null) {
             clearInterval(this.heartbeatTimer);
             this.heartbeatTimer = null;
+        }
+    }
+
+    private clearHorizonTimer(): void {
+        if (this.horizonTimer !== null) {
+            clearTimeout(this.horizonTimer);
+            this.horizonTimer = null;
         }
     }
 
@@ -3146,9 +3585,19 @@ export class DeliveryExecution<TPayload extends WorkJson = WorkJson> {
         return this.settleSafely(() => Consumer.DeadLetter(Delivery, action.Reason, action.Error));
     }
 
-    private async settleSafely(operation: () => Promise<SettleResult>): Promise<SettleResult> {
+    /**
+     * A settle that reports LeaseLost gets one AcknowledgeCancel attempt (spec 03 §3.2): a cancel that landed
+     * between the last heartbeat and this settle then frees its key now instead of at lease expiry. The
+     * acknowledgement is a no-op for every other cause of LeaseLost.
+     */
+    private async settleSafely(operation: () => Promise<SettleResult>, acknowledgeOnLeaseLost = true): Promise<SettleResult> {
         try {
-            return await operation();
+            const result = await operation();
+            if (result.Kind !== 'LeaseLost' || !acknowledgeOnLeaseLost) {
+                return result;
+            }
+            const acknowledged = await this.options.Consumer.AcknowledgeCancel(this.options.Delivery);
+            return acknowledged.Kind === 'Settled' ? acknowledged : result;
         } catch (error) {
             this.options.Log.Error('Settle failed; the delivery will be redelivered when its lease expires', error instanceof Error ? error : undefined, this.logData({}));
             return { Kind: 'Failed', DeliveryID: this.DeliveryID, Error: ErrorMessageOf(error) };
@@ -3181,7 +3630,7 @@ export * from './runtime/DeliveryExecution';
 - [ ] **Step 8: Run the tests and build**
 
 Run: `cd packages/WorkQueue/core && pnpm test`
-Expected: PASS — previous 76 plus outcomes (11) and DeliveryExecution (20): **107 tests**.
+Expected: PASS — previous 75 plus outcomes (11) and DeliveryExecution (32): **118 tests**.
 
 Run: `cd packages/WorkQueue/core && pnpm run build`
 Expected: builds.
@@ -3203,17 +3652,18 @@ git commit -m "feat(work-queue-core): handler outcome mapping and leased deliver
 - Test: `packages/WorkQueue/core/src/__tests__/ConsumerRuntime.test.ts`
 
 **Interfaces:**
-- Consumes: `ConsumerRuntimeOptions`, `DeliveryExecution`, `ErrorMessageOf` (Task 5); `ITransportConsumer`, `ReceivedDelivery`, `SettleResult`, `WorkHandler`, `WorkLogger`, `SubscriptionPolicy`, `WorkJson` (Task 1); test doubles from `src/__tests__/fakes.ts` (Task 5).
+- Consumes: `ConsumerRuntimeOptions`, `DeliveryExecution`, `ExecutionKeyOf`, `ErrorMessageOf` (Task 5); `ITransportConsumer`, `ReceivedDelivery`, `SettleResult`, `WorkHandler`, `WorkLogger`, `SubscriptionPolicy`, `WorkJson` (Task 1); test doubles from `src/__tests__/fakes.ts` (Task 5).
 - Produces:
-  - `SKIPPED_AFTER_PARTITION_FAILURE = 'SkippedAfterEarlierFailureInPartition'`
   - `class ConsumerRuntime<TPayload extends WorkJson = WorkJson>` exactly as spec 03 §3.2: `constructor(consumer, handlerFactory, policy, options, log, now?)`, `Start(): void`, `Stop(): Promise<void>`, `Kick(): void`, `get InFlightCount(): number`, `ProcessBatch(deliveries): Promise<SettleResult[]>`; plus `get IsRunning(): boolean`
 
 Loop rules:
 - Receives `min(Concurrency − in-flight, ReceiveBatchSize)` with `waitSeconds = ReceiveWaitSeconds ?? 0`. With no free slot it sleeps up to `IdlePollMaxMs`, woken as soon as any delivery settles.
 - An empty receive sleeps `IdlePollMinMs`, doubling each empty receive up to `IdlePollMaxMs`; any work resets it. `Kick()` wakes a sleep immediately and resets the delay to the minimum.
 - A receive that throws is logged and treated as empty.
-- `Stop()` stops receiving; deliveries returned by a receive that was in progress are released unstarted; waits up to `ShutdownDrainMs` for in-flight handlers, then aborts them with `'Shutdown'` (non-complete outcomes are released) and waits up to `ShutdownDrainMs` again before giving up with a warning.
-- `ProcessBatch` (Lambda mode, no loop) runs up to `Concurrency` lanes at once. For `Exclusive`/`Ordered` policies, deliveries sharing a `Message.PartitionKey` form one lane processed in order; after a delivery in a lane does not settle as `Completed`, the rest of that lane is not run and reports `{ Kind: 'Failed', Error: 'SkippedAfterEarlierFailureInPartition' }` (the AWS Lambda adapter maps these to batch item failures). Results align with the input.
+- Executions are tracked by `ExecutionKeyOf(delivery)` (`DeliveryID` + `LeaseToken`, spec 03 §3.2): a Database `DeliveryID` is stable across attempts, and a handler that ignored its abort may still be running when this runtime re-claims the delivery — keying by `DeliveryID` alone would let one execution evict the other and let `InFlightCount` under-count.
+- Each `DeliveryExecution` gets `LeaseExpiryGraceMs` from the options and `CancelDrainMs = ShutdownDrainMs`.
+- `Stop()` stops receiving; it waits for the receive loop for at most `ShutdownDrainMs` (a consumer whose `Receive` ignores the abort signal must not hang shutdown); deliveries returned by a receive that was in progress are released unstarted; waits up to `ShutdownDrainMs` for in-flight handlers, then aborts them with `'Shutdown'` (non-complete outcomes are released) and waits up to `ShutdownDrainMs` again before giving up with a warning.
+- `ProcessBatch` (Lambda mode, no loop) runs up to `Concurrency` lanes at once. For `Exclusive`/`Ordered` policies, deliveries sharing a `Message.PartitionKey` form one lane processed in order; after a delivery in a lane does not settle as `Completed`, the rest of that lane is **not run and is released** (`consumer.Release`, spec 03 §3.2) and the release's own result is returned — `{ Kind: 'Settled', Status: 'Pending' }` on success (the AWS Lambda adapter reports every non-`Completed` result as a batch item failure). Results align with the input.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -3221,7 +3671,7 @@ Loop rules:
 
 ```typescript
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { ConsumerRuntime, SKIPPED_AFTER_PARTITION_FAILURE } from '../runtime/ConsumerRuntime';
+import { ConsumerRuntime } from '../runtime/ConsumerRuntime';
 import { Outcome } from '../handler';
 import type { WorkContext, WorkOutcome } from '../handler';
 import type { WorkMessage } from '../envelope';
@@ -3376,6 +3826,24 @@ describe('ConsumerRuntime loop', () => {
         await runtime.Stop();
     });
 
+    it('tracks executions by delivery and lease token, so a re-claimed delivery does not evict a running one', async () => {
+        const consumer = new ScriptedConsumer();
+        consumer.Batches.push([MakeDelivery('d1', { LeaseToken: 'first-claim' })]);
+        const gate = CreateDeferred<WorkOutcome>();
+        const runtime = createRuntime(consumer, async () => gate.Promise);
+        runtime.Start();
+        await vi.advanceTimersByTimeAsync(0);
+        expect(runtime.InFlightCount).toBe(1);
+        // The first handler ignored its abort after a lease loss; the transport hands the same delivery out again.
+        consumer.Batches.push([MakeDelivery('d1', { LeaseToken: 'second-claim' })]);
+        runtime.Kick();
+        await vi.advanceTimersByTimeAsync(0);
+        expect(runtime.InFlightCount).toBe(2);
+        gate.Resolve(Outcome.Complete());
+        await runtime.Stop();
+        expect(runtime.InFlightCount).toBe(0);
+    });
+
     it('is idempotent on Start', async () => {
         const consumer = new ScriptedConsumer();
         const runtime = createRuntime(consumer, async () => Outcome.Complete());
@@ -3453,6 +3921,24 @@ describe('ConsumerRuntime.Stop', () => {
         expect(consumer.CallsOf('Release').map((call) => call.DeliveryID)).toEqual(['late']);
         expect(handled).toEqual([]);
     });
+
+    it('does not hang when Receive ignores the abort signal', async () => {
+        const consumer = new ScriptedConsumer();
+        consumer.ReceiveImpl = () => new Promise<ReceivedDelivery[]>(() => undefined);
+        const logger = new RecordingLogger();
+        const runtime = createRuntime(consumer, async () => Outcome.Complete(), { Logger: logger });
+        runtime.Start();
+        await vi.advanceTimersByTimeAsync(0);
+        let stopped = false;
+        const stopping = runtime.Stop().then(() => {
+            stopped = true;
+        });
+        await vi.advanceTimersByTimeAsync(999);
+        expect(stopped).toBe(false);
+        await vi.advanceTimersByTimeAsync(1);
+        await stopping;
+        expect(logger.Has('Warn', 'Receive did not return')).toBe(true);
+    });
 });
 
 describe('ConsumerRuntime.ProcessBatch', () => {
@@ -3470,7 +3956,7 @@ describe('ConsumerRuntime.ProcessBatch', () => {
         ]);
     });
 
-    it('skips the rest of a partition after a delivery that did not complete', async () => {
+    it('releases the rest of a partition, unrun, after a delivery that did not complete', async () => {
         const consumer = new ScriptedConsumer();
         const handled: string[] = [];
         const runtime = createRuntime(
@@ -3488,10 +3974,12 @@ describe('ConsumerRuntime.ProcessBatch', () => {
         ]);
         expect(results).toEqual([
             { Kind: 'Settled', DeliveryID: 'a1', Status: 'Pending' },
-            { Kind: 'Failed', DeliveryID: 'a2', Error: SKIPPED_AFTER_PARTITION_FAILURE },
+            { Kind: 'Settled', DeliveryID: 'a2', Status: 'Pending' },
             { Kind: 'Settled', DeliveryID: 'b1', Status: 'Completed' },
         ]);
         expect(handled.sort()).toEqual(['msg-a1', 'msg-b1']);
+        expect(consumer.CallsOf('Retry').map((call) => call.DeliveryID)).toEqual(['a1']);
+        expect(consumer.CallsOf('Release').map((call) => call.DeliveryID)).toEqual(['a2']);
     });
 
     it('does not group by partition key when PartitionMode is None', async () => {
@@ -3543,8 +4031,6 @@ import { DeliveryExecution } from './DeliveryExecution';
 import { ErrorMessageOf } from './outcomes';
 import type { ConsumerRuntimeOptions } from './types';
 
-export const SKIPPED_AFTER_PARTITION_FAILURE = 'SkippedAfterEarlierFailureInPartition';
-
 interface RunningExecution<TPayload extends WorkJson> {
     Execution: DeliveryExecution<TPayload>;
     Done: Promise<SettleResult>;
@@ -3554,6 +4040,7 @@ interface RunningExecution<TPayload extends WorkJson> {
 export class ConsumerRuntime<TPayload extends WorkJson = WorkJson> {
     private running = false;
     private loopPromise: Promise<void> | null = null;
+    /** Keyed by DeliveryExecution.ExecutionKey (DeliveryID + LeaseToken), never by DeliveryID alone. */
     private readonly executions = new Map<string, RunningExecution<TPayload>>();
     private receiveController = new AbortController();
     private wakeResolver: (() => void) | null = null;
@@ -3583,7 +4070,14 @@ export class ConsumerRuntime<TPayload extends WorkJson = WorkJson> {
         }
         this.running = true;
         this.receiveController = new AbortController();
-        this.loopPromise = this.loop();
+        this.loopPromise = this.loop().catch((error: unknown) => {
+            // The loop catches everything it awaits; this is the backstop for a throwing logger or similar.
+            this.running = false;
+            this.log.Error('Consumer loop stopped unexpectedly', error instanceof Error ? error : undefined, {
+                Subscription: this.policy.SubscriptionName,
+                Error: ErrorMessageOf(error),
+            });
+        });
     }
 
     /** Wake an idle loop immediately (used after in-process publish). */
@@ -3598,7 +4092,12 @@ export class ConsumerRuntime<TPayload extends WorkJson = WorkJson> {
         this.receiveController.abort();
         this.wake();
         if (this.loopPromise !== null) {
-            await this.loopPromise;
+            const loopEnded = await this.within(this.loopPromise.then(() => true), this.options.ShutdownDrainMs);
+            if (!loopEnded) {
+                this.log.Warn('Receive did not return after the abort signal; shutting down without it', {
+                    Subscription: this.policy.SubscriptionName,
+                });
+            }
             this.loopPromise = null;
         }
         if (await this.waitForExecutions(this.options.ShutdownDrainMs)) {
@@ -3698,17 +4197,20 @@ export class ConsumerRuntime<TPayload extends WorkJson = WorkJson> {
             Policy: this.policy,
             Log: this.log,
             Now: this.now,
+            LeaseExpiryGraceMs: this.options.LeaseExpiryGraceMs,
+            CancelDrainMs: this.options.ShutdownDrainMs,
         });
+        const key = execution.ExecutionKey;
         const done = execution
             .Run()
             .catch((error: unknown): SettleResult => ({ Kind: 'Failed', DeliveryID: delivery.DeliveryID, Error: ErrorMessageOf(error) }))
             .then((result) => {
-                this.executions.delete(delivery.DeliveryID);
+                this.executions.delete(key);
                 this.reportSettle(result);
                 this.wake();
                 return result;
             });
-        this.executions.set(delivery.DeliveryID, { Execution: execution, Done: done });
+        this.executions.set(key, { Execution: execution, Done: done });
         return done;
     }
 
@@ -3727,12 +4229,17 @@ export class ConsumerRuntime<TPayload extends WorkJson = WorkJson> {
             return true;
         }
         const allDone = Promise.all([...this.executions.values()].map((running) => running.Done)).then(() => true);
+        return this.within(allDone, timeoutMs);
+    }
+
+    /** Resolves true when `work` finishes within `timeoutMs`, false otherwise. Never rejects on timeout. */
+    private async within(work: Promise<boolean>, timeoutMs: number): Promise<boolean> {
         const deadline: { Timer: ReturnType<typeof setTimeout> | null } = { Timer: null };
         const timedOut = new Promise<boolean>((resolve) => {
             deadline.Timer = setTimeout(() => resolve(false), timeoutMs);
         });
         try {
-            return await Promise.race([allDone, timedOut]);
+            return await Promise.race([work, timedOut]);
         } finally {
             if (deadline.Timer !== null) {
                 clearTimeout(deadline.Timer);
@@ -3756,12 +4263,21 @@ export class ConsumerRuntime<TPayload extends WorkJson = WorkJson> {
         for (const index of indices) {
             const delivery = deliveries[index];
             if (blocked) {
-                results[index] = { Kind: 'Failed', DeliveryID: delivery.DeliveryID, Error: SKIPPED_AFTER_PARTITION_FAILURE };
+                // Spec 03 §3.2: later items of the key are released unrun, so an SQS FIFO group keeps its order.
+                results[index] = await this.releaseSkipped(delivery);
                 continue;
             }
             const result = await this.startExecution(delivery);
             results[index] = result;
             blocked = !(result.Kind === 'Settled' && result.Status === 'Completed');
+        }
+    }
+
+    private async releaseSkipped(delivery: ReceivedDelivery<TPayload>): Promise<SettleResult> {
+        try {
+            return await this.consumer.Release(delivery);
+        } catch (error) {
+            return { Kind: 'Failed', DeliveryID: delivery.DeliveryID, Error: ErrorMessageOf(error) };
         }
     }
 
@@ -3797,7 +4313,7 @@ export * from './runtime/ConsumerRuntime';
 - [ ] **Step 5: Run the tests and build**
 
 Run: `cd packages/WorkQueue/core && pnpm test`
-Expected: PASS — previous 107 plus ConsumerRuntime (14): **121 tests**.
+Expected: PASS — previous 118 plus ConsumerRuntime (16): **134 tests**.
 
 Run: `cd packages/WorkQueue/core && pnpm run build`
 Expected: builds.
@@ -3820,27 +4336,26 @@ git commit -m "feat(work-queue-core): consumer runtime loop, graceful stop and b
 - Test: `packages/WorkQueue/core/src/__tests__/InMemoryTransport.test.ts`
 
 **Interfaces:**
-- Consumes: every contract type (Task 1); `BuildWorkMessage`, `MAX_ENVELOPE_BYTES` (Task 2); `MatchesFilter` (Task 3); `SUBSCRIPTION_POLICY_DEFAULTS`, `PublishErrorCodes`, `RejectedPublishResult` (Task 1).
+- Consumes: every contract type (Task 1); `BuildWorkMessage`, `CanonicalEnvelope`, `MAX_ENVELOPE_BYTES` (Task 2); `MatchesFilter` (Task 3); `SUBSCRIPTION_POLICY_DEFAULTS`, `PublishErrorCodes`, `RejectedPublishResult` (Task 1).
 - Produces:
-  - `memory/InMemoryStore.ts`: `LEASE_EXPIRED_REASON = 'LeaseExpired'`, `SEQUENCE_ALREADY_RESOLVED_NOTE = 'SequenceAlreadyResolved'`, `interface DeliveryHandle { DeliveryID: string; LeaseToken: string }`, `interface DiscardResult { Changed: boolean; CancelRequested: boolean }`, `interface InMemoryDeliverySnapshot { DeliveryID; MessageID; Status: DeliveryStatus; PartitionKey: string | null; OrderKey: number; AttemptCount: number; IsReplay: boolean; ResolutionNote: string | null }`, `class InMemoryStore` (internal to the memory folder)
-  - `memory/InMemoryTransport.ts`: `IN_MEMORY_TRANSPORT_CAPABILITIES: TransportCapabilities` (identical to the Database transport's), `interface InMemoryTransportOptions { Now?: () => number; NewId?: () => string }`, `class InMemoryTransport implements ITransportDriver` with `Name = 'InMemory'`, `RunSweep(): { ExpiredLeases: number; GapStalls: number }`, `Snapshot(subscriptionName: string): InMemoryDeliverySnapshot[]`
+  - `memory/InMemoryStore.ts`: `LEASE_EXPIRED_REASON = 'LeaseExpired'`, `MAX_RESOLUTION_NOTE_LENGTH = 1000`, `interface DeliveryHandle { DeliveryID: string; LeaseToken: string }`, `interface DiscardResult { Changed: boolean; CancelRequested: boolean }`, `interface InMemoryDeliverySnapshot { DeliveryID; MessageID; Status: DeliveryStatus; PartitionKey: string | null; OrderKey: number; AttemptCount: number; IsReplay: boolean; CancelRequested: boolean; ResolutionNote: string | null }`, `class InMemoryStore` (internal to the memory folder)
+  - `memory/InMemoryTransport.ts`: `IN_MEMORY_TRANSPORT_CAPABILITIES: TransportCapabilities` (identical to the Database transport's), `interface InMemoryTransportOptions { Now?: () => number; NewId?: () => string }`, `class InMemoryTransport implements ITransportDriver` with `Name = 'InMemory'`, `RunSweep(): { ExpiredLeases: number }`, `Snapshot(subscriptionName: string): InMemoryDeliverySnapshot[]`
   - `memory/InMemoryConsumer.ts`: `class InMemoryConsumer<TPayload> implements ITransportConsumer<TPayload>`
   - `memory/InMemoryOperator.ts`: `class InMemoryOperator implements ITransportOperator`
   - `testing/fixtures.ts`: `type SubscriptionBindingOverrides`, `BuildTopicBinding(name: string, overrides?: Partial<TopicBinding>): TopicBinding`, `BuildSubscriptionBinding(topic: TopicBinding, name: string, overrides?: SubscriptionBindingOverrides): SubscriptionBinding`, `BuildMessages(topic: TopicBinding, requests: PublishRequest[], publishedAt?: Date): WorkMessage[]`, `class ManualClock { Now: () => number; Advance(ms: number): void }`
 
-The in-memory transport implements spec 03 §7 exactly, so it can stand in for the Database transport in unit tests and prove the conformance kit:
+The in-memory transport implements spec 03 §7 exactly, so it can stand in for the Database transport in unit tests and prove the conformance kit. Nothing about a partition is stored outside the delivery rows: single flight, head-of-line and blocking are all derived.
 
 | Concern | Rule |
 | --- | --- |
-| Publish | Same `MessageID` + same envelope (ignoring `PublishedAt`) → `Duplicate`; different envelope → `Rejected MessageIDConflict`; same `(topic, PartitionKey, Sequence)` → `Rejected DuplicateSequence`. One delivery per subscription whose filter matches. |
+| Publish | `MessageID` is **globally** unique (spec 03 §2.1, F10). A reused `MessageID` on the same topic with an equal `CanonicalEnvelope` → `Duplicate`; anything else (different envelope, or another topic) → `Rejected MessageIDConflict`. One delivery per subscription whose filter matches. |
 | Delivery `PartitionKey` | Stored only for `Exclusive`/`Ordered` subscriptions; a message without a key is its own lane. |
-| `OrderKey` | `Sequence` on `ExplicitSequence` topics, else the publish ordinal. |
-| Already-resolved sequence | An `Ordered` + `ExplicitSequence` delivery whose `Sequence ≤ LastCompletedSequence` is created `Discarded` with note `SequenceAlreadyResolved` (otherwise it would wedge its key). |
-| Claim | `ExpireLeases` first; `Pending` + visible, ordered by `OrderKey`; `Exclusive`: no in-flight delivery for the key; `Ordered`: must be the head (lowest unfinished `OrderKey`), no in-flight delivery, and for `ExplicitSequence` `OrderKey = LastCompletedSequence + 1` (else `AwaitingSequenceSince` is set). |
-| Holder writes | Guarded on `ID`, `InFlight` and `LeaseToken`; otherwise `LeaseLost` / `Lost`. |
-| Sequence mark | Advances when the next sequence completes, is discarded or is skipped, then keeps advancing through consecutive already-discarded sequences. |
-| Operator | Replay (`DeadLettered` → `Pending`, attempts reset, `IsReplay`); Discard (`Pending` or `DeadLettered`); SkipSequence (only when mark = sequence − 1 and no non-discarded delivery has that sequence). |
-| Cancel in flight | Discard of an `InFlight` delivery leaves `Status` alone: it records `CancelRequestedAt`, rotates `LeaseToken` (so the holder's next heartbeat reports `Lost`) and returns `CancelRequested: true`. The row stays `InFlight` — and an `Exclusive`/`Ordered` key stays busy — until its lease expires, when `ExpireLeases` makes it `Discarded` instead of retrying it (spec 03 §7). |
+| `OrderKey` | Always the message's publish ordinal. |
+| Claim | `ExpireLeases` first; `Pending` + visible + not cancelled, ordered by `OrderKey`; `Exclusive`: no in-flight delivery for the key; `Ordered`: must be the head (lowest unfinished `OrderKey`) and no in-flight delivery for the key. One receive never returns two deliveries of one key, and an `Ordered` head is never skipped in favour of a later delivery of its key. |
+| Holder writes | Guarded on `ID`, `InFlight`, `LeaseToken` **and no cancel request**; otherwise `LeaseLost`. `ExtendLease` that matches nothing distinguishes the cause: still in flight with this token and cancel requested → `Cancelled`; otherwise → `Lost`. |
+| Retry | → `Pending`, visible after the delay. An `Ordered` head in backoff still holds its key (it is still the head); an `Exclusive` retry does not (spec 03 §3.1, F11). |
+| Operator | Replay (`DeadLettered` → `Pending`, attempts reset, `IsReplay`, keeps its `OrderKey`); Discard (`Pending` or `DeadLettered` → `Discarded` now); reason and note truncated to 1000 characters. |
+| Cancel in flight (F2) | Discard of an `InFlight` delivery leaves `Status` and **the lease token** alone: it records `CancelRequestedAt` and returns `CancelRequested: true`. From then on the only holder write that succeeds is `AcknowledgeCancel` (token-fenced) → `Discarded` immediately, which frees an `Exclusive`/`Ordered` key as soon as the handler has really stopped. If the holder is dead, `ExpireLeases` discards the row when its lease runs out. A cancelled delivery is never retried. |
 
 - [ ] **Step 1: Write the failing test**
 
@@ -3870,13 +4385,13 @@ describe('InMemoryTransport publish', () => {
         expect(transport.Snapshot('email.clicks')).toHaveLength(1);
     });
 
-    it('reports a republished identical envelope as Duplicate', async () => {
+    it('reports a republished envelope as Duplicate, however the producer ordered its keys', async () => {
         const transport = new InMemoryTransport();
         const topic = BuildTopicBinding('t');
         const subscription = BuildSubscriptionBinding(topic, 's');
         const id = crypto.randomUUID();
-        const first = BuildWorkMessage('t', { MessageID: id, Attributes: { a: '1' } }, new Date('2026-01-01T00:00:00Z'), () => id);
-        const retry = BuildWorkMessage('t', { MessageID: id, Attributes: { a: '1' } }, new Date('2026-01-01T00:05:00Z'), () => id);
+        const first = BuildWorkMessage('t', { MessageID: id, Attributes: { a: '1', b: '2' }, Payload: { x: 1, y: 2 } }, new Date('2026-01-01T00:00:00Z'), () => id);
+        const retry = BuildWorkMessage('t', { MessageID: id, Attributes: { b: '2', a: '1' }, Payload: { y: 2, x: 1 } }, new Date('2026-01-01T00:05:00Z'), () => id);
         await transport.Publish(topic, [first], [subscription]);
         expect((await transport.Publish(topic, [retry], [subscription]))[0]).toEqual({ MessageID: id, Status: 'Duplicate' });
         expect(transport.Snapshot('s')).toHaveLength(1);
@@ -3893,12 +4408,15 @@ describe('InMemoryTransport publish', () => {
         expect(result.Error?.Code).toBe('MessageIDConflict');
     });
 
-    it('rejects a second message with the same partition key and sequence', async () => {
+    it('treats MessageID as globally unique: the same ID on another topic is a conflict', async () => {
         const transport = new InMemoryTransport();
-        const topic = BuildTopicBinding('t', { OrderingMode: 'ExplicitSequence' });
-        const subscription = BuildSubscriptionBinding(topic, 's', { PartitionMode: 'Ordered' });
-        const results = await transport.Publish(topic, BuildMessages(topic, [{ PartitionKey: 'k', Sequence: 1 }, { PartitionKey: 'k', Sequence: 1 }]), [subscription]);
-        expect(results[1].Error?.Code).toBe('DuplicateSequence');
+        const first = BuildTopicBinding('first.topic');
+        const second = BuildTopicBinding('second.topic');
+        const id = crypto.randomUUID();
+        await transport.Publish(first, BuildMessages(first, [{ MessageID: id }]), [BuildSubscriptionBinding(first, 's1')]);
+        const [result] = await transport.Publish(second, BuildMessages(second, [{ MessageID: id }]), [BuildSubscriptionBinding(second, 's2')]);
+        expect(result.Error?.Code).toBe('MessageIDConflict');
+        expect(transport.Snapshot('s2')).toHaveLength(0);
     });
 });
 
@@ -3909,6 +4427,7 @@ describe('InMemoryTransport partition rules', () => {
         const subscription = BuildSubscriptionBinding(topic, 's');
         await transport.Publish(topic, BuildMessages(topic, [{ PartitionKey: 'k' }, { PartitionKey: 'k' }]), [subscription]);
         expect(await transport.OpenConsumer(subscription).Receive(10, 0, signal)).toHaveLength(2);
+        expect(transport.Snapshot('s').map((row) => row.PartitionKey)).toEqual([null, null]);
     });
 
     it('treats messages without a partition key as independent on an Exclusive subscription', async () => {
@@ -3919,51 +4438,32 @@ describe('InMemoryTransport partition rules', () => {
         expect(await transport.OpenConsumer(subscription).Receive(10, 0, signal)).toHaveLength(2);
     });
 
-    it('creates an already-resolved sequence as Discarded', async () => {
+    it('never returns two deliveries of one key from a single receive', async () => {
         const transport = new InMemoryTransport();
-        const topic = BuildTopicBinding('t', { OrderingMode: 'ExplicitSequence' });
-        const subscription = BuildSubscriptionBinding(topic, 's', { PartitionMode: 'Ordered' });
-        const consumer = transport.OpenConsumer(subscription);
-        await transport.Publish(topic, BuildMessages(topic, [{ PartitionKey: 'k', Sequence: 2 }]), [subscription]);
-        expect(await consumer.Receive(10, 0, signal)).toEqual([]);
-        expect(await transport.Operator().SkipSequence(subscription, 'k', 1, 'lost upstream', null)).toEqual({ Supported: true, Changed: true });
-        await transport.Publish(topic, BuildMessages(topic, [{ PartitionKey: 'k', Sequence: 1 }]), [subscription]);
-        const late = transport.Snapshot('s').find((delivery) => delivery.OrderKey === 1);
-        expect(late).toMatchObject({ Status: 'Discarded', ResolutionNote: 'SequenceAlreadyResolved' });
-        expect((await consumer.Receive(10, 0, signal)).map((delivery) => delivery.Message.Sequence)).toEqual([2]);
+        const topic = BuildTopicBinding('t');
+        const subscription = BuildSubscriptionBinding(topic, 's', { PartitionMode: 'Exclusive' });
+        await transport.Publish(topic, BuildMessages(topic, [{ PartitionKey: 'a' }, { PartitionKey: 'a' }, { PartitionKey: 'b' }]), [subscription]);
+        const received = await transport.OpenConsumer(subscription).Receive(10, 0, signal);
+        expect(received.map((delivery) => delivery.Message.PartitionKey)).toEqual(['a', 'b']);
     });
 
-    it('advances the sequence mark through a discarded later sequence', async () => {
-        const transport = new InMemoryTransport();
-        const topic = BuildTopicBinding('t', { OrderingMode: 'ExplicitSequence' });
-        const subscription = BuildSubscriptionBinding(topic, 's', { PartitionMode: 'Ordered' });
-        const consumer = transport.OpenConsumer(subscription);
-        await transport.Publish(topic, BuildMessages(topic, [1, 2, 3].map((sequence) => ({ PartitionKey: 'k', Sequence: sequence }))), [subscription]);
-        const [first] = await consumer.Receive(10, 0, signal);
-        const second = transport.Snapshot('s').find((delivery) => delivery.OrderKey === 2);
-        expect(second).toBeDefined();
-        expect(await transport.Operator().Discard(subscription, second?.DeliveryID ?? '', 'bad batch', null)).toEqual({ Supported: true, Changed: true });
-        await consumer.Complete(first);
-        expect((await consumer.Receive(10, 0, signal)).map((delivery) => delivery.Message.Sequence)).toEqual([3]);
+    it('an Ordered head in retry backoff holds its key; an Exclusive retry does not', async () => {
+        for (const mode of ['Ordered', 'Exclusive'] as const) {
+            const clock = new ManualClock();
+            const transport = new InMemoryTransport({ Now: clock.Now });
+            const topic = BuildTopicBinding('t');
+            const subscription = BuildSubscriptionBinding(topic, 's', { PartitionMode: mode });
+            const consumer = transport.OpenConsumer(subscription);
+            await transport.Publish(topic, BuildMessages(topic, [{ PartitionKey: 'k', Attributes: { n: '1' } }, { PartitionKey: 'k', Attributes: { n: '2' } }]), [subscription]);
+            const [head] = await consumer.Receive(10, 0, signal);
+            await consumer.Retry(head, 60, 'busy');
+            const next = await consumer.Receive(10, 0, signal);
+            expect(next.map((delivery) => delivery.Message.Attributes.n)).toEqual(mode === 'Ordered' ? [] : ['2']);
+        }
     });
 });
 
 describe('InMemoryTransport operator and sweep', () => {
-    it('flags a sequence gap as stalled after SequenceGapAlertSeconds', async () => {
-        const clock = new ManualClock();
-        const transport = new InMemoryTransport({ Now: clock.Now });
-        const topic = BuildTopicBinding('t', { OrderingMode: 'ExplicitSequence' });
-        const subscription = BuildSubscriptionBinding(topic, 's', { PartitionMode: 'Ordered', SequenceGapAlertSeconds: 60 });
-        await transport.Publish(topic, BuildMessages(topic, [{ PartitionKey: 'k', Sequence: 2 }]), [subscription]);
-        expect(await transport.OpenConsumer(subscription).Receive(10, 0, signal)).toEqual([]);
-        clock.Advance(61_000);
-        expect(transport.RunSweep()).toEqual({ ExpiredLeases: 0, GapStalls: 1 });
-        const page = await transport.Operator().ListPartitions(subscription, 'GapStalled', null, 10);
-        expect(page?.Items).toEqual([
-            expect.objectContaining({ PartitionKey: 'k', Condition: 'GapStalled', LastCompletedSequence: 0, WaitingItems: 1 }),
-        ]);
-    });
-
     it('pages dead letters with a cursor', async () => {
         const transport = new InMemoryTransport();
         const topic = BuildTopicBinding('t');
@@ -4003,6 +4503,30 @@ describe('InMemoryTransport operator and sweep', () => {
         });
     });
 
+    it('derives partition conditions from the delivery rows', async () => {
+        const transport = new InMemoryTransport();
+        const topic = BuildTopicBinding('t');
+        const subscription = BuildSubscriptionBinding(topic, 's', { PartitionMode: 'Ordered' });
+        const consumer = transport.OpenConsumer(subscription);
+        await transport.Publish(topic, BuildMessages(topic, [{ PartitionKey: 'blocked' }, { PartitionKey: 'blocked' }, { PartitionKey: 'busy' }, { PartitionKey: 'idle' }]), [subscription]);
+        const received = await consumer.Receive(10, 0, signal);
+        const byKey = new Map(received.map((delivery) => [delivery.Message.PartitionKey, delivery]));
+        const blockedHead = byKey.get('blocked');
+        const idleHead = byKey.get('idle');
+        expect(blockedHead !== undefined && idleHead !== undefined).toBe(true);
+        if (blockedHead !== undefined && idleHead !== undefined) {
+            await consumer.DeadLetter(blockedHead, 'Poison', null);
+            await consumer.Complete(idleHead);
+        }
+        const all = await transport.Operator().ListPartitions(subscription, null, null, 10);
+        expect(all?.Items).toEqual([
+            { PartitionKey: 'blocked', Condition: 'Blocked', HeadDeliveryID: blockedHead?.DeliveryID, WaitingItems: 1 },
+            { PartitionKey: 'busy', Condition: 'InFlight', HeadDeliveryID: byKey.get('busy')?.DeliveryID, WaitingItems: 0 },
+        ]);
+        expect((await transport.Operator().ListPartitions(subscription, 'Idle', null, 10))?.Items.map((item) => item.PartitionKey)).toEqual(['idle']);
+        expect((await transport.Operator().GetStats(subscription)).BlockedKeys).toBe(1);
+    });
+
     it('hands out copies, so a handler cannot mutate the stored message', async () => {
         const transport = new InMemoryTransport();
         const topic = BuildTopicBinding('t');
@@ -4017,7 +4541,33 @@ describe('InMemoryTransport operator and sweep', () => {
         expect(again.Attempt).toBe(1);
     });
 
-    it('cancels an in-flight delivery by revoking its lease', async () => {
+    it('cancels in flight with a flag, fences every settle, and frees the key as soon as the holder acknowledges', async () => {
+        const transport = new InMemoryTransport();
+        const topic = BuildTopicBinding('t');
+        const subscription = BuildSubscriptionBinding(topic, 's', { PartitionMode: 'Exclusive', LeaseSeconds: 30 });
+        const consumer = transport.OpenConsumer(subscription);
+        await transport.Publish(topic, BuildMessages(topic, [{ PartitionKey: 'k' }, { PartitionKey: 'k' }]), [subscription]);
+        const [delivery] = await consumer.Receive(10, 0, signal);
+
+        expect(await transport.Operator().Discard(subscription, delivery.DeliveryID, 'operator cancelled', 'user-1')).toEqual({
+            Supported: true,
+            Changed: true,
+            CancelRequested: true,
+        });
+        // The token is NOT rotated: the holder learns why it lost the delivery, and can acknowledge.
+        expect(await consumer.ExtendLease(delivery, 30)).toBe('Cancelled');
+        expect(await consumer.Complete(delivery)).toEqual({ Kind: 'LeaseLost', DeliveryID: delivery.DeliveryID });
+        expect(await consumer.Retry(delivery, 5, 'x')).toEqual({ Kind: 'LeaseLost', DeliveryID: delivery.DeliveryID });
+        expect(transport.Snapshot('s').find((row) => row.DeliveryID === delivery.DeliveryID)).toMatchObject({ Status: 'InFlight', CancelRequested: true });
+        expect(await consumer.Receive(10, 0, signal)).toEqual([]);
+
+        expect(await consumer.AcknowledgeCancel(delivery)).toEqual({ Kind: 'Settled', DeliveryID: delivery.DeliveryID, Status: 'Discarded' });
+        expect((await consumer.Receive(10, 0, signal)).length).toBe(1);
+        // A second acknowledgement, or one for a delivery that was never cancelled, changes nothing.
+        expect(await consumer.AcknowledgeCancel(delivery)).toEqual({ Kind: 'LeaseLost', DeliveryID: delivery.DeliveryID });
+    });
+
+    it('discards a cancelled delivery at lease expiry when its holder is dead, and never retries it', async () => {
         const clock = new ManualClock();
         const transport = new InMemoryTransport({ Now: clock.Now });
         const topic = BuildTopicBinding('t');
@@ -4025,22 +4575,13 @@ describe('InMemoryTransport operator and sweep', () => {
         const consumer = transport.OpenConsumer(subscription);
         await transport.Publish(topic, BuildMessages(topic, [{ PartitionKey: 'k' }, { PartitionKey: 'k' }]), [subscription]);
         const [delivery] = await consumer.Receive(10, 0, signal);
-
-        expect(await transport.Operator().Discard(subscription, delivery.DeliveryID, 'operator cancelled', null)).toEqual({
-            Supported: true,
-            Changed: true,
-            CancelRequested: true,
-        });
-        // The holder is fenced out immediately, but the key stays busy until the lease runs out.
-        expect(await consumer.ExtendLease(delivery, 30)).toBe('Lost');
-        expect(await consumer.Complete(delivery)).toEqual({ Kind: 'LeaseLost', DeliveryID: delivery.DeliveryID });
-        expect(transport.Snapshot('s').find((row) => row.DeliveryID === delivery.DeliveryID)?.Status).toBe('InFlight');
+        await transport.Operator().Discard(subscription, delivery.DeliveryID, 'operator cancelled', null);
         expect(await consumer.Receive(10, 0, signal)).toEqual([]);
 
         clock.Advance(31_000);
-        expect(transport.RunSweep()).toEqual({ ExpiredLeases: 1, GapStalls: 0 });
+        expect(transport.RunSweep()).toEqual({ ExpiredLeases: 1 });
         expect(transport.Snapshot('s').find((row) => row.DeliveryID === delivery.DeliveryID)?.Status).toBe('Discarded');
-        expect((await consumer.Receive(10, 0, signal)).length).toBe(1);
+        expect((await consumer.Receive(10, 0, signal)).map((next) => next.DeliveryID)).not.toContain(delivery.DeliveryID);
     });
 
     it('declares Database-transport capabilities', () => {
@@ -4066,7 +4607,7 @@ import type { PublishRequest } from '../publishing';
 import type { SubscriptionBinding, TopicBinding } from '../transport';
 import { BuildWorkMessage, MAX_ENVELOPE_BYTES } from '../validation';
 
-export type SubscriptionBindingOverrides = Partial<Omit<SubscriptionPolicy, 'SubscriptionName' | 'TopicName' | 'OrderingMode'>> & {
+export type SubscriptionBindingOverrides = Partial<Omit<SubscriptionPolicy, 'SubscriptionName' | 'TopicName'>> & {
     Filter?: SubscriptionFilter | null;
     HostType?: HostType;
     Config?: Record<string, WorkJson>;
@@ -4075,7 +4616,6 @@ export type SubscriptionBindingOverrides = Partial<Omit<SubscriptionPolicy, 'Sub
 export function BuildTopicBinding(name: string, overrides: Partial<TopicBinding> = {}): TopicBinding {
     return {
         TopicName: name,
-        OrderingMode: 'PublishOrder',
         IsFifo: false,
         MaxPayloadBytes: MAX_ENVELOPE_BYTES,
         Config: {},
@@ -4089,7 +4629,6 @@ export function BuildSubscriptionBinding(topic: TopicBinding, name: string, over
         Policy: {
             SubscriptionName: name,
             TopicName: topic.TopicName,
-            OrderingMode: topic.OrderingMode,
             ...SUBSCRIPTION_POLICY_DEFAULTS,
             ...policy,
         },
@@ -4129,17 +4668,19 @@ import type { DeadLetterRecord, Page, PartitionCondition, PartitionStateRecord, 
 import type { DeliveryStatus, SubscriptionPolicy } from '../policy';
 import { PublishErrorCodes, RejectedPublishResult } from '../publishing';
 import type { PublishResult } from '../publishing';
-import type { ReceivedDelivery, SettleResult, SubscriptionBinding, TopicBinding } from '../transport';
+import type { LeaseExtension, ReceivedDelivery, SettleResult, SubscriptionBinding, TopicBinding } from '../transport';
+import { CanonicalEnvelope } from '../validation';
 
 export const LEASE_EXPIRED_REASON = 'LeaseExpired';
-export const SEQUENCE_ALREADY_RESOLVED_NOTE = 'SequenceAlreadyResolved';
+/** Matches WorkQueueDelivery.ResolutionNote nvarchar(1000). */
+export const MAX_RESOLUTION_NOTE_LENGTH = 1000;
 
 export interface DeliveryHandle {
     DeliveryID: string;
     LeaseToken: string;
 }
 
-/** Discard of an InFlight delivery revokes its lease instead of settling it (spec 03 §7). */
+/** Discard of an InFlight delivery asks its holder to stop instead of settling it (spec 03 §7). */
 export interface DiscardResult {
     Changed: boolean;
     CancelRequested: boolean;
@@ -4153,11 +4694,14 @@ export interface InMemoryDeliverySnapshot {
     OrderKey: number;
     AttemptCount: number;
     IsReplay: boolean;
+    CancelRequested: boolean;
     ResolutionNote: string | null;
 }
 
 interface StoredMessage {
     Message: WorkMessage;
+    TopicName: string;
+    Canonical: string;
     Ordinal: number;
 }
 
@@ -4167,8 +4711,8 @@ interface StoredDelivery {
     SubscriptionName: string;
     Status: DeliveryStatus;
     PartitionKey: string | null;
+    /** Always the message's publish ordinal (spec 03 §6.5). */
     OrderKey: number;
-    Ordinal: number;
     AttemptCount: number;
     IsReplay: boolean;
     CreatedAtMs: number;
@@ -4186,23 +4730,17 @@ interface StoredDelivery {
     ResolutionNote: string | null;
 }
 
-interface SequenceState {
-    SubscriptionName: string;
-    PartitionKey: string;
-    LastCompletedSequence: number;
-    AwaitingSequenceSinceMs: number | null;
-    GapStalled: boolean;
-}
-
 const UNFINISHED: ReadonlySet<DeliveryStatus> = new Set<DeliveryStatus>(['Pending', 'InFlight', 'DeadLettered']);
 const ONE_HOUR_MS = 3_600_000;
 
-/** State and rules of the in-memory transport (spec 03 §7). Not thread-safe; single process only. */
+/**
+ * State and rules of the in-memory transport (spec 03 §7). Everything about a partition — single flight,
+ * head-of-line, blocking — is derived from the delivery rows. Not thread-safe; single process only.
+ */
 export class InMemoryStore {
+    /** Keyed by lower-cased MessageID alone: a MessageID is globally unique, not per topic (F10). */
     private readonly messages = new Map<string, StoredMessage>();
-    private readonly sequenceIndex = new Set<string>();
     private readonly deliveries = new Map<string, StoredDelivery>();
-    private readonly sequences = new Map<string, SequenceState>();
     private readonly bindings = new Map<string, SubscriptionBinding>();
     private ordinal = 0;
 
@@ -4230,7 +4768,9 @@ export class InMemoryStore {
             if (claimed.length >= max) {
                 break;
             }
-            if (this.isClaimable(policy, delivery, now)) {
+            // Leasing marks the key in flight, so a second delivery of the same key fails this check: one receive
+            // never returns two deliveries of one key, and an Ordered head is never skipped for a later one.
+            if (this.isClaimable(policy, delivery)) {
                 claimed.push(this.lease(policy, delivery, now));
             }
         }
@@ -4246,13 +4786,11 @@ export class InMemoryStore {
                 continue;
             }
             clearLease(delivery);
+            expired += 1;
             if (delivery.CancelRequestedAtMs !== null) {
-                // A cancelled delivery is never retried: it settles as Discarded once its lease has run out,
-                // which is also when its partition key is released (spec 03 §7).
+                // The holder never acknowledged (it is dead): a cancelled delivery is discarded, never retried.
                 delivery.Status = 'Discarded';
                 delivery.CompletedAtMs = now;
-                this.onResolved(delivery);
-                expired += 1;
                 continue;
             }
             delivery.LastError = LEASE_EXPIRED_REASON;
@@ -4264,15 +4802,14 @@ export class InMemoryStore {
                 delivery.DeadLetterReason = LEASE_EXPIRED_REASON;
                 delivery.DeadLetteredAtMs = now;
             }
-            expired += 1;
         }
         return expired;
     }
 
-    public ExtendLease(handle: DeliveryHandle, leaseSeconds: number, progress?: WorkProgress): 'Held' | 'Lost' {
+    public ExtendLease(handle: DeliveryHandle, leaseSeconds: number, progress?: WorkProgress): LeaseExtension {
         const delivery = this.held(handle);
         if (delivery === null) {
-            return 'Lost';
+            return this.heldButCancelled(handle) === null ? 'Lost' : 'Cancelled';
         }
         const now = this.now();
         delivery.LeaseExpiresAtMs = now + leaseSeconds * 1000;
@@ -4291,7 +4828,6 @@ export class InMemoryStore {
         clearLease(delivery);
         delivery.Status = 'Completed';
         delivery.CompletedAtMs = this.now();
-        this.onResolved(delivery);
         return settled(delivery);
     }
 
@@ -4332,6 +4868,18 @@ export class InMemoryStore {
         return settled(delivery);
     }
 
+    /** The one holder write that succeeds after a cancel: token-fenced, InFlight, cancel requested → Discarded now. */
+    public AcknowledgeCancel(handle: DeliveryHandle): SettleResult {
+        const delivery = this.heldButCancelled(handle);
+        if (delivery === null) {
+            return lost(handle);
+        }
+        clearLease(delivery);
+        delivery.Status = 'Discarded';
+        delivery.CompletedAtMs = this.now();
+        return settled(delivery);
+    }
+
     public Stats(binding: SubscriptionBinding): SubscriptionStats {
         this.RegisterBinding(binding);
         const policy = binding.Policy;
@@ -4356,7 +4904,7 @@ export class InMemoryStore {
         const policy = binding.Policy;
         const records = this.deliveriesOf(policy.SubscriptionName)
             .filter((delivery) => delivery.Status === 'DeadLettered')
-            .sort((a, b) => (a.DeadLetteredAtMs ?? 0) - (b.DeadLetteredAtMs ?? 0) || a.Ordinal - b.Ordinal)
+            .sort((a, b) => (a.DeadLetteredAtMs ?? 0) - (b.DeadLetteredAtMs ?? 0) || a.OrderKey - b.OrderKey)
             .map((delivery) => this.deadLetterRecord(policy, delivery));
         return paginate(records, cursor, pageSize);
     }
@@ -4375,6 +4923,7 @@ export class InMemoryStore {
         if (delivery === null || delivery.Status !== 'DeadLettered') {
             return false;
         }
+        // The delivery keeps its OrderKey, so an Ordered head keeps its place (spec 03 §7).
         delivery.Status = 'Pending';
         delivery.AttemptCount = 0;
         delivery.IsReplay = true;
@@ -4382,7 +4931,7 @@ export class InMemoryStore {
         delivery.DeadLetterReason = null;
         delivery.DeadLetteredAtMs = null;
         delivery.ResolvedByUserID = actorUserID;
-        delivery.ResolutionNote = note;
+        delivery.ResolutionNote = note === null ? null : truncateNote(note);
         return true;
     }
 
@@ -4395,12 +4944,11 @@ export class InMemoryStore {
             if (delivery.CancelRequestedAtMs !== null) {
                 return { Changed: false, CancelRequested: true };
             }
-            // Revoke the lease rather than settling now: rotating the token fences the holder out on its next
-            // heartbeat, and the key stays busy until the lease expires (spec 03 §7).
+            // Status and LeaseToken stay as they are: the flag alone fences every settle except AcknowledgeCancel,
+            // and keeping the token lets the holder acknowledge and free the key at once (spec 03 §7, F2).
             delivery.CancelRequestedAtMs = this.now();
-            delivery.LeaseToken = this.newId();
             delivery.ResolvedByUserID = actorUserID;
-            delivery.ResolutionNote = reason;
+            delivery.ResolutionNote = truncateNote(reason);
             return { Changed: true, CancelRequested: true };
         }
         if (delivery.Status !== 'Pending' && delivery.Status !== 'DeadLettered') {
@@ -4409,44 +4957,13 @@ export class InMemoryStore {
         delivery.Status = 'Discarded';
         delivery.CompletedAtMs = this.now();
         delivery.ResolvedByUserID = actorUserID;
-        delivery.ResolutionNote = reason;
-        this.onResolved(delivery);
+        delivery.ResolutionNote = truncateNote(reason);
         return { Changed: true, CancelRequested: false };
     }
 
-    public SkipSequence(binding: SubscriptionBinding, partitionKey: string, sequence: number): boolean {
-        this.RegisterBinding(binding);
-        const policy = binding.Policy;
-        if (!tracksSequence(policy)) {
-            return false;
-        }
-        const state = this.sequenceState(policy.SubscriptionName, partitionKey);
-        const published = this.deliveriesOf(policy.SubscriptionName).some(
-            (delivery) => delivery.PartitionKey === partitionKey && delivery.OrderKey === sequence && delivery.Status !== 'Discarded',
-        );
-        if (state.LastCompletedSequence !== sequence - 1 || published) {
-            return false;
-        }
-        state.LastCompletedSequence = sequence;
-        this.advanceThroughDiscarded(state);
-        return true;
-    }
-
-    public RunSweep(): { ExpiredLeases: number; GapStalls: number } {
-        const expiredLeases = this.ExpireLeases();
-        const now = this.now();
-        let gapStalls = 0;
-        for (const state of this.sequences.values()) {
-            const alertSeconds = this.bindings.get(state.SubscriptionName)?.Policy.SequenceGapAlertSeconds;
-            if (alertSeconds === undefined || state.AwaitingSequenceSinceMs === null || state.GapStalled) {
-                continue;
-            }
-            if (now - state.AwaitingSequenceSinceMs >= alertSeconds * 1000) {
-                state.GapStalled = true;
-                gapStalls += 1;
-            }
-        }
-        return { ExpiredLeases: expiredLeases, GapStalls: gapStalls };
+    /** The sweeper's job in memory: expire leases everywhere. */
+    public RunSweep(): { ExpiredLeases: number } {
+        return { ExpiredLeases: this.ExpireLeases() };
     }
 
     public Snapshot(subscriptionName: string): InMemoryDeliverySnapshot[] {
@@ -4460,49 +4977,40 @@ export class InMemoryStore {
                 OrderKey: delivery.OrderKey,
                 AttemptCount: delivery.AttemptCount,
                 IsReplay: delivery.IsReplay,
+                CancelRequested: delivery.CancelRequestedAtMs !== null,
                 ResolutionNote: delivery.ResolutionNote,
             }));
     }
 
     private publishOne(topic: TopicBinding, message: WorkMessage, subscriptions: SubscriptionBinding[]): PublishResult {
-        const messageKey = JSON.stringify([topic.TopicName, message.MessageID.toLowerCase()]);
+        const messageKey = message.MessageID.toLowerCase();
+        const canonical = CanonicalEnvelope(message);
         const existing = this.messages.get(messageKey);
         if (existing !== undefined) {
-            return sameEnvelope(existing.Message, message)
+            return existing.TopicName === topic.TopicName && existing.Canonical === canonical
                 ? { MessageID: message.MessageID, Status: 'Duplicate' }
-                : RejectedPublishResult(message.MessageID, PublishErrorCodes.MessageIDConflict, `MessageID ${message.MessageID} was already published with a different envelope`);
-        }
-        if (message.PartitionKey !== undefined && message.Sequence !== undefined) {
-            const sequenceKey = JSON.stringify([topic.TopicName, message.PartitionKey, message.Sequence]);
-            if (this.sequenceIndex.has(sequenceKey)) {
-                return RejectedPublishResult(message.MessageID, PublishErrorCodes.DuplicateSequence, `Sequence ${message.Sequence} for '${message.PartitionKey}' was already published`);
-            }
-            this.sequenceIndex.add(sequenceKey);
+                : RejectedPublishResult(message.MessageID, PublishErrorCodes.MessageIDConflict, `MessageID ${message.MessageID} was already published with a different envelope or topic`);
         }
         this.ordinal += 1;
-        const stored: StoredMessage = { Message: structuredClone(message), Ordinal: this.ordinal };
+        const stored: StoredMessage = { Message: structuredClone(message), TopicName: topic.TopicName, Canonical: canonical, Ordinal: this.ordinal };
         this.messages.set(messageKey, stored);
         for (const subscription of subscriptions) {
             if (MatchesFilter(subscription.Filter, message.Attributes)) {
-                this.createDelivery(topic, subscription.Policy, messageKey, stored);
+                this.createDelivery(subscription.Policy, messageKey, stored);
             }
         }
         return { MessageID: message.MessageID, Status: 'Accepted' };
     }
 
-    private createDelivery(topic: TopicBinding, policy: SubscriptionPolicy, messageKey: string, stored: StoredMessage): void {
+    private createDelivery(policy: SubscriptionPolicy, messageKey: string, stored: StoredMessage): void {
         const now = this.now();
-        const message = stored.Message;
-        const partitionKey = policy.PartitionMode !== 'None' ? message.PartitionKey ?? null : null;
-        const explicit = topic.OrderingMode === 'ExplicitSequence' && message.Sequence !== undefined;
         const delivery: StoredDelivery = {
             ID: this.newId(),
             MessageKey: messageKey,
             SubscriptionName: policy.SubscriptionName,
             Status: 'Pending',
-            PartitionKey: partitionKey,
-            OrderKey: explicit && message.Sequence !== undefined ? message.Sequence : stored.Ordinal,
-            Ordinal: stored.Ordinal,
+            PartitionKey: policy.PartitionMode !== 'None' ? stored.Message.PartitionKey ?? null : null,
+            OrderKey: stored.Ordinal,
             AttemptCount: 0,
             IsReplay: false,
             CreatedAtMs: now,
@@ -4519,21 +5027,16 @@ export class InMemoryStore {
             ResolvedByUserID: null,
             ResolutionNote: null,
         };
-        if (partitionKey !== null && tracksSequence(policy) && delivery.OrderKey <= this.sequenceState(policy.SubscriptionName, partitionKey).LastCompletedSequence) {
-            delivery.Status = 'Discarded';
-            delivery.CompletedAtMs = now;
-            delivery.ResolutionNote = SEQUENCE_ALREADY_RESOLVED_NOTE;
-        }
         this.deliveries.set(delivery.ID, delivery);
     }
 
     private visiblePending(subscriptionName: string, now: number): StoredDelivery[] {
         return this.deliveriesOf(subscriptionName)
-            .filter((delivery) => delivery.Status === 'Pending' && delivery.VisibleAtMs <= now)
+            .filter((delivery) => delivery.Status === 'Pending' && delivery.VisibleAtMs <= now && delivery.CancelRequestedAtMs === null)
             .sort(byOrder);
     }
 
-    private isClaimable(policy: SubscriptionPolicy, delivery: StoredDelivery, now: number): boolean {
+    private isClaimable(policy: SubscriptionPolicy, delivery: StoredDelivery): boolean {
         const key = delivery.PartitionKey;
         if (policy.PartitionMode === 'None' || key === null) {
             return true;
@@ -4544,20 +5047,7 @@ export class InMemoryStore {
         if (policy.PartitionMode === 'Exclusive') {
             return true;
         }
-        if (this.headOf(policy.SubscriptionName, key)?.ID !== delivery.ID) {
-            return false;
-        }
-        if (!tracksSequence(policy)) {
-            return true;
-        }
-        const state = this.sequenceState(policy.SubscriptionName, key);
-        if (delivery.OrderKey === state.LastCompletedSequence + 1) {
-            state.AwaitingSequenceSinceMs = null;
-            state.GapStalled = false;
-            return true;
-        }
-        state.AwaitingSequenceSinceMs = state.AwaitingSequenceSinceMs ?? now;
-        return false;
+        return this.headOf(policy.SubscriptionName, key)?.ID === delivery.ID;
     }
 
     private lease(policy: SubscriptionPolicy, delivery: StoredDelivery, now: number): ReceivedDelivery {
@@ -4578,54 +5068,23 @@ export class InMemoryStore {
         };
     }
 
-    private onResolved(delivery: StoredDelivery): void {
-        const policy = this.policyOf(delivery.SubscriptionName);
-        if (delivery.PartitionKey === null || !tracksSequence(policy)) {
-            return;
-        }
-        const state = this.sequenceState(delivery.SubscriptionName, delivery.PartitionKey);
-        if (delivery.OrderKey !== state.LastCompletedSequence + 1) {
-            return;
-        }
-        state.LastCompletedSequence = delivery.OrderKey;
-        this.advanceThroughDiscarded(state);
-    }
-
-    private advanceThroughDiscarded(state: SequenceState): void {
-        const own = this.deliveriesOf(state.SubscriptionName).filter((delivery) => delivery.PartitionKey === state.PartitionKey);
-        while (own.some((delivery) => delivery.OrderKey === state.LastCompletedSequence + 1 && delivery.Status === 'Discarded')) {
-            state.LastCompletedSequence += 1;
-        }
-        state.AwaitingSequenceSinceMs = null;
-        state.GapStalled = false;
-    }
-
     private partitionRecord(policy: SubscriptionPolicy, key: string): PartitionStateRecord {
         const name = policy.SubscriptionName;
         const head = this.headOf(name, key);
-        const state = tracksSequence(policy) ? this.sequenceState(name, key) : null;
         return {
             PartitionKey: key,
-            Condition: this.conditionOf(policy, key, head, state),
+            Condition: this.conditionOf(policy, key, head),
             HeadDeliveryID: head?.ID ?? null,
-            LastCompletedSequence: state === null ? null : state.LastCompletedSequence,
-            AwaitingSequenceSince: state === null || state.AwaitingSequenceSinceMs === null ? null : new Date(state.AwaitingSequenceSinceMs).toISOString(),
             WaitingItems: this.deliveriesOf(name).filter((delivery) => delivery.PartitionKey === key && delivery.Status === 'Pending').length,
         };
     }
 
-    private conditionOf(policy: SubscriptionPolicy, key: string, head: StoredDelivery | null, state: SequenceState | null): PartitionCondition {
+    private conditionOf(policy: SubscriptionPolicy, key: string, head: StoredDelivery | null): PartitionCondition {
         if (this.hasInFlight(policy.SubscriptionName, key)) {
             return 'InFlight';
         }
         if (policy.PartitionMode === 'Ordered' && head?.Status === 'DeadLettered') {
             return 'Blocked';
-        }
-        if (state?.GapStalled === true) {
-            return 'GapStalled';
-        }
-        if (state !== null && state.AwaitingSequenceSinceMs !== null) {
-            return 'AwaitingSequence';
         }
         return 'Idle';
     }
@@ -4652,11 +5111,6 @@ export class InMemoryStore {
                 keys.add(delivery.PartitionKey);
             }
         }
-        for (const state of this.sequences.values()) {
-            if (state.SubscriptionName === subscriptionName) {
-                keys.add(state.PartitionKey);
-            }
-        }
         return [...keys].sort();
     }
 
@@ -4673,7 +5127,19 @@ export class InMemoryStore {
         return this.deliveriesOf(subscriptionName).some((delivery) => delivery.PartitionKey === key && delivery.Status === 'InFlight');
     }
 
+    /** Guard of every ordinary holder write: InFlight, this token, and no cancel request. */
     private held(handle: DeliveryHandle): StoredDelivery | null {
+        const delivery = this.tokenHolder(handle);
+        return delivery !== null && delivery.CancelRequestedAtMs === null ? delivery : null;
+    }
+
+    /** Guard of AcknowledgeCancel: InFlight, this token, and a cancel request. */
+    private heldButCancelled(handle: DeliveryHandle): StoredDelivery | null {
+        const delivery = this.tokenHolder(handle);
+        return delivery !== null && delivery.CancelRequestedAtMs !== null ? delivery : null;
+    }
+
+    private tokenHolder(handle: DeliveryHandle): StoredDelivery | null {
         const delivery = this.deliveries.get(handle.DeliveryID);
         return delivery !== undefined && delivery.Status === 'InFlight' && delivery.LeaseToken === handle.LeaseToken ? delivery : null;
     }
@@ -4686,16 +5152,6 @@ export class InMemoryStore {
 
     private deliveriesOf(subscriptionName: string): StoredDelivery[] {
         return [...this.deliveries.values()].filter((delivery) => delivery.SubscriptionName === subscriptionName);
-    }
-
-    private sequenceState(subscriptionName: string, partitionKey: string): SequenceState {
-        const key = JSON.stringify([subscriptionName, partitionKey]);
-        let state = this.sequences.get(key);
-        if (state === undefined) {
-            state = { SubscriptionName: subscriptionName, PartitionKey: partitionKey, LastCompletedSequence: 0, AwaitingSequenceSinceMs: null, GapStalled: false };
-            this.sequences.set(key, state);
-        }
-        return state;
     }
 
     private messageOf(delivery: StoredDelivery): WorkMessage {
@@ -4715,12 +5171,8 @@ export class InMemoryStore {
     }
 }
 
-function tracksSequence(policy: SubscriptionPolicy): boolean {
-    return policy.PartitionMode === 'Ordered' && policy.OrderingMode === 'ExplicitSequence';
-}
-
 function byOrder(a: StoredDelivery, b: StoredDelivery): number {
-    return a.OrderKey - b.OrderKey || a.Ordinal - b.Ordinal;
+    return a.OrderKey - b.OrderKey;
 }
 
 function clearLease(delivery: StoredDelivery): void {
@@ -4736,8 +5188,8 @@ function lost(handle: DeliveryHandle): SettleResult {
     return { Kind: 'LeaseLost', DeliveryID: handle.DeliveryID };
 }
 
-function sameEnvelope(a: WorkMessage, b: WorkMessage): boolean {
-    return JSON.stringify({ ...a, PublishedAt: '' }) === JSON.stringify({ ...b, PublishedAt: '' });
+function truncateNote(text: string): string {
+    return text.length <= MAX_RESOLUTION_NOTE_LENGTH ? text : text.slice(0, MAX_RESOLUTION_NOTE_LENGTH);
 }
 
 function paginate<T>(items: T[], cursor: string | null, pageSize: number): Page<T> {
@@ -4755,7 +5207,7 @@ function paginate<T>(items: T[], cursor: string | null, pageSize: number): Page<
 ```typescript
 import type { WorkJson } from '../envelope';
 import type { WorkProgress } from '../handler';
-import type { ITransportConsumer, ReceivedDelivery, SettleResult, SubscriptionBinding } from '../transport';
+import type { ITransportConsumer, LeaseExtension, ReceivedDelivery, SettleResult, SubscriptionBinding } from '../transport';
 import type { InMemoryStore } from './InMemoryStore';
 
 export class InMemoryConsumer<TPayload extends WorkJson = WorkJson> implements ITransportConsumer<TPayload> {
@@ -4774,7 +5226,7 @@ export class InMemoryConsumer<TPayload extends WorkJson = WorkJson> implements I
         return this.store.Claim(this.binding, max) as ReceivedDelivery<TPayload>[];
     }
 
-    public async ExtendLease(delivery: ReceivedDelivery<TPayload>, leaseSeconds: number, progress?: WorkProgress): Promise<'Held' | 'Lost'> {
+    public async ExtendLease(delivery: ReceivedDelivery<TPayload>, leaseSeconds: number, progress?: WorkProgress): Promise<LeaseExtension> {
         return this.store.ExtendLease(delivery, leaseSeconds, progress);
     }
 
@@ -4792,6 +5244,10 @@ export class InMemoryConsumer<TPayload extends WorkJson = WorkJson> implements I
 
     public async Release(delivery: ReceivedDelivery<TPayload>): Promise<SettleResult> {
         return this.store.Release(delivery);
+    }
+
+    public async AcknowledgeCancel(delivery: ReceivedDelivery<TPayload>): Promise<SettleResult> {
+        return this.store.AcknowledgeCancel(delivery);
     }
 
     public async Close(): Promise<void> {
@@ -4837,16 +5293,6 @@ export class InMemoryOperator implements ITransportOperator {
         return result.CancelRequested
             ? { Supported: true, Changed: result.Changed, CancelRequested: true }
             : { Supported: true, Changed: result.Changed };
-    }
-
-    public async SkipSequence(
-        subscription: SubscriptionBinding,
-        partitionKey: string,
-        sequence: number,
-        _reason: string,
-        _actorUserID: string | null,
-    ): Promise<OperatorResult> {
-        return { Supported: true, Changed: this.store.SkipSequence(subscription, partitionKey, sequence) };
     }
 }
 ```
@@ -4924,8 +5370,8 @@ export class InMemoryTransport implements ITransportDriver {
         return [];
     }
 
-    /** Expire leases everywhere and flag sequence gaps past SequenceGapAlertSeconds (the sweeper's job). */
-    public RunSweep(): { ExpiredLeases: number; GapStalls: number } {
+    /** Expire leases everywhere (the sweeper's job). */
+    public RunSweep(): { ExpiredLeases: number } {
         return this.store.RunSweep();
     }
 
@@ -4944,13 +5390,13 @@ Append to `packages/WorkQueue/core/src/index.ts`:
 export { InMemoryTransport, IN_MEMORY_TRANSPORT_CAPABILITIES } from './memory/InMemoryTransport';
 export type { InMemoryTransportOptions } from './memory/InMemoryTransport';
 export type { InMemoryDeliverySnapshot } from './memory/InMemoryStore';
-export { LEASE_EXPIRED_REASON, SEQUENCE_ALREADY_RESOLVED_NOTE } from './memory/InMemoryStore';
+export { LEASE_EXPIRED_REASON, MAX_RESOLUTION_NOTE_LENGTH } from './memory/InMemoryStore';
 ```
 
 - [ ] **Step 7: Run the tests and build**
 
 Run: `cd packages/WorkQueue/core && pnpm test`
-Expected: PASS — previous 121 plus InMemoryTransport (14): **135 tests**.
+Expected: PASS — previous 134 plus InMemoryTransport (15): **149 tests**.
 
 Run: `cd packages/WorkQueue/core && pnpm run build`
 Expected: builds.
@@ -4980,7 +5426,7 @@ git commit -m "feat(work-queue-core): in-memory reference transport with Databas
   - `interface ConformanceTraits { ReleaseConsumesAttempt: boolean; ExpiredLeaseDeadLetters: boolean; ReceiveWaitSeconds: number }`
   - `interface ConformanceHarness { readonly Capabilities: TransportCapabilities; readonly Traits: ConformanceTraits; CreateDriver(): Promise<ITransportDriver>; CreateTopic(driver: ITransportDriver, name: string, overrides?: Partial<TopicBinding>): Promise<TopicBinding>; CreateSubscription(driver: ITransportDriver, topic: TopicBinding, name: string, overrides?: SubscriptionBindingOverrides): Promise<SubscriptionBinding>; AdvanceTime(ms: number): Promise<void>; Dispose?(driver: ITransportDriver): Promise<void> }`
   - `interface ConformanceCase { Id: string; Title: string; Gate(harness: ConformanceHarness): string | null; Run(harness: ConformanceHarness): Promise<void> }` — `Gate` returns a skip reason or `null`; `Run` throws `ConformanceAssertionError` on failure and disposes its own driver
-  - `const CONFORMANCE_CASES: readonly ConformanceCase[]` (27 cases, ids `C01`–`C27`)
+  - `const CONFORMANCE_CASES: readonly ConformanceCase[]` (26 cases, ids `C01`–`C26`)
   - `interface ConformanceCheckResult { Id: string; Title: string; Status: 'Passed' | 'Failed' | 'Skipped'; Detail: string | null; DurationMs: number }`
   - `RunConformanceChecks(harness: ConformanceHarness): Promise<ConformanceCheckResult[]>` — runs cases sequentially, never throws
 - Produces from `@memberjunction/work-queue-core/testing/vitest`:
@@ -5011,16 +5457,17 @@ Cases (the `Gate` column is the condition for running; otherwise the case is `Sk
 | C15 | `SupportsOrdered` | `Ordered`: a head in retry backoff holds its key |
 | C16 | `SupportsOrdered` | `Ordered`: a dead letter blocks its key (listed as `Blocked` when `ListPartitions`); replay unblocks in order |
 | C17 | `SupportsOrdered` | `Ordered`: discarding the dead letter unblocks the key |
-| C18 | `SupportsOrdered` | `ExplicitSequence`: a gap waits, then proceeds in sequence order |
-| C19 | `SupportsOrdered` | `SkipSequence` releases the waiting sequence |
-| C20 | `SupportsOrdered` + `ListPartitions` | A waiting key is listed as `AwaitingSequence` |
-| C21 | `CancelPending` | Discarding a pending delivery cancels it |
-| C22 | `DetectsMessageIDDuplicates` | Republishing a `MessageID` returns `Duplicate` and delivers once |
-| C23 | — | `Release` redelivers with the same attempt, or the next when `Traits.ReleaseConsumesAttempt` |
-| C24 | `Traits.ExpiredLeaseDeadLetters` | A lease expiring on the final attempt dead-letters as `LeaseExpired` |
-| C25 | `CompletedCounts` | Stats count completions in the last hour |
+| C18 | `CancelPending` | Discarding a pending delivery cancels it |
+| C19 | `DetectsMessageIDDuplicates` | Republishing a `MessageID` with the same envelope returns `Duplicate` and delivers once |
+| C20 | `DetectsMessageIDDuplicates` | Reusing a `MessageID` with a different envelope is rejected as `MessageIDConflict` |
+| C21 | — | `Release` redelivers with the same attempt, or the next when `Traits.ReleaseConsumesAttempt` |
+| C22 | `Traits.ExpiredLeaseDeadLetters` | A lease expiring on the final attempt dead-letters as `LeaseExpired` |
+| C23 | `CompletedCounts` | Stats count completions in the last hour |
+| C24 | `CancelInFlight` | Cancelling in flight: `ExtendLease` reports `Cancelled`, every settle is fenced (`LeaseLost`), and `AcknowledgeCancel` settles the delivery as `Discarded` |
+| C25 | `CancelInFlight` | A cancelled `Exclusive` key stays busy until the holder acknowledges, then frees **immediately** — not at lease expiry |
+| C26 | `CancelInFlight` | A cancelled delivery whose holder is dead is discarded when its lease expires, is never redelivered, and frees its key then |
 
-Partitioned cases create their topic with `IsFifo: true`; sequence cases with `OrderingMode: 'ExplicitSequence'`. Delays are short (lease 5 s, retry 2 s) so real-time harnesses stay fast.
+Partitioned cases create their topic with `IsFifo: true`. Delays are short (lease 5 s, retry 2 s) so real-time harnesses stay fast.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -5062,12 +5509,16 @@ import type { ConformanceHarness } from '../testing';
 import type { ITransportDriver } from '../transport';
 
 function inMemoryHarness(overrides: Partial<ConformanceHarness> = {}): ConformanceHarness & { Disposed: ITransportDriver[] } {
-    const clock = new ManualClock();
+    // A fresh clock per driver: cases run sequentially, so no case inherits time another one advanced.
+    let clock = new ManualClock();
     const disposed: ITransportDriver[] = [];
     return {
         Capabilities: IN_MEMORY_TRANSPORT_CAPABILITIES,
         Traits: { ReleaseConsumesAttempt: false, ExpiredLeaseDeadLetters: true, ReceiveWaitSeconds: 0 },
-        CreateDriver: async () => new InMemoryTransport({ Now: clock.Now }),
+        CreateDriver: async () => {
+            clock = new ManualClock();
+            return new InMemoryTransport({ Now: () => clock.Now() });
+        },
         CreateTopic: async (_driver, name, topicOverrides) => BuildTopicBinding(name, topicOverrides),
         CreateSubscription: async (_driver, topic, name, subscriptionOverrides) => BuildSubscriptionBinding(topic, name, subscriptionOverrides),
         AdvanceTime: async (ms) => clock.Advance(ms),
@@ -5094,14 +5545,14 @@ describe('RunConformanceChecks', () => {
         const results = await RunConformanceChecks(harness);
         const byId = new Map(results.map((result) => [result.Id, result]));
         expect(byId.get('C14')).toMatchObject({ Status: 'Skipped', Detail: 'Transport does not support Ordered subscriptions', DurationMs: 0 });
-        expect(byId.get('C21')?.Status).toBe('Skipped');
+        expect(byId.get('C18')?.Status).toBe('Skipped');
         expect(results.filter((result) => result.Status === 'Failed')).toEqual([]);
     });
 
     it('records failures without throwing and still disposes the driver', async () => {
         const harness = inMemoryHarness({ Traits: { ReleaseConsumesAttempt: true, ExpiredLeaseDeadLetters: true, ReceiveWaitSeconds: 0 } });
         const results = await RunConformanceChecks(harness);
-        const release = results.find((result) => result.Id === 'C23');
+        const release = results.find((result) => result.Id === 'C21');
         expect(release?.Status).toBe('Failed');
         expect(release?.Detail).toContain('attempt: expected 2 but got 1');
         expect(harness.Disposed).toHaveLength(CONFORMANCE_CASES.length);
@@ -5116,12 +5567,16 @@ import { InMemoryTransport, IN_MEMORY_TRANSPORT_CAPABILITIES } from '../memory/I
 import { BuildSubscriptionBinding, BuildTopicBinding, ManualClock } from '../testing';
 import { RunTransportConformanceSuite } from '../testing/vitest';
 
-const clock = new ManualClock();
+// A fresh clock per driver keeps the cases independent of their order.
+let clock = new ManualClock();
 
 RunTransportConformanceSuite('InMemoryTransport', {
     Capabilities: IN_MEMORY_TRANSPORT_CAPABILITIES,
     Traits: { ReleaseConsumesAttempt: false, ExpiredLeaseDeadLetters: true, ReceiveWaitSeconds: 0 },
-    CreateDriver: async () => new InMemoryTransport({ Now: clock.Now }),
+    CreateDriver: async () => {
+        clock = new ManualClock();
+        return new InMemoryTransport({ Now: () => clock.Now() });
+    },
     CreateTopic: async (_driver, name, overrides) => BuildTopicBinding(name, overrides),
     CreateSubscription: async (_driver, topic, name, overrides) => BuildSubscriptionBinding(topic, name, overrides),
     AdvanceTime: async (ms) => clock.Advance(ms),
@@ -5366,10 +5821,6 @@ export function Numbers(deliveries: ReceivedDelivery[]): string[] {
 export function Keyed(n: string, key = 'k'): PublishRequest {
     return { PartitionKey: key, Attributes: { n } };
 }
-
-export function Sequenced(sequence: number, key = 'k'): PublishRequest {
-    return { PartitionKey: key, Sequence: sequence, Attributes: { n: String(sequence) } };
-}
 ```
 
 - [ ] **Step 6: Write `src/testing/conformanceCases.ts`**
@@ -5378,10 +5829,9 @@ export function Sequenced(sequence: number, key = 'k'): PublishRequest {
 import type { TopicBinding } from '../transport';
 import { AssertEqual, AssertLength, AssertMatch, AssertTrue } from './assertions';
 import type { ConformanceCase, ConformanceHarness } from './ConformanceHarness';
-import { Keyed, Numbers, Sequenced, WithScenario } from './ConformanceScenario';
+import { Keyed, Numbers, WithScenario } from './ConformanceScenario';
 
 const PARTITIONED_TOPIC: Partial<TopicBinding> = { IsFifo: true };
-const SEQUENCED_TOPIC: Partial<TopicBinding> = { OrderingMode: 'ExplicitSequence', IsFifo: true };
 
 const always = (): string | null => null;
 const whenOrdered = (harness: ConformanceHarness): string | null =>
@@ -5648,48 +6098,6 @@ const C17: ConformanceCase = {
 
 const C18: ConformanceCase = {
     Id: 'C18',
-    Title: 'ExplicitSequence: waits for a gap, then proceeds in order',
-    Gate: whenOrdered,
-    Run: (harness) =>
-        WithScenario(harness, SEQUENCED_TOPIC, [['a', { PartitionMode: 'Ordered' }]], async (s) => {
-            await s.Publish([Sequenced(2)]);
-            AssertLength(await s.Receive('a'), 0, 'receive with sequence 1 missing');
-            await s.Publish([Sequenced(1)]);
-            const first = await s.Receive('a');
-            AssertEqual(Numbers(first), ['1'], 'sequence 1');
-            await s.Consumer('a').Complete(first[0]);
-            AssertEqual(Numbers(await s.Receive('a')), ['2'], 'sequence 2');
-        }),
-};
-
-const C19: ConformanceCase = {
-    Id: 'C19',
-    Title: 'ExplicitSequence: SkipSequence releases the waiting sequence',
-    Gate: whenOrdered,
-    Run: (harness) =>
-        WithScenario(harness, SEQUENCED_TOPIC, [['a', { PartitionMode: 'Ordered' }]], async (s) => {
-            await s.Publish([Sequenced(2)]);
-            AssertLength(await s.Receive('a'), 0, 'receive with sequence 1 missing');
-            AssertEqual(await s.Operator.SkipSequence(s.Subscription('a'), 'k', 1, 'lost upstream', null), { Supported: true, Changed: true }, 'skip');
-            AssertEqual(Numbers(await s.Receive('a')), ['2'], 'sequence 2 after skip');
-        }),
-};
-
-const C20: ConformanceCase = {
-    Id: 'C20',
-    Title: 'ExplicitSequence: lists a waiting key as AwaitingSequence',
-    Gate: (harness) => whenOrdered(harness) ?? (harness.Capabilities.ListPartitions ? null : 'Transport cannot list partitions'),
-    Run: (harness) =>
-        WithScenario(harness, SEQUENCED_TOPIC, [['a', { PartitionMode: 'Ordered' }]], async (s) => {
-            await s.Publish([Sequenced(2)]);
-            await s.Receive('a');
-            const page = await s.Operator.ListPartitions(s.Subscription('a'), 'AwaitingSequence', null, 10);
-            AssertEqual((page?.Items ?? []).map((item) => item.PartitionKey), ['k'], 'awaiting keys');
-        }),
-};
-
-const C21: ConformanceCase = {
-    Id: 'C21',
     Title: 'discards a pending delivery',
     Gate: (harness) => (harness.Capabilities.CancelPending ? null : 'Transport cannot cancel pending deliveries'),
     Run: (harness) =>
@@ -5702,22 +6110,41 @@ const C21: ConformanceCase = {
         }),
 };
 
-const C22: ConformanceCase = {
-    Id: 'C22',
+const whenDetectsDuplicates = (harness: ConformanceHarness): string | null =>
+    harness.Capabilities.DetectsMessageIDDuplicates ? null : 'Transport does not detect MessageID duplicates';
+
+const C19: ConformanceCase = {
+    Id: 'C19',
     Title: 'reports a republished MessageID as Duplicate',
-    Gate: (harness) => (harness.Capabilities.DetectsMessageIDDuplicates ? null : 'Transport does not detect MessageID duplicates'),
+    Gate: whenDetectsDuplicates,
     Run: (harness) =>
         WithScenario(harness, {}, [['a', {}]], async (s) => {
             const messageID = crypto.randomUUID();
-            await s.Publish([{ MessageID: messageID, Attributes: { n: '1' } }]);
-            const [again] = await s.Publish([{ MessageID: messageID, Attributes: { n: '1' } }]);
+            await s.Publish([{ MessageID: messageID, Attributes: { n: '1', kind: 'x' }, Payload: { a: 1, b: 2 } }]);
+            // Same envelope with its keys in another order: the comparison is canonical (spec 03 §2.1).
+            const [again] = await s.Publish([{ MessageID: messageID, Attributes: { kind: 'x', n: '1' }, Payload: { b: 2, a: 1 } }]);
             AssertEqual(again.Status, 'Duplicate', 'republish status');
             AssertLength(await s.Receive('a'), 1, 'deliveries');
         }),
 };
 
-const C23: ConformanceCase = {
-    Id: 'C23',
+const C20: ConformanceCase = {
+    Id: 'C20',
+    Title: 'rejects a reused MessageID with a different envelope',
+    Gate: whenDetectsDuplicates,
+    Run: (harness) =>
+        WithScenario(harness, {}, [['a', {}]], async (s) => {
+            const messageID = crypto.randomUUID();
+            await s.Publish([{ MessageID: messageID, Attributes: { n: '1' } }]);
+            const [conflict] = await s.Publish([{ MessageID: messageID, Attributes: { n: '2' } }]);
+            AssertEqual(conflict.Status, 'Rejected', 'conflict status');
+            AssertEqual(conflict.Error?.Code, 'MessageIDConflict', 'conflict code');
+            AssertEqual(Numbers(await s.Receive('a')), ['1'], 'only the first publish is delivered');
+        }),
+};
+
+const C21: ConformanceCase = {
+    Id: 'C21',
     Title: 'redelivers a released delivery',
     Gate: always,
     Run: (harness) =>
@@ -5730,8 +6157,8 @@ const C23: ConformanceCase = {
         }),
 };
 
-const C24: ConformanceCase = {
-    Id: 'C24',
+const C22: ConformanceCase = {
+    Id: 'C22',
     Title: 'dead-letters a lease that expires on the final attempt',
     Gate: (harness) => (harness.Traits.ExpiredLeaseDeadLetters ? null : 'Transport does not dead-letter expired leases itself'),
     Run: (harness) =>
@@ -5745,8 +6172,8 @@ const C24: ConformanceCase = {
         }),
 };
 
-const C25: ConformanceCase = {
-    Id: 'C25',
+const C23: ConformanceCase = {
+    Id: 'C23',
     Title: 'counts completions in the last hour',
     Gate: (harness) => (harness.Capabilities.CompletedCounts ? null : 'Transport does not count completions'),
     Run: (harness) =>
@@ -5761,9 +6188,9 @@ const C25: ConformanceCase = {
 const whenCancelInFlight = (harness: ConformanceHarness): string | null =>
     harness.Capabilities.CancelInFlight ? null : 'Transport cannot cancel in-flight deliveries';
 
-const C26: ConformanceCase = {
-    Id: 'C26',
-    Title: 'cancelling in flight fences the holder and settles as Discarded when the lease expires',
+const C24: ConformanceCase = {
+    Id: 'C24',
+    Title: 'cancelling in flight reports Cancelled, fences every settle, and acknowledges as Discarded',
     Gate: whenCancelInFlight,
     Run: (harness) =>
         WithScenario(harness, {}, [['a', { LeaseSeconds: 5 }]], async (s) => {
@@ -5774,18 +6201,21 @@ const C26: ConformanceCase = {
                 { Supported: true, Changed: true, CancelRequested: true },
                 'cancel in flight',
             );
-            // The lease is revoked at once: the holder learns on its next heartbeat and cannot settle.
-            AssertEqual(await s.Consumer('a').ExtendLease(delivery, 5), 'Lost', 'heartbeat after cancel');
-            AssertMatch(await s.Consumer('a').Complete(delivery), { Kind: 'LeaseLost' }, 'settle after cancel');
+            // The token is not rotated: the holder is told why, and only AcknowledgeCancel still succeeds.
+            AssertEqual(await s.Consumer('a').ExtendLease(delivery, 5), 'Cancelled', 'heartbeat after cancel');
+            AssertMatch(await s.Consumer('a').Complete(delivery), { Kind: 'LeaseLost' }, 'complete after cancel');
+            AssertMatch(await s.Consumer('a').Retry(delivery, 1, 'x'), { Kind: 'LeaseLost' }, 'retry after cancel');
+            AssertMatch(await s.Consumer('a').AcknowledgeCancel(delivery), { Kind: 'Settled', Status: 'Discarded' }, 'acknowledge');
+            AssertMatch(await s.Consumer('a').AcknowledgeCancel(delivery), { Kind: 'LeaseLost' }, 'second acknowledge');
             await harness.AdvanceTime(6000);
             AssertLength(await s.Receive('a'), 0, 'cancelled work is not redelivered');
             AssertMatch(await s.Operator.GetStats(s.Subscription('a')), { Pending: 0, InFlight: 0, DeadLettered: 0 }, 'stats after cancel');
         }),
 };
 
-const C27: ConformanceCase = {
-    Id: 'C27',
-    Title: 'a cancelled key is released only once the old lease expires',
+const C25: ConformanceCase = {
+    Id: 'C25',
+    Title: 'a cancelled key frees as soon as the holder acknowledges, not at lease expiry',
     Gate: whenCancelInFlight,
     Run: (harness) =>
         WithScenario(harness, PARTITIONED_TOPIC, [['a', { PartitionMode: 'Exclusive', LeaseSeconds: 5 }]], async (s) => {
@@ -5793,16 +6223,32 @@ const C27: ConformanceCase = {
             const [head] = await s.Receive('a');
             await s.Operator.Discard(s.Subscription('a'), head.DeliveryID, 'operator cancelled', null);
             // Still in flight: the next item must not start while the old handler is winding down.
-            AssertLength(await s.Receive('a'), 0, 'key busy while the cancelled lease is alive');
+            AssertLength(await s.Receive('a'), 0, 'key busy until the holder acknowledges');
+            AssertMatch(await s.Consumer('a').AcknowledgeCancel(head), { Kind: 'Settled', Status: 'Discarded' }, 'acknowledge');
+            AssertEqual(Numbers(await s.Receive('a')), ['2'], 'next item right after the acknowledgement');
+        }),
+};
+
+const C26: ConformanceCase = {
+    Id: 'C26',
+    Title: 'a cancelled delivery whose holder is dead is discarded when its lease expires',
+    Gate: whenCancelInFlight,
+    Run: (harness) =>
+        WithScenario(harness, PARTITIONED_TOPIC, [['a', { PartitionMode: 'Exclusive', LeaseSeconds: 5 }]], async (s) => {
+            await s.Publish([Keyed('1'), Keyed('2')]);
+            const [head] = await s.Receive('a');
+            await s.Operator.Discard(s.Subscription('a'), head.DeliveryID, 'operator cancelled', null);
             await harness.AdvanceTime(6000);
+            // No acknowledgement ever arrives; ExpireLeases discards the row instead of retrying it.
             AssertEqual(Numbers(await s.Receive('a')), ['2'], 'next item after the cancelled lease expired');
+            AssertMatch(await s.Operator.GetStats(s.Subscription('a')), { Pending: 0, DeadLettered: 0 }, 'cancelled work was not retried');
         }),
 };
 
 /** The transport conformance cases (spec 02 §6), in execution order. */
 export const CONFORMANCE_CASES: readonly ConformanceCase[] = [
     C01, C02, C03, C04, C05, C06, C07, C08, C09, C10, C11, C12, C13,
-    C14, C15, C16, C17, C18, C19, C20, C21, C22, C23, C24, C25, C26, C27,
+    C14, C15, C16, C17, C18, C19, C20, C21, C22, C23, C24, C25, C26,
 ];
 ```
 
@@ -5930,7 +6376,7 @@ Expected: succeeds; the lockfile records the optional peer.
 - [ ] **Step 10: Run the tests and build**
 
 Run: `cd packages/WorkQueue/core && pnpm test`
-Expected: PASS — previous 135 plus conformanceAssertions (3), RunConformanceChecks (3) and conformance (27): **168 tests**.
+Expected: PASS — previous 149 plus conformanceAssertions (3), RunConformanceChecks (3) and conformance (26): **181 tests**.
 
 Run: `cd packages/WorkQueue/core && pnpm run build`
 Expected: builds; `dist/testing/index.js` and `dist/testing/vitest.js` exist.
@@ -5959,7 +6405,7 @@ git commit -m "feat(work-queue-core): runner-agnostic transport conformance kit 
 - Produces:
   - `api/restContract.ts` — the JSON shapes of spec 03 §9, shared with the REST extension (plan 06) so client and server map identically:
     - `MAX_REST_PUBLISH_BATCH = 100`
-    - `RestPayloadRefJson { uri; contentType?; sizeBytes?; checksum? }`, `RestPublishRequestJson { messageId?; partitionKey?; sequence?; attributes?; payload?; payloadRef?; correlationId?; deduplicationKey?; deduplicationTtlSeconds? }`, `RestPublishBodyJson { messages }`, `RestPublishErrorJson { code; message; retryable }`, `RestPublishResultJson { messageId; status: PublishStatus; error? }`, `RestPublishResponseJson { results }`
+    - `RestPayloadRefJson { uri; contentType?; sizeBytes?; checksum? }`, `RestPublishRequestJson { messageId?; partitionKey?; attributes?; payload?; payloadRef?; correlationId?; deduplicationKey?; deduplicationTtlSeconds? }`, `RestPublishBodyJson { messages }`, `RestPublishErrorJson { code; message; retryable }`, `RestPublishResultJson { messageId; status: PublishStatus; error? }`, `RestPublishResponseJson { results }`
     - `ToRestPublishRequest(request: PublishRequest): RestPublishRequestJson`, `FromRestPublishRequest(json: RestPublishRequestJson): PublishRequest`, `ToRestPublishResult(result: PublishResult): RestPublishResultJson`
     - `type RestPublishBodyParseResult = { Kind: 'Parsed'; Requests: PublishRequest[] } | { Kind: 'Invalid'; Error: string }`, `ParseRestPublishBody(value: unknown): RestPublishBodyParseResult` (shape only; envelope rules stay in `ValidatePublishRequest`)
     - `ParseRestPublishResponse(value: unknown, expectedCount: number): PublishResult[] | null`
@@ -5969,7 +6415,7 @@ git commit -m "feat(work-queue-core): runner-agnostic transport conformance kit 
 Client rules:
 - `MessageID`s are assigned **before** the first request, so every retry resends the same IDs.
 - Requests are chunked to 100 and sent to `POST {BaseUrl}/topics/{encodeURIComponent(topic)}/messages` with `X-API-Key`.
-- Network errors, timeouts (`TimeoutMs`, default 10 000), `429` and `5xx` are retried up to `MaxRetries` (default 3), sleeping `Retry-After` seconds when given, else `RetryBaseDelayMs × 2^attempt` (default base 200). After the last retry every item is `Rejected` with `TransportUnavailable` (retryable).
+- Network errors, timeouts (`TimeoutMs`, default 10 000), `429` and `5xx` are retried up to `MaxRetries` (default 3), sleeping for `Retry-After` when given (delta-seconds or an HTTP date, capped at `MAX_RETRY_AFTER_SECONDS = 60` so a hostile or mistaken header cannot park a producer), else `RetryBaseDelayMs × 2^attempt` (default base 200). After the last retry every item is `Rejected` with `TransportUnavailable` (retryable).
 - `200`/`202` bodies are parsed per item; a malformed body rejects every item with retryable `InvalidResponse`. Status values are matched case-insensitively; the client and extension emit `Accepted` / `Duplicate` / `Rejected`.
 - Other statuses reject every item with the body's `code` (fallbacks: `400 BadRequest`, `401 Unauthorized`, `403 Forbidden`, `404 TopicNotFound`, `413 PayloadTooLarge`, otherwise `Http<status>`), retryable per `IsRetryablePublishErrorCode`.
 - `Publish` never throws for transport or per-item failures.
@@ -5993,7 +6439,6 @@ import type { PublishRequest } from '../publishing';
 const FULL_REQUEST: PublishRequest = {
     MessageID: '6f1c2a4e-9b3d-4c5e-8f7a-1b2c3d4e5f60',
     PartitionKey: 'integration-42',
-    Sequence: 3,
     Attributes: { source: 'hubspot' },
     PayloadRef: { Uri: 's3://bucket/batch-3.jsonl', ContentType: 'application/x-ndjson', SizeBytes: 2048, Checksum: 'sha256:abc' },
     CorrelationID: 'corr-7',
@@ -6007,7 +6452,6 @@ describe('REST request mapping', () => {
         expect(json).toEqual({
             messageId: FULL_REQUEST.MessageID,
             partitionKey: 'integration-42',
-            sequence: 3,
             attributes: { source: 'hubspot' },
             payloadRef: { uri: 's3://bucket/batch-3.jsonl', contentType: 'application/x-ndjson', sizeBytes: 2048, checksum: 'sha256:abc' },
             correlationId: 'corr-7',
@@ -6034,14 +6478,14 @@ describe('REST request mapping', () => {
             { messages: Array.from({ length: 101 }, () => ({})) },
             { messages: ['text'] },
             { messages: [{ attributes: { a: 1 } }] },
-            { messages: [{ sequence: '1' }] },
+            { messages: [{ deduplicationTtlSeconds: '60' }] },
             { messages: [{ payloadRef: {} }] },
             { messages: [{ messageId: 7 }] },
         ];
         for (const body of invalidBodies) {
             expect(ParseRestPublishBody(body).Kind).toBe('Invalid');
         }
-        expect(ParseRestPublishBody({ messages: [{}, { sequence: 'x' }] })).toEqual({ Kind: 'Invalid', Error: 'messages[1]: "sequence" must be a number' });
+        expect(ParseRestPublishBody({ messages: [{}, { deduplicationTtlSeconds: 'x' }] })).toEqual({ Kind: 'Invalid', Error: 'messages[1]: "deduplicationTtlSeconds" must be a number' });
     });
 });
 
@@ -6183,6 +6627,18 @@ describe('WorkQueueApiPublisher', () => {
         expect(sleeps).toEqual([3000]);
     });
 
+    it('caps Retry-After at 60 s, whether it is delta-seconds or an HTTP date', async () => {
+        const sleeps: number[] = [];
+        const { Fetch } = fakeFetch([
+            json(429, {}, { 'Retry-After': '86400' }),
+            json(503, {}, { 'Retry-After': 'Fri, 31 Dec 2099 23:59:59 GMT' }),
+            echo('Accepted'),
+        ]);
+        const publisher = new WorkQueueApiPublisher({ BaseUrl: 'https://mj', ApiKey: 'k', Fetch, NewId: () => UUID, Sleep: async (ms) => { sleeps.push(ms); } });
+        await publisher.Publish('t', [{}]);
+        expect(sleeps).toEqual([60_000, 60_000]);
+    });
+
     it('reports TransportUnavailable after exhausting retries on network errors', async () => {
         const sleeps: number[] = [];
         const { Fetch, Calls } = fakeFetch([new Error('ECONNRESET'), new Error('ECONNRESET'), new Error('ECONNRESET')]);
@@ -6261,7 +6717,6 @@ export interface RestPayloadRefJson {
 export interface RestPublishRequestJson {
     messageId?: string;
     partitionKey?: string;
-    sequence?: number;
     attributes?: Record<string, string>;
     payload?: WorkJson;
     payloadRef?: RestPayloadRefJson;
@@ -6304,7 +6759,6 @@ export function ToRestPublishRequest(request: PublishRequest): RestPublishReques
     return {
         ...(request.MessageID !== undefined ? { messageId: request.MessageID } : {}),
         ...(request.PartitionKey !== undefined ? { partitionKey: request.PartitionKey } : {}),
-        ...(request.Sequence !== undefined ? { sequence: request.Sequence } : {}),
         ...(request.Attributes !== undefined ? { attributes: { ...request.Attributes } } : {}),
         ...(request.Payload !== undefined ? { payload: request.Payload } : {}),
         ...(request.PayloadRef !== undefined ? { payloadRef: toRestPayloadRef(request.PayloadRef) } : {}),
@@ -6318,7 +6772,6 @@ export function FromRestPublishRequest(json: RestPublishRequestJson): PublishReq
     return {
         ...(json.messageId !== undefined ? { MessageID: json.messageId } : {}),
         ...(json.partitionKey !== undefined ? { PartitionKey: json.partitionKey } : {}),
-        ...(json.sequence !== undefined ? { Sequence: json.sequence } : {}),
         ...(json.attributes !== undefined ? { Attributes: { ...json.attributes } } : {}),
         ...(json.payload !== undefined ? { Payload: json.payload } : {}),
         ...(json.payloadRef !== undefined ? { PayloadRef: fromRestPayloadRef(json.payloadRef) } : {}),
@@ -6424,7 +6877,7 @@ function parseRequestJson(value: unknown): RestPublishRequestJson | string {
 
 function parseScalarFields(value: Record<string, unknown>): RestPublishRequestJson | string {
     const strings = ['messageId', 'partitionKey', 'correlationId', 'deduplicationKey'] as const;
-    const numbers = ['sequence', 'deduplicationTtlSeconds'] as const;
+    const numbers = ['deduplicationTtlSeconds'] as const;
     const result: RestPublishRequestJson = {};
     for (const name of strings) {
         const field = typedField(value, name, 'string');
@@ -6711,12 +7164,23 @@ function parseJson(text: string): unknown {
     }
 }
 
+/** Upper bound on a server-requested wait: a hostile or mistaken header must not park a producer. */
+export const MAX_RETRY_AFTER_SECONDS = 60;
+
+/** RFC 9110 Retry-After: delta-seconds or an HTTP date. Capped at MAX_RETRY_AFTER_SECONDS. */
 function parseRetryAfter(header: string | null): number | null {
-    if (header === null) {
+    if (header === null || header.trim() === '') {
         return null;
     }
     const seconds = Number(header);
-    return Number.isFinite(seconds) && seconds >= 0 ? seconds : null;
+    if (Number.isFinite(seconds)) {
+        return seconds >= 0 ? Math.min(seconds, MAX_RETRY_AFTER_SECONDS) : null;
+    }
+    const at = Date.parse(header);
+    if (Number.isNaN(at)) {
+        return null;
+    }
+    return Math.min(Math.max(0, (at - Date.now()) / 1000), MAX_RETRY_AFTER_SECONDS);
 }
 ```
 
@@ -6732,7 +7196,7 @@ export * from './api/WorkQueueApiPublisher';
 - [ ] **Step 6: Run the tests and build**
 
 Run: `cd packages/WorkQueue/core && pnpm test`
-Expected: PASS — previous 168 plus restContract (6) and WorkQueueApiPublisher (11): **185 tests**.
+Expected: PASS — previous 181 plus restContract (6) and WorkQueueApiPublisher (12): **199 tests**.
 
 Run: `cd packages/WorkQueue/core && pnpm run build`
 Expected: builds.
@@ -6773,15 +7237,18 @@ describe('public API', () => {
             'ValidatePublishRequest',
             'BuildWorkMessage',
             'SerializedEnvelopeBytes',
+            'CanonicalEnvelope',
             'ParseSubscriptionFilter',
             'ValidateSubscriptionFilter',
             'MatchesFilter',
             'FilterFields',
             'WORK_QUEUE_FILTER_SUPPORT',
             'ComputeBackoffSeconds',
+            'HeartbeatIntervalSeconds',
             'SubscriptionUnsupportedReason',
             'ConsumerRuntime',
             'DeliveryExecution',
+            'ExecutionKeyOf',
             'InMemoryTransport',
             'WorkQueueApiPublisher',
             'ParseRestPublishBody',
@@ -6797,6 +7264,10 @@ describe('public API', () => {
     });
 
     it('keeps the conformance kit out of the main entry', () => {
+        // Removed in Revision 4 (spec 11): these must not reappear.
+        for (const removed of ['SEQUENCE_ALREADY_RESOLVED_NOTE', 'SKIPPED_AFTER_PARTITION_FAILURE']) {
+            expect(Object.prototype.hasOwnProperty.call(Core, removed), removed).toBe(false);
+        }
         expect(Object.prototype.hasOwnProperty.call(Core, 'RunConformanceChecks')).toBe(false);
         expect(Object.prototype.hasOwnProperty.call(Core, 'RunTransportConformanceSuite')).toBe(false);
     });
@@ -6846,7 +7317,7 @@ export * from './runtime/ConsumerRuntime';
 export { InMemoryTransport, IN_MEMORY_TRANSPORT_CAPABILITIES } from './memory/InMemoryTransport';
 export type { InMemoryTransportOptions } from './memory/InMemoryTransport';
 export type { InMemoryDeliverySnapshot } from './memory/InMemoryStore';
-export { LEASE_EXPIRED_REASON, SEQUENCE_ALREADY_RESOLVED_NOTE } from './memory/InMemoryStore';
+export { LEASE_EXPIRED_REASON, MAX_RESOLUTION_NOTE_LENGTH } from './memory/InMemoryStore';
 
 // REST publish client
 export * from './api/restContract';
@@ -6868,9 +7339,9 @@ Design and contract: `plans/work-queue-1/02-implementation-overview.md` and `03-
 
 | Area | Exports |
 | --- | --- |
-| Envelope & publishing | `WorkMessage`, `PublishRequest`, `PublishResult`, `IWorkPublisher`, `ValidatePublishRequest`, `BuildWorkMessage`, `PublishErrorCodes` |
+| Envelope & publishing | `WorkMessage`, `PublishRequest`, `PublishResult`, `IWorkPublisher`, `ValidatePublishRequest`, `BuildWorkMessage`, `CanonicalEnvelope`, `PublishErrorCodes` |
 | Handlers | `WorkHandler`, `WorkContext`, `Outcome`, `FatalWorkError`, `TransientWorkError` |
-| Policy & rules | `SubscriptionPolicy`, `ParseSubscriptionFilter`, `ValidateSubscriptionFilter`, `MatchesFilter`, `FilterFields`, `WORK_QUEUE_FILTER_SUPPORT`, `ComputeBackoffSeconds`, `SubscriptionUnsupportedReason`, `FilterUnsupportedReason` |
+| Policy & rules | `SubscriptionPolicy`, `ParseSubscriptionFilter`, `ValidateSubscriptionFilter`, `MatchesFilter`, `FilterFields`, `WORK_QUEUE_FILTER_SUPPORT`, `ComputeBackoffSeconds`, `HeartbeatIntervalSeconds`, `SubscriptionUnsupportedReason`, `FilterUnsupportedReason` |
 | Transports | `ITransportDriver`, `ITransportConsumer`, `ITransportOperator`, `TransportCapabilities` |
 | Runtime | `ConsumerRuntime` (loop or `ProcessBatch`), `DeliveryExecution` |
 | Reference transport | `InMemoryTransport` (Database-transport semantics, in memory) |
@@ -6905,8 +7376,11 @@ else is yours — see `plans/work-queue-1/10-consumer-guide.md`. Four rules cove
    `MaxProcessingSeconds` to the longest a healthy run should take: the runtime renews the lease while your
    handler awaits, and aborts once the cap passes. Use `'Manual'` only when you want a *stuck* handler detected,
    then call `await context.Heartbeat({ Percent })` at real progress boundaries.
-2. **Honor `context.Signal`.** It aborts when the lease is lost, an operator cancels the item, or the host shuts
-   down. Stop whatever external work you started — a child process, a remote job, a long query.
+2. **Honor `context.Signal`.** It aborts when an operator cancels the item, the lease is lost, the processing cap
+   is hit, or the host shuts down; `context.Signal.reason` says which (`'Cancelled'`, `'LeaseLost'`,
+   `'MaxProcessingSeconds'`, `'Shutdown'`). Stop whatever external work you started — a child process, a remote
+   job, a long query. Stopping promptly matters: after a cancel, the runtime acknowledges it as soon as your
+   handler returns, which frees an `Exclusive`/`Ordered` key immediately instead of at lease expiry.
 3. **Never block the event loop.** A long synchronous CPU-bound loop stops the heartbeat timer with it and the
    lease expires under you; move that work to a worker thread or child process.
 4. **Non-restartable side effects need your own guard.** At-least-once delivery means a handler can run twice.
@@ -6914,8 +7388,15 @@ else is yours — see `plans/work-queue-1/10-consumer-guide.md`. Four rules cove
    must not overlap — an infrastructure apply, a financial posting — set a `LeaseSeconds` larger than your worst
    heartbeat outage *and* hold a domain lock of your own.
 
-`context.Heartbeat` resolves `false` once the lease is gone (taken over, or revoked by an operator cancel); a
-transient transport error does not — it is retried on the next tick while the lease is still valid.
+`context.Heartbeat` resolves `false` once the lease is gone or the delivery is cancelled; a transient transport
+error does not — it is retried on the next tick. The runtime heartbeats every `min(LeaseSeconds / 3, 30 s)`, so a
+cancel or a lost lease is noticed within 30 seconds however long the lease, and it enforces the lease's expiry on
+its own timer in both heartbeat modes — a `Manual` handler that stops heartbeating is aborted when its lease runs
+out.
+
+**Ordering is publish order.** There is no producer-supplied ordering number. If one producer owns a key's order,
+it publishes in order: do not publish N+1 until N is accepted, or publish both in one call. `Ordered`
+subscriptions need a topic on the Database transport.
 
 ## Subscription filters
 
@@ -6967,7 +7448,7 @@ RunTransportConformanceSuite('MyTransport', {
 ```
 
 Outside vitest (for example an integration runner against a live database), call
-`await RunConformanceChecks(harness)` from `/testing`: it runs the same 27 cases sequentially, never throws, and
+`await RunConformanceChecks(harness)` from `/testing`: it runs the same 26 cases sequentially, never throws, and
 returns `{ Id, Title, Status: 'Passed' | 'Failed' | 'Skipped', Detail, DurationMs }` per case.
 
 `vitest` is an optional peer dependency used only by `/testing/vitest`.
@@ -6993,10 +7474,13 @@ Add `@memberjunction/work-queue-core`: transport-neutral durable work-queue cont
 - [ ] **Step 6: Full verification**
 
 Run: `cd packages/WorkQueue/core && pnpm test`
-Expected: PASS — **188 tests** (dependencyGuard 3, errors 6, publishing 2, validation 25, filter 23, backoff 8, compatibility 9, outcomes 11, DeliveryExecution 20, ConsumerRuntime 14, InMemoryTransport 14, conformanceAssertions 3, RunConformanceChecks 3, conformance 27, restContract 6, WorkQueueApiPublisher 11, publicApi 3).
+Expected: PASS — **202 tests** (dependencyGuard 4, errors 6, publishing 2, validation 23, filter 23, backoff 10, compatibility 7, outcomes 11, DeliveryExecution 32, ConsumerRuntime 16, InMemoryTransport 15, conformanceAssertions 3, RunConformanceChecks 3, conformance 26, restContract 6, WorkQueueApiPublisher 12, publicApi 3).
 
 Run: `cd packages/WorkQueue/core && pnpm run build`
 Expected: builds; `dist/index.js`, `dist/testing/index.js` and `dist/testing/vitest.js` exist.
+
+Run: `cd packages/WorkQueue/core && pnpm run typecheck:tests`
+Expected: no errors — the test files and `fakes.ts` type-check against the contract (run this after every task that adds tests, too).
 
 Run (repository root): `node .github/scripts/check-esm-imports.mjs packages --changed-since origin/next`
 Expected: `@memberjunction/work-queue-core` imports cleanly under native ESM (no `ERR_MODULE_NOT_FOUND`).
@@ -7026,7 +7510,7 @@ git push
 | 03 §1 envelope + §1.1 validation rules core can check | 1, 2 |
 | 03 §2 publisher contract, `WorkQueueApiPublisher` | 1, 9 |
 | 03 §3 handler/runtime contract, errors, outcomes | 1, 5, 6 |
-| 03 §3.1 policy, `ComputeBackoffSeconds` | 1, 4 |
+| 03 §3.1 policy, `ComputeBackoffSeconds`, `HeartbeatIntervalSeconds` | 1, 4 |
 | 03 §3.2 `ConsumerRuntime` rules | 5, 6 |
 | 03 §4 filter grammar, limits, missing-attribute rule | 3 |
 | 03 §5 transport contracts, `SubscriptionUnsupportedReason` | 1, 4 |
@@ -7035,29 +7519,27 @@ git push
 | 03 §9 REST JSON shapes | 9 |
 | 03 §10 manifest types | 1 |
 | 02 §6 conformance kit (vitest and runner-agnostic) | 8 |
-| 03 §7 cancel in flight (lease revocation, key held until expiry) | 5 (runtime), 7 (store/operator), 8 (C26–C27) |
+| 03 §7 cancel in flight (cancel flag, `Cancelled` heartbeat, `AcknowledgeCancel`, dead holder discarded at expiry) | 5 (runtime), 7 (store/operator), 8 (C24–C26) |
+| 03 §3.2 lease horizon on its own timer (hung heartbeat, `Manual` mode), separate cap/shutdown conditions, executions keyed by delivery + token | 5, 6 |
+| 03 §2.1 global `MessageID`, `CanonicalEnvelope` | 2, 7, 8 (C19–C20) |
+| 11 S1/S2 — no ordering numbers, no staged cloud `Ordered` | 1, 2, 4, 7, 8 (nothing to build; `publicApi.test.ts` guards against reintroduction) |
 | 02 §1a consumer responsibilities (handler rules) | 10 (README) |
 
 ## Contract deltas
 
-Differences between this plan and spec 03 that must be folded into 03 (and honoured by plans 05–08). **Adopted**
-means 03 already carries the rule (Revision 2/3) and the row is kept for traceability.
+Revision 4 rewrote 03 ([11 — Revision 4 review](11-revision-4-review.md)), and it now carries every delta this plan
+raised earlier: `ReceiveWaitSeconds`, the dependency guard in place of a lint rule, released batch leftovers, the
+100-character dead-letter reason, heartbeat coalescing, the two-entry conformance kit, the workspace globs, dot-free
+attribute keys, the filter details (`Filters` capability, one constraint per field, non-empty values), `LeaseExpiryGraceMs`,
+`WorkAbortReason`, `LeaseExtension`, `AcknowledgeCancel`, `CanonicalEnvelope` and the client-side REST codes. The
+ordering-number deltas are moot: explicit sequences were cut (11 S1). What remains open:
 
 | # | Delta | Why |
 | --- | --- | --- |
-| CD1 *(adopted — 03 §3.2)* | `ConsumerRuntimeOptions` gains optional `ReceiveWaitSeconds` (default 0), passed as `Receive`'s `waitSeconds`. | 03 §3.2 gives the runtime no way to long-poll SQS (plan 07's MJ worker needs 20 s). |
-| CD2 *(adopted — 03 §0)* | 03 §0's "lint rule (`no-restricted-imports`)" is not implementable as written: the repo has ESLint packages but no ESLint configuration wired into package builds or CI. Enforcement is `dependencyGuard.test.ts` (package.json fields + source import scan), which runs in every `pnpm test`. | Verified: no `.eslintrc*`/`eslint.config.*` at the root or in any package. |
-| CD3 *(adopted — 03 §3.2)* | `ProcessBatch` skips the remainder of a partition lane after a delivery that did not settle `Completed`, reporting `{ Kind: 'Failed', Error: 'SkippedAfterEarlierFailureInPartition' }` (exported `SKIPPED_AFTER_PARTITION_FAILURE`). | SQS FIFO batches must not run later items of a message group after an earlier one fails; plan 07's Lambda adapter maps these to batch item failures. |
-| CD4 *(adopted — 03 §3.2)* | Dead-letter reasons are truncated to 100 characters in the runtime (`MAX_DEAD_LETTER_REASON_LENGTH`). | `WorkQueueDelivery.DeadLetterReason` is `nvarchar(100)` (03 §6.5); a long `FatalWorkError` message would otherwise fail the settle. |
-| CD5 *(adopted — 03 §7)* | 03 §7 must add two sequence rules: (a) the `LastCompletedSequence` mark keeps advancing through consecutive already-`Discarded` sequences after Complete/Discard/Skip; (b) a delivery created for an `Ordered` + `ExplicitSequence` subscription whose `Sequence ≤ LastCompletedSequence` is created `Discarded` (note `SequenceAlreadyResolved`). | Without (a), discarding sequence 3 while 2 is pending leaves 4 waiting forever. Without (b), a late publish of a skipped sequence becomes an unclaimable head and wedges its key (possible on the Database transport once the original message row is purged, and on staged subscriptions). |
-| CD6 *(adopted — 03 §7)* | Awaiting-sequence state is cleared as soon as the head becomes the next sequence (not only on completion). | Otherwise `ListPartitions` keeps reporting `AwaitingSequence` for a key whose missing sequence has arrived. |
-| CD7 | 03 §9 does not pin the casing of `status` values or `payloadRef` field names. This plan emits `Accepted`/`Duplicate`/`Rejected` (parsed case-insensitively) and camelCase `payloadRef` fields (`uri`, `contentType`, `sizeBytes`, `checksum`), and exports the mapping (`ParseRestPublishBody`, `ToRestPublishResult`, …) from core so the REST extension (plan 06) uses the identical code. | Client and server are written in different plans; one shared mapping removes drift. |
-| CD8 | `PublishErrorCodes` adds client-side codes `BadRequest`, `Unauthorized` and `InvalidResponse` (retryable). An ExplicitSequence request with `Sequence` but no `PartitionKey` returns `InvalidSequence` (03 §1.1 names no code for that case). | Needed to report HTTP failures and a malformed success body per item. |
-| CD9 *(adopted — 03 §3.2)* | Heartbeats are coalesced: a `Heartbeat` call made while another `ExtendLease` is in flight shares its result and its progress is not sent. After `MaxProcessingSeconds`, `Heartbeat` resolves `false` but a later handler outcome is still settled (the transport's lease token fences it if the lease expired). | 03 §3.2 does not specify either case. |
-| CD10 | Extra exports beyond 03: `PublishErrorCodes`, `CreatePublishError`, `RejectedPublishResult`, `IsRetryablePublishErrorCode`, `SUBSCRIPTION_POLICY_DEFAULTS`, `NULL_WORK_LOGGER`, `ValidateSubscriptionFilter`, `FilterFields`, `WORK_QUEUE_FILTER_SUPPORT`, `FilterUnsupportedReason`, runtime helpers (`MapThrownError`, `ResolveSettleAction`, …), `DeliveryExecution`, `IN_MEMORY_TRANSPORT_CAPABILITIES`, and in `/testing`: fixtures, `ConformanceHarness` (with `Capabilities` and `Traits { ReleaseConsumesAttempt, ExpiredLeaseDeadLetters, ReceiveWaitSeconds }`), `ConformanceCase`, `CONFORMANCE_CASES`, `ConformanceAssertionError`, `ConformanceCheckResult`, `RunConformanceChecks`; in `/testing/vitest`: `RunTransportConformanceSuite`. | Shared by plans 05–07 so rules are implemented once. |
-| CD12 *(adopted — 02 §6)* | The conformance kit is runner-agnostic: cases are data (`CONFORMANCE_CASES`, each with `Gate` returning a skip reason and `Run` throwing `ConformanceAssertionError`), `RunConformanceChecks(harness)` runs them sequentially without throwing and disposes the driver per case, and the vitest wrapper lives in a separate `./testing/vitest` entry — the only module importing `vitest`. 02 §6 should name both entries. | Plan 06's integration bundle runs the kit against a live database outside vitest. |
-| CD11 *(adopted — 03 §0)* | Workspace globs: `packages/WorkQueue/*` must be added to both `pnpm-workspace.yaml` and the root `package.json` `workspaces` (Task 1). | Nested `packages/WorkQueue/{core,aws,engine,server}` folders are not covered by `packages/*`. |
-| CD13 | The lease horizon is enforced in the runtime, not only by the transport: `DeliveryExecution` tracks `LeaseExpiresAt` (moved forward on every `Held` renewal) and aborts with the **new** `ExecutionStopReason` value `'LeaseExpired'` once heartbeats have failed past it plus `LEASE_EXPIRY_GRACE_MS` (5 s, overridable per execution). 03 §3.2 says "only `Lost`, or the lease passing its expiry, aborts" without naming the grace allowance or the stop reason. | A transient database or SQS failure must not abort an hour-long handler, but a handler whose lease is genuinely gone must stop before another worker takes over. |
-| CD14 | Cancel needs no new consumer method: 03 §7's token rotation surfaces through the existing `ExtendLease → 'Lost'` path. The **operator** side does change — `ITransportOperator.Discard` may return `CancelRequested: true`, and the field is emitted **only** when true, so plain discards keep the `{ Supported, Changed }` shape that existing assertions and plans 05–07 use. `TransportCapabilities.CancelInFlight` gates conformance cases C26–C27. | 03 §5.2 types `CancelRequested` as optional but does not say when it is present. |
-| CD15 *(resolved — 03 §1/§1.1)* | Attribute keys may not contain a dot: the charset is `[A-Za-z0-9_-]{1,64}`, and the reserved-prefix rule is "starts with `mj` followed by `.` or `_`, case-insensitive". Filter field names are therefore always bare names, and a dotted field stays rejected as MJ's multi-record `source.field` form. | Allowing dotted attribute keys would make those attributes unfilterable, since `CompositeFilterDescriptor` overloads `field` for multi-record filters (`CompositeFilter.ParseFilterField`). |
-| CD16 | Filter details 03 §4 leaves open: an empty `filters: []` array matches everything (same as `null`); rule values are normalised with `String(value)` at parse time, so the stored filter always holds strings; an empty-string value is rejected for `eq`/`neq`/`startswith`; a nested group must use `logic: 'or'` (an inner `and` is rejected); `FilterSupport` is carried on `TransportCapabilities.Filters`, which every driver and fake must now set; and a field may be constrained only once per filter (matching plan 07's `ToSnsFilterPolicy`, delta D15). | Needed so the Database, AWS and in-memory transports agree byte-for-byte on what a stored filter means. |
+| CD1 | **Cancel drain.** 03 §3.2 says the runtime acknowledges a cancel "when the handler returns (or after `ShutdownDrainMs`)". `DeliveryExecution` takes this as its own option, `CancelDrainMs` (default 30 000), and `ConsumerRuntime` passes `ShutdownDrainMs`. When the drain elapses the cancel is acknowledged while the handler may still be running; its eventual outcome is dropped. 03 should name the option, or state that `ProcessBatch` (Lambda) uses the same value. | A handler that ignores its abort must not hold an `Exclusive`/`Ordered` key for the rest of a 20-minute lease. |
+| CD2 | **After the cap, the horizon still decides.** 03 §3.2 says a handler outcome after `MaxProcessingSeconds` "is still settled (the fence rejects it if the lease has gone)". This plan keeps the lease-horizon timer running after the cap, so once the horizon passes `Run` returns `LeaseLost` **without** attempting the settle. The observable result is the same (nothing is settled), minus one doomed round trip. | One rule for "the lease is gone", whatever caused it. |
+| CD3 | **`ProcessBatch` leftovers.** 03 §3.2 says they are released and "results returned"; this plan returns the release's own `SettleResult` (`Settled`/`Pending` on success, `Failed` when the release throws). The former `SKIPPED_AFTER_PARTITION_FAILURE` marker is gone — plan 07's Lambda adapter must report every non-`Completed` result as a batch item failure instead of matching that string. | 03 no longer defines a marker value. |
+| CD4 | **`InMemoryTransport.RunSweep()` returns `{ ExpiredLeases }` and counts every expired row**, whereas 03 §7's `ExpireLeases` statement *returns* only the rows it dead-lettered. The in-memory count is a test convenience; drivers follow 03. | Conformance harnesses only need "something expired". |
+| CD5 | **Extra exports beyond 03** (shared by plans 05–07 so rules are implemented once): `PublishErrorCodes`, `CreatePublishError`, `RejectedPublishResult`, `IsRetryablePublishErrorCode`, `SUBSCRIPTION_POLICY_DEFAULTS`, `NULL_WORK_LOGGER`, `HEARTBEAT_INTERVAL_MAX_SECONDS`, `ValidateSubscriptionFilter`, `FilterFields`, `FilterUnsupportedReason`, `IsWorkQueueUuid`, `IsReservedAttributeKey`, the size constants, runtime helpers (`MapThrownError`, `ResolveSettleAction`, `DescribeError`, …), `DeliveryExecution`, `ExecutionKeyOf`, `LEASE_EXPIRY_GRACE_MS`, `DEFAULT_CANCEL_DRAIN_MS`, `MAX_TIMER_DELAY_MS`, `MAX_RETRY_AFTER_SECONDS`, `IN_MEMORY_TRANSPORT_CAPABILITIES`, `LEASE_EXPIRED_REASON`, `MAX_RESOLUTION_NOTE_LENGTH`; in `/testing`: fixtures, `ConformanceHarness` (with `Traits { ReleaseConsumesAttempt, ExpiredLeaseDeadLetters, ReceiveWaitSeconds }`), `ConformanceCase`, `CONFORMANCE_CASES`, `ConformanceAssertionError`, `ConformanceCheckResult`, `RunConformanceChecks`; in `/testing/vitest`: `RunTransportConformanceSuite`. | Additive; nothing here contradicts 03. |
+| CD6 | **Filter details 03 §4 still leaves open:** an empty `filters: []` array matches everything (same as `null`); rule values are normalised with `String(value)` at parse time, so a stored filter always holds strings; a nested group must use `logic: 'or'` (an inner `and` is rejected). | Needed so the Database, AWS and in-memory transports agree byte-for-byte on what a stored filter means. |
+| CD7 | **Conformance traits vs. SQS attempt accounting.** `Traits.ReleaseConsumesAttempt` covers 03 §5.1's "Release consumes a receive"; nothing in the kit models the receive-time guard (`> MaxAttempts + 2`) or the redrive count (`MaxAttempts + 5`), which stay plan 07's own tests. | Those are SQS-specific margins, not transport-neutral behaviour. |

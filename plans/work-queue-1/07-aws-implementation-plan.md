@@ -2,13 +2,13 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build `@memberjunction/work-queue-aws` (SNS publish, SQS consumer, SQS dead-letter operator, Lambda adapter — with no MemberJunction runtime dependencies), wire it into the engine (driver factory, credentials, staging of cloud `Ordered` subscriptions), and ship a manifest-driven Terraform module with a deployment governance runbook.
+**Goal:** Build `@memberjunction/work-queue-aws` (SNS publish, SQS consumer, SQS dead-letter operator, Lambda adapter — with no MemberJunction runtime dependencies), wire it into the engine through the `@memberjunction/work-queue-engine/aws` subpath (driver factory, credentials, manifest filter policies), and ship a manifest-driven Terraform module with an enforced deployment governance pipeline.
 
-**Architecture:** A topic bound to the AWS transport is an SNS topic; each subscription is an SQS queue subscribed with raw delivery and an SNS filter policy, plus a dead-letter queue. `None`/`Exclusive` subscriptions are consumed directly from SQS by a thin Lambda (`CreateSqsLambdaHandler`) or an MJ worker, using the core `ConsumerRuntime`. `Ordered` subscriptions must be MJ-hosted: an `SqsStager` copies messages into Database delivery rows and the Database consumer processes them. Dead letters are SQS messages carrying `mj_*` reason attributes; the redrive policy is a crash backstop. No DynamoDB. Cloud resources are provisioned only by Terraform, from the topology manifest MJ exports.
+**Architecture:** A topic bound to the AWS transport is an SNS topic; each subscription is an SQS queue subscribed with raw delivery and an SNS filter policy, plus a dead-letter queue. `None` and `Exclusive` subscriptions are consumed directly from SQS by a thin Lambda (`CreateSqsLambdaHandler`) or an MJ worker, using the core `ConsumerRuntime`. **`Ordered` is not available on this transport** — validation rejects it ("Ordered requires the Database transport", 03 §5). FIFO queues are consumed **one message per receive** so `Exclusive` holds and followers never burn receive counts (03 §5.1, F5). Dead letters are SQS messages carrying `mj_*` reason attributes, each in its own message group (F6); the redrive policy is a crash backstop. No DynamoDB. Cloud resources are provisioned only by Terraform, from the topology manifest MJ exports.
 
-**Tech Stack:** TypeScript 5.9 (ESM), Vitest 3, AWS SDK for JavaScript v3 (`@aws-sdk/client-sns`, `@aws-sdk/client-sqs`, `@aws-sdk/credential-providers` in the engine only), esbuild (bundle check), Terraform ≥ 1.7 with the `hashicorp/aws` provider 6.x, tflint, LocalStack (opt-in), GitHub Actions.
+**Tech Stack:** TypeScript 5.9 (ESM), Vitest 3, AWS SDK for JavaScript v3 (`@aws-sdk/client-sns`, `@aws-sdk/client-sqs`; `@aws-sdk/credential-providers` in the engine's `./aws` subpath only), esbuild (bundle check), Terraform ≥ 1.7 with the `hashicorp/aws` provider 6.x, tflint, LocalStack (opt-in), GitHub Actions.
 
-**Spec:** [`03-interfaces-and-tables.md`](03-interfaces-and-tables.md) (normative), [`02-implementation-overview.md`](02-implementation-overview.md), [`README.md`](README.md). Read all three before starting. Names in 03 are binding; where this plan disagrees with 03, fix this plan (the deltas this plan needs are listed in [Contract deltas](#contract-deltas)).
+**Spec:** [`03-interfaces-and-tables.md`](03-interfaces-and-tables.md) (normative, Revision 4 — read §0, §4, §5, §5.1, §5.2, §10, §11), [`11-revision-4-review.md`](11-revision-4-review.md), [`02-implementation-overview.md`](02-implementation-overview.md), [`README.md`](README.md). Names in 03 are binding; where this plan disagrees with 03, fix this plan (the few deltas still open are listed in [Contract deltas](#contract-deltas)).
 
 ## Global Constraints
 
@@ -16,12 +16,13 @@
 - **Per-package commands:** `cd packages/WorkQueue/aws && pnpm test` / `pnpm run build`; engine: `cd packages/WorkQueue/engine && pnpm test` / `pnpm run build`. Never build single packages with turbo from the root.
 - **Internal dependency versions:** pin every `@memberjunction/*` dependency to the version in `packages/MJCore/package.json` (`6.1.0` when this plan was written).
 - **External versions:** `@aws-sdk/client-sns`, `@aws-sdk/client-sqs`, `@aws-sdk/credential-providers` at `^3.984.0` (matches the AWS SDK clients already in the repo, e.g. `packages/MJStorage/package.json`); `esbuild` `^0.27.3` (already in `pnpm-lock.yaml`).
-- **Dependency rule (R9, 03 §0):** `@memberjunction/work-queue-aws` depends **only** on `@memberjunction/work-queue-core`, `@aws-sdk/client-sns` and `@aws-sdk/client-sqs`. No CloudWatch client. Enforced by `src/__tests__/dependencyGuard.test.ts` and the package `.eslintrc.json`. The `./lambda` bundle is checked by `scripts/check-lambda-bundle.mjs`.
-- **Package shape:** `"type": "module"`, build `tsc && tsc-alias -f`, `tsconfig.json` extends `../../../tsconfig.server.json`, `vitest.config.ts` merges `../../../vitest.shared`, tests in `src/__tests__/*.test.ts`, extensionless relative imports, subpath exports declared with `types` + `default` (pattern: `packages/ServerBootstrapLite/package.json`).
-- **No test calls AWS.** Every SDK call goes through `SnsGateway`/`SqsGateway`; unit tests use the recording fakes in `src/testing/fakes.ts` (exported as `@memberjunction/work-queue-aws/testing` so engine tests can reuse them) or a scripted `client.send`. The LocalStack suite (Task 12) is opt-in and excluded from `pnpm test`.
-- **No DynamoDB, no parking, no state-sweeper Lambda** (README R8).
+- **Dependency rule (R9, 03 §0):** `@memberjunction/work-queue-aws` depends **only** on `@memberjunction/work-queue-core`, `@aws-sdk/client-sns` and `@aws-sdk/client-sqs`. No CloudWatch client. The repo has no ESLint configuration, so enforcement is `src/__tests__/dependencyGuard.test.ts` (package.json fields plus every import form: `from`, side-effect `import '…'`, dynamic `import(…)`, `require(…)`, single or double quotes). The `./lambda` entry must not reach `@aws-sdk/client-sns`; `scripts/check-lambda-bundle.mjs` bundles it **with the SDK included** and fails if the SNS client appears.
+- **Engine loading (F12, 03 §0):** the engine's **main entry never imports `@memberjunction/work-queue-aws`**. The AWS factory, credential resolution and manifest enrichment live in `packages/WorkQueue/engine/src/aws/` and are exported **only** from the subpath `@memberjunction/work-queue-engine/aws`, which `ServerBootstrap` (never `ServerBootstrapLite`) imports for its registration side effect. A guard test in the engine enforces this.
+- **Package shape:** `"type": "module"`, build `tsc && tsc-alias -f`, `tsconfig.json` extends `../../../tsconfig.server.json`, `vitest.config.ts` merges `../../../vitest.shared`, tests in `src/__tests__/*.test.ts`, extensionless relative imports, subpath exports declared with `types` + `default` (pattern: `packages/ServerBootstrapLite/package.json`). No cross-package re-exports (F13).
+- **No test calls AWS.** Every SDK call goes through `SnsGateway`/`SqsGateway`; unit tests use the recording fakes in `src/testing/fakes.ts` (exported as `@memberjunction/work-queue-aws/testing` so engine tests can reuse them) or a scripted `client.send`. The LocalStack suite (Task 11) is opt-in and excluded from `pnpm test`.
+- **No DynamoDB, no parking, no state-sweeper Lambda, no cloud-side `Ordered`** (README R8, 11 S2).
 - **Code rules:** no `any`; `unknown` only at trust boundaries (JSON parsing, SDK errors) and narrowed immediately; PascalCase public members, camelCase private; static imports only; functions around 30–40 lines.
-- **AWS limits used by this plan** (verify against current AWS quotas before release): SNS/SQS message ≤ 262,144 bytes including attributes; ≤ 10 message attributes; `PublishBatch` / `SendMessageBatch` ≤ 10 entries and ≤ 262,144 bytes per request; `ReceiveMessage` ≤ 10 messages, `WaitTimeSeconds` ≤ 20; visibility timeout ≤ 43,200 s and a message cannot stay invisible beyond 12 h from its receive; FIFO `MessageGroupId`/`MessageDeduplicationId` ≤ 128 printable ASCII characters; FIFO dedup window 5 minutes; SQS queue names ≤ 80 characters including `.fifo`; redrive `maxReceiveCount` 1–1000; Lambda timeout ≤ 900 s.
+- **AWS limits used by this plan** (verify against current AWS quotas before release): SNS/SQS message ≤ 262,144 bytes including attributes; ≤ 10 message attributes; an SNS `String` attribute value must be non-empty; `PublishBatch` / `SendMessageBatch` ≤ 10 entries and ≤ 262,144 bytes per request; `ReceiveMessage` ≤ 10 messages, `WaitTimeSeconds` ≤ 20; visibility timeout ≤ 43,200 s and a message cannot stay invisible beyond 12 h from its receive; FIFO `MessageGroupId`/`MessageDeduplicationId` ≤ 128 printable ASCII characters; FIFO dedup window 5 minutes; SQS queue names ≤ 80 characters including `.fifo`; Lambda timeout ≤ 900 s; event-source `maximum_concurrency` 2–1,000.
 - **Terraform:** `required_version = ">= 1.7.0"` (needed for `mock_provider` in `terraform test`), provider `hashicorp/aws` `~> 6.0`. `terraform fmt -check -recursive`, `terraform validate`, `tflint` and `terraform test` must pass.
 - **Commits:** a "Commit" step runs **only when the user has approved commits for this execution session** (repository rule: no commits without explicit approval). Otherwise stage the files and report.
 - **Branch:** `feat/work-queue`, tracking `origin/feat/work-queue` (verify with `git branch -vv` before any push).
@@ -34,41 +35,41 @@
 | --- | --- | --- |
 | 1 | `work-queue-aws` scaffold, dependency guard, binding config, resource names, envelope | Package builds; guard and pure helpers tested |
 | 2 | SNS filter-policy translation | `ToSnsFilterPolicy` tested |
-| 3 | SNS/SQS gateways, error mapping, client factory, fakes | Gateways tested against scripted SDK clients |
+| 3 | SNS/SQS gateways, error mapping, client factories (SQS-only and SNS), fakes with FIFO group locking | Gateways tested against scripted SDK clients |
 | 4 | Capabilities, SNS publish mapping, binding validation, test fixtures | Publish and validation tested against fakes |
-| 5 | `SqsTransportConsumer` and dead-letter writer | Lease, settle and poison handling tested |
-| 6 | `AwsTransportOperator` and `AwsTransportDriver` | Stats, dead-letter peek, replay, discard and driver assembly tested |
-| 7 | Lambda adapter (`./lambda`), EMF metrics, example consumer, bundle check | Batch semantics tested; bundle check passes |
-| 8 | Engine: `AWSTransportDriverFactory`, credential resolution, cloud dedup verification | Factory tested; publish coordinator dedup proven over the real AWS driver |
-| 9 | Engine: `SqsStager` for staged `Ordered` subscriptions | Staging, idempotency, ordering, shutdown tested |
-| 10 | Terraform module `infrastructure/terraform/work-queue/aws` | `fmt`, `validate`, `tflint`, `terraform test` pass |
-| 11 | Deployment governance runbook and CI workflow | `GOVERNANCE.md`; workflow runs module checks and the bundle check |
-| 12 | LocalStack conformance (opt-in) and package README | Conformance suite passes against LocalStack |
+| 5 | `SqsTransportConsumer` and dead-letter writer | One-message FIFO receive, single flight per key, lease, settle and poison handling tested |
+| 6 | `AwsTransportOperator` and `AwsTransportDriver` | Stats, dead-letter scan, replay, discard and driver assembly tested |
+| 7 | Lambda adapter (`./lambda`), EMF metrics, example consumer, bundle check | Batch semantics tested; bundle check proves no SNS client |
+| 8 | Engine `./aws` subpath: `AWSTransportDriverFactory`, credential resolution, manifest filter policies, cloud dedup verification | Factory tested; main-entry guard passes; publish coordinator dedup proven over the real AWS driver |
+| 9 | Terraform module `infrastructure/terraform/work-queue/aws` | `fmt`, `validate`, `tflint`, `terraform test` pass |
+| 10 | Deployment governance runbook, gated pipeline, drift job and CI workflow | `GOVERNANCE.md`; pipeline gates destructive changes and applies the reviewed plan |
+| 11 | LocalStack conformance (opt-in) and package README | Conformance suite passes against LocalStack |
 
-Tasks 1–7 depend only on plan 04. Tasks 8–9 need plans 05 and 06 merged. Tasks 10–11 need Task 1 (naming parity) and plan 06's `mj queue export-topology` / `import-bindings` for the runbook's end-to-end check. Task 12 needs Tasks 1–7.
+Tasks 1–7 depend only on plan 04. Task 8 needs plans 05 and 06 merged. Tasks 9–10 need Task 1 (naming parity) and plan 06's `mj queue export-topology` / `import-bindings` for the runbook's end-to-end check. Task 11 needs Tasks 1–7.
 
 ## Pre-flight
 
 - [ ] You are on `feat/work-queue` and `git branch -vv` shows `[origin/feat/work-queue]`.
 - [ ] Plan 04 is merged: `cd packages/WorkQueue/core && pnpm test` passes, and `pnpm-workspace.yaml` contains `'packages/WorkQueue/*'`.
-- [ ] For Tasks 8–9: plans 05 and 06 are merged: `cd packages/WorkQueue/engine && pnpm test` passes.
+- [ ] For Task 8: plans 05 and 06 are merged: `cd packages/WorkQueue/engine && pnpm test` passes.
 - [ ] `terraform version` reports ≥ 1.7.0; `tflint --version` works (install from https://github.com/terraform-linters/tflint if missing).
-- [ ] No AWS credentials are needed for Tasks 1–11. Task 12 needs Docker.
+- [ ] No AWS credentials are needed for Tasks 1–10. Task 11 needs Docker.
 
 ## File structure
 
 ```
 packages/WorkQueue/aws/
-  package.json · tsconfig.json · vitest.config.ts · .eslintrc.json                 Task 1 (package.json extended in 7, 12)
-  README.md                                                                         Task 12
+  package.json · tsconfig.json · vitest.config.ts                                   Task 1 (package.json extended in 3, 7, 11)
+  README.md                                                                         Task 11
   scripts/check-lambda-bundle.mjs                                                   Task 7
   examples/thin-consumer/index.ts                                                   Task 7
-  localstack/docker-compose.yml · vitest.localstack.config.ts                       Task 12
+  localstack/docker-compose.yml · vitest.localstack.config.ts                       Task 11
   src/index.ts                                                                      Task 1, extended by 2–6
   src/config.ts · src/names.ts · src/envelope.ts                                    Task 1
   src/filterPolicy.ts                                                               Task 2
   src/gateway/errors.ts · SnsGateway.ts · SqsGateway.ts                             Task 3
-  src/gateway/SdkSnsGateway.ts · SdkSqsGateway.ts · clients.ts                      Task 3
+  src/gateway/SdkSnsGateway.ts · SdkSqsGateway.ts                                   Task 3
+  src/gateway/sqsClient.ts (SQS only) · snsClient.ts                                Task 3
   src/driver/capabilities.ts · publish.ts · bindingValidation.ts · src/testing/fixtures.ts   Task 4
   src/driver/AwsTransportDriver.ts                                                  Task 6
   src/consumer/deadLetter.ts · SqsTransportConsumer.ts                              Task 5
@@ -76,26 +77,34 @@ packages/WorkQueue/aws/
   src/lambda/index.ts · lambdaTypes.ts · bindingEnv.ts · emf.ts · CreateSqsLambdaHandler.ts   Task 7
   src/testing/index.ts · src/testing/fakes.ts                                       Task 3 (exported as ./testing)
   src/__tests__/*.test.ts                                                           every code task
-  src/__localstack__/conformance.localstack.test.ts                                 Task 12
+  src/__localstack__/conformance.localstack.test.ts                                 Task 11
 
 packages/WorkQueue/engine/
-  package.json                                                                      Task 8
-  src/transports/aws/ResolveAwsCredentials.ts · AWSTransportDriverFactory.ts        Task 8
-  src/transports/aws/SqsStager.ts · RegisterAwsHostLoops.ts                         Task 9
-  src/index.ts                                                                      Tasks 8, 9
+  package.json (./aws export + dependencies)                                        Task 8
+  src/aws/index.ts · ResolveAwsCredentials.ts · AWSTransportDriverFactory.ts        Task 8
+  src/aws/AwsManifestEnricher.ts                                                    Task 8
+  src/topology/ManifestEnricherRegistry.ts · src/WorkQueueEngine.ts (ExportManifest)   Task 8
   src/__tests__/ResolveAwsCredentials.test.ts · AWSTransportDriverFactory.test.ts   Task 8
-  src/__tests__/AwsPublishCoordinator.test.ts · FinalizeTopologyManifest.test.ts    Task 8
-  src/topology/FinalizeTopologyManifest.ts · src/WorkQueueEngine.ts (ExportManifest)   Task 8
-  src/__tests__/SqsStager.test.ts                                                   Task 9
+  src/__tests__/AwsPublishCoordinator.test.ts · AwsManifestEnricher.test.ts         Task 8
+  src/__tests__/mainEntryGuard.test.ts                                              Task 8
+
+packages/ServerBootstrap/
+  package.json · src/index.ts (import '@memberjunction/work-queue-engine/aws')      Task 8
+
+packages/MJCLI/
+  src/commands/queue/export-topology.ts · import-bindings.ts                        Task 8 (Step 7b: same import)
+  src/commands/queue/validate-bindings.ts · work.ts                                 Task 8 (Step 7b)
+  src/__tests__/queue-aws-registration.test.ts                                      Task 8 (Step 7b)
 
 infrastructure/terraform/work-queue/aws/
-  versions.tf · variables.tf · locals.tf · topics.tf · subscriptions.tf            Task 10
-  lambda.tf · iam.tf · alarms.tf · outputs.tf · .tflint.hcl · README.md             Task 10
-  tests/basic.tftest.hcl · tests/fixtures/manifest.json                             Task 10
-  examples/basic/main.tf · examples/basic/manifest.json                             Task 10
-  GOVERNANCE.md · examples/deploy-pipeline.github-actions.yml                       Task 11
+  versions.tf · variables.tf · locals.tf · topics.tf · subscriptions.tf            Task 9
+  lambda.tf · iam.tf · kms.tf · alarms.tf · outputs.tf · .tflint.hcl · README.md    Task 9
+  tests/basic.tftest.hcl · tests/fixtures/manifest.json                             Task 9
+  examples/basic/main.tf · examples/basic/manifest.json                             Task 9
+  GOVERNANCE.md · scripts/check-destructive-plan.mjs                                Task 10
+  examples/deploy-pipeline.github-actions.yml · examples/drift.github-actions.yml   Task 10
 
-.github/workflows/work-queue-aws.yml                                                Task 11 (extended in 12)
+.github/workflows/work-queue-aws.yml                                                Task 10 (extended in 11)
 ```
 
 **Why `infrastructure/terraform/`:** the repository has no infrastructure-as-code folder today (`docker/` holds container definitions only, and `packages/*` are pnpm workspace members). A new top-level `infrastructure/terraform/` keeps Terraform out of the pnpm workspace and out of the unit-test workflow's `packages/**` path filter, and leaves room for `infrastructure/terraform/work-queue/azure` (09a).
@@ -105,7 +114,7 @@ infrastructure/terraform/work-queue/aws/
 ### Task 1: Package scaffold, dependency guard, binding config, resource names and envelope
 
 **Files:**
-- Create: `packages/WorkQueue/aws/package.json`, `tsconfig.json`, `vitest.config.ts`, `.eslintrc.json`
+- Create: `packages/WorkQueue/aws/package.json`, `tsconfig.json`, `vitest.config.ts`
 - Create: `packages/WorkQueue/aws/src/index.ts`, `src/config.ts`, `src/names.ts`, `src/envelope.ts`
 - Test: `packages/WorkQueue/aws/src/__tests__/dependencyGuard.test.ts`, `config.test.ts`, `names.test.ts`, `envelope.test.ts`
 
@@ -118,7 +127,7 @@ infrastructure/terraform/work-queue/aws/
   - `type AwsResourceKind = 'Topic' | 'Queue' | 'DeadLetterQueue'`, `SQS_MAX_NAME_LENGTH = 80`, `SNS_MAX_NAME_LENGTH = 256`, `ToResourceSlug(name: string): string`, `AwsResourceName(prefix: string, environment: string, logicalName: string, kind: AwsResourceKind, isFifo: boolean): string`
   - `SerializeEnvelope(message: WorkMessage): string`, `ParseEnvelopeBody(body: string): WorkMessage | null`, `MessageGroupIdFor(message: WorkMessage): string`, `IsWorkJson(value: unknown): value is WorkJson`
 
-Naming is shared with Terraform (Task 10 reproduces `AwsResourceName` in HCL and asserts the same three cases), so a resource name in a validation message always matches what the module created.
+Naming is shared with Terraform (Task 9 reproduces `AwsResourceName` in HCL and asserts the same three cases), so a resource name in a validation message always matches what the module created.
 
 - [ ] **Step 1: Create the package files**
 
@@ -195,26 +204,6 @@ export default mergeConfig(sharedConfig, defineProject({
 }));
 ```
 
-`packages/WorkQueue/aws/.eslintrc.json` (editor/lint signal; the dependency guard test is the enforcement):
-
-```json
-{
-  "rules": {
-    "no-restricted-imports": [
-      "error",
-      {
-        "patterns": [
-          {
-            "group": ["@memberjunction/*", "!@memberjunction/work-queue-core"],
-            "message": "work-queue-aws must stay free of MemberJunction runtime packages so Lambda consumers stay thin (plan 03 §0)."
-          }
-        ]
-      }
-    ]
-  }
-}
-```
-
 `packages/WorkQueue/aws/src/index.ts`:
 
 ```typescript
@@ -272,14 +261,33 @@ describe('work-queue-aws dependency guard', () => {
     });
 
     it('imports no MemberJunction package other than work-queue-core from source', () => {
-        const offenders = sourceFiles(join(PACKAGE_ROOT, 'src')).flatMap((file) => {
-            const text = readFileSync(file, 'utf8');
-            const imports = [...text.matchAll(/from\s+'(@memberjunction\/[^']+)'/g)].map((match) => match[1]);
-            return imports.filter((name) => name !== '@memberjunction/work-queue-core').map((name) => `${file}: ${name}`);
-        });
+        const offenders = sourceFiles(join(PACKAGE_ROOT, 'src')).flatMap((file) =>
+            ImportedModules(readFileSync(file, 'utf8'))
+                .filter((name) => name.startsWith('@memberjunction/') && !name.startsWith('@memberjunction/work-queue-core'))
+                .map((name) => `${file}: ${name}`));
         expect(offenders).toEqual([]);
     });
+
+    it('recognises every import form', () => {
+        const text = [
+            `import { A } from '@memberjunction/core';`,
+            `import "@memberjunction/global";`,
+            `export * from "@memberjunction/ai";`,
+            `const x = require('@memberjunction/queue');`,
+            `const y = await import("@memberjunction/server");`,
+        ].join('\n');
+        expect(ImportedModules(text)).toEqual([
+            '@memberjunction/core', '@memberjunction/global', '@memberjunction/ai',
+            '@memberjunction/queue', '@memberjunction/server',
+        ]);
+    });
 });
+
+/** Module specifiers from `from '…'`, side-effect `import '…'`, `require('…')` and `import('…')`, either quote style. */
+function ImportedModules(text: string): string[] {
+    const pattern = /(?:\bfrom\s*|\bimport\s*\(?\s*|\brequire\s*\(\s*)(['"])([^'"]+)\1/g;
+    return [...text.matchAll(pattern)].map((match) => match[2]);
+}
 ```
 
 `packages/WorkQueue/aws/src/__tests__/config.test.ts`:
@@ -391,7 +399,6 @@ const MESSAGE: WorkMessage = {
     MessageID: '5b0c7f4e-1a2b-4c3d-8e9f-0a1b2c3d4e5f',
     Topic: 'integration.batch-ready',
     PartitionKey: 'integration-42',
-    Sequence: 7,
     Attributes: { source: 'hubspot' },
     PayloadRef: { Uri: 's3://staging/batch-7.jsonl', SizeBytes: 1024 },
     CorrelationID: 'corr-1',
@@ -409,10 +416,10 @@ describe('envelope serialization', () => {
         expect(ParseEnvelopeBody('{"Topic":"x","Attributes":{},"PublishedAt":"t"}')).toBeNull();
     });
 
-    it('rejects non-string attribute values and invalid sequences', () => {
+    it('rejects non-string attribute values and non-string optional scalars', () => {
         expect(ParseEnvelopeBody(JSON.stringify({ ...MESSAGE, Attributes: { a: 1 } }))).toBeNull();
-        expect(ParseEnvelopeBody(JSON.stringify({ ...MESSAGE, Sequence: 0 }))).toBeNull();
-        expect(ParseEnvelopeBody(JSON.stringify({ ...MESSAGE, Sequence: 1.5 }))).toBeNull();
+        expect(ParseEnvelopeBody(JSON.stringify({ ...MESSAGE, PartitionKey: 42 }))).toBeNull();
+        expect(ParseEnvelopeBody(JSON.stringify({ ...MESSAGE, CorrelationID: false }))).toBeNull();
     });
 
     it('drops unknown fields', () => {
@@ -640,13 +647,11 @@ function readPayloadRef(value: unknown): WorkPayloadRef | undefined | null {
 }
 
 function hasValidScalars(raw: Record<string, unknown>): boolean {
-    const sequence = raw['Sequence'];
     return typeof raw['MessageID'] === 'string' && raw['MessageID'] !== ''
         && typeof raw['Topic'] === 'string' && raw['Topic'] !== ''
         && typeof raw['PublishedAt'] === 'string'
         && isStringMap(raw['Attributes'])
         && optionalString(raw['PartitionKey']) && optionalString(raw['CorrelationID'])
-        && (sequence === undefined || (typeof sequence === 'number' && Number.isInteger(sequence) && sequence >= 1))
         && (raw['Payload'] === undefined || IsWorkJson(raw['Payload']));
 }
 
@@ -672,7 +677,6 @@ export function ParseEnvelopeBody(body: string): WorkMessage | null {
         PublishedAt: raw['PublishedAt'] as string,
     };
     if (typeof raw['PartitionKey'] === 'string') message.PartitionKey = raw['PartitionKey'];
-    if (typeof raw['Sequence'] === 'number') message.Sequence = raw['Sequence'];
     if (raw['Payload'] !== undefined && IsWorkJson(raw['Payload'])) message.Payload = raw['Payload'];
     if (payloadRef) message.PayloadRef = payloadRef;
     if (typeof raw['CorrelationID'] === 'string') message.CorrelationID = raw['CorrelationID'];
@@ -691,7 +695,7 @@ The four `as` casts in `ParseEnvelopeBody` are on fields `hasValidScalars` has j
 - [ ] **Step 7: Run the tests and build**
 
 Run: `cd packages/WorkQueue/aws && pnpm test`
-Expected: PASS — dependencyGuard (3), config (8), names (5), envelope (7). Total 23.
+Expected: PASS — dependencyGuard (4), config (8), names (5), envelope (7). Total 24.
 
 Run: `cd packages/WorkQueue/aws && pnpm run build`
 Expected: builds; `dist/index.js` and `dist/index.d.ts` exist.
@@ -977,7 +981,7 @@ export * from './filterPolicy';
 - [ ] **Step 5: Run the tests and build**
 
 Run: `cd packages/WorkQueue/aws && pnpm test`
-Expected: PASS — dependencyGuard (3), config (8), names (5), envelope (7), filterPolicy (11). Total 34.
+Expected: PASS — dependencyGuard (4), config (8), names (5), envelope (7), filterPolicy (11). Total 35.
 
 Run: `cd packages/WorkQueue/aws && pnpm run build`
 Expected: builds.
@@ -990,10 +994,10 @@ git commit -m "feat(work-queue-aws): translate subscription filters to canonical
 ```
 
 ---
-### Task 3: SNS/SQS gateways, error mapping, client factory and fakes
+### Task 3: SNS/SQS gateways, error mapping, client factories and fakes
 
 **Files:**
-- Create: `packages/WorkQueue/aws/src/gateway/errors.ts`, `SnsGateway.ts`, `SqsGateway.ts`, `SdkSnsGateway.ts`, `SdkSqsGateway.ts`, `clients.ts`
+- Create: `packages/WorkQueue/aws/src/gateway/errors.ts`, `SnsGateway.ts`, `SqsGateway.ts`, `SdkSnsGateway.ts`, `SdkSqsGateway.ts`, `sqsClient.ts`, `snsClient.ts`
 - Create: `packages/WorkQueue/aws/src/testing/index.ts`, `src/testing/fakes.ts`
 - Modify: `packages/WorkQueue/aws/package.json` (add `./testing` export), `src/index.ts`
 - Test: `packages/WorkQueue/aws/src/__tests__/gatewayErrors.test.ts`, `SdkSqsGateway.test.ts`, `SdkSnsGateway.test.ts`, `clients.test.ts`, `fakes.test.ts`
@@ -1010,8 +1014,13 @@ git commit -m "feat(work-queue-aws): translate subscription filters to canonical
   - `interface SqsSendRequest { QueueUrl: string; Body: string; Attributes?: Record<string, string>; MessageGroupId?: string; MessageDeduplicationId?: string }`
   - `interface SqsGateway { Receive(request: SqsReceiveRequest): Promise<SqsReceivedMessage[]>; Send(request: SqsSendRequest): Promise<string>; ChangeVisibility(queueUrl: string, receiptHandle: string, seconds: number): Promise<boolean>; Delete(queueUrl: string, receiptHandle: string): Promise<boolean>; GetAttributes(queueUrl: string): Promise<Record<string, string> | null> }`
   - `class SdkSnsGateway implements SnsGateway` — `constructor(client: SNSClient)`; `class SdkSqsGateway implements SqsGateway` — `constructor(client: SQSClient)`
-  - `type AwsCredentialsOption = SNSClientConfig['credentials']`, `interface AwsClients { Sns: SNSClient; Sqs: SQSClient }`, `CreateAwsClients(config: AwsTransportConfig, credentials?: AwsCredentialsOption): AwsClients`
+  - `gateway/sqsClient.ts` (imports `@aws-sdk/client-sqs` **only**): `type AwsCredentialsOption = SQSClientConfig['credentials']`, `CreateSqsClient(config: AwsTransportConfig, credentials?: AwsCredentialsOption): SQSClient`
+  - `gateway/snsClient.ts`: `CreateSnsClient(config: AwsTransportConfig, credentials?: AwsCredentialsOption): SNSClient`
   - Test doubles exported from `@memberjunction/work-queue-aws/testing`: `FakeSqsGateway` (in-memory SQS with FIFO group blocking, visibility, receive counts, 5-minute FIFO dedup, failure injection, controllable clock) and `FakeSnsGateway` (records batches, scripted entry failures and attributes)
+
+**Two client factories, on purpose.** The `./lambda` entry (Task 7) consumes SQS and never publishes, so it must not
+pull `@aws-sdk/client-sns` into a bundle. Anything the Lambda path imports may import `sqsClient.ts` but never
+`snsClient.ts`, `SdkSnsGateway.ts` or `driver/*`; Task 7's bundle check enforces it.
 
 The gateways are the only code that talks to AWS. Their contract: a stale receipt handle is `false`, a missing
 queue/topic/subscription is `null`, an aborted long poll is `[]`, and every other failure is an
@@ -1343,25 +1352,34 @@ describe('SdkSnsGateway attributes', () => {
 
 ```typescript
 import { describe, it, expect } from 'vitest';
-import { CreateAwsClients } from '../gateway/clients';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { CreateSqsClient } from '../gateway/sqsClient';
+import { CreateSnsClient } from '../gateway/snsClient';
 
-describe('CreateAwsClients', () => {
-    it('configures both clients for the region with default endpoints', async () => {
-        const clients = CreateAwsClients({ Region: 'eu-west-2', Endpoint: null });
-        expect(await clients.Sns.config.region()).toBe('eu-west-2');
-        expect(await clients.Sqs.config.region()).toBe('eu-west-2');
-        expect(clients.Sqs.config.isCustomEndpoint).toBe(false);
+const GATEWAY_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'gateway');
+
+describe('client factories', () => {
+    it('configure the region with default endpoints', async () => {
+        const config = { Region: 'eu-west-2', Endpoint: null };
+        expect(await CreateSqsClient(config).config.region()).toBe('eu-west-2');
+        expect(await CreateSnsClient(config).config.region()).toBe('eu-west-2');
+        expect(CreateSqsClient(config).config.isCustomEndpoint).toBe(false);
     });
 
-    it('uses a custom endpoint and static credentials when given', async () => {
-        const clients = CreateAwsClients(
-            { Region: 'us-east-1', Endpoint: 'http://localhost:4566' },
-            { accessKeyId: 'test', secretAccessKey: 'test' },
-        );
-        expect(clients.Sns.config.isCustomEndpoint).toBe(true);
-        expect(clients.Sqs.config.isCustomEndpoint).toBe(true);
-        const credentials = await clients.Sqs.config.credentials();
-        expect(credentials.accessKeyId).toBe('test');
+    it('apply a custom endpoint and static credentials (LocalStack)', async () => {
+        const config = { Region: 'us-east-1', Endpoint: 'http://localhost:4566' };
+        const credentials = { accessKeyId: 'test', secretAccessKey: 'test' };
+        const sqs = CreateSqsClient(config, credentials);
+        expect(sqs.config.isCustomEndpoint).toBe(true);
+        expect(CreateSnsClient(config, credentials).config.isCustomEndpoint).toBe(true);
+        expect((await sqs.config.credentials()).accessKeyId).toBe('test');
+    });
+
+    it('keeps the SQS factory free of the SNS client', () => {
+        const text = readFileSync(join(GATEWAY_DIR, 'sqsClient.ts'), 'utf8');
+        expect(text).not.toContain('client-sns');
     });
 });
 ```
@@ -1384,6 +1402,15 @@ describe('FakeSqsGateway', () => {
         expect(first.map((m) => m.Body)).toEqual(['a1']);
         const second = await sqs.Receive({ QueueUrl: FIFO, MaxMessages: 10, WaitTimeSeconds: 0, VisibilityTimeoutSeconds: 30 });
         expect(second.map((m) => m.Body)).toEqual(['b1']);
+    });
+
+    it('like real SQS, can return several messages of one group from a single batched receive', async () => {
+        const sqs = new FakeSqsGateway().AddQueue(FIFO, { Fifo: true });
+        await sqs.Send({ QueueUrl: FIFO, Body: 'a1', MessageGroupId: 'a', MessageDeduplicationId: 'a1' });
+        await sqs.Send({ QueueUrl: FIFO, Body: 'a2', MessageGroupId: 'a', MessageDeduplicationId: 'a2' });
+        const batch = await sqs.Receive({ QueueUrl: FIFO, MaxMessages: 10, WaitTimeSeconds: 0, VisibilityTimeoutSeconds: 30 });
+        expect(batch.map((m) => m.Body)).toEqual(['a1', 'a2']);
+        expect(sqs.Calls[sqs.Calls.length - 1]).toMatchObject({ Op: 'Receive', MaxMessages: 10, WaitTimeSeconds: 0 });
     });
 
     it('redelivers after the visibility timeout with a higher receive count and a new receipt handle', async () => {
@@ -1423,7 +1450,7 @@ describe('FakeSqsGateway', () => {
 - [ ] **Step 3: Run the tests to verify they fail**
 
 Run: `cd packages/WorkQueue/aws && pnpm test gatewayErrors SdkSqsGateway SdkSnsGateway clients fakes`
-Expected: FAIL — unresolved imports `../gateway/errors`, `../gateway/SdkSqsGateway`, `../gateway/SdkSnsGateway`, `../gateway/clients`, `../testing/fakes`.
+Expected: FAIL — unresolved imports `../gateway/errors`, `../gateway/SdkSqsGateway`, `../gateway/SdkSnsGateway`, `../gateway/sqsClient`, `../gateway/snsClient`, `../testing/fakes`.
 
 - [ ] **Step 4: Write `src/gateway/errors.ts`**
 
@@ -1680,28 +1707,39 @@ export class SdkSnsGateway implements SnsGateway {
 }
 ```
 
-- [ ] **Step 7: Write `src/gateway/clients.ts`**
+- [ ] **Step 7: Write `src/gateway/sqsClient.ts` and `src/gateway/snsClient.ts`**
+
+`packages/WorkQueue/aws/src/gateway/sqsClient.ts` (imports the SQS client only — the Lambda path depends on this file):
 
 ```typescript
-import { SNSClient, type SNSClientConfig } from '@aws-sdk/client-sns';
-import { SQSClient } from '@aws-sdk/client-sqs';
+import { SQSClient, type SQSClientConfig } from '@aws-sdk/client-sqs';
 import type { AwsTransportConfig } from '../config';
 
 /** Static credentials or a credential provider. Undefined uses the SDK default chain (env, profile, role). */
-export type AwsCredentialsOption = SNSClientConfig['credentials'];
+export type AwsCredentialsOption = SQSClientConfig['credentials'];
 
-export interface AwsClients {
-    Sns: SNSClient;
-    Sqs: SQSClient;
-}
-
-export function CreateAwsClients(config: AwsTransportConfig, credentials?: AwsCredentialsOption): AwsClients {
-    const common = {
+export function CreateSqsClient(config: AwsTransportConfig, credentials?: AwsCredentialsOption): SQSClient {
+    return new SQSClient({
         region: config.Region,
         ...(config.Endpoint ? { endpoint: config.Endpoint } : {}),
         ...(credentials ? { credentials } : {}),
-    };
-    return { Sns: new SNSClient(common), Sqs: new SQSClient(common) };
+    });
+}
+```
+
+`packages/WorkQueue/aws/src/gateway/snsClient.ts`:
+
+```typescript
+import { SNSClient } from '@aws-sdk/client-sns';
+import type { AwsTransportConfig } from '../config';
+import type { AwsCredentialsOption } from './sqsClient';
+
+export function CreateSnsClient(config: AwsTransportConfig, credentials?: AwsCredentialsOption): SNSClient {
+    return new SNSClient({
+        region: config.Region,
+        ...(config.Endpoint ? { endpoint: config.Endpoint } : {}),
+        ...(credentials ? { credentials } : {}),
+    });
 }
 ```
 
@@ -1740,7 +1778,7 @@ export type FakeSqsOperation = 'Receive' | 'Send' | 'ChangeVisibility' | 'Delete
 export class FakeSqsGateway implements SqsGateway {
     /** Fake clock, epoch ms. */
     public Now = 1_800_000_000_000;
-    public readonly Calls: { Op: FakeSqsOperation; QueueUrl: string }[] = [];
+    public readonly Calls: { Op: FakeSqsOperation; QueueUrl: string; MaxMessages?: number; WaitTimeSeconds?: number }[] = [];
     private readonly queues = new Map<string, FakeQueue>();
     private readonly failures = new Map<FakeSqsOperation, Error>();
     private sequence = 0;
@@ -1769,7 +1807,7 @@ export class FakeSqsGateway implements SqsGateway {
     }
 
     public async Receive(request: SqsReceiveRequest): Promise<SqsReceivedMessage[]> {
-        this.record('Receive', request.QueueUrl);
+        this.record('Receive', request.QueueUrl, { MaxMessages: request.MaxMessages, WaitTimeSeconds: request.WaitTimeSeconds });
         const queue = this.queue(request.QueueUrl);
         const visibility = (request.VisibilityTimeoutSeconds ?? queue.VisibilityTimeoutSeconds) * 1000;
         const blockedGroups = new Set<string>();
@@ -1850,8 +1888,8 @@ export class FakeSqsGateway implements SqsGateway {
         };
     }
 
-    private record(op: FakeSqsOperation, queueUrl: string): void {
-        this.Calls.push({ Op: op, QueueUrl: queueUrl });
+    private record(op: FakeSqsOperation, queueUrl: string, detail: { MaxMessages?: number; WaitTimeSeconds?: number } = {}): void {
+        this.Calls.push({ Op: op, QueueUrl: queueUrl, ...detail });
         const failure = this.failures.get(op);
         if (failure) {
             this.failures.delete(op);
@@ -1909,6 +1947,11 @@ export class FakeSnsGateway implements SnsGateway {
 }
 ```
 
+Like real SQS, `FakeSqsGateway.Receive` with `MaxMessages > 1` **can return several messages of one FIFO group in a
+single call** — a group is only locked against *other* receives while one of its messages is in flight. That is the
+behavior Task 5's one-message-per-receive rule exists for, so the fake must not hide it. `Calls` records each
+receive's `MaxMessages` and `WaitTimeSeconds` so tests can assert the rule.
+
 `FakeSnsGateway.FailedEntries` is keyed by `MessageDeduplicationId` when present (the driver sets it to the
 `MessageID` on FIFO topics), otherwise by entry ID — so tests can fail a specific message.
 
@@ -1932,7 +1975,8 @@ export * from './gateway/SnsGateway';
 export * from './gateway/SqsGateway';
 export * from './gateway/SdkSnsGateway';
 export * from './gateway/SdkSqsGateway';
-export * from './gateway/clients';
+export * from './gateway/sqsClient';
+export * from './gateway/snsClient';
 ```
 
 In `packages/WorkQueue/aws/package.json`, replace the `exports` block with:
@@ -1953,7 +1997,7 @@ In `packages/WorkQueue/aws/package.json`, replace the `exports` block with:
 - [ ] **Step 10: Run the tests and build**
 
 Run: `cd packages/WorkQueue/aws && pnpm test`
-Expected: PASS — dependencyGuard (3), config (8), names (5), envelope (7), filterPolicy (11), gatewayErrors (3), SdkSqsGateway (8), SdkSnsGateway (5), clients (2), fakes (4). Total 56.
+Expected: PASS — dependencyGuard (4), config (8), names (5), envelope (7), filterPolicy (11), gatewayErrors (3), SdkSqsGateway (8), SdkSnsGateway (5), clients (3), fakes (5). Total 59.
 
 Run: `cd packages/WorkQueue/aws && pnpm run build`
 Expected: builds; `dist/testing/index.js` exists.
@@ -1970,7 +2014,7 @@ git commit -m "feat(work-queue-aws): SNS/SQS gateways with error mapping, client
 ### Task 4: Capabilities, SNS publish mapping and binding validation
 
 **Files:**
-- Create: `packages/WorkQueue/aws/src/driver/capabilities.ts`, `src/driver/publish.ts`, `src/driver/bindingValidation.ts`
+- Create: `packages/WorkQueue/aws/src/margins.ts`, `src/driver/capabilities.ts`, `src/driver/publish.ts`, `src/driver/bindingValidation.ts`
 - Create: `packages/WorkQueue/aws/src/testing/fixtures.ts`
 - Modify: `packages/WorkQueue/aws/src/index.ts`, `src/testing/index.ts`
 - Test: `packages/WorkQueue/aws/src/__tests__/capabilities.test.ts`, `publish.test.ts`, `bindingValidation.test.ts`
@@ -1980,9 +2024,9 @@ git commit -m "feat(work-queue-aws): SNS/SQS gateways with error mapping, client
 - Produces:
   - `AWS_TRANSPORT_NAME = 'AWS'`, `AWS_TRANSPORT_CAPABILITIES: TransportCapabilities` (including `Filters` — the operators and structure SNS can express, 03 §4.1)
   - `SNS_BATCH_MAX_ENTRIES = 10`, `SNS_REQUEST_MAX_BYTES = 262144`, `MAX_MESSAGE_ATTRIBUTES = 10`
-  - `BuildPublishEntry(message: WorkMessage, index: number, isFifo: boolean): SnsPublishEntry`, `EntryBytes(entry: SnsPublishEntry): number`, `ChunkEntries(entries: SnsPublishEntry[]): SnsPublishEntry[][]`
+  - `BuildPublishEntry(message: WorkMessage, index: number, isFifo: boolean): SnsPublishEntry`, `EntryBytes(entry: SnsPublishEntry): number`, `ChunkEntries(entries: SnsPublishEntry[], oneEntryPerGroup?: boolean): SnsPublishEntry[][]`
   - `PublishToSns(gateway: SnsGateway, topic: TopicBinding, messages: WorkMessage[]): Promise<PublishResult[]>`
-  - `STAGED_MAX_RECEIVE_COUNT = 1000`, `ExpectedMaxReceiveCount(policy: SubscriptionPolicy): number`, `RequiresFifoTopic(topic: TopicBinding, subscriptions: SubscriptionBinding[]): boolean`
+  - `src/margins.ts` (no imports, so the Lambda path can use it without touching `driver/*`): `RECEIVE_GUARD_MARGIN = 2`, `REDRIVE_MARGIN = 5`; `ExpectedMaxReceiveCount(policy: SubscriptionPolicy): number` (= `MaxAttempts + 5`), `RequiresFifoTopic(subscriptions: SubscriptionBinding[]): boolean`
   - `ValidateAwsBindings(sns: SnsGateway, sqs: SqsGateway, topic: TopicBinding, subscriptions: SubscriptionBinding[]): Promise<BindingValidationIssue[]>`
   - Test fixtures from `./testing`: `interface TestAwsResourceSet`, `TestAwsResources(isFifo: boolean): TestAwsResourceSet`, `TestPolicy(overrides?: Partial<SubscriptionPolicy>): SubscriptionPolicy`, `TestTopicBinding(isFifo?: boolean, overrides?: Partial<TopicBinding>): TopicBinding`, `TestSubscriptionBinding(isFifo?: boolean, options?: TestSubscriptionOptions): SubscriptionBinding`, `TestMessage(index: number, overrides?: Partial<WorkMessage>): WorkMessage`, `SeedValidAwsResources(sns: FakeSnsGateway, sqs: FakeSqsGateway, topic: TopicBinding, subscription: SubscriptionBinding): void`
 
@@ -1996,7 +2040,8 @@ request limit (message body + attribute names, types and values). Result mapping
 | Entry published | `Accepted` |
 | Topic has no valid `SnsTopicArn` | `Rejected` `TopicUnbound`, retryable |
 | Envelope + attributes over the topic cap or 262,144 bytes | `Rejected` `PayloadTooLarge` |
-| More than 10 attributes | `Rejected` `InvalidAttributes` |
+| More than 10 attributes, or an **empty attribute value** | `Rejected` `InvalidAttributes` (checked before the call: SNS rejects an empty `String` value by failing the **whole** `PublishBatch`, which would poison up to nine healthy messages) |
+| FIFO: an earlier message of the same `MessageGroupId` failed in this call | `Rejected` `TransportUnavailable`, retryable — the group's tail is **not sent**, so a caller retry cannot reorder the key |
 | Entry failed with `SenderFault = true` | `Rejected` `TransportRejected` (not retryable; SNS code in the message) |
 | Entry failed with `SenderFault = false`, or unreported | `Rejected` `TransportUnavailable`, retryable |
 | Whole `PublishBatch` call failed | every entry of that chunk `Rejected` `TransportUnavailable`, `Retryable` = the gateway error's flag |
@@ -2004,14 +2049,33 @@ request limit (message body + attribute names, types and values). Result mapping
 The AWS driver never returns `Duplicate` (03 §2.1): FIFO deduplication is silent, and `DeduplicationKey`
 suppression happens in the engine ledger before the driver is called.
 
-**Staged subscriptions.** On this transport `SupportsOrdered = false`, so every `Ordered` subscription is staged
-(03 §5.1). A staging failure (database outage) must not push messages into the dead-letter queue and break order,
-so staged queues use `maxReceiveCount = 1000` (the SQS maximum); every other queue uses `MaxAttempts + 2`.
+**FIFO publish order.** On a FIFO topic a `PublishBatch` never carries two entries of one message group (a partial
+entry failure inside one batch would let a later entry of the key succeed after an earlier one failed). `ChunkEntries`
+starts a new chunk when the group is already present, chunks are sent sequentially, and once an entry of a group is
+rejected every later entry of that group in the same `PublishToSns` call is rejected unsent. Core validation (03 §1.1)
+already rejects empty attribute values; the driver repeats the check because it is the last line before SNS.
+
+**`Ordered` is not available here.** `SupportsOrdered = false`, so core's `SubscriptionUnsupportedReason` rejects an
+`Ordered` subscription on an AWS topic when it is saved and at host start, and `ValidateAwsBindings` reports it as an
+error ("Ordered requires the Database transport"). A topic that needs a consumer which halts its key on failure lives
+on the Database transport (11 S2).
+
+**Receive margins (03 §5.1, F5).** `Attempt` is SQS's `ApproximateReceiveCount`. The runtime dead-letters after a
+failure at `Attempt ≥ MaxAttempts`; the consumer's receive-time guard (Task 5) dead-letters only when the count is
+`> MaxAttempts + RECEIVE_GUARD_MARGIN`; the queue's redrive policy is `MaxAttempts + REDRIVE_MARGIN`. `Release`
+(visibility 0 on shutdown) and Lambda throttling each consume a receive without running the handler — the margins
+absorb them. `ValidateAwsBindings` reports a redrive count or visibility timeout that no longer matches the policy as a
+**Warning** (policy drift: the Lambda's `MJ_WQ_SUBSCRIPTION` and the queue are frozen at apply time — re-apply Terraform).
+
+**`None` on a FIFO topic.** A topic is FIFO as soon as one subscription is `Exclusive`, and then **every** queue on it
+is FIFO. A `None` subscription there is serialised per `PartitionKey`, and a message in retry backoff
+(`ChangeMessageVisibility`) holds every later message of its key for the delay — unlike `None` on the Database
+transport. Use the two-topic pattern for firehoses (11 §4; README, Task 11).
 
 **Cancel.** Both `CancelPending` and `CancelInFlight` are `false`. SQS cannot delete a named pending message, and an
-in-flight message's lease is its receipt handle — there is no way to revoke it from outside the consumer, so 03 §7's
-lease-revoke cancel has no SQS equivalent. Staged `Ordered` subscriptions are unaffected: their deliveries are
-Database rows served by the Database operator, so cancelling in-flight work there behaves exactly as 03 §7 describes.
+in-flight message's lease is its receipt handle — there is no cancel flag to set from outside the consumer. So on this
+transport `ExtendLease` never returns `'Cancelled'`, `AcknowledgeCancel` always returns `LeaseLost` (03 §5), and the
+operator's `Discard` of a pending or in-flight message answers `{ Supported: false }` (Task 6).
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -2119,6 +2183,31 @@ describe('PublishToSns', () => {
         expect(sns.Batches).toHaveLength(0);
     });
 
+    it('rejects an empty attribute value before the call so the batch is not poisoned', async () => {
+        const empty = TestMessage(1, { Attributes: { eventType: '' } });
+        const results = await PublishToSns(sns, TestTopicBinding(false), [empty, TestMessage(2)]);
+        expect(results.map((r) => r.Error?.Code ?? r.Status)).toEqual(['InvalidAttributes', 'Accepted']);
+        expect(sns.Batches).toHaveLength(1);
+        expect(sns.Batches[0].Entries).toHaveLength(1);
+    });
+
+    it('never puts two messages of one key in one FIFO batch', async () => {
+        const messages = [TestMessage(1, { PartitionKey: 'k' }), TestMessage(2, { PartitionKey: 'k' }), TestMessage(3, { PartitionKey: 'other' })];
+        const results = await PublishToSns(sns, TestTopicBinding(true), messages);
+        expect(results.map((r) => r.Status)).toEqual(['Accepted', 'Accepted', 'Accepted']);
+        expect(sns.Batches.map((batch) => batch.Entries.map((e) => e.MessageGroupId))).toEqual([['k'], ['k', 'other']]);
+    });
+
+    it('does not send the tail of a key after one of its messages fails', async () => {
+        const messages = [TestMessage(1, { PartitionKey: 'k' }), TestMessage(2, { PartitionKey: 'k' }), TestMessage(3, { PartitionKey: 'other' })];
+        sns.FailedEntries.set(messages[0].MessageID, { Code: 'InternalError', Message: 'try again', SenderFault: false });
+        const results = await PublishToSns(sns, TestTopicBinding(true), messages);
+        expect(results.map((r) => r.Status)).toEqual(['Rejected', 'Rejected', 'Accepted']);
+        expect(results[1].Error).toMatchObject({ Code: 'TransportUnavailable', Retryable: true });
+        const sentGroups = sns.Batches.flatMap((batch) => batch.Entries.map((e) => e.MessageGroupId));
+        expect(sentGroups).toEqual(['k', 'other']);
+    });
+
     it('rejects oversized envelopes and too many attributes but publishes the rest', async () => {
         const tooBig = TestMessage(1, { Payload: 'x'.repeat(262_144) });
         const tooManyAttributes = TestMessage(2, { Attributes: Object.fromEntries(Array.from({ length: 11 }, (_, i) => [`a${i}`, 'v'])) });
@@ -2151,16 +2240,15 @@ function messages(issues: { Severity: string; Message: string }[]): string[] {
 }
 
 describe('ExpectedMaxReceiveCount and RequiresFifoTopic', () => {
-    it('uses MaxAttempts + 2, or 1000 for staged Ordered subscriptions', () => {
-        expect(ExpectedMaxReceiveCount(TestPolicy({ MaxAttempts: 5, PartitionMode: 'Exclusive' }))).toBe(7);
-        expect(ExpectedMaxReceiveCount(TestPolicy({ PartitionMode: 'Ordered' }))).toBe(1000);
+    it('uses MaxAttempts + 5 for every queue', () => {
+        expect(ExpectedMaxReceiveCount(TestPolicy({ MaxAttempts: 5, PartitionMode: 'Exclusive' }))).toBe(10);
+        expect(ExpectedMaxReceiveCount(TestPolicy({ MaxAttempts: 1, PartitionMode: 'None' }))).toBe(6);
     });
 
-    it('requires FIFO for partitioned subscriptions or ExplicitSequence topics', () => {
+    it('requires FIFO as soon as one subscription is Exclusive', () => {
         const none = TestSubscriptionBinding(false, { Policy: { PartitionMode: 'None' } });
-        expect(RequiresFifoTopic(TestTopicBinding(false), [none])).toBe(false);
-        expect(RequiresFifoTopic(TestTopicBinding(false), [TestSubscriptionBinding(false, { Policy: { PartitionMode: 'Exclusive' } })])).toBe(true);
-        expect(RequiresFifoTopic(TestTopicBinding(false, { OrderingMode: 'ExplicitSequence' }), [none])).toBe(true);
+        expect(RequiresFifoTopic([none])).toBe(false);
+        expect(RequiresFifoTopic([none, TestSubscriptionBinding(false, { Policy: { PartitionMode: 'Exclusive' } })])).toBe(true);
     });
 });
 
@@ -2186,7 +2274,7 @@ describe('ValidateAwsBindings', () => {
         sns.TopicAttributes.set(TestAwsResources(false).TopicArn, { FifoTopic: 'true' });
         expect(messages(await ValidateAwsBindings(sns, sqs, topic, [subscription]))).toEqual([
             'Error: SNS topic FifoTopic is true but the topic binding says IsFifo false',
-            'Error: Topic must be FIFO: it has Exclusive/Ordered subscriptions or uses ExplicitSequence',
+            'Error: Topic must be FIFO: it has an Exclusive subscription (03 W7)',
         ]);
     });
 
@@ -2199,9 +2287,18 @@ describe('ValidateAwsBindings', () => {
         expect(issues).toContain(`Error: SQS dead-letter queue ${TestAwsResources(true).DeadLetterQueueUrl} does not exist`);
     });
 
-    it('reports a redrive policy that targets the wrong queue or count', async () => {
+    it('rejects an Ordered subscription: Ordered requires the Database transport', async () => {
         const topic = TestTopicBinding(true);
         const subscription = TestSubscriptionBinding(true, { Policy: { PartitionMode: 'Ordered' } });
+        SeedValidAwsResources(sns, sqs, topic, subscription);
+        expect(messages(await ValidateAwsBindings(sns, sqs, topic, [subscription]))).toEqual([
+            'Error: Ordered requires the Database transport; this subscription cannot run on the AWS transport',
+        ]);
+    });
+
+    it('reports a redrive policy that targets the wrong queue, and warns about a drifted count', async () => {
+        const topic = TestTopicBinding(true);
+        const subscription = TestSubscriptionBinding(true, { Policy: { MaxAttempts: 5 } });
         const resources = TestAwsResources(true);
         SeedValidAwsResources(sns, sqs, topic, subscription);
         sqs.AddQueue(resources.QueueUrl, {
@@ -2210,7 +2307,7 @@ describe('ValidateAwsBindings', () => {
         });
         expect(messages(await ValidateAwsBindings(sns, sqs, topic, [subscription]))).toEqual([
             `Error: Redrive policy targets arn:aws:sqs:us-east-1:123456789012:other.fifo, expected ${resources.DeadLetterQueueArn}`,
-            'Error: Redrive maxReceiveCount is 7, expected 1000',
+            'Warning: Redrive maxReceiveCount is 7 but the policy expects 10 (MaxAttempts + 5): policy drift — re-apply Terraform',
         ]);
     });
 
@@ -2221,7 +2318,7 @@ describe('ValidateAwsBindings', () => {
         SeedValidAwsResources(sns, sqs, topic, subscription);
         sqs.AddQueue(resources.QueueUrl, {
             Fifo: true, VisibilityTimeoutSeconds: 60,
-            Attributes: { RedrivePolicy: JSON.stringify({ deadLetterTargetArn: resources.DeadLetterQueueArn, maxReceiveCount: 7 }), MaximumMessageSize: '65536' },
+            Attributes: { RedrivePolicy: JSON.stringify({ deadLetterTargetArn: resources.DeadLetterQueueArn, maxReceiveCount: 10 }), MaximumMessageSize: '65536' },
         });
         expect(messages(await ValidateAwsBindings(sns, sqs, topic, [subscription]))).toEqual([
             'Warning: Queue VisibilityTimeout 60 is below LeaseSeconds 120',
@@ -2286,6 +2383,15 @@ export const AWS_TRANSPORT_CAPABILITIES: TransportCapabilities = {
 };
 ```
 
+`packages/WorkQueue/aws/src/margins.ts`:
+
+```typescript
+/** The consumer's receive-time guard dead-letters at ReceiveCount > MaxAttempts + RECEIVE_GUARD_MARGIN (03 §5.1). */
+export const RECEIVE_GUARD_MARGIN = 2;
+/** Queue redrive policy: maxReceiveCount = MaxAttempts + REDRIVE_MARGIN — a crash-loop backstop behind the guard. */
+export const REDRIVE_MARGIN = 5;
+```
+
 - [ ] **Step 4: Write `src/driver/publish.ts`**
 
 ```typescript
@@ -2318,13 +2424,15 @@ export function EntryBytes(entry: SnsPublishEntry): number {
     );
 }
 
-export function ChunkEntries(entries: SnsPublishEntry[]): SnsPublishEntry[][] {
+/** Chunks by entry count and request bytes. With `oneEntryPerGroup` (FIFO) a chunk never holds two entries of one group. */
+export function ChunkEntries(entries: SnsPublishEntry[], oneEntryPerGroup = false): SnsPublishEntry[][] {
     const chunks: SnsPublishEntry[][] = [];
     let current: SnsPublishEntry[] = [];
     let currentBytes = 0;
     for (const entry of entries) {
         const bytes = EntryBytes(entry);
-        if (current.length === SNS_BATCH_MAX_ENTRIES || (current.length > 0 && currentBytes + bytes > SNS_REQUEST_MAX_BYTES)) {
+        const groupTaken = oneEntryPerGroup && current.some((other) => other.MessageGroupId === entry.MessageGroupId);
+        if (groupTaken || current.length === SNS_BATCH_MAX_ENTRIES || (current.length > 0 && currentBytes + bytes > SNS_REQUEST_MAX_BYTES)) {
             chunks.push(current);
             current = [];
             currentBytes = 0;
@@ -2355,6 +2463,11 @@ function precheck(message: WorkMessage, entry: SnsPublishEntry, topic: TopicBind
     if (Object.keys(message.Attributes).length > MAX_MESSAGE_ATTRIBUTES) {
         return rejected(message.MessageID, 'InvalidAttributes', `At most ${MAX_MESSAGE_ATTRIBUTES} attributes are allowed`, false);
     }
+    const emptyKey = Object.entries(message.Attributes).find(([, value]) => value === '')?.[0];
+    if (emptyKey !== undefined) {
+        // SNS fails the whole PublishBatch for an empty String attribute value, so it must never reach the call.
+        return rejected(message.MessageID, 'InvalidAttributes', `Attribute '${emptyKey}' has an empty value`, false);
+    }
     const limit = Math.min(topic.MaxPayloadBytes, SNS_REQUEST_MAX_BYTES);
     const bytes = EntryBytes(entry);
     return bytes > limit ? rejected(message.MessageID, 'PayloadTooLarge', `Envelope is ${bytes} bytes; the limit is ${limit}`, false) : null;
@@ -2368,6 +2481,16 @@ async function publishChunk(gateway: SnsGateway, topicArn: string, chunk: SnsPub
         const mapped: AwsGatewayError = ToGatewayError(error, 'SNS PublishBatch');
         return chunk.map((entry) => rejected(ids.get(entry.Id) ?? entry.Id, 'TransportUnavailable', mapped.message, mapped.Retryable));
     }
+}
+
+/** FIFO: once a group has a rejected entry, its later entries are rejected unsent so a caller retry cannot reorder the key. */
+function holdBack(entry: SnsPublishEntry, failedGroups: Set<string>, ids: Map<string, string>, results: Map<string, PublishResult>): boolean {
+    if (entry.MessageGroupId === undefined || !failedGroups.has(entry.MessageGroupId)) {
+        return false;
+    }
+    results.set(entry.Id, rejected(ids.get(entry.Id) ?? entry.Id, 'TransportUnavailable',
+        'Not sent: an earlier message of this partition key failed in the same publish call', true));
+    return true;
 }
 
 /** Publishes envelopes to the topic's SNS topic. Results are positionally aligned with messages. */
@@ -2392,9 +2515,19 @@ export async function PublishToSns(gateway: SnsGateway, topic: TopicBinding, mes
             sendable.push(entry);
         }
     });
-    for (const chunk of ChunkEntries(sendable)) {
-        const chunkResults = await publishChunk(gateway, topicArn, chunk, ids);
-        chunk.forEach((entry, i) => results.set(entry.Id, chunkResults[i]));
+    const failedGroups = new Set<string>();
+    for (const chunk of ChunkEntries(sendable, topic.IsFifo)) {
+        const live = chunk.filter((entry) => !holdBack(entry, failedGroups, ids, results));
+        if (live.length === 0) {
+            continue;
+        }
+        const chunkResults = await publishChunk(gateway, topicArn, live, ids);
+        live.forEach((entry, i) => {
+            results.set(entry.Id, chunkResults[i]);
+            if (chunkResults[i].Status === 'Rejected' && entry.MessageGroupId !== undefined) {
+                failedGroups.add(entry.MessageGroupId);
+            }
+        });
     }
     return messages.map((message, index) => results.get(String(index)) ?? rejected(message.MessageID, 'TransportUnavailable', 'No result', true));
 }
@@ -2408,20 +2541,21 @@ import type {
 } from '@memberjunction/work-queue-core';
 import { ReadAwsSubscriptionConfig, ReadAwsTopicConfig, type AwsSubscriptionConfig } from '../config';
 import { NormalizeSnsFilterPolicy, SnsFilterPolicyFor } from '../filterPolicy';
+import { REDRIVE_MARGIN } from '../margins';
 import type { SnsGateway } from '../gateway/SnsGateway';
 import type { SqsGateway } from '../gateway/SqsGateway';
 
-export const STAGED_MAX_RECEIVE_COUNT = 1000;
 const REQUIRED_MAX_MESSAGE_SIZE = 262_144;
 
 type IssueSink = (severity: 'Error' | 'Warning', message: string) => void;
 
 export function ExpectedMaxReceiveCount(policy: SubscriptionPolicy): number {
-    return policy.PartitionMode === 'Ordered' ? STAGED_MAX_RECEIVE_COUNT : policy.MaxAttempts + 2;
+    return policy.MaxAttempts + REDRIVE_MARGIN;
 }
 
-export function RequiresFifoTopic(topic: TopicBinding, subscriptions: SubscriptionBinding[]): boolean {
-    return topic.OrderingMode === 'ExplicitSequence' || subscriptions.some((s) => s.Policy.PartitionMode !== 'None');
+/** 03 W7: a topic must be FIFO when any subscription is Exclusive. (Ordered is rejected outright on this transport.) */
+export function RequiresFifoTopic(subscriptions: SubscriptionBinding[]): boolean {
+    return subscriptions.some((s) => s.Policy.PartitionMode === 'Exclusive');
 }
 
 function describe(error: unknown): string {
@@ -2444,8 +2578,8 @@ async function validateTopic(sns: SnsGateway, topic: TopicBinding, subscriptions
     if ((attributes['FifoTopic'] === 'true') !== topic.IsFifo) {
         add('Error', `SNS topic FifoTopic is ${attributes['FifoTopic'] === 'true'} but the topic binding says IsFifo ${topic.IsFifo}`);
     }
-    if (!topic.IsFifo && RequiresFifoTopic(topic, subscriptions)) {
-        add('Error', 'Topic must be FIFO: it has Exclusive/Ordered subscriptions or uses ExplicitSequence');
+    if (!topic.IsFifo && RequiresFifoTopic(subscriptions)) {
+        add('Error', 'Topic must be FIFO: it has an Exclusive subscription (03 W7)');
     }
     return topicArn;
 }
@@ -2475,7 +2609,7 @@ async function validateQueues(sqs: SqsGateway, binding: SubscriptionBinding, con
         }
         const expectedCount = ExpectedMaxReceiveCount(binding.Policy);
         if (redrive.maxReceiveCount !== expectedCount) {
-            add('Error', `Redrive maxReceiveCount is ${redrive.maxReceiveCount ?? 'unset'}, expected ${expectedCount}`);
+            add('Warning', `Redrive maxReceiveCount is ${redrive.maxReceiveCount ?? 'unset'} but the policy expects ${expectedCount} (MaxAttempts + ${REDRIVE_MARGIN}): policy drift — re-apply Terraform`);
         }
         const visibility = Number(queue['VisibilityTimeout'] ?? '0');
         if (visibility < binding.Policy.LeaseSeconds) {
@@ -2525,6 +2659,10 @@ async function validateSnsSubscription(sns: SnsGateway, binding: SubscriptionBin
 }
 
 async function validateSubscription(sns: SnsGateway, sqs: SqsGateway, topic: TopicBinding, topicArn: string | null, binding: SubscriptionBinding, add: IssueSink): Promise<void> {
+    if (binding.Policy.PartitionMode === 'Ordered') {
+        add('Error', 'Ordered requires the Database transport; this subscription cannot run on the AWS transport');
+        return;
+    }
     let config: AwsSubscriptionConfig;
     try {
         config = ReadAwsSubscriptionConfig(binding.Config);
@@ -2541,7 +2679,8 @@ async function validateSubscription(sns: SnsGateway, sqs: SqsGateway, topic: Top
     }
 }
 
-/** Checks that pre-provisioned SNS/SQS resources exist and match the topology (FIFO, redrive, raw delivery, filter). */
+/** Checks that pre-provisioned SNS/SQS resources exist and match the topology (FIFO, redrive, raw delivery, filter).
+ *  Read-only: it needs sns:GetTopicAttributes, sns:GetSubscriptionAttributes and sqs:GetQueueAttributes (Task 9 IAM). */
 export async function ValidateAwsBindings(sns: SnsGateway, sqs: SqsGateway, topic: TopicBinding, subscriptions: SubscriptionBinding[]): Promise<BindingValidationIssue[]> {
     const issues: BindingValidationIssue[] = [];
     const sinkFor = (subject: string): IssueSink => (severity, message) => issues.push({ Severity: severity, Subject: subject, Message: message });
@@ -2603,7 +2742,7 @@ export function TestAwsResources(isFifo: boolean): TestAwsResourceSet {
 
 export function TestPolicy(overrides: Partial<SubscriptionPolicy> = {}): SubscriptionPolicy {
     return {
-        SubscriptionName: 'email.unsubscribe', TopicName: 'email.events', OrderingMode: 'PublishOrder', PartitionMode: 'Exclusive',
+        SubscriptionName: 'email.unsubscribe', TopicName: 'email.events', PartitionMode: 'Exclusive',
         MaxAttempts: 5, BackoffBaseSeconds: 10, BackoffMaxSeconds: 900, LeaseSeconds: 60, HeartbeatMode: 'Auto',
         ...overrides,
     };
@@ -2611,7 +2750,7 @@ export function TestPolicy(overrides: Partial<SubscriptionPolicy> = {}): Subscri
 
 export function TestTopicBinding(isFifo: boolean = true, overrides: Partial<TopicBinding> = {}): TopicBinding {
     return {
-        TopicName: 'email.events', OrderingMode: 'PublishOrder', IsFifo: isFifo, MaxPayloadBytes: 262_144,
+        TopicName: 'email.events', IsFifo: isFifo, MaxPayloadBytes: 262_144,
         Config: { SnsTopicArn: TestAwsResources(isFifo).TopicArn },
         ...overrides,
     };
@@ -2677,7 +2816,9 @@ export * from './gateway/SnsGateway';
 export * from './gateway/SqsGateway';
 export * from './gateway/SdkSnsGateway';
 export * from './gateway/SdkSqsGateway';
-export * from './gateway/clients';
+export * from './gateway/sqsClient';
+export * from './gateway/snsClient';
+export * from './margins';
 export * from './driver/capabilities';
 export * from './driver/publish';
 export * from './driver/bindingValidation';
@@ -2693,7 +2834,7 @@ export * from './fixtures';
 - [ ] **Step 8: Run the tests and build**
 
 Run: `cd packages/WorkQueue/aws && pnpm test`
-Expected: PASS — previous 56, plus capabilities (1), publish (9), bindingValidation (10). Total 76.
+Expected: PASS — previous 59, plus capabilities (1), publish (12), bindingValidation (11). Total 83.
 
 Run: `cd packages/WorkQueue/aws && pnpm run build`
 Expected: builds.
@@ -2715,38 +2856,56 @@ git commit -m "feat(work-queue-aws): SNS publish mapping, binding validation and
 - Test: `packages/WorkQueue/aws/src/__tests__/deadLetter.test.ts`, `SqsTransportConsumer.test.ts`
 
 **Interfaces:**
-- Consumes: `ITransportConsumer`, `ReceivedDelivery`, `SettleResult`, `SubscriptionBinding`, `WorkJson`, `WorkMessage`, `WorkProgress` (core); `ReadAwsSubscriptionConfig`, `AwsSubscriptionConfig`, `ParseEnvelopeBody` (Task 1); `SqsGateway`, `SqsReceivedMessage`, `AwsGatewayError`, `ToGatewayError`, `FakeSqsGateway` (Task 3); `TestAwsResources`, `TestSubscriptionBinding`, `TestMessage` (Task 4).
+- Consumes: `ITransportConsumer`, `LeaseExtension`, `ReceivedDelivery`, `SettleResult`, `SubscriptionBinding`, `WorkJson`, `WorkMessage`, `WorkProgress` (core, 03 §5); `ReadAwsSubscriptionConfig`, `AwsSubscriptionConfig`, `ParseEnvelopeBody` (Task 1); `SqsGateway`, `SqsReceivedMessage`, `AwsGatewayError`, `ToGatewayError`, `FakeSqsGateway` (Task 3); `RECEIVE_GUARD_MARGIN` (`src/margins.ts`), `TestAwsResources`, `TestSubscriptionBinding`, `TestMessage` (Task 4).
 - Produces:
   - `DEAD_LETTER_ATTRIBUTES = { Reason: 'mj_dead_letter_reason', LastError: 'mj_last_error', Attempts: 'mj_attempts', DeadLetteredAt: 'mj_dead_lettered_at', SourceQueue: 'mj_source_queue' }`, `REPLAY_ATTRIBUTE = 'mj_replay'`, `DEAD_LETTER_REASON_MAX_CHARS = 500`, `LAST_ERROR_MAX_CHARS = 2000`
   - `interface DeadLetterRequest { Message: SqsReceivedMessage; Reason: string; Error: string | null; Attempts: number }`
   - `SendToDeadLetterQueue(gateway: SqsGateway, config: AwsSubscriptionConfig, request: DeadLetterRequest, now: Date): Promise<string>`
-  - `SQS_MAX_INVISIBLE_SECONDS = 43200`
-  - `interface SqsConsumerOptions { Now?: () => number }`
+  - `SQS_MAX_INVISIBLE_SECONDS = 43200`, `SQS_STANDARD_MAX_BATCH = 10`
+  - `interface SqsConsumerOptions { Now?: () => number; OnAdoptError?: (message: SqsReceivedMessage, error: Error) => void }`
   - `class SqsTransportConsumer<TPayload extends WorkJson = WorkJson> implements ITransportConsumer<TPayload>` — `constructor(gateway: SqsGateway, binding: SubscriptionBinding, options?: SqsConsumerOptions)`, plus `Adopt(message: SqsReceivedMessage): Promise<ReceivedDelivery<TPayload> | null>` (used by the Lambda adapter, Task 7) and `get TrackedCount(): number`
 
-Settle mapping (03 §5, 02 §4.4):
+**One message per FIFO receive (03 §5.1, F5).** SQS FIFO locks a message group against *other* receives while one of
+its messages is in flight — but a single `ReceiveMessage` with `MaxNumberOfMessages > 1` may return several messages of
+the **same** group. The core runtime starts every delivery it receives, so a batched receive would run one key's
+messages concurrently (breaking `Exclusive`) and, when the head retries, its batch-mates would be released and
+re-received, burning receive counts they never used. So on a FIFO binding `Receive(max, …)` issues up to
+`min(max, 10)` **parallel** `ReceiveMessage` calls, each with `MaxNumberOfMessages = 1`; SQS's group lock then
+guarantees they return different keys. Standard queues keep one batched receive (≤ 10).
+
+Settle mapping (03 §5, §5.1):
 
 | Operation | SQS call | Result |
 | --- | --- | --- |
-| `Receive` | `ReceiveMessage` (visibility = `LeaseSeconds`, ≤ 10) → `Adopt` each | valid envelopes as deliveries |
+| `Receive` | FIFO: up to `max` parallel `ReceiveMessage(MaxNumberOfMessages = 1)`; standard: one `ReceiveMessage(≤ 10)`; visibility = `LeaseSeconds`; then `Adopt` each | valid envelopes as deliveries; one message failing to adopt never loses the others |
 | `Adopt` — body is not an envelope | dead-letter `InvalidEnvelope` + `DeleteMessage` | `null` |
-| `Adopt` — `ReceiveCount > MaxAttempts` (crash loop: never settled) | dead-letter `LeaseExpired` + `DeleteMessage` | `null` |
-| `ExtendLease` | `ChangeMessageVisibility(min(lease, 12 h window left))` | `Held`; `Lost` on stale receipt, exhausted 12 h window or non-retryable error; `Held` on a retryable error (next heartbeat retries) |
+| `Adopt` — `ReceiveCount > MaxAttempts + 2` (receive-time guard: crash loop, never settled) | dead-letter `MaxAttemptsExceeded` + `DeleteMessage` | `null` |
+| `ExtendLease` | `ChangeMessageVisibility(min(lease, 12 h window left))` | `Held`; `Lost` on a stale receipt, an exhausted 12 h window or a non-retryable error; **throws** on a retryable error. Never `Cancelled` |
 | `Complete` | `DeleteMessage` | `Settled Completed` / `LeaseLost` / `Failed` |
 | `Retry` | `ChangeMessageVisibility(min(delay, 12 h window left))` | `Settled Pending` / `LeaseLost` / `Failed` |
-| `DeadLetter` | `SendMessage` to the DLQ with `mj_*` attributes, then `DeleteMessage` | `Settled DeadLettered` / `LeaseLost` (a DLQ copy exists; SQS will redeliver, so a second dead letter is possible) / `Failed` (send failed; message untouched) |
-| `Release` | `ChangeMessageVisibility(0)` | `Settled Pending` / `LeaseLost` |
+| `DeadLetter` | `SendMessage` to the DLQ with `mj_*` attributes, then `DeleteMessage` | `Settled DeadLettered` / `LeaseLost` (the DLQ copy exists; a second copy is suppressed by its dedup id) / `Failed` (send failed; message untouched) |
+| `Release` | `ChangeMessageVisibility(0)` | `Settled Pending` / `LeaseLost` — **the receive is already counted** |
+| `AcknowledgeCancel` | none | always `LeaseLost` (`CancelInFlight` is `false`) |
+
+**Attempt accounting.** `Attempt` = `ApproximateReceiveCount`. The runtime dead-letters after a *failure* at
+`Attempt ≥ MaxAttempts` (03 §3.2). Receives that never ran the handler — `Release` on shutdown, a Lambda throttle, a
+worker killed mid-handler — still increment the count, so the receive-time guard waits for
+`> MaxAttempts + RECEIVE_GUARD_MARGIN` and the queue's redrive policy for `MaxAttempts + REDRIVE_MARGIN` (Task 4). With
+one message per FIFO receive, a key's followers are never received while their head retries, so they arrive for
+their first run at `Attempt = 1`.
 
 `ExtendLease` is this transport's instance of 03 §3.2's **retry-within-lease** rule: a transient SQS failure
-(throttling, timeout, a 5xx) answers `Held`, so the runtime simply retries on its next heartbeat tick rather than
-aborting a healthy handler. Only three things answer `Lost`: a stale or invalid receipt handle (`ReceiptHandleIsInvalid`
-— the message was already redelivered to someone else), an exhausted 12-hour visibility window, or a non-retryable
-error. The runtime then aborts the handler's `Signal` and fences its settle.
+(throttling, timeout, a 5xx) **throws**, which the runtime treats as transient and retries on its next heartbeat tick;
+the independent lease-horizon timer (F4) still aborts the handler if the lease really runs out. Only three things
+answer `Lost`: a stale or invalid receipt handle (`ReceiptHandleIsInvalid` — the message was already redelivered to
+someone else), an exhausted 12-hour visibility window, or a non-retryable error.
 
-`DeliveryID` is the SQS `MessageId`; `LeaseToken` is the receipt handle; `Attempt` is `ApproximateReceiveCount`
-(a replayed message is a new SQS message, so its attempts restart at 1); `IsReplay` is `mj_replay = '1'`.
-Dead-letter FIFO IDs: `MessageGroupId` = the original group (or the SQS `MessageId`), `MessageDeduplicationId` =
-`<SQS MessageId>:dl` — stable across retries of the same delivery, distinct for a replayed copy.
+`DeliveryID` is the SQS `MessageId`; `LeaseToken` is the receipt handle; `IsReplay` is `mj_replay = '1'` (a replayed
+message is a new SQS message, so its attempts restart at 1).
+
+**Dead-letter copies get their own message group (03 §5.1, F6).** On a FIFO dead-letter queue, `MessageGroupId` = the
+source SQS `MessageId` and `MessageDeduplicationId` = `<SQS MessageId>:dl`. Order means nothing in a DLQ, and keeping
+the original group would let one in-flight scan receive block every other dead letter of a poison key (Task 6).
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -2760,7 +2919,7 @@ import { FakeSqsGateway } from '../testing/fakes';
 import { TestAwsResources, TestSubscriptionBinding } from '../testing/fixtures';
 
 describe('SendToDeadLetterQueue', () => {
-    it('copies the body with reason attributes and FIFO IDs', async () => {
+    it('copies the body with reason attributes, in a message group of its own', async () => {
         const r = TestAwsResources(true);
         const sqs = new FakeSqsGateway().AddQueue(r.DeadLetterQueueUrl, { Fifo: true });
         const config = ReadAwsSubscriptionConfig(TestSubscriptionBinding(true).Config);
@@ -2768,13 +2927,26 @@ describe('SendToDeadLetterQueue', () => {
         await SendToDeadLetterQueue(sqs, config, { Message: message, Reason: 'Fatal', Error: 'e'.repeat(5000), Attempts: 3 }, new Date('2026-09-16T12:00:00.000Z'));
         const [copy] = sqs.Messages(r.DeadLetterQueueUrl);
         expect(copy.Body).toBe('{"x":1}');
-        expect(copy.GroupId).toBe('subscriber-9');
+        expect(copy.GroupId).toBe('sqs-1');
         expect(copy.DeduplicationId).toBe('sqs-1:dl');
         expect(copy.Attributes[DEAD_LETTER_ATTRIBUTES.Reason]).toBe('Fatal');
         expect(copy.Attributes[DEAD_LETTER_ATTRIBUTES.LastError]).toHaveLength(LAST_ERROR_MAX_CHARS);
         expect(copy.Attributes[DEAD_LETTER_ATTRIBUTES.Attempts]).toBe('3');
         expect(copy.Attributes[DEAD_LETTER_ATTRIBUTES.DeadLetteredAt]).toBe('2026-09-16T12:00:00.000Z');
         expect(copy.Attributes[DEAD_LETTER_ATTRIBUTES.SourceQueue]).toBe(r.QueueArn);
+    });
+
+    it('lets a scan reach every dead letter of one poison key', async () => {
+        const r = TestAwsResources(true);
+        const sqs = new FakeSqsGateway().AddQueue(r.DeadLetterQueueUrl, { Fifo: true });
+        const config = ReadAwsSubscriptionConfig(TestSubscriptionBinding(true).Config);
+        for (const id of ['sqs-1', 'sqs-2', 'sqs-3']) {
+            const message = { MessageId: id, ReceiptHandle: 'rh', Body: id, ReceiveCount: 6, MessageGroupId: 'poison-key', SentTimestamp: 1, Attributes: {} };
+            await SendToDeadLetterQueue(sqs, config, { Message: message, Reason: 'Fatal', Error: null, Attempts: 6 }, new Date());
+        }
+        const first = await sqs.Receive({ QueueUrl: r.DeadLetterQueueUrl, MaxMessages: 1, WaitTimeSeconds: 0, VisibilityTimeoutSeconds: 30 });
+        const rest = await sqs.Receive({ QueueUrl: r.DeadLetterQueueUrl, MaxMessages: 10, WaitTimeSeconds: 0, VisibilityTimeoutSeconds: 30 });
+        expect([...first, ...rest].map((m) => m.Body).sort()).toEqual(['sqs-1', 'sqs-2', 'sqs-3']);
     });
 
     it('omits FIFO IDs and the last error on a standard queue when there is no error', async () => {
@@ -2799,6 +2971,7 @@ import type { SubscriptionBinding } from '@memberjunction/work-queue-core';
 import { DEAD_LETTER_ATTRIBUTES, REPLAY_ATTRIBUTE } from '../consumer/deadLetter';
 import { SqsTransportConsumer } from '../consumer/SqsTransportConsumer';
 import { AwsGatewayError } from '../gateway/errors';
+import type { SqsReceivedMessage } from '../gateway/SqsGateway';
 import { FakeSqsGateway } from '../testing/fakes';
 import { TestAwsResources, TestMessage, TestSubscriptionBinding } from '../testing/fixtures';
 
@@ -2813,8 +2986,14 @@ function withPolicy(overrides: Partial<SubscriptionBinding['Policy']>): SqsTrans
     return new SqsTransportConsumer(sqs, binding, { Now: () => sqs.Now });
 }
 
-async function send(index: number, attributes: Record<string, string> = {}): Promise<void> {
-    await sqs.Send({ QueueUrl: r.QueueUrl, Body: JSON.stringify(TestMessage(index)), MessageGroupId: `g-${index}`, MessageDeduplicationId: `d-${index}`, Attributes: attributes });
+async function send(index: number, attributes: Record<string, string> = {}, group: string = `g-${index}`): Promise<void> {
+    await sqs.Send({ QueueUrl: r.QueueUrl, Body: JSON.stringify(TestMessage(index)), MessageGroupId: group, MessageDeduplicationId: `d-${index}`, Attributes: attributes });
+}
+
+class AlwaysThrottledSqs extends FakeSqsGateway {
+    public override async Receive(): Promise<SqsReceivedMessage[]> {
+        throw new AwsGatewayError('SQS ReceiveMessage failed: Throttling', 'Throttling', true);
+    }
 }
 
 beforeEach(() => {
@@ -2834,6 +3013,49 @@ describe('SqsTransportConsumer.Receive', () => {
         expect(consumer.TrackedCount).toBe(2);
     });
 
+    it('receives one message per call on a FIFO queue, so one key is never in flight twice', async () => {
+        await send(1, {}, 'key-a');
+        await send(2, {}, 'key-a');
+        await send(3, {}, 'key-b');
+        const deliveries = await consumer.Receive(10, 0, signal);
+        expect(deliveries.map((d) => d.Message.MessageID).sort()).toEqual([TestMessage(1).MessageID, TestMessage(3).MessageID]);
+        const receives = sqs.Calls.filter((call) => call.Op === 'Receive');
+        expect(receives).toHaveLength(10);
+        expect(receives.every((call) => call.MaxMessages === 1)).toBe(true);
+        // key-a's second message stays queued until the first settles.
+        expect(await consumer.Receive(10, 0, signal)).toEqual([]);
+        await consumer.Complete(deliveries.find((d) => d.Message.MessageID === TestMessage(1).MessageID)!);
+        expect((await consumer.Receive(10, 0, signal)).map((d) => d.Message.MessageID)).toEqual([TestMessage(2).MessageID]);
+    });
+
+    it('does not burn a follower\'s attempts while its head retries', async () => {
+        await send(1, {}, 'key-a');
+        await send(2, {}, 'key-a');
+        for (let attempt = 1; attempt <= 3; attempt++) {
+            const [head] = await consumer.Receive(10, 0, signal);
+            expect(head.Message.MessageID).toBe(TestMessage(1).MessageID);
+            await consumer.Retry(head, 30, 'boom');
+            sqs.Advance(31);
+        }
+        const [head] = await consumer.Receive(10, 0, signal);
+        await consumer.Complete(head);
+        const [follower] = await consumer.Receive(10, 0, signal);
+        expect(follower.Message.MessageID).toBe(TestMessage(2).MessageID);
+        expect(follower.Attempt).toBe(1);
+    });
+
+    it('batches on a standard queue', async () => {
+        const standard = TestAwsResources(false);
+        sqs.AddQueue(standard.QueueUrl, { Fifo: false }).AddQueue(standard.DeadLetterQueueUrl, { Fifo: false });
+        const standardConsumer = new SqsTransportConsumer(sqs, TestSubscriptionBinding(false), { Now: () => sqs.Now });
+        for (const index of [1, 2, 3]) {
+            await sqs.Send({ QueueUrl: standard.QueueUrl, Body: JSON.stringify(TestMessage(index)) });
+        }
+        expect(await standardConsumer.Receive(25, 0, signal)).toHaveLength(3);
+        const receives = sqs.Calls.filter((call) => call.Op === 'Receive');
+        expect(receives).toEqual([expect.objectContaining({ MaxMessages: 10 })]);
+    });
+
     it('dead-letters a body that is not an envelope and does not return it', async () => {
         await sqs.Send({ QueueUrl: r.QueueUrl, Body: 'not json', MessageGroupId: 'g', MessageDeduplicationId: 'bad' });
         expect(await consumer.Receive(10, 0, signal)).toEqual([]);
@@ -2841,17 +3063,39 @@ describe('SqsTransportConsumer.Receive', () => {
         expect(sqs.Messages(r.DeadLetterQueueUrl)[0].Attributes[DEAD_LETTER_ATTRIBUTES.Reason]).toBe('InvalidEnvelope');
     });
 
-    it('dead-letters a message received more than MaxAttempts times without settling', async () => {
+    it('still returns the adopted messages when one message cannot be dead-lettered', async () => {
+        const failures: string[] = [];
+        consumer = new SqsTransportConsumer(sqs, binding, { Now: () => sqs.Now, OnAdoptError: (message, error) => failures.push(`${message.Body}: ${error.message}`) });
+        await sqs.Send({ QueueUrl: r.QueueUrl, Body: 'not json', MessageGroupId: 'bad', MessageDeduplicationId: 'bad' });
+        await send(1);
+        sqs.FailNext('Send', new AwsGatewayError('SQS SendMessage failed: down', 'InternalError', true));
+        const deliveries = await consumer.Receive(10, 0, signal);
+        expect(deliveries.map((d) => d.Message.MessageID)).toEqual([TestMessage(1).MessageID]);
+        expect(failures).toEqual(['not json: SQS SendMessage failed: down']);
+        // The poison message was not deleted; SQS redelivers it after the visibility timeout.
+        expect(sqs.Messages(r.QueueUrl).map((m) => m.Body)).toContain('not json');
+    });
+
+    it('throws only when every receive call fails', async () => {
+        const throttled = new AlwaysThrottledSqs().AddQueue(r.QueueUrl, { Fifo: true });
+        await expect(new SqsTransportConsumer(throttled, binding).Receive(3, 0, signal)).rejects.toThrow('Throttling');
+        // One failed call out of several is tolerated: the other receives still return their messages.
+        await send(1);
+        sqs.FailNext('Receive', new AwsGatewayError('SQS ReceiveMessage failed: Throttling', 'Throttling', true));
+        expect(await consumer.Receive(3, 0, signal)).toHaveLength(1);
+    });
+
+    it('guards at MaxAttempts + 2 receives, not at MaxAttempts', async () => {
         consumer = withPolicy({ MaxAttempts: 2 });
         await send(1);
-        for (let i = 0; i < 2; i++) {
-            await consumer.Receive(1, 0, signal);
+        for (let i = 0; i < 4; i++) {
+            expect(await consumer.Receive(1, 0, signal)).toHaveLength(1);   // receives 1–4 are still delivered
             sqs.Advance(61);
         }
-        expect(await consumer.Receive(1, 0, signal)).toEqual([]);
+        expect(await consumer.Receive(1, 0, signal)).toEqual([]);           // receive 5 > 2 + 2
         const [copy] = sqs.Messages(r.DeadLetterQueueUrl);
-        expect(copy.Attributes[DEAD_LETTER_ATTRIBUTES.Reason]).toBe('LeaseExpired');
-        expect(copy.Attributes[DEAD_LETTER_ATTRIBUTES.Attempts]).toBe('3');
+        expect(copy.Attributes[DEAD_LETTER_ATTRIBUTES.Reason]).toBe('MaxAttemptsExceeded');
+        expect(copy.Attributes[DEAD_LETTER_ATTRIBUTES.Attempts]).toBe('5');
     });
 });
 
@@ -2884,11 +3128,19 @@ describe('SqsTransportConsumer settles', () => {
         expect(sqs.Messages(r.QueueUrl)[0].VisibleAt).toBe(sqs.Now + 200_000);
     });
 
-    it('releases by making the message visible immediately', async () => {
+    it('releases by making the message visible immediately, which consumes a receive', async () => {
         await send(1);
         const [delivery] = await consumer.Receive(1, 0, signal);
         expect(await consumer.Release(delivery)).toEqual({ Kind: 'Settled', DeliveryID: delivery.DeliveryID, Status: 'Pending' });
-        expect(await consumer.Receive(1, 0, signal)).toHaveLength(1);
+        const [again] = await consumer.Receive(1, 0, signal);
+        expect(again.Attempt).toBe(2);
+    });
+
+    it('cannot acknowledge a cancel: SQS has no cancel flag', async () => {
+        await send(1);
+        const [delivery] = await consumer.Receive(1, 0, signal);
+        expect(await consumer.AcknowledgeCancel(delivery)).toEqual({ Kind: 'LeaseLost', DeliveryID: delivery.DeliveryID });
+        expect(sqs.Messages(r.QueueUrl)).toHaveLength(1);
     });
 });
 
@@ -2912,10 +3164,11 @@ describe('SqsTransportConsumer.ExtendLease', () => {
         expect(sqs.Calls).toHaveLength(callsBefore);
     });
 
-    it('holds on a retryable SQS error and loses on a non-retryable one', async () => {
+    it('throws on a retryable SQS error (the runtime retries next tick) and loses on a non-retryable one', async () => {
         await send(1);
         const [delivery] = await consumer.Receive(1, 0, signal);
         sqs.FailNext('ChangeVisibility', new AwsGatewayError('slow down', 'Throttling', true));
+        await expect(consumer.ExtendLease(delivery, 60)).rejects.toThrow('slow down');
         expect(await consumer.ExtendLease(delivery, 60)).toBe('Held');
         sqs.FailNext('ChangeVisibility', new AwsGatewayError('denied', 'AccessDenied', false));
         expect(await consumer.ExtendLease(delivery, 60)).toBe('Lost');
@@ -2930,7 +3183,7 @@ describe('SqsTransportConsumer.DeadLetter', () => {
         expect(sqs.Messages(r.QueueUrl)).toHaveLength(0);
         const [copy] = sqs.Messages(r.DeadLetterQueueUrl);
         expect(copy.Body).toBe(JSON.stringify(TestMessage(1)));
-        expect(copy.GroupId).toBe('g-1');
+        expect(copy.GroupId).toBe(delivery.DeliveryID);
         expect(copy.Attributes[DEAD_LETTER_ATTRIBUTES.LastError]).toBe('last failure');
         expect(consumer.TrackedCount).toBe(0);
     });
@@ -2993,8 +3246,9 @@ export async function SendToDeadLetterQueue(gateway: SqsGateway, config: AwsSubs
         QueueUrl: config.DeadLetterQueueUrl,
         Body: request.Message.Body,
         Attributes: attributes,
+        // F6: every dead letter is its own message group, so a scan's in-flight receive never blocks the others.
         ...(config.IsFifo
-            ? { MessageGroupId: request.Message.MessageGroupId ?? request.Message.MessageId, MessageDeduplicationId: `${request.Message.MessageId}:dl` }
+            ? { MessageGroupId: request.Message.MessageId, MessageDeduplicationId: `${request.Message.MessageId}:dl` }
             : {}),
     });
 }
@@ -3004,19 +3258,23 @@ export async function SendToDeadLetterQueue(gateway: SqsGateway, config: AwsSubs
 
 ```typescript
 import type {
-    ITransportConsumer, ReceivedDelivery, SettleResult, SubscriptionBinding, WorkJson, WorkMessage, WorkProgress,
+    ITransportConsumer, LeaseExtension, ReceivedDelivery, SettleResult, SubscriptionBinding, WorkJson, WorkMessage, WorkProgress,
 } from '@memberjunction/work-queue-core';
 import { ReadAwsSubscriptionConfig, type AwsSubscriptionConfig } from '../config';
+import { RECEIVE_GUARD_MARGIN } from '../margins';
 import { ParseEnvelopeBody } from '../envelope';
 import { ToGatewayError } from '../gateway/errors';
 import type { SqsGateway, SqsReceivedMessage } from '../gateway/SqsGateway';
 import { REPLAY_ATTRIBUTE, SendToDeadLetterQueue } from './deadLetter';
 
 export const SQS_MAX_INVISIBLE_SECONDS = 43200;
+export const SQS_STANDARD_MAX_BATCH = 10;
 
 export interface SqsConsumerOptions {
     /** Clock, epoch ms. Defaults to Date.now. */
     Now?: () => number;
+    /** Called when one received message could not be adopted (it stays on the queue and is redelivered). */
+    OnAdoptError?: (message: SqsReceivedMessage, error: Error) => void;
 }
 
 interface Tracked {
@@ -3027,11 +3285,13 @@ interface Tracked {
 export class SqsTransportConsumer<TPayload extends WorkJson = WorkJson> implements ITransportConsumer<TPayload> {
     private readonly config: AwsSubscriptionConfig;
     private readonly now: () => number;
+    private readonly onAdoptError: (message: SqsReceivedMessage, error: Error) => void;
     private readonly tracked = new Map<string, Tracked>();
 
     constructor(private readonly gateway: SqsGateway, private readonly binding: SubscriptionBinding, options: SqsConsumerOptions = {}) {
         this.config = ReadAwsSubscriptionConfig(binding.Config);
         this.now = options.Now ?? Date.now;
+        this.onAdoptError = options.OnAdoptError ?? (() => undefined);
     }
 
     public get TrackedCount(): number {
@@ -3039,15 +3299,20 @@ export class SqsTransportConsumer<TPayload extends WorkJson = WorkJson> implemen
     }
 
     public async Receive(max: number, waitSeconds: number, signal: AbortSignal): Promise<ReceivedDelivery<TPayload>[]> {
-        const messages = await this.gateway.Receive({
-            QueueUrl: this.config.QueueUrl, MaxMessages: max, WaitTimeSeconds: waitSeconds,
-            VisibilityTimeoutSeconds: this.binding.Policy.LeaseSeconds, Signal: signal,
-        });
+        const messages = this.config.IsFifo
+            ? await this.receiveOnePerCall(max, waitSeconds, signal)
+            : await this.receiveCall(Math.min(Math.max(max, 1), SQS_STANDARD_MAX_BATCH), waitSeconds, signal);
         const deliveries: ReceivedDelivery<TPayload>[] = [];
         for (const message of messages) {
-            const delivery = await this.Adopt(message);
-            if (delivery) {
-                deliveries.push(delivery);
+            try {
+                const delivery = await this.Adopt(message);
+                if (delivery) {
+                    deliveries.push(delivery);
+                }
+            } catch (error) {
+                // One message failing to adopt must not lose the ones already adopted: it was not deleted,
+                // so SQS redelivers it after its visibility timeout (and the redrive policy is the backstop).
+                this.onAdoptError(message, ToGatewayError(error, 'SQS adopt'));
             }
         }
         return deliveries;
@@ -3060,8 +3325,8 @@ export class SqsTransportConsumer<TPayload extends WorkJson = WorkJson> implemen
             await this.deadLetterAndDelete(message, 'InvalidEnvelope', 'Body is not a work-queue envelope');
             return null;
         }
-        if (message.ReceiveCount > this.binding.Policy.MaxAttempts) {
-            await this.deadLetterAndDelete(message, 'LeaseExpired', `Received ${message.ReceiveCount} times without being settled`);
+        if (message.ReceiveCount > this.binding.Policy.MaxAttempts + RECEIVE_GUARD_MARGIN) {
+            await this.deadLetterAndDelete(message, 'MaxAttemptsExceeded', `Received ${message.ReceiveCount} times without being settled`);
             return null;
         }
         const receivedAt = this.now();
@@ -3077,7 +3342,8 @@ export class SqsTransportConsumer<TPayload extends WorkJson = WorkJson> implemen
         };
     }
 
-    public async ExtendLease(delivery: ReceivedDelivery<TPayload>, leaseSeconds: number, _progress?: WorkProgress): Promise<'Held' | 'Lost'> {
+    /** Throws on a retryable SQS error: the runtime retries on its next heartbeat tick (03 §3.2). Never 'Cancelled'. */
+    public async ExtendLease(delivery: ReceivedDelivery<TPayload>, leaseSeconds: number, _progress?: WorkProgress): Promise<LeaseExtension> {
         const seconds = Math.min(leaseSeconds, this.windowLeftSeconds(delivery));
         if (seconds <= 0) {
             return 'Lost';
@@ -3085,7 +3351,11 @@ export class SqsTransportConsumer<TPayload extends WorkJson = WorkJson> implemen
         try {
             return (await this.gateway.ChangeVisibility(this.config.QueueUrl, delivery.LeaseToken, seconds)) ? 'Held' : 'Lost';
         } catch (error) {
-            return ToGatewayError(error, 'SQS ChangeMessageVisibility').Retryable ? 'Held' : 'Lost';
+            const mapped = ToGatewayError(error, 'SQS ChangeMessageVisibility');
+            if (mapped.Retryable) {
+                throw mapped;
+            }
+            return 'Lost';
         }
     }
 
@@ -3111,12 +3381,36 @@ export class SqsTransportConsumer<TPayload extends WorkJson = WorkJson> implemen
         return this.settle(delivery, 'DeadLettered', () => this.gateway.Delete(this.config.QueueUrl, delivery.LeaseToken));
     }
 
+    /** Visibility 0. SQS has already counted this receive; the receive margins (Task 4) absorb it. */
     public async Release(delivery: ReceivedDelivery<TPayload>): Promise<SettleResult> {
         return this.settle(delivery, 'Pending', () => this.gateway.ChangeVisibility(this.config.QueueUrl, delivery.LeaseToken, 0));
     }
 
+    /** CancelInFlight is false on this transport: there is no cancel flag to acknowledge (03 §5). */
+    public async AcknowledgeCancel(delivery: ReceivedDelivery<TPayload>): Promise<SettleResult> {
+        return { Kind: 'LeaseLost', DeliveryID: delivery.DeliveryID };
+    }
+
     public async Close(): Promise<void> {
         this.tracked.clear();
+    }
+
+    /** FIFO: parallel single-message receives. SQS's group lock makes them return different keys (03 §5.1, F5). */
+    private async receiveOnePerCall(max: number, waitSeconds: number, signal: AbortSignal): Promise<SqsReceivedMessage[]> {
+        const calls = Math.min(Math.max(max, 1), SQS_STANDARD_MAX_BATCH);
+        const settled = await Promise.allSettled(Array.from({ length: calls }, () => this.receiveCall(1, waitSeconds, signal)));
+        const failures = settled.filter((result): result is PromiseRejectedResult => result.status === 'rejected');
+        if (failures.length === calls) {
+            throw ToGatewayError(failures[0].reason, 'SQS ReceiveMessage');
+        }
+        return settled.flatMap((result) => (result.status === 'fulfilled' ? result.value : []));
+    }
+
+    private receiveCall(maxMessages: number, waitSeconds: number, signal: AbortSignal): Promise<SqsReceivedMessage[]> {
+        return this.gateway.Receive({
+            QueueUrl: this.config.QueueUrl, MaxMessages: maxMessages, WaitTimeSeconds: waitSeconds,
+            VisibilityTimeoutSeconds: this.binding.Policy.LeaseSeconds, Signal: signal,
+        });
     }
 
     private windowLeftSeconds(delivery: ReceivedDelivery<TPayload>): number {
@@ -3143,8 +3437,9 @@ export class SqsTransportConsumer<TPayload extends WorkJson = WorkJson> implemen
 }
 ```
 
-A failure inside `deadLetterAndDelete` propagates out of `Receive`/`Adopt`; the message was not deleted, so SQS
-redelivers it and the redrive policy is the final backstop.
+`Adopt` still throws when its dead-letter send fails — the Lambda adapter (Task 7) calls it per record and reports
+that record as a batch item failure. `Receive` catches per message, so the MJ-worker path never drops deliveries it
+already adopted. The parallel FIFO receives share the caller's `AbortSignal`; an aborted long poll returns `[]`.
 
 - [ ] **Step 5: Export the modules**
 
@@ -3158,7 +3453,7 @@ export * from './consumer/SqsTransportConsumer';
 - [ ] **Step 6: Run the tests and build**
 
 Run: `cd packages/WorkQueue/aws && pnpm test`
-Expected: PASS — previous 76, plus deadLetter (2), SqsTransportConsumer (12). Total 90.
+Expected: PASS — previous 83, plus deadLetter (3), SqsTransportConsumer (18). Total 104.
 
 Run: `cd packages/WorkQueue/aws && pnpm run build`
 Expected: builds.
@@ -3167,7 +3462,7 @@ Expected: builds.
 
 ```bash
 git add packages/WorkQueue/aws/src
-git commit -m "feat(work-queue-aws): SQS transport consumer with visibility leases and dead-letter writer"
+git commit -m "feat(work-queue-aws): SQS consumer with one-message FIFO receive, visibility leases and dead-letter writer"
 ```
 
 ---
@@ -3180,30 +3475,37 @@ git commit -m "feat(work-queue-aws): SQS transport consumer with visibility leas
 - Test: `packages/WorkQueue/aws/src/__tests__/AwsTransportOperator.test.ts`, `AwsTransportDriver.test.ts`
 
 **Interfaces:**
-- Consumes: `ITransportDriver`, `ITransportOperator`, `ITransportConsumer`, `TransportCapabilities`, `TopicBinding`, `SubscriptionBinding`, `WorkMessage`, `WorkJson`, `PublishResult`, `BindingValidationIssue`, `DatabasePublishOptions`, `SubscriptionStats`, `DeadLetterRecord`, `PartitionCondition`, `PartitionStateRecord`, `Page`, `OperatorResult` (core, 03 §5, §5.2); `AwsTransportConfig`, `ReadAwsSubscriptionConfig`, `ParseEnvelopeBody`, `MessageGroupIdFor` (Task 1); `SnsGateway`, `SqsGateway`, `SqsReceivedMessage`, `SdkSnsGateway`, `SdkSqsGateway`, `CreateAwsClients`, `AwsCredentialsOption` (Task 3); `AWS_TRANSPORT_NAME`, `AWS_TRANSPORT_CAPABILITIES`, `PublishToSns`, `ValidateAwsBindings` (Task 4); `SqsTransportConsumer`, `DEAD_LETTER_ATTRIBUTES`, `REPLAY_ATTRIBUTE` (Task 5).
+- Consumes: `ITransportDriver`, `ITransportOperator`, `ITransportConsumer`, `TransportCapabilities`, `TopicBinding`, `SubscriptionBinding`, `WorkMessage`, `WorkJson`, `PublishResult`, `BindingValidationIssue`, `DatabasePublishOptions`, `SubscriptionStats`, `DeadLetterRecord`, `PartitionCondition`, `PartitionStateRecord`, `Page`, `OperatorResult` (core, 03 §5, §5.2); `AwsTransportConfig`, `ReadAwsSubscriptionConfig`, `ParseEnvelopeBody`, `MessageGroupIdFor` (Task 1); `SnsGateway`, `SqsGateway`, `SqsReceivedMessage`, `SdkSnsGateway`, `SdkSqsGateway`, `CreateSqsClient`, `CreateSnsClient`, `AwsCredentialsOption` (Task 3); `AWS_TRANSPORT_NAME`, `AWS_TRANSPORT_CAPABILITIES`, `PublishToSns`, `ValidateAwsBindings` (Task 4); `SqsTransportConsumer`, `DEAD_LETTER_ATTRIBUTES`, `REPLAY_ATTRIBUTE` (Task 5).
 - Produces:
-  - `DEAD_LETTER_SCAN_LIMIT = 100`, `PEEK_VISIBILITY_SECONDS = 30`
+  - `DEAD_LETTER_SCAN_LIMIT = 100`, `PEEK_VISIBILITY_SECONDS = 30`, `DEAD_LETTER_SCAN_WAIT_SECONDS = 1`, `DEAD_LETTER_SCAN_EMPTY_LIMIT = 3`, `INVALID_ENVELOPE_ID_PREFIX = 'sqs:'`
   - `interface ScannedDeadLetter { Raw: SqsReceivedMessage; Envelope: WorkMessage | null }`
   - `ScanDeadLetters(gateway: SqsGateway, queueUrl: string, limit: number, isMatch?: (item: ScannedDeadLetter) => boolean): Promise<{ Items: ScannedDeadLetter[]; Match: ScannedDeadLetter | null }>`
   - `RestoreVisibility(gateway: SqsGateway, queueUrl: string, items: ScannedDeadLetter[], exceptReceiptHandle?: string): Promise<void>`
-  - `ToDeadLetterRecord(item: ScannedDeadLetter): DeadLetterRecord | null`
+  - `DeadLetterIdOf(item: ScannedDeadLetter): string`, `ToDeadLetterRecord(item: ScannedDeadLetter): DeadLetterRecord`
   - `REPLAY_NOTE_ATTRIBUTE = 'mj_replay_note'`, `REPLAYED_BY_ATTRIBUTE = 'mj_replayed_by'`
   - `class AwsTransportOperator implements ITransportOperator` — `constructor(sqs: SqsGateway, options?: { Now?: () => number })`
   - `class AwsTransportDriver implements ITransportDriver` — `constructor(sns: SnsGateway, sqs: SqsGateway, options?: { Now?: () => number })`, `readonly Sns: SnsGateway`, `readonly Sqs: SqsGateway`, `static Create(config: AwsTransportConfig, credentials?: AwsCredentialsOption): AwsTransportDriver`
 
-**Best-effort dead-letter operations.** SQS has no peek or lookup by ID. Listing receives up to
-`min(pageSize, 100)` dead letters with a 30-second visibility, maps them, then sets their visibility back to 0.
-`NextCursor` is always `null`. Replay and discard scan up to 100 dead letters for the envelope `MessageID`
-(03 §5.2: the AWS `DeliveryID` of a dead letter is the envelope `MessageID`). Replay sends the original body back to
-the subscription queue with `mj_replay = '1'` (FIFO group = the envelope's group, dedup ID
-`<MessageID>:replay:<epoch ms>` so a recent earlier copy does not suppress it) and deletes it from the dead-letter
-queue. A replayed message goes behind anything already queued in its group, which `Exclusive` allows (no order
-promise). Bulk redrive of a large dead-letter queue is done with SQS's own `StartMessageMoveTask` (see the package
-README, Task 12). Discarding a pending or in-flight SQS message is not supported
-(`CancelPending = false`, `CancelInFlight = false`): a discard whose `MessageID` is not among the scanned dead letters
-answers `{ Supported: false }`, so 03 §7's lease-revoke cancel never applies here. `ListPartitions` returns `null`
-and `SkipSequence` answers `{ Supported: false }`. Staged `Ordered` subscriptions use the **Database** operator for
-every one of these, including cancelling in-flight work.
+**Best-effort dead-letter operations (03 §5.1, F6).** SQS has no peek or lookup by ID, so every operation is a scan:
+receive with a 30-second visibility, act, then set everything not acted on back to visibility 0.
+
+- **Scan rules.** Every scan receive uses `WaitTimeSeconds = 1` — short polling (`0`) samples a subset of SQS servers
+  and returns false empties, which used to end a scan early. A scan stops after **three consecutive empty receives**,
+  at `min(pageSize, 100)` items, or at the first match. `NextCursor` is always `null`.
+- **Every dead letter is reachable.** Dead-letter copies are each their own message group (Task 5), so holding one in
+  flight during a scan never hides the other dead letters of a poison key.
+- **Identity.** The AWS `DeliveryID` of a dead letter is the envelope `MessageID` (03 §5.2). A body that is not an
+  envelope (`InvalidEnvelope`) has none, so it is listed as `sqs:<SQS MessageId>` with a placeholder `Message`
+  (`Payload: null`) and the first 1,000 characters of its raw body appended to `LastError`. It can be discarded by that
+  ID; it cannot be replayed (`Changed: false`).
+- **Replay** sends the original body back to the subscription queue with `mj_replay = '1'` (FIFO group = the
+  envelope's group, dedup ID `<MessageID>:replay:<epoch ms>` so the 5-minute window never swallows it) and deletes it
+  from the dead-letter queue. A replayed message goes behind anything already queued in its group, which `Exclusive`
+  allows (no order promise). Bulk redrive of a large dead-letter queue is done with SQS's own `StartMessageMoveTask`
+  (package README, Task 11).
+- **Not supported.** Discarding a pending or in-flight SQS message (`CancelPending = false`, `CancelInFlight = false`):
+  a discard whose ID is not among the scanned dead letters answers `{ Supported: false }`. `ListPartitions` returns
+  `null`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -3214,6 +3516,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import type { SubscriptionBinding } from '@memberjunction/work-queue-core';
 import { DEAD_LETTER_ATTRIBUTES, REPLAY_ATTRIBUTE } from '../consumer/deadLetter';
 import { SqsTransportConsumer } from '../consumer/SqsTransportConsumer';
+import type { SqsReceivedMessage, SqsReceiveRequest } from '../gateway/SqsGateway';
 import { AwsTransportOperator } from '../operator/AwsTransportOperator';
 import { FakeSqsGateway } from '../testing/fakes';
 import { TestAwsResources, TestMessage, TestSubscriptionBinding } from '../testing/fixtures';
@@ -3221,6 +3524,18 @@ import { TestAwsResources, TestMessage, TestSubscriptionBinding } from '../testi
 const r = TestAwsResources(true);
 const signal = new AbortController().signal;
 let sqs: FakeSqsGateway;
+
+/** Returns `EmptyReceives` false-empty results before behaving normally (what SQS short polling does). */
+class FalseEmptySqs extends FakeSqsGateway {
+    public EmptyReceives = 0;
+    public override async Receive(request: SqsReceiveRequest): Promise<SqsReceivedMessage[]> {
+        if (this.EmptyReceives > 0) {
+            this.EmptyReceives -= 1;
+            return [];
+        }
+        return super.Receive(request);
+    }
+}
 let binding: SubscriptionBinding;
 let operator: AwsTransportOperator;
 
@@ -3263,7 +3578,7 @@ describe('AwsTransportOperator.GetStats', () => {
 });
 
 describe('AwsTransportOperator.ListDeadLetters', () => {
-    it('maps runtime and redrive dead letters, skips unreadable bodies and restores visibility', async () => {
+    it('maps runtime, redrive and unreadable dead letters and restores visibility', async () => {
         await deadLetter(1, runtimeAttributes('MaxAttemptsExceeded', '5'), 'subscriber-9');
         await deadLetter(2, {});
         await sqs.Send({ QueueUrl: r.DeadLetterQueueUrl, Body: 'garbage', MessageGroupId: 'g-x', MessageDeduplicationId: 'x' });
@@ -3272,8 +3587,23 @@ describe('AwsTransportOperator.ListDeadLetters', () => {
         expect(page?.Items).toEqual([
             { DeliveryID: TestMessage(1).MessageID, Message: TestMessage(1, { PartitionKey: 'subscriber-9' }), PartitionKey: 'subscriber-9', Attempts: 5, Reason: 'MaxAttemptsExceeded', LastError: 'boom', DeadLetteredAt: '2026-09-16T12:00:00.000Z', BlocksKey: false },
             { DeliveryID: TestMessage(2).MessageID, Message: TestMessage(2), PartitionKey: null, Attempts: 0, Reason: 'RedrivePolicy', LastError: null, DeadLetteredAt: null, BlocksKey: false },
+            expect.objectContaining({ DeliveryID: expect.stringMatching(/^sqs:msg-/), Reason: 'RedrivePolicy', LastError: 'raw body: garbage' }),
         ]);
+        expect(page?.Items[2].Message).toMatchObject({ Topic: '', Attributes: {}, Payload: null });
         expect(sqs.Messages(r.DeadLetterQueueUrl).every((m) => m.VisibleAt <= sqs.Now)).toBe(true);
+    });
+
+    it('long-polls, survives false-empty receives and stops after three consecutive empties', async () => {
+        const flaky = new FalseEmptySqs().AddQueue(r.QueueUrl, { Fifo: true }).AddQueue(r.DeadLetterQueueUrl, { Fifo: true });
+        sqs = flaky;
+        operator = new AwsTransportOperator(flaky, { Now: () => flaky.Now });
+        await deadLetter(1, runtimeAttributes('Fatal', '1'));
+        flaky.EmptyReceives = 2;
+        expect((await operator.ListDeadLetters(binding, null, 50))?.Items).toHaveLength(1);
+        const receives = flaky.Calls.filter((call) => call.Op === 'Receive');
+        expect(receives.every((call) => call.WaitTimeSeconds === 1)).toBe(true);
+        flaky.EmptyReceives = 3;
+        expect((await operator.ListDeadLetters(binding, null, 50))?.Items).toEqual([]);
     });
 
     it('scans no more than the page size', async () => {
@@ -3314,9 +3644,16 @@ describe('AwsTransportOperator.Discard and unsupported operations', () => {
         expect(await operator.Discard(binding, TestMessage(2).MessageID, 'cancel', 'user-1')).toEqual({ Supported: false });
     });
 
-    it('has no partitions and cannot skip sequences', async () => {
+    it('discards an unreadable dead letter by its sqs: ID but cannot replay it', async () => {
+        await sqs.Send({ QueueUrl: r.DeadLetterQueueUrl, Body: 'garbage', MessageGroupId: 'g-x', MessageDeduplicationId: 'x' });
+        const [record] = (await operator.ListDeadLetters(binding, null, 50))?.Items ?? [];
+        expect(await operator.Replay(binding, record.DeliveryID, null, null)).toEqual({ Supported: true, Changed: false });
+        expect(await operator.Discard(binding, record.DeliveryID, 'unreadable', 'user-1')).toEqual({ Supported: true, Changed: true });
+        expect(sqs.Messages(r.DeadLetterQueueUrl)).toHaveLength(0);
+    });
+
+    it('has no partitions', async () => {
         expect(await operator.ListPartitions(binding, 'Blocked', null, 50)).toBeNull();
-        expect(await operator.SkipSequence(binding, 'k', 5, 'gone', null)).toEqual({ Supported: false });
     });
 });
 ```
@@ -3391,13 +3728,21 @@ import type { SqsGateway, SqsReceivedMessage } from '../gateway/SqsGateway';
 
 export const DEAD_LETTER_SCAN_LIMIT = 100;
 export const PEEK_VISIBILITY_SECONDS = 30;
+/** Long poll: WaitTimeSeconds 0 samples a subset of SQS servers and returns false empties (03 §5.1, F6). */
+export const DEAD_LETTER_SCAN_WAIT_SECONDS = 1;
+/** A scan ends after this many consecutive empty receives. */
+export const DEAD_LETTER_SCAN_EMPTY_LIMIT = 3;
+/** DeliveryID prefix of a dead letter whose body is not an envelope (it has no MessageID). */
+export const INVALID_ENVELOPE_ID_PREFIX = 'sqs:';
+const RAW_BODY_PREVIEW_CHARS = 1000;
 
 export interface ScannedDeadLetter {
     Raw: SqsReceivedMessage;
     Envelope: WorkMessage | null;
 }
 
-/** Receives up to `limit` dead letters with a short visibility. Stops early at the first item `isMatch` accepts. */
+/** Receives up to `limit` dead letters with a short visibility. Stops at the first item `isMatch` accepts, at the
+ *  limit, or after DEAD_LETTER_SCAN_EMPTY_LIMIT consecutive empty receives. */
 export async function ScanDeadLetters(
     gateway: SqsGateway,
     queueUrl: string,
@@ -3406,13 +3751,17 @@ export async function ScanDeadLetters(
 ): Promise<{ Items: ScannedDeadLetter[]; Match: ScannedDeadLetter | null }> {
     const items: ScannedDeadLetter[] = [];
     const cap = Math.min(limit, DEAD_LETTER_SCAN_LIMIT);
-    while (items.length < cap) {
+    let consecutiveEmpties = 0;
+    while (items.length < cap && consecutiveEmpties < DEAD_LETTER_SCAN_EMPTY_LIMIT) {
         const batch = await gateway.Receive({
-            QueueUrl: queueUrl, MaxMessages: Math.min(10, cap - items.length), WaitTimeSeconds: 0, VisibilityTimeoutSeconds: PEEK_VISIBILITY_SECONDS,
+            QueueUrl: queueUrl, MaxMessages: Math.min(10, cap - items.length),
+            WaitTimeSeconds: DEAD_LETTER_SCAN_WAIT_SECONDS, VisibilityTimeoutSeconds: PEEK_VISIBILITY_SECONDS,
         });
         if (batch.length === 0) {
-            break;
+            consecutiveEmpties += 1;
+            continue;
         }
+        consecutiveEmpties = 0;
         // Keep every received item (even past a match) so the caller can restore all of their visibility.
         const scanned = batch.map((raw): ScannedDeadLetter => ({ Raw: raw, Envelope: ParseEnvelopeBody(raw.Body) }));
         items.push(...scanned);
@@ -3433,20 +3782,31 @@ export async function RestoreVisibility(gateway: SqsGateway, queueUrl: string, i
     }
 }
 
-export function ToDeadLetterRecord(item: ScannedDeadLetter): DeadLetterRecord | null {
-    if (item.Envelope === null) {
-        return null;
-    }
+/** The operator-facing ID: the envelope MessageID, or 'sqs:<SQS MessageId>' when the body is not an envelope. */
+export function DeadLetterIdOf(item: ScannedDeadLetter): string {
+    return item.Envelope?.MessageID ?? `${INVALID_ENVELOPE_ID_PREFIX}${item.Raw.MessageId}`;
+}
+
+export function ToDeadLetterRecord(item: ScannedDeadLetter): DeadLetterRecord {
     const attributes = item.Raw.Attributes;
-    return {
-        DeliveryID: item.Envelope.MessageID,
-        Message: item.Envelope,
-        PartitionKey: item.Envelope.PartitionKey ?? null,
+    const lastError = attributes[DEAD_LETTER_ATTRIBUTES.LastError] ?? null;
+    const base = {
+        DeliveryID: DeadLetterIdOf(item),
         Attempts: Number(attributes[DEAD_LETTER_ATTRIBUTES.Attempts] ?? '0'),
         Reason: attributes[DEAD_LETTER_ATTRIBUTES.Reason] ?? 'RedrivePolicy',
-        LastError: attributes[DEAD_LETTER_ATTRIBUTES.LastError] ?? null,
         DeadLetteredAt: attributes[DEAD_LETTER_ATTRIBUTES.DeadLetteredAt] ?? null,
         BlocksKey: false,
+    };
+    if (item.Envelope !== null) {
+        return { ...base, Message: item.Envelope, PartitionKey: item.Envelope.PartitionKey ?? null, LastError: lastError };
+    }
+    // Not an envelope: surface the raw body so an operator can see what arrived before discarding it.
+    const preview = `raw body: ${item.Raw.Body.slice(0, RAW_BODY_PREVIEW_CHARS)}`;
+    return {
+        ...base,
+        Message: { MessageID: base.DeliveryID, Topic: '', Attributes: {}, Payload: null, PublishedAt: '' },
+        PartitionKey: null,
+        LastError: lastError ? `${lastError}; ${preview}` : preview,
     };
 }
 ```
@@ -3462,7 +3822,7 @@ import { ReadAwsSubscriptionConfig } from '../config';
 import { REPLAY_ATTRIBUTE } from '../consumer/deadLetter';
 import { MessageGroupIdFor } from '../envelope';
 import type { SqsGateway } from '../gateway/SqsGateway';
-import { RestoreVisibility, ScanDeadLetters, ToDeadLetterRecord, type ScannedDeadLetter } from './deadLetterScan';
+import { DeadLetterIdOf, RestoreVisibility, ScanDeadLetters, ToDeadLetterRecord, type ScannedDeadLetter } from './deadLetterScan';
 
 export const REPLAY_NOTE_ATTRIBUTE = 'mj_replay_note';
 export const REPLAYED_BY_ATTRIBUTE = 'mj_replayed_by';
@@ -3501,7 +3861,7 @@ export class AwsTransportOperator implements ITransportOperator {
         const config = ReadAwsSubscriptionConfig(subscription.Config);
         const { Items } = await ScanDeadLetters(this.sqs, config.DeadLetterQueueUrl, Math.max(1, pageSize));
         await RestoreVisibility(this.sqs, config.DeadLetterQueueUrl, Items);
-        return { Items: Items.map(ToDeadLetterRecord).filter((record): record is DeadLetterRecord => record !== null), NextCursor: null };
+        return { Items: Items.map(ToDeadLetterRecord), NextCursor: null };
     }
 
     public async ListPartitions(_subscription: SubscriptionBinding, _condition: PartitionCondition | null, _cursor: string | null, _pageSize: number): Promise<Page<PartitionStateRecord> | null> {
@@ -3546,12 +3906,8 @@ export class AwsTransportOperator implements ITransportOperator {
         }
     }
 
-    public async SkipSequence(_subscription: SubscriptionBinding, _partitionKey: string, _sequence: number, _reason: string, _actorUserID: string | null): Promise<OperatorResult> {
-        return { Supported: false };
-    }
-
     private find(queueUrl: string, messageID: string): Promise<{ Items: ScannedDeadLetter[]; Match: ScannedDeadLetter | null }> {
-        return ScanDeadLetters(this.sqs, queueUrl, Number.MAX_SAFE_INTEGER, (item) => item.Envelope?.MessageID === messageID);
+        return ScanDeadLetters(this.sqs, queueUrl, Number.MAX_SAFE_INTEGER, (item) => DeadLetterIdOf(item) === messageID);
     }
 }
 ```
@@ -3568,7 +3924,8 @@ import type {
 } from '@memberjunction/work-queue-core';
 import type { AwsTransportConfig } from '../config';
 import { SqsTransportConsumer } from '../consumer/SqsTransportConsumer';
-import { CreateAwsClients, type AwsCredentialsOption } from '../gateway/clients';
+import { CreateSqsClient, type AwsCredentialsOption } from '../gateway/sqsClient';
+import { CreateSnsClient } from '../gateway/snsClient';
 import { SdkSnsGateway } from '../gateway/SdkSnsGateway';
 import { SdkSqsGateway } from '../gateway/SdkSqsGateway';
 import type { SnsGateway } from '../gateway/SnsGateway';
@@ -3589,8 +3946,10 @@ export class AwsTransportDriver implements ITransportDriver {
     }
 
     public static Create(config: AwsTransportConfig, credentials?: AwsCredentialsOption): AwsTransportDriver {
-        const clients = CreateAwsClients(config, credentials);
-        return new AwsTransportDriver(new SdkSnsGateway(clients.Sns), new SdkSqsGateway(clients.Sqs));
+        return new AwsTransportDriver(
+            new SdkSnsGateway(CreateSnsClient(config, credentials)),
+            new SdkSqsGateway(CreateSqsClient(config, credentials)),
+        );
     }
 
     public Publish(topic: TopicBinding, messages: WorkMessage[], _subscriptions: SubscriptionBinding[], _opts?: DatabasePublishOptions): Promise<PublishResult[]> {
@@ -3625,7 +3984,7 @@ export * from './driver/AwsTransportDriver';
 - [ ] **Step 7: Run the tests and build**
 
 Run: `cd packages/WorkQueue/aws && pnpm test`
-Expected: PASS — previous 90, plus AwsTransportOperator (8), AwsTransportDriver (4). Total 102.
+Expected: PASS — previous 104, plus AwsTransportOperator (10), AwsTransportDriver (4). Total 118.
 
 Run: `cd packages/WorkQueue/aws && pnpm run build`
 Expected: builds.
@@ -3648,7 +4007,7 @@ git commit -m "feat(work-queue-aws): best-effort dead-letter operator and the AW
 - Test: `packages/WorkQueue/aws/src/__tests__/bindingEnv.test.ts`, `emf.test.ts`, `CreateSqsLambdaHandler.test.ts`
 
 **Interfaces:**
-- Consumes: `ConsumerRuntime`, `ConsumerRuntimeOptions`, `WorkHandler`, `WorkLogger`, `WorkJson`, `SettleResult`, `SubscriptionBinding`, `SubscriptionPolicy`, `ParseSubscriptionFilter` (now `(json, support)` — 03 §4.2), `Outcome`, `WorkQueueConfigurationError` (core; `ConsumerRuntime.ProcessBatch(deliveries)` returns one `SettleResult` per delivery and `Stop()` aborts in-flight handlers and releases them — 03 §3.2); `ReadAwsSubscriptionConfig` (Task 1); `SqsGateway`, `SqsReceivedMessage`, `SdkSqsGateway`, `CreateAwsClients` (Task 3); `SqsTransportConsumer` (Task 5); fakes and fixtures (Tasks 3–4).
+- Consumes: `ConsumerRuntime`, `ConsumerRuntimeOptions`, `WorkHandler`, `WorkLogger`, `WorkJson`, `SettleResult`, `SubscriptionBinding`, `SubscriptionPolicy`, `ParseSubscriptionFilter` (now `(json, support)` — 03 §4.2), `Outcome`, `WorkQueueConfigurationError` (core; `ConsumerRuntime.ProcessBatch(deliveries)` returns one `SettleResult` per delivery and `Stop()` aborts in-flight handlers and releases them — 03 §3.2); `ReadAwsSubscriptionConfig` (Task 1); `SqsGateway`, `SqsReceivedMessage`, `SdkSqsGateway`, `CreateSqsClient` from `gateway/sqsClient` — **never** `snsClient`, `SdkSnsGateway` or `driver/AwsTransportDriver` (Task 3); `SqsTransportConsumer` (Task 5); fakes and fixtures (Tasks 3–4).
 - Produces (all from `@memberjunction/work-queue-aws/lambda`):
   - `interface SqsLambdaRecord`, `interface SqsLambdaEvent`, `interface SqsBatchResponse`, `interface LambdaContextLike { getRemainingTimeInMillis(): number; awsRequestId?: string }`, `ToSqsReceivedMessage(record: SqsLambdaRecord): SqsReceivedMessage`
   - `SUBSCRIPTION_ENV_VAR = 'MJ_WQ_SUBSCRIPTION'`, `ParseSubscriptionBindingEnv(value: string | undefined): SubscriptionBinding`
@@ -3657,6 +4016,13 @@ git commit -m "feat(work-queue-aws): best-effort dead-letter operator and the AW
   - `type SqsLambdaHandler = (event: SqsLambdaEvent, context: LambdaContextLike) => Promise<SqsBatchResponse>`
   - `CreateSqsLambdaHandler<TPayload extends WorkJson = WorkJson>(handlerFactory: () => WorkHandler<TPayload>, options?: SqsLambdaHandlerOptions): SqsLambdaHandler`
 
+**Batch size (03 §5.1, F5).** A FIFO event source uses `batch_size = 1` — the Terraform module defaults to it and
+warns on anything larger (Task 9). With a larger batch, Lambda hands the function several messages of one key; when
+the head fails, the adapter must release its followers, and each release-and-re-receive burns one of the follower's
+receives without ever running it. Concurrency comes from the event source's `maximum_concurrency` (parallel
+invocations, one per active message group), not from batching. The adapter still handles a larger batch correctly —
+the grouping below is the safety net for a misconfigured event source, and the normal path for standard queues.
+
 **How a batch is processed.** The event source mapping must enable `ReportBatchItemFailures`. Records are grouped by
 `MessageGroupId` (standard queues: every record is its own group). Groups run concurrently (default 10); records
 inside a group run one at a time, in order, through `ConsumerRuntime.ProcessBatch([delivery])`.
@@ -3664,14 +4030,22 @@ inside a group run one at a time, in order, through `ConsumerRuntime.ProcessBatc
 | Record result | Reported as a batch failure? | Why |
 | --- | --- | --- |
 | `Settled Completed` / `Settled DeadLettered` | no | Already deleted (and copied to the DLQ) |
-| Poison body or crash-looping message (`Adopt` returned `null`) | no | `Adopt` dead-lettered and deleted it |
+| Poison body, or a message past the receive-time guard (`Adopt` returned `null`) | no | `Adopt` dead-lettered and deleted it |
 | `Settled Pending` (retry), `LeaseLost`, `Failed`, or `Adopt` threw | **yes** | Must stay on the queue |
-| Later records of a FIFO group after a failure | **yes**, not processed, visibility set to 0 | Order: they must not overtake the failed record; the group stays blocked by it in SQS |
+| Later records of a FIFO group after a failure | **yes**, not processed, visibility set to 0 | Order: they must not overtake the failed record; the group stays blocked by it in SQS. Each such release costs the follower one receive — the reason for `batch_size = 1` |
 | Records not started because the remaining time is below `TimeoutSafetyMs` (default 10 s) | **yes**, visibility set to 0 | Lambda would time out; SQS redelivers them promptly |
 
 A timer fires `TimeoutSafetyMs` before the function's deadline and calls `runtime.Stop()`, which aborts running
-handlers and releases their messages; those records are reported as failures. Cold-start initialization (binding
+handlers and releases their messages; those records are reported as failures. Lambda **throttling** (reserved
+concurrency exhausted) also returns messages to the queue with their receive already counted — throttle with the event
+source's `maximum_concurrency` instead (Task 9). Cold-start initialization (binding
 parse, SQS client) happens once; a failure throws and Lambda retries the whole batch.
+
+The adapter hands core one delivery per `ProcessBatch` call and decides success from the returned `SettleResult`
+alone (see `succeeded` below), so it never depends on how core reports a key's leftover items. Heartbeats come from
+core at `HeartbeatIntervalSeconds(policy)` = `min(LeaseSeconds / 3, 30 s)` (03 §3.2) and extend the SQS visibility;
+the timeout guard fires `TimeoutSafetyMs` before the deadline regardless of where the heartbeat cycle is, and a lease
+that really runs out is caught by core's independent lease-horizon timer (F4).
 
 One EMF line is written per invocation (namespace `MJ/WorkQueue`, dimension `Subscription`), so CloudWatch gets
 `Processed`, `Completed`, `Retried`, `DeadLettered`, `Failed`, `NotStarted` and `DurationMs` without a CloudWatch
@@ -3705,6 +4079,12 @@ describe('ParseSubscriptionBindingEnv', () => {
         expect(() => ParseSubscriptionBindingEnv(JSON.stringify({ ...binding, Policy: { ...binding.Policy, LeaseSeconds: '60' } })))
             .toThrow("Policy.LeaseSeconds");
         expect(() => ParseSubscriptionBindingEnv(JSON.stringify({ ...binding, Config: {} }))).toThrow("'IsFifo' must be a boolean");
+    });
+
+    it('rejects an Ordered subscription: Ordered requires the Database transport', () => {
+        const binding = TestSubscriptionBinding(true);
+        expect(() => ParseSubscriptionBindingEnv(JSON.stringify({ ...binding, Policy: { ...binding.Policy, PartitionMode: 'Ordered' } })))
+            .toThrow('Ordered requires the Database transport');
     });
 });
 ```
@@ -3951,10 +4331,10 @@ function int(source: Raw, key: string, optional: boolean): number | undefined {
     return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : fail(`Policy.${key} must be a non-negative integer`);
 }
 
-function oneOf<T extends string>(source: Raw, key: string, allowed: readonly T[]): T {
+function oneOf<T extends string>(source: Raw, key: string, allowed: readonly T[], hint?: string): T {
     const value = source[key];
     const match = allowed.find((candidate) => candidate === value);
-    return match ?? fail(`Policy.${key} must be one of ${allowed.join(', ')}`);
+    return match ?? fail(`Policy.${key} must be one of ${allowed.join(', ')}${hint ? ` (${hint})` : ''}`);
 }
 
 function readPolicy(raw: unknown): SubscriptionPolicy {
@@ -3964,8 +4344,7 @@ function readPolicy(raw: unknown): SubscriptionPolicy {
     const policy: SubscriptionPolicy = {
         SubscriptionName: str(raw, 'SubscriptionName'),
         TopicName: str(raw, 'TopicName'),
-        OrderingMode: oneOf(raw, 'OrderingMode', ['PublishOrder', 'ExplicitSequence'] as const),
-        PartitionMode: oneOf(raw, 'PartitionMode', ['None', 'Exclusive', 'Ordered'] as const),
+        PartitionMode: oneOf(raw, 'PartitionMode', ['None', 'Exclusive'] as const, 'Ordered requires the Database transport'),
         MaxAttempts: int(raw, 'MaxAttempts', false) ?? 0,
         BackoffBaseSeconds: int(raw, 'BackoffBaseSeconds', false) ?? 0,
         BackoffMaxSeconds: int(raw, 'BackoffMaxSeconds', false) ?? 0,
@@ -3973,9 +4352,7 @@ function readPolicy(raw: unknown): SubscriptionPolicy {
         HeartbeatMode: oneOf(raw, 'HeartbeatMode', ['Auto', 'Manual'] as const),
     };
     const maxProcessing = int(raw, 'MaxProcessingSeconds', true);
-    const gapAlert = int(raw, 'SequenceGapAlertSeconds', true);
     if (maxProcessing !== undefined) policy.MaxProcessingSeconds = maxProcessing;
-    if (gapAlert !== undefined) policy.SequenceGapAlertSeconds = gapAlert;
     return policy;
 }
 
@@ -4047,7 +4424,7 @@ import {
 } from '@memberjunction/work-queue-core';
 import { ReadAwsSubscriptionConfig } from '../config';
 import { SqsTransportConsumer } from '../consumer/SqsTransportConsumer';
-import { CreateAwsClients } from '../gateway/clients';
+import { CreateSqsClient } from '../gateway/sqsClient';
 import { SdkSqsGateway } from '../gateway/SdkSqsGateway';
 import type { SqsGateway } from '../gateway/SqsGateway';
 import { ParseSubscriptionBindingEnv, SUBSCRIPTION_ENV_VAR } from './bindingEnv';
@@ -4100,6 +4477,12 @@ async function runLimited<T>(items: T[], limit: number, work: (item: T) => Promi
     await Promise.all(workers);
 }
 
+/**
+ * A record leaves the batch only when SQS no longer holds it: Settled Completed (deleted) or Settled DeadLettered
+ * (copied to the DLQ, then deleted). Everything else — Settled Pending (retry or release), LeaseLost, Failed, or no
+ * result at all — is reported as a batch item failure so it stays on the queue. No marker strings are inspected:
+ * core's ProcessBatch returns the real SettleResult of every delivery, including ones it released (03 §3.2).
+ */
 function succeeded(result: SettleResult | undefined): boolean {
     return result?.Kind === 'Settled' && (result.Status === 'Completed' || result.Status === 'DeadLettered');
 }
@@ -4128,7 +4511,7 @@ export function CreateSqsLambdaHandler<TPayload extends WorkJson = WorkJson>(
         if (initialized === null) {
             const binding = options.Binding ?? ParseSubscriptionBindingEnv((options.Env ?? process.env)[SUBSCRIPTION_ENV_VAR]);
             const region = ReadAwsSubscriptionConfig(binding.Config).Region;
-            const gateway = options.Gateway ?? new SdkSqsGateway(CreateAwsClients({ Region: region, Endpoint: null }).Sqs);
+            const gateway = options.Gateway ?? new SdkSqsGateway(CreateSqsClient({ Region: region, Endpoint: null }));
             initialized = { Binding: binding, Gateway: gateway };
         }
         return initialized;
@@ -4237,9 +4620,12 @@ Expected: completes; `pnpm-lock.yaml` records `esbuild` for `@memberjunction/wor
 `packages/WorkQueue/aws/scripts/check-lambda-bundle.mjs`:
 
 ```javascript
-// Bundles the ./lambda entry exactly as a consumer's esbuild build would (AWS SDK external, as the Lambda Node.js
-// runtime provides it) and fails when the bundle pulls in any MemberJunction package other than work-queue-core,
-// or grows past the size budget. Run after `pnpm run build` of work-queue-core and work-queue-aws.
+// Checks the ./lambda entry two ways. Run after `pnpm run build` of work-queue-core and work-queue-aws.
+//  1. INSPECT: bundle with the AWS SDK *included* and fail when the graph reaches @aws-sdk/client-sns or any
+//     MemberJunction package other than work-queue-core. (Marking @aws-sdk/* external here would hide an SNS import,
+//     which is exactly the leak this check exists to catch.)
+//  2. SIZE: bundle as a consumer would (the Lambda Node.js runtime provides the SDK, so it is external) and enforce
+//     the budget on our own code.
 import { build } from 'esbuild';
 import { dirname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -4247,39 +4633,35 @@ import { fileURLToPath } from 'node:url';
 const BUDGET_BYTES = 150 * 1024;
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const allowedRoots = [packageRoot, resolve(packageRoot, '..', 'core')].map((root) => root + sep);
-
-const result = await build({
+const common = {
     entryPoints: [resolve(packageRoot, 'dist/lambda/index.js')],
-    bundle: true,
-    platform: 'node',
-    target: 'node22',
-    format: 'esm',
-    minify: true,
-    write: false,
-    metafile: true,
-    external: ['@aws-sdk/*'],
-    logLevel: 'silent',
-    absWorkingDir: packageRoot,
-});
+    bundle: true, platform: 'node', target: 'node22', format: 'esm', minify: true, write: false, metafile: true,
+    logLevel: 'silent', absWorkingDir: packageRoot,
+};
 
-const inputs = Object.keys(result.metafile.inputs).map((input) => resolve(packageRoot, input));
-const offenders = inputs.filter((input) => {
-    if (allowedRoots.some((root) => input.startsWith(root)) && !input.includes(`${sep}node_modules${sep}`)) {
-        return false;
-    }
-    return input.includes(`${sep}@memberjunction${sep}`) || input.includes(`${sep}packages${sep}`);
-});
-const bytes = result.outputFiles[0].contents.byteLength;
+const inspected = await build(common);
+const inputs = Object.keys(inspected.metafile.inputs).map((input) => resolve(packageRoot, input));
+const isOurs = (input) => allowedRoots.some((root) => input.startsWith(root)) && !input.includes(`${sep}node_modules${sep}`);
+const snsLeaks = inputs.filter((input) => input.includes(`${sep}@aws-sdk${sep}client-sns${sep}`));
+const mjLeaks = inputs.filter((input) => !isOurs(input)
+    && (input.includes(`${sep}@memberjunction${sep}`) || (input.includes(`${sep}packages${sep}`) && !input.includes(`${sep}node_modules${sep}`))));
 
-if (offenders.length > 0) {
-    console.error('work-queue-aws/lambda bundle includes forbidden modules:\n' + offenders.join('\n'));
+if (snsLeaks.length > 0) {
+    console.error(`work-queue-aws/lambda reaches the SNS client (${snsLeaks.length} files), e.g.\n` + snsLeaks.slice(0, 5).join('\n'));
     process.exit(1);
 }
+if (mjLeaks.length > 0) {
+    console.error('work-queue-aws/lambda bundle includes forbidden modules:\n' + mjLeaks.join('\n'));
+    process.exit(1);
+}
+
+const sized = await build({ ...common, metafile: false, external: ['@aws-sdk/*'] });
+const bytes = sized.outputFiles[0].contents.byteLength;
 if (bytes > BUDGET_BYTES) {
     console.error(`work-queue-aws/lambda bundle is ${bytes} bytes; budget is ${BUDGET_BYTES}`);
     process.exit(1);
 }
-console.log(`work-queue-aws/lambda bundle OK: ${bytes} bytes (budget ${BUDGET_BYTES}), ${inputs.length} input files`);
+console.log(`work-queue-aws/lambda bundle OK: ${bytes} bytes (budget ${BUDGET_BYTES}), no SNS client, ${inputs.filter(isOurs).length} own input files`);
 ```
 
 `packages/WorkQueue/aws/examples/thin-consumer/index.ts` (not compiled by the package; shown in the README):
@@ -4328,10 +4710,10 @@ export const handler = CreateSqsLambdaHandler(() => new UnsubscribeRecorder());
 - [ ] **Step 9: Run the tests, build and check the bundle**
 
 Run: `cd packages/WorkQueue/aws && pnpm test`
-Expected: PASS — previous 102, plus bindingEnv (3), emf (1), CreateSqsLambdaHandler (7). Total 113.
+Expected: PASS — previous 118, plus bindingEnv (4), emf (1), CreateSqsLambdaHandler (7). Total 130.
 
 Run: `cd packages/WorkQueue/core && pnpm run build && cd ../aws && pnpm run build && pnpm run check:lambda-bundle`
-Expected: `work-queue-aws/lambda bundle OK: <n> bytes (budget 153600), <m> input files` with `<n>` under 153,600.
+Expected: `work-queue-aws/lambda bundle OK: <n> bytes (budget 153600), no SNS client, <m> own input files` with `<n>` under 153,600. To see the check fail, temporarily add `import '../gateway/snsClient';` to `src/lambda/index.ts`, rebuild and re-run: it must exit 1 with "reaches the SNS client". Remove the line afterwards.
 
 - [ ] **Step 10: Commit**
 
@@ -4342,55 +4724,73 @@ git commit -m "feat(work-queue-aws): Lambda adapter with FIFO-safe partial batch
 
 ---
 
-### Task 8: Engine — `AWSTransportDriverFactory`, credential resolution and cloud deduplication
+### Task 8: Engine `./aws` subpath — driver factory, credentials, manifest filter policies, cloud deduplication
 
 **Files:**
-- Modify: `packages/WorkQueue/engine/package.json` (dependencies `@memberjunction/work-queue-aws`, `@memberjunction/credentials`, `@aws-sdk/credential-providers`)
-- Create: `packages/WorkQueue/engine/src/transports/aws/ResolveAwsCredentials.ts`, `src/transports/aws/AWSTransportDriverFactory.ts`, `src/topology/FinalizeTopologyManifest.ts`
-- Modify: `packages/WorkQueue/engine/src/index.ts`, `packages/WorkQueue/engine/src/WorkQueueEngine.ts` (`ExportManifest`, plan 05 Task 13)
-- Test: `packages/WorkQueue/engine/src/__tests__/ResolveAwsCredentials.test.ts`, `AWSTransportDriverFactory.test.ts`, `AwsPublishCoordinator.test.ts`, `FinalizeTopologyManifest.test.ts`
+- Modify: `packages/WorkQueue/engine/package.json` (`./aws` export; dependencies `@memberjunction/work-queue-aws`, `@memberjunction/credentials`, `@aws-sdk/credential-providers`)
+- Create: `packages/WorkQueue/engine/src/aws/index.ts`, `src/aws/ResolveAwsCredentials.ts`, `src/aws/AWSTransportDriverFactory.ts`, `src/aws/AwsManifestEnricher.ts`
+- Create: `packages/WorkQueue/engine/src/topology/ManifestEnricherRegistry.ts`
+- Modify: `packages/WorkQueue/engine/src/index.ts` (export the registry only), `packages/WorkQueue/engine/src/WorkQueueEngine.ts` (`ExportManifest`, plan 05)
+- Modify: `packages/ServerBootstrap/package.json`, `packages/ServerBootstrap/src/index.ts` (side-effect import of the subpath)
+- Modify: `packages/MJCLI/src/commands/queue/export-topology.ts`, `import-bindings.ts`, `validate-bindings.ts`, `work.ts` (same side-effect import); Test: `packages/MJCLI/src/__tests__/queue-aws-registration.test.ts`
+- Test: `packages/WorkQueue/engine/src/__tests__/ResolveAwsCredentials.test.ts`, `AWSTransportDriverFactory.test.ts`, `AwsPublishCoordinator.test.ts`, `AwsManifestEnricher.test.ts`, `mainEntryGuard.test.ts`
 
 **Interfaces:**
 - Consumes:
-  - Plan 05: `BaseTransportDriverFactory { Create(transport: TransportRow, deps: TransportDriverDeps): Promise<ITransportDriver> }` (`src/transports/BaseTransportDriverFactory.ts`); `TransportRow`, `TopicRow`, `SubscriptionRow` (`src/topology/rows.ts`); `TransportDriverDeps { ContextUser; Executor: WorkQueueExecutorSource; Log; InstanceID? }`; `ResolveTopic(snapshot, topicName)` (`src/topology/bindings.ts`); `WorkQueuePublishCoordinator`, `PublishCoordinatorDeps`, `LedgerOperations` (`src/publish/WorkQueuePublishCoordinator.ts`); `LedgerReservation` (`src/dedup/DeduplicationLedger.ts`); test fakes `RecordingExecutor`, `RecordingLogger`, `TestDeps`, `TRANSPORT_ROW`, `TOPIC_ROW`, `SUBSCRIPTION_ROW` (`src/__tests__/fakes.ts`).
-  - `CredentialEngine` (`@memberjunction/credentials`: `Config(forceRefresh, contextUser)`, `getCredentialById(id)`, `getCredential(name, { credentialId, contextUser, subsystem })`); `MJGlobal`, `RegisterClass` (`@memberjunction/global`); `fromTemporaryCredentials` (`@aws-sdk/credential-providers`).
-  - `AwsTransportDriver`, `ParseAwsTransportConfig`, `AwsCredentialsOption`, `SdkSnsGateway`, `SdkSqsGateway` (Tasks 1–6); `FakeSnsGateway`, `FakeSqsGateway`, `TestAwsResources` (`@memberjunction/work-queue-aws/testing`).
+  - Plan 05: `BaseTransportDriverFactory { Create(transport: TransportRow, deps: TransportDriverDeps): Promise<ITransportDriver> }` (`src/transports/BaseTransportDriverFactory.ts`); `TransportDriverDeps` (`src/transports/TransportDriverDeps.ts`, 03 §11); `TransportRow`, `TopicRow`, `SubscriptionRow` (**`@memberjunction/work-queue-base`** — imported from there directly, no re-export, F13); `ResolveTopic`, `BuildTopologyManifest`, `TopologySnapshot` (plan 05 topology helpers, in `work-queue-base`); `WorkQueuePublishCoordinator`, `PublishCoordinatorDeps`, `LedgerOperations` (`src/publish/WorkQueuePublishCoordinator.ts`); `LedgerReservation` (`src/dedup/DeduplicationLedger.ts`, 03 §11: `{ Kind: 'Reserved' } | { Kind: 'Duplicate'; OwnerMessageID } | { Kind: 'Pending'; OwnerMessageID }`); test fakes `RecordingExecutor`, `RecordingLogger`, `TestDeps`, `TRANSPORT_ROW`, `TOPIC_ROW`, `SUBSCRIPTION_ROW`.
+  - `CredentialEngine` (`@memberjunction/credentials`: `Config(forceRefresh, contextUser)`, `getCredentialById(id)`, `getCredential(name, { credentialId, contextUser, subsystem })`); `BaseSingleton`, `RegisterClass`, `MJGlobal` (`@memberjunction/global`); `fromTemporaryCredentials` (`@aws-sdk/credential-providers`).
+  - `AwsTransportDriver`, `ParseAwsTransportConfig`, `AwsCredentialsOption`, `SdkSnsGateway`, `SdkSqsGateway`, `SnsFilterPolicyFor` (Tasks 1–6); `FakeSnsGateway`, `FakeSqsGateway`, `TestAwsResources` (`@memberjunction/work-queue-aws/testing`).
 - Produces:
-  - `interface AwsCredentialValues { AccessKeyId?: string; SecretAccessKey?: string; SessionToken?: string; RoleArn?: string; ExternalId?: string }`
-  - `ToAwsCredentials(values: AwsCredentialValues): AwsCredentialsOption`
-  - `ResolveAwsCredentials(credentialID: string | null, contextUser: UserInfo): Promise<AwsCredentialsOption>`
-  - `@RegisterClass(BaseTransportDriverFactory, 'AWS') class AWSTransportDriverFactory extends BaseTransportDriverFactory`
-  - `AWS_DRIVER_CLASS = 'AWS'`, `FinalizeTopologyManifest(manifest: TopologyManifest): TopologyManifest` — for `manifest.Transport.DriverClass === 'AWS'` sets every subscription's `Aws = { SnsFilterPolicy: SnsFilterPolicyFor(Filter) }`; returns other manifests unchanged
-  - `WorkQueueEngine.ExportManifest(transportName)` now returns `FinalizeTopologyManifest(BuildTopologyManifest(this.Snapshot, transportName, new Date()))`
-  - Also consumes: `BuildTopologyManifest`, `TopologySnapshot` (plan 05 `src/topology/manifest.ts`, `src/topology/bindings.ts`); `TopologyManifest`, `ManifestSubscription` (core); `SnsFilterPolicyFor` (Task 2)
+  - Main entry (`@memberjunction/work-queue-engine`): `type ManifestEnricher = (manifest: TopologyManifest) => TopologyManifest`, `class ManifestEnricherRegistry extends BaseSingleton<ManifestEnricherRegistry>` — `static get Instance()`, `Register(driverClass: string, enricher: ManifestEnricher): void`, `Has(driverClass: string): boolean`, `Apply(manifest: TopologyManifest): TopologyManifest`. `WorkQueueEngine.ExportManifest(transportName)` returns `ManifestEnricherRegistry.Instance.Apply(BuildTopologyManifest(…))`.
+  - Subpath (`@memberjunction/work-queue-engine/aws`, **only** from here): `AWS_DRIVER_CLASS = 'AWS'`; `interface AwsCredentialValues { AccessKeyId?; SecretAccessKey?; SessionToken?; RoleArn?; ExternalId? }`; `ToAwsCredentials(values: AwsCredentialValues, region: string): AwsCredentialsOption`; `ResolveAwsCredentials(credentialID: string | null, region: string, contextUser: UserInfo): Promise<AwsCredentialsOption>`; `@RegisterClass(BaseTransportDriverFactory, 'AWS') class AWSTransportDriverFactory`; `EnrichAwsManifest(manifest: TopologyManifest): TopologyManifest`.
 
-**Manifest export for AWS (03 §10).** Plan 05's `BuildTopologyManifest` cannot render SNS filter policies because
-the engine only depends on `@memberjunction/work-queue-aws` from this task on. `FinalizeTopologyManifest` is the
-single post-processing hook, called by `WorkQueueEngine.ExportManifest`, and guarded by `DriverClass`: AWS manifests
-get `Aws.SnsFilterPolicy` (null for an unfiltered subscription); a filter SNS cannot express (more than 150 value
-combinations) makes the export throw `WorkQueueConfigurationError` instead of producing a manifest Terraform would
-apply with the wrong filter. Azure (09a) adds its own `DriverClass` branch here. The Terraform module refuses a
-filtered subscription without a rendered policy (Task 10), so a manifest exported without this step cannot silently
-deliver every message.
+**Engine loading (03 §0, F12) — the rule this task exists to keep.** The engine's **main entry never imports
+`@memberjunction/work-queue-aws`**, directly or transitively. Everything AWS lives in `src/aws/` and is exported only
+through the `./aws` subpath. Importing that subpath has two side effects: `@RegisterClass(BaseTransportDriverFactory,
+'AWS')` and `ManifestEnricherRegistry.Instance.Register('AWS', EnrichAwsManifest)`. `src/aws/*` imports the specific
+engine modules it needs (`../transports/BaseTransportDriverFactory`, `../topology/ManifestEnricherRegistry`) — never
+`../index` and never `../WorkQueueEngine` — so there is no import cycle and no temporal-dead-zone hazard at load.
 
-**Credentials.** `Transport.CredentialID = null` uses the SDK default chain (recommended when MJAPI runs in AWS with
-a task or instance role). Otherwise the MJ credential's decrypted values are either static keys (`AccessKeyId`,
+Who imports the subpath:
+
+| Process | Imports `…/aws`? | Why |
+| --- | --- | --- |
+| `ServerBootstrap` (MJAPI) | **yes** — `import '@memberjunction/work-queue-engine/aws';` in `src/index.ts` | It publishes to and consumes from AWS topics |
+| `ServerBootstrapLite`, CodeGen, MetadataSync, data providers | **no** | They must load neither the engine's AWS code nor any AWS client |
+| `mj queue export-topology` / `import-bindings` / `validate-bindings` / `work` (plan 06 CLI) | **yes**, from those four command modules only (Step 7b) | They render SNS filter policies, build AWS drivers or consume AWS queues; oclif loads a command module only when that command runs, so no other CLI command pays for it |
+
+The generated class-registration manifest does **not** do this for us: `GenerateClassRegistrationsManifest` skips a
+`@RegisterClass` class that is not exported from its package's main entry (it logs "found in … source but not in
+public exports"), which is exactly the case here. The explicit side-effect import is the registration.
+
+A transport row with `DriverClass = 'AWS'` in a process that did not import the subpath has no factory: plan 05's
+engine reports that as a validation **error**, never a crash (03 §0), and `ExportManifest` throws a
+`WorkQueueConfigurationError` naming the missing import instead of exporting a manifest without filter policies.
+
+**Manifest export for AWS (03 §10).** `BuildTopologyManifest` (plan 05) is transport-neutral. The AWS enricher sets
+every subscription's `Aws = { SnsFilterPolicy }` (null for an unfiltered subscription) so infrastructure code never
+re-translates a filter; a filter SNS cannot express (more than 150 value combinations, a field constrained twice)
+makes the export throw. It also refuses an `Ordered` subscription on an AWS topic ("Ordered requires the Database
+transport"), so an invalid topology never reaches Terraform. Azure (09a) registers its own enricher the same way.
+
+**Credentials.** `Transport.CredentialID = null` uses the SDK default chain (recommended when MJAPI runs in AWS with a
+task or instance role). Otherwise the MJ credential's decrypted values are either static keys (`AccessKeyId`,
 `SecretAccessKey`, optional `SessionToken`) or a role to assume (`RoleArn`, optional `ExternalId`) on top of the
-ambient identity — recommended for MJ running outside AWS. Credential access is audited by the Credentials engine
-under subsystem `WorkQueue`.
+ambient identity — recommended for MJ running outside AWS. The assume-role provider is given
+`clientConfig: { region }` from the transport configuration: outside AWS there is no `AWS_REGION`, and STS would
+otherwise fail to resolve an endpoint. The provider refreshes temporary credentials itself; **static** keys are read
+once per driver, so rotating them means re-saving the transport (which drops the engine's cached driver). Credential
+access is audited by the Credentials engine under subsystem `WorkQueue`.
 
-**Why the engine carries the factory.** `@memberjunction/work-queue-aws` stays free of MJ runtime packages (R9),
-so the ClassFactory registration lives here. Every MJ server that includes the engine installs
-`@aws-sdk/client-sns` and `@aws-sdk/client-sqs`; clients are only constructed when an AWS transport is resolved
-(precedent: `@memberjunction/storage` already ships `@aws-sdk/client-s3` to every server).
+**Deduplication on AWS (03 §2.1, F1).** Plan 05's `WorkQueuePublishCoordinator` owns the ledger protocol for cloud
+transports: reserve keyed requests → one `driver.Publish` → confirm accepted keys, release the rest. Only a
+**`Confirmed`** ledger row is a `Duplicate`; a `Reserved` row owned by another `MessageID` is `Rejected`
+`DeduplicationPending` (retryable), and one owned by the same `MessageID` is re-taken and the send repeated (the SNS
+FIFO 5-minute window absorbs the double send). Plan 05 tests that with a fake driver; this task runs the coordinator
+against the **real** `AwsTransportDriver` over `FakeSnsGateway`, so the FIFO deduplication ID, per-entry failure
+mapping and whole-call failure paths are proven end to end.
 
-**Deduplication on AWS (03 §2.1).** Plan 05's `WorkQueuePublishCoordinator` owns the ledger protocol for cloud
-transports: reserve keyed requests → one `driver.Publish` → confirm accepted keys, release the rest. Plan 05 tests
-that with a fake driver; this task runs the coordinator against the **real** `AwsTransportDriver` over
-`FakeSnsGateway`, so the FIFO deduplication ID, per-entry failure mapping and whole-call failure paths are proven
-end to end.
-
-- [ ] **Step 1: Add the engine dependencies**
+- [ ] **Step 1: Add the engine dependencies and the `./aws` export**
 
 In `packages/WorkQueue/engine/package.json`, add to `dependencies` (keep a single entry if one already exists):
 
@@ -4398,6 +4798,15 @@ In `packages/WorkQueue/engine/package.json`, add to `dependencies` (keep a singl
     "@aws-sdk/credential-providers": "^3.984.0",
     "@memberjunction/credentials": "6.1.0",
     "@memberjunction/work-queue-aws": "6.1.0",
+```
+
+and add the subpath to `exports` (keep the existing `.` entry):
+
+```json
+    "./aws": {
+      "types": "./dist/aws/index.d.ts",
+      "default": "./dist/aws/index.js"
+    }
 ```
 
 Run: `pnpm install` (repository root)
@@ -4417,9 +4826,12 @@ const credentialEngine = vi.hoisted(() => ({
     getCredential: vi.fn(),
 }));
 
-vi.mock('@memberjunction/credentials', () => ({ CredentialEngine: { Instance: credentialEngine } }));
+const assumeRole = vi.hoisted(() => vi.fn(() => async () => ({ accessKeyId: 'ASIA', secretAccessKey: 's', sessionToken: 't' })));
 
-import { ResolveAwsCredentials, ToAwsCredentials } from '../transports/aws/ResolveAwsCredentials';
+vi.mock('@memberjunction/credentials', () => ({ CredentialEngine: { Instance: credentialEngine } }));
+vi.mock('@aws-sdk/credential-providers', () => ({ fromTemporaryCredentials: assumeRole }));
+
+import { ResolveAwsCredentials, ToAwsCredentials } from '../aws/ResolveAwsCredentials';
 
 const USER = { ID: 'user-1' } as UserInfo;
 const CREDENTIAL_ID = '11111111-2222-4333-8444-555555555555';
@@ -4432,33 +4844,41 @@ beforeEach(() => {
 
 describe('ToAwsCredentials', () => {
     it('maps static keys, with an optional session token', () => {
-        expect(ToAwsCredentials({ AccessKeyId: 'AKIA', SecretAccessKey: 'secret' })).toEqual({ accessKeyId: 'AKIA', secretAccessKey: 'secret' });
-        expect(ToAwsCredentials({ AccessKeyId: 'ASIA', SecretAccessKey: 's', SessionToken: 't' })).toEqual({ accessKeyId: 'ASIA', secretAccessKey: 's', sessionToken: 't' });
+        expect(ToAwsCredentials({ AccessKeyId: 'AKIA', SecretAccessKey: 'secret' }, 'us-east-1')).toEqual({ accessKeyId: 'AKIA', secretAccessKey: 'secret' });
+        expect(ToAwsCredentials({ AccessKeyId: 'ASIA', SecretAccessKey: 's', SessionToken: 't' }, 'us-east-1')).toEqual({ accessKeyId: 'ASIA', secretAccessKey: 's', sessionToken: 't' });
     });
 
     it('maps a role ARN to an assume-role provider and rejects incomplete values', () => {
-        expect(typeof ToAwsCredentials({ RoleArn: 'arn:aws:iam::123456789012:role/mj-work-queue', ExternalId: 'x' })).toBe('function');
-        expect(() => ToAwsCredentials({ AccessKeyId: 'AKIA' })).toThrow('AccessKeyId and SecretAccessKey, or RoleArn');
+        expect(typeof ToAwsCredentials({ RoleArn: 'arn:aws:iam::123456789012:role/mj-work-queue', ExternalId: 'x' }, 'eu-west-2')).toBe('function');
+        expect(() => ToAwsCredentials({ AccessKeyId: 'AKIA' }, 'eu-west-2')).toThrow('AccessKeyId and SecretAccessKey, or RoleArn');
+    });
+
+    it('gives the assume-role provider the transport region (no AWS_REGION outside AWS)', () => {
+        ToAwsCredentials({ RoleArn: 'arn:aws:iam::123456789012:role/mj-work-queue' }, 'eu-west-2');
+        expect(assumeRole).toHaveBeenLastCalledWith({
+            params: { RoleArn: 'arn:aws:iam::123456789012:role/mj-work-queue', RoleSessionName: 'mj-work-queue' },
+            clientConfig: { region: 'eu-west-2' },
+        });
     });
 });
 
 describe('ResolveAwsCredentials', () => {
     it('uses the ambient identity when no credential is configured', async () => {
-        expect(await ResolveAwsCredentials(null, USER)).toBeUndefined();
+        expect(await ResolveAwsCredentials(null, 'us-east-1', USER)).toBeUndefined();
         expect(credentialEngine.Config).not.toHaveBeenCalled();
     });
 
     it('loads and decrypts the configured credential under the WorkQueue subsystem', async () => {
         credentialEngine.getCredentialById.mockReturnValue({ ID: CREDENTIAL_ID, Name: 'AWS Work Queue' });
         credentialEngine.getCredential.mockResolvedValue({ values: { AccessKeyId: 'AKIA', SecretAccessKey: 'secret' } });
-        expect(await ResolveAwsCredentials(CREDENTIAL_ID, USER)).toEqual({ accessKeyId: 'AKIA', secretAccessKey: 'secret' });
+        expect(await ResolveAwsCredentials(CREDENTIAL_ID, 'us-east-1', USER)).toEqual({ accessKeyId: 'AKIA', secretAccessKey: 'secret' });
         expect(credentialEngine.Config).toHaveBeenCalledWith(false, USER);
         expect(credentialEngine.getCredential).toHaveBeenCalledWith('AWS Work Queue', { credentialId: CREDENTIAL_ID, contextUser: USER, subsystem: 'WorkQueue' });
     });
 
     it('fails clearly when the credential does not exist', async () => {
         credentialEngine.getCredentialById.mockReturnValue(undefined);
-        await expect(ResolveAwsCredentials(CREDENTIAL_ID, USER)).rejects.toThrow(`Credential ${CREDENTIAL_ID} was not found`);
+        await expect(ResolveAwsCredentials(CREDENTIAL_ID, 'us-east-1', USER)).rejects.toThrow(`Credential ${CREDENTIAL_ID} was not found`);
     });
 });
 ```
@@ -4470,19 +4890,21 @@ import { describe, it, expect } from 'vitest';
 import { MJGlobal } from '@memberjunction/global';
 import { AwsTransportDriver, SdkSnsGateway, SdkSqsGateway } from '@memberjunction/work-queue-aws';
 import { WorkQueueConfigurationError } from '@memberjunction/work-queue-core';
+import type { TransportRow } from '@memberjunction/work-queue-base';
+import { TRANSPORT_ROW_FIXTURE } from '@memberjunction/work-queue-base/testing';
 import { BaseTransportDriverFactory } from '../transports/BaseTransportDriverFactory';
-import { AWSTransportDriverFactory } from '../transports/aws/AWSTransportDriverFactory';
-import type { TransportRow } from '../topology/rows';
-import { RecordingExecutor, TestDeps, TRANSPORT_ROW } from './fakes';
+import { AWSTransportDriverFactory } from '../aws/AWSTransportDriverFactory';
+import { RecordingExecutor, TestDeps } from './fakes';
 
 function transport(configuration: string | null): TransportRow {
-    return { ...TRANSPORT_ROW, ID: 'A0000000-0000-0000-0000-000000000001', Name: 'AWS-test', DriverClass: 'AWS', Configuration: configuration };
+    return { ...TRANSPORT_ROW_FIXTURE, ID: 'A0000000-0000-0000-0000-000000000001', Name: 'AWS-test', DriverClass: 'AWS', Configuration: configuration };
 }
 
 describe('AWSTransportDriverFactory', () => {
-    it('is registered under the AWS driver class', () => {
-        const factory = MJGlobal.Instance.ClassFactory.CreateInstance<BaseTransportDriverFactory>(BaseTransportDriverFactory, 'AWS');
-        expect(factory).toBeInstanceOf(AWSTransportDriverFactory);
+    it('is registered under the AWS driver class once its module is imported', () => {
+        const resolved = MJGlobal.Instance.ClassFactory.TryCreateInstance<BaseTransportDriverFactory>(BaseTransportDriverFactory, 'AWS');
+        expect(resolved.Resolved).toBe(true);
+        expect(resolved.Instance).toBeInstanceOf(AWSTransportDriverFactory);
     });
 
     it('creates an SDK-backed AWS driver from the transport configuration', async () => {
@@ -4508,12 +4930,15 @@ describe('AWSTransportDriverFactory', () => {
 import { describe, it, expect } from 'vitest';
 import { AwsGatewayError, AwsTransportDriver } from '@memberjunction/work-queue-aws';
 import { FakeSnsGateway, FakeSqsGateway, TestAwsResources } from '@memberjunction/work-queue-aws/testing';
+import { ResolveTopic, type TopicRow, type TransportRow } from '@memberjunction/work-queue-base';
+import { SUBSCRIPTION_ROW_FIXTURE, TOPIC_ROW_FIXTURE, TRANSPORT_ROW_FIXTURE } from '@memberjunction/work-queue-base/testing';
 import type { LedgerReservation } from '../dedup/DeduplicationLedger';
 import { WorkQueuePublishCoordinator, type LedgerOperations, type PublishCoordinatorDeps } from '../publish/WorkQueuePublishCoordinator';
-import { ResolveTopic } from '../topology/bindings';
-import type { TopicRow, TransportRow } from '../topology/rows';
-import { RecordingExecutor, RecordingLogger, SUBSCRIPTION_ROW, TOPIC_ROW, TRANSPORT_ROW } from './fakes';
+import { RecordingExecutor, RecordingLogger } from './fakes';
 
+const TRANSPORT_ROW = TRANSPORT_ROW_FIXTURE;
+const TOPIC_ROW = TOPIC_ROW_FIXTURE;
+const SUBSCRIPTION_ROW = SUBSCRIPTION_ROW_FIXTURE;
 const AWS_TRANSPORT: TransportRow = { ...TRANSPORT_ROW, ID: 'A0000000-0000-0000-0000-000000000001', Name: 'AWS-test', DriverClass: 'AWS', Configuration: '{"Region":"us-east-1"}' };
 const OWNER = 'EEEEEEEE-0000-4000-8000-000000000001';
 const M1 = '11111111-1111-4111-8111-111111111111';
@@ -4525,7 +4950,9 @@ class FakeLedger implements LedgerOperations {
 
     public async Reserve(topicID: string, key: string): Promise<LedgerReservation> {
         this.Events.push(`reserve:${key}`);
-        return key === 'held' ? { Kind: 'Duplicate', OwnerMessageID: OWNER } : { Kind: 'Reserved' };
+        if (key === 'confirmed') return { Kind: 'Duplicate', OwnerMessageID: OWNER };   // a Confirmed row: the only duplicate (F1)
+        if (key === 'in-flight') return { Kind: 'Pending', OwnerMessageID: OWNER };     // Reserved by another MessageID
+        return { Kind: 'Reserved' };                                                    // new, or re-taken by the same MessageID
     }
     public async Confirm(topicID: string, key: string, messageID: string, ttlSeconds: number): Promise<boolean> {
         this.Events.push(`confirm:${key}:${ttlSeconds}`);
@@ -4563,11 +4990,11 @@ function Setup() {
 const OPTIONS = { UserID: 'U1', External: false, CallerExecutor: null };
 
 describe('WorkQueuePublishCoordinator with the AWS transport driver', () => {
-    it('sends one SNS batch with FIFO IDs, skips a held key and confirms accepted keys with their TTL', async () => {
+    it('sends one SNS batch with FIFO IDs, skips a confirmed key and confirms accepted keys with their TTL', async () => {
         const { coordinator, sns, ledger } = Setup();
         const results = await coordinator.Publish('email.events', [
             { MessageID: M1, PartitionKey: 'subscriber-9', DeduplicationKey: 'click:1', DeduplicationTTLSeconds: 3600, Attributes: { eventType: 'click' } },
-            { MessageID: M2, DeduplicationKey: 'held', Attributes: { eventType: 'click' } },
+            { MessageID: M2, DeduplicationKey: 'confirmed', Attributes: { eventType: 'click' } },
             { MessageID: M3, Attributes: { eventType: 'open' } },
         ], OPTIONS);
         expect(results.map(r => r.Status)).toEqual(['Accepted', 'Duplicate', 'Accepted']);
@@ -4577,7 +5004,15 @@ describe('WorkQueuePublishCoordinator with the AWS transport driver', () => {
             ['subscriber-9', M1, { eventType: 'click' }],
             [M3, M3, { eventType: 'open' }],
         ]);
-        expect(ledger.Events).toEqual(['reserve:click:1', 'reserve:held', 'confirm:click:1:3600']);
+        expect(ledger.Events).toEqual(['reserve:click:1', 'reserve:confirmed', 'confirm:click:1:3600']);
+    });
+
+    it('does not call a reservation held by another publish a duplicate: it is retryable, and nothing is sent', async () => {
+        const { coordinator, sns, ledger } = Setup();
+        const results = await coordinator.Publish('email.events', [{ MessageID: M1, DeduplicationKey: 'in-flight', Attributes: { eventType: 'click' } }], OPTIONS);
+        expect(results[0]).toMatchObject({ Status: 'Rejected', Error: { Code: 'DeduplicationPending', Retryable: true } });
+        expect(sns.Batches).toHaveLength(0);
+        expect(ledger.Events).toEqual(['reserve:in-flight']);
     });
 
     it('releases the key of an entry SNS fails, and reports it as retryable', async () => {
@@ -4601,37 +5036,33 @@ describe('WorkQueuePublishCoordinator with the AWS transport driver', () => {
 });
 ```
 
-`packages/WorkQueue/engine/src/__tests__/FinalizeTopologyManifest.test.ts`:
+`packages/WorkQueue/engine/src/__tests__/AwsManifestEnricher.test.ts`:
 
 ```typescript
 import { describe, it, expect } from 'vitest';
+import type { SubscriptionRow, TopicRow, TransportRow } from '@memberjunction/work-queue-base';
+import { SUBSCRIPTION_ROW_FIXTURE, TOPIC_ROW_FIXTURE, TRANSPORT_ROW_FIXTURE } from '@memberjunction/work-queue-base/testing';
 import { WorkQueueConfigurationError } from '@memberjunction/work-queue-core';
+import { AWS_DRIVER_CLASS, EnrichAwsManifest } from '../aws/AwsManifestEnricher';
 import { BuildTopologyManifest } from '../topology/manifest';
-import { FinalizeTopologyManifest } from '../topology/FinalizeTopologyManifest';
-import type { SubscriptionRow, TopicRow, TransportRow } from '../topology/rows';
-import { SUBSCRIPTION_ROW, TOPIC_ROW, TRANSPORT_ROW } from './fakes';
+import { ManifestEnricherRegistry } from '../topology/ManifestEnricherRegistry';
 
-const AWS_TRANSPORT: TransportRow = { ...TRANSPORT_ROW, ID: 'A0000000-0000-0000-0000-000000000001', Name: 'AWS-test', DriverClass: 'AWS', Configuration: '{"Region":"us-east-1"}' };
-const AWS_TOPIC: TopicRow = { ...TOPIC_ROW, Name: 'email.events', TransportID: AWS_TRANSPORT.ID, IsFifo: true };
-const FILTERED: SubscriptionRow = { ...SUBSCRIPTION_ROW, ID: 'BBBBBBBB-0000-0000-0000-000000000002', Name: 'email.unsubscribe', PartitionMode: 'Exclusive', HostType: 'External', HandlerKey: null, Filter: '{"logic":"and","filters":[{"field":"eventType","operator":"eq","value":"unsubscribe"}]}' };
-const UNFILTERED: SubscriptionRow = { ...SUBSCRIPTION_ROW, ID: 'BBBBBBBB-0000-0000-0000-000000000003', Name: 'email.archive', PartitionMode: 'None', Filter: null };
+const AWS_TRANSPORT: TransportRow = { ...TRANSPORT_ROW_FIXTURE, ID: 'A0000000-0000-0000-0000-000000000001', Name: 'AWS-test', DriverClass: 'AWS', Configuration: '{"Region":"us-east-1"}' };
+const AWS_TOPIC: TopicRow = { ...TOPIC_ROW_FIXTURE, Name: 'email.events', TransportID: AWS_TRANSPORT.ID, IsFifo: true };
+const FILTERED: SubscriptionRow = { ...SUBSCRIPTION_ROW_FIXTURE, ID: 'BBBBBBBB-0000-0000-0000-000000000002', Name: 'email.unsubscribe', PartitionMode: 'Exclusive', HostType: 'External', HandlerKey: null, Filter: '{"logic":"and","filters":[{"field":"eventType","operator":"eq","value":"unsubscribe"}]}' };
+const UNFILTERED: SubscriptionRow = { ...SUBSCRIPTION_ROW_FIXTURE, ID: 'BBBBBBBB-0000-0000-0000-000000000003', Name: 'email.archive', PartitionMode: 'None', Filter: null };
 
-function exportFor(transportName: string, subscriptions: SubscriptionRow[]) {
-    const snapshot = { Transports: [TRANSPORT_ROW, AWS_TRANSPORT], Topics: [TOPIC_ROW, AWS_TOPIC], Subscriptions: subscriptions };
-    return FinalizeTopologyManifest(BuildTopologyManifest(snapshot, transportName, new Date('2026-09-16T12:00:00Z')));
+function build(transportName: string, subscriptions: SubscriptionRow[]) {
+    const snapshot = { Transports: [TRANSPORT_ROW_FIXTURE, AWS_TRANSPORT], Topics: [TOPIC_ROW_FIXTURE, AWS_TOPIC], Subscriptions: subscriptions };
+    return BuildTopologyManifest(snapshot, transportName, new Date('2026-09-16T12:00:00Z'));
 }
 
-describe('FinalizeTopologyManifest', () => {
+describe('EnrichAwsManifest', () => {
     it('renders SNS filter policies for every subscription of an AWS manifest', () => {
-        const manifest = exportFor('AWS-test', [FILTERED, UNFILTERED]);
+        const manifest = EnrichAwsManifest(build('AWS-test', [FILTERED, UNFILTERED]));
         const byName = Object.fromEntries(manifest.Topics[0].Subscriptions.map(s => [s.Name, s]));
         expect(byName['email.unsubscribe'].Aws).toEqual({ SnsFilterPolicy: '{"eventType":["unsubscribe"]}' });
         expect(byName['email.archive'].Aws).toEqual({ SnsFilterPolicy: null });
-    });
-
-    it('leaves non-AWS manifests unchanged', () => {
-        const manifest = exportFor('Database', [SUBSCRIPTION_ROW]);
-        expect(manifest.Topics[0].Subscriptions[0].Aws).toBeUndefined();
     });
 
     it('refuses a filter SNS cannot express', () => {
@@ -4641,17 +5072,171 @@ describe('FinalizeTopologyManifest', () => {
         });
         // 6 × 6 × 5 = 180 value combinations, above the SNS limit of 150 (Task 2).
         const wide: SubscriptionRow = { ...FILTERED, Filter: JSON.stringify({ logic: 'and', filters: [or('a', 6), or('b', 6), or('c', 5)] }) };
-        expect(() => exportFor('AWS-test', [wide])).toThrow(WorkQueueConfigurationError);
+        expect(() => EnrichAwsManifest(build('AWS-test', [wide]))).toThrow(WorkQueueConfigurationError);
+    });
+
+    it('refuses an Ordered subscription: Ordered requires the Database transport', () => {
+        const ordered: SubscriptionRow = { ...UNFILTERED, PartitionMode: 'Ordered', HostType: 'MJWorker' };
+        expect(() => EnrichAwsManifest(build('AWS-test', [ordered]))).toThrow('Ordered requires the Database transport');
+    });
+});
+
+describe('ManifestEnricherRegistry', () => {
+    it('applies the enricher registered for the manifest transport and leaves Database manifests alone', () => {
+        const registry = ManifestEnricherRegistry.Instance;
+        registry.Register(AWS_DRIVER_CLASS, EnrichAwsManifest);
+        expect(registry.Apply(build('AWS-test', [UNFILTERED])).Topics[0].Subscriptions[0].Aws).toEqual({ SnsFilterPolicy: null });
+        expect(registry.Apply(build('Database', [SUBSCRIPTION_ROW_FIXTURE])).Topics[0].Subscriptions[0].Aws).toBeUndefined();
+    });
+
+    it('names the missing import when a cloud manifest has no enricher', () => {
+        const manifest = { ...build('AWS-test', [UNFILTERED]), Transport: { Name: 'Azure-test', DriverClass: 'Azure', Configuration: {} } };
+        expect(() => ManifestEnricherRegistry.Instance.Apply(manifest)).toThrow("No manifest enricher is registered for DriverClass 'Azure'");
+    });
+});
+```
+
+`packages/WorkQueue/engine/src/__tests__/mainEntryGuard.test.ts`:
+
+```typescript
+import { describe, it, expect } from 'vitest';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const SRC = join(dirname(fileURLToPath(import.meta.url)), '..');
+const IMPORT = /(?:\bfrom\s*|\bimport\s*\(?\s*|\brequire\s*\(\s*)(['"])([^'"]+)\1/g;
+
+function resolveRelative(fromFile: string, specifier: string): string | null {
+    const base = resolve(dirname(fromFile), specifier);
+    return [`${base}.ts`, join(base, 'index.ts')].find((candidate) => existsSync(candidate)) ?? null;
+}
+
+/** Every source file reachable from `entry` through relative imports, and every bare specifier they import. */
+function walk(entry: string): { Files: Set<string>; Packages: Set<string> } {
+    const files = new Set<string>();
+    const packages = new Set<string>();
+    const queue = [entry];
+    while (queue.length > 0) {
+        const file = queue.pop();
+        if (file === undefined || files.has(file)) continue;
+        files.add(file);
+        for (const match of readFileSync(file, 'utf8').matchAll(IMPORT)) {
+            const specifier = match[2];
+            if (!specifier.startsWith('.')) {
+                packages.add(specifier);
+                continue;
+            }
+            const target = resolveRelative(file, specifier);
+            if (target) queue.push(target);
+        }
+    }
+    return { Files: files, Packages: packages };
+}
+
+describe('engine main entry (03 §0, F12)', () => {
+    const main = walk(join(SRC, 'index.ts'));
+
+    it('never reaches work-queue-aws, an AWS SDK package, or src/aws', () => {
+        const forbidden = [...main.Packages].filter((name) => name.startsWith('@memberjunction/work-queue-aws') || name.startsWith('@aws-sdk/'));
+        expect(forbidden).toEqual([]);
+        expect([...main.Files].filter((file) => file.startsWith(join(SRC, 'aws')))).toEqual([]);
+    });
+
+    it('never depends on the legacy queue or a data provider (03 §0 layering)', () => {
+        const forbidden = [...main.Packages].filter((name) =>
+            ['@memberjunction/queue', '@memberjunction/generic-database-provider', '@memberjunction/sqlserver-dataprovider', '@memberjunction/postgresql-dataprovider'].includes(name));
+        expect(forbidden).toEqual([]);
+    });
+
+    it('the ./aws entry imports engine modules directly, never the main entry or WorkQueueEngine', () => {
+        const awsEntry = walk(join(SRC, 'aws', 'index.ts'));
+        expect(awsEntry.Files.has(join(SRC, 'index.ts'))).toBe(false);
+        expect(awsEntry.Files.has(join(SRC, 'WorkQueueEngine.ts'))).toBe(false);
+        expect(awsEntry.Packages.has('@memberjunction/work-queue-aws')).toBe(true);
     });
 });
 ```
 
 - [ ] **Step 3: Run the tests to verify they fail**
 
-Run: `cd packages/WorkQueue/engine && pnpm test ResolveAwsCredentials AWSTransportDriverFactory AwsPublishCoordinator`
-Expected: FAIL — unresolved imports `../transports/aws/ResolveAwsCredentials`, `../transports/aws/AWSTransportDriverFactory` and `../topology/FinalizeTopologyManifest`. `AwsPublishCoordinator` needs no new code; it must pass once the others compile. If it fails, fix the defect (in `PublishToSns`, Task 4, or the coordinator, plan 05) rather than the test.
+Run: `cd packages/WorkQueue/engine && pnpm test ResolveAwsCredentials AWSTransportDriverFactory AwsPublishCoordinator AwsManifestEnricher mainEntryGuard`
+Expected: FAIL — unresolved imports `../aws/ResolveAwsCredentials`, `../aws/AWSTransportDriverFactory`, `../aws/AwsManifestEnricher`, `../topology/ManifestEnricherRegistry`; `mainEntryGuard` fails on the missing `src/aws/index.ts`. `AwsPublishCoordinator` needs no new code; it must pass once the others compile. If it fails, fix the defect (in `PublishToSns`, Task 4, or the coordinator, plan 05) rather than the test.
 
-- [ ] **Step 4: Write `src/transports/aws/ResolveAwsCredentials.ts`**
+- [ ] **Step 4: Write `src/topology/ManifestEnricherRegistry.ts` (main entry) and call it from `ExportManifest`**
+
+```typescript
+import { BaseSingleton } from '@memberjunction/global';
+import { WorkQueueConfigurationError, type TopologyManifest } from '@memberjunction/work-queue-core';
+
+export type ManifestEnricher = (manifest: TopologyManifest) => TopologyManifest;
+
+const DATABASE_DRIVER_CLASS = 'Database';
+
+/**
+ * Transport-specific manifest rendering. The main entry owns the registry; a transport's engine subpath
+ * (`@memberjunction/work-queue-engine/aws`) registers its enricher as an import side effect, so the main entry never
+ * imports a cloud package (03 §0, F12).
+ */
+export class ManifestEnricherRegistry extends BaseSingleton<ManifestEnricherRegistry> {
+    private readonly enrichers = new Map<string, ManifestEnricher>();
+
+    protected constructor() {
+        super();
+    }
+
+    public static get Instance(): ManifestEnricherRegistry {
+        return super.getInstance<ManifestEnricherRegistry>();
+    }
+
+    public Register(driverClass: string, enricher: ManifestEnricher): void {
+        this.enrichers.set(driverClass, enricher);
+    }
+
+    public Has(driverClass: string): boolean {
+        return this.enrichers.has(driverClass);
+    }
+
+    /** Database manifests pass through. A cloud manifest without its enricher is refused rather than exported half-rendered. */
+    public Apply(manifest: TopologyManifest): TopologyManifest {
+        const driverClass = manifest.Transport.DriverClass;
+        const enricher = this.enrichers.get(driverClass);
+        if (enricher) {
+            return enricher(manifest);
+        }
+        if (driverClass === DATABASE_DRIVER_CLASS) {
+            return manifest;
+        }
+        throw new WorkQueueConfigurationError(
+            `No manifest enricher is registered for DriverClass '${driverClass}'. Import the transport's engine entry in this process ` +
+            `(for AWS: import '@memberjunction/work-queue-engine/aws').`,
+        );
+    }
+}
+```
+
+In `packages/WorkQueue/engine/src/WorkQueueEngine.ts`, add the import and replace `ExportManifest`:
+
+```typescript
+import { ManifestEnricherRegistry } from './topology/ManifestEnricherRegistry';
+```
+
+```typescript
+    public ExportManifest(transportName: string): TopologyManifest {
+        return ManifestEnricherRegistry.Instance.Apply(BuildTopologyManifest(this.Snapshot, transportName, new Date()));
+    }
+```
+
+(`this.Snapshot` is whatever plan 05's facade uses to hand `BuildTopologyManifest` its rows; keep that expression as plan
+05 wrote it and wrap only the result.)
+
+Append to `packages/WorkQueue/engine/src/index.ts` — the **only** line this task adds to the main entry:
+
+```typescript
+export * from './topology/ManifestEnricherRegistry';
+```
+
+- [ ] **Step 5: Write `src/aws/ResolveAwsCredentials.ts`**
 
 ```typescript
 import { fromTemporaryCredentials } from '@aws-sdk/credential-providers';
@@ -4668,7 +5253,8 @@ export interface AwsCredentialValues {
     ExternalId?: string;
 }
 
-export function ToAwsCredentials(values: AwsCredentialValues): AwsCredentialsOption {
+/** `region` is the transport's region: the STS client behind assume-role needs it when AWS_REGION is not set. */
+export function ToAwsCredentials(values: AwsCredentialValues, region: string): AwsCredentialsOption {
     if (values.AccessKeyId && values.SecretAccessKey) {
         return {
             accessKeyId: values.AccessKeyId,
@@ -4679,13 +5265,14 @@ export function ToAwsCredentials(values: AwsCredentialValues): AwsCredentialsOpt
     if (values.RoleArn) {
         return fromTemporaryCredentials({
             params: { RoleArn: values.RoleArn, RoleSessionName: 'mj-work-queue', ...(values.ExternalId ? { ExternalId: values.ExternalId } : {}) },
+            clientConfig: { region },
         });
     }
     throw new WorkQueueConfigurationError('AWS credential values must contain AccessKeyId and SecretAccessKey, or RoleArn');
 }
 
 /** Null credential = SDK default chain (ambient role). Otherwise decrypts the MJ credential and maps its values. */
-export async function ResolveAwsCredentials(credentialID: string | null, contextUser: UserInfo): Promise<AwsCredentialsOption> {
+export async function ResolveAwsCredentials(credentialID: string | null, region: string, contextUser: UserInfo): Promise<AwsCredentialsOption> {
     if (credentialID === null) {
         return undefined;
     }
@@ -4696,55 +5283,56 @@ export async function ResolveAwsCredentials(credentialID: string | null, context
         throw new WorkQueueConfigurationError(`Credential ${credentialID} was not found`);
     }
     const resolved = await engine.getCredential<Record<string, string>>(credential.Name, { credentialId: credentialID, contextUser, subsystem: 'WorkQueue' });
-    return ToAwsCredentials(resolved.values);
+    return ToAwsCredentials(resolved.values, region);
 }
 ```
 
-- [ ] **Step 5: Write `src/transports/aws/AWSTransportDriverFactory.ts`**
+- [ ] **Step 6: Write `src/aws/AWSTransportDriverFactory.ts`, `src/aws/AwsManifestEnricher.ts` and `src/aws/index.ts`**
+
+`packages/WorkQueue/engine/src/aws/AWSTransportDriverFactory.ts`:
 
 ```typescript
 import { RegisterClass } from '@memberjunction/global';
+import type { TransportRow } from '@memberjunction/work-queue-base';
 import { AwsTransportDriver, ParseAwsTransportConfig } from '@memberjunction/work-queue-aws';
 import type { ITransportDriver } from '@memberjunction/work-queue-core';
-import type { TransportRow } from '../../topology/rows';
-import { BaseTransportDriverFactory, type TransportDriverDeps } from '../BaseTransportDriverFactory';
+import { BaseTransportDriverFactory } from '../transports/BaseTransportDriverFactory';
+import type { TransportDriverDeps } from '../transports/TransportDriverDeps';
 import { ResolveAwsCredentials } from './ResolveAwsCredentials';
 
-/** Resolves MJ: Work Queue Transports rows with DriverClass 'AWS' to an SNS/SQS driver. */
+/** Resolves MJ: Work Queue Transports rows with DriverClass 'AWS' to an SNS/SQS driver. Registered by importing `./aws`. */
 @RegisterClass(BaseTransportDriverFactory, 'AWS')
 export class AWSTransportDriverFactory extends BaseTransportDriverFactory {
     public async Create(transport: TransportRow, deps: TransportDriverDeps): Promise<ITransportDriver> {
         const config = ParseAwsTransportConfig(transport.Configuration);
-        const credentials = await ResolveAwsCredentials(transport.CredentialID, deps.ContextUser);
+        const credentials = await ResolveAwsCredentials(transport.CredentialID, config.Region, deps.ContextUser);
         return AwsTransportDriver.Create(config, credentials);
     }
 }
 ```
 
-If plan 05 exports `TransportDriverDeps` from a different module than `BaseTransportDriverFactory.ts`, import it
-from that module (plan 05 Task 8 is the source of truth).
-
-- [ ] **Step 5b: Write `src/topology/FinalizeTopologyManifest.ts` and call it from `ExportManifest`**
+`packages/WorkQueue/engine/src/aws/AwsManifestEnricher.ts`:
 
 ```typescript
 import { SnsFilterPolicyFor } from '@memberjunction/work-queue-aws';
-import type { ManifestSubscription, TopologyManifest } from '@memberjunction/work-queue-core';
+import { WorkQueueConfigurationError, type ManifestSubscription, type TopologyManifest } from '@memberjunction/work-queue-core';
 
 export const AWS_DRIVER_CLASS = 'AWS';
 
 function withAwsExtension(subscription: ManifestSubscription): ManifestSubscription {
+    if (subscription.Policy.PartitionMode === 'Ordered') {
+        throw new WorkQueueConfigurationError(
+            `Subscription '${subscription.Name}': Ordered requires the Database transport; it cannot be exported for the AWS transport`,
+        );
+    }
     return { ...subscription, Aws: { SnsFilterPolicy: SnsFilterPolicyFor(subscription.Filter) } };
 }
 
 /**
- * Transport-specific manifest rendering, applied after BuildTopologyManifest (plan 05) so infrastructure code never
- * re-translates policy. SnsFilterPolicyFor throws WorkQueueConfigurationError for filters SNS cannot express — more
-than 150 value combinations, a field constrained twice, or a mixed-field OR group (Task 2).
+ * Renders what Terraform must not re-translate. SnsFilterPolicyFor throws WorkQueueConfigurationError for filters SNS
+ * cannot express — more than 150 value combinations, a field constrained twice, or a mixed-field OR group (Task 2).
  */
-export function FinalizeTopologyManifest(manifest: TopologyManifest): TopologyManifest {
-    if (manifest.Transport.DriverClass !== AWS_DRIVER_CLASS) {
-        return manifest;
-    }
+export function EnrichAwsManifest(manifest: TopologyManifest): TopologyManifest {
     return {
         ...manifest,
         Topics: manifest.Topics.map(topic => ({ ...topic, Subscriptions: topic.Subscriptions.map(withAwsExtension) })),
@@ -4752,625 +5340,174 @@ export function FinalizeTopologyManifest(manifest: TopologyManifest): TopologyMa
 }
 ```
 
-In `packages/WorkQueue/engine/src/WorkQueueEngine.ts`, add the import and replace `ExportManifest`:
+`packages/WorkQueue/engine/src/aws/index.ts` — the `@memberjunction/work-queue-engine/aws` entry:
 
 ```typescript
-import { FinalizeTopologyManifest } from './topology/FinalizeTopologyManifest';
+// Importing this module registers the AWS transport with the engine (03 §0, F12):
+//  - @RegisterClass(BaseTransportDriverFactory, 'AWS') runs when AWSTransportDriverFactory is evaluated;
+//  - the manifest enricher is registered below.
+// It imports only the engine modules it needs — never '../index' or '../WorkQueueEngine' — so loading it cannot
+// create an import cycle with the main entry.
+import { ManifestEnricherRegistry } from '../topology/ManifestEnricherRegistry';
+import { AWS_DRIVER_CLASS, EnrichAwsManifest } from './AwsManifestEnricher';
+
+export * from './ResolveAwsCredentials';
+export * from './AWSTransportDriverFactory';
+export * from './AwsManifestEnricher';
+
+ManifestEnricherRegistry.Instance.Register(AWS_DRIVER_CLASS, EnrichAwsManifest);
 ```
+
+- [ ] **Step 7: Import the subpath from `ServerBootstrap`**
+
+In `packages/ServerBootstrap/package.json`, confirm `@memberjunction/work-queue-engine` is a dependency (plan 06 adds it; add `"@memberjunction/work-queue-engine": "6.1.0"` if it is missing) and run `pnpm install` at the repository root.
+
+In `packages/ServerBootstrap/src/index.ts`, add after the existing imports:
 
 ```typescript
-    public ExportManifest(transportName: string): TopologyManifest {
-        return FinalizeTopologyManifest(BuildTopologyManifest(this.Snapshot, transportName, new Date()));
-    }
+// Registers the AWS work-queue transport (driver factory + manifest enricher). Deliberately NOT in
+// ServerBootstrapLite: CodeGen, MetadataSync and the data providers must never load AWS clients (work-queue 03 §0).
+import '@memberjunction/work-queue-engine/aws';
 ```
 
-- [ ] **Step 6: Export the modules**
+The generated `mj-class-registrations.ts` will not list `AWSTransportDriverFactory` — the manifest generator only
+emits classes exported from a package's main entry — and that is expected.
 
-Append to `packages/WorkQueue/engine/src/index.ts`:
+- [ ] **Step 7b: Register the AWS transport in the four `mj queue` commands that need cloud drivers**
 
-```typescript
-export * from './transports/aws/ResolveAwsCredentials';
-export * from './transports/aws/AWSTransportDriverFactory';
-export * from './topology/FinalizeTopologyManifest';
-```
+`export-topology` renders SNS filter policies; `import-bindings` and `validate-bindings` build AWS drivers;
+`work` consumes AWS `MJWorker` subscriptions. The CLI boots `ServerBootstrapLite`, which never imports the subpath, so
+each of these command modules imports it itself. oclif loads a command module only when that command runs, so
+`mj codegen`, `mj sync`, `mj migrate` and every other `mj queue` command still load no AWS client. **Do not** add the
+import to a shared CLI entry, to `commands/queue/index.ts`, or to `ServerBootstrapLite`.
 
-- [ ] **Step 7: Run the tests and build**
-
-Run: `cd packages/WorkQueue/engine && pnpm test`
-Expected: PASS — the engine's existing suites (including plan 05's `manifest` tests, unchanged for Database manifests) plus ResolveAwsCredentials (5), AWSTransportDriverFactory (3), AwsPublishCoordinator (3), FinalizeTopologyManifest (3).
-
-Run: `cd packages/WorkQueue/engine && pnpm run build`
-Expected: builds.
-
-Run: `cd packages/ServerBootstrap && pnpm run build`
-Expected: builds, and the regenerated `src/generated/mj-class-registrations.ts` contains `AWSTransportDriverFactory` (the engine is a ServerBootstrap dependency from plan 06).
-
-- [ ] **Step 8: Commit**
-
-```bash
-git add packages/WorkQueue/engine packages/ServerBootstrap/src/generated/mj-class-registrations.ts pnpm-lock.yaml
-git commit -m "feat(work-queue-engine): AWS driver factory with MJ credential resolution and SNS filter policies in manifest export"
-```
-
----
-
-### Task 9: Engine — `SqsStager` for staged `Ordered` subscriptions
-
-**Files:**
-- Create: `packages/WorkQueue/engine/src/transports/aws/SqsStager.ts`, `src/transports/aws/RegisterAwsHostLoops.ts`
-- Modify: `packages/WorkQueue/engine/src/transports/aws/AWSTransportDriverFactory.ts` (side-effect import), `src/index.ts`
-- Test: `packages/WorkQueue/engine/src/__tests__/SqsStager.test.ts`, `src/__tests__/RegisterAwsHostLoops.test.ts`
-
-**Interfaces:**
-- Consumes:
-  - Plan 06 Task 2 (`src/host/WorkQueueHostLoopRegistry.ts`): `interface IHostLoop { readonly Name: string; Start(): void; Stop(): Promise<void> }`; `interface HostLoopContext { InstanceID; Subscription: MJWorkQueueSubscriptionEntity; Topic: MJWorkQueueTopicEntity; Transport: MJWorkQueueTransportEntity; Binding: SubscriptionBinding; StagedToDatabase: boolean; ContextUser; Executor; Log: WorkLogger; KickConsumer(): void }`; `type HostLoopFactory = (context: HostLoopContext) => Promise<IHostLoop[]>`; `WorkQueueHostLoopRegistry.Instance.Register(driverClass, factory)` / `.Get(driverClass)`. The host calls the factory for every hosted subscription on the transport, starts the returned loops with the consumer runtime and stops them on shutdown.
-  - Plan 05 Task 12 (`src/transports/database/DatabaseTransportDriver.ts`): `interface StageDeliveriesRequest { TopicID: string; SubscriptionID: string; PartitionMode: PartitionMode; OrderingMode: OrderingMode; Messages: WorkMessage[] }`; `type StageResult = { MessageID; Kind: 'Staged' } | { MessageID; Kind: 'AlreadyStaged' } | { MessageID; Kind: 'Rejected'; Code; Message }`; `DatabaseTransportDriver.StageDeliveries(request: StageDeliveriesRequest): Promise<StageResult[]>` — the whole batch in one transaction, results in request order, a thrown error rolls the batch back. Plan 05 Task 13: `WorkQueueEngine.Instance.GetDriver(transportID)`, `WorkQueueEngine.Instance.GetDatabaseDriver(): Promise<DatabaseTransportDriver>`.
-  - `SqsGateway`, `SqsReceivedMessage`, `ParseEnvelopeBody`, `ReadAwsSubscriptionConfig`, `SendToDeadLetterQueue`, `AwsTransportDriver`, `DEAD_LETTER_ATTRIBUTES` (Tasks 1–6); `FakeSqsGateway`, `FakeSnsGateway`, `TestAwsResources`, `TestMessage`, `TestSubscriptionBinding` (`@memberjunction/work-queue-aws/testing`); `RecordingExecutor`, `RecordingLogger` (plan 05 test fakes).
-- Produces:
-  - `interface StagingTarget { StageDeliveries(request: StageDeliveriesRequest): Promise<StageResult[]> }`
-  - `interface StagingIdentity { TopicID: string; SubscriptionID: string; PartitionMode: PartitionMode; OrderingMode: OrderingMode }`
-  - `interface SqsStagerOptions { ReceiveBatchSize?: number; WaitTimeSeconds?: number; VisibilityTimeoutSeconds?: number; FailureBackoffSeconds?: number; IdleDelayMs?: number; Now?: () => number }`
-  - `class SqsStager implements IHostLoop` — `constructor(gateway: SqsGateway, target: StagingTarget, binding: SubscriptionBinding, identity: StagingIdentity, onStaged: () => void, log: WorkLogger, options?: SqsStagerOptions)`, `RunOnce(signal: AbortSignal): Promise<number>`
-  - `interface AwsHostLoopDrivers { Aws(context: HostLoopContext): Promise<ITransportDriver>; Database(context: HostLoopContext): Promise<StagingTarget> }`, `ENGINE_DRIVERS: AwsHostLoopDrivers`, `StagingIdentityFor(context: HostLoopContext): StagingIdentity`
-  - `CreateAwsHostLoopFactory(drivers?: AwsHostLoopDrivers): HostLoopFactory`, `RegisterAwsHostLoops(): void`
-
-**Staging contract (03 §5.1).**
-
-```
-SQS FIFO queue (Ordered subscription)                  MJ database
-  ReceiveMessage (≤10, visibility 60 s) ──► parse ──► StageDeliveries(batch) — one transaction, receive order
-                                                         Staged / AlreadyStaged ──► DeleteMessage
-                                                         Rejected (MessageIDConflict, DuplicateSequence) ──► DLQ (reason = Code) + DeleteMessage + log error
-                                                         any Staged ──► KickConsumer()
-                                                         throws (rolled back) ──► stage one at a time, in order:
-                                                            result handled as above
-                                                            first throw ──► hide it and every later message 30 s
-  unparseable body ────────────────────────────────────► DLQ (InvalidEnvelope) + DeleteMessage
-```
-
-- **Identity.** `TopicID`/`SubscriptionID` come from the context's `Topic` and `Subscription` entities,
-  `PartitionMode` from `Subscription.PartitionMode`, `OrderingMode` from `Topic.OrderingMode`.
-- **Order.** SQS FIFO does not release a group's next message while an earlier one is in flight, and a batch lists a
-  group's messages in order. Staging inserts in request order, and after a thrown error nothing later in the batch is
-  staged, so `PublishOrdinal` follows publish order per key across instances.
-- **Idempotency.** A crash after commit and before `DeleteMessage` redelivers the message; it comes back
-  `AlreadyStaged` and is deleted.
-- **Rejected messages** are permanent producer errors (a reused `MessageID` with a different envelope, or a sequence
-  already used by another message) that MJ publish validation normally prevents. They were never staged, so they
-  cannot block a database key; they go to the SQS dead-letter queue for the operator.
-- **Outages.** Nothing is deleted unless its result was returned. Staged queues redrive only after 1000 receives
-  (Tasks 4 and 10), so a long database outage does not move messages to the dead-letter queue and break order.
-
-- [ ] **Step 1: Write the failing tests**
-
-`packages/WorkQueue/engine/src/__tests__/SqsStager.test.ts`:
-
-```typescript
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { DEAD_LETTER_ATTRIBUTES } from '@memberjunction/work-queue-aws';
-import { FakeSqsGateway, TestAwsResources, TestMessage, TestSubscriptionBinding } from '@memberjunction/work-queue-aws/testing';
-import type { SubscriptionBinding } from '@memberjunction/work-queue-core';
-import type { StageDeliveriesRequest, StageResult } from '../transports/database/DatabaseTransportDriver';
-import { SqsStager, type StagingIdentity, type StagingTarget } from '../transports/aws/SqsStager';
-import { RecordingLogger } from './fakes';
-
-const r = TestAwsResources(true);
-const IDENTITY: StagingIdentity = {
-    TopicID: 'AAAAAAAA-0000-4000-8000-000000000001', SubscriptionID: 'DDDDDDDD-0000-4000-8000-000000000001',
-    PartitionMode: 'Ordered', OrderingMode: 'ExplicitSequence',
-};
-
-class RecordingTarget implements StagingTarget {
-    public readonly Requests: StageDeliveriesRequest[] = [];
-    public readonly Existing = new Set<string>();
-    public readonly Rejections = new Map<string, { Code: string; Message: string }>();
-    public ThrowWhenIncluding: string | null = null;
-
-    public async StageDeliveries(request: StageDeliveriesRequest): Promise<StageResult[]> {
-        this.Requests.push(request);
-        if (this.ThrowWhenIncluding !== null && request.Messages.some((m) => m.MessageID === this.ThrowWhenIncluding)) {
-            throw new Error('database unavailable');
-        }
-        return request.Messages.map((m): StageResult => {
-            const rejection = this.Rejections.get(m.MessageID);
-            if (rejection) {
-                return { MessageID: m.MessageID, Kind: 'Rejected', ...rejection };
-            }
-            const kind = this.Existing.has(m.MessageID) ? 'AlreadyStaged' : 'Staged';
-            this.Existing.add(m.MessageID);
-            return { MessageID: m.MessageID, Kind: kind };
-        });
-    }
-}
-
-let sqs: FakeSqsGateway;
-let target: RecordingTarget;
-let binding: SubscriptionBinding;
-let log: RecordingLogger;
-let kicks: number;
-let stager: SqsStager;
-const signal = new AbortController().signal;
-
-async function send(index: number, group: string, body?: string): Promise<void> {
-    await sqs.Send({ QueueUrl: r.QueueUrl, Body: body ?? JSON.stringify(TestMessage(index, { PartitionKey: group })), MessageGroupId: group, MessageDeduplicationId: `d-${index}` });
-}
-
-function remainingIDs(): string[] {
-    return sqs.Messages(r.QueueUrl).map((m) => JSON.parse(m.Body).MessageID);
-}
-
-beforeEach(() => {
-    sqs = new FakeSqsGateway().AddQueue(r.QueueUrl, { Fifo: true }).AddQueue(r.DeadLetterQueueUrl, { Fifo: true });
-    target = new RecordingTarget();
-    binding = TestSubscriptionBinding(true, { Policy: { PartitionMode: 'Ordered', SubscriptionName: 'integration.apply' }, HostType: 'MJWorker' });
-    log = new RecordingLogger();
-    kicks = 0;
-    stager = new SqsStager(sqs, target, binding, IDENTITY, () => { kicks += 1; }, log, { WaitTimeSeconds: 0, IdleDelayMs: 5, Now: () => sqs.Now });
-});
-
-describe('SqsStager.RunOnce', () => {
-    it('stages a batch in receive order with the subscription identity, deletes it and kicks once', async () => {
-        await send(1, 'a');
-        await send(2, 'b');
-        expect(await stager.RunOnce(signal)).toBe(2);
-        expect(target.Requests).toEqual([{ ...IDENTITY, Messages: [TestMessage(1, { PartitionKey: 'a' }), TestMessage(2, { PartitionKey: 'b' })] }]);
-        expect(sqs.Messages(r.QueueUrl)).toHaveLength(0);
-        expect(kicks).toBe(1);
-    });
-
-    it('deletes already-staged redeliveries without kicking', async () => {
-        await send(1, 'a');
-        target.Existing.add(TestMessage(1).MessageID);
-        expect(await stager.RunOnce(signal)).toBe(0);
-        expect(sqs.Messages(r.QueueUrl)).toHaveLength(0);
-        expect(kicks).toBe(0);
-    });
-
-    it('dead-letters a rejected message with its code and message, and stages the rest', async () => {
-        await send(1, 'a');
-        await send(2, 'b');
-        target.Rejections.set(TestMessage(1).MessageID, { Code: 'DuplicateSequence', Message: 'sequence 3 already published by another message' });
-        expect(await stager.RunOnce(signal)).toBe(1);
-        const [copy] = sqs.Messages(r.DeadLetterQueueUrl);
-        expect(copy.Attributes[DEAD_LETTER_ATTRIBUTES.Reason]).toBe('DuplicateSequence');
-        expect(copy.Attributes[DEAD_LETTER_ATTRIBUTES.LastError]).toBe('sequence 3 already published by another message');
-        expect(sqs.Messages(r.QueueUrl)).toHaveLength(0);
-        expect(log.Lines.some((line) => line.startsWith('ERROR') && line.includes('rejected'))).toBe(true);
-    });
-
-    it('dead-letters an unparseable body and stages the rest', async () => {
-        await send(1, 'a', 'not an envelope');
-        await send(2, 'b');
-        expect(await stager.RunOnce(signal)).toBe(1);
-        expect(target.Requests[0].Messages.map((m) => m.MessageID)).toEqual([TestMessage(2).MessageID]);
-        expect(sqs.Messages(r.DeadLetterQueueUrl)[0].Attributes[DEAD_LETTER_ATTRIBUTES.Reason]).toBe('InvalidEnvelope');
-    });
-
-    it('after a rolled-back batch, stages earlier messages one at a time and holds back the failing one and everything after it', async () => {
-        await send(1, 'a');
-        await send(2, 'b');
-        await send(3, 'c');
-        target.ThrowWhenIncluding = TestMessage(2).MessageID;
-        expect(await stager.RunOnce(signal)).toBe(1);
-        expect(target.Requests.map((request) => request.Messages.length)).toEqual([3, 1, 1]);
-        expect(remainingIDs()).toEqual([TestMessage(2).MessageID, TestMessage(3).MessageID]);
-        expect(sqs.Messages(r.QueueUrl).every((m) => m.VisibleAt === sqs.Now + 30_000)).toBe(true);
-        expect(sqs.Messages(r.DeadLetterQueueUrl)).toHaveLength(0);
-        expect(kicks).toBe(1);
-    });
-
-    it('does nothing when the queue is empty', async () => {
-        expect(await stager.RunOnce(signal)).toBe(0);
-        expect(target.Requests).toHaveLength(0);
-    });
-
-    it('preserves order within a group across batches', async () => {
-        stager = new SqsStager(sqs, target, binding, IDENTITY, () => undefined, log, { WaitTimeSeconds: 0, ReceiveBatchSize: 1, Now: () => sqs.Now });
-        await send(1, 'a');
-        await send(2, 'a');
-        await stager.RunOnce(signal);
-        await stager.RunOnce(signal);
-        expect(target.Requests.map((request) => request.Messages[0].MessageID)).toEqual([TestMessage(1).MessageID, TestMessage(2).MessageID]);
-    });
-});
-
-describe('SqsStager loop', () => {
-    it('stages while running and stops cleanly', async () => {
-        stager.Start();
-        await send(1, 'a');
-        await vi.waitFor(() => expect(target.Requests).toHaveLength(1), { timeout: 2000, interval: 10 });
-        await stager.Stop();
-        const requestsAfterStop = target.Requests.length;
-        await send(2, 'a');
-        await new Promise((resolve) => setTimeout(resolve, 30));
-        expect(target.Requests).toHaveLength(requestsAfterStop);
-    });
-});
-```
-
-`packages/WorkQueue/engine/src/__tests__/RegisterAwsHostLoops.test.ts`:
+Write the failing test, `packages/MJCLI/src/__tests__/queue-aws-registration.test.ts`:
 
 ```typescript
 import { describe, it, expect } from 'vitest';
-import type { UserInfo } from '@memberjunction/core';
-import type { MJWorkQueueSubscriptionEntity, MJWorkQueueTopicEntity, MJWorkQueueTransportEntity } from '@memberjunction/core-entities';
-import { AWS_TRANSPORT_CAPABILITIES, AwsTransportDriver } from '@memberjunction/work-queue-aws';
-import { FakeSnsGateway, FakeSqsGateway, TestSubscriptionBinding } from '@memberjunction/work-queue-aws/testing';
-import type {
-    BindingValidationIssue, ITransportConsumer, ITransportDriver, ITransportOperator, PublishResult, WorkJson,
-} from '@memberjunction/work-queue-core';
-import { WorkQueueHostLoopRegistry, type HostLoopContext } from '../host/WorkQueueHostLoopRegistry';
-import type { StageDeliveriesRequest, StageResult } from '../transports/database/DatabaseTransportDriver';
-import { CreateAwsHostLoopFactory, RegisterAwsHostLoops, StagingIdentityFor, type AwsHostLoopDrivers } from '../transports/aws/RegisterAwsHostLoops';
-import { SqsStager, type StagingTarget } from '../transports/aws/SqsStager';
-import { RecordingExecutor, RecordingLogger } from './fakes';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { MJGlobal } from '@memberjunction/global';
+import { BaseTransportDriverFactory, ManifestEnricherRegistry } from '@memberjunction/work-queue-engine';
 
-class OtherDriver implements ITransportDriver {
-    public readonly Name: string = 'Azure';
-    public readonly Capabilities = AWS_TRANSPORT_CAPABILITIES;
-    public async Publish(): Promise<PublishResult[]> { return []; }
-    public OpenConsumer<TPayload extends WorkJson>(): ITransportConsumer<TPayload> { throw new Error('not used'); }
-    public Operator(): ITransportOperator { throw new Error('not used'); }
-    public async ValidateBindings(): Promise<BindingValidationIssue[]> { return []; }
-}
+const QUEUE_COMMANDS = join(dirname(fileURLToPath(import.meta.url)), '..', 'commands', 'queue');
+const AWS_IMPORT = /^import '@memberjunction\/work-queue-engine\/aws';$/m;
+const NEEDS_AWS = ['export-topology', 'import-bindings', 'validate-bindings', 'work'];
+const MUST_NOT = ['index', 'stats', 'backlog', 'dead-letters', 'replay', 'discard', 'partitions', 'usage'];
 
-const TARGET: StagingTarget = {
-    StageDeliveries: async (request: StageDeliveriesRequest): Promise<StageResult[]> => request.Messages.map((m) => ({ MessageID: m.MessageID, Kind: 'Staged' })),
-};
-
-function context(staged: boolean): HostLoopContext {
-    return {
-        InstanceID: 'host-1', StagedToDatabase: staged,
-        Subscription: { ID: 'DDDDDDDD-0000-4000-8000-000000000001', Name: 'integration.apply', PartitionMode: 'Ordered' } as MJWorkQueueSubscriptionEntity,
-        Topic: { ID: 'AAAAAAAA-0000-4000-8000-000000000001', Name: 'integration.batch-ready', OrderingMode: 'ExplicitSequence' } as MJWorkQueueTopicEntity,
-        Transport: { ID: 'A0000000-0000-0000-0000-000000000001', Name: 'AWS-test', DriverClass: 'AWS' } as MJWorkQueueTransportEntity,
-        Binding: TestSubscriptionBinding(true, { Policy: { PartitionMode: 'Ordered' }, HostType: 'MJWorker' }),
-        ContextUser: { ID: 'user-1' } as UserInfo, Executor: new RecordingExecutor(), Log: new RecordingLogger(), KickConsumer: () => undefined,
-    };
-}
-
-function drivers(aws: ITransportDriver): AwsHostLoopDrivers {
-    return { Aws: async () => aws, Database: async () => TARGET };
-}
-
-describe('AWS host loops', () => {
-    it('registers a factory for the AWS driver class', () => {
-        RegisterAwsHostLoops();
-        expect(WorkQueueHostLoopRegistry.Instance.Get('AWS')).toBeTypeOf('function');
+describe('mj queue commands and the AWS transport', () => {
+    it('registers the AWS driver factory and manifest enricher when a cloud command module loads', async () => {
+        await import('../commands/queue/validate-bindings');
+        const factory = MJGlobal.Instance.ClassFactory.TryCreateInstance<BaseTransportDriverFactory>(BaseTransportDriverFactory, 'AWS');
+        expect(factory.Resolved).toBe(true);
+        expect(ManifestEnricherRegistry.Instance.Has('AWS')).toBe(true);
     });
 
-    it('takes the staging identity from the subscription and topic entities', () => {
-        expect(StagingIdentityFor(context(true))).toEqual({
-            TopicID: 'AAAAAAAA-0000-4000-8000-000000000001', SubscriptionID: 'DDDDDDDD-0000-4000-8000-000000000001',
-            PartitionMode: 'Ordered', OrderingMode: 'ExplicitSequence',
-        });
+    it.each(NEEDS_AWS)('%s imports the engine ./aws subpath statically', (name) => {
+        expect(readFileSync(join(QUEUE_COMMANDS, `${name}.ts`), 'utf8')).toMatch(AWS_IMPORT);
     });
 
-    it('returns a stager only for staged subscriptions', async () => {
-        const factory = CreateAwsHostLoopFactory(drivers(new AwsTransportDriver(new FakeSnsGateway(), new FakeSqsGateway())));
-        expect(await factory(context(false))).toEqual([]);
-        const loops = await factory(context(true));
-        expect(loops).toHaveLength(1);
-        expect(loops[0]).toBeInstanceOf(SqsStager);
-        expect(loops[0].Name).toBe('stager:integration.apply');
-    });
-
-    it('refuses a transport driver that is not the AWS driver', async () => {
-        await expect(CreateAwsHostLoopFactory(drivers(new OtherDriver()))(context(true))).rejects.toThrow('requires the AWS transport driver');
+    it.each(MUST_NOT)('%s does not load the AWS transport', (name) => {
+        expect(readFileSync(join(QUEUE_COMMANDS, `${name}.ts`), 'utf8')).not.toContain('work-queue-engine/aws');
     });
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+(The `await import` is test-only module loading, the same technique vitest suites in this repo use to load a module
+after mocks; production code keeps static imports.)
 
-Run: `cd packages/WorkQueue/engine && pnpm test SqsStager RegisterAwsHostLoops`
-Expected: FAIL — unresolved imports `../transports/aws/SqsStager`, `../transports/aws/RegisterAwsHostLoops`.
+Run: `cd packages/MJCLI && pnpm test queue-aws-registration`
+Expected: FAIL — `factory.Resolved` is `false`, and the four "imports the engine ./aws subpath" cases fail.
 
-- [ ] **Step 3: Write `src/transports/aws/SqsStager.ts`**
-
-```typescript
-import {
-    ParseEnvelopeBody, ReadAwsSubscriptionConfig, SendToDeadLetterQueue, type AwsSubscriptionConfig, type SqsGateway, type SqsReceivedMessage,
-} from '@memberjunction/work-queue-aws';
-import type { OrderingMode, PartitionMode, SubscriptionBinding, WorkLogger, WorkMessage } from '@memberjunction/work-queue-core';
-import type { IHostLoop } from '../../host/WorkQueueHostLoopRegistry';
-import type { StageDeliveriesRequest, StageResult } from '../database/DatabaseTransportDriver';
-
-export interface StagingTarget {
-    StageDeliveries(request: StageDeliveriesRequest): Promise<StageResult[]>;
-}
-
-export interface StagingIdentity {
-    TopicID: string;
-    SubscriptionID: string;
-    PartitionMode: PartitionMode;
-    OrderingMode: OrderingMode;
-}
-
-export interface SqsStagerOptions {
-    ReceiveBatchSize?: number;
-    WaitTimeSeconds?: number;
-    VisibilityTimeoutSeconds?: number;
-    FailureBackoffSeconds?: number;
-    /** Pause after a cycle that staged nothing (guards a zero-wait receive from spinning). */
-    IdleDelayMs?: number;
-    Now?: () => number;
-}
-
-interface Parsed {
-    Raw: SqsReceivedMessage;
-    Envelope: WorkMessage;
-}
-
-function errorOf(value: unknown): Error {
-    return value instanceof Error ? value : new Error(String(value));
-}
-
-function delay(ms: number, signal: AbortSignal): Promise<void> {
-    return new Promise((resolve) => {
-        if (signal.aborted || ms <= 0) {
-            resolve();
-            return;
-        }
-        const timer = setTimeout(resolve, ms);
-        signal.addEventListener('abort', () => { clearTimeout(timer); resolve(); }, { once: true });
-    });
-}
-
-/** Copies an Ordered subscription's SQS messages into Database delivery rows (03 §5.1). */
-export class SqsStager implements IHostLoop {
-    public readonly Name: string;
-    private readonly config: AwsSubscriptionConfig;
-    private readonly batchSize: number;
-    private readonly waitSeconds: number;
-    private readonly visibilitySeconds: number;
-    private readonly backoffSeconds: number;
-    private readonly idleDelayMs: number;
-    private readonly now: () => number;
-    private controller: AbortController | null = null;
-    private running: Promise<void> | null = null;
-
-    constructor(
-        private readonly gateway: SqsGateway,
-        private readonly target: StagingTarget,
-        private readonly binding: SubscriptionBinding,
-        private readonly identity: StagingIdentity,
-        private readonly onStaged: () => void,
-        private readonly log: WorkLogger,
-        options: SqsStagerOptions = {},
-    ) {
-        this.Name = `stager:${binding.Policy.SubscriptionName}`;
-        this.config = ReadAwsSubscriptionConfig(binding.Config);
-        this.batchSize = options.ReceiveBatchSize ?? 10;
-        this.waitSeconds = options.WaitTimeSeconds ?? 20;
-        this.visibilitySeconds = options.VisibilityTimeoutSeconds ?? 60;
-        this.backoffSeconds = options.FailureBackoffSeconds ?? 30;
-        this.idleDelayMs = options.IdleDelayMs ?? 250;
-        this.now = options.Now ?? Date.now;
-    }
-
-    public Start(): void {
-        if (this.running) {
-            return;
-        }
-        this.controller = new AbortController();
-        this.running = this.loop(this.controller.signal);
-    }
-
-    public async Stop(): Promise<void> {
-        this.controller?.abort();
-        await this.running;
-        this.running = null;
-        this.controller = null;
-    }
-
-    /** One receive → stage → settle cycle. Returns the number of newly staged messages. */
-    public async RunOnce(signal: AbortSignal): Promise<number> {
-        const received = await this.gateway.Receive({
-            QueueUrl: this.config.QueueUrl, MaxMessages: this.batchSize, WaitTimeSeconds: this.waitSeconds,
-            VisibilityTimeoutSeconds: this.visibilitySeconds, Signal: signal,
-        });
-        const parsed = await this.parseOrDeadLetter(received);
-        if (parsed.length === 0) {
-            return 0;
-        }
-        let staged: number;
-        try {
-            staged = await this.settle(parsed, await this.stage(parsed));
-        } catch (error) {
-            this.log.Warn('Batch staging failed; staging one message at a time', { subscription: this.binding.Policy.SubscriptionName, error: errorOf(error).message });
-            staged = await this.stageIndividually(parsed);
-        }
-        if (staged > 0) {
-            this.onStaged();
-        }
-        return staged;
-    }
-
-    private stage(parsed: Parsed[]): Promise<StageResult[]> {
-        return this.target.StageDeliveries({ ...this.identity, Messages: parsed.map((p) => p.Envelope) });
-    }
-
-    private async parseOrDeadLetter(received: SqsReceivedMessage[]): Promise<Parsed[]> {
-        const parsed: Parsed[] = [];
-        for (const raw of received) {
-            const envelope = ParseEnvelopeBody(raw.Body);
-            if (envelope === null) {
-                await this.deadLetter(raw, 'InvalidEnvelope', 'Body is not a work-queue envelope');
-            } else {
-                parsed.push({ Raw: raw, Envelope: envelope });
-            }
-        }
-        return parsed;
-    }
-
-    /** Applies results (request order): delete staged and already-staged messages, dead-letter rejected ones. */
-    private async settle(parsed: Parsed[], results: StageResult[]): Promise<number> {
-        let staged = 0;
-        for (let i = 0; i < parsed.length; i++) {
-            const result = results[i];
-            if (result === undefined) {
-                continue;   // no result: leave the message; it is redelivered after its visibility timeout
-            }
-            if (result.Kind === 'Rejected') {
-                this.log.Error(`Staging rejected message ${result.MessageID}: ${result.Code}`, undefined, { subscription: this.binding.Policy.SubscriptionName, detail: result.Message });
-                await this.deadLetter(parsed[i].Raw, result.Code, result.Message);
-                continue;
-            }
-            await this.gateway.Delete(this.config.QueueUrl, parsed[i].Raw.ReceiptHandle);
-            staged += result.Kind === 'Staged' ? 1 : 0;
-        }
-        return staged;
-    }
-
-    /** Stages in order; at the first thrown error, hides that message and every later one so order is kept. */
-    private async stageIndividually(parsed: Parsed[]): Promise<number> {
-        let staged = 0;
-        for (let i = 0; i < parsed.length; i++) {
-            try {
-                staged += await this.settle([parsed[i]], await this.stage([parsed[i]]));
-            } catch (error) {
-                this.log.Error('Staging failed; backing off', errorOf(error), { subscription: this.binding.Policy.SubscriptionName, messageID: parsed[i].Envelope.MessageID });
-                for (const later of parsed.slice(i)) {
-                    await this.gateway.ChangeVisibility(this.config.QueueUrl, later.Raw.ReceiptHandle, this.backoffSeconds);
-                }
-                return staged;
-            }
-        }
-        return staged;
-    }
-
-    private async deadLetter(raw: SqsReceivedMessage, reason: string, error: string): Promise<void> {
-        await SendToDeadLetterQueue(this.gateway, this.config, { Message: raw, Reason: reason, Error: error, Attempts: raw.ReceiveCount }, new Date(this.now()));
-        await this.gateway.Delete(this.config.QueueUrl, raw.ReceiptHandle);
-    }
-
-    private async loop(signal: AbortSignal): Promise<void> {
-        while (!signal.aborted) {
-            try {
-                if ((await this.RunOnce(signal)) === 0) {
-                    await delay(this.idleDelayMs, signal);
-                }
-            } catch (error) {
-                this.log.Error('Stager cycle failed', errorOf(error), { subscription: this.binding.Policy.SubscriptionName });
-                await delay(this.backoffSeconds * 1000, signal);
-            }
-        }
-    }
-}
-```
-
-If the batch commits but a later `DeleteMessage` or dead-letter send throws, `RunOnce` falls into the one-at-a-time
-path; the already-committed messages come back `AlreadyStaged` and are deleted, so the retry is safe.
-
-- [ ] **Step 4: Write `src/transports/aws/RegisterAwsHostLoops.ts`**
+Add this line, directly after the existing `@memberjunction/work-queue-engine` import, to each of
+`packages/MJCLI/src/commands/queue/export-topology.ts`, `import-bindings.ts`, `validate-bindings.ts` and `work.ts`
+(the files plan 06's CLI task creates):
 
 ```typescript
-import { AwsTransportDriver } from '@memberjunction/work-queue-aws';
-import { WorkQueueConfigurationError, type ITransportDriver } from '@memberjunction/work-queue-core';
-import { WorkQueueHostLoopRegistry, type HostLoopContext, type HostLoopFactory, type IHostLoop } from '../../host/WorkQueueHostLoopRegistry';
-import { WorkQueueEngine } from '../../WorkQueueEngine';
-import { SqsStager, type StagingIdentity, type StagingTarget } from './SqsStager';
-
-export interface AwsHostLoopDrivers {
-    Aws(context: HostLoopContext): Promise<ITransportDriver>;
-    Database(context: HostLoopContext): Promise<StagingTarget>;
-}
-
-/** Both drivers come from the engine's cache (credentials, pools and instance IDs included). */
-export const ENGINE_DRIVERS: AwsHostLoopDrivers = {
-    Aws: (context) => WorkQueueEngine.Instance.GetDriver(context.Transport.ID),
-    Database: () => WorkQueueEngine.Instance.GetDatabaseDriver(),
-};
-
-export function StagingIdentityFor(context: HostLoopContext): StagingIdentity {
-    return {
-        TopicID: context.Topic.ID,
-        SubscriptionID: context.Subscription.ID,
-        PartitionMode: context.Subscription.PartitionMode,
-        OrderingMode: context.Topic.OrderingMode,
-    };
-}
-
-export function CreateAwsHostLoopFactory(drivers: AwsHostLoopDrivers = ENGINE_DRIVERS): HostLoopFactory {
-    return async (context: HostLoopContext): Promise<IHostLoop[]> => {
-        if (!context.StagedToDatabase) {
-            return [];
-        }
-        const aws = await drivers.Aws(context);
-        if (!(aws instanceof AwsTransportDriver)) {
-            throw new WorkQueueConfigurationError(`Subscription '${context.Subscription.Name}': staging requires the AWS transport driver, got '${aws.Name}'`);
-        }
-        const database = await drivers.Database(context);
-        return [new SqsStager(aws.Sqs, database, context.Binding, StagingIdentityFor(context), () => context.KickConsumer(), context.Log)];
-    };
-}
-
-export function RegisterAwsHostLoops(): void {
-    WorkQueueHostLoopRegistry.Instance.Register('AWS', CreateAwsHostLoopFactory());
-}
-
-RegisterAwsHostLoops();
+// Registers the 'AWS' transport driver factory and manifest enricher for this command only (work-queue 03 §0).
+import '@memberjunction/work-queue-engine/aws';
 ```
 
-In `packages/WorkQueue/engine/src/transports/aws/AWSTransportDriverFactory.ts`, add after the existing imports:
+Confirm `packages/MJCLI/package.json` lists `"@memberjunction/work-queue-engine": "6.1.0"` under `dependencies`
+(plan 06 adds it with the `mj queue` commands); add it and run `pnpm install` at the repository root if it is missing.
+pnpm resolves the `./aws` subpath's own dependencies through the engine package, so MJCLI declares nothing else.
 
-```typescript
-// Loading the AWS factory (the class manifest does) also registers the SQS stager with the host loop registry.
-import './RegisterAwsHostLoops';
-```
+Run: `cd packages/MJCLI && pnpm test queue-aws-registration`
+Expected: PASS — 13 tests (1 registration, 4 import, 8 must-not).
 
-- [ ] **Step 5: Export the modules**
-
-Append to `packages/WorkQueue/engine/src/index.ts`:
-
-```typescript
-export * from './transports/aws/SqsStager';
-export * from './transports/aws/RegisterAwsHostLoops';
-```
-
-- [ ] **Step 6: Run the tests and build**
-
-Run: `cd packages/WorkQueue/engine && pnpm test`
-Expected: PASS — existing suites, the Task 8 suites, plus SqsStager (8), RegisterAwsHostLoops (4).
-
-Run: `cd packages/WorkQueue/engine && pnpm run build`
+Run: `cd packages/MJCLI && pnpm run build`
 Expected: builds.
 
-- [ ] **Step 7: Commit**
+Manual check, against a database that has an `AWS` transport row (any region; no AWS credentials are needed to see
+the difference):
+
+Run: `pnpm exec mj queue validate-bindings --transport <aws transport name>`
+Expected: the output no longer contains "no registered factory" / "No transport driver factory is registered for
+DriverClass 'AWS'"; it now reports real binding issues (for an unprovisioned transport, `TopicUnbound` errors).
+
+Run: `pnpm exec mj queue export-topology --transport <aws transport name> | grep -c SnsFilterPolicy`
+Expected: one line per subscription of that transport (before this step the command failed with "No manifest enricher
+is registered for DriverClass 'AWS'").
+
+- [ ] **Step 8: Run the tests and build**
+
+Run: `cd packages/WorkQueue/engine && pnpm test`
+Expected: PASS — the engine's existing suites (including plan 05's `manifest` tests, unchanged for Database manifests) plus ResolveAwsCredentials (6), AWSTransportDriverFactory (3), AwsPublishCoordinator (4), AwsManifestEnricher (5), mainEntryGuard (3).
+
+Run: `cd packages/WorkQueue/engine && pnpm run build`
+Expected: builds; `dist/aws/index.js` and `dist/aws/index.d.ts` exist.
+
+Run: `cd packages/WorkQueue/engine && node --input-type=module -e "await import('@memberjunction/work-queue-engine'); await import('@memberjunction/work-queue-engine/aws'); console.log('both entries load');"`
+Expected: prints `both entries load`. (The authoritative check that the main entry stays AWS-free is `mainEntryGuard.test.ts`; this only proves the built entries resolve and load in either order.)
+
+Run: `cd packages/ServerBootstrap && pnpm run build`
+Expected: builds. `grep -c "work-queue-engine/aws" dist/index.js` prints `1`.
+
+- [ ] **Step 9: Commit**
 
 ```bash
-git add packages/WorkQueue/engine/src
-git commit -m "feat(work-queue-engine): stage AWS Ordered subscriptions into database deliveries"
+git add packages/WorkQueue/engine packages/ServerBootstrap/package.json packages/ServerBootstrap/src/index.ts packages/MJCLI/src/commands/queue packages/MJCLI/src/__tests__/queue-aws-registration.test.ts packages/MJCLI/package.json pnpm-lock.yaml
+git commit -m "feat(work-queue-engine): AWS transport behind the ./aws subpath — driver factory, credentials, manifest filter policies"
 ```
 
 ---
 
-### Task 10: Terraform module `infrastructure/terraform/work-queue/aws`
+### Task 9: Terraform module `infrastructure/terraform/work-queue/aws`
 
 **Files:**
-- Create: `infrastructure/terraform/work-queue/aws/versions.tf`, `variables.tf`, `locals.tf`, `topics.tf`, `subscriptions.tf`, `lambda.tf`, `iam.tf`, `alarms.tf`, `outputs.tf`, `.tflint.hcl`, `README.md`
-- Create: `infrastructure/terraform/work-queue/aws/tests/basic.tftest.hcl`, `tests/fixtures/manifest.json`, `tests/fixtures/invalid-standard-exclusive.json`, `tests/fixtures/invalid-ordered-external.json`
+- Create: `infrastructure/terraform/work-queue/aws/versions.tf`, `variables.tf`, `locals.tf`, `kms.tf`, `topics.tf`, `subscriptions.tf`, `lambda.tf`, `iam.tf`, `alarms.tf`, `outputs.tf`, `.tflint.hcl`, `README.md`
+- Create: `infrastructure/terraform/work-queue/aws/tests/basic.tftest.hcl`, `tests/fixtures/manifest.json`, `tests/fixtures/invalid-standard-exclusive.json`, `tests/fixtures/invalid-ordered.json`, `tests/fixtures/invalid-name-collision.json`
 - Create: `infrastructure/terraform/work-queue/aws/examples/basic/main.tf`, `examples/basic/manifest.json`
 
 **Interfaces:**
-- Consumes: the topology manifest (03 §10: `TopologyManifest`, `ManifestTopic`, `ManifestSubscription` including `StagedToDatabase` and `Aws.SnsFilterPolicy`), produced by `mj queue export-topology` (plan 06); the naming rule of `AwsResourceName` (Task 1); `ExpectedMaxReceiveCount` (Task 4); the `MJ_WQ_SUBSCRIPTION` contract (Task 7).
+- Consumes: the topology manifest (03 §10: `TopologyManifest`, `ManifestTopic`, `ManifestSubscription` including `Status` and `Aws.SnsFilterPolicy`), produced by `mj queue export-topology` (plan 06, with Task 8's enricher); the naming rule of `AwsResourceName` (Task 1); `ExpectedMaxReceiveCount` = `MaxAttempts + 5` (Task 4); the `MJ_WQ_SUBSCRIPTION` contract (Task 7).
 - Produces:
-  - Module inputs: `manifest_path`, `name_prefix`, `environment`, `region`, `kms_key_arn`, `lambda_consumers`, `fifo_high_throughput`, `message_retention_seconds`, `alarm_actions`, `oldest_message_age_alarm_seconds`, `tags`
-  - Outputs: `binding_import` (exactly 03 §10 `BindingImport`, subscriptions carrying the Task 1 `AwsSubscriptionConfig` fields), `mjapi_policy_json`, `mj_worker_policy_json`, `lambda_function_arns`
+  - Module inputs: `manifest_path`, `name_prefix`, `environment`, `region`, `create_kms_key`, `kms_key_arn`, `kms_key_policy_confirmed`, `lambda_consumers`, `fifo_high_throughput`, `message_retention_seconds`, `alarm_actions`, `oldest_message_age_alarm_seconds`, `tags`
+  - Outputs: `binding_import` (exactly 03 §10 `BindingImport`, subscriptions carrying the Task 1 `AwsSubscriptionConfig` fields), `mjapi_policy_json`, `mj_worker_policy_json` (null without `MJWorker` subscriptions), `lambda_function_arns`, `lambda_alias_arns`, `kms_key_arn`, `external_subscriptions_without_lambda`
 
 What the module creates, per manifest entry:
 
 | Manifest | Resources |
 | --- | --- |
-| Topic | `aws_sns_topic` (FIFO when `IsFifo`; precondition: FIFO required for partitioned subscriptions or `ExplicitSequence`) |
-| Subscription | DLQ `aws_sqs_queue` + redrive-allow policy; subscription `aws_sqs_queue` (redrive `maxReceiveCount` = 1000 when staged, else `MaxAttempts + 2`; visibility = `max(LeaseSeconds, 6 × Lambda timeout)` for Lambda consumers, else `max(LeaseSeconds, 30)`; FIFO high-throughput mode); queue policy allowing only its topic; `aws_sns_topic_subscription` (raw delivery, `FilterPolicyScope = MessageAttributes`, the manifest's pre-rendered policy) |
-| `External` subscription listed in `lambda_consumers` | IAM role (consume its queue, send to its DLQ, basic logging, optional KMS/extra policy), `aws_lambda_function` with `MJ_WQ_SUBSCRIPTION`, event source mapping with `ReportBatchItemFailures` |
-| Every subscription | CloudWatch alarms: DLQ has messages; oldest message age; Lambda errors and throttles for Lambda consumers |
+| Topic | `aws_sns_topic` (FIFO when `IsFifo`; precondition: FIFO required as soon as one subscription is `Exclusive`) |
+| Subscription | Dead-letter `aws_sqs_queue` + redrive-allow policy; subscription `aws_sqs_queue` (redrive `maxReceiveCount = MaxAttempts + 5`; visibility = `max(LeaseSeconds, 6 × Lambda timeout)` for Lambda consumers, else `max(LeaseSeconds, 30)`; FIFO high-throughput mode); queue policy allowing only its topic and denying non-TLS access; `aws_sns_topic_subscription` (raw delivery, `FilterPolicyScope = MessageAttributes`, the manifest's pre-rendered policy) with a **delivery-failure** dead-letter queue, so an SNS→SQS delivery that fails is kept and alarmed instead of silently dropped |
+| `External` subscription listed in `lambda_consumers` | IAM role (consume its queue, send to its DLQ, logging, KMS, optional extra policy), `aws_lambda_function` (always published) with `MJ_WQ_SUBSCRIPTION`, a `live` **alias**, and an event source mapping **on the alias** with `ReportBatchItemFailures`, `batch_size = 1` on FIFO, and `enabled` driven by the subscription's `Status` |
+| Every subscription | CloudWatch alarms: dead letters present; SNS delivery failures present; oldest message age; Lambda errors and throttles for Lambda consumers |
+| Optional | A customer-managed KMS key whose policy already carries the SNS and CloudWatch Logs statements |
 
-Guard rails: an `Ordered` subscription must be `MJWorker` (staged); `lambda_consumers` keys must name `External`
-subscriptions; an `External` subscription with no `lambda_consumers` entry is a `check` warning (its consumer may be
-deployed elsewhere).
+Guard rails (each a `precondition` that fails `plan`): an `Ordered` subscription is refused ("Ordered requires the
+Database transport"); a standard topic with an `Exclusive` subscription is refused; two subscriptions whose names
+collapse to the same queue name are refused; a filtered subscription without a rendered policy is refused; a FIFO
+Lambda consumer with `batch_size ≠ 1` is refused; `lambda_consumers` keys must name `External` subscriptions; a
+bring-your-own KMS key must be confirmed to carry the required key-policy statements. Queues carry
+`prevent_destroy`, so removing or renaming a subscription cannot destroy a queue by accident — the procedure is in
+GOVERNANCE.md (Task 10). Two `check` blocks warn without failing: an `External` subscription with no
+`lambda_consumers` entry, and a consumer that sets `reserved_concurrency`.
+
+**Why every test run is `command = plan`.** `prevent_destroy` makes the teardown of an `apply` run fail, and nothing
+these tests assert needs a provider-computed value: they assert names, flags, policy counts and the module's own
+locals (test assertions can reference any value available to a custom condition inside the module).
 
 - [ ] **Step 1: Write the test fixtures**
 
@@ -5384,60 +5521,58 @@ deployed elsewhere).
   "Topics": [
     {
       "Name": "email.events",
-      "OrderingMode": "PublishOrder",
       "IsFifo": false,
       "MaxPayloadBytes": 262144,
       "Subscriptions": [
         {
           "Name": "email.archive",
           "Filter": null,
-          "Policy": { "SubscriptionName": "email.archive", "TopicName": "email.events", "OrderingMode": "PublishOrder", "PartitionMode": "None", "MaxAttempts": 5, "BackoffBaseSeconds": 10, "BackoffMaxSeconds": 900, "LeaseSeconds": 60, "HeartbeatMode": "Auto" },
+          "Policy": { "SubscriptionName": "email.archive", "TopicName": "email.events", "PartitionMode": "None", "MaxAttempts": 5, "BackoffBaseSeconds": 10, "BackoffMaxSeconds": 900, "LeaseSeconds": 60, "HeartbeatMode": "Auto" },
           "HostType": "External",
-          "StagedToDatabase": false,
+          "Status": "Active",
           "ExternalRef": null,
           "Aws": { "SnsFilterPolicy": null }
         },
         {
           "Name": "email.dashboard",
           "Filter": { "logic": "and", "filters": [{ "logic": "or", "filters": [{ "field": "eventType", "operator": "eq", "value": "click" }, { "field": "eventType", "operator": "eq", "value": "open" }] }] },
-          "Policy": { "SubscriptionName": "email.dashboard", "TopicName": "email.events", "OrderingMode": "PublishOrder", "PartitionMode": "None", "MaxAttempts": 5, "BackoffBaseSeconds": 10, "BackoffMaxSeconds": 900, "LeaseSeconds": 60, "HeartbeatMode": "Auto" },
+          "Policy": { "SubscriptionName": "email.dashboard", "TopicName": "email.events", "PartitionMode": "None", "MaxAttempts": 5, "BackoffBaseSeconds": 10, "BackoffMaxSeconds": 900, "LeaseSeconds": 60, "HeartbeatMode": "Auto" },
           "HostType": "MJWorker",
-          "StagedToDatabase": false,
+          "Status": "Active",
           "ExternalRef": null,
           "Aws": { "SnsFilterPolicy": "{\"eventType\":[\"click\",\"open\"]}" }
         },
         {
           "Name": "email.unsubscribe",
           "Filter": { "logic": "and", "filters": [{ "field": "eventType", "operator": "eq", "value": "unsubscribe" }] },
-          "Policy": { "SubscriptionName": "email.unsubscribe", "TopicName": "email.events", "OrderingMode": "PublishOrder", "PartitionMode": "None", "MaxAttempts": 5, "BackoffBaseSeconds": 10, "BackoffMaxSeconds": 900, "LeaseSeconds": 60, "HeartbeatMode": "Auto" },
+          "Policy": { "SubscriptionName": "email.unsubscribe", "TopicName": "email.events", "PartitionMode": "None", "MaxAttempts": 5, "BackoffBaseSeconds": 10, "BackoffMaxSeconds": 900, "LeaseSeconds": 60, "HeartbeatMode": "Auto" },
           "HostType": "External",
-          "StagedToDatabase": false,
+          "Status": "Active",
           "ExternalRef": "arn:aws:lambda:us-east-1:123456789012:function:suppression",
           "Aws": { "SnsFilterPolicy": "{\"eventType\":[\"unsubscribe\"]}" }
         }
       ]
     },
     {
-      "Name": "integration.batch-ready",
-      "OrderingMode": "ExplicitSequence",
+      "Name": "email.subscriber",
       "IsFifo": true,
       "MaxPayloadBytes": 262144,
       "Subscriptions": [
         {
-          "Name": "integration.apply",
+          "Name": "email.subscriber-update",
           "Filter": null,
-          "Policy": { "SubscriptionName": "integration.apply", "TopicName": "integration.batch-ready", "OrderingMode": "ExplicitSequence", "PartitionMode": "Ordered", "MaxAttempts": 3, "BackoffBaseSeconds": 60, "BackoffMaxSeconds": 1800, "LeaseSeconds": 300, "HeartbeatMode": "Manual", "SequenceGapAlertSeconds": 3600 },
-          "HostType": "MJWorker",
-          "StagedToDatabase": true,
+          "Policy": { "SubscriptionName": "email.subscriber-update", "TopicName": "email.subscriber", "PartitionMode": "Exclusive", "MaxAttempts": 3, "BackoffBaseSeconds": 10, "BackoffMaxSeconds": 900, "LeaseSeconds": 60, "HeartbeatMode": "Auto" },
+          "HostType": "External",
+          "Status": "Paused",
           "ExternalRef": null,
           "Aws": { "SnsFilterPolicy": null }
         },
         {
           "Name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
           "Filter": null,
-          "Policy": { "SubscriptionName": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "TopicName": "integration.batch-ready", "OrderingMode": "ExplicitSequence", "PartitionMode": "Exclusive", "MaxAttempts": 5, "BackoffBaseSeconds": 10, "BackoffMaxSeconds": 900, "LeaseSeconds": 60, "HeartbeatMode": "Auto" },
+          "Policy": { "SubscriptionName": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "TopicName": "email.subscriber", "PartitionMode": "Exclusive", "MaxAttempts": 5, "BackoffBaseSeconds": 10, "BackoffMaxSeconds": 900, "LeaseSeconds": 60, "HeartbeatMode": "Auto" },
           "HostType": "MJWorker",
-          "StagedToDatabase": false,
+          "Status": "Active",
           "ExternalRef": null,
           "Aws": { "SnsFilterPolicy": null }
         }
@@ -5448,7 +5583,8 @@ deployed elsewhere).
 ```
 
 The 90-character subscription name exercises the shortened-name rule and must produce the same queue name as the
-Task 1 unit test: `mj-wq-prod-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-ec270642.fifo`.
+Task 1 unit test: `mj-wq-prod-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-ec270642.fifo`. `email.subscriber-update`
+is `Paused`, so its event source mapping must come out disabled.
 
 `infrastructure/terraform/work-queue/aws/tests/fixtures/invalid-standard-exclusive.json`:
 
@@ -5460,16 +5596,15 @@ Task 1 unit test: `mj-wq-prod-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
   "Topics": [
     {
       "Name": "email.events",
-      "OrderingMode": "PublishOrder",
       "IsFifo": false,
       "MaxPayloadBytes": 262144,
       "Subscriptions": [
         {
           "Name": "email.subscriber-update",
           "Filter": null,
-          "Policy": { "SubscriptionName": "email.subscriber-update", "TopicName": "email.events", "OrderingMode": "PublishOrder", "PartitionMode": "Exclusive", "MaxAttempts": 5, "BackoffBaseSeconds": 10, "BackoffMaxSeconds": 900, "LeaseSeconds": 60, "HeartbeatMode": "Auto" },
+          "Policy": { "SubscriptionName": "email.subscriber-update", "TopicName": "email.events", "PartitionMode": "Exclusive", "MaxAttempts": 5, "BackoffBaseSeconds": 10, "BackoffMaxSeconds": 900, "LeaseSeconds": 60, "HeartbeatMode": "Auto" },
           "HostType": "MJWorker",
-          "StagedToDatabase": false,
+          "Status": "Active",
           "ExternalRef": null,
           "Aws": { "SnsFilterPolicy": null }
         }
@@ -5479,7 +5614,8 @@ Task 1 unit test: `mj-wq-prod-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 }
 ```
 
-`infrastructure/terraform/work-queue/aws/tests/fixtures/invalid-ordered-external.json`:
+`infrastructure/terraform/work-queue/aws/tests/fixtures/invalid-ordered.json` (what a hand-edited manifest might
+contain; MJ's own export refuses it in Task 8):
 
 ```json
 {
@@ -5489,16 +5625,52 @@ Task 1 unit test: `mj-wq-prod-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
   "Topics": [
     {
       "Name": "integration.batch-ready",
-      "OrderingMode": "PublishOrder",
       "IsFifo": true,
       "MaxPayloadBytes": 262144,
       "Subscriptions": [
         {
           "Name": "integration.apply",
           "Filter": null,
-          "Policy": { "SubscriptionName": "integration.apply", "TopicName": "integration.batch-ready", "OrderingMode": "PublishOrder", "PartitionMode": "Ordered", "MaxAttempts": 3, "BackoffBaseSeconds": 60, "BackoffMaxSeconds": 1800, "LeaseSeconds": 300, "HeartbeatMode": "Manual" },
-          "HostType": "External",
-          "StagedToDatabase": false,
+          "Policy": { "SubscriptionName": "integration.apply", "TopicName": "integration.batch-ready", "PartitionMode": "Ordered", "MaxAttempts": 3, "BackoffBaseSeconds": 60, "BackoffMaxSeconds": 1800, "LeaseSeconds": 300, "HeartbeatMode": "Manual" },
+          "HostType": "MJWorker",
+          "Status": "Active",
+          "ExternalRef": null,
+          "Aws": { "SnsFilterPolicy": null }
+        }
+      ]
+    }
+  ]
+}
+```
+
+`infrastructure/terraform/work-queue/aws/tests/fixtures/invalid-name-collision.json` (`a.b` and `a-b` both slug to `a-b`):
+
+```json
+{
+  "ManifestVersion": 1,
+  "GeneratedAt": "2026-09-16T12:00:00.000Z",
+  "Transport": { "Name": "AWS-prod", "DriverClass": "AWS", "Configuration": { "Region": "us-east-1" } },
+  "Topics": [
+    {
+      "Name": "email.events",
+      "IsFifo": false,
+      "MaxPayloadBytes": 262144,
+      "Subscriptions": [
+        {
+          "Name": "a.b",
+          "Filter": null,
+          "Policy": { "SubscriptionName": "a.b", "TopicName": "email.events", "PartitionMode": "None", "MaxAttempts": 5, "BackoffBaseSeconds": 10, "BackoffMaxSeconds": 900, "LeaseSeconds": 60, "HeartbeatMode": "Auto" },
+          "HostType": "MJWorker",
+          "Status": "Active",
+          "ExternalRef": null,
+          "Aws": { "SnsFilterPolicy": null }
+        },
+        {
+          "Name": "a-b",
+          "Filter": null,
+          "Policy": { "SubscriptionName": "a-b", "TopicName": "email.events", "PartitionMode": "None", "MaxAttempts": 5, "BackoffBaseSeconds": 10, "BackoffMaxSeconds": 900, "LeaseSeconds": 60, "HeartbeatMode": "Auto" },
+          "HostType": "MJWorker",
+          "Status": "Active",
           "ExternalRef": null,
           "Aws": { "SnsFilterPolicy": null }
         }
@@ -5519,30 +5691,14 @@ mock_provider "aws" {
       json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
     }
   }
-  mock_resource "aws_sns_topic" {
+  mock_data "aws_caller_identity" {
     defaults = {
-      arn = "arn:aws:sns:us-east-1:123456789012:mock-topic"
+      account_id = "123456789012"
     }
   }
-  mock_resource "aws_sqs_queue" {
+  mock_data "aws_partition" {
     defaults = {
-      arn = "arn:aws:sqs:us-east-1:123456789012:mock-queue"
-      url = "https://sqs.us-east-1.amazonaws.com/123456789012/mock-queue"
-    }
-  }
-  mock_resource "aws_sns_topic_subscription" {
-    defaults = {
-      arn = "arn:aws:sns:us-east-1:123456789012:mock-topic:0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0"
-    }
-  }
-  mock_resource "aws_iam_role" {
-    defaults = {
-      arn = "arn:aws:iam::123456789012:role/mock"
-    }
-  }
-  mock_resource "aws_lambda_function" {
-    defaults = {
-      arn = "arn:aws:lambda:us-east-1:123456789012:function:mock"
+      partition = "aws"
     }
   }
 }
@@ -5558,18 +5714,24 @@ variables {
       s3_key          = "work-queue/email-archive/3f2a9c1d.zip"
       timeout_seconds = 60
     }
+    "email.subscriber-update" = {
+      s3_bucket           = "mj-artifacts"
+      s3_key              = "work-queue/email-subscriber-update/7be1d2aa.zip"
+      timeout_seconds     = 30
+      maximum_concurrency = 50
+    }
   }
 }
 
-run "creates_named_resources_with_policies" {
-  command = apply
+run "names_flags_and_margins" {
+  command = plan
 
   assert {
     condition     = aws_sns_topic.this["email.events"].name == "mj-wq-prod-email-events"
     error_message = "Standard topic name does not follow the naming rule."
   }
   assert {
-    condition     = aws_sns_topic.this["integration.batch-ready"].name == "mj-wq-prod-integration-batch-ready.fifo" && aws_sns_topic.this["integration.batch-ready"].fifo_topic
+    condition     = aws_sns_topic.this["email.subscriber"].name == "mj-wq-prod-email-subscriber.fifo" && aws_sns_topic.this["email.subscriber"].fifo_topic
     error_message = "FIFO topic name or flag is wrong."
   }
   assert {
@@ -5577,7 +5739,7 @@ run "creates_named_resources_with_policies" {
     error_message = "Standard queue name does not match AwsResourceName."
   }
   assert {
-    condition     = aws_sqs_queue.dead_letter["integration.apply"].name == "mj-wq-prod-integration-apply-dlq.fifo"
+    condition     = aws_sqs_queue.dead_letter["email.subscriber-update"].name == "mj-wq-prod-email-subscriber-update-dlq.fifo"
     error_message = "FIFO dead-letter queue name does not match AwsResourceName."
   }
   assert {
@@ -5585,12 +5747,8 @@ run "creates_named_resources_with_policies" {
     error_message = "Shortened queue name does not match AwsResourceName."
   }
   assert {
-    condition     = jsondecode(aws_sqs_queue.subscription["integration.apply"].redrive_policy).maxReceiveCount == 1000
-    error_message = "Staged Ordered subscription must redrive after 1000 receives."
-  }
-  assert {
-    condition     = jsondecode(aws_sqs_queue.subscription["email.unsubscribe"].redrive_policy).maxReceiveCount == 7
-    error_message = "Redrive must be MaxAttempts + 2."
+    condition     = local.max_receive_count["email.unsubscribe"] == 10 && local.max_receive_count["email.subscriber-update"] == 8
+    error_message = "Redrive must be MaxAttempts + 5 for every queue."
   }
   assert {
     condition     = aws_sqs_queue.subscription["email.archive"].visibility_timeout_seconds == 360 && aws_sqs_queue.subscription["email.dashboard"].visibility_timeout_seconds == 60
@@ -5605,16 +5763,8 @@ run "creates_named_resources_with_policies" {
     error_message = "Every SNS subscription must use raw message delivery."
   }
   assert {
-    condition     = contains(tolist(aws_lambda_event_source_mapping.consumer["email.archive"].function_response_types), "ReportBatchItemFailures")
-    error_message = "The event source mapping must report batch item failures."
-  }
-  assert {
-    condition     = jsondecode(aws_lambda_function.consumer["email.archive"].environment[0].variables.MJ_WQ_SUBSCRIPTION).Policy.SubscriptionName == "email.archive"
-    error_message = "MJ_WQ_SUBSCRIPTION must carry the subscription binding."
-  }
-  assert {
-    condition     = length(aws_lambda_function.consumer) == 1
-    error_message = "Only External subscriptions listed in lambda_consumers get a function."
+    condition     = length(aws_sqs_queue.delivery_failure) == 5 && aws_sqs_queue.delivery_failure["email.subscriber-update"].fifo_queue
+    error_message = "Every SNS subscription needs a delivery-failure queue of the same type as its topic."
   }
   assert {
     condition     = length(output.binding_import.Topics) == 2 && length(output.binding_import.Subscriptions) == 5 && output.binding_import.ManifestVersion == 1
@@ -5622,7 +5772,36 @@ run "creates_named_resources_with_policies" {
   }
 }
 
-run "rejects_partitioned_subscription_on_standard_topic" {
+run "lambda_consumers_are_fifo_safe_and_pausable" {
+  command = plan
+
+  assert {
+    condition     = length(aws_lambda_function.consumer) == 2 && alltrue([for f in aws_lambda_function.consumer : f.publish])
+    error_message = "Only External subscriptions listed in lambda_consumers get a function, and every function publishes versions."
+  }
+  assert {
+    condition     = aws_lambda_event_source_mapping.consumer["email.subscriber-update"].batch_size == 1 && aws_lambda_event_source_mapping.consumer["email.archive"].batch_size == 10
+    error_message = "FIFO event sources default to batch_size 1; standard queues to 10."
+  }
+  assert {
+    condition     = aws_lambda_event_source_mapping.consumer["email.archive"].enabled && !aws_lambda_event_source_mapping.consumer["email.subscriber-update"].enabled
+    error_message = "A Paused or Disabled subscription must disable its event source mapping."
+  }
+  assert {
+    condition     = contains(tolist(aws_lambda_event_source_mapping.consumer["email.archive"].function_response_types), "ReportBatchItemFailures")
+    error_message = "The event source mapping must report batch item failures."
+  }
+  assert {
+    condition     = aws_lambda_alias.live["email.archive"].name == "live"
+    error_message = "Each consumer needs a 'live' alias for the event source and for rollback."
+  }
+  assert {
+    condition     = jsondecode(local.subscriptions["email.archive"].policy_json).SubscriptionName == "email.archive"
+    error_message = "MJ_WQ_SUBSCRIPTION must carry the subscription's policy."
+  }
+}
+
+run "rejects_exclusive_subscription_on_standard_topic" {
   command = plan
   variables {
     manifest_path    = "tests/fixtures/invalid-standard-exclusive.json"
@@ -5631,26 +5810,68 @@ run "rejects_partitioned_subscription_on_standard_topic" {
   expect_failures = [aws_sns_topic.this]
 }
 
-run "rejects_ordered_subscription_on_external_host" {
+run "rejects_ordered_subscriptions" {
   command = plan
   variables {
-    manifest_path    = "tests/fixtures/invalid-ordered-external.json"
+    manifest_path    = "tests/fixtures/invalid-ordered.json"
     lambda_consumers = {}
   }
   expect_failures = [aws_sqs_queue.subscription]
+}
+
+run "rejects_colliding_queue_names" {
+  command = plan
+  variables {
+    manifest_path    = "tests/fixtures/invalid-name-collision.json"
+    lambda_consumers = {}
+  }
+  expect_failures = [terraform_data.name_uniqueness]
+}
+
+run "rejects_batching_on_a_fifo_event_source" {
+  command = plan
+  variables {
+    lambda_consumers = {
+      "email.subscriber-update" = {
+        s3_bucket  = "mj-artifacts"
+        s3_key     = "work-queue/email-subscriber-update/7be1d2aa.zip"
+        batch_size = 10
+      }
+    }
+  }
+  expect_failures = [aws_lambda_event_source_mapping.consumer]
 }
 
 run "rejects_lambda_consumer_for_mj_worker_subscription" {
   command = plan
   variables {
     lambda_consumers = {
-      "integration.apply" = {
+      "email.dashboard" = {
         s3_bucket = "mj-artifacts"
-        s3_key    = "work-queue/integration-apply/1.zip"
+        s3_key    = "work-queue/email-dashboard/1.zip"
       }
     }
   }
   expect_failures = [terraform_data.lambda_consumer_keys]
+}
+
+run "rejects_an_unconfirmed_customer_key" {
+  command = plan
+  variables {
+    kms_key_arn = "arn:aws:kms:us-east-1:123456789012:key/11111111-2222-3333-4444-555555555555"
+  }
+  expect_failures = [terraform_data.kms_key_policy]
+}
+
+run "creates_a_key_with_the_service_statements" {
+  command = plan
+  variables {
+    create_kms_key = true
+  }
+  assert {
+    condition     = length(aws_kms_key.this) == 1 && aws_kms_key.this[0].enable_key_rotation
+    error_message = "create_kms_key must create one rotating key."
+  }
 }
 ```
 
@@ -5707,14 +5928,26 @@ variable "environment" {
 }
 
 variable "region" {
-  description = "AWS region the provider deploys into; written into each subscription binding."
+  description = "AWS region the provider deploys into; written into each subscription binding and the KMS key policy."
   type        = string
 }
 
+variable "create_kms_key" {
+  description = "Create a customer managed key whose policy already allows SNS delivery and CloudWatch Logs. Mutually exclusive with kms_key_arn."
+  type        = bool
+  default     = false
+}
+
 variable "kms_key_arn" {
-  description = "Customer managed KMS key for SNS and SQS encryption. Null uses SQS-managed SSE and no SNS encryption. The key policy must allow sns.amazonaws.com to use the key."
+  description = "Bring-your-own customer managed key for SNS, SQS, Lambda and log encryption. Null (and create_kms_key = false) uses SQS-managed SSE and no SNS encryption."
   type        = string
   default     = null
+}
+
+variable "kms_key_policy_confirmed" {
+  description = "Set true only after confirming the bring-your-own key's policy carries the two service statements listed in the module README. Without them SNS accepts publishes and delivers nothing, and log-group creation fails."
+  type        = bool
+  default     = false
 }
 
 variable "lambda_consumers" {
@@ -5727,10 +5960,10 @@ variable "lambda_consumers" {
     runtime              = optional(string, "nodejs22.x")
     memory_size          = optional(number, 512)
     timeout_seconds      = optional(number, 60)
-    batch_size           = optional(number, 10)
-    maximum_concurrency  = optional(number)
-    reserved_concurrency = optional(number)
-    publish_version      = optional(bool, true)
+    batch_size           = optional(number) # default: 1 on FIFO queues, 10 on standard queues
+    maximum_concurrency  = optional(number) # event-source concurrency: the supported way to throttle
+    reserved_concurrency = optional(number) # discouraged: throttled invocations burn receives (see README)
+    alias_version        = optional(string) # pin the 'live' alias to an earlier version to roll back
     environment          = optional(map(string), {})
     extra_policy_json    = optional(string)
   }))
@@ -5745,16 +5978,26 @@ variable "lambda_consumers" {
     condition     = alltrue([for c in values(var.lambda_consumers) : c.timeout_seconds >= 1 && c.timeout_seconds <= 900])
     error_message = "timeout_seconds must be between 1 and 900 (the Lambda maximum)."
   }
+
+  validation {
+    condition     = alltrue([for c in values(var.lambda_consumers) : c.batch_size == null ? true : (c.batch_size >= 1 && c.batch_size <= 10)])
+    error_message = "batch_size must be between 1 and 10 (larger standard-queue batches need a batching window this module does not configure)."
+  }
+
+  validation {
+    condition     = alltrue([for c in values(var.lambda_consumers) : c.maximum_concurrency == null ? true : c.maximum_concurrency >= 2])
+    error_message = "maximum_concurrency must be at least 2 (the event source mapping minimum). Omit it for unbounded scaling."
+  }
 }
 
 variable "fifo_high_throughput" {
-  description = "Use per-message-group deduplication and throughput limits on FIFO queues."
+  description = "Use per-message-group deduplication and throughput limits on FIFO queues and topics."
   type        = bool
   default     = true
 }
 
 variable "message_retention_seconds" {
-  description = "Retention for subscription queues. Dead-letter queues always keep messages for 14 days."
+  description = "Retention for subscription queues. Dead-letter and delivery-failure queues always keep messages for 14 days."
   type        = number
   default     = 1209600
 }
@@ -5778,7 +6021,7 @@ variable "tags" {
 }
 ```
 
-- [ ] **Step 5: Write `locals.tf`**
+- [ ] **Step 5: Write `locals.tf` and `kms.tf`**
 
 `infrastructure/terraform/work-queue/aws/locals.tf`:
 
@@ -5789,10 +6032,9 @@ locals {
 
   topics = {
     for t in local.manifest.Topics : t.Name => {
-      name          = t.Name
-      is_fifo       = t.IsFifo
-      ordering_mode = t.OrderingMode
-      slug          = trim(replace(replace(lower(t.Name), "/[^a-z0-9_-]/", "-"), "/-+/", "-"), "-")
+      name    = t.Name
+      is_fifo = t.IsFifo
+      slug    = trim(replace(replace(lower(t.Name), "/[^a-z0-9_-]/", "-"), "/-+/", "-"), "-")
     }
   }
 
@@ -5804,7 +6046,7 @@ locals {
         topic             = t.Name
         is_fifo           = t.IsFifo
         host_type         = s.HostType
-        staged            = s.StagedToDatabase
+        status            = try(s.Status, "Active")
         partition_mode    = s.Policy.PartitionMode
         max_attempts      = s.Policy.MaxAttempts
         lease_seconds     = s.Policy.LeaseSeconds
@@ -5841,13 +6083,27 @@ locals {
       : "${substr("${local.base}-${s.slug}", 0, 80 - 4 - length(local.fifo_suffix[k]) - 9)}-${substr(sha1(s.name), 0, 8)}-dlq${local.fifo_suffix[k]}"
     )
   }
+  # SNS -> SQS delivery failures (not an MJ dead-letter queue; MJ never reads it).
+  delivery_failure_queue_names = {
+    for k, s in local.subscriptions : k => (
+      length("${local.base}-${s.slug}-snsdlq${local.fifo_suffix[k]}") <= 80
+      ? "${local.base}-${s.slug}-snsdlq${local.fifo_suffix[k]}"
+      : "${substr("${local.base}-${s.slug}", 0, 80 - 7 - length(local.fifo_suffix[k]) - 9)}-${substr(sha1(s.name), 0, 8)}-snsdlq${local.fifo_suffix[k]}"
+    )
+  }
+
+  # Distinct names can slug to one queue name ('a.b' and 'a-b', or 'x-dlq' and the DLQ of 'x'). SQS CreateQueue with
+  # identical attributes returns the existing queue, so two Terraform resources would silently own one queue.
+  all_queue_names = concat(values(local.queue_names), values(local.dead_letter_queue_names), values(local.delivery_failure_queue_names))
 
   lambda_subscriptions = {
     for k, s in local.subscriptions : k => s if s.host_type == "External" && contains(keys(var.lambda_consumers), k)
   }
   mj_worker_subscriptions = { for k, s in local.subscriptions : k => s if s.host_type == "MJWorker" }
 
-  max_receive_count = { for k, s in local.subscriptions : k => s.staged ? 1000 : s.max_attempts + 2 }
+  # 03 section 5.1 (F5): the runtime dead-letters at MaxAttempts, the consumer's receive-time guard at MaxAttempts + 2,
+  # and this redrive policy is the crash-loop backstop behind both. Same value as ExpectedMaxReceiveCount (Task 4).
+  max_receive_count = { for k, s in local.subscriptions : k => s.max_attempts + 5 }
   visibility_timeout_seconds = {
     for k, s in local.subscriptions : k => min(43200, (
       contains(keys(local.lambda_subscriptions), k)
@@ -5855,11 +6111,108 @@ locals {
       : max(s.lease_seconds, 30)
     ))
   }
+  # One message per invocation on FIFO queues: a larger batch hands the function several messages of one key, and
+  # every follower released after a head failure burns a receive it never used.
+  esm_batch_size = {
+    for k, s in local.lambda_subscriptions : k => coalesce(var.lambda_consumers[k].batch_size, s.is_fifo ? 1 : 10)
+  }
 
+  kms_key_arn = var.create_kms_key ? aws_kms_key.this[0].arn : var.kms_key_arn
   common_tags = merge(var.tags, { "mj-work-queue-environment" = var.environment })
+}
+
+resource "terraform_data" "name_uniqueness" {
+  input = length(local.all_queue_names)
+
+  lifecycle {
+    precondition {
+      condition     = length(distinct(local.all_queue_names)) == length(local.all_queue_names)
+      error_message = "Two subscriptions resolve to the same SQS queue name (names differing only in '.', '-' or case, or a name ending in '-dlq'/'-snsdlq' that shadows another subscription's queue). Rename one subscription in MJ."
+    }
+  }
 }
 ```
 
+`infrastructure/terraform/work-queue/aws/kms.tf`:
+
+```hcl
+data "aws_caller_identity" "current" {}
+data "aws_partition" "current" {}
+
+resource "terraform_data" "kms_key_policy" {
+  input = var.kms_key_arn
+
+  lifecycle {
+    precondition {
+      condition     = !(var.create_kms_key && var.kms_key_arn != null)
+      error_message = "Set create_kms_key or kms_key_arn, not both."
+    }
+    precondition {
+      condition     = var.kms_key_arn == null || var.kms_key_policy_confirmed
+      error_message = "kms_key_arn is set but kms_key_policy_confirmed is false. The key policy must allow (1) sns.amazonaws.com: kms:GenerateDataKey* and kms:Decrypt, or SNS accepts publishes and delivers nothing to the encrypted queues; and (2) logs.${var.region}.amazonaws.com: kms:Encrypt*, kms:Decrypt*, kms:ReEncrypt*, kms:GenerateDataKey*, kms:Describe* for the /aws/lambda/${var.name_prefix}-${var.environment}-* log groups, or log-group creation fails. Add them (see the module README), then set kms_key_policy_confirmed = true — or use create_kms_key = true."
+    }
+  }
+}
+
+data "aws_iam_policy_document" "kms" {
+  count = var.create_kms_key ? 1 : 0
+
+  statement {
+    sid       = "AccountAdministration"
+    actions   = ["kms:*"]
+    resources = ["*"]
+
+    principals {
+      type        = "AWS"
+      identifiers = ["arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:root"]
+    }
+  }
+
+  statement {
+    sid       = "AllowSnsToDeliverToEncryptedQueues"
+    actions   = ["kms:GenerateDataKey*", "kms:Decrypt"]
+    resources = ["*"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["sns.amazonaws.com"]
+    }
+  }
+
+  statement {
+    sid       = "AllowCloudWatchLogsForConsumerLogGroups"
+    actions   = ["kms:Encrypt*", "kms:Decrypt*", "kms:ReEncrypt*", "kms:GenerateDataKey*", "kms:Describe*"]
+    resources = ["*"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["logs.${var.region}.amazonaws.com"]
+    }
+
+    condition {
+      test     = "ArnLike"
+      variable = "kms:EncryptionContext:aws:logs:arn"
+      values   = ["arn:${data.aws_partition.current.partition}:logs:${var.region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/${local.base}-*"]
+    }
+  }
+}
+
+resource "aws_kms_key" "this" {
+  count = var.create_kms_key ? 1 : 0
+
+  description         = "MJ work queue ${local.base}: SNS topics, SQS queues, consumer functions and log groups"
+  enable_key_rotation = true
+  policy              = data.aws_iam_policy_document.kms[0].json
+  tags                = local.common_tags
+}
+
+resource "aws_kms_alias" "this" {
+  count = var.create_kms_key ? 1 : 0
+
+  name          = "alias/${local.base}-work-queue"
+  target_key_id = aws_kms_key.this[0].key_id
+}
+```
 
 - [ ] **Step 6: Write `topics.tf` and `subscriptions.tf`**
 
@@ -5872,16 +6225,16 @@ resource "aws_sns_topic" "this" {
   name                        = local.topic_names[each.key]
   fifo_topic                  = each.value.is_fifo
   content_based_deduplication = false
-  kms_master_key_id           = var.kms_key_arn
-  tags                        = local.common_tags
+  # High-throughput FIFO: throughput quota per message group rather than per topic (verify the attribute name
+  # against the pinned provider version; it pairs with the queues' perMessageGroupId limit below).
+  fifo_throughput_scope = each.value.is_fifo && var.fifo_high_throughput ? "MessageGroup" : null
+  kms_master_key_id     = local.kms_key_arn
+  tags                  = local.common_tags
 
   lifecycle {
     precondition {
-      condition = each.value.is_fifo || (
-        each.value.ordering_mode != "ExplicitSequence" &&
-        length([for s in values(local.subscriptions) : s.name if s.topic == each.key && s.partition_mode != "None"]) == 0
-      )
-      error_message = "Topic '${each.key}' must be FIFO (IsFifo = true): it uses ExplicitSequence or has Exclusive/Ordered subscriptions (plan 03 W7)."
+      condition     = each.value.is_fifo || length([for s in values(local.subscriptions) : s.name if s.topic == each.key && s.partition_mode == "Exclusive"]) == 0
+      error_message = "Topic '${each.key}' must be FIFO (IsFifo = true): it has an Exclusive subscription (plan 03 W7). A FIFO topic makes every queue on it FIFO; use the two-topic pattern for firehoses (plan 11 section 4)."
     }
   }
 }
@@ -5897,9 +6250,30 @@ resource "aws_sqs_queue" "dead_letter" {
   fifo_queue                = each.value.is_fifo
   message_retention_seconds = 1209600
   max_message_size          = 262144
-  kms_master_key_id         = var.kms_key_arn
-  sqs_managed_sse_enabled   = var.kms_key_arn == null ? true : null
+  kms_master_key_id         = local.kms_key_arn
+  sqs_managed_sse_enabled   = local.kms_key_arn == null ? true : null
   tags                      = local.common_tags
+
+  lifecycle {
+    prevent_destroy = true
+  }
+
+  depends_on = [terraform_data.name_uniqueness, terraform_data.kms_key_policy]
+}
+
+# SNS -> SQS delivery failures (queue policy or KMS problems). Without it SNS drops what it cannot deliver.
+resource "aws_sqs_queue" "delivery_failure" {
+  for_each = local.subscriptions
+
+  name                      = local.delivery_failure_queue_names[each.key]
+  fifo_queue                = each.value.is_fifo
+  message_retention_seconds = 1209600
+  max_message_size          = 262144
+  kms_master_key_id         = local.kms_key_arn
+  sqs_managed_sse_enabled   = local.kms_key_arn == null ? true : null
+  tags                      = local.common_tags
+
+  depends_on = [terraform_data.name_uniqueness, terraform_data.kms_key_policy]
 }
 
 resource "aws_sqs_queue" "subscription" {
@@ -5913,23 +6287,27 @@ resource "aws_sqs_queue" "subscription" {
   message_retention_seconds  = var.message_retention_seconds
   max_message_size           = 262144
   receive_wait_time_seconds  = 20
-  kms_master_key_id          = var.kms_key_arn
-  sqs_managed_sse_enabled    = var.kms_key_arn == null ? true : null
+  kms_master_key_id          = local.kms_key_arn
+  sqs_managed_sse_enabled    = local.kms_key_arn == null ? true : null
   tags                       = local.common_tags
 
-  # Staged Ordered subscriptions redrive only after 1000 receives so a database outage cannot break order;
-  # everything else redrives after MaxAttempts + 2 as a crash backstop (the runtime dead-letters at MaxAttempts).
+  # Crash-loop backstop only: the runtime dead-letters at MaxAttempts and the consumer's receive-time guard at
+  # MaxAttempts + 2 (plan 03 section 5.1). Release on shutdown and Lambda throttling consume receives too.
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.dead_letter[each.key].arn
     maxReceiveCount     = local.max_receive_count[each.key]
   })
 
   lifecycle {
+    prevent_destroy = true
+
     precondition {
-      condition     = each.value.partition_mode != "Ordered" || each.value.host_type == "MJWorker"
-      error_message = "Subscription '${each.key}' is Ordered on the AWS transport, so it must be hosted by an MJ worker (HostType MJWorker) and staged into the database (plan 03 section 5.1)."
+      condition     = each.value.partition_mode != "Ordered"
+      error_message = "Subscription '${each.key}' is Ordered. Ordered requires the Database transport: move its topic to the Database transport in MJ and re-export the manifest (plan 11, S2)."
     }
   }
+
+  depends_on = [terraform_data.name_uniqueness, terraform_data.kms_key_policy]
 }
 
 resource "aws_sqs_queue_redrive_allow_policy" "dead_letter" {
@@ -5962,6 +6340,24 @@ data "aws_iam_policy_document" "queue" {
       values   = [aws_sns_topic.this[each.value.topic].arn]
     }
   }
+
+  statement {
+    sid       = "DenyInsecureTransport"
+    effect    = "Deny"
+    actions   = ["sqs:*"]
+    resources = [aws_sqs_queue.subscription[each.key].arn]
+
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+
+    condition {
+      test     = "Bool"
+      variable = "aws:SecureTransport"
+      values   = ["false"]
+    }
+  }
 }
 
 resource "aws_sqs_queue_policy" "subscription" {
@@ -5969,6 +6365,82 @@ resource "aws_sqs_queue_policy" "subscription" {
 
   queue_url = aws_sqs_queue.subscription[each.key].id
   policy    = data.aws_iam_policy_document.queue[each.key].json
+}
+
+data "aws_iam_policy_document" "delivery_failure_queue" {
+  for_each = local.subscriptions
+
+  statement {
+    sid       = "AllowOwnTopicDeliveryFailures"
+    effect    = "Allow"
+    actions   = ["sqs:SendMessage"]
+    resources = [aws_sqs_queue.delivery_failure[each.key].arn]
+
+    principals {
+      type        = "Service"
+      identifiers = ["sns.amazonaws.com"]
+    }
+
+    condition {
+      test     = "ArnEquals"
+      variable = "aws:SourceArn"
+      values   = [aws_sns_topic.this[each.value.topic].arn]
+    }
+  }
+
+  statement {
+    sid       = "DenyInsecureTransport"
+    effect    = "Deny"
+    actions   = ["sqs:*"]
+    resources = [aws_sqs_queue.delivery_failure[each.key].arn]
+
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+
+    condition {
+      test     = "Bool"
+      variable = "aws:SecureTransport"
+      values   = ["false"]
+    }
+  }
+}
+
+resource "aws_sqs_queue_policy" "delivery_failure" {
+  for_each = local.subscriptions
+
+  queue_url = aws_sqs_queue.delivery_failure[each.key].id
+  policy    = data.aws_iam_policy_document.delivery_failure_queue[each.key].json
+}
+
+data "aws_iam_policy_document" "dead_letter_queue" {
+  for_each = local.subscriptions
+
+  statement {
+    sid       = "DenyInsecureTransport"
+    effect    = "Deny"
+    actions   = ["sqs:*"]
+    resources = [aws_sqs_queue.dead_letter[each.key].arn]
+
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+
+    condition {
+      test     = "Bool"
+      variable = "aws:SecureTransport"
+      values   = ["false"]
+    }
+  }
+}
+
+resource "aws_sqs_queue_policy" "dead_letter" {
+  for_each = local.subscriptions
+
+  queue_url = aws_sqs_queue.dead_letter[each.key].id
+  policy    = data.aws_iam_policy_document.dead_letter_queue[each.key].json
 }
 
 resource "aws_sns_topic_subscription" "this" {
@@ -5980,8 +6452,9 @@ resource "aws_sns_topic_subscription" "this" {
   raw_message_delivery = true
   filter_policy        = each.value.sns_filter_policy
   filter_policy_scope  = each.value.sns_filter_policy == null ? null : "MessageAttributes"
+  redrive_policy       = jsonencode({ deadLetterTargetArn = aws_sqs_queue.delivery_failure[each.key].arn })
 
-  depends_on = [aws_sqs_queue_policy.subscription]
+  depends_on = [aws_sqs_queue_policy.subscription, aws_sqs_queue_policy.delivery_failure]
 
   lifecycle {
     precondition {
@@ -6007,8 +6480,8 @@ locals {
 }
 ```
 
-When `kms_key_arn` is set, the key policy must allow `sns.amazonaws.com` to call `kms:GenerateDataKey*` and
-`kms:Decrypt`, or SNS cannot deliver to the encrypted queues (verify against the current SNS/SQS SSE documentation).
+An SNS subscription only receives messages published **after** it exists. A subscription added to a live topic
+therefore misses everything published before its `apply` — see GOVERNANCE.md ("Adding a subscription").
 
 - [ ] **Step 7: Write `lambda.tf`**
 
@@ -6023,6 +6496,8 @@ locals {
     )
   }
 
+  # MJ_WQ_SUBSCRIPTION freezes the subscription's policy at apply time. Changing MaxAttempts, backoff or the filter in
+  # MJ without a new export + apply is drift (GOVERNANCE.md); 'mj queue validate-bindings' warns about it.
   subscription_binding_json = {
     for k, s in local.lambda_subscriptions : k => jsonencode({
       Policy   = jsondecode(s.policy_json)
@@ -6070,8 +6545,11 @@ resource "aws_cloudwatch_log_group" "consumer" {
 
   name              = "/aws/lambda/${local.function_names[each.key]}"
   retention_in_days = 30
-  kms_key_id        = var.kms_key_arn
-  tags              = local.common_tags
+  # Needs the CloudWatch Logs statement in the key policy (kms.tf creates it; bring-your-own keys must confirm it).
+  kms_key_id = local.kms_key_arn
+  tags       = local.common_tags
+
+  depends_on = [terraform_data.kms_key_policy]
 }
 
 data "aws_iam_policy_document" "consumer" {
@@ -6096,7 +6574,7 @@ data "aws_iam_policy_document" "consumer" {
   }
 
   dynamic "statement" {
-    for_each = var.kms_key_arn == null ? [] : [var.kms_key_arn]
+    for_each = local.kms_key_arn == null ? [] : [local.kms_key_arn]
 
     content {
       sid       = "UseQueueKey"
@@ -6136,8 +6614,8 @@ resource "aws_lambda_function" "consumer" {
   memory_size                    = var.lambda_consumers[each.key].memory_size
   timeout                        = var.lambda_consumers[each.key].timeout_seconds
   reserved_concurrent_executions = coalesce(var.lambda_consumers[each.key].reserved_concurrency, -1)
-  publish                        = var.lambda_consumers[each.key].publish_version
-  kms_key_arn                    = var.kms_key_arn
+  publish                        = true # every apply that changes code or configuration publishes an immutable version
+  kms_key_arn                    = local.kms_key_arn
   tags                           = local.common_tags
 
   environment {
@@ -6150,14 +6628,24 @@ resource "aws_lambda_function" "consumer" {
   depends_on = [aws_cloudwatch_log_group.consumer, aws_iam_role_policy.consumer]
 }
 
+# The event source targets this alias, never $LATEST: a rollback is moving the alias (alias_version), not a redeploy.
+resource "aws_lambda_alias" "live" {
+  for_each = local.lambda_subscriptions
+
+  name             = "live"
+  function_name    = aws_lambda_function.consumer[each.key].function_name
+  function_version = coalesce(var.lambda_consumers[each.key].alias_version, aws_lambda_function.consumer[each.key].version)
+}
+
 resource "aws_lambda_event_source_mapping" "consumer" {
   for_each = local.lambda_subscriptions
 
   event_source_arn        = aws_sqs_queue.subscription[each.key].arn
-  function_name           = aws_lambda_function.consumer[each.key].arn
-  batch_size              = var.lambda_consumers[each.key].batch_size
+  function_name           = aws_lambda_alias.live[each.key].arn
+  batch_size              = local.esm_batch_size[each.key]
   function_response_types = ["ReportBatchItemFailures"]
-  enabled                 = true
+  # Pausing or disabling a subscription in MJ pauses its Lambda: the manifest carries Status (plan 03 section 10).
+  enabled = each.value.status == "Active"
 
   dynamic "scaling_config" {
     for_each = var.lambda_consumers[each.key].maximum_concurrency == null ? [] : [var.lambda_consumers[each.key].maximum_concurrency]
@@ -6166,22 +6654,37 @@ resource "aws_lambda_event_source_mapping" "consumer" {
       maximum_concurrency = scaling_config.value
     }
   }
+
+  lifecycle {
+    precondition {
+      condition     = !each.value.is_fifo || local.esm_batch_size[each.key] == 1
+      error_message = "Subscription '${each.key}' is on a FIFO queue, so its event source must use batch_size = 1 (plan 03 section 5.1): a larger batch hands the function several messages of one key, and followers released after a head failure burn receives they never used. Scale with maximum_concurrency instead."
+    }
+  }
+}
+
+check "reserved_concurrency_is_discouraged" {
+  assert {
+    condition     = alltrue([for c in values(var.lambda_consumers) : c.reserved_concurrency == null])
+    error_message = "A lambda consumer sets reserved_concurrency. Throttled invocations return their messages to the queue with the receive already counted, which can dead-letter messages that never ran. Throttle with maximum_concurrency (event source scaling) instead."
+  }
+}
+
+check "external_subscriptions_have_a_consumer" {
+  assert {
+    condition     = length([for k, s in local.subscriptions : k if s.host_type == "External" && !contains(keys(var.lambda_consumers), k)]) == 0
+    error_message = "At least one External subscription has no lambda_consumers entry (see output external_subscriptions_without_lambda). That is fine when its consumer is deployed elsewhere; otherwise its queue will only fill."
+  }
 }
 ```
 
-Add this validation to `lambda_consumers` in `variables.tf` (inside the variable block, after the timeout validation):
-
-```hcl
-  validation {
-    condition     = alltrue([for c in values(var.lambda_consumers) : c.batch_size >= 1 && c.batch_size <= 10])
-    error_message = "batch_size must be between 1 and 10 (the SQS FIFO event source maximum; larger standard-queue batches need a batching window this module does not configure)."
-  }
-```
-
-`MJ_WQ_SUBSCRIPTION` is well under Lambda's 4 KB environment limit for typical policies and filters; a subscription
-with a very large filter should keep its function's other environment variables small (verify against current
-Lambda quotas). The consumer bundle does not have to include `@aws-sdk/*`: the Lambda Node.js runtime provides the
-SDK v3 clients (Task 7 bundles with `@aws-sdk/*` external).
+Sizing notes. `MJ_WQ_SUBSCRIPTION` is well under Lambda's 4 KB environment limit for typical policies and filters
+(verify against current Lambda quotas). The visibility timeout follows AWS's guidance for SQS event sources (at least
+6 × the function timeout); the consumer then keeps it fresh from its heartbeat, whose interval is
+`min(LeaseSeconds / 3, 30 s)` (core `HeartbeatIntervalSeconds`, 03 §3.2) — so a consumer's `timeout_seconds` must
+exceed 30 s plus the adapter's 10 s safety margin for a heartbeat ever to fire; shorter functions rely on the initial
+visibility alone, which the 6× rule already covers. The consumer bundle does not have to include `@aws-sdk/*`: the
+Lambda Node.js runtime provides the SDK v3 clients.
 
 - [ ] **Step 8: Write `iam.tf`, `alarms.tf` and `outputs.tf`**
 
@@ -6190,16 +6693,18 @@ MJ worker roles (the module does not own those roles):
 
 ```hcl
 locals {
-  topic_arns           = [for t in aws_sns_topic.this : t.arn]
-  all_queue_arns       = [for q in aws_sqs_queue.subscription : q.arn]
-  all_dlq_arns         = [for q in aws_sqs_queue.dead_letter : q.arn]
-  subscription_arns    = [for s in aws_sns_topic_subscription.this : s.arn]
-  mj_worker_queue_arns = [for k, s in local.mj_worker_subscriptions : aws_sqs_queue.subscription[k].arn]
-  mj_worker_dlq_arns   = [for k, s in local.mj_worker_subscriptions : aws_sqs_queue.dead_letter[k].arn]
+  topic_arns                  = [for t in aws_sns_topic.this : t.arn]
+  all_queue_arns              = [for q in aws_sqs_queue.subscription : q.arn]
+  all_dlq_arns                = [for q in aws_sqs_queue.dead_letter : q.arn]
+  subscription_arns           = [for s in aws_sns_topic_subscription.this : s.arn]
+  mj_worker_queue_arns        = [for k, s in local.mj_worker_subscriptions : aws_sqs_queue.subscription[k].arn]
+  mj_worker_dlq_arns          = [for k, s in local.mj_worker_subscriptions : aws_sqs_queue.dead_letter[k].arn]
+  mj_worker_topic_arns        = distinct([for k, s in local.mj_worker_subscriptions : aws_sns_topic.this[s.topic].arn])
+  mj_worker_subscription_arns = [for k, s in local.mj_worker_subscriptions : aws_sns_topic_subscription.this[k].arn]
 }
 
 # MJAPI: publish (REST + in-process), binding validation, and the operator remote operations
-# (stats, dead-letter peek/replay/discard).
+# (stats, dead-letter scan/replay/discard).
 data "aws_iam_policy_document" "mjapi" {
   statement {
     sid       = "PublishTopics"
@@ -6232,7 +6737,7 @@ data "aws_iam_policy_document" "mjapi" {
   }
 
   dynamic "statement" {
-    for_each = var.kms_key_arn == null ? [] : [var.kms_key_arn]
+    for_each = local.kms_key_arn == null ? [] : [local.kms_key_arn]
 
     content {
       sid       = "UseQueueKey"
@@ -6242,8 +6747,11 @@ data "aws_iam_policy_document" "mjapi" {
   }
 }
 
-# MJ workers: consume MJWorker subscription queues (direct or staged) and write their dead letters.
+# MJ workers: consume MJWorker subscription queues, write their dead letters, and run the read-only binding
+# validation the host performs at start (sns:Get* on their own topics and subscriptions, sqs:GetQueueAttributes).
 data "aws_iam_policy_document" "mj_worker" {
+  count = length(local.mj_worker_subscriptions) > 0 ? 1 : 0
+
   statement {
     sid       = "ConsumeWorkerQueues"
     actions   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:ChangeMessageVisibility", "sqs:GetQueueAttributes"]
@@ -6251,13 +6759,25 @@ data "aws_iam_policy_document" "mj_worker" {
   }
 
   statement {
-    sid       = "WriteWorkerDeadLetters"
-    actions   = ["sqs:SendMessage"]
+    sid       = "WriteAndInspectWorkerDeadLetters"
+    actions   = ["sqs:SendMessage", "sqs:GetQueueAttributes"]
     resources = local.mj_worker_dlq_arns
   }
 
+  statement {
+    sid       = "ValidateWorkerTopics"
+    actions   = ["sns:GetTopicAttributes"]
+    resources = local.mj_worker_topic_arns
+  }
+
+  statement {
+    sid       = "ValidateWorkerSubscriptions"
+    actions   = ["sns:GetSubscriptionAttributes"]
+    resources = local.mj_worker_subscription_arns
+  }
+
   dynamic "statement" {
-    for_each = var.kms_key_arn == null ? [] : [var.kms_key_arn]
+    for_each = local.kms_key_arn == null ? [] : [local.kms_key_arn]
 
     content {
       sid       = "UseQueueKey"
@@ -6268,9 +6788,6 @@ data "aws_iam_policy_document" "mj_worker" {
 }
 ```
 
-If the manifest has no `MJWorker` subscriptions, `mj_worker_policy_json` has statements with empty resource lists;
-do not attach it (IAM rejects empty resources).
-
 `infrastructure/terraform/work-queue/aws/alarms.tf`:
 
 ```hcl
@@ -6278,10 +6795,29 @@ resource "aws_cloudwatch_metric_alarm" "dead_letters" {
   for_each = local.subscriptions
 
   alarm_name          = "${local.dead_letter_queue_names[each.key]}-has-messages"
-  alarm_description   = "Dead letters waiting for subscription '${each.key}'. Inspect with 'mj queue dead-letters --subscription ${each.key}'."
+  alarm_description   = "Dead letters waiting for subscription '${each.key}'. List with 'mj queue dead-letters --subscription ${each.key}' (scans up to 100; reason 'RedrivePolicy' means a crash loop). Replay one with 'mj queue replay'; for a bulk redrive use 'aws sqs start-message-move-task' on ${local.dead_letter_queue_names[each.key]}."
   namespace           = "AWS/SQS"
   metric_name         = "ApproximateNumberOfMessagesVisible"
   dimensions          = { QueueName = aws_sqs_queue.dead_letter[each.key].name }
+  statistic           = "Maximum"
+  period              = 300
+  evaluation_periods  = 1
+  threshold           = 0
+  comparison_operator = "GreaterThanThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = var.alarm_actions
+  ok_actions          = var.alarm_actions
+  tags                = local.common_tags
+}
+
+resource "aws_cloudwatch_metric_alarm" "delivery_failures" {
+  for_each = local.subscriptions
+
+  alarm_name          = "${local.delivery_failure_queue_names[each.key]}-has-messages"
+  alarm_description   = "SNS could not deliver to the queue of subscription '${each.key}' (queue policy or KMS key policy). MemberJunction cannot see this queue: inspect it in the SQS console or with 'aws sqs receive-message', fix the policy, then move the messages back with 'aws sqs start-message-move-task'."
+  namespace           = "AWS/SQS"
+  metric_name         = "ApproximateNumberOfMessagesVisible"
+  dimensions          = { QueueName = aws_sqs_queue.delivery_failure[each.key].name }
   statistic           = "Maximum"
   period              = 300
   evaluation_periods  = 1
@@ -6297,7 +6833,7 @@ resource "aws_cloudwatch_metric_alarm" "oldest_message" {
   for_each = local.subscriptions
 
   alarm_name          = "${local.queue_names[each.key]}-backlog-age"
-  alarm_description   = "Oldest message for subscription '${each.key}' is older than ${var.oldest_message_age_alarm_seconds} seconds."
+  alarm_description   = "Oldest message for subscription '${each.key}' is older than ${var.oldest_message_age_alarm_seconds} seconds. Check 'mj queue stats --subscription ${each.key}', the consumer's errors/throttles alarms, and whether the subscription is Paused (its Lambda event source is then disabled)."
   namespace           = "AWS/SQS"
   metric_name         = "ApproximateAgeOfOldestMessage"
   dimensions          = { QueueName = aws_sqs_queue.subscription[each.key].name }
@@ -6332,6 +6868,7 @@ resource "aws_cloudwatch_metric_alarm" "lambda_throttles" {
   for_each = local.lambda_subscriptions
 
   alarm_name          = "${local.function_names[each.key]}-throttles"
+  alarm_description   = "Consumer of '${each.key}' is being throttled. Every throttled invocation burns a receive of its messages; raise account concurrency or lower maximum_concurrency on the event source, and remove reserved_concurrency."
   namespace           = "AWS/Lambda"
   metric_name         = "Throttles"
   dimensions          = { FunctionName = aws_lambda_function.consumer[each.key].function_name }
@@ -6374,13 +6911,23 @@ output "mjapi_policy_json" {
 }
 
 output "mj_worker_policy_json" {
-  description = "IAM policy JSON for MJ worker roles consuming MJWorker subscriptions."
-  value       = data.aws_iam_policy_document.mj_worker.json
+  description = "IAM policy JSON for MJ worker roles consuming MJWorker subscriptions. Null when the manifest has none (IAM rejects statements with no resources)."
+  value       = length(local.mj_worker_subscriptions) > 0 ? data.aws_iam_policy_document.mj_worker[0].json : null
 }
 
 output "lambda_function_arns" {
   description = "Consumer functions by subscription name."
   value       = { for k, f in aws_lambda_function.consumer : k => f.arn }
+}
+
+output "lambda_alias_arns" {
+  description = "The 'live' alias each event source invokes, by subscription name."
+  value       = { for k, a in aws_lambda_alias.live : k => a.arn }
+}
+
+output "kms_key_arn" {
+  description = "The key in use: the module-created key, the bring-your-own key, or null."
+  value       = local.kms_key_arn
 }
 
 output "external_subscriptions_without_lambda" {
@@ -6425,18 +6972,20 @@ the only supported way to provision them. The full change process is in [GOVERNA
 
 ```hcl
 module "work_queue" {
-  source        = "../../infrastructure/terraform/work-queue/aws"
-  manifest_path = "${path.module}/manifest.json"   # mj queue export-topology --transport AWS-prod > manifest.json
-  name_prefix   = "mj-wq"
-  environment   = "prod"
-  region        = "us-east-1"
-  alarm_actions = [aws_sns_topic.ops_alerts.arn]
+  source         = "../../infrastructure/terraform/work-queue/aws"
+  manifest_path  = "${path.module}/manifest.json"   # mj queue export-topology --transport AWS-prod > manifest.json
+  name_prefix    = "mj-wq"
+  environment    = "prod"
+  region         = "us-east-1"
+  create_kms_key = true
+  alarm_actions  = [aws_sns_topic.ops_alerts.arn]
 
   lambda_consumers = {
     "email.unsubscribe" = {
-      s3_bucket       = "acme-artifacts"
-      s3_key          = "work-queue/email-unsubscribe/3f2a9c1d.zip"
-      timeout_seconds = 60
+      s3_bucket           = "acme-artifacts"
+      s3_key              = "work-queue/email-unsubscribe/3f2a9c1d.zip"
+      timeout_seconds     = 60
+      maximum_concurrency = 50
     }
   }
 }
@@ -6450,21 +6999,43 @@ mj queue import-bindings bindings.json
 mj queue validate-bindings --transport AWS-prod
 ```
 
-Attach `mjapi_policy_json` to the MJAPI role and `mj_worker_policy_json` to MJ worker roles.
+Attach `mjapi_policy_json` to the MJAPI role and `mj_worker_policy_json` (when not null) to MJ worker roles.
+
+## Encryption
+
+| Setting | Result |
+| --- | --- |
+| neither | SQS-managed SSE on queues; SNS topics unencrypted |
+| `create_kms_key = true` | The module creates a rotating customer managed key whose policy already allows SNS delivery and CloudWatch Logs |
+| `kms_key_arn` + `kms_key_policy_confirmed = true` | Your key. **Its policy must contain both statements below**, or SNS accepts publishes and delivers nothing, and log-group creation fails |
+
+```json
+{ "Sid": "AllowSnsToDeliverToEncryptedQueues", "Effect": "Allow", "Principal": { "Service": "sns.amazonaws.com" },
+  "Action": ["kms:GenerateDataKey*", "kms:Decrypt"], "Resource": "*" }
+{ "Sid": "AllowCloudWatchLogsForConsumerLogGroups", "Effect": "Allow", "Principal": { "Service": "logs.<region>.amazonaws.com" },
+  "Action": ["kms:Encrypt*", "kms:Decrypt*", "kms:ReEncrypt*", "kms:GenerateDataKey*", "kms:Describe*"], "Resource": "*",
+  "Condition": { "ArnLike": { "kms:EncryptionContext:aws:logs:arn": "arn:aws:logs:<region>:<account>:log-group:/aws/lambda/<name_prefix>-<environment>-*" } } }
+```
 
 ## Rules the module enforces
 
 | Rule | Where |
 | --- | --- |
-| A topic with `Exclusive`/`Ordered` subscriptions or `ExplicitSequence` ordering is FIFO | `aws_sns_topic.this` precondition |
-| `Ordered` subscriptions are `MJWorker` hosted (staged into the database) | `aws_sqs_queue.subscription` precondition |
+| A topic with an `Exclusive` subscription is FIFO | `aws_sns_topic.this` precondition |
+| `Ordered` subscriptions are refused — Ordered requires the Database transport | `aws_sqs_queue.subscription` precondition |
+| No two subscriptions resolve to the same queue name | `terraform_data.name_uniqueness` precondition |
 | `lambda_consumers` keys are `External` subscriptions | `terraform_data.lambda_consumer_keys` precondition |
-| Redrive after `MaxAttempts + 2` receives, or 1000 for staged subscriptions | `aws_sqs_queue.subscription` |
-| Raw message delivery and a `MessageAttributes` filter policy rendered by MJ | `aws_sns_topic_subscription.this` |
+| A bring-your-own KMS key is confirmed to carry the service statements | `terraform_data.kms_key_policy` precondition |
+| Redrive after `MaxAttempts + 5` receives (runtime dead-letters at `MaxAttempts`, receive-time guard at `+ 2`) | `aws_sqs_queue.subscription` |
+| Raw message delivery, a `MessageAttributes` filter policy rendered by MJ, and an SNS delivery-failure queue | `aws_sns_topic_subscription.this` |
+| FIFO event sources use `batch_size = 1`; scale with `maximum_concurrency` (≥ 2), not reserved concurrency | `aws_lambda_event_source_mapping.consumer` precondition; `check` warning |
+| The event source invokes the `live` alias and is disabled when the subscription is `Paused`/`Disabled` | `lambda.tf` |
 | Lambda visibility timeout ≥ 6 × function timeout | `locals.tf` |
+| Queues cannot be destroyed by a plan | `prevent_destroy` on `aws_sqs_queue.subscription` and `.dead_letter` |
+| TLS only | `DenyInsecureTransport` on every queue policy |
 
-Resource names follow `AwsResourceName` in `@memberjunction/work-queue-aws`; renaming a subscription replaces its
-queues (see GOVERNANCE.md, destructive changes).
+Resource names follow `AwsResourceName` in `@memberjunction/work-queue-aws`; renaming or removing a subscription would
+replace its queues, which `prevent_destroy` blocks — follow GOVERNANCE.md ("Destructive changes").
 ````
 
 `infrastructure/terraform/work-queue/aws/examples/basic/main.tf`:
@@ -6488,11 +7059,12 @@ provider "aws" {
 module "work_queue" {
   source = "../.."
   # Produce with: mj queue export-topology --transport AWS-dev > manifest.json
-  # (the export renders Aws.SnsFilterPolicy for every subscription; never hand-edit filters here)
-  manifest_path = "${path.module}/manifest.json"
-  name_prefix   = "mj-wq"
-  environment   = "dev"
-  region        = "us-east-1"
+  # (the export renders Aws.SnsFilterPolicy and Status for every subscription; never hand-edit filters here)
+  manifest_path  = "${path.module}/manifest.json"
+  name_prefix    = "mj-wq"
+  environment    = "dev"
+  region         = "us-east-1"
+  create_kms_key = true
 
   lambda_consumers = {
     "email.archive" = {
@@ -6522,14 +7094,16 @@ Run: `tflint --init && tflint`
 Expected: exit code 0, no issues reported.
 
 Run: `terraform test`
-Expected: `tests/basic.tftest.hcl... pass` for all four runs and `Success! 4 passed, 0 failed.`
+Expected: `tests/basic.tftest.hcl... pass` for all nine runs and `Success! 9 passed, 0 failed.` The two `check` blocks may print warnings for the fixture (`email.unsubscribe` has no Lambda here); warnings do not fail a run.
 
 Run: `cd examples/basic && terraform init -backend=false && terraform validate`
 Expected: `Success! The configuration is valid.`
 
-If `terraform test` reports an unknown value for a mocked computed attribute in an assertion (mock provider
-behavior differs by Terraform version — verify with the version you pin), add that attribute to the matching
-`mock_resource` defaults block; do not weaken the assertion.
+If an assertion reports an unknown value at plan time (mock-provider behavior differs by Terraform version — verify
+with the version you pin), assert the module local that feeds the attribute instead (as the redrive and policy
+assertions already do); do not switch the run to `apply` — `prevent_destroy` makes an apply run's teardown fail.
+If `fifo_throughput_scope` is not an argument of `aws_sns_topic` in the pinned provider, remove that one line and
+note it in the module README (the queue-side high-throughput settings still apply).
 
 - [ ] **Step 11: Commit**
 
@@ -6540,20 +7114,103 @@ git commit -m "feat(work-queue): manifest-driven Terraform module for the AWS tr
 
 ---
 
-### Task 11: Deployment governance runbook and CI workflow
+### Task 10: Deployment governance runbook, gated pipeline, drift job and CI workflow
 
 **Files:**
 - Create: `infrastructure/terraform/work-queue/aws/GOVERNANCE.md`
-- Create: `infrastructure/terraform/work-queue/aws/examples/deploy-pipeline.github-actions.yml`
+- Create: `infrastructure/terraform/work-queue/aws/scripts/check-destructive-plan.mjs`, `scripts/fixtures/plan-safe.json`, `scripts/fixtures/plan-destructive.json`
+- Create: `infrastructure/terraform/work-queue/aws/examples/deploy-pipeline.github-actions.yml`, `examples/drift.github-actions.yml`
 - Create: `.github/workflows/work-queue-aws.yml`
 
 **Interfaces:**
-- Consumes: the module and its outputs (Task 10); `check:lambda-bundle` (Task 7); plan 06's CLI commands `mj queue export-topology --transport <name>`, `mj queue import-bindings <file>`, `mj queue validate-bindings --transport <name>`, `mj queue dead-letters`, `mj queue stats`; `.github/actions/mj-setup` (repository composite action: pnpm, Node, frozen install).
-- Produces: the change process for SNS, SQS and Lambda resources; a repository workflow `Work Queue AWS` with jobs `terraform-module` and `lambda-bundle`; an example deployment pipeline for the repository that owns an environment's infrastructure.
+- Consumes: the module and its outputs (Task 9); `check:lambda-bundle` (Task 7); plan 06's CLI commands `mj queue export-topology --transport <name>`, `mj queue import-bindings <file>`, `mj queue validate-bindings --transport <name>`, `mj queue dead-letters`, `mj queue replay`, `mj queue discard`, `mj queue stats`; `.github/actions/mj-setup` (repository composite action: pnpm, Node, frozen install).
+- Produces: the change process for SNS, SQS and Lambda resources; `check-destructive-plan.mjs` (`node check-destructive-plan.mjs <plan.json> [--allow-destructive]`, exit 1 on an unapproved destructive plan); a repository workflow `Work Queue AWS` with jobs `terraform-module`, `plan-gate` and `lambda-bundle`; an example deployment pipeline and an example drift job for the repository that owns an environment's infrastructure.
 
-This task has no unit tests; its checks are the workflow's own jobs plus `actionlint`.
+**What "governed" means here — four controls the pipeline enforces, not describes:**
 
-- [ ] **Step 1: Write `GOVERNANCE.md`**
+| Control | Enforcement |
+| --- | --- |
+| Destructive changes are gated | `check-destructive-plan.mjs` **fails** the job when a plan deletes or replaces a topic, queue, queue policy, SNS subscription, event source mapping, function, alias or key — unless the PR carries the label `work-queue-destructive-approved` |
+| Queues cannot be destroyed by a plan at all | `prevent_destroy` (Task 9). Deleting a queue is a deliberate out-of-band step recorded in the PR |
+| What is applied is what was reviewed | The apply job downloads the **saved plan file** produced by the plan job of the same run and applies exactly that; approval happens at the environment gate, where the plan is shown. `terraform apply` refuses a saved plan if state moved since it was made |
+| Drift is detected | A scheduled `terraform plan -detailed-exitcode` per environment fails and notifies on exit code 2 |
+
+- [ ] **Step 1: Write the gate script and its fixtures**
+
+`infrastructure/terraform/work-queue/aws/scripts/check-destructive-plan.mjs`:
+
+```javascript
+// Fails (exit 1) when a Terraform plan deletes or replaces a resource that holds or routes messages, unless
+// --allow-destructive is passed (the pipeline passes it only for PRs labelled work-queue-destructive-approved).
+// Usage: terraform show -json tfplan > plan.json && node check-destructive-plan.mjs plan.json [--allow-destructive]
+import { readFileSync } from 'node:fs';
+
+const GUARDED_TYPES = new Set([
+    'aws_sns_topic', 'aws_sns_topic_subscription',
+    'aws_sqs_queue', 'aws_sqs_queue_policy', 'aws_sqs_queue_redrive_allow_policy',
+    'aws_lambda_event_source_mapping', 'aws_lambda_function', 'aws_lambda_alias',
+    'aws_kms_key',
+]);
+
+const [planPath, ...flags] = process.argv.slice(2);
+if (!planPath) {
+    console.error('usage: node check-destructive-plan.mjs <plan.json> [--allow-destructive]');
+    process.exit(2);
+}
+const allow = flags.includes('--allow-destructive');
+const plan = JSON.parse(readFileSync(planPath, 'utf8'));
+const destructive = (plan.resource_changes ?? [])
+    .filter((change) => GUARDED_TYPES.has(change.type) && (change.change?.actions ?? []).includes('delete'))
+    .map((change) => `${(change.change.actions.length > 1 ? 'replace' : 'delete').padEnd(7)} ${change.address}`);
+
+if (destructive.length === 0) {
+    console.log('No destructive work-queue changes.');
+    process.exit(0);
+}
+console.log(`Destructive work-queue changes (${destructive.length}):\n${destructive.join('\n')}`);
+if (allow) {
+    console.log('Allowed: the pull request carries the work-queue-destructive-approved label.');
+    process.exit(0);
+}
+console.error('\nBlocked. Complete the procedure in GOVERNANCE.md ("Destructive changes"), link it in the pull request, ' +
+    'and have an approver add the label work-queue-destructive-approved.');
+process.exit(1);
+```
+
+`infrastructure/terraform/work-queue/aws/scripts/fixtures/plan-safe.json`:
+
+```json
+{
+  "resource_changes": [
+    { "address": "module.work_queue.aws_sqs_queue.subscription[\"email.archive\"]", "type": "aws_sqs_queue", "change": { "actions": ["update"] } },
+    { "address": "module.work_queue.aws_cloudwatch_metric_alarm.dead_letters[\"email.archive\"]", "type": "aws_cloudwatch_metric_alarm", "change": { "actions": ["delete", "create"] } },
+    { "address": "module.work_queue.aws_sns_topic.this[\"email.events\"]", "type": "aws_sns_topic", "change": { "actions": ["no-op"] } }
+  ]
+}
+```
+
+`infrastructure/terraform/work-queue/aws/scripts/fixtures/plan-destructive.json`:
+
+```json
+{
+  "resource_changes": [
+    { "address": "module.work_queue.aws_sns_topic_subscription.this[\"email.archive\"]", "type": "aws_sns_topic_subscription", "change": { "actions": ["delete"] } },
+    { "address": "module.work_queue.aws_lambda_event_source_mapping.consumer[\"email.archive\"]", "type": "aws_lambda_event_source_mapping", "change": { "actions": ["delete", "create"] } },
+    { "address": "module.work_queue.aws_sqs_queue_policy.subscription[\"email.archive\"]", "type": "aws_sqs_queue_policy", "change": { "actions": ["delete"] } }
+  ]
+}
+```
+
+Run: `cd infrastructure/terraform/work-queue/aws/scripts && node check-destructive-plan.mjs fixtures/plan-safe.json; echo "exit $?"`
+Expected: `No destructive work-queue changes.` and `exit 0`.
+
+Run: `node check-destructive-plan.mjs fixtures/plan-destructive.json; echo "exit $?"`
+Expected: three lines (`delete`, `replace`, `delete`), the "Blocked." message, and `exit 1`.
+
+Run: `node check-destructive-plan.mjs fixtures/plan-destructive.json --allow-destructive; echo "exit $?"`
+Expected: the same three lines, "Allowed: …", and `exit 0`.
+
+- [ ] **Step 2: Write `GOVERNANCE.md`**
 
 `infrastructure/terraform/work-queue/aws/GOVERNANCE.md`:
 
@@ -6561,7 +7218,7 @@ This task has no unit tests; its checks are the workflow's own jobs plus `action
 # Work Queue on AWS — Deployment Governance
 
 MemberJunction metadata is the source of truth for work-queue topology. AWS resources are created **only** by this
-Terraform module, from a manifest exported from that metadata, through a reviewed pipeline. MJ binds to what exists
+Terraform module, from a manifest exported from that metadata, through a gated pipeline. MJ binds to what exists
 and validates it; it never creates, changes or deletes cloud resources.
 
 ## Roles
@@ -6569,24 +7226,25 @@ and validates it; it never creates, changes or deletes cloud resources.
 | Role | Owns |
 | --- | --- |
 | Application developer | Topics, subscriptions and handlers in MJ metadata; Lambda consumer code |
-| Platform engineer | The infrastructure repository, Terraform state, IAM attachments, environment promotion |
-| Approver (per environment) | Approving the Terraform plan before apply; `prod` requires a second approver |
+| Platform engineer | The infrastructure repository, Terraform state, IAM attachments, environment promotion, out-of-band queue deletion |
+| Approver (per environment) | Approving the saved plan at the environment gate; `prod` requires a second approver. Only an approver may add the `work-queue-destructive-approved` label |
 
 ## Normal change lifecycle
 
 ```
- 1. Developer changes topology       metadata/work-queue/*.json (system topics) or MJ: Work Queue entities (dev DB)
+ 1. Developer changes topology       metadata/work-queue-topics/*.json (system topics) or MJ: Work Queue entities
  2. Export the manifest              mj queue export-topology --transport AWS-dev > manifest.json
+                                     (renders Aws.SnsFilterPolicy and Status; refuses Ordered subscriptions)
  3. Open an infrastructure PR        manifest.json diff + lambda_consumers changes (artifact keys) in the env folder
- 4. CI                               terraform fmt / validate / tflint / test, then terraform plan (posted to the PR)
- 5. Review                           approver reads the plan; destructive actions (see below) block without a runbook
- 6. Apply to dev                     pipeline applies on merge
- 7. Bind MJ                          terraform output -json binding_import > bindings.json
+ 4. CI on the PR                     fmt / validate / tflint / test, terraform plan, DESTRUCTIVE-CHANGE GATE, plan posted
+ 5. Merge                            only with a green gate (or the approver's label, after the procedure below)
+ 6. Deploy run, per environment      plan -out=tfplan → gate → upload tfplan → ENVIRONMENT APPROVAL (plan shown)
+                                     → download the same tfplan → terraform apply tfplan   (never a fresh plan)
+ 7. Bind MJ                          terraform output -json binding_import > bindings.json   (kept as a run artifact)
                                      mj queue import-bindings bindings.json
- 8. Verify                           mj queue validate-bindings --transport AWS-dev   → no Errors
+ 8. Verify                           mj queue validate-bindings --transport AWS-dev   → no Errors, no drift Warnings
                                      MJAPI startup logs no binding errors for the transport
- 9. Promote                          repeat 2–8 for staging, then prod, each with its own manifest export from that
-                                     environment's MJ database and its own approval
+ 9. Promote                          dev → staging → prod, each from that environment's own manifest export
 ```
 
 Rules:
@@ -6598,7 +7256,34 @@ Rules:
 - **State**: remote backend (S3 + DynamoDB lock table, or Terraform Cloud) with versioning and encryption; one state
   per environment; no local state outside development.
 - **Accounts**: one AWS account per environment is recommended; at minimum, separate `environment` values and IAM
-  boundaries.
+  boundaries. Give the pipeline's apply role an explicit **Deny** on `sqs:DeleteQueue` and `sns:DeleteTopic`; queue
+  deletion uses a separate break-glass role.
+
+### What is frozen at apply time
+
+A Lambda consumer reads its subscription's **policy and filter from `MJ_WQ_SUBSCRIPTION`**, which Terraform writes when
+it applies. The queue's redrive count and visibility timeout are set at the same moment. Changing `MaxAttempts`,
+backoff, `LeaseSeconds`, the filter or `Status` in MJ therefore changes **nothing** on AWS until the manifest is
+re-exported and applied. `mj queue validate-bindings` compares the queue's redrive count and visibility timeout with
+the current policy and reports a **Warning** ("policy drift — re-apply Terraform"); the scheduled drift job below
+catches the rest. MJ-worker subscriptions read their policy from MJ directly, but their queue attributes are frozen
+the same way.
+
+### Pausing a subscription
+
+| Host | Effect of `Status = 'Paused'` in MJ |
+| --- | --- |
+| MJ worker | Immediate: the host stops receiving from the queue at its next reconcile |
+| Lambda | **Only after export + apply**: the manifest carries `Status`, and the module sets the event source mapping's `enabled = false`. Until then the function keeps consuming |
+
+Pausing never stops fan-out: SNS keeps delivering to the queue, and messages older than the queue's retention
+(14 days by default) are lost.
+
+### Adding a subscription
+
+An SNS subscription receives only what is published **after** it exists. A subscription added to a live topic starts
+empty and misses everything published before its apply; there is no backfill on this transport. If the new consumer
+needs history, replay it from the system of record.
 
 ## Change classes
 
@@ -6606,27 +7291,42 @@ Rules:
 | --- | --- | --- | --- |
 | Add topic or subscription | Safe | Creates resources | Normal lifecycle |
 | Change filter (`Aws.SnsFilterPolicy`) | Safe | Updates the SNS subscription in place | Normal; messages published during the update may be filtered by either policy |
-| Change `MaxAttempts`, `LeaseSeconds`, Lambda timeout | Safe | Updates queue attributes in place | Normal; in-flight messages keep their old visibility |
-| Add or update a Lambda consumer artifact | Safe | Updates function code, publishes a version | Normal (see Lambda pipeline) |
-| Change `PartitionMode` between `None` and `Exclusive` on a FIFO topic | Safe | Nothing | Metadata only |
-| Change a subscription to or from `Ordered` | **Behavioral** | Redrive count changes (7 ↔ 1000) | Pause the subscription, drain, change metadata and apply, import bindings, resume |
-| Flip a topic between standard and FIFO | **Destructive** | Replaces the topic and every subscription queue (names change) | Migration procedure below |
-| Rename a topic or subscription | **Destructive** | Replaces resources | Create the new one, move producers/consumers, drain, then remove the old one |
-| Delete a topic or subscription | **Destructive** | Deletes queues **and their messages** | Drain procedure below |
-| Change `name_prefix` or `environment` | **Destructive** | Replaces everything | Treat as a new deployment |
+| Change `MaxAttempts`, `LeaseSeconds`, Lambda timeout, `Status` | Safe | Updates queue attributes, function environment, event-source `enabled` in place | Normal; in-flight messages keep their old visibility |
+| Add or update a Lambda consumer artifact | Safe | Updates function code, publishes a version, moves the `live` alias | Normal (see Lambda pipeline) |
+| Roll a consumer back | Safe | Moves the `live` alias | Set `alias_version`, apply |
+| Flip a topic between standard and FIFO (including adding the first `Exclusive` subscription to a standard topic) | **Destructive** | Would replace the topic and every queue on it — blocked by `prevent_destroy` | Migration procedure below |
+| Rename a topic or subscription | **Destructive** | Would replace resources — queues blocked by `prevent_destroy` | Create the new one, move producers/consumers, drain, then remove the old one |
+| Delete a topic or subscription | **Destructive** | Deletes the SNS subscription, policies, consumer and alarms; the queues need the out-of-band step | Removal procedure below |
+| Change `name_prefix` or `environment` | **Destructive** | Would replace everything | Treat as a new deployment |
+| Change a subscription to `Ordered` | **Refused** | Plan fails | Ordered requires the Database transport: move the topic there in MJ |
 
-CI marks a plan as destructive when it contains any `delete` or `replace` of `aws_sns_topic`, `aws_sqs_queue`
-or `aws_lambda_function`; such PRs need the approver to link the completed procedure.
+## Destructive changes
 
-### Drain procedure (delete, rename)
+The gate blocks any plan that deletes or replaces an SNS topic, SNS subscription, SQS queue, queue policy, redrive-allow
+policy, event source mapping, function, alias or KMS key. To proceed, complete the matching procedure, link the
+evidence in the PR, and have an approver add `work-queue-destructive-approved`.
 
-1. Set the subscription `Status = 'Paused'` in MJ (fan-out continues, nothing is consumed) — or stop its producers
-   when the whole topic is going away.
-2. Wait until `mj queue stats --subscription <name>` shows `Pending = 0` and `InFlight = 0`. For a topic, check every
-   subscription.
-3. Handle dead letters: `mj queue dead-letters --subscription <name>`; replay or discard each, or export the SQS
-   dead-letter queue if they must be kept.
-4. Merge the infrastructure PR that removes the resources; then remove the metadata.
+### Removal procedure (delete, or the old half of a rename)
+
+1. Stop what feeds it: stop the producers when a whole topic is going away. A single subscription cannot be starved
+   while its topic is live — anything still queued when it is removed is discarded, by design.
+2. Let the consumer catch up: `mj queue stats --subscription <name>` shows `Pending = 0` and `InFlight = 0`.
+3. Settle the dead letters: `mj queue dead-letters --subscription <name>`; `mj queue replay` or `mj queue discard` each
+   one, or export the dead-letter queue (`aws sqs receive-message`) if they must be kept. Check the SNS
+   delivery-failure queue (`…-snsdlq`) in the console as well — MJ cannot see it.
+4. **Release the queues from Terraform** (platform engineer; paste the commands and output into the PR):
+   `terraform state rm 'module.work_queue.aws_sqs_queue.subscription["<name>"]' 'module.work_queue.aws_sqs_queue.dead_letter["<name>"]'`
+   Without this the plan fails on `prevent_destroy` — that failure is the control working.
+5. Open the PR that removes the subscription from the manifest. The plan deletes the SNS subscription, policies,
+   consumer and alarms; the gate needs the approver's label.
+6. After the apply, re-check that both queues are empty, then delete them with the break-glass role:
+   `aws sqs delete-queue --queue-url <url>` (twice).
+7. Remove the metadata in MJ.
+
+**Rollback.** Before step 6 nothing irreversible has happened: re-add the subscription to the manifest,
+`terraform import` the two queues back into state, and apply — the SNS subscription is recreated and starts receiving
+again (messages published in between are missed). After step 6 the messages are gone; that is why steps 2–3 come
+first. State versioning on the backend lets a bad `state rm` be undone by restoring the previous state object.
 
 ### Standard ↔ FIFO migration
 
@@ -6634,7 +7334,16 @@ or `aws_lambda_function`; such PRs need the approver to link the completed proce
 2. Apply infrastructure and import bindings for the new topic.
 3. Deploy consumers for the new subscriptions (they are idle).
 4. Switch producers to the new topic name.
-5. Drain the old topic's subscriptions (procedure above), then remove the old topic.
+5. Remove the old topic's subscriptions with the removal procedure, then the old topic.
+
+Prefer the **two-topic pattern** to flipping a busy topic to FIFO: keep the standard topic for the firehose
+subscriptions, and publish to a second FIFO topic for the per-key work (plan 11 §4).
+
+### Rolling back a bindings import
+
+Every deploy run keeps its `bindings.json` as an artifact. To roll back, re-import the previous run's file
+(`mj queue import-bindings <previous>/bindings.json`) and run `mj queue validate-bindings`. Import only rewrites
+`BindingConfig` on topics and subscriptions; it never touches AWS.
 
 ## Lambda consumer pipeline
 
@@ -6643,24 +7352,29 @@ consumer source ─► pnpm build ─► esbuild bundle (platform node, format e
                 ─► zip ─► sha256 of zip = content hash
                 ─► upload s3://<artifact-bucket>/work-queue/<subscription-slug>/<content-hash>.zip (never overwritten)
                 ─► PR: set lambda_consumers["<subscription>"].s3_key to the new key
-                ─► plan/apply (publish_version = true creates an immutable version)
+                ─► plan/apply: a new immutable version is published and the 'live' alias moves to it
 ```
 
 - **Immutable artifacts**: the key is the content hash; a rebuild of the same code produces no change.
-- **Rollback**: revert the `s3_key` in the infrastructure repository and apply; the previous zip still exists.
+- **The event source invokes the `live` alias**, never `$LATEST`.
+- **Rollback**: set `lambda_consumers["<subscription>"].alias_version = "<previous version number>"` and apply — the
+  alias moves, nothing is rebuilt. Remove `alias_version` with the next forward release. (Reverting `s3_key` also
+  works, but publishes yet another version.)
 - **Canary (optional)**: deploy to `staging` first and watch the `MJ/WorkQueue` EMF metrics (`Failed`, `Retried`,
   `DeadLettered`) and the module's alarms for one full traffic cycle before promoting.
+- **Throttle with `maximum_concurrency`**, not reserved concurrency: a throttled invocation returns its messages to the
+  queue with the receive already counted, and enough of those dead-letter a message that never ran.
 - **Idempotency is required** of every consumer; redeliveries happen during deploys.
 
 ## Operating
 
 | Signal | Alarm / source | Action |
 | --- | --- | --- |
-| Dead letters present | `<dlq>-has-messages` | `mj queue dead-letters --subscription <name>`; fix, then `mj queue replay` or `mj queue discard`. Bulk: `aws sqs start-message-move-task` from the DLQ to the queue after fixing the cause |
-| Backlog age | `<queue>-backlog-age` | Check consumer errors/throttles; for Lambda raise `maximum_concurrency`; for MJ workers raise `workQueue` concurrency |
-| Lambda errors / throttles | `<function>-errors`, `<function>-throttles` | Inspect logs; throttles mean concurrency limits |
-| Staged subscription stalled | `<queue>-backlog-age` on a staged queue | Check database health and MJ worker logs (`Staging failed; backing off`); `mj queue partitions --subscription <name> --condition Blocked` |
-| Binding drift | `mj queue validate-bindings` Errors | Re-export the manifest and apply, or import bindings |
+| Dead letters present | `<dlq>-has-messages` | `mj queue dead-letters --subscription <name>` (scans up to 100); fix, then `mj queue replay` or `mj queue discard`. Reason `RedrivePolicy` = crash loop. Bulk: `aws sqs start-message-move-task` from the DLQ to the queue after fixing the cause |
+| SNS could not deliver | `<snsdlq>-has-messages` | Not visible to MJ. Inspect the queue in the SQS console; the cause is almost always the queue policy or the KMS key policy. Fix, then `aws sqs start-message-move-task` |
+| Backlog age | `<queue>-backlog-age` | Check consumer errors/throttles and whether the subscription is `Paused`; for Lambda raise `maximum_concurrency`; for MJ workers raise `workQueue` concurrency |
+| Lambda errors / throttles | `<function>-errors`, `<function>-throttles` | Inspect logs; throttles burn receives — raise concurrency limits or lower `maximum_concurrency`, and remove reserved concurrency |
+| Binding or policy drift | `mj queue validate-bindings` Errors / Warnings; the drift job | Re-export the manifest and apply, then import bindings |
 
 ## Required CI checks for infrastructure PRs
 
@@ -6669,19 +7383,22 @@ consumer source ─► pnpm build ─► esbuild bundle (platform node, format e
 3. `tflint`
 4. `terraform test` (module repository)
 5. `terraform plan` for the target environment, posted to the PR
-6. Destructive-change detection (above)
+6. `check-destructive-plan.mjs` on that plan — **a failing gate, not a warning**
+7. Scheduled drift detection per environment (`plan -detailed-exitcode`)
 ````
 
-- [ ] **Step 2: Write the example deployment pipeline**
+- [ ] **Step 3: Write the example deployment pipeline**
 
 `infrastructure/terraform/work-queue/aws/examples/deploy-pipeline.github-actions.yml` (for the repository that
-owns an environment's infrastructure; copy and adjust names):
+owns an environment's infrastructure; copy and adjust names — it expects `check-destructive-plan.mjs` copied to
+`work-queue/scripts/`):
 
 ```yaml
 name: Work Queue Infrastructure
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
     paths: ['work-queue/**']
   push:
     branches: [main]
@@ -6694,9 +7411,9 @@ permissions:
 
 jobs:
   plan:
-    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         environment: [dev, staging, prod]
     environment: ${{ matrix.environment }}-plan
@@ -6712,19 +7429,34 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.9.8
+          terraform_wrapper: false
       - run: terraform fmt -check -recursive
       - run: terraform init -input=false
       - run: terraform validate
       - run: terraform plan -input=false -out=tfplan
-      - name: Detect destructive changes
+      - run: terraform show -json tfplan > plan.json
+      - name: Destructive-change gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_LABELS: ${{ toJson(github.event.pull_request.labels.*.name) }}
         run: |
-          terraform show -json tfplan > plan.json
-          DESTRUCTIVE=$(jq '[.resource_changes[] | select((.type == "aws_sns_topic" or .type == "aws_sqs_queue" or .type == "aws_lambda_function") and (.change.actions | index("delete")))] | length' plan.json)
-          echo "Destructive changes: $DESTRUCTIVE"
-          if [ "$DESTRUCTIVE" -gt 0 ]; then
-            echo "::warning::This plan deletes or replaces topics, queues or functions. Link the completed drain/migration runbook in the PR before approval."
+          # On a pull request the labels come from the event; on the merge commit, from the PR that produced it.
+          if [ "${{ github.event_name }}" = "push" ]; then
+            PR_LABELS=$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/pulls" --jq '[.[0].labels[].name]')
           fi
-      - name: Post plan
+          ALLOW=""
+          if echo "$PR_LABELS" | grep -q '"work-queue-destructive-approved"'; then ALLOW="--allow-destructive"; fi
+          node ../scripts/check-destructive-plan.mjs plan.json $ALLOW
+      - name: Show the plan
+        run: |
+          {
+            echo "### Work queue plan: ${{ matrix.environment }}"
+            echo '```'
+            terraform show -no-color tfplan | tail -c 60000
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Post the plan to the pull request
+        if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
         env:
           ENVIRONMENT: ${{ matrix.environment }}
@@ -6734,15 +7466,27 @@ jobs:
             const plan = execSync('terraform show -no-color tfplan', { cwd: `work-queue/${process.env.ENVIRONMENT}` }).toString();
             const body = `### Work queue plan: ${process.env.ENVIRONMENT}\n\n\`\`\`\n${plan.slice(-60000)}\n\`\`\``;
             await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body });
+      - name: Save the plan for the apply job
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-${{ matrix.environment }}
+          path: |
+            work-queue/${{ matrix.environment }}/tfplan
+            work-queue/${{ matrix.environment }}/.terraform.lock.hcl
+          retention-days: 7
 
   apply:
     if: github.event_name == 'push'
+    needs: plan
     runs-on: ubuntu-latest
     strategy:
       max-parallel: 1
       matrix:
         environment: [dev, staging, prod]
-    environment: ${{ matrix.environment }}   # protection rules require approval; prod requires two reviewers
+    # Protection rules on this environment require approval; the approver reviews the plan in the plan job's summary.
+    # prod requires two reviewers.
+    environment: ${{ matrix.environment }}
     defaults:
       run:
         working-directory: work-queue/${{ matrix.environment }}
@@ -6755,27 +7499,97 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.9.8
+          terraform_wrapper: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: tfplan-${{ matrix.environment }}
+          path: work-queue/${{ matrix.environment }}
       - run: terraform init -input=false
-      - run: terraform apply -input=false -auto-approve
+      # Applies the reviewed plan file — never a fresh plan. Terraform rejects it ("Saved plan is stale") if the
+      # state changed after it was made; re-run the workflow to produce and review a new one.
+      - run: terraform apply -input=false tfplan
       - run: terraform output -json binding_import > bindings.json
       - uses: actions/upload-artifact@v4
         with:
           name: bindings-${{ matrix.environment }}
           path: work-queue/${{ matrix.environment }}/bindings.json
+          retention-days: 90
 ```
 
 The bindings artifact is imported into the matching MJ environment with `mj queue import-bindings bindings.json`
-(by the platform engineer, or by a job with MJ API access), followed by `mj queue validate-bindings`.
+(by the platform engineer, or by a job with MJ API access), followed by `mj queue validate-bindings`. Keeping it for
+90 days is what makes "Rolling back a bindings import" possible.
 
-- [ ] **Step 3: Write the repository workflow**
+`infrastructure/terraform/work-queue/aws/examples/drift.github-actions.yml`:
+
+```yaml
+name: Work Queue Drift
+
+on:
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  issues: write
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [dev, staging, prod]
+    environment: ${{ matrix.environment }}-plan
+    defaults:
+      run:
+        working-directory: work-queue/${{ matrix.environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.TERRAFORM_PLAN_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+          terraform_wrapper: false
+      - run: terraform init -input=false
+      - name: Detect drift
+        id: plan
+        run: |
+          set +e
+          terraform plan -input=false -lock=false -detailed-exitcode -no-color > drift.txt
+          CODE=$?
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+          tail -c 60000 drift.txt >> "$GITHUB_STEP_SUMMARY"
+          if [ "$CODE" -eq 1 ]; then exit 1; fi   # plan itself failed
+      - name: Report drift
+        if: steps.plan.outputs.code == '2'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create --title "Work queue drift: ${{ matrix.environment }}" --label work-queue-drift \
+            --body "terraform plan found differences between the committed manifest and AWS in **${{ matrix.environment }}**. See run ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}. Either someone changed AWS by hand, or topology changed in MJ without a re-export (then also run mj queue validate-bindings)."
+          exit 1
+```
+
+Exit code 2 means "the plan is not empty": AWS no longer matches the committed manifest and variables. This job does
+not see MJ-side changes that were never exported — `mj queue validate-bindings` (policy-drift warnings) covers those,
+and `validate-bindings` in turn does not check IAM, KMS, alarms, event source mappings or queue policies, which is
+what this job is for.
+
+- [ ] **Step 4: Write the repository workflow**
 
 `.github/workflows/work-queue-aws.yml`:
 
 ```yaml
 name: Work Queue AWS
 
-# Checks the AWS Terraform module and the size/dependency budget of the thin Lambda entry point
-# (@memberjunction/work-queue-aws/lambda). The unit tests of the package itself run in test.yml like every package.
+# Checks the AWS Terraform module, the destructive-plan gate, and the dependency/size budget of the thin Lambda entry
+# point (@memberjunction/work-queue-aws/lambda). The unit tests of the packages run in test.yml like every package.
 
 on:
   pull_request:
@@ -6822,6 +7636,30 @@ jobs:
         working-directory: infrastructure/terraform/work-queue/aws/examples/basic
         run: terraform init -backend=false -input=false && terraform validate
 
+  plan-gate:
+    name: Destructive-plan gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: infrastructure/terraform/work-queue/aws/scripts
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Safe plan passes
+        run: node check-destructive-plan.mjs fixtures/plan-safe.json
+      - name: Destructive plan is blocked
+        run: |
+          if node check-destructive-plan.mjs fixtures/plan-destructive.json; then
+            echo "The gate let a destructive plan through"; exit 1
+          fi
+      - name: Destructive plan passes with the approval flag
+        run: node check-destructive-plan.mjs fixtures/plan-destructive.json --allow-destructive
+
   lambda-bundle:
     name: Lambda bundle budget
     runs-on: ubuntu-latest
@@ -6836,24 +7674,24 @@ jobs:
       - run: cd packages/WorkQueue/aws && pnpm run check:lambda-bundle
 ```
 
-- [ ] **Step 4: Check the workflow files**
+- [ ] **Step 5: Check the workflow files**
 
-Run: `actionlint .github/workflows/work-queue-aws.yml infrastructure/terraform/work-queue/aws/examples/deploy-pipeline.github-actions.yml` (install from https://github.com/rhysd/actionlint if missing)
+Run: `actionlint .github/workflows/work-queue-aws.yml infrastructure/terraform/work-queue/aws/examples/deploy-pipeline.github-actions.yml infrastructure/terraform/work-queue/aws/examples/drift.github-actions.yml` (install from https://github.com/rhysd/actionlint if missing)
 Expected: exit code 0, no output.
 
 Run: `cd packages/WorkQueue/core && pnpm run build && cd ../aws && pnpm run build && pnpm run check:lambda-bundle`
 Expected: `work-queue-aws/lambda bundle OK: …` (the same command the `lambda-bundle` job runs).
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add infrastructure/terraform/work-queue/aws/GOVERNANCE.md infrastructure/terraform/work-queue/aws/examples/deploy-pipeline.github-actions.yml .github/workflows/work-queue-aws.yml
-git commit -m "docs(work-queue): AWS deployment governance runbook, example pipeline and module CI"
+git add infrastructure/terraform/work-queue/aws/GOVERNANCE.md infrastructure/terraform/work-queue/aws/scripts infrastructure/terraform/work-queue/aws/examples/deploy-pipeline.github-actions.yml infrastructure/terraform/work-queue/aws/examples/drift.github-actions.yml .github/workflows/work-queue-aws.yml
+git commit -m "feat(work-queue): gated AWS deployment pipeline — destructive-plan gate, reviewed-plan apply, drift job, runbook"
 ```
 
 ---
 
-### Task 12: LocalStack conformance (opt-in) and the package README
+### Task 11: LocalStack conformance (opt-in) and the package README
 
 **Files:**
 - Create: `packages/WorkQueue/aws/localstack/docker-compose.yml`, `packages/WorkQueue/aws/vitest.localstack.config.ts`
@@ -6862,13 +7700,14 @@ git commit -m "docs(work-queue): AWS deployment governance runbook, example pipe
 - Modify: `packages/WorkQueue/aws/package.json` (`test:localstack` script; `@memberjunction/work-queue-core` stays the only MJ dependency), `.github/workflows/work-queue-aws.yml` (manual `localstack-conformance` job)
 
 **Interfaces:**
-- Consumes: `RunTransportConformanceSuite`, `ConformanceHarness`, `ConformanceTraits`, `BuildTopicBinding`, `BuildSubscriptionBinding`, `SubscriptionBindingOverrides` (`@memberjunction/work-queue-core/testing`, plan 04 Task 8); `AwsTransportDriver`, `AWS_TRANSPORT_CAPABILITIES`, `AwsResourceName`, `ExpectedMaxReceiveCount`, `SnsFilterPolicyFor` (Tasks 1–6); `SNSClient`, `CreateTopicCommand`, `DeleteTopicCommand`, `SubscribeCommand` (`@aws-sdk/client-sns`); `SQSClient`, `CreateQueueCommand`, `DeleteQueueCommand`, `GetQueueAttributesCommand` (`@aws-sdk/client-sqs`).
+- Consumes: `RunTransportConformanceSuite` (`@memberjunction/work-queue-core/testing/vitest`); `ConformanceHarness`, `ConformanceTraits`, `BuildTopicBinding`, `BuildSubscriptionBinding`, `SubscriptionBindingOverrides` (`@memberjunction/work-queue-core/testing`, plan 04 Task 8); `AwsTransportDriver`, `AWS_TRANSPORT_CAPABILITIES`, `AwsResourceName`, `ExpectedMaxReceiveCount`, `SnsFilterPolicyFor` (Tasks 1–6); `SNSClient`, `CreateTopicCommand`, `DeleteTopicCommand`, `SubscribeCommand` (`@aws-sdk/client-sns`); `SQSClient`, `CreateQueueCommand`, `DeleteQueueCommand`, `GetQueueAttributesCommand` (`@aws-sdk/client-sqs`).
 - Produces: `class LocalStackHarness implements ConformanceHarness`; npm script `test:localstack`; README.
 
 The conformance kit skips cases whose capabilities the transport lacks (`Ordered`, pending discard, partitions,
 progress, MessageID duplicate detection). What remains — fan-out, filters, lease extension and loss, retry backoff,
 `Exclusive` single flight, dead-letter, replay and discard of dead letters — runs against real SNS/SQS semantics in
-LocalStack. Staged `Ordered` behavior is covered by the Database conformance run (plan 05) plus Task 9's stager tests.
+LocalStack. `Ordered` is a Database-transport feature (11 S2); its behavior is covered by the Database conformance
+run (plan 05), and its cases are skipped here by the `SupportsOrdered = false` gate.
 
 - [ ] **Step 1: Write the LocalStack environment**
 
@@ -7053,7 +7892,7 @@ Run: `cd packages/WorkQueue/aws && pnpm run test:localstack`
 Expected: PASS for every case the AWS capabilities enable; capability-gated cases are reported as skipped. No failures.
 
 Run: `cd packages/WorkQueue/aws && pnpm test`
-Expected: PASS — 113 tests; the LocalStack suite is not included.
+Expected: PASS — 130 tests; the LocalStack suite is not included.
 
 Run: `cd packages/WorkQueue/aws && docker compose -f localstack/docker-compose.yml down`
 Expected: the container stops.
@@ -7109,15 +7948,21 @@ AWS transport for the MemberJunction work queue: SNS topics, one SQS queue (plus
 and a Lambda adapter for thin consumers. **No MemberJunction runtime dependencies** — only
 `@memberjunction/work-queue-core` and the AWS SDK SNS/SQS clients — so Lambda bundles stay small.
 
-MJ servers load this package through `@memberjunction/work-queue-engine` (`AWSTransportDriverFactory`). Cloud
-resources are created by `infrastructure/terraform/work-queue/aws`, never at runtime.
+MJ servers load this package through the engine's **`@memberjunction/work-queue-engine/aws`** subpath
+(`AWSTransportDriverFactory`), which only `ServerBootstrap` imports — the engine's main entry, the CLI's other
+commands, CodeGen and the data providers never load an AWS client. Cloud resources are created by
+`infrastructure/terraform/work-queue/aws`, never at runtime.
+
+**What runs here:** `None` and `Exclusive` subscriptions. **`Ordered` requires the Database transport** — validation
+rejects it on an AWS topic. `Exclusive` on SQS FIFO already processes a key's messages in order, one at a time; what it
+does not do is halt the key when one of them dead-letters.
 
 ## Entry points
 
 | Import | Use |
 | --- | --- |
 | `@memberjunction/work-queue-aws` | `AwsTransportDriver`, consumer, operator, filter-policy translation, binding validation |
-| `@memberjunction/work-queue-aws/lambda` | `CreateSqsLambdaHandler` for SQS-triggered Lambda consumers |
+| `@memberjunction/work-queue-aws/lambda` | `CreateSqsLambdaHandler` for SQS-triggered Lambda consumers. Built on an SQS-only client factory: it never pulls the SNS client into a bundle |
 | `@memberjunction/work-queue-aws/testing` | In-memory SNS/SQS fakes and fixtures for tests |
 
 ## Write a Lambda consumer
@@ -7137,7 +7982,10 @@ export const handler = CreateSqsLambdaHandler(() => new ArchiveEmailEvent());
 ```
 
 - Terraform sets `MJ_WQ_SUBSCRIPTION` (the subscription's policy, filter and queue URLs) and enables
-  `ReportBatchItemFailures` on the event source mapping.
+  `ReportBatchItemFailures` on the event source mapping. The policy in it is **frozen at apply time**: changing
+  `MaxAttempts` or backoff in MJ does nothing here until the manifest is re-exported and applied.
+- FIFO event sources use **`batch_size = 1`** (the module enforces it); scale with the event source's
+  `maximum_concurrency`, never reserved concurrency.
 - Bundle with esbuild (`platform: node`, `format: esm`, `external: ['@aws-sdk/*']`); the Lambda Node.js runtime
   provides the SDK.
 - Return `Outcome.Retry(reason, delaySeconds)` or throw `TransientWorkError` to retry; return `Outcome.DeadLetter(reason)`
@@ -7149,7 +7997,8 @@ The full version is the [consumer guide](../../../plans/work-queue-1/10-consumer
 
 - **Be idempotent.** Delivery is at least once, and `MessageID` is stable across redeliveries and replays — use it (or
   your own natural key) as the idempotency key.
-- **Honour `context.Signal`.** It aborts when the lease is lost or the host is shutting down. Stop whatever external
+- **Honour `context.Signal`.** It aborts when the lease is lost, `MaxProcessingSeconds` passes or the host is shutting
+  down (`Signal.reason` says which; `'Cancelled'` never occurs on this transport). Stop whatever external
   work you started; anything you write after that is fenced out anyway.
 - **Keep the item a claim check.** Results, output and history belong on your own domain row, referenced from the
   payload — not in `Payload` (256 KB cap) and not in `Progress`.
@@ -7163,8 +8012,10 @@ The full version is the [consumer guide](../../../plans/work-queue-1/10-consumer
   later by a webhook uses the split-message pattern (record the job on a domain row, complete, publish a completion
   message when the callback arrives); overlap and coalescing policy are yours.
 
-**FIFO queues:** records of one message group run in order; after a record retries or fails, the rest of its group
-in that batch is released unprocessed so nothing overtakes it. Different groups run concurrently.
+**FIFO queues:** with `batch_size = 1` each invocation gets one message, and SQS holds the rest of its key until it
+settles — including for the whole delay of a retry. If a larger batch is ever configured, records of one message group
+still run in order, and after a record retries or fails the rest of its group in that batch is released unprocessed
+so nothing overtakes it (each such release costs the follower one receive).
 
 **Metrics:** each invocation writes one CloudWatch Embedded Metric Format line in namespace `MJ/WorkQueue`
 (`Processed`, `Completed`, `Retried`, `DeadLettered`, `Failed`, `NotStarted`, `DurationMs`; dimension `Subscription`).
@@ -7175,10 +8026,26 @@ Per 02 §1a, the queue's guarantees stop when your handler settles. On SQS speci
 
 | Not provided | Consequence |
 | --- | --- |
-| Cancelling a pending or in-flight message (`CancelPending`/`CancelInFlight` are `false`) | An operator can discard a dead letter, not a running one. Handlers that must be interruptible should poll their own domain flag, or run as a staged `Ordered`/MJ-worker subscription where 03 §7's lease-revoke cancel applies. |
+| Cancelling a pending or in-flight message (`CancelPending`/`CancelInFlight` are `false`) | An operator can discard a dead letter, not a running one. Handlers that must be interruptible should poll their own domain flag, or live on a Database-transport topic, where 03 §7's cancel flag applies. |
+| `Ordered` (halt a key when one of its messages dead-letters) | Put the topic on the Database transport. A cloud topic that needs one such consumer bridges to it: a subscriber republishes onto a Database topic. |
+| `None` semantics on a FIFO topic | One `Exclusive` subscription makes the topic — and every queue on it — FIFO. A `None` subscription there is serialised per `PartitionKey`, and a message in retry backoff holds its key. |
 | Waiting for work that finishes elsewhere | Use the split-message pattern; the queue never parks a message awaiting a webhook. |
 | Suppressing duplicate side effects | Handlers are idempotent, or they hold their own lock. |
 | Knowing whether a consumer is still alive | The visibility timeout is the only liveness signal; size `LeaseSeconds` accordingly. |
+
+## Known limits
+
+- **FIFO throughput.** A topic with any `Exclusive` subscription must be FIFO, which caps **every** subscription on it
+  at the FIFO quotas (verify the current SNS/SQS FIFO and high-throughput-mode numbers for your region). For a
+  firehose, use the **two-topic pattern**: a standard topic for permanence and reporting subscriptions, and a second
+  FIFO topic for per-subscriber work.
+- **Every publish passes through MJ** (in-process or the REST endpoint), and a `DeduplicationKey` costs two
+  MJ-database writes (reserve, confirm). Producers at firehose volume should rely on stable `MessageID`s — on a FIFO
+  topic they are the SNS deduplication ID for five minutes — and on the direct publisher follow-on (09d).
+- **Receives are attempts.** `Attempt` is SQS's receive count, so a `Release` on shutdown or a Lambda throttle uses
+  one up. The receive-time guard (`MaxAttempts + 2`) and the redrive policy (`MaxAttempts + 5`) leave room for that;
+  sustained throttling does not.
+- **A new subscription starts empty.** SNS delivers only what is published after the subscription exists.
 
 ## Calling MemberJunction from a Lambda consumer
 
@@ -7192,9 +8059,11 @@ as `MJWorker` subscriptions instead.
 | --- | --- |
 | Handler returned `DeadLetter` / threw `FatalWorkError` | the handler's reason |
 | Retries exhausted | `MaxAttemptsExceeded` |
-| Received more than `MaxAttempts` times without being settled (crash loop) | `LeaseExpired` |
-| Body is not an envelope | `InvalidEnvelope` |
-| Moved by the SQS redrive policy (`MaxAttempts + 2` receives) | no attribute — reported as `RedrivePolicy` |
+| Received more than `MaxAttempts + 2` times without being settled (the consumer's receive-time guard) | `MaxAttemptsExceeded` |
+| Body is not an envelope | `InvalidEnvelope` — listed as `sqs:<SQS MessageId>` with the raw body in `LastError`; discardable, not replayable |
+| Moved by the SQS redrive policy (`MaxAttempts + 5` receives: a crash loop the consumer never saw) | no attribute — reported as `RedrivePolicy`, `Attempts = 0` |
+
+Every dead letter is its own FIFO message group, so a scan can reach all of a poison key's dead letters.
 
 Operate them from MJ:
 
@@ -7204,7 +8073,8 @@ mj queue replay  --subscription email.unsubscribe --delivery <MessageID>
 mj queue discard --subscription email.unsubscribe --delivery <MessageID> --reason "invalid address"
 ```
 
-Listing, replay and discard are **best effort** on SQS: they look at up to 100 dead letters at a time. For large
+Listing, replay and discard are **best effort** on SQS: they long-poll up to 100 dead letters at a time and stop after
+three consecutive empty receives. For large
 dead-letter queues, fix the cause and move everything back with SQS's own redrive
 (`aws sqs start-message-move-task --source-arn <dlq-arn> --destination-arn <queue-arn>`); moved messages keep their
 body and are processed again.
@@ -7212,7 +8082,8 @@ body and are processed again.
 ## IAM
 
 The Terraform module outputs `mjapi_policy_json` (publish, validation, dead-letter operations) and
-`mj_worker_policy_json` (consume MJ worker queues). Lambda consumer roles are created by the module with access to
+`mj_worker_policy_json` (consume MJ worker queues, plus the read-only `sns:Get*`/`sqs:GetQueueAttributes` calls binding
+validation makes at host start). Lambda consumer roles are created by the module with access to
 their own queue, dead-letter queue and log group only.
 
 ## Limits (verify against current AWS quotas)
@@ -7222,7 +8093,8 @@ their own queue, dead-letter queue and log group only.
 | Envelope incl. attributes | 262,144 bytes |
 | User attributes per message | 10 |
 | Retry delay / lease extension | ≤ 12 hours from receive |
-| Lambda batch size (FIFO) | ≤ 10 |
+| Lambda batch size | 1 on FIFO queues (enforced); ≤ 10 on standard queues |
+| Event source `maximum_concurrency` | ≥ 2 |
 | FIFO deduplication window (MessageID) | 5 minutes |
 
 ## Testing
@@ -7230,13 +8102,14 @@ their own queue, dead-letter queue and log group only.
 - `pnpm test` — unit tests against in-memory fakes; never calls AWS.
 - `pnpm run test:localstack` — the shared transport conformance suite against LocalStack
   (`docker compose -f localstack/docker-compose.yml up -d --wait` first).
-- `pnpm run check:lambda-bundle` — fails if the `./lambda` bundle pulls in MJ runtime packages or exceeds 150 KB.
+- `pnpm run check:lambda-bundle` — fails if the `./lambda` entry reaches the SNS client or an MJ runtime package, or
+  its own code exceeds 150 KB.
 ````
 
 - [ ] **Step 6: Build and commit**
 
 Run: `cd packages/WorkQueue/aws && pnpm run build && pnpm test`
-Expected: builds; PASS — 113 tests.
+Expected: builds; PASS — 130 tests.
 
 ```bash
 git add packages/WorkQueue/aws .github/workflows/work-queue-aws.yml
@@ -7247,33 +8120,37 @@ git commit -m "test(work-queue-aws): LocalStack conformance harness, manual CI j
 
 ## Contract deltas
 
-Places where this plan needs something 03 does not state, or states differently. **Revision 3 folded most of these
-into 03** — the Status column says which. Only the rows marked *open* still need a decision before execution.
+Revision 4 rewrote 03, and every delta earlier revisions of this plan carried (the `SnsSubscriptionArn` binding field,
+`TransportRejected`, the AWS operator's best-effort semantics, the `./lambda` and `./testing` subpaths, shared
+resource naming, the filter subset and its once-per-field rule, `CancelInFlight: false`, one-message FIFO receive and
+the `+2` / `+5` receive margins, dead-letter message groups, the engine's `./aws` subpath) is now **stated in 03**.
+The staging deltas are gone with S2. What is still open:
 
-| # | Delta | Status | Owner | Why |
-| --- | --- | --- | --- | --- |
-| D1 | AWS `SubscriptionBinding.Config` adds `SnsSubscriptionArn` to 03 §6.3's field list (`Region, QueueUrl, QueueArn, DeadLetterQueueUrl, DeadLetterQueueArn, IsFifo, SnsSubscriptionArn`). Terraform's `binding_import` emits it. | adopted (03 §6.3) | 03 | Binding validation compares raw delivery, endpoint and filter policy only through the SNS subscription |
-| D2 | Staging uses plan 05 Task 12's `DatabaseTransportDriver.StageDeliveries(request: StageDeliveriesRequest): Promise<StageResult[]>` (`{ TopicID, SubscriptionID, PartitionMode, OrderingMode, Messages }` → `Staged` / `AlreadyStaged` / `Rejected { Code, Message }`; one transaction; a throw rolls back) and `WorkQueueEngine.GetDatabaseDriver()`. Not in 03 §11. `Rejected` messages go to the SQS dead-letter queue with reason = `Code`. | adopted (03 §11 `StageDeliveries`) | 03 §11 (05 is normative) | 03 §5.1 staging (Task 9) |
-| D3 | `HostLoopContext` (plan 06) carries no driver accessor. The AWS loop factory resolves the AWS driver with `WorkQueueEngine.Instance.GetDriver(context.Transport.ID)` and the staging target with `GetDatabaseDriver()`; the staging identity comes from `context.Subscription` (`ID`, `PartitionMode`) and `context.Topic` (`ID`, `OrderingMode`). | confirmed — no change needed | 06 / 03 §11 | Reuses cached, credentialed drivers |
-| D4 | `WorkQueueEngine.ExportManifest` (plan 05 Task 13) is changed by this plan (Task 8) to `FinalizeTopologyManifest(BuildTopologyManifest(...))`, which sets `ManifestSubscription.Aws.SnsFilterPolicy` for `DriverClass = 'AWS'` manifests. The Terraform module refuses a filtered subscription without a rendered policy. | **open** — plan-level wiring | 05 (code touched by 07) | 03 §10 declares the field but plan 05's engine cannot depend on `work-queue-aws` |
-| D5 | `SubscriptionStats.OldestPendingAgeSeconds` is **always `null`** on AWS in Phase 1 (no CloudWatch client, to keep the package dependency rule); backlog age is covered by the Terraform `backlog-age` alarm. 03 §5.2 says "requires CloudWatch read access, else null". | adopted (03 §5.2) | 03 | R9 dependency rule |
-| D6 | New publish error code `TransportRejected` (not retryable) for SNS per-entry failures with `SenderFault = true`. | adopted (03 §1.1) | 03 §1.1 | Distinguishes bad requests from throttling (`TransportUnavailable`) |
-| D7 | Redrive `maxReceiveCount` is `MaxAttempts + 2` **except staged `Ordered` subscriptions, which use 1000**. 02 §3.4 states `MaxAttempts + 2` for all SQS queues. | adopted (03 §5.1) | 02 / 03 | A database outage must not push staged messages into the DLQ and break order |
-| D8 | New dead-letter reason `InvalidEnvelope`; SQS message attributes `mj_dead_letter_reason`, `mj_last_error`, `mj_attempts`, `mj_dead_lettered_at`, `mj_source_queue`, `mj_replay`, `mj_replay_note`, `mj_replayed_by` (reserved by 03 §1.1's `mj_` prefix rule). | adopted (03 §5.2) | 03 §5.2 | Dead-letter records and replay marking without DynamoDB |
-| D9 | AWS operator: `Discard` of a message not found among the scanned dead letters (including any pending message) returns `{ Supported: false }`; `ListDeadLetters.NextCursor` is always `null`; `BlockedKeys` is `null`; dead-letter `Attempts` is `0` for redrive-policy moves. | adopted (03 §5.2) | 03 §5.2 | SQS has no peek, lookup by ID or cancel |
-| D10 | `SqsTransportConsumer.ExtendLease` returns `Held` on a retryable SQS error (the next heartbeat retries) and `Lost` when the 12-hour visibility window is exhausted. | adopted (03 §3.2 retry-within-lease, §5.2) | 03 §5 | Throttling must not abort healthy handlers |
-| D11 | `@memberjunction/work-queue-engine` also depends on `@aws-sdk/credential-providers` (assume-role credentials). 03 §0 lists core, global, core-entities, sql-dialect, credentials and `work-queue-aws`. | adopted (03 §0) | 03 §0 | `RoleArn` credentials (Task 8) |
-| D12 | `@memberjunction/work-queue-aws` exposes `./lambda` and `./testing` subpath exports; the dependency guard excludes `src/__localstack__/`. | adopted (03 §0) | 03 §0 | Thin Lambda entry point; engine tests reuse the SNS/SQS fakes |
-| D13 | AWS resource naming (`AwsResourceName`: `<prefix>-<environment>-<slug>[-dlq][.fifo]`, hashed shortening) is shared by MJ validation messages and the Terraform module. Not in 03. | adopted (03 §0) | 03 §10 | Operators see identical names in MJ and AWS |
-| D15 | Filters are MJ `CompositeFilterDescriptor`-shaped (03 §4). Translation adds one rule 03 does not state: **a field may be constrained only once** at the top level, because SNS reads an attribute's value array as OR, so two AND-ed rules on one attribute would silently widen the filter. Mixed-field OR groups and value-less `eq`/`neq`/`startswith` rules are rejected for the same reason. `AWS_TRANSPORT_CAPABILITIES.Filters` publishes the accepted operators. | proposed for 03 §4.1 | 03 §4 | Revision 3 |
-| D14 | AWS capabilities add `CancelInFlight: false` (03 §5). SQS cannot revoke an in-flight message's lease, so 03 §7's cancel applies only to Database and staged subscriptions. | adopted (03 §5) | 03 | Revision 3 |
+| # | Delta | Owner | Why |
+| --- | --- | --- | --- |
+| D1 | **`ManifestEnricherRegistry`** (engine main entry) is how `ExportManifest` gets `Aws.SnsFilterPolicy` without the main entry importing `work-queue-aws`. 03 §10 says the policy is "rendered by the engine's ./aws entry" but names no seam; 03 §11 and plan 05's `ExportManifest` should name the registry. Task 8 wraps plan 05's `BuildTopologyManifest` result and adds one export line to the main entry. | 03 §10/§11, plan 05 | F12 forbids the direct import earlier revisions used |
+| D2 | **The CLI imports the subpath too — resolved.** 03 §0 now says the four `mj queue` commands that need cloud drivers (`export-topology`, `import-bindings`, `validate-bindings`, `work`) statically import `@memberjunction/work-queue-engine/aws`; Task 8 Step 7b adds the imports with a registration test, and nothing shared (CLI entry, `commands/queue/index.ts`, `ServerBootstrapLite`) imports it. | resolved (03 §0) | The manifest is exported from the CLI, which boots `ServerBootstrapLite` |
+| D3 | **Fixture names from plan 05.** Task 8's engine tests import `TRANSPORT_ROW_FIXTURE`, `TOPIC_ROW_FIXTURE`, `SUBSCRIPTION_ROW_FIXTURE`, `TransportRow`/`TopicRow`/`SubscriptionRow` and `ResolveTopic` from `@memberjunction/work-queue-base`, and `BuildTopologyManifest` from the engine's `src/topology/manifest`. **Resolved:** plan 05 ships the fixtures from `@memberjunction/work-queue-base/testing`; the imports in this plan use that subpath. | plan 05 | Cross-plan seam written while 05 was being revised |
+| D4 | **Unreadable dead letters.** 03 §5.1 says `InvalidEnvelope` dead letters are "listable (with a null `Message` payload) and discardable" but `DeadLetterRecord.Message` is a non-null `WorkMessage` and the AWS `DeliveryID` is "the envelope MessageID", which such a body lacks. Task 6 lists them as `DeliveryID = 'sqs:<SQS MessageId>'` with a placeholder `Message` (`Topic: ''`, `Payload: null`) and the raw body's first 1,000 characters in `LastError`. | 03 §5.1/§5.2 | Needed a concrete shape |
+| D5 | **`ValidateBindings` severities.** A redrive count or visibility timeout that no longer matches the policy is a **Warning** (policy drift, 03 §10); a redrive policy that targets the wrong queue, a missing resource, a FIFO mismatch or an `Ordered` subscription is an **Error**. 03 §10 states the warning but not the split. | 03 §5 / §10 | Drift must not read as a broken binding |
+| D6 | **FIFO publish tail.** On a FIFO topic `PublishToSns` never sends two entries of one message group in one `PublishBatch`, and rejects (unsent, `TransportUnavailable`, retryable) the later entries of a group once one of them fails. 03 §5.1 does not say how a partial batch failure is kept from reordering a key. | 03 §5.1 | Reviewer M3 |
+| D7 | **SNS delivery-failure queues** (`…-snsdlq`) exist per subscription in the Terraform module and are invisible to MJ by design (they hold SNS envelopes that never reached the subscription queue). Not in 03; operators handle them in AWS (GOVERNANCE.md). | 03 §5.1 (informational) | Reviewer M1 |
 
 ## Self-review notes
 
-- **Spec coverage.** 02 §4.4 (SNS → SQS → Lambda or MJ worker, heartbeat by visibility, retry by visibility, runtime
-  dead-lettering, redrive backstop): Tasks 3–7. 03 §5 transport, consumer and operator contracts: Tasks 4–6. 03 §5.1
-  staging: Task 9. 03 §2.1 cloud deduplication: Task 8 (coordinator from plan 05, proven over the real driver). 03 §10
-  manifest and `BindingImport`: Task 10. R6/R8/R9: Global Constraints, Tasks 1, 7, 9. Deployment governance (D6 in
-  the README decision log): Tasks 10–11.
-- **Not covered here, by design:** the `mj queue` CLI and remote operations (plan 06), manifest export and binding
+- **Spec coverage.** 02 §4.4 and 03 §5.1 (SNS → SQS → Lambda or MJ worker; one message per FIFO receive; heartbeat,
+  retry and release by visibility; runtime dead-lettering; receive-time guard; redrive backstop; dead-letter message
+  groups and scan rules): Tasks 3–7. 03 §5 / §5.2 transport, consumer (`LeaseExtension`, `AcknowledgeCancel`) and
+  operator contracts: Tasks 4–6. 03 §0 engine loading (F12) and no re-exports (F13): Tasks 3, 7, 8. 03 §2.1 cloud
+  deduplication (F1): Task 8 (coordinator from plan 05, proven over the real driver). 03 §10 manifest (`Status`,
+  `Aws.SnsFilterPolicy`) and `BindingImport`: Tasks 8–9. Scope cuts S1/S2: no ordering numbers and no cloud-side
+  `Ordered` anywhere; `Ordered` on an AWS topic is rejected in validation (Task 4), the Lambda binding parser
+  (Task 7), the manifest export (Task 8) and the module (Task 9). Deployment governance (README D6; 11 §3): Tasks
+  9–10. Known limits (11 §4): package README (Task 11) and GOVERNANCE.md.
+- **Reviewer findings.** C1/C2 → Task 5 (one-message receive, margins) and Task 9 (`batch_size = 1`,
+  `maximum_concurrency`). H1–H3 → removed with S2. H4 → Tasks 5–6. M1, M2, M7 → Task 9. M3, M4 → Task 4. M5 → Task 5.
+  M6 → Task 10. Lows: SQS-only client factory and an honest bundle check (Tasks 3, 7), guard regex (Task 1),
+  assume-role region (Task 8), listable `InvalidEnvelope` (Task 6), `maximum_concurrency` minimum,
+  `fifo_throughput_scope`, `aws:SecureTransport`, worker `sns:Get*` (Task 9).
+- **Not covered here, by design:** the `mj queue` CLI and remote operations (plan 06), manifest building and binding
   import (plans 05/06), Azure (09a), Firehose (09g).

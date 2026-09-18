@@ -53,7 +53,7 @@ List-Unsubscribe-Post one-click (RFC 8058) ──POST─────────
                                                            │
              ┌─────────────────────────────────────────────┴───────────────────────────┐
   DB deployment: one topic                              AWS deployment: two topics (W7 two-topic pattern)
-  email.events (PublishOrder, not FIFO)                 email.events            (standard SNS)
+  email.events (Database topic)                         email.events            (standard SNS)
    ├ email.record          None                          ├ email.record          None      (Lambda)
    ├ email.reporting       None                          └ email.reporting       None      (Lambda)
    ├ email.subscriber      Exclusive                    email.subscriber-events (FIFO SNS; ingress publishes
@@ -67,12 +67,44 @@ constrain the full event firehose. Only subscriber-affecting events (`bounce`, `
 `unsubscribe`, `group_unsubscribe`, `group_resubscribe`, plus `click` / `open` for last-engaged if enabled)
 go to the FIFO topic.
 
+Two Revision 4 facts shape the FIFO side (03 §5.1, F5; 11 §4): SQS FIFO queues are consumed **one message per
+receive**, with concurrency from parallel receives, so throughput per `RecipientKey` is one at a time by design and
+total throughput scales with the number of distinct recipients in flight; and a retrying message **holds its key** on
+SQS (it does not on the Database transport). Both are what a subscriber-record updater wants. The dedup ledger costs
+two MJ-database writes per keyed message, so this consumer relies on its stable `MessageID` and sends **no**
+`DeduplicationKey` on the firehose (only the MJ-hosted one-click endpoint uses one).
+
 | Subscription | Filter (03 §4) | Partition | Host | Handler responsibility |
 |---|---|---|---|---|
 | `email.record` | — | None | External (AWS) / MJWorker (DB) | idempotent upsert into `CommunicationEvent` keyed `(ProviderID, ProviderEventID)` |
 | `email.reporting` | — | None | External | aggregate counters (commutative) |
-| `email.subscriber` | `eventType: [bounce, dropped, spamreport, click, open]` | Exclusive by `RecipientKey` | MJWorker | last-writer-wins by `OccurredAt` on subscriber status fields |
-| `email.unsubscribe` | `eventType: [unsubscribe, group_unsubscribe, group_resubscribe]` | Exclusive by `RecipientKey` | MJWorker | apply suppression/preference; compare `OccurredAt` against the latest preference change; alert on dead letter |
+| `email.subscriber` | `eventType` is any of `bounce`, `dropped`, `spamreport`, `click`, `open` (filter ① below) | Exclusive by `RecipientKey` | MJWorker | last-writer-wins by `OccurredAt` on subscriber status fields |
+| `email.unsubscribe` | `eventType` is any of `unsubscribe`, `group_unsubscribe`, `group_resubscribe` (filter ② below) | Exclusive by `RecipientKey` | MJWorker | apply suppression/preference; compare `OccurredAt` against the latest preference change; alert on dead letter |
+
+Filters are MJ's `CompositeFilterDescriptor` JSON restricted to the broker-translatable subset (03 §4): top-level
+`and`, with "any of" written as a **single-field OR group of `eq`**. Matching is case-sensitive, so the ingress
+normalises `eventType` to SendGrid's lower-case names before publishing.
+
+```jsonc
+// ① email.subscriber — stored in Subscription.Filter, edited with mj-filter-builder
+{ "logic": "and", "filters": [
+  { "logic": "or", "filters": [
+    { "field": "eventType", "operator": "eq", "value": "bounce" },
+    { "field": "eventType", "operator": "eq", "value": "dropped" },
+    { "field": "eventType", "operator": "eq", "value": "spamreport" },
+    { "field": "eventType", "operator": "eq", "value": "click" },
+    { "field": "eventType", "operator": "eq", "value": "open" } ] } ] }
+
+// ② email.unsubscribe
+{ "logic": "and", "filters": [
+  { "logic": "or", "filters": [
+    { "field": "eventType", "operator": "eq", "value": "unsubscribe" },
+    { "field": "eventType", "operator": "eq", "value": "group_unsubscribe" },
+    { "field": "eventType", "operator": "eq", "value": "group_resubscribe" } ] } ] }
+```
+
+On AWS, ① renders to the SNS filter policy `{"eventType":["bounce","click","dropped","open","spamreport"]}` (plan 07's
+`ToSnsFilterPolicy`); the manifest carries the rendered string, so Terraform never re-translates it.
 
 `email.unsubscribe` policy: `MaxAttempts: 10`, `BackoffMaxSeconds: 3600`. A CloudWatch / DB alert fires on
 any dead letter (legal significance).

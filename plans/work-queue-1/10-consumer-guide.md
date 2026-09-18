@@ -20,7 +20,7 @@ await WorkQueueEngine.Instance.PublishAs('import.ready', [{
 
 | Belongs on your domain row | Belongs on the queue item |
 |---|---|
-| Request details, results, output tail, error text, history, retry lineage, operator UI state | `MessageID`, partition key, sequence, attributes, a reference payload |
+| Request details, results, output tail, error text, history, retry lineage, operator UI state | `MessageID`, partition key, attributes, a reference payload |
 
 Why: the delivery row is claimed, leased and purged on a retention schedule, and every byte of `Payload` is copied
 through the transport (256 KB cap, 10 attributes). `Progress` is a small operator hint (a percentage, a short message,
@@ -29,13 +29,17 @@ a resume checkpoint), not a log.
 ## 2. Handlers must be idempotent
 
 At-least-once delivery plus lease takeover means your handler can run twice for one message — after a crash, a network
-partition, or a redelivery. `MessageID` is stable across redeliveries and replays, so use it (or your own natural key)
-as the idempotency key:
+partition, or a redelivery. `MessageID` is stable across redeliveries and replays and **globally unique** (not per
+topic), so use it (or your own natural key) as the idempotency key:
 
 ```ts
 // "insert if this provider event hasn't been recorded" — safe to run twice
 await RecordClickOnce(message.MessageID, message.Payload, this.ContextUser);
 ```
+
+**Producers: reuse your `MessageID`s when you retry a publish.** A retry with the same `MessageID` and the same content
+is answered `Duplicate`; the same ID with different content is rejected as `MessageIDConflict`. `WorkQueueApiPublisher`
+generates IDs up front for exactly this reason.
 
 Ordering never substitutes for idempotency: on `None`/`Exclusive` subscriptions, arrival order is not guaranteed, so
 prefer last-writer-wins on an event timestamp over "latest arrival wins".
@@ -48,7 +52,9 @@ prefer last-writer-wins on an event timestamp over "latest arrival wins".
   aborts, which is your guard against a hung external command.
 - **Pick a host that allows the runtime you need.** Lambda caps at 15 minutes; an MJ worker or container job does not.
 - **Use `Manual` mode only when you want a stuck handler detected.** Then call `context.Heartbeat(progress)` at real
-  progress boundaries; it resolves `false` once the lease is gone.
+  progress boundaries; it resolves `false` once the lease is gone or the item has been cancelled.
+- Heartbeats run every 30 seconds at most, however long the lease is, so a long lease does not make your handler slow
+  to hear about a cancel.
 
 ```ts
 async Handle(message: WorkMessage<ImportPayload>, context: WorkContext): Promise<WorkOutcome> {
@@ -57,8 +63,19 @@ async Handle(message: WorkMessage<ImportPayload>, context: WorkContext): Promise
 }
 ```
 
-**Always honor `context.Signal`.** It aborts when the lease is lost, the item is cancelled, or the host is shutting
-down. Whatever external work you started — a child process, a remote job, a long query — stop it there.
+**Always honor `context.Signal`.** Whatever external work you started — a child process, a remote job, a long query —
+stop it when the signal aborts. `context.Signal.reason` tells you why:
+
+| `reason` | Meaning | What happens to the item |
+|---|---|---|
+| `'Cancelled'` | An operator discarded the in-flight item | `Discarded` as soon as your handler returns |
+| `'LeaseLost'` | The lease expired or was taken over | Another worker may already be running it; your outcome is ignored |
+| `'MaxProcessingSeconds'` | You ran past the subscription's cap | Treated as a failed attempt |
+| `'Shutdown'` | The host is stopping | Released back to the queue without consuming an attempt (Database) |
+
+**Stop promptly on `'Cancelled'`.** The key of an `Exclusive` or `Ordered` subscription stays busy until your handler
+returns; the moment it does, the runtime acknowledges the cancel and the next item for that key can run. A handler
+that ignores the signal holds the key until its lease runs out.
 
 **Don't block the event loop.** A long *synchronous* CPU-bound loop stops the heartbeat timer along with everything
 else, so the lease expires while you are still working. Move that work to a worker thread or child process. (This is
@@ -90,6 +107,19 @@ want: when a second sync is requested while one is active, your producer or hand
 the running job, queue it for after, or supersede. Stall detection is yours too: your domain row knows the job started
 at time T, so sweep it on your own schedule.
 
+## 5a. Publishing in order
+
+The queue has no sequence numbers: for an `Ordered` subscription, order **is** the order you published. You own it.
+
+- For one partition key, **do not publish N+1 until N has been accepted**, or publish both in **one call** (on the
+  Database transport one `Publish` call is one transaction, in array order).
+- The trap is a retry: you publish batch 3, the call times out, you move on and publish batch 4, then retry batch 3 —
+  now they are out of order with only one producer involved. Await each acceptance and it cannot happen.
+- If your order really is assigned elsewhere (a provider stamps its own numbers and delivers webhooks in any order),
+  do not ask the queue to reorder. Use `Exclusive`, and have the handler apply an event only if its version is newer
+  than what your domain row holds.
+- **`Ordered` needs a Database topic.** Cloud transports offer `None` and `Exclusive`.
+
 ## 6. "Only one at a time per key"
 
 Set `PartitionMode = 'Exclusive'` and a partition key with high cardinality (a subscriber ID, a connector ID, a venue
@@ -104,7 +134,12 @@ if (await SyncedSince(connectorId, minutesAgo(5))) {
 ```
 
 For genuine double-submits (a user clicking five times), add a publish-time `DeduplicationKey` with a short TTL. Use
-`Ordered` only when strict sequence matters — it blocks the key on a dead letter until an operator intervenes.
+`Ordered` only when strict order matters — it blocks the key on a dead letter until an operator intervenes.
+
+**`Exclusive` behaves differently while a message retries.** On SQS FIFO a retrying message keeps its key busy, so
+later messages for that key wait behind it (and therefore stay in publish order). On the Database transport a delivery
+in backoff does not hold its key: later deliveries for the key run while it waits. If "later items must wait for the
+failed one" matters to you, that is `Ordered`, on a Database topic.
 
 ## 6a. Filters
 
@@ -133,7 +168,12 @@ Two things to know:
 
 Retries use full-jitter backoff up to `MaxAttempts`, then dead-letter. Dead letters are visible to operators
 (`mj queue dead-letters`) and can be replayed after a fix, keeping the item's identity and its place in an `Ordered`
-key. Wire alerts with `WorkQueueEngine.OnDeadLettered(...)` (Database/staged) or the DLQ alarms (AWS).
+key.
+
+**Alerting on dead letters.** `WorkQueueEngine.OnDeadLettered(...)` is an **in-process** convenience: it fires only in
+the process that dead-lettered the item, so a dead letter produced by another instance's sweeper, or inside a one-shot
+container job, reaches no listener elsewhere. For anything that must not be missed (an unsubscribe), alert from
+`WorkQueue.GetSubscriptionStats` (`DeadLettered > 0`) on the Database transport and from the DLQ alarms on AWS.
 
 ## 8. Container-job workers
 
@@ -153,5 +193,5 @@ Pending-only count starves the queue. Give the scaler a SELECT-only login. The r
 - Put enough in `Attributes` for filters and triage (`eventType`, `tenant`), and nothing sensitive: attributes are
   visible in transports and logs.
 - Set `CorrelationID` from the originating request so one user action can be traced across subscriptions.
-- Report progress on long work (`context.Heartbeat({ Percent, Message })`, Database/staged), so a stuck item is
+- Report progress on long work (`context.Heartbeat({ Percent, Message })`, persisted on the Database transport), so a stuck item is
   recognisable in the operator views.

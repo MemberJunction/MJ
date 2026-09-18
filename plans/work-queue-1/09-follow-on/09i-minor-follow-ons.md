@@ -11,12 +11,12 @@ size, open questions. Priority reflects expected demand after Phase 1.
 | 4 | Remote-pull API for External consumers on the Database transport | P2 | M |
 | 5 | Action-backed handler adapter | P2 | S |
 | 6 | Priority lanes | P3 | S (pattern) / M (engine) |
-| 7 | Per-key concurrency > 1 and latest-wins coalescing | P3 | M |
+| 7 | Per-key concurrency > 1 (latest-wins coalescing moved to the declined register) | P3 | M |
 | 8 | Sampled per-message delivery ledger for cloud transports | P3 | M |
-| 9 | Cancel reason on the abort signal (the rest of C8 shipped in Phase 1) | P2 | S |
-| 10 | `Ordered` for External (serverless) hosts on cloud transports | P3 (only with a real use case) | L |
+| 9 | ~~Cancel reason on the abort signal~~ — **shipped in Phase 1** (Revision 4, F2) | — | — |
+| 10 | `Ordered` on cloud transports, including External (serverless) hosts | P3 (only with a real use case) | L |
 
-Items **considered and declined** in Revision 3 are recorded at the end, with the evidence that would reopen each.
+Items **considered and declined** (Revision 3) or **cut** (Revision 4, [11](../11-revision-4-review.md) §1) are recorded at the end, with the evidence that would reopen each.
 
 ---
 
@@ -31,12 +31,11 @@ same `MessageID` and order position, which matters for `Ordered` keys.
   `WorkContext.ReplayEdited = true`.
 - **DB:** `WorkQueueDelivery.ReplayPayload nvarchar(max) NULL`, `ReplayAttributes nvarchar(4000) NULL`,
   `ReplayEditedByUserID`. The claim join uses `COALESCE(d.ReplayPayload, m.Payload)`.
-- **Staged subscriptions (cloud `Ordered`):** same as DB — the delivery row carries the override.
 - **AWS (SQS dead-letter queue) / GCP (`<sub>.dlq`) / Azure (dead-letter subqueue):** dead-letter copies are
   immutable; replay already re-sends a copy to the source (scan-based), so the edited envelope is simply what gets
   re-sent, with the same `MessageID` and partition key. The original stays in the operator's audit log.
-- **Validation:** the edited envelope passes `ValidatePublishRequest` (03 §1.1). `PartitionKey` and `Sequence`
-  are **not editable** (they'd corrupt ordering). Filter attributes may change, but only affect this
+- **Validation:** the edited envelope passes `ValidatePublishRequest` (03 §1.1). `PartitionKey` is **not editable**
+  (it would move the item to another key and corrupt `Ordered` position). Filter attributes may change, but only affect this
   subscription's delivery.
 - **Audit:** the original payload is retained (message row / record history). The DB entity keeps
   `TrackRecordChanges=0`, so the override columns carry who and when.
@@ -82,10 +81,12 @@ transaction (02 §4.2); a bridge subscription republishes to the cloud topic.
 **Design.**
 - A built-in handler `WorkQueue.Bridge` (`@RegisterClass(BaseWorkHandler, 'WorkQueue.Bridge')`). Subscription
   `BindingConfig: { "TargetTopic": "email.events" }`.
-- The handler republishes with the **same `MessageID`**, `PartitionKey`, `Sequence`, `Attributes`, `Payload`
+- The handler republishes with the **same `MessageID`**, `PartitionKey`, `Attributes`, `Payload`
   and `CorrelationID`. `Duplicate` counts as success.
-- Ordering: make the bridge subscription `Ordered` by partition key when the target topic has ordered
-  consumers; otherwise `None` for throughput.
+- Ordering: make the bridge subscription `Ordered` by partition key when the target's consumers depend on per-key
+  order (cloud `Exclusive` subscriptions process a key in publish order, so the bridge must publish in order);
+  otherwise `None` for throughput. The reverse bridge — a cloud subscription republishing onto a **Database** topic —
+  is how a cloud event stream gets an `Ordered` consumer, since `Ordered` is Database-only (11 §1, S2).
 - A cloud publish failure → `Retry` (backoff). A target topic missing → `DeadLetter`.
 - Throughput is bounded by the DB transport, which is appropriate: the outbox protects correctness, not volume.
 
@@ -163,13 +164,12 @@ in `packages/Actions/Engine/src/generic/ActionEngine.ts`; `RunActionParams` in
 
 ---
 
-## 7. Per-key concurrency > 1 and latest-wins coalescing
+## 7. Per-key concurrency > 1
 
-**Per-key concurrency.**
 - New `WorkQueueSubscription.PartitionConcurrency int NULL`, for `Exclusive` only.
-- **DB / staged:** Revision 2 enforces single flight with the unique index
+- **DB:** Phase 1 enforces single flight with the unique index
   `(SubscriptionID, PartitionKey) WHERE Status='InFlight'`, which can't express N. Add `WorkQueueDelivery.Lane
-  tinyint NOT NULL DEFAULT 0` (`hash(MessageID) % N`, set at publish/staging) and widen the index to
+  tinyint NOT NULL DEFAULT 0` (`hash(MessageID) % N`, set at publish) and widen the index to
   `(SubscriptionID, PartitionKey, Lane)`: at most one in flight per lane, so at most N per key. N=1 keeps `Lane = 0`
   and today's behavior.
 - **AWS:** FIFO groups are single-flight, so emulate with sharded group IDs `key#(hash(MessageID) % N)`.
@@ -177,16 +177,8 @@ in `packages/Actions/Engine/src/generic/ActionEngine.ts`; `RunActionParams` in
 - **Azure:** multiple sessions per key via the same sharding.
 - The documentation must say plainly that N>1 is "at most N concurrent", not load-balanced.
 
-**Latest-wins coalescing.**
-- New `PartitionMode = 'Coalesce'`: only the newest pending item per key is handled; superseded items settle
-  as `Completed` with `ResolutionNote='Superseded'` (no handler call).
-- **DB:** at claim, pick the max `OrderKey` Pending delivery per key and complete older pending ones in the
-  same statement.
-- **AWS (and other cloud transports):** Revision 2 has no external state store, and thin consumers can't read the
-  MJ database. `Coalesce` is therefore supported only for MJ-hosted subscriptions, **staged** into Database rows
-  like `Ordered` (03 §5.1), where the DB claim rule above applies. External `Coalesce` would need the same state
-  store as item 10.
-- Use cases: "recompute subscriber score", "refresh cache for record X".
+**Latest-wins coalescing** used to sit here as a proposed `PartitionMode = 'Coalesce'`. Revision 3's boundary rule
+(R10) makes coalescing a **consumer** concern, so it is now in the declined register below.
 
 ---
 
@@ -208,44 +200,43 @@ delivery (D11 keeps it off by default).
 
 ---
 
-## 9. Cancel reason on the abort signal (residue of C8)
+## 9. Cancel reason on the abort signal — shipped in Phase 1
 
-**In-flight cancel itself shipped in Phase 1** (Revision 3, R12). `WorkQueue.DiscardDelivery` on an `InFlight`
-delivery sets `WorkQueueDelivery.CancelRequestedAt`, rotates `LeaseToken` and answers `CancelRequested: true`; the
-holder's next heartbeat resolves `false`, `WorkContext.Signal` aborts, any later settle is fenced, and the row
-becomes `Discarded` when its lease expires (03 §7, capability `CancelInFlight`). No separate
-`ITransportOperator.CancelInFlight` method was added — `Discard` covers `Pending`, `InFlight` and `DeadLettered`.
-AWS (non-staged) reports `CancelInFlight: false`; staged `Ordered` subscriptions get the Database behaviour.
+Nothing is left of this item. Revision 4 (F2, 03 §3 and §7) reworked in-flight cancel and delivered the reason with it:
 
-**What is left.** A handler cannot tell *why* it was stopped: lease lost, host shutting down, or operator cancel all
-surface as `Heartbeat() → false` and an aborted `Signal`. Handlers that want to record "cancelled by operator" on
-their domain row (09e's integration runs, for one) must infer it.
+- `WorkQueue.DiscardDelivery` on an `InFlight` delivery sets `CancelRequestedAt` **without rotating the lease token**
+  and answers `cancelRequested: true`. Every settle except `AcknowledgeCancel` is guarded on
+  `CancelRequestedAt IS NULL`.
+- `ExtendLease` returns `'Held' | 'Lost' | 'Cancelled'`; the runtime aborts the handler with
+  `WorkContext.Signal.reason` = `'Cancelled' | 'LeaseLost' | 'MaxProcessingSeconds' | 'Shutdown'`, within one heartbeat
+  interval (`min(LeaseSeconds / 3, 30 s)`).
+- When the handler has stopped, the runtime calls `AcknowledgeCancel` (token-fenced) → `Discarded` **immediately**,
+  freeing an `Exclusive`/`Ordered` key at once; a dead holder's row is discarded by `ExpireLeases`.
+- Capability `CancelInFlight`: `true` on the Database transport, `false` on AWS (an SQS receipt cannot be revoked),
+  Azure and GCP.
 
-**Design.** Carry a reason on the abort: `WorkContext.Signal.reason` set to a typed
-`WorkAbortedError { Kind: 'LeaseLost' | 'Cancelled' | 'Shutdown' | 'MaxProcessingSeconds' }`, sourced from the
-transport's `ExtendLease` result (`'Held' | 'Lost' | 'Cancelled'`) plus the runtime's own reasons. A handler that
-sees `Cancelled` may still settle: the fence has not moved for shutdown, and for cancel the queue ignores the
-outcome because the row is already destined for `Discarded`.
-
-**Schema.** None beyond Phase 1's `CancelRequestedAt`; add `CancelRequestedByUserID` only if the operator identity
-is wanted separately from `ResolvedByUserID`.
-
-**Size.** S. **Priority.** P2 — cosmetic until a consumer needs cancelled-vs-crashed on its own record.
+Still open, and small: `CancelRequestedByUserID` separate from `ResolvedByUserID`, only if the operator identity is
+wanted apart from the resolver's.
 
 ---
 
-## 10. `Ordered` for External (serverless) hosts on cloud transports
+## 10. `Ordered` on cloud transports, including External (serverless) hosts
 
-**Summary.** Let thin, MJ-free consumers (Lambda, Azure Functions, Cloud Run) run `Ordered` subscriptions — strict
-per-key order, blocking on dead letter, explicit-sequence gaps. Revision 2 deliberately leaves this out: cloud
-`Ordered` subscriptions must be `HostType = 'MJWorker'` and are staged into the Database transport (03 §5.1).
-**Build this only if a real use case appears** (neither Phase 1 use case needs it: email events use `None`/`Exclusive`;
-ordered integration batches need MJ entities).
+**Summary.** Let a subscription on a cloud topic — MJ-hosted or a thin, MJ-free consumer (Lambda, Azure Functions,
+Cloud Run) — run `Ordered`: strict per-key publish order with the key halted on a dead letter. Phase 1 deliberately
+has none of this: **`Ordered` is Database-only**. Revision 2's approach of *staging* cloud messages into Database
+delivery rows was cut in Revision 4 (11 §1, S2 — ordering holes across filtered subscriptions, backlog churn during a
+database outage, dead letters invisible to MJ), so no cloud `Ordered` path exists, for any host.
+**Build this only if a real use case appears**: neither Phase 1 use case needs it (email events use
+`None`/`Exclusive`; ordered integration batches need MJ entities and sit on a Database topic). Note what cloud
+`Exclusive` already gives: SQS FIFO groups, Service Bus sessions and Pub/Sub ordering keys all process a key's messages
+in publish order, one at a time. The only thing missing is **halt-on-dead-letter**. The cheap alternative is a bridge
+(item 3, reversed): one cloud subscription republishes onto a Database topic that has the `Ordered` consumer.
 
-**Why it's hard.** SQS FIFO, Pub/Sub ordering keys and Service Bus sessions all release a key after a dead letter,
-and an early-arriving explicit sequence would stall a FIFO group if left unacknowledged. Strict blocking therefore
-needs per-key control state plus **parking** (move blocked/early messages out of the queue, release them in order
-later).
+**Why it's hard.** SQS FIFO, Pub/Sub ordering keys and Service Bus sessions all release a key after a dead letter.
+Strict blocking therefore needs per-key control state plus **parking** (move the messages behind a blocked head out
+of the queue, release them in order once it is replayed or discarded) — and every crash window between "park" and
+"delete" has to be closed.
 
 **Options.**
 
@@ -258,18 +249,18 @@ later).
 | MJ remote-pull (item 4) | any | not serverless-thin, but gives External hosts Database semantics without a new store |
 
 **Contract.** Flip `TransportCapabilities.SupportsOrdered` to `true` for the transport; `SubscriptionUnsupportedReason`
-(03 §5) then accepts External `Ordered`. A shared `PartitionStateStore` interface (key state, park, release,
+(03 §5) then accepts `Ordered` on it. A shared `PartitionStateStore` interface (key state, park, release,
 dead-letter record) keeps one reducer and one conformance suite across stores.
 
-**Testing.** The full `Ordered` section of the conformance kit (blocking, replay-as-head, discard-releases,
-sequence gaps, skip) against each store, plus crash injection between park-write and message delete.
+**Testing.** The full `Ordered` section of the conformance kit (head-of-line, blocking, replay-as-head,
+discard-releases, retry-holds-the-key) against each store, plus crash injection between park-write and message delete.
 
 **Open question.** Is Azure's native session-state option enough to satisfy the first real use case, avoiding a
 store on AWS/GCP entirely?
 
 ---
 
-## Considered and declined (Revision 3)
+## Considered and declined (Revision 3) or cut (Revision 4)
 
 Reviewed against MJ Central's two hand-rolled queues ([01](../01-use-cases.md) use case 3) and declined on the
 boundary rule in [02 §1a](../02-implementation-overview.md#1a-where-the-queue-stops): the queue guarantees durable
@@ -278,7 +269,18 @@ names the evidence that would reopen it.
 
 | Declined | Why | Consumer does this instead | Reopen when |
 |---|---|---|---|
-| **`AwaitExternal` delivery state** — a delivery parks (lease released, key still held) until `CompleteExternal(completionKey)` or a timeout | Needs a new status, a completion-key index, a widened in-flight index, a timeout sweeper and a new API; works only on Database/staged, so the contract would diverge per transport. It also puts the domain's stall policy inside the queue | Split-message pattern ([10](../10-consumer-guide.md) §5): the handler starts the vendor job, records it on its domain row and completes; the webhook publishes a completion message. Overlap, coalescing and stall detection stay with the integration, which knows the rules | Many concurrent long external jobs make worker slots (option B: hold the lease and poll) genuinely expensive, **and** the split-message pattern's domain bookkeeping has been written more than twice |
+| **`AwaitExternal` delivery state** — a delivery parks (lease released, key still held) until `CompleteExternal(completionKey)` or a timeout | Needs a new status, a completion-key index, a widened in-flight index, a timeout sweeper and a new API; works only on the Database transport, so the contract would diverge per transport. It also puts the domain's stall policy inside the queue | Split-message pattern ([10](../10-consumer-guide.md) §5): the handler starts the vendor job, records it on its domain row and completes; the webhook publishes a completion message. Overlap, coalescing and stall detection stay with the integration, which knows the rules | Many concurrent long external jobs make worker slots (option B: hold the lease and poll) genuinely expensive, **and** the split-message pattern's domain bookkeeping has been written more than twice |
 | **Cloud liveness probe before reclaiming a lease** — sweeper asks the platform (e.g. Azure's execution API) whether the lease owner is alive before expiring it | Makes lease expiry cloud-aware and non-SQL, needs a probe registry and an owner-ID convention, and a dead-but-reported-alive executor blocks its key indefinitely. MJ Central needed it because its heartbeat was entangled with a full-row `Save()`; ours is a small guarded update, retried within the lease | Size `LeaseSeconds` above the worst plausible heartbeat outage, and guard non-restartable side effects in the handler (a state lock or a domain row claimed by conditional UPDATE) — [10](../10-consumer-guide.md) §4 | Long-lease subscriptions still see healthy-but-silent workers reclaimed in practice, with lease sizing already tuned |
 | **`DeduplicationMode = 'UntilResolved'`** — hold a deduplication key until the work finishes instead of for a TTL | "Resolved" is ambiguous under fan-out (all subscriptions? the first?), couples the ledger to delivery state, cannot work on AWS (no per-message tracking), and a dead letter silently blocks publishes until an operator acts | `Exclusive` serialises deliveries per key, so the handler can check its domain row without a race and coalesce or complete; a short `DeduplicationKey` TTL absorbs genuine double-submits — [10](../10-consumer-guide.md) §6 | A consumer needs cross-transport "one active per key" *at publish time* (not at handle time) and cannot see domain state from the producer |
 | **Child-process / heartbeat helpers in core** — `HeartbeatWhile(promise)`, `RunChildProcess` with SIGTERM→grace→SIGKILL and a bounded output tail | `HeartbeatMode: 'Auto'` already renews the lease while a handler awaits anything, so no helper is needed for liveness; signal escalation and output tails are domain utilities, and Node-only code has no place in the Lambda-safe core | Await normally, honour `context.Signal`, set `MaxProcessingSeconds`, and offload CPU-bound work off the event loop — [10](../10-consumer-guide.md) §3 | Several consumers ship near-identical process-supervision code; then it belongs in a general MJ Node utility, still not in `work-queue-core` |
+| **Latest-wins coalescing** (`PartitionMode = 'Coalesce'`) — only the newest pending item per key is handled; older ones settle as superseded | Whether an older request is redundant is domain knowledge (R10). It also cannot work on cloud transports without a state store, so it would be a Database-only mode with different semantics per transport | `Exclusive` serialises deliveries per key, so the handler checks its domain row ("was this key refreshed after this message was published?") and completes — [10](../10-consumer-guide.md) §6 | Several consumers implement the same "skip if superseded" check **and** the wasted handler invocations are a measured cost |
+
+### Cut in Revision 4 (built, reviewed, then removed)
+
+These were in the Phase 1 design until seven independent reviews ([11](../11-revision-4-review.md)) found them to be
+the largest source of defects while serving no current use case. Reopen conditions are copied from 11 §1.
+
+| Cut | Why | Instead | Reopen when |
+|---|---|---|---|
+| **Explicit sequences** — producer-supplied `Sequence`, topic `OrderingMode`, gap waiting, `SkipSequence`, the `WorkQueuePartitionState` table, `AwaitingSequence`/`GapStalled`, sequence sweeper steps, `SequenceGapAlertSeconds`, sequence error codes | Nine stuck-key defects across three review passes: new, re-enabled or filtered subscriptions wait forever; cancel and concurrent discards strand the counter; purge deletes rows the counter needs. And no use case: ordering matters when **one producer** owns the work, and that producer can publish in order | `Ordered` = publish order. For one key, do not publish N+1 until N is accepted, or publish both in one call (Database: one transaction, array order) — [10](../10-consumer-guide.md) §5a. If a provider delivers out of order, use `Exclusive` with a version/batch-number precondition in the handler (09e) — never a precondition under `Ordered`, where an early item heads the key and blocks the one it is waiting for | A real producer whose ordering authority is external (a provider's sequence numbers echoed by webhook) **and** a handler-side version check cannot solve it |
+| **Staged `Ordered` on cloud transports** — an MJ worker copying SQS messages into Database delivery rows (`StageDeliveries`, `StagedToDatabase`, `WorkQueueHostLoopRegistry`, the redrive-1000 rule) | Ordering holes (shared ordinals across filtered subscriptions; a PostgreSQL insert race), backlog churn during a database outage until SQS redrives everything out of order, dead letters invisible to MJ's operator commands. 02 already said no use case needs it | Put a topic that needs `Ordered` on the Database transport; bridge a cloud stream onto a Database topic when one consumer needs it (item 3). Cloud `Exclusive` already preserves per-key order — it lacks only halt-on-dead-letter | A cloud-hosted topic needs a consumer that halts its key on failure — then build item 10 properly (native per-transport state), not staging |

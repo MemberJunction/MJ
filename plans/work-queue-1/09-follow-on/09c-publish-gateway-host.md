@@ -46,7 +46,9 @@ image, health endpoints, auth, topology cache invalidation, metrics, and a scali
 work-queue-gateway (Node, Express)
  ├─ import '@memberjunction/server-bootstrap-lite'          class registrations (entities, core)
  ├─ import '@memberjunction/work-queue-server'              extension + engine + DB driver registration
- ├─ import '@memberjunction/work-queue-aws' (optional)      only if AWS topics are served (driver manifest)
+ ├─ import '@memberjunction/work-queue-engine/aws'          only if AWS topics are served: the engine subpath that registers the
+ │                                                          'AWS' driver factory (03 §0, F12). The engine's main entry never imports
+ │                                                          work-queue-aws, so a Database-only gateway loads no AWS client.
  ├─ loadMJConfig()  → db, workQueue, serverExtensions, gateway sections (packages/Config)
  ├─ DB pool + SQLServerDataProvider / PostgreSQLDataProvider setup
  ├─ StartupManager.Startup  (restricted: UserCache, APIKeyEngine, WorkQueueEngine only — see Open questions)
@@ -72,10 +74,12 @@ auth semantics can't drift. Parity tests guard this (below).
 ### Request path budget
 
 The target is p99 < 150 ms (AWS transport) at 100 messages per request:
-- Auth: API-key hash lookup cached in memory (verify that `APIKeyEngine` caches validated keys; add an
+- Auth: **API key only** (03 §9, F7 — a JWT session cannot publish over REST), with the scope check mirroring
+  `ResolverBase.CheckAPIKeyScopeAuthorization` (`full_access`, acting context, system user); the shared wiring
+  extracted above is what keeps MJAPI and the gateway identical. API-key hash lookup cached in memory (verify that `APIKeyEngine` caches validated keys; add an
   LRU with a 60 s TTL if not).
 - Validation: `ValidatePublishRequest` from core (03 §1.1, adopted) — pure CPU; plus the topic's `AllowExternalPublish` check.
-- Topology: `WorkQueueEngine` in-memory cache (BaseEngine).
+- Topology: `WorkQueueEngine`, a `BaseSingleton` facade that delegates metadata to `WorkQueueEngineBase.Instance` (the `BaseEngine` cache in `@memberjunction/work-queue-base` — R16, 03 §11); lookups are in-memory.
 - Transport: SNS `PublishBatch` in chunks of 10, run in parallel (bounded to 10 concurrent).
 - Cloud-transport topics: no DB writes **except** the deduplication ledger (03 §2.1) for requests that carry a
   `DeduplicationKey` — one `Reserve` before and one `Confirm`/`Release` after the send, batched per request.
@@ -86,7 +90,7 @@ The target is p99 < 150 ms (AWS transport) at 100 messages per request:
 
 | Deployment | Mechanism |
 |---|---|
-| Redis present (`REDIS_URL`) | BaseEngine / LocalCacheManager cache-change events over the existing `${prefix}:__pubsub__` channel (`packages/RedisProvider/src/RedisLocalStorageProvider.ts`) reload topics/subscriptions when those entities change |
+| Redis present (`REDIS_URL`) | `WorkQueueEngineBase` (a `BaseEngine`) / LocalCacheManager cache-change events over the existing `${prefix}:__pubsub__` channel (`packages/RedisProvider/src/RedisLocalStorageProvider.ts`) reload topics/subscriptions when those entities change |
 | No Redis | Poll every `gateway.topologyRefreshSeconds` (default 30) with a cheap version probe: `SELECT MAX(__mj_UpdatedAt), COUNT(*)` over Transport/Topic/Subscription; reload on change |
 | Publish error indicating a binding mismatch (e.g. SNS `NotFound`, missing `MessageGroupId`) | force a reload, then retry that chunk once |
 

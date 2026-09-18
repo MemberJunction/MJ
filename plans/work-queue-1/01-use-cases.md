@@ -37,7 +37,9 @@ hours), inside MJ because it needs MJ entities.
 
 **Distilled requirements**
 - R2.1 Messages carry **references** (claim-check), not bulk data.
-- R2.2 Batches for the same integration must be applied **strictly in order** — batch 4 must not apply before batch 3, even if batch 4's notification arrives first.
+- R2.2 Batches for the same integration must be applied **strictly in order**. One producer owns an integration's
+  batches and publishes their notifications in order (batch N+1 only after batch N is accepted, or both in one call);
+  the queue then processes that key in publish order, one at a time (`Ordered`, Database transport).
 - R2.3 If a batch fails permanently, **later batches for that integration must not proceed** until an operator fixes it (replays successfully or discards). Other integrations continue.
 - R2.4 Processing may run for a long time; the queue must know the worker is still alive and must redeliver if it silently dies.
 - R2.5 Only one worker may process a given batch at a time, even across multiple MJ server instances.
@@ -57,7 +59,7 @@ What that has cost them, and what this design must answer:
 | Load-check-`Save()` is not a compare-and-swap; two workers can claim one row, and a full-row save restores a stale lease over the winner's claim. Only a Terraform state lock catches it | R3.1 Claims are single guarded statements; every holder write is fenced (03 §7) |
 | A heartbeat that "dirtied" a row wrote nothing, `__mj_UpdatedAt` never moved, and every live run was reaped at 30 minutes | R3.2 Liveness is a dedicated column moved by guarded SQL; system columns are never the lease |
 | Frozen heartbeat during a healthy run forced a raise from 30 → 75 minutes plus a cloud liveness probe before reaping | R3.3 Per-subscription `LeaseSeconds` sized by the consumer; transient heartbeat failures retried within the lease |
-| Cancel is a flag polled by the heartbeat, up to 60 s late, and a stale save can clear it | R3.4 Cancel revokes the lease: next heartbeat returns `false`, the signal aborts, later settles are fenced |
+| Cancel is a flag polled by the heartbeat, up to 60 s late, and a stale save can clear it | R3.4 Cancel is a guarded flag no save can clear: the next heartbeat (≤ 30 s, whatever the lease length) reports it, the signal aborts, other settles are rejected, and the key is freed as soon as the handler acknowledges |
 | A scaler query counting only `Pending` starved the queue for ~40 minutes (scalers subtract running executions) | R3.5 A documented backlog metric counting claimable `Pending` **plus** `InFlight`, from a SELECT-only login |
 | Ten startup recovery steps, each with its own stale-state sweep | R3.6 Recovery is lease expiry; no per-state recovery code |
 | Requeue creates a new row, losing its place in line | R3.7 Replay keeps the item's identity and position |
@@ -74,12 +76,12 @@ deciding what to do with a second sync request, or completing work that a webhoo
 | X1 | **Liveness** of a processing thread | Lease + heartbeat; `Auto` or `Manual` heartbeat mode |
 | X2 | Handle the **unexplained absence** of an update | Lease expiry → counted as a failed attempt → redelivery (or dead letter at max attempts) |
 | X3 | **Prevent duplicate simultaneous handling** | Single-owner claim with lease token (fence); `Exclusive`/`Ordered` add per-key single-flight |
-| X4 | **Sequential processing** | `Ordered` partition mode; publish order or explicit `Sequence` with gap blocking |
+| X4 | **Sequential processing** | `Ordered` partition mode (Database transport): a key's deliveries run in publish order, one at a time. The producer owns the order |
 | X5 | **Dead-letter handling** | Per-subscription dead letters with reason + last error; replay/discard via operator API/CLI; `Ordered` keys block on dead letter |
-| X6 | **Durability** across process crash/restart/deploy | State lives in the transport (DB rows / SQS / DynamoDB), never only in memory |
+| X6 | **Durability** across process crash/restart/deploy | State lives in the transport (database rows / SQS), never only in memory |
 | X7 | **Pluggable infrastructure** | Transport driver interface; DB + AWS in Phase 1, Azure 1a, GCP later |
 | X8 | **Multi-instance safety** | All claims are atomic against shared state; clock comparisons use the DB/transport clock |
-| X9 | **Operability** | Stats, dead-letter browse, replay, discard (including cancelling in-flight work), blocked-key listing, sequence skip — same API on every transport |
+| X9 | **Operability** | Stats, dead-letter browse, replay, discard (including cancelling in-flight work), blocked-key listing — one API on every transport, each reporting what it supports |
 | X10 | **Worker shapes** | In-process host inside MJAPI, or a one-shot container job that claims, runs, drains and exits, scaled from a backlog metric |
 
 ## Non-goals (Phase 1)
@@ -91,5 +93,10 @@ deciding what to do with a second sync request, or completing work that a webhoo
 - Per-message delivery history for cloud transports.
 - Editing a dead-lettered message's payload before replay.
 - Priority queues (a separate topic/subscription is the Phase 1 answer to priority).
+- **Producer-supplied sequence numbers** (the queue reordering out-of-order publishes and waiting on gaps). Ordering
+  matters when one producer owns the work, and that producer can publish in order; an externally assigned order is
+  handled by a version check in the handler ([11 §1](11-revision-4-review.md), S1).
+- **`Ordered` subscriptions on cloud transports.** A topic that needs one lives on the Database transport; AWS
+  `Exclusive` already preserves order within a key and lacks only halt-on-dead-letter ([11 §1](11-revision-4-review.md), S2).
 - Waiting on external completion as a queue state, cloud liveness probes, "one active per key" deduplication, and
   child-process helpers — all considered with MJ Central and deliberately left to consumers ([09i](09-follow-on/09i-minor-follow-ons.md)).

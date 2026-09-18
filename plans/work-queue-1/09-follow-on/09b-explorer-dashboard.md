@@ -6,7 +6,8 @@ An MJ Explorer dashboard for operating the work queue. It gives the same capabil
 `mj queue` CLI:
 - topology overview with live stats
 - dead-letter browser with replay/discard
-- blocked and awaiting partitions with sequence skip
+- blocked `Ordered` partitions (a dead-lettered head halting its key), cleared by replay or discard
+- subscription filter editing with the generic `mj-filter-builder`
 - binding validation status
 
 It's built to [`guides/UI_LAYERING_GUIDE.md`](../../../guides/UI_LAYERING_GUIDE.md) (L0→L3) and to the
@@ -37,23 +38,30 @@ agent context/tools, permissions.
 Phase 1 already ships the operator surface as **Remote Operations** (03 §8; `guides/REMOTE_OPERATIONS_GUIDE.md`)
 — there are no REST operator routes (REST is publish-only). The dashboard calls the CodeGen-emitted operation
 classes through `this.ProviderToUse`, the same code path the `mj queue` CLI uses server-side. Topology (topics,
-subscriptions, transports) is read with `RunView.FromMetadataProvider(this.ProviderToUse)` over the generated
-entities; no operation is needed for it.
+subscriptions, transports) comes from **`WorkQueueEngineBase`** in the browser-safe
+`@memberjunction/work-queue-base` package (03 §0, §11; R16) — the metadata tier that exists for exactly this:
+`WorkQueueEngineBase.Instance.Config(false, user, this.ProviderToUse)`, then its cached `Transports`, `Topics`,
+`Subscriptions`, `SubscriptionsForTopic` and `ValidateTopologyRows`. No ad-hoc `RunView` over the topology entities,
+and no operation is needed for it. The dashboard never imports `@memberjunction/work-queue-engine` (server-only).
 
 | Remote Operation key (03 §8) | Used by | Side effect |
 |---|---|---|
 | `WorkQueue.GetSubscriptionStats` | Overview, stats strips | none |
 | `WorkQueue.ListDeadLetters` | Dead Letters | none |
 | `WorkQueue.ReplayDeadLetter` | Dead Letters (replay) | yes |
-| `WorkQueue.DiscardDelivery` | Dead Letters (discard); cancel a pending item where `CancelPending`, or a running one where `CancelInFlight` (03 §7 — the row clears when its lease expires, so the UI shows "cancelling…" until then) | yes |
+| `WorkQueue.DiscardDelivery` | Dead Letters (discard); cancel a pending item where `CancelPending`, or a running one where `CancelInFlight` (03 §7, F2 — the result carries `cancelRequested: true`; the handler notices within one heartbeat, at most 30 s, and acknowledges, so the UI shows "cancelling…" until the row turns `Discarded`; if the worker is dead the row is discarded when its lease expires) | yes |
 | `WorkQueue.ListPartitions` | Partitions | none |
-| `WorkQueue.SkipSequence` | Partitions | yes |
+| `WorkQueue.GetBacklog` | Overview (claimable / in-flight, the autoscaler metric; shows "1000+" when `capped`) | none |
 | `WorkQueue.ValidateBindings` | Bindings | none |
+
+These are the seven Phase 1 operations. There is no sequence-skip operation: explicit sequences were cut in
+Revision 4 (11 §1, S1).
 
 Phase 1 operations are single-item; bulk replay/discard loops client-side with per-item results (a batch variant
 is a candidate addition if loops prove slow). Every operation can answer `supported: false` (e.g. `ListPartitions`
-on a non-staged AWS subscription); the UI hides the corresponding section for that subscription rather than
-showing an error. `Discard` on a blocking `Ordered` head shows an explicit confirmation naming how many waiting
+or an in-flight cancel on an AWS subscription); the UI hides the corresponding section for that subscription rather
+than showing an error. AWS dead-letter lists are best-effort (a bounded DLQ scan, no cursor — 03 §5.2), and the UI
+says so. `Discard` on a blocking `Ordered` head shows an explicit confirmation naming how many waiting
 items will be released.
 
 ### Layers and packages
@@ -67,14 +75,16 @@ L0  @memberjunction/work-queue-core (types, already exists)
 L1  @memberjunction/ng-work-queue-widgets   (NO router, NO ng-shared, zero data access)
     mj-wq-stats-strip          (SubscriptionStats → counters; Pending/InFlight/DeadLettered/BlockedKeys/OldestAge)
     mj-wq-dead-letter-table    (DeadLetterRecord[] in; SelectionChange, ReplayRequested, DiscardRequested out)
-    mj-wq-partition-table      (PartitionStateRecord[] in; SkipSequenceRequested, ViewBlockingRequested out)
+    mj-wq-partition-table      (PartitionStateRecord[] in; ViewBlockingRequested out)
     mj-wq-envelope-viewer      (WorkMessage in; attributes + JSON payload/PayloadRef, copy buttons)
     mj-wq-binding-issues-list  (BindingValidationIssue[] in)
+    mj-wq-subscription-filter  (wraps the generic mj-filter-builder from @memberjunction/ng-filter-builder;
+                                CompositeFilterDescriptor in/out — see "Filter editing" below)
 
 L2  same package, composites extending BaseAngularComponent (ProviderToUse only)
     mj-wq-subscription-panel   (input: SubscriptionID or loaded entity; owns GetSubscriptionStats/ListDeadLetters/
-                                ListPartitions/ReplayDeadLetter/DiscardDelivery/SkipSequence calls; emits RecordOpenRequested)
-    mj-wq-topology-overview    (loads topics+subscriptions via RunView, one GetSubscriptionStats call; emits
+                                ListPartitions/ReplayDeadLetter/DiscardDelivery calls; emits RecordOpenRequested)
+    mj-wq-topology-overview    (reads topics+subscriptions from WorkQueueEngineBase, one GetSubscriptionStats call; emits
                                 SubscriptionSelected, RecordOpenRequested)
 
 L3  packages/Angular/Explorer/dashboards/src/WorkQueue/
@@ -91,13 +101,27 @@ Chrome trio (`<mj-page-layout>` / `<mj-page-header>` / `<mj-page-body>`) with a 
 |---|---|---|---|
 | **Overview** | `mj-wq-topology-overview`: topics grouped by transport, with subscription rows and stats strips; rows with DeadLettered>0 or BlockedKeys>0 sort first | status pill "N subscriptions need attention" (variant `warning`) when non-zero | Refresh |
 | **Dead Letters** | subscription picker + `mj-wq-subscription-panel` in dead-letter mode | X-of-Y selected | Refresh · Replay selected · Discard selected (primary = Replay) |
-| **Partitions** | panel in partitions mode, condition filter (`Blocked`, `AwaitingSequence`, `GapStalled`, `InFlight`) behind the one Filter popover | count of blocked keys (variant `danger`) | Refresh |
+| **Partitions** | panel in partitions mode, condition filter (`Blocked`, `InFlight` — 03 §5.2's `PartitionCondition`) behind the one Filter popover | count of blocked keys (variant `danger`) | Refresh |
 | **Bindings** | `WorkQueue.ValidateBindings` results per topic/transport | "N errors" pill | Re-validate |
 
 - Refresh: manual, plus a 15 s auto-refresh while the tab is visible (paused when hidden). No realtime push
   in this spec.
 - `NotifyLoadComplete()` is called after the first Overview stats load (or error).
 - Styling uses design tokens only (`.claude/rules/design-tokens.md`); buttons use `mjButton`.
+
+### Filter editing (R15)
+
+A subscription's `Filter` is MJ's standard `CompositeFilterDescriptor` JSON, so the dashboard edits it with the
+existing generic builder rather than a new control (03 §4.3):
+
+- `fields: FilterFieldInfo[]` = the topic's known attribute names (type `string`), gathered from the topic's other
+  subscriptions' filters plus free entry — attributes are free-form, so the list is a convenience, not a schema.
+- `config`: `allowGroups` limited to a single-field OR of `eq`; the operator list restricted to the target
+  transport's `FilterSupport.Operators` (`eq`, `neq`, `startswith`, `isnull`, `isnotnull`); depth ≤ 2.
+- The builder can still produce shapes the queue rejects (a field constrained twice). Before saving, the widget
+  calls `WorkQueueEngineBase.ParseFilter` and shows the returned reason; the server re-validates on save regardless.
+- A note beside the builder states that matching is **case-sensitive** — the one deliberate divergence from MJ's
+  usual filter comparison.
 
 ### Agent context & client tools (required by dashboards CLAUDE.md)
 
@@ -112,15 +136,18 @@ Chrome trio (`<mj-page-layout>` / `<mj-page-header>` / `<mj-page-body>`) with a 
 
 ### Permissions
 
-| Capability | Check |
-|---|---|
-| View dashboard + read operations | MJ Authorization `WorkQueue.Read` (new authorization metadata), enforced in each operation's `Authorize` hook (server) and used to hide the nav item |
-| Replay / Discard / SkipSequence | `WorkQueue.Operate`, enforced in the operation's `Authorize` hook. UI disables actions without it. |
-| Edit topology | normal entity permissions on the `MJ: Work Queue *` entities |
+Phase 1 already authorizes every operation (03 §8, F7) — the dashboard adds no new authorization model, it
+mirrors the existing one in the UI:
 
-API-key callers are additionally gated by the operations' `RequiredScope` (`workqueue:read` /
-`workqueue:operate`, 03 §8); interactive users are gated by the authorizations above. Each mutating operation
-records its actor (`ResolvedByUserID` on Database/staged deliveries; `actorUserID` passed to cloud operators).
+| Capability | Check (enforced server-side in each operation's `Authorize`) | UI |
+|---|---|---|
+| View dashboard + read operations | interactive user: **Read** on `MJ: Work Queue Deliveries` (restricted to administrative roles, because payloads may hold PII) | nav item hidden without it |
+| Replay / Discard | interactive user: **Update** on `MJ: Work Queue Subscriptions` | actions disabled without it |
+| Edit topology and filters | normal entity permissions on the `MJ: Work Queue *` entities | standard forms |
+
+API-key callers are gated by the operations' `RequiredScope` (`workqueue:read` / `workqueue:operate`, with the
+subscription name as the resource). Each mutating operation records its actor (`ResolvedByUserID` on Database
+deliveries; `actorUserID` passed to cloud operators).
 
 ### Application placement
 
@@ -129,8 +156,9 @@ A nav item under the existing Admin application (metadata in `metadata/applicati
 
 ## Interfaces / schema changes
 
-- None to the operations themselves (they ship in Phase 1). Adds `Authorize(input, user)` checks for the new
-  authorization metadata `WorkQueue.Read`, `WorkQueue.Operate` to the Phase 1 server subclasses.
+- None to the operations or their authorization (both ship in Phase 1, 03 §8).
+- New Angular dependency for the widgets package: `@memberjunction/work-queue-base` (browser-safe) and
+  `@memberjunction/ng-filter-builder`.
 - No table changes.
 
 ## Dependencies on Phase 1
@@ -152,12 +180,12 @@ A nav item under the existing Admin application (metadata in `metadata/applicati
 
 | Item | Size |
 |---|---|
-| Authorizations + `Authorize` hooks on the Phase 1 operations | S |
-| L1 widgets (5) + models | M |
+| Filter editor widget over `mj-filter-builder` + `ParseFilter` pre-validation | S |
+| L1 widgets (6) + models | M |
 | L2 composites (2) | M |
 | L3 dashboard, routing, query params, NotifyLoadComplete | S |
 | Agent context + tools | M |
-| Metadata (app nav, authorizations) | S |
+| Metadata (app nav) | S |
 | Playwright scenarios | S |
 
 ## Open questions

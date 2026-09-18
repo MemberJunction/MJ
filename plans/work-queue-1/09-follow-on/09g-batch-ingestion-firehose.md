@@ -87,20 +87,23 @@ emulate Firehose. Instead, a subscription may opt into **batch delivery**:
 - `WorkQueueSubscription.MaxBatchSize int NULL`: null = individual handler.
 - `BatchMaxWaitMs int NULL`: how long to wait to fill a batch.
 
-The worker runs the normal `ExpireLeases` step, then claims up to `MaxBatchSize` deliveries in **one**
-skip-locked statement (03 §7) and hands them to a `BatchWorkHandler`. Each delivery keeps its own lease token and
-settles individually through the fenced single-row writes. Claim rules per partition mode:
+The worker runs the normal `ExpireLeases` step, then claims up to `MaxBatchSize` deliveries with the **unchanged**
+Phase 1 claim (03 §7) and hands them to a `BatchWorkHandler`. Each delivery keeps its own lease token and settles
+individually through the fenced single-row writes. Claim rules per partition mode:
 
 | Mode | Batch claim candidate set |
 |---|---|
-| `None` | any claimable `Pending` rows (`VisibleAt ≤ now`), `TOP (@MaxBatchSize)` ordered by `OrderKey` |
-| `Exclusive` | at most **one row per `PartitionKey`**: `ROW_NUMBER() OVER (PARTITION BY PartitionKey ORDER BY OrderKey) = 1` among visible `Pending` rows, and no `InFlight` row for the key |
-| `Ordered` | the **head** per key only (03 §7 rule 4), plus `OrderKey = LastCompletedSequence + 1` on `ExplicitSequence` topics |
+| `None` | any claimable `Pending` rows (`VisibleAt ≤ now`, not cancel-requested), `TOP (@MaxBatchSize)` ordered by `OrderKey`, in **one** skip-locked statement |
+| `Exclusive` | at most **one row per `PartitionKey`** within the batch (`ROW_NUMBER() OVER (PARTITION BY PartitionKey ORDER BY OrderKey) = 1` among visible `Pending` rows, and no `InFlight` row for the key) |
+| `Ordered` | the **head** per key only (03 §7 rule 4); a locked head means the key yields nothing this cycle — a later row of the key is never taken instead. `Ordered` is Database-only (11 §1, S2) |
 
-The unique in-flight index `UQ_WorkQueueDelivery_InFlightPartition` stays the final guard. A multi-row claim
-statement that races another worker and violates it fails **as a whole** (no rows claimed); the worker then
-retries once with single-row claims for that cycle, so a race costs one round trip rather than correctness. The
-`Exclusive`/`Ordered` rules are therefore unchanged by batching.
+For partitioned subscriptions 03 §7 is already batch-shaped: candidates are selected one per key, **each candidate
+is claimed by its own guarded statement**, and a violation of the unique in-flight index
+`UQ_WorkQueueDelivery_InFlightPartition` is handled **per candidate** as "not claimed" — it never aborts the rest of
+the batch. Batching therefore adds no new claim statement and changes no `Exclusive`/`Ordered` rule; a batch for a
+partitioned subscription simply spans up to `MaxBatchSize` **different keys**. There is no sequence gap rule to
+honour (explicit sequences were cut, 11 §1, S1). The candidate query must stay bounded and index-backed (03 §6.5's
+filtered claim index, F9) — `MaxBatchSize` is capped at 500.
 
 A staging-table design (a buffer table sealed into batch objects) was considered and **rejected** for Phase 2.
 It duplicates the delivery table with no benefit at DB volumes.
@@ -132,9 +135,9 @@ export async function ProcessBatchObject<TRecord extends WorkJson>(
 ```
 
 `ProcessBatchObject` behavior:
-1. Resume from `Checkpoint.NextIndex`. Database and staged subscriptions persist `Progress.Checkpoint` already.
-   SQS subscriptions don't (`PersistsProgress: false`, 03 §5); rather than adding a state store (Revision 2 removed
-   DynamoDB), `ProcessBatchObject` writes a small **checkpoint object next to the batch object**
+1. Resume from `Checkpoint.NextIndex`. Database subscriptions persist `Progress.Checkpoint` already. SQS
+   subscriptions don't (`PersistsProgress: false`, 03 §5); rather than adding a state store (the design has no
+   DynamoDB, R8), `ProcessBatchObject` writes a small **checkpoint object next to the batch object**
    (`…/checkpoints/{subscription}/{messageId}.json` in the same bucket — S3 is already in this path; a blob on
    Azure) on each heartbeat and reads it on redelivery. Without it, a redelivered object is re-processed from
    index 0 and per-record idempotency absorbs the repeats (proposal **C6** generalizes this).

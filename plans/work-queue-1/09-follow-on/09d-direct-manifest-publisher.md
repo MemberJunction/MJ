@@ -48,7 +48,6 @@ a remote operation, callable by an API key over the generic `ExecuteRemoteOperat
 ```ts
 export interface ManifestTopic {
   Name: string;
-  OrderingMode: OrderingMode;
   IsFifo: boolean;
   MaxPayloadBytes: number;
   Status: 'Active' | 'Disabled';                 // new
@@ -60,7 +59,7 @@ export interface TopologyManifest { /* … */ ManifestHash: string; }   // new
 ```
 
 `BindingEpoch` is a new `WorkQueueTopic.BindingEpoch int NOT NULL DEFAULT 1`. It is incremented by the engine
-whenever `TransportID`, `IsFifo`, `OrderingMode` or the binding's resource identifier changes.
+whenever `TransportID`, `IsFifo` or the binding's resource identifier changes.
 
 ### Shared validation (adopted in 03 §1.1)
 
@@ -88,6 +87,14 @@ straight to the cloud skips it. Options:
 **Recommendation:** A by default; B when a producer needs windows longer than the transport's own dedup. With B,
 MJ is back in the path for those requests only, and an MJ outage turns them into `Rejected(TransportUnavailable,
 Retryable=true)` rather than silently publishing duplicates.
+
+Option B must follow the Revision 4 ledger protocol (03 §2.1, F1) exactly, because the crash window it closes is
+wider for a remote publisher: **only a `Confirmed` row returns `Duplicate`**. A `Reserved` row owned by the **same**
+`MessageID` is re-taken and the send repeated (the publisher crashed or timed out between reserve and send; a FIFO
+topic's 5-minute window absorbs the double send); a `Reserved` row owned by a **different** `MessageID` returns
+`Rejected(DeduplicationPending, Retryable=true)`. The direct publisher therefore generates its `MessageID`s before
+reserving and reuses them on every retry, as `WorkQueueApiPublisher` does. This also bears on 11 §4's known limit:
+the ledger is two MJ-database writes per keyed message, so firehose producers should use option A.
 
 ### Publisher
 
@@ -129,7 +136,7 @@ Publish(topic, reqs)
 | Subscription added/removed/filter changed | non-breaking | invisible to publishers (the transport applies filters) |
 | Topic `MaxPayloadBytes` lowered | soft | stale publishers may send larger messages until refresh; still ≤ transport hard limit (256 KB) |
 | Topic `Disabled` | soft | honored within TTL. Operators wait TTL + MaxStale before relying on it, or revoke IAM for hard stop. |
-| `OrderingMode`, `IsFifo`, transport or resource change | **breaking** (`BindingEpoch++`) | **Runbook:** create a new topic (preferred), or keep the old resource alive through `MaxStaleSeconds` + TTL so stale publishers still succeed, then retire it. MJ `ValidateBindings` warns when a topic's epoch changed within the drain window. |
+| `IsFifo`, transport or resource change | **breaking** (`BindingEpoch++`) | **Runbook:** create a new topic (preferred), or keep the old resource alive through `MaxStaleSeconds` + TTL so stale publishers still succeed, then retire it. MJ `ValidateBindings` warns when a topic's epoch changed within the drain window. |
 
 Direct publishers don't stamp the manifest version on messages. Consumers never depend on the publisher's
 manifest version, because their own binding is authoritative.
@@ -175,7 +182,7 @@ validation (plan 04).
 | Tier | What |
 |---|---|
 | Dedup | option A rejects keyed requests; option B reserve → send failure → release, and duplicate key → `Duplicate` |
-| Golden | for a matrix of topics (standard/FIFO × PublishOrder/ExplicitSequence × with/without key), the engine publisher and direct publisher produce **byte-identical** native entries |
+| Golden | for a matrix of topics (standard/FIFO × with/without partition key × with/without attributes), the engine publisher and direct publisher produce **byte-identical** native entries |
 | Unit | cache TTL/stale behavior, 304 handling, skew retry path, error classification |
 | LocalStack | publish via direct publisher → conformance consumers receive identical envelopes |
 | Security | IAM policy simulation: publisher role denied on non-listed topic ARNs |
