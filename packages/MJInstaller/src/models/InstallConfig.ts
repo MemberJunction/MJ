@@ -153,18 +153,23 @@ export interface InstallConfig {
 export type PartialInstallConfig = Partial<InstallConfig>;
 
 /**
- * Sensible defaults for {@link InstallConfig} fields.
+ * Defaults applied before any prompting.
  *
- * Applied as the base layer when creating a plan via
- * {@link InstallerEngine.CreatePlan}. User-supplied and prompted values
- * override these defaults.
+ * Only fields that a phase **before** `configure` reads belong here. Anything
+ * whose only default is a prompt fallback must NOT be listed: `CreatePlan`
+ * spreads this object into the config, so a value here makes
+ * `ConfigurePhase`'s `config.X = config.X ?? await prompt(...)` guard
+ * permanently non-nullish and the prompt can never fire. `DatabaseTrustCert`
+ * defaulted to `false` here, which is why interactive installs silently wrote an
+ * empty `DB_TRUST_SERVER_CERTIFICATE` and failed `migrate` against every
+ * self-signed (Docker, local) SQL Server — see #4562.
+ *
+ * The removed fields are still defaulted, twice over: every pre-`configure`
+ * consumer carries its own `?? 'localhost'` / `?? 1433` / `?? 4000` / `?? 4200`
+ * fallback, and each prompt passes the same value as its own default, so
+ * `--yes` installs are unchanged.
  */
 export const InstallConfigDefaults: PartialInstallConfig = {
-  DatabaseHost: 'localhost',
-  DatabasePort: 1433,
-  DatabaseTrustCert: false,
-  APIPort: 4000,
-  ExplorerPort: 4200,
   AuthProvider: 'none',
   InstallMode: 'distribution',
   PackageManager: 'pnpm',
