@@ -270,6 +270,15 @@ export class JudgePromptRequest {
     public ValidationCriteria?: string[];
 
     /**
+     * The same free-form application context the controller receives. The judge
+     * needs it for the same reason: without it, app-specific facts — how long a
+     * boot screen legitimately persists, what a loading state looks like — have to
+     * be hardcoded into the shared prompt, where they ship to every instance
+     * whether or not it runs that app.
+     */
+    public ApplicationContext?: string;
+
+    /**
      * Cancellation signal for the judge LLM call — see
      * {@link ControllerPromptRequest.Signal}. Threaded into
      * `AIPromptParams.cancellationToken` by Layer 2; not template data.

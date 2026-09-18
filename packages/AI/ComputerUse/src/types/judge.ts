@@ -61,6 +61,9 @@ export class JudgeContext {
      */
     public ValidationCriteria?: string[];
 
+    /** Free-form application context, threaded through to the judge prompt. */
+    public ApplicationContext?: string;
+
     /**
      * Whether this run is a checkpoint tour. Tours are scored by latching
      * sections as the trajectory passes through them, so the judge is the ONLY way

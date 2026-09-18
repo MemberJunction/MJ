@@ -362,6 +362,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
                 currentUrl: request.CurrentUrl,
                 diagnostics: request.Diagnostics,
                 validationCriteria: request.ValidationCriteria,
+                applicationContext: request.ApplicationContext,
             }, request.Signal);
 
             if (!result.success) {

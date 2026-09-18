@@ -2829,6 +2829,7 @@ export class ComputerUseEngine {
         judgeContext.ControllerRequestedJudgement = controllerRequestedJudgement;
         judgeContext.CurrentDiagnosticsDigest = currentDiagnosticsDigest;
         judgeContext.ValidationCriteria = this.activeJudgeCriteria(context, signaledCheckpoint);   // rubric judging; tour visual criteria
+        judgeContext.ApplicationContext = context.Params.ApplicationContext;   // app facts belong in metadata, not the shared prompt
         judgeContext.IsCheckpointTour = isCheckpointRun(context.Params.Checkpoints);   // suppress navigation-shape heuristics on a tour
         judgeContext.Signal = this.abortController.signal;   // abort in-flight judge call on Stop()
 

@@ -71,6 +71,7 @@ export class LLMJudge extends BaseJudge {
         request.CurrentUrl = context.CurrentUrl;
         request.Diagnostics = context.CurrentDiagnosticsDigest || undefined;
         request.ValidationCriteria = context.ValidationCriteria;
+        request.ApplicationContext = context.ApplicationContext;
         request.Signal = context.Signal;
         return request;
     }
