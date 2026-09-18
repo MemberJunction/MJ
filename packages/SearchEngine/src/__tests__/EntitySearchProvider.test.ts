@@ -139,11 +139,12 @@ describe('EntitySearchProvider', () => {
             expect(results).toEqual([]);
         });
 
-        // A full-text-search entity is searchable through its INDEX, not through per-field
-        // IncludeInUserSearchAPI flags — `createViewUserSearchSQL` takes the FTS branch before it
-        // ever looks at those. Screening on HasSearchFields alone would silently drop exactly the
-        // entities someone configured FTS for.
-        it('still queries a full-text-search entity that declares no per-field search flags', async () => {
+        // A full-text-search entity with no per-field flags is NOT exempted, and the reason is
+        // this provider's own scorer: convertResults counts which IncludeInUserSearchAPI fields
+        // contain the query, so with none declared every row scores matchedFields === 0 and is
+        // dropped. Querying it would buy a per-keystroke round-trip whose results are discarded.
+        // FullTextSearchProvider is what covers those entities (SourceType 'fulltext').
+        it('does not query a full-text-search entity that declares no per-field search flags', async () => {
             mockEntities.push({
                 Name: 'MJ: Content Items',
                 AllowUserSearchAPI: true,
@@ -155,12 +156,10 @@ describe('EntitySearchProvider', () => {
 
             mockRunViewFn.mockResolvedValue({ Success: true, Results: [] });
 
-            await provider.Search('Kligo', 10, undefined, contextUser);
+            const results = await provider.Search('Kligo', 10, undefined, contextUser);
 
-            expect(mockRunViewFn).toHaveBeenCalledWith(
-                expect.objectContaining({ EntityName: 'MJ: Content Items' }),
-                contextUser
-            );
+            expect(mockRunViewFn).not.toHaveBeenCalled();
+            expect(results).toEqual([]);
         });
 
         it('still queries entities that do declare a searchable field', async () => {

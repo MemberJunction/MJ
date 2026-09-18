@@ -208,11 +208,13 @@ export class EntitySearchProvider extends BaseSearchProvider {
      * not a text-search target). The latter still gets queried: it returns `(1=0)` cheaply and
      * is a real, if empty, answer. Only the no-surface case is skipped here.
      *
-     * `FullTextSearchEnabled` is the other way an entity can have a search surface, and it does
-     * not go through the per-field flags at all — `createViewUserSearchSQL` takes its FTS branch
-     * before it ever reads `IncludeInUserSearchAPI`. An FTS entity is searchable through its
-     * INDEX, so screening it out on `HasSearchFields` would drop precisely the entities someone
-     * deliberately configured full-text search for.
+     * A full-text-search entity with no per-field flags is deliberately NOT exempted here, even
+     * though `createViewUserSearchSQL` would happily take its FTS branch. This provider could not
+     * use the rows: `convertResults` scores by counting which `IncludeInUserSearchAPI` fields
+     * contain the query, so with none declared `matchedFields` is 0 and every row is dropped.
+     * Exempting them buys a per-keystroke round-trip whose results are discarded. Full-text
+     * entities are served by `FullTextSearchProvider`, which calls the provider's `FullTextSearch`
+     * directly and emits `SourceType: 'fulltext'` — that is where their coverage comes from.
      *
      * Note this is a screen, not a substitute for the metadata being right — `AllowUserSearchAPI`
      * should be off on such an entity (see `metadata/entities/.entity-search-exclusions.json`).
@@ -223,7 +225,7 @@ export class EntitySearchProvider extends BaseSearchProvider {
         md: IMetadataProvider,
         filters: SearchFilters | undefined
     ): { Name: string }[] {
-        let entities = md.Entities.filter(e => e.AllowUserSearchAPI && (e.HasSearchFields || e.FullTextSearchEnabled));
+        let entities = md.Entities.filter(e => e.AllowUserSearchAPI && e.HasSearchFields);
 
         if (filters?.EntityNames?.length) {
             const allowedNames = new Set(filters.EntityNames.map(n => n.toLowerCase()));

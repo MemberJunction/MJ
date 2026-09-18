@@ -1,6 +1,7 @@
 ---
 "@memberjunction/search-engine": patch
 "@memberjunction/ng-search": patch
+"@memberjunction/server": patch
 ---
 
 The omnibar dropdown and the Search Results page now apply the same relevance floor, and the entity fan-out stops querying entities that have no search surface.
@@ -13,6 +14,6 @@ The omnibar dropdown and the Search Results page now apply the same relevance fl
 
 **The fan-out queried entities that could never match.** `getSearchableEntities` filtered on `AllowUserSearchAPI` alone. An entity can carry that flag while declaring no `IncludeInUserSearchAPI` field — CodeGen defaults the entity flag to true, but the field flags are only set when smart-field analysis runs. For those, `UserSearchString` is a documented no-op (#4581/#4582): the provider ignores the term and returns the unfiltered table, and the scorer then discards every row because none of them matched. The round-trip could only ever produce load. The fan-out now also requires `EntityInfo.HasSearchFields`.
 
-Full-text-search entities are exempt from the screen: an FTS entity is searchable through its index, and `createViewUserSearchSQL` takes the FTS branch before it ever reads `IncludeInUserSearchAPI`, so the fan-out requires `HasSearchFields || FullTextSearchEnabled`.
+Full-text-search entities are deliberately NOT exempted from the screen. `createViewUserSearchSQL` would take its FTS branch, but this provider could not use the rows: `convertResults` scores by counting which `IncludeInUserSearchAPI` fields contain the query, so with none declared every row scores zero matches and is dropped. Exempting them buys a per-keystroke round-trip whose results are discarded. Those entities are served by `FullTextSearchProvider`, which calls the provider's `FullTextSearch` directly.
 
 This is a screen, not a substitute for the metadata being right — such entities belong in `metadata/entities/.entity-search-exclusions.json`, and the ones known today are already there. It is the backstop that keeps the next one from silently costing every keystroke a round-trip. Entities whose candidate fields all drop out at runtime (denied by field-level security, or not text-search targets) are still queried: they return `(1=0)` cheaply, which is a real if empty answer.

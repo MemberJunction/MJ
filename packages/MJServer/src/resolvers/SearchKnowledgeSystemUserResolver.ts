@@ -72,7 +72,11 @@ export class SearchKnowledgeSystemUserResolver extends ResolverBase {
                 return this.errorResult('Unable to determine system user', startTime);
             }
 
-            const result = await SearchEngine.Instance.PreviewSearch(query, maxResults, currentUser);
+            // MinScore 0 — no relevance floor. The interactive preview (SearchKnowledgeResolver)
+            // takes the default floor so the omnibar dropdown agrees with the Search Results page
+            // it links to. This is a programmatic API with no such page, and a caller that did not
+            // ask for a filter should not silently receive one; they can filter on Score themselves.
+            const result = await SearchEngine.Instance.PreviewSearch(query, maxResults, currentUser, 0);
 
             return this.mapSearchResult(result);
         } catch (error) {

@@ -817,20 +817,27 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
      * low-scoring ones. Same query, two answers, and the dropdown's own "See all results" link
      * was how users found the disagreement.
      *
+     * The floor is a DEFAULT, not a fixture: pass `minScore` explicitly to override it, and `0`
+     * to opt out entirely. `PreviewSearchAsSystemUser` does exactly that — a programmatic caller
+     * is not the omnibar and has no page to agree with, so it keeps receiving everything the
+     * providers returned rather than silently acquiring a relevance filter it cannot see.
+     *
      * @param query - The search query text
      * @param maxResults - Maximum number of preview results (default: 8)
      * @param contextUser - The user performing the search
+     * @param minScore - Relevance floor; defaults to {@link DEFAULT_SEARCH_MIN_SCORE}, `0` disables
      * @returns Search result in preview mode
      */
     public async PreviewSearch(
         query: string,
         maxResults: number = 8,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        minScore: number = DEFAULT_SEARCH_MIN_SCORE
     ): Promise<SearchResult> {
         return this.Search({
             Query: query,
             MaxResults: maxResults,
-            MinScore: DEFAULT_SEARCH_MIN_SCORE,
+            MinScore: minScore,
             Mode: 'preview'
         }, contextUser);
     }
