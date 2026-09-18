@@ -105,6 +105,14 @@ If A dies, its claim expires and reconciliation makes the task claimable again. 
 the row changed underneath it (cancelled, reassigned, reclaimed), the guarded completion refuses and
 A defers — overwriting would undo a newer, deliberate decision.
 
+**Every guarded write is a stored procedure** (`spTaskGraph*`, granted to `cdp_Developer` and
+`cdp_Integration`), and the store's reads go through the `MJ: Tasks` entity. That is not a style
+choice: MJ grants its runtime roles SELECT on views and EXECUTE on procedures and never table-level
+DML, so the earlier raw SQL against the `Task` table was refused outright under a least-privilege
+login — and, because a refusal returned the same zero rowcount a lost race does, the dispatcher
+skipped every task forever without saying so (#4575). Adding a guarded write means adding a
+procedure and its GRANT in a migration, not a statement in TypeScript.
+
 ---
 
 ## Runners are seams, not implementations
