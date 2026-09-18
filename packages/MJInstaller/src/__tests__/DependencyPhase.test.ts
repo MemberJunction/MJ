@@ -345,6 +345,21 @@ describe('DependencyPhase', () => {
       }
     });
   });
+
+  describe('turbo output determinism', () => {
+    it('disables turbo colour so the build output parses the same on every machine', async () => {
+      // FORCE_COLOR in the operator's shell reaches turbo through ProcessRunner's
+      // `{ ...process.env }`, and NO_COLOR does not override it. Pinning
+      // FORCE_COLOR=0 is the only reliable way off. See #4562.
+      mockRunner.Run.mockResolvedValueOnce(ok()).mockResolvedValueOnce(ok());
+
+      await phase.Run(makeContext());
+
+      const buildCall = mockRunner.Run.mock.calls.find((call) => call[1]?.includes('build'));
+      expect(buildCall).toBeDefined();
+      expect(buildCall![2]?.Env).toMatchObject({ FORCE_COLOR: '0' });
+    });
+  });
 });
 
 describe('tagToNpmVersion', () => {

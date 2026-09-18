@@ -383,6 +383,11 @@ export class DependencyPhase {
     const build = pm.RunScript('build');
     const result = await this.processRunner.Run(build.Cmd, build.Args, {
       Cwd: dir,
+      // turbo colourises when FORCE_COLOR is set, and ProcessRunner forwards the
+      // operator's whole environment. Colourised output is harder to read in
+      // diagnostic reports and was the trigger for #4562. NO_COLOR does not
+      // override FORCE_COLOR; pinning it to '0' does.
+      Env: { FORCE_COLOR: '0' },
       TimeoutMs: 1_800_000, // 30 minutes — first-time full workspace build of 170 packages can take 17+ min
       OnStdout: (line: string) => {
         emitter.Emit('step:progress', {
