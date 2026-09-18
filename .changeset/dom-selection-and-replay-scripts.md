@@ -6,6 +6,8 @@
 "@memberjunction/core-entities": minor
 "@memberjunction/testing-cli": minor
 "@memberjunction/cli": minor
+"@memberjunction/metadata-sync": minor
+"@memberjunction/ng-explorer-core": minor
 ---
 
 DOM-grounded selection and replay scripts for Computer Use tests.
@@ -70,3 +72,21 @@ test exists to catch. Defaults to `true`.
 Also adds `tier` and `ReplayTelemetry` (healed/diverged counts) to the testing-framework
 result types, so drift is visible per attempt and survives a green fallback. Design doc:
 `plans/regression-testing/dom-selection-and-replay-design.md`.
+
+**MetadataSync — JSON sub-property externalization.** `pull.externalizeFields` accepted
+entity fields only, so it could move a whole column into a side file but not a single
+property inside a JSON column. An entry may now be a dotted path (`Configuration.ReplayScript`),
+which externalizes that leaf and leaves an `@file:` reference in its place; push already
+resolves nested references, so there is no push-side change. A property the record does not
+carry is skipped entirely, and a whole-field config wins over its dotted paths. Pull's
+existing-file discovery moved to `lib/existing-record-files.ts`.
+
+**MJExplorer — a readiness beacon for automation.** The shell publishes `data-mj-ready="true"`
+on `<html>` when the active route's resource has finished loading, so a browser-driven suite
+can poll a fact instead of comparing screenshot hashes. The attribute is inert — nothing in
+the product reads it and no styling keys off it — and it is published from the `loading`
+accessor so all ~22 assignment sites stay correct.
+
+**Prompt model change.** The Computer Use controller and judge prompts in core `metadata/prompts`
+move from `Gemini 3.1 Flash-Lite` to `Gemini 3.6 Flash` and gain `Temperature`/`Seed` for
+determinism. This applies to every instance that syncs `metadata/`, not only the regression suite.
