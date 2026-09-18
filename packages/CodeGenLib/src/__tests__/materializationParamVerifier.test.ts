@@ -230,6 +230,17 @@ describe('verifyParamRole (render-and-diff verifier)', () => {
             expect(r.role).toBe('Unbounded');
         });
 
+        it('literal changing to/from NULL in SELECT projection is refused as Unbounded (not a clean WHERE predicate)', () => {
+            const r = verifyParamRole(
+                [
+                    "SELECT NULL AS Tag, ID FROM Orders WHERE Status = 'Active'",
+                    "SELECT 'foo' AS Tag, ID FROM Orders WHERE Status = 'Active'",
+                ],
+                tsql,
+            );
+            expect(r.role).toBe('Unbounded');
+        });
+
         it('literal in a HAVING clause is tainted (not the top-level WHERE)', () => {
             const r = verifyParamRole(
                 [

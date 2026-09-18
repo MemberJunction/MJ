@@ -7,7 +7,7 @@
  */
 
 import {
-    Component, Input, Output, EventEmitter,
+    Component, ChangeDetectionStrategy, Input, Output, EventEmitter,
     OnInit, OnDestroy, ChangeDetectorRef, inject
 } from '@angular/core';
 import { Subject } from 'rxjs';
@@ -87,6 +87,7 @@ const PAGE_SIZE = 25;
 
 @Component({
     standalone: false,
+    changeDetection: ChangeDetectionStrategy.OnPush,
     selector: 'app-analytics-prompt-runs',
     template: `
 
@@ -223,7 +224,7 @@ const PAGE_SIZE = 25;
             <div class="table-panel">
                 <div class="table-header">
                     <h3 class="table-title">Run Details</h3>
-                    <span class="table-count">{{ FilteredRuns.length | number }} runs</span>
+                    <span class="table-count">showing latest {{ FilteredRuns.length | number }} of {{ allRuns.length | number }} runs</span>
                 </div>
                 <div class="table-scroll">
                     <table class="runs-table">
@@ -266,14 +267,18 @@ const PAGE_SIZE = 25;
                 @if (TotalPages > 1) {
                     <div class="pagination">
                         <button
-                            class="page-btn"
+                            mjButton
+                            variant="secondary"
+                            size="sm"
                             [disabled]="CurrentPage === 1"
                             (click)="OnPageChange(CurrentPage - 1)">
                             <i class="fa-solid fa-chevron-left"></i>
                         </button>
                         <span class="page-info">Page {{ CurrentPage }} of {{ TotalPages }}</span>
                         <button
-                            class="page-btn"
+                            mjButton
+                            variant="secondary"
+                            size="sm"
                             [disabled]="CurrentPage === TotalPages"
                             (click)="OnPageChange(CurrentPage + 1)">
                             <i class="fa-solid fa-chevron-right"></i>
@@ -806,7 +811,7 @@ export class AnalyticsPromptRunsComponent extends BaseAngularComponent implement
     public SortDirection: SortDirection = 'desc';
     public CurrentPage = 1;
 
-    private allRuns: PromptRunRecord[] = [];
+    public allRuns: PromptRunRecord[] = [];
 
     readonly ChartMetricOptions: { key: ChartMetric; label: string }[] = [
         { key: 'volume', label: 'By Volume' },
@@ -1001,6 +1006,7 @@ export class AnalyticsPromptRunsComponent extends BaseAngularComponent implement
                 ExtraFilter: filter,
                 OrderBy: 'RunAt DESC',
                 Fields: FIELDS,
+                MaxRows: 1000,
                 ResultType: 'simple'
             });
 

@@ -65,6 +65,15 @@ export interface ExecutionTask {
 
   /** Selected vendor ID for this execution */
   vendorId?: string;
+
+  /** ID of the agent this prompt was run as part of */
+  agentId?: string;
+
+  /** ID of the agent run this prompt was run as part of */
+  agentRunId?: string;
+
+  /** User ID on whose behalf this prompt was executed */
+  userId?: string;
 }
 
 /**
@@ -129,6 +138,20 @@ export interface ExecutionTaskResult {
 
   /** Whether this task used streaming */
   wasStreamed?: boolean;
+}
+
+/**
+ * Represents a candidate ranking produced by an AI judge.
+ */
+export interface JudgeRanking {
+  /** Identifier of the candidate task that was evaluated */
+  candidateId: string;
+  /** Numerical rank (1 = best) */
+  rank: number;
+  /** Rationale explaining the rank */
+  rationale: string;
+  /** Optional numerical score assigned by the judge */
+  score?: number;
 }
 
 /**
@@ -476,5 +499,6 @@ export interface IParallelExecutionCoordinator {
     config: ResultSelectionConfig,
     parentPromptRunId?: string,
     cancellationToken?: AbortSignal,
+    contextUser?: UserInfo,
   ): Promise<ExecutionTaskResult | null>;
 }

@@ -1,0 +1,21 @@
+[
+  {
+    "fields": {
+      "Name": "AIUsageUnpricedAudit",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=AI",
+      "UserQuestion": "Which completed AI runs have not been priced and need pricing tiers or investigation?",
+      "Description": "Surfaces completed AI prompt and agent runs where IsPriced = 0, along with diagnostic explanations for why each run was unpriced (unmeasured, missing model, or missing pricing tier).",
+      "SQL": "@file:SQL/ai-usage-unpriced-audit.sql",
+      "TechnicalDescription": "Quality and audit query filtering [__mj].vwAIUsageFacts for IsCompleted = 1 AND IsPriced = 0, ordered descending by execution time. Emits UnpricedReason to assist administrators in backfilling model cost configurations.",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 3,
+      "UsesTemplate": false,
+      "IsMaterialized": false
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "226484B9-8178-418A-8CDB-25D2BF234684"
+    }
+  }
+]

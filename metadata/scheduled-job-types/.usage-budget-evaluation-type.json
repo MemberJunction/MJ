@@ -1,0 +1,14 @@
+[
+  {
+    "entity": "MJ: Scheduled Job Types",
+    "fields": {
+      "Name": "Usage Budget Evaluation",
+      "Description": "Evaluates active usage budgets against saved Query definitions on a scheduled cadence (Day, Week, Month UTC periods), updates LastEvaluatedAt and LastObservedAmount, and records Usage Budget Events when warning or limit thresholds are breached.",
+      "DriverClass": "UsageBudgetEvaluationScheduledJobDriver",
+      "NotificationsAvailable": true
+    },
+    "primaryKey": {
+      "ID": "1C79DFAF-C3A8-41C7-99C4-8F07BFFC5F1E"
+    }
+  }
+]

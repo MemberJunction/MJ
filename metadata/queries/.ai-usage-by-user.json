@@ -1,0 +1,21 @@
+[
+  {
+    "fields": {
+      "Name": "AIUsageByUser",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=AI",
+      "UserQuestion": "What is our AI usage, spend, and token volume per user for chargeback attribution?",
+      "Description": "Aggregates AI usage facts by UserID to support user-level chargeback, attribution, and consumption monitoring.",
+      "SQL": "@file:SQL/ai-usage-by-user.sql",
+      "TechnicalDescription": "Aggregates over UserID with optional start and end date boundaries. Computes total runs, own cost, prompt and completion tokens, and the timestamp of the user's most recent run.",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 3,
+      "UsesTemplate": true,
+      "IsMaterialized": false
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "7C9243A8-0B86-4CFA-A3DF-9A0E50FBC605"
+    }
+  }
+]

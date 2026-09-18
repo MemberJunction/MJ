@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT94 - Usage Budgets Evaluation Pipeline",
+    "Description": "Usage budgets evaluation pipeline: driver class resolution, period boundary math (Day/Week/Month UTC), threshold computation, and budget metadata integrity. 1 check (UB1), read-only, client transport.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Usage budgets evaluation pipeline: driver class resolution, period boundary math (Day/Week/Month UTC), threshold computation, and budget metadata integrity. 1 check (UB1), read-only, client transport."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "usage-budgets"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "B84E12C8-19F0-4E81-A6B1-D42A169EF5A1"
+  },
+  "sync": {
+    "lastModified": "2026-09-15T16:15:00.000Z",
+    "checksum": "b84e12c819f04e81a6b1d42a169ef5a100000000000000000000000000000000"
+  }
+}

@@ -647,10 +647,11 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
   private showTooltip(event: MouseEvent, data: TrendData) {
     const tooltip = d3.select(this.tooltip.nativeElement);
     
+    const costDisplay = data.cost !== null && data.cost !== undefined ? `$${data.cost.toFixed(4)}` : '\u2014';
     const content = `
       <div><strong>${d3.timeFormat('%H:%M')(data.timestamp)}</strong></div>
       <div>Executions: ${data.executions.toLocaleString()}</div>
-      <div>Cost: $${data.cost.toFixed(4)}</div>
+      <div>Cost: ${costDisplay}</div>
       <div>Tokens: ${data.tokens.toLocaleString()}</div>
       <div>Avg Time: ${(data.avgTime / 1000).toFixed(1)}s</div>
       <div>Errors: ${data.errors}</div>

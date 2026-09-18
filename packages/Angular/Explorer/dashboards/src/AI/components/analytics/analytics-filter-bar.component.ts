@@ -6,7 +6,7 @@
  * Each section shows/hides filters via boolean inputs.
  */
 
-import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
+import { Component, ChangeDetectionStrategy, Input, Output, EventEmitter, OnInit } from '@angular/core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { GlobalFilterState } from '../../interfaces/analytics-preferences.interface';
 
@@ -18,6 +18,7 @@ interface FilterOption {
 
 @Component({
     standalone: false,
+    changeDetection: ChangeDetectionStrategy.OnPush,
     selector: 'app-analytics-filter-bar',
     template: `
         <div class="filter-bar">
@@ -92,8 +93,11 @@ interface FilterOption {
 
             @if (ShowCompareToggle) {
                 <button
-                    class="compare-btn"
-                    [class.active]="compareActive"
+                    mjButton
+                    variant="secondary"
+                    size="sm"
+                    [toggleable]="true"
+                    [selected]="compareActive"
                     (click)="ToggleCompare()">
                     <i class="fa-solid fa-code-compare"></i>
                     Compare
@@ -101,7 +105,7 @@ interface FilterOption {
             }
 
             @if (ShowExportButton) {
-                <button class="export-btn" (click)="ExportClicked.emit()">
+                <button mjButton variant="secondary" size="sm" (click)="ExportClicked.emit()">
                     <i class="fa-solid fa-download"></i>
                     Export
                 </button>
@@ -109,12 +113,11 @@ interface FilterOption {
 
             <div class="time-chips">
                 @for (option of TimeRangeOptions; track option) {
-                    <button
-                        class="time-chip"
-                        [class.active]="TimeRange === option"
-                        (click)="OnTimeRangeSelect(option)">
-                        {{ option }}
-                    </button>
+                    <mj-filter-chip
+                        [Label]="option"
+                        [Active]="TimeRange === option"
+                        (Clicked)="OnTimeRangeSelect(option)">
+                    </mj-filter-chip>
                 }
             </div>
         </div>

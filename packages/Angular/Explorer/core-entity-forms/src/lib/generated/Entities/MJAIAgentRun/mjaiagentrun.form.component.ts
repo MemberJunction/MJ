@@ -39,7 +39,8 @@ export class MJAIAgentRunFormComponent extends BaseFormComponent {
             { sectionKey: 'mJExperimentSessions', sectionName: 'Experiment Sessions', isExpanded: false },
             { sectionKey: 'mJTasks', sectionName: 'Tasks', isExpanded: false },
             { sectionKey: 'mJUserRoutineRuns', sectionName: 'User Routine Runs', isExpanded: false },
-            { sectionKey: 'mJConversationSkills', sectionName: 'Conversation Skills', isExpanded: false }
+            { sectionKey: 'mJConversationSkills', sectionName: 'Conversation Skills', isExpanded: false },
+            { sectionKey: 'mJAIPromptRuns', sectionName: 'AI Prompt Runs', isExpanded: false }
         ]);
     }
 }

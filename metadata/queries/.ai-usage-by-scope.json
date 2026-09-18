@@ -1,0 +1,21 @@
+[
+  {
+    "fields": {
+      "Name": "AIUsageByScope",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=AI",
+      "UserQuestion": "What is our AI usage, tokens, and spend broken down by primary scope entity and record?",
+      "Description": "Aggregates AI usage facts by PrimaryScopeEntityID and PrimaryScopeRecordID. Supports optional filtering by scope entity, scope record, and date range.",
+      "SQL": "@file:SQL/ai-usage-by-scope.sql",
+      "TechnicalDescription": "Aggregates runs, success/failure counts, token metrics, own cost, and latencies grouped by PrimaryScopeEntityID and PrimaryScopeRecordID. Parameters scopeEntityId, scopeRecordId, start, and end are optional and evaluated via template conditionals.",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 3,
+      "UsesTemplate": true,
+      "IsMaterialized": false
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "EBF9166E-DEA4-4CEE-8D1F-56A903D0D1E6"
+    }
+  }
+]

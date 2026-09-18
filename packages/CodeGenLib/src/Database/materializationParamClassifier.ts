@@ -212,7 +212,13 @@ function isValuePassthrough(param: QueryParamDef, held: Record<string, unknown>,
         return false; // cannot render the sentinel → cannot prove passthrough → refuse
     }
     const parts = Array.isArray(sentinel) ? sentinel : [sentinel];
-    return parts.every((part) => rendered.includes(String(part)));
+    return parts.every((part) => {
+        if (param.Type === 'date') {
+            const iso = new Date(String(part)).toISOString();
+            return rendered.includes(iso) || rendered.includes(iso.replace(/Z$/, ''));
+        }
+        return rendered.includes(String(part));
+    });
 }
 
 /**

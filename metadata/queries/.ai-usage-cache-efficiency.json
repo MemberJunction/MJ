@@ -1,0 +1,21 @@
+[
+  {
+    "fields": {
+      "Name": "AIUsageCacheEfficiency",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=AI",
+      "UserQuestion": "What is our prompt caching hit rate and estimated cost savings across models and prompts?",
+      "Description": "Calculates prompt cache efficiency metrics per model and prompt, including cache read token volume, cache read share, and estimated financial savings based on model pricing tiers.",
+      "SQL": "@file:SQL/ai-usage-cache-efficiency.sql",
+      "TechnicalDescription": "Groups vwAIUsageFacts by ModelID and PromptID, joining vwAIModelCosts to evaluate the price delta between standard prompt input and cached prompt reads. Supports optional start and end date filtering.",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 3,
+      "UsesTemplate": true,
+      "IsMaterialized": false
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "55178AC9-75F8-47A3-9F89-152F0811A16C"
+    }
+  }
+]

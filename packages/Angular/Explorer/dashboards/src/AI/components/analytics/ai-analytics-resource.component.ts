@@ -10,7 +10,7 @@
  * with debounced writes.
  */
 
-import { Component, ChangeDetectorRef, OnInit, OnDestroy, ViewChild, inject } from '@angular/core';
+import { Component, ChangeDetectionStrategy, ChangeDetectorRef, OnInit, OnDestroy, AfterViewInit, ViewChild, inject } from '@angular/core';
 import { AnalyticsExecutiveSummaryComponent } from './executive-summary/executive-summary.component';
 import { AnalyticsPromptRunsComponent } from './prompt-runs/prompt-run-analysis.component';
 import { Subject } from 'rxjs';
@@ -21,6 +21,7 @@ import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { AIAnalyticsPreferences, GlobalFilterState } from '../../interfaces/analytics-preferences.interface';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { FilterFieldConfig, MJLeftNavItem, MJLeftNavSection } from '@memberjunction/ng-ui-components';
+import { AIInstrumentationService } from '../../services/ai-instrumentation.service';
 
 interface NavItem {
     Label?: string;
@@ -36,6 +37,7 @@ interface NavItem {
 @RegisterClass(BaseResourceComponent, 'AIAnalyticsResource')
 @Component({
     standalone: false,
+    changeDetection: ChangeDetectionStrategy.OnPush,
     selector: 'app-ai-analytics-resource',
     template: `
       <mj-page-layout>
@@ -151,6 +153,12 @@ interface NavItem {
                             [TimeRange]="CurrentTimeRange"
                         ></app-analytics-usage-patterns>
                     }
+                    @case ('usage-explorer') {
+                        <app-analytics-usage-explorer
+                            [TimeRange]="CurrentTimeRange"
+                            [Filters]="CurrentFilters"
+                        ></app-analytics-usage-explorer>
+                    }
                     @case ('realtime-overview') {
                         <app-analytics-realtime-overview
                             [TimeRange]="CurrentTimeRange"
@@ -257,12 +265,13 @@ interface NavItem {
         }
     `]
 })
-export class AIAnalyticsResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
+export class AIAnalyticsResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy, AfterViewInit {
     private readonly USER_SETTINGS_KEY = 'AI.Analytics.UserPreferences';
     private settingsPersistSubject = new Subject<void>();
     protected override destroy$ = new Subject<void>();
     private settingsLoaded = false;
     private cdr = inject(ChangeDetectorRef);
+    private instrumentation = inject(AIInstrumentationService);
 
     @ViewChild('executiveSummary') private executiveSummary?: AnalyticsExecutiveSummaryComponent;
     @ViewChild('promptRuns') private promptRuns?: AnalyticsPromptRunsComponent;
@@ -338,6 +347,8 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
                 return { ShowModelFilter: true,  ShowAgentFilter: false, ShowPromptFilter: true,  ShowStatusFilter: false, ShowSortBy: false, ShowVendor: false, ShowCompareToggle: false, ShowExportButton: false, TimeRangeOptions: ['1h', '6h', '24h', '7d', '30d'] };
             case 'usage-patterns':
                 return { ShowModelFilter: false, ShowAgentFilter: false, ShowPromptFilter: false, ShowStatusFilter: false, ShowSortBy: false, ShowVendor: false, ShowCompareToggle: false, ShowExportButton: false, TimeRangeOptions: ['1h', '6h', '24h', '7d', '30d'] };
+            case 'usage-explorer':
+                return { ShowModelFilter: false, ShowAgentFilter: false, ShowPromptFilter: false, ShowStatusFilter: false, ShowSortBy: false, ShowVendor: false, ShowCompareToggle: false, ShowExportButton: false, TimeRangeOptions: ['1h', '6h', '24h', '7d', '30d', '90d'] };
             // Realtime Voice sections own their filters internally (search/status/
             // target/user/host live with the grid); only the time-range chips come
             // from the shared chrome. Session data is bucketed daily, so the
@@ -568,6 +579,8 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
           Description: 'Failure patterns and root causes' },
         { Label: 'Usage Patterns', Icon: 'fa-solid fa-clock', Key: 'usage-patterns',
           Description: 'Volume, frequency, and concurrency over time' },
+        { Label: 'Usage Explorer', Icon: 'fa-solid fa-table-pivot', Key: 'usage-explorer',
+          Description: 'Multidimensional usage pivot across agents, models, users, and tokens' },
         { Key: 'divider2' },
         { Label: 'Realtime Voice', Icon: 'fa-solid fa-tower-broadcast', Key: 'realtime-overview',
           Description: 'Operational analytics for voice-agent sessions — sessions, channels, and delegated runs' },
@@ -618,6 +631,7 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
 
     async ngOnInit(): Promise<void> {
         super.ngOnInit();
+        this.instrumentation.Provider = this.ProviderToUse;
         this.setupSettingsDebounce();
         // AIEngineBase is deferred at startup — ensure it's loaded, then build the
         // option lists ONCE so the precomputed filter-field config has real data.
@@ -634,6 +648,11 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
         this.recomputeFilterFields();
         this.cdr.detectChanges();
         this.NotifyLoadComplete();
+    }
+
+    public ngAfterViewInit(): void {
+        this.publishAgentContext();
+        this.registerAgentTools();
     }
 
     ngOnDestroy(): void {
@@ -657,6 +676,7 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
         }
         this.ActiveSection = key;
         this.saveUserSettings();
+        this.publishAgentContext();
         this.cdr.detectChanges();
     }
 
@@ -664,12 +684,75 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
     public OnTimeRangeChange(range: string): void {
         this.CurrentTimeRange = range;
         this.saveUserSettings();
+        this.publishAgentContext();
+        this.cdr.detectChanges();
     }
 
     /** Handle filter changes from the filter bar */
     public OnFiltersChange(filters: GlobalFilterState): void {
         this.CurrentFilters = filters;
         this.saveUserSettings();
+        this.publishAgentContext();
+        this.cdr.detectChanges();
+    }
+
+    protected publishAgentContext(): void {
+        this.navigationService.SetAgentContext(this, {
+            ActiveSection: this.ActiveSection,
+            CurrentTimeRange: this.CurrentTimeRange,
+            CurrentFilters: this.CurrentFilters,
+            CurrentSortBy: this.CurrentSortBy,
+            CurrentVendor: this.CurrentVendor,
+            AvailableSections: this.NavItems.filter(i => !i.Key.startsWith('divider')).map(i => i.Key),
+        });
+    }
+
+    protected registerAgentTools(): void {
+        this.navigationService.SetAgentClientTools(this, [
+            {
+                Name: 'SwitchAnalyticsSection',
+                Description: 'Switch the active section of the AI Analytics dashboard (e.g., executive-summary, prompt-runs, agent-runs, model-performance, cost-budget, error-analysis, usage-patterns, realtime-overview, realtime-sessions, realtime-management, realtime-transcripts, usage-explorer).',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: {
+                        section: {
+                            type: 'string',
+                            description: 'The section key to navigate to.',
+                            enum: this.NavItems.filter(i => !i.Key.startsWith('divider')).map(i => i.Key),
+                        },
+                    },
+                    required: ['section'],
+                },
+                Handler: async (params: Record<string, unknown>) => {
+                    const section = typeof params['section'] === 'string' ? params['section'] : '';
+                    if (section) {
+                        this.OnSectionChange(section);
+                    }
+                    return { success: true, activeSection: this.ActiveSection };
+                },
+            },
+            {
+                Name: 'SetAnalyticsTimeRange',
+                Description: 'Change the time range filter for the current AI Analytics view (e.g., 1h, 6h, 24h, 7d, 30d, Today, MTD).',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: {
+                        timeRange: {
+                            type: 'string',
+                            description: 'The time range to select.',
+                        },
+                    },
+                    required: ['timeRange'],
+                },
+                Handler: async (params: Record<string, unknown>) => {
+                    const timeRange = typeof params['timeRange'] === 'string' ? params['timeRange'] : '';
+                    if (timeRange) {
+                        this.OnTimeRangeChange(timeRange);
+                    }
+                    return { success: true, currentTimeRange: this.CurrentTimeRange };
+                },
+            },
+        ]);
     }
 
     /** Compare-toggle button — only visible on Executive Summary; forwards to that section. */
@@ -749,6 +832,14 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
                 CostBudget: {
                     TimeRange: this.CurrentTimeRange,
                     Filters: this.CurrentFilters
+                },
+                UsageExplorer: {
+                    TimeRange: this.CurrentTimeRange,
+                    Measure: 'cost',
+                    GroupBy: 'AgentID',
+                    SecondarySplit: '',
+                    Grain: 'day',
+                    ComparisonEnabled: false
                 }
             };
             await UserInfoEngine.Instance.SetSetting(

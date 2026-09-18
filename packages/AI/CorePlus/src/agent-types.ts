@@ -10,13 +10,11 @@
  * @since 2.50.0
  */
 
-import { MJAIAgentTypeEntity,  } from '@memberjunction/core-entities';
-import { ChatMessage, ChatToolCall } from '@memberjunction/ai';
-import {  } from '@memberjunction/core-entities';
+import { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
+import { ChatMessage, ChatToolCall, AIAPIKey } from '@memberjunction/ai';
 import { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { AgentPayloadChangeRequest } from './agent-payload-change-request';
 import { AgentScratchpad } from './agent-scratchpad';
-import { AIAPIKey } from '@memberjunction/ai';
 import { AgentResponseForm } from './response-forms';
 import { ActionParam } from '@memberjunction/actions-base';
 import { ActionableCommand, AutomaticCommand } from './ui-commands';
@@ -1716,7 +1714,17 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * legitimate long iteration; tighten per-run for anything interactive.
      */
     maxExecutionTimeMs?: number;
+}
 
+/**
+ * Result of evaluating agent run guardrails.
+ */
+export interface AgentRunGuardrailVerdict {
+    exceeded: boolean;
+    type?: 'cost' | 'tokens' | 'iterations' | 'time';
+    limit?: number;
+    current?: number;
+    reason?: string;
 }
 
 /**

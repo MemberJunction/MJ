@@ -1,0 +1,21 @@
+[
+  {
+    "fields": {
+      "Name": "AIUsageByModel",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=AI",
+      "UserQuestion": "What is the efficiency, cost, token distribution, and latency for each AI model and vendor?",
+      "Description": "Evaluates model efficiency metrics including total runs, own cost, prompt/completion tokens, median and 95th percentile latency, and cache efficiency percentage.",
+      "SQL": "@file:SQL/ai-usage-by-model.sql",
+      "TechnicalDescription": "Aggregates over ModelID and VendorID with optional date range parameters start and end. Computes CacheEfficiencyPct as TokensCacheRead * 100.0 / (TokensPrompt + TokensCacheRead).",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 3,
+      "UsesTemplate": true,
+      "IsMaterialized": false
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "66919067-072A-4306-B49B-C539E254886D"
+    }
+  }
+]

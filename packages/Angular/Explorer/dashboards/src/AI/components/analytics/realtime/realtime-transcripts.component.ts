@@ -6,7 +6,7 @@
  *
  * @module @memberjunction/ng-dashboards
  */
-import { Component, OnInit, ChangeDetectorRef, inject } from '@angular/core';
+import { Component, ChangeDetectionStrategy, OnInit, ChangeDetectorRef, inject } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import {
@@ -18,6 +18,7 @@ import {
 
 @Component({
     standalone: false,
+    changeDetection: ChangeDetectionStrategy.OnPush,
     selector: 'app-analytics-realtime-transcripts',
     template: `
         @if (IsLoading) {
@@ -28,13 +29,13 @@ import {
                 <div class="room-list">
                     <div class="room-list__head">
                         <span>{{ Rooms.length }} meeting{{ Rooms.length === 1 ? '' : 's' }}</span>
-                        <button class="rt-refresh" title="Refresh" (click)="reload()"><i class="fa-solid fa-rotate"></i></button>
+                        <button mjButton variant="icon" size="sm" title="Refresh" (click)="Reload()"><i class="fa-solid fa-rotate"></i></button>
                     </div>
                     @if (Rooms.length === 0) {
                         <mj-empty-state class="empty" Size="compact" Icon="fa-solid fa-comment-slash" Title="No meeting transcripts yet" />
                     } @else {
                         @for (room of Rooms; track room.ConversationID) {
-                            <button class="room" [class.room--active]="room.ConversationID === SelectedRoom?.ConversationID" (click)="selectRoom(room)">
+                            <button class="room" [class.room--active]="room.ConversationID === SelectedRoom?.ConversationID" (click)="SelectRoom(room)">
                                 <i class="fa-solid fa-tower-broadcast room__icon"></i>
                                 <span class="room__name">{{ room.Name }}</span>
                                 <span class="room__when">{{ room.LastActivity | date: 'MMM d, h:mm a' }}</span>
@@ -118,10 +119,10 @@ export class AnalyticsRealtimeTranscriptsComponent extends BaseAngularComponent 
     public Lines: TranscriptLine[] = [];
 
     async ngOnInit(): Promise<void> {
-        await this.reload();
+        await this.Reload();
     }
 
-    public async reload(): Promise<void> {
+    public async Reload(): Promise<void> {
         this.IsLoading = true;
         this.cdr.detectChanges();
         await AIEngineBase.Instance.EnsureLoaded(); // agents cache, for AI-line attribution
@@ -130,7 +131,7 @@ export class AnalyticsRealtimeTranscriptsComponent extends BaseAngularComponent 
         this.cdr.detectChanges();
     }
 
-    public async selectRoom(room: MeetingRoomSummary): Promise<void> {
+    public async SelectRoom(room: MeetingRoomSummary): Promise<void> {
         this.SelectedRoom = room;
         this.Lines = [];
         this.IsLoadingTranscript = true;
@@ -139,6 +140,9 @@ export class AnalyticsRealtimeTranscriptsComponent extends BaseAngularComponent 
         this.IsLoadingTranscript = false;
         this.cdr.detectChanges();
     }
+
+    public reload(): Promise<void> { return this.Reload(); }
+    public selectRoom(room: MeetingRoomSummary): Promise<void> { return this.SelectRoom(room); }
 }
 
 /** Tree-shaking prevention — called from the module constructor so the component class isn't elided. */
