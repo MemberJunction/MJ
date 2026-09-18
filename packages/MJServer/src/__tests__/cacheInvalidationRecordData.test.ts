@@ -102,3 +102,71 @@ describe('allowlist normalisation', () => {
     expect(MayBroadcastRecordData('Users')).toBe(false);
   });
 });
+
+/**
+ * Entity-level delivery filtering, raised in review.
+ *
+ * An event for an entity a session cannot read at all tells that session the record exists, its
+ * stable key and when it changed — and the session could never have read it, so withholding costs
+ * nothing. This does NOT close the row-level case: two sessions that both hold read permission on
+ * an entity still see each other's keys. That is tracked separately and deliberately not faked
+ * green here.
+ */
+describe('cacheInvalidationFilter', () => {
+  const event = (entityName: string) => ({
+    entityName,
+    primaryKeyValues: '[{"FieldName":"ID","Value":"r1"}]',
+    action: 'save',
+    sourceServerId: 's1',
+    timestamp: new Date(),
+  });
+  const session = (userRecord: unknown) => ({ userPayload: { userRecord } });
+
+  const withEntities = async (entities: Array<{ Name: string; CanRead: boolean }>) => {
+    vi.resetModules();
+    vi.doMock('@memberjunction/core', () => ({
+      Metadata: class {
+        get Entities() {
+          return entities.map((e) => ({
+            Name: e.Name,
+            GetUserPermisions: () => ({ CanRead: e.CanRead }),
+          }));
+        }
+      },
+    }));
+    return (await import('../generic/CacheInvalidationResolver.js')).cacheInvalidationFilter;
+  };
+
+  afterEach(() => vi.doUnmock('@memberjunction/core'));
+
+  it('delivers an event for an entity the session may read', async () => {
+    const filter = await withEntities([{ Name: 'AI Models', CanRead: true }]);
+    expect(filter({ payload: event('AI Models') as never, context: session({ ID: 'u1' }) })).toBe(true);
+  });
+
+  it('withholds an event for an entity the session may NOT read', async () => {
+    const filter = await withEntities([{ Name: 'Users', CanRead: false }]);
+    expect(filter({ payload: event('Users') as never, context: session({ ID: 'u1' }) })).toBe(false);
+  });
+
+  it('fails closed when the connection carries no user', async () => {
+    // onConnect rejects a socket whose token does not validate, so this should not arise — and it
+    // is the case least deserving of an unfiltered firehose if it does.
+    const filter = await withEntities([{ Name: 'AI Models', CanRead: true }]);
+    expect(filter({ payload: event('AI Models') as never, context: undefined })).toBe(false);
+    expect(filter({ payload: event('AI Models') as never, context: session(undefined) })).toBe(false);
+  });
+
+  it('delivers when the entity is unknown to this server, rather than silently going stale', async () => {
+    // Deliberately the opposite choice: a name absent from metadata cannot be permission-checked,
+    // and withholding would stop invalidating a legitimately cacheable entity — a correctness bug
+    // in place of a disclosure one.
+    const filter = await withEntities([{ Name: 'AI Models', CanRead: true }]);
+    expect(filter({ payload: event('Some Entity This Server Never Heard Of') as never, context: session({ ID: 'u1' }) })).toBe(true);
+  });
+
+  it('withholds an event with no entity name', async () => {
+    const filter = await withEntities([{ Name: 'AI Models', CanRead: true }]);
+    expect(filter({ payload: { ...event(''), entityName: '' } as never, context: session({ ID: 'u1' }) })).toBe(false);
+  });
+});
