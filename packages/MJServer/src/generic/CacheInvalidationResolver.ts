@@ -19,7 +19,14 @@ let allowedRecordDataEntities: readonly string[] = [];
  * nothing but type-graphql.
  */
 export function ConfigureRecordDataBroadcast(entities: readonly string[] | undefined | null): void {
-  allowedRecordDataEntities = entities ?? [];
+  // Normalised HERE, once, rather than at each comparison. The wildcard used to be matched raw
+  // (`includes('*')`) while entity names were trimmed and lowercased two lines below, so a
+  // hand-edited `[' * ']` matched neither branch and silently opted nothing in — a config that
+  // looks like it disables the gate while leaving it fully on. Empty entries are dropped so a
+  // stray `''` cannot match an entity whose name is somehow blank.
+  allowedRecordDataEntities = (entities ?? [])
+    .map((e) => e.trim().toLowerCase())
+    .filter((e) => e.length > 0);
 }
 
 /**
@@ -39,8 +46,7 @@ export function ConfigureRecordDataBroadcast(entities: readonly string[] | undef
 export function MayBroadcastRecordData(entityName: string): boolean {
   if (allowedRecordDataEntities.length === 0) return false;
   if (allowedRecordDataEntities.includes('*')) return true;
-  const name = entityName.trim().toLowerCase();
-  return allowedRecordDataEntities.some((e) => e.trim().toLowerCase() === name);
+  return allowedRecordDataEntities.includes(entityName.trim().toLowerCase());
 }
 
 @ObjectType()
