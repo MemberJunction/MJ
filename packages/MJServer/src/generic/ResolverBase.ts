@@ -40,7 +40,7 @@ import { SQLParser } from '@memberjunction/sql-parser';
 import { PostgreSQLDialect, SQLServerDialect, type SQLParserDialect } from '@memberjunction/sql-dialect';
 import { EncryptionEngine } from '@memberjunction/encryption';
 import { PUSH_STATUS_UPDATES_TOPIC, publishStatusUpdate } from './PushStatusResolver.js';
-import { CACHE_INVALIDATION_TOPIC, MayBroadcastRecordData } from './CacheInvalidationResolver.js';
+import { CACHE_INVALIDATION_TOPIC, MayBroadcastRecordData, MayBroadcastPrimaryKey } from './CacheInvalidationResolver.js';
 import { PubSubManager } from './PubSubManager.js';
 import { FieldMapper } from '@memberjunction/graphql-dataprovider';
 import { Subscription } from 'rxjs';
@@ -1458,7 +1458,9 @@ export class ResolverBase {
     const entityName = entityObject.EntityInfo.Name;
     PubSubManager.Instance.Publish(CACHE_INVALIDATION_TOPIC, {
       entityName,
-      primaryKeyValues: JSON.stringify(entityObject.PrimaryKey.KeyValuePairs),
+      primaryKeyValues: MayBroadcastPrimaryKey(action, entityName)
+        ? JSON.stringify(entityObject.PrimaryKey.KeyValuePairs)
+        : null,
       action,
       sourceServerId: MJGlobal.Instance.ProcessUUID,
       timestamp: new Date(),
