@@ -13,12 +13,21 @@ import { Subject } from 'rxjs';
 /** Drives `GraphQLDataProvider.Instance.SocketReconnected$` from the test. */
 const socketReconnected$ = new Subject<void>();
 
+/** Flips `GraphQLDataProvider.Instance` between constructed and not-yet-constructed. */
+const providerState = { available: true };
+
 vi.mock('@memberjunction/graphql-dataprovider', () => ({
     GraphQLDataProvider: {
-        Instance: {
-            get SocketReconnected$() {
-                return socketReconnected$.asObservable();
-            },
+        // Returns undefined rather than throwing when the global store has no entry, which is
+        // what makes "provider missing" a silent path rather than a caught one.
+        get Instance() {
+            return providerState.available
+                ? {
+                      get SocketReconnected$() {
+                          return socketReconnected$.asObservable();
+                      },
+                  }
+                : undefined;
         },
     },
 }));
@@ -31,6 +40,7 @@ describe('ConversationLiveness', () => {
 
     beforeEach(() => {
         vi.useFakeTimers();
+        providerState.available = true;
         liveness = new ConversationLiveness();
         seen = [];
         liveness.reconciliationRequired$.subscribe((reason) => seen.push(reason));
@@ -125,5 +135,28 @@ describe('ConversationLiveness', () => {
 
         // A double-subscribe would emit twice and double every downstream reconciliation.
         expect(seen).toEqual(['socket-reconnected']);
+    });
+
+    it('retries the socket signal on a later initialize when the provider was not yet constructed', () => {
+        providerState.available = false;
+        liveness.initialize();
+
+        providerState.available = true;
+        liveness.initialize();
+        socketReconnected$.next();
+
+        // Marking itself initialized on a missing provider would leave the socket signal
+        // unwired for the life of the page, since every later call early-returns.
+        expect(seen).toEqual(['socket-reconnected']);
+    });
+
+    it('still wires the stream signal while the provider is missing', () => {
+        providerState.available = false;
+        const streamReconnected$ = new Subject<void>();
+        liveness.initialize(streamReconnected$.asObservable());
+
+        streamReconnected$.next();
+
+        expect(seen).toEqual(['stream-reconnected']);
     });
 });

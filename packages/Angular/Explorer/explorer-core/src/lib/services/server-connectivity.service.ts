@@ -167,7 +167,24 @@ export class ServerConnectivityService implements OnDestroy {
       //
       // So ask for a reconnect and keep polling. The banner clears only when the socket itself
       // reports 'connected', through onSocketStateChange.
-      GraphQLDataProvider.Instance?.ForceSocketReconnect();
+      const provider = GraphQLDataProvider.Instance;
+      provider?.ForceSocketReconnect();
+
+      // The one case where HTTP health is the whole truth: nothing is subscribed. The socket is
+      // created lazily by the next subscription, so on a screen that opens none no 'connected'
+      // can arrive and the warning would be stranded for the rest of the session — while no push
+      // is being missed. A subscription opened later against a socket that is still down emits
+      // 'disconnected' and raises the warning again.
+      if (provider && provider.ActiveSubscriptionCount === 0) {
+        this.degraded = false;
+        this.clearPollTimer();
+        if (!this.isConnected.value) {
+          this.isConnected.next(true);
+          LogStatus('Server connectivity restored (HTTP healthy, no active subscriptions)');
+        }
+        return;
+      }
+
       this.scheduleNextPoll();
     } else {
       // Still unreachable — schedule another poll

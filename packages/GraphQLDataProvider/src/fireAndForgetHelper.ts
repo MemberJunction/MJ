@@ -19,6 +19,12 @@ import { Subscription } from "rxjs";
  * window and the pulse are a matched pair and must be changed together; this value must
  * stay at roughly 3x {@link DEFAULT_PULSE_INTERVAL_MS} in MJServer's FireAndForgetHeartbeat,
  * or a healthy long-running agent will trip reconciliation on every quiet stretch.
+ *
+ * DEPLOYMENT ORDER. The pair spans two independently deployable packages — this one and
+ * `@memberjunction/server`. A client on this window talking to a server still pulsing every
+ * 5 minutes times out on EVERY pulse gap, not merely on a dead transport, so the server must
+ * ship first or with it. Combined with `DEFAULT_MAX_STALL_RECONCILES`, the give-up horizon is
+ * 6 x this window: roughly 18 minutes.
  */
 export const DEFAULT_IDLE_TIMEOUT_MS = 3 * 60 * 1000;
 

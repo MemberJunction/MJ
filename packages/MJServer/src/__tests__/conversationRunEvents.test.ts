@@ -95,6 +95,26 @@ describe('TailConversationEvents', () => {
             expect(contextUser).toBe(USER);
         });
 
+        it('bypasses the server RunView cache on every read', async () => {
+            // This is the last-resort recovery path, and the rows it judges are written by
+            // things that never fire a cache invalidation: `spSweepStaleAIAgentRuns` force-fails
+            // a run with a direct set-based UPDATE. `TrustServerCacheCompletely` defaults on, so
+            // a cached read here would keep reporting the run as Running and the recovery would
+            // never fire — the exact failure this resolver exists to end.
+            scriptRunView({
+                detail: { ID: DETAIL_ID, Status: 'In-Progress' },
+                run: { ID: RUN_ID, Status: 'Completed' },
+                steps: [],
+            });
+
+            await resolver.TailConversationEvents(DETAIL_ID, ctxFor(USER), 0);
+
+            expect(mockRunView.mock.calls.length).toBeGreaterThan(0);
+            for (const [params] of mockRunView.mock.calls) {
+                expect(params.BypassCache, `${params.EntityName} must bypass the cache`).toBe(true);
+            }
+        });
+
         it('gives an unreadable detail the same answer as a missing one', async () => {
             scriptRunView({ detail: null });
             const out = await resolver.TailConversationEvents(DETAIL_ID, ctxFor(USER), 0);

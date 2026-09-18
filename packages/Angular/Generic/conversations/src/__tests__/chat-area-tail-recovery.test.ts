@@ -129,6 +129,48 @@ describe('ConversationChatAreaComponent.tryRecoverFromTail', () => {
     expect(h.forgotten).toEqual(['MSG-1']);
   });
 
+  it('does not complete a message whose detail the server still reports as open', async () => {
+    // The orphan window: the run is over but its detail was never closed, because the process
+    // died between the two writes. `handleMessageCompletion` re-reads the detail rather than
+    // writing it, so completing here cannot settle the message — it reloads the whole
+    // conversation and leaves it spinning, then repeats on the next trigger. The server-side
+    // reconciler is what closes that row.
+    const h = createHarness(tailResult({
+      RunID: 'RUN-1',
+      RunStatus: 'Completed',
+      IsInFlight: false,
+      DetailStatus: 'In-Progress',
+    }));
+
+    await expect(recover(h)).resolves.toBe(false);
+    expect(h.completions).toEqual([]);
+  });
+
+  it('keeps the cursor through the orphan window', async () => {
+    const h = createHarness(tailResult({
+      RunID: 'RUN-1',
+      IsInFlight: false,
+      DetailStatus: 'In-Progress',
+    }));
+
+    await recover(h);
+
+    expect(h.forgotten).toEqual([]);
+  });
+
+  it('completes once the reconciler has closed the detail', async () => {
+    const h = createHarness(tailResult({
+      RunID: 'RUN-1',
+      RunStatus: 'Completed',
+      IsInFlight: false,
+      DetailStatus: 'Complete',
+    }));
+
+    await expect(recover(h)).resolves.toBe(true);
+    expect(h.completions).toEqual(['MSG-1']);
+    expect(h.forgotten).toEqual(['MSG-1']);
+  });
+
   it('keeps the cursor while the run is still in flight', async () => {
     const h = createHarness(tailResult({ RunID: 'RUN-1', IsInFlight: true }));
 

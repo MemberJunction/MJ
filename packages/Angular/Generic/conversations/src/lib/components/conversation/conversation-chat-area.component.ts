@@ -4806,18 +4806,18 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return;
     }
 
+    // `OrderBy __mj_CreatedAt DESC` puts the newest run first, so the first row seen for a detail
+    // in THIS pass wins — a retried message must reconcile against its latest run, not its first.
+    // Tracked per pass rather than by consulting the map, which usually already holds a run from
+    // an earlier pass and is cleared only on conversation load.
+    const seenDetailIds = new Set<string>();
     for (const run of result.Results || []) {
       const detailId = run.ConversationDetailID;
-      // `OrderBy __mj_CreatedAt DESC` puts the newest run first, so the first row seen for a
-      // detail wins — a retried message must reconcile against its latest run, not its first.
-      if (detailId && !this.agentRunsByDetailId.has(detailId)) {
-        this.agentRunsByDetailId.set(detailId, run);
-      } else if (detailId) {
-        const existing = this.agentRunsByDetailId.get(detailId);
-        if (existing && UUIDsEqual(existing.ID, run.ID)) {
-          this.agentRunsByDetailId.set(detailId, run);
-        }
+      if (!detailId || seenDetailIds.has(detailId)) {
+        continue;
       }
+      seenDetailIds.add(detailId);
+      this.agentRunsByDetailId.set(detailId, run);
     }
     // New map reference so OnPush children re-read it.
     this.agentRunsByDetailId = new Map(this.agentRunsByDetailId);
@@ -4889,6 +4889,19 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     const runIsTerminal = result.RunID != null && !result.IsInFlight;
 
     if (!runIsTerminal && !detailIsTerminal) {
+      return false;
+    }
+
+    // A terminal run beside a detail the server still reports as open is the orphan window, which
+    // the server-side reconciler closes after its grace period. `handleMessageCompletion` re-reads
+    // the detail rather than writing it, so completing here cannot settle the message; it would
+    // reload the whole conversation on every trigger and leave it spinning regardless. Keep the
+    // cursor and wait for the row to close.
+    if (!detailIsTerminal && result.DetailStatus === 'In-Progress') {
+      LogStatusEx({
+        message: `📼 Tail reports run ${result.RunID} finished but detail ${message.ID} is still open — leaving it to the reconciler`,
+        verboseOnly: true
+      });
       return false;
     }
 

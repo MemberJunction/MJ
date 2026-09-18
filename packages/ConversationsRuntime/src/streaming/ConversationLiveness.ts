@@ -62,6 +62,7 @@ export class ConversationLiveness {
     private readonly triggers$ = new Subject<ReconciliationReason>();
     private subscriptions = new Subscription();
     private initialized = false;
+    private streamWired = false;
 
     /**
      * Fires when client state may be stale. Already coalesced — subscribe and reconcile.
@@ -85,7 +86,10 @@ export class ConversationLiveness {
             return;
         }
 
+        let socketWired = false;
         try {
+            // `Instance` returns undefined rather than throwing when the provider is not yet
+            // constructed, so a missing provider is a falsy value here, not a caught error.
             const provider = GraphQLDataProvider.Instance;
             if (provider) {
                 // `SocketReconnected$` fires on `wasRetry`, which is the only trustworthy
@@ -95,19 +99,23 @@ export class ConversationLiveness {
                 this.subscriptions.add(
                     provider.SocketReconnected$.subscribe(() => this.Trigger('socket-reconnected'))
                 );
+                socketWired = true;
             }
         } catch (error) {
             // A provider that is not yet constructed is not a failure — the DOM-level and
-            // stream-level triggers still work, and this is retried on the next initialize().
+            // stream-level triggers still work, and the socket signal is retried below.
             console.warn('[ConversationLiveness] Socket signal unavailable:', error);
-            return;
         }
 
-        if (streamReconnected$) {
+        // Wired at most once, because the retry path below can bring execution back here.
+        if (streamReconnected$ && !this.streamWired) {
             this.subscriptions.add(streamReconnected$.subscribe(() => this.Trigger('stream-reconnected')));
+            this.streamWired = true;
         }
 
-        this.initialized = true;
+        // Complete only once the socket signal is attached. Marking initialized without it would
+        // early-return every later call and leave that signal unwired for the life of the page.
+        this.initialized = socketWired;
     }
 
     /** The tab became visible again. Called by the host's `visibilitychange` handler. */
@@ -135,5 +143,6 @@ export class ConversationLiveness {
         this.subscriptions.unsubscribe();
         this.subscriptions = new Subscription();
         this.initialized = false;
+        this.streamWired = false;
     }
 }

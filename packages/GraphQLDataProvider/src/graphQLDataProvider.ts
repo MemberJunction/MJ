@@ -3233,6 +3233,14 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     /**
+     * How many WebSocket subscriptions are currently open. Zero means nothing is waiting on
+     * push frames, so a socket that is down is delivering nothing and costing nothing.
+     */
+    public get ActiveSubscriptionCount(): number {
+        return this._activeSubscriptionCount;
+    }
+
+    /**
      * Force-dispose the current WebSocket client so the next subscription
      * creates a fresh connection. Called by ServerConnectivityService after
      * /healthcheck confirms the server is back online.

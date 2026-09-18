@@ -999,9 +999,13 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
 
         let handlers = this._channelHandlers.get(fullChannel);
         if (!handlers) {
+            // Registered only once the subscribe has actually succeeded. A map entry published
+            // ahead of the await would survive a rejection, and every later caller reads that
+            // entry as proof the channel is subscribed — registering handlers against a channel
+            // Redis is not listening on, with nothing surfaced.
+            await this._subscriber?.subscribe(fullChannel);
             handlers = new Set();
             this._channelHandlers.set(fullChannel, handlers);
-            await this._subscriber?.subscribe(fullChannel);
             if (this._enableLogging) {
                 LogStatus(`Redis pub/sub: subscribed to channel "${fullChannel}"`);
             }

@@ -29,11 +29,17 @@ const { mockForceSocketReconnect, socket } = vi.hoisted(() => {
     };
 });
 
+/** How many WebSocket subscriptions the provider currently holds. */
+const providerState = { activeSubscriptions: 1 };
+
 vi.mock('@memberjunction/graphql-dataprovider', () => ({
     GraphQLDataProvider: {
         Instance: {
             SocketConnectivity$: socket,
             ForceSocketReconnect: mockForceSocketReconnect,
+            get ActiveSubscriptionCount() {
+                return providerState.activeSubscriptions;
+            },
         },
     },
 }));
@@ -54,6 +60,7 @@ describe('ServerConnectivityService', () => {
     beforeEach(() => {
         vi.useFakeTimers();
         mockForceSocketReconnect.mockReset();
+        providerState.activeSubscriptions = 1;
         vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true })));
     });
     afterEach(() => {
@@ -76,6 +83,47 @@ describe('ServerConnectivityService', () => {
         await Promise.resolve();
 
         // HTTP is fine, but nothing has proven the socket carries frames.
+        expect(service.IsConnected).toBe(false);
+        service.Stop();
+    });
+
+    it('clears the warning when HTTP is healthy and nothing is subscribed', async () => {
+        // The socket is created lazily by the next subscription, so on a screen that opens none
+        // no 'connected' can ever arrive and the warning would be stranded for the session. With
+        // nothing subscribed there is also no push to miss, so HTTP health is the whole truth.
+        providerState.activeSubscriptions = 0;
+        const service = start();
+        socket.emit('disconnected');
+
+        await vi.advanceTimersByTimeAsync(31_000);
+        await Promise.resolve();
+
+        expect(service.IsConnected).toBe(true);
+        service.Stop();
+    });
+
+    it('keeps warning when HTTP is healthy but a subscription is waiting on frames', async () => {
+        providerState.activeSubscriptions = 2;
+        const service = start();
+        socket.emit('disconnected');
+
+        await vi.advanceTimersByTimeAsync(31_000);
+        await Promise.resolve();
+
+        expect(service.IsConnected).toBe(false);
+        service.Stop();
+    });
+
+    it('warns again once a subscription reopens against a socket that is still down', async () => {
+        providerState.activeSubscriptions = 0;
+        const service = start();
+        socket.emit('disconnected');
+        await vi.advanceTimersByTimeAsync(31_000);
+        await Promise.resolve();
+        expect(service.IsConnected).toBe(true);
+
+        socket.emit('disconnected');
+
         expect(service.IsConnected).toBe(false);
         service.Stop();
     });

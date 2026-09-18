@@ -90,6 +90,13 @@ export class ConversationRunEventsOutput {
     DetailStatus?: string;
 }
 
+/**
+ * Every read here sets `BypassCache`. This is the last-resort recovery path, and the rows it
+ * judges are written by callers that fire no cache invalidation — `spSweepStaleAIAgentRuns`
+ * force-fails a run with a direct set-based UPDATE. `TrustServerCacheCompletely` defaults on, so
+ * a cached read would keep reporting a swept run as `Running` and recovery would never fire.
+ */
+
 /** Ceiling on events returned per call. A client with a gap larger than this pages. */
 const MAX_EVENTS_PER_TAIL = 200;
 
@@ -200,6 +207,7 @@ export class ConversationRunEventsResolver {
                 ExtraFilter: `ID='${this.escape(conversationDetailID)}'`,
                 MaxRows: 1,
                 ResultType: 'entity_object',
+                BypassCache: true,
             },
             user
         );
@@ -219,6 +227,7 @@ export class ConversationRunEventsResolver {
                 OrderBy: '__mj_CreatedAt DESC',
                 MaxRows: 1,
                 ResultType: 'entity_object',
+                BypassCache: true,
             },
             user
         );
@@ -235,6 +244,7 @@ export class ConversationRunEventsResolver {
                 OrderBy: 'StepNumber ASC',
                 MaxRows: MAX_EVENTS_PER_TAIL,
                 ResultType: 'entity_object',
+                BypassCache: true,
             },
             user
         );
