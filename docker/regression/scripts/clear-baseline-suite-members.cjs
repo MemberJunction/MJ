@@ -12,7 +12,7 @@
  *
  *   Both are gone. The six tests were given fresh keys, so no metadata member
  *   reuses a baseline (SuiteID, TestID) pair; and the prune moved out of metadata
- *   into migrations/v6/V202609171030__v6.2.x__Prune_Pre_Consolidation_ComputerUse_Tests.sql,
+ *   into migrations/v6/V202609181937__v6.2.x__Prune_Pre_Consolidation_ComputerUse_Tests.sql,
  *   which drops all 25 memberships during db-setup. On a database built fresh
  *   from migrations this script now finds nothing to clear.
  *

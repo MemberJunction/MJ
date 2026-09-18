@@ -113,7 +113,7 @@ echo ""
 # different PKs for six of the same (SuiteID,TestID) pairs, which would UQ-collide
 # and roll back the whole member transaction; and (b) drops suite members holding
 # an FK to a Computer Use test that the prune migration already removed
-# during db-setup (migrations/v6/V202609171030__v6.2.x__Prune_Pre_Consolidation_ComputerUse_Tests.sql).
+# during db-setup (migrations/v6/V202609181937__v6.2.x__Prune_Pre_Consolidation_ComputerUse_Tests.sql).
 echo "Clearing baseline-seeded regression suite members..."
 node "$SCRIPTS/clear-baseline-suite-members.cjs" 2>&1 || echo "  WARNING: suite-member clear failed (non-fatal)"
 echo ""
