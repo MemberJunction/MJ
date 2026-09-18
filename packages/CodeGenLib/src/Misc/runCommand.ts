@@ -121,6 +121,18 @@ export class RunCommandsBase {
         });
 
         cp.on('close', (code) => {
+          // We ended the window ourselves and killed the child, so this close is our
+          // own doing and the race has already settled. Every branch below would
+          // narrate it as an outcome: the daemon branch as a daemon failure, and —
+          // because a killed child closes with a null code, never 0 — the generic
+          // branch as `FAILED: … (Process exited with code null)`, printed directly
+          // under `STAYED UP … boot check passed`. The verdict stays right either way,
+          // but the AFTER log and the diagnostic report would say pass and fail back to
+          // back, and a misread log is the failure this whole change exists to prevent.
+          if (endedByObservationWindow) {
+            return;
+          }
+
           const elapsedTime = new Date().getTime() - startTime.getTime();
 
           // A daemon's entire assertion is that it STAYS UP, so any close before the
