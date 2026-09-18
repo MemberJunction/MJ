@@ -5943,39 +5943,6 @@ export abstract class BaseEntity<T = unknown> {
     public set SkipEmbeddings(value: boolean) { this._skipEmbeddings = value; }
 
     /**
-     * When true, a sub-class that derives child records from this record's own data must
-     * NOT do so during Save(). It records the work instead and performs it when the caller
-     * invokes @see ProcessDeferredDerivedData.
-     *
-     * This exists because a caller that authors a parent AND its children — `mj sync push`
-     * is the motivating case — cannot write the children before the parent: the child rows
-     * carry a foreign key to it, so the parent's Save() always runs first. A sub-class that
-     * derives those same children inside Save() therefore creates its own copies before the
-     * authored ones are written, and the authored INSERT then collides on the child table's
-     * natural-key unique constraint. Deferring the derivation until the whole graph is
-     * written lets the derivation see the authored rows and reconcile with them.
-     *
-     * Set this before Save(). It is inert for entities that derive nothing, which is the
-     * overwhelming majority — BaseEntity's ProcessDeferredDerivedData is a no-op.
-     */
-    private _deferDerivedData: boolean = false;
-    public get DeferDerivedData(): boolean { return this._deferDerivedData; }
-    public set DeferDerivedData(value: boolean) { this._deferDerivedData = value; }
-
-    /**
-     * Performs derived-data work that Save() skipped because @see DeferDerivedData was set.
-     * BaseEntity derives nothing, so this is a no-op; sub-classes that derive child records
-     * override it.
-     *
-     * Callers invoke this once the full record graph is persisted and BEFORE the enclosing
-     * transaction commits, so the derived rows settle atomically with the authored ones.
-     * It is safe to call on any entity and safe to call when nothing was deferred.
-     */
-    public async ProcessDeferredDerivedData(): Promise<void> {
-        // no-op — see the method comment
-    }
-
-    /**
      * Utility storage for vector embeddings that represent the active record. Each string in the Map can be any unique key relative to the object so you can
      * use this to track vectors associated with 
      */

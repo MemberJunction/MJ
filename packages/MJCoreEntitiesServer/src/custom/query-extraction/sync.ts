@@ -4,7 +4,6 @@ import {
     MJQueryFieldEntity,
     MJQueryEntityEntity,
     MJQueryDependencyEntity,
-    QueryEngine,
 } from "@memberjunction/core-entities";
 import { UUIDsEqual } from "@memberjunction/global";
 import type {
@@ -667,21 +666,8 @@ export async function RemoveAllRecords(
 // ---------------------------------------------------------------------------
 
 /**
- * Loads all existing records of a given entity type for a query.
+ * Loads existing child records for a query, through the caller's provider.
  * Returns an empty array if the query has not been saved yet.
- */
-/**
- * Loads existing child records for a query.
- *
- * Prefers QueryEngine's in-memory cache when it is loaded (long-running MJAPI
- * server): the engine already holds every query child and auto-refreshes via
- * BaseEntity events, so we avoid a redundant RunView per save. When the cache
- * is NOT loaded — typically a short-lived CLI process such as `mj sync push`
- * or `mj codegen`, where QueryEngine was never `Config()`'d — we must read the
- * authoritative state from the database. Trusting the empty cache there
- * misclassifies already-persisted children as new and re-INSERTs them, hitting
- * `UQ_QueryParameter_QueryID_Name` (and the sibling unique constraints), which
- * on PostgreSQL aborts the entire push transaction and rolls back the run.
  */
 async function loadExistingRecords<T extends { QueryID: string }>(
     entityName: string,
@@ -692,24 +678,19 @@ async function loadExistingRecords<T extends { QueryID: string }>(
 ): Promise<T[]> {
     if (!isSaved) return [];
 
-    const qe = QueryEngine.Instance;
-    if (qe.Loaded) {
-        switch (entityName) {
-            case 'MJ: Query Parameters':
-                return qe.GetQueryParameters(queryID) as unknown as T[];
-            case 'MJ: Query Fields':
-                return qe.GetQueryFields(queryID) as unknown as T[];
-            case 'MJ: Query Entities':
-                return qe.QueryEntities.filter(e => UUIDsEqual(e.QueryID, queryID)) as unknown as T[];
-            case 'MJ: Query Dependencies':
-                return qe.Dependencies.filter(d => UUIDsEqual(d.QueryID, queryID)) as unknown as T[];
-            default:
-                return [];
-        }
-    }
-
-    // Cache cold — read straight from the DB so the add/update/remove delta is
-    // computed against real persisted state, not an empty cache.
+    // Always read through the caller's provider, never QueryEngine's cache.
+    //
+    // The cache is tempting here — the engine already holds every query child — but it is
+    // wrong for a WRITE delta twice over. It refreshes on BaseEntity events through a
+    // debounce (EntityEventDebounceTime, 5s by default), so within a single fast save it
+    // can still be missing rows that were written moments ago; and its entities are bound
+    // to whichever provider loaded the engine, which inside a transaction is a different
+    // connection than the one writing. Either way the delta misclassifies a persisted
+    // child as new and re-INSERTs it, hitting UQ_QueryParameter_QueryID_Name (and the
+    // sibling unique constraints) — which on PostgreSQL aborts the whole transaction.
+    //
+    // A query's children are few and this runs only when the SQL changed, so the read is
+    // cheap insurance against a class of bug that is invisible until it fails.
     const result = await runViewProvider.RunView({
         EntityName: entityName,
         ExtraFilter: `QueryID='${queryID}'`,

@@ -144,30 +144,6 @@ interface DeferredRecord {
  * here instead of being mutated directly, so they can be applied sequentially
  * after Promise.all() resolves — eliminating race conditions in parallel batches.
  */
-/**
- * An entity that recorded derived-data work during Save() for the caller to run later.
- * @see BaseEntity.DeferDerivedData
- */
-interface DeferredDerivedDataEntity {
-  DeferDerivedData: boolean;
-  ProcessDeferredDerivedData: () => Promise<void>;
-  EntityInfo: { Name: string };
-}
-
-/**
- * Tests the capability rather than the class. `instanceof BaseEntity` would be an identity
- * check against whichever copy of @memberjunction/core this module resolved, and a second
- * copy anywhere in the tree would make it silently false for every record — which, now that
- * Save() only RECORDS the derivation, means a push would quietly produce queries with no
- * parameters, fields or dependencies and report success.
- */
-function hasDeferredDerivedData(candidate: unknown): candidate is DeferredDerivedDataEntity {
-  const entity = candidate as Partial<DeferredDerivedDataEntity> | null | undefined;
-  return !!entity
-    && entity.DeferDerivedData === true
-    && typeof entity.ProcessDeferredDerivedData === 'function';
-}
-
 interface ProcessRecordResult {
   status: 'created' | 'updated' | 'unchanged' | 'error' | 'deleted' | 'skipped' | 'deferred';
   isDuplicate?: boolean;
@@ -813,27 +789,7 @@ export class PushService {
         // Peak live independent instances is then the current batch plus any
         // leftover-depth graphs still spanning later levels.
         const hostProvider = Metadata.Provider as unknown as DatabaseProviderBase; // global-provider-ok: host provider template for GraphProviderPool cloning
-
-        // Entities that deferred derived-data work during Save(), keyed by the graph they
-        // belong to. An entity that derives child records from its own data (MJ: Queries
-        // derives its parameters from its SQL) cannot do so while the graph is still being
-        // written — the authored children are not there yet, and it would create colliding
-        // copies of them. The pool calls back once a graph is complete so the derivation
-        // sees the finished graph and settles in the same transaction.
-        const deferredDerivedData = new Map<string, DeferredDerivedDataEntity[]>();
-        const graphPool = new GraphProviderPool(
-          hostProvider,
-          (msg) => callbacks?.onLog?.(msg),
-          async (graphId) => {
-            const entities = deferredDerivedData.get(graphId);
-            deferredDerivedData.delete(graphId);
-            if (!entities) return;
-            // Serial: these share the graph's single connection.
-            for (const entity of entities) {
-              await entity.ProcessDeferredDerivedData();
-            }
-          }
-        );
+        const graphPool = new GraphProviderPool(hostProvider, (msg) => callbacks?.onLog?.(msg));
 
         const applyProcessResult = (result: ProcessRecordResult): void => {
           if (result.batchContextEntry) {
@@ -937,13 +893,6 @@ export class PushService {
                     throw err;
                   }
                   applyProcessResult(batchResult.result);
-
-                  const saved = batchResult.result.batchContextEntry?.entity;
-                  if (hasDeferredDerivedData(saved)) {
-                    const forGraph = deferredDerivedData.get(batchResult.graphId);
-                    if (forGraph) forGraph.push(saved);
-                    else deferredDerivedData.set(batchResult.graphId, [saved]);
-                  }
                 }
               }
 
@@ -1455,11 +1404,6 @@ export class PushService {
       // Skip embedding generation during sync — vectors can be computed later by the
       // API server. This avoids loading the ~50MB Xenova model in short-lived CLI processes.
       entity.SkipEmbeddings = true;
-      // Sync authors a record together with its children, so the parent must not derive
-      // child records of its own while the graph is mid-write — the authored children are
-      // written after it and would collide with the derived copies on their natural key.
-      // The caller runs the derivation once the graph is complete.
-      entity.DeferDerivedData = true;
       const saveOptions = new EntitySaveOptions();
       if (alwaysPush) saveOptions.IgnoreDirtyState = true;
       if (entityConfig?.push?.skipGeoCoding) saveOptions.SkipGeoCoding = true;
@@ -2279,10 +2223,6 @@ export class PushService {
     // Records are in DB now, so this is mainly for tracking within this phase
     const batchContext = new BatchContextIndex();
 
-    // Same contract as the graph path: derived-data work waits until every record in this
-    // phase is written, then runs before the host transaction commits.
-    const deferredDerivedData: DeferredDerivedDataEntity[] = [];
-
     for (const deferred of this.deferredRecords) {
       const { flattenedRecord, entityDir, entityConfig } = deferred;
       const entityName = flattenedRecord.entityName;
@@ -2306,10 +2246,6 @@ export class PushService {
         // Apply side effects (sequential here, but consistent with parallel path)
         if (result.batchContextEntry) {
           batchContext.set(result.batchContextEntry.key, result.batchContextEntry.entity);
-          const saved = result.batchContextEntry.entity;
-          if (hasDeferredDerivedData(saved)) {
-            deferredDerivedData.push(saved);
-          }
         }
         if (result.warnings) {
           this.warnings.push(...result.warnings);
@@ -2339,17 +2275,6 @@ export class PushService {
           `     Tip: Ensure all referenced records exist or remove the ?allowDefer flag`
         );
 
-        errors++;
-      }
-    }
-
-    for (const entity of deferredDerivedData) {
-      try {
-        await entity.ProcessDeferredDerivedData();
-      } catch (error) {
-        callbacks?.onError?.(
-          `   ✗ Failed to complete deferred processing for ${entity.EntityInfo.Name}: ${(error as Error).message}`
-        );
         errors++;
       }
     }
@@ -2705,6 +2630,7 @@ export class PushService {
         const matchedItemSet = new Set<BaseEntity>();
         const colConfig = entityConfig?.collections?.[colName];
         const mode = colConfig?.mode ?? 'upsert';
+        const matchOn = colConfig?.matchOn ?? [];
 
         for (const itemData of colItems) {
           if (!itemData || typeof itemData !== 'object') continue;
@@ -2721,6 +2647,28 @@ export class PushService {
               }
               return true;
             }) ?? null;
+          }
+
+          // Fall back to the child's natural key. A row the server created for itself — a
+          // query parameter the extraction pipeline inferred, say — carries an id the
+          // declaration cannot know, so a primary-key match can never find it and the item
+          // below would be created a second time, colliding on the child's unique
+          // constraint. Matching on the declared fields adopts that row instead.
+          if (!targetChild && matchOn.length > 0 && loadedItems.length > 0 && itemData.fields) {
+            const fields = itemData.fields;
+            const wanted = matchOn.filter((f) => f in fields);
+            if (wanted.length === matchOn.length) {
+              targetChild = loadedItems.find((child) =>
+                wanted.every((f) => {
+                  const childValue = child.Get(f);
+                  const declaredValue = fields[f];
+                  if (childValue == null || declaredValue == null) return childValue === declaredValue;
+                  // Case-insensitive: the constraints these keys stand in for are, and a
+                  // declaration differing only in case means the same row, not a new one.
+                  return String(childValue).toLowerCase() === String(declaredValue).toLowerCase();
+                })
+              ) ?? null;
+            }
           }
 
           if (itemData.deleteRecord?.delete === true) {

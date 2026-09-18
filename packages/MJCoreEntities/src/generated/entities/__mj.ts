@@ -104538,6 +104538,26 @@ export class MJPublicLinkEntity extends BaseEntity<MJPublicLinkEntityType> {
  */
 @RegisterClass(BaseEntity, 'MJ: Queries')
 export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
+
+  /**
+  * Related records: MJ: Query Parameters
+  *
+  * Loads, validates and persists as one unit with this MJ: Queries record — see
+  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
+  * the 'MJ: Queries → MJ: Query Parameters' relationship; edit that row, not this file.
+  *
+  */
+  public readonly Parameters = this.DeclareRelatedRecords<MJQueryParameterEntity>({
+      Name: 'Parameters',
+        RelatedEntity: 'MJ: Query Parameters',
+        RelatedEntityJoinField: 'QueryID',
+        OrderBy: 'Name ASC',
+        Load: 'explicit',
+        OnRemove: 'delete',
+        Source: 'database',
+        ReadOnly: false,
+  });
+
     /**
     * Loads the MJ: Queries record from the database
     * @param ID: string - primary key value to load the MJ: Queries record.

@@ -244,6 +244,22 @@ describe('SyncParameters — declared parameters are authoritative', () => {
         expect(table.Find('CompanyIDs')?.Description).toBe('AI-generated description');
     });
 
+    // The pipeline calls SyncParameters with an empty list when the SQL yields no parameters
+    // at all. That used to be RemoveAllRecords, which knew nothing about DetectionMethod — so
+    // a declared parameter whose token form the parser did not recognise was written by the
+    // push and wiped again on the same save, every time, with success reported.
+    it('reports the declared rows it removes when extraction finds no parameters at all', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        const table = new FakeQueryParameterTable();
+        table.rows.push(declaredRow());
+        const { metadataProvider, runViewProvider } = buildProviders(table);
+
+        await SyncParameters(QUERY_ID, [], CONTEXT_USER, metadataProvider, runViewProvider, true);
+
+        expect(table.rows).toHaveLength(0);
+        expect(warn).toHaveBeenCalledWith(expect.stringContaining('CompanyIDs'));
+    });
+
     it('creates an extraction-owned row when nothing declares the parameter', async () => {
         const table = new FakeQueryParameterTable();
         const { metadataProvider, runViewProvider } = buildProviders(table);
