@@ -420,5 +420,53 @@ describe('DatabaseProvisionPhase', () => {
       expect(validateScript).toContain("name = 'CG'");
       expect(validateScript).toContain("name = 'API'");
     });
+
+    it('does not assert a database principal for sa', async () => {
+      // `sa` maps to dbo and never appears in sys.database_principals, so a
+      // correct setup printed "[FAIL] User sa NOT found". The setup emitter in
+      // this same file already special-cases built-in sysadmins (Msg 15405);
+      // the validate emitter did not. See #4562.
+      const ctx = makeContext({ Yes: true });
+      ctx.Config.DatabaseName = 'TestDB';
+      ctx.Config.CodeGenUser = 'sa';
+      ctx.Config.APIUser = 'sa';
+
+      await phase.Run(ctx);
+
+      const validateScript = mockFs.WriteText.mock.calls[1][1] as string;
+      expect(validateScript).not.toContain("name = 'sa'");
+      expect(validateScript).toMatch(/sa.*sysadmin/i);
+    });
+
+    it('still asserts database principals for ordinary logins', async () => {
+      const ctx = makeContext({ Yes: true });
+      ctx.Config.DatabaseName = 'TestDB';
+      ctx.Config.CodeGenUser = 'MJ_CodeGen';
+      ctx.Config.APIUser = 'MJ_API';
+
+      await phase.Run(ctx);
+
+      const validateScript = mockFs.WriteText.mock.calls[1][1] as string;
+      expect(validateScript).toContain("name = 'MJ_CodeGen'");
+      expect(validateScript).toContain("name = 'MJ_API'");
+    });
+  });
+
+  describe('connectivity reporting', () => {
+    it('does not claim credentials were verified by a TCP probe', async () => {
+      // SqlServerAdapter.CheckConnectivity opens a socket — no TLS, no login,
+      // no SELECT 1. Claiming "connectivity verified" is what let a bad
+      // DB_TRUST_SERVER_CERTIFICATE pass here and fail three phases later.
+      const { emitter, emitSpy } = createMockEmitter();
+      await phase.Run(makeContext({ Yes: true, Emitter: emitter }));
+
+      const messages = [
+        ...emittedEvents(emitSpy, 'log'),
+        ...emittedEvents(emitSpy, 'step:progress'),
+      ].map((e) => (e as { Message?: string }).Message ?? '').join('\n');
+
+      expect(messages).not.toMatch(/connectivity verified/i);
+      expect(messages).toMatch(/reachable/i);
+    });
   });
 });
