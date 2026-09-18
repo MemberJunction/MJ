@@ -228,3 +228,47 @@ describe('loadScript isolation (regression: a heal must not rewrite the promoted
         expect(test.ConfigurationObject!.maxSteps).toBe(30);
     });
 });
+
+describe('saveScript rollback (review: non-blocking)', () => {
+    const base = JSON.stringify({ maxSteps: 30 });
+
+    it('restores the previous configuration when Save() returns false', async () => {
+        const test = fakeTest(base, { ok: false, message: 'row locked' });
+        const before = test.Configuration;
+
+        const result = await saveScript(test, sampleScript());
+
+        expect(result.saved).toBe(false);
+        // The in-memory entity is cached and reused by the next run in this
+        // process. Leaving the unsaved script on it means replaying a script that
+        // never landed in the database.
+        expect(test.Configuration).toBe(before);
+        expect(loadScript(test)).toBeNull();
+    });
+
+    it('restores the previous configuration when Save() throws', async () => {
+        const test = fakeTest(base);
+        (test.Save as unknown as { mockImplementation: (f: () => Promise<boolean>) => void })
+            .mockImplementation(async () => { throw new Error('connection reset'); });
+        const before = test.Configuration;
+
+        const result = await saveScript(test, sampleScript());
+
+        expect(result.saved).toBe(false);
+        expect(result.error).toContain('connection reset');
+        expect(test.Configuration).toBe(before);
+    });
+
+    it('leaves an existing promoted script intact when a pending save fails', async () => {
+        const withScript = JSON.stringify({
+            maxSteps: 30,
+            ReplayScript: { TestId: 'test-1', GoalHash: 'deadbeef', Steps: [{ Instruction: 'click Save' }] },
+        });
+        const test = fakeTest(withScript, { ok: false, message: 'nope' });
+
+        await saveScript(test, sampleScript());
+
+        expect(test.ConfigurationObject!.PendingReplayScript).toBeUndefined();
+        expect(test.ConfigurationObject!.ReplayScript!.Steps).toHaveLength(1);
+    });
+});

@@ -72,6 +72,12 @@ export function allowsLLMFallback(test: MJTestEntity): boolean {
  * the next run a re-record, which is not worth failing a green test over.
  */
 export async function saveScript(test: MJTestEntity, script: ComputerUseTrace): Promise<ScriptSaveResult> {
+    // The raw column as it stands, so a failed save can put it back. The entity is
+    // cached and reused by the next run in this process, so leaving the unsaved
+    // script on it means replaying a script that never reached the database.
+    const previousRaw = test.Configuration;
+    const restore = (): void => { test.Configuration = previousRaw; };
+
     try {
         const current: MJTestEntity_ITestConfiguration = readConfiguration(test) ?? {};
         const slot: 'promoted' | 'pending' = current.ReplayScript ? 'pending' : 'promoted';
@@ -81,8 +87,10 @@ export async function saveScript(test: MJTestEntity, script: ComputerUseTrace): 
         if (await test.Save()) {
             return { saved: true, slot };
         }
+        restore();
         return { saved: false, error: test.LatestResult?.CompleteMessage ?? 'Save() returned false with no result detail' };
     } catch (e) {
+        restore();
         return { saved: false, error: e instanceof Error ? e.message : String(e) };
     }
 }
