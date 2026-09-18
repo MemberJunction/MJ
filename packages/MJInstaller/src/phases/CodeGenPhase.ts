@@ -480,6 +480,13 @@ export class CodeGenPhase {
   /**
    * Packages that contain generated code managed by CodeGen. Build failures in
    * only these packages are tolerated — codegen will regenerate the stale code.
+   *
+   * `DependencyPhase` has a same-named constant with deliberately different
+   * contents — it additionally tolerates `mj_generatedentities`/
+   * `mj_generatedactions`. That build runs **before** CodeGen has written
+   * `src/generated/`, so those two are expected to fail there; this rebuild
+   * runs **after** CodeGen has written it, so they are expected to build here.
+   * Do not "fix" one list to match the other.
    */
   private static readonly CODEGEN_MANAGED_PACKAGES = [
     'ng-core-entity-forms',

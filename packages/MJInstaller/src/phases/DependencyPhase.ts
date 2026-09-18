@@ -63,6 +63,13 @@ export function tagToNpmVersion(tag: string): string {
  * CodeGen will regenerate their stale source code and rebuild them in the
  * codegen phase. If any package outside this list fails, the build is a
  * hard error.
+ *
+ * `CodeGenPhase` has a same-named constant with deliberately different
+ * contents — it omits `mj_generatedentities`/`mj_generatedactions`. This
+ * build runs **before** CodeGen has written `src/generated/`, so those two
+ * packages are expected to fail here; by the time `CodeGenPhase`'s rebuild
+ * runs, CodeGen has written that source and they are expected to build. Do
+ * not "fix" one list to match the other.
  */
 const CODEGEN_MANAGED_PACKAGES = [
   'mj_generatedentities',
