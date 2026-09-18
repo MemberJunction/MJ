@@ -2397,11 +2397,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             }
             if (sUserSearchSQL.length > 0) {
                 sUserSearchSQL = '(' + sUserSearchSQL + ')';
-            } else if (
-                userSearchString &&
-                userSearchString.trim().length > 0 &&
-                entityInfo.Fields.some(f => f.IncludeInUserSearchAPI)
-            ) {
+            } else if (userSearchString && userSearchString.trim().length > 0 && entityInfo.HasSearchFields) {
                 // A term was supplied and this entity DOES declare searchable fields, but every one of
                 // them dropped out of the loop above — denied by field-level security, or not a sensible
                 // text-search target. Returning the whole table would imply the search ran when it did
