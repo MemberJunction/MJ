@@ -215,8 +215,8 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     /**
      * Independent instance that **shares the connection pool and metadata cache**
      * but has its own transaction stack. Same pattern MJAPI uses for per-request
-     * providers. Used by `mj sync push` so `--parallel-batch-size` (default 10)
-     * does not interleave `EntityTransactionScope`s on one provider.
+     * providers. Used by an entity directory that `mj sync push` writes with isolated
+     * transactions, so parallel graphs do not interleave `EntityTransactionScope`s on one provider.
      *
      * Not SQL Server-specific: each concrete provider implements this against
      * its own pool. {@link ReleaseIndependentInstance} must NOT close the pool.
