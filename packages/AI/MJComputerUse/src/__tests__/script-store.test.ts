@@ -4,21 +4,36 @@ import { ComputerUseTrace, TraceStep } from '@memberjunction/computer-use';
 import { allowsLLMFallback, loadScript, saveScript } from '../test-driver/script-store.js';
 
 /**
- * A stand-in for the generated `MJTestEntity`, reproducing the three behaviours
- * the store depends on: the lazy-parsing `ConfigurationObject` accessor, `Save()`
- * returning a boolean rather than throwing, and `LatestResult.CompleteMessage`
- * carrying the reason when it returns false.
+ * A stand-in for the generated `MJTestEntity`, reproducing the behaviours the store
+ * depends on: `Save()` returning a boolean rather than throwing,
+ * `LatestResult.CompleteMessage` carrying the reason when it returns false, and —
+ * critically — the `ConfigurationObject` accessor's **caching**.
+ *
+ * The generated accessor parses once and returns the SAME object reference until the
+ * raw `Configuration` string changes (`_ConfigurationObject_lastRaw`). An earlier
+ * version of this fake re-parsed on every get, handing out a fresh copy each time,
+ * which made it impossible to observe a caller mutating the cached script in place.
+ * That is exactly the defect this file now guards, so the fake has to cache too.
  */
 function fakeTest(configuration: string | null, save?: { ok: boolean; message?: string }): MJTestEntity {
     const entity = {
         ID: 'test-1',
         Configuration: configuration,
         LatestResult: save?.message ? { CompleteMessage: save.message } : undefined,
+        _cached: undefined as MJTestEntity_ITestConfiguration | null | undefined,
+        _lastRaw: undefined as string | null | undefined,
         get ConfigurationObject(): MJTestEntity_ITestConfiguration | null {
-            return this.Configuration ? JSON.parse(this.Configuration) : null;
+            if (this.Configuration !== this._lastRaw) {
+                this._cached = this.Configuration ? JSON.parse(this.Configuration) : null;
+                this._lastRaw = this.Configuration;
+            }
+            return this._cached!;
         },
         set ConfigurationObject(value: MJTestEntity_ITestConfiguration | null) {
-            this.Configuration = value ? JSON.stringify(value) : null;
+            const raw = value ? JSON.stringify(value) : null;
+            this.Configuration = raw;
+            this._cached = value;
+            this._lastRaw = raw;
         },
         Save: vi.fn(async () => save?.ok ?? true),
     };
@@ -148,5 +163,68 @@ describe('saveScript', () => {
         const result = await saveScript(test, sampleScript());
         expect(result.saved).toBe(false);
         expect(result.error).toBe('connection reset');
+    });
+});
+
+describe('loadScript isolation (regression: a heal must not rewrite the promoted script)', () => {
+    /** Configuration holding one promoted script with a single click step. */
+    function promoted(selector: string): string {
+        return JSON.stringify({
+            maxSteps: 30,
+            ReplayScript: {
+                TestId: 'test-1',
+                GoalHash: 'deadbeef',
+                Steps: [{ Instruction: 'click Save', Action: { Method: 'click', Target: { Role: 'button', Name: 'Save', Selector: selector } } }],
+            },
+        });
+    }
+
+    it('hands back a copy, so mutating the loaded script leaves the row untouched', () => {
+        const test = fakeTest(promoted('#old'));
+        const script = loadScript(test)!;
+
+        // What the engine does when it heals: rewrite the selector in place.
+        script.Steps[0].Action.Target!.Selector = '#healed';
+
+        expect(test.ConfigurationObject!.ReplayScript!.Steps[0].Action.Target!.Selector).toBe('#old');
+        expect(loadScript(test)!.Steps[0].Action.Target!.Selector).toBe('#old');
+    });
+
+    it('two loads do not share a reference', () => {
+        const test = fakeTest(promoted('#old'));
+        const a = loadScript(test)!;
+        const b = loadScript(test)!;
+        expect(a).not.toBe(b);
+        a.Steps[0].Instruction = 'mutated';
+        expect(b.Steps[0].Instruction).toBe('click Save');
+    });
+
+    it('a heal-then-fallback run leaves ReplayScript byte-identical', async () => {
+        const original = promoted('#old');
+        const test = fakeTest(original);
+
+        // 1. Replay loads the promoted script and heals step 0 in place.
+        const replayed = loadScript(test)!;
+        replayed.Steps[0].Action.Target!.Selector = '#healed';
+
+        // 2. It diverges later; AllowLLMFallback runs the agent, which passes and
+        //    records a fresh script. Because one already exists, it must go pending.
+        const fresh = sampleScript();
+        const result = await saveScript(test, fresh);
+
+        expect(result.saved).toBe(true);
+        expect(result.slot).toBe('pending');
+
+        const config = test.ConfigurationObject!;
+        expect(config.PendingReplayScript).toBeDefined();
+        // The promoted slot must be exactly what it was before the run.
+        expect(JSON.stringify(config.ReplayScript)).toBe(JSON.stringify(JSON.parse(original).ReplayScript));
+        expect(config.ReplayScript!.Steps[0].Action.Target!.Selector).toBe('#old');
+    });
+
+    it('preserves unrelated configuration keys through the pending save', async () => {
+        const test = fakeTest(promoted('#old'));
+        await saveScript(test, sampleScript());
+        expect(test.ConfigurationObject!.maxSteps).toBe(30);
     });
 });

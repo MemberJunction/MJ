@@ -44,7 +44,13 @@ export function loadScript(test: MJTestEntity): ComputerUseTrace | null {
     if (!script || typeof script.TestId !== 'string' || !Array.isArray(script.Steps)) {
         return null;
     }
-    return script;
+    // Deep-copy before handing it out. `ConfigurationObject` caches its parsed value
+    // and returns the SAME reference until the raw column changes, so this object is
+    // the test row's own state. Replay heals by rewriting `Target.Selector` in place,
+    // and `saveScript` later spreads that same cached configuration — so without a
+    // copy a healed selector rode into the promoted `ReplayScript`, bypassing the
+    // review gate and leaving `mj test scripts` diffing against a mutated baseline.
+    return structuredClone(script);
 }
 
 /**
