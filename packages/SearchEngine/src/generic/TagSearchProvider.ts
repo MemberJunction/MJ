@@ -182,6 +182,7 @@ export class TagSearchProvider extends BaseSearchProvider {
                 }
 
                 const entityInfo = md.EntityByName(candidate.entityName);
+                const entityDisplayName = entityInfo?.DisplayName || candidate.entityName;
                 const tagNames = candidate.tags.map(t => t.name);
                 const snippet = candidate.tags.length === 1
                     ? `Tagged with "${candidate.tags[0].name}" (${Math.round(candidate.tags[0].weight * 100)}% relevance)`
@@ -190,10 +191,11 @@ export class TagSearchProvider extends BaseSearchProvider {
                 results.push({
                     ID: candidate.recordID,
                     EntityName: candidate.entityName,
+                    EntityDisplayName: entityDisplayName,
                     RecordID: candidate.recordID,
                     SourceType: 'tag',
                     ResultType: 'entity-record' as SearchResultType,
-                    Title: `${candidate.entityName} Record`,
+                    Title: `${entityDisplayName} Record`,
                     Snippet: snippet,
                     Score: candidate.bestScore,
                     ScoreBreakdown: {
