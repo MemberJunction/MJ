@@ -1,7 +1,26 @@
 import { Field, ObjectType, Resolver, Root, Subscription } from 'type-graphql';
-import { configInfo } from '../config.js';
 
 export const CACHE_INVALIDATION_TOPIC = 'CACHE_INVALIDATION';
+
+/**
+ * Entities whose rows may ride along with an invalidation event. Empty until the server entry point
+ * supplies the configured list, so the default — including in any process that never configures it
+ * — is to broadcast nothing.
+ */
+let allowedRecordDataEntities: readonly string[] = [];
+
+/**
+ * Supply the configured allowlist. Called once from the server entry point during bootstrap.
+ *
+ * INJECTED rather than read from `configInfo` here, deliberately. `config.ts` runs `loadConfig()` at
+ * module scope, so importing it from this module would drag full config validation into every
+ * import chain that touches the resolver — including unit tests, which have no server config and
+ * would fail at import with "Configuration validation failed". This module deliberately imports
+ * nothing but type-graphql.
+ */
+export function ConfigureRecordDataBroadcast(entities: readonly string[] | undefined | null): void {
+  allowedRecordDataEntities = entities ?? [];
+}
 
 /**
  * May the full row of `entityName` be broadcast alongside its cache-invalidation event?
@@ -18,11 +37,10 @@ export const CACHE_INVALIDATION_TOPIC = 'CACHE_INVALIDATION';
  * allowlisted name drag in every entity whose name contains it.
  */
 export function MayBroadcastRecordData(entityName: string): boolean {
-  const allowed = configInfo?.cacheSettings?.recordDataBroadcastEntities ?? [];
-  if (allowed.length === 0) return false;
-  if (allowed.includes('*')) return true;
+  if (allowedRecordDataEntities.length === 0) return false;
+  if (allowedRecordDataEntities.includes('*')) return true;
   const name = entityName.trim().toLowerCase();
-  return allowed.some((e) => e.trim().toLowerCase() === name);
+  return allowedRecordDataEntities.some((e) => e.trim().toLowerCase() === name);
 }
 
 @ObjectType()
