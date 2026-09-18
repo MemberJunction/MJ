@@ -12,12 +12,6 @@ export abstract class BaseInfo {
     ID: any = null
 
     /**
-     * Copies initialization data from a plain object to the class instance.
-     * Only copies properties that already exist on the class to prevent creating new fields.
-     * Special handling for DefaultValue fields to extract actual values from SQL Server syntax.
-     * @param initData - The initialization data object
-     */
-    /**
      * Whether `key` resolves to a settable accessor somewhere on the prototype chain.
      *
      * A `@deprecated` alias for a renamed field is a get/set pair on the prototype, not an own
@@ -38,6 +32,12 @@ export abstract class BaseInfo {
         return false;
     }
 
+    /**
+     * Copies initialization data from a plain object to the class instance.
+     * Only copies properties that already exist on the class to prevent creating new fields.
+     * Special handling for DefaultValue fields to extract actual values from SQL Server syntax.
+     * @param initData - The initialization data object
+     */
     protected copyInitData(initData: any) {
         if (initData) {
             // copy the properties from the init data to the new class instance we are constructing

@@ -21,8 +21,9 @@
  * Parsing is syntax-only — `createSourceFile` per file, no `Program`, no type checker. There is no
  * root tsconfig in MJ that could build a repo-wide `Program` (the two at the root are bare
  * `compilerOptions` bases with no `include`/`references`), and a `Program` per package tsconfig
- * across 300+ packages is far too slow for a PR gate. Everything this rule needs is syntactic;
- * a full-repo pass over ~7,900 files costs about two seconds.
+ * across 300+ packages is far too slow for a PR gate. Everything this rule needs is syntactic, so a
+ * full-repo pass over ~7,900 files runs in well under a minute (about 44s on a developer laptop),
+ * against the many minutes a type-aware pass would take.
  *
  * ## What it deliberately does not check
  *
@@ -31,10 +32,10 @@
  *   `BaseResourceComponent.OnQueryParamsChanged`, `ProviderToUse`. That is the template-method
  *   pattern, it is load-bearing, and subclasses cannot deviate from the parent's casing. The
  *   documented "camelCase for private/protected" rule is simply wrong for the protected half.
- * - **Constructor parameter properties.** `constructor(private foo: X)` is already 98.5% compliant
- *   and the baseline this check's rollout was measured against excluded it. A later cycle can add it.
- * - **Interface and type-literal members.** Half of them mirror database rows (PascalCase) and half
- *   are option bags (camelCase); there is no single right answer, so there is no rule to enforce.
+ *
+ * Constructor parameter properties and interface / type-literal members WERE on this list while the
+ * rule was being rolled out. Both are checked now — `checkParameterProperties` and
+ * `checkTypeMembers` — and both are covered by tests.
  *
  * @module @memberjunction/standards
  */

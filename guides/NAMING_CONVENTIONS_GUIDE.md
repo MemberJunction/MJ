@@ -119,7 +119,7 @@ For a whole file of them, `allowedPrefixes` in `.mj-standards.json` is less nois
 
 The convention is enforced by the `naming-conventions` check in
 [`@memberjunction/standards`](../packages/Standards/README.md), which parses every `.ts` file with
-the TypeScript AST — syntax-only, about two seconds for the whole repo.
+the TypeScript AST — syntax-only, about 44 seconds for the whole repo on a developer laptop.
 
 ```bash
 pnpm run check:naming        # this check alone
@@ -291,10 +291,20 @@ These are not style choices; something else owns the name.
 | oclif commands | on a `*Command` subclass: `run`, `flags`, `args`, `description`, `examples`, `summary`, … |
 | `Error` subclasses | `name`, `message`, `stack`, `cause` |
 | Platform / protocol | `toJSON`, `toString`, `valueOf`, `transform`, `writeValue`, `registerOnChange`, `setDisabledState`, `connectedCallback`, `render`, `dispose` |
+| React lifecycle | `getDerivedStateFromError`, `getDerivedStateFromProps`, `componentDidCatch`, `componentDidMount`, `componentDidUpdate`, `componentWillUnmount`, `shouldComponentUpdate`, `getSnapshotBeforeUpdate`, the `UNSAFE_*` forms, `defaultProps`, `displayName`, `contextType`, `propTypes` |
+| Node stream hooks | `_transform`, `_flush`, `_read`, `_write`, `_writev`, `_final`, `_destroy`, `_construct` |
 | Framework-bound members | anything carrying `@HostListener` or `@HostBinding` |
 | MJ system columns | anything prefixed `__mj_` |
 | Constants | `SCREAMING_SNAKE_CASE`, in any visibility |
 | Non-identifier names | `[Symbol.iterator]`, computed keys, string-literal keys |
+
+**The two React statics are exempt for a stronger reason than the rest.** React reads
+`getDerivedStateFromError` and `getDerivedStateFromProps` off the class into a local and calls
+them **unbound** — `var f = fiber.type.getDerivedStateFromError; f(error)`. A `@deprecated` stub
+that forwards through `this` therefore does not merely look wrong, it throws; and for the error
+boundary it throws while React is already handling a child's error, so the whole tree unmounts.
+These are matched by name rather than through the base-class index because a boundary built
+against an injected React (`extends (React as any).Component`) has no typed base class to index.
 
 **Base-class contracts are matched by name, not by the `override` keyword.** Only ~8% of real
 overrides in MJ carry `override`, because TypeScript does not require it unless

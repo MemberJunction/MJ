@@ -221,6 +221,14 @@ them:
 - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
   overload sets and abstract members.
 
+**One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+`EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+`copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+fields silently. Same-version deployments, which is the supported configuration, see no change.
+
 Each package was verified against its own pre-change baseline rather than against zero, because
 several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
 with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
