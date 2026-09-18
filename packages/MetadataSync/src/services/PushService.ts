@@ -16,7 +16,13 @@ import { TransactionManager } from '../lib/transaction-manager';
 import { JsonWriteHelper } from '../lib/json-write-helper';
 import { RecordDependencyAnalyzer, FlattenedRecord, groupRecordsByGraphId } from '../lib/record-dependency-analyzer';
 import { GraphProviderPool, GraphSettleOutcome, probeIndependentInstances } from '../lib/graph-provider-pool';
-import { PushWriteMode, resolvePushWritePlan, parallelModeWarning } from '../lib/push-write-mode';
+import {
+  PushWriteMode,
+  resolveDirectoryMode,
+  graphBatchSizeFor,
+  isolatedModeWarning,
+  unusedBatchSizeWarning,
+} from '../lib/push-write-mode';
 import { CommittedWrite, PushAbortedError, describeCommitFailure, describeRollbackOutcome } from '../lib/push-outcome';
 import { JsonPreprocessor } from '../lib/json-preprocessor';
 import { findEntityDirectories } from '../lib/provider-utils';
@@ -38,16 +44,17 @@ export interface PushOptions {
   verbose?: boolean;
   noValidate?: boolean;
   /**
-   * JSON-root graphs to run at once in a non-atomic push (default: 10).
-   * Ignored, with a warning, when the push is atomic.
+   * JSON-root graphs to run at once in a directory using isolated transactions (default: 10).
+   * Ignored, with a warning, when no directory in the push uses them.
    */
   parallelBatchSize?: number;
   /**
-   * true: all-or-nothing, one transaction, graphs one at a time.
-   * false: graphs in parallel, creates and updates commit as they are saved.
-   * Undefined: use `push.atomic` from the root `.mj-sync.json`, else true.
+   * Force isolated transactions on or off for every entity directory in this push, overriding
+   * `push.isolatedTransactions` in every `.mj-sync.json`. Undefined: each directory decides.
+   * true: each JSON-root graph gets its own connection and commits as it saves (not rolled back).
+   * false: everything runs in the one push transaction, one graph at a time.
    */
-  atomic?: boolean;
+  isolatedTransactions?: boolean;
   include?: string[]; // Only process these directories (whitelist, supports patterns)
   exclude?: string[]; // Skip these directories (blacklist, supports patterns)
   deleteDbOnly?: boolean; // Delete database-only records that reference records being deleted
@@ -192,7 +199,14 @@ interface FileGraphRun {
   errorCount: () => number;
 }
 
-type GraphRecordSuccess = { success: true; result: ProcessRecordResult; record: FlattenedRecord; graphId: string };
+type GraphRecordSuccess = {
+  success: true;
+  result: ProcessRecordResult;
+  record: FlattenedRecord;
+  graphId: string;
+  /** The graph's provider was at depth 0 after this save, so in isolated mode the write is committed. */
+  settled: boolean;
+};
 type GraphRecordFailure = { success: false; error: unknown; record: FlattenedRecord; graphId: string };
 type GraphRecordOutcome = GraphRecordSuccess | GraphRecordFailure;
 
@@ -235,9 +249,15 @@ export class PushService {
   private stateManager: SyncStateManager | undefined;
   private syncMetadataEngine: SyncMetadataEngine;
   private confirmedCollections: Set<string> = new Set<string>();
-  /** How this push writes creates and updates. Set at the start of each push. */
-  private writeMode: PushWriteMode = 'atomic';
+  /** Write mode per entity directory, resolved once at the start of the push. */
+  private directoryModes: Map<string, PushWriteMode> = new Map();
+  /** The directory being processed right now, and how it writes. */
+  private writeMode: PushWriteMode = 'shared';
   private graphBatchSize = 1;
+  /** Counts so far, so a failed push can still report what it did. */
+  private runningTotals: EntityPushResult = emptyPushTotals();
+  /** The SQL log for this run, when one is being written. */
+  private sqlLogFilePath: string | undefined;
   /** Non-atomic mode: creates and updates that were committed outside the push transaction. */
   private committedWrites: CommittedWrite[] = [];
   /** Incremental state, applied only after the push commits. Keyed by path relative to the sync root. */
@@ -360,6 +380,9 @@ export class PushService {
     this.committedWrites = [];
     this.pendingChecksums.clear();
     this.pushedEntityDirs = [];
+    this.directoryModes.clear();
+    this.runningTotals = emptyPushTotals();
+    this.sqlLogFilePath = undefined;
     
     const fileBackupManager = new FileBackupManager();
     
@@ -375,8 +398,6 @@ export class PushService {
     if (this.syncConfig?.push?.autoCreateMissingRecords && !options.dryRun) {
       callbacks?.onWarn?.('\n🔧 WARNING: autoCreateMissingRecords is enabled - Missing records with primaryKey will be created\n');
     }
-    await this.applyWritePlan(options, callbacks);
-    
     if (options.verbose) {
       callbacks?.onLog?.(`Original working directory: ${configManager.getOriginalCwd()}`);
       callbacks?.onLog?.(`Config directory (with dir option): ${configDir}`);
@@ -414,6 +435,8 @@ export class PushService {
       if (entityDirs.length === 0) {
         throw new Error('No entity directories found');
       }
+
+      await this.applyWritePlan(entityDirs, options, callbacks);
 
       await this.preloadMetadata(entityDirs, options, callbacks);
 
@@ -458,8 +481,8 @@ export class PushService {
       }
 
       // One host transaction wraps the whole push. In atomic mode (the default) Phase 1 saves run
-      // on the host too, one graph at a time. In non-atomic mode they commit on independent
-      // instances as they go (see lib/push-write-mode.ts).
+      // on the host too, one graph at a time. A directory using isolated transactions commits on
+      // independent instances as it goes (see lib/push-write-mode.ts).
       if (!options.dryRun) {
         await transactionManager.beginTransaction();
       }
@@ -556,6 +579,7 @@ export class PushService {
         await fs.ensureDir(path.dirname(filepath));
 
         // Create the SQL logging session
+        this.sqlLogFilePath = filepath;
         sqlLoggingSession = await provider.CreateSqlLogger(filepath, {
           formatAsMigration: this.syncConfig?.sqlLogging?.formatAsMigration || false,
           description: 'MetadataSync push operation',
@@ -642,45 +666,62 @@ export class PushService {
   }
 
   /**
-   * Decide how this push writes creates and updates (atomic unless opted out) and warn about it.
-   * A non-atomic push that cannot create independent provider instances runs atomically instead.
+   * Decide, once and up front, how each entity directory writes: shared by default, isolated where
+   * the entity (or the root, or the CLI flag) asks for it. Deciding it here means a push can never
+   * discover mid-file that it must change topology, which is the mixed-provider deadlock.
    */
-  private async applyWritePlan(options: PushOptions, callbacks?: PushCallbacks): Promise<void> {
-    const plan = resolvePushWritePlan({
-      atomicFlag: options.atomic,
-      configAtomic: this.syncConfig?.push?.atomic,
-      parallelBatchSize: options.parallelBatchSize,
-    });
-    for (const warning of plan.warnings) {
-      this.addWarning(warning, callbacks);
+  private async applyWritePlan(entityDirs: string[], options: PushOptions, callbacks?: PushCallbacks): Promise<void> {
+    const isolated: string[] = [];
+    for (const entityDir of entityDirs) {
+      const entityConfig = await loadEntityConfig(entityDir);
+      const resolved = resolveDirectoryMode({
+        isolatedFlag: options.isolatedTransactions,
+        entityIsolated: entityConfig?.push?.isolatedTransactions,
+        rootIsolated: this.syncConfig?.push?.isolatedTransactions,
+      });
+      this.directoryModes.set(entityDir, resolved.mode);
+      if (resolved.mode === 'isolated') {
+        isolated.push(path.relative(process.cwd(), entityDir) || entityDir);
+      }
+      if (options.verbose) {
+        callbacks?.onLog?.(`   ${path.relative(process.cwd(), entityDir) || entityDir}: ${resolved.mode} (from ${resolved.source})`);
+      }
     }
-    this.writeMode = plan.mode;
-    this.graphBatchSize = plan.graphBatchSize;
 
-    if (plan.mode === 'parallel') {
-      await this.confirmIndependentInstances(options, callbacks);
-    }
-    if (options.verbose) {
-      const detail = this.writeMode === 'atomic' ? 'one transaction, one graph at a time' : `${this.graphBatchSize} graphs in parallel`;
-      callbacks?.onLog?.(`Write mode: ${this.writeMode} (${detail}; from ${plan.source})`);
+    if (isolated.length > 0) {
+      await this.confirmIsolatedTransactions(isolated, options, callbacks);
+    } else if (options.parallelBatchSize !== undefined && options.parallelBatchSize !== 1) {
+      this.addWarning(unusedBatchSizeWarning(options.parallelBatchSize), callbacks);
     }
   }
 
-  private async confirmIndependentInstances(options: PushOptions, callbacks?: PushCallbacks): Promise<void> {
+  /**
+   * Isolation needs independent provider instances. Without them every directory runs shared,
+   * because the alternative — some graphs on the host, some on their own connection — is the
+   * deadlock the graph pool exists to prevent.
+   */
+  private async confirmIsolatedTransactions(isolated: string[], options: PushOptions, callbacks?: PushCallbacks): Promise<void> {
     const reason = await probeIndependentInstances(this.hostProvider());
     if (reason) {
       this.addWarning(
-        `Independent provider instances are not available (${reason}), so this push runs atomically: ` +
-          `one transaction, one graph at a time.`,
+        `Independent provider instances are not available (${reason}), so every directory runs in the shared ` +
+          `push transaction: one transaction, one graph at a time.`,
         callbacks
       );
-      this.writeMode = 'atomic';
-      this.graphBatchSize = 1;
+      for (const dir of this.directoryModes.keys()) {
+        this.directoryModes.set(dir, 'shared');
+      }
       return;
     }
     if (!options.dryRun) {
-      this.addWarning(parallelModeWarning(this.graphBatchSize), callbacks);
+      this.addWarning(isolatedModeWarning(isolated, graphBatchSizeFor('isolated', options.parallelBatchSize)), callbacks);
     }
+  }
+
+  /** Adopt one directory's mode for the work about to run in it. */
+  private useDirectoryMode(entityDir: string, options: PushOptions): void {
+    this.writeMode = this.directoryModes.get(entityDir) ?? 'shared';
+    this.graphBatchSize = graphBatchSizeFor(this.writeMode, options.parallelBatchSize);
   }
 
   private addWarning(message: string, callbacks?: PushCallbacks): void {
@@ -713,7 +754,7 @@ export class PushService {
       if (committed) {
         throw await this.failAfterCommit(error, run);
       }
-      throw await this.abortPush(error, transactionManager, run.options, run.callbacks);
+      throw await this.abortPush(error, transactionManager, run);
     } finally {
       await this.ensureTransactionClosed(transactionManager, run.callbacks);
     }
@@ -758,26 +799,54 @@ export class PushService {
   }
 
   /** Roll back, say truthfully what is left in the database, and wrap the failure. */
-  private async abortPush(
-    error: unknown,
-    transactionManager: TransactionManager,
-    options: PushOptions,
-    callbacks?: PushCallbacks
-  ): Promise<PushAbortedError> {
+  private async abortPush(error: unknown, transactionManager: TransactionManager, run: PushRun): Promise<PushAbortedError> {
+    const { options, callbacks } = run;
     let rolledBack = true;
     if (!options.dryRun) {
       callbacks?.onWarn?.('\n⚠️  Rolling back database transaction due to error...');
       rolledBack = await transactionManager.rollbackTransaction();
+      await this.writeFilesWithCommittedRecords(run);
       for (const line of describeRollbackOutcome(rolledBack, this.committedWrites, configManager.getOriginalCwd())) {
         callbacks?.onWarn?.(line);
       }
     }
     return new PushAbortedError({
-      mode: this.writeMode,
+      modes: [...new Set(this.directoryModes.values())],
       rolledBack,
       committedWrites: [...this.committedWrites],
+      totals: { ...this.runningTotals },
+      sqlLogPath: this.sqlLogFilePath,
       cause: error,
     });
+  }
+
+  /**
+   * A file whose write was deferred to Phase 3 — it contains deletions — never reaches that phase
+   * when the push fails. In an isolated directory its creates are committed all the same, so write
+   * it now and keep it: otherwise the primary keys those rows were given exist only in the
+   * database, and the next push creates them a second time.
+   */
+  private async writeFilesWithCommittedRecords(run: PushRun): Promise<void> {
+    const committedFiles = new Set(this.committedWrites.map((w) => w.filePath));
+    for (const deferred of this.deferredFileWrites.values()) {
+      if (!committedFiles.has(deferred.filePath)) {
+        continue;
+      }
+      try {
+        const payload = deferred.isArray ? deferred.records : deferred.records[0];
+        await JsonWriteHelper.writeOrderedRecordData(deferred.filePath, payload);
+        this.syncMetadataEngine.invalidateCachedFile(deferred.filePath);
+        run.fileBackupManager.releaseBackup(deferred.filePath);
+        run.callbacks?.onWarn?.(
+          `   kept ${path.relative(configManager.getOriginalCwd(), deferred.filePath) || deferred.filePath}: ` +
+            `it holds records that are committed`
+        );
+      } catch (writeError) {
+        run.callbacks?.onWarn?.(
+          `Failed to write ${deferred.filePath} after a partial push: ${writeError instanceof Error ? writeError.message : String(writeError)}`
+        );
+      }
+    }
   }
 
   /**
@@ -838,12 +907,14 @@ export class PushService {
         continue;
       }
       const dirName = path.relative(process.cwd(), entityDir) || '.';
+      this.useDirectoryMode(entityDir, options);
       this.announceDirectory(dirName, progressPrefix, entityConfig.entity, entityDir, options, callbacks);
       const result = await this.processEntityDirectory(
         entityDir, entityConfig, options, run.fileBackupManager, callbacks, run.configDir
       );
       this.reportDirectoryResult(progressPrefix, dirName, result, options, callbacks);
       addPushTotals(totals, result);
+      addPushTotals(this.runningTotals, result);
     }
     return totals;
   }
@@ -1088,7 +1159,7 @@ export class PushService {
             this.syncMetadataEngine.invalidateCachedFile(filePath);
             // Non-atomic: this file's records are already committed, so a later failure must
             // not restore the old file and lose their primary keys and sync blocks.
-            if (this.writeMode === 'parallel') {
+            if (this.writeMode === 'isolated') {
               fileBackupManager.releaseBackup(filePath);
             }
           }
@@ -1117,7 +1188,7 @@ export class PushService {
 
   /**
    * Run one file's JSON-root graphs, level by level. Atomic mode: one graph at a time on the host.
-   * Non-atomic mode: `graphBatchSize` graphs at once, each on its own independent instance.
+   * Isolated mode: `graphBatchSize` graphs at once, each on its own independent instance.
    * Fail-fast: the first failed record (thrown or `status: 'error'`) stops the file.
    */
   private async runFileGraphs(run: FileGraphRun): Promise<void> {
@@ -1141,7 +1212,7 @@ export class PushService {
 
   private createGraphPool(pendingWrites: Map<string, CommittedWrite[]>, callbacks?: PushCallbacks): GraphProviderPool {
     return new GraphProviderPool(this.hostProvider(), {
-      mode: this.writeMode === 'atomic' ? 'host' : 'independent',
+      mode: this.writeMode === 'isolated' ? 'independent' : 'host',
       log: (msg) => callbacks?.onLog?.(msg),
       onGraphSettled: (graphId, outcome) => this.recordGraphOutcome(pendingWrites, graphId, outcome),
     });
@@ -1196,7 +1267,9 @@ export class PushService {
           record, run.entityDir, run.options, run.batchContext, run.callbacks, run.entityConfig, true,
           provider as unknown as IMetadataProvider
         );
-        outcomes.push({ success: true, result, record, graphId });
+        // Read the depth NOW: a save that settled its own scope is already committed in isolated
+        // mode, and that is true whatever the rest of the graph goes on to do.
+        outcomes.push({ success: true, result, record, graphId, settled: provider.TransactionDepth === 0 });
       } catch (error) {
         pool.markFailed();
         outcomes.push({ success: false, error, record, graphId });
@@ -1208,7 +1281,7 @@ export class PushService {
 
   /**
    * Apply a batch's results. Successful writes are tracked first, so a failure still reports
-   * what non-atomic graphs committed. Then the first thrown error, or any counted record
+   * what isolated graphs committed. Then the first thrown error, or any counted record
    * error outside a dry run, stops the push.
    */
   private applyGraphOutcomes(
@@ -1243,15 +1316,27 @@ export class PushService {
   }
 
   private trackPendingWrite(pendingWrites: Map<string, CommittedWrite[]>, filePath: string, outcome: GraphRecordSuccess): void {
-    if (this.writeMode !== 'parallel') {
-      return; // atomic: nothing commits before the push does
+    if (this.writeMode !== 'isolated') {
+      return; // shared: nothing commits before the push transaction does
     }
     const status = committedStatusOf(outcome.result);
     if (!status) {
       return;
     }
+    const write: CommittedWrite = {
+      filePath,
+      entityName: outcome.record.entityName,
+      recordPath: outcome.record.path,
+      status,
+    };
+    if (outcome.settled) {
+      // Committed as it was saved. Reporting it now means a later rollback of the graph's leftover
+      // depth cannot make this write disappear from the report while its row is in the database.
+      this.committedWrites.push(write);
+      return;
+    }
     const writes = pendingWrites.get(outcome.graphId) ?? [];
-    writes.push({ filePath, entityName: outcome.record.entityName, recordPath: outcome.record.path, status });
+    writes.push(write);
     pendingWrites.set(outcome.graphId, writes);
   }
 
@@ -2223,12 +2308,15 @@ export class PushService {
    */
   /** What the deletion confirmation says about rollback. Must match the write mode. */
   private transactionBannerLines(): string[] {
-    if (this.writeMode === 'atomic') {
+    const isolated = [...this.directoryModes.entries()].filter(([, mode]) => mode === 'isolated');
+    if (isolated.length === 0) {
       return ['All creates, updates and deletes run in one database transaction. If anything fails, nothing is saved.'];
     }
+    const names = isolated.map(([dir]) => path.relative(process.cwd(), dir) || dir).join(', ');
     return [
       'Deletes and deferred records run in one database transaction and are rolled back on error.',
-      'Creates and updates are NOT: this is a non-atomic push, so each one is committed as soon as it is saved.',
+      `These directories use isolated transactions, so each create and update in them is committed as soon as it is`,
+      `saved and is NOT rolled back: ${names}.`,
     ];
   }
 

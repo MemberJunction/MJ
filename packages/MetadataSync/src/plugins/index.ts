@@ -21,6 +21,9 @@ import fs from 'fs';
 import path from 'path';
 import { writeFileSync } from 'fs';
 
+// PushAbortedError lives in a dependency-free module, so importing it does not load the engine.
+import { PushAbortedError } from '../lib/push-outcome';
+
 // Type-only imports are erased at runtime — they never load the engine.
 import type { PushResult } from '../services/PushService';
 import type { PullOptions } from '../services/PullService';
@@ -49,6 +52,30 @@ function flushAndExit(code: number): void {
   process.stdout.write('', () => process.exit(code));
 }
 
+/**
+ * The `data` block for a failed push. `PushAbortedError` carries the counts the push reached and
+ * the SQL log path; anything else failed before the push started and has nothing to report.
+ */
+function failureData(error: unknown, dryRun: boolean): Record<string, unknown> | undefined {
+  if (!(error instanceof PushAbortedError)) {
+    return undefined;
+  }
+  const { totals } = error;
+  return {
+    created: totals.created,
+    updated: totals.updated,
+    unchanged: totals.unchanged,
+    deleted: totals.deleted,
+    skipped: totals.skipped,
+    deferred: totals.deferred,
+    errorCount: totals.errors,
+    dryRun,
+    sqlLogPath: error.sqlLogPath,
+    rolledBack: error.rolledBack,
+    committedOutsideTransaction: error.committedWrites.length,
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // mj sync push
 // ─────────────────────────────────────────────────────────────────────────────
@@ -73,15 +100,16 @@ export class SyncPushPlugin extends BaseCLIPlugin {
       description: 'Delete database-only records that reference records being deleted (prevents FK errors)',
       default: false,
     }),
-    atomic: Flags.boolean({
+    'isolated-transactions': Flags.boolean({
       description:
-        'All-or-nothing push: one transaction, one JSON-root graph at a time (default). ' +
-        '--no-atomic runs graphs in parallel and commits each create/update as it is saved, so a failure does not roll those back. ' +
-        'Overrides push.atomic in .mj-sync.json',
+        'Give every JSON-root graph its own connection and transaction, so siblings are written in parallel and each ' +
+        'create/update commits as it is saved (a failure does not roll those back). Off by default: the whole push runs ' +
+        'in one transaction, one graph at a time. Overrides push.isolatedTransactions in every .mj-sync.json, in both ' +
+        'directions — use --no-isolated-transactions to force one run back to a single transaction',
       allowNo: true,
     }),
     'parallel-batch-size': Flags.integer({
-      description: 'With --no-atomic: JSON-root graphs to process in parallel (default: 10). Ignored in an atomic push',
+      description: 'JSON-root graphs to process in parallel in a directory using isolated transactions (default: 10)',
       min: 1,
       max: 50,
     }),
@@ -109,8 +137,8 @@ export class SyncPushPlugin extends BaseCLIPlugin {
       { name: '--ci', type: 'boolean', description: 'No prompts; non-zero exit on error' },
       { name: '--no-validate', type: 'boolean', description: 'Skip pre-push validation' },
       { name: '--incremental', type: 'boolean', description: 'Skip unchanged files using stored checksums' },
-      { name: '--no-atomic', type: 'boolean', description: 'Run graphs in parallel; creates/updates commit as they go and are not rolled back' },
-      { name: '--parallel-batch-size', type: 'number', description: 'Graphs at once with --no-atomic (default 10)' },
+      { name: '--isolated-transactions', type: 'boolean', description: 'Per-graph connections; creates/updates commit as they go and are not rolled back' },
+      { name: '--parallel-batch-size', type: 'number', description: 'Graphs at once in an isolated directory (default 10)' },
       { name: '--format', type: 'text|json|md', description: 'Output format (json for machine-readable result)' },
     ],
     examples: ['mj sync push --dir=ai-agents', 'mj sync push --ci --format=json'],
@@ -199,7 +227,7 @@ export class SyncPushPlugin extends BaseCLIPlugin {
         noValidate: flags['no-validate'],
         deleteDbOnly: flags['delete-db-only'],
         parallelBatchSize: flags['parallel-batch-size'],
-        atomic: flags.atomic,
+        isolatedTransactions: flags['isolated-transactions'],
         include: includeFilter,
         exclude: excludeFilter,
         incremental: flags.incremental,
@@ -272,7 +300,10 @@ export class SyncPushPlugin extends BaseCLIPlugin {
       const message = error instanceof Error ? error.message : String(error);
       this.Host.FailStep('Push failed', message);
       if (errors.length === 0) errors.push({ message });
-      return { success: false, command: 'sync:push', durationSeconds: (Date.now() - startTime) / 1000, errors, warnings };
+      // A failed push still reports what it did. Without this the JSON consumer loses the counts
+      // and the SQL log path on exactly the runs that need them.
+      const data = failureData(error, flags['dry-run'] === true);
+      return { success: false, command: 'sync:push', durationSeconds: (Date.now() - startTime) / 1000, data, errors, warnings };
     }
   }
 

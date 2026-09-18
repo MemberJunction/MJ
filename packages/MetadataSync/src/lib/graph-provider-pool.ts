@@ -8,7 +8,7 @@
  *   stack, so graphs must run one at a time: `obtain` throws if a second graph asks for the
  *   host while another graph still holds it. The caller releases a graph with `drainBatch`.
  *
- * - **`independent`** (`--no-atomic`): each graph gets its own instance from
+ * - **`independent`** (an entity directory using isolated transactions): each graph gets its own instance from
  *   `CreateIndependentInstance()` (shared pool, own transaction stack), so sibling graphs can
  *   run in parallel. A root and its nested relatedEntities share one instance, so every DB op
  *   in that graph uses the same connection. Each `Save()` commits on its own, so this mode is
