@@ -268,7 +268,7 @@ describe('DependencyPhase', () => {
       // Regression guard for #4562: with FORCE_COLOR set, turbo wraps each name
       // in SGR escapes and the old regex matched nothing, hard-failing an install
       // that was in its expected pre-CodeGen state.
-      const ESC = '';
+      const ESC = '\u001B';
       const buildOutput =
         `${ESC}[1mFailed:    ${ESC}[31m${ESC}[1mmj_generatedactions#build${ESC}[0m, ` +
         `${ESC}[31m${ESC}[1mmj_generatedentities#build${ESC}[0m${ESC}[0m`;
