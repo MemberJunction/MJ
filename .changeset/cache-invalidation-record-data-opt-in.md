@@ -1,5 +1,5 @@
 ---
-"@memberjunction/server": minor
+"@memberjunction/server": patch
 ---
 
 Cache-invalidation events no longer carry row data unless the deployment opts in.
