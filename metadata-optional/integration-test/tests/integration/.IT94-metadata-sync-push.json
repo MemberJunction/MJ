@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT94 - MetadataSync Push Atomicity",
+    "Description": "mj sync push against the live database (mutation tier, RUN_MUTATION_TESTS=1), through PushService on throwaway scratch trees. MSP1 an atomic push (the default) that fails in its second folder rolls back the first folder's update and create and reports nothing committed (#4550). MSP2 a record that fails without throwing (missing primary key, autoCreateMissingRecords=false) stops the push and rolls it back; later folders never run. MSP3 an Action with nested Action Params pushes atomically without the #4290 hang. MSP4 a failed non-atomic push (atomic: false) lists exactly the records that stayed committed, and they are in the database. Every row is prefixed zzz-it94 and deleted in teardown. Server transport.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "A failed atomic push leaves the database and the metadata files unchanged, counted record errors stop the push, nested Action Param graphs push atomically, and a failed non-atomic push reports exactly what stayed committed."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "metadata-sync-push"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "DDE8BC13-69E4-4E77-93A1-9E4A182340EB"
+  }
+}
