@@ -14,7 +14,19 @@
       "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=Predictive Studio"
     },
     "relatedEntities": {
-      "MJ: AI Prompt Models": []
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "C9414B82-E01B-4A1B-943C-656A8F1A2001"
+          }
+        }
+      ]
     },
     "primaryKey": {
       "ID": "44F868D2-20ED-407E-ACB0-0720344B1BDE"
@@ -39,7 +51,19 @@
       "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=Predictive Studio"
     },
     "relatedEntities": {
-      "MJ: AI Prompt Models": []
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "C9414B82-E01B-4A1B-943C-656A8F1A2002"
+          }
+        }
+      ]
     },
     "primaryKey": {
       "ID": "4F1D56B0-7D1B-4C69-B282-341C830A6A1C"
@@ -64,7 +88,19 @@
       "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=Predictive Studio"
     },
     "relatedEntities": {
-      "MJ: AI Prompt Models": []
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "C9414B82-E01B-4A1B-943C-656A8F1A2003"
+          }
+        }
+      ]
     },
     "primaryKey": {
       "ID": "D8DF8DC9-87EB-4E4C-939A-7CBD2F8813C7"
@@ -89,7 +125,19 @@
       "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=Predictive Studio"
     },
     "relatedEntities": {
-      "MJ: AI Prompt Models": []
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "C9414B82-E01B-4A1B-943C-656A8F1A2004"
+          }
+        }
+      ]
     },
     "primaryKey": {
       "ID": "E97FE2BB-C7E5-458E-B80D-02A90531FADA"
