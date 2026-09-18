@@ -23,7 +23,7 @@ describe('describeRollbackOutcome', () => {
     it('never says "rolled back successfully" when records were committed outside the transaction', () => {
         const lines = describeRollbackOutcome(true, writes, cwd);
         expect(lines.join('\n')).not.toMatch(/rolled back successfully/);
-        expect(lines[0]).toMatch(/3 created or updated records were already committed/);
+        expect(lines[0]).toMatch(/3 created or updated records in directories using isolated transactions were already committed/);
         expect(lines).toContain('   meta/a/.vendors.json: 2 committed');
         expect(lines).toContain('      created MJ: AI Vendors at MJ: AI Vendors[1]');
     });
@@ -63,13 +63,25 @@ describe('describeCommitFailure', () => {
 describe('PushAbortedError', () => {
     it('keeps the original message and cause, and knows whether anything stayed committed', () => {
         const cause = new Error('Name cannot be null');
-        const clean = new PushAbortedError({ mode: 'atomic', rolledBack: true, committedWrites: [], cause });
+        const totals = { created: 1, updated: 2, unchanged: 3, deleted: 0, skipped: 0, deferred: 0, errors: 1 };
+        const clean = new PushAbortedError({ modes: ['shared'], rolledBack: true, committedWrites: [], totals, cause });
         expect(clean.message).toBe('Name cannot be null');
         expect(clean.cause).toBe(cause);
         expect(clean.NothingCommitted).toBe(true);
 
-        const dirty = new PushAbortedError({ mode: 'parallel', rolledBack: true, committedWrites: writes, cause });
+        const dirty = new PushAbortedError({
+            modes: ['shared', 'isolated'],
+            rolledBack: true,
+            committedWrites: writes,
+            totals,
+            sqlLogPath: '/tmp/push.sql',
+            cause,
+        });
         expect(dirty.NothingCommitted).toBe(false);
         expect(dirty).toBeInstanceOf(Error);
+        // A failed push still reports what it managed to do, and where its SQL log is.
+        expect(clean.totals.created).toBe(1);
+        expect(dirty.sqlLogPath).toBe('/tmp/push.sql');
+        expect(dirty.modes).toEqual(['shared', 'isolated']);
     });
 });
