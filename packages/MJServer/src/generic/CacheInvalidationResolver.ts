@@ -96,9 +96,23 @@ export class CacheInvalidationResolver {
      *
      * Because delivery is unfiltered, `RecordData` is only ever populated for entities a
      * deployment has opted in through `cacheSettings.recordDataBroadcastEntities` — see
-     * {@link MayBroadcastRecordData}, applied at both publish sites. EntityName / PrimaryKeyValues
-     * are safe to broadcast: they let a client evict, and reading the record still goes through
-     * the normal access-controlled path.
+     * {@link MayBroadcastRecordData}, applied at both publish sites.
+     *
+     * `EntityName`, `PrimaryKeyValues`, `Action` and `Timestamp` ARE still broadcast to every
+     * session, and that is a disclosure, not a safe residue. An earlier version of this comment
+     * called them "safe to broadcast" on the grounds that reading the record still goes through
+     * the access-controlled path — true of the row's CONTENTS, and beside the point for the
+     * metadata itself. A session with no relationship to a record still learns that it exists,
+     * its stable key, and every time it changes; across entities it learns the cadence and volume
+     * of another tenant's activity.
+     *
+     * The key is kept deliberately, because consumers need it to re-read the record they were
+     * told about (see `ResolveEntityEventKey` in @memberjunction/core) and because the alternative
+     * — a coarse "something in this entity changed" — forces whole-entity invalidation on the
+     * hottest write paths. That is a trade, not an absence of cost. Narrowing it means filtering
+     * delivery per subscriber, which needs an authorization predicate cheap enough to run per
+     * subscriber per event; entity-level permissions (`EntityInfo.GetUserPermisions`, an in-memory
+     * role match) would cover part of it, row-level tenancy would not.
      */
     @Subscription(() => CacheInvalidationNotification, {
         topics: CACHE_INVALIDATION_TOPIC,
