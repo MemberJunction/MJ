@@ -1060,8 +1060,7 @@ describe('ConfigurePhase', () => {
 
       const { emitter, emitSpy } = createMockEmitter();
       const answered: string[] = [];
-      emitter.On('prompt', (event) => {
-        const prompt = event as unknown as { PromptId: string; Default?: string; Resolve: (a: string) => void };
+      emitter.On('prompt', (prompt) => {
         answered.push(prompt.PromptId);
         prompt.Resolve(prompt.Default ?? '');
       });
