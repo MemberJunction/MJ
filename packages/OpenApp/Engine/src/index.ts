@@ -11,6 +11,8 @@ export { mjAppManifestSchema } from './manifest/manifest-schema.js';
 export type { MJAppManifest, ManifestPackageEntry, PackageRole } from './manifest/manifest-schema.js';
 export { LoadManifestFromFile, ParseAndValidateManifest, ValidateManifestObject } from './manifest/manifest-loader.js';
 export type { ManifestLoadResult } from './manifest/manifest-loader.js';
+export { ResolvePackagePlatform, PackageRunsOnTier } from './manifest/package-platform.js';
+export type { PackagePlatform, PlatformRoutable } from './manifest/package-platform.js';
 
 // Types
 export type {
