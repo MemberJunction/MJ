@@ -1,0 +1,34 @@
+[
+  {
+    "_comments": [
+      "Sets JSONType metadata on MJ: Queries.Configuration so CodeGen emits a typed",
+      "ConfigurationObject accessor returning MJQueryEntity_IQueryConfiguration.",
+      "The EntityField row must exist (created by the first CodeGen pass over the new",
+      "column) before this @lookup resolves on push.",
+      "Source: metadata/entities/JSONType-interfaces/IQueryConfiguration.ts"
+    ],
+    "fields": {
+      "Name": "MJ: Queries"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IQueryConfiguration",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IQueryConfiguration.ts"
+          },
+          "_comments": [
+            "Query.Configuration — optional semantic and execution configuration bag (Priority, LogExecution, AlternativeQuestions, etc.)"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Queries&Name=Configuration"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Queries"
+    }
+  }
+]
