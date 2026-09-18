@@ -1,20 +1,19 @@
 ---
 "@memberjunction/server": patch
+"@memberjunction/core": patch
+"@memberjunction/core-entities": patch
+"@memberjunction/ng-core-entity-forms": patch
+"@memberjunction/ng-dashboards": patch
 ---
 
-Cache-invalidation events no longer carry row data unless the deployment opts in.
+Cache-invalidation events no longer carry row data unless the deployment opts in, and the consumers that needed that row now re-read it through an access-controlled path.
 
-The `cacheInvalidation` subscription is delivered to every connected client with no per-user
-filter, and both publish sites attached the full row (`JSON.stringify(entity.GetAll())`) to every
-save. Any signed-in session therefore received the contents of rows it had no rights to read —
-row-level security and consumer-side tenant scoping both apply on the read path, which this
-bypasses.
+The `cacheInvalidation` subscription is delivered to every connected client with no per-user filter, and both publish sites attached the full row (`JSON.stringify(entity.GetAll())`) to every save. Row-level security and any consumer-side scoping apply on the read path, which a push bypasses — so every signed-in session received the contents of rows it had no right to read.
 
-`recordData` is now populated only for entities listed in the new
-`cacheSettings.recordDataBroadcastEntities` config option, which defaults to `[]`.
+**Server.** `recordData` is populated only for entities named in the new `cacheSettings.recordDataBroadcastEntities`, default `[]`. `['*']` restores the previous behaviour wholesale. `EntityName` and `PrimaryKeyValues` still broadcast unconditionally — they disclose nothing a client cannot already derive, and they are what tells a consumer *which* record changed.
 
-BEHAVIOUR CHANGE: with no configuration, the apply-in-place optimisation added alongside
-`RecordData` no longer applies — clients evict on the entity name and primary key the event still
-carries, then re-fetch through the normal access-controlled path, as they did before that
-optimisation. List entities to opt them back in; use `['*']` to restore the previous behaviour
-wholesale, which is only safe where every signed-in user may read every row.
+**Core.** New `ResolveEntityEventRow(event, provider?, contextUser?)` and `ResolveEntityEventKey(event)`. The first returns the row from the live entity (local events), from `recordData` (allowlisted entities), or by re-reading that one record by primary key through the provider — as the signed-in user, so the server decides what comes back. A session that may not read the record gets `null` rather than an exception or someone else's data. The second reads identity from the primary key, which is always present.
+
+**Consumers.** `ConversationEngine` hydrates once in its already-async event dispatcher and passes the row to its five handlers, which stay synchronous; identity now comes from the primary key, so Project events and conversation deletes need no row at all. The AI Agent Run form resolves `Status` and `AgentRunID` the same way, and the Form Builder cockpit resolves `Name` only after its id match has already missed.
+
+Without the consumer half, defaulting `recordDataBroadcastEntities` to `[]` would have made `ConversationEngine`'s remote handling a silent no-op — including the eviction whose own comment warns that a warm cache "would keep serving without this row forever".
