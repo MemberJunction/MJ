@@ -26,7 +26,8 @@
 
 ### 1.3 Success Criteria
 
-- A business user with a container runtime and a coding agent goes from empty folder to an agent running against a seeded instance in **under 30 minutes**, with no human help.
+- A business user with a container runtime and a coding agent gets to a running local instance with no human help. Environment build is a one-time, unattended cost — it is allowed to take as long as it takes.
+- Once the instance is up, the authoring loop (describe → push → run → read the result → iterate) is **minutes, not hours**.
 - The agent they produce is a bundle a reviewer can read in one sitting and install elsewhere unchanged.
 - An organization can stand up its own flavour of the lab by publishing two Open Apps and changing one URL.
 - Zero participants need a platform engineer to fix their environment during an onboarding session.
@@ -49,7 +50,7 @@
 | Published API image | `docker/MJAPI/Dockerfile` | **Solid.** Ships `@memberjunction/cli` globally (line 74); entrypoint runs `mj migrate` + `mj codegen` on boot |
 | Full-stack compose (source-built) | `docker/regression/docker-compose.test.yml` | **Works.** sqlserver → db-setup → mjapi → mjexplorer |
 | Full-stack compose (published images) | `docker/regression/docker-compose.bacpac-standalone.yml` | **Designed, blocked.** See §2.2 |
-| Metadata-seed migration convention | `V<ts>__v<x.y.x>_Metadata_Sync.sql` | **Documented,** but see §4.3 |
+| Metadata → migration capture | `packages/MetadataSync/src/lib/sql-logger.ts` | **Solid.** `sqlLogging.formatAsMigration` emits a push's SQL as a migration — how MJ ships its own metadata (§4.3) |
 
 ### 2.2 The one infrastructure blocker
 
@@ -150,27 +151,20 @@ The `more-cheese` repo is the worked example of this pattern and the default for
 
 It serves three purposes: a working reference for organizations building their own pair, a default environment for evaluation and training, and a shared vocabulary for examples in documentation.
 
-### 4.3 The gap this exposes — and it is the important one
+### 4.3 How the data actually ships — the release-time metadata migration
 
-**Today `mj app install more-cheese` gives you the schema, not the data.**
+`mj app install` applies migrations and nothing else, so sample data has to arrive as SQL. It does, through the same release step MJ uses to ship its own metadata.
 
-- `more-cheese/migrations/` contains one 696 KB baseline: 12 `CREATE TABLE` and ~365 INSERT/MERGE statements — schema plus CodeGen registration rows.
-- The 89 MB of business records lives in `generated/` (121 files), reachable only by `mj sync push` from a developer checkout.
-- Per the Open App contract, `mj app install` applies migrations and nothing else; `mj-app.json`'s `metadata.directory` is a dev-time pointer.
+When an app is published, the build engineer runs `mj sync push` for that app's metadata against a database at the **last-published state**, and captures the emitted SQL as the next `V<ts>__v<x.y.x>_Metadata_Sync.sql` migration. Because push is differential — it emits statements only for records that differ from what the database already holds — the captured SQL is precisely the delta since the previous published migration set. Successive releases therefore produce successive, append-only metadata migrations rather than one ever-growing seed.
 
-So the "sample data Open App" pattern needs a step that does not exist yet at this volume: **turning Loom output into shippable `Metadata_Sync` migrations.** The convention is already documented (`V<ts>__v<x.y.x>_Metadata_Sync.sql`, "metadata seeds captured from `mj sync push`") — nothing has exercised it at 89 MB.
+The capture is implemented in `packages/MetadataSync/src/lib/sql-logger.ts`: `sqlLogging: { enabled, outputDirectory, formatAsMigration }` records every statement a push executes and can format the result as a migration.
 
-This is bounded work, and it is on the critical path, because without it every organization's sample-data app is un-installable and the whole declarative chain degrades to "clone the repo and run a sync push," which is exactly the developer workflow this program exists to avoid.
+Two properties this gives the program:
 
-### 4.4 Install time, and where the install should run
+- **`generated/` is the editable dev-time source of truth; the migration is the shipping artifact.** An organization's data authors iterate on Loom output in their repo and never hand-write SQL. The migration is generated, not maintained.
+- **It scales to any volume.** The delta between releases is the size of what changed, not the size of the dataset. A large first release is a large first migration and a normal one thereafter.
 
-A clean core migrate plus N app installs plus CodeGen is not a fast first boot. The answer is **not** to snapshot a database — it is to move the install to **image build time**.
-
-Organization CI builds `<org>/mj-agent-lab:<tag>` by running the §3.1 chain against a fresh database *inside the image build*, then publishes the image. The citizen builder pulls it and boots in a couple of minutes.
-
-The source of truth stays entirely declarative Open Apps; the image is a reproducible build artifact, not a hand-made snapshot; refreshing it is a CI job triggered by a new app release, not a person remembering to export something. This preserves every property that makes the declarative chain right, and removes the only cost.
-
----
+**Consequence for this plan: nothing new is required here.** An organization publishing a sample-data Open App follows the ordinary MJ release process. The reason `more-cheese/migrations/` currently holds only its schema baseline is that it has not yet published its dataset through that step — not that the step is missing.
 
 ## 5. Tiers — the boundary is code
 
@@ -258,10 +252,10 @@ Review is a **checklist against rules already in `CLAUDE.md`** (§5.3), so most 
 | Phase | Work | Depends on |
 |---|---|---|
 | **P0** | Publish runtime-configurable `memberjunction/explorer` image | — (existing workstream; **critical path**) |
-| **P1** | Loom output → shippable `Metadata_Sync` migrations, at volume (§4.3) | — (**critical path**) |
+| **P1** | Publish the reference sample-data app, capturing its `Metadata_Sync` migration via the normal release step (§4.3) | — |
 | **P2** | `mj-agent-starter`: `CLAUDE.md`, `CAPABILITIES.md`, three skills, starter agent, sync configs | — |
 | **P3** | Reference `<org>` app pair, using `more-cheese` as the worked example | P1 |
-| **P4** | `docker-compose.yml` + image-build-time install pipeline (§4.4) | P0, P3 |
+| **P4** | `docker-compose.yml` wired to the §3.1 install chain against published images | P0, P3 |
 | **P5** | Catalog repo, review checklist, PR template; Tier 2 approval ownership | P2 |
 | **P6** | Dry run with 3 volunteers; fix what breaks | P4, P5 |
 
@@ -279,11 +273,10 @@ That plan proposes shipping a curated `CLAUDE.md` + `.claude/` pack with every M
 
 ## 10. Open questions
 
-1. **Loom → `Metadata_Sync` at volume (§4.3).** The convention is documented; nothing has exercised it at 89 MB. Until it works, no sample-data Open App is installable and the declarative chain does not close. **This is the highest-priority unknown in the plan.**
-2. **Private repo authentication from the container.** `mj app install <private repo URL>` needs credentials a business user does not have and should not be handed. Options: a fine-grained read-only token provisioned by IT into the image or `.env`; mirroring app packages to a registry the container can reach; or a credential helper in the CLI. Unresolved, and it blocks the very first command the user runs.
-3. **Who approves Tier 2 Runtime actions, and what is the turnaround?** The approval mechanism exists; the ownership and SLA do not. A review queue with no SLA converts enthusiasm into abandonment.
-4. **Where does `mj-agent-starter` live** — alongside MJ as part of the platform story, or in the adopting organization's own space? Probably both: a public reference template, forked per organization.
-5. **Tooling:** the guide should name one coding agent at step one. Divergence in the first instruction costs more than the tool difference is worth; the rest is tool-agnostic.
+1. **Private repo authentication from the container.** `mj app install <private repo URL>` needs credentials a business user does not have and should not be handed. Options: a fine-grained read-only token provisioned by IT into the image or `.env`; mirroring app packages to a registry the container can reach; or a credential helper in the CLI. Unresolved, and it blocks the very first command the user runs.
+2. **Who approves Tier 2 Runtime actions, and what is the turnaround?** The approval mechanism exists; the ownership and SLA do not. A review queue with no SLA converts enthusiasm into abandonment.
+3. **Where does `mj-agent-starter` live** — alongside MJ as part of the platform story, or in the adopting organization's own space? Probably both: a public reference template, forked per organization.
+4. **Tooling:** the guide should name one coding agent at step one. Divergence in the first instruction costs more than the tool difference is worth; the rest is tool-agnostic.
 
 ---
 
@@ -293,4 +286,4 @@ MJ already has every mechanism this needs. Agents are declarative metadata in gi
 
 What is missing is **packaging**: a container that needs no development environment, a repo that teaches the coding agent rather than the human, an organization-shaped environment assembled from two published Open Apps, and a submission path that does not require the author to know git.
 
-The two things genuinely not yet built are a published Explorer image and a way to ship Loom-generated data as migrations. Both are bounded. Everything else is assembly and documentation.
+The one thing genuinely not yet built is a published, runtime-configurable Explorer image — an existing workstream. Everything else is assembly, documentation, and an organization running the release process it already runs.
