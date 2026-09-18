@@ -8,7 +8,7 @@
  *    `autoCreateMissingRecords=false`) stops the push and rolls it back; later folders never run.
  *  - MSP3: an Action with nested Action Params — the #4290 graph that used to hang when parent
  *    and child ran on different connections — pushes cleanly in atomic mode.
- *  - MSP4: a non-atomic push (`atomic: false`) that fails reports exactly which records stayed
+ *  - MSP4: a push with isolated transactions that fails reports exactly which records stayed
  *    committed, and they really are in the database.
  *
  * Every row the bundle writes is named with the `zzz-it94` prefix. Teardown deletes all of them
@@ -230,7 +230,7 @@ async function checkMsp1AtomicRollsBackEarlierFolders(ctx: IntegrationCheckConte
 
     Assert(aborted.message.includes('Name cannot be null'), `MSP1: expected folder B's "Name cannot be null" failure, got: ${aborted.message}`);
     Assert(aborted.NothingCommitted, `MSP1: an atomic push must report nothing committed (committed: ${aborted.committedWrites.length})`);
-    AssertEqual(aborted.mode, 'atomic', 'MSP1: default write mode');
+    AssertEqual(aborted.modes.join(','), 'shared', 'MSP1: default write mode');
     await expectBaseVendorUnchanged(ctx, f, 'MSP1');
     AssertEqual(await countRows(ctx, 'MJ: AI Vendors', `ID='${newVendorID}'`), 0, 'MSP1: the vendor created in folder A must be rolled back');
 
@@ -297,15 +297,16 @@ async function checkMsp4NonAtomicReportsWhatStayedCommitted(ctx: IntegrationChec
     const f = requireFixture();
     const newVendorID = randomUUID().toUpperCase();
     const dir = s1Tree(path.join(f.Root, 'msp4'), f, 'MSP4', newVendorID);
-    const outcome = await runPush(ctx.User, dir, { atomic: false });
+    const outcome = await runPush(ctx.User, dir, { isolatedTransactions: true });
     const aborted = asAborted(outcome, 'MSP4');
 
-    AssertEqual(aborted.mode, 'parallel', 'MSP4: write mode');
+    AssertEqual(aborted.modes.join(','), 'isolated', 'MSP4: write mode');
     Assert(aborted.message.includes('Name cannot be null'), `MSP4: expected folder B's "Name cannot be null" failure, got: ${aborted.message}`);
-    Assert(!aborted.NothingCommitted, 'MSP4: a failed non-atomic push must not claim nothing was committed');
+    Assert(!aborted.NothingCommitted, 'MSP4: a failed isolated push must not claim nothing was committed');
     const listed = aborted.committedWrites.map((w) => `${w.status} ${w.recordPath}`).sort();
     AssertEqual(listed.join(' | '), 'created MJ: AI Vendors[1] | updated MJ: AI Vendors[0]', 'MSP4: committed records reported');
     Assert(!outcome.Warnings.some((w) => w.includes('rolled back successfully')), 'MSP4: must not print "rolled back successfully"');
+    Assert(aborted.totals.created > 0, `MSP4: a failed push still reports its counts (created: ${aborted.totals.created})`);
 
     const vendor = await loadVendor(ctx, f.BaseVendorID);
     AssertEqual(vendor?.Description ?? null, 'MSP4', 'MSP4: the reported update really is committed');
@@ -345,7 +346,7 @@ export const MetadataSyncPushChecks: NamedCheck[] = [
     },
     {
         Id: 'metadata-sync-push.MSP4',
-        Name: 'MSP4: a failed non-atomic push lists exactly the records that stayed committed',
+        Name: 'MSP4: a failed push with isolated transactions lists exactly the records that stayed committed',
         Fn: checkMsp4NonAtomicReportsWhatStayedCommitted,
         RequiresMutation: true,
     },

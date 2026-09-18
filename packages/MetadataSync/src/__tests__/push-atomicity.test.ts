@@ -20,6 +20,8 @@ type TxEvent = { instance: number; op: 'begin' | 'savepoint' | 'commit' | 'relea
 
 class FakeDatabase {
     committed: string[] = [];
+    /** Record name after whose save the provider is left at depth > 0, as a stray scope would. */
+    leftoverDepthAfter: string | undefined;
     events: TxEvent[] = [];
     independentCreated = 0;
     independentUnavailable = false;
@@ -123,12 +125,59 @@ vi.mock('../lib/sync-metadata-engine', () => ({
 
 vi.mock('../lib/entity-subclass-guard', () => ({ describeMissingEntitySubclass: () => undefined }));
 
+// The audit itself is not under test here; what matters is that a file carrying a delete has its
+// write deferred to Phase 3. Phase 2 then has nothing to do.
+vi.mock('../lib/deletion-auditor', () => ({
+    DeletionAuditor: class {
+        async auditDeletions() {
+            return {
+                explicitDeletes: new Map(),
+                implicitDeletes: new Map(),
+                alreadyDeleted: new Map(),
+                databaseOnlyReferences: [],
+                databaseOnlyDeletions: [],
+                orphanedReferences: [],
+                deletionLevels: [],
+            };
+        }
+    },
+}));
+
 // One graph per top-level record, all at level 0.
 vi.mock('../lib/record-dependency-analyzer', async () => {
     const actual = await vi.importActual<typeof import('../lib/record-dependency-analyzer')>('../lib/record-dependency-analyzer');
     class FlatAnalyzer {
+        private all: FlattenedRecord[] = [];
+
+        reset(): void {
+            this.all = [];
+        }
+
+        flattenFileRecords(records: RecordData[], entityName: string): FlattenedRecord[] {
+            const flattened = this.flatten(records, entityName);
+            this.all.push(...flattened);
+            return flattened;
+        }
+
+        analyzeAllDependencies(records: FlattenedRecord[]) {
+            return { sortedRecords: records, dependencyLevels: [records], circularDependencies: [] };
+        }
+
+        buildReverseDependencyMap(): Map<string, string[]> {
+            return new Map();
+        }
+
+        reverseTopologicalSort(records: FlattenedRecord[]): FlattenedRecord[][] {
+            return [records];
+        }
+
         async analyzeFileRecords(records: RecordData[], entityName: string) {
-            const flattened: FlattenedRecord[] = records.map((record, i) => ({
+            const flattened = this.flatten(records, entityName);
+            return { sortedRecords: flattened, dependencyLevels: [flattened], circularDependencies: [] };
+        }
+
+        private flatten(records: RecordData[], entityName: string): FlattenedRecord[] {
+            return records.map((record, i) => ({
                 record,
                 entityName,
                 depth: 0,
@@ -136,9 +185,8 @@ vi.mock('../lib/record-dependency-analyzer', async () => {
                 dependencies: new Set<string>(),
                 id: `${entityName}-${i}`,
                 originalIndex: i,
-                graphId: `${entityName}-g${i}`,
+                graphId: typeof record.fields?.Graph === 'string' ? `${entityName}-${record.fields.Graph}` : `${entityName}-g${i}`,
             }));
-            return { sortedRecords: flattened, dependencyLevels: [flattened], circularDependencies: [] };
         }
     }
     return { ...actual, RecordDependencyAnalyzer: FlatAnalyzer };
@@ -168,6 +216,9 @@ class ScriptedPushService extends PushService {
         recordProvider?: IMetadataProvider
     ) {
         const provider = (recordProvider as unknown as FakeDbProvider | undefined) ?? host;
+        if (flattenedRecord.record.deleteRecord?.delete === true) {
+            return { status: 'deleted' as const, isDeletedRecord: true }; // Phase 2 owns deletes
+        }
         const fields = flattenedRecord.record.fields;
         const name = String(fields.Name);
         const behavior = fields.Behavior as Behavior;
@@ -206,6 +257,10 @@ class ScriptedPushService extends PushService {
             throw new Error(`deferred lookup still missing for ${name}`);
         }
         await provider?.Save(allowDefer ? name : `${name} (deferred pass)`);
+        if (provider && name === db.leftoverDepthAfter) {
+            // A subclass that opened a scope and never settled it: the graph drains with depth > 0.
+            await provider.BeginTransaction();
+        }
         flattenedRecord.record.fields.Pushed = true; // what the file is written back with
         if (allowDefer && (behavior === 'defer' || behavior === 'defer-fail')) {
             return {
@@ -229,17 +284,22 @@ function makeSyncEngine(): SyncEngine {
     return stub as unknown as SyncEngine;
 }
 
-type Folder = { name: string; records: Array<{ Name: string; Behavior: Behavior }> };
+type FixtureRecord = { Name: string; Behavior: Behavior; Delete?: boolean; Graph?: string };
+type Folder = { name: string; records: FixtureRecord[]; isolated?: boolean };
 
-async function writeFixture(root: string, folders: Folder[], atomicConfig?: boolean): Promise<void> {
+async function writeFixture(root: string, folders: Folder[], rootIsolated?: boolean): Promise<void> {
     const push: Record<string, boolean> = { autoCreateMissingRecords: true };
-    if (atomicConfig !== undefined) push.atomic = atomicConfig;
+    if (rootIsolated !== undefined) push.isolatedTransactions = rootIsolated;
     await fs.writeJson(path.join(root, '.mj-sync.json'), { version: '1.0.0', push, directoryOrder: folders.map((f) => f.name) });
     for (const folder of folders) {
         const dir = path.join(root, folder.name);
         await fs.ensureDir(dir);
-        await fs.writeJson(path.join(dir, '.mj-sync.json'), { entity: `Entity ${folder.name}` });
-        const records = folder.records.map((fields) => ({ fields: { ...fields } }));
+        const entityConfig: Record<string, unknown> = { entity: `Entity ${folder.name}` };
+        if (folder.isolated !== undefined) entityConfig.push = { isolatedTransactions: folder.isolated };
+        await fs.writeJson(path.join(dir, '.mj-sync.json'), entityConfig);
+        const records = folder.records.map(({ Delete, ...fields }) =>
+            Delete ? { fields: { ...fields }, deleteRecord: { delete: true } } : { fields: { ...fields } }
+        );
         await fs.writeJson(path.join(dir, '.records.json'), records);
     }
 }
@@ -253,6 +313,7 @@ function collectCallbacks() {
         onLog: (m) => logs.push(m),
         onError: (m) => logs.push(m),
         onRecordError: (d) => recordErrors.push(d),
+        onConfirm: async () => true,
     };
     return { callbacks, warnings, logs, recordErrors };
 }
@@ -280,7 +341,7 @@ describe('PushService atomicity', () => {
         await fs.remove(root);
     });
 
-    describe('atomic (default)', () => {
+    describe('shared transaction (default)', () => {
         it('runs every save on the host and commits once, at the end', async () => {
             await writeFixture(root, [
                 { name: 'a', records: [ok('a1'), ok('a2')] },
@@ -297,7 +358,7 @@ describe('PushService atomicity', () => {
             expect(host.TransactionDepth).toBe(0);
         });
 
-        it('runs one graph at a time even with --parallel-batch-size, and warns that it is ignored', async () => {
+        it('runs one graph at a time even with --parallel-batch-size, and says the flag did nothing', async () => {
             service.delayMs = 5;
             await writeFixture(root, [{ name: 'a', records: [ok('a1'), ok('a2'), ok('a3'), ok('a4')] }]);
             const { callbacks, warnings } = collectCallbacks();
@@ -402,24 +463,59 @@ describe('PushService atomicity', () => {
             expect(db.events).toEqual([]);
         });
 
-        it('uses push.atomic from .mj-sync.json unless the flag overrides it', async () => {
-            await writeFixture(root, [{ name: 'a', records: [ok('a1')] }], false);
-            await service.push({ dir: root, atomic: true }, collectCallbacks().callbacks);
+        it('lets --no-isolated-transactions override an isolated root config', async () => {
+            await writeFixture(root, [{ name: 'a', records: [ok('a1')] }], true);
+            await service.push({ dir: root, isolatedTransactions: false }, collectCallbacks().callbacks);
             expect(db.independentCreated).toBe(0);
+        });
+
+        it('lets an entity directory opt itself in while the rest of the push stays shared', async () => {
+            // The mixed shape: metadata stays all-or-nothing, one entity buys parallelism.
+            service.delayMs = 5;
+            await writeFixture(root, [
+                { name: 'a', records: [ok('a1'), ok('a2')] },
+                { name: 'b', records: [ok('b1'), ok('b2')], isolated: true },
+            ]);
+            const { callbacks, warnings } = collectCallbacks();
+            await service.push({ dir: root }, callbacks);
+
+            // One probe plus one instance per graph in folder b only.
+            expect(db.independentCreated).toBe(3);
+            const isolatedDir = path.relative(process.cwd(), path.join(root, 'b'));
+            expect(warnings.some((w) => w.includes('Isolated transactions') && w.includes(isolatedDir))).toBe(true);
+            // Folder a's rows are still in the push transaction: the host commits last.
+            expect(db.events[db.events.length - 1]).toEqual({ instance: host.id, op: 'commit' });
+        });
+
+        it('rolls back the shared directories when an isolated one has already committed', async () => {
+            await writeFixture(root, [
+                { name: 'a', records: [ok('a1')], isolated: true },
+                { name: 'b', records: [{ Name: 'b1', Behavior: 'update' }] },
+                { name: 'c', records: [{ Name: 'c1', Behavior: 'throw' }] },
+            ]);
+            const { callbacks } = collectCallbacks();
+            const failure = await service.push({ dir: root }, callbacks).catch((e: unknown) => e);
+
+            const aborted = failure as PushAbortedError;
+            expect(aborted.modes.sort()).toEqual(['isolated', 'shared']);
+            // a committed on its own instance; b was in the push transaction and is gone.
+            expect(db.committed).toEqual(['a1']);
+            expect(aborted.committedWrites.map((w) => w.recordPath)).toEqual(['Entity a[0]']);
+            expect(aborted.NothingCommitted).toBe(false);
         });
     });
 
-    describe('non-atomic (--no-atomic)', () => {
+    describe('isolated transactions (--isolated-transactions)', () => {
         it('runs graphs in parallel on independent instances', async () => {
             service.delayMs = 5;
             await writeFixture(root, [{ name: 'a', records: [ok('a1'), ok('a2'), ok('a3')] }]);
             const { callbacks, warnings } = collectCallbacks();
-            await service.push({ dir: root, atomic: false }, callbacks);
+            await service.push({ dir: root, isolatedTransactions: true }, callbacks);
 
             expect(service.maxActive).toBe(3);
             // One probe plus one instance per graph.
             expect(db.independentCreated).toBe(4);
-            expect(warnings.some((w) => /Non-atomic push/.test(w))).toBe(true);
+            expect(warnings.some((w) => /Isolated transactions/.test(w))).toBe(true);
         });
 
         it('reports what stayed committed instead of claiming a clean rollback', async () => {
@@ -428,7 +524,7 @@ describe('PushService atomicity', () => {
                 { name: 'b', records: [{ Name: 'b1', Behavior: 'throw' }] },
             ]);
             const { callbacks, warnings } = collectCallbacks();
-            const failure = await service.push({ dir: root, atomic: false }, callbacks).catch((e: unknown) => e);
+            const failure = await service.push({ dir: root, isolatedTransactions: true }, callbacks).catch((e: unknown) => e);
 
             expect(failure).toBeInstanceOf(PushAbortedError);
             const aborted = failure as PushAbortedError;
@@ -439,19 +535,55 @@ describe('PushService atomicity', () => {
             ]);
             expect(db.committed).toEqual(['a1', 'a2']);
             expect(warnings.join('\n')).not.toMatch(/rolled back successfully/);
-            expect(warnings.some((w) => /2 created or updated records were already committed/.test(w))).toBe(true);
+            expect(warnings.some((w) => /2 created or updated records in directories using isolated transactions/.test(w))).toBe(true);
             expect(host.TransactionDepth).toBe(0);
             // Folder a's records stay committed, so its written-back file is kept.
             expect((await readRecords(root, 'a'))[0].fields.Pushed).toBe(true);
         });
 
-        it('runs atomically when independent instances are not available', async () => {
+        it('keeps a deletions file that already committed records, so the next push does not duplicate them', async () => {
+            // The file's write is deferred to phase 3 (deletion timestamps), which a failed push
+            // never reaches. Its creates are committed all the same, so the file has to keep them.
+            await writeFixture(root, [
+                { name: 'a', records: [ok('a1'), { Name: 'gone', Behavior: 'create', Delete: true }], isolated: true },
+                { name: 'b', records: [{ Name: 'b1', Behavior: 'throw' }] },
+            ]);
+            const { callbacks } = collectCallbacks();
+            await service.push({ dir: root }, callbacks).catch(() => undefined);
+
+            expect(db.committed).toEqual(['a1']);
+            const kept = await readRecords(root, 'a');
+            expect(kept[0].fields.Pushed).toBe(true);
+        });
+
+        it('reports a write that settled even when the graph is rolled back afterwards', async () => {
+            // A save that settled its own scope is committed. If the graph later rolls back leftover
+            // depth, that earlier row is still there and must stay in the report.
+            db.leftoverDepthAfter = 'b1';
+            await writeFixture(root, [
+                {
+                    name: 'a',
+                    // One graph, two records: the first settles, the second leaves depth behind.
+                    records: [{ ...ok('a1'), Graph: 'shared' }, { Name: 'b1', Behavior: 'update', Graph: 'shared' }],
+                    isolated: true,
+                },
+                { name: 'b', records: [{ Name: 'c1', Behavior: 'throw' }] },
+            ]);
+            const { callbacks } = collectCallbacks();
+            const failure = await service.push({ dir: root }, callbacks).catch((e: unknown) => e);
+
+            const aborted = failure as PushAbortedError;
+            expect(aborted.committedWrites.map((w) => w.recordPath)).toContain('Entity a[0]');
+            expect(aborted.NothingCommitted).toBe(false);
+        });
+
+        it('runs everything in the shared transaction when independent instances are not available', async () => {
             db.independentUnavailable = true;
             await writeFixture(root, [{ name: 'a', records: [ok('a1'), ok('a2')] }]);
             const { callbacks, warnings } = collectCallbacks();
-            await service.push({ dir: root, atomic: false }, callbacks);
+            await service.push({ dir: root, isolatedTransactions: true }, callbacks);
 
-            expect(warnings.some((w) => /runs atomically/.test(w))).toBe(true);
+            expect(warnings.some((w) => /every directory runs in the shared/.test(w))).toBe(true);
             expect(db.events.filter((e) => e.op === 'commit')).toEqual([{ instance: host.id, op: 'commit' }]);
         });
     });
