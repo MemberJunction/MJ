@@ -543,6 +543,20 @@ An `OutputPayload` of `{}` on the step *before* the fork is the tell.
 Read the message — it names the step. Common cases: a `Prompt` or `External` step (no runner yet), a
 loop with nothing to repeat, a step referencing an agent or action that no longer exists, or a cycle.
 
+### Nothing is ever claimed — every task sits Pending
+
+The dispatcher is running, the graph is `Pending`, and the log says nothing interesting. Look for
+`[TaskGraphDispatcher] Cannot claim tasks` or `[TaskGraph] guarded write … FAILED`.
+
+The claim protocol runs through `spTaskGraph*` stored procedures, which are granted to
+`cdp_Developer` and `cdp_Integration`. A database principal in neither role can execute none of
+them, so no task is ever claimed. Grant one of those roles to the principal the server connects as
+and restart; the dispatcher also checks this at startup and names the missing grant.
+
+Before #4575 these were raw statements against the `Task` table, which no runtime role may write —
+so on a least-privilege install nothing was ever claimed, and the refusal was reported as though
+another instance had won the race.
+
 ### A submission reported no dispatcher
 
 `GetTaskGraphSubmitter()` returns `null` on a host with no durable-execution package loaded. That is
