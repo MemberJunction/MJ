@@ -182,5 +182,24 @@
       "lastModified": "2026-04-28T19:14:56.395Z",
       "checksum": "3d0600f250fdd52c6af147191a93eb1f812bdb60c083b9bc01901b0faaf9b4fb"
     }
+  },
+  {
+    "fields": {
+      "Name": "Tags",
+      "Description": "Searches records associated with matching tags in the knowledge graph. Computes relevance by multiplying tag match confidence with item-level tag weight.",
+      "DriverClass": "TagSearchProvider",
+      "Status": "Active",
+      "Priority": 3,
+      "SupportsPreview": true,
+      "MaxResultsOverride": null,
+      "ProviderConfig": null,
+      "CredentialID": null,
+      "DisplayName": "Tags",
+      "Icon": "fa-solid fa-tags",
+      "Comments": "Built-in provider. Finds records tagged with terms matching the search query."
+    },
+    "primaryKey": {
+      "ID": "E89F43A1-7023-4158-9A7B-4B6CD7E19F12"
+    }
   }
 ]

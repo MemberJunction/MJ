@@ -72,6 +72,21 @@ class TestableSyncer extends EntityVectorSyncer {
   public recordIDFor(entity: EntityInfo, record: Record<string, unknown>): string {
     return this.BuildRecordID(entity, record);
   }
+
+  public testBuildVectorizeErrorSummary(totalFed?: number, processed?: number): string {
+    return (this as unknown as { buildVectorizeErrorSummary: (t?: number, p?: number) => string }).buildVectorizeErrorSummary(totalFed, processed);
+  }
+
+  public addTestEmbedError(recordID: string, message: string): void {
+    (this as unknown as { _embedErrors: { RecordID: string; Message: string }[] })._embedErrors.push({ RecordID: recordID, Message: message });
+  }
+
+  public resetErrors(): void {
+    const target = this as unknown as { _renderErrors: { RecordID: string; Message: string }[]; _embedErrors: { RecordID: string; Message: string }[]; _upsertErrors: { RecordID: string; Message: string }[] };
+    target._renderErrors = [];
+    target._embedErrors = [];
+    target._upsertErrors = [];
+  }
 }
 
 function fakeEntity(primaryKeys: string[]): EntityInfo {
@@ -100,3 +115,23 @@ describe('EntityVectorSyncer.BuildRecordID', () => {
     expect(a).not.toBe(b);
   });
 });
+
+describe('EntityVectorSyncer error reporting', () => {
+  const syncer = new TestableSyncer();
+
+  it('builds summary containing embedding generation failures', () => {
+    syncer.resetErrors();
+    syncer.addTestEmbedError('rec-1', 'API key missing');
+    syncer.addTestEmbedError('rec-2', 'API key missing');
+
+    const summary = syncer.testBuildVectorizeErrorSummary(2, 0);
+    expect(summary).toContain('2 record(s) failed embedding generation');
+  });
+
+  it('reports unhandled pipeline drops when no specific error array caught them', () => {
+    syncer.resetErrors();
+    const summary = syncer.testBuildVectorizeErrorSummary(10, 5);
+    expect(summary).toContain('5 record(s) failed to complete the vectorization pipeline');
+  });
+});
+
