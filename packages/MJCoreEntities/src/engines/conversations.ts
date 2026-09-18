@@ -1,4 +1,4 @@
-import { BaseEngine, BaseEnginePropertyConfig, BaseEntityEvent, IMetadataProvider, RunQuery, RunView, TransformSimpleObjectToEntityObject, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, BaseEntityEvent, IMetadataProvider, ResolveEntityEventKey, ResolveEntityEventRow, RunQuery, RunView, TransformSimpleObjectToEntityObject, UserInfo } from "@memberjunction/core";
 import { ChatMessage } from "@memberjunction/ai";
 import { NormalizeUUID, ToEpochMs, UUIDsEqual } from "@memberjunction/global";
 import { BehaviorSubject, Observable } from "rxjs";
@@ -2373,24 +2373,37 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             ? (event.payload as { action?: string })?.action || 'save'
             : event.type;
 
-        if (normalizedName === 'mj: conversations') {
-            return this.handleConversationEntityEvent(event, effectiveType);
-        }
+        const handled =
+            normalizedName === 'mj: conversations' ||
+            normalizedName === 'mj: conversation details' ||
+            normalizedName === 'mj: projects' ||
+            normalizedName === 'mj: ai agent runs' ||
+            normalizedName === 'mj: conversation detail artifacts' ||
+            normalizedName === 'mj: conversation detail ratings';
 
-        if (normalizedName === 'mj: conversation details') {
-            return this.handleConversationDetailEntityEvent(event, effectiveType);
-        }
+        if (handled) {
+            // Hydrate ONCE, here, because this is the only async frame on the path. A remote event
+            // carries the row only for entities on the server's broadcast allowlist (see
+            // `cacheSettings.recordDataBroadcastEntities`); otherwise this re-reads the single
+            // record through the provider, as this user, so access control decides what comes
+            // back. Handlers below stay synchronous and simply receive the row — passing it down
+            // rather than letting each fetch its own keeps this to one read per event and avoids
+            // turning five handlers async for a value the dispatcher can obtain once.
+            const row = await ResolveEntityEventRow(event, this.ProviderToUse, this.ContextUser);
 
-        if (normalizedName === 'mj: projects') {
-            return this.handleProjectEntityEvent(event, effectiveType);
-        }
-
-        if (normalizedName === 'mj: ai agent runs') {
-            return this.handleAgentRunEntityEvent(event, effectiveType);
-        }
-
-        if (normalizedName === 'mj: conversation detail artifacts' || normalizedName === 'mj: conversation detail ratings') {
-            return this.handlePeripheralJunctionEntityEvent(event);
+            if (normalizedName === 'mj: conversations') {
+                return this.handleConversationEntityEvent(event, effectiveType, row);
+            }
+            if (normalizedName === 'mj: conversation details') {
+                return this.handleConversationDetailEntityEvent(event, effectiveType, row);
+            }
+            if (normalizedName === 'mj: projects') {
+                return this.handleProjectEntityEvent(event, effectiveType, row);
+            }
+            if (normalizedName === 'mj: ai agent runs') {
+                return this.handleAgentRunEntityEvent(event, effectiveType, row);
+            }
+            return this.handlePeripheralJunctionEntityEvent(event, row);
         }
 
         // Not a conversation entity — let BaseEngine handle it
@@ -2403,6 +2416,22 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * For remote-invalidate events: parses recordData JSON from the payload.
      * Returns null if no data is available.
      */
+    /**
+     * This record's id, from the primary key the event always carries.
+     *
+     * Prefers the key over the row: the key is broadcast unconditionally, whereas the row is only
+     * present for allowlisted entities or after a re-read. Falls back to the row's `ID` so a
+     * single-column entity still resolves if the key is ever absent.
+     */
+    private eventRecordID(event: BaseEntityEvent, data: Record<string, unknown> | null): string | undefined {
+        const key = ResolveEntityEventKey(event);
+        const fromKey = key?.KeyValuePairs?.find(kv => kv.FieldName?.toLowerCase() === 'id')?.Value;
+        if (fromKey != null && String(fromKey).length > 0) {
+            return String(fromKey);
+        }
+        return data?.['ID'] as string | undefined;
+    }
+
     private extractRecordData(event: BaseEntityEvent): Record<string, unknown> | null {
         // Local event — entity is available directly
         if (event.baseEntity) {
@@ -2439,9 +2468,10 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     /**
      * Handles save/delete events on Conversation entities from local or remote code.
      */
-    private handleConversationEntityEvent(event: BaseEntityEvent, action: string): boolean {
-        const data = this.extractRecordData(event);
-        const id = data?.['ID'] as string;
+    private handleConversationEntityEvent(event: BaseEntityEvent, action: string, data: Record<string, unknown> | null): boolean {
+        // Identity comes from the primary key, which is broadcast unconditionally — a delete needs
+        // nothing else, so it no longer depends on the row being available.
+        const id = this.eventRecordID(event, data);
         if (!id) return true;
 
         if (action === 'save') {
@@ -2479,10 +2509,11 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     /**
      * Handles save/delete events on ConversationDetail entities from local or remote code.
      */
-    private handleConversationDetailEntityEvent(event: BaseEntityEvent, action: string): boolean {
+    private handleConversationDetailEntityEvent(event: BaseEntityEvent, action: string, data: Record<string, unknown> | null): boolean {
         const entity = event.baseEntity as MJConversationDetailEntity | null;
-        const data = this.extractRecordData(event);
-        const id = data?.['ID'] as string;
+        const id = this.eventRecordID(event, data);
+        // ConversationID is a foreign key, so the primary key cannot supply it — this is the field
+        // the dispatcher's re-read exists to obtain.
         const conversationId = data?.['ConversationID'] as string;
         if (!id || !conversationId) return true;
 
@@ -2522,9 +2553,8 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * deleted via the project form modal. Only tracks projects in the currently-loaded
      * environment; archived projects are dropped from the active list.
      */
-    private handleProjectEntityEvent(event: BaseEntityEvent, action: string): boolean {
-        const data = this.extractRecordData(event);
-        const id = data?.['ID'] as string;
+    private handleProjectEntityEvent(event: BaseEntityEvent, action: string, data: Record<string, unknown> | null): boolean {
+        const id = this.eventRecordID(event, data);
         if (!id) return true;
 
         const current = this._projects$.value;
@@ -2563,9 +2593,9 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * Handles save/delete events on AI Agent Run entities from local or remote code.
      * Updates the AgentRunsByDetailId map so timers and status reflect reality.
      */
-    private handleAgentRunEntityEvent(event: BaseEntityEvent, action: string): boolean {
-        const data = this.extractRecordData(event);
-        const id = data?.['ID'] as string;
+    private handleAgentRunEntityEvent(event: BaseEntityEvent, action: string, data: Record<string, unknown> | null): boolean {
+        const id = this.eventRecordID(event, data);
+        // Foreign key, not part of this row's primary key — supplied by the dispatcher's re-read.
         const detailId = data?.['ConversationDetailID'] as string;
         if (!id || !detailId) return true;
 
@@ -2602,8 +2632,9 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * reconstructed from the entity event alone, so we flag the cache as stale.
      * The UI component checks PeripheralDataStale and force-refreshes when needed.
      */
-    private handlePeripheralJunctionEntityEvent(event: BaseEntityEvent): boolean {
-        const data = this.extractRecordData(event);
+    private handlePeripheralJunctionEntityEvent(event: BaseEntityEvent, data: Record<string, unknown> | null): boolean {
+        // The junction's own primary key is not useful here; what matters is which detail it hangs
+        // off, which is a foreign key and therefore only available from the row.
         const detailId = data?.['ConversationDetailID'] as string;
         if (!detailId) return true;
 
