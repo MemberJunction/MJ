@@ -21,7 +21,7 @@ const CODEGEN_TOLERATED = [
   'ng-bootstrap',
 ] as const;
 
-const ESC = '';
+const ESC = '\u001b';
 
 describe('classifyTurboFailures', () => {
   it("reads every package from turbo's single comma-separated summary line", () => {
