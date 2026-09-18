@@ -73,3 +73,32 @@ describe('CacheInvalidationResolver module surface', () => {
     await expect(import('../generic/CacheInvalidationResolver.js')).resolves.toBeDefined();
   });
 });
+
+/**
+ * The allowlist is normalised where it enters, not where it is compared.
+ *
+ * Raised in review: the wildcard was matched raw while entity names were trimmed and lowercased,
+ * so a hand-edited `[' * ']` matched neither branch and silently opted nothing in — a config that
+ * reads as "broadcast everything" while the gate stayed fully closed.
+ */
+describe('allowlist normalisation', () => {
+  afterEach(() => ConfigureRecordDataBroadcast([]));
+
+  it("honours a wildcard written with surrounding whitespace", () => {
+    ConfigureRecordDataBroadcast([' * ']);
+    expect(MayBroadcastRecordData('Users')).toBe(true);
+  });
+
+  it('ignores blank entries rather than letting one match something', () => {
+    ConfigureRecordDataBroadcast(['', '   ']);
+    expect(MayBroadcastRecordData('Users')).toBe(false);
+    // A blank entry must not become a wildcard by accident either.
+    expect(MayBroadcastRecordData('')).toBe(false);
+  });
+
+  it('still matches a normal name written with odd casing and padding', () => {
+    ConfigureRecordDataBroadcast(['  AI MODELS  ']);
+    expect(MayBroadcastRecordData('ai models')).toBe(true);
+    expect(MayBroadcastRecordData('Users')).toBe(false);
+  });
+});
