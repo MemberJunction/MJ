@@ -509,6 +509,11 @@ export class CodeGenPhase {
     const rebuild = pm.RunScript('build');
     const result = await this.processRunner.Run(rebuild.Cmd, rebuild.Args, {
       Cwd: dir,
+      // turbo colourises when FORCE_COLOR is set, and ProcessRunner forwards the
+      // operator's whole environment. Colourised output is harder to read in
+      // diagnostic reports and was the trigger for #4562. NO_COLOR does not
+      // override FORCE_COLOR; pinning it to '0' does.
+      Env: { FORCE_COLOR: '0' },
       TimeoutMs: 1_800_000, // 30 minutes — same as DependencyPhase
       OnStdout: (line: string) => {
         emitter.Emit('step:progress', {
@@ -812,6 +817,8 @@ export class CodeGenPhase {
       turbo.Cmd, turbo.Args,
       {
         Cwd: dir,
+        // FORCE_COLOR=0: see the note on the workspace rebuild.
+        Env: { FORCE_COLOR: '0' },
         TimeoutMs: 600_000, // 10 minutes
         OnStdout: (line: string) => {
           emitter.Emit('step:progress', {
@@ -868,6 +875,8 @@ export class CodeGenPhase {
       turbo.Cmd, turbo.Args,
       {
         Cwd: dir,
+        // FORCE_COLOR=0: see the note on the workspace rebuild.
+        Env: { FORCE_COLOR: '0' },
         TimeoutMs: 300_000,
         OnStdout: (line: string) => {
           emitter.Emit('step:progress', {
@@ -957,6 +966,8 @@ export class CodeGenPhase {
         pkgBuild.Cmd, pkgBuild.Args,
         {
           Cwd: pkgDir,
+          // FORCE_COLOR=0: see the note on the workspace rebuild.
+          Env: { FORCE_COLOR: '0' },
           TimeoutMs: 300_000, // 5 minutes per package
           OnStdout: (line: string) => {
             emitter.Emit('step:progress', {
@@ -1383,6 +1394,8 @@ export class CodeGenPhase {
       singleBuild.Cmd, singleBuild.Args,
       {
         Cwd: pkgDir,
+        // FORCE_COLOR=0: see the note on the workspace rebuild.
+        Env: { FORCE_COLOR: '0' },
         TimeoutMs: 300_000, // 5 minutes
         OnStdout: (line: string) => {
           emitter.Emit('step:progress', {
