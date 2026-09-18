@@ -19,9 +19,43 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, '..', '..');
 const GUID = /^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$/i;
 
-/** A create call, located within its batch. */
+/**
+ * A create call, located within its batch. Captures the schema as written so a rewrite keeps
+ * the author's own spelling instead of silently converting it.
+ *
+ * Both schema spellings are accepted because the rest of this file always accepted both:
+ * buildProcTableMap's PROC_RE and isGuardedFor's tableTest each take `__mj` or the placeholder.
+ * Only this pattern did not, so `EXEC [__mj].spCreateX` — repo vocabulary, used by
+ * migrations/v2/V202506131707 and V202506151907 — matched nothing and was invisible to the gate
+ * AND to --fix, while the gate printed "all guarded". One file cannot hold three regexes that
+ * disagree about what a schema looks like; the odd one out was this.
+ */
 const EXEC_RE =
-  /EXEC\s+\[?\$\{flyway:defaultSchema\}\]?\.\[?spCreate(\w+)\]?\s+([\s\S]*?);/g;
+  /EXEC\s+(\[?(?:\$\{flyway:defaultSchema\}|__mj)\]?)\.\[?spCreate(\w+)\]?\s+([\s\S]*?);/gd;
+
+/**
+ * Backstop: ANY invocation of a spCreate proc, in any shape, parseable or not.
+ *
+ * EXEC_RE above is deliberately strict — it has to be, because --fix re-emits what it captures.
+ * A strict matcher used ALONE is fail-open by construction: a shape it does not match is not
+ * reported as unknown, it is not reported at all, and "no calls in this batch" reads as "nothing
+ * to guard". That is how a create with no trailing ';' (a terminator T-SQL treats as optional)
+ * and the `EXEC [__mj]` form both passed a gate whose whole purpose is to find them.
+ *
+ * So recognition and parsing are separated: this pattern decides THAT a create is here, EXEC_RE
+ * decides what it says. Anything this finds and EXEC_RE cannot parse raises, rather than
+ * vanishing. That is what makes the gate closed against the next shape nobody enumerated, which
+ * matters more than usual here: the plan is to gate PR #4519's emitter on this script, and a gate
+ * reporting "all guarded" over an unguarded create is worse than no gate, because it converts a
+ * visible problem into an invisible one.
+ *
+ * Kept loose on purpose — EXECUTE as well as EXEC, either schema spelling or none, brackets
+ * optional. It never rewrites anything, so a false alarm costs an author one restatement in the
+ * canonical form, while a miss costs MJ#4503 shipping again.
+ */
+const ANY_CREATE_EXEC_SRC = String.raw`\bEXEC(?:UTE)?\s+(?:(?:\[[^\]]*\]|[^\s.\[\];]+)\s*\.\s*)?\[?spCreate(\w+)\]?`;
+const ANY_CREATE_EXEC_RE = new RegExp(ANY_CREATE_EXEC_SRC, 'gi');
+const HAS_CREATE_EXEC_RE = new RegExp(ANY_CREATE_EXEC_SRC, 'i');
 /**
  * A literal GUID assigned to a local, in ANY T-SQL syntax.
  *
@@ -172,6 +206,74 @@ function readParenGroup(text, from) {
   return null;
 }
 
+/**
+ * A copy of `sql` with comment bodies blanked out, character for character, so offsets into the
+ * result are offsets into the original. Optionally blanks single-quoted string literals too.
+ *
+ * Exists because every pattern in this file used to read raw text, which cannot tell a statement
+ * from a sentence about one. That is not hypothetical: the first version of the backstop below
+ * brought the whole gate down on migrations/v6/V202608301800, whose block comment explains a
+ * deprecation by quoting `EXEC spCreateAIModelCost`. Prose is not code. Neither is a
+ * commented-out statement, and reading one as a guard would be a fail-open of exactly the kind
+ * this gate exists to close.
+ *
+ * `blankStrings` is off for statement parsing — a fixed GUID lives inside a string literal, and
+ * blanking it would hide the very thing being detected — and on for the backstop, where an EXEC
+ * inside a dynamic-SQL string is text this tool must not rewrite and must not raise over.
+ *
+ * Bracketed identifiers are stepped over rather than blanked: they are code, but a `'` or `--`
+ * inside one starts neither a string nor a comment.
+ */
+function maskInertText(sql, { blankStrings = false } = {}) {
+  const out = sql.split('');
+  const n = sql.length;
+  const blank = (from, to) => {
+    for (let k = from; k < to && k < n; k++) if (out[k] !== '\n') out[k] = ' ';
+  };
+  let i = 0;
+  while (i < n) {
+    const two = sql.slice(i, i + 2);
+    if (two === '--') {
+      const nl = sql.indexOf('\n', i);
+      const end = nl === -1 ? n : nl;
+      blank(i, end);
+      i = end;
+    } else if (two === '/*') {
+      // T-SQL nests block comments, so count depth rather than scanning for the first '*/'.
+      let depth = 1;
+      let j = i + 2;
+      while (j < n && depth > 0) {
+        const pair = sql.slice(j, j + 2);
+        if (pair === '/*') {
+          depth++;
+          j += 2;
+        } else if (pair === '*/') {
+          depth--;
+          j += 2;
+        } else j++;
+      }
+      blank(i, j);
+      i = j;
+    } else if (sql[i] === "'") {
+      let j = i + 1;
+      while (j < n) {
+        if (sql[j] !== "'") j++;
+        else if (sql[j + 1] === "'") j += 2; // doubled quote: an escaped ' inside the literal
+        else {
+          j++;
+          break;
+        }
+      }
+      if (blankStrings) blank(i, j);
+      i = j;
+    } else if (sql[i] === '[') {
+      const close = sql.indexOf(']', i + 1);
+      i = close === -1 ? n : close + 1;
+    } else i++;
+  }
+  return out.join('');
+}
+
 function escapeForRegExp(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -204,9 +306,50 @@ function escapeForRegExp(s) {
  * false alarm is an author restating the guard in the canonical emitted shape; the cost of
  * a false pass is MJ#4503 shipping again.
  */
+/**
+ * True when an `IF NOT EXISTS (…)` whose predicate ends at `from` actually governs the statement
+ * that the head ends with — i.e. the create sits in the branch the IF controls.
+ *
+ * Without this, isGuardedFor answered a strictly weaker question: "does a matching predicate
+ * appear anywhere earlier in this batch?" An IF whose BEGIN/END block closes before the create
+ * governs a PRINT and nothing else, so the create runs unconditionally — the same collision as no
+ * guard at all, reported as guarded and left alone by --fix.
+ *
+ * Counting BEGIN/END depth over the whole tail is NOT enough, and the difference is the point:
+ * `IF … BEGIN PRINT END BEGIN <create> END` leaves depth at 1 while the create sits in a bare
+ * block the IF never opened. So the walk starts at the block this IF opened and fails the moment
+ * that specific block closes.
+ *
+ * BEGIN TRANSACTION opens no block an END closes, so it is not read as one. A stray `END` from a
+ * CASE drives the depth negative and the guard is refused — the fail-closed direction, matching
+ * the rest of this file: a false alarm costs one restatement, a false pass costs MJ#4503 again.
+ */
+const BLOCK_BEGIN_SRC = String.raw`BEGIN\b(?!\s+(?:TRAN|TRANSACTION|DISTRIBUTED)\b)`;
+const BLOCK_OPENER_RE = new RegExp(String.raw`^\s*` + BLOCK_BEGIN_SRC, 'i');
+const BLOCK_EDGE_RE = new RegExp(String.raw`\b(?:(${BLOCK_BEGIN_SRC})|(END\b))`, 'gi');
+
+function governsStatementAfter(head, from) {
+  // String literals blanked as well as comments: `PRINT 'THE END'` must not close a block.
+  const tail = maskInertText(head.slice(from), { blankStrings: true });
+  const opener = BLOCK_OPENER_RE.exec(tail);
+  // No block: the IF governs exactly the next statement, so the create has to BE that statement.
+  if (!opener) return tail.trim() === '';
+  let depth = 1;
+  for (const edge of tail.slice(opener[0].length).matchAll(BLOCK_EDGE_RE)) {
+    depth += edge[1] ? 1 : -1;
+    if (depth <= 0) return false; // the block this IF opened closed before reaching the create
+  }
+  return true;
+}
+
 function isGuardedFor(head, idRef, table) {
   const ref = idRef.startsWith('@') ? `${escapeForRegExp(idRef)}\\b` : `N?${escapeForRegExp(idRef)}`;
-  const idTest = new RegExp(`\\[?ID\\]?\\s*=\\s*${ref}`, 'i');
+  // Left-anchored so the column is the primary key itself and not merely a name ENDING in it.
+  // Unanchored, the `ID]` closing `[EntityID]` satisfied this, which made EntityID, CategoryID,
+  // TemplateID and ApplicationID all read as primary-key guards — and a predicate on a foreign
+  // key answers a different question than "does THIS row already exist". A leading `.` or space
+  // is still fine, so `[T].[ID]`, `T.ID` and a bare `ID` all still match.
+  const idTest = new RegExp(`(?<![\\w\\]])\\[?ID\\]?\\s*=\\s*${ref}`, 'i');
   // An optional schema qualifier, bracketed or bare, so a hand-written `FROM __mj.Foo` and
   // the emitted `FROM [${flyway:defaultSchema}].[Foo]` are both recognised.
   const tableTest = new RegExp(
@@ -214,8 +357,12 @@ function isGuardedFor(head, idRef, table) {
     'i',
   );
   for (const m of head.matchAll(/IF\s+NOT\s+EXISTS\s*(?=\()/gi)) {
-    const predicate = readParenGroup(head, m.index + m[0].length);
-    if (predicate !== null && idTest.test(predicate) && tableTest.test(predicate)) return true;
+    const open = m.index + m[0].length;
+    const predicate = readParenGroup(head, open);
+    if (predicate === null || !idTest.test(predicate) || !tableTest.test(predicate)) continue;
+    // readParenGroup returns the text BETWEEN the parens, so the ')' sits at
+    // open + 1 + predicate.length and the governed span starts one past it.
+    if (governsStatementAfter(head, open + predicate.length + 2)) return true;
   }
   return false;
 }
@@ -228,8 +375,31 @@ function guardFile(sql, procTable, label) {
   let skipped = 0;
 
   const rewritten = batches.map((batch) => {
-    const assignments = literalGuidAssignments(batch);
-    const calls = [...batch.matchAll(EXEC_RE)];
+    // Parse against comment-masked text so prose and commented-out statements are not read as
+    // code, and slice the ORIGINAL for anything re-emitted — masking is length-preserving, so
+    // every offset is valid in both. The backstop additionally ignores string literals: an EXEC
+    // inside dynamic SQL is not a statement this tool can rewrite or should raise over.
+    const code = maskInertText(batch);
+    const codeOnly = maskInertText(batch, { blankStrings: true });
+    const assignments = literalGuidAssignments(code);
+    const calls = [...code.matchAll(EXEC_RE)];
+
+    // Before anything else: every create the backstop can see must be one EXEC_RE actually
+    // parsed. Checked ahead of the `calls.length === 0` return below, because a batch whose ONLY
+    // create is unparseable has no calls at all — the exact case that used to return silently.
+    const parsedAt = new Set(calls.map((m) => m.index));
+    for (const seen of codeOnly.matchAll(ANY_CREATE_EXEC_RE)) {
+      if (parsedAt.has(seen.index)) continue;
+      throw new Error(
+        `${label}: found an EXEC of spCreate${seen[1]} that this tool cannot parse as a complete ` +
+          `statement. A create is recognised only as ` +
+          `EXEC [<schema>].spCreate<X> <named args>; — note the trailing ';'. T-SQL treats the ` +
+          `terminator as optional, but without one the statement's end cannot be located, and ` +
+          `guessing a boundary would re-emit a truncated call into both guard branches. ` +
+          `Refusing to certify a create this tool cannot read.`,
+      );
+    }
+
     if (calls.length === 0) return batch;
 
     // The emitter (SQLServerDataProvider.RenderReplaySaveSQL, PR #4519) puts exactly one
@@ -239,8 +409,11 @@ function guardFile(sql, procTable, label) {
     let out = '';
     let cursor = 0;
     for (const m of calls) {
-      const entity = m[1];
-      const args = m[2];
+      // Sliced from `batch`, never from `code`: a masked comment inside an argument list would
+      // otherwise be re-emitted blanked into both guard branches.
+      const schema = batch.slice(...m.indices[1]);
+      const entity = batch.slice(...m.indices[2]);
+      const args = batch.slice(...m.indices[3]);
 
       // Postcondition on the capture itself: EXEC_RE's non-greedy match stops at the FIRST
       // ';', which is the wrong boundary if that ';' sits inside a string literal (a
@@ -300,7 +473,7 @@ function guardFile(sql, procTable, label) {
             `Refusing to guess — a guard naming the wrong table breaks the migration for every database.`,
         );
 
-      if (isGuardedFor(batch.slice(cursor, m.index), idRef, table)) {
+      if (isGuardedFor(code.slice(cursor, m.index), idRef, table)) {
         out += batch.slice(cursor, m.index + m[0].length); // already guarded, on THIS id AND this table
         cursor = m.index + m[0].length;
         continue;
@@ -309,11 +482,15 @@ function guardFile(sql, procTable, label) {
       const head = batch.slice(cursor, m.index).trimEnd();
       // Shape matches SQLServerDataProvider.RenderReplaySaveSQL in PR #4519 (Layer 1), so a
       // regenerated file and a freshly emitted one are structurally the same statement.
+      // `schema` is the create's own spelling, reused verbatim rather than normalised to the
+      // placeholder: rewriting a hand-written [__mj] into [${flyway:defaultSchema}] would be a
+      // silent semantic change the author never asked for. All 567 shipped creates spell it with
+      // the placeholder, so this is byte-identical for every one of them.
       const body =
-        `\nIF NOT EXISTS (SELECT 1 FROM [\${flyway:defaultSchema}].[${table}] WHERE [ID] = ${idRef})\n` +
-        `BEGIN\n    EXEC [\${flyway:defaultSchema}].spCreate${entity} ${args};\nEND\n` +
+        `\nIF NOT EXISTS (SELECT 1 FROM ${schema}.[${table}] WHERE [ID] = ${idRef})\n` +
+        `BEGIN\n    EXEC ${schema}.spCreate${entity} ${args};\nEND\n` +
         `ELSE\n` +
-        `BEGIN\n    EXEC [\${flyway:defaultSchema}].spUpdate${entity} ${args};\nEND\n`;
+        `BEGIN\n    EXEC ${schema}.spUpdate${entity} ${args};\nEND\n`;
       out += head + body;
       cursor = m.index + m[0].length;
       guarded++;
@@ -497,7 +674,107 @@ function runSelfTest() {
     }
   }
 
-  console.log(failures === 0 ? 'self-test: PASS (11 cases)' : `self-test: FAIL (${failures})`);
+  // Case 12 — a create with NO statement terminator. T-SQL does not require one, so this is a
+  // legal fixed-GUID create; EXEC_RE ends its capture at the first ';' and therefore matched
+  // nothing at all, which the gate reported as "all guarded". A create the parser never sees is
+  // the worst of the fail-open shapes because --fix cannot repair what it cannot find. Where the
+  // statement ends is genuinely unknowable without a terminator, and guessing the boundary is
+  // what the unbalanced-quote postcondition already refuses to do — so refuse, as with a
+  // positional call or an unresolvable table.
+  const nosemiInput = readFileSync(join(dir, 'no-semicolon-input.sql'), 'utf8');
+  try {
+    guardFile(nosemiInput, procTable, 'no-semicolon-input.sql');
+    console.error('FAIL: a create with no statement terminator passed through unseen');
+    failures++;
+  } catch (err) {
+    if (!/terminator/i.test(err.message)) {
+      console.error(`FAIL: wrong error for a create with no terminator: ${err.message}`);
+      failures++;
+    }
+  }
+
+  // Case 13 — `EXEC [__mj].[spCreateX]`, the direct-schema form. Repo vocabulary (two v2
+  // migrations use it), fully parseable, and accepted everywhere else in this file:
+  // buildProcTableMap's PROC_RE and isGuardedFor's tableTest both take `__mj` or the
+  // placeholder. Only EXEC_RE did not, so the call was invisible to the gate and to --fix. It
+  // must be guarded like any other — and the guard must keep the author's own schema spelling
+  // rather than silently rewriting it to the placeholder.
+  const directInput = readFileSync(join(dir, 'direct-schema-input.sql'), 'utf8');
+  const directExpected = readFileSync(join(dir, 'direct-schema-expected.sql'), 'utf8');
+  const directGot = guardFile(directInput, procTable, 'direct-schema-input.sql');
+  if (directGot.text !== directExpected || directGot.guarded !== 1 || directGot.skipped !== 0) {
+    console.error(
+      `FAIL: direct-schema create not guarded (guarded=${directGot.guarded}, skipped=${directGot.skipped})`,
+    );
+    console.error('--- got ---\n' + directGot.text + '\n--- expected ---\n' + directExpected);
+    failures++;
+  }
+
+  // Case 14 — the backstop must read CODE, not prose. A migration that merely mentions
+  // `EXEC spCreateX` in a comment, or carries one inside a dynamic-SQL string, has no create
+  // there to guard. Found the honest way: the first version of the backstop scanned raw text and
+  // brought the whole gate down on migrations/v6/V202608301800, which discusses
+  // `EXEC spCreateAIModelCost` in a block comment explaining a deprecation. A fail-closed gate
+  // still has to be able to tell a statement from a sentence, or it is simply broken.
+  //
+  // The dynamic-SQL line is expected to count as ONE skip, and that is recorded here rather than
+  // waved through: EXEC_RE reads comment-masked text but leaves string literals intact, because a
+  // fixed GUID lives inside a literal and blanking those would hide what the gate is looking for.
+  // A skip is reported in the gate's own output ("N computed-@ID create(s) skipped"), so it is
+  // visible and conservative — categorically unlike the fail-open shapes above, which printed
+  // "all guarded" over a create that was never examined at all.
+  const commentedInput = readFileSync(join(dir, 'commented-create-input.sql'), 'utf8');
+  const commentedGot = guardFile(commentedInput, procTable, 'commented-create-input.sql');
+  if (commentedGot.text !== commentedInput || commentedGot.guarded !== 0 || commentedGot.skipped !== 1) {
+    console.error(
+      `FAIL: a create named only in comments/strings was treated as real (guarded=${commentedGot.guarded}, skipped=${commentedGot.skipped}, rewritten=${commentedGot.text !== commentedInput})`,
+    );
+    failures++;
+  }
+
+  // Case 15 — the guard's block is closed BEFORE the create. isGuardedFor asked only whether a
+  // matching IF NOT EXISTS appeared earlier in the batch, never whether the create sits inside
+  // it, so an IF governing an unrelated PRINT certified the create that followed it. The create
+  // then runs unconditionally: same collision, and the gate calls it guarded.
+  const earlyInput = readFileSync(join(dir, 'guard-closed-early-input.sql'), 'utf8');
+  const earlyExpected = readFileSync(join(dir, 'guard-closed-early-expected.sql'), 'utf8');
+  const earlyGot = guardFile(earlyInput, procTable, 'guard-closed-early-input.sql');
+  if (earlyGot.text !== earlyExpected || earlyGot.guarded !== 1 || earlyGot.skipped !== 0) {
+    console.error(
+      `FAIL: a guard whose block closed before the create was accepted (guarded=${earlyGot.guarded}, skipped=${earlyGot.skipped})`,
+    );
+    console.error('--- got ---\n' + earlyGot.text + '\n--- expected ---\n' + earlyExpected);
+    failures++;
+  }
+  // …and the emitted guard must still be recognised with that closed block sitting above it,
+  // or --fix would wrap it again on its next run.
+  const earlyAgain = guardFile(earlyExpected, procTable, 'guard-closed-early-expected.sql');
+  if (earlyAgain.text !== earlyExpected || earlyAgain.guarded !== 0) {
+    console.error('FAIL: the emitted guard was not recognised when a closed IF block precedes it');
+    failures++;
+  }
+
+  // Case 16 — right table, right value, WRONG column. `idTest` was unanchored on the left, so
+  // the `ID]` ending `[EntityID]` satisfied it; in MJ that makes EntityID, CategoryID,
+  // TemplateID and ApplicationID all read as primary-key guards. A predicate on a foreign key
+  // answers a different question than "does THIS row exist", which is the only one that matters.
+  const wrongColInput = readFileSync(join(dir, 'wrong-column-guard-input.sql'), 'utf8');
+  const wrongColExpected = readFileSync(join(dir, 'wrong-column-guard-expected.sql'), 'utf8');
+  const wrongColGot = guardFile(wrongColInput, procTable, 'wrong-column-guard-input.sql');
+  if (wrongColGot.text !== wrongColExpected || wrongColGot.guarded !== 1 || wrongColGot.skipped !== 0) {
+    console.error(
+      `FAIL: a guard on a column that merely ENDS in "ID" was accepted (guarded=${wrongColGot.guarded}, skipped=${wrongColGot.skipped})`,
+    );
+    console.error('--- got ---\n' + wrongColGot.text + '\n--- expected ---\n' + wrongColExpected);
+    failures++;
+  }
+  const wrongColAgain = guardFile(wrongColExpected, procTable, 'wrong-column-guard-expected.sql');
+  if (wrongColAgain.text !== wrongColExpected || wrongColAgain.guarded !== 0) {
+    console.error('FAIL: the emitted guard was not recognised when a foreign-key probe precedes it');
+    failures++;
+  }
+
+  console.log(failures === 0 ? 'self-test: PASS (16 cases)' : `self-test: FAIL (${failures})`);
   return failures === 0 ? 0 : 1;
 }
 
@@ -520,7 +797,10 @@ function run(fix) {
   for (const scanRoot of scanRoots) {
     for (const f of sqlFilesUnder(scanRoot)) {
       const sql = readFileSync(f, 'utf8');
-      if (!/EXEC\s+\[?\$\{flyway:defaultSchema\}\]?\.\[?spCreate/.test(sql)) continue;
+      // The broad recogniser, not EXEC_RE's strict one: a file whose only create is in a shape
+      // EXEC_RE cannot parse must still reach guardFile, or the backstop there never runs and the
+      // file is skipped before anything looks at it.
+      if (!HAS_CREATE_EXEC_RE.test(sql)) continue;
       const rel = relative(REPO, f);
       const res = guardFile(sql, procTable, rel);
       totalSkipped += res.skipped;
