@@ -9,6 +9,25 @@
  */
 
 /**
+ * Default minimum relevance score (0-1) applied when a caller does not specify one.
+ *
+ * This is the floor every user-facing search surface shares. The Explorer Search Results page
+ * defaults its `MinScorePercent` to 30 and sends `0.30`; `SearchEngine.PreviewSearch` (the
+ * omnibar dropdown) applies this same value. Keeping them equal is what makes the dropdown and
+ * the "See all results" page agree — when they diverged, records visible in the dropdown were
+ * reported as "No results found" on the page.
+ *
+ * `SearchParams.MinScore` still defaults to `0` inside `Search` itself: a caller that omits it
+ * there is asking for everything the providers returned (agents, MCP and the system-user client
+ * rely on that). This constant is the default for the *interactive* surfaces, applied by them.
+ *
+ * `@memberjunction/ng-search` carries a matching constant. It cannot import this one — it is a
+ * browser package and this is a server package — so the two are kept equal by hand and each
+ * points at the other.
+ */
+export const DEFAULT_SEARCH_MIN_SCORE = 0.3;
+
+/**
  * Source types that can contribute to search results.
  */
 export type SearchSource = 'vector' | 'fulltext' | 'entity' | 'storage' | 'tag';

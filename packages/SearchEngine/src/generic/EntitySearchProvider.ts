@@ -194,12 +194,30 @@ export class EntitySearchProvider extends BaseSearchProvider {
 
     /**
      * Get the list of entities eligible for search, optionally filtered by name.
+     *
+     * `AllowUserSearchAPI` alone is not enough. An entity can carry that flag while declaring
+     * no `IncludeInUserSearchAPI` field at all — CodeGen defaults the entity flag to true, but
+     * the field flags are only set when smart-field analysis runs, so any entity created
+     * without it starts search-enabled with nothing to search. For those, `UserSearchString`
+     * is a documented no-op (MJ#4581/#4582): the provider ignores the term and returns the
+     * UNFILTERED table. The scorer then discards every row, because none of them matched
+     * anything — so the round-trip can only ever produce load, never a result.
+     *
+     * `HasSearchFields` is the same predicate the data provider uses to tell "this entity has
+     * no search surface" from "every candidate field dropped out at runtime" (FLS-denied, or
+     * not a text-search target). The latter still gets queried: it returns `(1=0)` cheaply and
+     * is a real, if empty, answer. Only the no-surface case is skipped here.
+     *
+     * Note this is a screen, not a substitute for the metadata being right — `AllowUserSearchAPI`
+     * should be off on such an entity (see `metadata/entities/.entity-search-exclusions.json`).
+     * It is the backstop that keeps a newly-added entity from silently costing every keystroke
+     * a round-trip until someone notices and adds it to that list.
      */
     private getSearchableEntities(
         md: IMetadataProvider,
         filters: SearchFilters | undefined
     ): { Name: string }[] {
-        let entities = md.Entities.filter(e => e.AllowUserSearchAPI);
+        let entities = md.Entities.filter(e => e.AllowUserSearchAPI && e.HasSearchFields);
 
         if (filters?.EntityNames?.length) {
             const allowedNames = new Set(filters.EntityNames.map(n => n.toLowerCase()));

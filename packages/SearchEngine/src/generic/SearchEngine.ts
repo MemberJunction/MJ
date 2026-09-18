@@ -47,6 +47,7 @@ import {
     FusionWeightsByProvider,
     DimensionExplanation,
     ScopePrincipals,
+    DEFAULT_SEARCH_MIN_SCORE,
 } from './search.types';
 import { BaseSearchProvider, SearchProviderConfig } from './ISearchProvider';
 import { SearchFusion, LabeledResultList } from './SearchFusion';
@@ -810,6 +811,12 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
      * Uses preview mode (no enrichment), limited to 8 results by default.
      * Only runs providers that have SupportsPreview=true.
      *
+     * Applies {@link DEFAULT_SEARCH_MIN_SCORE}, the same relevance floor the full Search Results
+     * page sends. Without it `Search` defaults an absent `MinScore` to 0, so the dropdown showed
+     * every candidate a provider returned while the page — which does send a floor — dropped the
+     * low-scoring ones. Same query, two answers, and the dropdown's own "See all results" link
+     * was how users found the disagreement.
+     *
      * @param query - The search query text
      * @param maxResults - Maximum number of preview results (default: 8)
      * @param contextUser - The user performing the search
@@ -823,6 +830,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         return this.Search({
             Query: query,
             MaxResults: maxResults,
+            MinScore: DEFAULT_SEARCH_MIN_SCORE,
             Mode: 'preview'
         }, contextUser);
     }

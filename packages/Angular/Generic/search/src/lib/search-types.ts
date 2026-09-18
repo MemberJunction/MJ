@@ -105,7 +105,8 @@ export interface SearchRequest {
     /**
      * Minimum relevance score (0-1) to include in results.
      * Results below this threshold are filtered out.
-     * Default: 0.35 (35%).
+     * Default: 0.30 (30%) — see DEFAULT_MIN_SCORE in search.service.ts, which must stay equal
+     * to the Explorer results page default and the server's DEFAULT_SEARCH_MIN_SCORE.
      */
     MinScore?: number;
     /**
