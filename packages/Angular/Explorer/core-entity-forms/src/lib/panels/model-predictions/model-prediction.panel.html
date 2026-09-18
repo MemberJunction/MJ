@@ -13,39 +13,39 @@
       [BadgeCount]="Cards.length">
 
     <div class="mpp-cards">
-      @for (card of Cards; track card.bindingId) {
+      @for (card of Cards; track card.BindingId) {
         <div class="mpp-card">
 
           <!-- Header: label + provenance -->
           <div class="mpp-card-head">
-            <div class="mpp-label">{{ card.label }}</div>
+            <div class="mpp-label">{{ card.Label }}</div>
             <div class="mpp-provenance">
               <i class="fa-solid fa-diagram-project mpp-prov-icon" aria-hidden="true"></i>
-              <span>{{ card.provenance }}</span>
-              @if (card.lastScored) {
+              <span>{{ card.Provenance }}</span>
+              @if (card.LastScored) {
                 <span class="mpp-dot" aria-hidden="true">·</span>
-                <span class="mpp-scored">Scored {{ card.lastScored }}</span>
+                <span class="mpp-scored">Scored {{ card.LastScored }}</span>
               }
             </div>
           </div>
 
           <!-- Value -->
           <div class="mpp-value-row">
-            <span class="mpp-value" [class.mpp-value-muted]="card.displayValue === '—'">
-              {{ card.displayValue }}
+            <span class="mpp-value" [class.mpp-value-muted]="card.DisplayValue === '—'">
+              {{ card.DisplayValue }}
             </span>
           </div>
 
           <!-- Probability gauge — neutral 3-band tercile. No moral direction. -->
-          @if (card.isProbability) {
+          @if (card.IsProbability) {
             <div class="mpp-gauge" role="img"
-                 [attr.aria-label]="card.label + ' ' + card.displayValue + ', ' + card.band + ' band'">
+                 [attr.aria-label]="card.Label + ' ' + card.DisplayValue + ', ' + card.Band + ' band'">
               <div class="mpp-gauge-track">
                 <div class="mpp-gauge-fill"
-                     [class.mpp-band-low]="card.band === 'low'"
-                     [class.mpp-band-mid]="card.band === 'mid'"
-                     [class.mpp-band-high]="card.band === 'high'"
-                     [style.width.%]="card.gaugePct"></div>
+                     [class.mpp-band-low]="card.Band === 'low'"
+                     [class.mpp-band-mid]="card.Band === 'mid'"
+                     [class.mpp-band-high]="card.Band === 'high'"
+                     [style.width.%]="card.GaugePct"></div>
               </div>
               <div class="mpp-gauge-scale">
                 <span>0%</span>
@@ -56,13 +56,13 @@
           }
 
           <!-- Top drivers (feature importance) — omitted cleanly when unavailable -->
-          @if (card.drivers.length > 0) {
+          @if (card.Drivers.length > 0) {
             <div class="mpp-drivers">
               <div class="mpp-drivers-title">
                 <i class="fa-solid fa-ranking-star" aria-hidden="true"></i>
                 Top drivers
               </div>
-              @for (driver of card.drivers; track driver.name) {
+              @for (driver of card.Drivers; track driver.name) {
                 <div class="mpp-driver">
                   <span class="mpp-driver-name" [title]="driver.name">{{ driver.name }}</span>
                   <span class="mpp-driver-bar-track">

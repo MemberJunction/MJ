@@ -38,7 +38,7 @@ export interface EntitySelectorConfig {
             @if (isLoading) {
               <div class="loading-state">
                 <i class="fa-solid fa-spinner fa-spin"></i>
-                <p>Loading {{ config.entityName }}...</p>
+                <p>Loading {{ config.EntityName }}...</p>
               </div>
             }
 
