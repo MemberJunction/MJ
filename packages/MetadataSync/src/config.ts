@@ -105,6 +105,18 @@ export interface SyncConfig {
      * Defaults to false.
      */
     alwaysPush?: boolean;
+    /**
+     * Default for every entity directory in this tree: whether each JSON-root graph gets its own
+     * connection and transaction. Defaults to false, and an entity directory's own
+     * `push.isolatedTransactions` overrides it.
+     * - `false` (default): all-or-nothing. Every create, update and delete runs in one database
+     *   transaction, one graph at a time. If anything fails, nothing is saved.
+     * - `true`: sibling graphs run in parallel (`--parallel-batch-size`) on their own connections,
+     *   and each create and update commits as soon as it is saved. A failure does NOT roll those
+     *   back. For entities that manage their own transaction scopes and want the parallelism.
+     * The CLI flags `--isolated-transactions` / `--no-isolated-transactions` override both.
+     */
+    isolatedTransactions?: boolean;
   };
   /** SQL logging configuration (only applies to root-level config, not inherited by subdirectories) */
   sqlLogging?: {
@@ -316,6 +328,17 @@ export interface EntityConfig {
      * Per-entity, not a global CLI kill switch.
      */
     skipGeoCoding?: boolean;
+    /**
+     * Whether this entity's JSON-root graphs each get their own connection and transaction, so
+     * siblings can be written in parallel. Overrides the root config; the CLI flags
+     * `--isolated-transactions` / `--no-isolated-transactions` override this.
+     *
+     * `true` buys parallelism and costs atomicity: each create and update commits as it is saved,
+     * so a later failure leaves them behind. Nested transaction scopes inside a save work either
+     * way — on the shared connection they become savepoints — so choose this for throughput on
+     * entities whose partial writes are acceptable, not to make nested scopes work.
+     */
+    isolatedTransactions?: boolean;
     /**
      * When false, skips creating or updating sync metadata blocks (`record.sync`)
      * on records pushed from this directory. Used by decision metadata directories
