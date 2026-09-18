@@ -47,6 +47,7 @@ import {
     FusionWeightsByProvider,
     DimensionExplanation,
     ScopePrincipals,
+    DEFAULT_SEARCH_MIN_SCORE,
 } from './search.types';
 import { BaseSearchProvider, SearchProviderConfig } from './ISearchProvider';
 import { SearchFusion, LabeledResultList } from './SearchFusion';
@@ -810,19 +811,33 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
      * Uses preview mode (no enrichment), limited to 8 results by default.
      * Only runs providers that have SupportsPreview=true.
      *
+     * Applies {@link DEFAULT_SEARCH_MIN_SCORE}, the same relevance floor the full Search Results
+     * page sends. Without it `Search` defaults an absent `MinScore` to 0, so the dropdown showed
+     * every candidate a provider returned while the page — which does send a floor — dropped the
+     * low-scoring ones. Same query, two answers, and the dropdown's own "See all results" link
+     * was how users found the disagreement.
+     *
+     * The floor is a DEFAULT, not a fixture: pass `minScore` explicitly to override it, and `0`
+     * to opt out entirely. `PreviewSearchAsSystemUser` does exactly that — a programmatic caller
+     * is not the omnibar and has no page to agree with, so it keeps receiving everything the
+     * providers returned rather than silently acquiring a relevance filter it cannot see.
+     *
      * @param query - The search query text
      * @param maxResults - Maximum number of preview results (default: 8)
      * @param contextUser - The user performing the search
+     * @param minScore - Relevance floor; defaults to {@link DEFAULT_SEARCH_MIN_SCORE}, `0` disables
      * @returns Search result in preview mode
      */
     public async PreviewSearch(
         query: string,
         maxResults: number = 8,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        minScore: number = DEFAULT_SEARCH_MIN_SCORE
     ): Promise<SearchResult> {
         return this.Search({
             Query: query,
             MaxResults: maxResults,
+            MinScore: minScore,
             Mode: 'preview'
         }, contextUser);
     }
