@@ -5736,6 +5736,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * release hands them to the enclosing frame.
      */
     private _postCommitTasks: PostCommitEntry[] = [];
+    /**
+     * Tasks whose own transaction already settled, held back because an UNRELATED transaction is
+     * open on this instance. Running them now would enlist their writes in it — on one connection,
+     * that means a rollback of work that has nothing to do with them. Drained when this provider
+     * goes idle, whichever way that transaction ends.
+     */
+    private _idlePostCommitTasks: PostCommitEntry[] = [];
     /** Identity of each open frame and the fate of recent transactions, for {@link PostCommitToken}s. */
     private readonly _frameTracker = new TransactionFrameTracker();
 
@@ -5842,10 +5849,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      *   {@link ResetTransactionState} discard the queue.
      * - A savepoint release keeps its tasks (they now belong to the enclosing frame); a savepoint
      *   rollback discards only the tasks registered inside that savepoint.
-     * - With a `token`, the task follows the transaction the token was captured in: it runs now if
-     *   that transaction already committed; it is dropped if that transaction, or any savepoint the
-     *   token was captured in, rolled back — or if the token matches nothing this provider knows;
-     *   otherwise it is queued at the deepest captured frame that is still open.
+     * - With a `token`, the task follows the transaction the token was captured in: it runs once
+     *   that transaction has committed; it is dropped if that transaction, or any savepoint the
+     *   token was captured in, rolled back — including a savepoint rolled back inside a transaction
+     *   that went on to commit — or if the token matches nothing this provider knows; otherwise it
+     *   is queued at the deepest captured frame that is still open. A token captured outside any
+     *   transaction always runs. "Runs" means immediately when this provider is idle, and otherwise
+     *   once it is: a task must never have its own writes rolled back by an unrelated transaction.
      */
     public override RunAfterCommit(task: PostCommitTask, description: string = 'post-commit task', token?: PostCommitToken): void {
         if (token) {
@@ -5860,10 +5870,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
-     * Snapshot of the open transaction frames, or `undefined` outside a transaction. Synchronous.
-     * See {@link DatabaseProviderBase.CapturePostCommitToken}.
+     * Snapshot of the open transaction frames. Synchronous, and never `undefined` on this provider:
+     * outside a transaction it returns a token whose epoch is `null`, which says the work is already
+     * durable rather than saying nothing. See {@link DatabaseProviderBase.CapturePostCommitToken}.
      */
-    public override CapturePostCommitToken(): PostCommitToken | undefined {
+    public override CapturePostCommitToken(): PostCommitToken {
         return this._frameTracker.Capture();
     }
 
@@ -5871,13 +5882,19 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         const resolution = this._frameTracker.Resolve(token, this._doomed);
         switch (resolution.Kind) {
             case 'run':
-                super.RunAfterCommit(task, description);
+                this.runDetachedTask(task, description);
                 return;
             case 'queue':
                 this._postCommitTasks.push({ Task: task, Description: description, Depth: resolution.Depth });
                 return;
             case 'drop':
-                LogStatus(`Dropped post-commit task '${description}': ${resolution.Reason}`);
+                if (resolution.Unknown) {
+                    // Not a rollback: durable work is being dropped because its transaction cannot be
+                    // identified. That is data loss, so it must not read as routine housekeeping.
+                    LogError(`Dropped post-commit task '${description}': ${resolution.Reason}`);
+                } else {
+                    LogStatus(`Dropped post-commit task '${description}': ${resolution.Reason}`);
+                }
                 return;
         }
     }
@@ -5885,6 +5902,37 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     /** Number of tasks waiting for the outermost commit. */
     public get PendingPostCommitTaskCount(): number {
         return this._postCommitTasks.length;
+    }
+
+    /** Number of tasks waiting only for this provider to go idle. */
+    public get PendingIdlePostCommitTaskCount(): number {
+        return this._idlePostCommitTasks.length;
+    }
+
+    /**
+     * Run work whose own transaction has already settled. Immediate when this provider is idle;
+     * otherwise held until it is, so the task's writes cannot join — and be rolled back with — a
+     * transaction it has nothing to do with.
+     */
+    private runDetachedTask(task: PostCommitTask, description: string): void {
+        if (this._transactionDepth === 0 && !this.HasPhysicalTransaction) {
+            super.RunAfterCommit(task, description);
+            return;
+        }
+        this._idlePostCommitTasks.push({ Task: task, Description: description, Depth: 0 });
+    }
+
+    /** Run everything that was waiting for this provider to go idle. Never throws. */
+    private async drainIdlePostCommitTasks(): Promise<void> {
+        if (this._idlePostCommitTasks.length === 0 || this._transactionDepth > 0 || this.HasPhysicalTransaction) {
+            return;
+        }
+        const tasks = this._idlePostCommitTasks;
+        this._idlePostCommitTasks = [];
+        LogStatus(`Running ${tasks.length} post-commit task(s) held back by an unrelated transaction`);
+        for (const entry of tasks) {
+            await this.RunPostCommitTaskSafely(entry.Task, entry.Description);
+        }
     }
 
     /** Run tasks detached from a committed transaction, one at a time, in order. Never throws. */
@@ -5960,6 +6008,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      */
     public async ResetTransactionState(): Promise<void> {
         await this.WithTransactionLock(() => this.abandonDoomedTransaction());
+        await this.drainIdlePostCommitTasks();
     }
 
     public async BeginTransaction(): Promise<void> {
@@ -5977,10 +6026,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             await this.runPostCommitTasks(committedTasks);
             await this.AfterPhysicalCommit();
         }
+        await this.drainIdlePostCommitTasks();
     }
 
     public async RollbackTransaction(): Promise<void> {
-        return this.WithTransactionLock(() => this.rollbackTransactionCore());
+        await this.WithTransactionLock(() => this.rollbackTransactionCore());
+        await this.drainIdlePostCommitTasks();
     }
 
     private async beginTransactionCore(): Promise<void> {
