@@ -3197,6 +3197,7 @@ export class EntityInfo extends BaseInfo {
     }
 
     private _hasInactiveFields: boolean | undefined = undefined;
+    private _hasSearchFields: boolean | undefined = undefined;
     /**
      * Returns true if ANY field on this entity is `Deprecated` or `Disabled` (i.e. not `Active`).
      *
@@ -3213,6 +3214,33 @@ export class EntityInfo extends BaseInfo {
             this._hasInactiveFields = this._Fields.some(f => f.Status === 'Deprecated' || f.Status === 'Disabled');
         }
         return this._hasInactiveFields;
+    }
+
+    /**
+     * Returns true if ANY field on this entity participates in `UserSearchString` matching
+     * (`EntityField.IncludeInUserSearchAPI`).
+     *
+     * Computed once on first access and cached for the lifetime of this EntityInfo. Like
+     * {@link HasInactiveFields} this is a property of the entity DEFINITION, shared across every
+     * record instance, so an entity is scanned at most once however many searches run against it.
+     *
+     * It answers "does this entity have a search surface at all", which is NOT the same question as
+     * "did this search produce a predicate". A field can be excluded from a particular search at
+     * runtime — denied by field-level security, or not a sensible text-search target — on an entity
+     * that does declare searchable fields. Providers use the distinction to tell "the caller asked
+     * to filter by something this entity does not have" (ignore the term) from "every candidate
+     * field dropped out" (match nothing). See MJ#4581.
+     *
+     * Caching assumes `EntityField.IncludeInUserSearchAPI` is not mutated in place after this
+     * EntityInfo is built — the same assumption {@link HasInactiveFields} makes about `Status`.
+     * A metadata refresh constructs new EntityInfo objects rather than editing existing ones, and
+     * the cache is reset wherever `_Fields` is (re)assigned, so both paths stay correct.
+     */
+    get HasSearchFields(): boolean {
+        if (this._hasSearchFields === undefined) {
+            this._hasSearchFields = this._Fields.some(f => f.IncludeInUserSearchAPI);
+        }
+        return this._hasSearchFields;
     }
     /**
      * Gets all relationships where other entities reference this entity.
@@ -4178,6 +4206,8 @@ export class EntityInfo extends BaseInfo {
             this._Fields = [];
 
             // Reset every lazy field-derived memo cache whenever _Fields is (re)assigned.
+            // `entityInfo.cacheReset.test.ts` mirrors this list in `runProductionCacheReset`;
+            // a cache added here needs adding there too, or its reset goes unexercised.
             // These caches (FieldByName map, PrimaryKeys, UniqueKeys, ForeignKeys, EncryptedFields,
             // DatetimeFields, NameField, FirstPrimaryKey) are populated lazily off this.Fields and
             // were previously relying on an implicit "_Fields is write-once after construction"
@@ -4194,6 +4224,10 @@ export class EntityInfo extends BaseInfo {
             this._encryptedFieldsCache = null;
             this._datetimeFieldsCache = null;
             this._nameFieldCache = undefined;
+            this._hasSearchFields = undefined;
+            // Added late: HasInactiveFields (Jun 18) post-dates this block (Jun 15) and was never
+            // listed here, so it carried exactly the staleness the block exists to prevent.
+            this._hasInactiveFields = undefined;
             const ef = initData.EntityFields || initData._Fields || initData.Fields;
             if (ef) {
                 for (let j = 0; j < ef.length; j++) {
