@@ -1,6 +1,7 @@
 /**
  * Unit tests for slack-block-builder.ts — rich Block Kit response builder.
  */
+import type { ComposeEmailCommand } from '@memberjunction/ai-core-plus';
 import { describe, it, expect } from 'vitest';
 import {
     buildRichResponse,
@@ -952,8 +953,8 @@ describe('buildActionButtons — compose:email', () => {
     // A mailto: URL fails isOpenableURI (http/https only), so a button built from one is dropped.
     // Without an explicit branch the command renders as NOTHING AT ALL — these assertions are what
     // stop that regressing back to silence.
-    const cmd = (over: Record<string, unknown> = {}) => ({
-        type: 'compose:email' as const,
+    const cmd = (over: Partial<ComposeEmailCommand> = {}): ComposeEmailCommand => ({
+        type: 'compose:email',
         label: 'Open draft in Mail',
         to: ['bob@example.com'],
         subject: 'Membership renewal',
@@ -978,5 +979,15 @@ describe('buildActionButtons — compose:email', () => {
     it('still names the draft when no recipient is known', () => {
         const blocks = buildActionButtons([cmd({ to: undefined })]);
         expect(JSON.stringify(blocks)).toContain('Open draft in Mail');
+    });
+
+    // The whole note is one italic span. A nested `_..._` around the subject closed the outer
+    // italic early (Slack pairs underscores left-to-right), leaving trailing underscores literal.
+    it('does not nest italics inside the note', () => {
+        const text = String((buildActionButtons([cmd()])[0] as { elements: { text: string }[] }).elements[0].text);
+        expect(text.startsWith('✉️ _')).toBe(true);
+        expect(text.endsWith('_')).toBe(true);
+        // exactly the opening and closing pair, no nested ones
+        expect((text.match(/_/g) ?? []).length).toBe(2);
     });
 });

@@ -342,8 +342,9 @@ function isButtonSafeURL(url: unknown): boolean {
 /**
  * Build action buttons from agent actionable commands.
  *
- * Handles both command types:
+ * Handles:
  * - `open:url` → Slack URL button (opens external link)
+ * - `compose:email` → context note (a mailto: URL is not button-safe on Slack)
  * - `open:resource` → Deep-link button to MJ Explorer if `explorerBaseURL` is configured,
  *   otherwise rendered as an informational context block showing entity/resource info
  *
@@ -425,7 +426,11 @@ function formatComposeEmailInfo(cmd: ComposeEmailCommand): string {
     parts.push(`to ${escapeMrkdwn(to.join(', '))}`);
   }
   if (cmd.subject) {
-    parts.push(`_${escapeMrkdwn(cmd.subject)}_`);
+    // Deliberately NOT wrapped in its own `_..._`: the whole note is already italic, and Slack
+    // pairs underscores left-to-right, so a nested pair closes the outer italic early and leaves
+    // the trailing underscores rendering literally. escapeMrkdwn does not escape `_`, so a subject
+    // containing one breaks it the same way — keeping the subject plain avoids both.
+    parts.push(escapeMrkdwn(cmd.subject));
   }
   const detail = parts.length > 0 ? ` (${parts.join(' — ')})` : '';
   return `✉️ _${escapeMrkdwn(cmd.label) || 'Email draft'}${detail} — open it in MJ Explorer to send._`;

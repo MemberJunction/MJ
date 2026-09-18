@@ -72,4 +72,9 @@ interface ComposeEmailCommand {
     body?: string;  // Body text. PLAIN TEXT only — see the note on this interface.
     artifactId?: string;  // Optional artifact holding the full draft.
 }
+
+interface MailtoURLResult {
+    url: string;  // The built `mailto:` URL.
+    withinLimit: boolean;  // Whether {@link url} is short enough for a mail client to open without truncating the body.
+}
 ```

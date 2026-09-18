@@ -47,7 +47,8 @@ describe('UICommandHandlerService — compose:email', () => {
     await service.executeActionableCommand(cmd());
 
     expect(clicked).toHaveLength(1);
-    expect(clicked[0]).toContain('mailto:bob%40example.com');
+    // `@` stays readable in the path (RFC 6068); only the query params are percent-encoded.
+    expect(clicked[0]).toContain('mailto:bob@example.com');
     expect(clicked[0]).toContain('subject=Renewal');
     // Handled locally — the host must not also be asked to open anything.
     expect(emitted).not.toHaveBeenCalled();

@@ -5,8 +5,7 @@ import {
   RefreshDataCommand,
   OpenURLCommand,
   ComposeEmailCommand,
-  BuildMailtoURL,
-  IsMailtoURLWithinLimit
+  BuildMailtoURL
 } from '@memberjunction/ai-core-plus';
 import { DataCacheService } from './data-cache.service';
 
@@ -19,8 +18,9 @@ export interface ActionableCommandRequest {
 /**
  * Service for handling UI commands from agents.
  *
- * Generic commands (open:url) are handled directly by this service.
- * App-specific commands (open:resource) are emitted for the host application to handle.
+ * Generic commands (open:url, and compose:email while it fits in a mailto: URL) are handled
+ * directly by this service. App-specific commands (open:resource, and the compose:email
+ * over-length fallback) are emitted for the host application to handle.
  */
 @Injectable({
   providedIn: 'root'
@@ -28,7 +28,10 @@ export interface ActionableCommandRequest {
 export class UICommandHandlerService {
   /**
    * Event emitted when an actionable command requires host-app handling.
-   * Currently only open:resource commands are emitted — open:url is handled directly.
+   *
+   * open:resource is always emitted. compose:email is emitted ONLY as a fallback, when the draft
+   * is too long for a mailto: URL and the host must open the draft artifact instead; a draft
+   * within the limit is handled here and never reaches the host. open:url is always handled here.
    */
   public actionableCommandRequested = new EventEmitter<ActionableCommandRequest>();
 
@@ -61,8 +64,15 @@ export class UICommandHandlerService {
       // Email Draft artifact instead of opening a truncated compose window.
     }
 
-    // open:resource (and the compose:email fallback above) require app-specific navigation
-    console.log('📤 Emitting actionable command for host app:', command);
+    // open:resource (and the compose:email fallback above) require app-specific navigation.
+    // compose:email is logged by TYPE ONLY: its body is free-text member correspondence, and the
+    // whole command object would otherwise land in the browser console and any console-forwarding
+    // telemetry.
+    if (command.type === 'compose:email') {
+      console.log('📤 Emitting actionable command for host app:', command.type);
+    } else {
+      console.log('📤 Emitting actionable command for host app:', command);
+    }
     this.actionableCommandRequested.emit({
       command,
       conversationId: origin?.conversationId ?? null,
@@ -98,8 +108,8 @@ export class UICommandHandlerService {
    *          a message without noticing.
    */
   private handleComposeEmail(command: ComposeEmailCommand): boolean {
-    const url = BuildMailtoURL(command);
-    if (!IsMailtoURLWithinLimit(url)) {
+    const { url, withinLimit } = BuildMailtoURL(command);
+    if (!withinLimit) {
       // Best-effort convenience so the text is not lost. Unavailable over plain HTTP and deniable
       // by permissions policy, so it must never gate the fallback.
       if (command.body) {

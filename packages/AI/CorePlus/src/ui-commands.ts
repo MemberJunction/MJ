@@ -436,7 +436,14 @@ export interface ComposeEmailCommand {
     to?: string[];
     /** Carbon-copy addresses. Same rule as {@link to}: omit rather than guess. */
     cc?: string[];
-    /** Blind-carbon-copy addresses. Same rule as {@link to}: omit rather than guess. */
+    /**
+     * Blind-carbon-copy addresses. Same rule as {@link to}: omit rather than guess.
+     *
+     * CAUTION: `bcc` is honored INCONSISTENTLY by mail clients — Outlook's desktop handler is
+     * known to drop it — and it fails silently, exactly like the truncation case above. Do not use
+     * it for anything that must happen (a compliance or archive copy); the user will send believing
+     * the copy went out.
+     */
     bcc?: string[];
     /** Subject line. */
     subject?: string;
@@ -475,7 +482,17 @@ export const MAILTO_MAX_URL_LENGTH = 1800;
  * body of roughly 1,000 characters already yields a ~1,450-character URL. Agents should be told a
  * body ceiling near 1,000, not one near {@link MAILTO_MAX_URL_LENGTH}.
  */
-export function BuildMailtoURL(command: Pick<ComposeEmailCommand, 'to' | 'cc' | 'bcc' | 'subject' | 'body'>): string {
+export interface MailtoURLResult {
+    /** The built `mailto:` URL. */
+    url: string;
+    /**
+     * Whether {@link url} is short enough for a mail client to open without truncating the body.
+     * When false the caller must NOT open it — show the full draft another way.
+     */
+    withinLimit: boolean;
+}
+
+export function BuildMailtoURL(command: Pick<ComposeEmailCommand, 'to' | 'cc' | 'bcc' | 'subject' | 'body'>): MailtoURLResult {
     const clean = (values?: string[]): string[] => (values ?? []).map((v) => v.trim()).filter((v) => v.length > 0);
     const params: string[] = [];
 
@@ -495,14 +512,24 @@ export function BuildMailtoURL(command: Pick<ComposeEmailCommand, 'to' | 'cc' | 
         params.push(`body=${encodeURIComponent(command.body)}`);
     }
 
-    const path = clean(command.to).map((r) => encodeURIComponent(r)).join(',');
+    // Encoded, then `@` restored: `@` is legal in an addr-spec (RFC 6068) and every other mailto
+    // builder leaves it, but a registered web-mail protocol handler that does not percent-decode
+    // the path would put a literal `a%40x.com` in the user's To field. Everything else stays
+    // encoded, so an address carrying a delimiter still cannot break the URL.
+    const path = clean(command.to).map((r) => encodeURIComponent(r).replace(/%40/g, '@')).join(',');
     const query = params.length > 0 ? `?${params.join('&')}` : '';
-    return `mailto:${path}${query}`;
+    const url = `mailto:${path}${query}`;
+    // The verdict rides WITH the URL on purpose. A separate opt-in check is one a caller can
+    // forget, and forgetting it silently reintroduces the truncated-body bug the limit exists to
+    // prevent — so the only way to get a URL from here is to also be handed whether it is safe.
+    return { url, withinLimit: IsMailtoURLWithinLimit(url) };
 }
 
 /**
- * Whether a built `mailto:` URL is short enough that the mail client will not truncate the body.
- * A host that gets `false` here must NOT open the URL — see {@link MAILTO_MAX_URL_LENGTH}.
+ * Whether a `mailto:` URL is short enough that the mail client will not truncate the body.
+ *
+ * {@link BuildMailtoURL} already reports this as `withinLimit`, so prefer that; this is exported
+ * for a caller holding a URL it did not build here.
  */
 export function IsMailtoURLWithinLimit(url: string): boolean {
     return url.length <= MAILTO_MAX_URL_LENGTH;

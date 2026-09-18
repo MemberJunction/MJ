@@ -40,3 +40,21 @@
     width: 100%;
   }
 }
+
+/* compose:email shows its recipients under the button so the address is visible
+   before the mail client opens. */
+.command-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.command-recipients {
+  font-size: 11px;
+  color: var(--mj-text-muted, #6b6b6b);
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

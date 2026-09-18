@@ -299,18 +299,32 @@ function formatComposeEmailNote(cmd: ComposeEmailCommand): string {
     const parts: string[] = [];
     const to = (cmd.to ?? []).filter(r => r.trim().length > 0);
     if (to.length > 0) {
-        parts.push(`to ${to.join(', ')}`);
+        parts.push(`to ${escapeCardMarkdown(to.join(', '))}`);
     }
     if (cmd.subject) {
-        parts.push(cmd.subject);
+        parts.push(escapeCardMarkdown(cmd.subject));
     }
     const detail = parts.length > 0 ? ` (${parts.join(' — ')})` : '';
-    return `✉️ _${cmd.label ?? 'Email draft'}${detail} — open it with "View in MJ Explorer" below to send._`;
+    return `✉️ _${escapeCardMarkdown(cmd.label ?? 'Email draft')}${detail} — open it with "View in MJ Explorer" below to send._`;
+}
+
+/**
+ * Escape the markdown subset an Adaptive Card TextBlock renders.
+ *
+ * Every field here is AGENT-AUTHORED, and TextBlock renders links. Without this a subject of
+ * `Renewal [click here](https://evil.example)` becomes a live hyperlink inside an official MJ
+ * card — the same "never hand the user a hostile link" case the adapter guards elsewhere through
+ * isOpenableURI. Brackets and parens defuse links; underscores and asterisks stop agent text from
+ * breaking out of the surrounding italics.
+ */
+function escapeCardMarkdown(text: string): string {
+    return text.replace(/([\[\]()_*`\\])/g, '\\$1');
 }
 
 /**
  * Build Action.OpenUrl buttons from actionable commands.
- * Handles `open:url` and `open:resource` command types.
+ * Handles `open:url` and `open:resource` command types. `compose:email` carries a mailto: URL,
+ * which Teams will not open from a button — it is surfaced by buildUnopenableResourceNotes instead.
  * Returns at most 5 action buttons.
  */
 export function buildActionButtons(
