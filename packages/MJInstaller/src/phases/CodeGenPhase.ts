@@ -333,11 +333,18 @@ export class CodeGenPhase {
     const { cmd, args } = await this.resolveCli(dir, pm, versionTag, ['codegen']);
     const result = await this.processRunner.Run(cmd, args, {
       Cwd: dir,
-      // afterFailed below regex-matches result.Stderr for "COMMAND:...FAILED".
-      // A colourised run (FORCE_COLOR forwarded from the operator's env, same
-      // trigger as #4562) can put escape codes between those words and make
-      // the match silently miss a real AFTER-command failure. NO_COLOR does
-      // not override FORCE_COLOR; pinning it to '0' does.
+      // `mj codegen` runs the AFTER commands, which are themselves builds, so the
+      // operator's FORCE_COLOR would otherwise reach that whole process tree. Pin it
+      // so the output we capture here — surfaced verbatim in InstallerError bodies and
+      // in the diagnostic report a user pastes into an issue — carries no escape codes.
+      // Misreading a colourised log pasted into GitHub is how #4562 was misdiagnosed twice.
+      // NO_COLOR does not override FORCE_COLOR; pinning it to '0' does.
+      //
+      // This is NOT needed to protect `afterFailed` below: that matches result.Stderr
+      // with /COMMAND:.*FAILED/i, and the line it looks for comes from a bare
+      // console.error template literal in runCommand.ts, which no colour library touches.
+      // Even colourised it would still match, because `.` excludes only line terminators
+      // and an ANSI CSI sequence contains none. Do not re-justify this pin on that basis.
       Env: { FORCE_COLOR: '0' },
       TimeoutMs: 900_000, // 15 minutes
       OnStdout: (line: string) => {
