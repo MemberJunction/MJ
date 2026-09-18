@@ -1030,7 +1030,12 @@ import {
     RunAllActiveArchivesAction,
 } from '@memberjunction/archiving-action';
 
-// @memberjunction/search-engine (14 classes)
+// @memberjunction/tag-engine-base (1 classes)
+import {
+    TagEngineBase,
+} from '@memberjunction/tag-engine-base';
+
+// @memberjunction/search-engine (15 classes)
 import {
     AzureAISearchProvider,
     BGEReRanker,
@@ -1043,15 +1048,11 @@ import {
     OpenSearchSearchProvider,
     SearchScopePermissionResolver,
     StorageSearchProvider,
+    TagSearchProvider,
     TypesenseSearchProvider,
     VectorSearchProvider,
     VoyageReRanker,
 } from '@memberjunction/search-engine';
-
-// @memberjunction/tag-engine-base (1 classes)
-import {
-    TagEngineBase,
-} from '@memberjunction/tag-engine-base';
 
 // @memberjunction/templates (3 classes)
 import {
@@ -2206,6 +2207,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     ArchiveDataAction,
     RestoreRecordAction,
     RunAllActiveArchivesAction,
+    TagEngineBase,
     AzureAISearchProvider,
     BGEReRanker,
     CohereReRanker,
@@ -2217,10 +2219,10 @@ const CLASS_REGISTRATIONS_3: any[] = [
     OpenSearchSearchProvider,
     SearchScopePermissionResolver,
     StorageSearchProvider,
+    TagSearchProvider,
     TypesenseSearchProvider,
     VectorSearchProvider,
     VoyageReRanker,
-    TagEngineBase,
     AIPromptExtension,
     TemplateEmbedExtension,
     TemplateRunServerOperation,
@@ -2310,11 +2312,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     PredictiveStudioTrainModelAction,
     PredictiveStudioTrainModelServerOperation,
     DurableTaskGraphSubmitter,
-    TaskGraphCancelServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    TaskGraphCancelServerOperation,
     TaskGraphForceCompleteTaskServerOperation,
     TaskGraphGetStatusServerOperation,
     TaskGraphOverrideEdgeServerOperation,
@@ -2514,11 +2516,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     SearchQueryCatalogAction,
     SearchStorageFilesAction,
     SendDocumentForSignatureAction,
-    SendSingleMessageAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    SendSingleMessageAction,
     SendToAudienceAction,
     ShareListAction,
     SlackWebhookAction,
@@ -2574,7 +2576,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1039;
+export const CLASS_REGISTRATIONS_COUNT = 1040;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
@@ -2659,8 +2661,8 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/storage',
     '@memberjunction/archiving-engine',
     '@memberjunction/archiving-action',
-    '@memberjunction/search-engine',
     '@memberjunction/tag-engine-base',
+    '@memberjunction/search-engine',
     '@memberjunction/templates',
     '@memberjunction/ai-prompts',
     '@memberjunction/ai-reranker',

@@ -436,13 +436,13 @@ describe('createViewUserSearchSQL — type guards', () => {
         expect(sql).toBe(`(([Name]  LIKE N'%foo%' ESCAPE '\\'))`);
     });
 
-    it('Returns empty when no field is eligible', () => {
+    it('Returns (1=0) when no field is eligible', () => {
         const e = makeEntity({ fields: [
             makeField({ name: 'ID', type: 'uniqueidentifier', predicate: 'Contains' }),
             makeField({ name: 'Year', type: 'int', predicate: 'Contains' }),
         ] });
         const sql = provider.buildSQL(e, 'foo');
-        expect(sql).toBe('');
+        expect(sql).toBe('(1=0)');
     });
 
     it('IncludeInUserSearchAPI=false is skipped even on a text field', () => {
