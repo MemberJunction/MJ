@@ -25890,6 +25890,12 @@ export const MJQuerySchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Author's declared intent that this Query should be materialized. CodeGen scans for IsMaterialized = 1 and, if the query qualifies (§9/§10), materializes it. The authoritative state lives on the linked MJ: Materialized Results row (found via the MaterializedResultQuery join table).`),
+    Configuration: z.any().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJQueryEntity_IQueryConfiguration
+        * * Description: Optional JSON configuration bag defining query-level policies and semantic capabilities (shape = IQueryConfiguration). Includes Priority (1-100) for ground-truth ranking in the semantic layer, LogExecution to control query execution logging, AlternativeQuestions for multi-phrasing vector recall, UsageGuidance and WhenNotToUse bounds for AI agents, and DomainScope.`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
         * * Display Name: Category Name
@@ -40843,6 +40849,7 @@ export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityTyp
     /**
     * Validate() method override for MJ: AI Agent Run Steps entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * FinalPayloadValidationResult: The final payload validation result must be one of the approved statuses: Warn, Fail, Retry, or Pass, to ensure consistent reporting of validation outcomes.
+    * * NativeToolCallCount: The native tool call count must be greater than or equal to zero, if it is specified.
     * * StepNumber: This rule ensures that the step number must be greater than zero.
     * @public
     * @method
@@ -40851,6 +40858,7 @@ export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityTyp
     public override Validate(): ValidationResult {
         const result = super.Validate();
         this.ValidateFinalPayloadValidationResultStatus(result);
+        this.ValidateNativeToolCallCountGreaterThanOrEqualToZero(result);
         this.ValidateStepNumberGreaterThanZero(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
@@ -40876,6 +40884,23 @@ export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityTyp
     		}
     	}
     }
+
+    /**
+    * The native tool call count must be greater than or equal to zero, if it is specified.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    	public ValidateNativeToolCallCountGreaterThanOrEqualToZero(result: ValidationResult) {
+    		if (this.NativeToolCallCount != null && this.NativeToolCallCount < 0) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"NativeToolCallCount",
+    				"The native tool call count must be 0 or greater.",
+    				this.NativeToolCallCount,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
 
     /**
     * This rule ensures that the step number must be greater than zero.
@@ -104527,6 +104552,68 @@ export class MJPublicLinkEntity extends BaseEntity<MJPublicLinkEntityType> {
 
 
 /**
+ * Optional per-query configuration bag.
+ *
+ * Stored as JSON in `MJ: Queries.Configuration`. CodeGen emits a typed
+ * `ConfigurationObject` accessor on `MJQueryEntity` that returns
+ * `MJQueryEntity_IQueryConfiguration | null`.
+ *
+ * Expand by adding a property here — no schema migration. Anything the engine
+ * filters, sorts, or joins on stays a column on `Query`. Semantic layer options,
+ * execution logging policies, and AI agent bounds belong in this bag.
+ */
+export interface MJQueryEntity_IQueryConfiguration {
+    /**
+     * Relative ranking / ground-truth priority for semantic query selection (1-100).
+     * High values (e.g. 90-100) mark authoritative, enterprise-certified ground truth queries
+     * that should be preferred when multiple similar queries match an agent's request.
+     * Default: 50.
+     */
+    Priority?: number;
+
+    /**
+     * Controls execution logging for this query.
+     * When true (default), executions are logged to `MJ: Query Execution Logs`.
+     * Set to false to opt out of execution logging (useful for high-frequency health checks,
+     * internal pollers, or sensitive data queries).
+     * Default: true.
+     */
+    LogExecution?: boolean;
+
+    /**
+     * Explicit flag indicating this query is an enterprise ground-truth / canonical query
+     * for its domain or question type. Agents can filter or prioritize canonical queries.
+     * Default: false.
+     */
+    IsCanonical?: boolean;
+
+    /**
+     * Alternative questions, natural language phrasings, and query aliases.
+     * Included in composite embeddings and semantic search indexing to boost vector recall
+     * across varied phrasing without diluting the primary description.
+     */
+    AlternativeQuestions?: string[];
+
+    /**
+     * Usage guidance for AI agents and callers. Provides prescriptive context on when
+     * this query should be chosen and how its results should be interpreted.
+     */
+    UsageGuidance?: string;
+
+    /**
+     * Explicit negative bounding / anti-patterns for AI agents.
+     * E.g. "Do NOT use for unbilled orders; use 'Unbilled Orders by Region' instead."
+     */
+    WhenNotToUse?: string;
+
+    /**
+     * Operational domain or persona scopes where this query applies
+     * (e.g. ['Sales', 'Finance', 'Executive']).
+     */
+    DomainScope?: string[];
+}
+
+/**
  * MJ: Queries - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: Query
@@ -104934,6 +105021,41 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
     }
     set IsMaterialized(value: boolean) {
         this.Set('IsMaterialized', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJQueryEntity_IQueryConfiguration
+    * * Description: Optional JSON configuration bag defining query-level policies and semantic capabilities (shape = IQueryConfiguration). Includes Priority (1-100) for ground-truth ranking in the semantic layer, LogExecution to control query execution logging, AlternativeQuestions for multi-phrasing vector recall, UsageGuidance and WhenNotToUse bounds for AI agents, and DomainScope.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    private _ConfigurationObject_cached: MJQueryEntity_IQueryConfiguration | null | undefined = undefined;
+    private _ConfigurationObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for Configuration — returns parsed JSON as MJQueryEntity_IQueryConfiguration.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get ConfigurationObject(): MJQueryEntity_IQueryConfiguration | null {
+        const raw = this.Configuration;
+        if (raw !== this._ConfigurationObject_lastRaw) {
+            this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
+            this._ConfigurationObject_lastRaw = raw;
+        }
+        return this._ConfigurationObject_cached!;
+    }
+    set ConfigurationObject(value: MJQueryEntity_IQueryConfiguration | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.Configuration = raw;
+        this._ConfigurationObject_cached = value;
+        this._ConfigurationObject_lastRaw = raw;
     }
 
     /**

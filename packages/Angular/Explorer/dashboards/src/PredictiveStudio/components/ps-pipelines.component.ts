@@ -5,6 +5,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { UUIDsEqual } from '@memberjunction/global';
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { MJMLTrainingPipelineEntity, PredictiveStudioTrainModelOperation } from '@memberjunction/core-entities';
+import { PSPipelineWizardComponent } from './ps-pipeline-wizard.component';
 import {
   DOMINANCE_THRESHOLD_DEFAULT,
   parseDenyList,
@@ -88,7 +89,7 @@ const PS_PIPELINES_STARTER_PROMPT =
 @Component({
   standalone: true,
   selector: 'ps-pipelines',
-  imports: [CommonModule, MJButtonDirective],
+  imports: [CommonModule, MJButtonDirective, PSPipelineWizardComponent],
   encapsulation: ViewEncapsulation.None,
   styleUrls: ['../predictive-studio.shared.css', './ps-pipelines.component.css'],
   template: `
@@ -99,13 +100,19 @@ const PS_PIPELINES_STARTER_PROMPT =
           <h3>No training pipelines yet</h3>
           <p>
             A training pipeline assembles features from your data, picks an algorithm, and trains a
-            versioned model. The fastest way to build one is to describe your goal to the Model
-            Development Agent — it designs the pipeline, guards against target leakage, and trains for you.
+            versioned model. You can build one step-by-step with the manual wizard or ask the Model
+            Development Agent to design one for you.
           </p>
-          <button mjButton variant="primary" size="sm" data-testid="ps-pipelines-ask-agent"
-            (click)="askAgent.emit(starterPrompt)">
-            <i class="fa-solid fa-robot"></i> Ask the agent to build one
-          </button>
+          <div class="empty-actions" style="display: flex; gap: 8px; margin-top: 12px;">
+            <button mjButton variant="primary" size="sm" data-testid="ps-pipelines-new-btn-empty"
+              (click)="openWizard()">
+              <i class="fa-solid fa-plus"></i> New Pipeline
+            </button>
+            <button mjButton variant="secondary" size="sm" data-testid="ps-pipelines-ask-agent"
+              (click)="askAgent.emit(starterPrompt)">
+              <i class="fa-solid fa-robot"></i> Ask the agent
+            </button>
+          </div>
         </div>
       } @else {
         <!-- Pipeline picker (its own scrollable row) -->
@@ -121,7 +128,13 @@ const PS_PIPELINES_STARTER_PROMPT =
 
         <!-- Toolbar for the selected pipeline (its own row) -->
         <div class="pl-toolbar">
-          <button mjButton variant="primary" size="sm" data-testid="ps-pipelines-save" [disabled]="!dirty || busy" (click)="save()">
+          <button mjButton variant="primary" size="sm" data-testid="ps-pipelines-new" (click)="openWizard()">
+            <i class="fa-solid fa-plus"></i> New Pipeline
+          </button>
+          <button mjButton variant="secondary" size="sm" data-testid="ps-pipelines-clone" [disabled]="!selectedPipeline" (click)="cloneSelected()">
+            <i class="fa-solid fa-copy"></i> Clone / Tweak
+          </button>
+          <button mjButton variant="secondary" size="sm" data-testid="ps-pipelines-save" [disabled]="!dirty || busy" (click)="save()">
             <i class="fa-solid fa-floppy-disk"></i> Save
           </button>
           <button mjButton variant="secondary" size="sm" data-testid="ps-pipelines-validate" [disabled]="busy" (click)="validate()">
@@ -307,6 +320,19 @@ const PS_PIPELINES_STARTER_PROMPT =
           </div>
         </div>
       }
+
+      @if (showWizard) {
+        <ps-pipeline-wizard
+          [engine]="engine"
+          [provider]="provider"
+          [currentUser]="currentUser"
+          [cloneFrom]="wizardClonePipeline"
+          [initialAlgorithmId]="initialWizardAlgorithmId"
+          (saved)="onWizardSaved($event)"
+          (trainRequested)="onWizardTrainRequested($event)"
+          (closed)="closeWizard()">
+        </ps-pipeline-wizard>
+      }
     </div>
   `,
 })
@@ -328,6 +354,45 @@ export class PSPipelinesComponent implements OnInit {
 
   public pipelines: MJMLTrainingPipelineEntity[] = [];
   public selectedPipelineId = '';
+
+  public showWizard = false;
+  public wizardClonePipeline: MJMLTrainingPipelineEntity | null = null;
+  public initialWizardAlgorithmId?: string;
+
+  public openWizard(algoId?: string): void {
+    this.wizardClonePipeline = null;
+    this.initialWizardAlgorithmId = algoId;
+    this.showWizard = true;
+  }
+
+  public cloneSelected(): void {
+    if (!this.selectedPipeline) return;
+    this.wizardClonePipeline = this.selectedPipeline;
+    this.initialWizardAlgorithmId = undefined;
+    this.showWizard = true;
+  }
+
+  public closeWizard(): void {
+    this.showWizard = false;
+    this.wizardClonePipeline = null;
+    this.initialWizardAlgorithmId = undefined;
+  }
+
+  public async onWizardSaved(pipeline: MJMLTrainingPipelineEntity): Promise<void> {
+    this.closeWizard();
+    await this.engine.Config(true, this.currentUser ?? undefined, this.provider ?? undefined);
+    this.pipelines = this.engine.Pipelines;
+    this.selectPipeline(pipeline.ID);
+    this.cdr.detectChanges();
+  }
+
+  public async onWizardTrainRequested(pipeline: MJMLTrainingPipelineEntity): Promise<void> {
+    this.closeWizard();
+    await this.engine.Config(true, this.currentUser ?? undefined, this.provider ?? undefined);
+    this.pipelines = this.engine.Pipelines;
+    this.selectPipeline(pipeline.ID);
+    await this.train();
+  }
 
   // Editable spec state (the source of truth; nodes/edges are derived).
   private editSources: SourceBinding[] = [];
@@ -381,7 +446,7 @@ export class PSPipelinesComponent implements OnInit {
     this.selectedId = this.nodes[0]?.id ?? '';
   }
 
-  private get selectedPipeline(): MJMLTrainingPipelineEntity | undefined {
+  public get selectedPipeline(): MJMLTrainingPipelineEntity | undefined {
     return this.pipelines.find((p) => UUIDsEqual(p.ID, this.selectedPipelineId));
   }
 

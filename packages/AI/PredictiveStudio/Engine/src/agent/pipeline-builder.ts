@@ -12,6 +12,7 @@
  * "build a new prediction" path is verifiable without the full LLM loop.
  */
 
+import { UUIDsEqual } from '@memberjunction/global';
 import { RunView, type IMetadataProvider, type UserInfo, type EntityInfo, LogError } from '@memberjunction/core';
 import type { MJMLTrainingPipelineEntity, MJMLModelEntity } from '@memberjunction/core-entities';
 import { type ModelingPlanSpec, deriveTrustVerdict, type TrustVerdict } from '@memberjunction/predictive-studio-core';
@@ -51,6 +52,10 @@ export interface BuildPredictionResult {
   heldReason: string | null;
   /** A clean error message when the build failed; else null. */
   errorMessage: string | null;
+  /** The trained model entity (present on successful build). */
+  model?: MJMLModelEntity;
+  /** The created pipeline entity (present once pipeline is created). */
+  pipeline?: MJMLTrainingPipelineEntity;
 }
 
 /** Deterministic builder: approved {@link ModelingPlanSpec} → pipeline + trained (+ maybe published) model. */
@@ -74,6 +79,8 @@ export class PredictiveStudioPipelineBuilder {
         success: true,
         pipelineId: pipeline.ID,
         modelId: model.ID,
+        model,
+        pipeline,
         trust,
         published,
         leakageFlagged,
@@ -92,10 +99,23 @@ export class PredictiveStudioPipelineBuilder {
     // Validate the whole plan against real metadata BEFORE creating any rows or training — so an invalid
     // plan (bad entity / target / feature / algorithm) fails fast with an actionable message and leaves
     // no orphan pipeline/run rows behind, instead of erroring mid-train.
-    const entity = provider.EntityByName(config.targetEntityName);
+    const entity = resolveEntity(config.targetEntityName, provider);
     if (!entity) {
       throw new Error(`Target entity '${config.targetEntityName}' was not found in metadata. The plan must reference a real entity.`);
     }
+    // Canonicalize target entity name so all downstream steps (FeatureAssembly, TrainingEngine, RunView) find it
+    config.targetEntityName = entity.Name;
+
+    // Canonicalize any source bindings referencing target entity view or aliases
+    for (const sb of config.sourceBindings ?? []) {
+      if (UUIDsEqual(resolveEntity(sb.Ref, provider)?.ID, entity.ID)) {
+        sb.Ref = entity.Name;
+      }
+    }
+
+    // Sanitize leakage guard deny fields against real entity schema
+    this.sanitizeLeakageGuard(config, entity, provider);
+
     this.validatePlanFields(config, entity);
     const targetEntityId = entity.ID;
     const algorithmId = await this.resolveAlgorithmId(config.algorithmName, provider, user);
@@ -122,26 +142,86 @@ export class PredictiveStudioPipelineBuilder {
   }
 
   /**
+   * Ensure LeakageGuard.DenyFields entries exist as real columns on the target entity or bound sources,
+   * mapping common synonyms (e.g. EndTime -> CompletedAt) and omitting non-existent column names that
+   * would fail server validation with a false-alarm typo error.
+   */
+  private sanitizeLeakageGuard(config: PipelineConfig, entity: EntityInfo, provider: IMetadataProvider): void {
+    if (!config.leakageGuard?.DenyFields || !Array.isArray(config.leakageGuard.DenyFields)) {
+      return;
+    }
+
+    const fieldMap = new Map(entity.Fields.map((f) => [f.Name.toLowerCase(), f.Name]));
+    const aliases: Record<string, string> = {
+      endtime: 'completedat',
+      enddate: 'completedat',
+      finishedat: 'completedat',
+    };
+
+    const validDenyFields: string[] = [];
+    for (const entry of config.leakageGuard.DenyFields) {
+      const lower = entry.trim().toLowerCase();
+      if (fieldMap.has(lower)) {
+        validDenyFields.push(fieldMap.get(lower)!);
+      } else if (aliases[lower] && fieldMap.has(aliases[lower])) {
+        validDenyFields.push(fieldMap.get(aliases[lower])!);
+      } else {
+        // Check if field exists on any other bound source entity
+        let foundOnBoundSource = false;
+        for (const sb of config.sourceBindings ?? []) {
+          if (sb.Kind === 'Entity') {
+            const srcEntity = resolveEntity(sb.Ref, provider);
+            if (srcEntity?.Fields.some((f) => f.Name.toLowerCase() === lower)) {
+              foundOnBoundSource = true;
+              break;
+            }
+          }
+        }
+        if (foundOnBoundSource) {
+          validDenyFields.push(entry);
+        }
+      }
+    }
+    config.leakageGuard.DenyFields = validDenyFields;
+  }
+
+  /**
    * Validate that the plan's target variable and its `select` feature columns actually exist as fields on
    * the target entity — throwing a single actionable error (with a sample of the real field names) when
    * they don't. This turns a would-be mid-train failure (or a garbage model trained on missing columns)
    * into a fast, correctable "the plan references fields that don't exist" message.
    *
-   * SINGLE-SOURCE ASSUMPTION: select columns are validated against the TARGET entity only, which is
-   * correct today because the plan converter only emits select columns from `CandidateFeatures` on the
-   * training-unit entity (see modeling-plan-to-pipeline.ts). If feature steps ever gain multi-source
-   * selects, this must validate each select against ITS source entity or it will false-reject valid plans.
+   * Also canonicalizes casing to match the real field names on the entity.
    */
   private validatePlanFields(config: PipelineConfig, entity: EntityInfo): void {
-    const fieldNames = new Set(entity.Fields.map((f) => f.Name.toLowerCase()));
+    const fieldMap = new Map(entity.Fields.map((f) => [f.Name.toLowerCase(), f.Name]));
     const missing: string[] = [];
-    if (config.targetVariable && !fieldNames.has(config.targetVariable.toLowerCase())) {
-      missing.push(`target field '${config.targetVariable}'`);
+    if (config.targetVariable) {
+      const canonicalTarget = fieldMap.get(config.targetVariable.toLowerCase());
+      if (canonicalTarget) {
+        config.targetVariable = canonicalTarget;
+      } else {
+        missing.push(`target field '${config.targetVariable}'`);
+      }
     }
-    const steps = (config.featureSteps?.Steps ?? []) as Array<{ Kind?: string; Columns?: string[] }>;
-    const selectCols = steps.filter((s) => s.Kind === 'select').flatMap((s) => s.Columns ?? []);
-    for (const c of selectCols) {
-      if (!fieldNames.has(c.toLowerCase())) missing.push(`feature '${c}'`);
+    const steps = (config.featureSteps?.Steps ?? []) as Array<{ Kind?: string; Columns?: string[]; Column?: string }>;
+    for (const s of steps) {
+      if (s.Kind === 'select' && Array.isArray(s.Columns)) {
+        s.Columns = s.Columns.map((c) => {
+          const canonical = fieldMap.get(c.toLowerCase());
+          if (canonical) return canonical;
+          missing.push(`feature '${c}'`);
+          return c;
+        });
+      }
+      if (s.Kind === 'onehot' && typeof s.Column === 'string') {
+        const canonical = fieldMap.get(s.Column.toLowerCase());
+        if (canonical) {
+          s.Column = canonical;
+        } else {
+          missing.push(`feature '${s.Column}'`);
+        }
+      }
     }
     if (missing.length > 0) {
       const available = entity.Fields.map((f) => f.Name).slice(0, 25).join(', ');
@@ -201,3 +281,37 @@ export class PredictiveStudioPipelineBuilder {
     return { published: true, heldReason: null };
   }
 }
+
+/**
+ * Resolve an entity identifier to an `EntityInfo`. Tolerant of LLM variations:
+ * matches entity Name (e.g. 'MJ: AI Prompt Runs'), BaseView ('vwAIPromptRuns'),
+ * BaseTable ('AIPromptRun'), schema prefixes ('__mj.vwAIPromptRuns'), and name without
+ * app prefix ('AI Prompt Runs').
+ */
+export function resolveEntity(nameOrView: string, provider: IMetadataProvider): EntityInfo | undefined {
+  if (!nameOrView) return undefined;
+  const direct = provider.EntityByName(nameOrView);
+  if (direct) return direct;
+
+  const trimmed = nameOrView.trim().toLowerCase();
+  const normalize = (s: string | null | undefined): string => (s ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const normalizedTarget = normalize(nameOrView);
+
+  for (const e of provider.Entities) {
+    if (e.Name.trim().toLowerCase() === trimmed) return e;
+    if (e.BaseView && e.BaseView.trim().toLowerCase() === trimmed) return e;
+    if (e.BaseTable && e.BaseTable.trim().toLowerCase() === trimmed) return e;
+
+    if (e.SchemaName && e.BaseView && `${e.SchemaName}.${e.BaseView}`.trim().toLowerCase() === trimmed) return e;
+    if (e.SchemaName && e.BaseTable && `${e.SchemaName}.${e.BaseTable}`.trim().toLowerCase() === trimmed) return e;
+
+    if (normalize(e.Name) === normalizedTarget) return e;
+    if (e.BaseView && normalize(e.BaseView) === normalizedTarget) return e;
+    if (e.BaseTable && normalize(e.BaseTable) === normalizedTarget) return e;
+
+    const strippedPrefix = e.Name.replace(/^[^:]+:\s*/, '').trim().toLowerCase();
+    if (strippedPrefix === trimmed || normalize(strippedPrefix) === normalizedTarget) return e;
+  }
+  return undefined;
+}
+
