@@ -1185,7 +1185,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
           // config's Filter"), so the code that spliced must notify observers itself —
           // otherwise DataChange$ consumers (ApplicationManager → app switcher / Home)
           // never learn the app was removed.
-          const config = this.Configs.find((c) => c.PropertyName === '_UserApplications');
+          const config = this.Configs.find((c) => c.PropertyName === '_userApplications');
           if (config) {
             this.notifyAlreadyAppliedMutation(config, 'delete', userApp);
           }
@@ -1247,9 +1247,9 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
       }, contextUser ?? this.ContextUser);
 
       if (dbResult.Success && dbResult.Results.length > 0) {
-        LogStatus(`UserInfoEngine: Repaired _UserApplications from database (${dbResult.Results.length} records) — in-memory cache was empty`);
+        LogStatus(`UserInfoEngine: Repaired _userApplications from database (${dbResult.Results.length} records) — in-memory cache was empty`);
         this._userApplications = dbResult.Results;
-        this.emitPropertyChange('_UserApplications');
+        this.emitPropertyChange('_userApplications');
         return dbResult.Results;
       }
     } catch (error) {
