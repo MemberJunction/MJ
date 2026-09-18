@@ -1070,5 +1070,23 @@ describe('ConfigurePhase', () => {
       expect(answered).toContain('db-trust-cert');
       expect(emittedEvents(emitSpy, 'prompt').length).toBeGreaterThan(0);
     });
+
+    it('falls back to the default port when the prompt answer is not a number', async () => {
+      const config = { ...sampleConfig() };
+      delete (config as Partial<InstallConfig>).DatabasePort;
+
+      const { emitter } = createMockEmitter();
+      emitter.On('prompt', (prompt) => {
+        if (prompt.PromptId === 'db-port') {
+          prompt.Resolve('not-a-number');
+        } else {
+          prompt.Resolve(prompt.Default ?? '');
+        }
+      });
+
+      const result = await phase.Run(makeContext({ Config: config, Yes: false, Emitter: emitter }));
+
+      expect(result.Config.DatabasePort).toBe(1433);
+    });
   });
 });
