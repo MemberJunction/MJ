@@ -102,6 +102,18 @@ describe('classifyTurboFailures', () => {
     expect(verdict.ToleratedOnly).toBe(false);
   });
 
+  it('refuses to tolerate when a listed entry cannot be parsed', () => {
+    // A tolerated package beside an entry we cannot name must not come back
+    // "all failures are tolerated" — that is defect #4562 all over again.
+    const verdict = classifyTurboFailures(
+      'Failed:    mj_generatedactions#build, <something unparseable>',
+      DEPENDENCY_TOLERATED
+    );
+
+    expect(verdict.Attributable).toBe(false);
+    expect(verdict.ToleratedOnly).toBe(false);
+  });
+
   it('honours a caller-specific tolerated set', () => {
     // CodeGenPhase's rebuild does not tolerate the generated packages.
     const output = 'Failed:    mj_generatedactions#build';

@@ -53,9 +53,11 @@ export interface TurboFailureVerdict {
   /**
    * Whether the failures could be attributed to specific packages at all.
    *
-   * `false` means turbo reported a failure but printed no parseable summary.
-   * Callers must treat that as a hard failure: tolerating a failure you cannot
-   * name is how a broken install gets reported as a working one.
+   * `false` means turbo reported a failure but printed no parseable summary,
+   * OR a `Failed:` line named at least one entry that did not match the
+   * expected `package#task` shape. Callers must treat that as a hard failure:
+   * tolerating a failure you cannot name is how a broken install gets
+   * reported as a working one.
    */
   Attributable: boolean;
   /** Whether every failed package matched `toleratedPatterns`. Always `false` when `Attributable` is `false`. */
@@ -89,20 +91,27 @@ export function classifyTurboFailures(
   const clean = output.replace(ANSI_ESCAPE_PATTERN, '');
 
   const failed: string[] = [];
+  let unparseable = false;
   SUMMARY_LINE_PATTERN.lastIndex = 0;
   let summary: RegExpExecArray | null;
   while ((summary = SUMMARY_LINE_PATTERN.exec(clean)) !== null) {
     for (const entry of summary[1].split(',')) {
       // trim() also clears the trailing \r on CRLF output.
-      const task = entry.trim().match(TASK_ENTRY_PATTERN);
+      const trimmed = entry.trim();
+      const task = trimmed.match(TASK_ENTRY_PATTERN);
       if (task) {
         failed.push(task[1]);
+      } else if (trimmed.length > 0) {
+        // A listed entry we cannot name is exactly as dangerous as no
+        // summary at all — it could be hiding a real failure beside a
+        // tolerated one. Never let it fall out of the count silently.
+        unparseable = true;
       }
     }
   }
 
   const FailedPackages = [...new Set(failed)];
-  const Attributable = FailedPackages.length > 0;
+  const Attributable = FailedPackages.length > 0 && !unparseable;
 
   return {
     FailedPackages,
