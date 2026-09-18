@@ -126,3 +126,78 @@ describe('ComputerUseEngine — a blocked step cannot strand the run', () => {
         expect(result.Success).toBe(false);
     }, 10_000);
 });
+
+/**
+ * Adapter that counts the browser work it is asked to do, and whose screenshot
+ * blocks the FIRST time only — so the orphaned step can be observed continuing
+ * after the run has already been scored.
+ */
+class CountingSilentAdapter extends SilentAdapter {
+    public actions = 0;
+    private blocked = false;
+    public override async CaptureScreenshot(): Promise<string> {
+        if (!this.blocked) {
+            this.blocked = true;
+            return new Promise<string>(() => {});
+        }
+        return 'FAKE';
+    }
+    public override async ExecuteAction(action: BrowserAction): Promise<ActionExecutionResult> {
+        this.actions++;
+        return super.ExecuteAction(action);
+    }
+}
+
+describe('expiry aborts the orphaned step (review: non-blocking)', () => {
+    it('marks the run cancelled and aborts when the budget expires mid-step', async () => {
+        vi.useFakeTimers();
+        const engine = new StubJudgeEngine();
+        const adapter = new CountingSilentAdapter();
+        engine.SetBrowserAdapter(adapter);
+
+        const run = engine.Run(hangingParams());
+        await vi.advanceTimersByTimeAsync(wallClockCeilingMs(BUDGET_MS) + 1000);
+        const result = await run;
+
+        expect(result.Status).toBe('TimeBudgetExceeded');
+        // The step we abandoned must not still be allowed to drive the browser.
+        // Without an abort it reaches its next cooperative checkpoint and carries
+        // on — a model call per expiry, and on a shared context it can click into
+        // whatever test is using the page next.
+        expect(engine.IsStopped).toBe(true);
+    }, 20_000);
+});
+
+describe('Replay is bounded the same way as the LLM tier (review: non-blocking)', () => {
+    it('unwinds to Cancelled when Stop() lands while a replay step is blocked', async () => {
+        const engine = new StubJudgeEngine();
+        engine.SetBrowserAdapter(new SilentAdapter());
+
+        const trace = { TestId: 'T1', GoalHash: '', AppBuildHash: '', Steps: [
+            { Instruction: 'click Save', Action: { Method: 'click', Target: { Role: 'button', Name: 'Save', Selector: '#s' } }, Precondition: {}, Postcondition: undefined },
+        ] } as never;
+
+        const replay = engine.Replay(trace, hangingParams());
+        await new Promise(resolve => setTimeout(resolve, 100));
+        engine.Stop();
+
+        const result = await replay;
+        expect(result.Status).toBe('Cancelled');
+    }, 10_000);
+
+    it('self-expires a replay step that blocks past the wall-clock ceiling', async () => {
+        vi.useFakeTimers();
+        const engine = new StubJudgeEngine();
+        engine.SetBrowserAdapter(new SilentAdapter());
+
+        const trace = { TestId: 'T1', GoalHash: '', AppBuildHash: '', Steps: [
+            { Instruction: 'click Save', Action: { Method: 'click', Target: { Role: 'button', Name: 'Save', Selector: '#s' } }, Precondition: {}, Postcondition: undefined },
+        ] } as never;
+
+        const replay = engine.Replay(trace, hangingParams());
+        await vi.advanceTimersByTimeAsync(wallClockCeilingMs(BUDGET_MS) + 1000);
+
+        const result = await replay;
+        expect(result.Status).toBe('TimeBudgetExceeded');
+    }, 20_000);
+});

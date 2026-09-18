@@ -274,6 +274,18 @@ export class ComputerUseEngine {
     }
 
     /**
+     * Whether the run has been stopped — by {@link Stop} or by its own expiry.
+     *
+     * Exposed because "the engine stopped waiting" and "the engine stopped
+     * working" are different things: a step blocked in a page call keeps running
+     * after the run is scored, and this is what says whether it has been told to
+     * unwind at its next cooperative checkpoint.
+     */
+    public get IsStopped(): boolean {
+        return this.cancelled;
+    }
+
+    /**
      * Cooperative-cancellation checkpoint: throw {@link CancellationError}
      * if the run has been stopped. Placed after each long await (settle, LLM,
      * actions, judge) so the step unwinds promptly; the main loop maps the throw
@@ -319,6 +331,16 @@ export class ComputerUseEngine {
             if (error instanceof CancellationError) {
                 this.log('Replay cancelled mid-step — returning Cancelled');
                 result = this.buildResult(context, 'Cancelled', false);
+                result.Replay = replay;
+                return result;
+            }
+            if (error instanceof StepDeadlineError) {
+                this.log(`Replay time budget exceeded — ${error.Reason}; expiring gracefully`);
+                // Same as the LLM tier: the abandoned step is still running, so tell
+                // it to unwind rather than leaving it free to drive the page.
+                this.cancelled = true;
+                this.abortController.abort();
+                result = this.buildResult(context, 'TimeBudgetExceeded', false);
                 result.Replay = replay;
                 return result;
             }
@@ -756,6 +778,13 @@ export class ComputerUseEngine {
                 }
                 if (error instanceof StepDeadlineError) {
                     this.log(`Time budget exceeded — ${error.Reason} — DURING step ${stepNumber}; expiring gracefully`);
+                    // The step we stopped waiting on is still running: a page call
+                    // cannot be cancelled. Tell it to unwind at its next cooperative
+                    // checkpoint, or it makes a model call per expiry and — on the
+                    // shared-context path, where workers reuse one browser — can act
+                    // on whatever page the NEXT test has since opened.
+                    this.cancelled = true;
+                    this.abortController.abort();
                     const verdict = await this.finalVerdictOnTermination(context, stepNumber, lastVerdict);
                     const result = this.buildResult(context, 'TimeBudgetExceeded', false, verdict);
                     this.onRunComplete(result);
@@ -960,7 +989,15 @@ export class ComputerUseEngine {
      * `TimeBudgetExceeded` rather than parking its caller forever.
      */
     private executeStepBounded(context: RunContext, stepNumber: number): Promise<StepRecord> {
-        const step = this.executeSingleStep(context, stepNumber);
+        return this.boundStep(context, this.executeSingleStep(context, stepNumber));
+    }
+
+    /**
+     * Race any in-flight step against the run's wall-clock ceiling and the abort
+     * signal, so the engine can stop WAITING on work it cannot cancel. Shared by
+     * both tiers — the containment is a property of the run, not of the LLM loop.
+     */
+    private boundStep<T>(context: RunContext, step: Promise<T>): Promise<T> {
         const maxMs = context.Params.MaxExecutionTimeMs;
         // No budget configured: still race the abort, so Stop() can unwind.
         if (!maxMs || maxMs <= 0) {
@@ -1237,7 +1274,13 @@ export class ComputerUseEngine {
 
         for (let i = 0; i < trace.Steps.length; i++) {
             this.ensureNotCancelled();
-            const { result: stepResult, step } = await this.replayOneStep(trace, i, context, volatile, values);
+            // Bounded exactly like an LLM-tier step. Replay reaches the page through
+            // the same uncancellable calls — a screenshot that never returns strands
+            // Replay() forever, and Stop() has no checkpoint to land on.
+            const { result: stepResult, step } = await this.boundStep(
+                context,
+                this.replayOneStep(trace, i, context, volatile, values)
+            );
             replay.Steps.push(stepResult);
             context.AddStep(step);
             this.onStepComplete(step, context.Params);
