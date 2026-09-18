@@ -97,8 +97,13 @@ export type PostCommitTask = () => Promise<void>;
  * to the same provider unchanged.
  */
 export interface PostCommitToken {
-    /** The outermost transaction the frames belong to. Unique per process. */
-    readonly Epoch: number;
+    /**
+     * The outermost transaction the frames belong to, unique per process, or `null` when the work
+     * was caused with **no transaction open**. A `null` epoch is not "unknown": it says the save is
+     * already durable, so the task runs whenever it registers, rather than being attached to an
+     * unrelated transaction that happens to be open by then.
+     */
+    readonly Epoch: number | null;
     /** Ids of the open frames, outermost first (the outermost transaction, then each savepoint). */
     readonly FrameIds: readonly number[];
 }
@@ -268,8 +273,11 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      * may find that transaction already settled. Capture a {@link PostCommitToken} with
      * {@link CapturePostCommitToken} when the work is caused and pass it here: the task then follows
      * the transaction the token names (run if it committed, dropped if it — or a savepoint the token
-     * was captured in — rolled back), not whatever is open when it registers. Without a token the
-     * task follows the transaction open at registration time.
+     * was captured in — rolled back), not whatever is open when it registers. A token captured
+     * with no transaction open runs the task whenever it registers. Without a token at all the
+     * task follows the transaction open at registration time, which is right for a caller that
+     * registers synchronously inside its own transaction and wrong for a deferred one — so pass
+     * a token whenever registration can outlive the save.
      *
      * @param task The work to run. Should not throw; a rejection is logged and swallowed.
      * @param description Short label used in log lines (e.g. `'Entity AI Action'`).

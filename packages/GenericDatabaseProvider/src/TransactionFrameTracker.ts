@@ -4,6 +4,16 @@ import type { PostCommitToken } from '@memberjunction/core';
 export type TransactionEpochOutcome = 'committed' | 'rolledBack';
 
 /**
+ * A settled epoch's fate. The rolled-back savepoint frames are kept alongside the outcome, because
+ * a committed transaction says nothing about a savepoint inside it that was rolled back — and work
+ * caused in that savepoint can still register after the outer commit.
+ */
+interface SettledEpoch {
+    Outcome: TransactionEpochOutcome;
+    RolledBackFrames: ReadonlySet<number>;
+}
+
+/**
  * What to do with a post-commit task registered with a {@link PostCommitToken}.
  * - `run` — the token's transaction committed; run the task now.
  * - `queue` — the token's transaction is still open; queue at `Depth` (the deepest captured frame
@@ -13,7 +23,8 @@ export type TransactionEpochOutcome = 'committed' | 'rolledBack';
 export type PostCommitTokenResolution =
     | { Kind: 'run' }
     | { Kind: 'queue'; Depth: number }
-    | { Kind: 'drop'; Reason: string };
+    /** `Unknown` marks a drop that is NOT a known rollback — the caller should log it louder. */
+    | { Kind: 'drop'; Reason: string; Unknown?: boolean };
 
 /**
  * Gives every transaction frame on one provider an identity, so work captured inside a frame can be
@@ -40,7 +51,7 @@ export class TransactionFrameTracker {
     private _openEpoch: number | null = null;
     private _frames: number[] = [];
     private readonly _rolledBackFrames = new Set<number>();
-    private readonly _settledEpochs = new Map<number, TransactionEpochOutcome>();
+    private readonly _settledEpochs = new Map<number, SettledEpoch>();
 
     /** Number of open frames. */
     public get Depth(): number {
@@ -75,17 +86,21 @@ export class TransactionFrameTracker {
         if (this._openEpoch === null) {
             return;
         }
-        this._settledEpochs.set(this._openEpoch, outcome);
+        this._settledEpochs.set(this._openEpoch, { Outcome: outcome, RolledBackFrames: new Set(this._rolledBackFrames) });
         this.evictOldEpochs();
         this._openEpoch = null;
         this._frames = [];
         this._rolledBackFrames.clear();
     }
 
-    /** Snapshot of the open frames, or `undefined` when none is open. */
-    public Capture(): PostCommitToken | undefined {
+    /**
+     * Snapshot of the open frames. Outside a transaction this returns a token with a `null` epoch
+     * rather than `undefined`: the work is already durable, and saying so is what stops a later
+     * registration from being attached to an unrelated transaction that opened in the meantime.
+     */
+    public Capture(): PostCommitToken {
         if (this._openEpoch === null || this._frames.length === 0) {
-            return undefined;
+            return { Epoch: null, FrameIds: [] };
         }
         return { Epoch: this._openEpoch, FrameIds: [...this._frames] };
     }
@@ -95,27 +110,40 @@ export class TransactionFrameTracker {
      * @param doomed Whether the owner's open transaction can no longer commit.
      */
     public Resolve(token: PostCommitToken, doomed: boolean): PostCommitTokenResolution {
+        if (token.Epoch === null) {
+            // Caused outside any transaction: already durable, so nothing to wait for or be undone by.
+            return { Kind: 'run' };
+        }
         if (token.Epoch === this._openEpoch) {
             return this.resolveOpenEpoch(token, doomed);
         }
-        const outcome = this._settledEpochs.get(token.Epoch);
-        if (outcome === 'committed') {
-            return { Kind: 'run' };
+        const settled = this._settledEpochs.get(token.Epoch);
+        if (settled?.Outcome === 'committed') {
+            // The outer transaction committing does not resurrect a savepoint that rolled back
+            // inside it, so the captured frames still decide.
+            return this.rolledBackFrame(token, settled.RolledBackFrames)
+                ? { Kind: 'drop', Reason: 'the savepoint it was registered in rolled back' }
+                : { Kind: 'run' };
         }
-        if (outcome === 'rolledBack') {
+        if (settled?.Outcome === 'rolledBack') {
             return { Kind: 'drop', Reason: 'the transaction it was registered in rolled back' };
         }
         return {
             Kind: 'drop',
-            Reason: `transaction ${token.Epoch} is unknown to this provider (another instance's, or too old to remember)`,
+            Unknown: true,
+            Reason: `transaction ${token.Epoch} is unknown to this provider (another instance's, or older than the last ${TransactionFrameTracker.SettledEpochLimit} transactions)`,
         };
+    }
+
+    private rolledBackFrame(token: PostCommitToken, rolledBack: ReadonlySet<number>): boolean {
+        return token.FrameIds.some((id) => rolledBack.has(id));
     }
 
     private resolveOpenEpoch(token: PostCommitToken, doomed: boolean): PostCommitTokenResolution {
         if (doomed) {
             return { Kind: 'drop', Reason: 'the transaction it was registered in was abandoned' };
         }
-        if (token.FrameIds.some((id) => this._rolledBackFrames.has(id))) {
+        if (this.rolledBackFrame(token, this._rolledBackFrames)) {
             return { Kind: 'drop', Reason: 'the savepoint it was registered in rolled back' };
         }
         for (let i = token.FrameIds.length - 1; i >= 0; i--) {

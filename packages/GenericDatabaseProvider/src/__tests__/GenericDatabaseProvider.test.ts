@@ -2329,9 +2329,10 @@ describe('GenericDatabaseProvider RunAfterCommit with a PostCommitToken (late re
     }
     const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
 
-    it('returns no token outside a transaction and one naming every open frame inside', async () => {
+    it('returns a null-epoch token outside a transaction and one naming every open frame inside', async () => {
         const p = new RecordingProvider();
-        expect(p.CapturePostCommitToken()).toBeUndefined();
+        // Not `undefined`: "no transaction was open" is information the late registration needs.
+        expect(p.CapturePostCommitToken()).toEqual({ Epoch: null, FrameIds: [] });
         await p.BeginTransaction();
         const outer = p.CapturePostCommitToken();
         await p.BeginTransaction();
@@ -2342,7 +2343,7 @@ describe('GenericDatabaseProvider RunAfterCommit with a PostCommitToken (late re
         expect(inner?.FrameIds).toHaveLength(2);
         await p.CommitTransaction();
         await p.CommitTransaction();
-        expect(p.CapturePostCommitToken()).toBeUndefined();
+        expect(p.CapturePostCommitToken()).toEqual({ Epoch: null, FrameIds: [] });
     });
 
     it('registered after the outermost ROLLBACK: never runs', async () => {
@@ -2389,6 +2390,81 @@ describe('GenericDatabaseProvider RunAfterCommit with a PostCommitToken (late re
         expect(r.ran).toEqual(['late']);
     });
 
+    it('captured in a savepoint that rolled back, registered AFTER the outer commit: still dropped', async () => {
+        // The outer transaction committing says nothing about a savepoint that was rolled back
+        // inside it. Registration lands after both, which is the common fire-and-forget shape.
+        const p = new RecordingProvider();
+        const r = recorder();
+        await p.BeginTransaction();          // outer
+        await p.BeginTransaction();          // savepoint
+        const token = p.CapturePostCommitToken();
+        await p.RollbackTransaction();       // savepoint rolled back — its work is gone
+        await p.CommitTransaction();         // outer commits
+        p.RunAfterCommit(r.task('late'), 'late', token);
+        await settle();
+        expect(r.ran).toEqual([]);
+    });
+
+    it('captured in a savepoint that was RELEASED, registered after the outer commit: runs', async () => {
+        // The control for the case above: same shape, released instead of rolled back.
+        const p = new RecordingProvider();
+        const r = recorder();
+        await p.BeginTransaction();
+        await p.BeginTransaction();
+        const token = p.CapturePostCommitToken();
+        await p.CommitTransaction();
+        await p.CommitTransaction();
+        p.RunAfterCommit(r.task('late'), 'late', token);
+        await settle();
+        expect(r.ran).toEqual(['late']);
+    });
+
+    it('captured with NO transaction open: runs even if an unrelated transaction is open by then', async () => {
+        // Work caused outside a transaction is already durable; it must not be attached to — and
+        // lost with — a transaction that merely happens to be open when it registers.
+        const p = new RecordingProvider();
+        const r = recorder();
+        const token = p.CapturePostCommitToken();
+        await p.BeginTransaction();
+        p.RunAfterCommit(r.task('unrelated-open'), 'unrelated-open', token);
+        expect(p.PendingPostCommitTaskCount).toBe(0);
+        await p.RollbackTransaction();
+        await settle();
+        expect(r.ran).toEqual(['unrelated-open']);
+    });
+
+    it('a task whose own transaction committed waits for an unrelated open one, then runs', async () => {
+        // Running it inside the unrelated transaction would enlist its writes in that transaction.
+        const p = new RecordingProvider();
+        const r = recorder();
+        await p.BeginTransaction();
+        const token = p.CapturePostCommitToken();
+        await p.CommitTransaction();
+
+        await p.BeginTransaction();                       // an unrelated transaction opens
+        p.RunAfterCommit(r.task('late'), 'late', token);  // ...and only now does the task register
+        await settle();
+        expect(r.ran).toEqual([]);
+        expect(p.PendingIdlePostCommitTaskCount).toBe(1);
+
+        await p.RollbackTransaction();                    // it ends — either way the task is owed
+        expect(r.ran).toEqual(['late']);
+        expect(p.PendingIdlePostCommitTaskCount).toBe(0);
+    });
+
+    it('the same, when the unrelated transaction commits', async () => {
+        const p = new RecordingProvider();
+        const r = recorder();
+        await p.BeginTransaction();
+        const token = p.CapturePostCommitToken();
+        await p.CommitTransaction();
+
+        await p.BeginTransaction();
+        p.RunAfterCommit(r.task('late'), 'late', token);
+        await p.CommitTransaction();
+        expect(r.ran).toEqual(['late']);
+    });
+
     it('captured in a savepoint that was then rolled back: dropped even though the outer commits', async () => {
         const p = new RecordingProvider();
         const r = recorder();
@@ -2418,7 +2494,9 @@ describe('GenericDatabaseProvider RunAfterCommit with a PostCommitToken (late re
         expect(r.ran).toEqual([]);
     });
 
-    it('follows the token epoch, not a NEW transaction: old epoch committed -> runs now', async () => {
+    it('follows the token epoch, not a NEW transaction: old epoch committed -> owed, and run once idle', async () => {
+        // The task is owed because ITS transaction committed. It is not run inside the unrelated
+        // one, whose rollback would take the task's own writes with it.
         const p = new RecordingProvider();
         const r = recorder();
         await p.BeginTransaction();
@@ -2427,7 +2505,7 @@ describe('GenericDatabaseProvider RunAfterCommit with a PostCommitToken (late re
         await p.BeginTransaction();
         p.RunAfterCommit(r.task('late'), 'late', token);
         await settle();
-        expect(r.ran).toEqual(['late']);
+        expect(r.ran).toEqual([]);
         expect(p.PendingPostCommitTaskCount).toBe(0);
         await p.RollbackTransaction();
         expect(r.ran).toEqual(['late']);
