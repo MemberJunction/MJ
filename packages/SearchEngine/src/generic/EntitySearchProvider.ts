@@ -208,6 +208,12 @@ export class EntitySearchProvider extends BaseSearchProvider {
      * not a text-search target). The latter still gets queried: it returns `(1=0)` cheaply and
      * is a real, if empty, answer. Only the no-surface case is skipped here.
      *
+     * `FullTextSearchEnabled` is the other way an entity can have a search surface, and it does
+     * not go through the per-field flags at all — `createViewUserSearchSQL` takes its FTS branch
+     * before it ever reads `IncludeInUserSearchAPI`. An FTS entity is searchable through its
+     * INDEX, so screening it out on `HasSearchFields` would drop precisely the entities someone
+     * deliberately configured full-text search for.
+     *
      * Note this is a screen, not a substitute for the metadata being right — `AllowUserSearchAPI`
      * should be off on such an entity (see `metadata/entities/.entity-search-exclusions.json`).
      * It is the backstop that keeps a newly-added entity from silently costing every keystroke
@@ -217,7 +223,7 @@ export class EntitySearchProvider extends BaseSearchProvider {
         md: IMetadataProvider,
         filters: SearchFilters | undefined
     ): { Name: string }[] {
-        let entities = md.Entities.filter(e => e.AllowUserSearchAPI && e.HasSearchFields);
+        let entities = md.Entities.filter(e => e.AllowUserSearchAPI && (e.HasSearchFields || e.FullTextSearchEnabled));
 
         if (filters?.EntityNames?.length) {
             const allowedNames = new Set(filters.EntityNames.map(n => n.toLowerCase()));

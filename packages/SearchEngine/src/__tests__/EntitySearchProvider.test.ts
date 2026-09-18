@@ -9,6 +9,8 @@ const { mockRunViewFn, mockEntities, mockLogErrorEx } = vi.hoisted(() => {
     const mockEntities: Array<{
         Name: string;
         AllowUserSearchAPI: boolean;
+        /** Entities searchable purely through a full-text index declare no per-field flags. */
+        FullTextSearchEnabled?: boolean;
         Icon?: string;
         Fields: Array<{
             Name: string;
@@ -135,6 +137,30 @@ describe('EntitySearchProvider', () => {
 
             expect(mockRunViewFn).not.toHaveBeenCalled();
             expect(results).toEqual([]);
+        });
+
+        // A full-text-search entity is searchable through its INDEX, not through per-field
+        // IncludeInUserSearchAPI flags — `createViewUserSearchSQL` takes the FTS branch before it
+        // ever looks at those. Screening on HasSearchFields alone would silently drop exactly the
+        // entities someone configured FTS for.
+        it('still queries a full-text-search entity that declares no per-field search flags', async () => {
+            mockEntities.push({
+                Name: 'MJ: Content Items',
+                AllowUserSearchAPI: true,
+                FullTextSearchEnabled: true,
+                Fields: [
+                    { Name: 'ID', IncludeInUserSearchAPI: false, IsNameField: false, Sequence: 1 },
+                ],
+            });
+
+            mockRunViewFn.mockResolvedValue({ Success: true, Results: [] });
+
+            await provider.Search('Kligo', 10, undefined, contextUser);
+
+            expect(mockRunViewFn).toHaveBeenCalledWith(
+                expect.objectContaining({ EntityName: 'MJ: Content Items' }),
+                contextUser
+            );
         });
 
         it('still queries entities that do declare a searchable field', async () => {
