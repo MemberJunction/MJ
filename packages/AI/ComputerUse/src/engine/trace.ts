@@ -360,6 +360,12 @@ export function recordTrace(options: RecordTraceOptions): ComputerUseTrace {
     for (const step of options.result.Steps) {
         trace.Steps.push(...distillStep(step, volatile, options.variableValues));
     }
+
+    // Final sweep: every string in the finished trace, not just the fields someone
+    // remembered to tokenize at construction time. Idempotent — a value already
+    // replaced is gone, so the second pass finds nothing.
+    tokenizeTraceDeep(trace.Steps, options.variableValues);
+    tokenizeTraceDeep(trace.GoalPostconditions, options.variableValues);
     return trace;
 }
 
@@ -402,7 +408,9 @@ function distillStep(
     // login step's reasoning quotes the very credentials it was handed
     // ("log in using (user / hunter2)"). Untokenized, every recorded login wrote
     // the password verbatim into metadata that gets committed.
-    const instruction = tokenize(compactInstruction(step.ControllerReasoning), variableValues) ?? '';
+    // Tokenize BEFORE truncating: compactInstruction cuts at 200 characters, and a
+    // credential straddling the cut survived as a fragment when the order was reversed.
+    const instruction = compactInstruction(tokenize(step.ControllerReasoning, variableValues) ?? '');
     const elementsByIndex = indexElements(step.InteractiveElements);
 
     const actions = successfulActions(step).filter(a => a.Type in RECORDABLE_METHODS);
@@ -520,11 +528,68 @@ function tokenize(text: string | undefined, variableValues?: Record<string, stri
     }
     let out = text;
     for (const [name, value] of Object.entries(variableValues)) {
-        if (value) {
+        if (isTokenizable(value)) {
             out = out.split(value).join(`%${name}%`);
         }
     }
     return out;
+}
+
+/** Below this, a value collides with ordinary text more often than it protects anything. */
+const MIN_TOKENIZE_LENGTH = 4;
+/** A digits-only value has to be at least this long to be worth the collision risk. */
+const MIN_NUMERIC_TOKENIZE_LENGTH = 8;
+
+/**
+ * Whether a variable's value is worth substituting out of the recorded trace.
+ *
+ * The driver stringifies EVERY variable before recording, so a step budget of 20
+ * arrives as "20" — and a blind replacement then rewrites the port in
+ * `localhost:4200` to `localhost:4%retries%0`, corrupting a URL that had nothing
+ * to do with the variable. Short and scalar-shaped values are skipped: they are
+ * configuration, not secrets, and they match far too much.
+ */
+function isTokenizable(value: string): boolean {
+    if (!value || value.length < MIN_TOKENIZE_LENGTH) {
+        return false;
+    }
+    if (/^(true|false|null|undefined)$/i.test(value)) {
+        return false;
+    }
+    if (/^\d+$/.test(value) && value.length < MIN_NUMERIC_TOKENIZE_LENGTH) {
+        return false;
+    }
+    return true;
+}
+
+/**
+ * Replace every variable value everywhere in a finished trace.
+ *
+ * Tokenizing at each construction site meant every new recorded field was in the
+ * clear until someone remembered it: `UrlBefore`, both `UrlPattern` guards and
+ * `Target.Name` all stored credentials verbatim, so a `?login_hint=` URL or a
+ * "Continue as <email>" button name went into committed metadata. One pass over
+ * the built object cannot be forgotten by the next field that gets added.
+ */
+function tokenizeTraceDeep<T>(node: T, variableValues?: Record<string, string>): T {
+    if (!variableValues) {
+        return node;
+    }
+    if (typeof node === 'string') {
+        return (tokenize(node, variableValues) ?? node) as unknown as T;
+    }
+    if (Array.isArray(node)) {
+        node.forEach((item, i) => { node[i] = tokenizeTraceDeep(item, variableValues); });
+        return node;
+    }
+    if (node && typeof node === 'object') {
+        for (const key of Object.keys(node as Record<string, unknown>)) {
+            const rec = node as Record<string, unknown>;
+            rec[key] = tokenizeTraceDeep(rec[key], variableValues);
+        }
+        return node;
+    }
+    return node;
 }
 
 /** The heal-prompt seed / human label: first line of the reasoning, bounded. */

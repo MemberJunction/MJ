@@ -465,3 +465,80 @@ describe('diffTraces', () => {
         expect(removed.meaningfulDrift).toBe(1);
     });
 });
+
+describe('recordTrace secrecy (review #6)', () => {
+    const CREDS = { authUsername: 'robert@example.com', authPassword: 'hunter2-correct-horse' };
+
+    it('tokenizes a password that straddles the instruction truncation boundary', () => {
+        const step = new StepRecord();
+        step.StepNumber = 1;
+        // compactInstruction cuts at 200 chars. Place the password across the cut:
+        // truncating BEFORE tokenizing leaves a fragment of it in the script.
+        const pad = 'x'.repeat(190);
+        step.ControllerReasoning = `${pad}${CREDS.authPassword} then submit`;
+        step.InteractiveElements = [element(0, 'button', 'Submit', '#s')];
+        step.ActionResults = [ok(clickEl(0))];
+
+        const trace = recordTrace({
+            result: completedResult([step]), testId: 'T1', goal: 'g', recordedAt: RECORDED_AT,
+            variables: Object.keys(CREDS), variableValues: CREDS,
+        });
+
+        const instruction = trace.Steps[0].Instruction;
+        expect(instruction).not.toContain('hunter2');
+        expect(instruction.length).toBeLessThanOrEqual(200);
+    });
+
+    it('tokenizes credentials appearing in URLs and in a target name', () => {
+        const step = new StepRecord();
+        step.StepNumber = 1;
+        step.UrlBefore = `http://x/login?login_hint=${CREDS.authUsername}`;
+        step.UrlAfter = `http://x/app/home?user=${CREDS.authUsername}`;
+        step.InteractiveElements = [element(0, 'button', `Continue as ${CREDS.authUsername}`, '#c')];
+        step.ActionResults = [ok(clickEl(0))];
+
+        const trace = recordTrace({
+            result: completedResult([step]), testId: 'T1', goal: 'g', recordedAt: RECORDED_AT,
+            variables: Object.keys(CREDS), variableValues: CREDS,
+        });
+
+        const serialized = JSON.stringify(trace);
+        expect(serialized).not.toContain('robert@example.com');
+        expect(serialized).toContain('%authUsername%');
+    });
+
+    it('does not corrupt unrelated text with a short numeric variable value', () => {
+        const step = new StepRecord();
+        step.StepNumber = 1;
+        step.UrlBefore = 'http://localhost:4200/app/home';
+        step.InteractiveElements = [element(0, 'link', 'Data', '#d')];
+        step.ActionResults = [ok(clickEl(0))];
+
+        const trace = recordTrace({
+            result: completedResult([step]), testId: 'T1', goal: 'g', recordedAt: RECORDED_AT,
+            // The driver stringifies every variable, so a numeric config value arrives
+            // as a short string. A blind split/join then rewrites any text containing
+            // it: "20" turns the port in ":4200" into ":4%retries%0".
+            variables: ['retries'], variableValues: { retries: '20' },
+        });
+
+        expect(trace.Steps[0].UrlBefore).toBe('http://localhost:4200/app/home');
+        expect(JSON.stringify(trace)).not.toContain('%retries%');
+    });
+
+    it('still tokenizes a substantial value, so the length floor does not disable secrecy', () => {
+        const step = new StepRecord();
+        step.StepNumber = 1;
+        step.InteractiveElements = [element(0, 'textbox', 'Password', '#p')];
+        const type = new TypeIntoElementAction(); type.Index = 0; type.Text = CREDS.authPassword;
+        step.ActionResults = [ok(type)];
+
+        const trace = recordTrace({
+            result: completedResult([step]), testId: 'T1', goal: 'g', recordedAt: RECORDED_AT,
+            variables: Object.keys(CREDS), variableValues: CREDS,
+        });
+
+        expect(JSON.stringify(trace)).not.toContain('hunter2');
+        expect(JSON.stringify(trace)).toContain('%authPassword%');
+    });
+});
