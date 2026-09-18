@@ -60,7 +60,7 @@ const SKIP_REASONS = {
     Overridden:
         'a subclass declares the same name. TypeScript treats overriding a private member as impossible and so never reports it, but the prototype does not care: the subclass member shadows the base one, and after a rename the base calls the new name while the override sits under the old one, intercepting nothing. Silent — no compile error, just a stub that never runs',
     RuntimeStringLookup:
-        'the name appears as a string literal that resolves the member at runtime (BaseEngine PropertyName, GetConfigData, ObserveProperty). Renaming the field without the string leaves the engine writing to a property nothing reads',
+        'the name appears as a string literal — either through a known runtime-lookup API (BaseEngine PropertyName, GetConfigData, ObserveProperty, emitPropertyChange) or anywhere in the declaring file. Renaming the field without the string leaves the engine writing to a property nothing reads, and an equality test or a lookup key against the old name silently stops matching',
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -313,16 +313,30 @@ function serializedClasses(files) {
  * Names this package resolves by STRING at runtime.
  *
  * `BaseEngine` reads its configs with `(this as Record<string, unknown>)[config.PropertyName]`, and
- * `GetConfigData` / `ObserveProperty` take the same string. None of that is type-checked against
- * the class, so a field renamed out from under one of these strings still compiles — the engine
- * just loads into a property nothing reads, and every getter returns empty.
+ * `GetConfigData` / `ObserveProperty` / `emitPropertyChange` take the same string. None of that is
+ * type-checked against the class, so a field renamed out from under one of these strings still
+ * compiles — the engine just loads into a property nothing reads, and every getter returns empty.
+ *
+ * Returns two sets, because knowing the API list is not enough. `Api` is every name reached through
+ * a form named above, package-wide. `ByFile` is EVERY string literal in each file, used against the
+ * declarations in that same file only. The second exists because `UserInfoEngine` shipped a
+ * half-rename this guard did not catch: `PropertyName`, `ObserveProperty` and both `GetConfigData`
+ * calls moved to `_userApplications`, while `c.PropertyName === '_UserApplications'` and
+ * `emitPropertyChange('_UserApplications')` did not — an equality test and a call this list did not
+ * know. Refusing a rename whenever the file mentions the name as a string is conservative on
+ * purpose: a refused finding stays in the gate's list and a human looks at it, which is the correct
+ * outcome. A silently-dropped notification is not.
  */
 function runtimeStringNames(files) {
     const names = new Set();
-    const byNameFirstArg = new Set(['GetConfigData', 'ObserveProperty', 'configLoadedSuccessfully']);
+    const perFile = new Map();
+    const byNameFirstArg = new Set([
+        'GetConfigData', 'ObserveProperty', 'configLoadedSuccessfully', 'emitPropertyChange',
+    ]);
     for (const file of files) {
         const source = parse(file);
         if (!source) continue;
+        const literals = new Set();
         const visit = (node) => {
             if (ts.isPropertyAssignment(node) && ts.isIdentifier(node.name) && node.name.text === 'PropertyName' &&
                 ts.isStringLiteralLike(node.initializer)) {
@@ -336,11 +350,16 @@ function runtimeStringNames(files) {
                     names.add(node.arguments[0].text);
                 }
             }
+            // Every string literal in the file, whatever it is doing. The named forms above are
+            // the APIs we know; this catches the ones we do not — `c.PropertyName === '_x'`,
+            // a key in a lookup table, a name passed to something this script has never heard of.
+            if (ts.isStringLiteralLike(node)) literals.add(node.text);
             ts.forEachChild(node, visit);
         };
         ts.forEachChild(source, visit);
+        perFile.set(file, literals);
     }
-    return names;
+    return { Api: names, ByFile: perFile };
 }
 
 /** `this` at the top of the expression chain — `this.X`, not `foo.this`. */
@@ -526,7 +545,7 @@ for (const [relFile, findings] of byFile) {
                     continue;
                 }
             }
-            if (runtimeStrings.has(oldName)) {
+            if (runtimeStrings.Api.has(oldName) || runtimeStrings.ByFile.get(absolute)?.has(oldName)) {
                 skipped.push({ Finding: finding, Reason: SKIP_REASONS.RuntimeStringLookup });
                 continue;
             }

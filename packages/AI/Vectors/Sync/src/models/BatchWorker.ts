@@ -148,7 +148,9 @@ export class BatchWorker<TRecord = Record<string, unknown>, TContext = Record<st
     return this.Enqueue(task);
   }
 
-  async Transform(chunk: TRecord, encoding: BufferEncoding, callback: TransformCallback) {
+  // Node calls this by exact name on the instance. A `@deprecated` stub forwarding to a
+  // PascalCase member works, but it makes the deprecated member the load-bearing one.
+  async _transform(chunk: TRecord, encoding: BufferEncoding, callback: TransformCallback) {
     this.Buffer.push(chunk);
     if (this.Buffer.length >= this.BatchSize) {
       const batch = this.Buffer.splice(0, this.BatchSize);
@@ -165,12 +167,8 @@ export class BatchWorker<TRecord = Record<string, unknown>, TContext = Record<st
     }
   }
 
-  /** @deprecated Use {@link Transform}. */
-  async _transform(chunk: TRecord, encoding: BufferEncoding, callback: TransformCallback) {
-    return this.Transform(chunk, encoding, callback);
-  }
-
-  async Flush(callback: TransformCallback) {
+  /** Node's flush hook — same naming contract as `_transform` above. */
+  async _flush(callback: TransformCallback) {
     if (this.Buffer.length > 0) {
       this.Enqueue(() =>
         this.ProcessBatchInWorker(this.Buffer)
@@ -183,11 +181,6 @@ export class BatchWorker<TRecord = Record<string, unknown>, TContext = Record<st
     } else {
       callback();
     }
-  }
-
-  /** @deprecated Use {@link Flush}. */
-  async _flush(callback: TransformCallback) {
-    return this.Flush(callback);
   }
 
   ProcessBatchInWorker(batch: Array<TRecord>): Promise<void> {

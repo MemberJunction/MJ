@@ -179,6 +179,11 @@ const PLATFORM_CONTRACT = new Set([
     'connectedCallback', 'disconnectedCallback', 'attributeChangedCallback', 'observedAttributes', 'render',
     // Disposable
     'dispose',
+    // Node stream internals. Node calls these by exact name on the instance, so a `@deprecated`
+    // stub still works — but it makes the deprecated member the load-bearing one, which inverts
+    // what the tag means. `Transform`/`Flush`/`Read` are ordinary MJ names and stay checked; only
+    // the underscore protocol hooks are the contract.
+    '_transform', '_flush', '_read', '_write', '_writev', '_final', '_destroy', '_construct',
 ]);
 
 /**

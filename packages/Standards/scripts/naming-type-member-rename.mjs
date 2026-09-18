@@ -54,6 +54,8 @@ const SKIP_REASONS = {
         'compiling the plan proved the checker had missed a use — the rename broke something it could not see from the declaration, so it was withdrawn',
     UnclaimedUse:
         'the old name still occurs on a value the checker types as `any` or cannot resolve, so the rename would not reach it and the read would silently return undefined',
+    TemplateUse:
+        'the old name is read from an Angular template in a package that compiles templates WITHOUT type checking (`strictTemplates: false`), so the rename would not reach it and nothing would report it — every read becomes undefined at runtime',
     StructurallyMirrored:
         'an inline type literal or generic constraint in this package describes the same shape — `T extends { name: string; schema: string; definition: string }` mirrors RoutineDef. Nothing links the two symbolically, so a rename moves one and not the other and the type stops satisfying the constraint',
 };
@@ -418,6 +420,62 @@ function unclaimedHazards(checker, index, name, claimedKeys, ownerMembers) {
     return hazards;
 }
 
+/**
+ * Member names read from an Angular template in a package Angular does NOT type-check.
+ *
+ * `strictTemplates: false` is a legitimate choice — `ng-core-entity-forms` sets it because the
+ * generated forms blow TypeScript's expression-complexity limit (TS2563) — but it turns off type
+ * checking for EVERY template expression in the package, hand-written ones included. The language
+ * service never sees a template, so the "the compile proved it" safety this pass rests on proves
+ * nothing there: four templates in that package shipped reading pre-rename names, and every read
+ * was `undefined`.
+ *
+ * Returns an empty set for a strict-template package, where the compiler does the checking.
+ *
+ * The match is deliberately coarse — any `.name` in any template in the package, whatever the
+ * receiver. Refusing costs a human review; accepting ships a blank panel or a thrown expression.
+ */
+function templateReadNames(packageDir) {
+    if (!isBasicTemplateMode(packageDir)) return new Set();
+    const names = new Set();
+    const add = (text) => {
+        for (const m of text.matchAll(/\.([A-Za-z_$][A-Za-z0-9_$]*)\b/g)) names.add(m[1]);
+    };
+    const walk = (dir) => {
+        let entries;
+        try {
+            entries = readdirSync(dir, { withFileTypes: true });
+        } catch {
+            return;
+        }
+        for (const entry of entries) {
+            if (entry.name === 'node_modules' || entry.name === 'dist' || entry.name === '.git') continue;
+            const full = join(dir, entry.name);
+            if (entry.isDirectory()) walk(full);
+            else if (entry.name.endsWith('.html')) add(readFileSync(full, 'utf8'));
+            else if (/\.tsx?$/.test(entry.name) && !/\.d\.ts$/.test(entry.name)) {
+                const text = readFileSync(full, 'utf8');
+                for (const m of text.matchAll(/template:\s*`([\s\S]*?)`/g)) add(m[1]);
+            }
+        }
+    };
+    walk(packageDir);
+    return names;
+}
+
+/** Does this package compile its templates without type checking? Follows one `extends` hop. */
+function isBasicTemplateMode(packageDir, depth = 0) {
+    const config = join(packageDir, 'tsconfig.json');
+    if (depth > 4 || !existsSync(config)) return false;
+    const text = readFileSync(config, 'utf8');
+    if (/"strictTemplates"\s*:\s*false/.test(text)) return true;
+    if (/"strictTemplates"\s*:\s*true/.test(text)) return false;
+    const extend = /"extends"\s*:\s*"([^"]+)"/.exec(text);
+    if (!extend) return false;
+    const target = resolve(packageDir, extend[1]);
+    return isBasicTemplateMode(dirname(target), depth + 1);
+}
+
 const args = parseArgs(process.argv.slice(2));
 const repoRoot = resolve(process.cwd());
 const packageRel = args.package.replace(/\/$/, '');
@@ -438,6 +496,7 @@ const { Service: service, Program: program, Files: files } = loadProgram(package
 const checker = program.getTypeChecker();
 const tainted = serializedTypes(program, files, packageDir);
 const occurrences = occurrenceIndex(program, files, packageDir);
+const templateNames = templateReadNames(packageDir);
 
 /** The type declaration that owns the member at this line, and the member's name node. */
 function memberAt(source, line, oldName) {
@@ -525,6 +584,11 @@ for (const finding of selected) {
     if (hazards.length > 0) {
         const where = hazards.slice(0, 3).map((h) => `${relative(repoRoot, h.File)} (${h.Kind}, ${h.Type})`).join('; ');
         skipped.push({ finding, reason: `${optional ? SKIP_REASONS.Optional : SKIP_REASONS.UnclaimedUse} [${where}]` });
+        continue;
+    }
+
+    if (templateNames.has(oldName)) {
+        skipped.push({ finding, reason: SKIP_REASONS.TemplateUse });
         continue;
     }
 

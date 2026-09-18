@@ -8,13 +8,9 @@ export class PagedRecords extends Readable {
     super({ objectMode: true });
   }
 
-  Read() {
-    // no-op
-  }
-
-  /** @deprecated Use {@link Read}. */
+  // Node calls this by exact name on the instance, so the hook keeps its own spelling.
   _read() {
-    return this.Read();
+    // no-op
   }
 
   /**
