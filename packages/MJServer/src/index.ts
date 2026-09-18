@@ -68,7 +68,7 @@ import { IntegrationProgressEmitter } from '@memberjunction/integration-progress
 import { PublishIntegrationProgress } from './resolvers/IntegrationProgressResolver.js';
 import { ClientToolRequestManager, AgentRunWatchdog } from '@memberjunction/ai-agents';
 import { SessionJanitor } from './agentSessions/index.js';
-import { CACHE_INVALIDATION_TOPIC, MayBroadcastRecordData } from './generic/CacheInvalidationResolver.js';
+import { CACHE_INVALIDATION_TOPIC, MayBroadcastRecordData, ConfigureRecordDataBroadcast } from './generic/CacheInvalidationResolver.js';
 import { ConnectorFactory, IntegrationEngine, IntegrationSyncOptions } from '@memberjunction/integration-engine';
 import { CronExpressionHelper } from '@memberjunction/scheduling-engine';
 import {
@@ -829,6 +829,11 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
       Data: event.data,
     })
   );
+
+  // Hand the resolver its allowlist before anything can publish. It cannot read configInfo itself:
+  // config.ts loads and validates at module scope, so importing it there would pull full config
+  // validation into every import chain that touches the resolver, unit tests included.
+  ConfigureRecordDataBroadcast(configInfo.cacheSettings?.recordDataBroadcastEntities);
 
   // Global listener: broadcast CACHE_INVALIDATION to all browser clients whenever
   // ANY BaseEntity save/delete occurs on this server — regardless of whether it
