@@ -73,7 +73,7 @@ export type {
 
 // Install handlers
 export { CreateAppSchema, DropAppSchema, SchemaExists, ValidateSchemaName, EscapeSqlString } from './install/schema-manager.js';
-export type { SchemaOperationResult } from './install/schema-manager.js';
+export type { SchemaOperationResult, SchemaNameValidation, SchemaNameRule } from './install/schema-manager.js';
 
 export { RunAppMigrations } from './install/migration-runner.js';
 export {
